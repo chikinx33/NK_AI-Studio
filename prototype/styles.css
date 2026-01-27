@@ -416,6 +416,30 @@ body {
   align-items: center;
 }
 
+.tag-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 4px;
+}
+
+.tag-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.tag-check input {
+  accent-color: var(--orange);
+}
+
 .form-actions {
   display: flex;
   justify-content: flex-end;

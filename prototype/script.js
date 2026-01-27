@@ -198,6 +198,26 @@
 
   let current = 'ko';
   let theme = 'dark';
+  const purposeCategories = {
+    '키즈 · 영유아': ['영유아','유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
+    '스토리 · 서사': ['동화','창작 이야기','에피소드형 스토리','세계관 스토리','판타지','힐링 스토리'],
+    '지식 · 교양': ['상식','과학','수학','역사','인문학','철학','심리','시사'],
+    '교육 · 학습': ['공부법','시험 대비','자격증','언어 학습','코딩','튜토리얼'],
+    '음식 · 요리': ['레시피','먹방','맛집 소개','요리 과정','음식 리뷰','홈쿡'],
+    '여행 · 관광': ['국내 여행','해외 여행','관광지 소개','숨은 명소','랜선 여행'],
+    '라이프 · 일상': ['브이로그','일상 기록','루틴','자취','육아','직장 생활'],
+    '리뷰 · 추천': ['제품 리뷰','서비스 리뷰','콘텐츠 추천','앱 리뷰','게임 리뷰','책 리뷰','영화 리뷰'],
+    '엔터테인먼트': ['코미디','패러디','챌린지','리액션','밈 콘텐츠'],
+    '게임': ['게임 플레이','공략','하이라이트','게임 리뷰','모바일 게임'],
+    '음악 · 사운드': ['음악 소개','BGM','커버','ASMR','사운드 콘텐츠'],
+    '스포츠 · 피트니스': ['운동 루틴','스트레칭','홈트레이닝','스포츠 해설','경기 요약'],
+    '취미 · 크리에이티브': ['그림','DIY','공예','디자인','글쓰기','사진'],
+    '비즈니스 · 경제': ['창업','재테크','경제 상식','마케팅','브랜딩'],
+    '테크 · IT': ['AI','신기술','앱 소개','기기 리뷰','생산성 툴'],
+    '힐링 · 감성': ['명상','위로','힐링 영상','감성 브이로그','자연 풍경'],
+    '종교 · 신앙': ['말씀 묵상','설교 요약','신앙 이야기','간증','기도'],
+    '사회 · 공감': ['인터뷰','다큐형 콘텐츠','사회 이슈','공감 토크']
+  };
 
   const apply = () => {
     const t = translations[current];
@@ -302,12 +322,43 @@
     };
 
     if (form && cardsEl) {
+      // 목적 대분류/소분류 초기화
+      const catSelect = document.getElementById('purpose-category');
+      const tagBox = document.getElementById('purpose-tags');
+      if (catSelect && tagBox) {
+        Object.keys(purposeCategories).forEach(cat => {
+          const opt = document.createElement('option');
+          opt.value = cat;
+          opt.textContent = cat;
+          catSelect.appendChild(opt);
+        });
+        const renderTags = () => {
+          tagBox.innerHTML = '';
+          const sel = catSelect.value;
+          (purposeCategories[sel] || []).forEach(tag => {
+            const id = `tag-${tag}`;
+            const label = document.createElement('label');
+            label.className = 'tag-check';
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.name = 'purposeTags';
+            input.value = tag;
+            label.appendChild(input);
+            label.appendChild(document.createTextNode(tag));
+            tagBox.appendChild(label);
+          });
+        };
+        catSelect.addEventListener('change', renderTags);
+        renderTags();
+      }
+
       form.addEventListener('submit', e => {
         e.preventDefault();
         const data = new FormData(form);
         const payload = {
           topic: data.get('topic') || '',
-          purpose: data.get('purpose') || '정보',
+          purposeCategory: data.get('purposeCategory') || '',
+          purposeTags: data.getAll('purposeTags') || [],
           target: data.get('target') || '',
           duration: data.get('duration') || '30',
           tone: data.get('tone') || '',

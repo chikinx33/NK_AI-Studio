@@ -73,13 +73,12 @@
                 <input name="topic" type="text" placeholder="예: 도심 자전거 안전" required />
               </div>
               <div class="form-group">
-                <label>영상 목적</label>
-                <select name="purpose" required>
-                  <option value="정보">정보</option>
-                  <option value="설득">설득</option>
-                  <option value="스토리">스토리</option>
-                  <option value="후킹">후킹</option>
-                </select>
+                <label>영상 목적 (대분류)</label>
+                <select id="purpose-category" name="purposeCategory" required></select>
+              </div>
+              <div class="form-group">
+                <label>세부 목적 (중복 선택 가능)</label>
+                <div id="purpose-tags" class="tag-checkboxes"></div>
               </div>
               <div class="form-group">
                 <label>타겟</label>
