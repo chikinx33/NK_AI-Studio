@@ -67,7 +67,7 @@
           <div>
             <p class="eyebrow" data-i18n="hero_fast">바로 자동 실행</p>
             <h2 data-i18n="hero_new_project">새 Scene 파이프라인 시작</h2>
-            <p class="muted" data-i18n="hero_new_desc">Scene 단위 자동 실행 · 대본/이미지/TTS/렌더를 각각 재시도 가능.</p>
+            <p class="muted" data-i18n="hero_new_desc">Scene 단위 자동 실행 · 대본/이미지/TTS/편집 규칙을 각각 재적용/재시도.</p>
           </div>
           <button class="btn-primary" data-i18n="btn_create_project">파이프라인 시작</button>
         </div>
@@ -83,7 +83,7 @@
           <div>
             <p class="eyebrow" data-i18n="hero_recent">재시도</p>
             <h3 data-i18n="hero_recent_title">실패 Scene만 다시 만들기</h3>
-            <p class="muted" data-i18n="hero_recent_desc">실패 원인 확인 → 재시도 → 직접 교체 흐름을 바로 실행</p>
+            <p class="muted" data-i18n="hero_recent_desc">실패 원인 확인 → 편집 규칙 재적용 / TTS 재생성 / 컷 길이 재보정 중 선택</p>
           </div>
           <button class="btn-secondary" data-i18n="btn_continue">재시도</button>
         </div>
@@ -105,7 +105,7 @@
                 </div>
                 <span class="chip" data-i18n="chip_timeline">자동화</span>
               </div>
-              <p class="muted" data-i18n="card1_desc">Scene 기반 자동 실행 · 대본/이미지/TTS 제어 가능</p>
+              <p class="muted" data-i18n="card1_desc">Scene 기반 자동 실행 · 대본/이미지/TTS/편집 규칙 제어 가능</p>
               <div class="progress">
                 <div class="fill" style="width: 78%"></div>
               </div>
@@ -124,7 +124,7 @@
                 </div>
                 <span class="chip pale" data-i18n="chip_script">Test Mode</span>
               </div>
-              <p class="muted" data-i18n="card2_desc">비용 최소 테스트 · 일부 Scene만 생성</p>
+              <p class="muted" data-i18n="card2_desc">비용 최소 테스트 · 선택 Scene만 생성/규칙 적용</p>
               <div class="progress">
                 <div class="fill teal" style="width: 52%"></div>
               </div>
@@ -143,7 +143,7 @@
                 </div>
                 <span class="chip warn" data-i18n="chip_render">재시도 필요</span>
               </div>
-              <p class="muted" data-i18n="card3_desc">원인 로그 확인 후 즉시 재시도/교체</p>
+              <p class="muted" data-i18n="card3_desc">원인 로그 확인 후 규칙 재적용·TTS 재생성·컷 재보정 선택 재시도</p>
               <div class="progress">
                 <div class="fill" style="width: 18%"></div>
               </div>
@@ -185,6 +185,21 @@
 
           <div class="panel">
             <div class="section-head">
+              <h4 data-i18n="side_rules">자동 편집 규칙</h4>
+            </div>
+            <ul class="rules">
+              <li data-i18n="rule_cut">컷 분할: Scene / 문장 기준</li>
+              <li data-i18n="rule_sub">자막: TTS 완료 후 자동 생성</li>
+              <li data-i18n="rule_len">컷 길이: 자동 보정 (±0.5초)</li>
+              <li data-i18n="rule_pos">자막 위치: 하단 중앙</li>
+              <li data-i18n="rule_fx">전환 효과: 페이드</li>
+            </ul>
+            <div class="flow-hint" data-i18n="flow_hint">🎙 TTS → 💬 자막 → ✂ 컷/길이 보정 (규칙 기반)</div>
+            <button class="btn-secondary full" data-i18n="btn_reapply_rules">편집 규칙 다시 적용</button>
+          </div>
+
+          <div class="panel">
+            <div class="section-head">
               <h4 data-i18n="side_queue">파이프라인 단계</h4>
               <button class="btn-ghost" data-i18n="btn_view_all_queue">모두 보기</button>
             </div>
@@ -195,6 +210,13 @@
                   <p data-i18n="queue1_title">스크립트 · 이미지 · TTS</p>
                 </div>
                 <div class="pill warn" data-i18n="queue1_badge">실행 중</div>
+              </div>
+              <div class="queue-row">
+                <div>
+                  <p class="eyebrow">Scene 03</p>
+                  <p data-i18n="queue_edit_title">자동 편집 규칙 적용 (자막/컷/전환)</p>
+                </div>
+                <div class="pill" data-i18n="queue_edit_badge">대기</div>
               </div>
               <div class="queue-row">
                 <div>

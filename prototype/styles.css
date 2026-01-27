@@ -498,6 +498,35 @@ body {
   background: linear-gradient(90deg, rgba(255, 122, 0, 0.15), transparent);
 }
 
+.rules {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text);
+}
+
+.rules li {
+  background: var(--layer-strong);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.flow-hint {
+  margin: 6px 0 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.btn-secondary.full {
+  width: 100%;
+  text-align: center;
+}
+
 .pill {
   background: var(--layer-strong);
   border-radius: 999px;
