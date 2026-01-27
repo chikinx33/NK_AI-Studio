@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NK_Studio · Dashboard</title>
+  <title>NK_Studio · Automation Dashboard</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -18,33 +18,31 @@
         <div class="brand-mark">NK</div>
         <div class="brand-text">
           <span class="title" data-i18n="brand_title">NK_Studio</span>
-          <span class="subtitle" data-i18n="brand_subtitle">통합 영상 랩</span>
+          <span class="subtitle" data-i18n="brand_subtitle">자동화 영상 파이프라인</span>
         </div>
       </div>
       <nav class="nav">
         <a class="nav-item active" href="#">
           <span class="dot"></span><span data-i18n="nav_dashboard">대시보드</span>
         </a>
-        <a class="nav-item" href="#"><span data-i18n="nav_research">리서치 · 시장</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_script">시나리오 · 대본</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_scenes">씬 & 파이프라인</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_media">미디어 랩</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_timeline">타임라인 · 편집</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_voice">더빙 · 자막</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_render">렌더 큐</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_render">자동화 큐</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_publish">배포</span></a>
       </nav>
       <div class="sidebar-footer">
-        <div class="pill warn" data-i18n="badge_render_queue">렌더 큐 3</div>
-        <button class="btn-secondary" data-i18n="btn_new_project">새 프로젝트</button>
+        <div class="pill warn" data-i18n="badge_render_queue">자동화 큐 3</div>
+        <button class="btn-secondary" data-i18n="btn_new_project">새 파이프라인</button>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
         <div class="project-picker">
-          <label data-i18n="project_label">프로젝트</label>
+          <label data-i18n="project_label">파이프라인</label>
           <div class="select">
-            <span>Alpha Studio Pitch</span>
+            <span>Solo Creator Pack</span>
             <span class="caret">▾</span>
           </div>
         </div>
@@ -52,8 +50,12 @@
           <input type="text" data-i18n-placeholder="search_placeholder" placeholder="명령/검색 (Ctrl + K)" />
         </div>
         <div class="top-actions">
+          <div class="mode-toggle" aria-label="mode toggle">
+            <button class="mode-btn active" data-i18n="mode_test">Test</button>
+            <button class="mode-btn" data-i18n="mode_prod">Prod</button>
+          </div>
           <button class="btn-ghost" data-i18n="notify">알림</button>
-          <button class="btn-primary" data-i18n="btn_new_project">새 프로젝트</button>
+          <button class="btn-primary" data-i18n="btn_new_project">새 파이프라인</button>
           <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()">☀</button>
           <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
           <div class="avatar">SJ</div>
@@ -63,34 +65,34 @@
       <section class="hero-grid">
         <div class="card hero accent-orange">
           <div>
-            <p class="eyebrow" data-i18n="hero_fast">빠르게 시작</p>
-            <h2 data-i18n="hero_new_project">새 프로젝트 만들기</h2>
-            <p class="muted" data-i18n="hero_new_desc">목적·플랫폼·길이만 선택하면 적합한 템플릿을 추천해요.</p>
+            <p class="eyebrow" data-i18n="hero_fast">바로 자동 실행</p>
+            <h2 data-i18n="hero_new_project">새 Scene 파이프라인 시작</h2>
+            <p class="muted" data-i18n="hero_new_desc">아이디어만 입력하면 Scene 단위 대본·이미지·TTS·렌더를 자동 실행합니다.</p>
           </div>
-          <button class="btn-primary" data-i18n="btn_create_project">프로젝트 생성</button>
+          <button class="btn-primary" data-i18n="btn_create_project">파이프라인 시작</button>
         </div>
         <div class="card hero">
           <div>
-            <p class="eyebrow" data-i18n="hero_templates">템플릿</p>
-            <h3 data-i18n="hero_templates_title">플랫폼별 프리셋</h3>
-            <p class="muted" data-i18n="hero_templates_desc">YouTube / Shorts / TikTok / IG Reels</p>
+            <p class="eyebrow" data-i18n="hero_templates">테스트</p>
+            <h3 data-i18n="hero_templates_title">Test Mode로 일부 Scene만</h3>
+            <p class="muted" data-i18n="hero_templates_desc">저해상·짧은 길이 렌더로 비용 최소화</p>
           </div>
-          <button class="btn-secondary" data-i18n="btn_browse">둘러보기</button>
+          <button class="btn-secondary" data-i18n="btn_browse">테스트 실행</button>
         </div>
         <div class="card hero">
           <div>
-            <p class="eyebrow" data-i18n="hero_recent">최근 작업</p>
-            <h3 data-i18n="hero_recent_title">어제 중단한 지점에서 이어하기</h3>
-            <p class="muted" data-i18n="hero_recent_desc">Script · Story 단계 62% 완료</p>
+            <p class="eyebrow" data-i18n="hero_recent">재시도</p>
+            <h3 data-i18n="hero_recent_title">실패 Scene만 다시 만들기</h3>
+            <p class="muted" data-i18n="hero_recent_desc">AI 실패 원인 확인 후 재생성/직접 교체</p>
           </div>
-          <button class="btn-secondary" data-i18n="btn_continue">계속하기</button>
+          <button class="btn-secondary" data-i18n="btn_continue">재시도</button>
         </div>
       </section>
 
       <section class="content">
         <div class="projects">
           <div class="section-head">
-            <h3 data-i18n="section_projects">진행 중 프로젝트</h3>
+            <h3 data-i18n="section_projects">진행 중 파이프라인</h3>
             <button class="btn-ghost" data-i18n="btn_view_all">전체 보기</button>
           </div>
           <div class="project-grid">
@@ -98,17 +100,17 @@
               <div class="card-accent orange"></div>
               <div class="project-top">
                 <div>
-                  <p class="eyebrow" data-i18n="card1_eyebrow">브랜드 캠페인</p>
+                  <p class="eyebrow" data-i18n="card1_eyebrow">자동 파이프라인</p>
                   <h4 data-i18n="card1_title">Nova Energy Launch</h4>
                 </div>
-                <span class="chip" data-i18n="chip_timeline">타임라인 · 편집</span>
+                <span class="chip" data-i18n="chip_timeline">자동화</span>
               </div>
-              <p class="muted" data-i18n="card1_desc">30초 TVC + 15초 소셜 컷 5종</p>
+              <p class="muted" data-i18n="card1_desc">Scene 12 · 완료 8 · 대기 3 · 실패 1</p>
               <div class="progress">
                 <div class="fill" style="width: 78%"></div>
               </div>
               <div class="meta-row">
-                <span><span data-i18n="meta_owner">담당:</span> Mia</span>
+                <span data-i18n="scene_status">모드: Prod</span>
                 <span class="muted" data-i18n="meta_eta">ETA 1시간 12분</span>
               </div>
             </article>
@@ -117,17 +119,17 @@
               <div class="card-accent teal"></div>
               <div class="project-top">
                 <div>
-                  <p class="eyebrow" data-i18n="card2_eyebrow">리서치 → 대본</p>
+                  <p class="eyebrow" data-i18n="card2_eyebrow">테스트 러닝</p>
                   <h4 data-i18n="card2_title">Travel Vlog Series</h4>
                 </div>
-                <span class="chip pale" data-i18n="chip_script">시나리오 · 대본</span>
+                <span class="chip pale" data-i18n="chip_script">Test Mode</span>
               </div>
-              <p class="muted" data-i18n="card2_desc">6개 도시, 멀티랭 더빙 예정</p>
+              <p class="muted" data-i18n="card2_desc">Scene 4 · 완료 2 · 대기 2 · 실패 0</p>
               <div class="progress">
                 <div class="fill teal" style="width: 52%"></div>
               </div>
               <div class="meta-row">
-                <span><span data-i18n="meta_owner">담당:</span> Jun</span>
+                <span data-i18n="scene_status">모드: Test</span>
                 <span class="muted" data-i18n="meta_deadline">마감: 오늘 18:00</span>
               </div>
             </article>
@@ -136,17 +138,17 @@
               <div class="card-accent blue"></div>
               <div class="project-top">
                 <div>
-                  <p class="eyebrow" data-i18n="card3_eyebrow">렌더 대기</p>
+                  <p class="eyebrow" data-i18n="card3_eyebrow">실패 Scene 있음</p>
                   <h4 data-i18n="card3_title">Product How-to</h4>
                 </div>
-                <span class="chip warn" data-i18n="chip_render">렌더 큐</span>
+                <span class="chip warn" data-i18n="chip_render">재시도 필요</span>
               </div>
-              <p class="muted" data-i18n="card3_desc">1080p · 3분 · 자막 번인 요청</p>
+              <p class="muted" data-i18n="card3_desc">Scene 6 · 완료 4 · 실패 2 (이미지/렌더)</p>
               <div class="progress">
                 <div class="fill" style="width: 18%"></div>
               </div>
               <div class="meta-row">
-                <span><span data-i18n="meta_owner">담당:</span> Dana</span>
+                <span data-i18n="scene_status">모드: Prod</span>
                 <span class="muted" data-i18n="meta_queue">대기열 2/5</span>
               </div>
             </article>
@@ -156,25 +158,25 @@
         <aside class="side-panels">
           <div class="panel">
             <div class="section-head">
-              <h4 data-i18n="side_activity">팀 활동</h4>
+              <h4 data-i18n="side_activity">AI 작업 로그</h4>
               <button class="btn-ghost" data-i18n="btn_log">로그</button>
             </div>
             <ul class="activity">
               <li>
                 <div>
-                  <strong>Mia</strong> <span data-i18n="act1">가 Nova Energy 씬 04에 코멘트 추가</span>
+                  <strong>Pipeline</strong> <span data-i18n="act1">Script v1 → v1.1: 길이 45s로 자동 조정</span>
                 </div>
                 <span class="muted" data-i18n="ago2m">2분 전</span>
               </li>
               <li>
                 <div>
-                  <strong>Jun</strong> <span data-i18n="act2">이 Travel Vlog 대본을 v1.3으로 업데이트</span>
+                  <strong>Image Agent</strong> <span data-i18n="act2">프롬프트 자동 수정(too dark → warm light)</span>
                 </div>
                 <span class="muted" data-i18n="ago35m">35분 전</span>
               </li>
               <li>
                 <div>
-                  <strong>Dana</strong> <span data-i18n="act3">가 Product How-to를 렌더 큐에 추가</span>
+                  <strong>TTS</strong> <span data-i18n="act3">재시도 2회 실패: SSML 태그 오류</span>
                 </div>
                 <span class="muted" data-i18n="ago1h">1시간 전</span>
               </li>
@@ -183,28 +185,28 @@
 
           <div class="panel">
             <div class="section-head">
-              <h4 data-i18n="side_queue">렌더 큐</h4>
+              <h4 data-i18n="side_queue">파이프라인 단계</h4>
               <button class="btn-ghost" data-i18n="btn_view_all_queue">모두 보기</button>
             </div>
             <div class="queue">
               <div class="queue-row">
                 <div>
-                  <p class="eyebrow">Step 1</p>
-                  <p data-i18n="queue1_title">How-to · 03:12</p>
+                  <p class="eyebrow">Scene 03</p>
+                  <p data-i18n="queue1_title">Script · 이미지 · TTS</p>
                 </div>
-                <div class="pill warn" data-i18n="queue1_badge">대기</div>
+                <div class="pill warn" data-i18n="queue1_badge">실행 중</div>
               </div>
               <div class="queue-row">
                 <div>
-                  <p class="eyebrow">Step 2</p>
-                  <p data-i18n="queue2_title">Nova Energy · 00:30</p>
+                  <p class="eyebrow">Scene 04</p>
+                  <p data-i18n="queue2_title">Render · 저해상 테스트</p>
                 </div>
-                <div class="pill" data-i18n="queue2_badge">인코딩 64%</div>
+                <div class="pill" data-i18n="queue2_badge">대기</div>
               </div>
               <div class="queue-row">
                 <div>
-                  <p class="eyebrow">Step 3</p>
-                  <p data-i18n="queue3_title">Social cut set</p>
+                  <p class="eyebrow">Scene 01</p>
+                  <p data-i18n="queue3_title">렌더 · 파이널 컷</p>
                 </div>
                 <div class="pill neutral" data-i18n="queue3_badge">완료</div>
               </div>
@@ -213,15 +215,15 @@
 
           <div class="panel">
             <div class="section-head">
-              <h4 data-i18n="storage">스토리지</h4>
+              <h4 data-i18n="storage">크레딧 · 스토리지</h4>
             </div>
             <div class="storage">
               <div class="progress thin">
                 <div class="fill" style="width: 68%"></div>
               </div>
               <div class="meta-row">
-                <span data-i18n="storage_usage">68% / 2TB</span>
-                <span class="muted" data-i18n="storage_meta">프리뷰 캐시 120GB</span>
+                <span data-i18n="storage_usage">크레딧 68% 사용</span>
+                <span class="muted" data-i18n="storage_meta">GPU 분 120 · 캐시 120GB</span>
               </div>
             </div>
           </div>

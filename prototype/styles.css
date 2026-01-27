@@ -222,6 +222,30 @@ body {
   gap: 10px;
 }
 
+.mode-toggle {
+  display: flex;
+  background: var(--layer-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.mode-btn {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 9px 12px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 13px;
+  transition: 0.15s ease;
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  color: #0b0b0b;
+}
+
 .btn-primary,
 .btn-secondary,
 .btn-ghost {
