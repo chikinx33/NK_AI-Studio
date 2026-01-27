@@ -381,15 +381,15 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
+  gap: 4px;
+  margin-bottom: 8px;
 }
 
 .scenario-form label {
   color: #ff7a00;
   font-size: 15px;
   font-weight: 700;
-  min-width: 110px;
+  min-width: 100px;
   flex-shrink: 0;
 }
 [data-theme="light"] .scenario-form label {
