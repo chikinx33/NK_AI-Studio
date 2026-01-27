@@ -171,6 +171,12 @@ body {
   gap: 12px;
 }
 
+.sidebar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .main {
   padding: 24px 32px 40px;
   display: grid;

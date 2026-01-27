@@ -37,6 +37,11 @@
       <div class="sidebar-footer">
         <div class="pill warn" data-i18n="badge_render_queue">자동화 큐 3</div>
         <button class="btn-secondary" data-i18n="btn_new_project">새 파이프라인</button>
+        <div class="sidebar-actions">
+          <button class="btn-ghost icon-btn" aria-label="알림">🔔</button>
+          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()"></button>
+          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
+        </div>
       </div>
     </aside>
 
@@ -55,13 +60,7 @@
             <span class="chip-filter" data-i18n="ch_politics">정치(만화)</span>
           </div>
         </div>
-        <div class="top-actions">
-          <button class="btn-ghost icon-btn" aria-label="알림">
-            🔔
-          </button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()">☀</button>
-          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-        </div>
+        <div class="top-actions"></div>
       </header>
 
       <div class="main-body">
