@@ -51,7 +51,7 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
   margin: 0;
   font-family: 'Space Grotesk', 'Pretendard', 'Inter', system-ui, -apple-system, sans-serif;
   background: radial-gradient(circle at 20% 20%, var(--bg-glow1), transparent 28%),
@@ -60,6 +60,14 @@ body {
   color: var(--text);
   min-height: 100vh;
   line-height: 1.5;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overflow: hidden;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .grain {
@@ -79,6 +87,7 @@ body {
 .app {
   display: grid;
   grid-template-columns: 250px 1fr;
+  height: 100vh;
   position: relative;
   z-index: 1;
 }
@@ -183,8 +192,11 @@ body {
   grid-template-rows: auto 1fr;
   gap: 18px;
   height: 100vh;
-  overflow: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.main::-webkit-scrollbar { width: 0; height: 0; }
 
 .topbar {
   display: flex;
@@ -203,17 +215,15 @@ body {
 }
 
 .main-body {
-  overflow-y: auto;
+  height: auto;
+  max-height: none;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 20px;
   padding-right: 4px;
+  padding-bottom: 24px;
 }
-
-/* 스크롤바 숨기기 (기능 유지) */
-.main-body::-webkit-scrollbar { width: 0; height: 0; }
-.main-body { scrollbar-width: none; }
-.main-body::-webkit-scrollbar-thumb { background: transparent; }
 
 .topbar-left {
   display: flex;
@@ -383,13 +393,53 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  height: 100%;
 }
 
 .scenario-grid {
   display: grid;
   grid-template-columns: 0.3fr 0.7fr;
+  grid-template-rows: auto 1fr;
   gap: 14px;
   align-items: start;
+  height: auto;
+}
+
+.section-caption {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  color: var(--text-strong);
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 0 4px;
+}
+.section-caption.left-caption { grid-column: 1 / 2; }
+.section-caption.right-caption { grid-column: 2 / 3; }
+.caption-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.caption-actions {
+  display: flex;
+  gap: 8px;
+}
+.results-card { grid-column: 2 / 3; grid-row: 2; }
+.scenario-form { grid-column: 1 / 2; grid-row: 2; }
+
+.card.scenario-form {
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  height: auto;
+}
+
+.results-card {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  overflow: hidden;
 }
 
 .scenario-form .form-group {
@@ -516,7 +566,7 @@ body {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 8px;
+  margin-top: 16px;
 }
 
 .scenario-results {
@@ -526,6 +576,12 @@ body {
 .scenario-cards {
   display: grid;
   gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: none;
+}
+.scenario-cards::-webkit-scrollbar { width: 0; height: 0; }
 }
 
 .scenario-card {
@@ -888,6 +944,13 @@ body {
   .side-panels { flex-direction: row; flex-wrap: wrap; }
   .side-panels .panel { flex: 1 1 260px; }
   .scenario-grid { grid-template-columns: 1fr; }
+  .section-caption.left-caption,
+  .section-caption.right-caption,
+  .results-card,
+  .scenario-form {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
 }
 
 @media (max-width: 780px) {

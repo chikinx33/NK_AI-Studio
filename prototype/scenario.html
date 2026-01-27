@@ -48,13 +48,20 @@
       <div class="main-body">
         <section class="scenario-section" id="scenario-section">
           <div class="scenario-grid">
+            <div class="section-caption left-caption caption-row">
+              <span>개요</span>
+              <div class="caption-actions">
+                <button type="reset" form="scenario-form" class="btn-ghost">초기화</button>
+                <button type="submit" form="scenario-form" class="btn-primary">시나리오 생성</button>
+              </div>
+            </div>
             <form class="card scenario-form" id="scenario-form">
               <div class="form-group">
                 <label>주제</label>
-                <input name="topic" type="text" placeholder="예: 도심 자전거 안전" required />
+                <input name="topic" type="text" placeholder="예: 모양새 친구들" required />
               </div>
               <div class="form-group">
-                <label>영상 목적</label>
+                <label>장르</label>
                 <select id="purpose-category" name="purposeCategory" required></select>
               </div>
               <div class="form-group">
@@ -106,21 +113,16 @@
               </div>
               <div class="form-group">
                 <label>추가 항목</label>
-                <textarea name="banned" rows="2" placeholder="예: 공포 표현 금지, 과장 금지"></textarea>
-              </div>
-              <div class="form-actions">
-                <button type="reset" class="btn-ghost">초기화</button>
-                <button type="submit" class="btn-primary" id="scenario-submit">시나리오 생성</button>
+                <textarea name="banned" rows="2" placeholder="부연 설명을 입력하세요"></textarea>
               </div>
             </form>
 
-            <div class="card scenario-results">
-              <div class="section-head">
-                <h4>생성 결과 (씬 단위)</h4>
-                <button class="btn-secondary" id="confirm-scenes">최종 컨펌 → 씬 파이프라인</button>
-              </div>
+            <div class="section-caption right-caption caption-row">
+              <span>씬 생성</span>
+              <button class="btn-primary" id="confirm-scenes">최종 컨펌 → 씬 파이프라인</button>
+            </div>
+            <div class="card scenario-results results-card">
               <div id="scenario-cards" class="scenario-cards">
-                <p class="muted">입력 후 “시나리오 생성”을 누르면 결과가 여기에 표시됩니다.</p>
               </div>
             </div>
           </div>

@@ -199,7 +199,7 @@
   let current = 'ko';
   let theme = 'dark';
   const purposeCategories = {
-    '키즈 · 영유아': ['영유아','유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
+    '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
     '지식 · 교양': ['상식','과학','수학','역사','인문학','철학','심리','시사'],
     '교육 · 학습': ['공부법','시험 대비','자격증','언어 학습','코딩','튜토리얼'],
@@ -225,8 +225,8 @@
     '관계','가정','자녀','연애','소통','자기 성찰','라이프스타일'
   ];
   const toneList = [
-    '담백','신뢰','차분','유머','경쾌','진지','따뜻','공감','감성','중립',
-    '설득','객관','전문','친근','위로','동기부여','논리','정보','스토리'
+    '담백','신뢰','차분','유머','경쾌','진지','따뜻','공감','감성','중립','풍자',
+    '설득','전문','친근','위로','동기부여','논리','정보','스토리'
   ];
   const styleList = [
     '실사','다큐 스타일','브이로그','만화','애니메이션','일러스트','모션그래픽','인포그래픽','슬라이드형',
@@ -328,9 +328,11 @@
     const mockGenerate = payload => {
       // TODO: 실제 OpenAI API 호출로 교체
       const base = [
-        { id: 1, title: '후킹', lines: `(${payload.purpose}) ${payload.topic} 한 줄 후킹`, estSec: 8 },
-        { id: 2, title: '핵심 정보', lines: `${payload.target}에게 ${payload.topic}을 2포인트로 설명`, estSec: 14 },
-        { id: 3, title: '전환/CTA', lines: payload.ctaEnabled ? `CTA: ${payload.ctaText || '더 알아보기'}` : '마무리 멘트', estSec: 8 }
+        { id: 1, title: '후킹', lines: `(${payload.purposeCategory || '목적'}) ${payload.topic} 한 줄 후킹`, estSec: 6 },
+        { id: 2, title: '핵심 정보 1', lines: `${payload.target}에게 ${payload.topic}을 2포인트로 설명`, estSec: 12 },
+        { id: 3, title: '핵심 정보 2', lines: `보강 포인트/예시로 신뢰도 업 (톤: ${payload.tone || '지정 톤'})`, estSec: 10 },
+        { id: 4, title: '편집 규칙 적용 구간', lines: '자막/컷 길이/전환을 규칙 기반으로 자동 적용', estSec: 8 },
+        { id: 5, title: '전환·CTA', lines: payload.ctaEnabled ? `CTA: ${payload.ctaText || '더 알아보기'}` : '깔끔한 마무리 멘트', estSec: 6 }
       ];
       return base.map(s => ({ ...s, notes: '컷/자막/전환은 규칙 기반 자동 적용' }));
     };
@@ -343,6 +345,22 @@
       const durationBox = document.getElementById('duration-tags');
       const toneBox = document.getElementById('tone-tags');
       const styleBox = document.getElementById('style-tags');
+      const defaultPurposeCat = '키즈 · 영유아';
+      const renderPurposeTags = (selCat, activateAll = false) => {
+        if (!tagBox) return;
+        tagBox.innerHTML = '';
+        const list = purposeCategories[selCat] || [];
+        list.forEach(tag => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'tag-toggle';
+          btn.dataset.value = tag;
+          btn.textContent = tag;
+          if (activateAll) btn.classList.add('active');
+          tagBox.appendChild(btn);
+        });
+      };
+
       if (catSelect && tagBox) {
         Object.keys(purposeCategories).forEach(cat => {
           const opt = document.createElement('option');
@@ -350,20 +368,9 @@
           opt.textContent = cat;
           catSelect.appendChild(opt);
         });
-        const renderTags = () => {
-          tagBox.innerHTML = '';
-          const sel = catSelect.value;
-          (purposeCategories[sel] || []).forEach(tag => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'tag-toggle';
-            btn.dataset.value = tag;
-            btn.textContent = tag;
-            tagBox.appendChild(btn);
-          });
-        };
-        catSelect.addEventListener('change', renderTags);
-        renderTags();
+        catSelect.value = defaultPurposeCat;
+        renderPurposeTags(defaultPurposeCat);
+        catSelect.addEventListener('change', () => renderPurposeTags(catSelect.value));
         tagBox.addEventListener('click', e => {
           const target = e.target;
           if (target instanceof HTMLElement && target.classList.contains('tag-toggle')) {
@@ -439,6 +446,23 @@
       form.addEventListener('submit', e => {
         e.preventDefault();
         const data = new FormData(form);
+        const hasPurpose = tagBox && tagBox.querySelector('.tag-toggle.active');
+        if (!hasPurpose) {
+          alert('장르 세부 항목을 하나 이상 선택해 주세요.');
+          return;
+        }
+        const toneText = (data.get('tone') || '').trim();
+        const hasToneTag = toneBox && toneBox.querySelector('.tag-toggle.active');
+        if (!toneText && !hasToneTag) {
+          alert('톤을 입력하거나 세부 톤 항목을 선택해 주세요.');
+          return;
+        }
+        const styleText = (data.get('style') || '').trim();
+        const hasStyleTag = styleBox && styleBox.querySelector('.tag-toggle.active');
+        if (!styleText && !hasStyleTag) {
+          alert('스타일을 입력하거나 세부 스타일 항목을 선택해 주세요.');
+          return;
+        }
         const payload = {
           topic: data.get('topic') || '',
           purposeCategory: data.get('purposeCategory') || '',
@@ -452,7 +476,8 @@
             const active = durationBox.querySelector('.duration-toggle.active');
             return active ? active.dataset.value || '15' : '15';
           })(),
-          tone: data.get('tone') || '',
+          tone: toneText,
+          style: styleText,
           banned: data.get('banned') || '',
           ctaEnabled: false,
           ctaText: ''
@@ -467,6 +492,11 @@
           if (!box) return;
           box.querySelectorAll('.tag-toggle.active').forEach(btn => btn.classList.remove('active'));
         });
+        // 목적 대분류/소분류를 기본값으로 재설정
+        if (catSelect) {
+          catSelect.value = defaultPurposeCat;
+          renderPurposeTags(defaultPurposeCat, false);
+        }
         // 영상 길이는 15초 기본
         if (durationBox) {
           durationBox.querySelectorAll('.duration-toggle').forEach(btn => btn.classList.remove('active'));
