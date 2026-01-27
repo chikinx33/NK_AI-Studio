@@ -28,7 +28,7 @@
         <a class="nav-item" href="#"><span data-i18n="nav_scenes">씬 & 파이프라인</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_media">미디어 랩</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_voice">더빙 · 자막</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_render">자동화 큐</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_render">결과 대기열</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_publish">배포</span></a>
       </nav>
       <div class="sidebar-footer">
@@ -42,7 +42,7 @@
         <div class="project-picker">
           <label data-i18n="project_label">파이프라인</label>
           <div class="select">
-            <span>Solo Creator Pack</span>
+            <span>Solo Creator Mode</span>
             <span class="caret">▾</span>
           </div>
         </div>
@@ -67,7 +67,7 @@
           <div>
             <p class="eyebrow" data-i18n="hero_fast">바로 자동 실행</p>
             <h2 data-i18n="hero_new_project">새 Scene 파이프라인 시작</h2>
-            <p class="muted" data-i18n="hero_new_desc">아이디어만 입력하면 Scene 단위 대본·이미지·TTS·렌더를 자동 실행합니다.</p>
+            <p class="muted" data-i18n="hero_new_desc">Scene 단위 자동 실행 · 대본/이미지/TTS/렌더를 각각 재시도 가능.</p>
           </div>
           <button class="btn-primary" data-i18n="btn_create_project">파이프라인 시작</button>
         </div>
@@ -75,7 +75,7 @@
           <div>
             <p class="eyebrow" data-i18n="hero_templates">테스트</p>
             <h3 data-i18n="hero_templates_title">Test Mode로 일부 Scene만</h3>
-            <p class="muted" data-i18n="hero_templates_desc">저해상·짧은 길이 렌더로 비용 최소화</p>
+            <p class="muted" data-i18n="hero_templates_desc">저해상·짧은 길이로 비용 절감 · Scene 선택 화면으로 이동</p>
           </div>
           <button class="btn-secondary" data-i18n="btn_browse">테스트 실행</button>
         </div>
@@ -83,7 +83,7 @@
           <div>
             <p class="eyebrow" data-i18n="hero_recent">재시도</p>
             <h3 data-i18n="hero_recent_title">실패 Scene만 다시 만들기</h3>
-            <p class="muted" data-i18n="hero_recent_desc">AI 실패 원인 확인 후 재생성/직접 교체</p>
+            <p class="muted" data-i18n="hero_recent_desc">실패 원인 확인 → 재시도 → 직접 교체 흐름을 바로 실행</p>
           </div>
           <button class="btn-secondary" data-i18n="btn_continue">재시도</button>
         </div>
@@ -105,13 +105,13 @@
                 </div>
                 <span class="chip" data-i18n="chip_timeline">자동화</span>
               </div>
-              <p class="muted" data-i18n="card1_desc">Scene 12 · 완료 8 · 대기 3 · 실패 1</p>
+              <p class="muted" data-i18n="card1_desc">Scene 기반 자동 실행 · 대본/이미지/TTS 제어 가능</p>
               <div class="progress">
                 <div class="fill" style="width: 78%"></div>
               </div>
               <div class="meta-row">
                 <span data-i18n="scene_status">모드: Prod</span>
-                <span class="muted" data-i18n="meta_eta">ETA 1시간 12분</span>
+                <span class="chip alert" data-i18n="chip_fail">⚠ 실패 Scene</span>
               </div>
             </article>
 
@@ -124,13 +124,13 @@
                 </div>
                 <span class="chip pale" data-i18n="chip_script">Test Mode</span>
               </div>
-              <p class="muted" data-i18n="card2_desc">Scene 4 · 완료 2 · 대기 2 · 실패 0</p>
+              <p class="muted" data-i18n="card2_desc">비용 최소 테스트 · 일부 Scene만 생성</p>
               <div class="progress">
                 <div class="fill teal" style="width: 52%"></div>
               </div>
               <div class="meta-row">
-                <span data-i18n="scene_status">모드: Test</span>
-                <span class="muted" data-i18n="meta_deadline">마감: 오늘 18:00</span>
+                <span data-i18n="scene_status_test">모드: Test</span>
+                <span class="chip neutral" data-i18n="chip_ok">정상</span>
               </div>
             </article>
 
@@ -143,13 +143,13 @@
                 </div>
                 <span class="chip warn" data-i18n="chip_render">재시도 필요</span>
               </div>
-              <p class="muted" data-i18n="card3_desc">Scene 6 · 완료 4 · 실패 2 (이미지/렌더)</p>
+              <p class="muted" data-i18n="card3_desc">원인 로그 확인 후 즉시 재시도/교체</p>
               <div class="progress">
                 <div class="fill" style="width: 18%"></div>
               </div>
               <div class="meta-row">
                 <span data-i18n="scene_status">모드: Prod</span>
-                <span class="muted" data-i18n="meta_queue">대기열 2/5</span>
+                <span class="chip alert" data-i18n="chip_fail">⚠ 실패 Scene</span>
               </div>
             </article>
           </div>
@@ -164,19 +164,19 @@
             <ul class="activity">
               <li>
                 <div>
-                  <strong>Pipeline</strong> <span data-i18n="act1">Script v1 → v1.1: 길이 45s로 자동 조정</span>
+                  <strong>Script</strong> <span data-i18n="act1">길이 초과 → 45s로 자동 트림 (자동)</span>
                 </div>
                 <span class="muted" data-i18n="ago2m">2분 전</span>
               </li>
               <li>
                 <div>
-                  <strong>Image Agent</strong> <span data-i18n="act2">프롬프트 자동 수정(too dark → warm light)</span>
+                  <strong>Image</strong> <span data-i18n="act2">프롬프트 수정: too dark → warm light (자동)</span>
                 </div>
                 <span class="muted" data-i18n="ago35m">35분 전</span>
               </li>
               <li>
                 <div>
-                  <strong>TTS</strong> <span data-i18n="act3">재시도 2회 실패: SSML 태그 오류</span>
+                  <strong>TTS</strong> <span data-i18n="act3">재시도 2회 실패: SSML 태그 오류 (자동)</span>
                 </div>
                 <span class="muted" data-i18n="ago1h">1시간 전</span>
               </li>
@@ -189,17 +189,17 @@
               <button class="btn-ghost" data-i18n="btn_view_all_queue">모두 보기</button>
             </div>
             <div class="queue">
-              <div class="queue-row">
+              <div class="queue-row active-step">
                 <div>
                   <p class="eyebrow">Scene 03</p>
-                  <p data-i18n="queue1_title">Script · 이미지 · TTS</p>
+                  <p data-i18n="queue1_title">스크립트 · 이미지 · TTS</p>
                 </div>
                 <div class="pill warn" data-i18n="queue1_badge">실행 중</div>
               </div>
               <div class="queue-row">
                 <div>
                   <p class="eyebrow">Scene 04</p>
-                  <p data-i18n="queue2_title">Render · 저해상 테스트</p>
+                  <p data-i18n="queue2_title">렌더 · 저해상 테스트</p>
                 </div>
                 <div class="pill" data-i18n="queue2_badge">대기</div>
               </div>
@@ -223,7 +223,7 @@
               </div>
               <div class="meta-row">
                 <span data-i18n="storage_usage">크레딧 68% 사용</span>
-                <span class="muted" data-i18n="storage_meta">GPU 분 120 · 캐시 120GB</span>
+                <span class="muted" data-i18n="storage_meta">GPU 분 120 · 캐시 120GB · Scene당 예상 0.3크레딧</span>
               </div>
             </div>
           </div>
