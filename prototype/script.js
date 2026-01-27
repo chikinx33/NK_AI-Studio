@@ -235,7 +235,7 @@
     const btn = document.querySelector('[data-theme-toggle]');
     if (!btn || !t) return;
     const target = theme === 'dark' ? 'light' : 'dark';
-    btn.textContent = theme === 'dark' ? '🌙' : '☀';
+    btn.textContent = '';
     btn.setAttribute('aria-label', target === 'light' ? t.theme_to_light : t.theme_to_dark);
     btn.setAttribute('title', target === 'light' ? t.theme_to_light : t.theme_to_dark);
   };
