@@ -336,21 +336,60 @@
       return base.map(s => ({ ...s, notes: '컷/자막/전환은 규칙 기반 자동 적용' }));
     };
 
+    const normalizeScenes = raw => {
+      try {
+        if (typeof raw === 'string') {
+          raw = JSON.parse(raw);
+        }
+      } catch (_) {}
+
+      let scenes = raw?.scenes;
+      if (!scenes && Array.isArray(raw)) scenes = raw;
+
+      // 경우: OpenAI 응답이 문자열 JSON을 content 필드에 담은 경우
+      if (!scenes && typeof raw?.content === 'string') {
+        try {
+          const parsed = JSON.parse(raw.content);
+          scenes = parsed.scenes || parsed;
+        } catch (_) {}
+      }
+
+      // scene 최소 형태 강제
+      if (Array.isArray(scenes)) {
+        return scenes.map((s, idx) => ({
+          id: s.id ?? idx + 1,
+          title: s.title ?? `Scene ${idx + 1}`,
+          lines: s.lines ?? (typeof s === 'string' ? s : ''),
+          estSec: s.estSec ?? 8,
+          notes: s.notes ?? '컷/자막/전환은 규칙 기반 자동 적용'
+        }));
+      }
+      throw new Error('invalid_response');
+    };
+
     const callScenarioAPI = async payload => {
       const res = await fetch('/api/scenario', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error('api_error');
-      const data = await res.json();
-      if (!data || !Array.isArray(data.scenes)) throw new Error('invalid_response');
-      return data.scenes;
+      const text = await res.text();
+      if (!res.ok) {
+        const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+        const err = new Error(detail || 'api_error');
+        err.status = res.status;
+        throw err;
+      }
+      const data = (() => {
+        try { return JSON.parse(text); } catch (_) { return text; }
+      })();
+      return normalizeScenes(data);
     };
 
     const setLoading = (loading) => {
       const submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
       const overlay = document.getElementById('scenario-loading');
+      const err = document.getElementById('scenario-error');
       if (submitBtn) {
         submitBtn.disabled = loading;
         submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
@@ -358,6 +397,7 @@
       if (overlay) {
         overlay.classList.toggle('hidden', !loading);
       }
+      if (loading && err) err.classList.add('hidden');
     };
 
     const buildPayload = (data) => ({
@@ -513,8 +553,14 @@
           renderScenes(scenes);
         } catch (err) {
           console.warn('API 실패, mock으로 대체', err);
+          const errBox = document.getElementById('scenario-error');
+          if (errBox) {
+            errBox.textContent = `시나리오 생성 실패: ${err.message || '알 수 없는 오류'}`;
+            errBox.classList.remove('hidden');
+          } else {
+            alert('시나리오 생성 중 오류가 발생했습니다.');
+          }
           renderScenes(mockGenerate(payload));
-          alert('API 응답이 없어 샘플 결과를 표시합니다.');
         } finally {
           setLoading(false);
         }
