@@ -401,6 +401,7 @@ body {
   background: var(--layer-soft);
   color: var(--text);
   flex: 1;
+  font-family: inherit;
 }
 .scenario-form select option {
   color: var(--text);
@@ -412,6 +413,12 @@ body {
 }
 
 .scenario-form textarea { resize: vertical; }
+
+.scenario-form input::placeholder,
+.scenario-form textarea::placeholder {
+  color: var(--muted);
+  font-style: normal;
+}
 
 .inline {
   display: flex;
