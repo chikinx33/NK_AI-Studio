@@ -465,21 +465,20 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 5px 8px;
-  border-radius: 10px;
+  padding: 4px 7px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--layer-soft);
   color: var(--text);
   cursor: pointer;
-  font-size: 12px;
-  min-width: 52px;
+  font-size: 11px;
+  min-width: 46px;
   transition: 0.12s ease;
 }
 
 #duration-tags {
-  flex-wrap: nowrap;
-  gap: 6px;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .duration-toggle.active {
