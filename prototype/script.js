@@ -247,29 +247,5 @@
       if (saved === 'light' || saved === 'dark') theme = saved;
     } catch (_) {}
     applyTheme();
-
-    // 링크를 복사 안내로 전환 (앱에서 강제 오픈되는 문제 회피)
-    const scenarioUrl = 'https://chat.openai.com/auth/login?next=/g/g-6978bb6d4f7481919aa066d37813ec88-nk-scenewriter-v0-1';
-    const toast = document.getElementById('toast');
-    const showToast = () => {
-      if (!toast) return;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 2600);
-    };
-    const copyScenarioUrl = async () => {
-      try {
-        await navigator.clipboard.writeText(scenarioUrl);
-        showToast();
-      } catch (_) {
-        alert('링크가 복사되지 않았어요. 주소를 직접 복사해 붙여넣어 주세요:\\n' + scenarioUrl);
-      }
-    };
-    document.querySelectorAll('[data-external-link="true"]').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        copyScenarioUrl();
-      });
-      el.setAttribute('title', '클릭하면 링크가 복사됩니다. 브라우저 주소창에 붙여넣어 주세요.');
-    });
   });
 })();
