@@ -403,8 +403,8 @@ body {
 }
 
 .content {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 18px;
 }
 
@@ -490,9 +490,10 @@ body {
 }
 
 .side-panels {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 12px;
+  width: 100%;
 }
 
 .panel {
