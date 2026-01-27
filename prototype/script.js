@@ -326,7 +326,6 @@
     };
 
     const mockGenerate = payload => {
-      // TODO: 실제 OpenAI API 호출로 교체
       const base = [
         { id: 1, title: '후킹', lines: `(${payload.purposeCategory || '목적'}) ${payload.topic} 한 줄 후킹`, estSec: 6 },
         { id: 2, title: '핵심 정보 1', lines: `${payload.target}에게 ${payload.topic}을 2포인트로 설명`, estSec: 12 },
@@ -336,6 +335,46 @@
       ];
       return base.map(s => ({ ...s, notes: '컷/자막/전환은 규칙 기반 자동 적용' }));
     };
+
+    const callScenarioAPI = async payload => {
+      const res = await fetch('/api/scenario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('api_error');
+      const data = await res.json();
+      if (!data || !Array.isArray(data.scenes)) throw new Error('invalid_response');
+      return data.scenes;
+    };
+
+    const setLoading = (loading) => {
+      const submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = loading;
+        submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
+      }
+    };
+
+    const buildPayload = (data) => ({
+      topic: data.get('topic') || '',
+      purposeCategory: data.get('purposeCategory') || '',
+      purposeTags: tagBox ? Array.from(tagBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
+      target: data.get('target') || '',
+      needs: needsBox ? Array.from(needsBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
+      tones: toneBox ? Array.from(toneBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
+      styles: styleBox ? Array.from(styleBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
+      duration: (() => {
+        if (!durationBox) return '15';
+        const active = durationBox.querySelector('.duration-toggle.active');
+        return active ? active.dataset.value || '15' : '15';
+      })(),
+      tone: (data.get('tone') || '').trim(),
+      style: (data.get('style') || '').trim(),
+      banned: data.get('banned') || '',
+      ctaEnabled: false,
+      ctaText: ''
+    });
 
     if (form && cardsEl) {
       // 목적 대분류/소분류 초기화
@@ -443,7 +482,7 @@
         if (def) def.classList.add('active');
       }
 
-      form.addEventListener('submit', e => {
+      form.addEventListener('submit', async e => {
         e.preventDefault();
         const data = new FormData(form);
         const hasPurpose = tagBox && tagBox.querySelector('.tag-toggle.active');
@@ -463,27 +502,18 @@
           alert('스타일을 입력하거나 세부 스타일 항목을 선택해 주세요.');
           return;
         }
-        const payload = {
-          topic: data.get('topic') || '',
-          purposeCategory: data.get('purposeCategory') || '',
-          purposeTags: tagBox ? Array.from(tagBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
-          target: data.get('target') || '',
-          needs: needsBox ? Array.from(needsBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
-          tones: toneBox ? Array.from(toneBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
-          styles: styleBox ? Array.from(styleBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
-          duration: (() => {
-            if (!durationBox) return '15';
-            const active = durationBox.querySelector('.duration-toggle.active');
-            return active ? active.dataset.value || '15' : '15';
-          })(),
-          tone: toneText,
-          style: styleText,
-          banned: data.get('banned') || '',
-          ctaEnabled: false,
-          ctaText: ''
-        };
-        const scenes = mockGenerate(payload);
-        renderScenes(scenes);
+        const payload = buildPayload(data);
+        setLoading(true);
+        try {
+          const scenes = await callScenarioAPI(payload);
+          renderScenes(scenes);
+        } catch (err) {
+          console.warn('API 실패, mock으로 대체', err);
+          renderScenes(mockGenerate(payload));
+          alert('API 응답이 없어 샘플 결과를 표시합니다.');
+        } finally {
+          setLoading(false);
+        }
       });
 
       form.addEventListener('reset', () => {
