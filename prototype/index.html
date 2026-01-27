@@ -42,30 +42,7 @@
 
     <main class="main">
       <header class="topbar">
-        <div class="project-picker">
-          <label data-i18n="project_label">파이프라인</label>
-          <div class="select">
-            <span>Solo Creator Mode</span>
-            <span class="caret">▾</span>
-          </div>
-        </div>
-        <div class="search">
-          <input type="text" data-i18n-placeholder="search_placeholder" placeholder="명령/검색 (Ctrl + K)" />
-        </div>
-        <div class="top-actions">
-          <div class="mode-toggle" aria-label="mode toggle">
-            <button class="mode-btn active" data-i18n="mode_test">Test</button>
-            <button class="mode-btn" data-i18n="mode_prod">Prod</button>
-          </div>
-          <button class="btn-ghost" data-i18n="notify">알림</button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()">☀</button>
-          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-          <div class="avatar">SJ</div>
-        </div>
-      </header>
-
-      <section class="channel-bar">
-        <div class="channel-left">
+        <div class="topbar-left">
           <h4 data-i18n="channels_title">채널</h4>
           <div class="chips">
             <span class="chip-filter active" data-i18n="ch_all">전체</span>
@@ -78,8 +55,14 @@
             <span class="chip-filter" data-i18n="ch_politics">정치(만화)</span>
           </div>
         </div>
-        <button class="btn-primary" data-i18n="btn_new_project">새 파이프라인</button>
-      </section>
+        <div class="top-actions">
+          <button class="btn-ghost" data-i18n="notify">알림</button>
+          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()">☀</button>
+          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
+          <div class="avatar">SJ</div>
+        </div>
+      </header>
+      <div class="main-body">
 
       <section class="hero-grid">
         <div class="card hero accent-orange">
@@ -357,14 +340,15 @@
               <div class="progress thin">
                 <div class="fill" style="width: 68%"></div>
               </div>
-              <div class="meta-row">
-                <span data-i18n="storage_usage">크레딧 68% 사용</span>
-                <span class="muted" data-i18n="storage_meta">GPU 분 120 · 캐시 120GB · Scene당 예상 0.3크레딧</span>
-              </div>
-            </div>
+          <div class="meta-row">
+            <span data-i18n="storage_usage">크레딧 68% 사용</span>
+            <span class="muted" data-i18n="storage_meta">GPU 분 120 · 캐시 120GB · Scene당 예상 0.3크레딧</span>
           </div>
+        </div>
+      </div>
         </aside>
       </section>
+      </div>
     </main>
   </div>
 </body>

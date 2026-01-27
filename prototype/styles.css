@@ -173,16 +173,37 @@ body {
 
 .main {
   padding: 24px 32px 40px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 18px;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .topbar {
-  display: grid;
-  grid-template-columns: 220px 1fr 320px;
+  display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(12, 19, 38, 0.95), rgba(10, 17, 32, 0.92));
+}
+
+.main-body {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-right: 4px;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .project-picker label {
@@ -405,21 +426,6 @@ body {
   display: flex;
   gap: 8px;
   margin-top: 6px;
-}
-
-.channel-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin: 4px 0 14px;
-  padding: 14px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: radial-gradient(circle at 10% 10%, rgba(255, 122, 0, 0.08), transparent 38%),
-    radial-gradient(circle at 90% 0%, rgba(11, 191, 165, 0.12), transparent 40%),
-    linear-gradient(135deg, rgba(12, 19, 38, 0.9), rgba(8, 14, 28, 0.94));
-  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.25);
 }
 
 .channel-left h4 {
