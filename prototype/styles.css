@@ -269,16 +269,13 @@ body {
 }
 
 [data-theme="dark"] .theme-toggle {
-  color: #ffd79f;
-  background: var(--layer-soft);
-  border-color: rgba(255, 255, 255, 0.25);
+  color: #f3c97b;
 }
 
 [data-theme="light"] .theme-toggle {
-  color: #b75800;
-  background: #e6ecf7;
-  border-color: #cdd9ee;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  color: #2a3045; /* 달 아이콘 대비 강화: 더 어두운 톤 */
+  background: var(--layer-soft);
+  border-color: var(--border);
 }
 
 .avatar {
