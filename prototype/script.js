@@ -1,7 +1,7 @@
 ﻿(function() {
   const translations = {
     en: {
-      brand_title: '* NK_Studio *',
+      brand_title: 'NK_Studio',
       brand_subtitle: 'Automated Video Pipeline',
       nav_dashboard: 'Dashboard',
       nav_scenario: 'Scenario (GPT)',
@@ -98,7 +98,7 @@
       theme_to_dark: 'Dark',
     },
     ko: {
-      brand_title: '* NK_Studio *',
+      brand_title: 'NK_Studio',
       brand_subtitle: '자동화 영상 제작 파이프라인',
       nav_dashboard: '대시보드',
       nav_scenario: '시나리오(GPT)',
