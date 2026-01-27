@@ -471,7 +471,7 @@ body {
   background: var(--layer-soft);
   color: var(--text);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 10px;
   min-width: 46px;
   transition: 0.12s ease;
 }
