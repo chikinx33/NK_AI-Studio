@@ -485,6 +485,7 @@ body {
 #duration-tags {
   flex-wrap: wrap;
   gap: 4px;
+  justify-content: flex-start;
 }
 
 .duration-toggle.active {
