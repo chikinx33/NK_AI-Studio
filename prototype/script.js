@@ -249,12 +249,12 @@
     applyTheme();
 
     // 강제 외부 브라우저 열기 (앱 내 웹뷰가 아닌 새 탭)
+    const scenarioUrl = 'https://chat.openai.com/auth/login?next=/g/g-6978bb6d4f7481919aa066d37813ec88-nk-scenewriter-v0-1';
     document.querySelectorAll('[data-external-link="true"]').forEach(el => {
+      el.setAttribute('href', scenarioUrl);
       el.addEventListener('click', e => {
         e.preventDefault();
-        const url = el.getAttribute('href');
-        if (!url) return;
-        window.open(url, '_blank', 'noopener');
+        window.open(scenarioUrl, '_blank', 'noopener,noreferrer');
       });
     });
   });
