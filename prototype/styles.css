@@ -398,6 +398,14 @@ body {
   background: var(--layer-soft);
   color: var(--text);
 }
+.scenario-form select option {
+  color: var(--text);
+  background: var(--bg-2);
+}
+[data-theme="light"] .scenario-form select option {
+  background: #ffffff;
+  color: #0f172a;
+}
 
 .scenario-form textarea { resize: vertical; }
 
