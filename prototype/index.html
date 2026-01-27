@@ -1,0 +1,233 @@
+﻿<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NK_Studio · Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="grain"></div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">NK</div>
+        <div class="brand-text">
+          <span class="title" data-i18n="brand_title">NK_Studio</span>
+          <span class="subtitle" data-i18n="brand_subtitle">통합 영상 랩</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item active" href="#">
+          <span class="dot"></span><span data-i18n="nav_dashboard">대시보드</span>
+        </a>
+        <a class="nav-item" href="#"><span data-i18n="nav_research">리서치 · 시장</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_script">시나리오 · 대본</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_media">미디어 랩</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_timeline">타임라인 · 편집</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_voice">더빙 · 자막</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_render">렌더 큐</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_publish">배포</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="pill warn" data-i18n="badge_render_queue">렌더 큐 3</div>
+        <button class="btn-secondary" data-i18n="btn_new_project">새 프로젝트</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="project-picker">
+          <label data-i18n="project_label">프로젝트</label>
+          <div class="select">
+            <span>Alpha Studio Pitch</span>
+            <span class="caret">▾</span>
+          </div>
+        </div>
+        <div class="search">
+          <input type="text" data-i18n-placeholder="search_placeholder" placeholder="명령/검색 (Ctrl + K)" />
+        </div>
+        <div class="top-actions">
+          <button class="btn-ghost" data-i18n="notify">알림</button>
+          <button class="btn-primary" data-i18n="btn_new_project">새 프로젝트</button>
+          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()">☀</button>
+          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
+          <div class="avatar">SJ</div>
+        </div>
+      </header>
+
+      <section class="hero-grid">
+        <div class="card hero accent-orange">
+          <div>
+            <p class="eyebrow" data-i18n="hero_fast">빠르게 시작</p>
+            <h2 data-i18n="hero_new_project">새 프로젝트 만들기</h2>
+            <p class="muted" data-i18n="hero_new_desc">목적·플랫폼·길이만 선택하면 적합한 템플릿을 추천해요.</p>
+          </div>
+          <button class="btn-primary" data-i18n="btn_create_project">프로젝트 생성</button>
+        </div>
+        <div class="card hero">
+          <div>
+            <p class="eyebrow" data-i18n="hero_templates">템플릿</p>
+            <h3 data-i18n="hero_templates_title">플랫폼별 프리셋</h3>
+            <p class="muted" data-i18n="hero_templates_desc">YouTube / Shorts / TikTok / IG Reels</p>
+          </div>
+          <button class="btn-secondary" data-i18n="btn_browse">둘러보기</button>
+        </div>
+        <div class="card hero">
+          <div>
+            <p class="eyebrow" data-i18n="hero_recent">최근 작업</p>
+            <h3 data-i18n="hero_recent_title">어제 중단한 지점에서 이어하기</h3>
+            <p class="muted" data-i18n="hero_recent_desc">Script · Story 단계 62% 완료</p>
+          </div>
+          <button class="btn-secondary" data-i18n="btn_continue">계속하기</button>
+        </div>
+      </section>
+
+      <section class="content">
+        <div class="projects">
+          <div class="section-head">
+            <h3 data-i18n="section_projects">진행 중 프로젝트</h3>
+            <button class="btn-ghost" data-i18n="btn_view_all">전체 보기</button>
+          </div>
+          <div class="project-grid">
+            <article class="card project">
+              <div class="card-accent orange"></div>
+              <div class="project-top">
+                <div>
+                  <p class="eyebrow" data-i18n="card1_eyebrow">브랜드 캠페인</p>
+                  <h4 data-i18n="card1_title">Nova Energy Launch</h4>
+                </div>
+                <span class="chip" data-i18n="chip_timeline">타임라인 · 편집</span>
+              </div>
+              <p class="muted" data-i18n="card1_desc">30초 TVC + 15초 소셜 컷 5종</p>
+              <div class="progress">
+                <div class="fill" style="width: 78%"></div>
+              </div>
+              <div class="meta-row">
+                <span><span data-i18n="meta_owner">담당:</span> Mia</span>
+                <span class="muted" data-i18n="meta_eta">ETA 1시간 12분</span>
+              </div>
+            </article>
+
+            <article class="card project">
+              <div class="card-accent teal"></div>
+              <div class="project-top">
+                <div>
+                  <p class="eyebrow" data-i18n="card2_eyebrow">리서치 → 대본</p>
+                  <h4 data-i18n="card2_title">Travel Vlog Series</h4>
+                </div>
+                <span class="chip pale" data-i18n="chip_script">시나리오 · 대본</span>
+              </div>
+              <p class="muted" data-i18n="card2_desc">6개 도시, 멀티랭 더빙 예정</p>
+              <div class="progress">
+                <div class="fill teal" style="width: 52%"></div>
+              </div>
+              <div class="meta-row">
+                <span><span data-i18n="meta_owner">담당:</span> Jun</span>
+                <span class="muted" data-i18n="meta_deadline">마감: 오늘 18:00</span>
+              </div>
+            </article>
+
+            <article class="card project">
+              <div class="card-accent blue"></div>
+              <div class="project-top">
+                <div>
+                  <p class="eyebrow" data-i18n="card3_eyebrow">렌더 대기</p>
+                  <h4 data-i18n="card3_title">Product How-to</h4>
+                </div>
+                <span class="chip warn" data-i18n="chip_render">렌더 큐</span>
+              </div>
+              <p class="muted" data-i18n="card3_desc">1080p · 3분 · 자막 번인 요청</p>
+              <div class="progress">
+                <div class="fill" style="width: 18%"></div>
+              </div>
+              <div class="meta-row">
+                <span><span data-i18n="meta_owner">담당:</span> Dana</span>
+                <span class="muted" data-i18n="meta_queue">대기열 2/5</span>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <aside class="side-panels">
+          <div class="panel">
+            <div class="section-head">
+              <h4 data-i18n="side_activity">팀 활동</h4>
+              <button class="btn-ghost" data-i18n="btn_log">로그</button>
+            </div>
+            <ul class="activity">
+              <li>
+                <div>
+                  <strong>Mia</strong> <span data-i18n="act1">가 Nova Energy 씬 04에 코멘트 추가</span>
+                </div>
+                <span class="muted" data-i18n="ago2m">2분 전</span>
+              </li>
+              <li>
+                <div>
+                  <strong>Jun</strong> <span data-i18n="act2">이 Travel Vlog 대본을 v1.3으로 업데이트</span>
+                </div>
+                <span class="muted" data-i18n="ago35m">35분 전</span>
+              </li>
+              <li>
+                <div>
+                  <strong>Dana</strong> <span data-i18n="act3">가 Product How-to를 렌더 큐에 추가</span>
+                </div>
+                <span class="muted" data-i18n="ago1h">1시간 전</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <h4 data-i18n="side_queue">렌더 큐</h4>
+              <button class="btn-ghost" data-i18n="btn_view_all_queue">모두 보기</button>
+            </div>
+            <div class="queue">
+              <div class="queue-row">
+                <div>
+                  <p class="eyebrow">1080p</p>
+                  <p data-i18n="queue1_title">How-to · 03:12</p>
+                </div>
+                <div class="pill warn" data-i18n="queue1_badge">대기</div>
+              </div>
+              <div class="queue-row">
+                <div>
+                  <p class="eyebrow">4K</p>
+                  <p data-i18n="queue2_title">Nova Energy · 00:30</p>
+                </div>
+                <div class="pill" data-i18n="queue2_badge">인코딩 64%</div>
+              </div>
+              <div class="queue-row">
+                <div>
+                  <p class="eyebrow">720p</p>
+                  <p data-i18n="queue3_title">Social cut set</p>
+                </div>
+                <div class="pill neutral" data-i18n="queue3_badge">완료</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <div class="section-head">
+              <h4 data-i18n="storage">스토리지</h4>
+            </div>
+            <div class="storage">
+              <div class="progress thin">
+                <div class="fill" style="width: 68%"></div>
+              </div>
+              <div class="meta-row">
+                <span data-i18n="storage_usage">68% / 2TB</span>
+                <span class="muted" data-i18n="storage_meta">프리뷰 캐시 120GB</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
