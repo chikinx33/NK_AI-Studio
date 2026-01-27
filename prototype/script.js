@@ -200,13 +200,13 @@
   let theme = 'dark';
   const purposeCategories = {
     '키즈 · 영유아': ['영유아','유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
-    '스토리 · 서사': ['동화','창작 이야기','에피소드형 스토리','세계관 스토리','판타지','힐링 스토리'],
+    '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
     '지식 · 교양': ['상식','과학','수학','역사','인문학','철학','심리','시사'],
     '교육 · 학습': ['공부법','시험 대비','자격증','언어 학습','코딩','튜토리얼'],
     '음식 · 요리': ['레시피','먹방','맛집 소개','요리 과정','음식 리뷰','홈쿡'],
     '여행 · 관광': ['국내 여행','해외 여행','관광지 소개','숨은 명소','랜선 여행'],
     '라이프 · 일상': ['브이로그','일상 기록','루틴','자취','육아','직장 생활'],
-    '리뷰 · 추천': ['제품 리뷰','서비스 리뷰','콘텐츠 추천','앱 리뷰','게임 리뷰','책 리뷰','영화 리뷰'],
+    '리뷰 · 추천': ['제품','서비스','콘텐츠 추천','앱','게임','책','영화'],
     '엔터테인먼트': ['코미디','패러디','챌린지','리액션','밈 콘텐츠'],
     '게임': ['게임 플레이','공략','하이라이트','게임 리뷰','모바일 게임'],
     '음악 · 사운드': ['음악 소개','BGM','커버','ASMR','사운드 콘텐츠'],
@@ -223,6 +223,14 @@
     '생산성','자기계발','시험','진로','커리어','창업','경제','재테크','소비','노후 설계','정치',
     '사회 이슈','시사','건강','운동','식습관','여가','취미','여행','스트레스 해소','멘탈 관리',
     '관계','가정','자녀','연애','소통','자기 성찰','라이프스타일'
+  ];
+  const toneList = [
+    '담백','신뢰감','차분함','유머러스','경쾌함','진지함','따뜻함','공감형','감성적','중립적',
+    '설득형','객관적','전문적','친근함','위로형','동기부여형','논리적','정보 중심','스토리 중심'
+  ];
+  const styleList = [
+    '실사','다큐 스타일','브이로그','만화','애니메이션','일러스트','모션그래픽','인포그래픽','슬라이드형',
+    '스크린 캡처','UI 중심','텍스트 중심','미니멀','컬러풀','심플','레트로','시네마틱'
   ];
 
   const apply = () => {
@@ -333,6 +341,8 @@
       const tagBox = document.getElementById('purpose-tags');
       const needsBox = document.getElementById('needs-tags');
       const durationBox = document.getElementById('duration-tags');
+      const toneBox = document.getElementById('tone-tags');
+      const styleBox = document.getElementById('style-tags');
       if (catSelect && tagBox) {
         Object.keys(purposeCategories).forEach(cat => {
           const opt = document.createElement('option');
@@ -379,6 +389,40 @@
         });
       }
 
+      if (toneBox) {
+        toneList.forEach(n => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'tag-toggle';
+          btn.textContent = n;
+          btn.dataset.value = n;
+          toneBox.appendChild(btn);
+        });
+        toneBox.addEventListener('click', e => {
+          const target = e.target;
+          if (target instanceof HTMLElement && target.classList.contains('tag-toggle')) {
+            target.classList.toggle('active');
+          }
+        });
+      }
+
+      if (styleBox) {
+        styleList.forEach(n => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'tag-toggle';
+          btn.textContent = n;
+          btn.dataset.value = n;
+          styleBox.appendChild(btn);
+        });
+        styleBox.addEventListener('click', e => {
+          const target = e.target;
+          if (target instanceof HTMLElement && target.classList.contains('tag-toggle')) {
+            target.classList.toggle('active');
+          }
+        });
+      }
+
       if (durationBox) {
         // single-select behavior
         durationBox.addEventListener('click', e => {
@@ -401,6 +445,8 @@
           purposeTags: tagBox ? Array.from(tagBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
           target: data.get('target') || '',
           needs: needsBox ? Array.from(needsBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
+          tones: toneBox ? Array.from(toneBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
+          styles: styleBox ? Array.from(styleBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
           duration: (() => {
             if (!durationBox) return '15';
             const active = durationBox.querySelector('.duration-toggle.active');
