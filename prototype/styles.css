@@ -114,12 +114,11 @@ body::-webkit-scrollbar {
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: linear-gradient(145deg, #ff7a00, #ff9f3a);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  color: #0b0b0b;
-  letter-spacing: 0.6px;
+  background: #0b1224;
+  background-image: url('./images/logo.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .brand-text .title {
