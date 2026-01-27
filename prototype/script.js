@@ -337,20 +337,22 @@
           tagBox.innerHTML = '';
           const sel = catSelect.value;
           (purposeCategories[sel] || []).forEach(tag => {
-            const id = `tag-${tag}`;
-            const label = document.createElement('label');
-            label.className = 'tag-check';
-            const input = document.createElement('input');
-            input.type = 'checkbox';
-            input.name = 'purposeTags';
-            input.value = tag;
-            label.appendChild(input);
-            label.appendChild(document.createTextNode(tag));
-            tagBox.appendChild(label);
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tag-toggle';
+            btn.dataset.value = tag;
+            btn.textContent = tag;
+            tagBox.appendChild(btn);
           });
         };
         catSelect.addEventListener('change', renderTags);
         renderTags();
+        tagBox.addEventListener('click', e => {
+          const target = e.target;
+          if (target instanceof HTMLElement && target.classList.contains('tag-toggle')) {
+            target.classList.toggle('active');
+          }
+        });
       }
 
       if (needsBox) {
@@ -376,7 +378,7 @@
         const payload = {
           topic: data.get('topic') || '',
           purposeCategory: data.get('purposeCategory') || '',
-          purposeTags: data.getAll('purposeTags') || [],
+          purposeTags: tagBox ? Array.from(tagBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
           target: data.get('target') || '',
           needs: needsBox ? Array.from(needsBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
           duration: data.get('duration') || '30',
