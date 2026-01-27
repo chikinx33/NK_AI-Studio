@@ -247,5 +247,15 @@
       if (saved === 'light' || saved === 'dark') theme = saved;
     } catch (_) {}
     applyTheme();
+
+    // 강제 외부 브라우저 열기 (앱 내 웹뷰가 아닌 새 탭)
+    document.querySelectorAll('[data-external-link="true"]').forEach(el => {
+      el.addEventListener('click', e => {
+        e.preventDefault();
+        const url = el.getAttribute('href');
+        if (!url) return;
+        window.open(url, '_blank', 'noopener');
+      });
+    });
   });
 })();
