@@ -191,9 +191,9 @@ body {
   background: linear-gradient(135deg, rgba(12, 19, 38, 0.95), rgba(10, 17, 32, 0.92));
 }
 [data-theme="light"] .topbar {
-  background: linear-gradient(135deg, #1b2a44, #121f39);
-  border-color: rgba(255,255,255,0.12);
-  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+  background: linear-gradient(135deg, #f8fbff, #e7eef8);
+  border-color: #d7e1f3;
+  box-shadow: 0 10px 24px rgba(13, 23, 47, 0.08);
 }
 
 .main-body {
@@ -459,6 +459,22 @@ body {
   background: rgba(255, 122, 0, 0.16);
   color: #ffb86a;
   box-shadow: 0 8px 22px rgba(255, 122, 0, 0.25);
+}
+[data-theme="light"] .chip-filter {
+  background: rgba(13, 23, 47, 0.05);
+  border-color: #cbd6ea;
+  color: #0d172f;
+}
+[data-theme="light"] .chip-filter.active {
+  background: rgba(255, 122, 0, 0.18);
+  border-color: rgba(255, 122, 0, 0.8);
+  color: #b35400;
+  box-shadow: 0 10px 26px rgba(255, 122, 0, 0.18);
+}
+
+[data-theme="light"] .top-actions .btn-ghost {
+  border-color: #cbd6ea;
+  color: #0d172f;
 }
 
 .card {
