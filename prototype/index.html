@@ -62,6 +62,23 @@
         </div>
       </header>
 
+      <section class="channel-bar">
+        <div class="channel-left">
+          <h4 data-i18n="channels_title">채널</h4>
+          <div class="chips">
+            <span class="chip-filter active" data-i18n="ch_all">전체</span>
+            <span class="chip-filter" data-i18n="ch_knowledge">지식</span>
+            <span class="chip-filter" data-i18n="ch_history">역사</span>
+            <span class="chip-filter" data-i18n="ch_food">음식</span>
+            <span class="chip-filter" data-i18n="ch_local">지역</span>
+            <span class="chip-filter" data-i18n="ch_economy">경제</span>
+            <span class="chip-filter" data-i18n="ch_science">과학</span>
+            <span class="chip-filter" data-i18n="ch_politics">정치(만화)</span>
+          </div>
+        </div>
+        <button class="btn-primary" data-i18n="btn_new_project">새 파이프라인</button>
+      </section>
+
       <section class="hero-grid">
         <div class="card hero accent-orange">
           <div>
@@ -156,6 +173,39 @@
         </div>
 
         <aside class="side-panels">
+          <div class="panel">
+            <div class="section-head">
+              <h4 data-i18n="proj_list_title">프로젝트 리스트</h4>
+              <button class="btn-ghost" data-i18n="btn_new_project">새 파이프라인</button>
+            </div>
+            <div class="proj-table">
+              <div class="proj-row head">
+                <span data-i18n="col_channel">채널</span>
+                <span data-i18n="col_title">프로젝트</span>
+                <span data-i18n="col_mode">모드</span>
+                <span data-i18n="col_status">상태</span>
+              </div>
+              <div class="proj-row">
+                <span data-i18n="ch_knowledge">지식</span>
+                <span>AI Basics 10분 컷</span>
+                <span class="chip neutral" data-i18n="scene_status_test">모드: Test</span>
+                <span class="chip alert" data-i18n="chip_fail">⚠ 실패 Scene</span>
+              </div>
+              <div class="proj-row">
+                <span data-i18n="ch_food">음식</span>
+                <span>Street Food Seoul</span>
+                <span class="chip neutral" data-i18n="scene_status">모드: Prod</span>
+                <span class="chip" data-i18n="chip_ok">정상</span>
+              </div>
+              <div class="proj-row">
+                <span data-i18n="ch_science">과학</span>
+                <span>Space Myths</span>
+                <span class="chip neutral" data-i18n="scene_status_test">모드: Test</span>
+                <span class="chip alert" data-i18n="chip_fail">⚠ 실패 Scene</span>
+              </div>
+            </div>
+          </div>
+
           <div class="panel">
             <div class="section-head">
               <h4 data-i18n="side_activity">AI 작업 로그</h4>

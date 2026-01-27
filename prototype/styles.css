@@ -319,6 +319,40 @@ body {
   gap: 14px;
 }
 
+.channel-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.channel-left h4 {
+  margin: 0 0 6px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip-filter {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.chip-filter.active {
+  border-color: rgba(255, 122, 0, 0.6);
+  background: rgba(255, 122, 0, 0.12);
+  color: #ffb86a;
+}
+
 .card {
   background: var(--card);
   border: 1px solid var(--border);
@@ -496,6 +530,31 @@ body {
   border-color: rgba(255, 122, 0, 0.6);
   box-shadow: 0 10px 24px rgba(255, 122, 0, 0.18);
   background: linear-gradient(90deg, rgba(255, 122, 0, 0.15), transparent);
+}
+
+.proj-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.proj-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1.2fr 1.2fr;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--layer-strong);
+  font-size: 14px;
+}
+
+.proj-row.head {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .rules {
