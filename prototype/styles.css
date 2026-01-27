@@ -372,7 +372,7 @@ body {
 
 .scenario-grid {
   display: grid;
-  grid-template-columns: 0.36fr 0.64fr;
+  grid-template-columns: 0.3fr 0.7fr;
   gap: 14px;
   align-items: start;
 }
@@ -406,6 +406,8 @@ body {
   color: var(--text);
   flex: 1;
   font-family: inherit;
+  min-width: 0;
+  width: 100%;
 }
 .scenario-form select option {
   color: var(--text);
