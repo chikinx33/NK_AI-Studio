@@ -178,10 +178,11 @@
     const t = translations[current];
     const btn = document.querySelector('[data-theme-toggle]');
     if (!btn || !t) return;
-    const to = theme === 'dark' ? 'light' : 'dark';
-    btn.textContent = to === 'light' ? '☀' : '🌙';
-    btn.setAttribute('aria-label', to === 'light' ? t.theme_to_light : t.theme_to_dark);
-    btn.setAttribute('title', to === 'light' ? t.theme_to_light : t.theme_to_dark);
+    const target = theme === 'dark' ? 'light' : 'dark';
+    // 아이콘은 현재 테마를 표현, 라벨/타이틀은 전환될 테마를 안내
+    btn.textContent = theme === 'dark' ? '🌙' : '☀';
+    btn.setAttribute('aria-label', target === 'light' ? t.theme_to_light : t.theme_to_dark);
+    btn.setAttribute('title', target === 'light' ? t.theme_to_light : t.theme_to_dark);
   };
 
   document.addEventListener('DOMContentLoaded', apply);
