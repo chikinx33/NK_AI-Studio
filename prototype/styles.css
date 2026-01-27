@@ -204,6 +204,11 @@ body {
   padding-right: 4px;
 }
 
+/* 스크롤바 숨기기 (기능 유지) */
+.main-body::-webkit-scrollbar { width: 0; height: 0; }
+.main-body { scrollbar-width: none; }
+.main-body::-webkit-scrollbar-thumb { background: transparent; }
+
 .topbar-left {
   display: flex;
   align-items: center;
