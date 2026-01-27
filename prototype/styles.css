@@ -436,19 +436,20 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   padding: 6px 4px;
+  justify-content: flex-end;
 }
 
 .tag-toggle {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  border-radius: 10px;
+  padding: 4px 7px;
+  border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--layer-soft);
   color: var(--muted);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 500;
   transition: 0.12s ease;
 }
@@ -471,7 +472,7 @@ body {
   background: var(--layer-soft);
   color: var(--text);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 11px;
   min-width: 46px;
   transition: 0.12s ease;
 }
