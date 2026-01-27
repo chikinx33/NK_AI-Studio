@@ -30,21 +30,21 @@
   --bg: #f7f9fd;
   --bg-2: #eef2fb;
   --card: #ffffff;
-  --panel: #f4f6fc;
-  --border: #d9e2f4;
-  --text: #0f172a;
-  --muted: #5b6c90;
-  --shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
-  --bg-glow1: rgba(255, 122, 0, 0.14);
-  --bg-glow2: rgba(11, 191, 165, 0.18);
+  --panel: #ffffff;
+  --border: #cbd6ea;
+  --text: #0d172f;
+  --muted: #51617f;
+  --shadow: 0 10px 26px rgba(13, 23, 47, 0.1);
+  --bg-glow1: rgba(255, 122, 0, 0.08);
+  --bg-glow2: rgba(11, 191, 165, 0.1);
   --bg-grad1: #f7f9fd;
-  --bg-grad2: #eef3ff;
-  --bg-grad3: #e7edf9;
-  --layer-soft: rgba(15, 23, 42, 0.05);
-  --layer-strong: rgba(15, 23, 42, 0.08);
-  --progress-bg: rgba(15, 23, 42, 0.08);
-  --chip-border: rgba(15, 23, 42, 0.12);
-  --pill-border: rgba(15, 23, 42, 0.12);
+  --bg-grad2: #eef2fa;
+  --bg-grad3: #e8edf8;
+  --layer-soft: rgba(13, 23, 47, 0.04);
+  --layer-strong: rgba(13, 23, 47, 0.06);
+  --progress-bg: rgba(13, 23, 47, 0.08);
+  --chip-border: rgba(13, 23, 47, 0.12);
+  --pill-border: rgba(13, 23, 47, 0.12);
 }
 
 * {
@@ -189,6 +189,11 @@ body {
   border: 1px solid var(--border);
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(12, 19, 38, 0.95), rgba(10, 17, 32, 0.92));
+}
+[data-theme="light"] .topbar {
+  background: linear-gradient(135deg, #1b2a44, #121f39);
+  border-color: rgba(255,255,255,0.12);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
 }
 
 .main-body {
@@ -465,6 +470,10 @@ body {
   overflow: hidden;
   box-shadow: var(--shadow);
 }
+[data-theme="light"] .card {
+  border-color: #d7e1f3;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.12);
+}
 
 .card.hero {
   display: flex;
@@ -547,6 +556,10 @@ body {
   border-radius: 999px;
   font-size: 12px;
 }
+[data-theme="light"] .chip {
+  background: rgba(13, 23, 47, 0.06);
+  color: #0d172f;
+}
 
 .chip.pale { color: #0b7f6c; border-color: rgba(11, 191, 165, 0.3); }
 [data-theme="dark"] .chip.pale { color: #a4fff2; }
@@ -596,6 +609,10 @@ body {
   border-radius: var(--radius);
   padding: 14px 14px 12px;
   box-shadow: var(--shadow);
+}
+[data-theme="light"] .panel {
+  border-color: #d7e1f3;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
 .activity {
