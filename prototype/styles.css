@@ -381,7 +381,7 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   margin-bottom: 10px;
 }
 
@@ -389,7 +389,7 @@ body {
   color: #ff7a00;
   font-size: 15px;
   font-weight: 700;
-  min-width: 130px;
+  min-width: 110px;
   flex-shrink: 0;
 }
 [data-theme="light"] .scenario-form label {
