@@ -187,12 +187,12 @@ body::-webkit-scrollbar {
 }
 
 .main {
-  padding: 24px 32px 40px;
+  padding: 16px 24px 24px;
   display: grid;
   grid-template-rows: auto 1fr;
-  gap: 18px;
+  gap: 12px;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -215,14 +215,14 @@ body::-webkit-scrollbar {
 }
 
 .main-body {
-  height: auto;
-  max-height: none;
-  overflow: visible;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
   padding-right: 4px;
-  padding-bottom: 24px;
+  padding-bottom: 8px;
 }
 
 .topbar-left {
@@ -392,7 +392,7 @@ body::-webkit-scrollbar {
 .scenario-section {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
   height: 100%;
 }
 
@@ -402,7 +402,8 @@ body::-webkit-scrollbar {
   grid-template-rows: auto 1fr;
   gap: 14px;
   align-items: start;
-  height: auto;
+  height: 100%;
+  min-height: 0;
 }
 
 .section-caption {
@@ -431,15 +432,17 @@ body::-webkit-scrollbar {
 .card.scenario-form {
   display: flex;
   flex-direction: column;
-  overflow: visible;
-  height: auto;
+  overflow: hidden;
+  height: 100%;
+  min-height: 0;
 }
 
 .results-card {
   display: flex;
   flex-direction: column;
-  height: auto;
+  height: 100%;
   overflow: hidden;
+  min-height: 0;
 }
 
 .scenario-form .form-group {
@@ -577,6 +580,7 @@ body::-webkit-scrollbar {
   display: grid;
   gap: 12px;
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
   scrollbar-width: none;
