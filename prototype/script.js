@@ -247,5 +247,83 @@
       if (saved === 'light' || saved === 'dark') theme = saved;
     } catch (_) {}
     applyTheme();
+
+    // 시나리오 폼 핸들링 (모의 API)
+    const form = document.getElementById('scenario-form');
+    const ctaCheck = document.getElementById('cta-check');
+    const ctaText = document.getElementById('cta-text');
+    const cardsEl = document.getElementById('scenario-cards');
+    const confirmBtn = document.getElementById('confirm-scenes');
+
+    if (ctaCheck && ctaText) {
+      ctaCheck.addEventListener('change', () => {
+        ctaText.disabled = !ctaCheck.checked;
+        if (!ctaCheck.checked) ctaText.value = '';
+      });
+    }
+
+    const renderScenes = scenes => {
+      if (!cardsEl) return;
+      if (!scenes || !scenes.length) {
+        cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
+        return;
+      }
+      cardsEl.innerHTML = scenes
+        .map(
+          s => `
+          <div class="scenario-card">
+            <div class="card-top">
+              <div>
+                <p class="eyebrow">Scene ${s.id}</p>
+                <h5>${s.title}</h5>
+              </div>
+              <span class="chip neutral">${s.estSec}s</span>
+            </div>
+            <p>${s.lines}</p>
+            ${s.notes ? `<p class="muted">${s.notes}</p>` : ''}
+            <div class="actions">
+              <button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
+              <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
+              <button class="btn-ghost" data-action="delete" data-id="${s.id}">삭제</button>
+            </div>
+          </div>`
+        )
+        .join('');
+    };
+
+    const mockGenerate = payload => {
+      // TODO: 실제 OpenAI API 호출로 교체
+      const base = [
+        { id: 1, title: '후킹', lines: `(${payload.purpose}) ${payload.topic} 한 줄 후킹`, estSec: 8 },
+        { id: 2, title: '핵심 정보', lines: `${payload.target}에게 ${payload.topic}을 2포인트로 설명`, estSec: 14 },
+        { id: 3, title: '전환/CTA', lines: payload.ctaEnabled ? `CTA: ${payload.ctaText || '더 알아보기'}` : '마무리 멘트', estSec: 8 }
+      ];
+      return base.map(s => ({ ...s, notes: '컷/자막/전환은 규칙 기반 자동 적용' }));
+    };
+
+    if (form && cardsEl) {
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        const data = new FormData(form);
+        const payload = {
+          topic: data.get('topic') || '',
+          purpose: data.get('purpose') || '정보',
+          target: data.get('target') || '',
+          duration: data.get('duration') || '30',
+          tone: data.get('tone') || '',
+          banned: data.get('banned') || '',
+          ctaEnabled: data.get('cta') === 'on',
+          ctaText: data.get('ctaText') || ''
+        };
+        const scenes = mockGenerate(payload);
+        renderScenes(scenes);
+      });
+    }
+
+    if (confirmBtn) {
+      confirmBtn.addEventListener('click', () => {
+        alert('최종 컨펌된 씬이 "씬 파이프라인"으로 전달됩니다. (데모 모드)');
+      });
+    }
   });
 })();
