@@ -325,6 +325,7 @@
       // 목적 대분류/소분류 초기화
       const catSelect = document.getElementById('purpose-category');
       const tagBox = document.getElementById('purpose-tags');
+      const needsBox = document.getElementById('needs-tags');
       if (catSelect && tagBox) {
         Object.keys(purposeCategories).forEach(cat => {
           const opt = document.createElement('option');
@@ -352,6 +353,23 @@
         renderTags();
       }
 
+      if (needsBox) {
+        needsList.forEach(n => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'tag-toggle';
+          btn.textContent = n;
+          btn.dataset.value = n;
+          needsBox.appendChild(btn);
+        });
+        needsBox.addEventListener('click', e => {
+          const target = e.target;
+          if (target instanceof HTMLElement && target.classList.contains('tag-toggle')) {
+            target.classList.toggle('active');
+          }
+        });
+      }
+
       form.addEventListener('submit', e => {
         e.preventDefault();
         const data = new FormData(form);
@@ -360,6 +378,7 @@
           purposeCategory: data.get('purposeCategory') || '',
           purposeTags: data.getAll('purposeTags') || [],
           target: data.get('target') || '',
+          needs: needsBox ? Array.from(needsBox.querySelectorAll('.tag-toggle.active')).map(el => el.dataset.value) : [],
           duration: data.get('duration') || '30',
           tone: data.get('tone') || '',
           banned: data.get('banned') || '',
@@ -378,3 +397,9 @@
     }
   });
 })();
+  const needsList = [
+    '학습','놀이','엔터테인먼트','스토리','감성','힐링','공감','실용 정보','생활 정보','업무 효율',
+    '생산성','자기계발','시험','진로','커리어','창업','경제','재테크','소비','노후 설계','정치',
+    '사회 이슈','시사','건강','운동','식습관','여가','취미','여행','스트레스 해소','번아웃 회복',
+    '멘탈 관리','관계','가정','자녀','연애','소통','자기 성찰','라이프스타일'
+  ];
