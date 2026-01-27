@@ -350,9 +350,13 @@
 
     const setLoading = (loading) => {
       const submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
+      const overlay = document.getElementById('scenario-loading');
       if (submitBtn) {
         submitBtn.disabled = loading;
         submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
+      }
+      if (overlay) {
+        overlay.classList.toggle('hidden', !loading);
       }
     };
 
