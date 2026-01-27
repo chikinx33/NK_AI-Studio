@@ -442,17 +442,39 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border-radius: 12px;
+  padding: 6px 10px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--layer-soft);
   color: var(--text);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   transition: 0.12s ease;
 }
 
 .tag-toggle.active {
+  border-color: rgba(255, 122, 0, 0.8);
+  background: rgba(255, 122, 0, 0.16);
+  color: #b35400;
+  box-shadow: 0 8px 20px rgba(255, 122, 0, 0.22);
+}
+
+.duration-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  min-width: 64px;
+  transition: 0.12s ease;
+}
+
+.duration-toggle.active {
   border-color: rgba(255, 122, 0, 0.8);
   background: rgba(255, 122, 0, 0.16);
   color: #b35400;
