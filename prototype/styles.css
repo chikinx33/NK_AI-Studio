@@ -386,7 +386,7 @@ body {
 }
 
 .scenario-form label {
-  color: var(--muted);
+  color: #ff7a00;
   font-size: 15px;
   font-weight: 700;
   min-width: 130px;
