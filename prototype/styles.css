@@ -573,6 +573,8 @@ body::-webkit-scrollbar {
 
 .scenario-results {
   min-height: 320px;
+  position: relative;
+  overflow: hidden;
 }
 
 .scenario-cards {
@@ -597,6 +599,7 @@ body::-webkit-scrollbar {
   background: rgba(12, 19, 38, 0.65);
   color: var(--text);
   backdrop-filter: blur(2px);
+  z-index: 5;
 }
 .loading-overlay.hidden { display: none; }
 .spinner {
