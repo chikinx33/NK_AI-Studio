@@ -99,7 +99,7 @@
     },
     ko: {
       brand_title: 'NK_Studio',
-      brand_subtitle: '자동화 영상 파이프라인',
+      brand_subtitle: '자동화 영상 제작 파이프라인',
       nav_dashboard: '대시보드',
       nav_scenario: '시나리오(GPT)',
       nav_scenes: '씬 & 파이프라인',
@@ -225,8 +225,8 @@
     '관계','가정','자녀','연애','소통','자기 성찰','라이프스타일'
   ];
   const toneList = [
-    '담백','신뢰감','차분함','유머러스','경쾌함','진지함','따뜻함','공감형','감성적','중립적',
-    '설득형','객관적','전문적','친근함','위로형','동기부여형','논리적','정보 중심','스토리 중심'
+    '담백','신뢰','차분','유머','경쾌','진지','따뜻','공감','감성','중립',
+    '설득','객관','전문','친근','위로','동기부여','논리','정보','스토리'
   ];
   const styleList = [
     '실사','다큐 스타일','브이로그','만화','애니메이션','일러스트','모션그래픽','인포그래픽','슬라이드형',
@@ -459,6 +459,20 @@
         };
         const scenes = mockGenerate(payload);
         renderScenes(scenes);
+      });
+
+      form.addEventListener('reset', () => {
+        // 토글류 모두 해제
+        [tagBox, needsBox, toneBox, styleBox].forEach(box => {
+          if (!box) return;
+          box.querySelectorAll('.tag-toggle.active').forEach(btn => btn.classList.remove('active'));
+        });
+        // 영상 길이는 15초 기본
+        if (durationBox) {
+          durationBox.querySelectorAll('.duration-toggle').forEach(btn => btn.classList.remove('active'));
+          const def = durationBox.querySelector('[data-value="15"]');
+          if (def) def.classList.add('active');
+        }
       });
     }
 
