@@ -314,7 +314,6 @@
               <span class="chip neutral">${s.estSec}s</span>
             </div>
             <p>${s.lines}</p>
-            ${s.notes ? `<p class="muted">${s.notes}</p>` : ''}
             <div class="actions">
               <button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
               <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
