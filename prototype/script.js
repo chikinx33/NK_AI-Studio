@@ -299,13 +299,6 @@
     let scenesState = [];
     let lastPayload = null;
 
-    const formatEst = sec => {
-      const n = Number(sec) || 0;
-      if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
-      if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
-      return `${n}s`;
-    };
-
     const draftNav = document.getElementById('draft-nav');
     const saveDraftBtn = document.getElementById('save-draft');
     const draftKey = 'nk_scenario_drafts_v1';
@@ -545,6 +538,8 @@
     let durationBox;
     let toneBox;
     let styleBox;
+    let catSelect;
+    let renderPurposeTags;
 
     const buildPayload = (data) => ({
       topic: data.get('topic') || '',
@@ -568,14 +563,14 @@
 
     if (form && cardsEl) {
       // 목적 대분류/소분류 초기화
-      const catSelect = document.getElementById('purpose-category');
+      catSelect = document.getElementById('purpose-category');
       tagBox = document.getElementById('purpose-tags');
       needsBox = document.getElementById('needs-tags');
       durationBox = document.getElementById('duration-tags');
       toneBox = document.getElementById('tone-tags');
       styleBox = document.getElementById('style-tags');
       const defaultPurposeCat = '키즈 · 영유아';
-      const renderPurposeTags = (selCat, activateAll = false) => {
+      renderPurposeTags = (selCat, activateAll = false) => {
         if (!tagBox) return;
         tagBox.innerHTML = '';
         const list = purposeCategories[selCat] || [];
