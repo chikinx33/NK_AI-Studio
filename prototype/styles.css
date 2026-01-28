@@ -216,7 +216,9 @@ body::-webkit-scrollbar {
 .nav-sub-item-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
+  background: transparent;
+  justify-content: space-between;
 }
 .nav-sub-delete {
   width: 22px;
