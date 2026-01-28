@@ -26,12 +26,15 @@
   const lang = body.language === 'en' ? 'en' : 'ko';
 
   const durationToScenes = {
-    '15': 3,
-    '30': 5,
-    '45': 7,
-    '60': 9
+    '15': 4,
+    '30': 7,
+    '45': 10,
+    '60': 12,
+    '1800': 120,
+    '3600': 240,
+    '7200': 480
   };
-  const sceneCount = durationToScenes[duration] || 5;
+  const sceneCount = durationToScenes[duration] || 7;
 
   const toneCombined = [tones, toneText].filter(Boolean).join(', ');
   const styleCombined = [styles, styleText].filter(Boolean).join(', ');
@@ -47,6 +50,8 @@
   · Duration = Scene 개수와 분할 구조만 결정 (감정·톤·스타일에 관여하지 않음)
   · Tone = 말투/감정 표현만, Style = 시각적 표현으로 shot에만 반영
 - Scene은 ${sceneCount}개를 생성하고 estSec 합이 ${duration}초 안팎(±10%)이 되도록 분배하세요. 1씬은 후킹, 마지막 씬은 자연스러운 정리/CTA. 각 Scene은 하나의 핵심 메시지만 담습니다.
+- Scene 개수 고정 규칙: 15초=4, 30초=7, 45초=10, 60초=12, 30분=120, 1시간=240, 2시간=480.
+- 30분 이상 롱폼은 Scene당 estSec을 10~20초 사이로 유지합니다.
 - 각 Scene의 lines는 2~3문장, 시청 타겟 눈높이에 맞춘 어휘, 톤/스타일을 느낄 수 있게 작성하세요.
 - 각 Scene에 shot(시각 묘사) 한 줄을 포함하세요. 스타일 요소는 shot에만 반영합니다.
 - 추가 설명(extraNotes)에 적힌 세부 요구를 반영하되, 기존 규칙을 덮어쓰지 않습니다.
@@ -62,6 +67,8 @@
   · Duration = scene count/segmentation only (not mood/style)
   · Tone = voice/emotion, Style = visual look reflected in shot
 - Produce ${sceneCount} scenes whose estSec roughly sum to ${duration}s (±10%). Scene 1 is the hook; final scene is wrap-up/CTA. One core message per scene.
+- Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
+- For 30m+ long-form, keep per-scene estSec between 10–20 seconds.
 - Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
 - Apply extraNotes without overriding rules above. No markdown or extra explanations.`;
 

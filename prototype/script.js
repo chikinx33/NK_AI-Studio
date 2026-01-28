@@ -326,10 +326,23 @@
     };
 
     const mockGenerate = payload => {
-      const durationMap = { '15': 3, '30': 5, '45': 7, '60': 9 };
-      const count = durationMap[payload.duration] || 5;
+      const durationMap = {
+        '15': 4,
+        '30': 7,
+        '45': 10,
+        '60': 12,
+        '1800': 120,
+        '3600': 240,
+        '7200': 480
+      };
+      const count = durationMap[payload.duration] || 7;
+      const total = Number(payload.duration || 30);
+      const est = (() => {
+        const avg = total / count;
+        if (total >= 1800) return Math.min(20, Math.max(10, Math.round(avg)));
+        return Math.max(3, Math.round(avg));
+      })();
       const scenes = [];
-      const est = Math.max(3, Math.round((Number(payload.duration || 30)) / count));
       for (let i = 0; i < count; i++) {
         const id = i + 1;
         scenes.push({
