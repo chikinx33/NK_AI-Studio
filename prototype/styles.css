@@ -1177,6 +1177,8 @@ body::-webkit-scrollbar {
 .image-placeholder.tall { width: 100%; aspect-ratio: 16 / 9; border: 1px dashed var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--muted); background: rgba(255,255,255,0.02); position: relative; }
 .image-placeholder.tall { font-size: 0; }
 .image-placeholder.tall::before { content: "+"; font-size: 24px; font-weight: 700; color: var(--muted); position: absolute; }
+.scene-img { width: 100%; height: auto; border-radius: 10px; display: block; }
+.error-text { color: #ff7a7a; margin: 6px 0 0; font-size: 12px; }
 .action-buttons.vertical { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 .action-buttons.vertical .btn-secondary { width: 160px; text-align: center; white-space: nowrap; }
 

@@ -298,6 +298,7 @@
 
     let scenesState = [];
     let lastPayload = null;
+    let pipelineState = null;
 
     const draftNav = document.getElementById('draft-nav');
     const saveDraftBtn = document.getElementById('save-draft');
@@ -1018,7 +1019,7 @@
         pipelineScenes.innerHTML = '';
         return;
       }
-      const { payload, scenes, savedAt } = stored;
+      const { payload, scenes, savedAt, header: savedHeader } = stored;
       const fmtList = (label, val) => val && val.length ? `<div><span class="muted">${label}</span> ${val}</div>` : '';
       pipelineMeta.innerHTML = `
         <h4 style="margin:0 0 8px;">${payload.topic || '제목 없음'}</h4>
@@ -1032,19 +1033,36 @@
           <div><span class="muted">길이</span> ${payload.duration || ''}s</div>
           <div><span class="muted">저장 시각</span> ${new Date(savedAt).toLocaleString()}</div>
         </div>`;
-      const header = stored.header || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
-      if (scenes && scenes.length) {
-        const rows = scenes.map(s => {
-          const scenePrompt = `${header} Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+      const header = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
+      const sceneList = (scenes || []).map((s, idx) => {
+        const scenePrompt = `${header} Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+        return {
+          ...s,
+          id: s.id ?? idx + 1,
+          promptText: scenePrompt,
+          imageDataUrl: s.imageDataUrl || '',
+          imgLoading: false,
+          imgError: ''
+        };
+      });
+      pipelineState = { payload, header, scenes: sceneList };
+      if (sceneList.length) {
+        const rows = sceneList.map(s => {
+          const img = s.imageDataUrl ? `<img class="scene-img" src="${s.imageDataUrl}" alt="scene image" />` : `<div class="image-placeholder tall"></div>`;
+          const err = s.imgError ? `<p class="error-text">${s.imgError}</p>` : '';
           return `
           <div class="scene-row">
             <div class="scene-cell story">
               <p class="eyebrow">Scene ${s.id}</p>
               <p>${s.lines}</p>
             </div>
-            <div class="scene-cell prompt"><p class="prompt-text">${scenePrompt}</p></div>
-            <div class="scene-cell image"><div class="image-placeholder tall"></div></div>
-            <div class="scene-cell actions"><div class="action-buttons vertical"><button class="btn-secondary">이미지 재생성</button><button class="btn-secondary">이미지 업로드</button><button class="btn-secondary">영상 변환</button></div></div>
+            <div class="scene-cell prompt"><p class="prompt-text">${s.promptText}</p></div>
+            <div class="scene-cell image">${img}${err}</div>
+            <div class="scene-cell actions"><div class="action-buttons vertical">
+              <button class="btn-secondary" data-action="regen-image" data-id="${s.id}" ${s.imgLoading ? 'disabled' : ''}>${s.imgLoading ? '생성중...' : '이미지 재생성'}</button>
+              <button class="btn-secondary" data-action="upload-image" data-id="${s.id}">이미지 업로드</button>
+              <button class="btn-secondary" data-action="video" data-id="${s.id}">영상 변환</button>
+            </div></div>
           </div>`;
         }).join('');
         pipelineScenes.innerHTML = `
@@ -1064,6 +1082,40 @@
 
     renderPipelinePage();
     applyAuthGuard();
+
+    // 이미지 재생성 (Imagen) - 파이프라인 페이지 전용
+    if (pipelineScenes) {
+      pipelineScenes.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-action="regen-image"]');
+        if (!btn || !pipelineState) return;
+        const id = Number(btn.dataset.id);
+        const idx = pipelineState.scenes.findIndex(s => Number(s.id) === id);
+        if (idx === -1) return;
+        const scene = pipelineState.scenes[idx];
+        const finalPrompt = `${scene.promptText}\n\nNarration (Korean): ${scene.lines}`;
+        pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
+        renderPipelinePage();
+        try {
+          const res = await fetch('/api/imagen', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: finalPrompt })
+          });
+          const text = await res.text();
+          if (!res.ok) {
+            const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+            throw new Error(detail || 'imagen_error');
+          }
+          const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+          const dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
+          pipelineState.scenes[idx] = { ...scene, imageDataUrl: dataUrl, imgLoading: false, imgError: '' , promptText: scene.promptText };
+        } catch (err) {
+          pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: '이미지 생성 실패' };
+        } finally {
+          renderPipelinePage();
+        }
+      });
+    }
 
     // 옵션 페이지 로그인 핸들러
     const optAuthBtn = document.getElementById('opt-auth-btn');
