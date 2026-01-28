@@ -304,6 +304,7 @@
     const draftToggle = document.getElementById('draft-toggle');
     const draftKey = 'nk_scenario_drafts_v1';
     const pipelineKey = 'nk_pipeline_last';
+    const headerKey = 'nk_global_header_v1';
 
     const formatEst = sec => {
       const n = Number(sec) || 0;
@@ -358,10 +359,11 @@
         .join('');
     };
 
-    const savePipeline = (payload, scenes) => {
+    const savePipeline = (payload, scenes, header) => {
       const data = {
         payload,
         scenes,
+        header: header || '',
         savedAt: new Date().toISOString()
       };
       try { localStorage.setItem(pipelineKey, JSON.stringify(data)); } catch (_) {}
@@ -372,6 +374,34 @@
         return JSON.parse(localStorage.getItem(pipelineKey));
       } catch (_) {
         return null;
+      }
+    };
+
+    const loadHeader = () => {
+      try { return localStorage.getItem(headerKey) || ''; } catch (_) { return ''; }
+    };
+
+    const saveHeader = (header) => {
+      try { localStorage.setItem(headerKey, header || ''); } catch (_) {}
+    };
+
+    const fetchGlobalHeader = async (payload) => {
+      try {
+        const res = await fetch('/api/prompt-header', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+          throw new Error(detail || 'header_error');
+        }
+        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+        return json.header || '';
+      } catch (err) {
+        console.warn('Global header fetch failed, using fallback', err);
+        return 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
       }
     };
 
@@ -716,8 +746,11 @@
       lastPayload = payload;
       try {
         const scenes = await callScenarioAPI(payload);
+        const header = await fetchGlobalHeader(payload);
+        saveHeader(header);
         renderScenes(scenes);
-        savePipeline(payload, scenes);
+        savePipeline(payload, scenes, header);
+        if (confirmBtn) confirmBtn.disabled = false;
       } catch (err) {
         console.warn('API 실패, mock으로 대체', err);
           const errBox = document.getElementById('scenario-error');
@@ -728,8 +761,11 @@
             alert('시나리오 생성 중 오류가 발생했습니다.');
           }
           const mock = mockGenerate(payload);
+          const header = await fetchGlobalHeader(payload);
+          saveHeader(header);
           renderScenes(mock);
-          savePipeline(payload, mock);
+          savePipeline(payload, mock, header);
+          if (confirmBtn) confirmBtn.disabled = false;
         } finally {
           setLoading(false);
         }
@@ -759,6 +795,7 @@
         if (cardsEl) cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
         const errBox = document.getElementById('scenario-error');
         if (errBox) errBox.classList.add('hidden');
+        if (confirmBtn) confirmBtn.disabled = true;
       });
     }
 
@@ -955,20 +992,36 @@
           <div><span class="muted">길이</span> ${payload.duration || ''}s</div>
           <div><span class="muted">저장 시각</span> ${new Date(savedAt).toLocaleString()}</div>
         </div>`;
+      const header = stored.header || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
       if (scenes && scenes.length) {
-        pipelineScenes.innerHTML = scenes.map(s => `
-          <div class="scenario-card">
-            <div class="card-top">
-              <div>
-                <p class="eyebrow">Scene ${s.id}</p>
-                <h5>Scene ${s.id} - ${s.title}</h5>
+        pipelineScenes.innerHTML = scenes.map(s => {
+          const scenePrompt = `${header} Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+          return `
+          <div class="scene-card">
+            <div class="scene-grid">
+              <div class="scene-block story">
+                <p class="eyebrow">Story</p>
+                <p>${s.lines}</p>
               </div>
-              <span class="chip neutral">${formatEst(s.estSec)}</span>
+              <div class="scene-block prompt">
+                <p class="eyebrow">Prompt</p>
+                <p class="prompt-text">${scenePrompt}</p>
+              </div>
+              <div class="scene-block image">
+                <p class="eyebrow">Image</p>
+                <div class="image-placeholder">Image placeholder</div>
+              </div>
+              <div class="scene-block actions">
+                <p class="eyebrow">Actions</p>
+                <div class="action-buttons">
+                  <button class="btn-secondary">이미지 재생성</button>
+                  <button class="btn-secondary">이미지 업로드</button>
+                  <button class="btn-secondary">영상 변환</button>
+                </div>
+              </div>
             </div>
-            <p>${s.lines}</p>
-            ${s.shot ? `<p class="muted">Shot: ${s.shot}</p>` : ''}
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
       } else {
         pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
       }
@@ -977,13 +1030,16 @@
     renderPipelinePage();
 
     if (confirmBtn) {
+      confirmBtn.disabled = true;
       confirmBtn.addEventListener('click', () => {
         if (!scenesState.length) {
           alert('먼저 시나리오를 생성하세요.');
           return;
         }
         const payload = lastPayload || buildPayload(new FormData(form));
-        savePipeline(payload, scenesState);
+        const header = loadHeader() || await fetchGlobalHeader(payload);
+        saveHeader(header);
+        savePipeline(payload, scenesState, header);
         window.location.href = 'scenes.html';
       });
     }
