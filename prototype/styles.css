@@ -651,6 +651,28 @@ body::-webkit-scrollbar {
   color: var(--text);
 }
 
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.edit-form label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.edit-form input,
+.edit-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
+.edit-form .actions {
+  justify-content: flex-start;
+  padding-top: 4px;
+  margin-top: 4px;
+}
+
 .scenario-card .card-top {
   display: flex;
   justify-content: space-between;
