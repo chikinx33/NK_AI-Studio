@@ -1077,7 +1077,9 @@
       if (optUsername) optUsername.textContent = ok ? (getUser() || LOGIN_ID) : '';
       if (optAuthBtn) optAuthBtn.textContent = ok ? '로그아웃' : '로그인';
       if (optFormRows.length) {
-        optFormRows.forEach(r => r.classList.toggle('hidden', ok));
+        optFormRows.forEach(r => {
+          r.style.display = ok ? 'none' : '';
+        });
       }
       if (optUsername) optUsername.classList.toggle('hidden', !ok);
     };
