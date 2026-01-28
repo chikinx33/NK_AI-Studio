@@ -953,7 +953,10 @@
         if (!btn) return;
         const id = Number(btn.dataset.draftId);
         const draft = loadDrafts().find(d => d.id === id);
-        if (draft) applyDraft(draft);
+        if (draft) {
+          applyDraft(draft);
+          if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+        }
       });
     }
 
