@@ -306,6 +306,17 @@
       return `${n}s`;
     };
 
+    const draftNav = document.getElementById('draft-nav');
+    const saveDraftBtn = document.getElementById('save-draft');
+    const draftKey = 'nk_scenario_drafts_v1';
+
+    const formatEst = sec => {
+      const n = Number(sec) || 0;
+      if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
+      if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
+      return `${n}s`;
+    };
+
     const renderScenes = scenes => {
       if (!cardsEl) return;
       if (!scenes || !scenes.length) {
@@ -381,6 +392,87 @@
         });
       }
       return scenes;
+    };
+
+    const truncateTitle = t => {
+      if (!t) return '제목없음';
+      return t.length > 10 ? `${t.slice(0, 10)}...` : t;
+    };
+
+    const loadDrafts = () => {
+      try {
+        return JSON.parse(localStorage.getItem(draftKey)) || [];
+      } catch (_) {
+        return [];
+      }
+    };
+
+    const saveDrafts = drafts => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify(drafts));
+      } catch (_) {}
+    };
+
+    const renderDraftNav = () => {
+      if (!draftNav) return;
+      const drafts = loadDrafts();
+      if (!drafts.length) {
+        draftNav.innerHTML = '<span class="muted" style="font-size:12px;">임시 저장 없음</span>';
+        return;
+      }
+      draftNav.innerHTML = drafts
+        .map(d => `<button class="nav-sub-item" data-draft-id="${d.id}">${truncateTitle(d.title)}</button>`)
+        .join('');
+    };
+
+    const setActiveTags = (box, values = []) => {
+      if (!box) return;
+      box.querySelectorAll('.tag-toggle').forEach(btn => {
+        const val = btn.dataset.value;
+        if (values.includes(val)) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+    };
+
+    const applyDraft = draft => {
+      if (!draft || !form) return;
+      form.reset();
+      // 기본 리셋 핸들러가 실행되도록 강제
+      form.dispatchEvent(new Event('reset'));
+
+      const data = draft.payload || {};
+      const topicInput = form.querySelector('input[name="topic"]');
+      if (topicInput) topicInput.value = data.topic || '';
+
+      if (catSelect) {
+        catSelect.value = data.purposeCategory || catSelect.value;
+        renderPurposeTags(catSelect.value, false);
+      }
+      setActiveTags(tagBox, data.purposeTags || []);
+
+      const targetSelect = form.querySelector('select[name="target"]');
+      if (targetSelect && data.target) targetSelect.value = data.target;
+
+      setActiveTags(needsBox, data.needs || []);
+      setActiveTags(toneBox, data.tones || []);
+      setActiveTags(styleBox, data.styles || []);
+
+      const toneInput = form.querySelector('input[name="tone"]');
+      if (toneInput) toneInput.value = data.tone || '';
+      const styleInput = form.querySelector('input[name="style"]');
+      if (styleInput) styleInput.value = data.style || '';
+      const bannedInput = form.querySelector('textarea[name="banned"]');
+      if (bannedInput) bannedInput.value = data.banned || '';
+
+      if (durationBox && data.duration) {
+        durationBox.querySelectorAll('.duration-toggle').forEach(btn => btn.classList.remove('active'));
+        const match = durationBox.querySelector(`[data-value="${data.duration}"]`);
+        if (match) match.classList.add('active');
+      }
+
+      scenesState = draft.scenes || [];
+      renderScenes(scenesState);
+      lastPayload = data;
     };
 
     const normalizeScenes = raw => {
@@ -756,6 +848,41 @@
         }
       }, true);
     }
+
+    if (saveDraftBtn) {
+      saveDraftBtn.addEventListener('click', () => {
+        if (!form) return;
+        const data = new FormData(form);
+        const payload = buildPayload(data);
+        const scenes = scenesState.length ? scenesState : mockGenerate(payload);
+        const drafts = loadDrafts();
+        const id = Date.now();
+        drafts.unshift({
+          id,
+          title: payload.topic || '제목없음',
+          payload,
+          scenes
+        });
+        // 최대 20개만 보관
+        const trimmed = drafts.slice(0, 20);
+        saveDrafts(trimmed);
+        renderDraftNav();
+        alert('임시 저장되었습니다.');
+      });
+    }
+
+    if (draftNav) {
+      draftNav.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-draft-id]');
+        if (!btn) return;
+        const id = Number(btn.dataset.draftId);
+        const draft = loadDrafts().find(d => d.id === id);
+        if (draft) applyDraft(draft);
+      });
+    }
+
+    // 초기 로드 시 저장 목록 렌더
+    renderDraftNav();
 
     if (confirmBtn) {
       confirmBtn.addEventListener('click', () => {

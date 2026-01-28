@@ -28,6 +28,7 @@
         <a class="nav-item active" href="scenario.html">
           <span data-i18n="nav_scenario">시나리오 작성</span>
         </a>
+        <div class="nav-sub" id="draft-nav"></div>
         <a class="nav-item" href="#"><span data-i18n="nav_scenes">씬 & 파이프라인</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_media">미디어 랩</span></a>
         <a class="nav-item" href="#"><span data-i18n="nav_voice">더빙 · 자막</span></a>
@@ -119,7 +120,10 @@
 
             <div class="section-caption right-caption caption-row">
               <span>대본</span>
-              <button class="btn-primary" id="confirm-scenes">최종 컨펌 → 씬 파이프라인</button>
+              <div class="caption-actions">
+                <button class="btn-secondary" id="save-draft">임시 저장</button>
+                <button class="btn-primary" id="confirm-scenes">최종 컨펌 → 씬 파이프라인</button>
+              </div>
             </div>
             <div class="card scenario-results results-card">
               <div id="scenario-error" class="error-banner hidden"></div>
