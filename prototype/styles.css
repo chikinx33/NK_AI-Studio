@@ -209,6 +209,7 @@ body::-webkit-scrollbar {
   cursor: pointer;
   text-align: left;
   transition: none;
+  box-shadow: none;
 }
 .nav-sub .nav-sub-item:hover {
   color: var(--text);
@@ -226,11 +227,12 @@ body::-webkit-scrollbar {
   height: 22px;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.04);
+  background: transparent;
   color: var(--muted);
   cursor: pointer;
   font-weight: 600;
   transition: none;
+  margin-left: -15px;
 }
 .nav-sub-delete:hover {
   color: var(--text);
