@@ -45,9 +45,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify({
         instances: [{ prompt }],
         parameters: {
-          sampleCount: 1,
-          aspectRatio: "1:1",
-	  personGeneration: "allow_all",
+  	  sampleCount: 1,
+  	  aspectRatio: "1:1",
+  	  personGeneration: "allow_all",
         },
       }),
     });
