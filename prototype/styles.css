@@ -252,6 +252,17 @@ body::-webkit-scrollbar {
   background: rgba(255,255,255,0.08);
 }
 
+/* Pipeline page scrolling for scene cards */
+#pipeline-scenes {
+  max-height: 70vh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+#pipeline-scenes::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 [data-theme="light"] .nav-sub-delete {
   border-color: #d0d8ea;
   background: #eef2fb;
