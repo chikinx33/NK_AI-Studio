@@ -1031,7 +1031,7 @@
 
     if (confirmBtn) {
       confirmBtn.disabled = true;
-      confirmBtn.addEventListener('click', () => {
+      confirmBtn.addEventListener('click', async () => {
         if (!scenesState.length) {
           alert('먼저 시나리오를 생성하세요.');
           return;
