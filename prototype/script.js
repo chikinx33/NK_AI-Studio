@@ -725,6 +725,13 @@
           const def = durationBox.querySelector('[data-value="15"]');
           if (def) def.classList.add('active');
         }
+
+        // 대본 영역 초기화
+        scenesState = [];
+        lastPayload = null;
+        if (cardsEl) cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
+        const errBox = document.getElementById('scenario-error');
+        if (errBox) errBox.classList.add('hidden');
       });
     }
 
