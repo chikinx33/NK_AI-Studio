@@ -1,0 +1,67 @@
+﻿<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NK_Studio · 씬 &amp; 파이프라인</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <div class="grain"></div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div class="brand-text">
+          <span class="title" data-i18n="brand_title">NK_Studio</span>
+          <span class="subtitle" data-i18n="brand_subtitle">자동화 영상 파이프라인</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item" href="index.html">
+          <span class="dot"></span><span data-i18n="nav_dashboard">대시보드</span>
+        </a>
+        <a class="nav-item" href="scenario.html">
+          <span data-i18n="nav_scenario">시나리오 작성</span>
+        </a>
+        <a class="nav-item active" href="scenes.html">
+          <span data-i18n="nav_scenes">씬 &amp; 파이프라인</span>
+        </a>
+        <a class="nav-item" href="#"><span data-i18n="nav_media">미디어 랩</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_voice">더빙 · 자막</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_render">결과 대기열</span></a>
+        <a class="nav-item" href="#"><span data-i18n="nav_publish">배포</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-actions">
+          <button class="btn-ghost icon-btn" aria-label="알림">🔔</button>
+          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()"></button>
+          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-body">
+        <section class="scenario-section" id="pipeline-section">
+          <div class="section-caption left-caption caption-row">
+            <span>씬 &amp; 파이프라인</span>
+            <div class="caption-actions">
+              <button class="btn-secondary" onclick="window.location.href='scenario.html'">시나리오로 돌아가기</button>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:12px;" id="pipeline-meta">
+          </div>
+          <div class="card scenario-results" id="pipeline-card">
+            <div id="pipeline-scenes" class="scenario-cards"></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

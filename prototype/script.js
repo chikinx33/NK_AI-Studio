@@ -303,6 +303,7 @@
     const saveDraftBtn = document.getElementById('save-draft');
     const draftToggle = document.getElementById('draft-toggle');
     const draftKey = 'nk_scenario_drafts_v1';
+    const pipelineKey = 'nk_pipeline_last';
 
     const formatEst = sec => {
       const n = Number(sec) || 0;
@@ -355,6 +356,23 @@
           </div>`
         )
         .join('');
+    };
+
+    const savePipeline = (payload, scenes) => {
+      const data = {
+        payload,
+        scenes,
+        savedAt: new Date().toISOString()
+      };
+      try { localStorage.setItem(pipelineKey, JSON.stringify(data)); } catch (_) {}
+    };
+
+    const loadPipeline = () => {
+      try {
+        return JSON.parse(localStorage.getItem(pipelineKey));
+      } catch (_) {
+        return null;
+      }
     };
 
     const mockGenerate = payload => {
@@ -699,6 +717,7 @@
       try {
         const scenes = await callScenarioAPI(payload);
         renderScenes(scenes);
+        savePipeline(payload, scenes);
       } catch (err) {
         console.warn('API 실패, mock으로 대체', err);
           const errBox = document.getElementById('scenario-error');
@@ -708,7 +727,9 @@
           } else {
             alert('시나리오 생성 중 오류가 발생했습니다.');
           }
-          renderScenes(mockGenerate(payload));
+          const mock = mockGenerate(payload);
+          renderScenes(mock);
+          savePipeline(payload, mock);
         } finally {
           setLoading(false);
         }
@@ -909,9 +930,61 @@
     // 초기 로드 시 저장 목록 렌더
     renderDraftNav();
 
+    // 씬 & 파이프라인 페이지 렌더
+    const pipelineMeta = document.getElementById('pipeline-meta');
+    const pipelineScenes = document.getElementById('pipeline-scenes');
+    const renderPipelinePage = () => {
+      if (!pipelineMeta || !pipelineScenes) return;
+      const stored = loadPipeline();
+      if (!stored) {
+        pipelineMeta.innerHTML = '<p class="muted">불러올 파이프라인이 없습니다. 시나리오를 생성하고 최종 컨펌을 눌러 주세요.</p>';
+        pipelineScenes.innerHTML = '';
+        return;
+      }
+      const { payload, scenes, savedAt } = stored;
+      const fmtList = (label, val) => val && val.length ? `<div><span class="muted">${label}</span> ${val}</div>` : '';
+      pipelineMeta.innerHTML = `
+        <h4 style="margin:0 0 8px;">${payload.topic || '제목 없음'}</h4>
+        <div class="meta-row" style="flex-wrap:wrap; gap:8px;">
+          ${fmtList('장르', `${payload.purposeCategory || ''} ${ (payload.purposeTags||[]).join(', ')}`)}
+          ${fmtList('타겟', payload.target || '')}
+          ${fmtList('니즈', (payload.needs||[]).join(', '))}
+          ${fmtList('톤', [(payload.tones||[]).join(', '), payload.tone].filter(Boolean).join(', '))}
+          ${fmtList('스타일', [(payload.styles||[]).join(', '), payload.style].filter(Boolean).join(', '))}
+          ${fmtList('추가 설명', payload.banned || '')}
+          <div><span class="muted">길이</span> ${payload.duration || ''}s</div>
+          <div><span class="muted">저장 시각</span> ${new Date(savedAt).toLocaleString()}</div>
+        </div>`;
+      if (scenes && scenes.length) {
+        pipelineScenes.innerHTML = scenes.map(s => `
+          <div class="scenario-card">
+            <div class="card-top">
+              <div>
+                <p class="eyebrow">Scene ${s.id}</p>
+                <h5>Scene ${s.id} - ${s.title}</h5>
+              </div>
+              <span class="chip neutral">${formatEst(s.estSec)}</span>
+            </div>
+            <p>${s.lines}</p>
+            ${s.shot ? `<p class="muted">Shot: ${s.shot}</p>` : ''}
+          </div>
+        `).join('');
+      } else {
+        pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
+      }
+    };
+
+    renderPipelinePage();
+
     if (confirmBtn) {
       confirmBtn.addEventListener('click', () => {
-        alert('최종 컨펌된 씬이 "씬 파이프라인"으로 전달됩니다. (데모 모드)');
+        if (!scenesState.length) {
+          alert('먼저 시나리오를 생성하세요.');
+          return;
+        }
+        const payload = lastPayload || buildPayload(new FormData(form));
+        savePipeline(payload, scenesState);
+        window.location.href = 'scenes.html';
       });
     }
   });
