@@ -1094,7 +1094,8 @@
         if (id === LOGIN_ID && pw === LOGIN_PW) {
           setAuthed(true, id);
           refreshOptionUI();
-          alert('로그인 되었습니다.');
+          alert('로그인 되었습니다. 시나리오 페이지로 이동합니다.');
+          window.location.href = 'scenario.html';
         } else {
           alert('아이디 또는 비밀번호가 올바르지 않습니다.');
         }
