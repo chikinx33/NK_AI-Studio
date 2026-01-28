@@ -1048,7 +1048,11 @@
       pipelineState = { payload, header, scenes: sceneList };
       if (sceneList.length) {
         const rows = sceneList.map(s => {
-          const img = s.imageDataUrl ? `<img class="scene-img" src="${s.imageDataUrl}" alt="scene image" />` : `<div class="image-placeholder tall"></div>`;
+          const img = s.imgLoading
+            ? `<div class="image-placeholder tall loading"><span>생성중...</span></div>`
+            : s.imageDataUrl
+              ? `<div class="image-box"><img class="scene-img" data-src="${s.imageDataUrl}" src="${s.imageDataUrl}" alt="scene image" /></div>`
+              : `<div class="image-placeholder tall"></div>`;
           const err = s.imgError ? `<p class="error-text">${s.imgError}</p>` : '';
           return `
           <div class="scene-row">
@@ -1059,7 +1063,7 @@
             <div class="scene-cell prompt"><p class="prompt-text">${s.promptText}</p></div>
             <div class="scene-cell image">${img}${err}</div>
             <div class="scene-cell actions"><div class="action-buttons vertical">
-              <button class="btn-secondary" data-action="regen-image" data-id="${s.id}" ${s.imgLoading ? 'disabled' : ''}>${s.imgLoading ? '생성중...' : '이미지 재생성'}</button>
+              <button class="btn-secondary" data-action="regen-image" data-id="${s.id}" ${s.imgLoading ? 'disabled' : ''}>${s.imgLoading ? '생성중...' : '이미지 생성'}</button>
               <button class="btn-secondary" data-action="upload-image" data-id="${s.id}">이미지 업로드</button>
               <button class="btn-secondary" data-action="video" data-id="${s.id}">영상 변환</button>
             </div></div>
@@ -1087,32 +1091,53 @@
     if (pipelineScenes) {
       pipelineScenes.addEventListener('click', async (e) => {
         const btn = e.target.closest('[data-action="regen-image"]');
-        if (!btn || !pipelineState) return;
-        const id = Number(btn.dataset.id);
-        const idx = pipelineState.scenes.findIndex(s => Number(s.id) === id);
-        if (idx === -1) return;
-        const scene = pipelineState.scenes[idx];
-        const finalPrompt = `${scene.promptText}\n\nNarration (Korean): ${scene.lines}`;
-        pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
-        renderPipelinePage();
-        try {
-          const res = await fetch('/api/imagen', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: finalPrompt })
-          });
-          const text = await res.text();
-          if (!res.ok) {
-            const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-            throw new Error(detail || 'imagen_error');
-          }
-          const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-          const dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
-          pipelineState.scenes[idx] = { ...scene, imageDataUrl: dataUrl, imgLoading: false, imgError: '' , promptText: scene.promptText };
-        } catch (err) {
-          pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: '이미지 생성 실패' };
-        } finally {
+        if (btn && pipelineState) {
+          const id = Number(btn.dataset.id);
+          const idx = pipelineState.scenes.findIndex(s => Number(s.id) === id);
+          if (idx === -1) return;
+          const scene = pipelineState.scenes[idx];
+          const finalPrompt = `${scene.promptText}\n\nNarration (Korean): ${scene.lines}`;
+          pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
           renderPipelinePage();
+          try {
+            const res = await fetch('/api/imagen', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ prompt: finalPrompt })
+            });
+            const text = await res.text();
+            if (!res.ok) {
+              const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+              throw new Error(detail || 'imagen_error');
+            }
+            const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+            const dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
+            pipelineState.scenes[idx] = { ...scene, imageDataUrl: dataUrl, imgLoading: false, imgError: '' , promptText: scene.promptText };
+          } catch (err) {
+            pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: '이미지 생성 실패' };
+          } finally {
+            renderPipelinePage();
+          }
+          return;
+        }
+        const img = e.target.closest('.scene-img');
+        if (img) {
+          const modal = document.getElementById('img-modal');
+          const modalImg = modal?.querySelector('img');
+          if (modal && modalImg) {
+            modalImg.src = img.dataset.src || img.src;
+            modal.classList.remove('hidden');
+          }
+          return;
+        }
+      });
+    }
+
+    const modal = document.getElementById('img-modal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          modal.classList.add('hidden');
         }
       });
     }
