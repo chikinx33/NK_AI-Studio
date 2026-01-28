@@ -1006,19 +1006,19 @@
           const scenePrompt = `${header} Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
           return `
           <div class="scene-row">
-            <div class="scene-cell story"><p class="eyebrow">Story</p><p>${s.lines}</p></div>
-            <div class="scene-cell prompt"><p class="eyebrow">Prompt</p><p class="prompt-text">${scenePrompt}</p></div>
-            <div class="scene-cell image"><p class="eyebrow">Image</p><div class="image-placeholder tall">Image placeholder</div></div>
-            <div class="scene-cell actions"><p class="eyebrow">Actions</p><div class="action-buttons vertical"><button class="btn-secondary">이미지 재생성</button><button class="btn-secondary">이미지 업로드</button><button class="btn-secondary">영상 변환</button></div></div>
+            <div class="scene-cell story"><p>${s.lines}</p></div>
+            <div class="scene-cell prompt"><p class="prompt-text">${scenePrompt}</p></div>
+            <div class="scene-cell image"><div class="image-placeholder tall">Image placeholder</div></div>
+            <div class="scene-cell actions"><div class="action-buttons vertical"><button class="btn-secondary">이미지 재생성</button><button class="btn-secondary">이미지 업로드</button><button class="btn-secondary">영상 변환</button></div></div>
           </div>`;
         }).join('');
         pipelineScenes.innerHTML = `
           <div class="scene-table">
             <div class="scene-row head">
-              <div class="scene-cell">문장</div>
-              <div class="scene-cell">프롬프트</div>
-              <div class="scene-cell">이미지</div>
-              <div class="scene-cell">관리</div>
+              <div class="scene-cell">Story</div>
+              <div class="scene-cell">Prompt</div>
+              <div class="scene-cell">Image</div>
+              <div class="scene-cell">Actions</div>
             </div>
             ${rows}
           </div>`;
