@@ -8,6 +8,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "prompt is required" }, 400);
     }
 
+    // 공통 가드 규칙: 다중 패널/텍스트/자막 금지 등
+    const guardRules = [
+      "Single frame only; do not split into multiple panels or pages.",
+      "No subtitles, captions, on-screen text, speech bubbles, UI, or watermarks in the image.",
+      "Render one final image, not a storyboard."
+    ];
+    const finalPrompt = `${prompt}\n\nGlobal guard: ${guardRules.join(" ")}`;
+
     // Cloudflare Pages > Variables and Secrets 에 등록한 값들
     const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
@@ -43,7 +51,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        instances: [{ prompt }],
+        instances: [{ prompt: finalPrompt }],
         parameters: {
   	  sampleCount: 1,
   	  aspectRatio: "1:1",

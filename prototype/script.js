@@ -1048,15 +1048,21 @@
           ${fmtList('추가 설명', payload.banned || '')}
           <div><span class="muted">길이</span> ${payload.duration || ''}s</div>
           <div><span class="muted">저장 시각</span> ${new Date(savedAt || Date.now()).toLocaleString()}</div>
+        </div>
+        <div class="meta-row" style="gap:8px; margin-top:6px;">
+          <button class="btn-secondary" id="bulk-generate">이미지 일괄 생성</button>
+          <button class="btn-secondary" id="bulk-video">영상 일괄 변환</button>
         </div>`;
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
           const img = s.imgLoading
             ? `<div class="image-placeholder tall loading"><span>생성중...</span></div>`
-            : s.imageDataUrl
-              ? `<div class="image-box"><img class="scene-img" data-src="${s.imageDataUrl}" src="${s.imageDataUrl}" alt="scene image" /></div>`
-              : `<div class="image-placeholder tall"></div>`;
-          const err = s.imgError ? `<p class="error-text">${s.imgError}</p>` : '';
+            : s.imgError
+              ? `<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>`
+              : s.imageDataUrl
+                ? `<div class="image-box"><img class="scene-img" data-src="${s.imageDataUrl}" src="${s.imageDataUrl}" alt="scene image" /></div>`
+                : `<div class="image-placeholder tall"></div>`;
+          const err = ''; // 별도 에러 텍스트 제거, 카드 안에서 표시
           return `
           <div class="scene-row">
             <div class="scene-cell story">
@@ -1065,10 +1071,14 @@
             </div>
             <div class="scene-cell prompt"><p class="prompt-text">${s.promptText}</p></div>
             <div class="scene-cell image">${img}${err}</div>
-            <div class="scene-cell actions"><div class="action-buttons vertical">
-              <button class="btn-secondary" data-action="regen-image" data-id="${s.id}" ${s.imgLoading ? 'disabled' : ''}>${s.imgLoading ? '생성중...' : '이미지 생성'}</button>
-              <button class="btn-secondary" data-action="upload-image" data-id="${s.id}">이미지 업로드</button>
-              <button class="btn-secondary" data-action="video" data-id="${s.id}">영상 변환</button>
+            <div class="scene-cell actions"><div class="action-buttons grid">
+              <button class="btn-secondary compact" data-action="regen-image" data-id="${s.id}" ${s.imgLoading ? 'disabled' : ''}>${s.imgLoading ? '생성중' : '생성'}</button>
+              <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}">삭제</button>
+              <button class="btn-secondary compact" data-action="copy-image" data-id="${s.id}">복사</button>
+              <button class="btn-secondary compact" data-action="paste-image" data-id="${s.id}">붙여넣기</button>
+              <button class="btn-secondary compact" data-action="upload-image" data-id="${s.id}">업로드</button>
+              <button class="btn-secondary compact" data-action="download-image" data-id="${s.id}">다운로드</button>
+              <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 변환</button>
             </div></div>
           </div>`;
         }).join('');
@@ -1090,36 +1100,82 @@
     renderPipelinePage();
     applyAuthGuard();
 
-    // 이미지 재생성 (Imagen) - 파이프라인 페이지 전용
+    const generateImageForIdx = async (idx) => {
+      if (!pipelineState) return;
+      const scene = pipelineState.scenes[idx];
+      const finalPrompt = `${scene.promptText}\n\nNarration (Korean): ${scene.lines}`;
+      pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
+      renderPipelinePage();
+      try {
+        const res = await fetch('/api/imagen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: finalPrompt })
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+          throw new Error(detail || 'imagen_error');
+        }
+        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+        const dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
+        pipelineState.scenes[idx] = { ...scene, imageDataUrl: dataUrl, imgLoading: false, imgError: '', promptText: scene.promptText };
+      } catch (err) {
+        pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: '이미지 생성 실패' };
+      }
+      renderPipelinePage();
+    };
+
+    // 이미지 재생성/복사/붙여넣기/삭제/다운로드 (Imagen) - 파이프라인 페이지 전용
     if (pipelineScenes) {
       pipelineScenes.addEventListener('click', async (e) => {
-        const btn = e.target.closest('[data-action="regen-image"]');
-        if (btn && pipelineState) {
-          const id = Number(btn.dataset.id);
+        const actionBtn = e.target.closest('[data-action]');
+        if (actionBtn && pipelineState) {
+          const action = actionBtn.dataset.action;
+          const id = Number(actionBtn.dataset.id);
           const idx = pipelineState.scenes.findIndex(s => Number(s.id) === id);
           if (idx === -1) return;
           const scene = pipelineState.scenes[idx];
-          const finalPrompt = `${scene.promptText}\n\nNarration (Korean): ${scene.lines}`;
-          pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
-          renderPipelinePage();
-          try {
-            const res = await fetch('/api/imagen', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ prompt: finalPrompt })
-            });
-            const text = await res.text();
-            if (!res.ok) {
-              const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-              throw new Error(detail || 'imagen_error');
-            }
-            const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-            const dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
-            pipelineState.scenes[idx] = { ...scene, imageDataUrl: dataUrl, imgLoading: false, imgError: '' , promptText: scene.promptText };
-          } catch (err) {
-            pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: '이미지 생성 실패' };
-          } finally {
+
+          // 복사/붙여넣기/삭제/다운로드 공통 처리
+          if (action === 'delete-image') {
+            pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
             renderPipelinePage();
+            return;
+          }
+          if (action === 'copy-image') {
+            if (!scene.imageDataUrl) {
+              alert('복사할 이미지가 없습니다.');
+              return;
+            }
+            window.__imageClipboard = scene.imageDataUrl;
+            alert('이미지를 복사했습니다.');
+            return;
+          }
+          if (action === 'paste-image') {
+            if (!window.__imageClipboard) {
+              alert('붙여넣을 이미지가 없습니다. 먼저 복사하세요.');
+              return;
+            }
+            pipelineState.scenes[idx] = { ...scene, imageDataUrl: window.__imageClipboard, imgError: '', imgLoading: false };
+            renderPipelinePage();
+            return;
+          }
+          if (action === 'download-image') {
+            if (!scene.imageDataUrl) {
+              alert('다운로드할 이미지가 없습니다.');
+              return;
+            }
+            const a = document.createElement('a');
+            a.href = scene.imageDataUrl;
+            a.download = `scene-${scene.id}.png`;
+            a.click();
+            return;
+          }
+
+          if (action === 'regen-image') {
+            await generateImageForIdx(idx);
+            return;
           }
           return;
         }
@@ -1143,6 +1199,21 @@
           modal.classList.add('hidden');
         }
       });
+    }
+
+    // 상단 일괄 버튼
+    const bulkGen = document.getElementById('bulk-generate');
+    const bulkVid = document.getElementById('bulk-video');
+    if (bulkGen) {
+      bulkGen.onclick = async () => {
+        if (!pipelineState || !pipelineState.scenes.length) return;
+        for (let i = 0; i < pipelineState.scenes.length; i++) {
+          await generateImageForIdx(i);
+        }
+      };
+    }
+    if (bulkVid) {
+      bulkVid.onclick = () => alert('영상 일괄 변환은 아직 구현되지 않았습니다.');
     }
 
     // 옵션 페이지 로그인 핸들러
