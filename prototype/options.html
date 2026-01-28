@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NK_Studio · 씬 &amp; 파이프라인</title>
+  <title>NK_Studio · 옵션</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -28,13 +28,10 @@
         <a class="nav-item" href="scenario.html">
           <span data-i18n="nav_scenario">시나리오 작성</span>
         </a>
-        <a class="nav-item active" href="scenes.html">
+        <a class="nav-item" href="scenes.html">
           <span data-i18n="nav_scenes">씬 &amp; 파이프라인</span>
         </a>
-        <a class="nav-item" href="#"><span data-i18n="nav_media">미디어 랩</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_voice">더빙 · 자막</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_render">결과 대기열</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_publish">배포</span></a>
+        <a class="nav-item active" href="options.html">옵션</a>
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-actions">
@@ -46,22 +43,28 @@
       </div>
     </aside>
 
-    <div id="auth-overlay" class="auth-overlay hidden">
-      <div class="auth-card">
-        <p class="auth-title">로그인 하세요.</p>
-        <a class="btn-primary" href="options.html">옵션 / 로그인으로 이동</a>
-      </div>
-    </div>
-
-    <main class="main blur-target">
-      <div class="main-body">
-        <section class="scenario-section" id="pipeline-section">
-          <div class="card" style="margin-bottom:12px;" id="pipeline-meta">
+    <main class="main">
+      <div class="main-body option-body">
+        <div class="card option-card">
+          <div class="logo-box">
+            <div class="brand-mark large"></div>
           </div>
-          <div class="card scenario-results" id="pipeline-card">
-            <div id="pipeline-scenes" class="scenario-cards"></div>
+          <div id="option-logged-out">
+            <div class="form-group">
+              <label>아이디</label>
+              <input type="text" id="opt-id" placeholder="아이디" />
+            </div>
+            <div class="form-group">
+              <label>비밀번호</label>
+              <input type="password" id="opt-pw" placeholder="비밀번호" />
+            </div>
+            <button class="btn-primary" id="opt-login-btn">로그인</button>
           </div>
-        </section>
+          <div id="option-logged-in" class="hidden">
+            <p class="muted" id="opt-username"></p>
+            <button class="btn-secondary" id="opt-logout-btn">로그아웃</button>
+          </div>
+        </div>
       </div>
     </main>
   </div>

@@ -305,12 +305,29 @@
     const draftKey = 'nk_scenario_drafts_v1';
     const pipelineKey = 'nk_pipeline_last';
     const headerKey = 'nk_global_header_v1';
+    const loginKey = 'nk_is_logged_in';
+    const loginUserKey = 'nk_login_user';
+    const LOGIN_ID = 'admin';
+    const LOGIN_PW = 'pass1234';
 
     const formatEst = sec => {
       const n = Number(sec) || 0;
       if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
       if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
       return `${n}s`;
+    };
+
+    const isAuthed = () => {
+      try { return localStorage.getItem(loginKey) === 'true'; } catch (_) { return false; }
+    };
+    const setAuthed = (val, user = '') => {
+      try {
+        localStorage.setItem(loginKey, val ? 'true' : 'false');
+        localStorage.setItem(loginUserKey, val ? user : '');
+      } catch (_) {}
+    };
+    const getUser = () => {
+      try { return localStorage.getItem(loginUserKey) || ''; } catch (_) { return ''; }
     };
 
     const renderScenes = scenes => {
@@ -975,6 +992,21 @@
     // 초기 로드 시 저장 목록 렌더
     renderDraftNav();
 
+    const applyAuthGuard = () => {
+      const overlay = document.getElementById('auth-overlay');
+      const blurTarget = document.querySelector('.blur-target');
+      const onScenarioLike = !!overlay && !!blurTarget;
+      if (!onScenarioLike) return;
+      const ok = isAuthed();
+      if (ok) {
+        overlay.classList.add('hidden');
+        blurTarget.classList.remove('blurred');
+      } else {
+        overlay.classList.remove('hidden');
+        blurTarget.classList.add('blurred');
+      }
+    };
+
     // 씬 & 파이프라인 페이지 렌더
     const pipelineMeta = document.getElementById('pipeline-meta');
     const pipelineScenes = document.getElementById('pipeline-scenes');
@@ -1011,7 +1043,7 @@
               <p>${s.lines}</p>
             </div>
             <div class="scene-cell prompt"><p class="prompt-text">${scenePrompt}</p></div>
-            <div class="scene-cell image"><div class="image-placeholder tall">Image placeholder</div></div>
+            <div class="scene-cell image"><div class="image-placeholder tall"></div></div>
             <div class="scene-cell actions"><div class="action-buttons vertical"><button class="btn-secondary">이미지 재생성</button><button class="btn-secondary">이미지 업로드</button><button class="btn-secondary">영상 변환</button></div></div>
           </div>`;
         }).join('');
@@ -1031,6 +1063,51 @@
     };
 
     renderPipelinePage();
+    applyAuthGuard();
+
+    // 옵션 페이지 로그인 핸들러
+    const optLoginBtn = document.getElementById('opt-login-btn');
+    const optLogoutBtn = document.getElementById('opt-logout-btn');
+    const optUsername = document.getElementById('opt-username');
+    const optOut = document.getElementById('option-logged-out');
+    const optIn = document.getElementById('option-logged-in');
+    const optId = document.getElementById('opt-id');
+    const optPw = document.getElementById('opt-pw');
+
+    const refreshOptionUI = () => {
+      const ok = isAuthed();
+      if (optOut && optIn && optUsername) {
+        if (ok) {
+          optOut.classList.add('hidden');
+          optIn.classList.remove('hidden');
+          optUsername.textContent = `로그인된 아이디: ${getUser() || LOGIN_ID}`;
+        } else {
+          optOut.classList.remove('hidden');
+          optIn.classList.add('hidden');
+        }
+      }
+    };
+    if (optLoginBtn && optId && optPw) {
+      optLoginBtn.addEventListener('click', () => {
+        const id = optId.value.trim();
+        const pw = optPw.value.trim();
+        if (id === LOGIN_ID && pw === LOGIN_PW) {
+          setAuthed(true, id);
+          refreshOptionUI();
+          alert('로그인 되었습니다.');
+        } else {
+          alert('아이디 또는 비밀번호가 올바르지 않습니다.');
+        }
+      });
+    }
+    if (optLogoutBtn) {
+      optLogoutBtn.addEventListener('click', () => {
+        setAuthed(false, '');
+        refreshOptionUI();
+        applyAuthGuard();
+      });
+    }
+    refreshOptionUI();
 
       if (confirmBtn) {
         confirmBtn.disabled = true;

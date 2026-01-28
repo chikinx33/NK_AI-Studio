@@ -41,11 +41,19 @@
           <button class="btn-ghost icon-btn" aria-label="알림">🔔</button>
           <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()"></button>
           <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
+          <a class="btn-ghost icon-btn" aria-label="옵션" href="options.html">⚙️</a>
         </div>
       </div>
     </aside>
 
-    <main class="main">
+    <div id="auth-overlay" class="auth-overlay hidden">
+      <div class="auth-card">
+        <p class="auth-title">로그인 하세요.</p>
+        <a class="btn-primary" href="options.html">옵션 / 로그인으로 이동</a>
+      </div>
+    </div>
+
+    <main class="main blur-target">
 
       <div class="main-body">
         <section class="scenario-section" id="scenario-section">
