@@ -576,9 +576,14 @@
       const submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
       const overlay = document.getElementById('scenario-loading');
       const err = document.getElementById('scenario-error');
+      const confirmBtn = document.getElementById('confirm-scenes');
       if (submitBtn) {
         submitBtn.disabled = loading;
         submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
+      }
+      if (confirmBtn) {
+        confirmBtn.disabled = loading;
+        confirmBtn.textContent = loading ? '컨펌 중...' : '최종 컨펌 → 씬 파이프라인';
       }
       if (overlay) {
         overlay.classList.toggle('hidden', !loading);
@@ -1032,19 +1037,24 @@
 
     renderPipelinePage();
 
-    if (confirmBtn) {
-      confirmBtn.disabled = true;
-      confirmBtn.addEventListener('click', async () => {
-        if (!scenesState.length) {
-          alert('먼저 시나리오를 생성하세요.');
-          return;
-        }
-        const payload = lastPayload || buildPayload(new FormData(form));
-        const header = loadHeader() || await fetchGlobalHeader(payload);
-        saveHeader(header);
-        savePipeline(payload, scenesState, header);
-        window.location.href = 'scenes.html';
-      });
-    }
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.addEventListener('click', async () => {
+          if (!scenesState.length) {
+            alert('먼저 시나리오를 생성하세요.');
+            return;
+          }
+          setLoading(true);
+          try {
+            const payload = lastPayload || buildPayload(new FormData(form));
+            const header = loadHeader() || await fetchGlobalHeader(payload);
+            saveHeader(header);
+            savePipeline(payload, scenesState, header);
+            window.location.href = 'scenes.html';
+          } finally {
+            setLoading(false);
+          }
+        });
+      }
   });
 })();
