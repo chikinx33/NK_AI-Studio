@@ -47,6 +47,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         parameters: {
           sampleCount: 1,
           aspectRatio: "1:1",
+	  personGeneration: "allow_all",
         },
       }),
     });
