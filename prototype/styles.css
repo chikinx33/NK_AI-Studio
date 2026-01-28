@@ -636,14 +636,6 @@ body::-webkit-scrollbar {
   position: relative;
 }
 
-.scenario-card:not(:first-child)::before {
-  content: '';
-  display: block;
-  height: 0;
-  border-top: 1px dashed rgba(255, 255, 255, 0.32);
-  margin: 12px -14px 18px;
-}
-
 .scenario-card .card-top {
   display: flex;
   justify-content: space-between;
