@@ -47,7 +47,7 @@
       <div class="main-body option-body">
         <div class="card option-card">
           <div class="logo-box">
-            <div class="brand-mark large"></div>
+            <img src="images/logo(500500).png" alt="logo" class="logo-img" />
           </div>
           <div id="option-logged-out">
             <div class="form-group">
@@ -58,11 +58,15 @@
               <label>비밀번호</label>
               <input type="password" id="opt-pw" placeholder="비밀번호" />
             </div>
-            <button class="btn-primary" id="opt-login-btn">로그인</button>
+            <div class="option-actions">
+              <button class="btn-primary" id="opt-login-btn">로그인</button>
+            </div>
           </div>
           <div id="option-logged-in" class="hidden">
             <p class="muted" id="opt-username"></p>
-            <button class="btn-secondary" id="opt-logout-btn">로그아웃</button>
+            <div class="option-actions">
+              <button class="btn-secondary" id="opt-logout-btn">로그아웃</button>
+            </div>
           </div>
         </div>
       </div>

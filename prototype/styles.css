@@ -1197,6 +1197,7 @@ body::-webkit-scrollbar {
 }
 .scene-cell { border: 1px solid var(--border); padding: 10px; }
 .option-body { display: flex; align-items: center; justify-content: center; }
+.main .option-body { min-height: 80vh; }
 .option-card {
   max-width: 420px;
   width: 100%;
@@ -1205,12 +1206,18 @@ body::-webkit-scrollbar {
   border-radius: 14px;
   background: var(--panel);
   border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .logo-box { display: flex; justify-content: center; margin-bottom: 18px; }
-.brand-mark.large { width: 64px; height: 64px; border-radius: 16px; }
+.logo-img { width: 300px; height: 300px; border-radius: 24px; object-fit: cover; }
 .option-card .form-group { display: flex; flex-direction: column; gap: 6px; }
 .option-card label { font-weight: 600; }
 .option-card input { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text); }
+.option-actions { display: flex; justify-content: center; }
+.option-actions .btn-primary,
+.option-actions .btn-secondary { width: 160px; }
 
 .auth-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
 .auth-overlay.hidden { display: none; }
