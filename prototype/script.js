@@ -301,6 +301,7 @@
 
     const draftNav = document.getElementById('draft-nav');
     const saveDraftBtn = document.getElementById('save-draft');
+    const draftToggle = document.getElementById('draft-toggle');
     const draftKey = 'nk_scenario_drafts_v1';
 
     const formatEst = sec => {
@@ -414,7 +415,12 @@
         return;
       }
       draftNav.innerHTML = drafts
-        .map(d => `<button class="nav-sub-item" data-draft-id="${d.id}">${truncateTitle(d.title)}</button>`)
+        .map(d => `
+          <div class="nav-sub-item-row">
+            <button class="nav-sub-item" data-draft-id="${d.id}">${truncateTitle(d.title)}</button>
+            <button class="nav-sub-delete" data-draft-id="${d.id}" aria-label="삭제">-</button>
+          </div>
+        `)
         .join('');
     };
 
@@ -875,11 +881,28 @@
 
     if (draftNav) {
       draftNav.addEventListener('click', (e) => {
+        const del = e.target.closest('.nav-sub-delete');
+        if (del) {
+          const id = Number(del.dataset.draftId);
+          if (confirm('삭제할까요?')) {
+            const drafts = loadDrafts().filter(d => d.id !== id);
+            saveDrafts(drafts);
+            renderDraftNav();
+          }
+          return;
+        }
         const btn = e.target.closest('[data-draft-id]');
         if (!btn) return;
         const id = Number(btn.dataset.draftId);
         const draft = loadDrafts().find(d => d.id === id);
         if (draft) applyDraft(draft);
+      });
+    }
+
+    if (draftToggle && draftNav) {
+      draftToggle.addEventListener('click', () => {
+        const hidden = draftNav.classList.toggle('hidden');
+        draftToggle.textContent = hidden ? '+' : '-';
       });
     }
 
