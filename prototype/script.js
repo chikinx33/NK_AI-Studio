@@ -400,6 +400,13 @@
       if (loading && err) err.classList.add('hidden');
     };
 
+    // 토글 박스를 외부 스코프로 올려서 payload 빌드 시 참조 오류를 방지
+    let tagBox;
+    let needsBox;
+    let durationBox;
+    let toneBox;
+    let styleBox;
+
     const buildPayload = (data) => ({
       topic: data.get('topic') || '',
       purposeCategory: data.get('purposeCategory') || '',
@@ -423,11 +430,11 @@
     if (form && cardsEl) {
       // 목적 대분류/소분류 초기화
       const catSelect = document.getElementById('purpose-category');
-      const tagBox = document.getElementById('purpose-tags');
-      const needsBox = document.getElementById('needs-tags');
-      const durationBox = document.getElementById('duration-tags');
-      const toneBox = document.getElementById('tone-tags');
-      const styleBox = document.getElementById('style-tags');
+      tagBox = document.getElementById('purpose-tags');
+      needsBox = document.getElementById('needs-tags');
+      durationBox = document.getElementById('duration-tags');
+      toneBox = document.getElementById('tone-tags');
+      styleBox = document.getElementById('style-tags');
       const defaultPurposeCat = '키즈 · 영유아';
       const renderPurposeTags = (selCat, activateAll = false) => {
         if (!tagBox) return;
