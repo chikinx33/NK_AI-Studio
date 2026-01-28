@@ -307,8 +307,8 @@
     const headerKey = 'nk_global_header_v1';
     const loginKey = 'nk_is_logged_in';
     const loginUserKey = 'nk_login_user';
-    const LOGIN_ID = 'admin';
-    const LOGIN_PW = 'pass1234';
+    const LOGIN_ID = 'limfactory';
+    const LOGIN_PW = 'limfactory1234';
 
     const formatEst = sec => {
       const n = Number(sec) || 0;
