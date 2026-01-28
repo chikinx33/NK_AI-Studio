@@ -278,6 +278,7 @@ body::-webkit-scrollbar {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding-bottom: 10px;
 }
 
 .sidebar-actions {
@@ -347,6 +348,14 @@ body::-webkit-scrollbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.sidebar-version {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: left;
+  padding-left: 4px;
 }
 
 .search input {
