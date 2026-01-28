@@ -314,6 +314,7 @@
               <span class="chip neutral">${s.estSec}s</span>
             </div>
             <p>${s.lines}</p>
+            ${s.shot ? `<p class="muted">Shot: ${s.shot}</p>` : ''}
             <div class="actions">
               <button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
               <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
@@ -325,14 +326,21 @@
     };
 
     const mockGenerate = payload => {
-      const base = [
-        { id: 1, title: '후킹', lines: `(${payload.purposeCategory || '목적'}) ${payload.topic} 한 줄 후킹`, estSec: 6 },
-        { id: 2, title: '핵심 정보 1', lines: `${payload.target}에게 ${payload.topic}을 2포인트로 설명`, estSec: 12 },
-        { id: 3, title: '핵심 정보 2', lines: `보강 포인트/예시로 신뢰도 업 (톤: ${payload.tone || '지정 톤'})`, estSec: 10 },
-        { id: 4, title: '편집 규칙 적용 구간', lines: '자막/컷 길이/전환을 규칙 기반으로 자동 적용', estSec: 8 },
-        { id: 5, title: '전환·CTA', lines: payload.ctaEnabled ? `CTA: ${payload.ctaText || '더 알아보기'}` : '깔끔한 마무리 멘트', estSec: 6 }
-      ];
-      return base.map(s => ({ ...s, notes: '컷/자막/전환은 규칙 기반 자동 적용' }));
+      const durationMap = { '15': 3, '30': 5, '45': 7, '60': 9 };
+      const count = durationMap[payload.duration] || 5;
+      const scenes = [];
+      const est = Math.max(3, Math.round((Number(payload.duration || 30)) / count));
+      for (let i = 0; i < count; i++) {
+        const id = i + 1;
+        scenes.push({
+          id,
+          title: i === 0 ? '후킹' : (i === count - 1 ? '마무리/CTA' : `핵심 ${id}`),
+          lines: `${payload.topic || '주제'} 핵심 메시지 ${id}`,
+          estSec: est,
+          shot: `${payload.style || '스타일'} 분위기, ${payload.target || '시청자'} 시점의 화면 묘사`
+        });
+      }
+      return scenes;
     };
 
     const normalizeScenes = raw => {
@@ -360,7 +368,7 @@
           title: s.title ?? `Scene ${idx + 1}`,
           lines: s.lines ?? (typeof s === 'string' ? s : ''),
           estSec: s.estSec ?? 8,
-          notes: s.notes ?? '컷/자막/전환은 규칙 기반 자동 적용'
+          shot: s.shot ?? ''
         }));
       }
       throw new Error('invalid_response');
