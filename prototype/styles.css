@@ -636,6 +636,21 @@ body::-webkit-scrollbar {
   position: relative;
 }
 
+.chip-input {
+  border: 1px solid var(--chip-border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 16px;
+  width: 64px;
+  text-align: center;
+  font-size: 12px;
+}
+.chip-input:focus {
+  outline: 1px solid rgba(255, 122, 0, 0.4);
+  color: var(--text);
+}
+
 .scenario-card .card-top {
   display: flex;
   justify-content: space-between;

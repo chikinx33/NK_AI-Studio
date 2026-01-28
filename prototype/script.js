@@ -296,12 +296,23 @@
       });
     }
 
+    let scenesState = [];
+    let lastPayload = null;
+
+    const formatEst = sec => {
+      const n = Number(sec) || 0;
+      if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
+      if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
+      return `${n}s`;
+    };
+
     const renderScenes = scenes => {
       if (!cardsEl) return;
       if (!scenes || !scenes.length) {
         cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
         return;
       }
+      scenesState = scenes;
       cardsEl.innerHTML = scenes
         .map(
           s => `
@@ -311,15 +322,31 @@
                 <p class="eyebrow">Scene ${s.id}</p>
                 <h5>${s.title}</h5>
               </div>
-              <span class="chip neutral">${s.estSec}s</span>
+              <input class="chip-input est-input" data-id="${s.id}" value="${formatEst(s.estSec)}" aria-label="예상 길이"/>
             </div>
-            <p>${s.lines}</p>
-            ${s.shot ? `<p class="muted">Shot: ${s.shot}</p>` : ''}
-            <div class="actions">
-              <button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
-              <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
-              <button class="btn-ghost" data-action="delete" data-id="${s.id}">삭제</button>
-            </div>
+            ${
+              s.editing
+                ? `<div class="edit-form">
+                    <label class="muted">제목</label>
+                    <input class="edit-title" value="${s.title || ''}" data-id="${s.id}"/>
+                    <label class="muted">내용</label>
+                    <textarea class="edit-lines" rows="3" data-id="${s.id}">${s.lines || ''}</textarea>
+                    <label class="muted">Shot</label>
+                    <input class="edit-shot" value="${s.shot || ''}" data-id="${s.id}"/>
+                    <div class="actions">
+                      <button class="btn-secondary" data-action="save" data-id="${s.id}">저장</button>
+                      <button class="btn-ghost" data-action="cancel-edit" data-id="${s.id}">취소</button>
+                    </div>
+                  </div>`
+                : `<p>${s.lines}</p>
+                   ${s.shot ? `<p class="muted">Shot: ${s.shot}</p>` : ''}
+                   <div class="actions">
+                     <button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
+                     <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
+                     <button class="btn-ghost" data-action="delete" data-id="${s.id}">삭제</button>
+                     <button class="btn-ghost" data-action="add" data-id="${s.id}">추가</button>
+                   </div>`
+            }
           </div>`
         )
         .join('');
@@ -574,12 +601,13 @@
           return;
         }
         const payload = buildPayload(data);
-        setLoading(true);
-        try {
-          const scenes = await callScenarioAPI(payload);
-          renderScenes(scenes);
-        } catch (err) {
-          console.warn('API 실패, mock으로 대체', err);
+      setLoading(true);
+      lastPayload = payload;
+      try {
+        const scenes = await callScenarioAPI(payload);
+        renderScenes(scenes);
+      } catch (err) {
+        console.warn('API 실패, mock으로 대체', err);
           const errBox = document.getElementById('scenario-error');
           if (errBox) {
             errBox.textContent = `시나리오 생성 실패: ${err.message || '알 수 없는 오류'}`;
@@ -611,6 +639,122 @@
           if (def) def.classList.add('active');
         }
       });
+    }
+
+    const parseEst = (val) => {
+      if (!val) return null;
+      const trimmed = val.trim().toLowerCase();
+      const match = trimmed.match(/^([0-9]+(?:\\.[0-9]+)?)([smh])?$/);
+      if (!match) return null;
+      const num = parseFloat(match[1]);
+      const unit = match[2] || 's';
+      if (unit === 'h') return Math.round(num * 3600);
+      if (unit === 'm') return Math.round(num * 60);
+      return Math.round(num);
+    };
+
+    const updateSceneField = (id, updater) => {
+      scenesState = scenesState.map(s => (s.id === id ? { ...s, ...updater } : s));
+      renderScenes(scenesState);
+    };
+
+    const regenerateScene = async (id) => {
+      if (!lastPayload) {
+        alert('먼저 시나리오를 생성하세요.');
+        return;
+      }
+      try {
+        setLoading(true);
+        const newScenes = await callScenarioAPI(lastPayload);
+        // replace same index, fallback to id
+        const idx = scenesState.findIndex(s => s.id === id);
+        const replacement = idx >= 0
+          ? (newScenes[idx] || newScenes.find(ns => ns.id === id) || newScenes[0])
+          : newScenes[0];
+        scenesState = scenesState.map((s, i) => (i === idx ? replacement : s));
+        renderScenes(scenesState);
+      } catch (err) {
+        console.warn('개별 재생성 실패, mock 사용', err);
+        const idx = scenesState.findIndex(s => s.id === id);
+        const mock = mockGenerate(lastPayload);
+        const replacement = idx >= 0 ? mock[idx] || mock[0] : mock[0];
+        scenesState = scenesState.map((s, i) => (i === idx ? replacement : s));
+        renderScenes(scenesState);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const insertEmptyAfter = (id) => {
+      const idx = scenesState.findIndex(s => s.id === id);
+      const newId = Math.max(0, ...scenesState.map(s => Number(s.id) || 0)) + 1;
+      const empty = {
+        id: newId,
+        title: '새 씬',
+        lines: '',
+        shot: '',
+        estSec: 5,
+        editing: true
+      };
+      if (idx === -1) {
+        scenesState.push(empty);
+      } else {
+        scenesState.splice(idx + 1, 0, empty);
+      }
+      renderScenes(scenesState);
+    };
+
+    if (cardsEl) {
+      cardsEl.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const id = Number(btn.dataset.id);
+        const action = btn.dataset.action;
+        if (action === 'delete') {
+          if (confirm('삭제하시겠습니까?')) {
+            scenesState = scenesState.filter(s => s.id !== id);
+            renderScenes(scenesState);
+          }
+        } else if (action === 'edit') {
+          scenesState = scenesState.map(s => ({ ...s, editing: s.id === id }));
+          renderScenes(scenesState);
+        } else if (action === 'cancel-edit') {
+          scenesState = scenesState.map(s => (s.id === id ? { ...s, editing: false } : s));
+          renderScenes(scenesState);
+        } else if (action === 'save') {
+          const card = btn.closest('.scenario-card');
+          if (!card) return;
+          const title = card.querySelector('.edit-title')?.value || '';
+          const lines = card.querySelector('.edit-lines')?.value || '';
+          const shot = card.querySelector('.edit-shot')?.value || '';
+          updateSceneField(id, { title, lines, shot, editing: false });
+        } else if (action === 'regenerate') {
+          regenerateScene(id);
+        } else if (action === 'add') {
+          insertEmptyAfter(id);
+        }
+      });
+
+      cardsEl.addEventListener('change', (e) => {
+        if (e.target.classList.contains('est-input')) {
+          const id = Number(e.target.dataset.id);
+          const parsed = parseEst(e.target.value);
+          if (parsed && parsed > 0) {
+            updateSceneField(id, { estSec: parsed });
+          } else {
+            e.target.value = formatEst(scenesState.find(s => s.id === id)?.estSec || 8);
+          }
+        }
+      });
+
+      cardsEl.addEventListener('blur', (e) => {
+        if (e.target.classList.contains('est-input')) {
+          const id = Number(e.target.dataset.id);
+          const parsed = parseEst(e.target.value);
+          const fallback = scenesState.find(s => s.id === id)?.estSec || 8;
+          e.target.value = formatEst(parsed && parsed > 0 ? parsed : fallback);
+        }
+      }, true);
     }
 
     if (confirmBtn) {
