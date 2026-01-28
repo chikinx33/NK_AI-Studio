@@ -1186,6 +1186,8 @@ body::-webkit-scrollbar {
 .image-placeholder.tall { width: 100%; aspect-ratio: 16 / 9; border: 1px dashed var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--muted); background: rgba(255,255,255,0.02); position: relative; }
 .image-placeholder.tall { font-size: 0; }
 .image-placeholder.tall::before { content: "+"; font-size: 24px; font-weight: 700; color: var(--muted); position: absolute; }
+.image-placeholder.loading { font-size: 12px; color: var(--muted); }
+.image-placeholder.loading::before { display: none; }
 .scene-img { width: 100%; height: auto; border-radius: 10px; display: block; }
 .error-text { color: #ff7a7a; margin: 6px 0 0; font-size: 12px; }
 .image-placeholder.loading span { font-size: 12px; color: var(--muted); }

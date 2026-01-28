@@ -1013,13 +1013,29 @@
     const pipelineScenes = document.getElementById('pipeline-scenes');
     const renderPipelinePage = () => {
       if (!pipelineMeta || !pipelineScenes) return;
-      const stored = loadPipeline();
-      if (!stored) {
-        pipelineMeta.innerHTML = '<p class="muted">불러올 파이프라인이 없습니다. 시나리오를 생성하고 최종 컨펌을 눌러 주세요.</p>';
-        pipelineScenes.innerHTML = '';
-        return;
+
+      // 우선 현재 상태가 있으면 그것으로 렌더, 없으면 저장된 값으로 초기화
+      if (!pipelineState) {
+        const stored = loadPipeline();
+        if (!stored) {
+          pipelineMeta.innerHTML = '<p class="muted">불러올 파이프라인이 없습니다. 시나리오를 생성하고 최종 컨펌을 눌러 주세요.</p>';
+          pipelineScenes.innerHTML = '';
+          return;
+        }
+        const { payload, scenes, savedAt, header: savedHeader } = stored;
+        const headerInit = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
+        const sceneListInit = (scenes || []).map((s, idx) => ({
+          ...s,
+          id: s.id ?? idx + 1,
+          promptText: s.promptText || `${headerInit} Scene ${s.id ?? idx + 1}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`,
+          imageDataUrl: s.imageDataUrl || '',
+          imgLoading: false,
+          imgError: ''
+        }));
+        pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt };
       }
-      const { payload, scenes, savedAt, header: savedHeader } = stored;
+
+      const { payload, scenes, savedAt, header } = pipelineState;
       const fmtList = (label, val) => val && val.length ? `<div><span class="muted">${label}</span> ${val}</div>` : '';
       pipelineMeta.innerHTML = `
         <h4 style="margin:0 0 8px;">${payload.topic || '제목 없음'}</h4>
@@ -1031,23 +1047,10 @@
           ${fmtList('스타일', [(payload.styles||[]).join(', '), payload.style].filter(Boolean).join(', '))}
           ${fmtList('추가 설명', payload.banned || '')}
           <div><span class="muted">길이</span> ${payload.duration || ''}s</div>
-          <div><span class="muted">저장 시각</span> ${new Date(savedAt).toLocaleString()}</div>
+          <div><span class="muted">저장 시각</span> ${new Date(savedAt || Date.now()).toLocaleString()}</div>
         </div>`;
-      const header = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
-      const sceneList = (scenes || []).map((s, idx) => {
-        const scenePrompt = `${header} Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
-        return {
-          ...s,
-          id: s.id ?? idx + 1,
-          promptText: scenePrompt,
-          imageDataUrl: s.imageDataUrl || '',
-          imgLoading: false,
-          imgError: ''
-        };
-      });
-      pipelineState = { payload, header, scenes: sceneList };
-      if (sceneList.length) {
-        const rows = sceneList.map(s => {
+      if (scenes && scenes.length) {
+        const rows = scenes.map(s => {
           const img = s.imgLoading
             ? `<div class="image-placeholder tall loading"><span>생성중...</span></div>`
             : s.imageDataUrl
