@@ -193,6 +193,15 @@ body::-webkit-scrollbar {
   background: rgba(255, 255, 255, 0.12);
 }
 
+[data-theme="light"] .nav-toggle {
+  border-color: #d0d8ea;
+  background: #eef2fb;
+  color: #0d172f;
+}
+[data-theme="light"] .nav-toggle:hover {
+  background: #e1e8f7;
+}
+
 .nav-sub {
   margin: -4px 0 10px 13px;
   display: flex;
@@ -203,13 +212,16 @@ body::-webkit-scrollbar {
   font-size: 12px;
   color: var(--muted);
   text-decoration: none;
-  padding: 4px 0;
+  padding: 2px 0;
+  border: none;
   border-radius: 0;
   background: transparent;
+  box-shadow: none;
   cursor: pointer;
   text-align: left;
   transition: none;
-  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 .nav-sub .nav-sub-item:hover {
   color: var(--text);
@@ -232,11 +244,22 @@ body::-webkit-scrollbar {
   cursor: pointer;
   font-weight: 600;
   transition: none;
-  margin-left: -15px;
+  margin-left: -15px; /* keeps icon closer */
+  transform: translateX(-15px);
 }
 .nav-sub-delete:hover {
   color: var(--text);
   background: rgba(255,255,255,0.08);
+}
+
+[data-theme="light"] .nav-sub-delete {
+  border-color: #d0d8ea;
+  background: #eef2fb;
+  color: #51617f;
+}
+[data-theme="light"] .nav-sub-delete:hover {
+  background: #e1e8f7;
+  color: #0d172f;
 }
 
 .sidebar-footer {
