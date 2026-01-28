@@ -1066,46 +1066,41 @@
     applyAuthGuard();
 
     // 옵션 페이지 로그인 핸들러
-    const optLoginBtn = document.getElementById('opt-login-btn');
-    const optLogoutBtn = document.getElementById('opt-logout-btn');
+    const optAuthBtn = document.getElementById('opt-auth-btn');
     const optUsername = document.getElementById('opt-username');
-    const optOut = document.getElementById('option-logged-out');
-    const optIn = document.getElementById('option-logged-in');
     const optId = document.getElementById('opt-id');
     const optPw = document.getElementById('opt-pw');
+    const optFormRows = Array.from(document.querySelectorAll('.option-card .form-row'));
 
     const refreshOptionUI = () => {
       const ok = isAuthed();
-      if (optOut && optIn && optUsername) {
-        if (ok) {
-          optOut.classList.add('hidden');
-          optIn.classList.remove('hidden');
-          optUsername.textContent = `로그인된 아이디: ${getUser() || LOGIN_ID}`;
-        } else {
-          optOut.classList.remove('hidden');
-          optIn.classList.add('hidden');
-        }
+      if (optUsername) optUsername.textContent = ok ? (getUser() || LOGIN_ID) : '';
+      if (optAuthBtn) optAuthBtn.textContent = ok ? '로그아웃' : '로그인';
+      if (optFormRows.length) {
+        optFormRows.forEach(r => r.classList.toggle('hidden', ok));
       }
+      if (optUsername) optUsername.classList.toggle('hidden', !ok);
     };
-    if (optLoginBtn && optId && optPw) {
-      optLoginBtn.addEventListener('click', () => {
+    if (optAuthBtn && optId && optPw) {
+      optAuthBtn.addEventListener('click', () => {
+        if (isAuthed()) {
+          setAuthed(false, '');
+          refreshOptionUI();
+          applyAuthGuard();
+          alert('로그아웃했습니다.');
+          return;
+        }
         const id = optId.value.trim();
         const pw = optPw.value.trim();
         if (id === LOGIN_ID && pw === LOGIN_PW) {
           setAuthed(true, id);
           refreshOptionUI();
+          applyAuthGuard();
           alert('로그인 되었습니다. 시나리오 페이지로 이동합니다.');
           window.location.href = 'scenario.html';
         } else {
           alert('아이디 또는 비밀번호가 올바르지 않습니다.');
         }
-      });
-    }
-    if (optLogoutBtn) {
-      optLogoutBtn.addEventListener('click', () => {
-        setAuthed(false, '');
-        refreshOptionUI();
-        applyAuthGuard();
       });
     }
     refreshOptionUI();

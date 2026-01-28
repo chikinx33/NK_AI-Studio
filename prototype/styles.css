@@ -1210,8 +1210,23 @@ body::-webkit-scrollbar {
   flex-direction: column;
   gap: 12px;
 }
+.option-title { margin: 0 auto; text-align: center; font-weight: 700; letter-spacing: 1px; }
 .logo-box { display: flex; justify-content: center; margin-bottom: 18px; }
 .logo-img { width: 300px; height: 300px; border-radius: 24px; object-fit: cover; }
+.form-row {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  align-items: center;
+  gap: 10px;
+}
+.form-row label { font-weight: 700; }
+.form-row input {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+}
 .option-card .form-group { display: flex; flex-direction: column; gap: 6px; }
 .option-card label { font-weight: 600; }
 .option-card input { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-2); color: var(--text); }
