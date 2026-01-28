@@ -324,7 +324,7 @@
             <div class="card-top">
               <div>
                 <p class="eyebrow">Scene ${s.id}</p>
-                <h5>${s.title}</h5>
+                <h5>Scene ${s.id} - ${s.title}</h5>
               </div>
               <input class="chip-input est-input" data-id="${s.id}" value="${formatEst(s.estSec)}" aria-label="예상 길이"/>
             </div>
