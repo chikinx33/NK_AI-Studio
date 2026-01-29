@@ -1,17 +1,23 @@
 // prototype/functions/api/video/status.ts
 // Poll Veo operation status and return a playable video URL (signed GCS URL if possible).
 
+const send = (data: any, status = 200) =>
+  new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+  });
+
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
     const url = new URL(request.url);
     const jobId = (url.searchParams.get('job_id') || '').trim();
-    if (!jobId) return json({ error: 'job_id is required' }, 400);
+    if (!jobId) return send({ error: 'job_id is required' }, 400);
 
     const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     if (!projectId || !clientEmail || !privateKeyRaw) {
-      return json({ error: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, 500);
+      return send({ error: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, 500);
     }
 
     const location = 'us-central1';
@@ -32,14 +38,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     });
     const text = await res.text();
     if (!res.ok) {
-      return json({ status: 'error', message: `operations.get failed (${res.status})`, detail: safeJson(text) }, 500);
+      return send({ status: 'error', message: `operations.get failed (${res.status})`, detail: safeJson(text) }, 500);
     }
     const data = safeJson(text);
     if (!data.done) {
-      return json({ status: 'processing' });
+      return send({ status: 'processing' });
     }
     if (data.error) {
-      return json({ status: 'error', message: data.error.message || 'Veo error', detail: data.error });
+      return send({ status: 'error', message: data.error.message || 'Veo error', detail: data.error });
     }
 
     const gcsUri =
@@ -50,7 +56,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       data.response?.generatedContentUri ||
       '';
     if (!gcsUri) {
-      return json({ status: 'error', message: 'No output URI found', detail: data.response || data });
+      return send({ status: 'error', message: 'No output URI found', detail: data.response || data });
     }
 
     let videoUrl = gcsToHttps(gcsUri);
@@ -69,18 +75,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       // fallback to public https path
     }
 
-    return json({ status: 'done', videoUrl, gcsUri });
+    return send({ status: 'done', videoUrl, gcsUri });
   } catch (e: any) {
-    return json({ status: 'error', message: e?.message || 'Unknown error' }, 500);
+    return send({ status: 'error', message: e?.message || 'Unknown error' }, 500);
   }
 };
-
-function json(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
-  });
-}
 
 function safeJson(text: string) {
   try { return JSON.parse(text); } catch { return text; }
