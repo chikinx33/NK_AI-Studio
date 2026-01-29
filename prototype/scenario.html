@@ -43,7 +43,7 @@
           <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
           <a class="btn-ghost icon-btn" aria-label="옵션" href="options.html">⚙️</a>
         </div>
-        <div class="sidebar-version">ver 1004</div>
+        <div class="sidebar-version">ver 1005</div>
       </div>
     </aside>
 
@@ -131,6 +131,11 @@
             <div class="section-caption right-caption caption-row">
               <span>대본</span>
               <div class="caption-actions">
+                <div class="ratio-group" id="ratio-group">
+                  <button type="button" class="btn-secondary ratio-btn active" data-ratio="16:9">16:9</button>
+                  <button type="button" class="btn-secondary ratio-btn" data-ratio="9:16">9:16</button>
+                  <button type="button" class="btn-secondary ratio-btn" data-ratio="1:1">1:1</button>
+                </div>
                 <button class="btn-secondary" id="save-draft">임시 저장</button>
                 <button class="btn-primary" id="confirm-scenes">최종 컨펌 → 씬 파이프라인</button>
               </div>

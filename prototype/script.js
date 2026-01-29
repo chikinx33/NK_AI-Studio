@@ -281,6 +281,16 @@
       if (saved === 'light' || saved === 'dark') theme = saved;
     } catch (_) {}
     applyTheme();
+    // 화면비 토글 초기화
+    ratioButtons.forEach(btn => {
+      if (btn instanceof HTMLElement) {
+        btn.classList.toggle('active', btn.dataset.ratio === aspectRatio);
+        btn.addEventListener('click', () => {
+          const r = btn.dataset.ratio || '16:9';
+          saveAspect(r);
+        });
+      }
+    });
 
     // 시나리오 폼 핸들링 (모의 API)
     const form = document.getElementById('scenario-form');
@@ -310,6 +320,8 @@
     const loginUserKey = 'nk_login_user';
     const LOGIN_ID = 'limfactory';
     const LOGIN_PW = 'limfactory1234';
+    const ratioButtons = document.querySelectorAll('.ratio-btn');
+    let aspectRatio = localStorage.getItem('nk_aspect_ratio') || '16:9';
 
     const formatEst = sec => {
       const n = Number(sec) || 0;
@@ -382,7 +394,8 @@
         payload,
         scenes,
         header: header || '',
-        savedAt: new Date().toISOString()
+        savedAt: new Date().toISOString(),
+        aspectRatio
       };
       try { localStorage.setItem(pipelineKey, JSON.stringify(data)); } catch (_) {}
     };
@@ -401,6 +414,16 @@
 
     const saveHeader = (header) => {
       try { localStorage.setItem(headerKey, header || ''); } catch (_) {}
+    };
+
+    const saveAspect = (ratio) => {
+      aspectRatio = ratio;
+      try { localStorage.setItem('nk_aspect_ratio', ratio); } catch (_) {}
+      ratioButtons.forEach(btn => {
+        if (btn instanceof HTMLElement) {
+          btn.classList.toggle('active', btn.dataset.ratio === ratio);
+        }
+      });
     };
 
     const fetchGlobalHeader = async (payload) => {
@@ -528,6 +551,7 @@
       if (styleInput) styleInput.value = data.style || '';
       const bannedInput = form.querySelector('textarea[name="banned"]');
       if (bannedInput) bannedInput.value = data.banned || '';
+      if (data.aspectRatio) saveAspect(data.aspectRatio);
 
       if (durationBox && data.duration) {
         durationBox.querySelectorAll('.duration-toggle').forEach(btn => btn.classList.remove('active'));
@@ -634,6 +658,7 @@
       tone: (data.get('tone') || '').trim(),
       style: (data.get('style') || '').trim(),
       banned: data.get('banned') || '',
+      aspectRatio,
       ctaEnabled: false,
       ctaText: ''
     });
@@ -1022,17 +1047,19 @@
           pipelineScenes.innerHTML = '';
           return;
         }
-        const { payload, scenes, savedAt, header: savedHeader } = stored;
+        const { payload, scenes, savedAt, header: savedHeader, aspectRatio: savedRatio } = stored;
+        if (savedRatio) aspectRatio = savedRatio;
+        saveAspect(aspectRatio);
         const headerInit = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
         const sceneListInit = (scenes || []).map((s, idx) => ({
           ...s,
           id: s.id ?? idx + 1,
-          promptText: s.promptText || `${headerInit} Scene ${s.id ?? idx + 1}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`,
+          promptText: s.promptText || `${headerInit} [Aspect ratio: ${aspectRatio}] Scene ${s.id ?? idx + 1}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`,
           imageDataUrl: s.imageDataUrl || '',
           imgLoading: false,
           imgError: ''
         }));
-        pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt };
+        pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio };
       }
 
       const { payload, scenes, savedAt, header } = pipelineState;
@@ -1046,6 +1073,7 @@
           ${fmtList('톤', [(payload.tones||[]).join(', '), payload.tone].filter(Boolean).join(', '))}
           ${fmtList('스타일', [(payload.styles||[]).join(', '), payload.style].filter(Boolean).join(', '))}
           ${fmtList('추가 설명', payload.banned || '')}
+          <div><span class="muted">화면비</span> ${aspectRatio}</div>
           <div><span class="muted">길이</span> ${payload.duration || ''}s</div>
           <div><span class="muted">저장 시각</span> ${new Date(savedAt || Date.now()).toLocaleString()}</div>
         </div>
@@ -1055,12 +1083,14 @@
         </div>`;
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
-          const img = s.imgLoading
+          const scenePrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+          const updatedScene = { ...s, promptText: scenePrompt };
+          const img = updatedScene.imgLoading
             ? `<div class="image-placeholder tall loading"><span>생성중...</span></div>`
-            : s.imgError
+            : updatedScene.imgError
               ? `<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>`
-              : s.imageDataUrl
-                ? `<div class="image-box"><img class="scene-img" data-src="${s.imageDataUrl}" src="${s.imageDataUrl}" alt="scene image" /></div>`
+              : updatedScene.imageDataUrl
+                ? `<div class="image-box"><img class="scene-img" data-src="${updatedScene.imageDataUrl}" src="${updatedScene.imageDataUrl}" alt="scene image" /></div>`
                 : `<div class="image-placeholder tall"></div>`;
           const err = ''; // 별도 에러 텍스트 제거, 카드 안에서 표시
           return `
@@ -1069,10 +1099,10 @@
               <p class="eyebrow">Scene ${s.id}</p>
               <p>${s.lines}</p>
             </div>
-            <div class="scene-cell prompt"><p class="prompt-text">${s.promptText}</p></div>
+            <div class="scene-cell prompt"><p class="prompt-text">${scenePrompt}</p></div>
             <div class="scene-cell image">${img}${err}</div>
             <div class="scene-cell actions"><div class="action-buttons grid">
-              <button class="btn-secondary compact" data-action="regen-image" data-id="${s.id}" ${s.imgLoading ? 'disabled' : ''}>${s.imgLoading ? '생성중' : '생성'}</button>
+              <button class="btn-secondary compact" data-action="regen-image" data-id="${s.id}" ${updatedScene.imgLoading ? 'disabled' : ''}>${updatedScene.imgLoading ? '생성중' : '생성'}</button>
               <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}">삭제</button>
               <button class="btn-secondary compact" data-action="copy-image" data-id="${s.id}">복사</button>
               <button class="btn-secondary compact" data-action="paste-image" data-id="${s.id}">붙여넣기</button>
@@ -1082,6 +1112,11 @@
             </div></div>
           </div>`;
         }).join('');
+        // 업데이트된 prompt를 상태에 반영
+        pipelineState.scenes = scenes.map((s, idx) => {
+          const scenePrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+          return { ...s, promptText: scenePrompt };
+        });
         pipelineScenes.innerHTML = `
           <div class="scene-table">
             <div class="scene-row head">
