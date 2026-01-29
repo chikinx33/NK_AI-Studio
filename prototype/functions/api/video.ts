@@ -2,6 +2,8 @@
 // Minimal Veo (image -> video) trigger endpoint for Cloudflare Pages Functions.
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 
+// Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
+(globalThis as any).g = globalThis;
 const log = (...args: any[]) => console.log('[video]', ...args);
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {

@@ -1,6 +1,8 @@
 // prototype/functions/api/video/status.ts
 // Poll Veo operation status and return a playable video URL (signed GCS URL if possible).
 
+// Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
+(globalThis as any).g = globalThis;
 const send = (data: any, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
