@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.062';
+  const APP_VERSION = '1.063';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1332,7 +1332,7 @@
           const videoCard = (() => {
             if (updatedScene.videoUrl) {
               const note = updatedScene.videoMethod === 'inline' ? `<div class="video-note">생성 성공(인라인 반환)</div>` : '';
-              return `<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="${updatedScene.videoUrl}" type="video/mp4" /></video>${note}</div>`;
+              return `<div class="video-box"><video class="scene-video" src="${updatedScene.videoUrl}" controls muted playsinline preload="metadata" crossorigin="anonymous"></video>${note}</div>`;
             }
             if (updatedScene.videoStatus === 'processing') {
               return `<div class="video-placeholder loading"><span>영상 생성중...</span></div>`;
@@ -1436,25 +1436,6 @@
               v.addEventListener('error', () => {
                 console.error('video error', v.error || null);
               });
-              const srcEl = v.querySelector('source');
-              const src = (srcEl && srcEl.getAttribute('src')) || v.getAttribute('src') || '';
-              if (src && src.startsWith('data:video/mp4;base64,') && !v.dataset.hydrated) {
-                v.dataset.hydrated = '1';
-                (async () => {
-                  try {
-                    const resp = await fetch(src);
-                    const blob = await resp.blob();
-                    const url = URL.createObjectURL(blob);
-                    const se = v.querySelector('source');
-                    if (se) se.setAttribute('src', url);
-                    else v.src = url;
-                    v.load();
-                    console.log('video inline hydrated', { size: blob.size });
-                  } catch (e) {
-                    console.error('video inline hydrate fail', e);
-                  }
-                })();
-              }
             });
           } catch (_) {}
       } else {
@@ -1608,7 +1589,14 @@
             console.error('video status error detail (stringify fail)', json?.detail || json?.raw || null);
           }
         } else if (json.status === 'done') {
-          const vid = json.videoUrl || json.videoDataUrl || '';
+          const vid = json.outputUrl || '';
+          if (!(String(vid).startsWith('https://') || String(vid).startsWith('data:video/mp4;base64,'))) {
+            console.error('invalid video src', vid);
+            pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: '재생 URL이 올바르지 않습니다' };
+            renderPipelinePage();
+            persistPipeline();
+            return;
+          }
           const method = json.method || (json.gcsUri ? 'gcs' : (String(vid).startsWith('data:video/mp4;base64,') ? 'inline' : 'unknown'));
           pipelineState.scenes[idx] = {
             ...scene,

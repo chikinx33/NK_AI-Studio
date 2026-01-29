@@ -127,16 +127,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
                 log('sign_url_error', err);
               }
               log('done_base64', { jobId: decoded, videoUrl: videoUrlSigned?.slice(0, 120) + '...' });
-              return send({ status: 'done', method: 'gcs_inline_upload', videoUrl: videoUrlSigned, gcsUri: finalGcsUri, raw: data, uploaded: uploadJson });
+              return send({ status: 'done', method: 'gcs_inline_upload', outputUrl: videoUrlSigned, videoUrl: videoUrlSigned, gcsUri: finalGcsUri, raw: data, uploaded: uploadJson });
             } else {
               const dataUrl = `data:video/mp4;base64,${base64Vid}`;
               log('fallback_data_uri', { len: base64Vid.length });
-              return send({ status: 'done', method: 'inline', videoUrl: dataUrl, videoDataUrl: dataUrl, gcsUri: '', raw: data });
+              return send({ status: 'done', method: 'inline', outputUrl: dataUrl, videoUrl: dataUrl, videoDataUrl: dataUrl, gcsUri: '', raw: data });
             }
           } else {
             const dataUrl = `data:video/mp4;base64,${base64Vid}`;
             log('fallback_data_uri_no_env', { len: base64Vid.length });
-            return send({ status: 'done', method: 'inline', videoUrl: dataUrl, videoDataUrl: dataUrl, gcsUri: '', raw: data });
+            return send({ status: 'done', method: 'inline', outputUrl: dataUrl, videoUrl: dataUrl, videoDataUrl: dataUrl, gcsUri: '', raw: data });
           }
         } catch (err) {
           log('base64_handle_error', err);
@@ -176,7 +176,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     log('done', { jobId: decoded, videoUrl: videoUrl?.slice(0, 120) + '...' });
-    return send({ status: 'done', method: 'gcs', videoUrl, gcsUri, raw: data });
+    return send({ status: 'done', method: 'gcs', outputUrl: videoUrl, videoUrl, gcsUri, raw: data });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
     return send({ status: 'error', message: e?.message || 'Unknown error', stack: e?.stack || '' });
