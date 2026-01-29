@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.045';
+  const APP_VERSION = '1.046';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1611,7 +1611,11 @@
             const visualText = visualEl ? (visualEl.textContent || '') : '';
             const durationText = durEl ? (durEl.textContent || '') : '';
             const text = [`Common`, commonText, `Visual`, visualText, `Duration`, durationText].join('\n');
-            pipelineState.scenes[idx] = { ...scene, promptText: text, promptEdited: true, editingPrompt: false };
+            const durNum = (() => {
+              const m = (durationText || '').match(/\d+/);
+              return Math.max(Number(m && m[0]) || 1, 1);
+            })();
+            pipelineState.scenes[idx] = { ...scene, promptText: text, promptEdited: true, editingPrompt: false, shot: visualText, estSec: durNum };
             renderPipelinePage();
             persistPipeline();
             return;
