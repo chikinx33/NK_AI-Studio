@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.034';
+  const APP_VERSION = '1.035';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1628,9 +1628,9 @@
     refreshOptionUI();
 
       if (confirmBtn) {
-        confirmBtn.disabled = true;
+        confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
         confirmBtn.addEventListener('click', async () => {
-          if (!scenesState.length) {
+          if (!scenesState.length && !forceConfirmEnable) {
             alert('먼저 시나리오를 생성하세요.');
             return;
           }
