@@ -88,13 +88,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const operationName =
       (resJson && resJson.name) ||
       resJson?.operation?.name ||
-      resJson?.predictions?.[0]?.name ||
-      resJson?.output?.name ||
       "";
 
     if (!operationName) {
       log('no_operation_name', resJson);
       return json({ error: "No operation name returned", raw: resJson }, 500);
+    }
+    const valid = /^projects\/[^/]+\/locations\/[^/]+\/operations\/[^/]+$/.test(operationName);
+    if (!valid) {
+      log('invalid_operation_name', operationName);
+      return json({ error: "Invalid operation name format", raw: resJson }, 500);
     }
 
     log('ok', { job_id: operationName });
