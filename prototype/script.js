@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.072';
+  const APP_VERSION = '1.073';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -363,6 +363,7 @@
       const list = drafts.map(d => {
         const ar = d.payload?.aspectRatio || '16:9';
         const dur = fmtDuration(d.payload?.duration || 0);
+        const canGenerate = Array.isArray(d.scenes) && d.scenes.length > 0;
         return `
           <article class="draft-card">
             <div class="draft-top">
@@ -376,8 +377,8 @@
               </div>
             </div>
             <div class="draft-actions">
-              <button class="btn-secondary" data-action="scenario-edit" data-id="${d.id}">시나리오 편집</button>
-              <button class="btn-secondary" data-action="scene-edit" data-id="${d.id}">씬 편집</button>
+              <button class="btn-secondary" data-action="scenario-edit" data-id="${d.id}">시나리오</button>
+              <button class="btn-secondary" data-action="scene-edit" data-id="${d.id}" ${canGenerate ? '' : 'disabled'}>영상 생성</button>
               <button class="trash-btn" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
             </div>
           </article>
@@ -402,6 +403,7 @@
       dashContainer.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
+        if (btn.disabled) return;
         const action = btn.dataset.action;
         if (action === 'create-project') {
           const overlay = document.getElementById('project-overlay');
