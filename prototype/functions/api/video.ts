@@ -32,7 +32,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const location = "us-central1";
     const jobId = crypto.randomUUID();
-    const outputGcsUri = `${baseOutput.replace(/\\/$/, "")}/${sceneId}/${jobId}/`;
+    const outputGcsUri = `${baseOutput.replace(/\/$/, "")}/${sceneId}/${jobId}/`;
 
     const bytesBase64Encoded = extractBase64(imageDataUrl);
     if (!bytesBase64Encoded) {
