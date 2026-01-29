@@ -149,13 +149,6 @@ body::-webkit-scrollbar {
   align-items: center;
 }
 
-.nav-item .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--teal);
-  opacity: 0;
-}
 
 .nav-item:hover {
   background: var(--layer-soft);
@@ -168,13 +161,9 @@ body::-webkit-scrollbar {
   border: 1px solid rgba(255, 122, 0, 0.25);
 }
 
-.nav-item.active .dot {
-  opacity: 1;
-}
-
 .nav-item.active {
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .nav-toggle {
