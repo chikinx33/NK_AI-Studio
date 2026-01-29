@@ -996,17 +996,23 @@ body::-webkit-scrollbar {
   flex: 1 1 0;
 }
 .trash-btn {
-  width: 38px;
-  height: 38px;
+  width: 46px;
+  height: 46px;
   display: grid;
   place-items: center;
-  border-radius: 10px;
+  border-radius: 12px;
   border: 1px solid var(--border);
-  background: var(--layer-soft);
+  background: radial-gradient(circle at 30% 30%, rgba(255,122,0,0.15), transparent 55%), var(--layer-soft);
   cursor: pointer;
   color: var(--muted);
+  font-size: 18px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.03);
 }
-.trash-btn:hover { color: var(--text); }
+.trash-btn:hover {
+  color: var(--text);
+  border-color: rgba(255,122,0,0.6);
+  box-shadow: 0 8px 18px rgba(255,122,0,0.16);
+}
 
 .project {
   padding-top: 16px;
