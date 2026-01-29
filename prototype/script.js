@@ -268,6 +268,8 @@
     try { localStorage.setItem('nk_theme', theme); } catch (_) {}
   };
 
+  let currentDraftId = null;
+
   // 공통 프롬프트에 화면비를 반드시 포함시키기 위한 헬퍼
   const withAspectInHeader = (headerText, ratio) => {
     if (!headerText) return `[Aspect ratio: ${ratio}]`;
@@ -410,9 +412,10 @@
     let lastPayload = null;
     let pipelineState = null;
 
-    const draftNav = document.getElementById('draft-nav');
+    const draftNav = null;
     const saveDraftBtn = document.getElementById('save-draft');
-    const draftToggle = document.getElementById('draft-toggle');
+    const cloneDraftBtn = document.getElementById('clone-draft');
+    const draftToggle = null;
     const headerKey = 'nk_global_header_v1';
     const loginKey = 'nk_is_logged_in';
     const loginUserKey = 'nk_login_user';
@@ -594,22 +597,7 @@
       } catch (_) {}
     };
 
-    const renderDraftNav = () => {
-      if (!draftNav) return;
-      const drafts = loadDrafts();
-      if (!drafts.length) {
-        draftNav.innerHTML = '<span class="muted" style="font-size:12px;">임시 저장 없음</span>';
-        return;
-      }
-      draftNav.innerHTML = drafts
-        .map(d => `
-          <div class="nav-sub-item-row">
-            <button class="nav-sub-item" data-draft-id="${d.id}">${truncateTitle(d.title)}</button>
-            <button class="nav-sub-delete" data-draft-id="${d.id}" aria-label="삭제">-</button>
-          </div>
-        `)
-        .join('');
-    };
+    const renderDraftNav = () => {};
 
     const setActiveTags = (box, values = []) => {
       if (!box) return;
@@ -625,6 +613,7 @@
       form.reset();
       // 기본 리셋 핸들러가 실행되도록 강제
       form.dispatchEvent(new Event('reset'));
+      currentDraftId = draft.id || null;
 
       const data = draft.payload || {};
       const topicInput = form.querySelector('input[name="topic"]');
@@ -1071,53 +1060,50 @@
         const payload = buildPayload(data);
         const scenes = scenesState.length ? scenesState : mockGenerate(payload);
         const drafts = loadDrafts();
-        const id = Date.now();
-        drafts.unshift({
+        let id = currentDraftId;
+        if (!id) {
+          id = Date.now();
+        }
+        const newDraft = {
           id,
           title: payload.topic || '제목없음',
           payload,
           scenes
-        });
-        // 최대 20개만 보관
+        };
+        const existsIdx = drafts.findIndex(d => d.id === id);
+        if (existsIdx >= 0) drafts[existsIdx] = newDraft;
+        else drafts.unshift(newDraft);
+        currentDraftId = id;
         const trimmed = drafts.slice(0, 20);
         saveDrafts(trimmed);
         renderDraftNav();
-        alert('임시 저장되었습니다.');
+        alert(existsIdx >= 0 ? '저장되었습니다.' : '새 프로젝트로 저장되었습니다.');
+      });
+    }
+    if (cloneDraftBtn) {
+      cloneDraftBtn.addEventListener('click', () => {
+        if (!form) return;
+        const data = new FormData(form);
+        const payload = buildPayload(data);
+        const scenes = scenesState.length ? scenesState : mockGenerate(payload);
+        const drafts = loadDrafts();
+        const id = Date.now();
+        const newDraft = {
+          id,
+          title: payload.topic || '제목없음',
+          payload,
+          scenes
+        };
+        drafts.unshift(newDraft);
+        currentDraftId = id;
+        const trimmed = drafts.slice(0, 20);
+        saveDrafts(trimmed);
+        renderDraftNav();
+        alert('복제하여 새 프로젝트로 저장했습니다.');
       });
     }
 
-    if (draftNav) {
-      draftNav.addEventListener('click', (e) => {
-        const del = e.target.closest('.nav-sub-delete');
-        if (del) {
-          const id = Number(del.dataset.draftId);
-          if (confirm('삭제할까요?')) {
-            const drafts = loadDrafts().filter(d => d.id !== id);
-            saveDrafts(drafts);
-            renderDraftNav();
-          }
-          return;
-        }
-        const btn = e.target.closest('[data-draft-id]');
-        if (!btn) return;
-        const id = Number(btn.dataset.draftId);
-        const draft = loadDrafts().find(d => d.id === id);
-        if (draft) {
-          applyDraft(draft);
-          if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
-        }
-      });
-    }
-
-    if (draftToggle && draftNav) {
-      draftToggle.addEventListener('click', () => {
-        const hidden = draftNav.classList.toggle('hidden');
-        draftToggle.textContent = hidden ? '+' : '-';
-      });
-    }
-
-    // 초기 로드 시 저장 목록 렌더
-    renderDraftNav();
+    // nav-sub 제거됨
 
     // 대시보드에서 선택된 draft 적용
     try {
