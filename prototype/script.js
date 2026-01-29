@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.063';
+  const APP_VERSION = '1.066';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1332,7 +1332,7 @@
           const videoCard = (() => {
             if (updatedScene.videoUrl) {
               const note = updatedScene.videoMethod === 'inline' ? `<div class="video-note">생성 성공(인라인 반환)</div>` : '';
-              return `<div class="video-box"><video class="scene-video" src="${updatedScene.videoUrl}" controls muted playsinline preload="metadata" crossorigin="anonymous"></video>${note}</div>`;
+              return `<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata" crossorigin="anonymous"><source src="${updatedScene.videoUrl}" type="video/mp4" /></video>${note}</div>`;
             }
             if (updatedScene.videoStatus === 'processing') {
               return `<div class="video-placeholder loading"><span>영상 생성중...</span></div>`;
@@ -1385,6 +1385,7 @@
               <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 변환</button>
               <button class="btn-secondary compact" data-action="open-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>새 창에서 보기</button>
               <button class="btn-secondary compact" data-action="download-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>다운로드 영상</button>
+              <button class="btn-secondary compact" data-action="video-safe" data-id="${s.id}">안전 모드 변환</button>
             </div></div>
           </div>`;
         }).join('');
@@ -1436,6 +1437,26 @@
               v.addEventListener('error', () => {
                 console.error('video error', v.error || null);
               });
+              const se = v.querySelector('source');
+              const src = (se && se.getAttribute('src')) || v.getAttribute('src') || '';
+              if (src && src.startsWith('data:video/mp4;base64,') && !v.dataset.hydrated) {
+                v.dataset.hydrated = '1';
+                (async () => {
+                  try {
+                    const resp = await fetch(src);
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    if (se) se.setAttribute('src', url);
+                    else v.src = url;
+                    v.load();
+                    console.log('video inline hydrated', { size: blob.size });
+                  } catch (e) {
+                    console.error('video inline hydrate fail', e);
+                  }
+                })();
+              } else {
+                v.load();
+              }
             });
           } catch (_) {}
       } else {
@@ -1553,6 +1574,92 @@
         persistPipeline();
       }
     };
+    const pixelateDataUrl = (dataUrl, pixel = 8) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        const small = document.createElement('canvas');
+        small.width = Math.max(1, Math.floor(w / pixel));
+        small.height = Math.max(1, Math.floor(h / pixel));
+        const sctx = small.getContext('2d');
+        if (!sctx) return reject(new Error('canvas'));
+        sctx.imageSmoothingEnabled = false;
+        sctx.drawImage(img, 0, 0, small.width, small.height);
+        const big = document.createElement('canvas');
+        big.width = w;
+        big.height = h;
+        const bctx = big.getContext('2d');
+        if (!bctx) return reject(new Error('canvas'));
+        bctx.imageSmoothingEnabled = false;
+        bctx.drawImage(small, 0, 0, big.width, big.height);
+        resolve(big.toDataURL('image/png'));
+      };
+      img.onerror = e => reject(e);
+      img.src = dataUrl;
+    });
+    const blurDataUrl = (dataUrl, radius = 4) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth || img.width;
+        const h = img.naturalHeight || img.height;
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        const ctx = c.getContext('2d');
+        if (!ctx) return reject(new Error('canvas'));
+        ctx.filter = `blur(${Math.max(1, radius)}px)`;
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/png'));
+      };
+      img.onerror = e => reject(e);
+      img.src = dataUrl;
+    });
+    const startVideoForIdxSafe = async (idx) => {
+      if (!pipelineState) return;
+      const scene = pipelineState.scenes[idx];
+      if (!scene.imageDataUrl) {
+        alert('먼저 이미지를 생성하거나 업로드하세요.');
+        return;
+      }
+      if (scene.videoStatus === 'processing') {
+        alert('이미 영상 생성이 진행 중입니다.');
+        return;
+      }
+      try {
+        const safeImg = await blurDataUrl(scene.imageDataUrl, 6);
+        pipelineState.scenes[idx] = { ...scene, videoStatus: 'processing', videoError: '', videoUrl: '' };
+        renderPipelinePage();
+        persistPipeline();
+        const res = await fetch('/api/video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sceneId: scene.id,
+            promptText: scene.promptText || scene.lines || '',
+            imageDataUrl: safeImg,
+            durationSeconds: Math.min(Math.max(Number(scene.estSec) || 6, 4), 8),
+            aspectRatio,
+          })
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+          throw new Error(`${res.status} ${detail || 'video_api_error'}`);
+        }
+        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+        const jobId = json.job_id || '';
+        if (!jobId) throw new Error('job_id 없음');
+        pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], videoJobId: jobId, videoStatus: 'processing', videoSafeTried: true };
+        renderPipelinePage();
+        persistPipeline();
+        pollVideoJob(jobId, idx, 0);
+      } catch (err) {
+        pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: err?.message || '안전 모드 실패' };
+        alert(err?.message || '영상 생성 실패');
+        renderPipelinePage();
+        persistPipeline();
+      }
+    };
 
     const pollVideoJob = async (jobId, idx, attempt = 0) => {
       if (!pipelineState) return;
@@ -1587,6 +1694,12 @@
             console.error('video status error detail', JSON.stringify(det, null, 2));
           } catch (_) {
             console.error('video status error detail (stringify fail)', json?.detail || json?.raw || null);
+          }
+          const m = /blocked by your current safety settings for person\/face generation/i.test(String(json.message || ''));
+          if (m && !scene.videoSafeTried) {
+            alert('안전 모드로 다시 시도합니다.');
+            await startVideoForIdxSafe(idx);
+            return;
           }
         } else if (json.status === 'done') {
           const vid = json.outputUrl || '';
@@ -1768,6 +1881,10 @@
           }
           if (action === 'video') {
             await startVideoForIdx(idx);
+            return;
+          }
+          if (action === 'video-safe') {
+            await startVideoForIdxSafe(idx);
             return;
           }
           if (action === 'open-video') {
