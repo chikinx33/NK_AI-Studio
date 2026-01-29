@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.043';
+  const APP_VERSION = '1.045';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1259,8 +1259,6 @@
             promptText: s.promptText || [
               `Common`,
               `${headerInit}`,
-              `Aspect ratio`,
-              `${aspectRatio}`,
               `Visual`,
               `${s.shot || ''}`,
               `Duration`,
@@ -1313,8 +1311,6 @@
           const computedPrompt = [
             `Common`,
             `${header}`,
-            `Aspect ratio`,
-            `${aspectRatio}`,
             `Visual`,
             `${s.shot || ''}`,
             `Duration`,
@@ -1357,8 +1353,6 @@
             <div class="scene-cell prompt">
               <p class="eyebrow">Common</p>
               <p class="prompt-common" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${header}</p>
-              <p class="eyebrow">Aspect ratio</p>
-              <p class="prompt-aspect" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${aspectRatio}</p>
               <p class="eyebrow">Visual</p>
               <p class="prompt-visual" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${s.shot || ''}</p>
               <p class="eyebrow">Duration</p>
@@ -1387,8 +1381,6 @@
             const computedPrompt = [
               `Common`,
               `${header}`,
-              `Aspect ratio`,
-              `${aspectRatio}`,
               `Visual`,
               `${s.shot || ''}`,
               `Duration`,
@@ -1418,7 +1410,7 @@
             ${rows}
           </div>`;
       } else {
-        pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다. 시나리오 페이지에서 컨펌 후 불러오세요.</p>';
+        pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
       }
 
       const savePipelineBtn = document.getElementById('save-pipeline-btn');
@@ -1463,7 +1455,7 @@
         const res = await fetch('/api/imagen', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: finalPrompt })
+          body: JSON.stringify({ prompt: finalPrompt, aspectRatio })
         });
         const text = await res.text();
         if (!res.ok) {
@@ -1613,14 +1605,12 @@
           if (action === 'save-prompt') {
             const row = actionBtn.closest('.scene-row');
             const commonEl = row ? row.querySelector('.prompt-common') : null;
-            const aspectEl = row ? row.querySelector('.prompt-aspect') : null;
             const visualEl = row ? row.querySelector('.prompt-visual') : null;
             const durEl = row ? row.querySelector('.prompt-duration') : null;
             const commonText = commonEl ? (commonEl.textContent || '') : '';
-            const aspectText = aspectEl ? (aspectEl.textContent || '') : '';
             const visualText = visualEl ? (visualEl.textContent || '') : '';
             const durationText = durEl ? (durEl.textContent || '') : '';
-            const text = [`Common`, commonText, `Aspect ratio`, aspectText, `Visual`, visualText, `Duration`, durationText].join('\n');
+            const text = [`Common`, commonText, `Visual`, visualText, `Duration`, durationText].join('\n');
             pipelineState.scenes[idx] = { ...scene, promptText: text, promptEdited: true, editingPrompt: false };
             renderPipelinePage();
             persistPipeline();

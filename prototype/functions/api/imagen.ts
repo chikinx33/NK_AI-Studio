@@ -3,6 +3,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const body = await request.json().catch(() => ({} as any));
     const prompt = (body?.prompt ?? "").toString().trim();
+    const aspectIncoming = (body?.aspectRatio ?? "16:9").toString().trim();
+    const allowed = new Set(["16:9", "9:16", "1:1"]);
+    const aspectFinal = allowed.has(aspectIncoming) ? aspectIncoming : "16:9";
 
     if (!prompt) {
       return json({ error: "prompt is required" }, 400);
@@ -53,9 +56,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify({
         instances: [{ prompt: finalPrompt }],
         parameters: {
-  	  sampleCount: 1,
-  	  aspectRatio: "1:1",
-  	  personGeneration: "allow_all",
+          sampleCount: 1,
+          aspectRatio: aspectFinal,
+          personGeneration: "allow_all",
         },
       }),
     });
