@@ -259,6 +259,13 @@
     try { localStorage.setItem('nk_theme', theme); } catch (_) {}
   };
 
+  // 공통 프롬프트에 화면비를 반드시 포함시키기 위한 헬퍼
+  const withAspectInHeader = (headerText, ratio) => {
+    if (!headerText) return `[Aspect ratio: ${ratio}]`;
+    const hasAspect = /\[?\s*aspect\s*ratio\s*:/i.test(headerText);
+    return hasAspect ? headerText : `${headerText} [Aspect ratio: ${ratio}]`;
+  };
+
   window.toggleTheme = () => {
     theme = theme === 'dark' ? 'light' : 'dark';
     applyTheme();
@@ -1062,7 +1069,8 @@
         const { payload, scenes, savedAt, header: savedHeader, aspectRatio: savedRatio } = stored;
         if (savedRatio) aspectRatio = savedRatio;
         saveAspect(aspectRatio);
-        const headerInit = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
+        const headerInitRaw = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
+        const headerInit = withAspectInHeader(headerInitRaw, aspectRatio);
         const sceneListInit = (scenes || []).map((s, idx) => ({
           ...s,
           id: s.id ?? idx + 1,
@@ -1446,7 +1454,8 @@
           setLoading(true);
           try {
             const payload = lastPayload || buildPayload(new FormData(form));
-            const header = loadHeader() || await fetchGlobalHeader(payload);
+            const headerRaw = loadHeader() || await fetchGlobalHeader(payload);
+            const header = withAspectInHeader(headerRaw, aspectRatio);
             saveHeader(header);
             savePipeline(payload, scenesState, header);
             window.location.href = 'scenes.html';
