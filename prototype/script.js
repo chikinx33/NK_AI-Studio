@@ -1151,45 +1151,65 @@
       if (!pipelineMeta || !pipelineScenes) return;
 
       // 우선 현재 상태가 있으면 그것으로 렌더, 없으면 저장된 값으로 초기화
+      let placeholderMode = false;
       if (!pipelineState) {
         const stored = loadPipeline();
         if (!stored) {
-          pipelineMeta.innerHTML = '<p class="muted">불러올 파이프라인이 없습니다. 시나리오를 생성하고 최종 컨펌을 눌러 주세요.</p>';
-          pipelineScenes.innerHTML = '';
-          return;
+          placeholderMode = true;
+          const payload = {
+            topic: '',
+            purposeCategory: '',
+            purposeTags: [],
+            target: '',
+            needs: [],
+            tones: [],
+            styles: [],
+            tone: '',
+            style: '',
+            banned: '',
+            duration: ''
+          };
+          const headerInit = withAspectInHeader('', aspectRatio);
+          pipelineState = { payload, header: headerInit, scenes: [], savedAt: '', aspectRatio, isPlaceholder: true };
+        } else {
+          const { payload, scenes, savedAt, header: savedHeader, aspectRatio: savedRatio } = stored;
+          if (savedRatio) aspectRatio = savedRatio;
+          saveAspect(aspectRatio);
+          const headerInitRaw = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
+          const headerInit = withAspectInHeader(headerInitRaw, aspectRatio);
+          const sceneListInit = (scenes || []).map((s, idx) => ({
+            ...s,
+            id: s.id ?? idx + 1,
+            promptText: s.promptText || `${headerInit} [Aspect ratio: ${aspectRatio}] Scene ${s.id ?? idx + 1}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`,
+            imageDataUrl: s.imageDataUrl || '',
+            imgLoading: false,
+            imgError: '',
+            videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
+            videoStatus: s.videoStatus || '',
+            videoError: s.videoError || '',
+            videoJobId: s.videoJobId || ''
+          }));
+          pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio, isPlaceholder: false };
         }
-        const { payload, scenes, savedAt, header: savedHeader, aspectRatio: savedRatio } = stored;
-        if (savedRatio) aspectRatio = savedRatio;
-        saveAspect(aspectRatio);
-        const headerInitRaw = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
-        const headerInit = withAspectInHeader(headerInitRaw, aspectRatio);
-        const sceneListInit = (scenes || []).map((s, idx) => ({
-          ...s,
-          id: s.id ?? idx + 1,
-          promptText: s.promptText || `${headerInit} [Aspect ratio: ${aspectRatio}] Scene ${s.id ?? idx + 1}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`,
-          imageDataUrl: s.imageDataUrl || '',
-          imgLoading: false,
-          imgError: '',
-          videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
-          videoStatus: s.videoStatus || '',
-          videoError: s.videoError || '',
-          videoJobId: s.videoJobId || ''
-        }));
-        pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio };
       }
 
       const { payload, scenes, savedAt, header } = pipelineState;
-      const metaItems = [
+      const metaItemsRaw = [
         ['장르', `${payload.purposeCategory || ''} ${(payload.purposeTags || []).join(', ')}`.trim()],
         ['타겟', payload.target || ''],
         ['니즈', (payload.needs || []).join(', ')],
         ['톤', [(payload.tones || []).join(', '), payload.tone].filter(Boolean).join(', ')],
         ['스타일', [(payload.styles || []).join(', '), payload.style].filter(Boolean).join(', ')],
         ['추가 설명', payload.banned || ''],
-        ['화면비', aspectRatio],
-        ['길이', `${payload.duration || ''}s`],
-        ['저장 시각', new Date(savedAt || Date.now()).toLocaleString('ko-KR')]
-      ].filter(([, val]) => val && String(val).trim().length);
+        ['화면비', aspectRatio || ''],
+        ['길이', payload.duration ? `${payload.duration}s` : ''],
+        ['저장 시각', savedAt ? new Date(savedAt).toLocaleString('ko-KR') : '']
+      ];
+      const metaItems = metaItemsRaw
+        .map(([label, val]) => {
+          if (val && String(val).trim().length) return [label, val];
+          return [label, '<span class="muted">입력 필요</span>'];
+        });
 
       const metaLine = metaItems
         .map(([label, val]) => `<span class="meta-item"><span class="meta-label">${label}</span> ${val}</span>`)
@@ -1201,10 +1221,10 @@
           <div class="pipeline-meta-line">${metaLine}</div>
         </div>
         <div class="pipeline-actions">
-          <button class="btn-secondary" id="save-pipeline-btn">저장하기</button>
-          <button class="btn-secondary" id="bulk-generate">이미지 일괄 생성</button>
-          <button class="btn-secondary" id="bulk-video">영상 일괄 변환</button>
-          <button class="btn-primary" id="confirm-dub">최종 컨펌 → 영상 편집</button>
+          <button class="btn-secondary" id="save-pipeline-btn" ${pipelineState.isPlaceholder ? 'disabled' : ''}>저장하기</button>
+          <button class="btn-secondary" id="bulk-generate" ${pipelineState.isPlaceholder ? 'disabled' : ''}>이미지 일괄 생성</button>
+          <button class="btn-secondary" id="bulk-video" ${pipelineState.isPlaceholder ? 'disabled' : ''}>영상 일괄 변환</button>
+          <button class="btn-primary" id="confirm-dub" ${pipelineState.isPlaceholder && !scenes.length ? 'disabled' : ''}>최종 컨펌 → 영상 편집</button>
         </div>`;
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
@@ -1272,7 +1292,7 @@
             ${rows}
           </div>`;
       } else {
-        pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
+        pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다. 시나리오 페이지에서 컨펌 후 불러오세요.</p>';
       }
 
       const savePipelineBtn = document.getElementById('save-pipeline-btn');
