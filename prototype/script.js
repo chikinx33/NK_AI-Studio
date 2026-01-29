@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.033';
+  const APP_VERSION = '1.034';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -247,7 +247,7 @@
   const ensureConfirmEnabled = () => {
     const confirmBtn = document.getElementById('confirm-scenes');
     if (!confirmBtn) return;
-    const enabled = scenesState.length > 0;
+    const enabled = scenesState.length > 0 || forceConfirmEnable;
     confirmBtn.disabled = !enabled;
     if (enabled) confirmBtn.removeAttribute('disabled');
   };
@@ -487,7 +487,7 @@
         cardsEl.innerHTML = '<div class="empty-center"><p class="muted">시나리오를 생성하세요</p></div>';
         if (saveDraftBtn) saveDraftBtn.disabled = true;
         if (cloneDraftBtn) cloneDraftBtn.disabled = true;
-        if (confirmBtn) confirmBtn.disabled = true;
+        if (confirmBtn) confirmBtn.disabled = !forceConfirmEnable;
         return;
       }
       cardsEl.classList.remove('empty');
@@ -697,7 +697,7 @@
       const hasScenes = scenesState.length > 0;
       if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
       if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
-      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
       ensureConfirmEnabled();
     };
 
@@ -1167,12 +1167,22 @@
       if (pending) {
         const parsed = JSON.parse(pending);
         applyDraft(parsed);
-        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 ? true : false;
+          if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable ? true : false;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
       }
-      ensureConfirmEnabled();
+        const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
+        if (forceEnable) {
+          forceConfirmEnable = true;
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.removeAttribute('disabled');
+          }
+          sessionStorage.removeItem('nk_force_confirm_enable');
+        } else {
+          ensureConfirmEnabled();
+        }
     } catch (_) {}
 
     const applyAuthGuard = () => {
