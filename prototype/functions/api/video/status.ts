@@ -28,8 +28,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       jobId.startsWith("projects/")
         ? jobId
         : jobId.replace(/^\/+/, "");
-    // jobId already contains the full path including location/publisher/model/operations/...
-    const opUrl = `https://${normalizedJobId.split('/')[3] || 'us-central1'}-aiplatform.googleapis.com/v1/${normalizedJobId}`;
+
+    const locMatch = normalizedJobId.match(/projects\/[^/]+\/locations\/([^/]+)/);
+    const loc = locMatch?.[1] || 'us-central1';
+    // jobId is the full operation name; do not prefix anything else.
+    const opUrl = `https://${loc}-aiplatform.googleapis.com/v1/${normalizedJobId}`;
 
     const accessToken = await getGoogleAccessToken({
       clientEmail,
@@ -45,14 +48,25 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!res.ok) {
       const detail = safeJson(text);
       log('op_error', { status: res.status, detail });
-      return send({ status: 'error', message: `operations.get failed (${res.status})`, detail }, 500);
+      const errBody = detail?.error || detail;
+      return send({
+        status: 'error',
+        code: errBody?.code || res.status,
+        message: errBody?.message || `operations.get failed (${res.status})`,
+        detail
+      }, res.status);
     }
     const data = safeJson(text);
     if (!data.done) {
       return send({ status: 'processing', raw: data });
     }
     if (data.error) {
-      return send({ status: 'error', message: data.error.message || 'Veo error', detail: data.error }, 200);
+      return send({
+        status: 'error',
+        code: data.error.code,
+        message: data.error.message || 'Veo error',
+        detail: data.error
+      });
     }
 
     const gcsUri =
@@ -63,7 +77,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       data.response?.generatedContentUri ||
       '';
     if (!gcsUri) {
-      return send({ status: 'error', message: 'No output URI found', detail: data.response || data }, 200);
+      return send({ status: 'error', message: 'No output URI found', detail: data.response || data });
     }
 
     let videoUrl = gcsToHttps(gcsUri);
@@ -84,10 +98,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     log('done', { jobId: normalizedJobId, videoUrl: videoUrl?.slice(0, 120) + '...' });
-    return send({ status: 'done', videoUrl, gcsUri, raw: data }, 200);
+    return send({ status: 'done', videoUrl, gcsUri, raw: data });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
-    return send({ status: 'error', message: e?.message || 'Unknown error', stack: e?.stack || '' }, 500);
+    return send({ status: 'error', message: e?.message || 'Unknown error', stack: e?.stack || '' });
   }
 };
 
