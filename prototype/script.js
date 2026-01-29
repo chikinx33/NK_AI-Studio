@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.073';
+  const APP_VERSION = '1.074';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -369,7 +369,10 @@
             <div class="draft-top">
               <div class="draft-thumb"></div>
               <div>
-                <h4 class="draft-title">${d.title || '제목없음'}</h4>
+                <div class="draft-title-row">
+                  <h4 class="draft-title" data-id="${d.id}">${d.title || '제목없음'}</h4>
+                  <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">✎</button>
+                </div>
                 <div class="draft-meta">
                   <span>화면비 ${ar}</span>
                   <span>길이 ${dur}</span>
@@ -405,6 +408,22 @@
         if (!btn) return;
         if (btn.disabled) return;
         const action = btn.dataset.action;
+        if (action === 'title-edit') {
+          const card = btn.closest('.draft-card');
+          const titleEl = card ? card.querySelector('.draft-title') : null;
+          if (titleEl) {
+            titleEl.setAttribute('contenteditable', 'true');
+            titleEl.focus();
+            const range = document.createRange();
+            range.selectNodeContents(titleEl);
+            const sel = window.getSelection();
+            if (sel) {
+              sel.removeAllRanges();
+              sel.addRange(range);
+            }
+          }
+          return;
+        }
         if (action === 'create-project') {
           const overlay = document.getElementById('project-overlay');
           const input = document.getElementById('project-name-input');
@@ -453,6 +472,36 @@
           }
         }
       });
+      const saveCardTitle = (id, el) => {
+        const next = (el.textContent || '').trim();
+        const drafts = loadDraftsGlobal();
+        const idx = drafts.findIndex(d => Number(d.id) === Number(id));
+        if (idx === -1) return;
+        drafts[idx] = { ...drafts[idx], title: next || (drafts[idx].title || '제목없음') };
+        saveDraftsGlobal(drafts);
+        renderDashboardDrafts();
+      };
+      dashContainer.addEventListener('keydown', (e) => {
+        const el = e.target;
+        if (!(el instanceof HTMLElement)) return;
+        if (!el.classList.contains('draft-title')) return;
+        if (!el.isContentEditable) return;
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const id = Number(el.getAttribute('data-id') || '0');
+          el.removeAttribute('contenteditable');
+          saveCardTitle(id, el);
+        }
+      });
+      dashContainer.addEventListener('blur', (e) => {
+        const el = e.target;
+        if (!(el instanceof HTMLElement)) return;
+        if (!el.classList.contains('draft-title')) return;
+        if (!el.isContentEditable) return;
+        const id = Number(el.getAttribute('data-id') || '0');
+        el.removeAttribute('contenteditable');
+        saveCardTitle(id, el);
+      }, true);
     }
     const projectOverlay = document.getElementById('project-overlay');
     const projectNameInput = document.getElementById('project-name-input');

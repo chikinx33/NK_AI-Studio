@@ -979,6 +979,26 @@ body::-webkit-scrollbar {
   font-weight: 700;
   font-size: 18px;
 }
+.draft-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.edit-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+}
+.edit-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
 .draft-meta {
   display: flex;
   gap: 10px;
