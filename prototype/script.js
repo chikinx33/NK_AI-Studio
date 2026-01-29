@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.032';
+  const APP_VERSION = '1.033';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -244,6 +244,14 @@
   };
 
   let forceConfirmEnable = false;
+  const ensureConfirmEnabled = () => {
+    const confirmBtn = document.getElementById('confirm-scenes');
+    if (!confirmBtn) return;
+    if (scenesState.length > 0 || forceConfirmEnable) {
+      confirmBtn.disabled = false;
+      confirmBtn.removeAttribute('disabled');
+    }
+  };
 
   const applyVersionAndNav = () => {
     // 버전 표기 통일
@@ -522,7 +530,8 @@
         .join('');
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
       if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
-      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+      if (confirmBtn) confirmBtn.disabled = false;
+      setTimeout(ensureConfirmEnabled, 0);
     };
 
     const savePipeline = (payload, scenes, header) => {
@@ -687,7 +696,8 @@
       const hasScenes = scenesState.length > 0;
       if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
       if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
-      if (confirmBtn) confirmBtn.disabled = !hasScenes;
+      if (confirmBtn) confirmBtn.disabled = false;
+      ensureConfirmEnabled();
     };
 
     const normalizeScenes = raw => {
@@ -1165,10 +1175,7 @@
         sessionStorage.removeItem('nk_force_confirm_enable');
       } else {
         // 추가 안전망: pending 드래프트가 있었으면 컨펌을 켜준다
-        if (confirmBtn && scenesState.length > 0) {
-          confirmBtn.disabled = false;
-          confirmBtn.removeAttribute('disabled');
-        }
+        ensureConfirmEnabled();
       }
     } catch (_) {}
 
