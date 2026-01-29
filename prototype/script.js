@@ -1233,8 +1233,9 @@
         });
         const text = await res.text();
         if (!res.ok) {
+          console.error('video api error', res.status, text);
           const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-          throw new Error(detail || 'video_api_error');
+          throw new Error(`${res.status} ${detail || 'video_api_error'}`);
         }
         const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
         const jobId = json.job_id || '';
@@ -1244,6 +1245,7 @@
         persistPipeline();
         pollVideoJob(jobId, idx, 0);
       } catch (err) {
+        console.error('video start fail', err);
         pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: err?.message || '영상 생성 실패' };
         renderPipelinePage();
         persistPipeline();
