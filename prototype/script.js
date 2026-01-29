@@ -242,6 +242,8 @@
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch (_) {}
   };
 
+  let forceConfirmEnable = false;
+
   const apply = () => {
     const t = translations[current];
     document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -367,6 +369,7 @@
         if (action === 'scenario-edit') {
           try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) {}
           try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) {}
+          forceConfirmEnable = true;
           window.location.href = 'scenario.html';
           return;
         }
@@ -450,7 +453,7 @@
         cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
         if (saveDraftBtn) saveDraftBtn.disabled = true;
         if (cloneDraftBtn) cloneDraftBtn.disabled = true;
-        if (confirmBtn) confirmBtn.disabled = true;
+        if (confirmBtn) confirmBtn.disabled = !forceConfirmEnable;
         return;
       }
       scenesState = scenes;
@@ -493,7 +496,7 @@
         .join('');
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
       if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
-      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
     };
 
     const savePipeline = (payload, scenes, header) => {
@@ -658,7 +661,7 @@
       const hasScenes = scenesState.length > 0;
       if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
       if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
-      if (confirmBtn) confirmBtn.disabled = !hasScenes;
+      if (confirmBtn) confirmBtn.disabled = !hasScenes && !forceConfirmEnable;
     };
 
     const normalizeScenes = raw => {
@@ -1127,9 +1130,12 @@
         localStorage.removeItem('nk_selected_draft');
       }
       const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
-      if (forceEnable && confirmBtn) {
-        confirmBtn.disabled = false;
-        confirmBtn.removeAttribute('disabled');
+      if (forceEnable) {
+        forceConfirmEnable = true;
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.removeAttribute('disabled');
+        }
         sessionStorage.removeItem('nk_force_confirm_enable');
       }
     } catch (_) {}
