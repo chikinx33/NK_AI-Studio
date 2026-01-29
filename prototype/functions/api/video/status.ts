@@ -87,6 +87,67 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       '';
     if (!gcsUri) {
       const resp = data.response || {};
+      const base64Vid =
+        resp?.videos?.[0]?.bytesBase64Encoded ||
+        resp?.predictions?.[0]?.videos?.[0]?.bytesBase64Encoded ||
+        resp?.predictions?.[0]?.generatedVideos?.[0]?.bytesBase64Encoded ||
+        '';
+      if (base64Vid) {
+        try {
+          const bytes = base64ToUint8(base64Vid);
+          const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
+          const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
+          if (outParsed) {
+            const objectBase = outParsed.object.replace(/\/$/, '');
+            const objectName = `${objectBase}/manual/${match[4]}.mp4`;
+            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+            const uploadRes = await fetch(uploadUrl, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'video/mp4',
+              },
+              body: bytes
+            });
+            const uploadText = await uploadRes.text();
+            const uploadJson = safeJson(uploadText);
+            log('upload_base64', { status: uploadRes.status, objectName });
+            if (uploadRes.ok) {
+              const finalGcsUri = `gs://${outParsed.bucket}/${objectName}`;
+              let videoUrlSigned = gcsToHttps(finalGcsUri);
+              try {
+                videoUrlSigned = await signGcsUrl({
+                  bucket: outParsed.bucket,
+                  object: objectName,
+                  clientEmail,
+                  privateKeyPem: privateKeyRaw,
+                  expiresInSec: 3600,
+                });
+              } catch (err) {
+                log('sign_url_error', err);
+              }
+              log('done_base64', { jobId: decoded, videoUrl: videoUrlSigned?.slice(0, 120) + '...' });
+              return send({ status: 'done', method: 'gcs_inline_upload', videoUrl: videoUrlSigned, gcsUri: finalGcsUri, raw: data, uploaded: uploadJson });
+            } else {
+              const dataUrl = `data:video/mp4;base64,${base64Vid}`;
+              log('fallback_data_uri', { len: base64Vid.length });
+              return send({ status: 'done', method: 'inline', videoUrl: dataUrl, videoDataUrl: dataUrl, gcsUri: '', raw: data });
+            }
+          } else {
+            const dataUrl = `data:video/mp4;base64,${base64Vid}`;
+            log('fallback_data_uri_no_env', { len: base64Vid.length });
+            return send({ status: 'done', method: 'inline', videoUrl: dataUrl, videoDataUrl: dataUrl, gcsUri: '', raw: data });
+          }
+        } catch (err) {
+          log('base64_handle_error', err);
+          return send({
+            status: 'error',
+            code: 500,
+            message: 'Failed to handle base64 video',
+            detail: { error: String((err as any)?.message || err), raw: data }
+          });
+        }
+      }
       const respKeys = resp && typeof resp === 'object' ? Object.keys(resp) : [];
       log('no_output_uri', { keys: respKeys, hasPredictions: !!resp?.predictions, hasVideos: !!resp?.videos });
       return send({
@@ -115,7 +176,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     log('done', { jobId: decoded, videoUrl: videoUrl?.slice(0, 120) + '...' });
-    return send({ status: 'done', videoUrl, gcsUri, raw: data });
+    return send({ status: 'done', method: 'gcs', videoUrl, gcsUri, raw: data });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
     return send({ status: 'error', message: e?.message || 'Unknown error', stack: e?.stack || '' });
@@ -210,6 +271,13 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   const bytes = new Uint8Array(buf);
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function base64ToUint8(b64: string) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
 }
 
 async function signGcsUrl(opts: {
