@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.071';
+  const APP_VERSION = '1.072';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -470,7 +470,7 @@
         }
         const id = Date.now();
         const ratio = (() => { try { return localStorage.getItem('nk_aspect_ratio') || '16:9'; } catch (_) { return '16:9'; } })();
-        const newDraft = { id, title, payload: { topic: title, aspectRatio: ratio }, scenes: [] };
+        const newDraft = { id, title, payload: { topic: '', aspectRatio: ratio }, scenes: [] };
         const drafts = loadDraftsGlobal();
         drafts.unshift(newDraft);
         saveDraftsGlobal(drafts.slice(0, 20));
@@ -1164,19 +1164,14 @@
           alert('대시보드에서 프로젝트를 먼저 생성하고 선택하세요.');
           return;
         }
-        const newDraft = {
-          id,
-          title: payload.topic || '제목없음',
-          payload,
-          scenes
-        };
         const existsIdx = drafts.findIndex(d => d.id === id);
-        if (existsIdx >= 0) {
-          drafts[existsIdx] = newDraft;
-        } else {
+        if (existsIdx === -1) {
           alert('프로젝트를 찾을 수 없습니다. 대시보드에서 다시 선택하세요.');
           return;
         }
+        const preservedTitle = drafts[existsIdx]?.title || '제목없음';
+        const newDraft = { id, title: preservedTitle, payload, scenes };
+        drafts[existsIdx] = newDraft;
         currentDraftId = id;
         const trimmed = drafts.slice(0, 20);
         saveDrafts(trimmed);
@@ -1193,12 +1188,8 @@
         const scenes = scenesState.length ? scenesState : mockGenerate(payload);
         const drafts = loadDrafts();
         const id = Date.now();
-        const newDraft = {
-          id,
-          title: payload.topic || '제목없음',
-          payload,
-          scenes
-        };
+        const baseTitle = drafts.find(d => Number(d.id) === Number(currentDraftId))?.title || '제목없음';
+        const newDraft = { id, title: baseTitle, payload, scenes };
         drafts.unshift(newDraft);
         currentDraftId = id;
         const trimmed = drafts.slice(0, 20);
@@ -1265,7 +1256,6 @@
       const current = drafts[idx];
       const updated = {
         ...current,
-        title: (pipelineState.payload && pipelineState.payload.topic) ? pipelineState.payload.topic : (current.title || '제목없음'),
         payload: pipelineState.payload || current.payload || {},
         scenes: pipelineState.scenes || current.scenes || []
       };
