@@ -1095,6 +1095,7 @@
         <div class="pipeline-actions">
           <button class="btn-secondary" id="bulk-generate">이미지 일괄 생성</button>
           <button class="btn-secondary" id="bulk-video">영상 일괄 변환</button>
+          <button class="btn-primary" id="confirm-dub">최종 컨펌 → 더빙 · 자막</button>
         </div>`;
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
