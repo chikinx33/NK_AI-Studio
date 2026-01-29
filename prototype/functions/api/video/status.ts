@@ -24,12 +24,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return send({ error: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, 500);
     }
 
-    const location = 'us-central1';
     const normalizedJobId =
       jobId.startsWith("projects/")
         ? jobId
         : jobId.replace(/^\/+/, "");
-    const opUrl = `https://${location}-aiplatform.googleapis.com/v1/${normalizedJobId}`;
+    // jobId already contains the full path including location/publisher/model/operations/...
+    const opUrl = `https://${normalizedJobId.split('/')[3] || 'us-central1'}-aiplatform.googleapis.com/v1/${normalizedJobId}`;
 
     const accessToken = await getGoogleAccessToken({
       clientEmail,
@@ -49,10 +49,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
     const data = safeJson(text);
     if (!data.done) {
-      return send({ status: 'processing' });
+      return send({ status: 'processing', raw: data });
     }
     if (data.error) {
-      return send({ status: 'error', message: data.error.message || 'Veo error', detail: data.error });
+      return send({ status: 'error', message: data.error.message || 'Veo error', detail: data.error }, 200);
     }
 
     const gcsUri =
@@ -63,7 +63,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       data.response?.generatedContentUri ||
       '';
     if (!gcsUri) {
-      return send({ status: 'error', message: 'No output URI found', detail: data.response || data });
+      return send({ status: 'error', message: 'No output URI found', detail: data.response || data }, 200);
     }
 
     let videoUrl = gcsToHttps(gcsUri);
@@ -78,12 +78,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           expiresInSec: 3600,
         });
       }
-    } catch (_) {
+    } catch (err) {
+      log('sign_url_error', err);
       // fallback to public https path
     }
 
     log('done', { jobId: normalizedJobId, videoUrl: videoUrl?.slice(0, 120) + '...' });
-    return send({ status: 'done', videoUrl, gcsUri });
+    return send({ status: 'done', videoUrl, gcsUri, raw: data }, 200);
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
     return send({ status: 'error', message: e?.message || 'Unknown error', stack: e?.stack || '' }, 500);
