@@ -2,6 +2,8 @@
 // Minimal Veo (image -> video) trigger endpoint for Cloudflare Pages Functions.
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 
+const log = (...args: any[]) => console.log('[video]', ...args);
+
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const body = await request.json().catch(() => ({} as any));
@@ -46,6 +48,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     });
 
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predict`;
+    log('request', { sceneId, jobId, modelId, durationSeconds, aspectRatio, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
 
     const vertexRes = await fetch(url, {
       method: "POST",
@@ -70,8 +73,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const text = await vertexRes.text();
     if (!vertexRes.ok) {
+      const detail = safeJson(text);
+      log('vertex_error', { status: vertexRes.status, detail });
       return json(
-        { error: "Vertex AI Veo error", status: vertexRes.status, detail: safeJson(text) },
+        { error: "Vertex AI Veo error", status: vertexRes.status, detail },
         500
       );
     }
@@ -84,15 +89,18 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       "";
 
     if (!operationName) {
+      log('no_operation_name', resJson);
       return json({ error: "No operation name returned", raw: resJson }, 500);
     }
 
+    log('ok', { job_id: operationName });
     return json({
       job_id: operationName,
       outputGcsUri,
       model: modelId,
     });
   } catch (e: any) {
+    log('catch', e?.message, e?.stack);
     return json({ error: e?.message ?? "Unknown error" }, 500);
   }
 };

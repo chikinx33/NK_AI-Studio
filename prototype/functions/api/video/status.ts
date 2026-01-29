@@ -7,6 +7,8 @@ const send = (data: any, status = 200) =>
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 
+const log = (...args: any[]) => console.log('[video-status]', ...args);
+
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
     const url = new URL(request.url);
@@ -33,12 +35,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       scope: 'https://www.googleapis.com/auth/cloud-platform',
     });
 
+    log('poll', { jobId: normalizedJobId });
     const res = await fetch(opUrl, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
     const text = await res.text();
     if (!res.ok) {
-      return send({ status: 'error', message: `operations.get failed (${res.status})`, detail: safeJson(text) }, 500);
+      const detail = safeJson(text);
+      log('op_error', { status: res.status, detail });
+      return send({ status: 'error', message: `operations.get failed (${res.status})`, detail }, 500);
     }
     const data = safeJson(text);
     if (!data.done) {
@@ -75,8 +80,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       // fallback to public https path
     }
 
+    log('done', { jobId: normalizedJobId, videoUrl: videoUrl?.slice(0, 120) + '...' });
     return send({ status: 'done', videoUrl, gcsUri });
   } catch (e: any) {
+    log('catch', e?.message, e?.stack);
     return send({ status: 'error', message: e?.message || 'Unknown error' }, 500);
   }
 };
