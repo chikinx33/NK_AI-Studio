@@ -553,6 +553,11 @@ body::-webkit-scrollbar {
   gap: 8px;
   align-items: center;
 }
+.caption-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .ratio-group {
   display: inline-flex;
   gap: 6px;
@@ -939,6 +944,67 @@ body::-webkit-scrollbar {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 14px;
 }
+
+.draft-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 12px;
+}
+.draft-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+.draft-top {
+  display: flex;
+  gap: 12px;
+}
+.draft-thumb {
+  width: 84px;
+  height: 84px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,122,0,0.18), rgba(11,191,165,0.18));
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.draft-title {
+  margin: 0 0 6px;
+  font-weight: 700;
+}
+.draft-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 13px;
+}
+.draft-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.draft-actions .btn-secondary,
+.draft-actions .btn-ghost {
+  flex: 1 1 0;
+}
+.trash-btn {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  cursor: pointer;
+  color: var(--muted);
+}
+.trash-btn:hover { color: var(--text); }
 
 .project {
   padding-top: 16px;

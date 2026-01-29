@@ -198,6 +198,8 @@
 
   let current = 'ko';
   let theme = 'dark';
+  const DRAFT_KEY = 'nk_scenario_drafts_v1';
+  const PIPELINE_KEY = 'nk_pipeline_last';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -232,6 +234,13 @@
     '실사','다큐 스타일','브이로그','만화','애니메이션','일러스트','모션그래픽','인포그래픽','슬라이드형',
     '스크린 캡처','UI 중심','텍스트 중심','미니멀','컬러풀','심플','레트로','시네마틱'
   ];
+
+  const loadDraftsGlobal = () => {
+    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)) || []; } catch (_) { return []; }
+  };
+  const saveDraftsGlobal = (drafts) => {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch (_) {}
+  };
 
   const apply = () => {
     const t = translations[current];
@@ -298,6 +307,80 @@
       if (saved === 'light' || saved === 'dark') theme = saved;
     } catch (_) {}
     applyTheme();
+    const renderDashboardDrafts = () => {
+      const container = document.getElementById('dashboard-drafts');
+      if (!container) return;
+      const drafts = loadDraftsGlobal();
+      if (!drafts.length) {
+        container.innerHTML = '<p class="muted">저장된 시나리오가 없습니다.</p>';
+        return;
+      }
+      const fmtDuration = (sec) => {
+        const n = Number(sec) || 0;
+        if (n >= 3600 && n % 3600 === 0) return `${n/3600}h`;
+        if (n >= 60 && n % 60 === 0) return `${n/60}m`;
+        return `${n}s`;
+      };
+      container.innerHTML = drafts.map(d => {
+        const ar = d.payload?.aspectRatio || '16:9';
+        const dur = fmtDuration(d.payload?.duration || 0);
+        return `
+          <article class="draft-card">
+            <div class="draft-top">
+              <div class="draft-thumb"></div>
+              <div>
+                <h4 class="draft-title">${d.title || '제목없음'}</h4>
+                <div class="draft-meta">
+                  <span>화면비 ${ar}</span>
+                  <span>길이 ${dur}</span>
+                </div>
+              </div>
+            </div>
+            <div class="draft-actions">
+              <button class="btn-secondary" data-action="scenario-edit" data-id="${d.id}">시나리오 편집</button>
+              <button class="btn-secondary" data-action="scene-edit" data-id="${d.id}">씬 편집</button>
+              <button class="trash-btn" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
+            </div>
+          </article>
+        `;
+      }).join('');
+    };
+    renderDashboardDrafts();
+
+    const dashContainer = document.getElementById('dashboard-drafts');
+    if (dashContainer) {
+      dashContainer.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const id = Number(btn.dataset.id);
+        const drafts = loadDraftsGlobal();
+        const draft = drafts.find(d => d.id === id);
+        const action = btn.dataset.action;
+        if (action === 'draft-delete') {
+          saveDraftsGlobal(drafts.filter(d => d.id !== id));
+          renderDashboardDrafts();
+          return;
+        }
+        if (!draft) return;
+        if (action === 'scenario-edit') {
+          try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) {}
+          window.location.href = 'scenario.html';
+          return;
+        }
+        if (action === 'scene-edit') {
+          const pipelineData = {
+            payload: draft.payload || {},
+            scenes: draft.scenes || [],
+            header: '',
+            savedAt: new Date().toISOString(),
+            aspectRatio: (draft.payload && draft.payload.aspectRatio) || '16:9'
+          };
+          try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) {}
+          window.location.href = 'scenes.html';
+          return;
+        }
+      });
+    }
     // 화면비 토글 초기화
     ratioButtons.forEach(btn => {
       if (btn instanceof HTMLElement) {
@@ -330,8 +413,6 @@
     const draftNav = document.getElementById('draft-nav');
     const saveDraftBtn = document.getElementById('save-draft');
     const draftToggle = document.getElementById('draft-toggle');
-    const draftKey = 'nk_scenario_drafts_v1';
-    const pipelineKey = 'nk_pipeline_last';
     const headerKey = 'nk_global_header_v1';
     const loginKey = 'nk_is_logged_in';
     const loginUserKey = 'nk_login_user';
@@ -362,6 +443,7 @@
       if (!cardsEl) return;
       if (!scenes || !scenes.length) {
         cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
+        if (saveDraftBtn) saveDraftBtn.disabled = true;
         return;
       }
       scenesState = scenes;
@@ -402,6 +484,7 @@
           </div>`
         )
         .join('');
+      if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
     };
 
     const savePipeline = (payload, scenes, header) => {
@@ -412,12 +495,12 @@
         savedAt: new Date().toISOString(),
         aspectRatio
       };
-      try { localStorage.setItem(pipelineKey, JSON.stringify(data)); } catch (_) {}
+      try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(data)); } catch (_) {}
     };
 
     const loadPipeline = () => {
       try {
-        return JSON.parse(localStorage.getItem(pipelineKey));
+        return JSON.parse(localStorage.getItem(PIPELINE_KEY));
       } catch (_) {
         return null;
       }
@@ -499,7 +582,7 @@
 
     const loadDrafts = () => {
       try {
-        return JSON.parse(localStorage.getItem(draftKey)) || [];
+        return JSON.parse(localStorage.getItem(DRAFT_KEY)) || [];
       } catch (_) {
         return [];
       }
@@ -507,7 +590,7 @@
 
     const saveDrafts = drafts => {
       try {
-        localStorage.setItem(draftKey, JSON.stringify(drafts));
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
       } catch (_) {}
     };
 
@@ -577,6 +660,7 @@
       scenesState = draft.scenes || [];
       renderScenes(scenesState);
       lastPayload = data;
+      if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
     };
 
     const normalizeScenes = raw => {
@@ -859,6 +943,7 @@
         const errBox = document.getElementById('scenario-error');
         if (errBox) errBox.classList.add('hidden');
         if (confirmBtn) confirmBtn.disabled = true;
+        if (saveDraftBtn) saveDraftBtn.disabled = true;
       });
     }
 
@@ -979,6 +1064,7 @@
     }
 
     if (saveDraftBtn) {
+      saveDraftBtn.disabled = true;
       saveDraftBtn.addEventListener('click', () => {
         if (!form) return;
         const data = new FormData(form);
@@ -1032,6 +1118,18 @@
 
     // 초기 로드 시 저장 목록 렌더
     renderDraftNav();
+
+    // 대시보드에서 선택된 draft 적용
+    try {
+      const pending = localStorage.getItem('nk_selected_draft');
+      if (pending) {
+        const parsed = JSON.parse(pending);
+        applyDraft(parsed);
+        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+        if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
+        localStorage.removeItem('nk_selected_draft');
+      }
+    } catch (_) {}
 
     const applyAuthGuard = () => {
       const overlay = document.getElementById('auth-overlay');
@@ -1109,6 +1207,7 @@
           <div class="pipeline-meta-line">${metaLine}</div>
         </div>
         <div class="pipeline-actions">
+          <button class="btn-secondary" id="save-pipeline-btn">저장하기</button>
           <button class="btn-secondary" id="bulk-generate">이미지 일괄 생성</button>
           <button class="btn-secondary" id="bulk-video">영상 일괄 변환</button>
           <button class="btn-primary" id="confirm-dub">최종 컨펌 → 더빙 · 자막</button>
@@ -1180,6 +1279,33 @@
           </div>`;
       } else {
         pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
+      }
+
+      const savePipelineBtn = document.getElementById('save-pipeline-btn');
+      if (savePipelineBtn) {
+        savePipelineBtn.onclick = () => {
+          if (!pipelineState) return;
+          savePipeline(pipelineState.payload, pipelineState.scenes, pipelineState.header);
+          alert('저장되었습니다.');
+        };
+      }
+      const bulkGen = document.getElementById('bulk-generate');
+      if (bulkGen) {
+        bulkGen.onclick = async () => {
+          if (!pipelineState || !pipelineState.scenes.length) return;
+          for (let i = 0; i < pipelineState.scenes.length; i++) {
+            await generateImageForIdx(i);
+          }
+        };
+      }
+      const bulkVid = document.getElementById('bulk-video');
+      if (bulkVid) {
+        bulkVid.onclick = async () => {
+          if (!pipelineState || !pipelineState.scenes.length) return;
+          for (let i = 0; i < pipelineState.scenes.length; i++) {
+            await startVideoForIdx(i);
+          }
+        };
       }
     };
 
@@ -1380,26 +1506,6 @@
           modal.classList.add('hidden');
         }
       });
-    }
-
-    // 상단 일괄 버튼
-    const bulkGen = document.getElementById('bulk-generate');
-    const bulkVid = document.getElementById('bulk-video');
-    if (bulkGen) {
-      bulkGen.onclick = async () => {
-        if (!pipelineState || !pipelineState.scenes.length) return;
-        for (let i = 0; i < pipelineState.scenes.length; i++) {
-          await generateImageForIdx(i);
-        }
-      };
-    }
-    if (bulkVid) {
-      bulkVid.onclick = async () => {
-        if (!pipelineState || !pipelineState.scenes.length) return;
-        for (let i = 0; i < pipelineState.scenes.length; i++) {
-          await startVideoForIdx(i);
-        }
-      };
     }
 
     // 옵션 페이지 로그인 핸들러
