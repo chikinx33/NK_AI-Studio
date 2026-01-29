@@ -1332,7 +1332,7 @@
           const videoCard = (() => {
             if (updatedScene.videoUrl) {
               const note = updatedScene.videoMethod === 'inline' ? `<div class="video-note">생성 성공(인라인 반환)</div>` : '';
-              return `<div class="video-box"><video class="scene-video" src="${updatedScene.videoUrl}" controls muted playsinline></video>${note}</div>`;
+              return `<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="${updatedScene.videoUrl}" type="video/mp4" /></video>${note}</div>`;
             }
             if (updatedScene.videoStatus === 'processing') {
               return `<div class="video-placeholder loading"><span>영상 생성중...</span></div>`;
@@ -1383,6 +1383,8 @@
               <button class="btn-secondary compact" data-action="upload-image" data-id="${s.id}">업로드</button>
               <button class="btn-secondary compact" data-action="download-image" data-id="${s.id}">다운로드</button>
               <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 변환</button>
+              <button class="btn-secondary compact" data-action="open-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>새 창에서 보기</button>
+              <button class="btn-secondary compact" data-action="download-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>다운로드 영상</button>
             </div></div>
           </div>`;
         }).join('');
@@ -1421,6 +1423,40 @@
             </div>
             ${rows}
           </div>`;
+          try {
+            const vids = pipelineScenes.querySelectorAll('video.scene-video');
+            vids.forEach(v => {
+              v.preload = 'metadata';
+              v.addEventListener('loadedmetadata', () => {
+                console.log('video loadedmetadata', { src: v.currentSrc, duration: v.duration });
+              });
+              v.addEventListener('canplay', () => {
+                console.log('video canplay', { src: v.currentSrc });
+              });
+              v.addEventListener('error', () => {
+                console.error('video error', v.error || null);
+              });
+              const srcEl = v.querySelector('source');
+              const src = (srcEl && srcEl.getAttribute('src')) || v.getAttribute('src') || '';
+              if (src && src.startsWith('data:video/mp4;base64,') && !v.dataset.hydrated) {
+                v.dataset.hydrated = '1';
+                (async () => {
+                  try {
+                    const resp = await fetch(src);
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    const se = v.querySelector('source');
+                    if (se) se.setAttribute('src', url);
+                    else v.src = url;
+                    v.load();
+                    console.log('video inline hydrated', { size: blob.size });
+                  } catch (e) {
+                    console.error('video inline hydrate fail', e);
+                  }
+                })();
+              }
+            });
+          } catch (_) {}
       } else {
         pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
       }
@@ -1744,6 +1780,21 @@
           }
           if (action === 'video') {
             await startVideoForIdx(idx);
+            return;
+          }
+          if (action === 'open-video') {
+            if (!scene.videoUrl) return;
+            try {
+              window.open(scene.videoUrl, '_blank', 'noopener');
+            } catch (_) {}
+            return;
+          }
+          if (action === 'download-video') {
+            if (!scene.videoUrl) return;
+            const a = document.createElement('a');
+            a.href = scene.videoUrl;
+            a.download = `scene-${scene.id}.mp4`;
+            a.click();
             return;
           }
           return;
