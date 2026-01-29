@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.049';
+  const APP_VERSION = '1.050';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -409,18 +409,25 @@
           return;
         }
         if (action === 'scene-edit') {
-          const pipelineData = {
-            payload: draft.payload || {},
-            scenes: draft.scenes || [],
-            header: '',
-            savedAt: new Date().toISOString(),
-            aspectRatio: (draft.payload && draft.payload.aspectRatio) || '16:9',
-            draftId: draft.id
-          };
-          try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) {}
-          try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
-          window.location.href = 'scenes.html';
-          return;
+          const existing = loadPipeline();
+          if (existing && Array.isArray(existing.scenes) && existing.scenes.length) {
+            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
+            window.location.href = 'scenes.html';
+            return;
+          } else {
+            const pipelineData = {
+              payload: draft.payload || {},
+              scenes: draft.scenes || [],
+              header: '',
+              savedAt: new Date().toISOString(),
+              aspectRatio: (draft.payload && draft.payload.aspectRatio) || '16:9',
+              draftId: draft.id
+            };
+            try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) {}
+            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
+            window.location.href = 'scenes.html';
+            return;
+          }
         }
       });
     }
