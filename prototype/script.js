@@ -403,7 +403,7 @@
 
     const dashContainer = document.getElementById('dashboard-drafts');
     if (dashContainer) {
-      dashContainer.addEventListener('click', (e) => {
+      dashContainer.addEventListener('click', async (e) => {
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
         if (btn.disabled) return;
@@ -437,6 +437,21 @@
         if (action === 'draft-delete') {
           const ok = confirm('저장된 프로젝트를 삭제하시겠습니까?');
           if (!ok) return;
+          try {
+            await fetch('/api/project/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ projectId: String(id), confirm: 'yes' })
+            }).then(async (res) => {
+              const t = await res.text();
+              const j = (() => { try { return JSON.parse(t); } catch (_) { return {}; } })();
+              if (!res.ok) {
+                alert(`스토리지 삭제 실패: ${res.status}`);
+              }
+            }).catch(() => {
+              alert('스토리지 삭제 요청 실패');
+            });
+          } catch (_) {}
           saveDraftsGlobal(drafts.filter(d => d.id !== id));
           renderDashboardDrafts();
           alert('삭제되었습니다.');
