@@ -103,7 +103,7 @@
       nav_dashboard: '대시보드',
       nav_scenario: '시나리오(GPT)',
       nav_scenes: '씬 & 파이프라인',
-      nav_media: '미디어 랩',
+      nav_media: '영상 편집',
       nav_voice: '더빙 · 자막',
       nav_render: '결과 대기열',
       nav_publish: '배포',
@@ -447,6 +447,8 @@
       if (!scenes || !scenes.length) {
         cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
         if (saveDraftBtn) saveDraftBtn.disabled = true;
+        if (cloneDraftBtn) cloneDraftBtn.disabled = true;
+        if (confirmBtn) confirmBtn.disabled = true;
         return;
       }
       scenesState = scenes;
@@ -488,6 +490,8 @@
         )
         .join('');
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
+      if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
+      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
     };
 
     const savePipeline = (payload, scenes, header) => {
@@ -650,6 +654,8 @@
       renderScenes(scenesState);
       lastPayload = data;
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
+      if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
+      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
     };
 
     const normalizeScenes = raw => {
@@ -1081,6 +1087,7 @@
       });
     }
     if (cloneDraftBtn) {
+      cloneDraftBtn.disabled = true;
       cloneDraftBtn.addEventListener('click', () => {
         if (!form) return;
         const data = new FormData(form);
@@ -1113,6 +1120,7 @@
         applyDraft(parsed);
         if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
+        if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
       }
     } catch (_) {}
@@ -1196,7 +1204,7 @@
           <button class="btn-secondary" id="save-pipeline-btn">저장하기</button>
           <button class="btn-secondary" id="bulk-generate">이미지 일괄 생성</button>
           <button class="btn-secondary" id="bulk-video">영상 일괄 변환</button>
-          <button class="btn-primary" id="confirm-dub">최종 컨펌 → 더빙 · 자막</button>
+          <button class="btn-primary" id="confirm-dub">최종 컨펌 → 영상 편집</button>
         </div>`;
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
