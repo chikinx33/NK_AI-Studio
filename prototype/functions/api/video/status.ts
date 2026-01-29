@@ -24,10 +24,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return send({ error: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, 500);
     }
 
-    const normalizedJobId =
-      jobId.startsWith("projects/")
-        ? jobId
-        : jobId.replace(/^\/+/, "");
+    const normalizedJobId = (() => {
+      const trimmed = jobId.replace(/^\/+/, '');
+      // Case 1: Already standard operations form
+      if (/^projects\/[^/]+\/locations\/[^/]+\/operations\/[^/]+$/.test(trimmed)) return trimmed;
+      // Case 2: Contains publishers/google/models/.../operations/<id> → normalize to standard
+      const m = trimmed.match(/projects\/([^/]+)\/locations\/([^/]+)\/(?:publishers\/google\/models\/[^/]+\/)?operations\/([^/]+)/i);
+      if (m) return `projects/${m[1]}/locations/${m[2]}/operations/${m[3]}`;
+      // Fallback: leave as-is (may still work if it is a full name)
+      return trimmed;
+    })();
 
     const locMatch = normalizedJobId.match(/projects\/[^/]+\/locations\/([^/]+)/);
     const loc = locMatch?.[1] || 'us-central1';
@@ -40,7 +46,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       scope: 'https://www.googleapis.com/auth/cloud-platform',
     });
 
-    log('poll', { jobId: normalizedJobId });
+    log('poll', { jobId: normalizedJobId, original: jobId, opUrl });
     const res = await fetch(opUrl, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
