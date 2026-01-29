@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.037';
+  const APP_VERSION = '1.038';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1284,8 +1284,9 @@
         </div>`;
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
-          const scenePrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
-          const updatedScene = { ...s, promptText: scenePrompt };
+          const computedPrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+          const displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
+          const updatedScene = { ...s, promptText: displayPrompt };
           const img = updatedScene.imgLoading
             ? `<div class="image-placeholder tall loading"><span>생성중...</span></div>`
             : updatedScene.imgError
@@ -1311,14 +1312,24 @@
             <div class="scene-cell story">
               <p class="eyebrow">Scene ${s.id}</p>
               <p class="story-lines" data-id="${s.id}" ${s.editingStory ? 'contenteditable="true"' : ''}>${s.lines}</p>
+              <div class="cell-actions br">
+                ${s.editingStory
+                  ? `<button class="btn-secondary compact" data-action="save-story" data-id="${s.id}">저장</button>
+                     <button class="btn-ghost compact" data-action="cancel-story" data-id="${s.id}">취소</button>`
+                  : `<button class="btn-ghost compact" data-action="edit-story" data-id="${s.id}">수정</button>`}
+              </div>
             </div>
-            <div class="scene-cell prompt"><p class="prompt-text">${scenePrompt}</p></div>
+            <div class="scene-cell prompt">
+              <p class="prompt-text" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${displayPrompt}</p>
+              <div class="cell-actions br">
+                ${s.editingPrompt
+                  ? `<button class="btn-secondary compact" data-action="save-prompt" data-id="${s.id}">저장</button>
+                     <button class="btn-ghost compact" data-action="cancel-prompt" data-id="${s.id}">취소</button>`
+                  : `<button class="btn-ghost compact" data-action="edit-prompt" data-id="${s.id}">수정</button>`}
+              </div>
+            </div>
             <div class="scene-cell image"><div class="scene-media-stack">${img}${videoCard}</div>${err}</div>
             <div class="scene-cell actions"><div class="action-buttons grid">
-              ${s.editingStory
-                ? `<button class="btn-secondary compact" data-action="save-story" data-id="${s.id}">저장</button>
-                   <button class="btn-ghost compact" data-action="cancel-story" data-id="${s.id}">취소</button>`
-                : `<button class="btn-secondary compact" data-action="edit-story" data-id="${s.id}">수정</button>`}
               <button class="btn-secondary compact" data-action="regen-image" data-id="${s.id}" ${updatedScene.imgLoading ? 'disabled' : ''}>${updatedScene.imgLoading ? '생성중' : '생성'}</button>
               <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}">삭제</button>
               <button class="btn-secondary compact" data-action="copy-image" data-id="${s.id}">복사</button>
@@ -1331,14 +1342,18 @@
         }).join('');
         // 업데이트된 prompt를 상태에 반영
           pipelineState.scenes = scenes.map((s, idx) => {
-            const scenePrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+            const computedPrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+            const finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
             return {
               ...s,
-              promptText: scenePrompt,
+              promptText: finalPrompt,
               videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
               videoStatus: s.videoStatus || '',
               videoError: s.videoError || '',
-              videoJobId: s.videoJobId || ''
+              videoJobId: s.videoJobId || '',
+              editingPrompt: !!s.editingPrompt,
+              editingStory: !!s.editingStory,
+              promptEdited: !!s.promptEdited
             };
           });
           pipelineScenes.innerHTML = `
@@ -1529,6 +1544,25 @@
             const el = row ? row.querySelector('.story-lines') : null;
             const text = el ? (el.textContent || '') : '';
             pipelineState.scenes[idx] = { ...scene, lines: text, editingStory: false };
+            renderPipelinePage();
+            persistPipeline();
+            return;
+          }
+          if (action === 'edit-prompt') {
+            pipelineState.scenes[idx] = { ...scene, editingPrompt: true };
+            renderPipelinePage();
+            return;
+          }
+          if (action === 'cancel-prompt') {
+            pipelineState.scenes[idx] = { ...scene, editingPrompt: false };
+            renderPipelinePage();
+            return;
+          }
+          if (action === 'save-prompt') {
+            const row = actionBtn.closest('.scene-row');
+            const el = row ? row.querySelector('.prompt-text') : null;
+            const text = el ? (el.textContent || '') : '';
+            pipelineState.scenes[idx] = { ...scene, promptText: text, promptEdited: true, editingPrompt: false };
             renderPipelinePage();
             persistPipeline();
             return;
