@@ -84,7 +84,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     return send({ status: 'done', videoUrl, gcsUri });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
-    return send({ status: 'error', message: e?.message || 'Unknown error' }, 500);
+    return send({ status: 'error', message: e?.message || 'Unknown error', stack: e?.stack || '' }, 500);
   }
 };
 

@@ -101,7 +101,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
-    return json({ error: e?.message ?? "Unknown error" }, 500);
+    return json({ error: e?.message ?? "Unknown error", stack: e?.stack ?? '' }, 500);
   }
 };
 
