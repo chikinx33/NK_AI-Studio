@@ -1159,7 +1159,7 @@
             <div class="scene-row head">
               <div class="scene-cell">Story</div>
               <div class="scene-cell">Prompt</div>
-              <div class="scene-cell">Image/Video</div>
+              <div class="scene-cell">Image2Video</div>
               <div class="scene-cell">Actions</div>
             </div>
             ${rows}
