@@ -34,13 +34,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       privateKeyPem: privateKeyRaw,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
+    const userProject = (env.GOOGLE_PROJECT_ID as string | undefined) || "";
 
     // List and delete objects with pagination
     let pageToken = "";
     const results: Array<{ name: string; status: number }> = [];
     let listedCount = 0;
     do {
-      const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+      const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
       const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
       const text = await res.text();
       if (!res.ok) {
@@ -52,7 +53,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       for (const it of items) {
         const name = String(it.name || "");
         if (!name.startsWith(prefix)) continue;
-        const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}`;
+        const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
         const dres = await fetch(delUrl, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
         results.push({ name, status: dres.status });
       }
