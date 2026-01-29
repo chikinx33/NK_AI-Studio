@@ -12,6 +12,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body = await request.json().catch(() => ({} as any));
     const {
       sceneId = "scene",
+      projTag = "",
       promptText = "",
       imageDataUrl = "",
       durationSeconds = 6,
@@ -37,7 +38,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const location = "us-central1";
     const jobId = crypto.randomUUID();
-    const outputGcsUri = `${baseOutput.replace(/\/$/, "")}/${sceneId}/${jobId}/`;
+    const outParsed = parseGcsUri(baseOutput);
+    if (!outParsed) {
+      return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI (expect gs://bucket/prefix)" }, 500);
+    }
+    const projectTag = (projTag || "default").toString();
+    const basePrefix = outParsed.object.replace(/\/$/, "");
+    const videoPrefix = `${basePrefix}/projects/${projectTag}/videos/${sceneId}/${jobId}/`;
+    const outputGcsUri = `gs://${outParsed.bucket}/${videoPrefix}`;
 
     const parsedImage = parseDataUrl(imageDataUrl);
     if (!parsedImage) {
@@ -84,6 +92,22 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         500
       );
     }
+
+    // Ensure project marker object exists for folder visualization
+    try {
+      const markerName = `${basePrefix}/projects/${projectTag}/.keep`;
+      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(markerName)}`;
+      const accessTokenMarker = await getGoogleAccessToken({
+        clientEmail,
+        privateKeyPem: privateKeyRaw,
+        scope: "https://www.googleapis.com/auth/cloud-platform",
+      });
+      await fetch(uploadUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessTokenMarker}`, "Content-Type": "text/plain" },
+        body: "1"
+      }).catch(() => {});
+    } catch (_) {}
 
     const resJson = safeJson(text);
     const operationName =
@@ -135,6 +159,16 @@ function safeJson(text: string) {
   } catch {
     return text;
   }
+}
+
+function parseGcsUri(uri: string): { bucket: string; object: string } | null {
+  if (!uri.startsWith("gs://")) return null;
+  const rest = uri.slice(5);
+  const slash = rest.indexOf("/");
+  if (slash === -1) return null;
+  const bucket = rest.slice(0, slash);
+  const object = rest.slice(slash + 1);
+  return { bucket, object };
 }
 
 async function getGoogleAccessToken(opts: {

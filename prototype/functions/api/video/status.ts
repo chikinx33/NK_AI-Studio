@@ -16,6 +16,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
     const url = new URL(request.url);
     const jobId = (url.searchParams.get('job_id') || '').trim();
+    const projectTag = (url.searchParams.get('projectId') || '').trim();
+    const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();
     if (!jobId) return send({ error: 'job_id is required' }, 400);
     log('job_id_raw', jobId);
 
@@ -73,6 +75,20 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       });
     }
 
+    // Guard: raiMediaFilteredCount > 0 => immediate failure
+    const filteredCount =
+      Number((data.response && (data.response.raiMediaFilteredCount as any)) ?? 0) ||
+      Number((data.response?.predictions?.[0]?.raiMediaFilteredCount as any) ?? 0) ||
+      Number((data.response?.metrics?.raiMediaFilteredCount as any) ?? 0);
+    if (filteredCount > 0) {
+      return send({
+        status: 'error',
+        code: 400,
+        message: 'raiMediaFilteredCount>0: media filtered by safety settings',
+        detail: { filteredCount, raw: data }
+      }, 400);
+    }
+
     let gcsUri =
       data.response?.outputUri ||
       data.response?.outputGcsUri ||
@@ -114,7 +130,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
           if (outParsed) {
             const objectBase = outParsed.object.replace(/\/$/, '');
-            const objectName = `${objectBase}/manual/${match[4]}.mp4`;
+            const objectName = projectTag && sceneIdParam
+              ? `${objectBase}/projects/${projectTag}/videos/${sceneIdParam}/manual/${match[4]}.mp4`
+              : `${objectBase}/manual/${match[4]}.mp4`;
             const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
             const uploadRes = await fetch(uploadUrl, {
               method: 'POST',

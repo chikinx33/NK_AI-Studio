@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.067';
+  const APP_VERSION = '1.068';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1383,9 +1383,9 @@
               <button class="btn-secondary compact" data-action="upload-image" data-id="${s.id}">업로드</button>
               <button class="btn-secondary compact" data-action="download-image" data-id="${s.id}">다운로드</button>
               <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 변환</button>
-              <button class="btn-secondary compact" data-action="open-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>새 창에서 보기</button>
+              <button class="btn-secondary compact" data-action="library" data-id="${s.id}">라이브러리</button>
+              <button class="btn-secondary compact" data-action="upload-video" data-id="${s.id}">업로드</button>
               <button class="btn-secondary compact" data-action="download-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>다운로드 영상</button>
-              <button class="btn-secondary compact" data-action="video-safe" data-id="${s.id}">안전 모드 변환</button>
             </div></div>
           </div>`;
         }).join('');
@@ -1542,6 +1542,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             sceneId: scene.id,
+            projTag: pipelineState.draftId || '',
             promptText: scene.promptText || scene.lines || '',
             imageDataUrl: scene.imageDataUrl,
             durationSeconds: Math.min(Math.max(Number(scene.estSec) || 6, 4), 8),
@@ -1675,7 +1676,8 @@
         return;
       }
       try {
-        const res = await fetch(`/api/video/status?job_id=${encodeURIComponent(jobId)}`);
+        const pid = pipelineState.draftId || '';
+        const res = await fetch(`/api/video/status?job_id=${encodeURIComponent(jobId)}&projectId=${encodeURIComponent(pid)}&sceneId=${encodeURIComponent(scene.id)}`);
         const text = await res.text();
         if (!res.ok) throw new Error(text || 'status_error');
         const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
@@ -1695,12 +1697,7 @@
           } catch (_) {
             console.error('video status error detail (stringify fail)', json?.detail || json?.raw || null);
           }
-          const m = /blocked by your current safety settings for person\/face generation/i.test(String(json.message || ''));
-          if (m && !scene.videoSafeTried) {
-            alert('안전 모드로 다시 시도합니다.');
-            await startVideoForIdxSafe(idx);
-            return;
-          }
+          // 안전 모드 재시도 제거
         } else if (json.status === 'done') {
           const vid = json.outputUrl || '';
           if (!(String(vid).startsWith('https://') || String(vid).startsWith('data:video/mp4;base64,'))) {
@@ -1914,6 +1911,32 @@
           }
           return;
         }
+        const vbox = e.target.closest('.video-box') || e.target.closest('video.scene-video');
+        if (vbox && pipelineState) {
+          const row = vbox.closest('.scene-row');
+          const idEl = row ? row.querySelector('.eyebrow') : null;
+          const idTxt = idEl ? idEl.textContent || '' : '';
+          const num = (() => { const m = idTxt.match(/Scene\s+(\d+)/i); return Number((m && m[1]) || 0); })();
+          const idx = pipelineState.scenes.findIndex(s => Number(s.id) === num);
+          if (idx >= 0) {
+            const scene = pipelineState.scenes[idx];
+            const url = scene.videoUrl || '';
+            if (url) {
+              const vmodal = document.getElementById('video-modal');
+              const v = vmodal ? vmodal.querySelector('video') : null;
+              if (vmodal && v) {
+                v.src = url;
+                v.autoplay = true;
+                v.controls = true;
+                v.onloadedmetadata = () => console.log('modal video loadedmetadata', { src: v.currentSrc, duration: v.duration });
+                v.onerror = () => console.error('modal video error', v.error || null);
+                vmodal.classList.remove('hidden');
+                try { v.play().catch(() => {}); } catch (_) {}
+              }
+            }
+          }
+          return;
+        }
       });
     }
 
@@ -1922,6 +1945,28 @@
       modal.addEventListener('click', (e) => {
         if (e.target === modal) {
           modal.classList.add('hidden');
+        }
+      });
+    }
+    const vmodal = document.getElementById('video-modal');
+    if (vmodal) {
+      vmodal.addEventListener('click', (e) => {
+        if (e.target === vmodal) {
+          vmodal.classList.add('hidden');
+          const v = vmodal.querySelector('video');
+          if (v) {
+            try { v.pause(); } catch (_) {}
+            v.removeAttribute('src');
+            v.load();
+          }
+        }
+      });
+    }
+    const libModal = document.getElementById('lib-modal');
+    if (libModal) {
+      libModal.addEventListener('click', (e) => {
+        if (e.target === libModal) {
+          libModal.classList.add('hidden');
         }
       });
     }
