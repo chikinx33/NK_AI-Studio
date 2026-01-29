@@ -24,21 +24,18 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return send({ error: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, 500);
     }
 
-    const normalizedJobId = (() => {
-      const trimmed = jobId.replace(/^\/+/, '');
-      // Case 1: Already standard operations form
-      if (/^projects\/[^/]+\/locations\/[^/]+\/operations\/[^/]+$/.test(trimmed)) return trimmed;
-      // Case 2: Contains publishers/google/models/.../operations/<id> → normalize to standard
-      const m = trimmed.match(/projects\/([^/]+)\/locations\/([^/]+)\/(?:publishers\/google\/models\/[^/]+\/)?operations\/([^/]+)/i);
-      if (m) return `projects/${m[1]}/locations/${m[2]}/operations/${m[3]}`;
-      // Fallback: leave as-is (may still work if it is a full name)
-      return trimmed;
-    })();
+    const trimmed = jobId.replace(/^\/+/, '');
+    const locFromJobId = trimmed.match(/projects\/[^/]+\/locations\/([^/]+)/)?.[1] || 'us-central1';
+    const candidates: string[] = [];
+    if (trimmed.startsWith('projects/')) candidates.push(trimmed);
+    const m = trimmed.match(/projects\/([^/]+)\/locations\/([^/]+)\/(?:publishers\/google\/models\/[^/]+\/)?operations\/([^/]+)/i);
+    if (m) {
+      const std = `projects/${m[1]}/locations/${m[2]}/operations/${m[3]}`;
+      if (!candidates.includes(std)) candidates.push(std);
+    }
+    if (!candidates.length) return send({ status: 'error', message: 'invalid job_id', detail: jobId }, 400);
 
-    const locMatch = normalizedJobId.match(/projects\/[^/]+\/locations\/([^/]+)/);
-    const loc = locMatch?.[1] || 'us-central1';
-    // jobId is the full operation name; do not prefix anything else.
-    const opUrl = `https://${loc}-aiplatform.googleapis.com/v1/${normalizedJobId}`;
+    const loc = locFromJobId || 'us-central1';
 
     const accessToken = await getGoogleAccessToken({
       clientEmail,
@@ -46,23 +43,34 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       scope: 'https://www.googleapis.com/auth/cloud-platform',
     });
 
-    log('poll', { jobId: normalizedJobId, original: jobId, opUrl });
-    const res = await fetch(opUrl, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      const detail = safeJson(text);
-      log('op_error', { status: res.status, detail });
-      const errBody = detail?.error || detail;
-      return send({
-        status: 'error',
-        code: errBody?.code || res.status,
-        message: errBody?.message || `operations.get failed (${res.status})`,
-        detail
-      }, res.status);
+    let lastError: any = null;
+    let data: any = null;
+    for (const path of candidates) {
+      const opUrl = `https://${loc}-aiplatform.googleapis.com/v1/${path}`;
+      log('poll_try', { path });
+      const res = await fetch(opUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const text = await res.text();
+      if (res.ok) {
+        data = safeJson(text);
+        break;
+      } else {
+        const detail = safeJson(text);
+        const errBody = detail?.error || detail;
+        lastError = {
+          status: res.status,
+          code: errBody?.code || res.status,
+          message: errBody?.message || `operations.get failed (${res.status})`,
+          detail
+        };
+        const msg = String(lastError?.message || '');
+        const canFallback = res.status === 404 || /Operation ID must be a Long/i.test(msg);
+        log('poll_fail', { path, status: res.status, message: lastError.message });
+        if (!canFallback) break;
+      }
     }
-    const data = safeJson(text);
+    if (!data) {
+      return send({ status: 'error', ...(lastError || { message: 'Unknown operations error' }) }, lastError?.status || 500);
+    }
     if (!data.done) {
       return send({ status: 'processing', raw: data });
     }
