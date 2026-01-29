@@ -1249,6 +1249,12 @@ body::-webkit-scrollbar {
 .scene-img { width: 100%; height: auto; border-radius: 10px; display: block; }
 .error-text { color: #ff7a7a; margin: 6px 0 0; font-size: 12px; }
 .image-placeholder.loading span { font-size: 12px; color: var(--muted); }
+.scene-media-stack { display: flex; flex-direction: column; gap: 8px; }
+.video-box { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--layer-strong); }
+.scene-video { display: block; width: 100%; height: auto; }
+.video-placeholder { width: 100%; aspect-ratio: 16 / 9; border: 1px dashed var(--border); border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--muted); background: rgba(255,255,255,0.02); font-size: 13px; }
+.video-placeholder.loading { color: var(--muted); }
+.video-placeholder.error-state { color: #ff7a7a; border-color: rgba(255, 122, 0, 0.5); }
 
 .img-modal {
   position: fixed;

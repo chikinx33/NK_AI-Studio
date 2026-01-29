@@ -1065,7 +1065,10 @@
           promptText: s.promptText || `${headerInit} [Aspect ratio: ${aspectRatio}] Scene ${s.id ?? idx + 1}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`,
           imageDataUrl: s.imageDataUrl || '',
           imgLoading: false,
-          imgError: ''
+          imgError: '',
+          videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
+          videoStatus: s.videoStatus || '',
+          videoError: s.videoError || ''
         }));
         pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio };
       }
@@ -1108,6 +1111,18 @@
               : updatedScene.imageDataUrl
                 ? `<div class="image-box"><img class="scene-img" data-src="${updatedScene.imageDataUrl}" src="${updatedScene.imageDataUrl}" alt="scene image" /></div>`
                 : `<div class="image-placeholder tall"></div>`;
+          const videoCard = (() => {
+            if (updatedScene.videoUrl) {
+              return `<div class="video-box"><video class="scene-video" src="${updatedScene.videoUrl}" controls muted playsinline></video></div>`;
+            }
+            if (updatedScene.videoStatus === 'processing') {
+              return `<div class="video-placeholder loading"><span>영상 생성중...</span></div>`;
+            }
+            if (updatedScene.videoError) {
+              return `<div class="video-placeholder error-state"><span>${updatedScene.videoError}</span></div>`;
+            }
+            return `<div class="video-placeholder"><span>영상 없음</span></div>`;
+          })();
           const err = ''; // 별도 에러 텍스트 제거, 카드 안에서 표시
           return `
           <div class="scene-row">
@@ -1116,7 +1131,7 @@
               <p>${s.lines}</p>
             </div>
             <div class="scene-cell prompt"><p class="prompt-text">${scenePrompt}</p></div>
-            <div class="scene-cell image">${img}${err}</div>
+            <div class="scene-cell image"><div class="scene-media-stack">${img}${videoCard}</div>${err}</div>
             <div class="scene-cell actions"><div class="action-buttons grid">
               <button class="btn-secondary compact" data-action="regen-image" data-id="${s.id}" ${updatedScene.imgLoading ? 'disabled' : ''}>${updatedScene.imgLoading ? '생성중' : '생성'}</button>
               <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}">삭제</button>
@@ -1129,16 +1144,22 @@
           </div>`;
         }).join('');
         // 업데이트된 prompt를 상태에 반영
-        pipelineState.scenes = scenes.map((s, idx) => {
-          const scenePrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
-          return { ...s, promptText: scenePrompt };
-        });
-        pipelineScenes.innerHTML = `
+          pipelineState.scenes = scenes.map((s, idx) => {
+            const scenePrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+            return {
+              ...s,
+              promptText: scenePrompt,
+              videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
+              videoStatus: s.videoStatus || '',
+              videoError: s.videoError || ''
+            };
+          });
+          pipelineScenes.innerHTML = `
           <div class="scene-table">
             <div class="scene-row head">
               <div class="scene-cell">Story</div>
               <div class="scene-cell">Prompt</div>
-              <div class="scene-cell">Image</div>
+              <div class="scene-cell">Image/Video</div>
               <div class="scene-cell">Actions</div>
             </div>
             ${rows}
