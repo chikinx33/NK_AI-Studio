@@ -1044,6 +1044,10 @@
     // 씬 & 파이프라인 페이지 렌더
     const pipelineMeta = document.getElementById('pipeline-meta');
     const pipelineScenes = document.getElementById('pipeline-scenes');
+    const persistPipeline = () => {
+      if (!pipelineState) return;
+      savePipeline(pipelineState.payload, pipelineState.scenes, pipelineState.header);
+    };
     const renderPipelinePage = () => {
       if (!pipelineMeta || !pipelineScenes) return;
 
@@ -1068,7 +1072,8 @@
           imgError: '',
           videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
           videoStatus: s.videoStatus || '',
-          videoError: s.videoError || ''
+          videoError: s.videoError || '',
+          videoJobId: s.videoJobId || ''
         }));
         pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio };
       }
@@ -1151,7 +1156,8 @@
               promptText: scenePrompt,
               videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
               videoStatus: s.videoStatus || '',
-              videoError: s.videoError || ''
+              videoError: s.videoError || '',
+              videoJobId: s.videoJobId || ''
             };
           });
           pipelineScenes.innerHTML = `
@@ -1159,7 +1165,7 @@
             <div class="scene-row head">
               <div class="scene-cell">Story</div>
               <div class="scene-cell">Prompt</div>
-              <div class="scene-cell">Image2Video</div>
+              <div class="scene-cell">Image/Video</div>
               <div class="scene-cell">Actions</div>
             </div>
             ${rows}
@@ -1196,6 +1202,95 @@
         pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: '이미지 생성 실패' };
       }
       renderPipelinePage();
+      persistPipeline();
+    };
+
+    const startVideoForIdx = async (idx) => {
+      if (!pipelineState) return;
+      const scene = pipelineState.scenes[idx];
+      if (!scene.imageDataUrl) {
+        alert('먼저 이미지를 생성하거나 업로드하세요.');
+        return;
+      }
+      if (scene.videoStatus === 'processing') {
+        alert('이미 영상 생성이 진행 중입니다.');
+        return;
+      }
+      pipelineState.scenes[idx] = { ...scene, videoStatus: 'processing', videoError: '', videoUrl: '' };
+      renderPipelinePage();
+      persistPipeline();
+      try {
+        const res = await fetch('/api/video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sceneId: scene.id,
+            promptText: scene.promptText || scene.lines || '',
+            imageDataUrl: scene.imageDataUrl,
+            durationSeconds: Math.min(Math.max(Number(scene.estSec) || 6, 4), 8),
+            aspectRatio,
+          })
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+          throw new Error(detail || 'video_api_error');
+        }
+        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+        const jobId = json.job_id || '';
+        if (!jobId) throw new Error('job_id 없음');
+        pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], videoJobId: jobId, videoStatus: 'processing' };
+        renderPipelinePage();
+        persistPipeline();
+        pollVideoJob(jobId, idx, 0);
+      } catch (err) {
+        pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: err?.message || '영상 생성 실패' };
+        renderPipelinePage();
+        persistPipeline();
+      }
+    };
+
+    const pollVideoJob = async (jobId, idx, attempt = 0) => {
+      if (!pipelineState) return;
+      const scene = pipelineState.scenes[idx];
+      const maxAttempts = 40; // ~2분 (3초 간격)
+      const delay = (ms) => new Promise(r => setTimeout(r, ms));
+      if (attempt > maxAttempts) {
+        pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: '타임아웃' };
+        renderPipelinePage();
+        persistPipeline();
+        return;
+      }
+      try {
+        const res = await fetch(`/api/video/status?job_id=${encodeURIComponent(jobId)}`);
+        const text = await res.text();
+        if (!res.ok) throw new Error(text || 'status_error');
+        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+        if (json.status === 'processing') {
+          await delay(3000);
+          return pollVideoJob(jobId, idx, attempt + 1);
+        }
+        if (json.status === 'error') {
+          pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: json.message || '영상 생성 실패' };
+        } else if (json.status === 'done') {
+          const vid = json.videoUrl || '';
+          pipelineState.scenes[idx] = {
+            ...scene,
+            videoStatus: 'done',
+            videoUrl: vid,
+            videoError: '',
+            videoJobId: jobId
+          };
+        } else {
+          pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: '알 수 없는 상태' };
+        }
+        renderPipelinePage();
+        persistPipeline();
+      } catch (err) {
+        pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: err?.message || 'status 실패' };
+        renderPipelinePage();
+        persistPipeline();
+      }
     };
 
     // 이미지 재생성/복사/붙여넣기/삭제/다운로드 (Imagen) - 파이프라인 페이지 전용
@@ -1249,6 +1344,10 @@
             await generateImageForIdx(idx);
             return;
           }
+          if (action === 'video') {
+            await startVideoForIdx(idx);
+            return;
+          }
           return;
         }
         const img = e.target.closest('.scene-img');
@@ -1285,7 +1384,12 @@
       };
     }
     if (bulkVid) {
-      bulkVid.onclick = () => alert('영상 일괄 변환은 아직 구현되지 않았습니다.');
+      bulkVid.onclick = async () => {
+        if (!pipelineState || !pipelineState.scenes.length) return;
+        for (let i = 0; i < pipelineState.scenes.length; i++) {
+          await startVideoForIdx(i);
+        }
+      };
     }
 
     // 옵션 페이지 로그인 핸들러
