@@ -947,9 +947,9 @@ body::-webkit-scrollbar {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 320px);
+  grid-template-columns: repeat(auto-fill, 640px);
   justify-content: flex-start;
-  gap: 12px;
+  gap: 16px;
 }
 .draft-card {
   display: flex;
@@ -958,35 +958,36 @@ body::-webkit-scrollbar {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 18px;
   box-shadow: var(--shadow);
 }
 .draft-top {
   display: flex;
-  gap: 12px;
+  gap: 16px;
 }
 .draft-thumb {
-  width: 84px;
-  height: 84px;
+  width: 140px;
+  height: 140px;
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(255,122,0,0.18), rgba(11,191,165,0.18));
   border: 1px solid var(--border);
   flex-shrink: 0;
 }
 .draft-title {
-  margin: 0 0 6px;
+  margin: 0 0 10px;
   font-weight: 700;
+  font-size: 18px;
 }
 .draft-meta {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 .draft-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
   justify-content: space-between;
 }
