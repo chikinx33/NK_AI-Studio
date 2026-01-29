@@ -1,4 +1,4 @@
-﻿(function() {
+(function() {
   const translations = {
     en: {
       brand_title: 'NK_Studio',
@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.040';
+  const APP_VERSION = '1.043';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -304,11 +304,10 @@
 
   let currentDraftId = null;
 
-  // 공통 프롬프트에 화면비를 반드시 포함시키기 위한 헬퍼
   const withAspectInHeader = (headerText, ratio) => {
-    if (!headerText) return `[Aspect ratio: ${ratio}]`;
-    const hasAspect = /\[?\s*aspect\s*ratio\s*:/i.test(headerText);
-    return hasAspect ? headerText : `${headerText} [Aspect ratio: ${ratio}]`;
+    const text = headerText || '';
+    const cleaned = text.replace(/\[?\s*aspect\s*ratio\s*:\s*.*?\]?/ig, '').replace(/\s{2,}/g, ' ').trim();
+    return cleaned;
   };
 
   window.toggleTheme = () => {
@@ -1257,7 +1256,16 @@
           const sceneListInit = (scenes || []).map((s, idx) => ({
             ...s,
             id: s.id ?? idx + 1,
-            promptText: s.promptText || `${headerInit} [Aspect ratio: ${aspectRatio}] Scene ${s.id ?? idx + 1}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`,
+            promptText: s.promptText || [
+              `Common`,
+              `${headerInit}`,
+              `Aspect ratio`,
+              `${aspectRatio}`,
+              `Visual`,
+              `${s.shot || ''}`,
+              `Duration`,
+              `${Math.max(Number(s.estSec) || 0, 1)}s.`
+            ].join('\n'),
             imageDataUrl: s.imageDataUrl || '',
             imgLoading: false,
             imgError: '',
@@ -1303,10 +1311,14 @@
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
           const computedPrompt = [
-            `Common: ${header}`,
-            `Aspect ratio: ${aspectRatio}`,
-            `Visual: ${s.shot || ''}`,
-            `Duration ${Math.max(Number(s.estSec) || 0, 1)}s.`
+            `Common`,
+            `${header}`,
+            `Aspect ratio`,
+            `${aspectRatio}`,
+            `Visual`,
+            `${s.shot || ''}`,
+            `Duration`,
+            `${Math.max(Number(s.estSec) || 0, 1)}s.`
           ].join('\\n');
           const displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
           const updatedScene = { ...s, promptText: displayPrompt };
@@ -1343,7 +1355,14 @@
               </div>
             </div>
             <div class="scene-cell prompt">
-              <p class="prompt-text" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${displayPrompt}</p>
+              <p class="eyebrow">Common</p>
+              <p class="prompt-common" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${header}</p>
+              <p class="eyebrow">Aspect ratio</p>
+              <p class="prompt-aspect" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${aspectRatio}</p>
+              <p class="eyebrow">Visual</p>
+              <p class="prompt-visual" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${s.shot || ''}</p>
+              <p class="eyebrow">Duration</p>
+              <p class="prompt-duration" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${Math.max(Number(s.estSec) || 0, 1)}s.</p>
               <div class="cell-actions br">
                 ${s.editingPrompt
                   ? `<button class="btn-secondary compact" data-action="save-prompt" data-id="${s.id}">저장</button>
@@ -1366,10 +1385,14 @@
         // 업데이트된 prompt를 상태에 반영
           pipelineState.scenes = scenes.map((s, idx) => {
             const computedPrompt = [
-              `Common: ${header}`,
-              `Aspect ratio: ${aspectRatio}`,
-              `Visual: ${s.shot || ''}`,
-              `Duration ${Math.max(Number(s.estSec) || 0, 1)}s.`
+              `Common`,
+              `${header}`,
+              `Aspect ratio`,
+              `${aspectRatio}`,
+              `Visual`,
+              `${s.shot || ''}`,
+              `Duration`,
+              `${Math.max(Number(s.estSec) || 0, 1)}s.`
             ].join('\\n');
             const finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
             return {
@@ -1589,8 +1612,15 @@
           }
           if (action === 'save-prompt') {
             const row = actionBtn.closest('.scene-row');
-            const el = row ? row.querySelector('.prompt-text') : null;
-            const text = el ? (el.textContent || '') : '';
+            const commonEl = row ? row.querySelector('.prompt-common') : null;
+            const aspectEl = row ? row.querySelector('.prompt-aspect') : null;
+            const visualEl = row ? row.querySelector('.prompt-visual') : null;
+            const durEl = row ? row.querySelector('.prompt-duration') : null;
+            const commonText = commonEl ? (commonEl.textContent || '') : '';
+            const aspectText = aspectEl ? (aspectEl.textContent || '') : '';
+            const visualText = visualEl ? (visualEl.textContent || '') : '';
+            const durationText = durEl ? (durEl.textContent || '') : '';
+            const text = [`Common`, commonText, `Aspect ratio`, aspectText, `Visual`, visualText, `Duration`, durationText].join('\n');
             pipelineState.scenes[idx] = { ...scene, promptText: text, promptEdited: true, editingPrompt: false };
             renderPipelinePage();
             persistPipeline();

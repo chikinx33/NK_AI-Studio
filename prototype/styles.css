@@ -1375,6 +1375,11 @@ body::-webkit-scrollbar {
 .scene-cell { position: relative; }
 .cell-actions.br { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 6px; }
 .prompt-text[contenteditable="true"] { outline: 1px solid var(--border); border-radius: 4px; }
+.story-lines[contenteditable="true"] { outline: 1px solid var(--border); border-radius: 4px; }
+.prompt-common[contenteditable="true"],
+.prompt-aspect[contenteditable="true"],
+.prompt-visual[contenteditable="true"],
+.prompt-duration[contenteditable="true"] { outline: 1px solid var(--border); border-radius: 4px; }
 .option-body { display: flex; align-items: center; justify-content: center; }
 .main .option-body { min-height: 80vh; }
 .option-card {
