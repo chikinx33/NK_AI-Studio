@@ -496,7 +496,7 @@
         .join('');
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
       if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
-      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
+      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
     };
 
     const savePipeline = (payload, scenes, header) => {
@@ -661,7 +661,7 @@
       const hasScenes = scenesState.length > 0;
       if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
       if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
-      if (confirmBtn) confirmBtn.disabled = !hasScenes && !forceConfirmEnable;
+      if (confirmBtn) confirmBtn.disabled = !hasScenes;
     };
 
     const normalizeScenes = raw => {
@@ -1124,7 +1124,7 @@
       if (pending) {
         const parsed = JSON.parse(pending);
         applyDraft(parsed);
-        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 ? true : false;
+        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
