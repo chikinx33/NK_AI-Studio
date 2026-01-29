@@ -655,9 +655,10 @@
       scenesState = draft.scenes || [];
       renderScenes(scenesState);
       lastPayload = data;
-      if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
-      if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
-      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+      const hasScenes = scenesState.length > 0;
+      if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
+      if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
+      if (confirmBtn) confirmBtn.disabled = !hasScenes;
     };
 
     const normalizeScenes = raw => {
@@ -1120,7 +1121,7 @@
       if (pending) {
         const parsed = JSON.parse(pending);
         applyDraft(parsed);
-        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 ? true : false;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
@@ -1128,6 +1129,7 @@
       const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
       if (forceEnable && confirmBtn) {
         confirmBtn.disabled = false;
+        confirmBtn.removeAttribute('disabled');
         sessionStorage.removeItem('nk_force_confirm_enable');
       }
     } catch (_) {}
