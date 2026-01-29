@@ -1011,11 +1011,10 @@ body::-webkit-scrollbar {
 }
 .trash-btn:hover {
   color: var(--text);
+}
 .empty-project-card {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 180px;
+  position: relative;
+  height: 260px;
   background: var(--panel);
   border: 1px dashed var(--border);
   border-radius: var(--radius);
@@ -1023,20 +1022,17 @@ body::-webkit-scrollbar {
   cursor: pointer;
 }
 .empty-project-card .empty-card-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 .empty-project-card .plus-icon {
-  font-size: 42px;
+  font-size: 120px;
   color: var(--muted);
 }
 .empty-project-card:hover {
   border-color: rgba(255,122,0,0.6);
-}
-  border-color: rgba(255,122,0,0.6);
-  box-shadow: 0 8px 18px rgba(255,122,0,0.16);
 }
 
 .project {

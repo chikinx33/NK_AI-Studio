@@ -384,6 +384,16 @@
         `;
       }).join('');
       container.innerHTML = emptyCard + list;
+      const firstCard = container.querySelector('.draft-card:not(.empty-project-card)');
+      const emptyEl = container.querySelector('.empty-project-card');
+      if (emptyEl) {
+        if (firstCard) {
+          const h = firstCard.getBoundingClientRect().height;
+          if (h && h > 0) emptyEl.style.height = `${Math.round(h)}px`;
+        } else {
+          emptyEl.style.height = '260px';
+        }
+      }
     };
     renderDashboardDrafts();
 
