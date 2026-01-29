@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.046';
+  const APP_VERSION = '1.047';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1357,11 +1357,16 @@
               <p class="prompt-visual" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${s.shot || ''}</p>
               <p class="eyebrow">Duration</p>
               <p class="prompt-duration" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${Math.max(Number(s.estSec) || 0, 1)}s.</p>
+              ${s.editingPromptRaw ? `<p class="eyebrow">Prompt (EN)</p><div class="prompt-raw" data-id="${s.id}" contenteditable="true">${displayPrompt}</div>` : ''}
               <div class="cell-actions br">
                 ${s.editingPrompt
                   ? `<button class="btn-secondary compact" data-action="save-prompt" data-id="${s.id}">저장</button>
                      <button class="btn-ghost compact" data-action="cancel-prompt" data-id="${s.id}">취소</button>`
                   : `<button class="btn-ghost compact" data-action="edit-prompt" data-id="${s.id}">수정</button>`}
+                ${s.editingPromptRaw
+                  ? `<button class="btn-secondary compact" data-action="save-prompt-raw" data-id="${s.id}">영문 저장</button>
+                     <button class="btn-ghost compact" data-action="cancel-prompt-raw" data-id="${s.id}">취소</button>`
+                  : `<button class="btn-ghost compact" data-action="edit-prompt-raw" data-id="${s.id}">영문 프롬프트</button>`}
               </div>
             </div>
             <div class="scene-cell image"><div class="scene-media-stack">${img}${videoCard}</div>${err}</div>
@@ -1396,7 +1401,8 @@
               videoJobId: s.videoJobId || '',
               editingPrompt: !!s.editingPrompt,
               editingStory: !!s.editingStory,
-              promptEdited: !!s.promptEdited
+              promptEdited: !!s.promptEdited,
+              editingPromptRaw: !!s.editingPromptRaw
             };
           });
           pipelineScenes.innerHTML = `
@@ -1616,6 +1622,46 @@
               return Math.max(Number(m && m[0]) || 1, 1);
             })();
             pipelineState.scenes[idx] = { ...scene, promptText: text, promptEdited: true, editingPrompt: false, shot: visualText, estSec: durNum };
+            renderPipelinePage();
+            persistPipeline();
+            return;
+          }
+          if (action === 'edit-prompt-raw') {
+            pipelineState.scenes[idx] = { ...scene, editingPromptRaw: true };
+            renderPipelinePage();
+            return;
+          }
+          if (action === 'cancel-prompt-raw') {
+            pipelineState.scenes[idx] = { ...scene, editingPromptRaw: false };
+            renderPipelinePage();
+            return;
+          }
+          if (action === 'save-prompt-raw') {
+            const row = actionBtn.closest('.scene-row');
+            const rawEl = row ? row.querySelector('.prompt-raw') : null;
+            const rawText = rawEl ? (rawEl.textContent || '') : (scene.promptText || '');
+            const parseSection = (name) => {
+              const re = new RegExp(`(?:^|\\n)\\s*${name}\\s*\\n([\\s\\S]*?)(?:\\n[A-Z][^\\n]*|$)`, 'i');
+              const m = rawText.match(re);
+              return m ? m[1].trim() : '';
+            };
+            const commonText = parseSection('Common');
+            const visualText = parseSection('Visual');
+            const durationLine = parseSection('Duration');
+            const durNum = (() => {
+              const m1 = (durationLine || '').match(/\\d+/);
+              const m2 = rawText.match(/Duration\\s+(\\d+)/i);
+              return Math.max(Number((m1 && m1[0]) || (m2 && m2[1]) || scene.estSec || 1) || 1, 1);
+            })();
+            const rebuilt = [
+              `Common`,
+              `${commonText || (pipelineState.header || '')}`,
+              `Visual`,
+              `${visualText || scene.shot || ''}`,
+              `Duration`,
+              `${durNum}s.`
+            ].join('\\n');
+            pipelineState.scenes[idx] = { ...scene, promptText: rebuilt, promptEdited: true, editingPromptRaw: false, shot: visualText || scene.shot || '', estSec: durNum };
             renderPipelinePage();
             persistPipeline();
             return;
