@@ -1,4 +1,5 @@
 // prototype/functions/api/imagen.ts
+type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const body = await request.json().catch(() => ({} as any));
@@ -81,10 +82,41 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "No image bytes returned", raw: vertexJson }, 500);
     }
 
-    // 프론트에서 바로 <img src="data:image/png;base64,..." /> 로 쓸 수 있게 dataUrl도 제공
+    const projTagRaw = (body?.projectId ?? body?.projTag ?? "").toString().trim();
+    const projTag = projTagRaw || "default";
+    const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
+    const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
+    let signedUrl = "";
+    let objectName = "";
+    if (outParsed) {
+      const basePrefix = outParsed.object.replace(/\/$/, "");
+      const stamp = Date.now();
+      objectName = `${basePrefix}/projects/${projTag}/image/${stamp}-${crypto.randomUUID()}.png`;
+      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+      const bytes = base64ToUint8(bytesBase64Encoded);
+      const upRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
+        body: bytes
+      });
+      const upTxt = await upRes.text();
+      if (upRes.ok) {
+        signedUrl = await signGcsUrl({
+          bucket: outParsed.bucket,
+          object: objectName,
+          clientEmail,
+          privateKeyPem: privateKeyRaw,
+          expiresInSec: 3600,
+        }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
+      } else {
+        objectName = "";
+      }
+    }
     return json({
       bytesBase64Encoded,
       dataUrl: `data:image/png;base64,${bytesBase64Encoded}`,
+      signedUrl,
+      objectName,
       model: modelVersion,
       location,
     });
@@ -196,4 +228,61 @@ function pemToArrayBuffer(pem: string) {
   const buf = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
   return buf.buffer;
+}
+function parseGcsUri(uri: string): { bucket: string; object: string } | null {
+  if (!uri || !uri.startsWith("gs://")) return null;
+  const rest = uri.slice(5);
+  const slash = rest.indexOf("/");
+  if (slash === -1) return null;
+  const bucket = rest.slice(0, slash);
+  const object = rest.slice(slash + 1);
+  return { bucket, object };
+}
+function gcsToHttps(uri: string) {
+  if (!uri.startsWith("gs://")) return uri;
+  const parsed = parseGcsUri(uri);
+  if (!parsed) return uri;
+  return `https://storage.googleapis.com/${parsed.bucket}/${parsed.object}`;
+}
+function base64ToUint8(b64: string) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {
+  const now = new Date();
+  const pad = (n: number) => `${n}`.padStart(2, "0");
+  const date = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  const time = `${date}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const credential = `${opts.clientEmail}/${date}/auto/storage/goog4_request`;
+  const host = "storage.googleapis.com";
+  const canonicalUri = `/${encodeURIComponent(opts.bucket)}/${opts.object.split("/").map(encodeURIComponent).join("/")}`;
+  const signedHeaders = "host";
+  const query = new URLSearchParams({
+    "X-Goog-Algorithm": "GOOG4-RSA-SHA256",
+    "X-Goog-Credential": credential,
+    "X-Goog-Date": time,
+    "X-Goog-Expires": `${opts.expiresInSec}`,
+    "X-Goog-SignedHeaders": signedHeaders,
+  });
+  const canonicalQuery = query.toString();
+  const canonicalRequest = ["GET", canonicalUri, canonicalQuery, `host:${host}`, "", signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
+  const hashedRequest = await sha256Hex(canonicalRequest);
+  const stringToSign = ["GOOG4-RSA-SHA256", time, `${date}/auto/storage/goog4_request`, hashedRequest].join("\n");
+  const signatureB64url = await signRS256(stringToSign, opts.privateKeyPem);
+  const signatureHex = b64urlToHex(signatureB64url);
+  const finalQuery = `${canonicalQuery}&X-Goog-Signature=${signatureHex}`;
+  return `https://${host}${canonicalUri}?${finalQuery}`;
+}
+async function sha256Hex(input: string) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function b64urlToHex(b64url: string) {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  let out = "";
+  for (let i = 0; i < bin.length; i++) out += bin.charCodeAt(i).toString(16).padStart(2, "0");
+  return out;
 }
