@@ -200,6 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
+  const APP_VERSION = '1.030';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -243,6 +244,21 @@
   };
 
   let forceConfirmEnable = false;
+
+  const applyVersionAndNav = () => {
+    // 버전 표기 통일
+    document.querySelectorAll('.sidebar-version').forEach(el => {
+      el.textContent = `ver ${APP_VERSION}`;
+    });
+    // 네비게이션 활성화
+    const path = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    const match = Array.from(document.querySelectorAll('.nav-item[href]')).find(a => {
+      const href = (a.getAttribute('href') || '').toLowerCase();
+      return href === path || (path === '' && href === 'index.html');
+    });
+    if (match) match.classList.add('active');
+  };
 
   const apply = () => {
     const t = translations[current];
@@ -296,6 +312,7 @@
 
   document.addEventListener('DOMContentLoaded', apply);
   document.addEventListener('DOMContentLoaded', () => {
+    applyVersionAndNav();
     // 화면비 상태는 가장 먼저 초기화해서 하위 로직이 안전하게 실행되도록 함
     const ratioButtons = document.querySelectorAll('.ratio-btn');
     let aspectRatio = (() => {
