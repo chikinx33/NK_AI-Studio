@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.053';
+  const APP_VERSION = '1.054';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1337,7 +1337,7 @@
               return `<div class="video-placeholder loading"><span>영상 생성중...</span></div>`;
             }
             if (updatedScene.videoError) {
-              return `<div class="video-placeholder error-state"><span>${updatedScene.videoError}</span></div>`;
+              return `<div class="video-placeholder error-state"><span>생성 실패</span></div>`;
             }
             return `<div class="video-placeholder"><span>영상 없음</span></div>`;
           })();
