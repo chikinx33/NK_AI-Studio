@@ -1212,15 +1212,12 @@
         ['길이', payload.duration ? `${payload.duration}s` : ''],
         ['저장 시각', savedAt ? new Date(savedAt).toLocaleString('ko-KR') : '']
       ];
-      const metaItems = metaItemsRaw
-        .map(([label, val]) => {
-          if (val && String(val).trim().length) return [label, val];
-          return [label, '<span class="muted">입력 필요</span>'];
-        });
+      const metaItems = metaItemsRaw.map(([label, val]) => {
+        const content = val && String(val).trim().length ? val : '<span class="muted">입력 필요</span>';
+        return `<span class="meta-item">${label} - ${content}</span>`;
+      });
 
-      const metaLine = metaItems
-        .map(([label, val]) => `<span class="meta-item"><span class="meta-label">${label}</span> ${val}</span>`)
-        .join('<span class="meta-sep">·</span>');
+      const metaLine = metaItems.join('<span class="meta-sep">·</span>');
 
       pipelineMeta.innerHTML = `
         <div class="pipeline-meta-bar">
