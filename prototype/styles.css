@@ -1320,6 +1320,12 @@ body::-webkit-scrollbar {
 .image-placeholder.loading { font-size: 12px; color: var(--muted); }
 .image-placeholder.loading::before { display: none; }
 .image-placeholder.error-state { font-size: 12px; color: #ff7a7a; }
+.view-title[contenteditable="true"],
+.view-lines[contenteditable="true"],
+.view-shot[contenteditable="true"] {
+  outline: 1px solid var(--border);
+  border-radius: 4px;
+}
 .image-placeholder.error-state::before { display: none; }
 .scene-img { width: 100%; height: auto; border-radius: 10px; display: block; }
 .error-text { color: #ff7a7a; margin: 6px 0 0; font-size: 12px; }

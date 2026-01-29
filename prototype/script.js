@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.035';
+  const APP_VERSION = '1.037';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -394,8 +394,11 @@
         const draft = drafts.find(d => d.id === id);
         const action = btn.dataset.action;
         if (action === 'draft-delete') {
+          const ok = confirm('저장된 프로젝트를 삭제하시겠습니까?');
+          if (!ok) return;
           saveDraftsGlobal(drafts.filter(d => d.id !== id));
           renderDashboardDrafts();
+          alert('삭제되었습니다.');
           return;
         }
         if (!draft) return;
@@ -499,33 +502,23 @@
             <div class="card-top">
               <div>
                 <p class="eyebrow">Scene ${s.id}</p>
-                <h5>Scene ${s.id} - ${s.title}</h5>
+                <h5>Scene ${s.id} - <span class="view-title" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.title || ''}</span></h5>
               </div>
               <input class="chip-input est-input" data-id="${s.id}" value="${formatEst(s.estSec)}" aria-label="예상 길이"/>
             </div>
-            ${
-              s.editing
-                ? `<div class="edit-form">
-                    <label class="muted">제목</label>
-                    <input class="edit-title" value="${s.title || ''}" data-id="${s.id}"/>
-                    <label class="muted">내용</label>
-                    <textarea class="edit-lines" rows="3" data-id="${s.id}">${s.lines || ''}</textarea>
-                    <label class="muted">Shot</label>
-                    <input class="edit-shot" value="${s.shot || ''}" data-id="${s.id}"/>
-                    <div class="actions">
-                      <button class="btn-secondary" data-action="save" data-id="${s.id}">저장</button>
-                      <button class="btn-ghost" data-action="cancel-edit" data-id="${s.id}">취소</button>
-                    </div>
-                  </div>`
-                : `<p>${s.lines}</p>
-                   ${s.shot ? `<p class="muted">Shot: ${s.shot}</p>` : ''}
-                   <div class="actions">
-                     <button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
+            <p class="view-lines" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.lines || ''}</p>
+            <p class="muted">Shot: <span class="view-shot" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.shot || ''}</span></p>
+            <div class="actions">
+              ${
+                s.editing
+                  ? `<button class="btn-secondary" data-action="save" data-id="${s.id}">저장</button>
+                     <button class="btn-ghost" data-action="cancel-edit" data-id="${s.id}">취소</button>`
+                  : `<button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
                      <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
                      <button class="btn-ghost" data-action="delete" data-id="${s.id}">삭제</button>
-                     <button class="btn-ghost" data-action="add" data-id="${s.id}">추가</button>
-                   </div>`
-            }
+                     <button class="btn-ghost" data-action="add" data-id="${s.id}">추가</button>`
+              }
+            </div>
           </div>`
         )
         .join('');
@@ -1074,9 +1067,9 @@
         } else if (action === 'save') {
           const card = btn.closest('.scenario-card');
           if (!card) return;
-          const title = card.querySelector('.edit-title')?.value || '';
-          const lines = card.querySelector('.edit-lines')?.value || '';
-          const shot = card.querySelector('.edit-shot')?.value || '';
+          const title = card.querySelector('.view-title')?.textContent || '';
+          const lines = card.querySelector('.view-lines')?.textContent || '';
+          const shot = card.querySelector('.view-shot')?.textContent || '';
           updateSceneField(id, { title, lines, shot, editing: false });
         } else if (action === 'regenerate') {
           regenerateScene(id);
@@ -1317,11 +1310,15 @@
           <div class="scene-row">
             <div class="scene-cell story">
               <p class="eyebrow">Scene ${s.id}</p>
-              <p>${s.lines}</p>
+              <p class="story-lines" data-id="${s.id}" ${s.editingStory ? 'contenteditable="true"' : ''}>${s.lines}</p>
             </div>
             <div class="scene-cell prompt"><p class="prompt-text">${scenePrompt}</p></div>
             <div class="scene-cell image"><div class="scene-media-stack">${img}${videoCard}</div>${err}</div>
             <div class="scene-cell actions"><div class="action-buttons grid">
+              ${s.editingStory
+                ? `<button class="btn-secondary compact" data-action="save-story" data-id="${s.id}">저장</button>
+                   <button class="btn-ghost compact" data-action="cancel-story" data-id="${s.id}">취소</button>`
+                : `<button class="btn-secondary compact" data-action="edit-story" data-id="${s.id}">수정</button>`}
               <button class="btn-secondary compact" data-action="regen-image" data-id="${s.id}" ${updatedScene.imgLoading ? 'disabled' : ''}>${updatedScene.imgLoading ? '생성중' : '생성'}</button>
               <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}">삭제</button>
               <button class="btn-secondary compact" data-action="copy-image" data-id="${s.id}">복사</button>
@@ -1517,6 +1514,25 @@
           if (idx === -1) return;
           const scene = pipelineState.scenes[idx];
 
+          if (action === 'edit-story') {
+            pipelineState.scenes[idx] = { ...scene, editingStory: true };
+            renderPipelinePage();
+            return;
+          }
+          if (action === 'cancel-story') {
+            pipelineState.scenes[idx] = { ...scene, editingStory: false };
+            renderPipelinePage();
+            return;
+          }
+          if (action === 'save-story') {
+            const row = actionBtn.closest('.scene-row');
+            const el = row ? row.querySelector('.story-lines') : null;
+            const text = el ? (el.textContent || '') : '';
+            pipelineState.scenes[idx] = { ...scene, lines: text, editingStory: false };
+            renderPipelinePage();
+            persistPipeline();
+            return;
+          }
           // 복사/붙여넣기/삭제/다운로드 공통 처리
           if (action === 'delete-image') {
             pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
@@ -1641,6 +1657,7 @@
             const header = withAspectInHeader(headerRaw, aspectRatio);
             saveHeader(header);
             savePipeline(payload, scenesState, header);
+            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
             window.location.href = 'scenes.html';
           } finally {
             setLoading(false);
