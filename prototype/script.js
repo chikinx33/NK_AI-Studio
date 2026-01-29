@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.033';
+  const APP_VERSION = '1.034';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -243,14 +243,15 @@
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch (_) {}
   };
 
-  let forceConfirmEnable = false;
-  const ensureConfirmEnabled = () => {
+  const hasSceneContent = () =>
+    scenesState.some(s => typeof s.lines === 'string' && s.lines.trim().length > 0);
+
+  const updateConfirmState = () => {
     const confirmBtn = document.getElementById('confirm-scenes');
     if (!confirmBtn) return;
-    if (scenesState.length > 0 || forceConfirmEnable) {
-      confirmBtn.disabled = false;
-      confirmBtn.removeAttribute('disabled');
-    }
+    const enable = scenesState.length > 0 && hasSceneContent();
+    confirmBtn.disabled = !enable;
+    if (enable) confirmBtn.removeAttribute('disabled');
   };
 
   const applyVersionAndNav = () => {
@@ -402,8 +403,6 @@
         if (!draft) return;
         if (action === 'scenario-edit') {
           try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) {}
-          try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) {}
-          forceConfirmEnable = true;
           window.location.href = 'scenario.html';
           return;
         }
@@ -487,7 +486,7 @@
         cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
         if (saveDraftBtn) saveDraftBtn.disabled = true;
         if (cloneDraftBtn) cloneDraftBtn.disabled = true;
-        if (confirmBtn) confirmBtn.disabled = !forceConfirmEnable;
+        updateConfirmState();
         return;
       }
       scenesState = scenes;
@@ -530,8 +529,7 @@
         .join('');
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
       if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
-      if (confirmBtn) confirmBtn.disabled = false;
-      setTimeout(ensureConfirmEnabled, 0);
+      updateConfirmState();
     };
 
     const savePipeline = (payload, scenes, header) => {
@@ -696,8 +694,7 @@
       const hasScenes = scenesState.length > 0;
       if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
       if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
-      if (confirmBtn) confirmBtn.disabled = false;
-      ensureConfirmEnabled();
+      updateConfirmState();
     };
 
     const normalizeScenes = raw => {
@@ -760,8 +757,8 @@
         submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
       }
       if (confirmBtn) {
-        confirmBtn.disabled = loading;
         confirmBtn.textContent = loading ? '컨펌 중...' : '최종 컨펌 → 씬 파이프라인';
+        confirmBtn.disabled = loading ? true : !hasSceneContent();
       }
       if (overlay) {
         overlay.classList.toggle('hidden', !loading);
@@ -934,7 +931,7 @@
         saveHeader(header);
         renderScenes(scenes);
         savePipeline(payload, scenes, header);
-        if (confirmBtn) confirmBtn.disabled = false;
+        updateConfirmState();
       } catch (err) {
         console.warn('API 실패, mock으로 대체', err);
           const errBox = document.getElementById('scenario-error');
@@ -949,7 +946,7 @@
           saveHeader(header);
           renderScenes(mock);
           savePipeline(payload, mock, header);
-          if (confirmBtn) confirmBtn.disabled = false;
+          updateConfirmState();
         } finally {
           setLoading(false);
         }
@@ -979,7 +976,7 @@
         if (cardsEl) cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
         const errBox = document.getElementById('scenario-error');
         if (errBox) errBox.classList.add('hidden');
-        if (confirmBtn) confirmBtn.disabled = true;
+        updateConfirmState();
         if (saveDraftBtn) saveDraftBtn.disabled = true;
       });
     }
@@ -1160,23 +1157,11 @@
       if (pending) {
         const parsed = JSON.parse(pending);
         applyDraft(parsed);
-        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 ? true : false;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
       }
-      const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
-      if (forceEnable) {
-        forceConfirmEnable = true;
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.removeAttribute('disabled');
-        }
-        sessionStorage.removeItem('nk_force_confirm_enable');
-      } else {
-        // 추가 안전망: pending 드래프트가 있었으면 컨펌을 켜준다
-        ensureConfirmEnabled();
-      }
+      updateConfirmState();
     } catch (_) {}
 
     const applyAuthGuard = () => {
@@ -1622,9 +1607,9 @@
     refreshOptionUI();
 
       if (confirmBtn) {
-        confirmBtn.disabled = true;
+        updateConfirmState();
         confirmBtn.addEventListener('click', async () => {
-          if (!scenesState.length) {
+          if (!scenesState.length || !hasSceneContent()) {
             alert('먼저 시나리오를 생성하세요.');
             return;
           }
@@ -1638,6 +1623,7 @@
             window.location.href = 'scenes.html';
           } finally {
             setLoading(false);
+            updateConfirmState();
           }
         });
       }
