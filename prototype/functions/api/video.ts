@@ -49,7 +49,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predict`;
+    // Veo는 Long Running Predict API를 사용해야 함
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predictLongRunning`;
     log('request', { sceneId, jobId, modelId, durationSeconds, aspectRatio, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
 
     const vertexRes = await fetch(url, {
@@ -88,6 +89,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       (resJson && resJson.name) ||
       resJson?.operation?.name ||
       resJson?.predictions?.[0]?.name ||
+      resJson?.output?.name ||
       "";
 
     if (!operationName) {
