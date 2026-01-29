@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.038';
+  const APP_VERSION = '1.040';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -415,7 +415,8 @@
             scenes: draft.scenes || [],
             header: '',
             savedAt: new Date().toISOString(),
-            aspectRatio: (draft.payload && draft.payload.aspectRatio) || '16:9'
+            aspectRatio: (draft.payload && draft.payload.aspectRatio) || '16:9',
+            draftId: draft.id
           };
           try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) {}
           try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
@@ -1200,6 +1201,23 @@
       if (!pipelineState) return;
       savePipeline(pipelineState.payload, pipelineState.scenes, pipelineState.header);
     };
+    const updateDraftFromPipeline = () => {
+      if (!pipelineState || !pipelineState.draftId) return;
+      const id = pipelineState.draftId;
+      const drafts = loadDraftsGlobal();
+      const idx = drafts.findIndex(d => Number(d.id) === Number(id));
+      if (idx === -1) return;
+      const current = drafts[idx];
+      const updated = {
+        ...current,
+        title: (pipelineState.payload && pipelineState.payload.topic) ? pipelineState.payload.topic : (current.title || '제목없음'),
+        payload: pipelineState.payload || current.payload || {},
+        scenes: pipelineState.scenes || current.scenes || []
+      };
+      const next = drafts.slice();
+      next[idx] = updated;
+      saveDraftsGlobal(next);
+    };
     const renderPipelinePage = () => {
       if (!pipelineMeta || !pipelineScenes) return;
 
@@ -1231,7 +1249,7 @@
           const headerInit = withAspectInHeader('', aspectRatio);
           pipelineState = { payload, header: headerInit, scenes: [], savedAt: '', aspectRatio, isPlaceholder: true };
         } else {
-          const { payload, scenes, savedAt, header: savedHeader, aspectRatio: savedRatio } = stored;
+          const { payload, scenes, savedAt, header: savedHeader, aspectRatio: savedRatio, draftId } = stored;
           if (savedRatio) aspectRatio = savedRatio;
           saveAspect(aspectRatio);
           const headerInitRaw = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
@@ -1248,7 +1266,7 @@
             videoError: s.videoError || '',
             videoJobId: s.videoJobId || ''
           }));
-          pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio, isPlaceholder: false };
+          pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio, isPlaceholder: false, draftId: draftId || null };
         }
       }
 
@@ -1284,7 +1302,12 @@
         </div>`;
       if (scenes && scenes.length) {
         const rows = scenes.map(s => {
-          const computedPrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+          const computedPrompt = [
+            `Common: ${header}`,
+            `Aspect ratio: ${aspectRatio}`,
+            `Visual: ${s.shot || ''}`,
+            `Duration ${Math.max(Number(s.estSec) || 0, 1)}s.`
+          ].join('\\n');
           const displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
           const updatedScene = { ...s, promptText: displayPrompt };
           const img = updatedScene.imgLoading
@@ -1342,7 +1365,12 @@
         }).join('');
         // 업데이트된 prompt를 상태에 반영
           pipelineState.scenes = scenes.map((s, idx) => {
-            const computedPrompt = `${header} [Aspect ratio: ${aspectRatio}] Scene ${s.id}: ${s.lines}. Visual focus: ${s.shot || ''}. Duration about ${formatEst(s.estSec)}.`;
+            const computedPrompt = [
+              `Common: ${header}`,
+              `Aspect ratio: ${aspectRatio}`,
+              `Visual: ${s.shot || ''}`,
+              `Duration ${Math.max(Number(s.estSec) || 0, 1)}s.`
+            ].join('\\n');
             const finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
             return {
               ...s,
@@ -1375,6 +1403,7 @@
         savePipelineBtn.onclick = () => {
           if (!pipelineState) return;
           savePipeline(pipelineState.payload, pipelineState.scenes, pipelineState.header);
+          updateDraftFromPipeline();
           alert('저장되었습니다.');
         };
       }
