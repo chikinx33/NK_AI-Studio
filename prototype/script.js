@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.074';
+  const APP_VERSION = '1.075';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -525,6 +525,21 @@
         const drafts = loadDraftsGlobal();
         drafts.unshift(newDraft);
         saveDraftsGlobal(drafts.slice(0, 20));
+        try {
+          fetch('/api/project/init', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId: String(id) })
+          }).then(async (res) => {
+            const text = await res.text();
+            const data = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+            if (!res.ok) {
+              console.warn('Project init failed', res.status, data);
+            }
+          }).catch(err => console.warn('Project init error', err));
+        } catch (err) {
+          console.warn('Project init error', err);
+        }
         renderDashboardDrafts();
         if (projectOverlay) projectOverlay.classList.add('hidden');
       });
