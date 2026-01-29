@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.047';
+  const APP_VERSION = '1.048';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1519,7 +1519,13 @@
         pollVideoJob(jobId, idx, 0);
       } catch (err) {
         console.error('video start fail', err);
-        pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: err?.message || '영상 생성 실패' };
+        const msg = String(err?.message || '');
+        const is404 = /^404\b/.test(msg);
+        const friendly = is404
+          ? 'API 엔드포인트를 찾을 수 없습니다(404). Cloudflare Pages Functions 개발 서버를 실행하거나 배포 환경에서 시도하세요.'
+          : (err?.message || '영상 생성 실패');
+        pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: friendly };
+        alert(friendly);
         renderPipelinePage();
         persistPipeline();
       }
