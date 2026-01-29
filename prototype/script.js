@@ -276,6 +276,16 @@
 
   document.addEventListener('DOMContentLoaded', apply);
   document.addEventListener('DOMContentLoaded', () => {
+    // 화면비 상태는 가장 먼저 초기화해서 하위 로직이 안전하게 실행되도록 함
+    const ratioButtons = document.querySelectorAll('.ratio-btn');
+    let aspectRatio = (() => {
+      try {
+        return localStorage.getItem('nk_aspect_ratio') || '16:9';
+      } catch (_) {
+        return '16:9';
+      }
+    })();
+
     try {
       const saved = localStorage.getItem('nk_theme');
       if (saved === 'light' || saved === 'dark') theme = saved;
@@ -320,8 +330,6 @@
     const loginUserKey = 'nk_login_user';
     const LOGIN_ID = 'limfactory';
     const LOGIN_PW = 'limfactory1234';
-    const ratioButtons = document.querySelectorAll('.ratio-btn');
-    let aspectRatio = localStorage.getItem('nk_aspect_ratio') || '16:9';
 
     const formatEst = sec => {
       const n = Number(sec) || 0;
