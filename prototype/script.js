@@ -101,8 +101,8 @@
       brand_title: 'NK_Studio',
       brand_subtitle: '자동화 영상 제작 파이프라인',
       nav_dashboard: '대시보드',
-      nav_scenario: '시나리오(GPT)',
-      nav_scenes: '씬 & 파이프라인',
+      nav_scenario: '시나리오',
+      nav_scenes: '영상생성',
       nav_media: '영상 편집',
       nav_voice: '더빙 · 자막',
       nav_render: '결과 대기열',
@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.068';
+  const APP_VERSION = '1.069';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
