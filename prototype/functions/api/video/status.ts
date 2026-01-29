@@ -16,6 +16,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const url = new URL(request.url);
     const jobId = (url.searchParams.get('job_id') || '').trim();
     if (!jobId) return send({ error: 'job_id is required' }, 400);
+    log('job_id_raw', jobId);
 
     const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
@@ -24,18 +25,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return send({ error: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, 500);
     }
 
-    const trimmed = jobId.replace(/^\/+/, '');
-    const locFromJobId = trimmed.match(/projects\/[^/]+\/locations\/([^/]+)/)?.[1] || 'us-central1';
-    const candidates: string[] = [];
-    if (trimmed.startsWith('projects/')) candidates.push(trimmed);
-    const m = trimmed.match(/projects\/([^/]+)\/locations\/([^/]+)\/(?:publishers\/google\/models\/[^/]+\/)?operations\/([^/]+)/i);
-    if (m) {
-      const std = `projects/${m[1]}/locations/${m[2]}/operations/${m[3]}`;
-      if (!candidates.includes(std)) candidates.push(std);
+    const decoded = (() => { try { return decodeURIComponent(jobId); } catch { return jobId; } })();
+    log('job_id_decoded', decoded);
+    const re = /^projects\/([^/]+)\/locations\/(us-central1)\/publishers\/google\/models\/([^/]+)\/operations\/([^/]+)$/;
+    const match = decoded.match(re);
+    if (!match) {
+      return send({ error: 'invalid operationName format', detail: decoded }, 400);
     }
-    if (!candidates.length) return send({ status: 'error', message: 'invalid job_id', detail: jobId }, 400);
-
-    const loc = locFromJobId || 'us-central1';
+    const endpointName = `projects/${match[1]}/locations/${match[2]}/publishers/google/models/${match[3]}`;
 
     const accessToken = await getGoogleAccessToken({
       clientEmail,
@@ -43,34 +40,25 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       scope: 'https://www.googleapis.com/auth/cloud-platform',
     });
 
-    let lastError: any = null;
-    let data: any = null;
-    for (const path of candidates) {
-      const opUrl = `https://${loc}-aiplatform.googleapis.com/v1/${path}`;
-      log('poll_try', { path });
-      const res = await fetch(opUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-      const text = await res.text();
-      if (res.ok) {
-        data = safeJson(text);
-        break;
-      } else {
-        const detail = safeJson(text);
-        const errBody = detail?.error || detail;
-        lastError = {
-          status: res.status,
-          code: errBody?.code || res.status,
-          message: errBody?.message || `operations.get failed (${res.status})`,
-          detail
-        };
-        const msg = String(lastError?.message || '');
-        const canFallback = res.status === 404 || /Operation ID must be a Long/i.test(msg);
-        log('poll_fail', { path, status: res.status, message: lastError.message });
-        if (!canFallback) break;
-      }
+    const urlFetch = `https://aiplatform.googleapis.com/v1/${endpointName}:fetchPredictOperation`;
+    log('fetchPredictOperation', { endpointName, operationName: decoded });
+    const res = await fetch(urlFetch, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operationName: decoded })
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      const detail = safeJson(text);
+      const errBody = detail?.error || detail;
+      return send({
+        status: 'error',
+        code: errBody?.code || res.status,
+        message: errBody?.message || `fetchPredictOperation failed (${res.status})`,
+        detail
+      }, res.status);
     }
-    if (!data) {
-      return send({ status: 'error', ...(lastError || { message: 'Unknown operations error' }) }, lastError?.status || 500);
-    }
+    const data = safeJson(text);
     if (!data.done) {
       return send({ status: 'processing', raw: data });
     }
@@ -111,7 +99,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       // fallback to public https path
     }
 
-    log('done', { jobId: normalizedJobId, videoUrl: videoUrl?.slice(0, 120) + '...' });
+    log('done', { jobId: decoded, videoUrl: videoUrl?.slice(0, 120) + '...' });
     return send({ status: 'done', videoUrl, gcsUri, raw: data });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
