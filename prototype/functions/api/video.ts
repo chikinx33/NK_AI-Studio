@@ -38,8 +38,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const jobId = crypto.randomUUID();
     const outputGcsUri = `${baseOutput.replace(/\/$/, "")}/${sceneId}/${jobId}/`;
 
-    const bytesBase64Encoded = extractBase64(imageDataUrl);
-    if (!bytesBase64Encoded) {
+    const parsedImage = parseDataUrl(imageDataUrl);
+    if (!parsedImage) {
       return json({ error: "imageDataUrl is invalid or missing base64 payload" }, 400);
     }
 
@@ -63,7 +63,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         instances: [
           {
             prompt: { text: promptText },
-            image: { bytesBase64Encoded },
+            image: { bytesBase64Encoded: parsedImage.base64, mimeType: parsedImage.mimeType || 'image/png' },
           },
         ],
         parameters: {
@@ -109,11 +109,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   }
 };
 
-function extractBase64(dataUrl: string) {
-  if (!dataUrl || typeof dataUrl !== "string") return "";
-  const comma = dataUrl.indexOf(",");
-  if (comma === -1) return "";
-  return dataUrl.slice(comma + 1).trim();
+function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
+  if (!dataUrl || typeof dataUrl !== "string") return null;
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const [, mime, b64] = match;
+  if (!b64) return null;
+  return { base64: b64.trim(), mimeType: mime || 'image/png' };
 }
 
 function json(data: any, status = 200) {
