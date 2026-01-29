@@ -9,6 +9,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body.projectId || "").trim();
     const confirm = String(body.confirm || "").trim() === "yes";
+    const deleteAll = String(body.all || "").trim() === "true";
     if (!projectId || !confirm) {
       return send({ error: "projectId and confirm=yes are required" }, 400);
     }
@@ -21,10 +22,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const prefix = `${basePrefix}/projects/${projectId}/`;
+    const prefix = deleteAll ? `${basePrefix}/projects/` : `${basePrefix}/projects/${projectId}/`;
 
     // Validate prefix boundaries (simple sanity check)
-    if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) {
+    if (!deleteAll && !/^[a-zA-Z0-9._-]+$/.test(projectId)) {
       return send({ error: "Invalid projectId format" }, 400);
     }
 
@@ -34,27 +35,31 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
-    // List objects
-    const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=1000`;
-    const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
-    const text = await res.text();
-    if (!res.ok) {
-      return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status);
-    }
-    const json = safeJson(text);
-    const items = Array.isArray(json.items) ? json.items : [];
-
-    // Delete each object
+    // List and delete objects with pagination
+    let pageToken = "";
     const results: Array<{ name: string; status: number }> = [];
-    for (const it of items) {
-      const name = String(it.name || "");
-      if (!name.startsWith(prefix)) continue;
-      const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}`;
-      const dres = await fetch(delUrl, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-      results.push({ name, status: dres.status });
-    }
+    let listedCount = 0;
+    do {
+      const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}`;
+      const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
+      const text = await res.text();
+      if (!res.ok) {
+        return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status);
+      }
+      const json = safeJson(text);
+      const items = Array.isArray(json.items) ? json.items : [];
+      listedCount += items.length;
+      for (const it of items) {
+        const name = String(it.name || "");
+        if (!name.startsWith(prefix)) continue;
+        const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}`;
+        const dres = await fetch(delUrl, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        results.push({ name, status: dres.status });
+      }
+      pageToken = String((json as any)?.nextPageToken || "");
+    } while (pageToken);
 
-    return send({ deletedCount: results.filter(r => r.status === 204).length, results, prefix });
+    return send({ deletedCount: results.filter(r => r.status === 204).length, listedCount, results, prefix, deleteAll });
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500);
   }
@@ -116,4 +121,3 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
-
