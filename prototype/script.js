@@ -378,6 +378,7 @@
             aspectRatio: (draft.payload && draft.payload.aspectRatio) || '16:9'
           };
           try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) {}
+          try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
           window.location.href = 'scenes.html';
           return;
         }
@@ -1153,7 +1154,13 @@
       // 우선 현재 상태가 있으면 그것으로 렌더, 없으면 저장된 값으로 초기화
       let placeholderMode = false;
       if (!pipelineState) {
-        const stored = loadPipeline();
+        const keep = (() => { try { return sessionStorage.getItem('nk_pipeline_keep') === 'true'; } catch (_) { return false; } })();
+        const stored = keep ? loadPipeline() : null;
+        if (!keep) {
+          try { localStorage.removeItem(PIPELINE_KEY); } catch (_) {}
+        } else {
+          try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) {}
+        }
         if (!stored) {
           placeholderMode = true;
           const payload = {
