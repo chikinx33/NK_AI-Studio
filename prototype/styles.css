@@ -1012,6 +1012,50 @@ body::-webkit-scrollbar {
   color: var(--text);
 }
 
+.pipeline-meta-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: nowrap;
+}
+.pipeline-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+.pipeline-meta-line {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow-x: auto;
+  text-align: right;
+}
+.pipeline-meta-line .meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.pipeline-meta-line .meta-label {
+  color: var(--muted);
+  font-size: 13px;
+}
+.pipeline-meta-line .meta-sep {
+  color: var(--muted);
+  margin: 0 2px;
+}
+.pipeline-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .side-panels {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

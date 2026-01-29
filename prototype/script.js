@@ -1071,21 +1071,28 @@
       }
 
       const { payload, scenes, savedAt, header } = pipelineState;
-      const fmtList = (label, val) => val && val.length ? `<div><span class="muted">${label}</span> ${val}</div>` : '';
+      const metaItems = [
+        ['장르', `${payload.purposeCategory || ''} ${(payload.purposeTags || []).join(', ')}`.trim()],
+        ['타겟', payload.target || ''],
+        ['니즈', (payload.needs || []).join(', ')],
+        ['톤', [(payload.tones || []).join(', '), payload.tone].filter(Boolean).join(', ')],
+        ['스타일', [(payload.styles || []).join(', '), payload.style].filter(Boolean).join(', ')],
+        ['추가 설명', payload.banned || ''],
+        ['화면비', aspectRatio],
+        ['길이', `${payload.duration || ''}s`],
+        ['저장 시각', new Date(savedAt || Date.now()).toLocaleString('ko-KR')]
+      ].filter(([, val]) => val && String(val).trim().length);
+
+      const metaLine = metaItems
+        .map(([label, val]) => `<span class="meta-item"><span class="meta-label">${label}</span> ${val}</span>`)
+        .join('<span class="meta-sep">·</span>');
+
       pipelineMeta.innerHTML = `
-        <h4 style="margin:0 0 8px;">${payload.topic || '제목 없음'}</h4>
-        <div class="meta-row" style="flex-wrap:wrap; gap:8px;">
-          ${fmtList('장르', `${payload.purposeCategory || ''} ${ (payload.purposeTags||[]).join(', ')}`)}
-          ${fmtList('타겟', payload.target || '')}
-          ${fmtList('니즈', (payload.needs||[]).join(', '))}
-          ${fmtList('톤', [(payload.tones||[]).join(', '), payload.tone].filter(Boolean).join(', '))}
-          ${fmtList('스타일', [(payload.styles||[]).join(', '), payload.style].filter(Boolean).join(', '))}
-          ${fmtList('추가 설명', payload.banned || '')}
-          <div><span class="muted">화면비</span> ${aspectRatio}</div>
-          <div><span class="muted">길이</span> ${payload.duration || ''}s</div>
-          <div><span class="muted">저장 시각</span> ${new Date(savedAt || Date.now()).toLocaleString()}</div>
+        <div class="pipeline-meta-bar">
+          <h4 class="pipeline-title">${payload.topic || '제목 없음'}</h4>
+          <div class="pipeline-meta-line">${metaLine}</div>
         </div>
-        <div class="meta-row" style="gap:8px; margin-top:6px;">
+        <div class="pipeline-actions">
           <button class="btn-secondary" id="bulk-generate">이미지 일괄 생성</button>
           <button class="btn-secondary" id="bulk-video">영상 일괄 변환</button>
         </div>`;
