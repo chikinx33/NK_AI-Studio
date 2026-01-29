@@ -247,10 +247,9 @@
   const ensureConfirmEnabled = () => {
     const confirmBtn = document.getElementById('confirm-scenes');
     if (!confirmBtn) return;
-    if (scenesState.length > 0 || forceConfirmEnable) {
-      confirmBtn.disabled = false;
-      confirmBtn.removeAttribute('disabled');
-    }
+    const enabled = scenesState.length > 0;
+    confirmBtn.disabled = !enabled;
+    if (enabled) confirmBtn.removeAttribute('disabled');
   };
 
   const applyVersionAndNav = () => {
@@ -484,12 +483,14 @@
     const renderScenes = scenes => {
       if (!cardsEl) return;
       if (!scenes || !scenes.length) {
-        cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
+        cardsEl.classList.add('empty');
+        cardsEl.innerHTML = '<div class="empty-center"><p class="muted">시나리오를 생성하세요</p></div>';
         if (saveDraftBtn) saveDraftBtn.disabled = true;
         if (cloneDraftBtn) cloneDraftBtn.disabled = true;
-        if (confirmBtn) confirmBtn.disabled = !forceConfirmEnable;
+        if (confirmBtn) confirmBtn.disabled = true;
         return;
       }
+      cardsEl.classList.remove('empty');
       scenesState = scenes;
       cardsEl.innerHTML = scenes
         .map(
@@ -696,7 +697,7 @@
       const hasScenes = scenesState.length > 0;
       if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
       if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
-      if (confirmBtn) confirmBtn.disabled = false;
+      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
       ensureConfirmEnabled();
     };
 
@@ -976,12 +977,18 @@
         // 대본 영역 초기화
         scenesState = [];
         lastPayload = null;
-        if (cardsEl) cardsEl.innerHTML = '<p class="muted">생성된 씬이 없습니다.</p>';
+        if (cardsEl) {
+          cardsEl.classList.add('empty');
+          cardsEl.innerHTML = '<div class="empty-center"><p class="muted">시나리오를 생성하세요</p></div>';
+        }
         const errBox = document.getElementById('scenario-error');
         if (errBox) errBox.classList.add('hidden');
         if (confirmBtn) confirmBtn.disabled = true;
         if (saveDraftBtn) saveDraftBtn.disabled = true;
       });
+    }
+    if (form && cardsEl) {
+      renderScenes(scenesState);
     }
 
     const parseEst = (val) => {
@@ -1165,18 +1172,7 @@
         if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
       }
-      const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
-      if (forceEnable) {
-        forceConfirmEnable = true;
-        if (confirmBtn) {
-          confirmBtn.disabled = false;
-          confirmBtn.removeAttribute('disabled');
-        }
-        sessionStorage.removeItem('nk_force_confirm_enable');
-      } else {
-        // 추가 안전망: pending 드래프트가 있었으면 컨펌을 켜준다
-        ensureConfirmEnabled();
-      }
+      ensureConfirmEnabled();
     } catch (_) {}
 
     const applyAuthGuard = () => {

@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --orange: #ff7a00;
   --teal: #0bbfa5;
   --blue: #5c7cff;
@@ -736,6 +736,18 @@ body::-webkit-scrollbar {
   scrollbar-width: none;
 }
 .scenario-cards::-webkit-scrollbar { width: 0; height: 0; }
+.scenario-cards.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+.scenario-cards.empty .empty-center {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .loading-overlay {
   position: absolute;
