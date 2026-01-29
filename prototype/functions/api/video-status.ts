@@ -15,7 +15,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     const location = 'us-central1';
-    const opPath = jobId.startsWith('projects/') ? jobId : jobId.replace(/^\\/+/, '');
+    const normalizedJobId =
+      jobId.startsWith("projects/")
+        ? jobId
+        : jobId.replace(/^\/+/, "");
+    const opPath = normalizedJobId;
     const opUrl = `https://${location}-aiplatform.googleapis.com/v1/${opPath}`;
 
     const accessToken = await getGoogleAccessToken({
