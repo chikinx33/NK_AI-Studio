@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.069';
+  const APP_VERSION = '1.070';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -347,17 +347,20 @@
       const container = document.getElementById('dashboard-drafts');
       if (!container) return;
       const drafts = loadDraftsGlobal();
-      if (!drafts.length) {
-        container.innerHTML = '<p class="muted">저장된 시나리오가 없습니다.</p>';
-        return;
-      }
       const fmtDuration = (sec) => {
         const n = Number(sec) || 0;
         if (n >= 3600 && n % 3600 === 0) return `${n/3600}h`;
         if (n >= 60 && n % 60 === 0) return `${n/60}m`;
         return `${n}s`;
       };
-      container.innerHTML = drafts.map(d => {
+      const emptyCard = `
+        <article class="draft-card empty-project-card" data-action="create-project" aria-label="새 프로젝트">
+          <div class="empty-card-content">
+            <span class="plus-icon">+</span>
+          </div>
+        </article>
+      `;
+      const list = drafts.map(d => {
         const ar = d.payload?.aspectRatio || '16:9';
         const dur = fmtDuration(d.payload?.duration || 0);
         return `
@@ -380,6 +383,7 @@
           </article>
         `;
       }).join('');
+      container.innerHTML = emptyCard + list;
     };
     renderDashboardDrafts();
 
@@ -388,10 +392,17 @@
       dashContainer.addEventListener('click', (e) => {
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
+        const action = btn.dataset.action;
+        if (action === 'create-project') {
+          const overlay = document.getElementById('project-overlay');
+          const input = document.getElementById('project-name-input');
+          if (overlay) overlay.classList.remove('hidden');
+          if (input) { input.value = ''; input.focus(); }
+          return;
+        }
         const id = Number(btn.dataset.id);
         const drafts = loadDraftsGlobal();
         const draft = drafts.find(d => d.id === id);
-        const action = btn.dataset.action;
         if (action === 'draft-delete') {
           const ok = confirm('저장된 프로젝트를 삭제하시겠습니까?');
           if (!ok) return;
@@ -429,6 +440,32 @@
             return;
           }
         }
+      });
+    }
+    const projectOverlay = document.getElementById('project-overlay');
+    const projectNameInput = document.getElementById('project-name-input');
+    const projectCancelBtn = document.getElementById('project-cancel');
+    const projectCreateBtn = document.getElementById('project-create');
+    if (projectCancelBtn) {
+      projectCancelBtn.addEventListener('click', () => {
+        if (projectOverlay) projectOverlay.classList.add('hidden');
+      });
+    }
+    if (projectCreateBtn) {
+      projectCreateBtn.addEventListener('click', () => {
+        const title = (projectNameInput && projectNameInput.value) ? projectNameInput.value.trim() : '';
+        if (!title) {
+          alert('프로젝트 이름을 입력하세요.');
+          return;
+        }
+        const id = Date.now();
+        const ratio = (() => { try { return localStorage.getItem('nk_aspect_ratio') || '16:9'; } catch (_) { return '16:9'; } })();
+        const newDraft = { id, title, payload: { topic: title, aspectRatio: ratio }, scenes: [] };
+        const drafts = loadDraftsGlobal();
+        drafts.unshift(newDraft);
+        saveDraftsGlobal(drafts.slice(0, 20));
+        renderDashboardDrafts();
+        if (projectOverlay) projectOverlay.classList.add('hidden');
       });
     }
     // 화면비 토글 초기화
@@ -1112,9 +1149,10 @@
         const payload = buildPayload(data);
         const scenes = scenesState.length ? scenesState : mockGenerate(payload);
         const drafts = loadDrafts();
-        let id = currentDraftId;
+        const id = currentDraftId;
         if (!id) {
-          id = Date.now();
+          alert('대시보드에서 프로젝트를 먼저 생성하고 선택하세요.');
+          return;
         }
         const newDraft = {
           id,
@@ -1123,13 +1161,17 @@
           scenes
         };
         const existsIdx = drafts.findIndex(d => d.id === id);
-        if (existsIdx >= 0) drafts[existsIdx] = newDraft;
-        else drafts.unshift(newDraft);
+        if (existsIdx >= 0) {
+          drafts[existsIdx] = newDraft;
+        } else {
+          alert('프로젝트를 찾을 수 없습니다. 대시보드에서 다시 선택하세요.');
+          return;
+        }
         currentDraftId = id;
         const trimmed = drafts.slice(0, 20);
         saveDrafts(trimmed);
         renderDraftNav();
-        alert(existsIdx >= 0 ? '저장되었습니다.' : '새 프로젝트로 저장되었습니다.');
+        alert('저장되었습니다.');
       });
     }
     if (cloneDraftBtn) {

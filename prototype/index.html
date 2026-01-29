@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko" data-theme="dark">
 <head>
   <meta charset="UTF-8" />
@@ -42,6 +42,20 @@
         <div class="sidebar-version">ver</div>
       </div>
     </aside>
+
+    <div id="project-overlay" class="auth-overlay hidden">
+      <div class="auth-card">
+        <p class="auth-title">새 프로젝트 생성</p>
+        <div class="form-row">
+          <label>이름</label>
+          <input id="project-name-input" placeholder="프로젝트 이름" />
+        </div>
+        <div class="option-actions">
+          <button id="project-cancel" class="btn-secondary">취소</button>
+          <button id="project-create" class="btn-primary">생성</button>
+        </div>
+      </div>
+    </div>
 
     <div id="auth-overlay" class="auth-overlay hidden">
       <div class="auth-card">
