@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.055';
+  const APP_VERSION = '1.056';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1542,6 +1542,8 @@
       const delay = (ms) => new Promise(r => setTimeout(r, ms));
       if (attempt > maxAttempts) {
         pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: '타임아웃' };
+        alert('영상 생성 실패(타임아웃)');
+        console.error('video timeout', { jobId, idx, attempt });
         renderPipelinePage();
         persistPipeline();
         return;
@@ -1557,6 +1559,8 @@
         }
         if (json.status === 'error') {
           pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: json.message || '영상 생성 실패' };
+          alert(json.message || '영상 생성 실패');
+          console.error('video status error', json);
         } else if (json.status === 'done') {
           const vid = json.videoUrl || '';
           pipelineState.scenes[idx] = {
@@ -1568,11 +1572,15 @@
           };
         } else {
           pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: '알 수 없는 상태' };
+          alert('영상 생성 실패');
+          console.error('video status unknown', json);
         }
         renderPipelinePage();
         persistPipeline();
       } catch (err) {
         pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: err?.message || 'status 실패' };
+        alert(err?.message || '영상 생성 실패');
+        console.error('video status fail', err);
         renderPipelinePage();
         persistPipeline();
       }
