@@ -366,6 +366,7 @@
         if (!draft) return;
         if (action === 'scenario-edit') {
           try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) {}
+          try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) {}
           window.location.href = 'scenario.html';
           return;
         }
@@ -1123,6 +1124,11 @@
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
+      }
+      const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
+      if (forceEnable && confirmBtn) {
+        confirmBtn.disabled = false;
+        sessionStorage.removeItem('nk_force_confirm_enable');
       }
     } catch (_) {}
 
