@@ -947,7 +947,8 @@ body::-webkit-scrollbar {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, 320px);
+  justify-content: flex-start;
   gap: 12px;
 }
 .draft-card {
