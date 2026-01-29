@@ -77,6 +77,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       data.response?.videos?.[0]?.uri ||
       data.response?.videos?.[0]?.outputUri ||
       data.response?.generatedContentUri ||
+      data.response?.predictions?.[0]?.generatedContentUri ||
+      data.response?.predictions?.[0]?.videos?.[0]?.uri ||
+      data.response?.predictions?.[0]?.videos?.[0]?.outputUri ||
+      data.response?.predictions?.[0]?.outputGcsUri ||
+      data.response?.predictions?.[0]?.outputUri ||
+      data.response?.predictions?.[0]?.uri ||
       '';
     if (!gcsUri) {
       return send({ status: 'error', message: 'No output URI found', detail: data.response || data });
