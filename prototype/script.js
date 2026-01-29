@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.030';
+  const APP_VERSION = '1.032';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -250,12 +250,21 @@
     document.querySelectorAll('.sidebar-version').forEach(el => {
       el.textContent = `ver ${APP_VERSION}`;
     });
-    // 네비게이션 활성화
-    const path = (window.location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    // 네비게이션 활성화 (확장자/슬래시/대소문자/쿼리 무시)
+    const normalize = (p) => {
+      if (!p) return 'index';
+      let clean = p.toLowerCase();
+      clean = clean.split('#')[0].split('?')[0];
+      clean = clean.replace(/\/+$/, '');
+      const base = clean.split('/').pop() || 'index';
+      return base.replace(/\.html?$/, '') || 'index';
+    };
+    const current = normalize(window.location.pathname);
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
     const match = Array.from(document.querySelectorAll('.nav-item[href]')).find(a => {
-      const href = (a.getAttribute('href') || '').toLowerCase();
-      return href === path || (path === '' && href === 'index.html');
+      const href = a.getAttribute('href') || '';
+      if (href.startsWith('#')) return false;
+      return normalize(href) === current;
     });
     if (match) match.classList.add('active');
   };
@@ -1141,7 +1150,7 @@
       if (pending) {
         const parsed = JSON.parse(pending);
         applyDraft(parsed);
-        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0;
+        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 ? true : false;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
@@ -1154,6 +1163,12 @@
           confirmBtn.removeAttribute('disabled');
         }
         sessionStorage.removeItem('nk_force_confirm_enable');
+      } else {
+        // 추가 안전망: pending 드래프트가 있었으면 컨펌을 켜준다
+        if (confirmBtn && scenesState.length > 0) {
+          confirmBtn.disabled = false;
+          confirmBtn.removeAttribute('disabled');
+        }
       }
     } catch (_) {}
 
