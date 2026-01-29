@@ -1,4 +1,4 @@
-// prototype/functions/api/video-status.ts
+// prototype/functions/api/video/status.ts
 // Poll Veo operation status and return a playable video URL (signed GCS URL if possible).
 
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
@@ -19,8 +19,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       jobId.startsWith("projects/")
         ? jobId
         : jobId.replace(/^\/+/, "");
-    const opPath = normalizedJobId;
-    const opUrl = `https://${location}-aiplatform.googleapis.com/v1/${opPath}`;
+    const opUrl = `https://${location}-aiplatform.googleapis.com/v1/${normalizedJobId}`;
 
     const accessToken = await getGoogleAccessToken({
       clientEmail,
@@ -138,7 +137,7 @@ function base64url(input: string) {
   let str = '';
   for (const b of bytes) str += String.fromCharCode(b);
   const b64 = btoa(str);
-  return b64.replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, '');
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 async function signRS256(message: string, privateKeyPem: string) {
@@ -159,7 +158,7 @@ function pemToArrayBuffer(pem: string) {
   const lines = pem
     .replace('-----BEGIN PRIVATE KEY-----', '')
     .replace('-----END PRIVATE KEY-----', '')
-    .replace(/\\s+/g, '');
+    .replace(/\s+/g, '');
   const raw = atob(lines);
   const buf = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
@@ -170,7 +169,7 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   let bin = '';
   const bytes = new Uint8Array(buf);
   for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/g, '');
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
 }
 
 async function signGcsUrl(opts: {
@@ -207,7 +206,7 @@ async function signGcsUrl(opts: {
     '',
     signedHeaders,
     'UNSIGNED-PAYLOAD'
-  ].join('\\n');
+  ].join('\n');
 
   const hashedRequest = await sha256Hex(canonicalRequest);
   const stringToSign = [
@@ -215,7 +214,7 @@ async function signGcsUrl(opts: {
     time,
     `${date}/auto/storage/goog4_request`,
     hashedRequest
-  ].join('\\n');
+  ].join('\n');
 
   const signatureB64url = await signRS256(stringToSign, opts.privateKeyPem);
   const signatureHex = b64urlToHex(signatureB64url);
