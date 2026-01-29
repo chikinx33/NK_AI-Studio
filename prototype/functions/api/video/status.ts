@@ -59,6 +59,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }, res.status);
     }
     const data = safeJson(text);
+    log('fetch_raw_response', data);
     if (!data.done) {
       return send({ status: 'processing', raw: data });
     }
@@ -85,7 +86,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       data.response?.predictions?.[0]?.uri ||
       '';
     if (!gcsUri) {
-      return send({ status: 'error', message: 'No output URI found', detail: data.response || data });
+      const resp = data.response || {};
+      const respKeys = resp && typeof resp === 'object' ? Object.keys(resp) : [];
+      log('no_output_uri', { keys: respKeys, hasPredictions: !!resp?.predictions, hasVideos: !!resp?.videos });
+      return send({
+        status: 'error',
+        code: (data.error?.code || resp?.error?.code || 500),
+        message: 'No output URI found',
+        detail: { response: resp, raw: data }
+      });
     }
 
     let videoUrl = gcsToHttps(gcsUri);
