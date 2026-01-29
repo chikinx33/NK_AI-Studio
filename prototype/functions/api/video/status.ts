@@ -3,6 +3,7 @@
 
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
 (globalThis as any).g = globalThis;
+type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const send = (data: any, status = 200) =>
   new Response(JSON.stringify(data), {
     status,
@@ -72,7 +73,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       });
     }
 
-    const gcsUri =
+    let gcsUri =
       data.response?.outputUri ||
       data.response?.outputGcsUri ||
       data.response?.videos?.[0]?.uri ||
@@ -86,11 +87,25 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       data.response?.predictions?.[0]?.uri ||
       '';
     if (!gcsUri) {
+      const alt =
+        data.response?.generatedVideos?.[0]?.video?.uri ||
+        data.response?.generatedVideos?.[0]?.video?.outputUri ||
+        data.response?.generatedVideos?.[0]?.uri ||
+        data.response?.generatedVideos?.[0]?.outputUri ||
+        data.response?.files?.[0]?.gcsUri ||
+        data.response?.files?.[0]?.uri ||
+        data.response?.outputUris?.[0] ||
+        '';
+      if (alt) gcsUri = alt;
+    }
+    if (!gcsUri) {
       const resp = data.response || {};
       const base64Vid =
         resp?.videos?.[0]?.bytesBase64Encoded ||
         resp?.predictions?.[0]?.videos?.[0]?.bytesBase64Encoded ||
         resp?.predictions?.[0]?.generatedVideos?.[0]?.bytesBase64Encoded ||
+        resp?.generatedVideos?.[0]?.video?.bytesBase64Encoded ||
+        resp?.generatedVideos?.[0]?.bytesBase64Encoded ||
         '';
       if (base64Vid) {
         try {
@@ -238,7 +253,7 @@ function base64url(input: string) {
   let str = '';
   for (const b of bytes) str += String.fromCharCode(b);
   const b64 = btoa(str);
-  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return b64.replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
 async function signRS256(message: string, privateKeyPem: string) {
@@ -259,7 +274,7 @@ function pemToArrayBuffer(pem: string) {
   const lines = pem
     .replace('-----BEGIN PRIVATE KEY-----', '')
     .replace('-----END PRIVATE KEY-----', '')
-    .replace(/\s+/g, '');
+    .split(/\s+/).join('');
   const raw = atob(lines);
   const buf = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
@@ -270,7 +285,7 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   let bin = '';
   const bytes = new Uint8Array(buf);
   for (const b of bytes) bin += String.fromCharCode(b);
-  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+  return btoa(bin).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
 }
 
 function base64ToUint8(b64: string) {

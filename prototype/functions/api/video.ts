@@ -4,6 +4,7 @@
 
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
 (globalThis as any).g = globalThis;
+type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const log = (...args: any[]) => console.log('[video]', ...args);
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
@@ -184,7 +185,7 @@ function base64url(input: string) {
   let str = "";
   for (const b of bytes) str += String.fromCharCode(b);
   const b64 = btoa(str);
-  return b64.replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return b64.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 async function signRS256(message: string, privateKeyPem: string) {
@@ -209,14 +210,14 @@ async function signRS256(message: string, privateKeyPem: string) {
   let bin = "";
   for (const b of sigBytes) bin += String.fromCharCode(b);
   const b64 = btoa(bin);
-  return b64.replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return b64.replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
 function pemToArrayBuffer(pem: string) {
   const lines = pem
     .replace("-----BEGIN PRIVATE KEY-----", "")
     .replace("-----END PRIVATE KEY-----", "")
-    .replace(/\\s+/g, "");
+    .split(/\s+/).join("");
   const raw = atob(lines);
   const buf = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
