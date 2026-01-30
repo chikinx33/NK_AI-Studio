@@ -45,7 +45,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     let listedCount = 0;
     do {
       const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=1000${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
-      const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(listUrl, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(userProject ? { "X-Goog-User-Project": userProject } : {})
+        }
+      });
       const text = await res.text();
       if (!res.ok) {
         return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status);
@@ -57,7 +62,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const name = String(it.name || "");
         if (!name.startsWith(prefix)) continue;
         const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
-        const dres = await fetch(delUrl, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+        const dres = await fetch(delUrl, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(userProject ? { "X-Goog-User-Project": userProject } : {})
+          }
+        });
         results.push({ name, status: dres.status });
       }
       pageToken = String((json as any)?.nextPageToken || "");
