@@ -24,7 +24,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const safeName = (file.name || "video.mp4").replace(/[^a-zA-Z0-9._-]+/g, "_");
     const stamp = Date.now();
-    const objectName = `${basePrefix}/projects/${projectId}/videos/${sceneId}/${stamp}-${safeName}`;
+    const objectName = `${basePrefix}/projects/${projectId}/videos/${stamp}-scene-${sceneId}-${safeName}`;
 
     const token = await getGoogleAccessToken({
       clientEmail,
@@ -154,4 +154,3 @@ function b64urlToHex(b64url: string) {
   const bin = atob(b64);
   return Array.from(bin).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
 }
-

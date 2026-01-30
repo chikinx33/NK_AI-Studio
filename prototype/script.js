@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.087';
+  const APP_VERSION = '1.089';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1632,6 +1632,53 @@
       persistPipeline();
     };
 
+    const uploadImageForIdx = async (idx) => {
+      if (!pipelineState) return;
+      const pid = pipelineState.draftId || '';
+      if (!pid) { alert('프로젝트를 먼저 선택하세요.'); return; }
+      const scene = pipelineState.scenes[idx];
+      const fi = document.createElement('input');
+      fi.type = 'file';
+      fi.accept = 'image/*';
+      fi.onchange = async (ev) => {
+        const target = ev.target;
+        const file = target && target.files && target.files[0] ? target.files[0] : null;
+        if (!file) return;
+        pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
+        renderPipelinePage();
+        persistPipeline();
+        const fd = new FormData();
+        fd.append('projectId', pid);
+        fd.append('file', file);
+        try {
+          const res = await fetch('/api/image/upload', { method: 'POST', body: fd });
+          const text = await res.text();
+          if (!res.ok) {
+            const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+            throw new Error(`${res.status} ${detail || 'upload_error'}`);
+          }
+          const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+          const url = String(json.signedUrl || '');
+          pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], imageDataUrl: url, imgLoading: false, imgError: '' };
+          renderPipelinePage();
+          persistPipeline();
+          const libModal = document.getElementById('lib-modal');
+          if (libModal && !libModal.classList.contains('hidden')) {
+            await openLibrary('image', idx);
+          }
+        } catch (err) {
+          const msg = String(err?.message || '');
+          const is404 = /^404\b/.test(msg);
+          const friendly = is404 ? 'API 엔드포인트를 찾을 수 없습니다(404). Cloudflare Pages Functions 개발 서버를 실행하거나 배포 환경에서 시도하세요.' : '업로드 실패';
+          pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: friendly };
+          alert(friendly);
+          renderPipelinePage();
+          persistPipeline();
+        }
+      };
+      fi.click();
+    };
+
     const startVideoForIdx = async (idx) => {
       if (!pipelineState) return;
       const scene = pipelineState.scenes[idx];
@@ -1684,6 +1731,53 @@
         renderPipelinePage();
         persistPipeline();
       }
+    };
+    const uploadVideoForIdx = async (idx) => {
+      if (!pipelineState) return;
+      const pid = pipelineState.draftId || '';
+      if (!pid) { alert('프로젝트를 먼저 선택하세요.'); return; }
+      const scene = pipelineState.scenes[idx];
+      const fi = document.createElement('input');
+      fi.type = 'file';
+      fi.accept = 'video/*';
+      fi.onchange = async (ev) => {
+        const target = ev.target;
+        const file = target && target.files && target.files[0] ? target.files[0] : null;
+        if (!file) return;
+        pipelineState.scenes[idx] = { ...scene, videoStatus: 'processing', videoError: '', videoUrl: '' };
+        renderPipelinePage();
+        persistPipeline();
+        const fd = new FormData();
+        fd.append('projectId', pid);
+        fd.append('sceneId', String(scene.id));
+        fd.append('file', file);
+        try {
+          const res = await fetch('/api/video/upload', { method: 'POST', body: fd });
+          const text = await res.text();
+          if (!res.ok) {
+            const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+            throw new Error(`${res.status} ${detail || 'upload_error'}`);
+          }
+          const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+          const url = String(json.signedUrl || '');
+          pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], videoUrl: url, videoStatus: 'done', videoError: '' };
+          renderPipelinePage();
+          persistPipeline();
+          const libModal = document.getElementById('lib-modal');
+          if (libModal && !libModal.classList.contains('hidden')) {
+            await openLibrary('video', idx);
+          }
+        } catch (err) {
+          const msg = String(err?.message || '');
+          const is404 = /^404\b/.test(msg);
+          const friendly = is404 ? 'API 엔드포인트를 찾을 수 없습니다(404). Cloudflare Pages Functions 개발 서버를 실행하거나 배포 환경에서 시도하세요.' : '업로드 실패';
+          pipelineState.scenes[idx] = { ...scene, videoStatus: 'error', videoError: friendly };
+          alert(friendly);
+          renderPipelinePage();
+          persistPipeline();
+        }
+      };
+      fi.click();
     };
     const pixelateDataUrl = (dataUrl, pixel = 8) => new Promise((resolve, reject) => {
       const img = new Image();
@@ -1855,7 +1949,7 @@
       const scene = pipelineState.scenes[idx];
       const url = kind === 'image'
         ? `/api/image/library?projectId=${encodeURIComponent(pid)}`
-        : `/api/video/library?projectId=${encodeURIComponent(pid)}&sceneId=${encodeURIComponent(scene.id)}`;
+        : `/api/video/library?projectId=${encodeURIComponent(pid)}`;
       try {
         const res = await fetch(url);
         const text = await res.text();
@@ -2031,6 +2125,10 @@
             await openLibrary('image', idx);
             return;
           }
+          if (action === 'upload-image') {
+            await uploadImageForIdx(idx);
+            return;
+          }
           if (action === 'video') {
             await startVideoForIdx(idx);
             return;
@@ -2041,6 +2139,10 @@
           }
           if (action === 'library-video') {
             await openLibrary('video', idx);
+            return;
+          }
+          if (action === 'upload-video') {
+            await uploadVideoForIdx(idx);
             return;
           }
           if (action === 'open-video') {

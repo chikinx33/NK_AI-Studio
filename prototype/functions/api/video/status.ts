@@ -130,9 +130,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
           if (outParsed) {
             const objectBase = outParsed.object.replace(/\/$/, '');
-            const objectName = projectTag && sceneIdParam
-              ? `${objectBase}/projects/${projectTag}/videos/${sceneIdParam}/manual/${match[4]}.mp4`
-              : `${objectBase}/manual/${match[4]}.mp4`;
+            const objectName = projectTag
+              ? `${objectBase}/projects/${projectTag}/videos/${match[4]}.mp4`
+              : `${objectBase}/videos/${match[4]}.mp4`;
             const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
             const uploadRes = await fetch(uploadUrl, {
               method: 'POST',

@@ -23,7 +23,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const prefix = `${basePrefix}/projects/${projectId}/videos/${sceneId ? `${sceneId}/` : ""}`;
+    const prefix = `${basePrefix}/projects/${projectId}/videos/`;
 
     const token = await getGoogleAccessToken({
       clientEmail,
