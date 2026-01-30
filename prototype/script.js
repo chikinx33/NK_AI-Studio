@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.079';
+  const APP_VERSION = '1.080';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -437,21 +437,25 @@
         if (action === 'draft-delete') {
           const ok = confirm('저장된 프로젝트를 삭제하시겠습니까?');
           if (!ok) return;
+          let storageDeleted = false;
           try {
-            await fetch('/api/project/delete', {
+            const res = await fetch('/api/project/delete', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ projectId: String(id), confirm: 'yes' })
-            }).then(async (res) => {
-              const t = await res.text();
-              const j = (() => { try { return JSON.parse(t); } catch (_) { return {}; } })();
-              if (!res.ok) {
-                alert(`스토리지 삭제 실패: ${res.status}`);
-              }
-            }).catch(() => {
-              alert('스토리지 삭제 요청 실패');
             });
-          } catch (_) {}
+            const t = await res.text();
+            const j = (() => { try { return JSON.parse(t); } catch (_) { return {}; } })();
+            if (!res.ok) {
+              const msg = j?.error?.message || j?.error || t || '';
+              alert(`스토리지 삭제 실패: ${res.status}` + (msg ? `\n${msg}` : ''));
+            } else {
+              storageDeleted = true;
+            }
+          } catch (err) {
+            alert('스토리지 삭제 요청 실패');
+          }
+          if (!storageDeleted) return;
           saveDraftsGlobal(drafts.filter(d => d.id !== id));
           renderDashboardDrafts();
           alert('삭제되었습니다.');
