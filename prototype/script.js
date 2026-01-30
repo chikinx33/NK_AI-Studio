@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.104';
+  const APP_VERSION = '1.106';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -1744,11 +1744,15 @@
         const target = ev.target;
         const file = target && target.files && target.files[0] ? target.files[0] : null;
         if (!file) return;
+        // 업로드 시점에 현재 pipelineState.draftId를 다시 확인
+        const currentPid = pipelineState.draftId || '';
+        if (!currentPid) { alert('프로젝트 ID를 찾을 수 없습니다.'); return; }
+        console.log('[uploadImage] projectId:', currentPid, 'file:', file.name);
         pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
         renderPipelinePage();
         persistPipeline();
         const fd = new FormData();
-        fd.append('projectId', pid);
+        fd.append('projectId', currentPid);
         fd.append('file', file);
         try {
           const res = await fetch('/api/image/upload', { method: 'POST', body: fd });
@@ -1844,11 +1848,15 @@
         const target = ev.target;
         const file = target && target.files && target.files[0] ? target.files[0] : null;
         if (!file) return;
+        // 업로드 시점에 현재 pipelineState.draftId를 다시 확인
+        const currentPid = pipelineState.draftId || '';
+        if (!currentPid) { alert('프로젝트 ID를 찾을 수 없습니다.'); return; }
+        console.log('[uploadVideo] projectId:', currentPid, 'sceneId:', scene.id, 'file:', file.name);
         pipelineState.scenes[idx] = { ...scene, videoStatus: 'processing', videoError: '', videoUrl: '' };
         renderPipelinePage();
         persistPipeline();
         const fd = new FormData();
-        fd.append('projectId', pid);
+        fd.append('projectId', currentPid);
         fd.append('sceneId', String(scene.id));
         fd.append('file', file);
         try {
@@ -2193,8 +2201,55 @@
           }
           // 삭제/다운로드 공통 처리
           if (action === 'delete-image') {
-            pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
-            renderPipelinePage();
+            if (!scene.imageDataUrl) {
+              alert('삭제할 이미지가 없습니다.');
+              return;
+            }
+            // 확인 메시지
+            const confirmed = confirm('이미지를 삭제하시겠습니까?\n스토리지에서 완전히 삭제되며 복구할 수 없습니다.');
+            if (!confirmed) return;
+
+            const pid = pipelineState.draftId || '';
+            if (!pid) {
+              alert('프로젝트 ID를 찾을 수 없습니다.');
+              return;
+            }
+
+            try {
+              // API 호출하여 스토리지에서 삭제
+              const imageUrl = scene.imageDataUrl;
+              console.log('[deleteImage] projectId:', pid, 'imageUrl:', imageUrl);
+
+              const res = await fetch('/api/image/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: pid, imageUrl })
+              });
+
+              if (!res.ok) {
+                const text = await res.text();
+                const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+                throw new Error(`${res.status} ${detail || 'delete_error'}`);
+              }
+
+              // UI에서도 제거
+              pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
+              renderPipelinePage();
+              persistPipeline();
+            } catch (err) {
+              console.error('이미지 삭제 실패:', err);
+              const msg = String(err?.message || '');
+              const is404 = /^404\b/.test(msg);
+              if (is404) {
+                // 404면 API가 없거나 이미 삭제된 상태이므로 UI에서만 제거
+                alert('삭제 API를 찾을 수 없습니다. UI에서만 제거합니다.');
+                pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
+                renderPipelinePage();
+                persistPipeline();
+              } else {
+                alert('이미지 삭제 실패: ' + msg);
+              }
+            }
             return;
           }
           if (action === 'download-image') {
@@ -2250,16 +2305,69 @@
             return;
           }
           if (action === 'delete-video') {
-            pipelineState.scenes[idx] = {
-              ...scene,
-              videoUrl: '',
-              videoStatus: '',
-              videoError: '',
-              videoJobId: '',
-              videoMethod: ''
-            };
-            renderPipelinePage();
-            persistPipeline();
+            if (!scene.videoUrl) {
+              alert('삭제할 영상이 없습니다.');
+              return;
+            }
+            // 확인 메시지
+            const confirmed = confirm('영상을 삭제하시겠습니까?\n스토리지에서 완전히 삭제되며 복구할 수 없습니다.');
+            if (!confirmed) return;
+
+            const pid = pipelineState.draftId || '';
+            if (!pid) {
+              alert('프로젝트 ID를 찾을 수 없습니다.');
+              return;
+            }
+
+            try {
+              // API 호출하여 스토리지에서 삭제
+              const videoUrl = scene.videoUrl;
+              console.log('[deleteVideo] projectId:', pid, 'videoUrl:', videoUrl);
+
+              const res = await fetch('/api/video/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: pid, videoUrl })
+              });
+
+              if (!res.ok) {
+                const text = await res.text();
+                const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
+                throw new Error(`${res.status} ${detail || 'delete_error'}`);
+              }
+
+              // UI에서도 제거
+              pipelineState.scenes[idx] = {
+                ...scene,
+                videoUrl: '',
+                videoStatus: '',
+                videoError: '',
+                videoJobId: '',
+                videoMethod: ''
+              };
+              renderPipelinePage();
+              persistPipeline();
+            } catch (err) {
+              console.error('영상 삭제 실패:', err);
+              const msg = String(err?.message || '');
+              const is404 = /^404\b/.test(msg);
+              if (is404) {
+                // 404면 API가 없거나 이미 삭제된 상태이므로 UI에서만 제거
+                alert('삭제 API를 찾을 수 없습니다. UI에서만 제거합니다.');
+                pipelineState.scenes[idx] = {
+                  ...scene,
+                  videoUrl: '',
+                  videoStatus: '',
+                  videoError: '',
+                  videoJobId: '',
+                  videoMethod: ''
+                };
+                renderPipelinePage();
+                persistPipeline();
+              } else {
+                alert('영상 삭제 실패: ' + msg);
+              }
+            }
             return;
           }
           if (action === 'video') {
