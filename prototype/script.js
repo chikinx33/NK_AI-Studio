@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.108';
+  const APP_VERSION = '1.110';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -2216,14 +2216,27 @@
             }
 
             try {
-              // API 호출하여 스토리지에서 삭제
-              const imageUrl = scene.imageDataUrl;
-              console.log('[deleteImage] projectId:', pid, 'imageUrl:', imageUrl);
+              // API 호출하여 스토리지에서 삭제 (/api/project/delete 사용)
+              // URL에서 파일명 추출
+              const getFileName = (u) => {
+                try {
+                  const urlObj = new URL(u);
+                  const path = urlObj.pathname;
+                  const parts = path.split('/');
+                  return decodeURIComponent(parts[parts.length - 1]);
+                } catch (_) {
+                  const parts = u.split(/[?#]/)[0].split('/');
+                  return decodeURIComponent(parts[parts.length - 1]);
+                }
+              };
 
-              const res = await fetch('/api/image/delete', {
+              const objectName = getFileName(scene.imageDataUrl);
+              console.log('[deleteImage] projectId:', pid, 'objectName:', objectName);
+
+              const res = await fetch('/api/project/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: pid, imageUrl })
+                body: JSON.stringify({ projectId: pid, confirm: 'yes', objectName })
               });
 
               if (!res.ok) {
@@ -2328,14 +2341,26 @@
             }
 
             try {
-              // API 호출하여 스토리지에서 삭제
-              const videoUrl = scene.videoUrl;
-              console.log('[deleteVideo] projectId:', pid, 'videoUrl:', videoUrl);
+              // API 호출하여 스토리지에서 삭제 (/api/project/delete 사용)
+              const getFileName = (u) => {
+                try {
+                  const urlObj = new URL(u);
+                  const path = urlObj.pathname;
+                  const parts = path.split('/');
+                  return decodeURIComponent(parts[parts.length - 1]);
+                } catch (_) {
+                  const parts = u.split(/[?#]/)[0].split('/');
+                  return decodeURIComponent(parts[parts.length - 1]);
+                }
+              };
 
-              const res = await fetch('/api/video/delete', {
+              const objectName = getFileName(scene.videoUrl);
+              console.log('[deleteVideo] projectId:', pid, 'objectName:', objectName);
+
+              const res = await fetch('/api/project/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: pid, videoUrl })
+                body: JSON.stringify({ projectId: pid, confirm: 'yes', objectName })
               });
 
               if (!res.ok) {
