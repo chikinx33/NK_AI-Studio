@@ -39,6 +39,24 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       (env.GOOGLE_PROJECT_ID as string | undefined) ||
       "";
 
+    const objectName = String((body.objectName || body.object || "")).trim();
+    if (objectName) {
+      const allowedPrefix = `${basePrefix}/projects/${projectId}/`;
+      if (!objectName.startsWith(allowedPrefix)) {
+        return send({ error: "Invalid objectName for project" }, 400);
+      }
+      const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
+      const dres = await fetch(delUrl, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(userProject ? { "X-Goog-User-Project": userProject } : {})
+        }
+      });
+      const status = dres.status;
+      return send({ deletedCount: status === 204 ? 1 : 0, results: [{ name: objectName, status }], single: true });
+    }
+
     // List and delete objects with pagination
     let pageToken = "";
     const results: Array<{ name: string; status: number }> = [];

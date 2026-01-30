@@ -16,8 +16,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const basePrefix = outParsed.object.replace(/\/$/, "")
     const prefix = `${basePrefix}/projects/${projectId}/image/`
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" })
-    const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=500`
-    const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}` } })
+    const userProject =
+      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+      (env.GOOGLE_PROJECT_ID as string | undefined) ||
+      ""
+    const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=500${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`
+    const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) } })
     const text = await res.text()
     if (!res.ok) {
       return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status)

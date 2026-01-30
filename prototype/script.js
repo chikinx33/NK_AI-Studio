@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.085';
+  const APP_VERSION = '1.086';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -1514,10 +1514,10 @@
               <button class="btn-secondary compact" data-action="copy-image" data-id="${s.id}">복사</button>
               <button class="btn-secondary compact" data-action="paste-image" data-id="${s.id}">붙여넣기</button>
               <button class="btn-secondary compact" data-action="upload-image" data-id="${s.id}">업로드</button>
-              <button class="btn-secondary compact" data-action="download-image" data-id="${s.id}">라이브러리</button>
+              <button class="btn-secondary compact" data-action="library-image" data-id="${s.id}">라이브러리</button>
               <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 변환</button>
               <button class="btn-secondary compact" data-action="upload-video" data-id="${s.id}">업로드</button>
-              <button class="btn-secondary compact" data-action="library" data-id="${s.id}">라이브러리</button>
+              <button class="btn-secondary compact" data-action="library-video" data-id="${s.id}">라이브러리</button>
               <button class="btn-secondary compact" data-action="download-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>영상 다운로드</button>
             </div></div>
           </div>`;
@@ -1871,6 +1871,94 @@
       }
     };
 
+    async function openLibrary(kind, idx) {
+      if (!pipelineState) return;
+      const pid = pipelineState.draftId || '';
+      if (!pid) { alert('프로젝트를 먼저 선택하세요.'); return; }
+      const scene = pipelineState.scenes[idx];
+      const url = kind === 'image'
+        ? `/api/image/library?projectId=${encodeURIComponent(pid)}`
+        : `/api/video/library?projectId=${encodeURIComponent(pid)}&sceneId=${encodeURIComponent(scene.id)}`;
+      try {
+        const res = await fetch(url);
+        const text = await res.text();
+        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+        if (!res.ok) {
+          alert('라이브러리 조회 실패');
+          return;
+        }
+        const items = Array.isArray(json.items) ? json.items : [];
+        const libModal = document.getElementById('lib-modal');
+        const content = libModal ? libModal.querySelector('.lib-content') : null;
+        if (!libModal || !content) return;
+        const head = `<div class="card-top"><h5>${kind === 'image' ? '이미지 라이브러리' : '영상 라이브러리'}</h5><div class="right"><button class="btn-ghost" data-lib-close>닫기</button></div></div>`;
+        const grid = `<div class="lib-grid">${items.map(it => {
+          const name = String(it.name || '');
+          const sUrl = String(it.signedUrl || '');
+          const thumb = kind === 'image' ? `<img class="lib-thumb" src="${sUrl}" alt="${name}" />` : `<video class="lib-thumb" src="${sUrl}" preload="metadata"></video>`;
+          return `<div class="lib-item" data-name="${encodeURIComponent(name)}" data-url="${encodeURIComponent(sUrl)}" data-kind="${kind}">
+            ${thumb}
+            <div class="lib-meta"><span class="lib-name">${name.split('/').pop()}</span></div>
+            <div class="lib-actions">
+              <button class="btn-secondary compact" data-lib-use>사용</button>
+              <button class="btn-ghost compact" data-lib-delete>삭제</button>
+            </div>
+          </div>`;
+        }).join('')}</div>`;
+        content.innerHTML = head + grid;
+        libModal.classList.remove('hidden');
+        content.onclick = async (e) => {
+          const closeBtn = e.target.closest('[data-lib-close]');
+          if (closeBtn) {
+            libModal.classList.add('hidden');
+            return;
+          }
+          const useBtn = e.target.closest('[data-lib-use]');
+          const delBtn = e.target.closest('[data-lib-delete]');
+          const item = e.target.closest('.lib-item');
+          if (!item) return;
+          const name = decodeURIComponent(item.dataset.name || '');
+          const signed = decodeURIComponent(item.dataset.url || '');
+          const k = item.dataset.kind || kind;
+          if (useBtn) {
+            if (k === 'image') {
+              pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], imageDataUrl: signed, imgError: '', imgLoading: false };
+            } else {
+              pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], videoUrl: signed, videoStatus: 'done', videoError: '' };
+            }
+            renderPipelinePage();
+            persistPipeline();
+            libModal.classList.add('hidden');
+            return;
+          }
+          if (delBtn) {
+            if (!confirm('삭제하시겠습니까?')) return;
+            try {
+              const res = await fetch('/api/project/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectId: pid, confirm: 'yes', objectName: name })
+              });
+              const text = await res.text();
+              const ok = res.ok;
+              const j = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+              if (!ok) {
+                alert('삭제 실패');
+                return;
+              }
+              item.remove();
+              alert('삭제했습니다.');
+            } catch (_) {
+              alert('삭제 실패');
+            }
+            return;
+          }
+        };
+      } catch (_) {
+        alert('라이브러리 조회 실패');
+      }
+    }
+
     // 이미지 재생성/복사/붙여넣기/삭제/다운로드 (Imagen) - 파이프라인 페이지 전용
     if (pipelineScenes) {
       pipelineScenes.addEventListener('click', async (e) => {
@@ -1953,20 +2041,14 @@
             renderPipelinePage();
             return;
           }
-          if (action === 'download-image') {
-            if (!scene.imageDataUrl) {
-              alert('다운로드할 이미지가 없습니다.');
-              return;
-            }
-            const a = document.createElement('a');
-            a.href = scene.imageDataUrl;
-            a.download = `scene-${scene.id}.png`;
-            a.click();
-            return;
-          }
+          
 
           if (action === 'regen-image') {
             await generateImageForIdx(idx);
+            return;
+          }
+          if (action === 'library-image') {
+            await openLibrary('image', idx);
             return;
           }
           if (action === 'video') {
@@ -1975,6 +2057,10 @@
           }
           if (action === 'video-safe') {
             await startVideoForIdxSafe(idx);
+            return;
+          }
+          if (action === 'library-video') {
+            await openLibrary('video', idx);
             return;
           }
           if (action === 'open-video') {
