@@ -5,7 +5,7 @@
       brand_subtitle: 'Automated Video Pipeline',
       nav_dashboard: 'Dashboard',
       nav_scenario: 'Scenario (GPT)',
-      nav_scenes: 'Scenes & Pipelines',
+      nav_scenes: 'Video Production',
       nav_media: 'Media Lab',
       nav_voice: 'Voice & Subtitles',
       nav_render: 'Results Queue',
@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.112';
+  const APP_VERSION = '1.113';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
