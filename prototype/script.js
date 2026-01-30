@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.107';
+  const APP_VERSION = '1.108';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -2240,14 +2240,22 @@
               console.error('이미지 삭제 실패:', err);
               const msg = String(err?.message || '');
               const is404 = /^404\b/.test(msg);
-              if (is404) {
-                // 404면 API가 없거나 이미 삭제된 상태이므로 UI에서만 제거
-                alert('삭제 API를 찾을 수 없습니다. UI에서만 제거합니다.');
+              const is405 = /^405\b/.test(msg);
+
+              if (is404 || is405) {
+                // 404/405면 API 문제이므로 UI에서만 제거
+                const code = is404 ? '404' : '405';
+                alert(`스토리지 삭제 API 오류(${code}). UI에서만 제거합니다.`);
                 pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
                 renderPipelinePage();
                 persistPipeline();
               } else {
-                alert('이미지 삭제 실패: ' + msg);
+                // 그 외 에러는 사용자에게 선택권 부여
+                if (confirm(`이미지 삭제 실패: ${msg}\n\n스토리지 삭제에 실패했습니다. 목록에서 강제로 제거하시겠습니까?`)) {
+                  pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
+                  renderPipelinePage();
+                  persistPipeline();
+                }
               }
             }
             return;
@@ -2351,9 +2359,12 @@
               console.error('영상 삭제 실패:', err);
               const msg = String(err?.message || '');
               const is404 = /^404\b/.test(msg);
-              if (is404) {
-                // 404면 API가 없거나 이미 삭제된 상태이므로 UI에서만 제거
-                alert('삭제 API를 찾을 수 없습니다. UI에서만 제거합니다.');
+              const is405 = /^405\b/.test(msg);
+
+              if (is404 || is405) {
+                // 404/405면 API 문제이므로 UI에서만 제거
+                const code = is404 ? '404' : '405';
+                alert(`스토리지 삭제 API 오류(${code}). UI에서만 제거합니다.`);
                 pipelineState.scenes[idx] = {
                   ...scene,
                   videoUrl: '',
@@ -2365,7 +2376,19 @@
                 renderPipelinePage();
                 persistPipeline();
               } else {
-                alert('영상 삭제 실패: ' + msg);
+                // 그 외 에러는 사용자에게 선택권 부여
+                if (confirm(`영상 삭제 실패: ${msg}\n\n스토리지 삭제에 실패했습니다. 목록에서 강제로 제거하시겠습니까?`)) {
+                  pipelineState.scenes[idx] = {
+                    ...scene,
+                    videoUrl: '',
+                    videoStatus: '',
+                    videoError: '',
+                    videoJobId: '',
+                    videoMethod: ''
+                  };
+                  renderPipelinePage();
+                  persistPipeline();
+                }
               }
             }
             return;
