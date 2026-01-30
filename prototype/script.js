@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.093';
+  const APP_VERSION = '1.094';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
