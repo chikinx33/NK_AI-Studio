@@ -201,6 +201,9 @@
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
   const APP_VERSION = '1.093';
+  let scenesState = [];
+  let lastPayload = null;
+  let pipelineState = null;
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육', '키즈 놀이', '키즈 학습', '동요', '율동', '동화'],
     '스토리 · 서사': ['동화', '창작', '에피소드', '세계관', '판타지', '힐링'],
@@ -597,9 +600,7 @@
       });
     }
 
-    let scenesState = [];
-    let lastPayload = null;
-    let pipelineState = null;
+
 
     const draftNav = null;
     const saveDraftBtn = document.getElementById('save-draft');
@@ -1451,7 +1452,7 @@
           const videoCard = (() => {
             if (updatedScene.videoUrl) {
               const note = updatedScene.videoMethod === 'inline' ? `<div class="video-note">생성 성공(인라인 반환)</div>` : '';
-              return `<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata" crossorigin="anonymous"><source src="${updatedScene.videoUrl}" type="video/mp4" /></video>${note}</div>`;
+              return `<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="${updatedScene.videoUrl}" type="video/mp4" /></video>${note}</div>`;
             }
             if (updatedScene.videoStatus === 'processing') {
               return `<div class="video-placeholder loading"><span>영상 생성중...</span></div>`;
