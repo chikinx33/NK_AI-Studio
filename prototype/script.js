@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.124';
+  const APP_VERSION = '1.125';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -1727,6 +1727,69 @@
         window.location.href = 'media.html';
       });
     }
+    const refreshAssetUrls = async () => {
+      if (!pipelineState || !pipelineState.scenes || !pipelineState.scenes.length) return;
+      if (pipelineState._assetsRefreshed) return;
+      const pid = pipelineState.draftId || '';
+      if (!pid) return;
+      const needImg = pipelineState.scenes.some(s => s.imageDataUrl && !String(s.imageDataUrl).startsWith('data:'));
+      const needVid = pipelineState.scenes.some(s => s.videoUrl && !String(s.videoUrl).startsWith('data:'));
+      if (!needImg && !needVid) return;
+      try {
+        const [imgRes, vidRes] = await Promise.all([
+          needImg ? fetch(`/api/image/library?projectId=${encodeURIComponent(pid)}`) : null,
+          needVid ? fetch(`/api/video/library?projectId=${encodeURIComponent(pid)}`) : null
+        ]);
+        const imgItems = (() => {
+          if (!imgRes) return [];
+          try { return (JSON.parse(await imgRes.text()).items) || []; } catch (_) { return []; }
+        })();
+        const vidItems = (() => {
+          if (!vidRes) return [];
+          try { return (JSON.parse(await vidRes.text()).items) || []; } catch (_) { return []; }
+        })();
+        const baseName = (u) => {
+          try {
+            const urlObj = new URL(String(u));
+            const path = urlObj.pathname;
+            const parts = path.split('/');
+            return decodeURIComponent(parts[parts.length - 1]);
+          } catch (_) {
+            const parts = String(u).split(/[?#]/)[0].split('/');
+            return decodeURIComponent(parts[parts.length - 1]);
+          }
+        };
+        const imgMap = new Map(imgItems.map(it => [String(it.name || '').split('/').pop(), String(it.signedUrl || '')]));
+        const vidMap = new Map(vidItems.map(it => [String(it.name || '').split('/').pop(), String(it.signedUrl || '')]));
+        let changed = false;
+        pipelineState.scenes = pipelineState.scenes.map(s => {
+          let next = s;
+          if (needImg && s.imageDataUrl && !String(s.imageDataUrl).startsWith('data:')) {
+            const bn = baseName(s.imageDataUrl);
+            const signed = imgMap.get(bn);
+            if (signed && signed !== s.imageDataUrl) {
+              next = { ...next, imageDataUrl: signed };
+              changed = true;
+            }
+          }
+          if (needVid && s.videoUrl && !String(s.videoUrl).startsWith('data:')) {
+            const bn = baseName(s.videoUrl);
+            const signed = vidMap.get(bn);
+            if (signed && signed !== s.videoUrl) {
+              next = { ...next, videoUrl: signed, videoStatus: 'done', videoError: '' };
+              changed = true;
+            }
+          }
+          return next;
+        });
+        if (changed) {
+          renderPipelinePage();
+          persistPipeline();
+        }
+        pipelineState._assetsRefreshed = true;
+      } catch (_) { }
+    };
+    refreshAssetUrls();
 
     const generateImageForIdx = async (idx, retryCount = 0) => {
       if (!pipelineState) return;
