@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.095';
+  const APP_VERSION = '1.096';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -795,12 +795,21 @@
 
     const applyDraft = draft => {
       try {
-        if (!draft || !form) return;
+        // 폼 요소 강력 재확인
+        let targetForm = form;
+        if (!targetForm) targetForm = document.getElementById('scenario-form');
+
+        if (!draft) return;
+        if (!targetForm) {
+          console.error('Scenario form not found');
+          return;
+        }
+
         console.log('Applying draft:', draft);
         currentDraftId = draft.id || null;
 
         const data = draft.payload || {};
-        const topicInput = form.querySelector('input[name="topic"]');
+        const topicInput = targetForm.querySelector('input[name="topic"]');
         if (topicInput) topicInput.value = data.topic || '';
 
         // UI 요소 재확인 (변수 초기화가 늦은 경우 대비)
@@ -820,18 +829,18 @@
         }
         setActiveTags(tagBox, data.purposeTags || []);
 
-        const targetSelect = form.querySelector('select[name="target"]');
+        const targetSelect = targetForm.querySelector('select[name="target"]');
         if (targetSelect && data.target) targetSelect.value = data.target;
 
         setActiveTags(needsBox, data.needs || []);
         setActiveTags(toneBox, data.tones || []);
         setActiveTags(styleBox, data.styles || []);
 
-        const toneInput = form.querySelector('input[name="tone"]');
+        const toneInput = targetForm.querySelector('input[name="tone"]');
         if (toneInput) toneInput.value = data.tone || '';
-        const styleInput = form.querySelector('input[name="style"]');
+        const styleInput = targetForm.querySelector('input[name="style"]');
         if (styleInput) styleInput.value = data.style || '';
-        const bannedInput = form.querySelector('textarea[name="banned"]');
+        const bannedInput = targetForm.querySelector('textarea[name="banned"]');
         if (bannedInput) bannedInput.value = data.banned || '';
         if (data.aspectRatio) saveAspect(data.aspectRatio);
 
