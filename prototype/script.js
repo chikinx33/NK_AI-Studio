@@ -2,7 +2,7 @@
   const translations = {
     en: {
       brand_title: 'NK_Studio',
-      brand_subtitle: 'Automated Video Pipeline',
+      brand_subtitle: 'Video Automated Pipeline',
       nav_dashboard: 'Dashboard',
       nav_scenario: 'Pre-production',
       nav_scenes: 'Production',
@@ -99,7 +99,7 @@
     },
     ko: {
       brand_title: 'NK_Studio',
-      brand_subtitle: '자동화 영상 제작 파이프라인',
+      brand_subtitle: '영상 제작 자동화 파이프라인',
       nav_dashboard: '대시보드',
       nav_scenario: '프리 프로덕션',
       nav_scenes: '프로덕션',
@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.123';
+  const APP_VERSION = '1.124';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -512,6 +512,9 @@
           try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) { }
           try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) { }
           try { sessionStorage.setItem('nk_allow_scenario', 'true'); } catch (_) { }
+          try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
           forceConfirmEnable = true;
           window.location.href = 'scenario.html';
           return;
@@ -525,6 +528,9 @@
             } catch (_) { }
             try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
             try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) { }
+            try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
+            try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
+            try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
             window.location.href = 'scenes.html';
             return;
           } else {
@@ -539,6 +545,9 @@
             try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) { }
             try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
             try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) { }
+            try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
+            try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
+            try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
             window.location.href = 'scenes.html';
             return;
           }
@@ -1708,6 +1717,16 @@
 
     renderPipelinePage();
     applyAuthGuard();
+    const confirmDubBtn = document.getElementById('confirm-dub');
+    if (confirmDubBtn) {
+      confirmDubBtn.addEventListener('click', () => {
+        try { sessionStorage.setItem('nk_allow_media', 'true'); } catch (_) {}
+        try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
+        try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
+        try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
+        window.location.href = 'media.html';
+      });
+    }
 
     const generateImageForIdx = async (idx, retryCount = 0) => {
       if (!pipelineState) return;
@@ -2598,6 +2617,10 @@
           refreshOptionUI();
           applyAuthGuard();
           alert('로그인 되었습니다. 시나리오 페이지로 이동합니다.');
+          try { sessionStorage.setItem('nk_allow_scenario', 'true'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
           window.location.href = 'scenario.html';
         } else {
           alert('아이디 또는 비밀번호가 올바르지 않습니다.');
@@ -2621,6 +2644,10 @@
           saveHeader(header);
           savePipeline(payload, scenesState, header);
           try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
+          try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
           window.location.href = 'scenes.html';
         } finally {
           setLoading(false);
