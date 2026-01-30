@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.083';
+  const APP_VERSION = '1.084';
   const purposeCategories = {
     '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
     '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
@@ -438,6 +438,8 @@
           const ok = confirm('저장된 프로젝트를 삭제하시겠습니까?');
           if (!ok) return;
           let storageDeleted = false;
+          setLoading(true);
+          btn.disabled = true;
           try {
             const res = await fetch('/api/project/delete', {
               method: 'POST',
@@ -454,6 +456,9 @@
             }
           } catch (err) {
             alert('스토리지 삭제 요청 실패');
+          } finally {
+            setLoading(false);
+            btn.disabled = false;
           }
           if (!storageDeleted) return;
           saveDraftsGlobal(drafts.filter(d => d.id !== id));
@@ -472,6 +477,10 @@
         if (action === 'scene-edit') {
           const existing = loadPipeline();
           if (existing && Array.isArray(existing.scenes) && existing.scenes.length) {
+            try {
+              const updated = { ...existing, draftId: draft.id };
+              localStorage.setItem(PIPELINE_KEY, JSON.stringify(updated));
+            } catch (_) {}
             try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
             window.location.href = 'scenes.html';
             return;
@@ -884,7 +893,7 @@
 
     const setLoading = (loading) => {
       const submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
-      const overlay = document.getElementById('scenario-loading');
+      const overlay = document.getElementById('scenario-loading') || document.getElementById('dashboard-loading');
       const err = document.getElementById('scenario-error');
       const confirmBtn = document.getElementById('confirm-scenes');
       if (submitBtn) {
