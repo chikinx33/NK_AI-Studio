@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.119';
+  const APP_VERSION = '1.122';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -256,11 +256,9 @@
   };
 
   const applyVersionAndNav = () => {
-    // 버전 표기 통일
     document.querySelectorAll('.sidebar-version').forEach(el => {
       el.textContent = `ver ${APP_VERSION}`;
     });
-    // 네비게이션 활성화 (확장자/슬래시/대소문자/쿼리 무시)
     const normalize = (p) => {
       if (!p) return 'index';
       let clean = p.toLowerCase();
@@ -270,6 +268,39 @@
       return base.replace(/\.html?$/, '') || 'index';
     };
     const current = normalize(window.location.pathname);
+    if (current === 'index') {
+      try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
+      try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
+      try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
+      try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
+    }
+    const allowScenario = (() => { try { return sessionStorage.getItem('nk_allow_scenario') === 'true'; } catch (_) { return false; } })();
+    const allowScenes = (() => { try { return sessionStorage.getItem('nk_allow_scenes') === 'true'; } catch (_) { return false; } })();
+    const allowMedia = (() => { try { return sessionStorage.getItem('nk_allow_media') === 'true'; } catch (_) { return false; } })();
+    const allowPublish = (() => { try { return sessionStorage.getItem('nk_allow_publish') === 'true'; } catch (_) { return false; } })();
+    document.querySelectorAll('.nav .nav-item').forEach(a => {
+      const keyEl = a.querySelector('[data-i18n]');
+      const key = keyEl ? keyEl.getAttribute('data-i18n') : '';
+      let allowed = true;
+      if (key === 'nav_scenario') allowed = allowScenario;
+      else if (key === 'nav_scenes') allowed = allowScenes;
+      else if (key === 'nav_media') allowed = allowMedia;
+      else if (key === 'nav_publish') allowed = allowPublish;
+      if (!allowed) {
+        a.classList.add('disabled');
+        a.setAttribute('aria-disabled', 'true');
+        a.setAttribute('tabindex', '-1');
+        const original = a.getAttribute('data-href') || a.getAttribute('href') || '';
+        a.setAttribute('data-href', original);
+        a.setAttribute('href', '#');
+      } else {
+        a.classList.remove('disabled');
+        a.removeAttribute('aria-disabled');
+        a.removeAttribute('tabindex');
+        const original = a.getAttribute('data-href') || '';
+        if (original) a.setAttribute('href', original);
+      }
+    });
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
     const match = Array.from(document.querySelectorAll('.nav-item[href]')).find(a => {
       const href = a.getAttribute('href') || '';
@@ -480,6 +511,7 @@
         if (action === 'scenario-edit') {
           try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) { }
           try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) { }
+          try { sessionStorage.setItem('nk_allow_scenario', 'true'); } catch (_) { }
           forceConfirmEnable = true;
           window.location.href = 'scenario.html';
           return;
@@ -492,6 +524,7 @@
               localStorage.setItem(PIPELINE_KEY, JSON.stringify(updated));
             } catch (_) { }
             try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
+            try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) { }
             window.location.href = 'scenes.html';
             return;
           } else {
@@ -505,6 +538,7 @@
             };
             try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) { }
             try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
+            try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) { }
             window.location.href = 'scenes.html';
             return;
           }

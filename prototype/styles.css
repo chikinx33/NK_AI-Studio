@@ -151,6 +151,17 @@ body::-webkit-scrollbar {
   align-items: center;
 }
 
+.nav-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.nav-item.disabled:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
 
 .nav-item:hover {
   background: var(--layer-soft);
@@ -435,6 +446,11 @@ body::-webkit-scrollbar {
   color: var(--muted);
   text-align: left;
   padding-left: 4px;
+}
+
+.option-card .sidebar-version {
+  text-align: center;
+  padding-left: 0;
 }
 
 .search input {
