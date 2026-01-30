@@ -5,7 +5,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.140';
+  const APP_VERSION = '1.144';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -434,7 +434,7 @@
         header: header || '',
         savedAt: new Date().toISOString(),
         aspectRatio: aspectRatio,
-        draftId: existing.draftId || currentDraftId || null
+        draftId: currentDraftId || existing.draftId || null
       };
       NK.store.savePipeline(data);
     };
@@ -1025,7 +1025,7 @@
       if (pending) {
         const parsed = JSON.parse(pending);
         applyDraft(parsed);
-        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable ? true : false;
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
       }
@@ -1889,18 +1889,35 @@
         const gotoScenes = () => { setNavStage('scenes'); try { window.location.assign('scenes.html'); } catch (_) { window.location.href = 'scenes.html'; } };
         try {
           const payload = lastPayload || buildPayload(new FormData(form));
-          let headerRaw = loadHeader();
-          if (!headerRaw) {
-            try { headerRaw = await fetchGlobalHeader(payload); } catch (_) { headerRaw = ''; }
-          }
-          const header = withAspectInHeader(headerRaw, aspectRatio);
-          saveHeader(header);
-          if (scenesState && scenesState.length) {
-            savePipeline(payload, scenesState, header);
+          const initialHeaderRaw = loadHeader() || '';
+          const initialHeader = withAspectInHeader(initialHeaderRaw, aspectRatio);
+          saveHeader(initialHeader);
+          const scenes = (scenesState && scenesState.length) ? scenesState : [];
+          const drafts = loadDrafts();
+          let id = currentDraftId;
+          let existsIdx = id ? drafts.findIndex(d => d.id === id) : -1;
+          if (!id || existsIdx === -1) {
+            const newId = Date.now();
+            const title = (payload.topic || '').trim() || '새 프로젝트';
+            const newDraft = { id: newId, title, payload, scenes };
+            const trimmed = [newDraft, ...drafts].slice(0, 20);
+            saveDrafts(trimmed);
+            currentDraftId = newId;
           } else {
-            savePipeline(payload, [], header);
+            const existing = drafts[existsIdx];
+            const title = (payload.topic || '').trim() || (existing.title || '제목없음');
+            drafts[existsIdx] = { ...existing, title, payload, scenes };
+            saveDrafts(drafts);
           }
+          savePipeline(payload, scenes, initialHeader);
           gotoScenes();
+          Promise.resolve().then(async () => {
+            try {
+              const fetched = await fetchGlobalHeader(payload);
+              const cleaned = withAspectInHeader(fetched || '', aspectRatio);
+              saveHeader(cleaned);
+            } catch (_) { }
+          });
         } catch (_) {
           gotoScenes();
         } finally {
