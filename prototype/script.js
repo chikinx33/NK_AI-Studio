@@ -603,7 +603,6 @@
 
     const draftNav = null;
     const saveDraftBtn = document.getElementById('save-draft');
-    const cloneDraftBtn = document.getElementById('clone-draft');
     const draftToggle = null;
     const headerKey = 'nk_global_header_v1';
     const loginKey = 'nk_is_logged_in';
@@ -637,7 +636,6 @@
         cardsEl.classList.add('empty');
         cardsEl.innerHTML = '<div class="empty-center"><p class="muted">시나리오를 생성하세요</p></div>';
         if (saveDraftBtn) saveDraftBtn.disabled = true;
-        if (cloneDraftBtn) cloneDraftBtn.disabled = true;
         if (confirmBtn) confirmBtn.disabled = !forceConfirmEnable;
         return;
       }
@@ -671,7 +669,6 @@
         )
         .join('');
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
-      if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
       if (confirmBtn) confirmBtn.disabled = false;
       setTimeout(ensureConfirmEnabled, 0);
     };
@@ -836,7 +833,6 @@
       lastPayload = data;
       const hasScenes = scenesState.length > 0;
       if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
-      if (cloneDraftBtn) cloneDraftBtn.disabled = !hasScenes;
       if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
       ensureConfirmEnabled();
     };
@@ -1275,25 +1271,7 @@
         alert('저장되었습니다.');
       });
     }
-    if (cloneDraftBtn) {
-      cloneDraftBtn.disabled = true;
-      cloneDraftBtn.addEventListener('click', () => {
-        if (!form) return;
-        const data = new FormData(form);
-        const payload = buildPayload(data);
-        const scenes = scenesState.length ? scenesState : mockGenerate(payload);
-        const drafts = loadDrafts();
-        const id = Date.now();
-        const baseTitle = drafts.find(d => Number(d.id) === Number(currentDraftId))?.title || '제목없음';
-        const newDraft = { id, title: baseTitle, payload, scenes };
-        drafts.unshift(newDraft);
-        currentDraftId = id;
-        const trimmed = drafts.slice(0, 20);
-        saveDrafts(trimmed);
-        renderDraftNav();
-        alert('복제하여 새 프로젝트로 저장했습니다.');
-      });
-    }
+    // 복제 기능 제거
 
     // nav-sub 제거됨
 
@@ -1305,7 +1283,6 @@
         applyDraft(parsed);
           if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable ? true : false;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
-        if (cloneDraftBtn) cloneDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
       }
         const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
