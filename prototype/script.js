@@ -1,255 +1,47 @@
 (function () {
-  const translations = {
-    en: {
-      brand_title: 'NK_Studio',
-      brand_subtitle: 'Video Automated Pipeline',
-      nav_dashboard: 'Dashboard',
-      nav_scenario: 'Pre-production',
-      nav_scenes: 'Production',
-      nav_media: 'Post-production',
-      nav_voice: 'Voice & Subtitles',
-      nav_render: 'Results Queue',
-      nav_publish: 'Publish',
-      badge_render_queue: 'Automation queue 3',
-      btn_new_project: 'New Pipeline',
-      project_label: 'Pipeline',
-      search_placeholder: 'Command / Search (Ctrl + K)',
-      notify: 'Alerts',
-      mode_test: 'Test',
-      mode_prod: 'Prod',
-      channels_title: 'Channels',
-      ch_all: 'All',
-      ch_knowledge: 'Knowledge',
-      ch_history: 'History',
-      ch_food: 'Food',
-      ch_local: 'Local',
-      ch_economy: 'Economy',
-      ch_science: 'Science',
-      ch_politics: 'Politics (Comics)',
-      hero_fast: 'Run instantly',
-      hero_new_project: 'Start new scene pipeline',
-      hero_new_desc: 'Scene-level auto-run. Script/Image/TTS/edit rules individually retryable.',
-      btn_create_project: 'Start pipeline',
-      hero_templates: 'Test',
-      hero_templates_title: 'Run partial scenes in Test Mode',
-      hero_templates_desc: 'Low-res, short length. Opens scene selector.',
-      btn_browse: 'Run test',
-      hero_recent: 'Retry',
-      hero_recent_title: 'Regenerate failed scenes only',
-      hero_recent_desc: 'Pick: reapply edit rules / regen TTS then recalc subs & cuts / keep images, re-balance cut length.',
-      btn_continue: 'Retry',
-      section_projects: 'Active pipelines',
-      btn_view_all: 'View all',
-      proj_list_title: 'Project list',
-      col_channel: 'Channel',
-      col_title: 'Project',
-      col_mode: 'Mode',
-      col_status: 'Status',
-      card1_eyebrow: 'Auto pipeline',
-      card1_title: 'Nova Energy Launch',
-      card1_desc: 'Scene auto-run with controllable Script/Image/TTS/Edit rules',
-      chip_timeline: 'Automation',
-      meta_eta: 'ETA 1h 12m',
-      scene_status: 'Mode: Prod',
-      scene_status_test: 'Mode: Test',
-      chip_fail: '⚠ Failed Scene',
-      chip_ok: 'OK',
-      card2_eyebrow: 'Test run',
-      card2_title: 'Travel Vlog Series',
-      card2_desc: 'Cost-min test · selected scenes only · rules applied',
-      chip_script: 'Test Mode',
-      meta_deadline: 'Due: Today 18:00',
-      card3_eyebrow: 'Has failed scenes',
-      card3_title: 'Product How-to',
-      card3_desc: 'Inspect logs then reapply rules / regen TTS / re-balance cuts',
-      chip_render: 'Retry needed',
-      meta_queue: 'Queue 2/5',
-      side_activity: 'AI work log',
-      btn_log: 'Log',
-      act1: 'Length overflow → auto-trimmed to 45s (auto)',
-      act2: 'Prompt fix: too dark → warm light (auto)',
-      act3: 'TTS retry x2 failed: SSML tag error (auto)',
-      ago2m: '2m ago',
-      ago35m: '35m ago',
-      ago1h: '1h ago',
-      side_rules: 'Auto edit rules',
-      rule_cut: 'Cuts: scene/sentence based',
-      rule_sub: 'Subtitles: auto from TTS',
-      rule_len: 'Cut length: auto-balance (±0.5s)',
-      rule_pos: 'Sub position: bottom center',
-      rule_fx: 'Transitions: fade',
-      flow_hint: '🎙 TTS → 💬 Subs → ✂ Cuts/length (rule-based)',
-      btn_reapply_rules: 'Reapply edit rules',
-      side_queue: 'Pipeline steps',
-      btn_view_all_queue: 'View all',
-      queue1_title: 'Script · Image · TTS',
-      queue1_badge: 'Running',
-      queue_edit_title: 'Apply edit rules (subs/cuts/transitions)',
-      queue_edit_badge: 'Pending',
-      queue2_title: 'Render · low-res test',
-      queue2_badge: 'Pending',
-      queue3_title: 'Render · final cut',
-      queue3_badge: 'Done',
-      storage: 'Credits · Storage',
-      storage_meta: 'GPU minutes 120 · Cache 120GB · ~0.3 credit/scene',
-      storage_usage: 'Credits used 68%',
-      lang_toggle: 'EN',
-      theme_to_light: 'Light',
-      theme_to_dark: 'Dark',
-    },
-    ko: {
-      brand_title: 'NK_Studio',
-      brand_subtitle: '영상 제작 자동화 파이프라인',
-      nav_dashboard: '대시보드',
-      nav_scenario: '프리 프로덕션',
-      nav_scenes: '프로덕션',
-      nav_media: '포스트 프로덕션',
-      nav_voice: '더빙 · 자막',
-      nav_render: '결과 대기열',
-      nav_publish: '배포',
-      badge_render_queue: '자동화 큐 3',
-      btn_new_project: '새 파이프라인',
-      project_label: '파이프라인',
-      search_placeholder: '명령/검색 (Ctrl + K)',
-      notify: '알림',
-      mode_test: 'Test',
-      mode_prod: 'Prod',
-      channels_title: '채널',
-      ch_all: '전체',
-      ch_knowledge: '지식',
-      ch_history: '역사',
-      ch_food: '음식',
-      ch_local: '지역',
-      ch_economy: '경제',
-      ch_science: '과학',
-      ch_politics: '정치(만화)',
-      hero_fast: '바로 자동 실행',
-      hero_new_project: '새 Scene 파이프라인 시작',
-      hero_new_desc: 'Scene 단위 자동 실행 · 대본/이미지/TTS/편집 규칙을 각각 재적용/재시도.',
-      btn_create_project: '파이프라인 시작',
-      hero_templates: '테스트',
-      hero_templates_title: 'Test Mode로 일부 Scene만',
-      hero_templates_desc: '저해상·짧은 길이 · Scene 선택 화면 이동',
-      btn_browse: '테스트 실행',
-      hero_recent: '재시도',
-      hero_recent_title: '실패 Scene만 다시 만들기',
-      hero_recent_desc: '편집 규칙 재적용 / TTS 재생성+자막·컷 재계산 / 이미지 유지+컷 길이 재보정 중 선택',
-      btn_continue: '재시도',
-      section_projects: '진행 중 파이프라인',
-      btn_view_all: '전체 보기',
-      proj_list_title: '프로젝트 리스트',
-      col_channel: '채널',
-      col_title: '프로젝트',
-      col_mode: '모드',
-      col_status: '상태',
-      card1_eyebrow: '자동 파이프라인',
-      card1_title: 'Nova Energy Launch',
-      card1_desc: 'Scene 기반 자동 실행 · 대본/이미지/TTS/편집 규칙 제어',
-      chip_timeline: '자동화',
-      meta_eta: 'ETA 1시간 12분',
-      scene_status: '모드: Prod',
-      scene_status_test: '모드: Test',
-      chip_fail: '⚠ 실패 Scene',
-      chip_ok: '정상',
-      card2_eyebrow: '테스트 러닝',
-      card2_title: 'Travel Vlog Series',
-      card2_desc: '비용 최소 테스트 · 선택 Scene만 생성/규칙 적용',
-      chip_script: 'Test Mode',
-      meta_deadline: '마감: 오늘 18:00',
-      card3_eyebrow: '실패 Scene 있음',
-      card3_title: 'Product How-to',
-      card3_desc: '원인 로그 후 규칙 재적용·TTS 재생성·컷 재보정 선택 재시도',
-      chip_render: '재시도 필요',
-      meta_queue: '대기열 2/5',
-      side_activity: 'AI 작업 로그',
-      btn_log: '로그',
-      act1: '길이 초과 → 45s로 자동 트림 (자동)',
-      act2: '프롬프트 수정: too dark → warm light (자동)',
-      act3: 'TTS 재시도 2회 실패: SSML 태그 오류 (자동)',
-      ago2m: '2분 전',
-      ago35m: '35분 전',
-      ago1h: '1시간 전',
-      side_rules: '자동 편집 규칙',
-      rule_cut: '컷 분할: Scene / 문장 기준',
-      rule_sub: '자막: TTS 완료 후 자동 생성',
-      rule_len: '컷 길이: 자동 보정 (±0.5초)',
-      rule_pos: '자막 위치: 하단 중앙',
-      rule_fx: '전환 효과: 페이드',
-      flow_hint: '🎙 TTS → 💬 자막 → ✂ 컷/길이 보정 (규칙 기반)',
-      btn_reapply_rules: '편집 규칙 다시 적용',
-      side_queue: '파이프라인 단계',
-      btn_view_all_queue: '모두 보기',
-      queue1_title: '스크립트 · 이미지 · TTS',
-      queue1_badge: '실행 중',
-      queue_edit_title: '자동 편집 규칙 적용 (자막/컷/전환)',
-      queue_edit_badge: '대기',
-      queue2_title: '렌더 · 저해상 테스트',
-      queue2_badge: '대기',
-      queue3_title: '렌더 · 파이널 컷',
-      queue3_badge: '완료',
-      storage: '크레딧 · 스토리지',
-      storage_meta: 'GPU 분 120 · 캐시 120GB · Scene당 예상 0.3크레딧',
-      storage_usage: '크레딧 68% 사용',
-      lang_toggle: 'KO',
-      theme_to_light: '라이트',
-      theme_to_dark: '다크',
-    }
-  };
+  const translations = NK.core.translations;
 
   let current = 'ko';
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.128';
+  const APP_VERSION = '1.140';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
-  const purposeCategories = {
-    '키즈 · 영유아': ['유아 교육', '키즈 놀이', '키즈 학습', '동요', '율동', '동화'],
-    '스토리 · 서사': ['동화', '창작', '에피소드', '세계관', '판타지', '힐링'],
-    '지식 · 교양': ['상식', '과학', '수학', '역사', '인문학', '철학', '심리', '시사'],
-    '교육 · 학습': ['공부법', '시험 대비', '자격증', '언어 학습', '코딩', '튜토리얼'],
-    '음식 · 요리': ['레시피', '먹방', '맛집 소개', '요리 과정', '음식 리뷰', '홈쿡'],
-    '여행 · 관광': ['국내 여행', '해외 여행', '관광지 소개', '숨은 명소', '랜선 여행'],
-    '라이프 · 일상': ['브이로그', '일상 기록', '루틴', '자취', '육아', '직장 생활'],
-    '리뷰 · 추천': ['제품', '서비스', '콘텐츠 추천', '앱', '게임', '책', '영화'],
-    '엔터테인먼트': ['코미디', '패러디', '챌린지', '리액션', '밈 콘텐츠'],
-    '게임': ['게임 플레이', '공략', '하이라이트', '게임 리뷰', '모바일 게임'],
-    '음악 · 사운드': ['음악 소개', 'BGM', '커버', 'ASMR', '사운드 콘텐츠'],
-    '스포츠 · 피트니스': ['운동 루틴', '스트레칭', '홈트레이닝', '스포츠 해설', '경기 요약'],
-    '취미 · 크리에이티브': ['그림', 'DIY', '공예', '디자인', '글쓰기', '사진'],
-    '비즈니스 · 경제': ['창업', '재테크', '경제 상식', '마케팅', '브랜딩'],
-    '테크 · IT': ['AI', '신기술', '앱 소개', '기기 리뷰', '생산성 툴'],
-    '힐링 · 감성': ['명상', '위로', '힐링 영상', '감성 브이로그', '자연 풍경'],
-    '종교 · 신앙': ['말씀 묵상', '설교 요약', '신앙 이야기', '간증', '기도'],
-    '사회 · 공감': ['인터뷰', '다큐형 콘텐츠', '사회 이슈', '공감 토크']
-  };
-  const needsList = [
-    '학습', '놀이', '엔터테인먼트', '스토리', '감성', '힐링', '공감', '실용 정보', '생활 정보', '업무 효율',
-    '생산성', '자기계발', '시험', '진로', '커리어', '창업', '경제', '재테크', '소비', '노후 설계', '정치',
-    '사회 이슈', '시사', '건강', '운동', '식습관', '여가', '취미', '여행', '스트레스 해소', '멘탈 관리',
-    '관계', '가정', '자녀', '연애', '소통', '자기 성찰', '라이프스타일'
-  ];
-  const toneList = [
-    '담백', '신뢰', '차분', '유머', '경쾌', '진지', '따뜻', '공감', '감성', '중립', '풍자',
-    '설득', '전문', '친근', '위로', '동기부여', '논리', '정보', '스토리'
-  ];
-  const styleList = [
-    '실사', '다큐 스타일', '브이로그', '만화', '애니메이션', '일러스트', '모션그래픽', '인포그래픽', '슬라이드형',
-    '스크린 캡처', 'UI 중심', '텍스트 중심', '미니멀', '컬러풀', '심플', '레트로', '시네마틱'
-  ];
+  const purposeCategories = NK.core.purposeCategories;
+  const needsList = NK.core.needsList;
+  const toneList = NK.core.toneList;
+  const styleList = NK.core.styleList;
 
   const loadDraftsGlobal = () => NK.store.getDrafts();
   const saveDraftsGlobal = (drafts) => NK.store.saveDrafts(drafts);
   const migrateDraftsIfNeeded = () => NK.store.migrateDrafts();
 
+  const sGet = (k) => { try { return sessionStorage.getItem(k); } catch (_) { return null; } };
+  const sSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch (_) { } };
+  const sRemove = (k) => { try { sessionStorage.removeItem(k); } catch (_) { } };
+  const setNavStage = (stage) => {
+    if (stage === 'scenes') sSet('nk_pipeline_keep', 'true');
+    if (stage === 'scenario') {
+      sSet('nk_allow_scenario', 'true'); sRemove('nk_allow_scenes'); sRemove('nk_allow_media'); sRemove('nk_allow_publish');
+    } else if (stage === 'scenes') {
+      sSet('nk_allow_scenes', 'true'); sRemove('nk_allow_scenario'); sRemove('nk_allow_media'); sRemove('nk_allow_publish');
+    } else if (stage === 'media') {
+      sSet('nk_allow_media', 'true'); sRemove('nk_allow_scenario'); sRemove('nk_allow_scenes'); sRemove('nk_allow_publish');
+    } else if (stage === 'publish') {
+      sSet('nk_allow_publish', 'true'); sRemove('nk_allow_scenario'); sRemove('nk_allow_scenes'); sRemove('nk_allow_media');
+    } else {
+      sRemove('nk_allow_scenario'); sRemove('nk_allow_scenes'); sRemove('nk_allow_media'); sRemove('nk_allow_publish');
+    }
+  };
+
   let forceConfirmEnable = false;
   const ensureConfirmEnabled = () => {
     const confirmBtn = document.getElementById('confirm-scenes');
     if (!confirmBtn) return;
-    const enabled = scenesState.length > 0 || forceConfirmEnable;
-    confirmBtn.disabled = !enabled;
-    if (enabled) confirmBtn.removeAttribute('disabled');
+    confirmBtn.disabled = false;
+    confirmBtn.removeAttribute('disabled');
   };
 
   NK.core.APP_VERSION = APP_VERSION;
@@ -447,10 +239,7 @@
         if (action === 'scenario-edit') {
           try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) { }
           try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) { }
-          try { sessionStorage.setItem('nk_allow_scenario', 'true'); } catch (_) { }
-          try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
+          setNavStage('scenario');
           forceConfirmEnable = true;
           window.location.href = 'scenario.html';
           return;
@@ -462,11 +251,7 @@
               const updated = { ...existing, draftId: draft.id };
               localStorage.setItem(PIPELINE_KEY, JSON.stringify(updated));
             } catch (_) { }
-            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
-            try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) { }
-            try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
-            try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
-            try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
+            setNavStage('scenes');
             window.location.href = 'scenes.html';
             return;
           } else {
@@ -479,11 +264,7 @@
               draftId: draft.id
             };
             try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) { }
-            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
-            try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) { }
-            try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
-            try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
-            try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
+            setNavStage('scenes');
             window.location.href = 'scenes.html';
             return;
           }
@@ -542,21 +323,7 @@
         const drafts = NK.store.getDrafts();
         drafts.unshift(newDraft);
         NK.store.saveDrafts(drafts.slice(0, 20));
-        try {
-          fetch('/api/project/init', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId: String(id) })
-          }).then(async (res) => {
-            const text = await res.text();
-            const data = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-            if (!res.ok) {
-              console.warn('Project init failed', res.status, data);
-            }
-          }).catch(err => console.warn('Project init error', err));
-        } catch (err) {
-          console.warn('Project init error', err);
-        }
+        try { NK.api.projectInit(String(id)); } catch (err) { console.warn('Project init error', err); }
         renderDashboardDrafts();
         if (projectOverlay) projectOverlay.classList.add('hidden');
       });
@@ -623,7 +390,7 @@
         cardsEl.classList.add('empty');
         cardsEl.innerHTML = '<div class="empty-center"><p class="muted">시나리오를 생성하세요</p></div>';
         if (saveDraftBtn) saveDraftBtn.disabled = true;
-        if (confirmBtn) confirmBtn.disabled = !forceConfirmEnable;
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
         return;
       }
       cardsEl.classList.remove('empty');
@@ -655,7 +422,7 @@
         )
         .join('');
       if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
-      if (confirmBtn) confirmBtn.disabled = false;
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
       setTimeout(ensureConfirmEnabled, 0);
     };
 
@@ -688,25 +455,7 @@
       });
     };
 
-    const fetchGlobalHeader = async (payload) => {
-      try {
-        const res = await fetch('/api/prompt-header', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const text = await res.text();
-        if (!res.ok) {
-          const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-          throw new Error(detail || 'header_error');
-        }
-        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-        return json.header || '';
-      } catch (err) {
-        console.warn('Global header fetch failed, using fallback', err);
-        return 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
-      }
-    };
+    const fetchGlobalHeader = NK.api.promptHeader;
 
     const mockGenerate = payload => {
       const durationMap = {
@@ -839,7 +588,7 @@
         lastPayload = data;
         const hasScenes = scenesState.length > 0;
         if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
-        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
         ensureConfirmEnabled();
 
         console.log('Draft applied successfully');
@@ -882,22 +631,8 @@
     };
 
     const callScenarioAPI = async payload => {
-      const res = await fetch('/api/scenario', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-        const err = new Error(detail || 'api_error');
-        err.status = res.status;
-        throw err;
-      }
-      const data = (() => {
-        try { return JSON.parse(text); } catch (_) { return text; }
-      })();
-      return normalizeScenes(data);
+      const raw = await NK.api.scenario(payload);
+      return normalizeScenes(raw);
     };
 
     const setLoading = NK.core.setLoading;
@@ -1067,7 +802,7 @@
           saveHeader(header);
           renderScenes(scenes);
           savePipeline(payload, scenes, header);
-          if (confirmBtn) confirmBtn.disabled = false;
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
         } catch (err) {
           console.warn('API 실패, mock으로 대체', err);
           const errBox = document.getElementById('scenario-error');
@@ -1082,7 +817,7 @@
           saveHeader(header);
           renderScenes(mock);
           savePipeline(payload, mock, header);
-          if (confirmBtn) confirmBtn.disabled = false;
+          if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
         } finally {
           setLoading(false);
         }
@@ -1115,7 +850,7 @@
         }
         const errBox = document.getElementById('scenario-error');
         if (errBox) errBox.classList.add('hidden');
-        if (confirmBtn) confirmBtn.disabled = true;
+        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
         if (saveDraftBtn) saveDraftBtn.disabled = true;
       });
     }
@@ -1312,14 +1047,8 @@
       const blurTarget = document.querySelector('.blur-target');
       const onScenarioLike = !!overlay && !!blurTarget;
       if (!onScenarioLike) return;
-      const ok = isAuthed();
-      if (ok) {
-        overlay.classList.add('hidden');
-        blurTarget.classList.remove('blurred');
-      } else {
-        overlay.classList.remove('hidden');
-        blurTarget.classList.add('blurred');
-      }
+      if (overlay) overlay.classList.add('hidden');
+      if (blurTarget) blurTarget.classList.remove('blurred');
     };
 
     // 씬 & 파이프라인 페이지 렌더
@@ -1345,419 +1074,35 @@
       next[idx] = updated;
       saveDraftsGlobal(next);
     };
-    const renderPipelinePage = () => {
-      if (!pipelineMeta || !pipelineScenes) return;
-
-      // 우선 현재 상태가 있으면 그것으로 렌더, 없으면 저장된 값으로 초기화
-      let placeholderMode = false;
-      if (!pipelineState) {
-        const stored = (() => {
-          try { return loadPipeline(); } catch (_) { return null; }
-        })();
-        try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
-        if (!stored) {
-          placeholderMode = true;
-          const payload = {
-            topic: '',
-            purposeCategory: '',
-            purposeTags: [],
-            target: '',
-            needs: [],
-            tones: [],
-            styles: [],
-            tone: '',
-            style: '',
-            banned: '',
-            duration: ''
-          };
-          const headerInit = withAspectInHeader('', aspectRatio);
-          pipelineState = { payload, header: headerInit, scenes: [], savedAt: '', aspectRatio, isPlaceholder: true };
-        } else {
-          const { payload, scenes, savedAt, header: savedHeader, aspectRatio: savedRatio, draftId } = stored;
-          if (savedRatio) aspectRatio = savedRatio;
-          saveAspect(aspectRatio);
-          const headerInitRaw = savedHeader || loadHeader() || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
-          const headerInit = withAspectInHeader(headerInitRaw, aspectRatio);
-          const sceneListInit = (scenes || []).map((s, idx) => ({
-            ...s,
-            id: s.id ?? idx + 1,
-            promptText: s.promptText || [
-              `Common`,
-              `${headerInit}`,
-              `Visual`,
-              `${s.shot || ''}`,
-              `Duration`,
-              `${Math.max(Number(s.estSec) || 0, 1)}s.`
-            ].join('\n'),
-            imageDataUrl: s.imageDataUrl || '',
-            imgLoading: false,
-            imgError: '',
-            videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
-            videoStatus: s.videoStatus || '',
-            videoError: s.videoError || '',
-            videoJobId: s.videoJobId || ''
-          }));
-          pipelineState = { payload, header: headerInit, scenes: sceneListInit, savedAt, aspectRatio, isPlaceholder: false, draftId: draftId || null };
-        }
-      }
-
-      const { payload, scenes, savedAt, header } = pipelineState;
-      const metaItemsRaw = [
-        ['장르', `${payload.purposeCategory || ''} ${(payload.purposeTags || []).join(', ')}`.trim()],
-        ['타겟', payload.target || ''],
-        ['니즈', (payload.needs || []).join(', ')],
-        ['톤', [(payload.tones || []).join(', '), payload.tone].filter(Boolean).join(', ')],
-        ['스타일', [(payload.styles || []).join(', '), payload.style].filter(Boolean).join(', ')],
-        ['추가 설명', payload.banned || ''],
-        ['화면비', aspectRatio || ''],
-        ['길이', payload.duration ? `${payload.duration}s` : ''],
-        ['저장 시각', savedAt ? new Date(savedAt).toLocaleString('ko-KR') : '']
-      ];
-      const metaItems = metaItemsRaw.map(([label, val]) => {
-        const content = val && String(val).trim().length ? val : '<span class="muted">입력 필요</span>';
-        return `<span class="meta-item">${label} - ${content}</span>`;
-      });
-
-      const metaLine = metaItems.join('<span class="meta-sep">·</span>');
-
-      pipelineMeta.innerHTML = `
-        <div class="pipeline-meta-bar">
-          <h4 class="pipeline-title">${payload.topic || '제목 없음'}</h4>
-          <div class="pipeline-meta-line">${metaLine}</div>
-        </div>
-        <div class="pipeline-actions">
-          <button class="btn-secondary" id="save-pipeline-btn" ${pipelineState.isPlaceholder ? 'disabled' : ''}>저장하기</button>
-          <button class="btn-secondary" id="bulk-generate" ${pipelineState.isPlaceholder ? 'disabled' : ''}>이미지 일괄 생성</button>
-          <button class="btn-secondary" id="bulk-video" ${pipelineState.isPlaceholder ? 'disabled' : ''}>영상 일괄 변환</button>
-          <button class="btn-primary" id="confirm-dub" ${pipelineState.isPlaceholder && !scenes.length ? 'disabled' : ''}>최종 컨펌 → 포스트 프로덕션</button>
-        </div>`;
-      if (scenes && scenes.length) {
-        pipelineScenes.classList.remove('empty');
-        const rows = scenes.map(s => {
-          const computedPrompt = [
-            `Common`,
-            `${header}`,
-            `Visual`,
-            `${s.shot || ''}`,
-            `Duration`,
-            `${Math.max(Number(s.estSec) || 0, 1)}s.`
-          ].join('\\n');
-          const displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
-          const updatedScene = { ...s, promptText: displayPrompt };
-          const img = updatedScene.imgLoading
-            ? `<div class="image-placeholder tall loading"><span>생성중...</span></div>`
-            : updatedScene.imgError
-              ? `<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>`
-              : updatedScene.imageDataUrl
-                ? `<div class="image-box"><img class="scene-img" data-src="${updatedScene.imageDataUrl}" src="${updatedScene.imageDataUrl}" alt="scene image" /></div>`
-                : `<div class="image-placeholder tall"></div>`;
-          const videoCard = (() => {
-            if (updatedScene.videoUrl) {
-              const note = updatedScene.videoMethod === 'inline' ? `<div class="video-note">생성 성공(인라인 반환)</div>` : '';
-              return `<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="${updatedScene.videoUrl}" type="video/mp4" /></video>${note}</div>`;
-            }
-            if (updatedScene.videoStatus === 'processing') {
-              return `<div class="video-placeholder loading"><span>영상 생성중...</span></div>`;
-            }
-            if (updatedScene.videoError) {
-              return `<div class="video-placeholder error-state"><span>생성 실패</span></div>`;
-            }
-            return `<div class="video-placeholder"><span>영상 없음</span></div>`;
-          })();
-          const err = ''; // 별도 에러 텍스트 제거, 카드 안에서 표시
-          return `
-          <div class="scene-row">
-            <div class="scene-cell story">
-              <p class="eyebrow">Scene ${s.id}</p>
-              <p class="story-lines" data-id="${s.id}" ${s.editingStory ? 'contenteditable="true"' : ''}>${s.lines}</p>
-              <div class="cell-actions br">
-                ${s.editingStory
-              ? `<button class="btn-secondary compact" data-action="save-story" data-id="${s.id}">저장</button>
-                     <button class="btn-ghost compact" data-action="cancel-story" data-id="${s.id}">취소</button>`
-              : `<button class="btn-ghost compact" data-action="edit-story" data-id="${s.id}">수정</button>`}
-              </div>
-            </div>
-            <div class="scene-cell prompt">
-              <p class="eyebrow">Common</p>
-              <p class="prompt-common" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${header}</p>
-              <p class="eyebrow">Visual</p>
-              <p class="prompt-visual" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${s.shot || ''}</p>
-              <p class="eyebrow">Duration</p>
-              <p class="prompt-duration" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${Math.max(Number(s.estSec) || 0, 1)}s.</p>
-              <div class="cell-actions br">
-                ${s.editingPrompt
-              ? `<button class="btn-secondary compact" data-action="save-prompt" data-id="${s.id}">저장</button>
-                     <button class="btn-ghost compact" data-action="cancel-prompt" data-id="${s.id}">취소</button>`
-              : `<button class="btn-ghost compact" data-action="edit-prompt" data-id="${s.id}">수정</button>`}
-              </div>
-            </div>
-            <div class="scene-cell image"><div class="scene-media-stack">${img}${videoCard}</div>${err}</div>
-            <div class="scene-cell actions">
-              <div class="action-buttons grid">
-                <button class="btn-secondary compact span2" data-action="regen-image" data-id="${s.id}" ${updatedScene.imgLoading ? 'disabled' : ''}>${updatedScene.imgLoading ? '생성중...' : '이미지 생성'}</button>
-                <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}" ${updatedScene.imageDataUrl ? '' : 'disabled'}>삭제</button>
-                <button class="btn-secondary compact" data-action="upload-image" data-id="${s.id}">업로드</button>
-                <button class="btn-secondary compact" data-action="library-image" data-id="${s.id}">라이브러리</button>
-                <button class="btn-secondary compact" data-action="download-image" data-id="${s.id}" ${updatedScene.imageDataUrl ? '' : 'disabled'}>다운로드</button>
-              </div>
-              <div class="action-buttons grid video-actions">
-                <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 생성</button>
-                <button class="btn-secondary compact" data-action="delete-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>삭제</button>
-                <button class="btn-secondary compact" data-action="upload-video" data-id="${s.id}">업로드</button>
-                <button class="btn-secondary compact" data-action="library-video" data-id="${s.id}">라이브러리</button>
-                <button class="btn-secondary compact" data-action="download-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>다운로드</button>
-              </div>
-            </div>
-          </div>`;
-        }).join('');
-        // 업데이트된 prompt를 상태에 반영
-        pipelineState.scenes = scenes.map((s, idx) => {
-          const computedPrompt = [
-            `Common`,
-            `${header}`,
-            `Visual`,
-            `${s.shot || ''}`,
-            `Duration`,
-            `${Math.max(Number(s.estSec) || 0, 1)}s.`
-          ].join('\\n');
-          const finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
-          return {
-            ...s,
-            promptText: finalPrompt,
-            videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
-            videoStatus: s.videoStatus || '',
-            videoMethod: s.videoMethod || '',
-            videoError: s.videoError || '',
-            videoJobId: s.videoJobId || '',
-            editingPrompt: !!s.editingPrompt,
-            editingStory: !!s.editingStory,
-            promptEdited: !!s.promptEdited,
-            editingPromptRaw: false
-          };
-        });
-        pipelineScenes.innerHTML = `
-          <div class="scene-table">
-            <div class="scene-row head">
-              <div class="scene-cell">Story</div>
-              <div class="scene-cell">Prompt</div>
-              <div class="scene-cell">Image/Video</div>
-              <div class="scene-cell">Actions</div>
-            </div>
-            ${rows}
-          </div>`;
-        try {
-          const vids = pipelineScenes.querySelectorAll('video.scene-video');
-          vids.forEach(v => {
-            v.preload = 'metadata';
-            v.addEventListener('loadedmetadata', () => {
-              console.log('video loadedmetadata', { src: v.currentSrc, duration: v.duration });
-            });
-            v.addEventListener('canplay', () => {
-              console.log('video canplay', { src: v.currentSrc });
-            });
-            v.addEventListener('error', () => {
-              console.error('video error', v.error || null);
-            });
-            const se = v.querySelector('source');
-            const src = (se && se.getAttribute('src')) || v.getAttribute('src') || '';
-            if (src && src.startsWith('data:video/mp4;base64,') && !v.dataset.hydrated) {
-              v.dataset.hydrated = '1';
-              (async () => {
-                try {
-                  const resp = await fetch(src);
-                  const blob = await resp.blob();
-                  const url = URL.createObjectURL(blob);
-                  if (se) se.setAttribute('src', url);
-                  else v.src = url;
-                  v.load();
-                  console.log('video inline hydrated', { size: blob.size });
-                } catch (e) {
-                  console.error('video inline hydrate fail', e);
-                }
-              })();
-            } else {
-              v.load();
-            }
-          });
-        } catch (_) { }
-      } else {
-        pipelineScenes.classList.add('empty');
-        pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
-      }
-
-      const savePipelineBtn = document.getElementById('save-pipeline-btn');
-      if (savePipelineBtn) {
-        savePipelineBtn.onclick = () => {
-          if (!pipelineState) return;
-          savePipeline(pipelineState.payload, pipelineState.scenes, pipelineState.header);
-          updateDraftFromPipeline();
-          alert('저장되었습니다.');
-        };
-      }
-      const bulkGen = document.getElementById('bulk-generate');
-      if (bulkGen) {
-        bulkGen.onclick = async () => {
-          if (!pipelineState || !pipelineState.scenes.length) return;
-          for (let i = 0; i < pipelineState.scenes.length; i++) {
-            await generateImageForIdx(i);
-          }
-        };
-      }
-      const bulkVid = document.getElementById('bulk-video');
-      if (bulkVid) {
-        bulkVid.onclick = async () => {
-          if (!pipelineState || !pipelineState.scenes.length) return;
-          for (let i = 0; i < pipelineState.scenes.length; i++) {
-            await startVideoForIdx(i);
-          }
-        };
-      }
+    const uiCtx = {
+      getState: () => pipelineState,
+      setState: (st) => { pipelineState = st; },
+      getAspectRatio: () => aspectRatio,
+      saveAspect: saveAspect,
+      loadPipeline: loadPipeline,
+      savePipeline: savePipeline,
+      loadHeader: loadHeader,
+      withAspectInHeader: withAspectInHeader,
+      updateDraftFromPipeline: updateDraftFromPipeline,
+      persistPipeline: persistPipeline,
+      startVideoForIdx: (idx) => startVideoForIdx(idx),
+      openLibrary: (kind, idx) => openLibrary(kind, idx)
     };
+    if (window.NK && NK.uiPipeline && typeof NK.uiPipeline.init === 'function') {
+      NK.uiPipeline.init(uiCtx);
+    }
+    const renderPipelinePage = () => NK.uiPipeline.render();
 
     renderPipelinePage();
     applyAuthGuard();
     const confirmDubBtn = document.getElementById('confirm-dub');
     if (confirmDubBtn) {
-      confirmDubBtn.addEventListener('click', () => {
-        try { sessionStorage.setItem('nk_allow_media', 'true'); } catch (_) {}
-        try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
-        try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
-        try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
-        window.location.href = 'media.html';
-      });
+      confirmDubBtn.addEventListener('click', () => { setNavStage('media'); window.location.href = 'media.html'; });
     }
-    const refreshAssetUrls = async () => {
-      if (!pipelineState || !pipelineState.scenes || !pipelineState.scenes.length) return;
-      if (pipelineState._assetsRefreshed) return;
-      const pid = pipelineState.draftId || '';
-      if (!pid) return;
-      const needImg = pipelineState.scenes.some(s => s.imageDataUrl && !String(s.imageDataUrl).startsWith('data:'));
-      const needVid = pipelineState.scenes.some(s => s.videoUrl && !String(s.videoUrl).startsWith('data:'));
-      if (!needImg && !needVid) return;
-      try {
-        const [imgRes, vidRes] = await Promise.all([
-          needImg ? fetch(`/api/image/library?projectId=${encodeURIComponent(pid)}`) : null,
-          needVid ? fetch(`/api/video/library?projectId=${encodeURIComponent(pid)}`) : null
-        ]);
-        let imgItems = [];
-        if (imgRes) {
-          try {
-            const t = await imgRes.text();
-            const j = JSON.parse(t);
-            imgItems = Array.isArray(j.items) ? j.items : [];
-          } catch (_) { imgItems = []; }
-        }
-        let vidItems = [];
-        if (vidRes) {
-          try {
-            const t = await vidRes.text();
-            const j = JSON.parse(t);
-            vidItems = Array.isArray(j.items) ? j.items : [];
-          } catch (_) { vidItems = []; }
-        }
-        const baseName = (u) => {
-          try {
-            const urlObj = new URL(String(u));
-            const path = urlObj.pathname;
-            const parts = path.split('/');
-            return decodeURIComponent(parts[parts.length - 1]);
-          } catch (_) {
-            const parts = String(u).split(/[?#]/)[0].split('/');
-            return decodeURIComponent(parts[parts.length - 1]);
-          }
-        };
-        const imgMap = new Map(imgItems.map(it => [String(it.name || '').split('/').pop(), String(it.signedUrl || '')]));
-        const vidMap = new Map(vidItems.map(it => [String(it.name || '').split('/').pop(), String(it.signedUrl || '')]));
-        let changed = false;
-        pipelineState.scenes = pipelineState.scenes.map(s => {
-          let next = s;
-          if (needImg && s.imageDataUrl && !String(s.imageDataUrl).startsWith('data:')) {
-            const bn = baseName(s.imageDataUrl);
-            const signed = imgMap.get(bn);
-            if (signed && signed !== s.imageDataUrl) {
-              next = { ...next, imageDataUrl: signed };
-              changed = true;
-            }
-          }
-          if (needVid && s.videoUrl && !String(s.videoUrl).startsWith('data:')) {
-            const bn = baseName(s.videoUrl);
-            const signed = vidMap.get(bn);
-            if (signed && signed !== s.videoUrl) {
-              next = { ...next, videoUrl: signed, videoStatus: 'done', videoError: '' };
-              changed = true;
-            }
-          }
-          return next;
-        });
-        if (changed) {
-          renderPipelinePage();
-          persistPipeline();
-        }
-        pipelineState._assetsRefreshed = true;
-      } catch (_) { }
-    };
+    const refreshAssetUrls = async () => NK.uiPipeline.refreshAssets();
     refreshAssetUrls();
 
-    const generateImageForIdx = async (idx, retryCount = 0) => {
-      if (!pipelineState) return;
-      const scene = pipelineState.scenes[idx];
-      const finalPrompt = `${scene.promptText}\n\nNarration (Korean): ${scene.lines}`;
-
-      pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
-      renderPipelinePage();
-
-      try {
-        const res = await fetch('/api/imagen', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: finalPrompt, aspectRatio, projectId: pipelineState.draftId || '' })
-        });
-        const text = await res.text();
-
-        if (!res.ok) {
-          // 500 에러 처리 및 재시도
-          if (res.status === 500 && retryCount < 2) {
-            console.warn(`이미지 생성 실패 (500), 재시도 ${retryCount + 1}/2...`);
-            pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: `재시도 중... (${retryCount + 1}/2)` };
-            renderPipelinePage();
-
-            // 지수 백오프: 첫 재시도 2초, 두 번째 재시도 4초 대기
-            await new Promise(resolve => setTimeout(resolve, 2000 * Math.pow(2, retryCount)));
-            return generateImageForIdx(idx, retryCount + 1);
-          }
-
-          const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-          const errorMsg = res.status === 500
-            ? `서버 오류 (500): ${detail || '이미지 생성 서버에 일시적 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'}`
-            : detail || 'imagen_error';
-          throw new Error(errorMsg);
-        }
-
-        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-        const dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
-
-        if (!dataUrl) {
-          throw new Error('이미지 데이터를 받지 못했습니다.');
-        }
-
-        pipelineState.scenes[idx] = {
-          ...scene,
-          imageDataUrl: dataUrl,
-          imgLoading: false,
-          imgError: '',
-          promptText: scene.promptText
-        };
-
-        console.log(`Scene ${scene.id} 이미지 생성 성공`);
-      } catch (err) {
-        const errorMessage = err?.message || '이미지 생성 실패';
-        console.error(`Scene ${scene.id} 이미지 생성 실패:`, errorMessage);
-        pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: errorMessage };
-      }
-
-      renderPipelinePage();
-      persistPipeline();
-    };
+    const generateImageForIdx = async (idx, retryCount = 0) => NK.uiPipeline.generateImageForIdx(idx, retryCount);
 
     const uploadImageForIdx = async (idx) => {
       if (!pipelineState) return;
@@ -1778,17 +1123,8 @@
         pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
         renderPipelinePage();
         persistPipeline();
-        const fd = new FormData();
-        fd.append('projectId', currentPid);
-        fd.append('file', file);
         try {
-          const res = await fetch('/api/image/upload', { method: 'POST', body: fd });
-          const text = await res.text();
-          if (!res.ok) {
-            const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-            throw new Error(`${res.status} ${detail || 'upload_error'}`);
-          }
-          const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+          const json = await NK.api.imageUpload(currentPid, file);
           const url = String(json.signedUrl || '');
           pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], imageDataUrl: url, imgLoading: false, imgError: '' };
           renderPipelinePage();
@@ -1825,25 +1161,14 @@
       renderPipelinePage();
       persistPipeline();
       try {
-        const res = await fetch('/api/video', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sceneId: scene.id,
-            projTag: pipelineState.draftId || '',
-            promptText: scene.promptText || scene.lines || '',
-            imageDataUrl: scene.imageDataUrl,
-            durationSeconds: Math.min(Math.max(Number(scene.estSec) || 6, 4), 8),
-            aspectRatio,
-          })
+        const json = await NK.api.videoStart({
+          sceneId: scene.id,
+          projTag: pipelineState.draftId || '',
+          promptText: scene.promptText || scene.lines || '',
+          imageDataUrl: scene.imageDataUrl,
+          durationSeconds: Math.min(Math.max(Number(scene.estSec) || 6, 4), 8),
+          aspectRatio
         });
-        const text = await res.text();
-        if (!res.ok) {
-          console.error('video api error', res.status, text);
-          const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-          throw new Error(`${res.status} ${detail || 'video_api_error'}`);
-        }
-        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
         const jobId = json.job_id || '';
         if (!jobId) throw new Error('job_id 없음');
         pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], videoJobId: jobId, videoStatus: 'processing' };
@@ -1882,18 +1207,8 @@
         pipelineState.scenes[idx] = { ...scene, videoStatus: 'processing', videoError: '', videoUrl: '' };
         renderPipelinePage();
         persistPipeline();
-        const fd = new FormData();
-        fd.append('projectId', currentPid);
-        fd.append('sceneId', String(scene.id));
-        fd.append('file', file);
         try {
-          const res = await fetch('/api/video/upload', { method: 'POST', body: fd });
-          const text = await res.text();
-          if (!res.ok) {
-            const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-            throw new Error(`${res.status} ${detail || 'upload_error'}`);
-          }
-          const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+          const json = await NK.api.videoUpload(currentPid, String(scene.id), file);
           const url = String(json.signedUrl || '');
           pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], videoUrl: url, videoStatus: 'done', videoError: '' };
           renderPipelinePage();
@@ -2016,10 +1331,7 @@
       }
       try {
         const pid = pipelineState.draftId || '';
-        const res = await fetch(`/api/video/status?job_id=${encodeURIComponent(jobId)}&projectId=${encodeURIComponent(pid)}&sceneId=${encodeURIComponent(scene.id)}`);
-        const text = await res.text();
-        if (!res.ok) throw new Error(text || 'status_error');
-        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
+        const json = await NK.api.videoStatus({ job_id: jobId, projectId: pid, sceneId: scene.id });
         if (json.status === 'processing') {
           await delay(3000);
           return pollVideoJob(jobId, idx, attempt + 1);
@@ -2082,17 +1394,8 @@
       const pid = pipelineState.draftId || '';
       if (!pid) { alert('프로젝트를 먼저 선택하세요.'); return; }
       const scene = pipelineState.scenes[idx];
-      const url = kind === 'image'
-        ? `/api/image/library?projectId=${encodeURIComponent(pid)}`
-        : `/api/video/library?projectId=${encodeURIComponent(pid)}`;
       try {
-        const res = await fetch(url);
-        const text = await res.text();
-        const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-        if (!res.ok) {
-          alert('라이브러리 조회 실패');
-          return;
-        }
+        const json = await NK.api.library(kind, pid);
         const items = Array.isArray(json.items) ? json.items : [];
         const libModal = document.getElementById('lib-modal');
         const content = libModal ? libModal.querySelector('.lib-content') : null;
@@ -2131,22 +1434,14 @@
             if (!confirm('삭제하시겠습니까?')) return;
             const targetName = selected.name;
             try {
-              const res = await fetch('/api/project/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: pid, confirm: 'yes', objectName: targetName })
-              });
-              const text = await res.text();
-              const ok = res.ok;
-              const j = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-              if (!ok) { alert('삭제 실패'); return; }
+              try {
+                await NK.api.projectDelete(pid, targetName);
+              } catch (_) { alert('삭제 실패'); return; }
               const node = content.querySelector(`.lib-item[data-name="${encodeURIComponent(targetName)}"]`);
               if (node) node.remove();
               selected = null;
               alert('삭제했습니다.');
-            } catch (_) {
-              alert('삭제 실패');
-            }
+            } catch (_) { alert('삭제 실패'); }
             return;
           }
           if (closeBtn) {
@@ -2265,17 +1560,7 @@
               const objectName = getFileName(scene.imageDataUrl);
               console.log('[deleteImage] projectId:', pid, 'objectName:', objectName);
 
-              const res = await fetch('/api/project/delete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: pid, confirm: 'yes', objectName })
-              });
-
-              if (!res.ok) {
-                const text = await res.text();
-                const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-                throw new Error(`${res.status} ${detail || 'delete_error'}`);
-              }
+              await NK.api.projectDelete(pid, objectName);
 
               // UI에서도 제거
               pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
@@ -2587,10 +1872,7 @@
           refreshOptionUI();
           applyAuthGuard();
           alert('로그인 되었습니다. 시나리오 페이지로 이동합니다.');
-          try { sessionStorage.setItem('nk_allow_scenario', 'true'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
+          setNavStage('scenario');
           window.location.href = 'scenario.html';
         } else {
           alert('아이디 또는 비밀번호가 올바르지 않습니다.');
@@ -2600,25 +1882,27 @@
     refreshOptionUI();
 
     if (confirmBtn) {
-      confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
+      confirmBtn.disabled = false;
+      confirmBtn.removeAttribute('disabled');
       confirmBtn.addEventListener('click', async () => {
-        if (!scenesState.length && !forceConfirmEnable) {
-          alert('먼저 시나리오를 생성하세요.');
-          return;
-        }
         setLoading(true);
+        const gotoScenes = () => { setNavStage('scenes'); try { window.location.assign('scenes.html'); } catch (_) { window.location.href = 'scenes.html'; } };
         try {
           const payload = lastPayload || buildPayload(new FormData(form));
-          const headerRaw = loadHeader() || await fetchGlobalHeader(payload);
+          let headerRaw = loadHeader();
+          if (!headerRaw) {
+            try { headerRaw = await fetchGlobalHeader(payload); } catch (_) { headerRaw = ''; }
+          }
           const header = withAspectInHeader(headerRaw, aspectRatio);
           saveHeader(header);
-          savePipeline(payload, scenesState, header);
-          try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
-          try { sessionStorage.setItem('nk_allow_scenes', 'true'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
-          try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
-          window.location.href = 'scenes.html';
+          if (scenesState && scenesState.length) {
+            savePipeline(payload, scenesState, header);
+          } else {
+            savePipeline(payload, [], header);
+          }
+          gotoScenes();
+        } catch (_) {
+          gotoScenes();
         } finally {
           setLoading(false);
         }
