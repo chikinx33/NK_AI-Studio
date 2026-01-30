@@ -1,4 +1,4 @@
-(function() {
+(function () {
   const translations = {
     en: {
       brand_title: 'NK_Studio',
@@ -202,45 +202,45 @@
   const PIPELINE_KEY = 'nk_pipeline_last';
   const APP_VERSION = '1.089';
   const purposeCategories = {
-    '키즈 · 영유아': ['유아 교육','키즈 놀이','키즈 학습','동요','율동','동화'],
-    '스토리 · 서사': ['동화','창작','에피소드','세계관','판타지','힐링'],
-    '지식 · 교양': ['상식','과학','수학','역사','인문학','철학','심리','시사'],
-    '교육 · 학습': ['공부법','시험 대비','자격증','언어 학습','코딩','튜토리얼'],
-    '음식 · 요리': ['레시피','먹방','맛집 소개','요리 과정','음식 리뷰','홈쿡'],
-    '여행 · 관광': ['국내 여행','해외 여행','관광지 소개','숨은 명소','랜선 여행'],
-    '라이프 · 일상': ['브이로그','일상 기록','루틴','자취','육아','직장 생활'],
-    '리뷰 · 추천': ['제품','서비스','콘텐츠 추천','앱','게임','책','영화'],
-    '엔터테인먼트': ['코미디','패러디','챌린지','리액션','밈 콘텐츠'],
-    '게임': ['게임 플레이','공략','하이라이트','게임 리뷰','모바일 게임'],
-    '음악 · 사운드': ['음악 소개','BGM','커버','ASMR','사운드 콘텐츠'],
-    '스포츠 · 피트니스': ['운동 루틴','스트레칭','홈트레이닝','스포츠 해설','경기 요약'],
-    '취미 · 크리에이티브': ['그림','DIY','공예','디자인','글쓰기','사진'],
-    '비즈니스 · 경제': ['창업','재테크','경제 상식','마케팅','브랜딩'],
-    '테크 · IT': ['AI','신기술','앱 소개','기기 리뷰','생산성 툴'],
-    '힐링 · 감성': ['명상','위로','힐링 영상','감성 브이로그','자연 풍경'],
-    '종교 · 신앙': ['말씀 묵상','설교 요약','신앙 이야기','간증','기도'],
-    '사회 · 공감': ['인터뷰','다큐형 콘텐츠','사회 이슈','공감 토크']
+    '키즈 · 영유아': ['유아 교육', '키즈 놀이', '키즈 학습', '동요', '율동', '동화'],
+    '스토리 · 서사': ['동화', '창작', '에피소드', '세계관', '판타지', '힐링'],
+    '지식 · 교양': ['상식', '과학', '수학', '역사', '인문학', '철학', '심리', '시사'],
+    '교육 · 학습': ['공부법', '시험 대비', '자격증', '언어 학습', '코딩', '튜토리얼'],
+    '음식 · 요리': ['레시피', '먹방', '맛집 소개', '요리 과정', '음식 리뷰', '홈쿡'],
+    '여행 · 관광': ['국내 여행', '해외 여행', '관광지 소개', '숨은 명소', '랜선 여행'],
+    '라이프 · 일상': ['브이로그', '일상 기록', '루틴', '자취', '육아', '직장 생활'],
+    '리뷰 · 추천': ['제품', '서비스', '콘텐츠 추천', '앱', '게임', '책', '영화'],
+    '엔터테인먼트': ['코미디', '패러디', '챌린지', '리액션', '밈 콘텐츠'],
+    '게임': ['게임 플레이', '공략', '하이라이트', '게임 리뷰', '모바일 게임'],
+    '음악 · 사운드': ['음악 소개', 'BGM', '커버', 'ASMR', '사운드 콘텐츠'],
+    '스포츠 · 피트니스': ['운동 루틴', '스트레칭', '홈트레이닝', '스포츠 해설', '경기 요약'],
+    '취미 · 크리에이티브': ['그림', 'DIY', '공예', '디자인', '글쓰기', '사진'],
+    '비즈니스 · 경제': ['창업', '재테크', '경제 상식', '마케팅', '브랜딩'],
+    '테크 · IT': ['AI', '신기술', '앱 소개', '기기 리뷰', '생산성 툴'],
+    '힐링 · 감성': ['명상', '위로', '힐링 영상', '감성 브이로그', '자연 풍경'],
+    '종교 · 신앙': ['말씀 묵상', '설교 요약', '신앙 이야기', '간증', '기도'],
+    '사회 · 공감': ['인터뷰', '다큐형 콘텐츠', '사회 이슈', '공감 토크']
   };
   const needsList = [
-    '학습','놀이','엔터테인먼트','스토리','감성','힐링','공감','실용 정보','생활 정보','업무 효율',
-    '생산성','자기계발','시험','진로','커리어','창업','경제','재테크','소비','노후 설계','정치',
-    '사회 이슈','시사','건강','운동','식습관','여가','취미','여행','스트레스 해소','멘탈 관리',
-    '관계','가정','자녀','연애','소통','자기 성찰','라이프스타일'
+    '학습', '놀이', '엔터테인먼트', '스토리', '감성', '힐링', '공감', '실용 정보', '생활 정보', '업무 효율',
+    '생산성', '자기계발', '시험', '진로', '커리어', '창업', '경제', '재테크', '소비', '노후 설계', '정치',
+    '사회 이슈', '시사', '건강', '운동', '식습관', '여가', '취미', '여행', '스트레스 해소', '멘탈 관리',
+    '관계', '가정', '자녀', '연애', '소통', '자기 성찰', '라이프스타일'
   ];
   const toneList = [
-    '담백','신뢰','차분','유머','경쾌','진지','따뜻','공감','감성','중립','풍자',
-    '설득','전문','친근','위로','동기부여','논리','정보','스토리'
+    '담백', '신뢰', '차분', '유머', '경쾌', '진지', '따뜻', '공감', '감성', '중립', '풍자',
+    '설득', '전문', '친근', '위로', '동기부여', '논리', '정보', '스토리'
   ];
   const styleList = [
-    '실사','다큐 스타일','브이로그','만화','애니메이션','일러스트','모션그래픽','인포그래픽','슬라이드형',
-    '스크린 캡처','UI 중심','텍스트 중심','미니멀','컬러풀','심플','레트로','시네마틱'
+    '실사', '다큐 스타일', '브이로그', '만화', '애니메이션', '일러스트', '모션그래픽', '인포그래픽', '슬라이드형',
+    '스크린 캡처', 'UI 중심', '텍스트 중심', '미니멀', '컬러풀', '심플', '레트로', '시네마틱'
   ];
 
   const loadDraftsGlobal = () => {
     try { return JSON.parse(localStorage.getItem(DRAFT_KEY)) || []; } catch (_) { return []; }
   };
   const saveDraftsGlobal = (drafts) => {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch (_) {}
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch (_) { }
   };
 
   let forceConfirmEnable = false;
@@ -299,7 +299,7 @@
   const applyTheme = () => {
     document.documentElement.setAttribute('data-theme', theme);
     updateThemeButton();
-    try { localStorage.setItem('nk_theme', theme); } catch (_) {}
+    try { localStorage.setItem('nk_theme', theme); } catch (_) { }
   };
 
   let currentDraftId = null;
@@ -341,7 +341,7 @@
     try {
       const saved = localStorage.getItem('nk_theme');
       if (saved === 'light' || saved === 'dark') theme = saved;
-    } catch (_) {}
+    } catch (_) { }
     applyTheme();
     const renderDashboardDrafts = () => {
       const container = document.getElementById('dashboard-drafts');
@@ -349,8 +349,8 @@
       const drafts = loadDraftsGlobal();
       const fmtDuration = (sec) => {
         const n = Number(sec) || 0;
-        if (n >= 3600 && n % 3600 === 0) return `${n/3600}h`;
-        if (n >= 60 && n % 60 === 0) return `${n/60}m`;
+        if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
+        if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
         return `${n}s`;
       };
       const emptyCard = `
@@ -468,8 +468,8 @@
         }
         if (!draft) return;
         if (action === 'scenario-edit') {
-          try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) {}
-          try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) {}
+          try { localStorage.setItem('nk_selected_draft', JSON.stringify(draft)); } catch (_) { }
+          try { sessionStorage.setItem('nk_force_confirm_enable', 'true'); } catch (_) { }
           forceConfirmEnable = true;
           window.location.href = 'scenario.html';
           return;
@@ -480,8 +480,8 @@
             try {
               const updated = { ...existing, draftId: draft.id };
               localStorage.setItem(PIPELINE_KEY, JSON.stringify(updated));
-            } catch (_) {}
-            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
+            } catch (_) { }
+            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
             window.location.href = 'scenes.html';
             return;
           } else {
@@ -493,8 +493,8 @@
               aspectRatio: (draft.payload && draft.payload.aspectRatio) || '16:9',
               draftId: draft.id
             };
-            try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) {}
-            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
+            try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(pipelineData)); } catch (_) { }
+            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
             window.location.href = 'scenes.html';
             return;
           }
@@ -624,7 +624,7 @@
       try {
         localStorage.setItem(loginKey, val ? 'true' : 'false');
         localStorage.setItem(loginUserKey, val ? user : '');
-      } catch (_) {}
+      } catch (_) { }
     };
     const getUser = () => {
       try { return localStorage.getItem(loginUserKey) || ''; } catch (_) { return ''; }
@@ -655,15 +655,14 @@
             <p class="view-lines" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.lines || ''}</p>
             <p class="muted">Shot: <span class="view-shot" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.shot || ''}</span></p>
             <div class="actions">
-              ${
-                s.editing
-                  ? `<button class="btn-secondary" data-action="save" data-id="${s.id}">저장</button>
+              ${s.editing
+              ? `<button class="btn-secondary" data-action="save" data-id="${s.id}">저장</button>
                      <button class="btn-ghost" data-action="cancel-edit" data-id="${s.id}">취소</button>`
-                  : `<button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
+              : `<button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
                      <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
                      <button class="btn-ghost" data-action="delete" data-id="${s.id}">삭제</button>
                      <button class="btn-ghost" data-action="add" data-id="${s.id}">추가</button>`
-              }
+            }
             </div>
           </div>`
         )
@@ -683,7 +682,7 @@
         aspectRatio,
         draftId: existing.draftId || currentDraftId || null
       };
-      try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(data)); } catch (_) {}
+      try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(data)); } catch (_) { }
     };
 
     const loadPipeline = () => {
@@ -699,12 +698,12 @@
     };
 
     const saveHeader = (header) => {
-      try { localStorage.setItem(headerKey, header || ''); } catch (_) {}
+      try { localStorage.setItem(headerKey, header || ''); } catch (_) { }
     };
 
     const saveAspect = (ratio) => {
       aspectRatio = ratio;
-      try { localStorage.setItem('nk_aspect_ratio', ratio); } catch (_) {}
+      try { localStorage.setItem('nk_aspect_ratio', ratio); } catch (_) { }
       ratioButtons.forEach(btn => {
         if (btn instanceof HTMLElement) {
           btn.classList.toggle('active', btn.dataset.ratio === ratio);
@@ -779,10 +778,10 @@
     const saveDrafts = drafts => {
       try {
         localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
-      } catch (_) {}
+      } catch (_) { }
     };
 
-    const renderDraftNav = () => {};
+    const renderDraftNav = () => { };
 
     const setActiveTags = (box, values = []) => {
       if (!box) return;
@@ -794,47 +793,52 @@
     };
 
     const applyDraft = draft => {
-      if (!draft || !form) return;
-      currentDraftId = draft.id || null;
+      try {
+        if (!draft || !form) return;
+        currentDraftId = draft.id || null;
 
-      const data = draft.payload || {};
-      const topicInput = form.querySelector('input[name="topic"]');
-      if (topicInput) topicInput.value = data.topic || '';
+        const data = draft.payload || {};
+        const topicInput = form.querySelector('input[name="topic"]');
+        if (topicInput) topicInput.value = data.topic || '';
 
-      if (catSelect) {
-        catSelect.value = data.purposeCategory || catSelect.value;
-        renderPurposeTags(catSelect.value, false);
+        if (catSelect) {
+          catSelect.value = data.purposeCategory || catSelect.value;
+          renderPurposeTags(catSelect.value, false);
+        }
+        setActiveTags(tagBox, data.purposeTags || []);
+
+        const targetSelect = form.querySelector('select[name="target"]');
+        if (targetSelect && data.target) targetSelect.value = data.target;
+
+        setActiveTags(needsBox, data.needs || []);
+        setActiveTags(toneBox, data.tones || []);
+        setActiveTags(styleBox, data.styles || []);
+
+        const toneInput = form.querySelector('input[name="tone"]');
+        if (toneInput) toneInput.value = data.tone || '';
+        const styleInput = form.querySelector('input[name="style"]');
+        if (styleInput) styleInput.value = data.style || '';
+        const bannedInput = form.querySelector('textarea[name="banned"]');
+        if (bannedInput) bannedInput.value = data.banned || '';
+        if (data.aspectRatio) saveAspect(data.aspectRatio);
+
+        if (durationBox && data.duration) {
+          durationBox.querySelectorAll('.duration-toggle').forEach(btn => btn.classList.remove('active'));
+          const match = durationBox.querySelector(`[data-value="${data.duration}"]`);
+          if (match) match.classList.add('active');
+        }
+
+        scenesState = draft.scenes || [];
+        renderScenes(scenesState);
+        lastPayload = data;
+        const hasScenes = scenesState.length > 0;
+        if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
+        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
+        ensureConfirmEnabled();
+      } catch (err) {
+        console.error('Failed to apply draft:', err);
+        alert('시나리오 불러오기 실패: ' + err.message);
       }
-      setActiveTags(tagBox, data.purposeTags || []);
-
-      const targetSelect = form.querySelector('select[name="target"]');
-      if (targetSelect && data.target) targetSelect.value = data.target;
-
-      setActiveTags(needsBox, data.needs || []);
-      setActiveTags(toneBox, data.tones || []);
-      setActiveTags(styleBox, data.styles || []);
-
-      const toneInput = form.querySelector('input[name="tone"]');
-      if (toneInput) toneInput.value = data.tone || '';
-      const styleInput = form.querySelector('input[name="style"]');
-      if (styleInput) styleInput.value = data.style || '';
-      const bannedInput = form.querySelector('textarea[name="banned"]');
-      if (bannedInput) bannedInput.value = data.banned || '';
-      if (data.aspectRatio) saveAspect(data.aspectRatio);
-
-      if (durationBox && data.duration) {
-        durationBox.querySelectorAll('.duration-toggle').forEach(btn => btn.classList.remove('active'));
-        const match = durationBox.querySelector(`[data-value="${data.duration}"]`);
-        if (match) match.classList.add('active');
-      }
-
-      scenesState = draft.scenes || [];
-      renderScenes(scenesState);
-      lastPayload = data;
-      const hasScenes = scenesState.length > 0;
-      if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
-      if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
-      ensureConfirmEnabled();
     };
 
     const normalizeScenes = raw => {
@@ -842,7 +846,7 @@
         if (typeof raw === 'string') {
           raw = JSON.parse(raw);
         }
-      } catch (_) {}
+      } catch (_) { }
 
       let scenes = raw?.scenes;
       if (!scenes && Array.isArray(raw)) scenes = raw;
@@ -852,7 +856,7 @@
         try {
           const parsed = JSON.parse(raw.content);
           scenes = parsed.scenes || parsed;
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // scene 최소 형태 강제
@@ -1063,17 +1067,17 @@
           return;
         }
         const payload = buildPayload(data);
-      setLoading(true);
-      lastPayload = payload;
-      try {
-        const scenes = await callScenarioAPI(payload);
-        const header = await fetchGlobalHeader(payload);
-        saveHeader(header);
-        renderScenes(scenes);
-        savePipeline(payload, scenes, header);
-        if (confirmBtn) confirmBtn.disabled = false;
-      } catch (err) {
-        console.warn('API 실패, mock으로 대체', err);
+        setLoading(true);
+        lastPayload = payload;
+        try {
+          const scenes = await callScenarioAPI(payload);
+          const header = await fetchGlobalHeader(payload);
+          saveHeader(header);
+          renderScenes(scenes);
+          savePipeline(payload, scenes, header);
+          if (confirmBtn) confirmBtn.disabled = false;
+        } catch (err) {
+          console.warn('API 실패, mock으로 대체', err);
           const errBox = document.getElementById('scenario-error');
           if (errBox) {
             errBox.textContent = `시나리오 생성 실패: ${err.message || '알 수 없는 오류'}`;
@@ -1281,22 +1285,22 @@
       if (pending) {
         const parsed = JSON.parse(pending);
         applyDraft(parsed);
-          if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable ? true : false;
+        if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable ? true : false;
         if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
         localStorage.removeItem('nk_selected_draft');
       }
-        const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
-        if (forceEnable) {
-          forceConfirmEnable = true;
-          if (confirmBtn) {
-            confirmBtn.disabled = false;
-            confirmBtn.removeAttribute('disabled');
-          }
-          sessionStorage.removeItem('nk_force_confirm_enable');
-        } else {
-          ensureConfirmEnabled();
+      const forceEnable = sessionStorage.getItem('nk_force_confirm_enable') === 'true';
+      if (forceEnable) {
+        forceConfirmEnable = true;
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.removeAttribute('disabled');
         }
-    } catch (_) {}
+        sessionStorage.removeItem('nk_force_confirm_enable');
+      } else {
+        ensureConfirmEnabled();
+      }
+    } catch (_) { }
 
     const applyAuthGuard = () => {
       const overlay = document.getElementById('auth-overlay');
@@ -1345,9 +1349,9 @@
         const keep = (() => { try { return sessionStorage.getItem('nk_pipeline_keep') === 'true'; } catch (_) { return false; } })();
         const stored = keep ? loadPipeline() : null;
         if (!keep) {
-          try { localStorage.removeItem(PIPELINE_KEY); } catch (_) {}
+          try { localStorage.removeItem(PIPELINE_KEY); } catch (_) { }
         } else {
-          try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) {}
+          try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
         }
         if (!stored) {
           placeholderMode = true;
@@ -1465,9 +1469,9 @@
               <p class="story-lines" data-id="${s.id}" ${s.editingStory ? 'contenteditable="true"' : ''}>${s.lines}</p>
               <div class="cell-actions br">
                 ${s.editingStory
-                  ? `<button class="btn-secondary compact" data-action="save-story" data-id="${s.id}">저장</button>
+              ? `<button class="btn-secondary compact" data-action="save-story" data-id="${s.id}">저장</button>
                      <button class="btn-ghost compact" data-action="cancel-story" data-id="${s.id}">취소</button>`
-                  : `<button class="btn-ghost compact" data-action="edit-story" data-id="${s.id}">수정</button>`}
+              : `<button class="btn-ghost compact" data-action="edit-story" data-id="${s.id}">수정</button>`}
               </div>
             </div>
             <div class="scene-cell prompt">
@@ -1479,9 +1483,9 @@
               <p class="prompt-duration" data-id="${s.id}" ${s.editingPrompt ? 'contenteditable="true"' : ''}>${Math.max(Number(s.estSec) || 0, 1)}s.</p>
               <div class="cell-actions br">
                 ${s.editingPrompt
-                  ? `<button class="btn-secondary compact" data-action="save-prompt" data-id="${s.id}">저장</button>
+              ? `<button class="btn-secondary compact" data-action="save-prompt" data-id="${s.id}">저장</button>
                      <button class="btn-ghost compact" data-action="cancel-prompt" data-id="${s.id}">취소</button>`
-                  : `<button class="btn-ghost compact" data-action="edit-prompt" data-id="${s.id}">수정</button>`}
+              : `<button class="btn-ghost compact" data-action="edit-prompt" data-id="${s.id}">수정</button>`}
               </div>
             </div>
             <div class="scene-cell image"><div class="scene-media-stack">${img}${videoCard}</div>${err}</div>
@@ -1500,31 +1504,31 @@
           </div>`;
         }).join('');
         // 업데이트된 prompt를 상태에 반영
-          pipelineState.scenes = scenes.map((s, idx) => {
-            const computedPrompt = [
-              `Common`,
-              `${header}`,
-              `Visual`,
-              `${s.shot || ''}`,
-              `Duration`,
-              `${Math.max(Number(s.estSec) || 0, 1)}s.`
-            ].join('\\n');
-            const finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
-            return {
-              ...s,
-              promptText: finalPrompt,
-              videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
-              videoStatus: s.videoStatus || '',
-              videoMethod: s.videoMethod || '',
-              videoError: s.videoError || '',
-              videoJobId: s.videoJobId || '',
-              editingPrompt: !!s.editingPrompt,
-              editingStory: !!s.editingStory,
-              promptEdited: !!s.promptEdited,
-              editingPromptRaw: false
-            };
-          });
-          pipelineScenes.innerHTML = `
+        pipelineState.scenes = scenes.map((s, idx) => {
+          const computedPrompt = [
+            `Common`,
+            `${header}`,
+            `Visual`,
+            `${s.shot || ''}`,
+            `Duration`,
+            `${Math.max(Number(s.estSec) || 0, 1)}s.`
+          ].join('\\n');
+          const finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
+          return {
+            ...s,
+            promptText: finalPrompt,
+            videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
+            videoStatus: s.videoStatus || '',
+            videoMethod: s.videoMethod || '',
+            videoError: s.videoError || '',
+            videoJobId: s.videoJobId || '',
+            editingPrompt: !!s.editingPrompt,
+            editingStory: !!s.editingStory,
+            promptEdited: !!s.promptEdited,
+            editingPromptRaw: false
+          };
+        });
+        pipelineScenes.innerHTML = `
           <div class="scene-table">
             <div class="scene-row head">
               <div class="scene-cell">Story</div>
@@ -1534,41 +1538,41 @@
             </div>
             ${rows}
           </div>`;
-          try {
-            const vids = pipelineScenes.querySelectorAll('video.scene-video');
-            vids.forEach(v => {
-              v.preload = 'metadata';
-              v.addEventListener('loadedmetadata', () => {
-                console.log('video loadedmetadata', { src: v.currentSrc, duration: v.duration });
-              });
-              v.addEventListener('canplay', () => {
-                console.log('video canplay', { src: v.currentSrc });
-              });
-              v.addEventListener('error', () => {
-                console.error('video error', v.error || null);
-              });
-              const se = v.querySelector('source');
-              const src = (se && se.getAttribute('src')) || v.getAttribute('src') || '';
-              if (src && src.startsWith('data:video/mp4;base64,') && !v.dataset.hydrated) {
-                v.dataset.hydrated = '1';
-                (async () => {
-                  try {
-                    const resp = await fetch(src);
-                    const blob = await resp.blob();
-                    const url = URL.createObjectURL(blob);
-                    if (se) se.setAttribute('src', url);
-                    else v.src = url;
-                    v.load();
-                    console.log('video inline hydrated', { size: blob.size });
-                  } catch (e) {
-                    console.error('video inline hydrate fail', e);
-                  }
-                })();
-              } else {
-                v.load();
-              }
+        try {
+          const vids = pipelineScenes.querySelectorAll('video.scene-video');
+          vids.forEach(v => {
+            v.preload = 'metadata';
+            v.addEventListener('loadedmetadata', () => {
+              console.log('video loadedmetadata', { src: v.currentSrc, duration: v.duration });
             });
-          } catch (_) {}
+            v.addEventListener('canplay', () => {
+              console.log('video canplay', { src: v.currentSrc });
+            });
+            v.addEventListener('error', () => {
+              console.error('video error', v.error || null);
+            });
+            const se = v.querySelector('source');
+            const src = (se && se.getAttribute('src')) || v.getAttribute('src') || '';
+            if (src && src.startsWith('data:video/mp4;base64,') && !v.dataset.hydrated) {
+              v.dataset.hydrated = '1';
+              (async () => {
+                try {
+                  const resp = await fetch(src);
+                  const blob = await resp.blob();
+                  const url = URL.createObjectURL(blob);
+                  if (se) se.setAttribute('src', url);
+                  else v.src = url;
+                  v.load();
+                  console.log('video inline hydrated', { size: blob.size });
+                } catch (e) {
+                  console.error('video inline hydrate fail', e);
+                }
+              })();
+            } else {
+              v.load();
+            }
+          });
+        } catch (_) { }
       } else {
         pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
       }
@@ -2115,7 +2119,7 @@
             renderPipelinePage();
             return;
           }
-          
+
 
           if (action === 'regen-image') {
             await generateImageForIdx(idx);
@@ -2149,7 +2153,7 @@
             if (!scene.videoUrl) return;
             try {
               window.open(scene.videoUrl, '_blank', 'noopener');
-            } catch (_) {}
+            } catch (_) { }
             return;
           }
           if (action === 'download-video') {
@@ -2192,7 +2196,7 @@
                 v.onloadedmetadata = () => console.log('modal video loadedmetadata', { src: v.currentSrc, duration: v.duration });
                 v.onerror = () => console.error('modal video error', v.error || null);
                 vmodal.classList.remove('hidden');
-                try { v.play().catch(() => {}); } catch (_) {}
+                try { v.play().catch(() => { }); } catch (_) { }
               }
             }
           }
@@ -2216,7 +2220,7 @@
           vmodal.classList.add('hidden');
           const v = vmodal.querySelector('video');
           if (v) {
-            try { v.pause(); } catch (_) {}
+            try { v.pause(); } catch (_) { }
             v.removeAttribute('src');
             v.load();
           }
@@ -2274,26 +2278,26 @@
     }
     refreshOptionUI();
 
-      if (confirmBtn) {
-        confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
-        confirmBtn.addEventListener('click', async () => {
-          if (!scenesState.length && !forceConfirmEnable) {
-            alert('먼저 시나리오를 생성하세요.');
-            return;
-          }
-          setLoading(true);
-          try {
-            const payload = lastPayload || buildPayload(new FormData(form));
-            const headerRaw = loadHeader() || await fetchGlobalHeader(payload);
-            const header = withAspectInHeader(headerRaw, aspectRatio);
-            saveHeader(header);
-            savePipeline(payload, scenesState, header);
-            try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) {}
-            window.location.href = 'scenes.html';
-          } finally {
-            setLoading(false);
-          }
-        });
-      }
+    if (confirmBtn) {
+      confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
+      confirmBtn.addEventListener('click', async () => {
+        if (!scenesState.length && !forceConfirmEnable) {
+          alert('먼저 시나리오를 생성하세요.');
+          return;
+        }
+        setLoading(true);
+        try {
+          const payload = lastPayload || buildPayload(new FormData(form));
+          const headerRaw = loadHeader() || await fetchGlobalHeader(payload);
+          const header = withAspectInHeader(headerRaw, aspectRatio);
+          saveHeader(header);
+          savePipeline(payload, scenesState, header);
+          try { sessionStorage.setItem('nk_pipeline_keep', 'true'); } catch (_) { }
+          window.location.href = 'scenes.html';
+        } finally {
+          setLoading(false);
+        }
+      });
+    }
   });
 })();

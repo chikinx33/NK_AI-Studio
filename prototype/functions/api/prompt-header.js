@@ -22,6 +22,7 @@
 - One concise English sentence (can be two clauses) that sets the consistent visual world for all scenes.
 - Include: overall visual style (animation/illustration/real), color/line/render feel, mood matching tone, character consistency (type, outfits), setting (indoor/outdoor, world, season/time), recurring props treatment, and camera/framing continuity.
 - Do NOT mention the specific scene content; make it project-wide.
+- SAFETY: To avoid video generation policy violations, expressly avoid describing 'realistic' or 'photorealistic' human faces. Prefer 'stylized', 'animated', '3D character', 'toy-like', 'soft render', or 'illustration'.
 - Keep it under 55 words.`;
 
   const user = `Project: ${topic}

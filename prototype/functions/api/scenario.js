@@ -54,6 +54,7 @@
 - 30분 이상 롱폼은 Scene당 estSec을 10~20초 사이로 유지합니다.
 - 각 Scene의 lines는 2~3문장, 시청 타겟 눈높이에 맞춘 어휘, 톤/스타일을 느낄 수 있게 작성하세요.
 - 각 Scene에 shot(시각 묘사) 한 줄을 포함하세요. 스타일 요소는 shot에만 반영합니다.
+- [중요] 영상 생성 안전 정책 준수: '실사 사람 얼굴'이나 '구체적인 이목구비' 묘사를 피하세요. 대신 '3D 캐릭터', '애니메이션 스타일', '뒷모습', '실루엣', '동물/사물', '토이 스타일', '몽환적 분위기' 등을 사용하여 인물을 추상화하거나 스타일화하세요.
 - 추가 설명(extraNotes)에 적힌 세부 요구를 반영하되, 기존 규칙을 덮어쓰지 않습니다.
 - 마크다운/설명 없이 JSON만 반환합니다.`;
 
@@ -70,6 +71,7 @@
 - Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
 - For 30m+ long-form, keep per-scene estSec between 10–20 seconds.
 - Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
+- [IMPORTANT] Video Safety Compliance: Avoid describing 'realistic human faces' or 'detailed facial features'. Instead, use 'stylized 3D character', 'animated style', 'back view', 'silhouette', 'anthropomorphic animal/object', 'toy style', or 'dreamy atmosphere' to abstract or stylize figures.
 - Apply extraNotes without overriding rules above. No markdown or extra explanations.`;
 
   const userPrompt =
