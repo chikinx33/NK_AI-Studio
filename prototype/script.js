@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.097';
+  const APP_VERSION = '1.098';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -1298,24 +1298,37 @@
         const payload = buildPayload(data);
         const scenes = scenesState.length ? scenesState : mockGenerate(payload);
         const drafts = loadDrafts();
-        const id = currentDraftId;
-        if (!id) {
-          alert('대시보드에서 프로젝트를 먼저 생성하고 선택하세요.');
-          return;
+
+        let id = currentDraftId;
+        let existsIdx = -1;
+
+        if (id) {
+          existsIdx = drafts.findIndex(d => d.id === id);
         }
-        const existsIdx = drafts.findIndex(d => d.id === id);
-        if (existsIdx === -1) {
-          alert('프로젝트를 찾을 수 없습니다. 대시보드에서 다시 선택하세요.');
-          return;
+
+        // ID가 없거나 유효하지 않으면 새 프로젝트로 생성
+        if (!id || existsIdx === -1) {
+          const newId = Date.now();
+          const title = payload.topic ? payload.topic.trim() : '새 프로젝트';
+          const newDraft = { id: newId, title, payload, scenes };
+          drafts.unshift(newDraft);
+          currentDraftId = newId;
+        } else {
+          // 기존 프로젝트 업데이트
+          const existing = drafts[existsIdx];
+          const newTitle = payload.topic ? payload.topic.trim() : (existing.title || '제목없음');
+          const updatedDraft = {
+            ...existing,
+            title: newTitle, // 주제가 바뀌면 제목도 갱신 (선택사항이지만 편의상)
+            payload,
+            scenes
+          };
+          drafts[existsIdx] = updatedDraft;
         }
-        const preservedTitle = drafts[existsIdx]?.title || '제목없음';
-        const newDraft = { id, title: preservedTitle, payload, scenes };
-        drafts[existsIdx] = newDraft;
-        currentDraftId = id;
+
         const trimmed = drafts.slice(0, 20);
         saveDrafts(trimmed);
-        renderDraftNav();
-        alert('저장되었습니다.');
+        alert(id ? '저장되었습니다.' : '새 프로젝트로 저장되었습니다.');
       });
     }
     // 복제 기능 제거
