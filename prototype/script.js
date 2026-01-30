@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.096';
+  const APP_VERSION = '1.097';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -1473,6 +1473,7 @@
           <button class="btn-primary" id="confirm-dub" ${pipelineState.isPlaceholder && !scenes.length ? 'disabled' : ''}>최종 컨펌 → 영상 편집</button>
         </div>`;
       if (scenes && scenes.length) {
+        pipelineScenes.classList.remove('empty');
         const rows = scenes.map(s => {
           const computedPrompt = [
             `Common`,
@@ -1617,6 +1618,7 @@
           });
         } catch (_) { }
       } else {
+        pipelineScenes.classList.add('empty');
         pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
       }
 
