@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.094';
+  const APP_VERSION = '1.095';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -796,15 +796,27 @@
     const applyDraft = draft => {
       try {
         if (!draft || !form) return;
+        console.log('Applying draft:', draft);
         currentDraftId = draft.id || null;
 
         const data = draft.payload || {};
         const topicInput = form.querySelector('input[name="topic"]');
         if (topicInput) topicInput.value = data.topic || '';
 
+        // UI 요소 재확인 (변수 초기화가 늦은 경우 대비)
+        if (!catSelect) catSelect = document.getElementById('purpose-category');
+        if (!tagBox) tagBox = document.getElementById('purpose-tags');
+        if (!needsBox) needsBox = document.getElementById('needs-tags');
+        if (!toneBox) toneBox = document.getElementById('tone-tags');
+        if (!styleBox) styleBox = document.getElementById('style-tags');
+        if (!durationBox) durationBox = document.getElementById('duration-tags');
+
         if (catSelect) {
           catSelect.value = data.purposeCategory || catSelect.value;
-          renderPurposeTags(catSelect.value, false);
+          // renderPurposeTags 함수 존재 여부 확인
+          if (typeof renderPurposeTags === 'function') {
+            renderPurposeTags(catSelect.value, false);
+          }
         }
         setActiveTags(tagBox, data.purposeTags || []);
 
