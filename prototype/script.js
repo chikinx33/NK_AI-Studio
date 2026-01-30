@@ -4,9 +4,9 @@
       brand_title: 'NK_Studio',
       brand_subtitle: 'Automated Video Pipeline',
       nav_dashboard: 'Dashboard',
-      nav_scenario: 'Scenario (GPT)',
-      nav_scenes: 'Video Production',
-      nav_media: 'Media Lab',
+      nav_scenario: 'Pre-production',
+      nav_scenes: 'Production',
+      nav_media: 'Post-production',
       nav_voice: 'Voice & Subtitles',
       nav_render: 'Results Queue',
       nav_publish: 'Publish',
@@ -101,9 +101,9 @@
       brand_title: 'NK_Studio',
       brand_subtitle: '자동화 영상 제작 파이프라인',
       nav_dashboard: '대시보드',
-      nav_scenario: '시나리오',
-      nav_scenes: '영상 제작',
-      nav_media: '영상 편집',
+      nav_scenario: '프리 프로덕션',
+      nav_scenes: '프로덕션',
+      nav_media: '포스트 프로덕션',
       nav_voice: '더빙 · 자막',
       nav_render: '결과 대기열',
       nav_publish: '배포',
@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.113';
+  const APP_VERSION = '1.119';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -366,9 +366,14 @@
       const list = drafts.map(d => {
         const ar = d.payload?.aspectRatio || '16:9';
         const dur = fmtDuration(d.payload?.duration || 0);
+        const cat = d.payload?.purposeCategory || '';
+        const tags = Array.isArray(d.payload?.purposeTags) ? d.payload.purposeTags.join(', ') : '';
+        const tgt = d.payload?.target || '';
+        const genre = `${cat} ${tags}`.trim();
         const canGenerate = Array.isArray(d.scenes) && d.scenes.length > 0;
         return `
           <article class="draft-card">
+            <button class="trash-btn top-right" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
             <div class="draft-top">
               <div class="draft-thumb"></div>
               <div>
@@ -377,15 +382,17 @@
                   <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">✎</button>
                 </div>
                 <div class="draft-meta">
-                  <span>화면비 ${ar}</span>
-                  <span>길이 ${dur}</span>
+                  <div>장르 : ${genre || '-'}</div>
+                  <div>타겟 : ${tgt || '-'}</div>
+                  <div>길이 : ${dur}</div>
+                  <div>비율 : ${ar}</div>
                 </div>
               </div>
             </div>
             <div class="draft-actions">
-              <button class="btn-secondary" data-action="scenario-edit" data-id="${d.id}">시나리오</button>
-              <button class="btn-secondary" data-action="scene-edit" data-id="${d.id}" ${canGenerate ? '' : 'disabled'}>영상 제작</button>
-              <button class="trash-btn" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
+              <button class="btn-secondary" data-action="scenario-edit" data-id="${d.id}">프리 프로덕션</button>
+              <button class="btn-secondary" data-action="scene-edit" data-id="${d.id}" ${canGenerate ? '' : 'disabled'}>프로덕션</button>
+              <button class="btn-secondary" data-action="post-edit" data-id="${d.id}">포스트 프로덕션</button>
             </div>
           </article>
         `;
@@ -945,7 +952,7 @@
       }
       if (confirmBtn) {
         confirmBtn.disabled = loading;
-        confirmBtn.textContent = loading ? '컨펌 중...' : '최종 컨펌 → 씬 파이프라인';
+        confirmBtn.textContent = loading ? '컨펌 중...' : '최종 컨펌 → 프로덕션';
       }
       if (overlay) {
         overlay.classList.toggle('hidden', !loading);
@@ -1480,7 +1487,7 @@
           <button class="btn-secondary" id="save-pipeline-btn" ${pipelineState.isPlaceholder ? 'disabled' : ''}>저장하기</button>
           <button class="btn-secondary" id="bulk-generate" ${pipelineState.isPlaceholder ? 'disabled' : ''}>이미지 일괄 생성</button>
           <button class="btn-secondary" id="bulk-video" ${pipelineState.isPlaceholder ? 'disabled' : ''}>영상 일괄 변환</button>
-          <button class="btn-primary" id="confirm-dub" ${pipelineState.isPlaceholder && !scenes.length ? 'disabled' : ''}>최종 컨펌 → 영상 편집</button>
+          <button class="btn-primary" id="confirm-dub" ${pipelineState.isPlaceholder && !scenes.length ? 'disabled' : ''}>최종 컨펌 → 포스트 프로덕션</button>
         </div>`;
       if (scenes && scenes.length) {
         pipelineScenes.classList.remove('empty');

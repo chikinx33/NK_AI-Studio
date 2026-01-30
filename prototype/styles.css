@@ -1109,6 +1109,7 @@ body::-webkit-scrollbar {
   border-radius: var(--radius);
   padding: 18px;
   box-shadow: var(--shadow);
+  position: relative;
 }
 
 .draft-top {
@@ -1126,15 +1127,17 @@ body::-webkit-scrollbar {
 }
 
 .draft-title {
-  margin: 0 0 10px;
+  margin: 0;
   font-weight: 700;
   font-size: 18px;
+  line-height: 30px;
 }
 
 .draft-title-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 10px;
 }
 
 .edit-btn {
@@ -1156,8 +1159,8 @@ body::-webkit-scrollbar {
 
 .draft-meta {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 4px;
   color: var(--muted);
   font-size: 14px;
 }
@@ -1167,6 +1170,9 @@ body::-webkit-scrollbar {
   gap: 10px;
   align-items: center;
   justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
 }
 
 .draft-actions .btn-secondary,
@@ -1190,6 +1196,13 @@ body::-webkit-scrollbar {
 
 .trash-btn:hover {
   color: var(--text);
+}
+
+.trash-btn.top-right {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
 }
 
 .empty-project-card {
