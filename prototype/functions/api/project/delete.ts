@@ -34,7 +34,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       privateKeyPem: privateKeyRaw,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
-    const userProject = (env.GOOGLE_PROJECT_ID as string | undefined) || "";
+    const userProject =
+      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+      (env.GOOGLE_PROJECT_ID as string | undefined) ||
+      "";
 
     // List and delete objects with pagination
     let pageToken = "";
