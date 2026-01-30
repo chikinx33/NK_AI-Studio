@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.126';
+  const APP_VERSION = '1.127';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -273,60 +273,8 @@
     if (enabled) confirmBtn.removeAttribute('disabled');
   };
 
-  const applyVersionAndNav = () => {
-    document.querySelectorAll('.sidebar-version').forEach(el => {
-      el.textContent = `ver ${APP_VERSION}`;
-    });
-    const normalize = (p) => {
-      if (!p) return 'index';
-      let clean = p.toLowerCase();
-      clean = clean.split('#')[0].split('?')[0];
-      clean = clean.replace(/\/+$/, '');
-      const base = clean.split('/').pop() || 'index';
-      return base.replace(/\.html?$/, '') || 'index';
-    };
-    const current = normalize(window.location.pathname);
-    if (current === 'index') {
-      try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
-      try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
-      try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
-      try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
-    }
-    const allowScenario = (() => { try { return sessionStorage.getItem('nk_allow_scenario') === 'true'; } catch (_) { return false; } })();
-    const allowScenes = (() => { try { return sessionStorage.getItem('nk_allow_scenes') === 'true'; } catch (_) { return false; } })();
-    const allowMedia = (() => { try { return sessionStorage.getItem('nk_allow_media') === 'true'; } catch (_) { return false; } })();
-    const allowPublish = (() => { try { return sessionStorage.getItem('nk_allow_publish') === 'true'; } catch (_) { return false; } })();
-    document.querySelectorAll('.nav .nav-item').forEach(a => {
-      const keyEl = a.querySelector('[data-i18n]');
-      const key = keyEl ? keyEl.getAttribute('data-i18n') : '';
-      let allowed = true;
-      if (key === 'nav_scenario') allowed = allowScenario;
-      else if (key === 'nav_scenes') allowed = allowScenes;
-      else if (key === 'nav_media') allowed = allowMedia;
-      else if (key === 'nav_publish') allowed = allowPublish;
-      if (!allowed) {
-        a.classList.add('disabled');
-        a.setAttribute('aria-disabled', 'true');
-        a.setAttribute('tabindex', '-1');
-        const original = a.getAttribute('data-href') || a.getAttribute('href') || '';
-        a.setAttribute('data-href', original);
-        a.setAttribute('href', '#');
-      } else {
-        a.classList.remove('disabled');
-        a.removeAttribute('aria-disabled');
-        a.removeAttribute('tabindex');
-        const original = a.getAttribute('data-href') || '';
-        if (original) a.setAttribute('href', original);
-      }
-    });
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    const match = Array.from(document.querySelectorAll('.nav-item[href]')).find(a => {
-      const href = a.getAttribute('href') || '';
-      if (href.startsWith('#')) return false;
-      return normalize(href) === current;
-    });
-    if (match) match.classList.add('active');
-  };
+  NK.core.APP_VERSION = APP_VERSION;
+  const applyVersionAndNav = NK.core.applyVersionAndNav;
 
   const apply = () => {
     const t = translations[current];
@@ -356,11 +304,7 @@
 
   let currentDraftId = null;
 
-  const withAspectInHeader = (headerText, ratio) => {
-    const text = headerText || '';
-    const cleaned = text.replace(/\[?\s*aspect\s*ratio\s*:\s*.*?\]?/ig, '').replace(/\s{2,}/g, ' ').trim();
-    return cleaned;
-  };
+  const withAspectInHeader = NK.core.withAspectInHeader;
 
   window.toggleTheme = () => {
     theme = theme === 'dark' ? 'light' : 'dark';
@@ -1003,24 +947,7 @@
       return normalizeScenes(data);
     };
 
-    const setLoading = (loading) => {
-      const submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
-      const overlay = document.getElementById('scenario-loading') || document.getElementById('dashboard-loading');
-      const err = document.getElementById('scenario-error');
-      const confirmBtn = document.getElementById('confirm-scenes');
-      if (submitBtn) {
-        submitBtn.disabled = loading;
-        submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
-      }
-      if (confirmBtn) {
-        confirmBtn.disabled = loading;
-        confirmBtn.textContent = loading ? '컨펌 중...' : '최종 컨펌 → 프로덕션';
-      }
-      if (overlay) {
-        overlay.classList.toggle('hidden', !loading);
-      }
-      if (loading && err) err.classList.add('hidden');
-    };
+    const setLoading = NK.core.setLoading;
 
     // 토글 박스를 외부 스코프로 올려서 payload 빌드 시 참조 오류를 방지
     let tagBox;
