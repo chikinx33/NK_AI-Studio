@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.125';
+  const APP_VERSION = '1.126';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -244,6 +244,24 @@
   };
   const saveDraftsGlobal = (drafts) => {
     try { localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch (_) { }
+  };
+  const migrateDraftsIfNeeded = () => {
+    try {
+      const cur = loadDraftsGlobal();
+      if (Array.isArray(cur) && cur.length) return;
+      const candidates = ['nk_scenario_drafts', 'nk_scenario_drafts_v0', 'nk_pipeline_drafts', 'nk_drafts'];
+      for (const k of candidates) {
+        try {
+          const txt = localStorage.getItem(k);
+          if (!txt) continue;
+          const arr = JSON.parse(txt);
+          if (Array.isArray(arr) && arr.length) {
+            saveDraftsGlobal(arr);
+            return;
+          }
+        } catch (_) { }
+      }
+    } catch (_) { }
   };
 
   let forceConfirmEnable = false;
@@ -362,6 +380,7 @@
   document.addEventListener('DOMContentLoaded', apply);
   document.addEventListener('DOMContentLoaded', () => {
     applyVersionAndNav();
+    migrateDraftsIfNeeded();
     // 화면비 상태는 가장 먼저 초기화해서 하위 로직이 안전하게 실행되도록 함
     const ratioButtons = document.querySelectorAll('.ratio-btn');
     let aspectRatio = (() => {
@@ -1740,14 +1759,22 @@
           needImg ? fetch(`/api/image/library?projectId=${encodeURIComponent(pid)}`) : null,
           needVid ? fetch(`/api/video/library?projectId=${encodeURIComponent(pid)}`) : null
         ]);
-        const imgItems = (() => {
-          if (!imgRes) return [];
-          try { return (JSON.parse(await imgRes.text()).items) || []; } catch (_) { return []; }
-        })();
-        const vidItems = (() => {
-          if (!vidRes) return [];
-          try { return (JSON.parse(await vidRes.text()).items) || []; } catch (_) { return []; }
-        })();
+        let imgItems = [];
+        if (imgRes) {
+          try {
+            const t = await imgRes.text();
+            const j = JSON.parse(t);
+            imgItems = Array.isArray(j.items) ? j.items : [];
+          } catch (_) { imgItems = []; }
+        }
+        let vidItems = [];
+        if (vidRes) {
+          try {
+            const t = await vidRes.text();
+            const j = JSON.parse(t);
+            vidItems = Array.isArray(j.items) ? j.items : [];
+          } catch (_) { vidItems = []; }
+        }
         const baseName = (u) => {
           try {
             const urlObj = new URL(String(u));
