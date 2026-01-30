@@ -795,71 +795,92 @@
 
     const applyDraft = draft => {
       try {
-        // 폼 요소 강력 재확인
-        let targetForm = form;
-        if (!targetForm) targetForm = document.getElementById('scenario-form');
-
-        if (!draft) return;
-        if (!targetForm) {
-          console.error('Scenario form not found');
+        console.log('Attempting to apply draft:', draft);
+        if (!draft) {
+          console.warn('No draft object provided to applyDraft');
           return;
         }
 
-        console.log('Applying draft:', draft);
+        // 1. Re-query Elements (Safety)
+        const f = document.getElementById('scenario-form');
+        const cSel = document.getElementById('purpose-category');
+        const tBox = document.getElementById('purpose-tags');
+        const nBox = document.getElementById('needs-tags');
+        const dBox = document.getElementById('duration-tags');
+        const toBox = document.getElementById('tone-tags');
+        const sBox = document.getElementById('style-tags');
+
+        if (!f) {
+          console.error('Scenario Form not found in DOM');
+          return;
+        }
+
         currentDraftId = draft.id || null;
-
         const data = draft.payload || {};
-        const topicInput = targetForm.querySelector('input[name="topic"]');
-        if (topicInput) topicInput.value = data.topic || '';
 
-        // UI 요소 재확인 (변수 초기화가 늦은 경우 대비)
-        if (!catSelect) catSelect = document.getElementById('purpose-category');
-        if (!tagBox) tagBox = document.getElementById('purpose-tags');
-        if (!needsBox) needsBox = document.getElementById('needs-tags');
-        if (!toneBox) toneBox = document.getElementById('tone-tags');
-        if (!styleBox) styleBox = document.getElementById('style-tags');
-        if (!durationBox) durationBox = document.getElementById('duration-tags');
+        // 2. Text Inputs
+        const topicIn = f.querySelector('input[name="topic"]');
+        if (topicIn) topicIn.value = data.topic || '';
 
-        if (catSelect) {
-          catSelect.value = data.purposeCategory || catSelect.value;
-          // renderPurposeTags 함수 존재 여부 확인
+        const targetSel = f.querySelector('select[name="target"]');
+        if (targetSel && data.target) targetSel.value = data.target;
+
+        const toneIn = f.querySelector('input[name="tone"]');
+        if (toneIn) toneIn.value = data.tone || '';
+
+        const styleIn = f.querySelector('input[name="style"]');
+        if (styleIn) styleIn.value = data.style || '';
+
+        const banIn = f.querySelector('textarea[name="banned"]');
+        if (banIn) banIn.value = data.banned || '';
+
+        // 3. Category & Tags
+        if (cSel && tBox) {
+          // Ensure category is set
+          const catVal = data.purposeCategory || '키즈 · 영유아'; // Default
+          cSel.value = catVal;
+
+          // If the function exists, use it to refresh options
           if (typeof renderPurposeTags === 'function') {
-            renderPurposeTags(catSelect.value, false);
+            renderPurposeTags(catVal, false);
+          }
+          // Now set active tags
+          if (data.purposeTags && Array.isArray(data.purposeTags)) {
+            setActiveTags(tBox, data.purposeTags);
           }
         }
-        setActiveTags(tagBox, data.purposeTags || []);
 
-        const targetSelect = targetForm.querySelector('select[name="target"]');
-        if (targetSelect && data.target) targetSelect.value = data.target;
+        // 4. Other Chips
+        if (nBox && data.needs) setActiveTags(nBox, data.needs);
+        if (toBox && data.tones) setActiveTags(toBox, data.tones);
+        if (sBox && data.styles) setActiveTags(sBox, data.styles);
 
-        setActiveTags(needsBox, data.needs || []);
-        setActiveTags(toneBox, data.tones || []);
-        setActiveTags(styleBox, data.styles || []);
-
-        const toneInput = targetForm.querySelector('input[name="tone"]');
-        if (toneInput) toneInput.value = data.tone || '';
-        const styleInput = targetForm.querySelector('input[name="style"]');
-        if (styleInput) styleInput.value = data.style || '';
-        const bannedInput = targetForm.querySelector('textarea[name="banned"]');
-        if (bannedInput) bannedInput.value = data.banned || '';
-        if (data.aspectRatio) saveAspect(data.aspectRatio);
-
-        if (durationBox && data.duration) {
-          durationBox.querySelectorAll('.duration-toggle').forEach(btn => btn.classList.remove('active'));
-          const match = durationBox.querySelector(`[data-value="${data.duration}"]`);
+        // 5. Duration
+        if (dBox && data.duration) {
+          dBox.querySelectorAll('.duration-toggle').forEach(b => b.classList.remove('active'));
+          const match = dBox.querySelector(`[data-value="${data.duration}"]`);
           if (match) match.classList.add('active');
         }
 
+        // 6. Aspect Ratio
+        if (data.aspectRatio) saveAspect(data.aspectRatio);
+
+        // 7. Scenes
         scenesState = draft.scenes || [];
         renderScenes(scenesState);
+
+        // 8. Sync State
         lastPayload = data;
         const hasScenes = scenesState.length > 0;
         if (saveDraftBtn) saveDraftBtn.disabled = !hasScenes;
         if (confirmBtn) confirmBtn.disabled = scenesState.length === 0 && !forceConfirmEnable;
         ensureConfirmEnabled();
+
+        console.log('Draft applied successfully');
+
       } catch (err) {
         console.error('Failed to apply draft:', err);
-        alert('시나리오 불러오기 실패: ' + err.message);
+        alert('시나리오 불러오기 중 오류 발생: ' + err.message);
       }
     };
 
