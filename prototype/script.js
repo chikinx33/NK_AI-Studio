@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.127';
+  const APP_VERSION = '1.128';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -239,30 +239,9 @@
     '스크린 캡처', 'UI 중심', '텍스트 중심', '미니멀', '컬러풀', '심플', '레트로', '시네마틱'
   ];
 
-  const loadDraftsGlobal = () => {
-    try { return JSON.parse(localStorage.getItem(DRAFT_KEY)) || []; } catch (_) { return []; }
-  };
-  const saveDraftsGlobal = (drafts) => {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts)); } catch (_) { }
-  };
-  const migrateDraftsIfNeeded = () => {
-    try {
-      const cur = loadDraftsGlobal();
-      if (Array.isArray(cur) && cur.length) return;
-      const candidates = ['nk_scenario_drafts', 'nk_scenario_drafts_v0', 'nk_pipeline_drafts', 'nk_drafts'];
-      for (const k of candidates) {
-        try {
-          const txt = localStorage.getItem(k);
-          if (!txt) continue;
-          const arr = JSON.parse(txt);
-          if (Array.isArray(arr) && arr.length) {
-            saveDraftsGlobal(arr);
-            return;
-          }
-        } catch (_) { }
-      }
-    } catch (_) { }
-  };
+  const loadDraftsGlobal = () => NK.store.getDrafts();
+  const saveDraftsGlobal = (drafts) => NK.store.saveDrafts(drafts);
+  const migrateDraftsIfNeeded = () => NK.store.migrateDrafts();
 
   let forceConfirmEnable = false;
   const ensureConfirmEnabled = () => {
@@ -324,16 +303,10 @@
   document.addEventListener('DOMContentLoaded', apply);
   document.addEventListener('DOMContentLoaded', () => {
     applyVersionAndNav();
-    migrateDraftsIfNeeded();
+    NK.store.migrateDrafts();
     // 화면비 상태는 가장 먼저 초기화해서 하위 로직이 안전하게 실행되도록 함
     const ratioButtons = document.querySelectorAll('.ratio-btn');
-    let aspectRatio = (() => {
-      try {
-        return localStorage.getItem('nk_aspect_ratio') || '16:9';
-      } catch (_) {
-        return '16:9';
-      }
-    })();
+    let aspectRatio = NK.store.getAspectRatio();
 
     try {
       const saved = localStorage.getItem('nk_theme');
@@ -343,7 +316,7 @@
     const renderDashboardDrafts = () => {
       const container = document.getElementById('dashboard-drafts');
       if (!container) return;
-      const drafts = loadDraftsGlobal();
+      const drafts = NK.store.getDrafts();
       const fmtDuration = (sec) => {
         const n = Number(sec) || 0;
         if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
@@ -465,7 +438,7 @@
             btn.disabled = false;
           }
           if (!storageDeleted) return;
-          saveDraftsGlobal(drafts.filter(d => d.id !== id));
+          NK.store.saveDrafts(drafts.filter(d => d.id !== id));
           renderDashboardDrafts();
           alert('삭제되었습니다.');
           return;
@@ -483,7 +456,7 @@
           return;
         }
         if (action === 'scene-edit') {
-          const existing = loadPipeline();
+          const existing = NK.store.getPipeline();
           if (existing && Array.isArray(existing.scenes) && existing.scenes.length) {
             try {
               const updated = { ...existing, draftId: draft.id };
@@ -518,11 +491,11 @@
       });
       const saveCardTitle = (id, el) => {
         const next = (el.textContent || '').trim();
-        const drafts = loadDraftsGlobal();
+        const drafts = NK.store.getDrafts();
         const idx = drafts.findIndex(d => Number(d.id) === Number(id));
         if (idx === -1) return;
         drafts[idx] = { ...drafts[idx], title: next || (drafts[idx].title || '제목없음') };
-        saveDraftsGlobal(drafts);
+        NK.store.saveDrafts(drafts);
         renderDashboardDrafts();
       };
       dashContainer.addEventListener('keydown', (e) => {
@@ -564,11 +537,11 @@
           return;
         }
         const id = Date.now();
-        const ratio = (() => { try { return localStorage.getItem('nk_aspect_ratio') || '16:9'; } catch (_) { return '16:9'; } })();
+        const ratio = NK.store.getAspectRatio();
         const newDraft = { id, title, payload: { topic: '', aspectRatio: ratio }, scenes: [] };
-        const drafts = loadDraftsGlobal();
+        const drafts = NK.store.getDrafts();
         drafts.unshift(newDraft);
-        saveDraftsGlobal(drafts.slice(0, 20));
+        NK.store.saveDrafts(drafts.slice(0, 20));
         try {
           fetch('/api/project/init', {
             method: 'POST',
@@ -687,37 +660,27 @@
     };
 
     const savePipeline = (payload, scenes, header) => {
-      const existing = loadPipeline() || {};
+      const existing = NK.store.getPipeline() || {};
       const data = {
-        payload,
-        scenes,
+        payload: payload,
+        scenes: scenes,
         header: header || '',
         savedAt: new Date().toISOString(),
-        aspectRatio,
+        aspectRatio: aspectRatio,
         draftId: existing.draftId || currentDraftId || null
       };
-      try { localStorage.setItem(PIPELINE_KEY, JSON.stringify(data)); } catch (_) { }
+      NK.store.savePipeline(data);
     };
 
-    const loadPipeline = () => {
-      try {
-        return JSON.parse(localStorage.getItem(PIPELINE_KEY));
-      } catch (_) {
-        return null;
-      }
-    };
+    const loadPipeline = () => NK.store.getPipeline();
 
-    const loadHeader = () => {
-      try { return localStorage.getItem(headerKey) || ''; } catch (_) { return ''; }
-    };
+    const loadHeader = () => NK.store.getHeader();
 
-    const saveHeader = (header) => {
-      try { localStorage.setItem(headerKey, header || ''); } catch (_) { }
-    };
+    const saveHeader = (header) => NK.store.saveHeader(header);
 
     const saveAspect = (ratio) => {
       aspectRatio = ratio;
-      try { localStorage.setItem('nk_aspect_ratio', ratio); } catch (_) { }
+      NK.store.setAspectRatio(ratio);
       ratioButtons.forEach(btn => {
         if (btn instanceof HTMLElement) {
           btn.classList.toggle('active', btn.dataset.ratio === ratio);
@@ -781,19 +744,9 @@
       return t.length > 10 ? `${t.slice(0, 10)}...` : t;
     };
 
-    const loadDrafts = () => {
-      try {
-        return JSON.parse(localStorage.getItem(DRAFT_KEY)) || [];
-      } catch (_) {
-        return [];
-      }
-    };
+    const loadDrafts = () => NK.store.getDrafts();
 
-    const saveDrafts = drafts => {
-      try {
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
-      } catch (_) { }
-    };
+    const saveDrafts = drafts => NK.store.saveDrafts(drafts);
 
     const renderDraftNav = () => { };
 
