@@ -102,7 +102,7 @@
       brand_subtitle: '자동화 영상 제작 파이프라인',
       nav_dashboard: '대시보드',
       nav_scenario: '시나리오',
-      nav_scenes: '영상생성',
+      nav_scenes: '영상 제작',
       nav_media: '영상 편집',
       nav_voice: '더빙 · 자막',
       nav_render: '결과 대기열',
@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.099';
+  const APP_VERSION = '1.104';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -384,7 +384,7 @@
             </div>
             <div class="draft-actions">
               <button class="btn-secondary" data-action="scenario-edit" data-id="${d.id}">시나리오</button>
-              <button class="btn-secondary" data-action="scene-edit" data-id="${d.id}" ${canGenerate ? '' : 'disabled'}>영상 생성</button>
+              <button class="btn-secondary" data-action="scene-edit" data-id="${d.id}" ${canGenerate ? '' : 'disabled'}>영상 제작</button>
               <button class="trash-btn" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
             </div>
           </article>
@@ -1546,18 +1546,22 @@
               </div>
             </div>
             <div class="scene-cell image"><div class="scene-media-stack">${img}${videoCard}</div>${err}</div>
-            <div class="scene-cell actions"><div class="action-buttons grid">
-              <button class="btn-secondary compact" data-action="regen-image" data-id="${s.id}" ${updatedScene.imgLoading ? 'disabled' : ''}>${updatedScene.imgLoading ? '생성중' : '생성'}</button>
-              <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}">삭제</button>
-              <button class="btn-secondary compact" data-action="copy-image" data-id="${s.id}">복사</button>
-              <button class="btn-secondary compact" data-action="paste-image" data-id="${s.id}">붙여넣기</button>
-              <button class="btn-secondary compact" data-action="upload-image" data-id="${s.id}">업로드</button>
-              <button class="btn-secondary compact" data-action="library-image" data-id="${s.id}">라이브러리</button>
-              <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 변환</button>
-              <button class="btn-secondary compact" data-action="upload-video" data-id="${s.id}">업로드</button>
-              <button class="btn-secondary compact" data-action="library-video" data-id="${s.id}">라이브러리</button>
-              <button class="btn-secondary compact" data-action="download-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>영상 다운로드</button>
-            </div></div>
+            <div class="scene-cell actions">
+              <div class="action-buttons grid">
+                <button class="btn-secondary compact span2" data-action="regen-image" data-id="${s.id}" ${updatedScene.imgLoading ? 'disabled' : ''}>${updatedScene.imgLoading ? '생성중...' : '이미지 생성'}</button>
+                <button class="btn-secondary compact" data-action="delete-image" data-id="${s.id}" ${updatedScene.imageDataUrl ? '' : 'disabled'}>삭제</button>
+                <button class="btn-secondary compact" data-action="upload-image" data-id="${s.id}">업로드</button>
+                <button class="btn-secondary compact" data-action="library-image" data-id="${s.id}">라이브러리</button>
+                <button class="btn-secondary compact" data-action="download-image" data-id="${s.id}" ${updatedScene.imageDataUrl ? '' : 'disabled'}>다운로드</button>
+              </div>
+              <div class="action-buttons grid video-actions">
+                <button class="btn-secondary compact span2" data-action="video" data-id="${s.id}">영상 생성</button>
+                <button class="btn-secondary compact" data-action="delete-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>삭제</button>
+                <button class="btn-secondary compact" data-action="upload-video" data-id="${s.id}">업로드</button>
+                <button class="btn-secondary compact" data-action="library-video" data-id="${s.id}">라이브러리</button>
+                <button class="btn-secondary compact" data-action="download-video" data-id="${s.id}" ${updatedScene.videoUrl ? '' : 'disabled'}>다운로드</button>
+              </div>
+            </div>
           </div>`;
         }).join('');
         // 업데이트된 prompt를 상태에 반영
@@ -2187,28 +2191,48 @@
             persistPipeline();
             return;
           }
-          // 복사/붙여넣기/삭제/다운로드 공통 처리
+          // 삭제/다운로드 공통 처리
           if (action === 'delete-image') {
             pipelineState.scenes[idx] = { ...scene, imageDataUrl: '', imgError: '', imgLoading: false };
             renderPipelinePage();
             return;
           }
-          if (action === 'copy-image') {
+          if (action === 'download-image') {
             if (!scene.imageDataUrl) {
-              alert('복사할 이미지가 없습니다.');
+              alert('다운로드할 이미지가 없습니다.');
               return;
             }
-            window.__imageClipboard = scene.imageDataUrl;
-            alert('이미지를 복사했습니다.');
-            return;
-          }
-          if (action === 'paste-image') {
-            if (!window.__imageClipboard) {
-              alert('붙여넣을 이미지가 없습니다. 먼저 복사하세요.');
-              return;
+            try {
+              // 이미지 다운로드 처리
+              const url = scene.imageDataUrl;
+              const filename = `scene_${scene.id}_image.png`;
+
+              // data URL인 경우
+              if (url.startsWith('data:')) {
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              }
+              // 외부 URL인 경우 (CORS 문제 회피)
+              else {
+                const response = await fetch(url);
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(blobUrl);
+              }
+            } catch (err) {
+              console.error('이미지 다운로드 실패:', err);
+              alert('이미지 다운로드 실패');
             }
-            pipelineState.scenes[idx] = { ...scene, imageDataUrl: window.__imageClipboard, imgError: '', imgLoading: false };
-            renderPipelinePage();
             return;
           }
 
@@ -2223,6 +2247,19 @@
           }
           if (action === 'upload-image') {
             await uploadImageForIdx(idx);
+            return;
+          }
+          if (action === 'delete-video') {
+            pipelineState.scenes[idx] = {
+              ...scene,
+              videoUrl: '',
+              videoStatus: '',
+              videoError: '',
+              videoJobId: '',
+              videoMethod: ''
+            };
+            renderPipelinePage();
+            persistPipeline();
             return;
           }
           if (action === 'video') {
