@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.098';
+  const APP_VERSION = '1.099';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -1667,12 +1667,14 @@
     renderPipelinePage();
     applyAuthGuard();
 
-    const generateImageForIdx = async (idx) => {
+    const generateImageForIdx = async (idx, retryCount = 0) => {
       if (!pipelineState) return;
       const scene = pipelineState.scenes[idx];
       const finalPrompt = `${scene.promptText}\n\nNarration (Korean): ${scene.lines}`;
+
       pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: '' };
       renderPipelinePage();
+
       try {
         const res = await fetch('/api/imagen', {
           method: 'POST',
@@ -1680,16 +1682,48 @@
           body: JSON.stringify({ prompt: finalPrompt, aspectRatio, projectId: pipelineState.draftId || '' })
         });
         const text = await res.text();
+
         if (!res.ok) {
+          // 500 에러 처리 및 재시도
+          if (res.status === 500 && retryCount < 2) {
+            console.warn(`이미지 생성 실패 (500), 재시도 ${retryCount + 1}/2...`);
+            pipelineState.scenes[idx] = { ...scene, imgLoading: true, imgError: `재시도 중... (${retryCount + 1}/2)` };
+            renderPipelinePage();
+
+            // 지수 백오프: 첫 재시도 2초, 두 번째 재시도 4초 대기
+            await new Promise(resolve => setTimeout(resolve, 2000 * Math.pow(2, retryCount)));
+            return generateImageForIdx(idx, retryCount + 1);
+          }
+
           const detail = (() => { try { return JSON.parse(text).error; } catch (_) { return text; } })();
-          throw new Error(detail || 'imagen_error');
+          const errorMsg = res.status === 500
+            ? `서버 오류 (500): ${detail || '이미지 생성 서버에 일시적 문제가 발생했습니다. 잠시 후 다시 시도해주세요.'}`
+            : detail || 'imagen_error';
+          throw new Error(errorMsg);
         }
+
         const json = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
         const dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
-        pipelineState.scenes[idx] = { ...scene, imageDataUrl: dataUrl, imgLoading: false, imgError: '', promptText: scene.promptText };
+
+        if (!dataUrl) {
+          throw new Error('이미지 데이터를 받지 못했습니다.');
+        }
+
+        pipelineState.scenes[idx] = {
+          ...scene,
+          imageDataUrl: dataUrl,
+          imgLoading: false,
+          imgError: '',
+          promptText: scene.promptText
+        };
+
+        console.log(`Scene ${scene.id} 이미지 생성 성공`);
       } catch (err) {
-        pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: '이미지 생성 실패' };
+        const errorMessage = err?.message || '이미지 생성 실패';
+        console.error(`Scene ${scene.id} 이미지 생성 실패:`, errorMessage);
+        pipelineState.scenes[idx] = { ...scene, imgLoading: false, imgError: errorMessage };
       }
+
       renderPipelinePage();
       persistPipeline();
     };
