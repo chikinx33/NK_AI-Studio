@@ -200,7 +200,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.110';
+  const APP_VERSION = '1.111';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -2070,7 +2070,7 @@
         const libModal = document.getElementById('lib-modal');
         const content = libModal ? libModal.querySelector('.lib-content') : null;
         if (!libModal || !content) return;
-        const head = `<div class="card-top"><h5>${kind === 'image' ? '이미지 라이브러리' : '영상 라이브러리'}</h5><div class="lib-toolbar"><button class="btn-secondary compact" data-lib-use>사용</button><button class="btn-ghost compact" data-lib-delete>삭제</button></div></div>`;
+        const head = `<div class="card-top"><h5>${kind === 'image' ? '이미지 라이브러리' : '영상 라이브러리'}</h5><div class="lib-toolbar"><button class="btn-secondary compact" data-lib-use>사용</button><button class="btn-ghost compact" data-lib-delete>삭제</button><button class="btn-ghost compact" data-lib-close>닫기</button></div></div>`;
         const grid = `<div class="lib-grid">${items.map(it => {
           const name = String(it.name || '');
           const sUrl = String(it.signedUrl || '');
@@ -2083,6 +2083,7 @@
         content.onclick = async (e) => {
           const useBtn = e.target.closest('[data-lib-use]');
           const delBtn = e.target.closest('[data-lib-delete]');
+          const closeBtn = e.target.closest('[data-lib-close]');
           const item = e.target.closest('.lib-item');
           if (useBtn) {
             if (!selected) { alert('항목을 먼저 선택하세요.'); return; }
@@ -2119,6 +2120,10 @@
             } catch (_) {
               alert('삭제 실패');
             }
+            return;
+          }
+          if (closeBtn) {
+            libModal.classList.add('hidden');
             return;
           }
           if (item) {

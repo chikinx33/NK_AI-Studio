@@ -206,21 +206,21 @@ body::-webkit-scrollbar {
   font-size: 12px;
   color: var(--muted);
   text-decoration: none;
-  padding: 2px 0;
+  padding: 6px 8px;
   border: none;
-  border-radius: 0;
+  border-radius: 8px;
   background: transparent;
   box-shadow: none;
   cursor: pointer;
   text-align: left;
-  transition: none;
+  transition: 0.15s ease;
   appearance: none;
   -webkit-appearance: none;
 }
 
 .nav-sub .nav-sub-item:hover {
   color: var(--text);
-  background: transparent;
+  background: var(--layer-soft);
 }
 
 .nav-sub-item-row {
