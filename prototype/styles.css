@@ -252,6 +252,64 @@ body::-webkit-scrollbar {
   height: 0;
 }
 
+.lib-content {
+  width: 70vw;
+  height: 70vh;
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.lib-content::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+.lib-content .card-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+.lib-toolbar {
+  display: flex;
+  gap: 8px;
+}
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+.lib-item {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+  cursor: pointer;
+}
+.lib-item.selected {
+  outline: 2px solid var(--orange);
+  background: rgba(255, 122, 0, 0.08);
+}
+.lib-thumb {
+  width: 100%;
+  display: block;
+  object-fit: cover;
+}
+.lib-item img.lib-thumb { aspect-ratio: 1 / 1; }
+.lib-item video.lib-thumb { aspect-ratio: 16 / 9; }
+.lib-meta {
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 [data-theme="light"] .nav-sub-delete {
   border-color: #d0d8ea;
   background: #eef2fb;

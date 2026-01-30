@@ -1868,36 +1868,24 @@
         const libModal = document.getElementById('lib-modal');
         const content = libModal ? libModal.querySelector('.lib-content') : null;
         if (!libModal || !content) return;
-        const head = `<div class="card-top"><h5>${kind === 'image' ? '이미지 라이브러리' : '영상 라이브러리'}</h5><div class="right"><button class="btn-ghost" data-lib-close>닫기</button></div></div>`;
+        const head = `<div class="card-top"><h5>${kind === 'image' ? '이미지 라이브러리' : '영상 라이브러리'}</h5><div class="lib-toolbar"><button class="btn-secondary compact" data-lib-use>사용</button><button class="btn-ghost compact" data-lib-delete>삭제</button></div></div>`;
         const grid = `<div class="lib-grid">${items.map(it => {
           const name = String(it.name || '');
           const sUrl = String(it.signedUrl || '');
           const thumb = kind === 'image' ? `<img class="lib-thumb" src="${sUrl}" alt="${name}" />` : `<video class="lib-thumb" src="${sUrl}" preload="metadata"></video>`;
-          return `<div class="lib-item" data-name="${encodeURIComponent(name)}" data-url="${encodeURIComponent(sUrl)}" data-kind="${kind}">
-            ${thumb}
-            <div class="lib-meta"><span class="lib-name">${name.split('/').pop()}</span></div>
-            <div class="lib-actions">
-              <button class="btn-secondary compact" data-lib-use>사용</button>
-              <button class="btn-ghost compact" data-lib-delete>삭제</button>
-            </div>
-          </div>`;
+          return `<div class="lib-item" data-name="${encodeURIComponent(name)}" data-url="${encodeURIComponent(sUrl)}" data-kind="${kind}">${thumb}<div class="lib-meta"><span class="lib-name">${name.split('/').pop()}</span></div></div>`;
         }).join('')}</div>`;
         content.innerHTML = head + grid;
         libModal.classList.remove('hidden');
+        let selected = null;
         content.onclick = async (e) => {
-          const closeBtn = e.target.closest('[data-lib-close]');
-          if (closeBtn) {
-            libModal.classList.add('hidden');
-            return;
-          }
           const useBtn = e.target.closest('[data-lib-use]');
           const delBtn = e.target.closest('[data-lib-delete]');
           const item = e.target.closest('.lib-item');
-          if (!item) return;
-          const name = decodeURIComponent(item.dataset.name || '');
-          const signed = decodeURIComponent(item.dataset.url || '');
-          const k = item.dataset.kind || kind;
           if (useBtn) {
+            if (!selected) { alert('항목을 먼저 선택하세요.'); return; }
+            const { name, url, k } = selected;
+            const signed = url;
             if (k === 'image') {
               pipelineState.scenes[idx] = { ...pipelineState.scenes[idx], imageDataUrl: signed, imgError: '', imgLoading: false };
             } else {
@@ -1909,25 +1897,40 @@
             return;
           }
           if (delBtn) {
+            if (!selected) { alert('항목을 먼저 선택하세요.'); return; }
             if (!confirm('삭제하시겠습니까?')) return;
+            const targetName = selected.name;
             try {
               const res = await fetch('/api/project/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectId: pid, confirm: 'yes', objectName: name })
+                body: JSON.stringify({ projectId: pid, confirm: 'yes', objectName: targetName })
               });
               const text = await res.text();
               const ok = res.ok;
               const j = (() => { try { return JSON.parse(text); } catch (_) { return {}; } })();
-              if (!ok) {
-                alert('삭제 실패');
-                return;
-              }
-              item.remove();
+              if (!ok) { alert('삭제 실패'); return; }
+              const node = content.querySelector(`.lib-item[data-name="${encodeURIComponent(targetName)}"]`);
+              if (node) node.remove();
+              selected = null;
               alert('삭제했습니다.');
             } catch (_) {
               alert('삭제 실패');
             }
+            return;
+          }
+          if (item) {
+            const name = decodeURIComponent(item.dataset.name || '');
+            const signed = decodeURIComponent(item.dataset.url || '');
+            const k = item.dataset.kind || kind;
+            if (selected && selected.name === name) {
+              item.classList.remove('selected');
+              selected = null;
+              return;
+            }
+            content.querySelectorAll('.lib-item.selected').forEach(el => el.classList.remove('selected'));
+            item.classList.add('selected');
+            selected = { name, url: signed, k };
             return;
           }
         };
