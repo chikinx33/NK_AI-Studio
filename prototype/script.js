@@ -1229,49 +1229,63 @@
 
     if (saveDraftBtn) {
       saveDraftBtn.disabled = true;
-      saveDraftBtn.addEventListener('click', () => {
+      saveDraftBtn.addEventListener('click', async () => {
         if (!form) return;
         const data = new FormData(form);
         const payload = buildPayload(data);
         const scenes = scenesState.length ? scenesState : mockGenerate(payload);
-        const drafts = loadDrafts();
-
         let id = currentDraftId;
-        let existsIdx = -1;
-
-        if (id) {
-          existsIdx = drafts.findIndex(d => d.id === id);
+        if (!id) {
+          try { id = JSON.parse(localStorage.getItem('nk_current_project') || '{}').id; } catch (_) { id = null; }
         }
-
-        // ID가 없거나 유효하지 않으면 새 프로젝트로 생성
-        if (!id || existsIdx === -1) {
-          const newId = Date.now();
+        if (!id) id = Date.now();
+        try {
+          await NK.api.projectSave(String(id), payload, scenes);
           const title = payload.topic ? payload.topic.trim() : '새 프로젝트';
-          const newDraft = { id: newId, title, payload, scenes };
-          drafts.unshift(newDraft);
-          currentDraftId = newId;
-        } else {
-          // 기존 프로젝트 업데이트
-          const existing = drafts[existsIdx];
-          const newTitle = payload.topic ? payload.topic.trim() : (existing.title || '제목없음');
-          const updatedDraft = {
-            ...existing,
-            title: newTitle, // 주제가 바뀌면 제목도 갱신 (선택사항이지만 편의상)
-            payload,
-            scenes
-          };
-          drafts[existsIdx] = updatedDraft;
+          const drafts = loadDrafts();
+          const idx = drafts.findIndex(d => d.id === id);
+          const metaOnly = { id, title, payload: {}, scenes: [] };
+          const next = drafts.slice();
+          if (idx === -1) next.unshift(metaOnly);
+          else next[idx] = { ...next[idx], id, title, payload: {}, scenes: [] };
+          saveDrafts(next.slice(0, 20));
+          try { localStorage.setItem('nk_current_project', JSON.stringify({ id, title })); } catch (_) { }
+          currentDraftId = id;
+          alert('저장되었습니다.');
+        } catch (err) {
+          alert('원격 저장 실패: ' + (err && err.message ? err.message : '네트워크 오류'));
         }
-
-        const trimmed = drafts.slice(0, 20);
-        saveDrafts(trimmed);
-        alert(id ? '저장되었습니다.' : '새 프로젝트로 저장되었습니다.');
       });
     }
     // 복제 기능 제거
 
     // nav-sub 제거됨
 
+    // 원격 프로젝트 불러오기 우선
+    (async function () {
+      try {
+        const curTxt = localStorage.getItem('nk_current_project');
+        const selTxt = localStorage.getItem('nk_selected_draft');
+        let pid = null;
+        try { pid = curTxt ? JSON.parse(curTxt).id : null; } catch (_) { pid = null; }
+        if (!pid) { try { pid = selTxt ? JSON.parse(selTxt).id : null; } catch (_) { pid = null; } }
+        if (pid) {
+          try {
+            const remote = await NK.api.projectGet(String(pid));
+            const title = remote.title || (remote.payload && remote.payload.topic) || '제목없음';
+            const payload = remote.payload || {};
+            const scenes = Array.isArray(remote.scenes) ? remote.scenes : [];
+            applyDraft({ id: pid, title, payload, scenes });
+            if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
+            if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
+            try { localStorage.removeItem('nk_selected_draft'); } catch (_) { }
+            return;
+          } catch (err) {
+            console.warn('원격 불러오기 실패, 로컬 선택값으로 시도', err);
+          }
+        }
+      } catch (_) { }
+    })();
     // 대시보드에서 선택된 draft 적용
     try {
       const pending = localStorage.getItem('nk_selected_draft');

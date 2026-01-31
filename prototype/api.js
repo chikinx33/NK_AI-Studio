@@ -115,4 +115,24 @@
     var data = j(text);
     return { ok: ok, data: data, status: res.status };
   };
+
+  api.projectGet = async function (projectId) {
+    var url = '/api/project/get?projectId=' + encodeURIComponent(String(projectId || ''));
+    var res = await fetch(url, { method: 'GET' });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'get_error')));
+    return j(text);
+  };
+
+  api.projectSave = async function (projectId, payload, scenes) {
+    var body = { projectId: String(projectId || ''), payload: payload || {}, scenes: Array.isArray(scenes) ? scenes : [] };
+    var res = await fetch('/api/project/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
+    return j(text);
+  };
 })(); 
