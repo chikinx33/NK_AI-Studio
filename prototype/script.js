@@ -5,7 +5,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.200';
+  const APP_VERSION = '1.201';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -356,7 +356,15 @@
       e.preventDefault();
       e.stopPropagation();
       const action = btn.dataset.action;
-      if (action === 'sidebar-edit-scenario') { showSidebarProjectCard(); setNavStage('scenario'); updateSidebarStageHighlight('scenario'); loadStage('scenario.html'); return; }
+      if (action === 'sidebar-edit-scenario') {
+        showSidebarProjectCard();
+        const cur = lGet('nk_current_project');
+        if (cur) { try { lSet('nk_selected_draft', cur); } catch (_) { } }
+        setNavStage('scenario');
+        updateSidebarStageHighlight('scenario');
+        loadStage('scenario.html');
+        return;
+      }
       if (action === 'sidebar-edit-scenes') { showSidebarProjectCard(); setNavStage('scenes'); updateSidebarStageHighlight('scenes'); loadStage('scenes.html'); return; }
       if (action === 'sidebar-edit-media') { showSidebarProjectCard(); setNavStage('media'); updateSidebarStageHighlight('media'); loadStage('media.html'); return; }
       if (action === 'open-options') { loadStage('options.html'); return; }
