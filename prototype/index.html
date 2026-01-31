@@ -28,19 +28,13 @@
         <a class="nav-item" href="index.html">
           <span data-i18n="nav_dashboard">대시보드</span>
         </a>
-        <a class="nav-item" id="scenario-link" href="scenario.html">
-          <span data-i18n="nav_scenario">프리 프로덕션</span>
-        </a>
-        <a class="nav-item" href="scenes.html"><span data-i18n="nav_scenes">프로덕션</span></a>
-        <a class="nav-item" href="media.html"><span data-i18n="nav_media">포스트 프로덕션</span></a>
-        <a class="nav-item" href="#"><span data-i18n="nav_publish">배포</span></a>
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-actions">
           <button class="btn-ghost icon-btn" aria-label="알림">🔔</button>
           <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()"></button>
           <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-          <a class="btn-ghost icon-btn" aria-label="옵션" href="options.html">⚙️</a>
+          <a class="btn-ghost icon-btn" aria-label="옵션" href="options.html" data-action="open-options">⚙️</a>
         </div>
         <div class="sidebar-version">ver</div>
       </div>
@@ -69,20 +63,7 @@
 
     <main class="main blur-target">
       <div class="main-body">
-
-        <section class="content">
-          <div class="projects">
-          <div class="section-head">
-            <h3>저장된 프로젝트</h3>
-          </div>
-          <div id="dashboard-drafts" class="draft-card-grid"></div>
-          <div id="dashboard-loading" class="loading-overlay hidden">
-            <div class="spinner"></div>
-            <p>삭제 중...</p>
-          </div>
-          </div>
-        </section>
-      </section>
+        <section class="content"></section>
       </div>
     </main>
   </div>

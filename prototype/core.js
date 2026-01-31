@@ -15,39 +15,16 @@
       return base.replace(/\.html?$/, '') || 'index';
     };
     var current = normalize(window.location.pathname);
-    if (current === 'index') {
-      try { sessionStorage.removeItem('nk_allow_scenario'); } catch (_) {}
-      try { sessionStorage.removeItem('nk_allow_scenes'); } catch (_) {}
-      try { sessionStorage.removeItem('nk_allow_media'); } catch (_) {}
-      try { sessionStorage.removeItem('nk_allow_publish'); } catch (_) {}
+    try {
+      document.documentElement.setAttribute('data-page', current || 'index');
+      document.body && document.body.setAttribute('data-page', current || 'index');
+    } catch (_) { }
+    var isEmbedded = (function () { try { return window.self !== window.top; } catch (_) { return true; } })();
+    var hasSidebar = !!document.querySelector('.sidebar');
+    if (!isEmbedded && hasSidebar && (current === 'scenario' || current === 'scenes' || current === 'media' || current === 'publish')) {
+      try { window.location.href = 'index.html'; } catch (_) {}
+      return;
     }
-    var allowScenario = (function () { try { return sessionStorage.getItem('nk_allow_scenario') === 'true'; } catch (_) { return false; } })();
-    var allowScenes = (function () { try { return sessionStorage.getItem('nk_allow_scenes') === 'true'; } catch (_) { return false; } })();
-    var allowMedia = (function () { try { return sessionStorage.getItem('nk_allow_media') === 'true'; } catch (_) { return false; } })();
-    var allowPublish = (function () { try { return sessionStorage.getItem('nk_allow_publish') === 'true'; } catch (_) { return false; } })();
-    document.querySelectorAll('.nav .nav-item').forEach(function (a) {
-      var keyEl = a.querySelector('[data-i18n]');
-      var key = keyEl ? keyEl.getAttribute('data-i18n') : '';
-      var allowed = true;
-      if (key === 'nav_scenario') allowed = allowScenario;
-      else if (key === 'nav_scenes') allowed = allowScenes;
-      else if (key === 'nav_media') allowed = allowMedia;
-      else if (key === 'nav_publish') allowed = allowPublish;
-      if (!allowed) {
-        a.classList.add('disabled');
-        a.setAttribute('aria-disabled', 'true');
-        a.setAttribute('tabindex', '-1');
-        var original = a.getAttribute('data-href') || a.getAttribute('href') || '';
-        a.setAttribute('data-href', original);
-        a.setAttribute('href', '#');
-      } else {
-        a.classList.remove('disabled');
-        a.removeAttribute('aria-disabled');
-        a.removeAttribute('tabindex');
-        var original2 = a.getAttribute('data-href') || '';
-        if (original2) a.setAttribute('href', original2);
-      }
-    });
     document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });
     var match = Array.from(document.querySelectorAll('.nav-item[href]')).find(function (a) {
       var href = a.getAttribute('href') || '';

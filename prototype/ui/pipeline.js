@@ -56,34 +56,11 @@
     var scenes = state.scenes;
     var savedAt = state.savedAt;
     var header = state.header;
-    var metaItemsRaw = [
-      ['장르', (String(payload.purposeCategory || '') + ' ' + ((payload.purposeTags || []).join(', '))).trim()],
-      ['타겟', payload.target || ''],
-      ['니즈', (payload.needs || []).join(', ')],
-      ['톤', [((payload.tones || []).join(', ')), payload.tone].filter(Boolean).join(', ')],
-      ['스타일', [((payload.styles || []).join(', ')), payload.style].filter(Boolean).join(', ')],
-      ['추가 설명', payload.banned || ''],
-      ['화면비', aspectRatio || ''],
-      ['길이', payload.duration ? (payload.duration + 's') : ''],
-      ['저장 시각', savedAt ? new Date(savedAt).toLocaleString('ko-KR') : '']
-    ];
-    var metaItems = metaItemsRaw.map(function (pair) {
-      var label = pair[0];
-      var val = pair[1];
-      var content = (val && String(val).trim().length) ? val : '<span class="muted">입력 필요</span>';
-      return '<span class="meta-item">' + label + ' - ' + content + '</span>';
-    });
-    var metaLine = metaItems.join('<span class="meta-sep">·</span>');
     pipelineMeta.innerHTML = (
-      '<div class="pipeline-meta-bar">' +
-      '<h4 class="pipeline-title">' + (payload.topic || '제목 없음') + '</h4>' +
-      '<div class="pipeline-meta-line">' + metaLine + '</div>' +
-      '</div>' +
       '<div class="pipeline-actions">' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 변환</button>' +
-      '<button class="btn-primary" id="confirm-dub" ' + ((state.isPlaceholder && !(scenes && scenes.length)) ? 'disabled' : '') + '>최종 컨펌 → 포스트 프로덕션</button>' +
       '</div>'
     );
     if (scenes && scenes.length) {

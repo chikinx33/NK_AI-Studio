@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NK_Studio · 프로덕션</title>
+  <title>NK_Studio · 대시보드</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11,41 +11,43 @@
   <script src="core.js" defer></script>
   <script src="store.js" defer></script>
   <script src="api.js" defer></script>
-  <script src="ui/pipeline.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 <body>
   <div class="grain"></div>
   <div class="app no-sidebar">
-
+    <div id="project-overlay" class="auth-overlay hidden">
+      <div class="auth-card">
+        <p class="auth-title">새 프로젝트 생성</p>
+        <div class="form-row">
+          <label>이름</label>
+          <input id="project-name-input" placeholder="프로젝트 이름" />
+        </div>
+        <div class="option-actions">
+          <button id="project-cancel" class="btn-secondary">취소</button>
+          <button id="project-create" class="btn-primary">생성</button>
+        </div>
+      </div>
+    </div>
     <div id="auth-overlay" class="auth-overlay hidden">
       <div class="auth-card">
         <p class="auth-title">로그인 하세요.</p>
         <a class="btn-primary no-underline" href="options.html">로그인 하기</a>
       </div>
     </div>
-
-    <main class="main blur-target">
+    <main class="main">
       <div class="main-body">
-        <section class="scenario-section" id="pipeline-section">
-          <div style="margin-bottom:12px;" id="pipeline-meta">
-          </div>
-          <div class="card scenario-results" id="pipeline-card">
-            <div id="pipeline-scenes" class="scenario-cards"></div>
+        <section class="content">
+          <div class="projects">
+            <div id="dashboard-drafts" class="draft-card-grid"></div>
+            <div id="dashboard-loading" class="loading-overlay hidden">
+              <div class="spinner"></div>
+              <p>삭제 중...</p>
+            </div>
           </div>
         </section>
       </div>
     </main>
-  </div>
-
-  <div id="img-modal" class="img-modal hidden">
-    <img src="" alt="preview" />
-  </div>
-  <div id="video-modal" class="img-modal hidden">
-    <video controls autoplay></video>
-  </div>
-  <div id="lib-modal" class="img-modal hidden">
-    <div class="card lib-content" style="width:70vw; height:70vh; overflow:auto;"></div>
   </div>
 </body>
 </html>

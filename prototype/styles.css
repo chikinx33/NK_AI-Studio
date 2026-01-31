@@ -94,6 +94,19 @@ body::-webkit-scrollbar {
   z-index: 1;
 }
 
+.app.no-sidebar {
+  grid-template-columns: 1fr;
+}
+
+#stage-iframe {
+  width: 100%;
+  height: 100vh;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .sidebar {
   background: var(--bg-2);
   border-right: 1px solid var(--border);
@@ -104,6 +117,30 @@ body::-webkit-scrollbar {
   display: flex;
   flex-direction: column;
   gap: 26px;
+}
+
+html[data-embed="1"],
+body[data-embed="1"] {
+  background: transparent !important;
+  overflow: auto;
+}
+
+[data-embed="1"] .main {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+[data-embed="1"] .main-body {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+[data-page="index"] .main-body {
+  height: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .brand {
@@ -263,8 +300,16 @@ body::-webkit-scrollbar {
 }
 
 /* Pipeline page scrolling for scene cards */
+#pipeline-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 80vh;
+  overflow: hidden;
+}
+
 #pipeline-scenes {
-  max-height: 70vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -364,6 +409,97 @@ body::-webkit-scrollbar {
   flex-direction: column;
   gap: 12px;
   padding-bottom: 10px;
+}
+
+#sidebar-project-card {
+  margin-top: 16px;
+}
+
+#sidebar-project-card .draft-top {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+#sidebar-project-card .draft-thumb {
+  margin: 0 auto;
+}
+
+#sidebar-project-card .draft-title-row {
+  justify-content: center;
+  width: 100%;
+}
+
+#sidebar-project-card .draft-meta {
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+#sidebar-project-card .draft-title {
+  word-break: keep-all;
+}
+
+#sidebar-project-card .sidebar-card-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  width: 100%;
+  margin-bottom: 10px;
+}
+
+#sidebar-project-card .sidebar-card-title {
+  font-weight: 700;
+  font-size: 18px;
+  line-height: 1.4;
+  white-space: normal;
+  word-break: break-word;
+  text-align: left;
+  align-self: flex-start;
+  width: 100%;
+}
+
+#sidebar-project-card .sidebar-card-lines {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 400;
+  white-space: normal;
+  word-break: break-word;
+  text-align: left;
+  width: 100%;
+}
+
+#sidebar-stage-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 12px;
+}
+
+#sidebar-stage-actions .btn-secondary {
+  width: 100%;
+  justify-content: center;
+}
+#sidebar-project-card .sidebar-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+#sidebar-project-card .sidebar-card-actions .btn-secondary {
+  width: 100%;
+  box-sizing: border-box;
+  justify-content: center;
+}
+#sidebar-project-card .sidebar-card-actions .btn-secondary.active {
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  color: #0b0b0b;
+  border-color: rgba(255, 122, 0, 0.6);
 }
 
 .sidebar-actions {
@@ -525,11 +661,26 @@ body::-webkit-scrollbar {
   font-weight: 600;
   transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
+a.btn-primary,
+a.btn-secondary,
+a.btn-ghost {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 
 .btn-primary {
   background: linear-gradient(135deg, #ff7a00, #ff9f3a);
   color: #0b0b0b;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
   padding: 10px 16px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 12px 40px rgba(255, 122, 0, 0.25);
 }
 
@@ -569,6 +720,18 @@ body::-webkit-scrollbar {
 .btn-secondary:hover,
 .btn-ghost:hover {
   transform: translateY(-1px);
+}
+
+#confirm-scenes {
+  background: #fb9a33;
+  background-image: none;
+  color: #0b0b0b;
+}
+a.btn-primary:link,
+a.btn-primary:visited,
+a.btn-primary:hover,
+a.btn-primary:active {
+  color: #0b0b0b;
 }
 
 .btn-primary:disabled:hover,
@@ -695,7 +858,7 @@ body::-webkit-scrollbar {
 .card.scenario-form {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
   height: 100%;
   min-height: 0;
 }
@@ -935,7 +1098,39 @@ body::-webkit-scrollbar {
   padding: 16px 14px 18px;
   background: var(--panel);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 240px;
+  min-height: 240px;
 }
+ .scenario-card .card-top {
+   flex: 0 0 auto;
+ }
+ .scenario-card .view-lines {
+   flex: 1 1 auto;
+   overflow-y: auto;
+   scrollbar-width: none;
+   -ms-overflow-style: none;
+ }
+ .scenario-card .view-lines::-webkit-scrollbar {
+   width: 0;
+   height: 0;
+ }
+ .scenario-card .muted {
+   flex: 0 0 auto;
+ }
+ .scenario-card .actions {
+   flex: 0 0 auto;
+ }
+ .scenario-card.placeholder {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+ }
+ .scenario-card.placeholder .card-top,
+ .scenario-card.placeholder .actions {
+   display: none;
+ }
 
 .chip-input {
   border: 1px solid var(--chip-border);
@@ -1111,7 +1306,7 @@ body::-webkit-scrollbar {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 640px);
+  grid-template-columns: repeat(auto-fill, 426px);
   justify-content: flex-start;
   gap: 16px;
 }
@@ -1194,6 +1389,12 @@ body::-webkit-scrollbar {
 .draft-actions .btn-secondary,
 .draft-actions .btn-ghost {
   flex: 1 1 0;
+}
+
+.draft-actions .btn-primary {
+  width: 140px;
+  flex: 0 0 140px;
+  justify-content: center;
 }
 
 .trash-btn {
