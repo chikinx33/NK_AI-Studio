@@ -235,6 +235,7 @@
 
         NK.store.saveDrafts(drafts);
         localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+        try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes); } catch (_) { }
         NK.state.set({ currentProject: draft });
         alert('저장되었습니다.');
       };
@@ -277,7 +278,9 @@
           const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
           const draft = saved ? JSON.parse(saved) : { id: Date.now() };
           draft.scenes = res.scenes;
+          draft.payload = params;
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+          try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes); } catch (_) { }
           scenario.renderScenes(res.scenes);
         }
       } catch (err) {
@@ -288,12 +291,33 @@
     };
 
     // 데이터 로드 실행
-    const initial = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
-    if (initial) {
-      try {
-        scenario.load(JSON.parse(initial));
-      } catch (_) { }
-    }
+    const tryLoad = async () => {
+      let localDraft = null;
+      const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
+      if (saved) {
+        try { localDraft = JSON.parse(saved); } catch (_) { }
+      }
+      const projectId = localDraft?.id || NK.state?.runtime?.currentProject?.id;
+      if (projectId) {
+        try {
+          const res = await NK.api.projectGet(projectId);
+          if (res && res.data) {
+            const serverDraft = {
+              id: projectId,
+              payload: res.data.payload || {},
+              scenes: res.data.scenes || [],
+              header: res.data.header || '',
+              aspectRatio: res.data.aspectRatio || res.data.payload?.aspectRatio
+            };
+            localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(serverDraft));
+            scenario.load(serverDraft);
+            return;
+          }
+        } catch (_) { }
+      }
+      if (localDraft) scenario.load(localDraft);
+    };
+    tryLoad();
 
     // 씬 카드 액션 핸들러 (수정/삭제/저장/취소)
     const cards = document.getElementById('scenario-cards');
