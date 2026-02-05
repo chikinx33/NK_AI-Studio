@@ -132,7 +132,10 @@
         sel.addRange(range);
         titleEl.focus();
 
+        let committed = false;
         const commit = () => {
+          if (committed) return;
+          committed = true;
           const drafts = NK.store.getDrafts();
           const draft = drafts.find(d => String(d.id) === String(id));
           if (!draft) return;
@@ -155,6 +158,7 @@
               title: newTitle
             }).catch(() => { /* ignore network errors */ });
           }
+          alert('제목을 수정했습니다.');
         };
 
         const cancel = () => {
