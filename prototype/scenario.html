@@ -45,10 +45,6 @@
           <div class="scenario-grid">
             <div class="section-caption left-caption caption-row">
               <span>개요</span>
-              <div class="caption-actions">
-                <button type="reset" form="scenario-form" class="btn-ghost">초기화</button>
-                <button type="submit" form="scenario-form" class="btn-primary">시나리오 생성</button>
-              </div>
             </div>
             <form class="card scenario-form" id="scenario-form">
               <div class="form-group">
@@ -115,14 +111,17 @@
             <div class="section-caption right-caption caption-row">
               <div class="caption-left">
                 <span>대본</span>
+              </div>
+              <div class="caption-actions">
                 <div class="ratio-group" id="ratio-group">
                   <button type="button" class="btn-secondary ratio-btn active" data-ratio="16:9">16:9</button>
                   <button type="button" class="btn-secondary ratio-btn" data-ratio="9:16">9:16</button>
                   <button type="button" class="btn-secondary ratio-btn" data-ratio="1:1">1:1</button>
                 </div>
-              </div>
-              <div class="caption-actions">
+                <button type="submit" form="scenario-form" class="btn-primary">시나리오 생성</button>
+                <button type="reset" form="scenario-form" class="btn-ghost">초기화</button>
                 <button class="btn-secondary" id="save-draft">저장하기</button>
+                <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()" aria-label="테마 전환"></button>
               </div>
             </div>
             <div class="card scenario-results results-card">

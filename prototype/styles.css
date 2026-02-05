@@ -750,6 +750,16 @@ a.btn-ghost {
   border: 1px solid var(--border);
 }
 
+/* 프리프로덕션 상단 초기화 버튼을 저장하기와 동일 스타일로 맞춤 */
+.caption-actions .btn-ghost[form="scenario-form"][type="reset"] {
+  background: rgba(11, 191, 165, 0.12);
+  color: #0b0b0b;
+  border: 1px solid rgba(11, 191, 165, 0.3);
+}
+[data-theme="dark"] .caption-actions .btn-ghost[form="scenario-form"][type="reset"] {
+  color: #9df1e2;
+}
+
 .btn-primary:hover,
 .btn-secondary:hover,
 .btn-ghost:hover {
@@ -856,7 +866,7 @@ a.btn-primary:active {
 
 .caption-actions {
   display: flex;
-  gap: 8px;
+  gap: 16px;
   align-items: center;
 }
 
@@ -868,11 +878,24 @@ a.btn-primary:active {
 
 .ratio-group {
   display: inline-flex;
-  gap: 6px;
+  gap: 8px;
+}
+
+.caption-actions > .ratio-group {
+  margin-right: 6px;
+}
+
+/* 시나리오 생성 + 초기화 버튼 묶음 간격 조정 */
+.caption-actions > .btn-primary,
+.caption-actions > .btn-ghost[form="scenario-form"][type="reset"] {
+  margin-right: 0;
+}
+.caption-actions > .btn-primary + .btn-ghost[form="scenario-form"][type="reset"] {
+  margin-left: -6px;
 }
 
 .ratio-group .ratio-btn {
-  padding: 8px 10px;
+  padding: 10px 14px;
 }
 
 .ratio-group .ratio-btn.active {
@@ -2195,24 +2218,54 @@ a.btn-primary:active {
   object-fit: cover;
 }
 
-.form-row {
-  display: grid;
-  grid-template-columns: 70px 300px;
-  align-items: center;
-  gap: 10px;
+.login-icons {
+  display: flex;
   justify-content: center;
+  gap: 30px;
+  margin: 0px 0 50px;
+  filter: blur(0);
+  opacity: 1;
+  transition: filter 0.25s ease, opacity 0.25s ease;
 }
 
-.form-row label {
+.login-icons img {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+}
+
+.login-icon-link {
+  display: inline-flex;
+}
+
+.login-icons.blurred {
+  filter: blur(6px);
+  opacity: 0.45;
+}
+
+.option-card .form-row {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  column-gap: 10px;
+  align-items: center;
+  width: 300px;
+  margin: 0 auto;
+}
+
+.option-card .form-row label {
   font-weight: 700;
+  text-align: left;
 }
 
-.form-row input {
+.option-card .form-row input {
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--bg-2);
   color: var(--text);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .option-card .form-group {
@@ -2231,6 +2284,9 @@ a.btn-primary:active {
   border: 1px solid var(--border);
   background: var(--bg-2);
   color: var(--text);
+  flex: 1 1 0;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .option-actions {

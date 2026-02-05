@@ -211,6 +211,7 @@
     const pwInput = document.getElementById('opt-pw');
     const btn = document.getElementById('opt-auth-btn');
     const nameEl = document.getElementById('opt-username');
+    const icons = document.getElementById('login-icons');
     const formRows = document.querySelectorAll('.option-card .form-row');
     if (!idInput || !pwInput || !btn) return;
 
@@ -222,6 +223,7 @@
       formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
       btn.textContent = loggedIn ? '로그아웃' : '로그인';
       btn.dataset.state = loggedIn ? 'logout' : 'login';
+      if (icons) icons.classList.toggle('blurred', !loggedIn);
     };
 
     const initialUser = NK.auth.getUser();
