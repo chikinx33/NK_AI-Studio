@@ -269,11 +269,13 @@
     const input = document.getElementById('project-name-input');
     const btnCreate = document.getElementById('project-create');
     const btnCancel = document.getElementById('project-cancel');
+    const blurTargets = document.querySelectorAll('.main, .sidebar');
     if (!overlay || !input || !btnCreate || !btnCancel) return;
 
     const close = () => {
       overlay.classList.add('hidden');
       input.value = '';
+      blurTargets.forEach(el => el.classList.remove('blur-active'));
     };
 
     btnCancel.onclick = close;
@@ -299,6 +301,15 @@
 
     btnCreate.onclick = create;
     input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
+
+    // 오버레이 열릴 때 배경 블러 처리
+    const openFromAnywhere = () => {
+      overlay.classList.remove('hidden');
+      blurTargets.forEach(el => el.classList.add('blur-active'));
+      setTimeout(() => input.focus(), 0);
+    };
+    // 빈 카드 클릭 처리 이미 renderDrafts 쪽에 존재하므로 여기서는 open 함수만 노출
+    NK.ui.openProjectOverlay = openFromAnywhere;
   };
 
   const updateSidebarHighlight = (stage) => {

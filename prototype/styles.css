@@ -2315,6 +2315,46 @@ a.btn-primary:active {
   width: 120px;
 }
 
+/* 프로젝트 생성 오버레이 스타일 확장 */
+#project-overlay .auth-card {
+  padding: 32px 32px;
+  min-width: 320px;
+  max-width: 380px;
+  width: 86vw;
+}
+
+#project-overlay .auth-title {
+  font-size: 22px;
+  margin-bottom: 20px;
+}
+
+#project-overlay .form-row {
+  width: 100%;
+  justify-content: center;
+}
+
+#project-overlay .form-row label {
+  flex: 0 0 70px;
+  font-size: 15px;
+}
+
+#project-overlay .form-row input {
+  width: 260px;
+  max-width: 260px;
+  font-size: 16px;
+  padding: 14px 14px;
+  border-radius: 12px;
+}
+
+.app.blur-target {
+  transition: filter 0.2s ease;
+}
+
+.main.blur-active,
+.sidebar.blur-active {
+  filter: blur(5px);
+}
+
 .auth-overlay {
   position: fixed;
   inset: 0;

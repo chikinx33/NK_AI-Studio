@@ -133,8 +133,14 @@
           NK.navigation.loadStage('scenario.html');
         }
       } else if (action === 'create-project') {
-        const overlay = document.getElementById('project-overlay');
-        if (overlay) overlay.classList.remove('hidden');
+        if (NK.ui && NK.ui.openProjectOverlay) {
+          NK.ui.openProjectOverlay();
+        } else {
+          const overlay = document.getElementById('project-overlay');
+          const app = document.querySelector('.app');
+          if (overlay) overlay.classList.remove('hidden');
+          if (app) app.classList.add('blur-active');
+        }
       } else if (action === 'draft-delete') {
         if (confirm('삭제하시겠습니까?')) {
           NK.service.project.delete(id).catch((err) => {
