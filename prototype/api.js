@@ -156,7 +156,7 @@
       scenes: Array.isArray(scenes) ? scenes : [],
       header: opts && opts.header ? opts.header : '',
       aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',
-      title: (opts && opts.title) || (payload && payload.topic) || ''
+      title: (opts && opts.title) || ''
     };
     var res = await fetch(withBase('/api/project/save'), {
       method: 'POST',

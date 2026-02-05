@@ -147,6 +147,14 @@
           titleEl.textContent = newTitle;
           titleEl.contentEditable = 'false';
           titleEl.classList.remove('editing');
+          if (NK.api && NK.api.projectSave) {
+            // 서버에 제목만이라도 즉시 반영
+            NK.api.projectSave(draft.id, draft.payload || {}, draft.scenes || [], {
+              header: draft.header || '',
+              aspectRatio: draft.payload?.aspectRatio,
+              title: newTitle
+            }).catch(() => { /* ignore network errors */ });
+          }
         };
 
         const cancel = () => {
