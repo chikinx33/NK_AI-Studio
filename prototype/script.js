@@ -5,7 +5,7 @@
   let theme = 'dark';
   const DRAFT_KEY = 'nk_scenario_drafts_v1';
   const PIPELINE_KEY = 'nk_pipeline_last';
-  const APP_VERSION = '1.201';
+  const APP_VERSION = '1.202';
   let scenesState = [];
   let lastPayload = null;
   let pipelineState = null;
@@ -230,6 +230,17 @@
         return '';
       } catch (_) { return ''; }
     };
+
+    // 상태 구독을 통한 UI 업데이트 연동
+    NK.state.subscribe((runtime) => {
+      if (runtime.currentStage) {
+        updateSidebarStageHighlight(runtime.currentStage);
+      }
+      if (runtime.currentProject) {
+        NK.ui.dashboard.renderSidebarProjectCard(runtime.currentProject);
+      }
+    });
+
     const updateSidebarStageHighlight = (stage) => {
       const card = document.querySelector('#sidebar-project-card');
       if (!card) return;
@@ -274,28 +285,20 @@
       const desc = [`장르 : ${genre || '-'}`, `타겟 : ${tgt || '-'}`, `길이 : ${dur}`, `비율 : ${ar}`].join(' · ');
       return (
         '<div class="draft-top">' +
-          '<div class="draft-thumb"></div>' +
-          '<div class="sidebar-card-text">' +
-            '<h4 class="sidebar-card-title">' + (d?.title || '제목없음') + '</h4>' +
-            '<p class="sidebar-card-lines">' + desc + '</p>' +
-          '</div>' +
+        '<div class="draft-thumb"></div>' +
+        '<div class="sidebar-card-text">' +
+        '<h4 class="sidebar-card-title">' + (d?.title || '제목없음') + '</h4>' +
+        '<p class="sidebar-card-lines">' + desc + '</p>' +
+        '</div>' +
         '</div>' +
         '<div class="sidebar-card-actions">' +
-          '<button class="btn-secondary" data-action="sidebar-edit-scenario">프리 프로덕션</button>' +
-          '<button class="btn-secondary" data-action="sidebar-edit-scenes">프로덕션</button>' +
-          '<button class="btn-secondary" data-action="sidebar-edit-media">포스트 프로덕션</button>' +
+        '<button class="btn-secondary" data-action="sidebar-edit-scenario">프리 프로덕션</button>' +
+        '<button class="btn-secondary" data-action="sidebar-edit-scenes">프로덕션</button>' +
+        '<button class="btn-secondary" data-action="sidebar-edit-media">포스트 프로덕션</button>' +
         '</div>'
       );
     };
-    const renderSidebarProjectCard = (draft) => {
-      const container = ensureSidebarProjectCard();
-      if (!container) return;
-      container.innerHTML = draft ? buildProjectOverview(draft) : '';
-      const stage = ensureSidebarStageActions();
-      if (stage) stage.innerHTML = '';
-      const cur = sGet('nk_current_stage') || lGet('nk_current_stage') || '';
-      if (cur) updateSidebarStageHighlight(cur);
-    };
+    const renderSidebarProjectCard = (draft) => NK.ui.dashboard.renderSidebarProjectCard(draft);
     const renderSidebarProjectCardFromStorage = () => {
       let d = null;
       try {
@@ -308,7 +311,7 @@
           if (s2) d = JSON.parse(s2);
         } catch (_) { }
       }
-      if (d) renderSidebarProjectCard(d);
+      if (d) NK.ui.dashboard.renderSidebarProjectCard(d);
     };
     window.addEventListener('message', (e) => {
       const data = e && e.data;
@@ -369,67 +372,7 @@
       if (action === 'sidebar-edit-media') { showSidebarProjectCard(); setNavStage('media'); updateSidebarStageHighlight('media'); loadStage('media.html'); return; }
       if (action === 'open-options') { loadStage('options.html'); return; }
     });
-    const renderDashboardDrafts = () => {
-      const container = document.getElementById('dashboard-drafts');
-      if (!container) return;
-      const drafts = NK.store.getDrafts();
-      const fmtDuration = (sec) => {
-        const n = Number(sec) || 0;
-        if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
-        if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
-        return `${n}s`;
-      };
-      const emptyCard = `
-        <article class="draft-card empty-project-card" data-action="create-project" aria-label="새 프로젝트">
-          <div class="empty-card-content">
-            <span class="plus-icon">+</span>
-          </div>
-        </article>
-      `;
-      const list = drafts.map(d => {
-        const ar = d.payload?.aspectRatio || '16:9';
-        const dur = fmtDuration(d.payload?.duration || 0);
-        const cat = d.payload?.purposeCategory || '';
-        const tags = Array.isArray(d.payload?.purposeTags) ? d.payload.purposeTags.join(', ') : '';
-        const tgt = d.payload?.target || '';
-        const genre = `${cat} ${tags}`.trim();
-        const canGenerate = Array.isArray(d.scenes) && d.scenes.length > 0;
-        return `
-          <article class="draft-card">
-            <button class="trash-btn top-right" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
-            <div class="draft-top">
-              <div class="draft-thumb"></div>
-              <div>
-                <div class="draft-title-row">
-                  <h4 class="draft-title" data-id="${d.id}">${d.title || '제목없음'}</h4>
-                  <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">✎</button>
-                </div>
-                <div class="draft-meta">
-                  <div>장르 : ${genre || '-'}</div>
-                  <div>타겟 : ${tgt || '-'}</div>
-                  <div>길이 : ${dur}</div>
-                  <div>비율 : ${ar}</div>
-                </div>
-              </div>
-            </div>
-            <div class="draft-actions">
-              <button class="btn-primary" data-action="draft-edit" data-id="${d.id}">편집</button>
-            </div>
-          </article>
-        `;
-      }).join('');
-      container.innerHTML = emptyCard + list;
-      const firstCard = container.querySelector('.draft-card:not(.empty-project-card)');
-      const emptyEl = container.querySelector('.empty-project-card');
-      if (emptyEl) {
-        if (firstCard) {
-          const h = firstCard.getBoundingClientRect().height;
-          if (h && h > 0) emptyEl.style.height = `${Math.round(h)}px`;
-        } else {
-          emptyEl.style.height = '260px';
-        }
-      }
-    };
+    const renderDashboardDrafts = () => NK.ui.dashboard.renderDrafts();
     renderDashboardDrafts();
 
     const dashContainer = document.getElementById('dashboard-drafts');
@@ -613,12 +556,7 @@
     const LOGIN_ID = 'limfactory';
     const LOGIN_PW = 'limfactory1234';
 
-    const formatEst = sec => {
-      const n = Number(sec) || 0;
-      if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
-      if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
-      return `${n}s`;
-    };
+    const formatEst = sec => NK.ui.scenario.formatEst(sec);
 
     const isAuthed = () => {
       try { return localStorage.getItem(loginKey) === 'true'; } catch (_) { return false; }
@@ -634,49 +572,14 @@
     };
 
     const renderScenes = scenes => {
-      if (!cardsEl) return;
-      if (!scenes || !scenes.length) {
-        cardsEl.classList.remove('empty');
-        cardsEl.innerHTML = (
-          '<div class="scenario-card placeholder">' +
-            '<p class="muted" style="text-align:center; width:100%;">시나리오를 생성하세요</p>' +
-          '</div>'
-        );
-        if (saveDraftBtn) saveDraftBtn.disabled = true;
-        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
-        return;
-      }
-      cardsEl.classList.remove('empty');
+      NK.ui.scenario.renderScenes(scenes, {
+        onRendered: () => {
+          if (saveDraftBtn) saveDraftBtn.disabled = scenes.length === 0;
+          if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
+          setTimeout(ensureConfirmEnabled, 0);
+        }
+      });
       scenesState = scenes;
-      cardsEl.innerHTML = scenes
-        .map(
-          s => `
-          <div class="scenario-card">
-            <div class="card-top">
-              <div>
-                <p class="eyebrow">Scene ${s.id}</p>
-                <h5>Scene ${s.id} - <span class="view-title" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.title || ''}</span></h5>
-              </div>
-              <input class="chip-input est-input" data-id="${s.id}" value="${formatEst(s.estSec)}" aria-label="예상 길이"/>
-            </div>
-            <p class="view-lines" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.lines || ''}</p>
-            <p class="muted">Shot: <span class="view-shot" data-id="${s.id}" ${s.editing ? 'contenteditable="true"' : ''}>${s.shot || ''}</span></p>
-            <div class="actions">
-              ${s.editing
-              ? `<button class="btn-secondary" data-action="save" data-id="${s.id}">저장</button>
-                     <button class="btn-ghost" data-action="cancel-edit" data-id="${s.id}">취소</button>`
-              : `<button class="btn-secondary" data-action="regenerate" data-id="${s.id}">재생성</button>
-                     <button class="btn-ghost" data-action="edit" data-id="${s.id}">수정</button>
-                     <button class="btn-ghost" data-action="delete" data-id="${s.id}">삭제</button>
-                     <button class="btn-ghost" data-action="add" data-id="${s.id}">추가</button>`
-            }
-            </div>
-          </div>`
-        )
-        .join('');
-      if (saveDraftBtn) saveDraftBtn.disabled = scenesState.length === 0;
-      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
-      setTimeout(ensureConfirmEnabled, 0);
     };
 
     const savePipeline = (payload, scenes, header) => {
@@ -752,14 +655,7 @@
 
     const renderDraftNav = () => { };
 
-    const setActiveTags = (box, values = []) => {
-      if (!box) return;
-      box.querySelectorAll('.tag-toggle').forEach(btn => {
-        const val = btn.dataset.value;
-        if (values.includes(val)) btn.classList.add('active');
-        else btn.classList.remove('active');
-      });
-    };
+    const setActiveTags = (box, values) => NK.ui.scenario.setActiveTags(box, values);
 
     const applyDraft = draft => {
       try {
@@ -929,20 +825,7 @@
       toneBox = document.getElementById('tone-tags');
       styleBox = document.getElementById('style-tags');
       const defaultPurposeCat = '키즈 · 영유아';
-      renderPurposeTags = (selCat, activateAll = false) => {
-        if (!tagBox) return;
-        tagBox.innerHTML = '';
-        const list = purposeCategories[selCat] || [];
-        list.forEach(tag => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'tag-toggle';
-          btn.dataset.value = tag;
-          btn.textContent = tag;
-          if (activateAll) btn.classList.add('active');
-          tagBox.appendChild(btn);
-        });
-      };
+      renderPurposeTags = (selCat, activateAll = false) => NK.ui.scenario.renderPurposeTags(tagBox, selCat, activateAll);
 
       if (catSelect && tagBox) {
         Object.keys(purposeCategories).forEach(cat => {
@@ -1055,7 +938,7 @@
           saveHeader(header);
           renderScenes(scenes);
           savePipeline(payload, scenes, header);
-        if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
+          if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.removeAttribute('disabled'); }
         } catch (err) {
           console.warn('API 실패, mock으로 대체', err);
           const errBox = document.getElementById('scenario-error');
