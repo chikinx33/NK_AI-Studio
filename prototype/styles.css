@@ -1112,9 +1112,17 @@ a.btn-primary:active {
 
 .scenario-cards.empty .empty-center {
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.center-empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 240px;
+  text-align: center;
 }
 
 .loading-overlay {

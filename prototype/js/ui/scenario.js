@@ -36,9 +36,11 @@
 
     if (!scenes || !scenes.length) {
       container.innerHTML = `
-        <div class="empty-state" style="padding: 100px 0; text-align: center; width: 100%;">
-          <p class="muted">생성된 시나리오가 없습니다.</p>
-          <p class="muted small">왼쪽 패널에서 조건을 입력하고 '시나리오 생성'을 눌러주세요.</p>
+        <div class="empty-state center-empty">
+          <div>
+            <p class="muted">생성된 시나리오가 없습니다.</p>
+            <p class="muted small">왼쪽 패널에서 조건을 입력하고 '시나리오 생성'을 눌러주세요.</p>
+          </div>
         </div>
       `;
       return;
