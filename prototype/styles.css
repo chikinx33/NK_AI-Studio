@@ -1421,6 +1421,18 @@ a.btn-primary:active {
   outline: none;
 }
 
+.inline-trash {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  color: var(--text);
+}
+.inline-trash:hover {
+  transform: translateY(-1px);
+}
+
 .edit-btn {
   width: 30px;
   height: 30px;
@@ -1456,15 +1468,25 @@ a.btn-primary:active {
   border-top: 1px dashed var(--border);
 }
 
-.draft-actions .btn-secondary,
-.draft-actions .btn-ghost {
-  flex: 1 1 0;
-}
-
 .draft-actions .btn-primary {
   width: 140px;
   flex: 0 0 140px;
   justify-content: center;
+}
+
+.draft-actions .action-trash {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--layer-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+.draft-actions .action-trash:hover {
+  transform: translateY(-1px);
 }
 
 .trash-btn {

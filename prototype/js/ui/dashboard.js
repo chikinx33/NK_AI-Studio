@@ -37,14 +37,13 @@
 
       return `
         <article class="draft-card">
-          <button class="trash-btn top-right" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
           <div class="draft-top">
             <div class="draft-thumb"></div>
             <div>
-              <div class="draft-title-row">
-                <h4 class="draft-title" data-id="${d.id}">${d.title || '제목없음'}</h4>
-                <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">✎</button>
-              </div>
+          <div class="draft-title-row">
+            <h4 class="draft-title" data-id="${d.id}">${d.title || '제목없음'}</h4>
+            <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">✎</button>
+          </div>
               <div class="draft-meta">
                 <div>장르 : ${genre || '-'}</div>
                 <div>타겟 : ${tgt || '-'}</div>
@@ -55,6 +54,7 @@
           </div>
           <div class="draft-actions">
             <button class="btn-primary" data-action="draft-edit" data-id="${d.id}">편집</button>
+            <button class="trash-btn action-trash" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
           </div>
         </article>
       `;

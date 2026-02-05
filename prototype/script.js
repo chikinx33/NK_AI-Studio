@@ -316,7 +316,10 @@
     // 1. 일반 네비게이션 아이템
     document.querySelectorAll('.nav-item').forEach(item => {
       const href = item.getAttribute('href') || '';
-      if (href.includes(stage)) item.classList.add('active');
+      const normHref = href.replace(/.*\//, '').replace(/\.html?$/, '') || 'index';
+      const isDash = stage === 'dashboard' && (normHref === 'dashboard' || normHref === 'index');
+      const isMatch = href.includes(stage) || isDash;
+      if (isMatch) item.classList.add('active');
       else item.classList.remove('active');
     });
 

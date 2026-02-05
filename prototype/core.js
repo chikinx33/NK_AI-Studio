@@ -32,6 +32,13 @@
       return normalize(href) === current;
     });
     if (match) match.classList.add('active');
+    else {
+      var dash = Array.from(document.querySelectorAll('.nav-item[href]')).find(function (a) {
+        var href = a.getAttribute('href') || '';
+        return normalize(href) === 'dashboard';
+      });
+      if (current === 'index' && dash) dash.classList.add('active');
+    }
   };
 
   core.withAspectInHeader = function (headerText, ratio) {
