@@ -119,6 +119,20 @@
     const form = document.getElementById('scenario-form');
     if (!form) return;
 
+    // 공통 폼 데이터 수집
+    const collectPayload = () => {
+      const formData = new FormData(form);
+      const payload = {};
+      formData.forEach((v, k) => { payload[k] = v; });
+      payload.purposeTags = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
+      payload.needs = Array.from(document.querySelectorAll('#needs-tags .tag-toggle.active')).map(b => b.dataset.value);
+      payload.tones = Array.from(document.querySelectorAll('#tone-tags .tag-toggle.active')).map(b => b.dataset.value);
+      payload.styles = Array.from(document.querySelectorAll('#style-tags .tag-toggle.active')).map(b => b.dataset.value);
+      payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || '15';
+      payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || document.querySelector('.ratio-btn.active')?.dataset.value || '16:9';
+      return payload;
+    };
+
     // 카테고리 초기화
     const catSelect = document.getElementById('purpose-category');
     const purposeTags = document.getElementById('purpose-tags');
@@ -153,23 +167,15 @@
     const saveBtn = document.getElementById('save-draft');
     if (saveBtn) {
       saveBtn.onclick = async () => {
-        const formData = new FormData(form);
-        const payload = {};
-        formData.forEach((v, k) => { payload[k] = v; });
-
-        payload.purposeTags = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
-        payload.needs = Array.from(document.querySelectorAll('#needs-tags .tag-toggle.active')).map(b => b.dataset.value);
-        payload.tones = Array.from(document.querySelectorAll('#tone-tags .tag-toggle.active')).map(b => b.dataset.value);
-        payload.styles = Array.from(document.querySelectorAll('#style-tags .tag-toggle.active')).map(b => b.dataset.value);
-        payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || '15';
-        payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || document.querySelector('.ratio-btn.active')?.dataset.value || '16:9';
+        const payload = collectPayload();
 
         const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
         const currentDraft = saved ? JSON.parse(saved) : {};
 
         const draft = {
           id: currentDraft.id || Date.now(),
-          title: payload.topic || currentDraft.title || '새 프로젝트',
+          // 제목은 별도 관리: 토픽 입력 시 제목을 덮어쓰지 않는다.
+          title: currentDraft.title || '새 프로젝트',
           payload: payload,
           scenes: currentDraft.scenes || [],
           header: currentDraft.header || 'A cohesive visual world.'
@@ -190,9 +196,7 @@
     form.onsubmit = async (e) => {
       e.preventDefault();
       NK.core.setLoading(true);
-      const formData = new FormData(form);
-      const params = {};
-      formData.forEach((v, k) => { params[k] = v; });
+      const params = collectPayload();
 
       try {
         const res = await NK.api.scenario(params);
