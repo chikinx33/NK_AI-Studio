@@ -324,6 +324,7 @@
           if (res && res.data) {
             const serverDraft = {
               id: projectId,
+              title: res.data.title || localDraft?.title || '새 프로젝트',
               payload: res.data.payload || {},
               scenes: res.data.scenes || [],
               header: res.data.header || '',
