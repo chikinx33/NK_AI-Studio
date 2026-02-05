@@ -1,43 +1,66 @@
-﻿export async function onRequestPost(context) {
+const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev"];
+
+const corsHeaders = (origin) => {
+  const headers = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+  if (!origin) {
+    // file:// 로컬에서 오는 null origin 지원
+    headers["Access-Control-Allow-Origin"] = "*";
+  } else if (ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+  return headers;
+};
+
+export async function onRequestPost(context) {
   const { request, env } = context;
+  const origin = request.headers.get("Origin");
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders(origin) });
+  }
+
   if (!env.OPENAI_API_KEY) {
-    return jsonError('OPENAI_API_KEY not set', 500);
+    return jsonError("OPENAI_API_KEY not set", 500, origin);
   }
 
   let body;
   try {
     body = await request.json();
   } catch (err) {
-    return jsonError('Invalid JSON body', 400);
+    return jsonError("Invalid JSON body", 400, origin);
   }
 
   // Build prompt from incoming payload
-  const topic = body.topic || '주제 없음';
-  const purposeCategory = body.purposeCategory || '';
-  const purposeTags = (body.purposeTags || []).join(', ');
-  const target = body.target || '';
-  const tones = (body.tones || []).join(', ');
-  const toneText = (body.tone || '').trim();
-  const styles = (body.styles || []).join(', ');
-  const styleText = (body.style || '').trim();
-  const needs = (body.needs || []).join(', ');
-  const duration = body.duration || '60';
-  const extraNotes = (body.banned || '').trim(); // UI에서는 추가 설명 필드로 사용
-  const lang = body.language === 'en' ? 'en' : 'ko';
+  const topic = body.topic || "주제 없음";
+  const purposeCategory = body.purposeCategory || "";
+  const purposeTags = (body.purposeTags || []).join(", ");
+  const target = body.target || "";
+  const tones = (body.tones || []).join(", ");
+  const toneText = (body.tone || "").trim();
+  const styles = (body.styles || []).join(", ");
+  const styleText = (body.style || "").trim();
+  const needs = (body.needs || []).join(", ");
+  const duration = body.duration || "60";
+  const extraNotes = (body.banned || "").trim(); // UI에서는 추가 설명 필드로 사용
+  const lang = body.language === "en" ? "en" : "ko";
 
   const durationToScenes = {
-    '15': 4,
-    '30': 7,
-    '45': 10,
-    '60': 12,
-    '1800': 120,
-    '3600': 240,
-    '7200': 480
+    "15": 4,
+    "30": 7,
+    "45": 10,
+    "60": 12,
+    "1800": 120,
+    "3600": 240,
+    "7200": 480,
   };
   const sceneCount = durationToScenes[duration] || 7;
 
-  const toneCombined = [tones, toneText].filter(Boolean).join(', ');
-  const styleCombined = [styles, styleText].filter(Boolean).join(', ');
+  const toneCombined = [tones, toneText].filter(Boolean).join(", ");
+  const styleCombined = [styles, styleText].filter(Boolean).join(", ");
 
   const sysKo = `당신은 쇼츠/릴스용 짧은 영상 시나리오를 작성하는 어시스턴트입니다.
 - JSON만 반환: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
@@ -75,7 +98,7 @@
 - Apply extraNotes without overriding rules above. No markdown or extra explanations.`;
 
   const userPrompt =
-    lang === 'en'
+    lang === "en"
       ? `Topic: ${topic}
 Audience: ${target}
 Purpose category: ${purposeCategory}
@@ -99,21 +122,21 @@ Please respond in English.`
 
   let scenes;
   try {
-    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
+    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
+        model: "gpt-4o-mini",
+        response_format: { type: "json_object" },
         messages: [
-          { role: 'system', content: lang === 'en' ? sysEn : sysKo },
-          { role: 'user', content: userPrompt }
+          { role: "system", content: lang === "en" ? sysEn : sysKo },
+          { role: "user", content: userPrompt },
         ],
-        temperature: 0.5
-      })
+        temperature: 0.5,
+      }),
     });
 
     if (!completion.ok) {
@@ -123,24 +146,24 @@ Please respond in English.`
 
     const data = await completion.json();
     const text = data.choices?.[0]?.message?.content;
-    const parsed = JSON.parse(text || '{}');
+    const parsed = JSON.parse(text || "{}");
     scenes = parsed.scenes || parsed;
     if (!Array.isArray(scenes) || scenes.length === 0) {
-      throw new Error('Invalid scenes format from OpenAI');
+      throw new Error("Invalid scenes format from OpenAI");
     }
   } catch (err) {
-    return jsonError(err.message || 'OpenAI request failed', 500);
+    return jsonError(err.message || "OpenAI request failed", 500, origin);
   }
 
   return new Response(JSON.stringify({ scenes }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' }
+    headers: corsHeaders(origin),
   });
 }
 
-function jsonError(message, status = 500) {
+function jsonError(message, status = 500, origin = null) {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: corsHeaders(origin),
   });
 }

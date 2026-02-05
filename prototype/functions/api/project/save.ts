@@ -2,24 +2,44 @@
 // Save project payload/scenes to GCS reference folder as data.json
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-const send = (data: any, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
+const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev"];
+const corsHeaders = (origin: string | null) => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  };
+  if (!origin) {
+    headers["Access-Control-Allow-Origin"] = "*";
+  } else if (ALLOWED_ORIGINS.includes(origin)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
+  return headers;
+};
+
+const send = (data: any, status = 200, origin: string | null = null) =>
+  new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
+    const origin = request.headers.get("Origin");
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
+
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body.projectId || "").trim();
-    if (!projectId) return send({ error: "projectId is required" }, 400);
-    if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "Invalid projectId format" }, 400);
+    if (!projectId) return send({ error: "projectId is required" }, 400, origin);
+    if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "Invalid projectId format" }, 400, origin);
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     if (!clientEmail || !privateKeyRaw || !baseOutput) {
-      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500);
+      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     }
     const outParsed = parseGcsUri(baseOutput);
-    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
+    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const objectName = `${basePrefix}/projects/${projectId}/reference/data.json`;
 
@@ -45,11 +65,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify(payload),
     });
     const text = await res.text();
-    if (!res.ok) return send({ error: text || "upload_error" }, res.status);
+    if (!res.ok) return send({ error: text || "upload_error" }, res.status, origin);
 
-    return send({ ok: true, objectName });
+    return send({ ok: true, objectName }, 200, origin);
   } catch (e: any) {
-    return send({ error: e?.message || "Unknown error" }, 500);
+    return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
   }
 };
 

@@ -292,13 +292,15 @@
 
     // 데이터 로드 실행
     const tryLoad = async () => {
+      const isFile = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
       let localDraft = null;
       const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
       if (saved) {
         try { localDraft = JSON.parse(saved); } catch (_) { }
       }
       const projectId = localDraft?.id || NK.state?.runtime?.currentProject?.id;
-      if (projectId) {
+      // file:// 환경에서는 CORS 제한으로 원격 get 호출을 건너뛰고 로컬 캐시만 사용
+      if (projectId && !isFile) {
         try {
           const res = await NK.api.projectGet(projectId);
           if (res && res.data) {

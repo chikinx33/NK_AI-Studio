@@ -7,6 +7,7 @@
     var pipelineMeta = document.getElementById('pipeline-meta');
     var pipelineScenes = document.getElementById('pipeline-scenes');
     if (!pipelineMeta || !pipelineScenes || !ctx) return;
+    var isFile = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
     var state = ctx.getState();
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var persistPipeline = ctx.persistPipeline;
@@ -38,7 +39,7 @@
 
       // 서버 데이터 우선 로드 시도
       var serverData = null;
-      if (projectId && NK.api && NK.api.projectGet) {
+      if (projectId && NK.api && NK.api.projectGet && !isFile) {
         try {
           var res = await NK.api.projectGet(projectId);
           if (res && res.data) serverData = res.data;

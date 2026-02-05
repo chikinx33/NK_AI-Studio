@@ -4,9 +4,22 @@
 
   const base = (function () {
     try {
-      const saved = localStorage.getItem('nk_api_base') || NK.config.API_BASE || '';
-      return saved.trim();
-    } catch (_) { return NK.config.API_BASE || ''; }
+      const savedRaw = localStorage.getItem('nk_api_base');
+      const saved = savedRaw ? savedRaw.trim() : '';
+      if (savedRaw !== null && saved === '') {
+        // remove accidental empty override that breaks file:// or localhost
+        localStorage.removeItem('nk_api_base');
+      }
+      if (saved && saved !== 'null' && saved !== 'undefined') return saved;
+      if (NK.config.API_BASE) return NK.config.API_BASE;
+      if (typeof window !== 'undefined') {
+        const host = window.location.hostname || '';
+        if (window.location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1') {
+          return 'https://nk-ai-studio.pages.dev';
+        }
+      }
+      return '';
+    } catch (_) { return NK.config.API_BASE || 'https://nk-ai-studio.pages.dev'; }
   })();
   const withBase = (path) => {
     if (!base) return path;
