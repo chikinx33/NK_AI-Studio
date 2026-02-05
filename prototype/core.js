@@ -62,7 +62,7 @@
   core.translations = {
     en: {
       brand_title: 'NK_Studio',
-      brand_subtitle: 'Video Automated Pipeline',
+      brand_subtitle: 'Video Auto Pipeline',
       nav_dashboard: 'Dashboard',
       nav_scenario: 'Pre-production',
       nav_scenes: 'Production',

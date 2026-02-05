@@ -135,4 +135,15 @@
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
     return j(text);
   };
+
+  api.login = async function (id, pw) {
+    var res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, pw })
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'login_error');
+    return j(text);
+  };
 })(); 

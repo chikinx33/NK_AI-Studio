@@ -10,6 +10,12 @@
         const st = nav.normalizeStageName(targetName);
         const url = targetName + (targetName.indexOf('?') >= 0 ? '&' : '?') + 'embed=1';
 
+        // 옵션 페이지는 별도 창으로 전체 이동 (iframe 사용 안 함)
+        if (!isIframe && st === 'options') {
+            window.location.href = targetName;
+            return;
+        }
+
         if (isIframe) {
             // 1. 아이프레임 스스로 이동
             window.location.assign(url);
@@ -42,7 +48,7 @@
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
             const name = base.replace(/\.html?$/, '');
-            if (['scenario', 'scenes', 'media', 'publish', 'dashboard'].includes(name)) return name;
+            if (['scenario', 'scenes', 'media', 'publish', 'dashboard', 'options'].includes(name)) return name;
             if (name === 'index' || name === '') return 'dashboard';
             return '';
         } catch (_) { return ''; }

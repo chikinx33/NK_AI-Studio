@@ -18,7 +18,7 @@
         });
 
         const btn = document.querySelector('[data-lang-toggle]');
-        if (btn) btn.textContent = lang === 'ko' ? 'EN' : 'KO';
+        if (btn) btn.textContent = lang === 'ko' ? 'KO' : 'EN';
 
         common.updateThemeButton(NK.state.runtime.theme, lang);
     };

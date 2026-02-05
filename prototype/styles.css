@@ -2197,9 +2197,10 @@ a.btn-primary:active {
 
 .form-row {
   display: grid;
-  grid-template-columns: 60px 1fr;
+  grid-template-columns: 70px 300px;
   align-items: center;
   gap: 10px;
+  justify-content: center;
 }
 
 .form-row label {

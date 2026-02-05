@@ -63,7 +63,8 @@
     }
 
     // 기본 대시보드 로드 (부모 창인 경우에만)
-    const isMainPage = !isIframe && (
+    const isOptionsPage = stage === 'options' || currentPath.toLowerCase().includes('options.html');
+    const isMainPage = !isIframe && !isOptionsPage && (
       stage === 'dashboard' ||
       currentPath.toLowerCase().includes('index.html') ||
       currentPath.endsWith('/') ||
@@ -78,6 +79,9 @@
     // 4. 각 페이지별 전용 UI 렌더링
     if (document.getElementById('dashboard-drafts')) {
       NK.ui.dashboard.renderDrafts();
+    }
+    if (document.getElementById('opt-auth-btn')) {
+      setupLoginPage();
     }
     if (document.getElementById('scenario-form')) {
       NK.ui.scenario.init();
@@ -200,6 +204,61 @@
         NK.navigation.loadStage(data.url);
       }
     });
+  };
+
+  const setupLoginPage = () => {
+    const idInput = document.getElementById('opt-id');
+    const pwInput = document.getElementById('opt-pw');
+    const btn = document.getElementById('opt-auth-btn');
+    const nameEl = document.getElementById('opt-username');
+    const formRows = document.querySelectorAll('.option-card .form-row');
+    if (!idInput || !pwInput || !btn) return;
+
+    const setUI = (loggedIn, user = '') => {
+      if (nameEl) {
+        nameEl.textContent = loggedIn ? `${user} 님 로그인됨` : '';
+        nameEl.classList.toggle('hidden', !loggedIn);
+      }
+      formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
+      btn.textContent = loggedIn ? '로그아웃' : '로그인';
+      btn.dataset.state = loggedIn ? 'logout' : 'login';
+    };
+
+    const initialUser = NK.auth.getUser();
+    setUI(NK.auth.isAuthed(), initialUser);
+
+    const handleEnter = (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!btn.disabled) btn.click();
+      }
+    };
+    [idInput, pwInput].forEach(el => el && el.addEventListener('keydown', handleEnter));
+
+    btn.onclick = async () => {
+      const isLogout = btn.dataset.state === 'logout';
+      if (isLogout) {
+        NK.auth.logout();
+        setUI(false);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = '로그인 중...';
+      try {
+        const ok = await NK.auth.login(idInput.value.trim(), pwInput.value.trim());
+        if (ok) {
+          setUI(true, NK.auth.getUser());
+          alert('로그인 성공');
+        } else {
+          alert('로그인 실패: 아이디 또는 비밀번호를 확인하세요.');
+        }
+      } finally {
+        btn.disabled = false;
+        // 최신 인증 상태에 맞춰 버튼/필드 갱신
+        setUI(NK.auth.isAuthed(), NK.auth.getUser());
+      }
+    };
   };
 
   const updateSidebarHighlight = (stage) => {
