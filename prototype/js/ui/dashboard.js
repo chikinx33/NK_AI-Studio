@@ -23,8 +23,8 @@
         if (!ids.length) return;
         let changed = false;
         for (const id of ids) {
-          const has = drafts.find(d => String(d.id) === String(id));
-          if (!has && NK.api.projectGet) {
+          const idx = drafts.findIndex(d => String(d.id) === String(id));
+          if (NK.api.projectGet) {
             try {
               const res = await NK.api.projectGet(id);
               const data = res?.data || {};
@@ -35,12 +35,15 @@
                 scenes: data.scenes || [],
                 header: data.header || '',
               };
-              drafts.push(draft);
+              if (idx === -1) drafts.push(draft);
+              else drafts[idx] = draft; // 기존 항목도 최신 데이터로 덮어쓰기
               changed = true;
             } catch (_) {
               // data.json이 없거나 404라도 최소한 ID는 노출되도록 스텁 추가
-              drafts.push({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
-              changed = true;
+              if (idx === -1) {
+                drafts.push({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
+                changed = true;
+              }
             }
           }
         }
@@ -146,6 +149,7 @@
             localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
             localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
             localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+            if (NK.state && NK.state.set) NK.state.set({ currentProject: draft });
           } catch (_) { }
           titleEl.textContent = newTitle;
           titleEl.contentEditable = 'false';
