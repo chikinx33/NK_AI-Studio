@@ -1,26 +1,44 @@
 // prototype/functions/api/project/delete.ts
 // Delete all objects under projects/{projectId}/ prefix with safety checks.
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
-const send = (data: any, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
+
+const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev", "null"];
+const corsHeaders = (origin: string | null) => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
+  };
+  if (!origin || origin === "null") headers["Access-Control-Allow-Origin"] = "*";
+  else if (ALLOWED_ORIGINS.includes(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+};
+
+const send = (data: any, status = 200, origin: string | null = null) =>
+  new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
+    const origin = request.headers.get("Origin");
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body.projectId || "").trim();
     const confirm = String(body.confirm || "").trim() === "yes";
     const deleteAll = String(body.all || "").trim() === "true";
     if (!projectId || !confirm) {
-      return send({ error: "projectId and confirm=yes are required" }, 400);
+      return send({ error: "projectId and confirm=yes are required" }, 400, origin);
     }
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     if (!clientEmail || !privateKeyRaw || !baseOutput) {
-      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500);
+      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     }
     const outParsed = parseGcsUri(baseOutput);
-    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
+    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const prefix = deleteAll ? `${basePrefix}/projects/` : `${basePrefix}/projects/${projectId}/`;
 
@@ -43,7 +61,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (objectName) {
       const allowedPrefix = `${basePrefix}/projects/${projectId}/`;
       if (!objectName.startsWith(allowedPrefix)) {
-        return send({ error: "Invalid objectName for project" }, 400);
+        return send({ error: "Invalid objectName for project" }, 400, origin);
       }
       const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
       const dres = await fetch(delUrl, {
@@ -54,7 +72,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         }
       });
       const status = dres.status;
-      return send({ deletedCount: status === 204 ? 1 : 0, results: [{ name: objectName, status }], single: true });
+      return send({ deletedCount: status === 204 ? 1 : 0, results: [{ name: objectName, status }], single: true }, 200, origin);
     }
 
     // List and delete objects with pagination
@@ -71,7 +89,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       });
       const text = await res.text();
       if (!res.ok) {
-        return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status);
+        return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status, origin);
       }
       const json = safeJson(text);
       const items = Array.isArray(json.items) ? json.items : [];
@@ -92,9 +110,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       pageToken = String((json as any)?.nextPageToken || "");
     } while (pageToken);
 
-    return send({ deletedCount: results.filter(r => r.status === 204).length, listedCount, results, prefix, deleteAll });
+    return send({ deletedCount: results.filter(r => r.status === 204).length, listedCount, results, prefix, deleteAll }, 200, origin);
   } catch (e: any) {
-    return send({ error: e?.message || "Unknown error" }, 500);
+    return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
   }
 };
 
@@ -154,3 +172,8 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
+
+export const onRequestOptions: PagesFunction = async ({ request }) => {
+  const origin = request.headers.get("Origin");
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+};
