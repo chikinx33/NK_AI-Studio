@@ -228,6 +228,12 @@
     const cards = document.getElementById('scenario-cards');
     if (cards) {
       cards.addEventListener('click', (e) => {
+        const card = e.target.closest('.scenario-card');
+        if (card) {
+          cards.querySelectorAll('.scenario-card').forEach(c => c.classList.remove('active-card'));
+          card.classList.add('active-card');
+        }
+
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
         const action = btn.dataset.action;
