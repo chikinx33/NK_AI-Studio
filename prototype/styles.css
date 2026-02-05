@@ -850,6 +850,13 @@ a.btn-primary:active {
   line-height: 30px;
 }
 
+.section-caption span {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  line-height: 40px;
+}
+
 .section-caption.left-caption {
   grid-column: 1 / 2;
 }
