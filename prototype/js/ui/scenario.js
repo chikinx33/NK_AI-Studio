@@ -235,7 +235,7 @@
 
         NK.store.saveDrafts(drafts);
         localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
-        try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes); } catch (_) { }
+        try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio }); } catch (_) { }
         NK.state.set({ currentProject: draft });
         alert('저장되었습니다.');
       };
@@ -280,7 +280,7 @@
           draft.scenes = res.scenes;
           draft.payload = params;
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
-          try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes); } catch (_) { }
+          try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio }); } catch (_) { }
           scenario.renderScenes(res.scenes);
         }
       } catch (err) {

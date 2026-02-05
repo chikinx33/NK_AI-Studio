@@ -3,7 +3,7 @@
   var ui = NK.uiPipeline || (NK.uiPipeline = {});
   var ctx = null;
   ui.init = function (c) { ctx = c || {}; };
-  ui.render = function () {
+  ui.render = async function () {
     var pipelineMeta = document.getElementById('pipeline-meta');
     var pipelineScenes = document.getElementById('pipeline-scenes');
     if (!pipelineMeta || !pipelineScenes || !ctx) return;
@@ -15,15 +15,64 @@
     var loadPipeline = ctx.loadPipeline;
     var loadHeader = ctx.loadHeader;
     var saveAspect = ctx.saveAspect;
+    var projectId = (function () {
+      try {
+        var sel = localStorage.getItem('nk_selected_draft');
+        if (sel) { var d = JSON.parse(sel); if (d && d.id) return d.id; }
+      } catch (_) { }
+      try {
+        if (NK && NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
+          return NK.state.runtime.currentProject.id;
+        }
+      } catch (_) { }
+      return null;
+    })();
+    if (state && projectId && String(state.draftId || '') !== String(projectId)) {
+      state = null;
+      ctx.setState(null);
+    }
     if (!state) {
       var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
+      if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
       try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
-      if (!stored) {
-        var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '' };
-        var headerInit = withAspectInHeader ? withAspectInHeader('', aspectRatio) : '';
-        state = { payload: payload, header: headerInit, scenes: [], savedAt: '', aspectRatio: aspectRatio, isPlaceholder: true };
+
+      // 서버 데이터 우선 로드 시도
+      var serverData = null;
+      if (projectId && NK.api && NK.api.projectGet) {
+        try {
+          var res = await NK.api.projectGet(projectId);
+          if (res && res.data) serverData = res.data;
+        } catch (_) { }
+      }
+
+      if (serverData) {
+        var serverRatio = serverData.aspectRatio || serverData.payload?.aspectRatio || aspectRatio;
+        if (serverRatio && saveAspect) saveAspect(serverRatio);
+        aspectRatio = serverRatio || aspectRatio;
+        var headerSrv = serverData.header || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
+        var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
+        var sceneSrv = (serverData.scenes || []).map(function (s, idx) {
+          return {
+            id: (s.id != null ? s.id : (idx + 1)),
+            lines: s.lines || '',
+            shot: s.shot || '',
+            estSec: s.estSec,
+            promptText: (s.promptText || ['Common', headerSrv2, 'Visual', (s.shot || ''), 'Duration', ((Math.max(Number(s.estSec) || 0, 1)) + 's.')].join('\n')),
+            imageDataUrl: s.imageDataUrl || '',
+            imgLoading: false,
+            imgError: '',
+            videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
+            videoStatus: s.videoStatus || '',
+            videoError: s.videoError || '',
+            videoJobId: s.videoJobId || '',
+            promptEdited: !!s.promptEdited,
+            editingPrompt: !!s.editingPrompt,
+            editingStory: !!s.editingStory
+          };
+        });
+        state = { payload: serverData.payload || {}, header: headerSrv2, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
         ctx.setState(state);
-      } else {
+      } else if (stored) {
         var savedRatio = stored.aspectRatio;
         if (savedRatio && saveAspect) saveAspect(savedRatio);
         aspectRatio = savedRatio || aspectRatio;
@@ -49,6 +98,11 @@
           };
         });
         state = { payload: stored.payload, header: headerInit2, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || null) };
+        ctx.setState(state);
+      } else {
+        var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '' };
+        var headerInit = withAspectInHeader ? withAspectInHeader('', aspectRatio) : '';
+        state = { payload: payload, header: headerInit, scenes: [], savedAt: '', aspectRatio: aspectRatio, isPlaceholder: true };
         ctx.setState(state);
       }
     }
@@ -189,11 +243,14 @@
     }
     var savePipelineBtn = document.getElementById('save-pipeline-btn');
     if (savePipelineBtn) {
-      savePipelineBtn.onclick = function () {
+      savePipelineBtn.onclick = async function () {
         var st = ctx.getState();
         if (!st) return;
         ctx.savePipeline(st.payload, st.scenes, st.header);
         if (updateDraftFromPipeline) updateDraftFromPipeline();
+        if (projectId && NK.api && NK.api.projectSave) {
+          try { await NK.api.projectSave(projectId, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' }); } catch (_) { }
+        }
         alert('저장되었습니다.');
       };
     }

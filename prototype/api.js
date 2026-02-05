@@ -136,8 +136,14 @@
     return j(text);
   };
 
-  api.projectSave = async function (projectId, payload, scenes) {
-    var body = { projectId: String(projectId || ''), payload: payload || {}, scenes: Array.isArray(scenes) ? scenes : [] };
+  api.projectSave = async function (projectId, payload, scenes, opts) {
+    var body = {
+      projectId: String(projectId || ''),
+      payload: payload || {},
+      scenes: Array.isArray(scenes) ? scenes : [],
+      header: opts && opts.header ? opts.header : '',
+      aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || ''
+    };
     var res = await fetch(withBase('/api/project/save'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
