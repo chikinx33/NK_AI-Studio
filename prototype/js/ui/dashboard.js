@@ -30,14 +30,18 @@
               const data = res?.data || {};
               const draft = {
                 id,
-                title: data.title || data.payload?.topic || '프로젝트',
+                title: data.title || '프로젝트',
                 payload: data.payload || {},
                 scenes: data.scenes || [],
                 header: data.header || '',
               };
               drafts.push(draft);
               changed = true;
-            } catch (_) { }
+            } catch (_) {
+              // data.json이 없거나 404라도 최소한 ID는 노출되도록 스텁 추가
+              drafts.push({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
+              changed = true;
+            }
           }
         }
         if (changed) {
