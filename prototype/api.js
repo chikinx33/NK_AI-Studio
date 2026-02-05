@@ -155,7 +155,8 @@
       payload: payload || {},
       scenes: Array.isArray(scenes) ? scenes : [],
       header: opts && opts.header ? opts.header : '',
-      aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || ''
+      aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',
+      title: (opts && opts.title) || (payload && payload.topic) || ''
     };
     var res = await fetch(withBase('/api/project/save'), {
       method: 'POST',
@@ -164,6 +165,13 @@
     });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
+    return j(text);
+  };
+
+  api.projectList = async function () {
+    var res = await fetch(withBase('/api/project/list'), { method: 'GET' });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'list_error')));
     return j(text);
   };
 

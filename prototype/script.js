@@ -5,6 +5,44 @@
   let currentLang = 'ko';
   let currentTheme = 'dark';
 
+  // 서버 → 로컬 동기화 (프로젝트 리스트 병합)
+  const syncProjectsFromServer = async () => {
+    try {
+      const isFile = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
+      if (isFile) return; // file://은 CORS 우회가 있어도 불필요 시 건너뜀
+      if (!NK.api || !NK.api.projectList) return;
+      const list = await NK.api.projectList();
+      const ids = Array.isArray(list?.ids) ? list.ids : [];
+      if (!ids.length) return;
+      const drafts = NK.store.getDrafts();
+      let changed = false;
+      for (const id of ids) {
+        const has = drafts.find(d => String(d.id) === String(id));
+        if (!has) {
+          try {
+            const res = await NK.api.projectGet(id);
+            const data = res?.data || {};
+            const draft = {
+              id,
+              title: data.title || data.payload?.topic || '프로젝트',
+              payload: data.payload || {},
+              scenes: data.scenes || [],
+              header: data.header || '',
+              aspectRatio: data.aspectRatio || data.payload?.aspectRatio
+            };
+            drafts.push(draft);
+            changed = true;
+          } catch (_) { /* ignore */ }
+        }
+      }
+      if (changed) {
+        NK.store.saveDrafts(drafts);
+        if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) NK.ui.dashboard.renderDrafts();
+        refreshSidebarCard();
+      }
+    } catch (_) { }
+  };
+
   // 사이드바 카드가 비어 있으면 현재 선택된/저장된 프로젝트로 다시 채운다.
   const refreshSidebarCard = () => {
     const container = document.getElementById('sidebar-project-card');
@@ -102,6 +140,7 @@
       NK.ui.dashboard.renderDrafts();
       setupProjectOverlay();
       refreshSidebarCard();
+      syncProjectsFromServer();
     }
     if (document.getElementById('opt-auth-btn')) {
       setupLoginPage();

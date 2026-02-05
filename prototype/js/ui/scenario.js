@@ -249,7 +249,7 @@
         if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
           NK.ui.dashboard.renderSidebarProjectCard(draft);
         }
-        try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio }); } catch (_) { }
+        try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title }); } catch (_) { }
         alert('저장되었습니다.');
       };
     }
@@ -298,7 +298,7 @@
           if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
             NK.ui.dashboard.renderSidebarProjectCard(draft);
           }
-          try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio }); } catch (_) { }
+          try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title }); } catch (_) { }
           scenario.renderScenes(res.scenes);
         }
       } catch (err) {

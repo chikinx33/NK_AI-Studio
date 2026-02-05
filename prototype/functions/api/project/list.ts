@@ -1,75 +1,80 @@
-// prototype/functions/api/project/save.ts
-// Save project payload/scenes to GCS reference folder as data.json
+// prototype/functions/api/project/list.ts
+// List project IDs under projects/ prefix in GCS (lightweight).
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev", "null"];
 const corsHeaders = (origin: string | null) => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
   };
-  if (!origin || origin === "null") {
-    headers["Access-Control-Allow-Origin"] = "*";
-  } else if (ALLOWED_ORIGINS.includes(origin)) {
-    headers["Access-Control-Allow-Origin"] = origin;
-  }
+  if (!origin || origin === "null") headers["Access-Control-Allow-Origin"] = "*";
+  else if (ALLOWED_ORIGINS.includes(origin)) headers["Access-Control-Allow-Origin"] = origin;
   return headers;
 };
 
 const send = (data: any, status = 200, origin: string | null = null) =>
   new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
-export const onRequestPost: PagesFunction = async ({ request, env }) => {
+export const onRequestGet: PagesFunction = async ({ request, env }) => {
+  const origin = request.headers.get("Origin");
   try {
-    const origin = request.headers.get("Origin");
-    const body = await request.json().catch(() => ({} as any));
-    const projectId = String(body.projectId || "").trim();
-    if (!projectId) return send({ error: "projectId is required" }, 400, origin);
-    if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "Invalid projectId format" }, 400, origin);
-
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     if (!clientEmail || !privateKeyRaw || !baseOutput) {
       return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     }
-    const outParsed = parseGcsUri(baseOutput);
-    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
-    const basePrefix = outParsed.object.replace(/\/$/, "");
-    const objectName = `${basePrefix}/projects/${projectId}/reference/data.json`;
+    const parsed = parseGcsUri(baseOutput);
+    if (!parsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
+    const basePrefix = parsed.object.replace(/\/$/, "");
+    const prefix = `${basePrefix}/projects/`;
 
     const token = await getGoogleAccessToken({
       clientEmail,
       privateKeyPem: privateKeyRaw,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
+    const userProject =
+      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+      (env.GOOGLE_PROJECT_ID as string | undefined) ||
+      "";
 
-    const payload = {
-      projectId,
-      title: body.title || "",
-      payload: body.payload || {},
-      scenes: Array.isArray(body.scenes) ? body.scenes : [],
-      header: body.header || "",
-      aspectRatio: body.aspectRatio || "",
-      savedAt: new Date().toISOString(),
-    };
-
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-    const res = await fetch(uploadUrl, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+    // use delimiter to get prefixes only
+    const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o?delimiter=%2F&prefix=${encodeURIComponent(prefix)}&maxResults=200${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(userProject ? { "X-Goog-User-Project": userProject } : {}),
+      },
     });
     const text = await res.text();
-    if (!res.ok) return send({ error: text || "upload_error" }, res.status, origin);
-
-    return send({ ok: true, objectName }, 200, origin);
+    if (!res.ok) return send({ error: "list_failed", detail: safeJson(text) }, res.status, origin);
+    const json = safeJson(text);
+    const prefixes: string[] = Array.isArray(json.prefixes) ? json.prefixes : [];
+    const ids = prefixes
+      .map((p) => p.replace(prefix, "").replace(/\/$/, ""))
+      .filter(Boolean)
+      .slice(0, 200);
+    return send({ ok: true, ids }, 200, origin);
   } catch (e: any) {
-    return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
+    return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
 };
+
+export const onRequestOptions: PagesFunction = async ({ request }) => {
+  const origin = request.headers.get("Origin");
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+};
+
+function safeJson(t: string) {
+  try { return JSON.parse(t); } catch { return t; }
+}
 
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri.startsWith("gs://")) return null;
@@ -131,8 +136,3 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
-
-export const onRequestOptions: PagesFunction = async ({ request }) => {
-  const origin = request.headers.get("Origin");
-  return new Response(null, { status: 204, headers: corsHeaders(origin) });
-};
