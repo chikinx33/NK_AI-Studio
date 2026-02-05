@@ -2,14 +2,15 @@
 // Fetch project data.json from GCS reference folder
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev"];
+const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev", "null"];
 const corsHeaders = (origin: string | null) => {
   const headers: Record<string, string> = {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Methods": "GET, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
   };
-  if (!origin) {
+  if (!origin || origin === "null") {
     headers["Access-Control-Allow-Origin"] = "*";
   } else if (ALLOWED_ORIGINS.includes(origin)) {
     headers["Access-Control-Allow-Origin"] = origin;
@@ -23,10 +24,6 @@ const send = (data: any, status = 200, origin: string | null = null) =>
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
     const origin = request.headers.get("Origin");
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(origin) });
-    }
-
     const url = new URL(request.url);
     const projectId = String(url.searchParams.get("projectId") || "").trim();
     if (!projectId) return send({ error: "projectId is required" }, 400, origin);
@@ -120,3 +117,8 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
+
+export const onRequestOptions: PagesFunction = async ({ request }) => {
+  const origin = request.headers.get("Origin");
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+};

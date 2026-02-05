@@ -1,12 +1,13 @@
-const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev"];
+const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev", "null"];
 
 const corsHeaders = (origin) => {
   const headers = {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
   };
-  if (!origin) {
+  if (!origin || origin === "null") {
     // file:// 로컬에서 오는 null origin 지원
     headers["Access-Control-Allow-Origin"] = "*";
   } else if (ALLOWED_ORIGINS.includes(origin)) {
@@ -166,4 +167,10 @@ function jsonError(message, status = 500, origin = null) {
     status,
     headers: corsHeaders(origin),
   });
+}
+
+// Explicit OPTIONS handler for preflight (needed on Cloudflare Pages)
+export async function onRequestOptions(context) {
+  const origin = context.request.headers.get("Origin");
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
 }
