@@ -318,6 +318,8 @@
           NK.ui.dashboard.renderDrafts();
         }
         NK.navigation.loadStage('scenario.html');
+        // 즉시 하이라이트 반영
+        updateSidebarHighlight('scenario');
       } catch (err) {
         alert('프로젝트 생성 실패: ' + (err?.message || err));
       } finally {

@@ -80,6 +80,15 @@
     const form = document.getElementById('scenario-form');
     if (!form) return;
 
+    const ensureDefaultRatio = () => {
+      const active = document.querySelector('.ratio-btn.active');
+      if (!active) {
+        const btn169 = document.querySelector('.ratio-btn[data-ratio="16:9"], .ratio-btn[data-value="16:9"]');
+        const target = btn169 || document.querySelector('.ratio-btn');
+        if (target) target.classList.add('active');
+      }
+    };
+
     // 1. 기본 필드 채우기
     const p = draft.payload || {};
     const defaultCat = (() => {
@@ -236,6 +245,7 @@
         NK.store.saveDrafts(drafts);
         localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
         if (NK.state && NK.state.set) NK.state.set({ currentProject: draft });
+        if (NK.state && NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
         if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
           NK.ui.dashboard.renderSidebarProjectCard(draft);
         }
@@ -284,6 +294,7 @@
           draft.payload = params;
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           if (NK.state && NK.state.set) NK.state.set({ currentProject: draft });
+          if (NK.state && NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
           if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
             NK.ui.dashboard.renderSidebarProjectCard(draft);
           }
@@ -325,6 +336,7 @@
         } catch (_) { }
       }
       if (localDraft) scenario.load(localDraft);
+      ensureDefaultRatio();
     };
     tryLoad();
 
