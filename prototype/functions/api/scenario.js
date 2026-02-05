@@ -49,7 +49,7 @@
   · Audience = 어휘 난이도·정보 밀도·설명 방식만 조절
   · Duration = Scene 개수와 분할 구조만 결정 (감정·톤·스타일에 관여하지 않음)
   · Tone = 말투/감정 표현만, Style = 시각적 표현으로 shot에만 반영
-- Scene은 ${sceneCount}개를 생성하고 estSec 합이 ${duration}초 안팎(±10%)이 되도록 분배하세요. 1씬은 후킹, 마지막 씬은 자연스러운 정리/CTA. 각 Scene은 하나의 핵심 메시지만 담습니다.
+- Scene은 ${sceneCount}개를 생성합니다. 각 Scene의 estSec 합이 ${duration}초에 최대한 근접하게 분배되도록 하세요(허용 오차 ±10%). estSec이 너무 작지 않게(최소 3초 이상) 조정하고, 총합이 목표 길이를 넘거나 부족하지 않도록 마지막 씬에서 미세 보정합니다.
 - Scene 개수 고정 규칙: 15초=4, 30초=7, 45초=10, 60초=12, 30분=120, 1시간=240, 2시간=480.
 - 30분 이상 롱폼은 Scene당 estSec을 10~20초 사이로 유지합니다.
 - 각 Scene의 lines는 2~3문장, 시청 타겟 눈높이에 맞춘 어휘, 톤/스타일을 느낄 수 있게 작성하세요.
@@ -67,7 +67,7 @@
   · Audience = vocabulary level, density, explanation style only
   · Duration = scene count/segmentation only (not mood/style)
   · Tone = voice/emotion, Style = visual look reflected in shot
-- Produce ${sceneCount} scenes whose estSec roughly sum to ${duration}s (±10%). Scene 1 is the hook; final scene is wrap-up/CTA. One core message per scene.
+- Produce ${sceneCount} scenes whose estSec sum should stay as close as possible to ${duration}s (±10%). Keep estSec per scene reasonable (>=3s), and adjust the last scene if needed so the total fits the target duration.
 - Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
 - For 30m+ long-form, keep per-scene estSec between 10–20 seconds.
 - Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
