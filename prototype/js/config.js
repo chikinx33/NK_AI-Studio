@@ -24,6 +24,9 @@
         DEFAULT_PW: 'limfactory1234'
     };
 
+    // API Base (empty = current origin). Overridable via localStorage 'nk_api_base'
+    config.API_BASE = '';
+
     // Default Values
     config.DEFAULTS = {
         ASPECT_RATIO: '16:9',

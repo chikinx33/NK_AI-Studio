@@ -70,7 +70,56 @@
       const action = btn.dataset.action;
       const id = btn.dataset.id;
 
-      if (action === 'draft-edit' || action === 'title-edit') {
+      if (action === 'title-edit') {
+        const titleEl = container.querySelector(`.draft-title[data-id="${id}"]`);
+        if (!titleEl) return;
+
+        // 이미 편집 중이면 무시
+        if (titleEl.isContentEditable) return;
+
+        titleEl.contentEditable = 'true';
+        titleEl.classList.add('editing');
+        const range = document.createRange();
+        range.selectNodeContents(titleEl);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        titleEl.focus();
+
+        const commit = () => {
+          const drafts = NK.store.getDrafts();
+          const draft = drafts.find(d => String(d.id) === String(id));
+          if (!draft) return;
+          const newTitle = (titleEl.textContent || '').trim() || '제목없음';
+          draft.title = newTitle;
+          NK.store.saveDrafts(drafts);
+          try {
+            localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+            localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
+            localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+          } catch (_) { }
+          titleEl.textContent = newTitle;
+          titleEl.contentEditable = 'false';
+          titleEl.classList.remove('editing');
+        };
+
+        const cancel = () => {
+          titleEl.contentEditable = 'false';
+          titleEl.classList.remove('editing');
+          titleEl.textContent = titleEl.textContent || '제목없음';
+        };
+
+        titleEl.onkeydown = (ev) => {
+          if (ev.key === 'Enter') {
+            ev.preventDefault();
+            commit();
+          } else if (ev.key === 'Escape') {
+            ev.preventDefault();
+            cancel();
+          }
+        };
+        titleEl.onblur = () => { commit(); titleEl.onblur = null; titleEl.onkeydown = null; };
+      } else if (action === 'draft-edit') {
         const drafts = NK.store.getDrafts();
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
@@ -128,7 +177,12 @@
     const tags = Array.isArray(draft.payload?.purposeTags) ? draft.payload.purposeTags.join(', ') : '';
     const tgt = draft.payload?.target || '';
     const genre = `${cat} ${tags}`.trim();
-    const desc = [`장르 : ${genre || '-'}`, `타겟 : ${tgt || '-'}`, `길이 : ${dur}`, `비율 : ${ar}`].join(' · ');
+    const desc = [
+      `장르 : ${genre || '-'}`,
+      `타겟 : ${tgt || '-'}`,
+      `길이 : ${dur}`,
+      `비율 : ${ar}`
+    ].join('\n');
 
     container.innerHTML = `
       <div class="draft-top">
