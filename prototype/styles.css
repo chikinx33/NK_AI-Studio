@@ -2197,6 +2197,10 @@ a.btn-primary:active {
 .scene-cell {
   position: relative;
 }
+.scene-cell.active-cell {
+  border: 2px solid #ff7a00 !important;
+  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.25);
+}
 
 .cell-actions.br {
   position: absolute;

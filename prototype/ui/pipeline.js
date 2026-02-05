@@ -274,6 +274,15 @@
         }
       };
     }
+    // 셀 클릭 시 활성 테두리 표시
+    pipelineScenes.addEventListener('click', function (e) {
+      var cell = e.target.closest('.scene-cell');
+      if (!cell) return;
+      var table = pipelineScenes.querySelector('.scene-table');
+      if (!table) return;
+      table.querySelectorAll('.scene-cell.active-cell').forEach(function (c) { c.classList.remove('active-cell'); });
+      cell.classList.add('active-cell');
+    });
   };
   ui.refreshAssets = async function () {
     if (!ctx) return;
