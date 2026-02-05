@@ -2,6 +2,7 @@
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var dashboard = ui.dashboard || (ui.dashboard = {});
+  var serverMerged = false;
 
   /**
    * 대시보드의 드래프트 리스트를 렌더링합니다.
@@ -10,7 +11,48 @@
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
 
-    const drafts = NK.store.getDrafts();
+    // 서버 프로젝트와 병합
+    let drafts = NK.store.getDrafts();
+    const mergeFromServer = async () => {
+      if (!NK.api || !NK.api.projectList) return;
+      if (serverMerged) return;
+      serverMerged = true;
+      try {
+        const list = await NK.api.projectList();
+        const ids = Array.isArray(list?.ids) ? list.ids : [];
+        if (!ids.length) return;
+        let changed = false;
+        for (const id of ids) {
+          const has = drafts.find(d => String(d.id) === String(id));
+          if (!has && NK.api.projectGet) {
+            try {
+              const res = await NK.api.projectGet(id);
+              const data = res?.data || {};
+              const draft = {
+                id,
+                title: data.title || data.payload?.topic || '프로젝트',
+                payload: data.payload || {},
+                scenes: data.scenes || [],
+                header: data.header || '',
+              };
+              drafts.push(draft);
+              changed = true;
+            } catch (_) { }
+          }
+        }
+        if (changed) {
+          NK.store.saveDrafts(drafts);
+        }
+      } catch (_) { }
+    };
+    // 병합 시도 후 최신 drafts 사용
+    // 비동기지만 UI 렌더 직전에 가장 최신 로컬 상태로 갱신
+    if (NK.api && NK.api.projectList && !serverMerged) {
+      mergeFromServer().then(() => dashboard.renderDrafts());
+      // 현재 렌더는 기존 drafts로 진행 (즉시 표시)
+    }
+
+    drafts = NK.store.getDrafts();
 
     const fmtDuration = (sec) => {
       const n = Number(sec) || 0;
