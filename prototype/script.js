@@ -5,6 +5,23 @@
   let currentLang = 'ko';
   let currentTheme = 'dark';
 
+  // 사이드바 카드가 비어 있으면 현재 선택된/저장된 프로젝트로 다시 채운다.
+  const refreshSidebarCard = () => {
+    const container = document.getElementById('sidebar-project-card');
+    if (!container) return;
+    const hasContent = !!(container.innerHTML && container.innerHTML.trim().length);
+    let draft = NK.state?.runtime?.currentProject || null;
+    if (!draft) {
+      try {
+        const saved = localStorage.getItem(KEY.SELECTED_DRAFT);
+        if (saved) draft = JSON.parse(saved);
+      } catch (_) { }
+    }
+    if (!hasContent && draft && NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
+      NK.ui.dashboard.renderSidebarProjectCard(draft);
+    }
+  };
+
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     NK.core.APP_VERSION = NK.config.APP_VERSION;
@@ -80,6 +97,7 @@
     if (document.getElementById('dashboard-drafts')) {
       NK.ui.dashboard.renderDrafts();
       setupProjectOverlay();
+      refreshSidebarCard();
     }
     if (document.getElementById('opt-auth-btn')) {
       setupLoginPage();
@@ -153,6 +171,7 @@
 
       // 2. 하이라이트는 항상 렌더링 이후에 수행 (카드가 존재해야 하므로)
       if (stage) updateSidebarHighlight(stage);
+      refreshSidebarCard();
     });
 
     // 만약 현재 상태에 이미 프로젝트가 있다면 즉시 렌더링 시도
@@ -288,6 +307,9 @@
         localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
         localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
         NK.state.set({ currentProject: draft });
+        if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
+          NK.ui.dashboard.renderSidebarProjectCard(draft);
+        }
         if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) {
           NK.ui.dashboard.renderDrafts();
         }

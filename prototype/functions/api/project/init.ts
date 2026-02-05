@@ -1,27 +1,45 @@
 // prototype/functions/api/project/init.ts
 // Initialize GCS folder structure for a projectId by creating .keep files.
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
-const send = (data: any, status = 200) =>
-  new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } });
+
+const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev", "null"];
+const corsHeaders = (origin: string | null) => {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Access-Control-Max-Age": "86400",
+  };
+  if (!origin || origin === "null") headers["Access-Control-Allow-Origin"] = "*";
+  else if (ALLOWED_ORIGINS.includes(origin)) headers["Access-Control-Allow-Origin"] = origin;
+  return headers;
+};
+
+const send = (data: any, status = 200, origin: string | null = null) =>
+  new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
+    const origin = request.headers.get("Origin");
+    if (request.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders(origin) });
+    }
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body.projectId || "").trim();
     if (!projectId) {
-      return send({ error: "projectId is required" }, 400);
+      return send({ error: "projectId is required" }, 400, origin);
     }
     if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) {
-      return send({ error: "Invalid projectId format" }, 400);
+      return send({ error: "Invalid projectId format" }, 400, origin);
     }
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     if (!clientEmail || !privateKeyRaw || !baseOutput) {
-      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500);
+      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     }
     const outParsed = parseGcsUri(baseOutput);
-    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
+    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const folders = ["image", "video", "sfx", "bgm", "caption", "reference"];
     const token = await getGoogleAccessToken({
@@ -40,9 +58,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       });
       results.push({ folder, status: res.status, objectName });
     }
-    return send({ initialized: results.filter(r => r.status >= 200 && r.status < 300).length, results });
+    return send({ initialized: results.filter(r => r.status >= 200 && r.status < 300).length, results }, 200, origin);
   } catch (e: any) {
-    return send({ error: e?.message || "Unknown error" }, 500);
+    return send({ error: e?.message || "Unknown error" }, 500, null);
   }
 };
 
@@ -101,3 +119,8 @@ function bufferToBase64Url(buf: ArrayBuffer) {
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
+
+export const onRequestOptions: PagesFunction = async ({ request }) => {
+  const origin = request.headers.get("Origin");
+  return new Response(null, { status: 204, headers: corsHeaders(origin) });
+};
