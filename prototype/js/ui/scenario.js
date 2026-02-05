@@ -2,6 +2,7 @@
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var scenario = ui.scenario || (ui.scenario = {});
+  var currentScenes = [];
 
   /**
    * 시간(초)을 읽기 쉬운 형식(s, m, h)으로 포맷팅합니다.
@@ -31,6 +32,7 @@
   scenario.renderScenes = function (scenes, options = {}) {
     const container = document.getElementById('scenario-cards');
     if (!container) return;
+    currentScenes = Array.isArray(scenes) ? scenes.map(s => ({ ...s })) : [];
 
     if (!scenes || !scenes.length) {
       container.innerHTML = `
@@ -220,6 +222,58 @@
       try {
         scenario.load(JSON.parse(initial));
       } catch (_) { }
+    }
+
+    // 씬 카드 액션 핸들러 (수정/삭제/저장/취소)
+    const cards = document.getElementById('scenario-cards');
+    if (cards) {
+      cards.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const id = btn.dataset.id;
+        if (!id) return;
+
+        const idx = currentScenes.findIndex(s => String(s.id) === String(id));
+        if (idx === -1) return;
+        const scene = currentScenes[idx];
+
+        const persistScenes = () => {
+          const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
+          if (saved) {
+            try {
+              const draft = JSON.parse(saved);
+              draft.scenes = currentScenes;
+              localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+            } catch (_) { }
+          }
+        };
+
+        if (action === 'edit') {
+          scene.editing = true;
+          scenario.renderScenes(currentScenes);
+        } else if (action === 'delete') {
+          currentScenes.splice(idx, 1);
+          persistScenes();
+          scenario.renderScenes(currentScenes);
+        } else if (action === 'cancel') {
+          scene.editing = false;
+          scenario.renderScenes(currentScenes);
+        } else if (action === 'save') {
+          const titleEl = cards.querySelector(`.view-title[data-id="${id}"]`);
+          const linesEl = cards.querySelector(`.view-lines[data-id="${id}"]`);
+          const shotEl = cards.querySelector(`.view-shot[data-id="${id}"]`);
+          const estEl = cards.querySelector(`.est-input[data-id="${id}"]`);
+          scene.title = (titleEl?.textContent || '').trim();
+          scene.lines = (linesEl?.textContent || '').trim();
+          scene.shot = (shotEl?.textContent || '').trim();
+          const est = NK.utils && NK.utils.parseEst ? NK.utils.parseEst(estEl?.value || '') : null;
+          if (est) scene.estSec = est;
+          scene.editing = false;
+          persistScenes();
+          scenario.renderScenes(currentScenes);
+        }
+      });
     }
   };
 
