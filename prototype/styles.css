@@ -927,6 +927,13 @@ a.btn-primary:active {
   overflow: auto;
   height: 100%;
   min-height: 0;
+  -ms-overflow-style: none; /* IE, Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.card.scenario-form::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .results-card {
@@ -983,6 +990,10 @@ a.btn-primary:active {
 
 .scenario-form textarea {
   resize: vertical;
+  scrollbar-width: none; /* Firefox */
+}
+.scenario-form textarea::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
 }
 
 .scenario-form input::placeholder,
