@@ -137,8 +137,14 @@
         if (overlay) overlay.classList.remove('hidden');
       } else if (action === 'draft-delete') {
         if (confirm('삭제하시겠습니까?')) {
-          NK.service.project.delete(id).then(() => {
+          NK.service.project.delete(id).catch((err) => {
+            alert('삭제 중 오류가 발생했지만 로컬 목록은 정리했습니다. 새로고침 후 확인하세요.\n' + (err?.message || err));
+          }).finally(() => {
             dashboard.renderDrafts();
+            // 사이드바 카드도 즉시 비워주기
+            if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
+              NK.ui.dashboard.renderSidebarProjectCard(null);
+            }
           });
         }
       }

@@ -2,11 +2,23 @@
   var NK = window.NK || (window.NK = {});
   var api = NK.api || (NK.api = {});
 
+  const base = (function () {
+    try {
+      const saved = localStorage.getItem('nk_api_base') || NK.config.API_BASE || '';
+      return saved.trim();
+    } catch (_) { return NK.config.API_BASE || ''; }
+  })();
+  const withBase = (path) => {
+    if (!base) return path;
+    if (path.startsWith('http')) return path;
+    return base.replace(/\/+$/, '') + path;
+  };
+
   var j = function (t) { try { return JSON.parse(t); } catch (_) { return {}; } };
   var e = function (t) { try { return JSON.parse(t).error; } catch (_) { return t; } };
 
   api.promptHeader = async function (payload) {
-    var res = await fetch('/api/prompt-header', {
+    var res = await fetch(withBase('/api/prompt-header'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {})
@@ -18,7 +30,7 @@
   };
 
   api.scenario = async function (payload) {
-    var res = await fetch('/api/scenario', {
+    var res = await fetch(withBase('/api/scenario'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {})
@@ -33,7 +45,7 @@
   };
 
   api.imagen = async function (body) {
-    var res = await fetch('/api/imagen', {
+    var res = await fetch(withBase('/api/imagen'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {})
@@ -44,7 +56,7 @@
   };
 
   api.videoStart = async function (body) {
-    var res = await fetch('/api/video', {
+    var res = await fetch(withBase('/api/video'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body || {})
@@ -56,7 +68,7 @@
 
   api.videoStatus = async function (params) {
     var q = new URLSearchParams(params || {});
-    var res = await fetch('/api/video/status?' + q.toString());
+    var res = await fetch(withBase('/api/video/status?' + q.toString()));
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'status_error');
     return j(text);
@@ -66,7 +78,7 @@
     var fd = new FormData();
     fd.append('projectId', String(projectId || ''));
     fd.append('file', file);
-    var res = await fetch('/api/image/upload', { method: 'POST', body: fd });
+    var res = await fetch(withBase('/api/image/upload'), { method: 'POST', body: fd });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'upload_error')));
     return j(text);
@@ -77,7 +89,7 @@
     fd.append('projectId', String(projectId || ''));
     fd.append('sceneId', String(sceneId || ''));
     fd.append('file', file);
-    var res = await fetch('/api/video/upload', { method: 'POST', body: fd });
+    var res = await fetch(withBase('/api/video/upload'), { method: 'POST', body: fd });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'upload_error')));
     return j(text);
@@ -85,8 +97,8 @@
 
   api.library = async function (kind, projectId) {
     var url = kind === 'image'
-      ? '/api/image/library?projectId=' + encodeURIComponent(String(projectId || ''))
-      : '/api/video/library?projectId=' + encodeURIComponent(String(projectId || ''));
+      ? withBase('/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')))
+      : withBase('/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')));
     var res = await fetch(url);
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'library_error');
@@ -94,18 +106,18 @@
   };
 
   api.projectDelete = async function (projectId, objectName) {
-    var res = await fetch('/api/project/delete', {
+    var res = await fetch(withBase('/api/project/delete'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: String(projectId || ''), confirm: 'yes', objectName: String(objectName || '') })
     });
     var text = await res.text();
-    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'delete_error')));
-    return j(text);
+    var data = j(text);
+    return { ok: res.ok, status: res.status, data: data, error: e(text) };
   };
 
   api.projectInit = async function (projectId) {
-    var res = await fetch('/api/project/init', {
+    var res = await fetch(withBase('/api/project/init'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ projectId: String(projectId || '') })
@@ -117,7 +129,7 @@
   };
 
   api.projectGet = async function (projectId) {
-    var url = '/api/project/get?projectId=' + encodeURIComponent(String(projectId || ''));
+    var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')));
     var res = await fetch(url, { method: 'GET' });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'get_error')));
@@ -126,7 +138,7 @@
 
   api.projectSave = async function (projectId, payload, scenes) {
     var body = { projectId: String(projectId || ''), payload: payload || {}, scenes: Array.isArray(scenes) ? scenes : [] };
-    var res = await fetch('/api/project/save', {
+    var res = await fetch(withBase('/api/project/save'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -137,7 +149,7 @@
   };
 
   api.login = async function (id, pw) {
-    var res = await fetch('/api/login', {
+    var res = await fetch(withBase('/api/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, pw })

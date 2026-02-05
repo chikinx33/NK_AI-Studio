@@ -33,13 +33,37 @@
      * 프로젝트 삭제
      */
     project.delete = async function (id) {
-        const res = await NK.api.projectDelete(id);
-        if (!res.ok && res.status !== 404) {
-            throw new Error(res.data?.error || 'Delete failed');
+        let apiOk = false;
+        try {
+            const res = await NK.api.projectDelete(id);
+            if (res && (res.ok || res.status === 404)) apiOk = true;
+        } catch (err) {
+            console.warn('Project delete API failed, removing locally only', err);
         }
 
         const drafts = NK.store.getDrafts();
-        NK.store.saveDrafts(drafts.filter(d => d.id !== id));
+        const filtered = drafts.filter(d => String(d.id) !== String(id));
+        NK.store.saveDrafts(filtered);
+
+        // 선택된 프로젝트가 삭제 대상이면 상태/스토리지도 정리
+        try {
+            const savedSel = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
+            if (savedSel) {
+                const sel = JSON.parse(savedSel);
+                if (String(sel?.id) === String(id)) {
+                    localStorage.removeItem(NK.config.KEYS.SELECTED_DRAFT);
+                    localStorage.removeItem(NK.config.KEYS.CURRENT_PROJECT);
+                    localStorage.removeItem('nk_current_project');
+                }
+            }
+        } catch (_) { }
+        if (NK.state && NK.state.set) {
+            const cur = NK.state.runtime?.currentProject;
+            if (cur && String(cur.id) === String(id)) {
+                NK.state.set({ currentProject: null });
+            }
+        }
+        return { ok: apiOk };
     };
 
     /**
