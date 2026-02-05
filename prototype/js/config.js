@@ -2,7 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '1.218';
+    config.APP_VERSION = '1.223';
 
     // Storage Keys
     config.KEYS = {
@@ -31,7 +31,7 @@
     config.DEFAULTS = {
         ASPECT_RATIO: '16:9',
         DURATION: '15',
-        CATEGORY: '키즈 · 영유아',
+        CATEGORY: '',
         SCENE_EST: 8
     };
 

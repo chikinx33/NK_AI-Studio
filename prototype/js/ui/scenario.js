@@ -80,13 +80,23 @@
 
     // 1. 기본 필드 채우기
     const p = draft.payload || {};
+    const defaultCat = (() => {
+      const list = Object.keys(NK.core.purposeCategories || {});
+      return list && list.length ? list[0] : '';
+    })();
+    const defaultTarget = (() => {
+      const sel = document.getElementById('target-select');
+      if (!sel || !sel.options || !sel.options.length) return '';
+      return sel.options[0].value || '';
+    })();
+
     if (form.topic) form.topic.value = p.topic || draft.title || '';
     if (form.purposeCategory) {
-      form.purposeCategory.value = p.purposeCategory || '';
+      form.purposeCategory.value = p.purposeCategory || defaultCat;
       // 카테고리에 맞는 상세 태그 렌더링
       scenario.renderPurposeTags(document.getElementById('purpose-tags'), form.purposeCategory.value);
     }
-    if (form.target) form.target.value = p.target || '';
+    if (form.target) form.target.value = p.target || defaultTarget;
     if (form.tone) form.tone.value = p.tone || '';
     if (form.style) form.style.value = p.style || '';
     if (form.banned) form.banned.value = p.banned || '';
@@ -130,8 +140,15 @@
       payload.needs = Array.from(document.querySelectorAll('#needs-tags .tag-toggle.active')).map(b => b.dataset.value);
       payload.tones = Array.from(document.querySelectorAll('#tone-tags .tag-toggle.active')).map(b => b.dataset.value);
       payload.styles = Array.from(document.querySelectorAll('#style-tags .tag-toggle.active')).map(b => b.dataset.value);
-      payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || '15';
-      payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || document.querySelector('.ratio-btn.active')?.dataset.value || '16:9';
+      const defaults = NK.config.DEFAULTS || {};
+      const defaultCat = (() => {
+        const list = Object.keys(NK.core.purposeCategories || {});
+        return list && list.length ? list[0] : '';
+      })();
+      payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || defaults.DURATION || '15';
+      payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || document.querySelector('.ratio-btn.active')?.dataset.value || defaults.ASPECT_RATIO || '16:9';
+      payload.purposeCategory = payload.purposeCategory || defaults.CATEGORY || defaultCat || '';
+      payload.target = payload.target || (document.getElementById('target-select')?.options?.[0]?.value || '');
       return payload;
     };
 
@@ -158,6 +175,12 @@
       const btn = e.target.closest('.tag-toggle, .duration-toggle, .ratio-btn');
       if (!btn) return;
       if (btn.classList.contains('tag-toggle')) btn.classList.toggle('active');
+      // 목적 세부 태그는 단일 선택
+      if (btn.closest('#purpose-tags')) {
+        btn.parentElement.querySelectorAll('.tag-toggle').forEach(b => {
+          if (b !== btn) b.classList.remove('active');
+        });
+      }
       else {
         const selector = btn.classList.contains('duration-toggle') ? '.duration-toggle' : '.ratio-btn';
         document.querySelectorAll(selector).forEach(b => b.classList.remove('active'));
@@ -170,6 +193,27 @@
     if (saveBtn) {
       saveBtn.onclick = async () => {
         const payload = collectPayload();
+        // 필수 검증: 주제, 장르, 시청 타겟, 태그들
+        if (!payload.topic || !payload.purposeCategory || !payload.target) {
+          alert('필수 항목(주제, 장르, 시청 타겟)을 모두 입력하세요.');
+          return;
+        }
+        if (!payload.purposeTags || payload.purposeTags.length !== 1) {
+          alert('장르 세부 태그를 정확히 1개 선택하세요.');
+          return;
+        }
+        if (!payload.needs?.length) {
+          alert('시청 타겟 태그를 최소 1개 선택하세요.');
+          return;
+        }
+        if (!payload.tone && (!payload.tones || payload.tones.length === 0)) {
+          alert('톤 텍스트를 입력하거나 톤 태그를 최소 1개 선택하세요.');
+          return;
+        }
+        if (!payload.style && (!payload.styles || payload.styles.length === 0)) {
+          alert('스타일 텍스트를 입력하거나 스타일 태그를 최소 1개 선택하세요.');
+          return;
+        }
 
         const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
         const currentDraft = saved ? JSON.parse(saved) : {};
@@ -199,6 +243,31 @@
       e.preventDefault();
       NK.core.setLoading(true);
       const params = collectPayload();
+      if (!params.topic || !params.purposeCategory || !params.target) {
+        NK.core.setLoading(false);
+        alert('필수 항목(주제, 장르, 시청 타겟)을 모두 입력하세요.');
+        return;
+      }
+      if (!params.purposeTags || params.purposeTags.length !== 1) {
+        NK.core.setLoading(false);
+        alert('장르 세부 태그를 정확히 1개 선택하세요.');
+        return;
+      }
+      if (!params.needs || params.needs.length === 0) {
+        NK.core.setLoading(false);
+        alert('시청 타겟 태그를 최소 1개 선택하세요.');
+        return;
+      }
+      if (!params.tone && (!params.tones || params.tones.length === 0)) {
+        NK.core.setLoading(false);
+        alert('톤 텍스트를 입력하거나 톤 태그를 최소 1개 선택하세요.');
+        return;
+      }
+      if (!params.style && (!params.styles || params.styles.length === 0)) {
+        NK.core.setLoading(false);
+        alert('스타일 텍스트를 입력하거나 스타일 태그를 최소 1개 선택하세요.');
+        return;
+      }
 
       try {
         const res = await NK.api.scenario(params);
@@ -287,11 +356,15 @@
       setTimeout(() => {
         // select/checkbox/button 등 모든 UI를 초기 상태로 되돌림
         const defaults = NK.config.DEFAULTS || {};
+        const defaultCat = (() => {
+          const list = Object.keys(NK.core.purposeCategories || {});
+          return list && list.length ? list[0] : '';
+        })();
         // 카테고리
         const catSelect = document.getElementById('purpose-category');
         if (catSelect) {
-          catSelect.value = '';
-          scenario.renderPurposeTags(document.getElementById('purpose-tags'), '');
+          catSelect.value = defaults.CATEGORY || defaultCat || '';
+          scenario.renderPurposeTags(document.getElementById('purpose-tags'), catSelect.value);
         }
         // 토글 그룹 비활성화
         ['purpose-tags', 'needs-tags', 'tone-tags', 'style-tags'].forEach(id => {
