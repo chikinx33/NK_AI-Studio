@@ -79,6 +79,7 @@
     // 4. 각 페이지별 전용 UI 렌더링
     if (document.getElementById('dashboard-drafts')) {
       NK.ui.dashboard.renderDrafts();
+      setupProjectOverlay();
     }
     if (document.getElementById('opt-auth-btn')) {
       setupLoginPage();
@@ -261,6 +262,43 @@
         setUI(NK.auth.isAuthed(), NK.auth.getUser());
       }
     };
+  };
+
+  const setupProjectOverlay = () => {
+    const overlay = document.getElementById('project-overlay');
+    const input = document.getElementById('project-name-input');
+    const btnCreate = document.getElementById('project-create');
+    const btnCancel = document.getElementById('project-cancel');
+    if (!overlay || !input || !btnCreate || !btnCancel) return;
+
+    const close = () => {
+      overlay.classList.add('hidden');
+      input.value = '';
+    };
+
+    btnCancel.onclick = close;
+
+    const create = async () => {
+      const title = (input.value || '').trim() || '새 프로젝트';
+      try {
+        const draft = await NK.service.project.create(title);
+        localStorage.setItem(KEY.SELECTED_DRAFT, JSON.stringify(draft));
+        localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
+        localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+        NK.state.set({ currentProject: draft });
+        if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) {
+          NK.ui.dashboard.renderDrafts();
+        }
+        NK.navigation.loadStage('scenario.html');
+      } catch (err) {
+        alert('프로젝트 생성 실패: ' + (err?.message || err));
+      } finally {
+        close();
+      }
+    };
+
+    btnCreate.onclick = create;
+    input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
   };
 
   const updateSidebarHighlight = (stage) => {
