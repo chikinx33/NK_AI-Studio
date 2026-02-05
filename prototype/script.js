@@ -16,6 +16,10 @@
         const saved = localStorage.getItem(KEY.SELECTED_DRAFT);
         if (saved) draft = JSON.parse(saved);
       } catch (_) { }
+      // state에 없고 로컬에 있으면 state도 세팅
+      if (draft && NK.state && NK.state.set) {
+        NK.state.set({ currentProject: draft });
+      }
     }
     if (!hasContent && draft && NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
       NK.ui.dashboard.renderSidebarProjectCard(draft);
