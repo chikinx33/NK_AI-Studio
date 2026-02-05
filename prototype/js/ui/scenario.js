@@ -275,6 +275,39 @@
         }
       });
     }
+
+    // 폼 초기화 시 UI도 기본값으로 리셋
+    form.addEventListener('reset', (e) => {
+      setTimeout(() => {
+        // select/checkbox/button 등 모든 UI를 초기 상태로 되돌림
+        const defaults = NK.config.DEFAULTS || {};
+        // 카테고리
+        const catSelect = document.getElementById('purpose-category');
+        if (catSelect) {
+          catSelect.value = '';
+          scenario.renderPurposeTags(document.getElementById('purpose-tags'), '');
+        }
+        // 토글 그룹 비활성화
+        ['purpose-tags', 'needs-tags', 'tone-tags', 'style-tags'].forEach(id => {
+          const box = document.getElementById(id);
+          if (box) box.querySelectorAll('.tag-toggle').forEach(btn => btn.classList.remove('active'));
+        });
+        // 길이
+        const durDefault = defaults.DURATION || '15';
+        document.querySelectorAll('.duration-toggle').forEach(b => {
+          b.classList.toggle('active', b.dataset.value === durDefault);
+        });
+        // 화면비
+        const arDefault = defaults.ASPECT_RATIO || '16:9';
+        document.querySelectorAll('.ratio-btn').forEach(b => {
+          const val = b.dataset.ratio || b.dataset.value;
+          b.classList.toggle('active', val === arDefault);
+        });
+        // 씬 목록 초기화 (UI만)
+        currentScenes = [];
+        scenario.renderScenes(currentScenes);
+      }, 0);
+    });
   };
 
   /**
