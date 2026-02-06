@@ -803,8 +803,17 @@
         ctx.setState(st);
         ui.render();
         if (!playback) {
-          const key = jobId || scene.id; // jobId 없을 때 scene.id로 폴링 시도
-          pollVideoStatus(projectId, key, i, 0);
+          if (jobId) {
+            pollVideoStatus(projectId, jobId, i, 0);
+          } else {
+            st.scenes[i] = Object.assign({}, st.scenes[i], {
+              videoStatus: 'error',
+              videoError: 'no jobId/playback from server'
+            });
+            ctx.setState(st);
+            ui.render();
+            alert('영상 생성 응답에 jobId나 playbackUrl이 없습니다. 서버 응답을 확인해주세요.');
+          }
         }
       } catch (err) {
         st = ctx.getState() || st;
@@ -817,11 +826,11 @@
     }
   };
 
-  async function pollVideoStatus(projectId, jobKey, idx, attempt) {
+  async function pollVideoStatus(projectId, jobId, idx, attempt) {
     var maxAttempts = 18; // 18*5s = 90s
     var delay = 5000;
     try {
-      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobKey, sceneId: jobKey });
+      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId });
       var playback = res.playbackUrl || res.url || '';
       var status = res.status || '';
       var st = ctx.getState();
