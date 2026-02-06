@@ -97,16 +97,13 @@
         return (
           '<div class="lib-item" data-url="' + url + '" style="background:none;box-shadow:none;">' +
             thumb +
-            '<div class="lib-actions" style="margin-top:6px;display:flex;gap:6px;">' +
-              '<button class="btn-secondary compact lib-select" data-url="' + url + '" style="width:100%;min-height:30px;">선택</button>' +
-            '</div>' +
           '</div>'
         );
       }).join('');
       box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:12px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
-      box.querySelectorAll('.lib-select').forEach(function (btn) {
-        btn.onclick = function () {
-          const u = btn.dataset.url;
+      box.querySelectorAll('.lib-item').forEach(function (item) {
+        item.onclick = function () {
+          const u = item.dataset.url;
           if (onSelect && u) onSelect(u);
           closeModals();
         };
@@ -125,6 +122,20 @@
         const v = m && m.querySelector('video');
         if (v) { v.pause(); v.src = ''; }
       }
+    });
+  }
+
+  function setPipelineLoading(show) {
+    const overlay = document.getElementById('pipeline-loading');
+    if (overlay) overlay.classList.toggle('hidden', !show);
+    const blurTargets = [
+      document.getElementById('pipeline-scenes'),
+      document.getElementById('pipeline-meta')
+    ];
+    blurTargets.forEach(el => {
+      if (!el) return;
+      el.classList.toggle('blurred-content', show);
+      el.style.pointerEvents = show ? 'none' : '';
     });
   }
 
@@ -182,6 +193,7 @@
       ctx.setState(null);
     }
     if (!state) {
+      setPipelineLoading(true);
       var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
       if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
       try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
@@ -285,6 +297,7 @@
         state = { payload: payload, header: headerInit, scenes: [], savedAt: '', aspectRatio: aspectRatio, isPlaceholder: true };
         ctx.setState(state);
       }
+      setPipelineLoading(false);
     }
     var payload = state.payload;
     var scenes = state.scenes;
@@ -427,6 +440,7 @@
         const originalText = savePipelineBtn.textContent;
         savePipelineBtn.disabled = true;
         savePipelineBtn.textContent = '저장중...';
+        setPipelineLoading(true);
         var st = ctx.getState();
         if (!st) return;
         ctx.savePipeline(st.payload, st.scenes, st.header);
@@ -446,12 +460,14 @@
           } finally {
             savePipelineBtn.disabled = false;
             savePipelineBtn.textContent = originalText;
+            setPipelineLoading(false);
           }
           return;
         }
         // projectId 없을 때도 버튼 상태 복원
         savePipelineBtn.disabled = false;
         savePipelineBtn.textContent = originalText;
+        setPipelineLoading(false);
         alert('저장되었습니다.');
       };
     }

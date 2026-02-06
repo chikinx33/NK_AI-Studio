@@ -1163,6 +1163,10 @@ a.btn-primary:active {
   display: none;
 }
 
+.blurred-content {
+  filter: blur(4px);
+}
+
 .spinner {
   width: 34px;
   height: 34px;

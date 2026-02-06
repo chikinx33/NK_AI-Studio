@@ -75,19 +75,20 @@
   /**
    * 프로젝트 데이터를 페이지에 로드합니다.
    */
+  // 공통 비율 기본 설정 (다른 함수에서도 재사용)
+  const ensureDefaultRatio = () => {
+    const active = document.querySelector('.ratio-btn.active');
+    if (!active) {
+      const btn169 = document.querySelector('.ratio-btn[data-ratio="16:9"], .ratio-btn[data-value="16:9"]');
+      const target = btn169 || document.querySelector('.ratio-btn');
+      if (target) target.classList.add('active');
+    }
+  };
+
   scenario.load = function (draft) {
     if (!draft) return;
     const form = document.getElementById('scenario-form');
     if (!form) return;
-
-    const ensureDefaultRatio = () => {
-      const active = document.querySelector('.ratio-btn.active');
-      if (!active) {
-        const btn169 = document.querySelector('.ratio-btn[data-ratio="16:9"], .ratio-btn[data-value="16:9"]');
-        const target = btn169 || document.querySelector('.ratio-btn');
-        if (target) target.classList.add('active');
-      }
-    };
 
     // 1. 기본 필드 채우기
     const p = draft.payload || {};
@@ -311,6 +312,7 @@
     // 데이터 로드 실행
     const tryLoad = async () => {
       const isFile = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
+      if (NK.core && NK.core.setLoading) NK.core.setLoading(true);
       let localDraft = null;
       const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
       if (saved) {
@@ -332,12 +334,14 @@
             };
             localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(serverDraft));
             scenario.load(serverDraft);
+            if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
             return;
           }
         } catch (_) { }
       }
       if (localDraft) scenario.load(localDraft);
       ensureDefaultRatio();
+      if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
     };
     tryLoad();
 
