@@ -1209,6 +1209,14 @@ a.btn-primary:active {
 #pipeline-scenes .scene-cell.story {
   display: flex;
   flex-direction: column;
+  position: relative;
+  padding-bottom: 170px; /* 공간 확보해 하단 고정 보이스 블록 겹침 방지 */
+}
+
+#pipeline-scenes .scene-cell.story .story-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 #pipeline-scenes .story-lines {
@@ -1216,7 +1224,11 @@ a.btn-primary:active {
 }
 
 #pipeline-scenes .scene-cell.story .voice-block {
-  margin-top: auto;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 12px;
+  margin-top: 0;
 }
 
 .voice-block {
@@ -2607,7 +2619,7 @@ a.btn-primary:active {
 }
 
 .action-buttons.grid.video-actions {
-  margin-top: 30px;
+  margin-top: 63px; /* 요청: 3px 추가 하단 이동 */
 }
 
 

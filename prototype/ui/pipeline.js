@@ -337,6 +337,7 @@
         return (
           '<div class="scene-row">' +
           '<div class="scene-cell story">' +
+          '<div class="story-inner">' +
           '<p class="eyebrow">Scene ' + s.id + '</p>' +
           '<p class="story-lines" data-id="' + s.id + '">' + (s.lines || '') + '</p>' +
           '<div class="voice-block" style="margin-top:8px;">' +
@@ -353,6 +354,7 @@
             '<div class="voice-player" data-id="' + s.id + '" style="margin-top:10px;">' +
               '<audio controls preload="auto" style="width:100%;" ' + (updatedScene.voiceUrl ? '' : 'disabled') + ' src="' + (updatedScene.voiceUrl || '') + '"></audio>' +
             '</div>' +
+          '</div>' +
           '</div>' +
           '</div>' +
           '<div class="scene-cell prompt">' +
