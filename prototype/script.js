@@ -447,10 +447,22 @@
   // scope: 'global' => 부모+iframe 전체 전파, 'local' => 현재 문서만
   const broadcastTheme = (theme) => {
     try {
-      const iframe = document.getElementById('stage-iframe');
-      if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage({ type: 'theme-apply', theme }, '*');
-      }
+      // 현재 문서에 있는 모든 iframe에 테마 적용 시도
+      document.querySelectorAll('iframe').forEach((f) => {
+        try {
+          const cw = f.contentWindow;
+          if (cw && cw.NK && cw.NK.ui && cw.NK.ui.common && cw.NK.ui.common.applyTheme) {
+            cw.NK.ui.common.applyTheme(theme);
+          } else {
+            // fallback: data-theme 속성만 강제
+            if (f.contentDocument && f.contentDocument.documentElement) {
+              f.contentDocument.documentElement.setAttribute('data-theme', theme);
+            }
+            if (cw) cw.postMessage({ type: 'theme-apply', theme }, '*');
+          }
+        } catch (_) { }
+      });
+      // 자신이 iframe일 경우 부모에게도 전파
       if (window.parent && window.parent !== window) {
         window.parent.postMessage({ type: 'theme-apply', theme }, '*');
       }
@@ -459,7 +471,11 @@
   window.toggleTheme = (scope = 'global') => {
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
     NK.ui.common.applyTheme(currentTheme);
-    if (scope === 'global') broadcastTheme(currentTheme);
+    if (scope === 'global') {
+      broadcastTheme(currentTheme);
+      // iframe 로딩 타이밍을 대비해 한 번 더 전파
+      setTimeout(() => broadcastTheme(currentTheme), 100);
+    }
   };
 
   window.toggleLang = () => {

@@ -78,7 +78,7 @@
             iframe.style.height = '100%';
             iframe.style.border = 'none';
             content.appendChild(iframe);
-        }
-        return iframe;
-    };
-})();
+          }
+          return iframe;
+        };
+    })();
