@@ -804,6 +804,14 @@
         ui.render();
         if (!playback && jobId) {
           pollVideoStatus(projectId, jobId, i, 0);
+        } else if (!playback && !jobId) {
+          st.scenes[i] = Object.assign({}, st.scenes[i], {
+            videoStatus: 'error',
+            videoError: 'no jobId/playback from server'
+          });
+          ctx.setState(st);
+          ui.render();
+          alert('영상 생성 응답에 jobId나 playbackUrl이 없습니다. 서버 응답을 확인해주세요.');
         }
       } catch (err) {
         st = ctx.getState() || st;
