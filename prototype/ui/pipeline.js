@@ -81,7 +81,7 @@
     modal.classList.remove('hidden');
   }
 
-  function openLibraryModal(items, kind) {
+  function openLibraryModal(items, kind, onSelect) {
     const modal = document.getElementById('lib-modal');
     if (!modal) return;
     const box = modal.querySelector('.lib-content');
@@ -89,14 +89,24 @@
     if (!items || !items.length) {
       box.innerHTML = '<p class="muted">리소스가 없습니다.</p>';
     } else {
-      box.innerHTML = items.map(function (it, i) {
+      const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
         const name = it.name || ('item-' + (i + 1));
         if (kind === 'image') {
-          return '<div class="lib-item"><img src="' + url + '" alt="' + name + '" style="max-width:120px;max-height:120px;object-fit:cover;"/><div>' + name + '</div></div>';
+          return '<div class="lib-item" data-url="' + url + '"><img src="' + url + '" alt="' + name + '" style="max-width:120px;max-height:120px;object-fit:cover;"/><div class="lib-name">' + name + '</div><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
         }
-        return '<div class="lib-item"><video src="' + url + '" controls preload="metadata" style="max-width:160px;"></video><div>' + name + '</div></div>';
+        return '<div class="lib-item" data-url="' + url + '"><video src="' + url + '" controls preload="metadata" style="max-width:160px;"></video><div class="lib-name">' + name + '</div><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
       }).join('');
+      box.innerHTML = '<div class="lib-toolbar"><button class="btn-secondary" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
+      box.querySelectorAll('.lib-select').forEach(function (btn) {
+        btn.onclick = function () {
+          const u = btn.dataset.url;
+          if (onSelect && u) onSelect(u);
+          closeModals();
+        };
+      });
+      const closeBtn = box.querySelector('#lib-close');
+      if (closeBtn) closeBtn.onclick = () => closeModals();
     }
     modal.classList.remove('hidden');
   }
@@ -571,14 +581,10 @@
               var libImg = await NK.api.library('image', projectId);
               var items = Array.isArray(libImg.items) ? libImg.items : [];
               if (!items.length) { alert('라이브러리에 이미지가 없습니다.'); return; }
-              openLibraryModal(items, 'image');
-              // 첫 항목을 바로 선택하여 적용
-              var item = items[0];
-              var url = item ? (item.signedUrl || item.url || '') : '';
-              if (url) {
+              openLibraryModal(items, 'image', function (url) {
                 st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
                 refreshAndPersist(true);
-              }
+              });
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
             }
@@ -626,13 +632,10 @@
               var libVid = await NK.api.library('video', projectId);
               var vitems = Array.isArray(libVid.items) ? libVid.items : [];
               if (!vitems.length) { alert('라이브러리에 비디오가 없습니다.'); return; }
-              openLibraryModal(vitems, 'video');
-              var vitem = vitems[0];
-              var vurl = vitem ? (vitem.signedUrl || vitem.url || '') : '';
-              if (vurl) {
-                st.scenes[idx] = Object.assign({}, scene, { videoUrl: vurl, videoError: '', videoStatus: 'done' });
+              openLibraryModal(vitems, 'video', function (url) {
+                st.scenes[idx] = Object.assign({}, scene, { videoUrl: url, videoError: '', videoStatus: 'done' });
                 refreshAndPersist(true);
-              }
+              });
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
             }
@@ -687,17 +690,30 @@
     var scene = st.scenes[i];
     var projectId = st.draftId || getProjectId();
     if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
-      st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
-      ctx.setState(st);
-      ui.render();
-      try {
-        var payload = {
-          projectId: projectId,
-          sceneId: scene.id,
-          prompt: scene.promptText,
-          script: scene.lines,
-          aspectRatio: st.aspectRatio || '16:9'
-        };
+    var header = st.header || '';
+    var promptBase = ['Common', header, 'Visual', (scene.shot || ''), 'Duration', ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')].join('\n');
+    var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
+    if (!finalPrompt || !finalPrompt.trim()) {
+      alert('프롬프트가 비어 있어 영상을 생성할 수 없습니다. 프리/프로덕션에서 프롬프트를 입력해주세요.');
+      return;
+    }
+    var imageUrl = scene.imageDataUrl || '';
+    if (!imageUrl) {
+      alert('영상 생성을 위해서는 먼저 이미지가 필요합니다. 이미지 생성 또는 업로드 후 다시 시도하세요.');
+      return;
+    }
+    st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
+    ctx.setState(st);
+    ui.render();
+    try {
+      var payload = {
+        projectId: projectId,
+        sceneId: scene.id,
+        prompt: finalPrompt,
+        script: scene.lines,
+        aspectRatio: st.aspectRatio || '16:9',
+        imageDataUrl: imageUrl
+      };
         var resp = await NK.api.videoStart(payload);
         var playback = resp.playbackUrl || resp.url || '';
         st = ctx.getState() || st;
