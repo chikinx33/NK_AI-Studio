@@ -792,23 +792,71 @@
       };
         var resp = await NK.api.videoStart(payload);
         var playback = resp.playbackUrl || resp.url || '';
+        var jobId = resp.jobId || resp.id || '';
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], {
           videoUrl: playback,
           videoStatus: playback ? 'done' : (resp.status || 'processing'),
           videoError: resp.error || '',
-          videoJobId: resp.jobId || resp.id || ''
+          videoJobId: jobId
         });
+        ctx.setState(st);
+        ui.render();
+        if (!playback && jobId) {
+          pollVideoStatus(projectId, jobId, i, 0);
+        }
       } catch (err) {
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
         alert('영상 생성 실패: ' + (err && err.message ? err.message : err));
+        ctx.setState(st);
+        ui.render();
       }
-      ctx.setState(st);
-      ui.render();
       if (ctx.persistPipeline) ctx.persistPipeline();
     }
   };
+
+  async function pollVideoStatus(projectId, jobId, idx, attempt) {
+    var maxAttempts = 18; // 18*5s = 90s
+    var delay = 5000;
+    try {
+      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId });
+      var playback = res.playbackUrl || res.url || '';
+      var status = res.status || '';
+      var st = ctx.getState();
+      if (!st || !st.scenes || st.scenes.length <= idx) return;
+      if (playback) {
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], {
+          videoUrl: playback,
+          videoStatus: 'done',
+          videoError: ''
+        });
+        ctx.setState(st);
+        ui.render();
+        if (ctx.persistPipeline) ctx.persistPipeline();
+        return;
+      }
+      if (status && status.toLowerCase() === 'error') {
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error || 'video_error' });
+        ctx.setState(st);
+        ui.render();
+        return;
+      }
+      if (attempt + 1 >= maxAttempts) {
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: 'timeout' });
+        ctx.setState(st);
+        ui.render();
+        return;
+      }
+      setTimeout(() => pollVideoStatus(projectId, jobId, idx, attempt + 1), delay);
+    } catch (err) {
+      var st = ctx.getState();
+      if (!st || !st.scenes || st.scenes.length <= idx) return;
+      st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
+      ctx.setState(st);
+      ui.render();
+    }
+  }
   ui.refreshAssets = async function () {
     if (!ctx) return;
     var st = ctx.getState();
