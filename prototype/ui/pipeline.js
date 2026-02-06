@@ -307,9 +307,9 @@
     var header = state.header;
     pipelineMeta.innerHTML = (
       '<div class="pipeline-actions">' +
-      '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>??ν븯湲?/button>' +
-      '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>?대?吏 ?쇨큵 ?앹꽦</button>' +
-      '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>?곸긽 ?쇨큵 蹂??/button>' +
+      '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
+      '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
+      '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 생성</button>' +
       '</div>'
     );
     if (scenes && scenes.length) {
@@ -321,17 +321,17 @@
         var img = (updatedScene.imgLoading
           ? '<div class="image-placeholder tall loading"><span>?앹꽦以?..</span></div>'
           : (updatedScene.imgError
-            ? '<div class="image-placeholder tall error-state"><span>?대?吏 ?앹꽦 ?ㅽ뙣</span></div>'
+            ? '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>'
             : (updatedScene.imageDataUrl
               ? '<div class="image-box"><img class="scene-img" data-src="' + updatedScene.imageDataUrl + '" src="' + updatedScene.imageDataUrl + '" alt="scene image" /></div>'
               : '<div class="image-placeholder tall no-plus"><span>image</span></div>')));
         var videoCard = (function () {
           if (updatedScene.videoUrl) {
-            var note = updatedScene.videoMethod === 'inline' ? '<div class="video-note">?앹꽦 ?깃났(?몃씪??諛섑솚)</div>' : '';
+            var note = updatedScene.videoMethod === 'inline' ? '<div class="video-note">내장 재생(임시 변환)</div>' : '';
             return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + updatedScene.videoUrl + '" type="video/mp4" /></video>' + note + '</div>';
           }
           if (updatedScene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>?곸긽 ?앹꽦以?..</span></div>';
-          if (updatedScene.videoError) return '<div class="video-placeholder error-state"><span>?앹꽦 ?ㅽ뙣</span></div>';
+          if (updatedScene.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
           return '<div class="video-placeholder"><span>video</span></div>';
         })();
         var err = '';
@@ -339,11 +339,25 @@
           '<div class="scene-row">' +
           '<div class="scene-cell story">' +
           '<p class="eyebrow">Scene ' + s.id + '</p>' +
-          '<p class="story-lines" data-id="' + s.id + '"' + (s.editingStory ? ' contenteditable="true"' : '') + '>' + (s.lines || '') + '</p>' +
-          '<div class="cell-actions br">' +
+          '<div class="cell-actions br" style="margin-bottom:10px;">' +
           (s.editingStory
-            ? '<button class="btn-secondary compact" data-action="save-story" data-id="' + s.id + '">???/button><button class="btn-ghost compact" data-action="cancel-story" data-id="' + s.id + '">痍⑥냼</button>'
-            : '<button class="btn-ghost compact" data-action="edit-story" data-id="' + s.id + '">?섏젙</button>') +
+            ? '<button class="btn-secondary compact" data-action="save-story" data-id="' + s.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-story" data-id="' + s.id + '">취소</button>'
+            : '<button class="btn-ghost compact" data-action="edit-story" data-id="' + s.id + '">편집</button>') +
+          '</div>' +
+          '<p class="story-lines" data-id="' + s.id + '"' + (s.editingStory ? ' contenteditable="true"' : '') + '>' + (s.lines || '') + '</p>' +
+          '<div class="voice-block" style="margin-top:12px;">' +
+            '<div class="muted small" style="margin-bottom:6px;">AI 보이스</div>' +
+            '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">' +
+              '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
+                '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
+                '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
+              '</select>' +
+              '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
+            '</div>' +
+            '<div class="voice-player" data-id="' + s.id + '">' +
+              '<audio controls preload="auto" style="width:100%;" ' + (updatedScene.voiceUrl ? '' : 'disabled') + ' src="' + (updatedScene.voiceUrl || '') + '"></audio>' +
+              '<p class="muted small" style="margin-top:4px;">' + (updatedScene.voiceStatus || '대기 중') + '</p>' +
+            '</div>' +
           '</div>' +
           '</div>' +
           '<div class="scene-cell prompt">' +
@@ -355,39 +369,25 @@
           '<p class="prompt-duration" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(s.estSec) || 0, 1)) + 's.</p>' +
           '<div class="cell-actions br">' +
           (s.editingPrompt
-            ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + s.id + '">???/button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + s.id + '">痍⑥냼</button>'
-            : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + s.id + '">?섏젙</button>') +
+            ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + s.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + s.id + '">취소</button>'
+            : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + s.id + '">편집</button>') +
           '</div>' +
           '</div>' +
           '<div class="scene-cell image"><div class="scene-media-stack">' + img + videoCard + '</div>' + err + '</div>' +
           '<div class="scene-cell actions">' +
           '<div class="action-buttons grid">' +
-          '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + s.id + '"' + (updatedScene.imgLoading ? ' disabled' : '') + '>' + (updatedScene.imgLoading ? '?앹꽦以?..' : '?대?吏 ?앹꽦') + '</button>' +
-          '<button class="btn-secondary compact" data-action="delete-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>??젣</button>' +
-          '<button class="btn-secondary compact" data-action="upload-image" data-id="' + s.id + '">?낅줈??/button>' +
-          '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">?쇱씠釉뚮윭由?/button>' +
-          '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>?ㅼ슫濡쒕뱶</button>' +
+          '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + s.id + '"' + (updatedScene.imgLoading ? ' disabled' : '') + '>' + (updatedScene.imgLoading ? '이미지 생성중...' : '이미지 생성') + '</button>' +
+          '<button class="btn-secondary compact" data-action="delete-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>삭제</button>' +
+          '<button class="btn-secondary compact" data-action="upload-image" data-id="' + s.id + '">업로드</button>' +
+          '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">라이브러리</button>' +
+          '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
           '</div>' +
           '<div class="action-buttons grid video-actions">' +
-          '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">?곸긽 ?앹꽦</button>' +
-          '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>??젣</button>' +
-          '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">?낅줈??/button>' +
-          '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">?쇱씠釉뚮윭由?/button>' +
-          '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>?ㅼ슫濡쒕뱶</button>' +
-          '</div>' +
-          '<div class="voice-block" style="margin-top:8px;">' +
-            '<div class="muted small" style="margin-bottom:6px;">AI 蹂댁씠??/div>' +
-            '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">' +
-              '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
-                '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>?⑥꽦 (?곕え)</option>' +
-                '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>?ъ꽦 (?곕え)</option>' +
-              '</select>' +
-              '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">?뚯꽦 ?앹꽦</button>' +
-            '</div>' +
-            '<div class="voice-player" data-id="' + s.id + '">' +
-              '<audio controls preload="auto" style="width:100%;" ' + (updatedScene.voiceUrl ? '' : 'disabled') + ' src="' + (updatedScene.voiceUrl || '') + '"></audio>' +
-              '<p class="muted small" style="margin-top:4px;">' + (updatedScene.voiceStatus || '以鍮꾨맖') + '</p>' +
-            '</div>' +
+          '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">영상 생성</button>' +
+          '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>삭제</button>' +
+          '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">업로드</button>' +
+          '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">라이브러리</button>' +
+          '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
           '</div>' +
           '</div>' +
           '</div>'
@@ -448,7 +448,7 @@
       } catch (_) { }
     } else {
       pipelineScenes.classList.add('empty');
-      pipelineScenes.innerHTML = '<p class="muted">???뺣낫媛 ?놁뒿?덈떎.</p>';
+      pipelineScenes.innerHTML = '<p class="muted">장면이媛 ?놁뒿?덈떎.</p>';
     }
     var savePipelineBtn = document.getElementById('save-pipeline-btn');
     if (savePipelineBtn) {
@@ -468,11 +468,11 @@
               aspectRatio: st.aspectRatio || '',
               title: getProjectTitle()
             });
-            // ?쒕쾭 ????깃났 ??濡쒖뺄 ?꾩떆 ?뚯씠?꾨씪??罹먯떆???뺣━
+            // ?쒕쾭 저장?깃났 ??濡쒖뺄 ?꾩떆 ?뚯씠?꾨씪??罹먯떆???뺣━
             try { localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
             alert('??λ릺?덉뒿?덈떎.');
           } catch (err) {
-            alert('????ㅽ뙣: ' + (err && err.message ? err.message : err));
+            alert('저장?ㅽ뙣: ' + (err && err.message ? err.message : err));
           } finally {
             savePipelineBtn.disabled = false;
             savePipelineBtn.textContent = originalText;
@@ -579,7 +579,7 @@
           }
 
           if (action === 'regen-image') {
-            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
             btn.disabled = true;
             await ui.generateImageForIdx(idx);
             return;
@@ -590,7 +590,7 @@
             return;
           }
           if (action === 'upload-image') {
-            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
             var inputImg = document.createElement('input');
             inputImg.type = 'file';
             inputImg.accept = 'image/*';
@@ -604,7 +604,7 @@
                   st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
                   refreshAndPersist(true);
                 } else {
-                  alert('?낅줈???묐떟???대?吏 URL???놁뒿?덈떎.');
+                  alert('업로드 응답에 이미지 URL이 없습니다.');
                 }
               } catch (err) {
                 alert('?대?吏 ?낅줈???ㅽ뙣: ' + (err && err.message ? err.message : err));
@@ -615,7 +615,7 @@
           }
           if (action === 'library-image') {
             if (!projectId) {
-              alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲?? ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
+              alert('프로젝트가 선택되지 않았습니다. ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
               openLibraryModal([], 'image', null);
               return;
             }
@@ -631,7 +631,7 @@
                 refreshAndPersist(true);
               });
             } catch (err) {
-              alert('?쇱씠釉뚮윭由?遺덈윭?ㅺ린 ?ㅽ뙣: ' + (err && err.message ? err.message : err));
+              alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
               openLibraryModal([], 'image', null);
             }
             return;
@@ -643,7 +643,7 @@
           }
 
           if (action === 'video') {
-            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
             await startVideoForIdx(idx);
             return;
           }
@@ -653,7 +653,7 @@
             return;
           }
           if (action === 'upload-video') {
-            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
             var inputVid = document.createElement('input');
             inputVid.type = 'file';
             inputVid.accept = 'video/mp4,video/*';
@@ -674,7 +674,7 @@
           }
           if (action === 'library-video') {
             if (!projectId) {
-              alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲?? ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
+              alert('프로젝트가 선택되지 않았습니다. ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
               openLibraryModal([], 'video', null);
               return;
             }
@@ -690,7 +690,7 @@
                 refreshAndPersist(true);
               });
             } catch (err) {
-              alert('?쇱씠釉뚮윭由?遺덈윭?ㅺ린 ?ㅽ뙣: ' + (err && err.message ? err.message : err));
+              alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
               openLibraryModal([], 'video', null);
             }
             return;
@@ -764,7 +764,7 @@
     if (!st) return;
     var scene = st.scenes[i];
     var projectId = st.draftId || getProjectId();
-    if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
+    if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
     var header = st.header || '';
     var promptBase = ['Common', header, 'Visual', (scene.shot || ''), 'Duration', ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')].join('\n');
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
@@ -819,7 +819,7 @@
       } catch (err) {
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
-        alert('?곸긽 ?앹꽦 ?ㅽ뙣: ' + (err && err.message ? err.message : err));
+        alert('?곸긽 생성 실패: ' + (err && err.message ? err.message : err));
         ctx.setState(st);
         ui.render();
       }
@@ -968,15 +968,15 @@
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var rc = Number(retryCount) || 0;
       if (is500 && rc < 2) {
-        console.warn('?대?吏 ?앹꽦 ?ㅽ뙣 (500), ?ъ떆??' + (rc + 1) + '/2...');
+        console.warn('이미지 생성 실패 (500), ?ъ떆??' + (rc + 1) + '/2...');
         st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: ('?ъ떆??以?.. (' + (rc + 1) + '/2)') });
         ctx.setState(st);
         ui.render();
         await new Promise(function (resolve) { return setTimeout(resolve, 2000 * Math.pow(2, rc)); });
         return ui.generateImageForIdx(idx, rc + 1);
       }
-      var errorMessage = (err && err.message) || '?대?吏 ?앹꽦 ?ㅽ뙣';
-      console.error('Scene ' + scene.id + ' ?대?吏 ?앹꽦 ?ㅽ뙣:', errorMessage);
+      var errorMessage = (err && err.message) || '이미지 생성 실패';
+      console.error('Scene ' + scene.id + ' 이미지 생성 실패:', errorMessage);
       st.scenes[idx] = Object.assign({}, scene, { imgLoading: false, imgError: errorMessage });
       ctx.setState(st);
     }
