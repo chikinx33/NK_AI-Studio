@@ -375,6 +375,9 @@
         localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
         localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
         NK.state.set({ currentProject: draft });
+        if (NK.state && NK.state.broadcast) {
+          NK.state.broadcast('update-project', { project: draft });
+        }
         if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
           NK.ui.dashboard.renderSidebarProjectCard(draft);
         }
