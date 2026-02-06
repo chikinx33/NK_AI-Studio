@@ -329,7 +329,7 @@
             var note = updatedScene.videoMethod === 'inline' ? '<div class="video-note">내장 재생(임시 변환)</div>' : '';
             return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + updatedScene.videoUrl + '" type="video/mp4" /></video>' + note + '</div>';
           }
-          if (updatedScene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>?곸긽 ?앹꽦以?..</span></div>';
+          if (updatedScene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>영상 생성중...</span></div>';
           if (updatedScene.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
           return '<div class="video-placeholder"><span>video</span></div>';
         })();
@@ -748,12 +748,12 @@
     var promptBase = ['Common', header, 'Visual', (scene.shot || ''), 'Duration', ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')].join('\n');
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
     if (!finalPrompt || !finalPrompt.trim()) {
-      alert('?꾨＼?꾪듃媛 鍮꾩뼱 ?덉뼱 ?곸긽???앹꽦?????놁뒿?덈떎. ?꾨━/?꾨줈?뺤뀡?먯꽌 ?꾨＼?꾪듃瑜??낅젰?댁＜?몄슂.');
+      alert('프롬프트가 비어 있어 영상 생성에 실패했습니다. 시나리오/스토리 탭에서 프롬프트를 입력해주세요.');
       return;
     }
     var imageUrl = scene.imageDataUrl || '';
     if (!imageUrl) {
-      alert('?곸긽 ?앹꽦???꾪빐?쒕뒗 癒쇱? ?대?吏媛 ?꾩슂?⑸땲?? ?대?吏 ?앹꽦 ?먮뒗 ?낅줈?????ㅼ떆 ?쒕룄?섏꽭??');
+      alert('영상 생성을 위해서는 이미지가 필요합니다. 이미지를 생성하거나 업로드한 후 다시 시도해주세요.');
       return;
     }
     st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
@@ -792,13 +792,13 @@
             });
             ctx.setState(st);
             ui.render();
-            alert('?곸긽 ?앹꽦 ?묐떟??jobId??playbackUrl???놁뒿?덈떎. ?쒕쾭 ?묐떟???뺤씤?댁＜?몄슂.');
+            alert('영상 생성 응답에 jobId나 playbackUrl이 없습니다. 서버 응답을 확인해주세요.');
           }
         }
       } catch (err) {
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
-        alert('?곸긽 생성 실패: ' + (err && err.message ? err.message : err));
+        alert('영상 생성 실패: ' + (err && err.message ? err.message : err));
         ctx.setState(st);
         ui.render();
       }
