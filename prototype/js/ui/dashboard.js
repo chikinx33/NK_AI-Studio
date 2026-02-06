@@ -3,6 +3,17 @@
   var ui = NK.ui || (NK.ui = {});
   var dashboard = ui.dashboard || (ui.dashboard = {});
   var serverMerged = false;
+  const setDashLoading = (show, text) => {
+    const overlay = document.getElementById('dashboard-loading');
+    const blurTarget = document.getElementById('dashboard-drafts');
+    if (!overlay) return;
+    if (text) {
+      const p = overlay.querySelector('p');
+      if (p) p.textContent = text;
+    }
+    overlay.classList.toggle('hidden', !show);
+    if (blurTarget) blurTarget.classList.toggle('blur-active', !!show);
+  };
 
   /**
    * 대시보드의 드래프트 리스트를 렌더링합니다.
@@ -18,9 +29,14 @@
       if (serverMerged) return;
       serverMerged = true;
       try {
+        setDashLoading(true, '동기화 중...');
         const list = await NK.api.projectList();
         const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
-        if (!ids.length) return;
+        if (!ids.length) {
+          drafts = [];
+          NK.store.saveDrafts(drafts);
+          return;
+        }
         let changed = false;
         const idSet = new Set(ids.map((v) => String(v)));
         for (const id of ids) {
@@ -58,6 +74,9 @@
           NK.store.saveDrafts(drafts);
         }
       } catch (_) { }
+      finally {
+        setDashLoading(false);
+      }
     };
     // 병합 시도 후 최신 drafts 사용
     // 비동기지만 UI 렌더 직전에 가장 최신 로컬 상태로 갱신
@@ -237,9 +256,12 @@
         }
       } else if (action === 'draft-delete') {
         if (confirm('삭제하시겠습니까?')) {
+          setDashLoading(true, '삭제 중...');
           NK.service.project.delete(id).catch((err) => {
             alert('삭제 중 오류가 발생했지만 로컬 목록은 정리했습니다. 새로고침 후 확인하세요.\n' + (err?.message || err));
           }).finally(() => {
+            serverMerged = false; // 다시 서버와 동기화하도록 플래그 리셋
+            setDashLoading(false);
             dashboard.renderDrafts();
             // 사이드바 카드도 즉시 비워주기
             if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {

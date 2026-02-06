@@ -469,7 +469,7 @@
             try { localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
             alert('??λ릺?덉뒿?덈떎.');
           } catch (err) {
-            alert('저장?ㅽ뙣: ' + (err && err.message ? err.message : err));
+            alert('저장 실패: ' + (err && err.message ? err.message : err));
           } finally {
             savePipelineBtn.disabled = false;
             savePipelineBtn.textContent = originalText;

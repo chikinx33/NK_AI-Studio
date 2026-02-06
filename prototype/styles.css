@@ -2563,6 +2563,10 @@ a.btn-primary:active {
   filter: blur(5px);
 }
 
+#dashboard-drafts.blur-active {
+  filter: blur(5px);
+}
+
 .auth-overlay {
   position: fixed;
   inset: 0;
