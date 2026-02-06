@@ -109,7 +109,9 @@
             </div>
           </div>
           <div class="draft-actions">
-            <button class="btn-primary" data-action="draft-edit" data-id="${d.id}">편집</button>
+            <button class="btn-primary" data-action="draft-edit" data-id="${d.id}">Pre</button>
+            <button class="btn-secondary" data-action="draft-production" data-id="${d.id}">Production</button>
+            <button class="btn-secondary" data-action="draft-post" data-id="${d.id}">Post</button>
             <button class="trash-btn action-trash" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
           </div>
         </article>
@@ -200,6 +202,28 @@
           NK.state.broadcast('update-project', { project: draft });
 
           const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
+          NK.navigation.loadStage(url);
+        }
+      } else if (action === 'draft-production') {
+        const drafts = NK.store.getDrafts();
+        const draft = drafts.find(d => String(d.id) === String(id));
+        if (draft) {
+          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+          localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
+          localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+          NK.state.broadcast('update-project', { project: draft });
+          const url = draft.id ? `scenes.html?projectId=${encodeURIComponent(draft.id)}` : 'scenes.html';
+          NK.navigation.loadStage(url);
+        }
+      } else if (action === 'draft-post') {
+        const drafts = NK.store.getDrafts();
+        const draft = drafts.find(d => String(d.id) === String(id));
+        if (draft) {
+          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+          localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
+          localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+          NK.state.broadcast('update-project', { project: draft });
+          const url = draft.id ? `media.html?projectId=${encodeURIComponent(draft.id)}` : 'media.html';
           NK.navigation.loadStage(url);
         }
       } else if (action === 'create-project') {

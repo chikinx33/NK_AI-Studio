@@ -1,11 +1,9 @@
-; (function () {
+﻿; (function () {
     var NK = window.NK || (window.NK = {});
     var nav = NK.navigation || (NK.navigation = {});
 
     nav.loadStage = function (name) {
         let targetName = name;
-        if (targetName.includes('ai-video.html')) targetName = 'dashboard.html';
-        if (targetName === 'dashboard.html') targetName = 'dashboard.html';
 
         const isIframe = window.self !== window.top;
         const st = nav.normalizeStageName(targetName);

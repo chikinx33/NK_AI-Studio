@@ -261,8 +261,7 @@
             videoJobId: s.videoJobId || '',
             promptEdited: !!s.promptEdited,
             editingPrompt: !!s.editingPrompt,
-            editingStory: !!s.editingStory
-          };
+            };
         });
         state = { payload: serverData.payload || {}, header: headerSrv2, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
         ctx.setState(state);
@@ -288,8 +287,7 @@
             videoJobId: s.videoJobId || '',
             promptEdited: !!s.promptEdited,
             editingPrompt: !!s.editingPrompt,
-            editingStory: !!s.editingStory
-          };
+            };
         });
         state = { payload: stored.payload, header: headerInit2, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
         ctx.setState(state);
@@ -310,6 +308,7 @@
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 생성</button>' +
+      '<button class="btn-ghost theme-toggle top-theme" data-theme-toggle onclick="toggleTheme(\'local\')" aria-label="테마 전환"></button>' +
       '</div>'
     );
     if (scenes && scenes.length) {
@@ -339,24 +338,20 @@
           '<div class="scene-row">' +
           '<div class="scene-cell story">' +
           '<p class="eyebrow">Scene ' + s.id + '</p>' +
-          '<div class="cell-actions br" style="margin-bottom:10px;">' +
-          (s.editingStory
-            ? '<button class="btn-secondary compact" data-action="save-story" data-id="' + s.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-story" data-id="' + s.id + '">취소</button>'
-            : '<button class="btn-ghost compact" data-action="edit-story" data-id="' + s.id + '">편집</button>') +
-          '</div>' +
-          '<p class="story-lines" data-id="' + s.id + '"' + (s.editingStory ? ' contenteditable="true"' : '') + '>' + (s.lines || '') + '</p>' +
-          '<div class="voice-block" style="margin-top:12px;">' +
-            '<div class="muted small" style="margin-bottom:6px;">AI 보이스</div>' +
-            '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">' +
+          '<p class="story-lines" data-id="' + s.id + '">' + (s.lines || '') + '</p>' +
+          '<div class="voice-block" style="margin-top:8px;">' +
+            '<div class="voice-title-row">' +
+              '<span class="voice-title">AI 보이스</span>' +
+            '</div>' +
+            '<div class="voice-row voice-controls">' +
               '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
                 '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
                 '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
               '</select>' +
               '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
             '</div>' +
-            '<div class="voice-player" data-id="' + s.id + '">' +
+            '<div class="voice-player" data-id="' + s.id + '" style="margin-top:10px;">' +
               '<audio controls preload="auto" style="width:100%;" ' + (updatedScene.voiceUrl ? '' : 'disabled') + ' src="' + (updatedScene.voiceUrl || '') + '"></audio>' +
-              '<p class="muted small" style="margin-top:4px;">' + (updatedScene.voiceStatus || '대기 중') + '</p>' +
             '</div>' +
           '</div>' +
           '</div>' +
@@ -404,7 +399,7 @@
           videoError: (s.videoError || ''),
           videoJobId: (s.videoJobId || ''),
           editingPrompt: !!s.editingPrompt,
-          editingStory: !!s.editingStory,
+          
           promptEdited: !!s.promptEdited,
           editingPromptRaw: false
         });
@@ -529,24 +524,6 @@
             ui.render();
             if (persist && ctx.persistPipeline) ctx.persistPipeline();
           };
-
-          if (action === 'edit-story') {
-            st.scenes[idx] = Object.assign({}, scene, { editingStory: true });
-            refreshAndPersist(false);
-            return;
-          }
-          if (action === 'cancel-story') {
-            st.scenes[idx] = Object.assign({}, scene, { editingStory: false });
-            refreshAndPersist(false);
-            return;
-          }
-          if (action === 'save-story') {
-            var storyEl = pipelineScenes.querySelector('.story-lines[data-id="' + id + '"]');
-            var newLines = (storyEl && storyEl.textContent) ? storyEl.textContent.trim() : '';
-            st.scenes[idx] = Object.assign({}, scene, { lines: newLines, editingStory: false });
-            refreshAndPersist(true);
-            return;
-          }
 
           if (action === 'edit-prompt') {
             st.scenes[idx] = Object.assign({}, scene, { editingPrompt: true });
@@ -984,4 +961,6 @@
     if (ctx.persistPipeline) ctx.persistPipeline();
   };
 })(); 
+
+
 

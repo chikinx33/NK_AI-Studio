@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
   const config = NK.config;
   const KEY = config.KEYS;
 
@@ -291,6 +291,12 @@
       if (data.type === 'load-stage' && data.url) {
         NK.navigation.loadStage(data.url);
       }
+      if (data.type === 'theme-apply' && data.theme) {
+        currentTheme = data.theme;
+        NK.ui.common.applyTheme(currentTheme);
+        // 부모창에서 받은 경우 자식 iframe에도 전파
+        if (window.self === window.top) broadcastTheme(currentTheme);
+      }
     });
   };
 
@@ -431,9 +437,22 @@
   };
 
   // 전역 노출 함수 (버튼 onclick용)
-  window.toggleTheme = () => {
+  // scope: 'global' => 부모+iframe 전체 전파, 'local' => 현재 문서만
+  const broadcastTheme = (theme) => {
+    try {
+      const iframe = document.getElementById('stage-iframe');
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: 'theme-apply', theme }, '*');
+      }
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'theme-apply', theme }, '*');
+      }
+    } catch (_) { }
+  };
+  window.toggleTheme = (scope = 'global') => {
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
     NK.ui.common.applyTheme(currentTheme);
+    if (scope === 'global') broadcastTheme(currentTheme);
   };
 
   window.toggleLang = () => {
@@ -443,3 +462,4 @@
 
   document.addEventListener('DOMContentLoaded', init);
 })();
+
