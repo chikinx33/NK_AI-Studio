@@ -310,13 +310,30 @@
     var savePipelineBtn = document.getElementById('save-pipeline-btn');
     if (savePipelineBtn) {
       savePipelineBtn.onclick = async function () {
+        const originalText = savePipelineBtn.textContent;
+        savePipelineBtn.disabled = true;
+        savePipelineBtn.textContent = '저장중...';
         var st = ctx.getState();
         if (!st) return;
         ctx.savePipeline(st.payload, st.scenes, st.header);
         if (updateDraftFromPipeline) updateDraftFromPipeline();
         if (projectId && NK.api && NK.api.projectSave) {
-          try { await NK.api.projectSave(projectId, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' }); } catch (_) { }
+          try {
+            await NK.api.projectSave(projectId, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' });
+            // 서버 저장 성공 시 로컬 임시 파이프라인 캐시는 정리
+            try { localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
+            alert('저장되었습니다.');
+          } catch (err) {
+            alert('저장 실패: ' + (err && err.message ? err.message : err));
+          } finally {
+            savePipelineBtn.disabled = false;
+            savePipelineBtn.textContent = originalText;
+          }
+          return;
         }
+        // projectId 없을 때도 버튼 상태 복원
+        savePipelineBtn.disabled = false;
+        savePipelineBtn.textContent = originalText;
         alert('저장되었습니다.');
       };
     }
