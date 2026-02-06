@@ -19,7 +19,7 @@
       serverMerged = true;
       try {
         const list = await NK.api.projectList();
-        const ids = Array.isArray(list?.ids) ? list.ids : [];
+        const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
         if (!ids.length) return;
         let changed = false;
         const idSet = new Set(ids.map((v) => String(v)));

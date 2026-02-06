@@ -1167,6 +1167,10 @@ a.btn-primary:active {
   filter: blur(4px);
 }
 
+.voice-block audio[disabled] {
+  opacity: 0.4;
+}
+
 .spinner {
   width: 34px;
   height: 34px;

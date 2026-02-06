@@ -4,6 +4,8 @@
   var ctx = null;
   var lastProjectId = null;
   var subscribed = false;
+  // 데모용 음성 URL (짧은 무음 wav)
+  var SAMPLE_VOICE_URL = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
   var getProjectId = function () {
     if (lastProjectId) return lastProjectId;
     try {
@@ -373,6 +375,20 @@
           '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">라이브러리</button>' +
           '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
           '</div>' +
+          '<div class="voice-block" style="margin-top:8px;">' +
+            '<div class="muted small" style="margin-bottom:6px;">AI 보이스</div>' +
+            '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">' +
+              '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
+                '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
+                '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
+              '</select>' +
+              '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
+            '</div>' +
+            '<div class="voice-player" data-id="' + s.id + '">' +
+              '<audio controls preload="auto" style="width:100%;" ' + (updatedScene.voiceUrl ? '' : 'disabled') + ' src="' + (updatedScene.voiceUrl || '') + '"></audio>' +
+              '<p class="muted small" style="margin-top:4px;">' + (updatedScene.voiceStatus || '준비됨') + '</p>' +
+            '</div>' +
+          '</div>' +
           '</div>' +
           '</div>'
         );
@@ -682,6 +698,27 @@
           if (action === 'download-video') {
             if (!scene.videoUrl) return;
             await downloadFile(scene.videoUrl, 'scene-' + id + '.mp4');
+            return;
+          }
+          if (action === 'voice-generate') {
+            const sel = pipelineScenes.querySelector('.voice-select[data-id="' + id + '"]');
+            const vid = (sel && sel.value) ? sel.value : 'demo-male';
+            st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성중...', voiceVoiceId: vid });
+            refreshAndPersist(false);
+            setTimeout(() => {
+              const cur = ctx.getState();
+              if (!cur || !cur.scenes) return;
+              const ii = cur.scenes.findIndex(s => String(s.id) === String(id));
+              if (ii < 0) return;
+              cur.scenes[ii] = Object.assign({}, cur.scenes[ii], {
+                voiceStatus: '완료',
+                voiceUrl: SAMPLE_VOICE_URL,
+                voiceVoiceId: vid
+              });
+              ctx.setState(cur);
+              ui.render();
+              if (ctx.persistPipeline) ctx.persistPipeline();
+            }, 1200);
             return;
           }
         }

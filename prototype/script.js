@@ -12,7 +12,7 @@
       if (isFile) return; // file://은 CORS 우회가 있어도 불필요 시 건너뜀
       if (!NK.api || !NK.api.projectList) return;
       const list = await NK.api.projectList();
-      const ids = Array.isArray(list?.ids) ? list.ids : [];
+      const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
       if (!ids.length) return;
       let drafts = NK.store.getDrafts();
       let changed = false;
