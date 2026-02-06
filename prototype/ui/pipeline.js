@@ -241,7 +241,7 @@
         var serverRatio = serverData.aspectRatio || serverData.payload?.aspectRatio || aspectRatio;
         if (serverRatio && saveAspect) saveAspect(serverRatio);
         aspectRatio = serverRatio || aspectRatio;
-        var headerSrv = serverData.header || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.';
+        var headerSrv = serverData.header || serverData.payload?.header || (loadHeader ? loadHeader() : '');
         var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
         var sceneSrv = (serverData.scenes || []).map(function (s, idx) {
           return {
@@ -268,7 +268,7 @@
         var savedRatio = stored.aspectRatio;
         if (savedRatio && saveAspect) saveAspect(savedRatio);
         aspectRatio = savedRatio || aspectRatio;
-        var headerInitRaw = (stored.header || (loadHeader ? loadHeader() : '') || 'A cohesive visual world with consistent characters, lighting, and framing; keep style, props, and mood uniform across all scenes.');
+        var headerInitRaw = (stored.header || stored.payload?.header || (loadHeader ? loadHeader() : '') || '');
         var headerInit2 = withAspectInHeader ? withAspectInHeader(headerInitRaw, aspectRatio) : headerInitRaw;
         var sceneListInit = (stored.scenes || []).map(function (s, idx) {
           return {
