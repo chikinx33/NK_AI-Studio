@@ -81,7 +81,7 @@
     modal.classList.remove('hidden');
   }
 
-  function openLibraryModal(items, kind, onSelect, onDelete) {
+  function openLibraryModal(items, kind, onSelect) {
     const modal = document.getElementById('lib-modal');
     if (!modal) return;
     const box = modal.querySelector('.lib-content');
@@ -98,24 +98,16 @@
           '<div class="lib-item" data-url="' + url + '" style="background:none;box-shadow:none;">' +
             thumb +
             '<div class="lib-actions" style="margin-top:6px;display:flex;gap:6px;">' +
-              '<button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button>' +
-              '<button class="btn-secondary compact lib-delete" data-url="' + url + '">삭제</button>' +
+              '<button class="btn-secondary compact lib-select" data-url="' + url + '" style="width:100%;min-height:30px;">선택</button>' +
             '</div>' +
           '</div>'
         );
       }).join('');
-      box.innerHTML = '<button class="btn-secondary lib-close-btn" id="lib-close" style="position:absolute; top:12px; right:12px;">닫기</button><div class="lib-grid">' + list + '</div>';
+      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:12px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
       box.querySelectorAll('.lib-select').forEach(function (btn) {
         btn.onclick = function () {
           const u = btn.dataset.url;
           if (onSelect && u) onSelect(u);
-          closeModals();
-        };
-      });
-      box.querySelectorAll('.lib-delete').forEach(function (btn) {
-        btn.onclick = function () {
-          const u = btn.dataset.url;
-          if (onDelete && u) onDelete(u);
           closeModals();
         };
       });
@@ -590,21 +582,25 @@
             return;
           }
           if (action === 'library-image') {
-            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (!projectId) {
+              alert('프로젝트가 선택되지 않았습니다. 라이브러리를 불러올 수 없습니다.');
+              openLibraryModal([], 'image', null);
+              return;
+            }
             try {
               var libImg = await NK.api.library('image', projectId);
               var items = Array.isArray(libImg.items) ? libImg.items : [];
-              if (!items.length) { alert('라이브러리에 이미지가 없습니다.'); return; }
+              if (!items.length) {
+                openLibraryModal([], 'image', null);
+                return;
+              }
               openLibraryModal(items, 'image', function (url) {
                 st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
-                refreshAndPersist(true);
-              }, function (url) {
-                if (!url) return;
-                st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: (scene.imageDataUrl === url ? '' : scene.imageDataUrl) });
                 refreshAndPersist(true);
               });
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
+              openLibraryModal([], 'image', null);
             }
             return;
           }
@@ -645,21 +641,25 @@
             return;
           }
           if (action === 'library-video') {
-            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (!projectId) {
+              alert('프로젝트가 선택되지 않았습니다. 라이브러리를 불러올 수 없습니다.');
+              openLibraryModal([], 'video', null);
+              return;
+            }
             try {
               var libVid = await NK.api.library('video', projectId);
               var vitems = Array.isArray(libVid.items) ? libVid.items : [];
-              if (!vitems.length) { alert('라이브러리에 비디오가 없습니다.'); return; }
+              if (!vitems.length) {
+                openLibraryModal([], 'video', null);
+                return;
+              }
               openLibraryModal(vitems, 'video', function (url) {
                 st.scenes[idx] = Object.assign({}, scene, { videoUrl: url, videoError: '', videoStatus: 'done' });
-                refreshAndPersist(true);
-              }, function (url) {
-                if (!url) return;
-                st.scenes[idx] = Object.assign({}, scene, { videoUrl: (scene.videoUrl === url ? '' : scene.videoUrl), videoStatus: '' });
                 refreshAndPersist(true);
               });
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
+              openLibraryModal([], 'video', null);
             }
             return;
           }
