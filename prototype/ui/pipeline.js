@@ -91,32 +91,34 @@
     } else {
       const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
-        if (kind === 'image') {
-          return '<div class="lib-item" data-url="' + url + '"><img class="lib-thumb" src="' + url + '" alt="" /><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
-        }
-        return '<div class="lib-item" data-url="' + url + '"><video class="lib-video" src="' + url + '" controls preload="metadata"></video><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
+        const thumb = (kind === 'image')
+          ? '<img class="lib-thumb" src="' + url + '" alt="" />'
+          : '<video class="lib-video" src="' + url + '" controls preload="metadata"></video>';
+        return (
+          '<div class="lib-item" data-url="' + url + '" style="background:none;box-shadow:none;">' +
+            thumb +
+            '<div class="lib-actions" style="margin-top:6px;display:flex;gap:6px;">' +
+              '<button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button>' +
+              '<button class="btn-secondary compact lib-delete" data-url="' + url + '">삭제</button>' +
+            '</div>' +
+          '</div>'
+        );
       }).join('');
-      box.innerHTML = '<div class="lib-toolbar"><button class="btn-secondary" id="lib-select">선택</button><button class="btn-secondary" id="lib-delete">삭제</button><div class="flex-spacer"></div><button class="btn-secondary" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
-      let selectedUrl = '';
-      const itemsEl = box.querySelectorAll('.lib-item');
-      itemsEl.forEach(function (el) {
-        el.onclick = function () {
-          itemsEl.forEach(node => node.classList.remove('active'));
-          el.classList.add('active');
-          selectedUrl = el.dataset.url || '';
+      box.innerHTML = '<button class="btn-secondary lib-close-btn" id="lib-close" style="position:absolute; top:12px; right:12px;">닫기</button><div class="lib-grid">' + list + '</div>';
+      box.querySelectorAll('.lib-select').forEach(function (btn) {
+        btn.onclick = function () {
+          const u = btn.dataset.url;
+          if (onSelect && u) onSelect(u);
+          closeModals();
         };
       });
-      const selectBtn = box.querySelector('#lib-select');
-      if (selectBtn) selectBtn.onclick = function () {
-        if (selectedUrl && onSelect) onSelect(selectedUrl);
-        closeModals();
-      };
-      const deleteBtn = box.querySelector('#lib-delete');
-      if (deleteBtn) deleteBtn.onclick = function () {
-        if (!selectedUrl || !onDelete) { alert('삭제할 항목을 선택하세요.'); return; }
-        onDelete(selectedUrl);
-        closeModals();
-      };
+      box.querySelectorAll('.lib-delete').forEach(function (btn) {
+        btn.onclick = function () {
+          const u = btn.dataset.url;
+          if (onDelete && u) onDelete(u);
+          closeModals();
+        };
+      });
       const closeBtn = box.querySelector('#lib-close');
       if (closeBtn) closeBtn.onclick = () => closeModals();
     }
