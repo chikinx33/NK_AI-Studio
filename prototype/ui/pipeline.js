@@ -747,7 +747,8 @@
       });
     }
 
-    // 紐⑤떖 ?リ린 ?몃뱾??    ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
+    // 모달 오버레이 클릭 시 닫기
+    ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
       const m = document.getElementById(id);
       if (m && !m.dataset.bound) {
         m.dataset.bound = '1';
