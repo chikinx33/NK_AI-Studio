@@ -747,7 +747,8 @@
       var payload = {
         projectId: projectId,
         sceneId: scene.id,
-        prompt: finalPrompt,
+        // 서버 요구사항: promptText, imageDataUrl 필수
+        promptText: finalPrompt,
         script: scene.lines,
         aspectRatio: st.aspectRatio || '16:9',
         imageDataUrl: imageUrl

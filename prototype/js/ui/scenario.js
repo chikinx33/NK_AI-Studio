@@ -52,7 +52,6 @@
         <div class="scenario-card">
           <div class="card-top">
             <div>
-              <p class="eyebrow">Scene ${s.id}</p>
               <h5>Scene ${s.id} - <span class="view-title" data-id="${s.id}" ${isEditing ? 'contenteditable="true"' : ''}>${s.title || ''}</span></h5>
             </div>
             <input class="chip-input est-input" data-id="${s.id}" value="${scenario.formatEst(s.estSec)}" />
@@ -204,25 +203,31 @@
     const saveBtn = document.getElementById('save-draft');
     if (saveBtn) {
       saveBtn.onclick = async () => {
+        NK.core.setLoading(true);
         const payload = collectPayload();
         // 필수 검증: 주제, 장르, 시청 타겟, 태그들
         if (!payload.topic || !payload.purposeCategory || !payload.target) {
+          NK.core.setLoading(false);
           alert('필수 항목(주제, 장르, 시청 타겟)을 모두 입력하세요.');
           return;
         }
         if (!payload.purposeTags || payload.purposeTags.length !== 1) {
+          NK.core.setLoading(false);
           alert('장르 세부 태그를 정확히 1개 선택하세요.');
           return;
         }
         if (!payload.needs?.length) {
+          NK.core.setLoading(false);
           alert('시청 타겟 태그를 최소 1개 선택하세요.');
           return;
         }
         if (!payload.tone && (!payload.tones || payload.tones.length === 0)) {
+          NK.core.setLoading(false);
           alert('톤 텍스트를 입력하거나 톤 태그를 최소 1개 선택하세요.');
           return;
         }
         if (!payload.style && (!payload.styles || payload.styles.length === 0)) {
+          NK.core.setLoading(false);
           alert('스타일 텍스트를 입력하거나 스타일 태그를 최소 1개 선택하세요.');
           return;
         }
@@ -252,6 +257,7 @@
         }
         try { await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title }); } catch (_) { }
         alert('저장되었습니다.');
+        NK.core.setLoading(false);
       };
     }
 
