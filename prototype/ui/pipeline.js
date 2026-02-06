@@ -1,10 +1,10 @@
-;(function () {
+﻿;(function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.uiPipeline || (NK.uiPipeline = {});
   var ctx = null;
   var lastProjectId = null;
   var subscribed = false;
-  // 데모용 음성 URL (짧은 무음 wav)
+  // ?곕え???뚯꽦 URL (吏㏃? 臾댁쓬 wav)
   var SAMPLE_VOICE_URL = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
   var getProjectId = function () {
     if (lastProjectId) return lastProjectId;
@@ -33,7 +33,7 @@
     return null;
   };
 
-  // 공통 모달/다운로드 유틸
+  // 怨듯넻 紐⑤떖/?ㅼ슫濡쒕뱶 ?좏떥
   async function downloadFile(url, filename) {
     try {
       if (!url) return;
@@ -62,7 +62,7 @@
       }, 100);
     } catch (e) {
       console.error('download failed', e);
-      alert('다운로드 실패: ' + (e && e.message ? e.message : e));
+      alert('?ㅼ슫濡쒕뱶 ?ㅽ뙣: ' + (e && e.message ? e.message : e));
     }
   }
 
@@ -89,7 +89,7 @@
     const box = modal.querySelector('.lib-content');
     if (!box) return;
     if (!items || !items.length) {
-      box.innerHTML = '<p class="muted">리소스가 없습니다.</p>';
+      box.innerHTML = '<p class="muted">由ъ냼?ㅺ? ?놁뒿?덈떎.</p>';
     } else {
       const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
@@ -102,7 +102,7 @@
           '</div>'
         );
       }).join('');
-      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:12px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
+      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:12px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">?쇱씠釉뚮윭由?/span><div style="flex:1;"></div><button class="btn-secondary lib-close-btn" id="lib-close">?リ린</button></div><div class="lib-grid">' + list + '</div>';
       box.querySelectorAll('.lib-item').forEach(function (item) {
         item.onclick = function () {
           const u = item.dataset.url;
@@ -200,7 +200,7 @@
       if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
       try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
 
-      // 서버 데이터 우선 로드 시도 + 스토리지 fallback
+      // ?쒕쾭 ?곗씠???곗꽑 濡쒕뱶 ?쒕룄 + ?ㅽ넗由ъ? fallback
       var serverData = null;
       const loadReferenceFallback = async function () {
         const candidates = [];
@@ -228,7 +228,7 @@
         return null;
       };
 
-      // file:// 환경에서도 API_BASE가 설정되어 있으면 서버에서 가져오도록 허용
+      // file:// ?섍꼍?먯꽌??API_BASE媛 ?ㅼ젙?섏뼱 ?덉쑝硫??쒕쾭?먯꽌 媛?몄삤?꾨줉 ?덉슜
       if (projectId && NK.api && NK.api.projectGet) {
         try {
           var res = await NK.api.projectGet(projectId);
@@ -307,9 +307,9 @@
     var header = state.header;
     pipelineMeta.innerHTML = (
       '<div class="pipeline-actions">' +
-      '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
-      '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
-      '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 변환</button>' +
+      '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>??ν븯湲?/button>' +
+      '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>?대?吏 ?쇨큵 ?앹꽦</button>' +
+      '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>?곸긽 ?쇨큵 蹂??/button>' +
       '</div>'
     );
     if (scenes && scenes.length) {
@@ -319,19 +319,19 @@
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
         var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
         var img = (updatedScene.imgLoading
-          ? '<div class="image-placeholder tall loading"><span>생성중...</span></div>'
+          ? '<div class="image-placeholder tall loading"><span>?앹꽦以?..</span></div>'
           : (updatedScene.imgError
-            ? '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>'
+            ? '<div class="image-placeholder tall error-state"><span>?대?吏 ?앹꽦 ?ㅽ뙣</span></div>'
             : (updatedScene.imageDataUrl
               ? '<div class="image-box"><img class="scene-img" data-src="' + updatedScene.imageDataUrl + '" src="' + updatedScene.imageDataUrl + '" alt="scene image" /></div>'
               : '<div class="image-placeholder tall no-plus"><span>image</span></div>')));
         var videoCard = (function () {
           if (updatedScene.videoUrl) {
-            var note = updatedScene.videoMethod === 'inline' ? '<div class="video-note">생성 성공(인라인 반환)</div>' : '';
+            var note = updatedScene.videoMethod === 'inline' ? '<div class="video-note">?앹꽦 ?깃났(?몃씪??諛섑솚)</div>' : '';
             return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + updatedScene.videoUrl + '" type="video/mp4" /></video>' + note + '</div>';
           }
-          if (updatedScene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>영상 생성중...</span></div>';
-          if (updatedScene.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
+          if (updatedScene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>?곸긽 ?앹꽦以?..</span></div>';
+          if (updatedScene.videoError) return '<div class="video-placeholder error-state"><span>?앹꽦 ?ㅽ뙣</span></div>';
           return '<div class="video-placeholder"><span>video</span></div>';
         })();
         var err = '';
@@ -342,8 +342,8 @@
           '<p class="story-lines" data-id="' + s.id + '"' + (s.editingStory ? ' contenteditable="true"' : '') + '>' + (s.lines || '') + '</p>' +
           '<div class="cell-actions br">' +
           (s.editingStory
-            ? '<button class="btn-secondary compact" data-action="save-story" data-id="' + s.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-story" data-id="' + s.id + '">취소</button>'
-            : '<button class="btn-ghost compact" data-action="edit-story" data-id="' + s.id + '">수정</button>') +
+            ? '<button class="btn-secondary compact" data-action="save-story" data-id="' + s.id + '">???/button><button class="btn-ghost compact" data-action="cancel-story" data-id="' + s.id + '">痍⑥냼</button>'
+            : '<button class="btn-ghost compact" data-action="edit-story" data-id="' + s.id + '">?섏젙</button>') +
           '</div>' +
           '</div>' +
           '<div class="scene-cell prompt">' +
@@ -355,38 +355,38 @@
           '<p class="prompt-duration" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(s.estSec) || 0, 1)) + 's.</p>' +
           '<div class="cell-actions br">' +
           (s.editingPrompt
-            ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + s.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + s.id + '">취소</button>'
-            : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + s.id + '">수정</button>') +
+            ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + s.id + '">???/button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + s.id + '">痍⑥냼</button>'
+            : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + s.id + '">?섏젙</button>') +
           '</div>' +
           '</div>' +
           '<div class="scene-cell image"><div class="scene-media-stack">' + img + videoCard + '</div>' + err + '</div>' +
           '<div class="scene-cell actions">' +
           '<div class="action-buttons grid">' +
-          '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + s.id + '"' + (updatedScene.imgLoading ? ' disabled' : '') + '>' + (updatedScene.imgLoading ? '생성중...' : '이미지 생성') + '</button>' +
-          '<button class="btn-secondary compact" data-action="delete-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>삭제</button>' +
-          '<button class="btn-secondary compact" data-action="upload-image" data-id="' + s.id + '">업로드</button>' +
-          '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">라이브러리</button>' +
-          '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
+          '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + s.id + '"' + (updatedScene.imgLoading ? ' disabled' : '') + '>' + (updatedScene.imgLoading ? '?앹꽦以?..' : '?대?吏 ?앹꽦') + '</button>' +
+          '<button class="btn-secondary compact" data-action="delete-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>??젣</button>' +
+          '<button class="btn-secondary compact" data-action="upload-image" data-id="' + s.id + '">?낅줈??/button>' +
+          '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">?쇱씠釉뚮윭由?/button>' +
+          '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>?ㅼ슫濡쒕뱶</button>' +
           '</div>' +
           '<div class="action-buttons grid video-actions">' +
-          '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">영상 생성</button>' +
-          '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>삭제</button>' +
-          '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">업로드</button>' +
-          '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">라이브러리</button>' +
-          '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
+          '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">?곸긽 ?앹꽦</button>' +
+          '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>??젣</button>' +
+          '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">?낅줈??/button>' +
+          '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">?쇱씠釉뚮윭由?/button>' +
+          '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>?ㅼ슫濡쒕뱶</button>' +
           '</div>' +
           '<div class="voice-block" style="margin-top:8px;">' +
-            '<div class="muted small" style="margin-bottom:6px;">AI 보이스</div>' +
+            '<div class="muted small" style="margin-bottom:6px;">AI 蹂댁씠??/div>' +
             '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">' +
               '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
-                '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
-                '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
+                '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>?⑥꽦 (?곕え)</option>' +
+                '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>?ъ꽦 (?곕え)</option>' +
               '</select>' +
-              '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
+              '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">?뚯꽦 ?앹꽦</button>' +
             '</div>' +
             '<div class="voice-player" data-id="' + s.id + '">' +
               '<audio controls preload="auto" style="width:100%;" ' + (updatedScene.voiceUrl ? '' : 'disabled') + ' src="' + (updatedScene.voiceUrl || '') + '"></audio>' +
-              '<p class="muted small" style="margin-top:4px;">' + (updatedScene.voiceStatus || '준비됨') + '</p>' +
+              '<p class="muted small" style="margin-top:4px;">' + (updatedScene.voiceStatus || '以鍮꾨맖') + '</p>' +
             '</div>' +
           '</div>' +
           '</div>' +
@@ -448,14 +448,14 @@
       } catch (_) { }
     } else {
       pipelineScenes.classList.add('empty');
-      pipelineScenes.innerHTML = '<p class="muted">씬 정보가 없습니다.</p>';
+      pipelineScenes.innerHTML = '<p class="muted">???뺣낫媛 ?놁뒿?덈떎.</p>';
     }
     var savePipelineBtn = document.getElementById('save-pipeline-btn');
     if (savePipelineBtn) {
       savePipelineBtn.onclick = async function () {
         const originalText = savePipelineBtn.textContent;
         savePipelineBtn.disabled = true;
-        savePipelineBtn.textContent = '저장중...';
+        savePipelineBtn.textContent = '??μ쨷...';
         setPipelineLoading(true);
         var st = ctx.getState();
         if (!st) return;
@@ -468,11 +468,11 @@
               aspectRatio: st.aspectRatio || '',
               title: getProjectTitle()
             });
-            // 서버 저장 성공 시 로컬 임시 파이프라인 캐시는 정리
+            // ?쒕쾭 ????깃났 ??濡쒖뺄 ?꾩떆 ?뚯씠?꾨씪??罹먯떆???뺣━
             try { localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
-            alert('저장되었습니다.');
+            alert('??λ릺?덉뒿?덈떎.');
           } catch (err) {
-            alert('저장 실패: ' + (err && err.message ? err.message : err));
+            alert('????ㅽ뙣: ' + (err && err.message ? err.message : err));
           } finally {
             savePipelineBtn.disabled = false;
             savePipelineBtn.textContent = originalText;
@@ -480,11 +480,11 @@
           }
           return;
         }
-        // projectId 없을 때도 버튼 상태 복원
+        // projectId ?놁쓣 ?뚮룄 踰꾪듉 ?곹깭 蹂듭썝
         savePipelineBtn.disabled = false;
         savePipelineBtn.textContent = originalText;
         setPipelineLoading(false);
-        alert('저장되었습니다.');
+        alert('??λ릺?덉뒿?덈떎.');
       };
     }
     var bulkGen = document.getElementById('bulk-generate');
@@ -508,7 +508,7 @@
       };
     }
 
-    // 액션/셀 클릭 이벤트 바인딩(중복 바인딩 방지)
+    // ?≪뀡/? ?대┃ ?대깽??諛붿씤??以묐났 諛붿씤??諛⑹?)
     if (!pipelineScenes.dataset.bound) {
       pipelineScenes.dataset.bound = '1';
       pipelineScenes.addEventListener('click', async function (e) {
@@ -579,7 +579,7 @@
           }
 
           if (action === 'regen-image') {
-            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
             btn.disabled = true;
             await ui.generateImageForIdx(idx);
             return;
@@ -590,7 +590,7 @@
             return;
           }
           if (action === 'upload-image') {
-            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
             var inputImg = document.createElement('input');
             inputImg.type = 'file';
             inputImg.accept = 'image/*';
@@ -604,10 +604,10 @@
                   st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
                   refreshAndPersist(true);
                 } else {
-                  alert('업로드 응답에 이미지 URL이 없습니다.');
+                  alert('?낅줈???묐떟???대?吏 URL???놁뒿?덈떎.');
                 }
               } catch (err) {
-                alert('이미지 업로드 실패: ' + (err && err.message ? err.message : err));
+                alert('?대?吏 ?낅줈???ㅽ뙣: ' + (err && err.message ? err.message : err));
               }
             };
             inputImg.click();
@@ -615,7 +615,7 @@
           }
           if (action === 'library-image') {
             if (!projectId) {
-              alert('프로젝트가 선택되지 않았습니다. 라이브러리를 불러올 수 없습니다.');
+              alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲?? ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
               openLibraryModal([], 'image', null);
               return;
             }
@@ -631,7 +631,7 @@
                 refreshAndPersist(true);
               });
             } catch (err) {
-              alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
+              alert('?쇱씠釉뚮윭由?遺덈윭?ㅺ린 ?ㅽ뙣: ' + (err && err.message ? err.message : err));
               openLibraryModal([], 'image', null);
             }
             return;
@@ -643,7 +643,7 @@
           }
 
           if (action === 'video') {
-            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
             await startVideoForIdx(idx);
             return;
           }
@@ -653,7 +653,7 @@
             return;
           }
           if (action === 'upload-video') {
-            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
             var inputVid = document.createElement('input');
             inputVid.type = 'file';
             inputVid.accept = 'video/mp4,video/*';
@@ -666,7 +666,7 @@
                 st.scenes[idx] = Object.assign({}, scene, { videoUrl: vurl, videoError: '', videoStatus: vurl ? 'done' : '' });
                 refreshAndPersist(true);
               } catch (err) {
-                alert('비디오 업로드 실패: ' + (err && err.message ? err.message : err));
+                alert('鍮꾨뵒???낅줈???ㅽ뙣: ' + (err && err.message ? err.message : err));
               }
             };
             inputVid.click();
@@ -674,7 +674,7 @@
           }
           if (action === 'library-video') {
             if (!projectId) {
-              alert('프로젝트가 선택되지 않았습니다. 라이브러리를 불러올 수 없습니다.');
+              alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲?? ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
               openLibraryModal([], 'video', null);
               return;
             }
@@ -690,7 +690,7 @@
                 refreshAndPersist(true);
               });
             } catch (err) {
-              alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
+              alert('?쇱씠釉뚮윭由?遺덈윭?ㅺ린 ?ㅽ뙣: ' + (err && err.message ? err.message : err));
               openLibraryModal([], 'video', null);
             }
             return;
@@ -703,7 +703,7 @@
           if (action === 'voice-generate') {
             const sel = pipelineScenes.querySelector('.voice-select[data-id="' + id + '"]');
             const vid = (sel && sel.value) ? sel.value : 'demo-male';
-            st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성중...', voiceVoiceId: vid });
+            st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '?앹꽦以?..', voiceVoiceId: vid });
             refreshAndPersist(false);
             setTimeout(() => {
               const cur = ctx.getState();
@@ -711,7 +711,7 @@
               const ii = cur.scenes.findIndex(s => String(s.id) === String(id));
               if (ii < 0) return;
               cur.scenes[ii] = Object.assign({}, cur.scenes[ii], {
-                voiceStatus: '완료',
+                voiceStatus: '?꾨즺',
                 voiceUrl: SAMPLE_VOICE_URL,
                 voiceVoiceId: vid
               });
@@ -723,7 +723,7 @@
           }
         }
 
-        // 액션 외 셀 클릭 시 활성 테두리 표시
+        // ?≪뀡 ??? ?대┃ ???쒖꽦 ?뚮몢由??쒖떆
         var cell = e.target.closest('.scene-cell');
         if (!cell) return;
         var table = pipelineScenes.querySelector('.scene-table');
@@ -732,7 +732,7 @@
         cell.classList.add('active-cell');
       });
 
-      // 이미지/비디오 클릭 시 팝업
+      // ?대?吏/鍮꾨뵒???대┃ ???앹뾽
       pipelineScenes.addEventListener('click', function (e) {
         const img = e.target.closest('img.scene-img');
         if (img && img.src) {
@@ -747,8 +747,7 @@
       });
     }
 
-    // 모달 닫기 핸들러
-    ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
+    // 紐⑤떖 ?リ린 ?몃뱾??    ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
       const m = document.getElementById(id);
       if (m && !m.dataset.bound) {
         m.dataset.bound = '1';
@@ -758,23 +757,23 @@
       }
     });
 
-    // 비디오 생성 공통 함수
+    // 鍮꾨뵒???앹꽦 怨듯넻 ?⑥닔
   async function startVideoForIdx(i) {
     var st = ctx.getState();
     if (!st) return;
     var scene = st.scenes[i];
     var projectId = st.draftId || getProjectId();
-    if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+    if (!projectId) { alert('?꾨줈?앺듃媛 ?좏깮?섏? ?딆븯?듬땲??'); return; }
     var header = st.header || '';
     var promptBase = ['Common', header, 'Visual', (scene.shot || ''), 'Duration', ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')].join('\n');
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
     if (!finalPrompt || !finalPrompt.trim()) {
-      alert('프롬프트가 비어 있어 영상을 생성할 수 없습니다. 프리/프로덕션에서 프롬프트를 입력해주세요.');
+      alert('?꾨＼?꾪듃媛 鍮꾩뼱 ?덉뼱 ?곸긽???앹꽦?????놁뒿?덈떎. ?꾨━/?꾨줈?뺤뀡?먯꽌 ?꾨＼?꾪듃瑜??낅젰?댁＜?몄슂.');
       return;
     }
     var imageUrl = scene.imageDataUrl || '';
     if (!imageUrl) {
-      alert('영상 생성을 위해서는 먼저 이미지가 필요합니다. 이미지 생성 또는 업로드 후 다시 시도하세요.');
+      alert('?곸긽 ?앹꽦???꾪빐?쒕뒗 癒쇱? ?대?吏媛 ?꾩슂?⑸땲?? ?대?吏 ?앹꽦 ?먮뒗 ?낅줈?????ㅼ떆 ?쒕룄?섏꽭??');
       return;
     }
     st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
@@ -783,16 +782,17 @@
     try {
       var payload = {
         projectId: projectId,
+        projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
         sceneId: scene.id,
-        // 서버 요구사항: promptText, imageDataUrl 필수
+        // ?쒕쾭 ?붽뎄?ы빆: promptText, imageDataUrl ?꾩닔
         promptText: finalPrompt,
         script: scene.lines,
         aspectRatio: st.aspectRatio || '16:9',
         imageDataUrl: imageUrl
       };
         var resp = await NK.api.videoStart(payload);
-        var playback = resp.playbackUrl || resp.url || '';
-        var jobId = resp.jobId || resp.id || '';
+        var playback = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
+        var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], {
           videoUrl: playback,
@@ -812,13 +812,13 @@
             });
             ctx.setState(st);
             ui.render();
-            alert('영상 생성 응답에 jobId나 playbackUrl이 없습니다. 서버 응답을 확인해주세요.');
+            alert('?곸긽 ?앹꽦 ?묐떟??jobId??playbackUrl???놁뒿?덈떎. ?쒕쾭 ?묐떟???뺤씤?댁＜?몄슂.');
           }
         }
       } catch (err) {
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
-        alert('영상 생성 실패: ' + (err && err.message ? err.message : err));
+        alert('?곸긽 ?앹꽦 ?ㅽ뙣: ' + (err && err.message ? err.message : err));
         ctx.setState(st);
         ui.render();
       }
@@ -830,8 +830,8 @@
     var maxAttempts = 18; // 18*5s = 90s
     var delay = 5000;
     try {
-      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId });
-      var playback = res.playbackUrl || res.url || '';
+      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId, sceneId: st.scenes[idx].id });
+      var playback = res.playbackUrl || res.videoUrl || res.outputUrl || res.url || '';
       var status = res.status || '';
       var st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
@@ -946,7 +946,7 @@
     if (!st) return;
     var pid = st.draftId || getProjectId();
     if (!pid) {
-      alert('프로젝트 ID를 찾을 수 없어 이미지 생성이 중단되었습니다. 대시보드에서 프로젝트를 다시 선택하세요.');
+      alert('?꾨줈?앺듃 ID瑜?李얠쓣 ???놁뼱 ?대?吏 ?앹꽦??以묐떒?섏뿀?듬땲?? ??쒕낫?쒖뿉???꾨줈?앺듃瑜??ㅼ떆 ?좏깮?섏꽭??');
       return;
     }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
@@ -958,24 +958,24 @@
     try {
       var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: pid });
       var dataUrl = (json.dataUrl || json.bytesBase64Encoded || '');
-      if (!dataUrl) throw new Error('이미지 데이터를 받지 못했습니다.');
+      if (!dataUrl) throw new Error('?대?吏 ?곗씠?곕? 諛쏆? 紐삵뻽?듬땲??');
       st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: dataUrl, imgLoading: false, imgError: '', promptText: scene.promptText });
       ctx.setState(st);
-      console.log('Scene ' + scene.id + ' 이미지 생성 성공');
+      console.log('Scene ' + scene.id + ' ?대?吏 ?앹꽦 ?깃났');
     } catch (err) {
       var msg = (err && err.message) || '';
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var rc = Number(retryCount) || 0;
       if (is500 && rc < 2) {
-        console.warn('이미지 생성 실패 (500), 재시도 ' + (rc + 1) + '/2...');
-        st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: ('재시도 중... (' + (rc + 1) + '/2)') });
+        console.warn('?대?吏 ?앹꽦 ?ㅽ뙣 (500), ?ъ떆??' + (rc + 1) + '/2...');
+        st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: ('?ъ떆??以?.. (' + (rc + 1) + '/2)') });
         ctx.setState(st);
         ui.render();
         await new Promise(function (resolve) { return setTimeout(resolve, 2000 * Math.pow(2, rc)); });
         return ui.generateImageForIdx(idx, rc + 1);
       }
-      var errorMessage = (err && err.message) || '이미지 생성 실패';
-      console.error('Scene ' + scene.id + ' 이미지 생성 실패:', errorMessage);
+      var errorMessage = (err && err.message) || '?대?吏 ?앹꽦 ?ㅽ뙣';
+      console.error('Scene ' + scene.id + ' ?대?吏 ?앹꽦 ?ㅽ뙣:', errorMessage);
       st.scenes[idx] = Object.assign({}, scene, { imgLoading: false, imgError: errorMessage });
       ctx.setState(st);
     }
@@ -983,3 +983,4 @@
     if (ctx.persistPipeline) ctx.persistPipeline();
   };
 })(); 
+

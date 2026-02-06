@@ -80,7 +80,13 @@
   };
 
   api.videoStatus = async function (params) {
-    var q = new URLSearchParams(params || {});
+    var p = params || {};
+    // 백엔드가 기대하는 쿼리 키는 job_id 이므로 매핑
+    var q = new URLSearchParams();
+    if (p.projectId) q.set('projectId', String(p.projectId));
+    if (p.sceneId) q.set('sceneId', String(p.sceneId));
+    var job = p.job_id || p.jobId || p.job || '';
+    if (job) q.set('job_id', String(job));
     var res = await fetch(withBase('/api/video/status?' + q.toString()));
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'status_error');
