@@ -22,6 +22,7 @@
         const ids = Array.isArray(list?.ids) ? list.ids : [];
         if (!ids.length) return;
         let changed = false;
+        const idSet = new Set(ids.map((v) => String(v)));
         for (const id of ids) {
           const idx = drafts.findIndex(d => String(d.id) === String(id));
           if (NK.api.projectGet) {
@@ -46,6 +47,11 @@
               }
             }
           }
+        }
+        const filtered = drafts.filter(d => idSet.has(String(d.id)));
+        if (filtered.length !== drafts.length) {
+          drafts = filtered;
+          changed = true;
         }
         if (changed) {
           NK.store.saveDrafts(drafts);
@@ -192,7 +198,8 @@
           // 상태 방송 (부모에게 전달)
           NK.state.broadcast('update-project', { project: draft });
 
-          NK.navigation.loadStage('scenario.html');
+          const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
+          NK.navigation.loadStage(url);
         }
       } else if (action === 'create-project') {
         if (NK.ui && NK.ui.openProjectOverlay) {

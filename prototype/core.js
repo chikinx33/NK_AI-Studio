@@ -15,6 +15,7 @@
       return base.replace(/\.html?$/, '') || 'index';
     };
     var current = normalize(window.location.pathname);
+    if (current === 'ai-video') current = 'dashboard';
     try {
       document.documentElement.setAttribute('data-page', current || 'index');
       document.body && document.body.setAttribute('data-page', current || 'index');
@@ -22,7 +23,7 @@
     var isEmbedded = (function () { try { return window.self !== window.top; } catch (_) { return true; } })();
     var hasSidebar = !!document.querySelector('.sidebar');
     if (!isEmbedded && hasSidebar && (current === 'scenario' || current === 'scenes' || current === 'media' || current === 'publish')) {
-      try { window.location.href = 'index.html'; } catch (_) {}
+      try { window.location.href = 'ai-video.html'; } catch (_) {}
       return;
     }
     document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });

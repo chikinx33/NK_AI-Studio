@@ -2,8 +2,21 @@
   var NK = window.NK || (window.NK = {});
   var ui = NK.uiPipeline || (NK.uiPipeline = {});
   var ctx = null;
+  var lastProjectId = null;
+  var subscribed = false;
   ui.init = function (c) { ctx = c || {}; };
   ui.render = async function () {
+    if (!subscribed && NK.state && NK.state.subscribe) {
+      subscribed = true;
+      NK.state.subscribe(function (rt) {
+        var pid = rt && rt.currentProject && rt.currentProject.id;
+        if (pid && pid !== lastProjectId) {
+          lastProjectId = pid;
+          try { ctx && ctx.setState && ctx.setState(null); } catch (_) { }
+          ui.render();
+        }
+      });
+    }
     var pipelineMeta = document.getElementById('pipeline-meta');
     var pipelineScenes = document.getElementById('pipeline-scenes');
     if (!pipelineMeta || !pipelineScenes || !ctx) return;
@@ -18,16 +31,38 @@
     var saveAspect = ctx.saveAspect;
     var projectId = (function () {
       try {
+        var qp = new URLSearchParams(window.location.search);
+        var pidUrl = qp.get('projectId') || qp.get('pid');
+        if (pidUrl) return pidUrl;
+      } catch (_) { }
+      try {
         var sel = localStorage.getItem('nk_selected_draft');
         if (sel) { var d = JSON.parse(sel); if (d && d.id) return d.id; }
+      } catch (_) { }
+      try {
+        var cur = localStorage.getItem('nk_current_project');
+        if (cur) { var c = JSON.parse(cur); if (c && c.id) return c.id; }
       } catch (_) { }
       try {
         if (NK && NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
           return NK.state.runtime.currentProject.id;
         }
       } catch (_) { }
+      try {
+        var drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
+        if (Array.isArray(drafts) && drafts.length === 1) {
+          var only = drafts[0];
+          try {
+            localStorage.setItem('nk_selected_draft', JSON.stringify(only));
+            localStorage.setItem('nk_current_project', JSON.stringify({ id: only.id, title: only.title }));
+          } catch (_) { }
+          if (NK.state && NK.state.set) NK.state.set({ currentProject: only });
+          return only.id;
+        }
+      } catch (_) { }
       return null;
     })();
+    if (projectId) lastProjectId = projectId;
     if (state && projectId && String(state.draftId || '') !== String(projectId)) {
       state = null;
       ctx.setState(null);
@@ -37,13 +72,43 @@
       if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
       try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
 
-      // 서버 데이터 우선 로드 시도
+      // 서버 데이터 우선 로드 시도 + 스토리지 fallback
       var serverData = null;
-      if (projectId && NK.api && NK.api.projectGet && !isFile) {
+      const loadReferenceFallback = async function () {
+        const candidates = [];
+        try { candidates.push('/reference/' + encodeURIComponent(projectId) + '/data.json'); } catch (_) { }
+        try {
+          const origin = (typeof window !== 'undefined' && window.location) ? window.location.origin : '';
+          if (origin) candidates.push(origin.replace(/\/+$/, '') + '/reference/' + encodeURIComponent(projectId) + '/data.json');
+        } catch (_) { }
+        try {
+          if (NK.config && NK.config.API_BASE) {
+            const b = (NK.config.API_BASE || '').replace(/\/+$/, '');
+            if (b) candidates.push(b + '/reference/' + encodeURIComponent(projectId) + '/data.json');
+          }
+        } catch (_) { }
+        for (var i = 0; i < candidates.length; i++) {
+          const url = candidates[i];
+          try {
+            const resp = await fetch(url);
+            if (!resp.ok) continue;
+            const txt = await resp.text();
+            const j = JSON.parse(txt);
+            if (j && (j.scenes || j.payload)) return j;
+          } catch (_) { }
+        }
+        return null;
+      };
+
+      // file:// 환경에서도 API_BASE가 설정되어 있으면 서버에서 가져오도록 허용
+      if (projectId && NK.api && NK.api.projectGet) {
         try {
           var res = await NK.api.projectGet(projectId);
-          if (res && res.data) serverData = res.data;
+          if (res) serverData = (res.data || res);
         } catch (_) { }
+        if (!serverData || (!serverData.scenes && !serverData.payload)) {
+          try { serverData = await loadReferenceFallback(); } catch (_) { }
+        }
       }
 
       if (serverData) {
@@ -271,19 +336,245 @@
         var st = ctx.getState();
         if (!st || !st.scenes.length) return;
         for (var i = 0; i < st.scenes.length; i++) {
-          if (ctx.startVideoForIdx) await ctx.startVideoForIdx(i);
+          await startVideoForIdx(i);
         }
       };
     }
-    // 셀 클릭 시 활성 테두리 표시
-    pipelineScenes.addEventListener('click', function (e) {
-      var cell = e.target.closest('.scene-cell');
-      if (!cell) return;
-      var table = pipelineScenes.querySelector('.scene-table');
-      if (!table) return;
-      table.querySelectorAll('.scene-cell.active-cell').forEach(function (c) { c.classList.remove('active-cell'); });
-      cell.classList.add('active-cell');
-    });
+
+    // 액션/셀 클릭 이벤트 바인딩(중복 바인딩 방지)
+    if (!pipelineScenes.dataset.bound) {
+      pipelineScenes.dataset.bound = '1';
+      pipelineScenes.addEventListener('click', async function (e) {
+        var btn = e.target.closest('[data-action]');
+        if (btn) {
+          e.preventDefault();
+          var action = btn.dataset.action || '';
+          var id = btn.dataset.id;
+          var st = ctx.getState();
+          if (!st || !st.scenes || !st.scenes.length || !id) return;
+          var idx = st.scenes.findIndex(function (s) { return String(s.id) === String(id); });
+          if (idx < 0) return;
+          var scene = st.scenes[idx];
+          var projectId = st.draftId || (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id);
+
+          var refreshAndPersist = function (persist) {
+            ctx.setState(st);
+            ui.render();
+            if (persist && ctx.persistPipeline) ctx.persistPipeline();
+          };
+
+          if (action === 'edit-story') {
+            st.scenes[idx] = Object.assign({}, scene, { editingStory: true });
+            refreshAndPersist(false);
+            return;
+          }
+          if (action === 'cancel-story') {
+            st.scenes[idx] = Object.assign({}, scene, { editingStory: false });
+            refreshAndPersist(false);
+            return;
+          }
+          if (action === 'save-story') {
+            var storyEl = pipelineScenes.querySelector('.story-lines[data-id="' + id + '"]');
+            var newLines = (storyEl && storyEl.textContent) ? storyEl.textContent.trim() : '';
+            st.scenes[idx] = Object.assign({}, scene, { lines: newLines, editingStory: false });
+            refreshAndPersist(true);
+            return;
+          }
+
+          if (action === 'edit-prompt') {
+            st.scenes[idx] = Object.assign({}, scene, { editingPrompt: true });
+            refreshAndPersist(false);
+            return;
+          }
+          if (action === 'cancel-prompt') {
+            st.scenes[idx] = Object.assign({}, scene, { editingPrompt: false });
+            refreshAndPersist(false);
+            return;
+          }
+          if (action === 'save-prompt') {
+            var commonEl = pipelineScenes.querySelector('.prompt-common[data-id="' + id + '"]');
+            var visualEl = pipelineScenes.querySelector('.prompt-visual[data-id="' + id + '"]');
+            var durEl = pipelineScenes.querySelector('.prompt-duration[data-id="' + id + '"]');
+            var common = (commonEl && commonEl.textContent) ? commonEl.textContent.trim() : '';
+            var visual = (visualEl && visualEl.textContent) ? visualEl.textContent.trim() : '';
+            var durTxt = (durEl && durEl.textContent) ? durEl.textContent.replace(/[^0-9.]/g, '') : '';
+            var est = Number(durTxt) || scene.estSec || 0;
+            var newPrompt = [common, visual, 'Duration', (est ? est + 's.' : '')].join('\n');
+            st.scenes[idx] = Object.assign({}, scene, {
+              promptText: newPrompt,
+              promptEdited: true,
+              editingPrompt: false,
+              shot: visual,
+              estSec: est
+            });
+            refreshAndPersist(true);
+            return;
+          }
+
+          if (action === 'regen-image') {
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            btn.disabled = true;
+            await ui.generateImageForIdx(idx);
+            return;
+          }
+          if (action === 'delete-image') {
+            st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: '', imgError: '', imgLoading: false });
+            refreshAndPersist(true);
+            return;
+          }
+          if (action === 'upload-image') {
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            var inputImg = document.createElement('input');
+            inputImg.type = 'file';
+            inputImg.accept = 'image/*';
+            inputImg.onchange = async function () {
+              var file = inputImg.files && inputImg.files[0];
+              if (!file) return;
+              try {
+                var resp = await NK.api.imageUpload(projectId, file);
+                var url = resp.signedUrl || resp.url || resp.dataUrl || '';
+                if (url) {
+                  st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
+                  refreshAndPersist(true);
+                } else {
+                  alert('업로드 응답에 이미지 URL이 없습니다.');
+                }
+              } catch (err) {
+                alert('이미지 업로드 실패: ' + (err && err.message ? err.message : err));
+              }
+            };
+            inputImg.click();
+            return;
+          }
+          if (action === 'library-image') {
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            try {
+              var libImg = await NK.api.library('image', projectId);
+              var item = (libImg.items && libImg.items[0]) || null;
+              var url = item ? (item.signedUrl || item.url || '') : '';
+              if (url) {
+                st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
+                refreshAndPersist(true);
+              } else {
+                alert('라이브러리에 이미지가 없습니다.');
+              }
+            } catch (err) {
+              alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
+            }
+            return;
+          }
+          if (action === 'download-image') {
+            if (!scene.imageDataUrl) return;
+            var aImg = document.createElement('a');
+            aImg.href = scene.imageDataUrl;
+            aImg.download = 'scene-' + id + '.png';
+            aImg.click();
+            return;
+          }
+
+          if (action === 'video') {
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            await startVideoForIdx(idx);
+            return;
+          }
+          if (action === 'delete-video') {
+            st.scenes[idx] = Object.assign({}, scene, { videoUrl: '', videoError: '', videoStatus: '' });
+            refreshAndPersist(true);
+            return;
+          }
+          if (action === 'upload-video') {
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            var inputVid = document.createElement('input');
+            inputVid.type = 'file';
+            inputVid.accept = 'video/mp4,video/*';
+            inputVid.onchange = async function () {
+              var fileV = inputVid.files && inputVid.files[0];
+              if (!fileV) return;
+              try {
+                var respV = await NK.api.videoUpload(projectId, id, fileV);
+                var vurl = respV.signedUrl || respV.url || respV.playbackUrl || '';
+                st.scenes[idx] = Object.assign({}, scene, { videoUrl: vurl, videoError: '', videoStatus: vurl ? 'done' : '' });
+                refreshAndPersist(true);
+              } catch (err) {
+                alert('비디오 업로드 실패: ' + (err && err.message ? err.message : err));
+              }
+            };
+            inputVid.click();
+            return;
+          }
+          if (action === 'library-video') {
+            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            try {
+              var libVid = await NK.api.library('video', projectId);
+              var vitem = (libVid.items && libVid.items[0]) || null;
+              var vurl = vitem ? (vitem.signedUrl || vitem.url || '') : '';
+              if (vurl) {
+                st.scenes[idx] = Object.assign({}, scene, { videoUrl: vurl, videoError: '', videoStatus: 'done' });
+                refreshAndPersist(true);
+              } else {
+                alert('라이브러리에 비디오가 없습니다.');
+              }
+            } catch (err) {
+              alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
+            }
+            return;
+          }
+          if (action === 'download-video') {
+            if (!scene.videoUrl) return;
+            var aVid = document.createElement('a');
+            aVid.href = scene.videoUrl;
+            aVid.download = 'scene-' + id + '.mp4';
+            aVid.click();
+            return;
+          }
+        }
+
+        // 액션 외 셀 클릭 시 활성 테두리 표시
+        var cell = e.target.closest('.scene-cell');
+        if (!cell) return;
+        var table = pipelineScenes.querySelector('.scene-table');
+        if (!table) return;
+        table.querySelectorAll('.scene-cell.active-cell').forEach(function (c) { c.classList.remove('active-cell'); });
+        cell.classList.add('active-cell');
+      });
+    }
+
+    // 비디오 생성 공통 함수
+    async function startVideoForIdx(i) {
+      var st = ctx.getState();
+      if (!st) return;
+      var scene = st.scenes[i];
+      var projectId = st.draftId || (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id);
+      if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+      st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
+      ctx.setState(st);
+      ui.render();
+      try {
+        var payload = {
+          projectId: projectId,
+          sceneId: scene.id,
+          prompt: scene.promptText,
+          script: scene.lines,
+          aspectRatio: st.aspectRatio || '16:9'
+        };
+        var resp = await NK.api.videoStart(payload);
+        var playback = resp.playbackUrl || resp.url || '';
+        st = ctx.getState() || st;
+        st.scenes[i] = Object.assign({}, st.scenes[i], {
+          videoUrl: playback,
+          videoStatus: playback ? 'done' : (resp.status || 'processing'),
+          videoError: resp.error || '',
+          videoJobId: resp.jobId || resp.id || ''
+        });
+      } catch (err) {
+        st = ctx.getState() || st;
+        st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
+        alert('영상 생성 실패: ' + (err && err.message ? err.message : err));
+      }
+      ctx.setState(st);
+      ui.render();
+      if (ctx.persistPipeline) ctx.persistPipeline();
+    }
   };
   ui.refreshAssets = async function () {
     if (!ctx) return;

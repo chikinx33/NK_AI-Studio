@@ -4,11 +4,23 @@
 
     nav.loadStage = function (name) {
         let targetName = name;
-        if (targetName.includes('index.html')) targetName = 'dashboard.html';
+        if (targetName.includes('ai-video.html')) targetName = 'dashboard.html';
+        if (targetName === 'dashboard.html') targetName = 'dashboard.html';
 
         const isIframe = window.self !== window.top;
         const st = nav.normalizeStageName(targetName);
-        const url = targetName + (targetName.indexOf('?') >= 0 ? '&' : '?') + 'embed=1';
+        const pid = (function () {
+            try {
+                if (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
+                    return NK.state.runtime.currentProject.id;
+                }
+                const sel = localStorage.getItem('nk_selected_draft');
+                if (sel) { const d = JSON.parse(sel); if (d && d.id) return d.id; }
+            } catch (_) { }
+            return null;
+        })();
+        let url = targetName + (targetName.indexOf('?') >= 0 ? '&' : '?') + 'embed=1';
+        if (pid) url += '&projectId=' + encodeURIComponent(pid);
 
         // 옵션 페이지는 별도 창으로 전체 이동 (iframe 사용 안 함)
         if (!isIframe && st === 'options') {
@@ -48,8 +60,10 @@
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
             const name = base.replace(/\.html?$/, '');
-            if (['scenario', 'scenes', 'media', 'publish', 'dashboard', 'options'].includes(name)) return name;
-            if (name === 'index' || name === '') return 'dashboard';
+            if (['scenario', 'scenes', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
+                return name === 'ai-video' ? 'dashboard' : name;
+            }
+            if (name === 'index' || name === '') return 'options';
             return '';
         } catch (_) { return ''; }
     };

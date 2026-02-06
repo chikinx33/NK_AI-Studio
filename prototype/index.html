@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NK_Studio · Automation Dashboard</title>
+  <title>NK_Studio · 로그인</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
@@ -29,56 +29,37 @@
 
 <body>
   <div class="grain"></div>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark"></div>
-        <div class="brand-text">
-          <span class="title" data-i18n="brand_title">NK_Studio</span>
-          <span class="subtitle" data-i18n="brand_subtitle">자동화 영상 파이프라인</span>
-        </div>
-      </div>
-      <nav class="nav">
-        <a class="nav-item" href="index.html">
-          <span data-i18n="nav_dashboard">대시보드</span>
-        </a>
-      </nav>
-      <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>
-      <div class="sidebar-footer">
-        <div class="sidebar-actions">
-          <button class="btn-ghost icon-btn" aria-label="알림">🔔</button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme()"></button>
-          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-          <a class="btn-ghost icon-btn" aria-label="옵션" href="options.html" data-action="open-options">⚙️</a>
-        </div>
-        <div class="sidebar-version">ver</div>
-      </div>
-    </aside>
+  <div class="app no-sidebar">
 
-    <div id="project-overlay" class="auth-overlay hidden">
-      <div class="auth-card">
-        <p class="auth-title">새 프로젝트 생성</p>
-        <div class="form-row">
-          <label>이름</label>
-          <input id="project-name-input" placeholder="프로젝트 이름" />
+    <main class="main">
+      <div class="main-body option-body">
+        <div class="login-icons" id="login-icons" aria-hidden="true">
+          <a href="ai-video.html" class="login-icon-link">
+            <img src="images/icon-ai-video.png" alt="영상 편집 메인으로 이동" />
+          </a>
+          <img src="images/icon-ai-image.png" alt="" />
+          <img src="images/icon-ai-sound.png" alt="" />
+          <img src="images/icon-ai-doc.png" alt="" />
         </div>
-        <div class="option-actions">
-          <button id="project-cancel" class="btn-secondary">취소</button>
-          <button id="project-create" class="btn-primary">생성</button>
+        <div class="card option-card">
+          <h3 class="option-title">NK AI STUDIO</h3>
+          <div class="logo-box">
+            <img src="images/logo(500500).png" alt="logo" class="logo-img" />
+          </div>
+          <div class="form-row">
+            <label for="opt-id">ID</label>
+            <input type="text" id="opt-id" placeholder="아이디" />
+          </div>
+          <div class="form-row">
+            <label for="opt-pw">PASS</label>
+            <input type="password" id="opt-pw" placeholder="비밀번호" />
+          </div>
+          <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
+          <div class="option-actions">
+            <button class="btn-primary" id="opt-auth-btn">로그인</button>
+          </div>
+          <div class="sidebar-version">ver</div>
         </div>
-      </div>
-    </div>
-
-    <div id="auth-overlay" class="auth-overlay hidden">
-      <div class="auth-card">
-        <p class="auth-title">로그인 하세요.</p>
-        <a class="btn-primary no-underline" href="options.html">로그인 하기</a>
-      </div>
-    </div>
-
-    <main class="main blur-target">
-      <div class="main-body">
-        <section class="content"></section>
       </div>
     </main>
   </div>

@@ -138,7 +138,8 @@ body[data-embed="1"] {
   overflow: hidden;
 }
 
-[data-page="index"] .main-body {
+[data-page="index"] .main-body,
+[data-page="ai-video"] .main-body {
   height: auto;
   max-height: none;
   overflow: visible;

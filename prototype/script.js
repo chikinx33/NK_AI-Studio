@@ -14,8 +14,9 @@
       const list = await NK.api.projectList();
       const ids = Array.isArray(list?.ids) ? list.ids : [];
       if (!ids.length) return;
-      const drafts = NK.store.getDrafts();
+      let drafts = NK.store.getDrafts();
       let changed = false;
+      const idSet = new Set(ids.map(id => String(id)));
       for (const id of ids) {
         const has = drafts.find(d => String(d.id) === String(id));
         if (!has) {
@@ -35,6 +36,11 @@
           } catch (_) { /* ignore */ }
         }
       }
+      const filtered = drafts.filter(d => idSet.has(String(d.id)));
+      if (filtered.length !== drafts.length) {
+        drafts = filtered;
+        changed = true;
+      }
       if (changed) {
         NK.store.saveDrafts(drafts);
         if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) NK.ui.dashboard.renderDrafts();
@@ -47,6 +53,11 @@
   const refreshSidebarCard = () => {
     const container = document.getElementById('sidebar-project-card');
     if (!container) return;
+    // 대시보드 스테이지에서는 카드 표시를 건너뜀
+    try {
+      const st = NK.state?.runtime?.currentStage;
+      if (st === 'dashboard') return;
+    } catch (_) { }
     const hasContent = !!(container.innerHTML && container.innerHTML.trim().length);
     let draft = NK.state?.runtime?.currentProject || null;
     if (!draft) {
@@ -122,13 +133,10 @@
     }
 
     // 기본 대시보드 로드 (부모 창인 경우에만)
-    const isOptionsPage = stage === 'options' || currentPath.toLowerCase().includes('options.html');
+    const isOptionsPage = stage === 'options';
     const isMainPage = !isIframe && !isOptionsPage && (
       stage === 'dashboard' ||
-      currentPath.toLowerCase().includes('index.html') ||
-      currentPath.endsWith('/') ||
-      currentPath.endsWith('\\') ||
-      stage === ''
+      currentPath.toLowerCase().includes('ai-video.html')
     );
 
     if (isMainPage) {
@@ -194,14 +202,14 @@
   };
 
   /**
-   * 부모 창(index.html)에서만 작동하는 이벤트 및 네비게이션 설정
+   * 부모 창(ai-video.html)에서만 작동하는 이벤트 및 네비게이션 설정
    */
   const setupParentLogic = () => {
     // 사이드바 하이라이트 동기화
     NK.state.subscribe((runtime) => {
       const stage = runtime.currentStage;
 
-      // 1. 대시보드로 돌아가면 프로젝트 카드 숨김, 그 외 편집 단계에서는 노출
+      // 1. 대시보드에서는 카드 숨김, 그 외에는 표시
       if (stage === 'dashboard') {
         if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
           NK.ui.dashboard.renderSidebarProjectCard(null);
@@ -230,28 +238,45 @@
       if (!link) return;
 
       const href = link.getAttribute('href');
+      const currentProject = NK.state?.runtime?.currentProject;
+      const persistCurrentProject = () => {
+        const cp = NK.state?.runtime?.currentProject;
+        if (!cp) return;
+        try {
+          localStorage.setItem(KEY.SELECTED_DRAFT, JSON.stringify(cp));
+          localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: cp.id, title: cp.title }));
+          localStorage.setItem('nk_current_project', JSON.stringify({ id: cp.id, title: cp.title }));
+        } catch (_) { }
+      };
 
-      // 대시보드(index.html) 클릭 시 프로젝트 데이터 비우고 "새로고침" 유도
-      if (href && (href.includes('index.html') || href.includes('dashboard.html'))) {
-        localStorage.removeItem(KEY.SELECTED_DRAFT);
-        localStorage.removeItem('nk_current_project');
-        // e.preventDefault() 를 호출하지 않아 index.html로 페이지가 새로고침되며 이동함
+      // 대시보드/메인 클릭: 전체 페이지 전환을 막고 iframe으로만 로드
+      if (href && (href.includes('ai-video.html') || href.includes('dashboard.html'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        NK.navigation.loadStage('dashboard.html');
         return;
       }
 
       if (href && href.includes('.html')) {
         e.preventDefault();
+        e.stopPropagation();
         NK.navigation.loadStage(href);
       }
 
       // 사이드바 프로젝트 카드 버튼 처리
       const action = link.dataset.action;
       if (action === 'sidebar-edit-scenario') {
-        NK.navigation.loadStage('scenario.html');
+        persistCurrentProject();
+        const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';
+        NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-scenes') {
-        NK.navigation.loadStage('scenes.html');
+        persistCurrentProject();
+        const url = currentProject?.id ? `scenes.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenes.html';
+        NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-media') {
-        NK.navigation.loadStage('media.html');
+        persistCurrentProject();
+        const url = currentProject?.id ? `media.html?projectId=${encodeURIComponent(currentProject.id)}` : 'media.html';
+        NK.navigation.loadStage(url);
       }
     });
 
@@ -356,7 +381,8 @@
         if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) {
           NK.ui.dashboard.renderDrafts();
         }
-        NK.navigation.loadStage('scenario.html');
+        const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
+        NK.navigation.loadStage(url);
         // 즉시 하이라이트 반영
         updateSidebarHighlight('scenario');
       } catch (err) {
