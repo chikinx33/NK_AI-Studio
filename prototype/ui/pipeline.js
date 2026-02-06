@@ -767,7 +767,8 @@
         // ?쒕쾭 ?붽뎄?ы빆: promptText, imageDataUrl ?꾩닔
         promptText: finalPrompt,
         script: scene.lines,
-        aspectRatio: st.aspectRatio || '16:9',
+        aspectRatio: st.aspectRatio || "16:9",
+        durationSeconds: Math.max(Number(scene.estSec) || 0, 1),
         imageDataUrl: imageUrl
       };
         var resp = await NK.api.videoStart(payload);
@@ -963,6 +964,7 @@
     if (ctx.persistPipeline) ctx.persistPipeline();
   };
 })(); 
+
 
 
 
