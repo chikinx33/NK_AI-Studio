@@ -4,6 +4,136 @@
   var ctx = null;
   var lastProjectId = null;
   var subscribed = false;
+  var getProjectId = function () {
+    if (lastProjectId) return lastProjectId;
+    try {
+      var qp = new URLSearchParams(window.location.search);
+      var pidUrl = qp.get('projectId') || qp.get('pid');
+      if (pidUrl) return pidUrl;
+    } catch (_) { }
+    try {
+      var sel = localStorage.getItem('nk_selected_draft');
+      if (sel) { var d = JSON.parse(sel); if (d && d.id) return d.id; }
+    } catch (_) { }
+    try {
+      var cur = localStorage.getItem('nk_current_project');
+      if (cur) { var c = JSON.parse(cur); if (c && c.id) return c.id; }
+    } catch (_) { }
+    try {
+      if (NK && NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
+        return NK.state.runtime.currentProject.id;
+      }
+    } catch (_) { }
+    try {
+      var drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
+      if (Array.isArray(drafts) && drafts.length === 1) return drafts[0].id;
+    } catch (_) { }
+    return null;
+  };
+
+  // 공통 모달/다운로드 유틸
+  async function downloadFile(url, filename) {
+    try {
+      if (!url) return;
+      let blob;
+      if (url.startsWith('data:')) {
+        const arr = url.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8 = new Uint8Array(n);
+        while (n--) u8[n] = bstr.charCodeAt(n);
+        blob = new Blob([u8], { type: mime });
+      } else {
+        const res = await fetch(url);
+        blob = await res.blob();
+      }
+      const a = document.createElement('a');
+      const objectUrl = URL.createObjectURL(blob);
+      a.href = objectUrl;
+      a.download = filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(objectUrl);
+        document.body.removeChild(a);
+      }, 100);
+    } catch (e) {
+      console.error('download failed', e);
+      alert('다운로드 실패: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  function openImageModal(src) {
+    const modal = document.getElementById('img-modal');
+    if (!modal || !src) return;
+    const img = modal.querySelector('img');
+    img.src = src;
+    modal.classList.remove('hidden');
+  }
+
+  function openVideoModal(src) {
+    const modal = document.getElementById('video-modal');
+    if (!modal || !src) return;
+    const video = modal.querySelector('video');
+    video.src = src;
+    video.load();
+    modal.classList.remove('hidden');
+  }
+
+  function openLibraryModal(items, kind) {
+    const modal = document.getElementById('lib-modal');
+    if (!modal) return;
+    const box = modal.querySelector('.lib-content');
+    if (!box) return;
+    if (!items || !items.length) {
+      box.innerHTML = '<p class="muted">리소스가 없습니다.</p>';
+    } else {
+      box.innerHTML = items.map(function (it, i) {
+        const url = it.signedUrl || it.url || '';
+        const name = it.name || ('item-' + (i + 1));
+        if (kind === 'image') {
+          return '<div class="lib-item"><img src="' + url + '" alt="' + name + '" style="max-width:120px;max-height:120px;object-fit:cover;"/><div>' + name + '</div></div>';
+        }
+        return '<div class="lib-item"><video src="' + url + '" controls preload="metadata" style="max-width:160px;"></video><div>' + name + '</div></div>';
+      }).join('');
+    }
+    modal.classList.remove('hidden');
+  }
+
+  function closeModals() {
+    ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
+      const m = document.getElementById(id);
+      if (m) m.classList.add('hidden');
+      if (id === 'video-modal') {
+        const v = m && m.querySelector('video');
+        if (v) { v.pause(); v.src = ''; }
+      }
+    });
+  }
+
+  var getProjectTitle = function () {
+    try {
+      if (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.title) {
+        return NK.state.runtime.currentProject.title;
+      }
+    } catch (_) { }
+    try {
+      var cur = localStorage.getItem('nk_current_project');
+      if (cur) { var c = JSON.parse(cur); if (c && c.title) return c.title; }
+    } catch (_) { }
+    try {
+      var sel = localStorage.getItem('nk_selected_draft');
+      if (sel) { var d = JSON.parse(sel); if (d && d.title) return d.title; }
+    } catch (_) { }
+    try {
+      var drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
+      var pid = getProjectId();
+      var found = drafts.find(function (v) { return String(v.id) === String(pid); });
+      if (found && found.title) return found.title;
+    } catch (_) { }
+    return '';
+  };
   ui.init = function (c) { ctx = c || {}; };
   ui.render = async function () {
     if (!subscribed && NK.state && NK.state.subscribe) {
@@ -29,39 +159,7 @@
     var loadPipeline = ctx.loadPipeline;
     var loadHeader = ctx.loadHeader;
     var saveAspect = ctx.saveAspect;
-    var projectId = (function () {
-      try {
-        var qp = new URLSearchParams(window.location.search);
-        var pidUrl = qp.get('projectId') || qp.get('pid');
-        if (pidUrl) return pidUrl;
-      } catch (_) { }
-      try {
-        var sel = localStorage.getItem('nk_selected_draft');
-        if (sel) { var d = JSON.parse(sel); if (d && d.id) return d.id; }
-      } catch (_) { }
-      try {
-        var cur = localStorage.getItem('nk_current_project');
-        if (cur) { var c = JSON.parse(cur); if (c && c.id) return c.id; }
-      } catch (_) { }
-      try {
-        if (NK && NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
-          return NK.state.runtime.currentProject.id;
-        }
-      } catch (_) { }
-      try {
-        var drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
-        if (Array.isArray(drafts) && drafts.length === 1) {
-          var only = drafts[0];
-          try {
-            localStorage.setItem('nk_selected_draft', JSON.stringify(only));
-            localStorage.setItem('nk_current_project', JSON.stringify({ id: only.id, title: only.title }));
-          } catch (_) { }
-          if (NK.state && NK.state.set) NK.state.set({ currentProject: only });
-          return only.id;
-        }
-      } catch (_) { }
-      return null;
-    })();
+    var projectId = getProjectId();
     if (projectId) lastProjectId = projectId;
     if (state && projectId && String(state.draftId || '') !== String(projectId)) {
       state = null;
@@ -163,7 +261,7 @@
             editingStory: !!s.editingStory
           };
         });
-        state = { payload: stored.payload, header: headerInit2, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || null) };
+        state = { payload: stored.payload, header: headerInit2, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
         ctx.setState(state);
       } else {
         var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '' };
@@ -319,7 +417,11 @@
         if (updateDraftFromPipeline) updateDraftFromPipeline();
         if (projectId && NK.api && NK.api.projectSave) {
           try {
-            await NK.api.projectSave(projectId, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' });
+            await NK.api.projectSave(projectId, st.payload || {}, st.scenes || [], {
+              header: st.header || '',
+              aspectRatio: st.aspectRatio || '',
+              title: getProjectTitle()
+            });
             // 서버 저장 성공 시 로컬 임시 파이프라인 캐시는 정리
             try { localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
             alert('저장되었습니다.');
@@ -372,7 +474,7 @@
           var idx = st.scenes.findIndex(function (s) { return String(s.id) === String(id); });
           if (idx < 0) return;
           var scene = st.scenes[idx];
-          var projectId = st.draftId || (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id);
+          var projectId = st.draftId || getProjectId();
 
           var refreshAndPersist = function (persist) {
             ctx.setState(st);
@@ -467,13 +569,15 @@
             if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
             try {
               var libImg = await NK.api.library('image', projectId);
-              var item = (libImg.items && libImg.items[0]) || null;
+              var items = Array.isArray(libImg.items) ? libImg.items : [];
+              if (!items.length) { alert('라이브러리에 이미지가 없습니다.'); return; }
+              openLibraryModal(items, 'image');
+              // 첫 항목을 바로 선택하여 적용
+              var item = items[0];
               var url = item ? (item.signedUrl || item.url || '') : '';
               if (url) {
                 st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
                 refreshAndPersist(true);
-              } else {
-                alert('라이브러리에 이미지가 없습니다.');
               }
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
@@ -482,10 +586,7 @@
           }
           if (action === 'download-image') {
             if (!scene.imageDataUrl) return;
-            var aImg = document.createElement('a');
-            aImg.href = scene.imageDataUrl;
-            aImg.download = 'scene-' + id + '.png';
-            aImg.click();
+            await downloadFile(scene.imageDataUrl, 'scene-' + id + '.png');
             return;
           }
 
@@ -523,13 +624,14 @@
             if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
             try {
               var libVid = await NK.api.library('video', projectId);
-              var vitem = (libVid.items && libVid.items[0]) || null;
+              var vitems = Array.isArray(libVid.items) ? libVid.items : [];
+              if (!vitems.length) { alert('라이브러리에 비디오가 없습니다.'); return; }
+              openLibraryModal(vitems, 'video');
+              var vitem = vitems[0];
               var vurl = vitem ? (vitem.signedUrl || vitem.url || '') : '';
               if (vurl) {
                 st.scenes[idx] = Object.assign({}, scene, { videoUrl: vurl, videoError: '', videoStatus: 'done' });
                 refreshAndPersist(true);
-              } else {
-                alert('라이브러리에 비디오가 없습니다.');
               }
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
@@ -538,10 +640,7 @@
           }
           if (action === 'download-video') {
             if (!scene.videoUrl) return;
-            var aVid = document.createElement('a');
-            aVid.href = scene.videoUrl;
-            aVid.download = 'scene-' + id + '.mp4';
-            aVid.click();
+            await downloadFile(scene.videoUrl, 'scene-' + id + '.mp4');
             return;
           }
         }
@@ -554,15 +653,40 @@
         table.querySelectorAll('.scene-cell.active-cell').forEach(function (c) { c.classList.remove('active-cell'); });
         cell.classList.add('active-cell');
       });
+
+      // 이미지/비디오 클릭 시 팝업
+      pipelineScenes.addEventListener('click', function (e) {
+        const img = e.target.closest('img.scene-img');
+        if (img && img.src) {
+          openImageModal(img.src);
+          return;
+        }
+        const vid = e.target.closest('video.scene-video');
+        if (vid && (vid.currentSrc || vid.src)) {
+          openVideoModal(vid.currentSrc || vid.src);
+          return;
+        }
+      });
     }
 
+    // 모달 닫기 핸들러
+    ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
+      const m = document.getElementById(id);
+      if (m && !m.dataset.bound) {
+        m.dataset.bound = '1';
+        m.addEventListener('click', (e) => {
+          if (e.target === m) closeModals();
+        });
+      }
+    });
+
     // 비디오 생성 공통 함수
-    async function startVideoForIdx(i) {
-      var st = ctx.getState();
-      if (!st) return;
-      var scene = st.scenes[i];
-      var projectId = st.draftId || (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id);
-      if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+  async function startVideoForIdx(i) {
+    var st = ctx.getState();
+    if (!st) return;
+    var scene = st.scenes[i];
+    var projectId = st.draftId || getProjectId();
+    if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
       st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
       ctx.setState(st);
       ui.render();
@@ -670,6 +794,11 @@
     if (!ctx) return;
     var st = ctx.getState();
     if (!st) return;
+    var pid = st.draftId || getProjectId();
+    if (!pid) {
+      alert('프로젝트 ID를 찾을 수 없어 이미지 생성이 중단되었습니다. 대시보드에서 프로젝트를 다시 선택하세요.');
+      return;
+    }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var scene = st.scenes[idx];
     var finalPrompt = (scene.promptText + '\n\nNarration (Korean): ' + scene.lines);
@@ -677,7 +806,7 @@
     ctx.setState(st);
     ui.render();
     try {
-      var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: (st.draftId || '') });
+      var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: pid });
       var dataUrl = (json.dataUrl || json.bytesBase64Encoded || '');
       if (!dataUrl) throw new Error('이미지 데이터를 받지 못했습니다.');
       st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: dataUrl, imgLoading: false, imgError: '', promptText: scene.promptText });

@@ -25,7 +25,7 @@
             const data = res?.data || {};
             const draft = {
               id,
-              title: data.title || data.payload?.topic || '프로젝트',
+              title: data.title || data.payload?.topic || (drafts.find(d => String(d.id) === String(id))?.title) || '프로젝트',
               payload: data.payload || {},
               scenes: data.scenes || [],
               header: data.header || '',

@@ -29,9 +29,10 @@
             try {
               const res = await NK.api.projectGet(id);
               const data = res?.data || {};
+              const existingTitle = idx >= 0 ? drafts[idx].title : '';
               const draft = {
                 id,
-                title: data.title || '프로젝트',
+                title: data.title || data.payload?.topic || existingTitle || '프로젝트',
                 payload: data.payload || {},
                 scenes: data.scenes || [],
                 header: data.header || '',
@@ -42,7 +43,7 @@
             } catch (_) {
               // data.json이 없거나 404라도 최소한 ID는 노출되도록 스텁 추가
               if (idx === -1) {
-                drafts.push({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
+                drafts.push({ id, title: existingTitle || '프로젝트', payload: {}, scenes: [], header: '' });
                 changed = true;
               }
             }
