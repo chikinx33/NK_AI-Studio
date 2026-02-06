@@ -81,7 +81,7 @@
     modal.classList.remove('hidden');
   }
 
-  function openLibraryModal(items, kind, onSelect) {
+  function openLibraryModal(items, kind, onSelect, onDelete) {
     const modal = document.getElementById('lib-modal');
     if (!modal) return;
     const box = modal.querySelector('.lib-content');
@@ -91,20 +91,32 @@
     } else {
       const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
-        const name = it.name || ('item-' + (i + 1));
         if (kind === 'image') {
-          return '<div class="lib-item" data-url="' + url + '"><img src="' + url + '" alt="' + name + '" style="max-width:120px;max-height:120px;object-fit:cover;"/><div class="lib-name">' + name + '</div><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
+          return '<div class="lib-item" data-url="' + url + '"><img class="lib-thumb" src="' + url + '" alt="" /><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
         }
-        return '<div class="lib-item" data-url="' + url + '"><video src="' + url + '" controls preload="metadata" style="max-width:160px;"></video><div class="lib-name">' + name + '</div><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
+        return '<div class="lib-item" data-url="' + url + '"><video class="lib-video" src="' + url + '" controls preload="metadata"></video><button class="btn-secondary compact lib-select" data-url="' + url + '">선택</button></div>';
       }).join('');
-      box.innerHTML = '<div class="lib-toolbar"><button class="btn-secondary" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
-      box.querySelectorAll('.lib-select').forEach(function (btn) {
-        btn.onclick = function () {
-          const u = btn.dataset.url;
-          if (onSelect && u) onSelect(u);
-          closeModals();
+      box.innerHTML = '<div class="lib-toolbar"><button class="btn-secondary" id="lib-select">선택</button><button class="btn-secondary" id="lib-delete">삭제</button><div class="flex-spacer"></div><button class="btn-secondary" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
+      let selectedUrl = '';
+      const itemsEl = box.querySelectorAll('.lib-item');
+      itemsEl.forEach(function (el) {
+        el.onclick = function () {
+          itemsEl.forEach(node => node.classList.remove('active'));
+          el.classList.add('active');
+          selectedUrl = el.dataset.url || '';
         };
       });
+      const selectBtn = box.querySelector('#lib-select');
+      if (selectBtn) selectBtn.onclick = function () {
+        if (selectedUrl && onSelect) onSelect(selectedUrl);
+        closeModals();
+      };
+      const deleteBtn = box.querySelector('#lib-delete');
+      if (deleteBtn) deleteBtn.onclick = function () {
+        if (!selectedUrl || !onDelete) { alert('삭제할 항목을 선택하세요.'); return; }
+        onDelete(selectedUrl);
+        closeModals();
+      };
       const closeBtn = box.querySelector('#lib-close');
       if (closeBtn) closeBtn.onclick = () => closeModals();
     }
@@ -584,6 +596,10 @@
               openLibraryModal(items, 'image', function (url) {
                 st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
                 refreshAndPersist(true);
+              }, function (url) {
+                if (!url) return;
+                st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: (scene.imageDataUrl === url ? '' : scene.imageDataUrl) });
+                refreshAndPersist(true);
               });
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
@@ -634,6 +650,10 @@
               if (!vitems.length) { alert('라이브러리에 비디오가 없습니다.'); return; }
               openLibraryModal(vitems, 'video', function (url) {
                 st.scenes[idx] = Object.assign({}, scene, { videoUrl: url, videoError: '', videoStatus: 'done' });
+                refreshAndPersist(true);
+              }, function (url) {
+                if (!url) return;
+                st.scenes[idx] = Object.assign({}, scene, { videoUrl: (scene.videoUrl === url ? '' : scene.videoUrl), videoStatus: '' });
                 refreshAndPersist(true);
               });
             } catch (err) {
