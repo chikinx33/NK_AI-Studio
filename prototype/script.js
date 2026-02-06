@@ -300,6 +300,13 @@
     });
   };
 
+  // 초기 로드 시 현재 테마를 iframe에도 한번 전파(iframe가 늦게 만들어지는 경우 대비)
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      try { broadcastTheme(currentTheme); } catch (_) { }
+    }, 50);
+  });
+
   const setupLoginPage = () => {
     const idInput = document.getElementById('opt-id');
     const pwInput = document.getElementById('opt-pw');
