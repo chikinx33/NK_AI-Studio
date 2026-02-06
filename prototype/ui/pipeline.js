@@ -322,7 +322,7 @@
             ? '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>'
             : (updatedScene.imageDataUrl
               ? '<div class="image-box"><img class="scene-img" data-src="' + updatedScene.imageDataUrl + '" src="' + updatedScene.imageDataUrl + '" alt="scene image" /></div>'
-              : '<div class="image-placeholder tall"></div>')));
+              : '<div class="image-placeholder tall no-plus"><span>image</span></div>')));
         var videoCard = (function () {
           if (updatedScene.videoUrl) {
             var note = updatedScene.videoMethod === 'inline' ? '<div class="video-note">생성 성공(인라인 반환)</div>' : '';
@@ -330,7 +330,7 @@
           }
           if (updatedScene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>영상 생성중...</span></div>';
           if (updatedScene.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
-          return '<div class="video-placeholder"><span>영상 없음</span></div>';
+          return '<div class="video-placeholder"><span>video</span></div>';
         })();
         var err = '';
         return (

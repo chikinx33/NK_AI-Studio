@@ -2056,6 +2056,15 @@ a.btn-primary:active {
   position: absolute;
 }
 
+.image-placeholder.no-plus::before {
+  display: none;
+}
+
+.image-placeholder.no-plus {
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .image-placeholder.loading {
   font-size: 12px;
   color: var(--muted);
