@@ -106,6 +106,17 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       r?.predictions?.[0]?.generatedContentUri ||
       null;
 
+    const inferProjectFolder = (): string => {
+      const guessFromUri = (u?: string) => {
+        if (!u) return '';
+        try {
+          const m = u.match(/projects\/([^/]+)\/videos/i);
+          return m ? m[1] : '';
+        } catch (_) { return ''; }
+      };
+      return projectTag || guessFromUri(opResponse?.outputGcsUri || opResponse?.outputUri) || guessFromUri(op?.outputGcsUri || op?.outputUri) || 'default';
+    };
+
     let playback = done ? (pick(opResponse) || pick(op)) : null;
 
     // bytesBase64Encoded → GCS 업로드 후 playback 제공 (Signed URL)
@@ -121,7 +132,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           if (outParsed) {
             const objectBase = outParsed.object.replace(/\/$/, '');
             const stamp = Date.now();
-            const projectFolder = projectTag || 'default';
+            const projectFolder = inferProjectFolder();
             const objectName = `${objectBase}/projects/${projectFolder}/videos/${stamp}-${match[5]}.mp4`;
             const userProject =
               (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
