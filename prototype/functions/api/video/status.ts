@@ -22,36 +22,36 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   let jobId = '';
   try {
     const url = new URL(request.url);
-    const jobIdRaw = url.searchParams.get(''job_id'') || url.searchParams.get(''jobId'') || '' '';
-    const projectTag = (url.searchParams.get(''projectId'') || '''').trim();
-    const sceneIdParam = (url.searchParams.get(''sceneId'') || '''').trim();
+    const jobIdRaw = url.searchParams.get('job_id') || url.searchParams.get('jobId') || '';
+    const projectTag = (url.searchParams.get('projectId') || '').trim();
+    const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();
 
     if (!jobIdRaw.trim()) {
-      return corsJson({ ok: false, job_id: '''', done: false, error: { code: ''BAD_REQUEST'', message: ''job_id is required'' }, response: null, rawOperation: null, playback: null }, 400);
+      return corsJson({ ok: false, job_id: '', done: false, error: { code: 'BAD_REQUEST', message: 'job_id is required' }, response: null, rawOperation: null, playback: null }, 400);
     }
 
     jobId = (() => { try { return decodeURIComponent(jobIdRaw.trim()); } catch { return jobIdRaw.trim(); } })();
-    log(''job_id'', jobId);
+    log('job_id', jobId);
 
     const projectIdEnv = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     if (!projectIdEnv || !clientEmail || !privateKeyRaw) {
-      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: ''CONFIG_MISSING'', message: ''Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY'' }, response: null, rawOperation: null, playback: null }, 500);
+      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, response: null, rawOperation: null, playback: null }, 500);
     }
 
     const re = /^projects\/([^/]+)\/locations\/([^/]+)\/publishers\/([^/]+)\/models\/([^/]+)\/operations\/([^/]+)$/;
     if (!jobId.match(re)) {
-      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: ''BAD_REQUEST'', message: ''invalid operationName format'' }, response: null, rawOperation: null, playback: null }, 400);
+      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'BAD_REQUEST', message: 'invalid operationName format' }, response: null, rawOperation: null, playback: null }, 400);
     }
-    const endpointName = jobId.split(''/operations/'')[0];
+    const endpointName = jobId.split('/operations/')[0];
 
-    const accessToken = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: ''https://www.googleapis.com/auth/cloud-platform'' });
+    const accessToken = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: 'https://www.googleapis.com/auth/cloud-platform' });
 
     // 1) fetchPredictOperation
     const urlFetch = `https://aiplatform.googleapis.com/v1/${endpointName}:fetchPredictOperation`;
-    log(''fetchPredictOperation'', { endpointName, operationName: jobId });
-    const res = await fetch(urlFetch, { method: ''POST'', headers: { Authorization: `Bearer ${accessToken}`, ''Content-Type'': ''application/json'' }, body: JSON.stringify({ operationName: jobId }) });
+    log('fetchPredictOperation', { endpointName, operationName: jobId });
+    const res = await fetch(urlFetch, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ operationName: jobId }) });
     const text = await res.text();
     if (!res.ok) {
       const detail = safeJson(text);
@@ -67,11 +67,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const textOp = await resOp.text();
       dataOp = safeJson(textOp);
     } catch (err) {
-      log(''operation_get_error'', err);
+      log('operation_get_error', err);
     }
 
     const rawOperation = { fetchPredictOperation: dataFetch, operationGet: dataOp };
-    console.log(''[video-status][rawOperation]'', rawOperation);
+    console.log('[video-status][rawOperation]', rawOperation);
 
     const op: any = dataOp || dataFetch || {};
     const done = !!op.done;
@@ -97,7 +97,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     return corsJson({ ok: true, job_id: jobId, done, error: opError || null, response: opResponse || null, rawOperation, playback: done ? playback : null });
   } catch (e: any) {
-    return corsJson({ ok: false, job_id: jobId, done: false, error: { code: ''INTERNAL'', message: e?.message || ''Unknown error'' }, response: null, rawOperation: null, playback: null }, 500);
+    return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'INTERNAL', message: e?.message || 'Unknown error' }, response: null, rawOperation: null, playback: null }, 500);
   }
 };
 export const onRequestOptions: PagesFunction = async () => {
@@ -178,12 +178,12 @@ function bufferToBase64Url(buf: ArrayBuffer) {
 }
 
 function gcsToHttps(gcsUri: string) {
-  if (!gcsUri) return '';
+  if (!gcsUri) return ';
   if (gcsUri.startsWith('https://')) return gcsUri;
   if (!gcsUri.startsWith('gs://')) return gcsUri;
   const noScheme = gcsUri.slice(5);
   const slash = noScheme.indexOf('/');
-  if (slash === -1) return '';
+  if (slash === -1) return ';
   const bucket = noScheme.slice(0, slash);
   const object = noScheme.slice(slash + 1);
   return `https://storage.googleapis.com/${bucket}/${object}`;
@@ -195,5 +195,6 @@ function base64ToUint8(base64: string) {
   for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
   return arr;
 }
+
 
 
