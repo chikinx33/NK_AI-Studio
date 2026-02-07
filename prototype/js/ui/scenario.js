@@ -97,10 +97,11 @@
     setActiveButtons('.duration-toggle', p.duration || defaults.DURATION || '15');
     setActiveButtons('.ratio-btn', p.aspectRatio || '16:9');
 
-    renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[defaultCat] || [], p.purposeTags || []);
-    renderTagButtons(document.getElementById('needs-tags'), NK.core.needsList || [], p.needs || []);
-    renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], p.tones || []);
-    renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], p.styles || []);
+    const one = (arr) => Array.isArray(arr) && arr.length ? [arr[0]] : [];
+    renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[defaultCat] || [], one(p.purposeTags), true);
+    renderTagButtons(document.getElementById('needs-tags'), NK.core.needsList || [], one(p.needs), true);
+    renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], one(p.tones), true);
+    renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], one(p.styles), true);
 
     scenario.renderScenes(draft.scenes || []);
   };
@@ -109,6 +110,21 @@
   scenario.init = async function () {
     const form = document.getElementById('scenario-form');
     if (!form) return;
+
+    // 장르(목적 대분류) 드롭다운 옵션 주입 - 기본값이 비어 보이는 문제 대응
+    const ensurePurposeOptions = () => {
+      const sel = document.getElementById('purpose-category');
+      if (!sel || sel.options.length) return;
+      const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
+      categories.forEach((c, idx) => {
+        const opt = document.createElement('option');
+        opt.value = c;
+        opt.textContent = c;
+        if (idx === 0) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    };
+    ensurePurposeOptions();
 
     let draft = null;
     const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
@@ -155,7 +171,7 @@
       if (btn.closest('#purpose-tags') || btn.name === 'purposeCategory') {
         const cat = form.purposeCategory ? form.purposeCategory.value : '';
         const sel = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
-        renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], sel);
+        renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], sel, true);
       }
     });
 
@@ -163,7 +179,7 @@
     if (form.purposeCategory) {
       form.purposeCategory.addEventListener('change', () => {
         const cat = form.purposeCategory.value;
-        renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], []);
+        renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], [], true);
       });
     }
 
