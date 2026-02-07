@@ -117,7 +117,7 @@
         </div>`;
       return;
     }
-    const commonBlock = commonInfo ? `<div class="common-info-row" id="common-info-row"><span class="muted tiny">${commonInfo}</span><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button></div>` : '';
+    const commonBlock = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
     container.innerHTML = commonBlock + sceneList.map(s => `
       <div class="scenario-card">
         <div class="card-top">

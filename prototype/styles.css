@@ -1366,16 +1366,15 @@ a.btn-primary:active {
   border: 1px dashed var(--border);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 [data-theme="light"] .common-info-row {
   background: rgba(13, 23, 47, 0.05);
 }
 
 .common-info-play {
-  position: absolute;
-  right: 8px;
-  bottom: 8px;
   width: 28px;
   height: 28px;
   border-radius: 8px;
@@ -1386,6 +1385,7 @@ a.btn-primary:active {
   cursor: pointer;
   line-height: 1;
   padding: 0;
+  flex-shrink: 0;
 }
 [data-theme="light"] .common-info-play {
   background: #f0f4ff;
