@@ -128,11 +128,13 @@
 
     const pageLoading = document.getElementById('page-loading');
     const main = document.querySelector('.main');
+    if (NK.core && NK.core.setLoading) NK.core.setLoading(true);
     if (pageLoading) pageLoading.classList.remove('hidden');
     const finishLoading = () => {
       try {
         if (pageLoading) pageLoading.classList.add('hidden');
         if (main) main.classList.remove('loading-blur');
+        if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
       } catch (_) { }
     };
     if (main) main.classList.add('loading-blur');
