@@ -128,6 +128,7 @@
 
     const pageLoading = document.getElementById('page-loading');
     const main = document.querySelector('.main');
+    if (pageLoading) pageLoading.classList.remove('hidden');
     const finishLoading = () => {
       try {
         if (pageLoading) pageLoading.classList.add('hidden');
