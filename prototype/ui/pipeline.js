@@ -815,8 +815,10 @@
         ctx.setState(st);
         ui.render();
         if (!playback) {
-          if (jobId) {
-            pollVideoStatus(projectId, jobId, i, 0);
+          // 상태 폴링은 job_id 하나로 통일
+          const pollingJobId = jobId || resp.job_id || resp.id || '';
+          if (pollingJobId) {
+            pollVideoStatus(projectId, pollingJobId, i, 0);
           } else {
             st.scenes[i] = Object.assign({}, st.scenes[i], {
               videoStatus: 'error',
