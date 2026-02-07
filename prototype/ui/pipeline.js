@@ -1012,7 +1012,12 @@
     }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var scene = st.scenes[idx];
-    var finalPrompt = (scene.promptText + '\n\nNarration (Korean): ' + scene.lines);
+    var common = st.header || (st.payload && st.payload.header) || '';
+    var finalPrompt = [
+      common ? ('Common:\n' + common) : '',
+      scene.promptText,
+      'Narration (Korean): ' + scene.lines
+    ].filter(Boolean).join('\n\n');
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
     ui.render();
