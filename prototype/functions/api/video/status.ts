@@ -1,4 +1,4 @@
-// prototype/functions/api/video/status.ts
+﻿// prototype/functions/api/video/status.ts
 // Poll Veo operation status and return a playable video URL (signed GCS URL if possible).
 // Contracts: job_id (legacy) OR jobId accepted. projectId/sceneId optional metadata.
 
@@ -19,241 +19,87 @@ const corsJson = (data: any, status = 200) =>
 const log = (...args: any[]) => console.log('[video-status]', ...args);
 
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
+  let jobId = '';
   try {
     const url = new URL(request.url);
-    const jobIdRaw = url.searchParams.get('job_id') || url.searchParams.get('jobId') || '';
-    const projectTag = (url.searchParams.get('projectId') || '').trim();
-    const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();
+    const jobIdRaw = url.searchParams.get(''job_id'') || url.searchParams.get(''jobId'') || '' '';
+    const projectTag = (url.searchParams.get(''projectId'') || '''').trim();
+    const sceneIdParam = (url.searchParams.get(''sceneId'') || '''').trim();
 
     if (!jobIdRaw.trim()) {
-      return corsJson({
-        ok: false,
-        code: 'BAD_REQUEST',
-        message: 'job_id is required',
-        details: { projectId: projectTag, jobId: jobIdRaw || '', sceneId: sceneIdParam }
-      }, 400);
+      return corsJson({ ok: false, job_id: '''', done: false, error: { code: ''BAD_REQUEST'', message: ''job_id is required'' }, response: null, rawOperation: null, playback: null }, 400);
     }
 
-    const jobId = (() => { try { return decodeURIComponent(jobIdRaw.trim()); } catch { return jobIdRaw.trim(); } })();
-    log('job_id', jobId);
+    jobId = (() => { try { return decodeURIComponent(jobIdRaw.trim()); } catch { return jobIdRaw.trim(); } })();
+    log(''job_id'', jobId);
 
-    const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
+    const projectIdEnv = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
-    if (!projectId || !clientEmail || !privateKeyRaw) {
-      return corsJson({
-        ok: false,
-        code: 'CONFIG_MISSING',
-        message: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY',
-        details: {}
-      }, 500);
+    if (!projectIdEnv || !clientEmail || !privateKeyRaw) {
+      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: ''CONFIG_MISSING'', message: ''Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY'' }, response: null, rawOperation: null, playback: null }, 500);
     }
 
-    // 허용 범위 완화: 위치/퍼블리셔/모델을 고정하지 않고 any 로 수용
     const re = /^projects\/([^/]+)\/locations\/([^/]+)\/publishers\/([^/]+)\/models\/([^/]+)\/operations\/([^/]+)$/;
-    const match = jobId.match(re);
-    if (!match) {
-      return corsJson({
-        ok: false,
-        code: 'BAD_REQUEST',
-        message: 'invalid operationName format',
-        details: { jobId, projectId: projectTag, sceneId: sceneIdParam }
-      }, 400);
+    if (!jobId.match(re)) {
+      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: ''BAD_REQUEST'', message: ''invalid operationName format'' }, response: null, rawOperation: null, playback: null }, 400);
     }
-    const endpointName = `projects/${match[1]}/locations/${match[2]}/publishers/${match[3]}/models/${match[4]}`;
+    const endpointName = jobId.split(''/operations/'')[0];
 
-    const accessToken = await getGoogleAccessToken({
-      clientEmail,
-      privateKeyPem: privateKeyRaw,
-      scope: 'https://www.googleapis.com/auth/cloud-platform',
-    });
+    const accessToken = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: ''https://www.googleapis.com/auth/cloud-platform'' });
 
-    // 실제 Vertex operation 상태/결과 조회
+    // 1) fetchPredictOperation
     const urlFetch = `https://aiplatform.googleapis.com/v1/${endpointName}:fetchPredictOperation`;
-    log('fetchPredictOperation', { endpointName, operationName: jobId });
-    const res = await fetch(urlFetch, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operationName: jobId })
-    });
+    log(''fetchPredictOperation'', { endpointName, operationName: jobId });
+    const res = await fetch(urlFetch, { method: ''POST'', headers: { Authorization: `Bearer ${accessToken}`, ''Content-Type'': ''application/json'' }, body: JSON.stringify({ operationName: jobId }) });
     const text = await res.text();
     if (!res.ok) {
       const detail = safeJson(text);
       const errBody = (detail as any)?.error || detail;
-      return corsJson({
-        ok: false,
-        code: errBody?.code || res.status,
-        message: errBody?.message || `fetchPredictOperation failed (${res.status})`,
-        details: { projectId: projectTag, jobId, sceneId: sceneIdParam, raw: detail }
-      }, res.status);
+      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: errBody?.code || res.status, message: errBody?.message || `fetchPredictOperation failed (${res.status})` }, response: null, rawOperation: detail, playback: null }, res.status);
     }
-
     const dataFetch = safeJson(text);
-    log('fetch_raw_response', dataFetch);
 
-    // operations.get 로 원본 operation 확인
+    // 2) operations.get
     let dataOp: any = null;
     try {
-      const urlOp = `https://aiplatform.googleapis.com/v1/${jobId}`;
-      const resOp = await fetch(urlOp, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const resOp = await fetch(`https://aiplatform.googleapis.com/v1/${jobId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
       const textOp = await resOp.text();
       dataOp = safeJson(textOp);
-      log('operation_get_raw', dataOp);
     } catch (err) {
-      log('operation_get_error', err);
+      log(''operation_get_error'', err);
     }
 
-    const data: any = dataOp || dataFetch;
+    const rawOperation = { fetchPredictOperation: dataFetch, operationGet: dataOp };
+    console.log(''[video-status][rawOperation]'', rawOperation);
 
-    if (!data.done) {
-      return corsJson({
-        ok: true,
-        status: 'processing',
-        details: { projectId: projectTag, sceneId: sceneIdParam },
-        raw: { fetchPredictOperation: dataFetch, operationGet: dataOp }
-      });
-    }
-    if (data.error) {
-      return corsJson({
-        ok: false,
-        code: data.error.code || 'ERROR',
-        message: data.error.message || 'Veo error',
-        details: { projectId: projectTag, jobId, sceneId: sceneIdParam, raw: { fetchPredictOperation: dataFetch, operationGet: dataOp } }
-      });
-    }
+    const op: any = dataOp || dataFetch || {};
+    const done = !!op.done;
+    const opError = op.error || null;
+    const opResponse = op.response || null;
 
-    // Guard: raiMediaFilteredCount > 0 => immediate failure
-    const filteredCount =
-      Number((data.response && (data.response.raiMediaFilteredCount as any)) ?? 0) ||
-      Number((data.response?.predictions?.[0]?.raiMediaFilteredCount as any) ?? 0) ||
-      Number((data.response?.metrics?.raiMediaFilteredCount as any) ?? 0);
-    if (filteredCount > 0) {
-      return corsJson({
-        ok: false,
-        code: 'FILTERED',
-        message: 'raiMediaFilteredCount>0: media filtered by safety settings',
-        details: { filteredCount, projectId: projectTag, sceneId: sceneIdParam, raw: data }
-      }, 400);
-    }
+    const pick = (r: any) =>
+      r?.videos?.[0]?.gcsUri ||
+      r?.videos?.[0]?.uri ||
+      r?.videos?.[0]?.outputUri ||
+      r?.outputGcsUri ||
+      r?.outputUri ||
+      r?.files?.[0]?.gcsUri ||
+      r?.generatedContentUri ||
+      r?.outputUris?.[0] ||
+      r?.predictions?.[0]?.videos?.[0]?.gcsUri ||
+      r?.predictions?.[0]?.videos?.[0]?.outputUri ||
+      r?.predictions?.[0]?.outputGcsUri ||
+      r?.predictions?.[0]?.generatedContentUri ||
+      null;
 
-    let gcsUri =
-      data.response?.outputUri ||
-      data.response?.outputGcsUri ||
-      data.response?.videos?.[0]?.uri ||
-      data.response?.videos?.[0]?.outputUri ||
-      data.response?.generatedContentUri ||
-      data.response?.predictions?.[0]?.generatedContentUri ||
-      data.response?.predictions?.[0]?.videos?.[0]?.uri ||
-      data.response?.predictions?.[0]?.videos?.[0]?.outputUri ||
-      data.response?.predictions?.[0]?.outputGcsUri ||
-      data.response?.predictions?.[0]?.outputUri ||
-      data.response?.predictions?.[0]?.uri ||
-      '';
-    if (!gcsUri) {
-      const alt =
-        data.response?.generatedVideos?.[0]?.video?.uri ||
-        data.response?.generatedVideos?.[0]?.video?.outputUri ||
-        data.response?.generatedVideos?.[0]?.uri ||
-        data.response?.generatedVideos?.[0]?.outputUri ||
-        data.response?.files?.[0]?.gcsUri ||
-        data.response?.files?.[0]?.uri ||
-        data.response?.outputUris?.[0] ||
-        '';
-      if (alt) gcsUri = alt;
-    }
-    if (!gcsUri) {
-      const resp = data.response || {};
-      const base64Vid =
-        resp?.videos?.[0]?.bytesBase64Encoded ||
-        resp?.predictions?.[0]?.videos?.[0]?.bytesBase64Encoded ||
-        resp?.predictions?.[0]?.generatedVideos?.[0]?.bytesBase64Encoded ||
-        resp?.generatedVideos?.[0]?.video?.bytesBase64Encoded ||
-        resp?.generatedVideos?.[0]?.bytesBase64Encoded ||
-        '';
-      if (base64Vid) {
-        try {
-          const bytes = base64ToUint8(base64Vid);
-          const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
-          const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
-          if (outParsed) {
-            const objectBase = outParsed.object.replace(/\/$/, '');
-            const objectName = projectTag
-              ? `${objectBase}/projects/${projectTag}/videos/${match[4]}.mp4`
-              : `${objectBase}/videos/${match[4]}.mp4`;
-            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-            const uploadRes = await fetch(uploadUrl, {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${accessToken}`,
-                "Content-Type": "video/mp4",
-              },
-              body: bytes
-            });
-            const uploadText = await uploadRes.text();
-            const uploadJson = safeJson(uploadText);
-            log('upload_base64', { status: uploadRes.status, objectName });
-            if (uploadRes.ok) {
-              const finalGcsUri = `gs://${outParsed.bucket}/${objectName}`;
-              let videoUrlSigned = gcsToHttps(finalGcsUri);
-              try {
-                videoUrlSigned = await signGcsUrl({
-                  bucket: outParsed.bucket,
-                  object: objectName,
-                  clientEmail,
-                  privateKeyPem: privateKeyRaw,
-                  expiresInSec: 3600,
-                });
-              } catch (err) {
-                log('sign_url_error', err);
-              }
-              return corsJson({ ok: true, status: 'done', videoUrl: videoUrlSigned, gcsUri: finalGcsUri });
-            } else {
-              log('upload_base64_failed', uploadJson);
-            }
-          }
-        } catch (err) {
-          log('base64_upload_error', err);
-        }
-      }
-    }
+    const playback = done ? (pick(opResponse) || pick(op)) : null;
 
-    const signedUrl = gcsUri ? gcsToHttps(gcsUri) : '';
-    let videoUrlSigned = signedUrl;
-    if (gcsUri) {
-      try {
-        const parsed = parseGcsUri(gcsUri.startsWith('gs://') ? gcsUri : `gs://${gcsUri.replace(/^https?:\/\//, '')}`);
-        if (parsed) {
-          videoUrlSigned = await signGcsUrl({
-            bucket: parsed.bucket,
-            object: parsed.object,
-            clientEmail,
-            privateKeyPem: privateKeyRaw,
-            expiresInSec: 3600,
-          });
-        }
-      } catch (err) {
-        log('sign_url_error', err);
-      }
-    }
-
-    return corsJson({
-      ok: true,
-      status: gcsUri ? 'done' : 'processing',
-      videoUrl: videoUrlSigned || '',
-      gcsUri: gcsUri || '',
-      details: { projectId: projectTag, sceneId: sceneIdParam },
-      raw: { fetchPredictOperation: dataFetch, operationGet: dataOp }
-    });
+    return corsJson({ ok: true, job_id: jobId, done, error: opError || null, response: opResponse || null, rawOperation, playback: done ? playback : null });
   } catch (e: any) {
-    return corsJson({
-      ok: false,
-      code: 'INTERNAL',
-      message: e?.message || "Unknown error",
-      details: {}
-    }, 500);
+    return corsJson({ ok: false, job_id: jobId, done: false, error: { code: ''INTERNAL'', message: e?.message || ''Unknown error'' }, response: null, rawOperation: null, playback: null }, 500);
   }
 };
-
 export const onRequestOptions: PagesFunction = async () => {
   return new Response(null, {
     status: 204,
@@ -349,3 +195,5 @@ function base64ToUint8(base64: string) {
   for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
   return arr;
 }
+
+
