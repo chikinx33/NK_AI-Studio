@@ -108,7 +108,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     let playback = done ? (pick(opResponse) || pick(op)) : null;
 
-    // bytesBase64Encoded → GCS 업로드 후 playback 제공
+    // bytesBase64Encoded → GCS 업로드 후 playback 제공 (Signed URL)
     if (done && !playback) {
       const b64 =
         opResponse?.videos?.[0]?.bytesBase64Encoded ||
@@ -131,13 +131,44 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
             });
             const upTxt = await upRes.text();
             if (upRes.ok) {
-              playback = gcsToHttps(`gs://${outParsed.bucket}/${objectName}`);
+              const gsUri = `gs://${outParsed.bucket}/${objectName}`;
+              try {
+                playback = await signGcsUrl({
+                  bucket: outParsed.bucket,
+                  object: objectName,
+                  clientEmail,
+                  privateKeyPem: privateKeyRaw,
+                  expiresInSec: 3600,
+                });
+              } catch (err) {
+                log('sign_url_error', err);
+                playback = gcsToHttps(gsUri);
+              }
             } else {
               log('bytes_upload_failed', safeJson(upTxt));
             }
           }
         } catch (err) {
           log('bytes_upload_error', err);
+        }
+      }
+    }
+
+    // playback이 gs:// 이거나 서명 안 된 https://storage.googleapis.com 이면 서명 URL 생성
+    if (done && playback && playback.startsWith('gs://')) {
+      const parsed = parseGcsUri(playback);
+      if (parsed) {
+        try {
+          playback = await signGcsUrl({
+            bucket: parsed.bucket,
+            object: parsed.object,
+            clientEmail,
+            privateKeyPem: privateKeyRaw,
+            expiresInSec: 3600,
+          });
+        } catch (err) {
+          log('sign_url_error', err);
+          playback = gcsToHttps(playback);
         }
       }
     }
@@ -253,6 +284,43 @@ function base64ToUint8(base64: string) {
   const arr = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
   return arr;
+}
+
+async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {
+  const now = new Date();
+  const pad = (n: number) => `${n}`.padStart(2, "0");
+  const date = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  const time = `${date}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const credential = `${opts.clientEmail}/${date}/auto/storage/goog4_request`;
+  const host = "storage.googleapis.com";
+  const canonicalUri = `/${encodeURIComponent(opts.bucket)}/${opts.object.split("/").map(encodeURIComponent).join("/")}`;
+  const signedHeaders = "host";
+  const query = new URLSearchParams({
+    "X-Goog-Algorithm": "GOOG4-RSA-SHA256",
+    "X-Goog-Credential": credential,
+    "X-Goog-Date": time,
+    "X-Goog-Expires": `${opts.expiresInSec}`,
+    "X-Goog-SignedHeaders": signedHeaders
+  });
+  const canonicalQuery = query.toString();
+  const canonicalRequest = ["GET", canonicalUri, canonicalQuery, `host:${host}`, "", signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
+  const hashedRequest = await sha256Hex(canonicalRequest);
+  const stringToSign = ["GOOG4-RSA-SHA256", time, `${date}/auto/storage/goog4_request`, hashedRequest].join("\n");
+  const signatureB64url = await signRS256(stringToSign, opts.privateKeyPem);
+  const signatureHex = b64urlToHex(signatureB64url);
+  const finalQuery = `${canonicalQuery}&X-Goog-Signature=${signatureHex}`;
+  return `https://${host}${canonicalUri}?${finalQuery}`;
+}
+
+async function sha256Hex(input: string) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function b64urlToHex(b64url: string) {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  return Array.from(bin).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
 }
 
 
