@@ -54,7 +54,12 @@
       err.status = res.status;
       throw err;
     }
-    return j(text);
+    var data = j(text);
+    // 응답에 scenes가 없거나 파싱 실패 시 명시적으로 오류를 던져 UI가 감지하도록 함
+    if (!data || !Array.isArray(data.scenes) || data.scenes.length === 0) {
+      throw new Error('scenario_response_invalid');
+    }
+    return data;
   };
 
   api.imagen = async function (body) {

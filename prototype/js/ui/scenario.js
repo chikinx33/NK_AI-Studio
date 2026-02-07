@@ -128,6 +128,12 @@
 
     const pageLoading = document.getElementById('page-loading');
     const main = document.querySelector('.main');
+    const finishLoading = () => {
+      try {
+        if (pageLoading) pageLoading.classList.add('hidden');
+        if (main) main.classList.remove('loading-blur');
+      } catch (_) { }
+    };
     if (main) main.classList.add('loading-blur');
 
     // 장르(목적 대분류) 옵션을 주입 - 기본값이 비어 보이는 문제 대응
@@ -216,6 +222,8 @@
     // 시나리오 생성
     form.onsubmit = async (e) => {
       e.preventDefault();
+      const errEl = document.getElementById('scenario-error');
+      if (errEl) errEl.classList.add('hidden');
       NK.core.setLoading(true);
       const payload = collectPayload();
       try {
@@ -235,7 +243,12 @@
           alert('시나리오를 생성했습니다.');
         }
       } catch (err) {
-        alert('시나리오 생성 실패: ' + (err?.message || err));
+        if (errEl) {
+          errEl.textContent = '시나리오 생성 실패: ' + (err?.message || err);
+          errEl.classList.remove('hidden');
+        } else {
+          alert('시나리오 생성 실패: ' + (err?.message || err));
+        }
       } finally {
         NK.core.setLoading(false);
       }
@@ -274,10 +287,8 @@
       };
     }
     // 페이지 로딩 종료 처리 (초기 렌더 완료 후)
-    setTimeout(() => {
-      if (pageLoading) pageLoading.classList.add('hidden');
-      if (main) main.classList.remove('loading-blur');
-    }, 120);
+    setTimeout(finishLoading, 120);
+    window.addEventListener('load', finishLoading);
   };
 })();
 

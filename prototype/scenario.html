@@ -144,6 +144,15 @@
       </div>
     </main>
   </div>
+  <script>
+    // 실패 시에도 오버레이가 남지 않도록 최후 안전장치
+    window.addEventListener('load', function () {
+      var p = document.getElementById('page-loading');
+      if (p) p.classList.add('hidden');
+      var main = document.querySelector('.main');
+      if (main) main.classList.remove('loading-blur');
+    });
+  </script>
 </body>
 
 </html>
