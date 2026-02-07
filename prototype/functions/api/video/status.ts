@@ -120,7 +120,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const guessFromUri = (u?: string) => {
         if (!u) return '';
         try {
-          const m = u.match(/projects\/([^/]+)\/videos/i);
+          const m = u.match(/projects\/([^/]+)\/video/i) || u.match(/projects\/([^/]+)\/videos/i);
           return m ? m[1] : '';
         } catch (_) { return ''; }
       };
@@ -143,7 +143,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
             const objectBase = outParsed.object.replace(/\/$/, '');
             const stamp = Date.now();
             const projectFolder = inferProjectFolder();
-            const objectName = `${objectBase}/projects/${projectFolder}/videos/${stamp}-${match[5]}.mp4`;
+            const objectName = `${objectBase}/projects/${projectFolder}/video/${stamp}-${match[5]}.mp4`;
             const userProject =
               (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
               (env.GOOGLE_PROJECT_ID as string | undefined) ||

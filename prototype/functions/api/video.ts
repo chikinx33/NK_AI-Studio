@@ -43,7 +43,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     const projectTag = (projTag || "default").toString();
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const videoPrefix = `${basePrefix}/projects/${projectTag}/videos/`;
+    // 표준 경로: projects/{projectId}/video/
+    const videoPrefix = `${basePrefix}/projects/${projectTag}/video/`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoPrefix}`;
 
     const accessToken = await getGoogleAccessToken({
