@@ -46,16 +46,38 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const videoPrefix = `${basePrefix}/projects/${projectTag}/videos/`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoPrefix}`;
 
-    const parsedImage = parseDataUrl(imageDataUrl);
-    if (!parsedImage) {
-      return json({ error: "imageDataUrl is invalid or missing base64 payload" }, 400);
-    }
-
     const accessToken = await getGoogleAccessToken({
       clientEmail,
       privateKeyPem: privateKeyRaw,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
+
+    // imageDataUrl 처리: data:URL이면 그대로, gs:// 또는 https:// 이면 다운로드 후 base64 변환
+    let parsedImage = parseDataUrl(imageDataUrl);
+    if (!parsedImage) {
+      try {
+        const resolvedUrl = imageDataUrl.startsWith("gs://")
+          ? gcsToHttps(imageDataUrl)
+          : imageDataUrl;
+        if (!resolvedUrl) {
+          return json({ error: "imageDataUrl is invalid or missing base64 payload" }, 400);
+        }
+        const headers: Record<string, string> = {};
+        if (imageDataUrl.startsWith("gs://") || resolvedUrl.includes("storage.googleapis.com")) {
+          headers["Authorization"] = `Bearer ${accessToken}`;
+        }
+        const imgRes = await fetch(resolvedUrl, { headers });
+        if (!imgRes.ok) {
+          const t = await imgRes.text().catch(() => "");
+          return json({ error: "imageDataUrl fetch failed", status: imgRes.status, detail: t }, 400);
+        }
+        const buf = await imgRes.arrayBuffer();
+        const mime = imgRes.headers.get("content-type") || "image/png";
+        parsedImage = { base64: arrayBufferToBase64(buf), mimeType: mime };
+      } catch (err: any) {
+        return json({ error: "imageDataUrl is invalid or fetch failed", detail: err?.message || err }, 400);
+      }
+    }
 
     // Veo는 Long Running Predict API를 사용해야 함
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predictLongRunning`;
@@ -143,6 +165,25 @@ function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | n
   const [, mime, b64] = match;
   if (!b64) return null;
   return { base64: b64.trim(), mimeType: mime || 'image/png' };
+}
+
+function gcsToHttps(uri: string) {
+  if (!uri.startsWith("gs://")) return uri;
+  const rest = uri.slice(5);
+  const slash = rest.indexOf("/");
+  if (slash === -1) return uri;
+  const bucket = rest.slice(0, slash);
+  const object = rest.slice(slash + 1);
+  return `https://storage.googleapis.com/${bucket}/${object}`;
+}
+
+function arrayBufferToBase64(buf: ArrayBuffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 function json(data: any, status = 200) {
