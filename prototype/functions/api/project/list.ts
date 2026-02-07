@@ -2,18 +2,16 @@
 // List project IDs under projects/ prefix in GCS (lightweight).
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
-const ALLOWED_ORIGINS = ["https://nk-ai-studio.pages.dev", "null"];
-const corsHeaders = (origin: string | null) => {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json; charset=utf-8",
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    "Access-Control-Max-Age": "86400",
-  };
-  if (!origin || origin === "null") headers["Access-Control-Allow-Origin"] = "*";
-  else if (ALLOWED_ORIGINS.includes(origin)) headers["Access-Control-Allow-Origin"] = origin;
-  return headers;
-};
+// Allow any origin (file://, localhost, custom domains) so that local/server dashboards
+// can both talk to the same Pages Functions without CORS blocks.
+const corsHeaders = (origin: string | null) => ({
+  "Content-Type": "application/json; charset=utf-8",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400",
+  "Access-Control-Allow-Origin": origin || "*",
+  "Vary": "Origin",
+});
 
 const send = (data: any, status = 200, origin: string | null = null) =>
   new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
