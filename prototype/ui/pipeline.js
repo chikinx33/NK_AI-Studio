@@ -804,6 +804,16 @@
         durationSeconds: Math.max(Number(scene.estSec) || 0, 1),
         imageDataUrl: imageUrl
       };
+      console.log('videoStart payload', {
+        projectId,
+        sceneId: scene.id,
+        aspectRatio: payload.aspectRatio,
+        durationSeconds: payload.durationSeconds,
+        // 프롬프트 전문을 그대로 확인
+        promptText: payload.promptText,
+        script: payload.script,
+        imageDataUrl_preview: imageUrl.startsWith('data:') ? 'dataurl:' + imageUrl.length + ' chars' : imageUrl
+      });
       var resp = await NK.api.videoStart(payload);
       var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
       var playback = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';

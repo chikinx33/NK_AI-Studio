@@ -53,6 +53,21 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
+    // 디버그: 최종 요청 요약 로그 (이미지 데이터는 길이만 기록)
+    log('video_request', {
+      sceneId,
+      projTag: projectTag,
+      topic: body?.topic,
+      target: body?.target,
+      tone: body?.tone || body?.tones,
+      style: body?.style || body?.styles,
+      aspectRatio,
+      durationSeconds,
+      promptText,
+      outputGcsUri,
+      imageDataUrl_len: (imageDataUrl || '').length
+    });
+
     // imageDataUrl 처리: data:URL이면 그대로, gs:// 또는 https:// 이면 다운로드 후 base64 변환
     let parsedImage = parseDataUrl(imageDataUrl);
     if (!parsedImage) {
