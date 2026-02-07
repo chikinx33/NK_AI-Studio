@@ -228,12 +228,43 @@
         return null;
       };
 
-      // file:// ?섍꼍?먯꽌??API_BASE媛 ?ㅼ젙?섏뼱 ?덉쑝硫??쒕쾭?먯꽌 媛?몄삤?꾨줉 ?덉슜
+      // file:// 환경에서 API_BASE가 설정되어 있으면 원격에서 불러오고,
+      // 404 등으로 실패하면 로컬 드래프트를 찾아 원격에 즉시 저장(동기화) 후 사용
       if (projectId && NK.api && NK.api.projectGet) {
+        const loadLocalDraftById = (pid) => {
+          try {
+            const drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
+            return drafts.find(d => String(d.id) === String(pid)) || null;
+          } catch (_) { return null; }
+        };
         try {
           var res = await NK.api.projectGet(projectId);
           if (res) serverData = (res.data || res);
-        } catch (_) { }
+        } catch (err) {
+          // 서버에 data.json이 없으면(404 포함) 로컬 드래프트를 업로드해 동기화
+          const localDraft = loadLocalDraftById(projectId);
+          if (localDraft && NK.api.projectSave) {
+            try {
+              await NK.api.projectSave(
+                projectId,
+                localDraft.payload || {},
+                localDraft.scenes || [],
+                {
+                  header: localDraft.header || '',
+                  aspectRatio: localDraft.payload?.aspectRatio,
+                  title: localDraft.title || ''
+                }
+              );
+              serverData = {
+                title: localDraft.title || '',
+                payload: localDraft.payload || {},
+                scenes: localDraft.scenes || [],
+                header: localDraft.header || '',
+                aspectRatio: localDraft.payload?.aspectRatio || ''
+              };
+            } catch (_) { /* 동기화 실패 시 아래 fallback 시도 */ }
+          }
+        }
         if (!serverData || (!serverData.scenes && !serverData.payload)) {
           try { serverData = await loadReferenceFallback(); } catch (_) { }
         }
@@ -318,7 +349,7 @@
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
         var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
         var img = (updatedScene.imgLoading
-          ? '<div class="image-placeholder tall loading"><span>?앹꽦以?..</span></div>'
+          ? '<div class="image-placeholder tall loading"><span>생성 중...</span></div>'
           : (updatedScene.imgError
             ? '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>'
             : (updatedScene.imageDataUrl

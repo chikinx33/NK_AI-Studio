@@ -126,6 +126,17 @@
     };
     ensurePurposeOptions();
 
+    // 화면 비율 버튼(16:9/9:16/1:1)이 폼 밖에 있어 클릭이 안 먹던 문제 해결
+    const ratioGroup = document.getElementById('ratio-group');
+    if (ratioGroup) {
+      ratioGroup.addEventListener('click', (e) => {
+        const btn = e.target.closest('.ratio-btn');
+        if (!btn) return;
+        e.preventDefault();
+        setActiveButtons('.ratio-btn', btn.dataset.ratio || btn.dataset.value);
+      });
+    }
+
     let draft = null;
     const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
     if (saved) draft = JSON.parse(saved);
