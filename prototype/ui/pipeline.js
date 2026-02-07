@@ -805,6 +805,7 @@
       var resp = await NK.api.videoStart(payload);
       var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
       var playback = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
+      console.log('videoStart ok', { jobId, playback, resp });
       st = ctx.getState() || st;
       st.scenes[i] = Object.assign({}, st.scenes[i], {
         videoUrl: playback,
