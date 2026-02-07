@@ -95,7 +95,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     const playback = done ? (pick(opResponse) || pick(op)) : null;
 
-    return corsJson({ ok: true, job_id: jobId, done, error: opError || null, response: opResponse || null, rawOperation, playback: done ? playback : null });
+    return corsJson({
+      ok: true,
+      job_id: jobId,
+      done,
+      error: opError || null,
+      response: opResponse || null,
+      rawOperation,
+      playback: done ? playback : null,
+      playbackUrl: done ? playback : null
+    });
   } catch (e: any) {
     return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'INTERNAL', message: e?.message || 'Unknown error' }, response: null, rawOperation: null, playback: null }, 500);
   }
