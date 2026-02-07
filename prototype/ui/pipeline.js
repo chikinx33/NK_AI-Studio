@@ -778,7 +778,27 @@
     var projectId = st.draftId || getProjectId();
     if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
     var header = st.header || '';
-    var promptBase = ['Common', header, 'Visual', (scene.shot || ''), 'Duration', ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')].join('\n');
+    var payload = st.payload || {};
+    var selections = [
+      payload.topic ? `Topic: ${payload.topic}` : '',
+      payload.purposeCategory ? `Genre/Purpose: ${payload.purposeCategory}` : '',
+      Array.isArray(payload.purposeTags) && payload.purposeTags.length ? `Tags: ${payload.purposeTags.join(', ')}` : '',
+      payload.target ? `Audience: ${payload.target}` : '',
+      (Array.isArray(payload.tones) && payload.tones.length) || payload.tone ? `Tone: ${[...(payload.tones || []), payload.tone || ''].filter(Boolean).join(', ')}` : '',
+      (Array.isArray(payload.styles) && payload.styles.length) || payload.style ? `Style: ${[...(payload.styles || []), payload.style || ''].filter(Boolean).join(', ')}` : '',
+      payload.needs && payload.needs.length ? `Needs: ${payload.needs.join(', ')}` : '',
+      payload.aspectRatio ? `AspectRatio: ${payload.aspectRatio}` : '',
+      payload.duration ? `TargetDuration: ${payload.duration}s` : ''
+    ].filter(Boolean).join('\n');
+    var promptBase = [
+      'Global',
+      header,
+      selections,
+      'Scene Visual',
+      (scene.shot || ''),
+      'Scene Duration',
+      ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')
+    ].filter(Boolean).join('\n');
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
     if (!finalPrompt || !finalPrompt.trim()) {
       alert('프롬프트가 비어 있어 영상 생성에 실패했습니다. 시나리오/스토리 탭에서 프롬프트를 입력해주세요.');

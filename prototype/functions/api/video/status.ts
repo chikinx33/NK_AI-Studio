@@ -76,8 +76,23 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       log('operation_get_error', err);
     }
 
-    const rawOperation = { fetchPredictOperation: dataFetch, operationGet: dataOp };
-    console.log('[video-status][rawOperation]', rawOperation);
+    const summarize = (obj: any): any => {
+      if (!obj || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(summarize);
+      const out: any = {};
+      for (const k of Object.keys(obj)) {
+        const v: any = (obj as any)[k];
+        if (k === 'bytesBase64Encoded' && typeof v === 'string') {
+          out[k] = `[omitted:${v.length} bytesBase64Encoded]`;
+        } else {
+          out[k] = summarize(v);
+        }
+      }
+      return out;
+    };
+
+    const rawOperation = { fetchPredictOperation: summarize(dataFetch), operationGet: summarize(dataOp) };
+    console.log('[video-status] fetch done', { jobId, done: !!((dataFetch as any)?.done || (dataOp as any)?.done), hasResponse: !!(opSource?.response), hasError: !!(opSource?.error) });
 
     // if fetchPredictOperation already has response/videos, 우선 사용
     const opSource =
