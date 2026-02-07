@@ -91,13 +91,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return out;
     };
 
-    const rawOperation = { fetchPredictOperation: summarize(dataFetch), operationGet: summarize(dataOp) };
-    console.log('[video-status] fetch done', { jobId, done: !!((dataFetch as any)?.done || (dataOp as any)?.done), hasResponse: !!(opSource?.response), hasError: !!(opSource?.error) });
-
-    // if fetchPredictOperation already has response/videos, 우선 사용
     const opSource =
-      (dataFetch && typeof dataFetch === 'object' && dataFetch.response) ? dataFetch :
+      (dataFetch && typeof dataFetch === 'object' && (dataFetch as any).response) ? dataFetch :
       (dataOp && typeof dataOp === 'object' && !Array.isArray(dataOp) ? dataOp : dataFetch);
+
+    const rawOperation = { fetchPredictOperation: summarize(dataFetch), operationGet: summarize(dataOp) };
+    console.log('[video-status] fetch done', { jobId, done: !!((dataFetch as any)?.done || (dataOp as any)?.done), hasResponse: !!(opSource as any)?.response, hasError: !!(opSource as any)?.error });
 
     const op: any = opSource || {};
     let done = !!op.done;
