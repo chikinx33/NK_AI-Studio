@@ -24,10 +24,6 @@ export async function onRequestPost(context) {
     return new Response(null, { status: 204, headers: corsHeaders(origin) });
   }
 
-  if (!env.OPENAI_API_KEY) {
-    return jsonError("OPENAI_API_KEY not set", 500, origin);
-  }
-
   let body;
   try {
     body = await request.json();
@@ -123,6 +119,10 @@ Please respond in English.`
 
   let scenes;
   try {
+    // 없으면 즉시 fallback 생성
+    if (!env.OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY missing");
+    }
     const completion = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -153,13 +153,35 @@ Please respond in English.`
       throw new Error("Invalid scenes format from OpenAI");
     }
   } catch (err) {
-    return jsonError(err.message || "OpenAI request failed", 500, origin);
+    // 근본 원인: 모델/키/요청 실패 시 UI가 비지 않도록 안전한 기본 시나리오를 반환
+    scenes = fallbackScenes(topic, target, duration, sceneCount);
+    return new Response(JSON.stringify({ scenes, fallback: true, error: err?.message || 'fallback_used' }), {
+      status: 200,
+      headers: corsHeaders(origin),
+    });
   }
 
   return new Response(JSON.stringify({ scenes }), {
     status: 200,
     headers: corsHeaders(origin),
   });
+}
+
+function fallbackScenes(topic, target, duration, sceneCount) {
+  const count = Number(sceneCount) || 4;
+  const per = Math.max(Math.floor((Number(duration) || 60) / count), 5);
+  const t = topic || "주제 미정";
+  const audience = target || "일반 시청자";
+  const scenes = [];
+  for (let i = 0; i < count; i++) {
+    scenes.push({
+      id: i + 1,
+      lines: `${t}에 대한 핵심 포인트 ${i + 1}. ${audience}가 이해하기 쉬운 짧은 설명.`,
+      shot: `장면 ${i + 1}의 시각적 아이디어를 단문으로`,
+      estSec: per
+    });
+  }
+  return scenes;
 }
 
 function jsonError(message, status = 500, origin = null) {
