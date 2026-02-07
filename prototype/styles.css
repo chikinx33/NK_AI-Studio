@@ -1173,6 +1173,42 @@ a.btn-primary:active {
   display: none;
 }
 
+.page-loading {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 12, 0.45);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  text-align: center;
+}
+.page-loading.hidden {
+  display: none;
+}
+.page-loading .loading-box {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: center;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+.page-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+.main.loading-blur {
+  filter: blur(6px);
+  pointer-events: none;
+}
+
 .blurred-content {
   filter: blur(4px);
 }

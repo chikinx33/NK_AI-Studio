@@ -1,4 +1,4 @@
-;(function () {
+﻿;(function () {
   const NK = window.NK || (window.NK = {});
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
@@ -111,7 +111,11 @@
     const form = document.getElementById('scenario-form');
     if (!form) return;
 
-    // 장르(목적 대분류) 드롭다운 옵션 주입 - 기본값이 비어 보이는 문제 대응
+    const pageLoading = document.getElementById('page-loading');
+    const main = document.querySelector('.main');
+    if (main) main.classList.add('loading-blur');
+
+    // 장르(목적 대분류) 옵션을 주입 - 기본값이 비어 보이는 문제 대응
     const ensurePurposeOptions = () => {
       const sel = document.getElementById('purpose-category');
       if (!sel || sel.options.length) return;
@@ -142,7 +146,7 @@
     if (saved) draft = JSON.parse(saved);
     const pid = draft?.id || new URLSearchParams(location.search).get('projectId');
 
-    // 서버 최신 데이터 우선 로드
+    // 서버 최신 데이터를 우선 로드
     if (pid && NK.api?.projectGet) {
       try {
         const srv = await NK.api.projectGet(pid);
@@ -160,10 +164,10 @@
       } catch (_) { }
     }
 
-    // 폼 렌더
+    // 저장된 초안 로드
     loadDraft(draft);
 
-    // 태그/토글 클릭
+    // 토글/버튼 클릭
     form.addEventListener('click', (e) => {
       const btn = e.target.closest('.tag-toggle, .duration-toggle, .ratio-btn');
       if (!btn) return;
@@ -235,8 +239,7 @@
             const est = parseEst(estTxt);
             return {
               id,
-              title: '', // 제목 미사용
-              lines: card.querySelector('.view-lines')?.textContent?.trim() || '',
+              title: '', // 제목은 미사용
               shot: card.querySelector('.view-shot')?.textContent?.trim() || '',
               estSec: est
             };
@@ -254,5 +257,17 @@
         }
       };
     }
+    // 페이지 로딩 종료 처리 (초기 렌더 완료 후)
+    setTimeout(() => {
+      if (pageLoading) pageLoading.classList.add('hidden');
+      if (main) main.classList.remove('loading-blur');
+    }, 120);
   };
 })();
+
+
+
+
+
+
+

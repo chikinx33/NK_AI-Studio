@@ -4,7 +4,7 @@
   var ctx = null;
   var lastProjectId = null;
   var subscribed = false;
-  // ?곕え???뚯꽦 URL (吏㏃? 臾댁쓬 wav)
+  // 샘플 보이스 파일 URL (짧은 무음 wav)
   var SAMPLE_VOICE_URL = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
   var getProjectId = function () {
     if (lastProjectId) return lastProjectId;
@@ -33,7 +33,7 @@
     return null;
   };
 
-  // 怨듯넻 紐⑤떖/?ㅼ슫濡쒕뱶 ?좏떥
+  // 공통 모달 / 다운로드 헬퍼
   async function downloadFile(url, filename) {
     try {
       if (!url) return;
@@ -89,7 +89,7 @@
     const box = modal.querySelector('.lib-content');
     if (!box) return;
     if (!items || !items.length) {
-      box.innerHTML = '<p class="muted">由ъ냼?ㅺ? ?놁뒿?덈떎.</p>';
+      box.innerHTML = '<p class="muted">항목이 없습니다.</p>';
     } else {
       const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
@@ -102,7 +102,7 @@
           '</div>'
         );
       }).join('');
-      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:12px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">?쇱씠釉뚮윭由?/span><div style="flex:1;"></div><button class="btn-secondary lib-close-btn" id="lib-close">?リ린</button></div><div class="lib-grid">' + list + '</div>';
+      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:12px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
       box.querySelectorAll('.lib-item').forEach(function (item) {
         item.onclick = function () {
           const u = item.dataset.url;
@@ -200,7 +200,7 @@
       if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
       try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
 
-      // ?쒕쾭 ?곗씠???곗꽑 濡쒕뱶 ?쒕룄 + ?ㅽ넗由ъ? fallback
+      // 서버 데이터 로드 시도 + 레퍼런스 fallback
       var serverData = null;
       const loadReferenceFallback = async function () {
         const candidates = [];
@@ -483,7 +483,7 @@
       savePipelineBtn.onclick = async function () {
         const originalText = savePipelineBtn.textContent;
         savePipelineBtn.disabled = true;
-        savePipelineBtn.textContent = '??μ쨷...';
+        savePipelineBtn.textContent = '저장 중...';
         setPipelineLoading(true);
         var st = ctx.getState();
         if (!st) return;
@@ -496,9 +496,9 @@
               aspectRatio: st.aspectRatio || '',
               title: getProjectTitle()
             });
-            // ?쒕쾭 저장?깃났 ??濡쒖뺄 ?꾩떆 ?뚯씠?꾨씪??罹먯떆???뺣━
+            // 서버 저장이 끝나면 임시 로컬 파이프라인 캐시를 지움
             try { localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
-            alert('??λ릺?덉뒿?덈떎.');
+            alert('저장되었습니다.');
           } catch (err) {
             alert('저장 실패: ' + (err && err.message ? err.message : err));
           } finally {
@@ -508,11 +508,11 @@
           }
           return;
         }
-        // projectId ?놁쓣 ?뚮룄 踰꾪듉 ?곹깭 蹂듭썝
+        // projectId가 없을 때 버튼 상태 복구
         savePipelineBtn.disabled = false;
         savePipelineBtn.textContent = originalText;
         setPipelineLoading(false);
-        alert('??λ릺?덉뒿?덈떎.');
+        alert('저장되었습니다.');
       };
     }
     var bulkGen = document.getElementById('bulk-generate');
@@ -536,7 +536,7 @@
       };
     }
 
-    // ?≪뀡/? ?대┃ ?대깽??諛붿씤??以묐났 諛붿씤??諛⑹?)
+    // 씬/미디어 카드 클릭 이벤트 바인딩(중복 방지)
     if (!pipelineScenes.dataset.bound) {
       pipelineScenes.dataset.bound = '1';
       pipelineScenes.addEventListener('click', async function (e) {
@@ -617,7 +617,7 @@
                   alert('업로드 응답에 이미지 URL이 없습니다.');
                 }
               } catch (err) {
-                alert('?대?吏 ?낅줈???ㅽ뙣: ' + (err && err.message ? err.message : err));
+                alert('이미지 업로드 실패: ' + (err && err.message ? err.message : err));
               }
             };
             inputImg.click();
@@ -625,7 +625,7 @@
           }
           if (action === 'library-image') {
             if (!projectId) {
-              alert('프로젝트가 선택되지 않았습니다. ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
+              alert('프로젝트가 선택되지 않았습니다. 라이브러리를 불러올 수 없습니다.');
               openLibraryModal([], 'image', null);
               return;
             }
@@ -676,7 +676,7 @@
                 st.scenes[idx] = Object.assign({}, scene, { videoUrl: vurl, videoError: '', videoStatus: vurl ? 'done' : '' });
                 refreshAndPersist(true);
               } catch (err) {
-                alert('鍮꾨뵒???낅줈???ㅽ뙣: ' + (err && err.message ? err.message : err));
+                alert('비디오 업로드 실패: ' + (err && err.message ? err.message : err));
               }
             };
             inputVid.click();
@@ -684,7 +684,7 @@
           }
           if (action === 'library-video') {
             if (!projectId) {
-              alert('프로젝트가 선택되지 않았습니다. ?쇱씠釉뚮윭由щ? 遺덈윭?????놁뒿?덈떎.');
+              alert('프로젝트가 선택되지 않았습니다. 라이브러리를 불러올 수 없습니다.');
               openLibraryModal([], 'video', null);
               return;
             }
@@ -713,7 +713,7 @@
           if (action === 'voice-generate') {
             const sel = pipelineScenes.querySelector('.voice-select[data-id="' + id + '"]');
             const vid = (sel && sel.value) ? sel.value : 'demo-male';
-            st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '?앹꽦以?..', voiceVoiceId: vid });
+            st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: vid });
             refreshAndPersist(false);
             setTimeout(() => {
               const cur = ctx.getState();
@@ -721,7 +721,7 @@
               const ii = cur.scenes.findIndex(s => String(s.id) === String(id));
               if (ii < 0) return;
               cur.scenes[ii] = Object.assign({}, cur.scenes[ii], {
-                voiceStatus: '?꾨즺',
+                voiceStatus: '완료',
                 voiceUrl: SAMPLE_VOICE_URL,
                 voiceVoiceId: vid
               });
@@ -733,7 +733,7 @@
           }
         }
 
-        // ?≪뀡 ??? ?대┃ ???쒖꽦 ?뚮몢由??쒖떆
+        // 씬 셀을 클릭했을 때 활성 상태 표시
         var cell = e.target.closest('.scene-cell');
         if (!cell) return;
         var table = pipelineScenes.querySelector('.scene-table');
@@ -742,7 +742,7 @@
         cell.classList.add('active-cell');
       });
 
-      // ?대?吏/鍮꾨뵒???대┃ ???앹뾽
+      // 이미지/비디오 클릭 시 모달 오픈
       pipelineScenes.addEventListener('click', function (e) {
         const img = e.target.closest('img.scene-img');
         if (img && img.src) {
@@ -768,7 +768,7 @@
       }
     });
 
-    // 鍮꾨뵒???앹꽦 怨듯넻 ?⑥닔
+    // 비디오 생성 공통 함수
   async function startVideoForIdx(i) {
     var st = ctx.getState();
     if (!st) return;
@@ -795,7 +795,7 @@
         projectId: projectId,
         projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
         sceneId: scene.id,
-        // ?쒕쾭 ?붽뎄?ы빆: promptText, imageDataUrl ?꾩닔
+        // 서버에 꼭 전달해야 하는 값: promptText, imageDataUrl
         promptText: finalPrompt,
         script: scene.lines,
         aspectRatio: st.aspectRatio || "16:9",
@@ -958,7 +958,7 @@
     if (!st) return;
     var pid = st.draftId || getProjectId();
     if (!pid) {
-      alert('?꾨줈?앺듃 ID瑜?李얠쓣 ???놁뼱 ?대?吏 ?앹꽦??以묐떒?섏뿀?듬땲?? ??쒕낫?쒖뿉???꾨줈?앺듃瑜??ㅼ떆 ?좏깮?섏꽭??');
+      alert('프로젝트 ID를 찾을 수 없어 이미지를 생성할 수 없습니다. 왼쪽 상단에서 프로젝트를 다시 선택해 주세요.');
       return;
     }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
@@ -970,17 +970,17 @@
     try {
       var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: pid });
       var dataUrl = (json.dataUrl || json.bytesBase64Encoded || '');
-      if (!dataUrl) throw new Error('?대?吏 ?곗씠?곕? 諛쏆? 紐삵뻽?듬땲??');
+      if (!dataUrl) throw new Error('이미지 데이터가 비었습니다.');
       st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: dataUrl, imgLoading: false, imgError: '', promptText: scene.promptText });
       ctx.setState(st);
-      console.log('Scene ' + scene.id + ' ?대?吏 ?앹꽦 ?깃났');
+      console.log('Scene ' + scene.id + ' 이미지 생성 완료');
     } catch (err) {
       var msg = (err && err.message) || '';
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var rc = Number(retryCount) || 0;
       if (is500 && rc < 2) {
-        console.warn('이미지 생성 실패 (500), ?ъ떆??' + (rc + 1) + '/2...');
-        st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: ('?ъ떆??以?.. (' + (rc + 1) + '/2)') });
+        console.warn('이미지 생성 실패(500), 재시도 ' + (rc + 1) + '/2...');
+        st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: ('재시도 중... (' + (rc + 1) + '/2)') });
         ctx.setState(st);
         ui.render();
         await new Promise(function (resolve) { return setTimeout(resolve, 2000 * Math.pow(2, rc)); });
