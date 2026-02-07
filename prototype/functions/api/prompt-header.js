@@ -16,20 +16,22 @@
   const style = [...(body.styles || []), body.style || ''].filter(Boolean).join(', ');
   const target = body.target || '';
   const duration = body.duration || '';
+  const directives = (body.banned || '').trim();
 
-  const sys = `You are an assistant that writes a single global visual anchor sentence for an entire video project.
+  const sys = `You write one global visual anchor sentence for the entire video project.
 - Output JSON only: {"header":"..."}
-- One concise English sentence (can be two clauses) that sets the consistent visual world for all scenes.
-- Include: overall visual style (animation/illustration/real), color/line/render feel, mood matching tone, character consistency (type, outfits), setting (indoor/outdoor, world, season/time), recurring props treatment, and camera/framing continuity.
-- Do NOT mention the specific scene content; make it project-wide.
-- SAFETY: To avoid video generation policy violations, expressly avoid describing 'realistic' or 'photorealistic' human faces. Prefer 'stylized', 'animated', '3D character', 'toy-like', 'soft render', or 'illustration'.
-- Keep it under 55 words.`;
+- Make a single concise English sentence (≤55 words) that sets the consistent visual world for all scenes.
+- Include: overall visual style (respect user style), color/lighting/texture feel, mood matching tone, character consistency (type, outfits), setting (indoor/outdoor/world/season/time), recurring props, and camera/framing continuity.
+- Apply Mandatory Directives as hard constraints with no paraphrasing.
+- If the user specified a style, do NOT switch to other looks (e.g., do not default to stylized/animated unless explicitly requested).
+- Safety: stay within policy, but prioritize the user's style/constraints; if faces are required, keep them non-graphic and non-violent.`;
 
   const user = `Project: ${topic}
-Tone: ${tone}
-Style: ${style}
-Audience: ${target}
-Duration: ${duration}s`;
+Tone: ${tone || 'unspecified'}
+Style: ${style || 'unspecified'}
+Audience: ${target || 'unspecified'}
+Duration: ${duration ? duration + 's' : 'unspecified'}
+Mandatory Directives: ${directives || 'none'}`;
 
   try {
     const completion = await fetch('https://api.openai.com/v1/chat/completions', {
