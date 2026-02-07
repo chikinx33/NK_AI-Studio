@@ -853,6 +853,12 @@
       var status = res.status || '';
       var st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
+      if (res.done && res.error) {
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error.message || 'video_error' });
+        ctx.setState(st);
+        ui.render();
+        return;
+      }
       if (playback) {
         st.scenes[idx] = Object.assign({}, st.scenes[idx], {
           videoUrl: playback,

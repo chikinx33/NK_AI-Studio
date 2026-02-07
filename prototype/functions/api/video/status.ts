@@ -73,10 +73,17 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const rawOperation = { fetchPredictOperation: dataFetch, operationGet: dataOp };
     console.log('[video-status][rawOperation]', rawOperation);
 
-    const op: any = dataOp || dataFetch || {};
-    const done = !!op.done;
-    const opError = op.error || null;
-    const opResponse = op.response || null;
+    const op: any = (typeof dataOp === 'string' ? {} : dataOp) || dataFetch || {};
+    let done = !!op.done;
+    let opError = op.error || null;
+    let opResponse = op.response || null;
+
+    // fetchPredictOperation에서 바로 error를 내려주는 경우 처리
+    if (!done && dataFetch && (dataFetch as any).error) {
+      opError = (dataFetch as any).error;
+      opResponse = (dataFetch as any).response || null;
+      done = true;
+    }
 
     const pick = (r: any) =>
       r?.videos?.[0]?.gcsUri ||
@@ -103,7 +110,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       response: opResponse || null,
       rawOperation,
       playback: done ? playback : null,
-      playbackUrl: done ? playback : null
+      playbackUrl: done ? playback : null,
+      status: done
+        ? (opError ? 'error' : (playback ? 'done' : 'done_no_output'))
+        : 'processing'
     });
   } catch (e: any) {
     return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'INTERNAL', message: e?.message || 'Unknown error' }, response: null, rawOperation: null, playback: null }, 500);
