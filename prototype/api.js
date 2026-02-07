@@ -76,16 +76,22 @@
     });
     var text = await res.text();
     if (!res.ok) throw new Error((e(text) || 'video_api_error') + '');
-    return j(text);
+    var data = j(text) || {};
+    var jobId = data.jobId || data.job_id || data.id || data.operationName;
+    var outputGcsUri = data.outputGcsUri || data.output_gcs_uri;
+    var model = data.model;
+    if (!jobId) {
+      throw new Error('videoStart succeeded but jobId missing. keys=' + Object.keys(data).join(','));
+    }
+    return { jobId, outputGcsUri, model, raw: data };
   };
 
   api.videoStatus = async function (params) {
     var p = params || {};
-    // 백엔드가 기대하는 쿼리 키는 job_id 이므로 매핑
     var q = new URLSearchParams();
     if (p.projectId) q.set('projectId', String(p.projectId));
     if (p.sceneId) q.set('sceneId', String(p.sceneId));
-    var job = p.job_id || p.jobId || p.job || '';
+    var job = p.jobId || p.job_id || p.job || '';
     if (job) q.set('job_id', String(job));
     var res = await fetch(withBase('/api/video/status?' + q.toString()));
     var text = await res.text();
