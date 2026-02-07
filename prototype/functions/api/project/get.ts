@@ -61,6 +61,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
       const imageUrl = typeof s?.imageDataUrl === "string" ? s.imageDataUrl : "";
       const imagePath = toGcsPath(imageUrl) || (typeof s?.imagePath === "string" ? s.imagePath : "");
+      const videoUrl = typeof s?.videoUrl === "string" ? s.videoUrl : (typeof s?.videoPlaybackUrl === "string" ? s.videoPlaybackUrl : "");
       return {
         id: Number(s?.id ?? idx + 1),
         title: typeof s?.title === "string" ? s.title : "",
@@ -69,6 +70,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: imagePath || imageUrl,
         imagePath,
+        videoUrl,
+        videoStatus: typeof s?.videoStatus === "string" ? s.videoStatus : "",
+        videoError: typeof s?.videoError === "string" ? s.videoError : "",
+        videoJobId: typeof s?.videoJobId === "string" ? s.videoJobId : "",
+        videoMethod: typeof s?.videoMethod === "string" ? s.videoMethod : "",
       };
     };
 

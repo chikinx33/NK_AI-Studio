@@ -57,6 +57,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
       const imageUrl = typeof s?.imageDataUrl === "string" ? s.imageDataUrl : "";
       const imagePath = toGcsPath(imageUrl);
+      const videoUrl = typeof s?.videoUrl === "string" ? s.videoUrl : "";
+      const videoStatus = typeof s?.videoStatus === "string" ? s.videoStatus : "";
+      const videoError = typeof s?.videoError === "string" ? s.videoError : "";
+      const videoJobId = typeof s?.videoJobId === "string" ? s.videoJobId : "";
+      const videoMethod = typeof s?.videoMethod === "string" ? s.videoMethod : "";
       return {
         id: Number(s?.id ?? idx + 1),
         title: typeof s?.title === "string" ? s.title : "",
@@ -65,6 +70,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: imagePath || imageUrl,
         imagePath,
+        videoUrl,
+        videoStatus,
+        videoError,
+        videoJobId,
+        videoMethod,
       };
     };
 
