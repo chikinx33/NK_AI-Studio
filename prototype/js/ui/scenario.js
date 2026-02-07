@@ -93,6 +93,14 @@
     return parts.join(' · ');
   };
 
+  const buildCommonDetail = () => {
+    const p = currentPayload || {};
+    const lines = [];
+    lines.push('Common');
+    lines.push(p.header || '(Common 블록이 아직 생성되지 않았습니다)');
+    return lines.join('\n');
+  };
+
   // ---------- render scenes ----------
   scenario.renderScenes = function (scenes = []) {
     const container = document.getElementById('scenario-cards');
@@ -109,7 +117,7 @@
         </div>`;
       return;
     }
-    const commonBlock = commonInfo ? `<div class="common-info-row"><span class="muted tiny">${commonInfo}</span></div>` : '';
+    const commonBlock = commonInfo ? `<div class="common-info-row" id="common-info-row"><span class="muted tiny">${commonInfo}</span><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button></div>` : '';
     container.innerHTML = commonBlock + sceneList.map(s => `
       <div class="scenario-card">
         <div class="card-top">
@@ -266,12 +274,15 @@
       const payload = collectPayload();
       try {
         const res = await NK.api.scenario(payload);
+        const headerText = (NK.service?.project?.getPromptHeader)
+          ? await NK.service.project.getPromptHeader(payload)
+          : '';
         if (res?.scenes) {
           const normalized = normalizeScenes(res.scenes);
           draft = draft || { id: Date.now(), title: payload.topic || '새 프로젝트' };
           draft.payload = payload;
           draft.scenes = normalized;
-          draft.header = res.header || draft.header || '';
+          draft.header = res.header || headerText || draft.header || '';
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           NK.store.saveDrafts([draft]);
           if (NK.api?.projectSave) {
@@ -330,6 +341,26 @@
     // 페이지 로딩 종료 처리 (초기 렌더 완료 후)
     setTimeout(finishLoading, 120);
     window.addEventListener('load', finishLoading);
+
+    // 공통 프롬프트 팝업
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (target && target.id === 'common-info-btn') {
+        const modal = document.getElementById('common-modal');
+        const body = document.getElementById('common-modal-body');
+        if (modal && body) {
+          body.textContent = buildCommonDetail();
+          modal.classList.remove('hidden');
+        }
+      }
+      if (target && target.dataset && target.dataset.close === 'common-modal') {
+        document.getElementById('common-modal')?.classList.add('hidden');
+      }
+      const modal = document.getElementById('common-modal');
+      if (modal && !modal.classList.contains('hidden') && target === modal) {
+        modal.classList.add('hidden');
+      }
+    });
   };
 })();
 
