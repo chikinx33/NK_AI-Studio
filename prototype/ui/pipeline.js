@@ -1022,13 +1022,15 @@
       styleLock =
         'Style Rules: use only [' +
         styleArr.join(', ') +
-        '] as specified by the user. Do NOT switch to animation/cartoon/toy/pastel/soft-render/3D character styles unless the user explicitly included them.';
+        '] as specified by the user. Do NOT switch to animation/cartoon/toy/pastel/soft-render/3D character styles unless explicitly requested.';
     }
+    // common 프롬프트를 최우선으로 API에 전달
     var finalPrompt = [
       common ? ('Common:\n' + common) : '',
       styleLock,
-      scene.promptText,
-      'Narration (Korean): ' + scene.lines
+      scene.promptText ? ('Scene Prompt:\n' + scene.promptText) : '',
+      'Scene Visual:\n' + (scene.shot || ''),
+      'Narration (Korean): ' + (scene.lines || '')
     ].filter(Boolean).join('\n\n');
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
