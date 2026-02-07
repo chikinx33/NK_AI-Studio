@@ -137,7 +137,8 @@
     const form = document.getElementById('scenario-form');
     if (!form || !draft) return;
     const p = draft.payload || {};
-    currentPayload = p || {};
+    const header = draft.header || p.header || '';
+    currentPayload = Object.assign({}, p || {}, { header });
     const defaults = NK.config.DEFAULTS || {};
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
     const defaultCat = p.purposeCategory || categories[0] || '';
@@ -283,6 +284,7 @@
           draft.payload = payload;
           draft.scenes = normalized;
           draft.header = res.header || headerText || draft.header || '';
+          currentPayload = Object.assign({}, draft.payload, { header: draft.header });
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           NK.store.saveDrafts([draft]);
           if (NK.api?.projectSave) {
