@@ -779,7 +779,7 @@
     if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
     var header = st.header || '';
     var payload = st.payload || {};
-    var audience = (Array.isArray(payload.targets) && payload.targets.length) ? payload.targets.join(', ') : (payload.target || '');
+    var audience = payload.target || '';
     var selections = [
       payload.topic ? `Topic: ${payload.topic}` : '',
       payload.purposeCategory ? `Genre/Purpose: ${payload.purposeCategory}` : '',

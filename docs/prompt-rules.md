@@ -22,7 +22,8 @@
   - 종교 · 신앙: 말씀 묵상, 설교 요약, 신앙 이야기, 간증, 기도  
   - 사회 · 공감: 인터뷰, 다큐형 콘텐츠, 사회 이슈, 공감 토크
 
-- **시청 타겟(targets)**: 영유아, 아동, 청소년, 청년, 직장인, 중장년, 시니어, 전 연령
+- **시청 타겟(target)**: (드롭다운 단일 선택)  
+  영유아 · 학습/놀이/감성 발달 / 아동 · 기초 학습/호기심/놀이/이야기 / 청소년 · 학습/시험/자기 정체성/엔터테인먼트 / 청년 · 엔터테인먼트/감성/힐링/정보/자기계발 / 직장인 · 업무 효율/실용 정보/자기계발/스트레스 해소 / 중장년 · 생활 정보/가정/경제/건강/취미/노후 설계 / 시니어 · 건강/여가/힐링/회고/정치 / 전 연령 · 공감/정보/엔터테인먼트
 
 - **학습/니즈(needs)**:  
   학습, 놀이, 엔터테인먼트, 스토리, 감성, 힐링, 공감, 실용 정보, 생활 정보, 업무 효율, 생산성, 자기계발, 시험, 진로, 커리어, 창업, 경제, 재테크, 소비, 노후 설계, 정치, 사회 이슈, 시사, 건강, 운동, 식습관, 여가, 취미, 여행, 스트레스 해소, 멘탈 관리, 관계, 가정, 자녀, 연애, 소통, 자기 성찰, 라이프스타일
@@ -40,8 +41,9 @@
 
 ## 2. Common Prompt 구성 흐름 (핵심 규칙)
 1) **scenario.html / scenario.js**  
-   - payload에 topic, purposeCategory, purposeTags, targets/target, needs, duration, tones/tone, styles/style, aspectRatio, banned을 저장.  
-   - 시청 타겟/톤/스타일 태그는 다중 선택 → 배열(`targets`, `tones`, `styles`)과 쉼표 문자열(`target`, `tone`, `style`)을 함께 보관.
+   - payload에 topic, purposeCategory, purposeTags, target, needs, duration, tones/tone, styles/style, aspectRatio, banned을 저장.  
+   - 톤/스타일 태그는 다중 선택 → 배열(`tones`, `styles`)과 쉼표 문자열(`tone`, `style`)을 함께 보관.  
+   - 시청 타겟은 단일 선택(`target`)만 사용한다.
 2) **pipeline.js에서 Common Prompt 조립**  
    - selections: Topic / Genre·Purpose / Tags / Audience / Needs / AspectRatio / TargetDuration.  
    - Narrative & Tone Rules  
@@ -85,9 +87,10 @@
 - payload와 씬 정보는 localStorage + 프로젝트 저장 API로 보관.  
 - 영상 결과는 `nkstudio-video-out/projects/{projectId}/video/`에 mp4로 저장, playbackUrl로 재생.
 
-## 5. 태그 다중 선택 규칙
-- 시청 타겟, 톤, 스타일 태그는 모두 다중 선택 가능.  
-- 선택된 배열을 `targets`/`tones`/`styles`에 저장하고, 표시·호환을 위해 쉼표 문자열을 `target`/`tone`/`style`에도 기록한다.
+## 5. 태그 선택 규칙
+- 톤, 스타일 태그는 다중 선택 가능.  
+- 시청 타겟은 태그 없이 드롭다운 단일 선택만 사용한다.  
+- 선택된 배열을 `tones`/`styles`에 저장하고, 표시·호환을 위해 쉼표 문자열을 `tone`/`style`에도 기록한다.
 
 ## 6. 자유입력 우선 규칙 (Override Rule)
 - 원칙  
