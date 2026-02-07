@@ -67,6 +67,7 @@ export async function onRequestPost(context) {
 - 각 Scene의 lines는 2~3문장, 시청자 눈높이에 맞춘 어휘·톤을 느끼게 작성하세요.
 - 각 Scene의 shot(시각 묘사)은 한 줄로 요약하고, shot에만 스타일을 반영하세요.
 - [Style 고정] 스타일 지시를 우선하며, 지정된 스타일 외 임의 스타일(예: ${styleBan})을 사용하지 마세요.
+- [Style 금지 예시] 사용자가 요청하지 않았다면 “soft-rendered pastel whimsical animated world”, “stylized playful characters”, “toy-like” 등의 기본 스타일을 넣지 마세요.
 - [Tone 고정] 톤 지시는 그대로 따르고, 임의 톤을 추가하지 마세요.
 - [Mandatory Directives] extraNotes는 해석 없이 그대로 지켜야 할 규칙으로 적용하세요.
 - 마크다운/추가 설명 없이 JSON만 반환.`;
@@ -84,7 +85,7 @@ export async function onRequestPost(context) {
 - Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
 - For 30m+ long-form, keep per-scene estSec between 10??0 seconds.
 - Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
-- [Style lock] Follow given style; do NOT switch to other looks (e.g., avoid ${styleBan}).
+- [Style lock] Follow given style; do NOT switch to other looks (e.g., avoid ${styleBan}). Do not default to soft-rendered pastel/whimsical/animated worlds unless the user asked for them.
 - [Tone lock] Follow given tone; do NOT add unrelated tones.
 - [Mandatory Directives] Treat extraNotes as hard rules with no paraphrasing or relaxation.
 - No markdown or extra explanations.`;
