@@ -6,8 +6,8 @@
      * 시간 문자열(예: '15s', '1h')을 초 단위 숫자로 파싱합니다.
      */
     utils.parseEst = function (val) {
-        if (!val) return null;
-        const trimmed = val.trim().toLowerCase();
+        if (val === undefined || val === null) return null;
+        const trimmed = String(val).trim().toLowerCase();
         const match = trimmed.match(/^([0-9]+(?:\.[0-9]+)?)([smh])?$/);
         if (!match) return null;
         const num = parseFloat(match[1]);
