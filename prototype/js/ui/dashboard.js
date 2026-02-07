@@ -222,6 +222,8 @@
 
           const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
           NK.navigation.loadStage(url);
+          // 보조 강제 내비게이션 (일부 환경에서 loadStage가 막히는 문제 대응)
+          setTimeout(() => { try { window.location.assign(url); } catch (_) {} }, 30);
         }
       } else if (action === 'draft-production') {
         const drafts = NK.store.getDrafts();
@@ -233,6 +235,7 @@
           NK.state.broadcast('update-project', { project: draft });
           const url = draft.id ? `scenes.html?projectId=${encodeURIComponent(draft.id)}` : 'scenes.html';
           NK.navigation.loadStage(url);
+          setTimeout(() => { try { window.location.assign(url); } catch (_) {} }, 30);
         }
       } else if (action === 'draft-post') {
         const drafts = NK.store.getDrafts();
@@ -244,6 +247,7 @@
           NK.state.broadcast('update-project', { project: draft });
           const url = draft.id ? `media.html?projectId=${encodeURIComponent(draft.id)}` : 'media.html';
           NK.navigation.loadStage(url);
+          setTimeout(() => { try { window.location.assign(url); } catch (_) {} }, 30);
         }
       } else if (action === 'create-project') {
         if (NK.ui && NK.ui.openProjectOverlay) {
