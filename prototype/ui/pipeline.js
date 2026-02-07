@@ -296,6 +296,7 @@
         });
         state = { payload: serverData.payload || {}, header: headerSrv2, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
         ctx.setState(state);
+        await ui.refreshAssets();
       } else if (stored) {
         var savedRatio = stored.aspectRatio;
         if (savedRatio && saveAspect) saveAspect(savedRatio);
@@ -322,6 +323,7 @@
         });
         state = { payload: stored.payload, header: headerInit2, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
         ctx.setState(state);
+        await ui.refreshAssets();
       } else {
         var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '' };
         var headerInit = withAspectInHeader ? withAspectInHeader('', aspectRatio) : '';
