@@ -40,11 +40,24 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
+    const normalizeScene = (s: any, idx: number) => {
+      const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
+      return {
+        id: Number(s?.id ?? idx + 1),
+        title: typeof s?.title === "string" ? s.title : "",
+        lines: typeof s?.lines === "string" ? s.lines : (typeof s?.dialogue === "string" ? s.dialogue : ""),
+        shot: typeof s?.shot === "string" ? s.shot : (typeof s?.visual === "string" ? s.visual : ""),
+        estSec: est > 0 ? Math.round(est) : undefined,
+      };
+    };
+
+    const scenes = Array.isArray(body.scenes) ? body.scenes.map(normalizeScene) : [];
+
     const payload = {
       projectId,
       title: body.title || "",
       payload: body.payload || {},
-      scenes: Array.isArray(body.scenes) ? body.scenes : [],
+      scenes,
       header: body.header || "",
       aspectRatio: body.aspectRatio || "",
       savedAt: new Date().toISOString(),

@@ -44,7 +44,21 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const res = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
     const text = await res.text();
     if (!res.ok) return send({ error: text || 'not_found' }, res.status, origin);
+    const normalizeScene = (s: any, idx: number) => {
+      const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
+      return {
+        id: Number(s?.id ?? idx + 1),
+        title: typeof s?.title === "string" ? s.title : "",
+        lines: typeof s?.lines === "string" ? s.lines : (typeof s?.dialogue === "string" ? s.dialogue : ""),
+        shot: typeof s?.shot === "string" ? s.shot : (typeof s?.visual === "string" ? s.visual : ""),
+        estSec: est > 0 ? Math.round(est) : undefined,
+      };
+    };
+
     const data = JSON.parse(text);
+    if (Array.isArray(data?.scenes)) {
+      data.scenes = data.scenes.map(normalizeScene);
+    }
     return send({ ok: true, data }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
