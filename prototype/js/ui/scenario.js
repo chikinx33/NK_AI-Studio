@@ -58,7 +58,14 @@
     return (Array.isArray(scenes) ? scenes : []).map((s, i) => {
       const est = parseEst(s.estSec || s.duration || s.len || s.length || 8);
       const lines = s.lines || s.dialogue || s.text || s.script || s.content || '';
-      const shot = s.shot || s.visual || s.camera || s.scene_visual || s.image || '';
+      const shot =
+        s.shot ||
+        s.visual ||
+        s.camera ||
+        s.scene_visual ||
+        s.image ||
+        (lines ? String(lines).split(/(?<=[.!?])\s+/)[0] || '' : '') ||
+        '';
       return {
         id: s.id != null ? s.id : (i + 1),
         lines,
@@ -92,7 +99,7 @@
           <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
         </div>
         <p class="view-lines" data-id="${s.id}" contenteditable="true">${s.lines || ''}</p>
-        <p class="muted small">Visual: <span class="view-shot" data-id="${s.id}" contenteditable="true">${s.shot || ''}</span></p>
+        <p class="muted small">Visual: <span class="view-shot" data-id="${s.id}" contenteditable="true">${s.shot || '없음'}</span></p>
       </div>
     `).join('');
   };

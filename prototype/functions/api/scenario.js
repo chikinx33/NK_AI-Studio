@@ -147,6 +147,34 @@ Mandatory Directives: ${extraNotes || "없음"}
     if (!Array.isArray(scenes) || scenes.length === 0) {
       throw new Error("Invalid scenes format from OpenAI");
     }
+    // sanitize scenes: ensure shot/estSec present
+    scenes = scenes.map((s, idx) => {
+      const lines = s.lines || s.dialogue || s.text || s.script || s.content || "";
+      const firstLine = String(lines || "").split(/(?<=[.!?])\s+/)[0] || lines || "";
+      const shot =
+        s.shot ||
+        s.visual ||
+        s.scene_visual ||
+        s.camera ||
+        s.image ||
+        firstLine ||
+        `장면 ${idx + 1}의 시각적 아이디어`;
+      const fallbackPer = Math.max(
+        Math.floor((Number(duration) || 60) / (sceneCount || 7)),
+        3
+      );
+      const estSec = Math.max(
+        Math.floor(Number(s.estSec || s.duration || s.len || s.length || fallbackPer)),
+        3
+      );
+      return {
+        id: s.id != null ? s.id : idx + 1,
+        title: s.title || "",
+        lines,
+        shot,
+        estSec
+      };
+    });
   } catch (err) {
     // 근본 ?�인: 모델/???�청 ?�패 ??UI가 비�? ?�도�??�전??기본 ?�나리오�?반환
     scenes = fallbackScenes(topic, target, duration, sceneCount);
