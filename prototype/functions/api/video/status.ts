@@ -121,7 +121,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           if (outParsed) {
             const objectBase = outParsed.object.replace(/\/$/, '');
             const stamp = Date.now();
-            const objectName = `${objectBase}/videos/${stamp}-${match[5]}.mp4`;
+            const projectFolder = projectTag || 'default';
+            const objectName = `${objectBase}/projects/${projectFolder}/videos/${stamp}-${match[5]}.mp4`;
             const userProject =
               (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
               (env.GOOGLE_PROJECT_ID as string | undefined) ||
