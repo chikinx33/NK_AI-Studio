@@ -846,6 +846,7 @@
     var delay = 5000;
     try {
       var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId, sceneId: st.scenes[idx].id });
+      console.log('videoStatus', { jobId, res });
       var playback = res.playbackUrl || res.videoUrl || res.outputUrl || res.url || '';
       var status = res.status || '';
       var st = ctx.getState();

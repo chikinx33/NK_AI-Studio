@@ -221,7 +221,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       videoUrl: videoUrlSigned || '',
       gcsUri: gcsUri || '',
       details: { projectId: projectTag, sceneId: sceneIdParam },
-      raw: data
+      raw: data // 전체 Veo 응답 payload 노출 (mp4 생성 단서 확인용)
     });
   } catch (e: any) {
     return corsJson({
