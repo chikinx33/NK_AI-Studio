@@ -802,33 +802,33 @@
         durationSeconds: Math.max(Number(scene.estSec) || 0, 1),
         imageDataUrl: imageUrl
       };
-        var resp = await NK.api.videoStart(payload);
-        var playback = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
-        var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
-        st = ctx.getState() || st;
+      var resp = await NK.api.videoStart(payload);
+      var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
+      var playback = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
+      st = ctx.getState() || st;
+      st.scenes[i] = Object.assign({}, st.scenes[i], {
+        videoUrl: playback,
+        videoStatus: playback ? 'done' : 'processing',
+        videoError: resp.error || '',
+        videoJobId: jobId
+      });
+      ctx.setState(st);
+      ui.render();
+
+      // 폴링을 반드시 시작: jobId가 없으면 즉시 에러
+      const pollingJobId = jobId || resp.job_id || resp.id || '';
+      if (pollingJobId) {
+        // 테스트 목적으로 1회 즉시 호출
+        pollVideoStatus(projectId, pollingJobId, i, 0);
+      } else {
         st.scenes[i] = Object.assign({}, st.scenes[i], {
-          videoUrl: playback,
-          videoStatus: playback ? 'done' : (resp.status || 'processing'),
-          videoError: resp.error || '',
-          videoJobId: jobId
+          videoStatus: 'error',
+          videoError: 'no jobId in videoStart response'
         });
         ctx.setState(st);
         ui.render();
-        if (!playback) {
-          // 상태 폴링은 job_id 하나로 통일
-          const pollingJobId = jobId || resp.job_id || resp.id || '';
-          if (pollingJobId) {
-            pollVideoStatus(projectId, pollingJobId, i, 0);
-          } else {
-            st.scenes[i] = Object.assign({}, st.scenes[i], {
-              videoStatus: 'error',
-              videoError: 'no jobId/playback from server'
-            });
-            ctx.setState(st);
-            ui.render();
-            alert('영상 생성 응답에 jobId나 playbackUrl이 없습니다. 서버 응답을 확인해주세요.');
-          }
-        }
+        alert('영상 생성 응답에 jobId가 없습니다. 서버 응답을 확인해주세요.');
+      }
       } catch (err) {
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
