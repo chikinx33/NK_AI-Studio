@@ -199,7 +199,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     let videoUrlSigned = signedUrl;
     if (gcsUri) {
       try {
-        const parsed = parseGcsUri(gcsUri.startsWith('gs://') ? gcsUri : `gs://${gcsUri.replace(/^https?:\\/\\//, '')}`);
+        const parsed = parseGcsUri(gcsUri.startsWith('gs://') ? gcsUri : `gs://${gcsUri.replace(/^https?:\/\//, '')}`);
         if (parsed) {
           videoUrlSigned = await signGcsUrl({
             bucket: parsed.bucket,
