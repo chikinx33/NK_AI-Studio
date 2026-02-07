@@ -178,12 +178,12 @@ function bufferToBase64Url(buf: ArrayBuffer) {
 }
 
 function gcsToHttps(gcsUri: string) {
-  if (!gcsUri) return ';
+  if (!gcsUri) return '';
   if (gcsUri.startsWith('https://')) return gcsUri;
   if (!gcsUri.startsWith('gs://')) return gcsUri;
   const noScheme = gcsUri.slice(5);
   const slash = noScheme.indexOf('/');
-  if (slash === -1) return ';
+  if (slash === -1) return '';
   const bucket = noScheme.slice(0, slash);
   const object = noScheme.slice(slash + 1);
   return `https://storage.googleapis.com/${bucket}/${object}`;
