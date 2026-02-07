@@ -47,11 +47,26 @@
     return payload;
   };
 
+  const normalizeScenes = (scenes = []) => {
+    return (Array.isArray(scenes) ? scenes : []).map((s, i) => {
+      const est = parseEst(s.estSec || s.duration || s.len || s.length || 8);
+      const lines = s.lines || s.dialogue || s.text || s.script || s.content || '';
+      const shot = s.shot || s.visual || s.camera || s.scene_visual || s.image || '';
+      return {
+        id: s.id != null ? s.id : (i + 1),
+        lines,
+        shot,
+        estSec: est
+      };
+    });
+  };
+
   // ---------- render scenes ----------
   scenario.renderScenes = function (scenes = []) {
     const container = document.getElementById('scenario-cards');
     if (!container) return;
-    if (!scenes.length) {
+    const sceneList = normalizeScenes(scenes);
+    if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
           <div>
@@ -61,7 +76,7 @@
         </div>`;
       return;
     }
-    container.innerHTML = scenes.map(s => `
+    container.innerHTML = sceneList.map(s => `
       <div class="scenario-card">
         <div class="card-top">
           <div>
@@ -103,7 +118,7 @@
     renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], one(p.tones), true);
     renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], one(p.styles), true);
 
-    scenario.renderScenes(draft.scenes || []);
+    scenario.renderScenes(normalizeScenes(draft.scenes || []));
   };
 
   // ---------- init ----------
@@ -206,9 +221,10 @@
       try {
         const res = await NK.api.scenario(payload);
         if (res?.scenes) {
+          const normalized = normalizeScenes(res.scenes);
           draft = draft || { id: Date.now(), title: payload.topic || '새 프로젝트' };
           draft.payload = payload;
-          draft.scenes = res.scenes;
+          draft.scenes = normalized;
           draft.header = res.header || draft.header || '';
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           NK.store.saveDrafts([draft]);
