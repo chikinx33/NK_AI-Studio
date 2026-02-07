@@ -779,11 +779,12 @@
     if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
     var header = st.header || '';
     var payload = st.payload || {};
+    var audience = (Array.isArray(payload.targets) && payload.targets.length) ? payload.targets.join(', ') : (payload.target || '');
     var selections = [
       payload.topic ? `Topic: ${payload.topic}` : '',
       payload.purposeCategory ? `Genre/Purpose: ${payload.purposeCategory}` : '',
       Array.isArray(payload.purposeTags) && payload.purposeTags.length ? `Tags: ${payload.purposeTags.join(', ')}` : '',
-      payload.target ? `Audience: ${payload.target}` : '',
+      audience ? `Audience: ${audience}` : '',
       (Array.isArray(payload.tones) && payload.tones.length) || payload.tone ? `Tone: ${[...(payload.tones || []), payload.tone || ''].filter(Boolean).join(', ')}` : '',
       (Array.isArray(payload.styles) && payload.styles.length) || payload.style ? `Style: ${[...(payload.styles || []), payload.style || ''].filter(Boolean).join(', ')}` : '',
       payload.needs && payload.needs.length ? `Needs: ${payload.needs.join(', ')}` : '',

@@ -25,6 +25,12 @@
     }).join('');
   };
 
+  const toArray = (v) => {
+    if (Array.isArray(v)) return v.filter(Boolean);
+    if (typeof v === 'string') return v.split(',').map(s => s.trim()).filter(Boolean);
+    return [];
+  };
+
   const setActiveButtons = (selector, value) => {
     document.querySelectorAll(selector).forEach(btn => {
       const val = btn.dataset.value || btn.dataset.ratio;
@@ -40,10 +46,13 @@
     fd.forEach((v, k) => { payload[k] = v; });
     payload.purposeTags = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
     payload.needs = Array.from(document.querySelectorAll('#needs-tags .tag-toggle.active')).map(b => b.dataset.value);
+    payload.targets = Array.from(document.querySelectorAll('#target-tags .tag-toggle.active')).map(b => b.dataset.value);
+    payload.target = payload.targets.join(', ');
     payload.tones = Array.from(document.querySelectorAll('#tone-tags .tag-toggle.active')).map(b => b.dataset.value);
     payload.styles = Array.from(document.querySelectorAll('#style-tags .tag-toggle.active')).map(b => b.dataset.value);
     payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || NK.config.DEFAULTS?.DURATION || '15';
     payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || '16:9';
+    if (form.target) form.target.value = payload.targets[0] || '';
     return payload;
   };
 
@@ -99,7 +108,9 @@
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
     const defaultCat = p.purposeCategory || categories[0] || '';
     const targetSel = document.getElementById('target-select');
-    const defaultTarget = p.target || (targetSel && targetSel.options.length ? targetSel.options[0].value : '');
+    const targetList = Array.from(targetSel?.options || []).map(o => o.value);
+    const selectedTargets = toArray(p.targets || p.target);
+    const defaultTarget = selectedTargets[0] || p.target || (targetList[0] || '');
 
     if (form.topic) form.topic.value = p.topic || draft.title || '';
     if (form.purposeCategory) form.purposeCategory.value = defaultCat;
@@ -115,8 +126,9 @@
     const one = (arr) => Array.isArray(arr) && arr.length ? [arr[0]] : [];
     renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[defaultCat] || [], one(p.purposeTags), true);
     renderTagButtons(document.getElementById('needs-tags'), NK.core.needsList || [], one(p.needs), true);
-    renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], one(p.tones), true);
-    renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], one(p.styles), true);
+    renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], toArray(p.tones), false);
+    renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], toArray(p.styles), false);
+    renderTagButtons(document.getElementById('target-tags'), targetList, selectedTargets, false);
 
     scenario.renderScenes(normalizeScenes(draft.scenes || []));
   };
@@ -153,6 +165,19 @@
       });
     };
     ensurePurposeOptions();
+    // 시청 타겟 토글 초기화(다중 선택 지원)
+    const targetOptions = Array.from(document.querySelectorAll('#target-select option')).map(o => o.value);
+    renderTagButtons(document.getElementById('target-tags'), targetOptions, [], false);
+    const targetSel = document.getElementById('target-select');
+    if (targetSel) {
+      targetSel.addEventListener('change', () => {
+        const val = targetSel.value;
+        const btns = document.querySelectorAll('#target-tags .tag-toggle');
+        btns.forEach(b => {
+          if (b.dataset.value === val) b.classList.add('active');
+        });
+      });
+    }
 
     // 화면 비율 버튼(16:9/9:16/1:1)이 폼 밖에 있어 클릭이 안 먹던 문제 해결
     const ratioGroup = document.getElementById('ratio-group');
