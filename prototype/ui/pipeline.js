@@ -1013,8 +1013,20 @@
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var scene = st.scenes[idx];
     var common = st.header || (st.payload && st.payload.header) || '';
+    var styleLock = '';
+    var styleArr = [];
+    if (st.payload) {
+      styleArr = [...(st.payload.styles || []), st.payload.style || ''].filter(Boolean);
+    }
+    if (styleArr.length) {
+      styleLock =
+        'Style Rules: use only [' +
+        styleArr.join(', ') +
+        '] as specified by the user. Do NOT switch to animation/cartoon/toy/pastel/soft-render/3D character styles unless the user explicitly included them.';
+    }
     var finalPrompt = [
       common ? ('Common:\n' + common) : '',
+      styleLock,
       scene.promptText,
       'Narration (Korean): ' + scene.lines
     ].filter(Boolean).join('\n\n');
