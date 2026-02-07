@@ -24,7 +24,7 @@ export async function onRequestPost(context) {
   }
 
   // Build prompt from incoming payload
-  const topic = body.topic || "주제 ?�음";
+  const topic = body.topic || "주제 없음";
   const purposeCategory = body.purposeCategory || "";
   const purposeTags = (body.purposeTags || []).join(", ");
   const target = body.target || "";
@@ -34,7 +34,7 @@ export async function onRequestPost(context) {
   const styleText = (body.style || "").trim();
   const needs = (body.needs || []).join(", ");
   const duration = body.duration || "60";
-  const extraNotes = (body.banned || "").trim(); // UI?�서??추�? ?�명 ?�드�??�용
+  const extraNotes = (body.banned || "").trim(); // UI에서 추가 설명 필드로 사용
   const lang = body.language === "en" ? "en" : "ko";
 
   const durationToScenes = {
@@ -51,24 +51,22 @@ export async function onRequestPost(context) {
   const toneCombined = [tones, toneText].filter(Boolean).join(", ");
   const styleCombined = [styles, styleText].filter(Boolean).join(", ");
 
-  const sysKo = `?�신?� ?�츠/릴스??짧�? ?�상 ?�나리오�??�성?�는 ?�시?�턴?�입?�다.
-- JSON�?반환: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
-- ?�력�?topic, target, purposeCategory, purposeTags, needs, tone/toneText, style/styleText, 추�? ?�명)??모두 반영?�니??
-- ?��? ?�택 ??��???�다�??�스?�보???�선?�니??
-- ??���???��???�동?��? 마세??
-  · Topic = 줄거�??�계관/?�재 결정 (구조·?�·스?�?��? 건드리�? ?�음)
-  · Genre = ?�개/?�사 ?�형�?결정 (문체·?�각 묘사???�님)
-  · Audience = ?�휘 ?�이?�·정�?밀?�·설�?방식�?조절
-  · Duration = Scene 개수?� 분할 구조�?결정 (감정·?�·스?�?�에 관?�하지 ?�음)
-  · Tone = 말투/감정 ?�현�? Style = ?�각???�현?�로 shot?�만 반영
-- Scene?� ${sceneCount}개�? ?�성?�니?? �?Scene??estSec ?�이 ${duration}초에 최�???근접?�게 분배?�도�??�세???�용 ?�차 ±10%). estSec???�무 ?��? ?�게(최소 3�??�상) 조정?�고, 총합??목표 길이�??�거??부족하지 ?�도�?마�?�??�에??미세 보정?�니??
-- Scene 개수 고정 규칙: 15�?4, 30�?7, 45�?10, 60�?12, 30�?120, 1?�간=240, 2?�간=480.
-- 30�??�상 롱폼?� Scene??estSec??10~20�??�이�??��??�니??
-- �?Scene??lines??2~3문장, ?�청 ?��??�높?�에 맞춘 ?�휘, ???��??�을 ?�낄 ???�게 ?�성?�세??
-- �?Scene??shot(?�각 묘사) ??줄을 ?�함?�세?? ?��????�소??shot?�만 반영?�니??
-- [중요] ?�상 ?�성 ?�전 ?�책 준?? '?�사 ?�람 ?�굴'?�나 '구체?�인 ?�목구비' 묘사�??�하?�요. ?�??'3D 캐릭??, '?�니메이???��???, '?�모??, '?�루??, '?�물/?�물', '?�이 ?��???, '몽환??분위�? ?�을 ?�용?�여 ?�물??추상?�하거나 ?��??�화?�세??
-- 추�? ?�명(extraNotes)???�힌 ?��? ?�구�?반영?�되, 기존 규칙????��?��? ?�습?�다.
-- 마크?�운/?�명 ?�이 JSON�?반환?�니??`;
+  const sysKo = `당신은 숏폼/릴스/쇼츠 같은 짧은 영상 시나리오를 작성하는 어시스턴트입니다.
+- JSON만 반환: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
+- 입력값(topic, target, purposeCategory, purposeTags, needs, tone/toneText, style/styleText, extraNotes)을 모두 반영하세요.
+- 역할을 섞지 마세요:
+  · Topic = 전체 줄거리/세계/소재 결정 (톤·스타일 아님)
+  · Genre = 내러티브 구조만 결정 (문체·시각 묘사 아님)
+  · Audience = 어휘 난이도·정보 밀도·설명 방식만 조절
+  · Duration = Scene 개수·분할 구조만 결정 (감정·톤·스타일 아님)
+  · Tone = 말투/감정 표현, Style = 시각적 느낌을 shot 한 줄로 반영
+- Scene은 ${sceneCount}개 생성. 각 estSec 합이 ${duration}초(±10%)에 가깝도록 분배하세요. estSec는 최소 3초 이상 유지하고, 총합이 목표와 어긋나지 않게 마지막에서 미세 보정해도 됩니다.
+- Scene 개수 규칙: 15초=4, 30초=7, 45초=10, 60초=12, 30분=120, 1시간=240, 2시간=480.
+- 30분 이상 롱폼은 Scene 당 estSec를 10~20초 사이로 유지.
+- 각 Scene의 lines는 2~3문장, 시청자 눈높이에 맞춘 어휘·톤을 느끼게 작성하세요.
+- 각 Scene의 shot(시각 묘사)은 한 줄로 요약하고, shot에만 스타일을 반영하세요.
+- [중요] 현실적인 얼굴·세부 묘사는 피하세요. '스타일라이즈드 3D 캐릭터', '애니메이션 스타일', '뒷모습/실루엣', '토이 스타일', '몽환적 분위기' 등으로 추상화해 표현하세요.
+- extraNotes는 규칙을 덮어쓰지 않는 선에서 반영. 마크다운/추가 설명 없이 JSON만 반환.`;
 
   const sysEn = `You write short-form video scenarios.
 - Return JSON only: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
@@ -188,4 +186,6 @@ export async function onRequestOptions(context) {
   const origin = context.request.headers.get("Origin");
   return new Response(null, { status: 204, headers: corsHeaders(origin) });
 }
+
+
 
