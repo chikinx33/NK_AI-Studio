@@ -79,9 +79,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const rawOperation = { fetchPredictOperation: dataFetch, operationGet: dataOp };
     console.log('[video-status][rawOperation]', rawOperation);
 
-    const op: any = (dataOp && typeof dataOp === 'object' && !Array.isArray(dataOp) ? dataOp : dataFetch) || {};
+    // if fetchPredictOperation already has response/videos, 우선 사용
+    const opSource =
+      (dataFetch && typeof dataFetch === 'object' && dataFetch.response) ? dataFetch :
+      (dataOp && typeof dataOp === 'object' && !Array.isArray(dataOp) ? dataOp : dataFetch);
+
+    const op: any = opSource || {};
     let done = !!op.done;
-    let opError = op.error || null;
+    let opError = (opSource === dataFetch && dataFetch.response) ? null : (op.error || null);
     let opResponse = op.response || null;
 
     // fetchPredictOperation에서 바로 error를 내려주는 경우 처리
