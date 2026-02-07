@@ -61,12 +61,17 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
     const dataFetch = safeJson(text);
 
-    // 2) operations.get
+    // 2) operations.get (region endpoint; google.com 금지)
     let dataOp: any = null;
     try {
-      const resOp = await fetch(`https://aiplatform.googleapis.com/v1/${jobId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const resOp = await fetch(`https://us-central1-aiplatform.googleapis.com/v1/${jobId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
       const textOp = await resOp.text();
-      dataOp = safeJson(textOp);
+      const looksHtml = /^\s*</.test(textOp || '') && textOp.toLowerCase().includes('<html');
+      if (looksHtml) {
+        dataOp = { error: { code: 'HTML_RESPONSE', message: 'operation get returned HTML (check endpoint/url)' }, done: true, response: null, rawHtml: textOp };
+      } else {
+        dataOp = safeJson(textOp);
+      }
     } catch (err) {
       log('operation_get_error', err);
     }
