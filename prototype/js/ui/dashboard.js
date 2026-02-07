@@ -21,6 +21,17 @@
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
+    // 전역 클릭 핸들러를 한 번만 등록해 iframe/부모 상태와 무관하게 동작하도록 보장
+    if (!window.__nk_dashboard_global_click_bound) {
+      window.__nk_dashboard_global_click_bound = true;
+      document.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const action = btn.dataset.action || '';
+        if (!['draft-edit', 'draft-production', 'draft-post'].includes(action)) return;
+        try { if (container.onclick) container.onclick(e); } catch (_) { }
+      }, true);
+    }
 
     // 서버 프로젝트와 병합
     let drafts = NK.store.getDrafts();
