@@ -40,14 +40,31 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
+    const toGcsPath = (url?: string) => {
+      if (!url) return '';
+      try {
+        if (url.startsWith('gs://')) return url;
+        const u = new URL(url);
+        if (u.host === 'storage.googleapis.com') {
+          const path = u.pathname.replace(/^\/+/, '');
+          if (path) return `gs://${path.replace(/^\//, '')}`;
+        }
+      } catch (_) { }
+      return '';
+    };
+
     const normalizeScene = (s: any, idx: number) => {
       const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
+      const imageUrl = typeof s?.imageDataUrl === "string" ? s.imageDataUrl : "";
+      const imagePath = toGcsPath(imageUrl);
       return {
         id: Number(s?.id ?? idx + 1),
         title: typeof s?.title === "string" ? s.title : "",
         lines: typeof s?.lines === "string" ? s.lines : (typeof s?.dialogue === "string" ? s.dialogue : ""),
         shot: typeof s?.shot === "string" ? s.shot : (typeof s?.visual === "string" ? s.visual : ""),
         estSec: est > 0 ? Math.round(est) : undefined,
+        imageDataUrl: imagePath || imageUrl,
+        imagePath,
       };
     };
 
