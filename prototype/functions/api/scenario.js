@@ -48,8 +48,9 @@ export async function onRequestPost(context) {
   };
   const sceneCount = durationToScenes[duration] || 7;
 
-  const toneCombined = [tones, toneText].filter(Boolean).join(", ");
-  const styleCombined = [styles, styleText].filter(Boolean).join(", ");
+  const toneCombined = [toneText, tones].filter(Boolean).join(", ");
+  const styleCombined = [styleText, styles].filter(Boolean).join(", ");
+  const styleBan = "3D, 토이, 만화/카툰, 몽환적/꿈결 스타일 금지 (지정된 스타일을 우선)";
 
   const sysKo = `당신은 숏폼/릴스/쇼츠 같은 짧은 영상 시나리오를 작성하는 어시스턴트입니다.
 - JSON만 반환: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
@@ -65,8 +66,10 @@ export async function onRequestPost(context) {
 - 30분 이상 롱폼은 Scene 당 estSec를 10~20초 사이로 유지.
 - 각 Scene의 lines는 2~3문장, 시청자 눈높이에 맞춘 어휘·톤을 느끼게 작성하세요.
 - 각 Scene의 shot(시각 묘사)은 한 줄로 요약하고, shot에만 스타일을 반영하세요.
-- [중요] 현실적인 얼굴·세부 묘사는 피하세요. '스타일라이즈드 3D 캐릭터', '애니메이션 스타일', '뒷모습/실루엣', '토이 스타일', '몽환적 분위기' 등으로 추상화해 표현하세요.
-- extraNotes는 규칙을 덮어쓰지 않는 선에서 반영. 마크다운/추가 설명 없이 JSON만 반환.`;
+- [Style 고정] 스타일 지시를 우선하며, 지정된 스타일 외 임의 스타일(예: ${styleBan})을 사용하지 마세요.
+- [Tone 고정] 톤 지시는 그대로 따르고, 임의 톤을 추가하지 마세요.
+- [Mandatory Directives] extraNotes는 해석 없이 그대로 지켜야 할 규칙으로 적용하세요.
+- 마크다운/추가 설명 없이 JSON만 반환.`;
 
   const sysEn = `You write short-form video scenarios.
 - Return JSON only: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
@@ -81,8 +84,10 @@ export async function onRequestPost(context) {
 - Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
 - For 30m+ long-form, keep per-scene estSec between 10??0 seconds.
 - Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
-- [IMPORTANT] Video Safety Compliance: Avoid describing 'realistic human faces' or 'detailed facial features'. Instead, use 'stylized 3D character', 'animated style', 'back view', 'silhouette', 'anthropomorphic animal/object', 'toy style', or 'dreamy atmosphere' to abstract or stylize figures.
-- Apply extraNotes without overriding rules above. No markdown or extra explanations.`;
+- [Style lock] Follow given style; do NOT switch to other looks (e.g., avoid ${styleBan}).
+- [Tone lock] Follow given tone; do NOT add unrelated tones.
+- [Mandatory Directives] Treat extraNotes as hard rules with no paraphrasing or relaxation.
+- No markdown or extra explanations.`;
 
   const userPrompt =
     lang === "en"
@@ -97,15 +102,15 @@ Additional notes: ${extraNotes}
 Duration target: ${duration}s
 Please respond in English.`
       : `주제: ${topic}
-?�청 ?��? ${target}
-목적 ?�분류: ${purposeCategory}
-목적 ?�그: ${purposeTags}
-?�즈: ${needs}
-?? ${toneCombined}
-?��??? ${styleCombined}
-추�? ?�명: ${extraNotes}
-목표 길이: ${duration}�?(±10%)
-?�국?�로 JSON�?반환?�주?�요.`;
+      시청 타겟: ${target}
+목적 대분류: ${purposeCategory}
+목적 태그: ${purposeTags}
+니즈: ${needs}
+Tone 지시: ${toneCombined || "지정 없음"}
+Style 지시: ${styleCombined || "지정 없음"}
+Mandatory Directives: ${extraNotes || "없음"}
+목표 길이: ${duration}초(±10%)
+한국어로 JSON만 반환하세요.`;
 
   let scenes;
   try {
