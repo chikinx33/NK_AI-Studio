@@ -49,7 +49,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }, 500);
     }
 
-    const re = /^projects\/([^/]+)\/locations\/(us-central1)\/publishers\/google\/models\/([^/]+)\/operations\/([^/]+)$/;
+    // 허용 범위 완화: 위치/퍼블리셔/모델을 고정하지 않고 any 로 수용
+    const re = /^projects\/([^/]+)\/locations\/([^/]+)\/publishers\/([^/]+)\/models\/([^/]+)\/operations\/([^/]+)$/;
     const match = jobId.match(re);
     if (!match) {
       return corsJson({
@@ -59,7 +60,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         details: { jobId, projectId: projectTag, sceneId: sceneIdParam }
       }, 400);
     }
-    const endpointName = `projects/${match[1]}/locations/${match[2]}/publishers/google/models/${match[3]}`;
+    const endpointName = `projects/${match[1]}/locations/${match[2]}/publishers/${match[3]}/models/${match[4]}`;
 
     const accessToken = await getGoogleAccessToken({
       clientEmail,
