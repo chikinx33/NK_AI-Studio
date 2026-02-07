@@ -17,21 +17,36 @@
   const target = body.target || '';
   const duration = body.duration || '';
   const directives = (body.banned || '').trim();
+  const needs = (body.needs || []).join(', ');
+  const purposeCategory = body.purposeCategory || '';
+  const purposeTags = (body.purposeTags || []).join(', ');
+  const aspect = body.aspectRatio || '16:9';
 
-  const sys = `You write one global visual anchor sentence for the entire video project.
-- Output JSON only: {"header":"..."}
-- Make a single concise English sentence (≤55 words) that sets the consistent visual world for all scenes.
-- Include: overall visual style (respect user style), color/lighting/texture feel, mood matching tone, character consistency (type, outfits), setting (indoor/outdoor/world/season/time), recurring props, and camera/framing continuity.
-- Apply Mandatory Directives as hard constraints with no paraphrasing.
-- If the user specified a style, do NOT switch to other looks (e.g., do not default to stylized/animated unless explicitly requested).
-- Safety: stay within policy, but prioritize the user's style/constraints; if faces are required, keep them non-graphic and non-violent.`;
+  const sys = `You compose a global "Common Prompt" in Korean for the video project.
+- Output JSON only: {"header":"..."} where header is a multi-section Korean block.
+- Sections and order (all required):
+  Project Context
+  Narrative & Tone Rules
+  Visual Style Rules
+  Continuity Rules
+  Mandatory Directives
+  Aspect Ratio
+- Reflect every user input explicitly. Do NOT invent default worlds or pastel/whimsical/animated styles unless the user asked.
+- Style lock: honor user style; do not switch to stylized/toy/pastel/soft-rendered defaults.
+- Tone lock: use only requested tones.
+- Mandatory Directives: copy as-is, no paraphrasing/loosening.
+- Keep concise (≤220 words).`;
 
-  const user = `Project: ${topic}
-Tone: ${tone || 'unspecified'}
-Style: ${style || 'unspecified'}
-Audience: ${target || 'unspecified'}
-Duration: ${duration ? duration + 's' : 'unspecified'}
-Mandatory Directives: ${directives || 'none'}`;
+  const user = `Topic: ${topic}
+Genre: ${purposeCategory}${purposeTags ? ' (' + purposeTags + ')' : ''}
+Audience: ${target || '미지정'}
+Needs: ${needs || '미지정'}
+Tone: ${tone || '미지정'}
+Style: ${style || '미지정'}
+Directives: ${directives || '없음'}
+Aspect: ${aspect}
+Target: ${duration ? duration + 's' : '미지정'}
+Language: Korean`;
 
   try {
     const completion = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -47,7 +62,7 @@ Mandatory Directives: ${directives || 'none'}`;
           { role: 'system', content: sys },
           { role: 'user', content: user }
         ],
-        temperature: 0.5
+        temperature: 0.05
       })
     });
 

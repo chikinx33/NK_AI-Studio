@@ -1360,6 +1360,17 @@ a.btn-primary:active {
   -ms-overflow-style: none;
 }
 
+.common-info-row {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+[data-theme="light"] .common-info-row {
+  background: rgba(13, 23, 47, 0.05);
+}
+
 .scenario-card .view-lines::-webkit-scrollbar {
   width: 0;
   height: 0;

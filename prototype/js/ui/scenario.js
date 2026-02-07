@@ -2,6 +2,7 @@
   const NK = window.NK || (window.NK = {});
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
+  let currentPayload = {};
 
   // ---------- helpers ----------
   const fmtEst = (sec) => {
@@ -75,11 +76,29 @@
     });
   };
 
+  const formatCommonInfo = () => {
+    const p = currentPayload || {};
+    const parts = [];
+    if (p.topic) parts.push(`Topic: ${p.topic}`);
+    if (p.purposeCategory) parts.push(`Genre: ${p.purposeCategory}${p.purposeTags?.length ? ` (${p.purposeTags.join(', ')})` : ''}`);
+    if (p.target) parts.push(`Audience: ${p.target}`);
+    if (p.needs?.length) parts.push(`Needs: ${p.needs.join(', ')}`);
+    const toneStr = [...(p.tones || []), p.tone || ''].filter(Boolean).join(', ');
+    if (toneStr) parts.push(`Tone: ${toneStr}`);
+    const styleStr = [...(p.styles || []), p.style || ''].filter(Boolean).join(', ');
+    if (styleStr) parts.push(`Style: ${styleStr}`);
+    if (p.banned) parts.push(`Directives: ${p.banned}`);
+    if (p.aspectRatio) parts.push(`Aspect: ${p.aspectRatio}`);
+    if (p.duration) parts.push(`Target: ${p.duration}s`);
+    return parts.join(' · ');
+  };
+
   // ---------- render scenes ----------
   scenario.renderScenes = function (scenes = []) {
     const container = document.getElementById('scenario-cards');
     if (!container) return;
     const sceneList = normalizeScenes(scenes);
+    const commonInfo = formatCommonInfo();
     if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
@@ -90,7 +109,8 @@
         </div>`;
       return;
     }
-    container.innerHTML = sceneList.map(s => `
+    const commonBlock = commonInfo ? `<div class="common-info-row"><span class="muted tiny">${commonInfo}</span></div>` : '';
+    container.innerHTML = commonBlock + sceneList.map(s => `
       <div class="scenario-card">
         <div class="card-top">
           <div>
@@ -109,6 +129,7 @@
     const form = document.getElementById('scenario-form');
     if (!form || !draft) return;
     const p = draft.payload || {};
+    currentPayload = p || {};
     const defaults = NK.config.DEFAULTS || {};
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
     const defaultCat = p.purposeCategory || categories[0] || '';
