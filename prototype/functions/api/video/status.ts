@@ -68,6 +68,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       scope: 'https://www.googleapis.com/auth/cloud-platform',
     });
 
+    // 실제 Vertex operation 상태/결과 조회
     const urlFetch = `https://aiplatform.googleapis.com/v1/${endpointName}:fetchPredictOperation`;
     log('fetchPredictOperation', { endpointName, operationName: jobId });
     const res = await fetch(urlFetch, {
@@ -87,17 +88,37 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }, res.status);
     }
 
-    const data = safeJson(text);
-    log('fetch_raw_response', data);
+    const dataFetch = safeJson(text);
+    log('fetch_raw_response', dataFetch);
+
+    // operations.get 로 원본 operation 확인
+    let dataOp: any = null;
+    try {
+      const urlOp = `https://aiplatform.googleapis.com/v1/${jobId}`;
+      const resOp = await fetch(urlOp, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const textOp = await resOp.text();
+      dataOp = safeJson(textOp);
+      log('operation_get_raw', dataOp);
+    } catch (err) {
+      log('operation_get_error', err);
+    }
+
+    const data: any = dataOp || dataFetch;
+
     if (!data.done) {
-      return corsJson({ ok: true, status: 'processing', details: { projectId: projectTag, sceneId: sceneIdParam }, raw: data });
+      return corsJson({
+        ok: true,
+        status: 'processing',
+        details: { projectId: projectTag, sceneId: sceneIdParam },
+        raw: { fetchPredictOperation: dataFetch, operationGet: dataOp }
+      });
     }
     if (data.error) {
       return corsJson({
         ok: false,
         code: data.error.code || 'ERROR',
         message: data.error.message || 'Veo error',
-        details: { projectId: projectTag, jobId, sceneId: sceneIdParam, raw: data.error }
+        details: { projectId: projectTag, jobId, sceneId: sceneIdParam, raw: { fetchPredictOperation: dataFetch, operationGet: dataOp } }
       });
     }
 
@@ -221,7 +242,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       videoUrl: videoUrlSigned || '',
       gcsUri: gcsUri || '',
       details: { projectId: projectTag, sceneId: sceneIdParam },
-      raw: data // 전체 Veo 응답 payload 노출 (mp4 생성 단서 확인용)
+      raw: { fetchPredictOperation: dataFetch, operationGet: dataOp }
     });
   } catch (e: any) {
     return corsJson({
