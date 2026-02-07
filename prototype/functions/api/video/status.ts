@@ -73,7 +73,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const rawOperation = { fetchPredictOperation: dataFetch, operationGet: dataOp };
     console.log('[video-status][rawOperation]', rawOperation);
 
-    const op: any = (typeof dataOp === 'string' ? {} : dataOp) || dataFetch || {};
+    const op: any = (dataOp && typeof dataOp === 'object' && !Array.isArray(dataOp) ? dataOp : dataFetch) || {};
     let done = !!op.done;
     let opError = op.error || null;
     let opResponse = op.response || null;
@@ -83,6 +83,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       opError = (dataFetch as any).error;
       opResponse = (dataFetch as any).response || null;
       done = true;
+    }
+    // fetchPredictOperation done=true인데 operationGet이 404 문자열인 경우에도 done 처리
+    if (!done && dataFetch && (dataFetch as any).done) {
+      done = true;
+      opResponse = opResponse || (dataFetch as any).response || null;
     }
 
     const pick = (r: any) =>
@@ -100,7 +105,41 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       r?.predictions?.[0]?.generatedContentUri ||
       null;
 
-    const playback = done ? (pick(opResponse) || pick(op)) : null;
+    let playback = done ? (pick(opResponse) || pick(op)) : null;
+
+    // bytesBase64Encoded → GCS 업로드 후 playback 제공
+    if (done && !playback) {
+      const b64 =
+        opResponse?.videos?.[0]?.bytesBase64Encoded ||
+        op?.videos?.[0]?.bytesBase64Encoded ||
+        null;
+      if (b64) {
+        try {
+          const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
+          const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
+          if (outParsed) {
+            const objectBase = outParsed.object.replace(/\/$/, '');
+            const stamp = Date.now();
+            const objectName = `${objectBase}/videos/${stamp}-${match[5]}.mp4`;
+            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+            const buf = base64ToUint8(b64);
+            const upRes = await fetch(uploadUrl, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "video/mp4" },
+              body: buf
+            });
+            const upTxt = await upRes.text();
+            if (upRes.ok) {
+              playback = gcsToHttps(`gs://${outParsed.bucket}/${objectName}`);
+            } else {
+              log('bytes_upload_failed', safeJson(upTxt));
+            }
+          }
+        } catch (err) {
+          log('bytes_upload_error', err);
+        }
+      }
+    }
 
     return corsJson({
       ok: true,
