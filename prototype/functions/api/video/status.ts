@@ -122,11 +122,19 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
             const objectBase = outParsed.object.replace(/\/$/, '');
             const stamp = Date.now();
             const objectName = `${objectBase}/videos/${stamp}-${match[5]}.mp4`;
-            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+            const userProject =
+              (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+              (env.GOOGLE_PROJECT_ID as string | undefined) ||
+              '';
+            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ''}`;
             const buf = base64ToUint8(b64);
             const upRes = await fetch(uploadUrl, {
               method: "POST",
-              headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "video/mp4" },
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                "Content-Type": "video/mp4",
+                ...(userProject ? { "X-Goog-User-Project": userProject } : {})
+              },
               body: buf
             });
             const upTxt = await upRes.text();

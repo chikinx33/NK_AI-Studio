@@ -859,6 +859,12 @@
         ui.render();
         return;
       }
+      if (res.done && !playback) {
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: 'done but no playback (가공 실패)' });
+        ctx.setState(st);
+        ui.render();
+        return;
+      }
       if (playback) {
         st.scenes[idx] = Object.assign({}, st.scenes[idx], {
           videoUrl: playback,
