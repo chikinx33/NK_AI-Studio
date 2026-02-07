@@ -41,7 +41,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     const re = /^projects\/([^/]+)\/locations\/([^/]+)\/publishers\/([^/]+)\/models\/([^/]+)\/operations\/([^/]+)$/;
-    if (!jobId.match(re)) {
+    const match = jobId.match(re);
+    if (!match) {
       return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'BAD_REQUEST', message: 'invalid operationName format' }, response: null, rawOperation: null, playback: null }, 400);
     }
     const endpointName = jobId.split('/operations/')[0];
