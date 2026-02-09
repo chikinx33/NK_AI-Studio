@@ -346,7 +346,7 @@
             lines: s.lines || '',
             shot: s.shot || '',
             estSec: s.estSec,
-            promptText: (s.promptText || ['Common', headerSrv2, 'Visual', (s.shot || ''), 'Duration', ((Math.max(Number(s.estSec) || 0, 1)) + 's.')].join('\n')),
+            promptText: (s.promptText || ['Common', headerSrv2, 'Visual', (s.shot || '')].join('\n')),
             imageDataUrl: s.imageDataUrl || '',
             imgLoading: false,
             imgError: '',
@@ -373,7 +373,7 @@
             lines: s.lines || '',
             shot: s.shot || '',
             estSec: s.estSec,
-            promptText: (s.promptText || ['Common', headerInit2, 'Visual', (s.shot || ''), 'Duration', ((Math.max(Number(s.estSec) || 0, 1)) + 's.')].join('\n')),
+            promptText: (s.promptText || ['Common', headerInit2, 'Visual', (s.shot || '')].join('\n')),
             imageDataUrl: s.imageDataUrl || '',
             imgLoading: false,
             imgError: '',
@@ -411,7 +411,7 @@
     if (scenes && scenes.length) {
       pipelineScenes.classList.remove('empty');
       var rows = scenes.map(function (s) {
-        var computedPrompt = ['Common', header, 'Visual', (s.shot || ''), 'Duration', ((Math.max(Number(s.estSec) || 0, 1)) + 's.')].join('\\n');
+        var computedPrompt = ['Common', header, 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
         var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
         var img = (updatedScene.imgLoading
