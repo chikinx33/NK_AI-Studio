@@ -69,7 +69,12 @@
       body: JSON.stringify(body || {})
     });
     var text = await res.text();
-    if (!res.ok) throw new Error(e(text) || 'imagen_error');
+    if (!res.ok) {
+      var err = new Error(e(text) || 'imagen_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
     return j(text);
   };
 
@@ -80,7 +85,12 @@
       body: JSON.stringify(body || {})
     });
     var text = await res.text();
-    if (!res.ok) throw new Error((e(text) || 'video_api_error') + '');
+    if (!res.ok) {
+      var err = new Error((e(text) || 'video_api_error') + '');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
     var data = j(text) || {};
     var jobId = data.jobId || data.job_id || data.id || data.operationName;
     var outputGcsUri = data.outputGcsUri || data.output_gcs_uri;

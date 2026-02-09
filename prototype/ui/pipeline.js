@@ -929,8 +929,11 @@
       }
       } catch (err) {
         st = ctx.getState() || st;
-        st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
-        alert('영상 생성 실패: ' + (err && err.message ? err.message : err));
+        const msg = (err && err.message) ? err.message : 'video_error';
+        const detail = (err && err.detail) ? err.detail : '';
+        console.error('videoStart error:', msg, detail);
+        st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
+        alert('영상 생성 실패: ' + msg + (detail ? '\n상세: ' + detail : ''));
         ctx.setState(st);
         ui.render();
       }
@@ -950,6 +953,7 @@
       if (!st || !st.scenes || st.scenes.length <= idx) return;
       if (res.done && res.error) {
         st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error.message || 'video_error' });
+        console.error('videoStatus error (done+error):', res.error);
         ctx.setState(st);
         ui.render();
         return;
@@ -973,6 +977,7 @@
       }
       if (status && status.toLowerCase() === 'error') {
         st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error || 'video_error' });
+        console.error('videoStatus error status flag:', res);
         ctx.setState(st);
         ui.render();
         return;
@@ -987,7 +992,10 @@
     } catch (err) {
       var st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
-      st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: (err && err.message ? err.message : 'video_error') });
+      const msg = (err && err.message) ? err.message : 'video_error';
+      const detail = (err && err.detail) ? err.detail : '';
+      console.error('videoStatus polling error:', msg, detail);
+      st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
       ctx.setState(st);
       ui.render();
     }
@@ -1122,6 +1130,8 @@
       console.log('Scene ' + scene.id + ' 이미지 생성 완료');
     } catch (err) {
       var msg = (err && err.message) || '';
+      var detail = (err && err.detail) ? (' detail: ' + err.detail) : '';
+      console.error('Scene ' + scene.id + ' 이미지 생성 실패:', msg, detail);
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var rc = Number(retryCount) || 0;
       if (is500 && rc < 2) {
@@ -1133,8 +1143,7 @@
         return ui.generateImageForIdx(idx, rc + 1);
       }
       var errorMessage = (err && err.message) || '이미지 생성 실패';
-      console.error('Scene ' + scene.id + ' 이미지 생성 실패:', errorMessage);
-      st.scenes[idx] = Object.assign({}, scene, { imgLoading: false, imgError: errorMessage });
+      st.scenes[idx] = Object.assign({}, scene, { imgLoading: false, imgError: errorMessage + (detail ? ' ' + detail : '') });
       ctx.setState(st);
     }
     ui.render();
