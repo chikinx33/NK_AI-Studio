@@ -33,7 +33,7 @@
   - 한 문장 안에서 필요시 “no people / no text” 등 부정도 함께 명시해 네거티브 남발을 줄인다.
 - 렌더 우선순위: **Visual > Style lock > Common**. Common은 참고용이며 “do NOT render” 표시로 전달.
 
-### 개선된 예시 (수학 시나리오)
+### 예시(샘플)
 - Common 예시  
   - “Photoreal; deep teal/navy palette; clean studio lighting with subtle rim; neon highlights on math lines; steady camera; shots keep same palette/lighting; no anime/cel shading; no subtitles/speech bubbles.”
 - Scene Visual 예시  
