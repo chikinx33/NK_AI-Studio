@@ -397,9 +397,11 @@ body[data-embed="1"] {
 }
 
 .lib-empty {
-  min-height: 180px;
-  display: grid;
-  place-items: center;
+  min-height: 240px;
+  height: 50vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
 }
 

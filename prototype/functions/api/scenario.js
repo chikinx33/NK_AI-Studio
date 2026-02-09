@@ -51,9 +51,9 @@ export async function onRequestPost(context) {
   };
   const sceneCount = durationToScenes[duration] || 7;
 
-  const toneCombined = [toneText, tones].filter(Boolean).join(", ");
-  const styleCombined = [styleText, styles].filter(Boolean).join(", ");
-  const styleBan = "사용자가 요청하지 않았다면 3D, 토이, 만화/카툰, 몽환적/꿈결 스타일을 피함 (지정된 스타일을 우선)";
+  // 자유입력이 있으면 태그를 무시하고 우선 사용
+  const toneCombined = toneText || tones;
+  const styleCombined = styleText || styles;
 
   const genreTemplateKo =
     purposeCategory.includes("교양") || purposeCategory.includes("과학")
@@ -99,13 +99,15 @@ export async function onRequestPost(context) {
   · Tone = 말투/정서 표현만 결정 (시각 묘사 금지)
   · Style = 시각적 룩/질감/조명만 결정 (내러티브·톤 금지)
   · Mandatory(extraNotes) = 변형 없이 그대로 적용/금지 사항
+- Tone 우선순위: 자유 입력이 있으면 톤 태그는 무시.
+- Style 우선순위: 자유 입력이 있으면 스타일 태그는 무시.
 - 역할을 서로 덮어쓰지 말 것.
 - Scene은 ${sceneCount}개 생성. 각 estSec 합이 ${duration}초(±10%)에 가깝도록 분배하세요. estSec는 최소 3초 이상 유지하고, 총합이 목표와 어긋나지 않게 마지막에서 미세 보정해도 됩니다.
 - Scene 개수 규칙: 15초=4, 30초=7, 45초=10, 60초=12, 30분=120, 1시간=240, 2시간=480.
 - 30분 이상 롱폼은 Scene 당 estSec를 10~20초 사이로 유지.
 - 각 Scene의 lines는 2~3문장, 시청자 눈높이에 맞춘 어휘·톤을 느끼게 작성하세요.
 - 각 Scene의 shot(시각 묘사)은 한 줄로 요약하고, shot에만 스타일을 반영하세요.
-- [Style 고정] 스타일 지시를 우선하며, 지정된 스타일 외 임의 스타일(예: ${styleBan})을 사용하지 마세요.
+- [Style 고정] 스타일 지시를 우선하며, 지정된 스타일 외 임의 스타일을 추가하지 마세요.
 - [Tone 고정] 톤 지시는 그대로 따르고, 임의 톤을 추가하지 마세요.
 - [Mandatory Directives] extraNotes는 해석 없이 그대로 지켜야 할 규칙으로 적용하세요.
 - 마크다운/추가 설명 없이 JSON만 반환.
@@ -124,43 +126,48 @@ ${tagRuleKo}`;
   · Tone = voice/emotion only (no visual style)
   · Style = visual look/texture/lighting only (no narrative/tone changes)
   · Mandatory(extraNotes) = apply as-is with no paraphrasing
+- Tone priority: if tone freeform exists, ignore tone tags.
+- Style priority: if style freeform exists, ignore style tags.
 - Do not let roles override each other.
 - Produce ${sceneCount} scenes whose estSec sum should stay as close as possible to ${duration}s (±10%). Keep estSec per scene reasonable (>=3s), and adjust the last scene if needed so the total fits the target duration.
 - Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
 - For 30m+ long-form, keep per-scene estSec between 10~20 seconds.
 - Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
-- [Style lock] Follow given style; do NOT switch to other looks (e.g., avoid ${styleBan}). Do not default to soft-rendered pastel/whimsical/animated worlds unless the user asked for them.
+- [Style lock] Follow given style; do NOT switch to other looks unless the user requested them.
 - [Tone lock] Follow given tone; do NOT add unrelated tones.
 - [Mandatory Directives] Treat extraNotes as hard rules with no paraphrasing or relaxation.
 - No markdown or extra explanations.
 ${genreTemplateEn}
 ${tagRuleEn}`;
 
+  const toneTagsForPrompt = toneText ? "" : tones;
+  const styleTagsForPrompt = styleText ? "" : styles;
+
   const userPrompt =
     lang === "en"
       ? `Topic: ${topic}
-Audience: ${target || "(not provided)"}
+Audience: ${target || "(not provided)"} (affects vocabulary/examples only; do not change plot/style)
 Purpose category: ${purposeCategory}
-Purpose tags: ${purposeTags}
+Purpose tags: ${purposeTags} (include ≥1 sentence per tag perspective)
 Needs: ${needs}
-Tone (tags): ${tones}
-Tone (freeform): ${toneText}
-Style (tags): ${styles}
-Style (freeform): ${styleText}
-Additional notes (mandatory): ${extraNotes}
+Tone (freeform, priority): ${toneText || "(none)"}
+Tone (tags, ignored if freeform exists): ${toneTagsForPrompt}
+Style (freeform, priority): ${styleText || "(none)"}
+Style (tags, ignored if freeform exists): ${styleTagsForPrompt}
+Additional notes (mandatory, override tone/style if conflict): ${extraNotes}
 Aspect ratio: ${aspectRatio || "(not provided)"}
 Duration target: ${duration}s
 Please respond in English.`
       : `주제: ${topic}
-시청 타겟: ${target || "(미입력)"}
+시청 타겟: ${target || "(미입력)"} (어휘/예시 난이도에만 영향, 플롯·스타일 변경 금지)
 목적 대분류: ${purposeCategory}
-목적 태그: ${purposeTags}
+목적 태그: ${purposeTags} (태그별 관점 문장 최소 1개 포함)
 니즈: ${needs}
-Tone(태그): ${tones}
-Tone(자유입력): ${toneText}
-Style(태그): ${styles}
-Style(자유입력): ${styleText}
-Mandatory Directives: ${extraNotes || "없음"}
+Tone(자유입력, 우선): ${toneText || "(없음)"}
+Tone(태그, 자유입력 있으면 무시): ${toneTagsForPrompt}
+Style(자유입력, 우선): ${styleText || "(없음)"}
+Style(태그, 자유입력 있으면 무시): ${styleTagsForPrompt}
+Mandatory Directives(충돌 시 톤/스타일보다 우선): ${extraNotes || "없음"}
 화면비: ${aspectRatio || "(미입력)"}
 목표 길이: ${duration}초(±10%)
 한국어로 JSON만 반환하세요.`;
