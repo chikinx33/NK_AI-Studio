@@ -1023,7 +1023,8 @@
 
     // 단순·우선순위화된 이미지 프롬프트
     var primaryVisual = scene.shot || '';
-    var extraContext = scene.promptText || '';
+    // 이미지 모델 혼선을 줄이기 위해 중복된 Common/Visual 라벨은 제외
+    var extraContext = ''; // scene.promptText는 Common/Visual 라벨을 포함하므로 사용하지 않음
     var narration = scene.lines || '';
     var finalPrompt = [
       common ? ('Common guidance: ' + common) : '',
