@@ -116,18 +116,37 @@
       const itemsEls = box.querySelectorAll('.lib-item');
       itemsEls.forEach(function (item) {
         item.onclick = function () {
+          const already = item.classList.contains('lib-selected');
           itemsEls.forEach(el => el.classList.remove('lib-selected', 'selected'));
-          item.classList.add('lib-selected');
-          selected = { url: item.dataset.url, name: item.dataset.name };
+          if (already) {
+            selected = null;
+          } else {
+            item.classList.add('lib-selected');
+            selected = { url: item.dataset.url, name: item.dataset.name };
+          }
+          updateLibActions();
         };
       });
       const useBtn = box.querySelector('#lib-use-btn');
+      const delBtn = box.querySelector('#lib-delete-btn');
+
+      function updateLibActions() {
+        const active = !!(selected && selected.url);
+        if (useBtn) {
+          useBtn.disabled = !active;
+          useBtn.classList.toggle('disabled', !active);
+        }
+        if (delBtn) {
+          delBtn.disabled = !active;
+          delBtn.classList.toggle('disabled', !active);
+        }
+      }
+
       if (useBtn) useBtn.onclick = function () {
         if (!selected || !selected.url) { alert('이미지를 먼저 선택하세요.'); return; }
         if (onSelect) onSelect(selected.url);
         closeModals();
       };
-      const delBtn = box.querySelector('#lib-delete-btn');
       if (delBtn) delBtn.onclick = async function () {
         if (kind !== 'image') { alert('이미지 라이브러리에서만 삭제를 지원합니다.'); return; }
         if (!projectId) { alert('프로젝트 ID를 찾을 수 없습니다.'); return; }
@@ -142,6 +161,7 @@
           alert('삭제 실패: ' + (err && err.message ? err.message : err));
         }
       };
+      updateLibActions();
       const closeBtn = box.querySelector('#lib-close');
       if (closeBtn) closeBtn.onclick = () => closeModals();
     }
