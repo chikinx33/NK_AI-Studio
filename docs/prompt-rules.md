@@ -24,28 +24,42 @@
 - `rebalanceEstSec`로 총 길이를 목표(Duration)과 맞추도록 비례 재분배(최소 3초).
 - 실패 시 `fallbackScenes`로 기본 시나리오 반환.
 
-## 5. 이미지 프롬프트(pipeline.js)
-- **Primary visual (scene.shot)**만 렌더 지시.  
-- 보조 가드:  
-  - `Render ONLY the primary visual; ignore unrelated narrative elements.`  
-  - shot에 인물 키워드가 없으면 `Do not add human figures...`  
-  - shot에 수학/공식 키워드가 있으면 공식/그리드 명확히 표현 지시.  
-- **Style lock**: 사용자가 선택한 스타일만 사용, 다른 룩 추가 금지.  
-- **Background context**: Common header를 `do NOT render`로 표시해 참고용만 전달.  
-- **Narration**: `context only, do NOT draw text/characters`.  
-- **Aspect ratio** 포함.  
-- 목적: shot 우선, 컨텍스트는 참고만 하도록 단순화.
+## 5. Common / Visual 역할 분리 (이미지·영상 공통)
+- **Common(공통)**: 전 프로젝트에 적용되는 시각 톤·룩·연출 가이드만 적는다.  
+  - 포함: 스타일 키워드(렌더링 방식/질감/조명 기조), 색·무드, 카메라 경향(고정/핸드헬드), 연속성 규칙(씬 간 색/조명/캐릭터 일관), 금지/강조 요소.  
+  - 제외: 화면 비율, 분량, 스토리 플롯 설명(Story용), 각 씬 개별 디테일.
+- **Visual(shot)**: 해당 씬 하나를 그릴 구체 연출.  
+  - 포함: 주피사체/배경, 행동, 카메라 앵글·렌즈·구도, 조명·시간대, 색감, 질감, 필요한 소 props, 인물 유무, 텍스트 표시 여부(없음 권장).  
+  - 한 문장 안에서 필요시 “no people / no text” 등 부정도 함께 명시해 네거티브 남발을 줄인다.
+- 렌더 우선순위: **Visual > Style lock > Common**. Common은 참고용이며 “do NOT render” 표시로 전달.
 
-## 6. 에러 로깅
+### 개선된 예시 (위 수학 시나리오)
+- Common 예시  
+  - “Photoreal, clean studio lighting, deep teal/dark navy palette, sharp focus, thin neon highlights on mathematical lines; camera steady tripod; keep shots consistent in palette/lighting across scenes; no anime/cel shading; no subtitles/speech bubbles.”
+- Scene 1 Visual 예시  
+  - “Wide shot, dark lab wall, glowing ζ(s)=0 formula floating in front of a glass board, only equations and grid visible, no people, no text overlays, photoreal lighting, subtle volumetric light.”
+- Scene 2 Visual 예시  
+  - “Medium shot of hands annotating a printed complex plane chart on a desk, soft key light from left, shallow depth of field, no faces visible, no on-screen text.”
+- Scene 3 Visual 예시  
+  - “Close-up of a monitor showing a clean line chart of zero distributions, dark UI, teal accent lines, no speech bubbles, photoreal.”
+
+## 6. 이미지 프롬프트(pipeline.js) 구성
+- Primary visual: `scene.shot`(위 Visual)를 그대로 렌더 지시.
+- Style lock: 선택 스타일만 사용, 다른 룩 추가 금지.
+- Background context: Common을 `do NOT render`로 전달(톤·룩 참고만).
+- Narration 미반영: 텍스트/인물 유인을 줄이기 위해 narration은 렌더하지 않는 컨텍스트로만 전달.
+- Aspect ratio는 별도 파라미터로 전달하며 Common/Visual 문구에는 포함하지 않는다.
+
+## 7. 에러 로깅
 - `api.js`: imagen/video 요청 실패 시 `status`와 원문 `detail`을 Error에 담아 throw.
 - `pipeline.js`: 이미지/영상 생성/폴링 실패 시 콘솔에 detail 출력, 씬 `imgError`/`videoError`에 상세 포함, 알림에도 표시.
 
-## 7. 기타 규칙
+## 8. 기타 규칙
 - Tone/Style 자유입력이 있으면 태그 무시(우선순위 고정).
 - 선택 태그/톤/스타일 버튼은 단일 선택.
 - Version 관리: 코드 수정 시 `prototype/js/config.js`의 `APP_VERSION`을 즉시 증가.
 
-## 8. 참고 흐름
+## 9. 참고 흐름
 - 프론트 폼 → `/api/scenario` → OpenAI → scenes 보정/저장 → 렌더.
 - 이미지 생성: 씬 선택 → finalPrompt(shot 중심) → `/api/imagen`(Vertex) → imageDataUrl 저장.
 - 영상 생성: promptText/shot/script 등 → `/api/video` → status 폴링.

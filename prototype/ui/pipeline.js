@@ -191,6 +191,18 @@
     });
   }
 
+  // Header에서 화면비/분량 문구를 제거해 프롬프트에 중복 반영되지 않도록 정리
+  function cleanHeader(text) {
+    if (!text) return '';
+    return String(text)
+      .split(/\n+/)
+      .filter(function (line) {
+        return !/(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration)/i.test(line);
+      })
+      .join('\n')
+      .trim();
+  }
+
   function setPipelineLoading(show) {
     const overlay = document.getElementById('pipeline-loading');
     if (overlay) overlay.classList.toggle('hidden', !show);
@@ -340,13 +352,14 @@
         aspectRatio = serverRatio || aspectRatio;
         var headerSrv = serverData.header || serverData.payload?.header || (loadHeader ? loadHeader() : '');
         var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
+        var headerCleanSrv = cleanHeader(headerSrv2);
         var sceneSrv = (serverData.scenes || []).map(function (s, idx) {
           return {
             id: (s.id != null ? s.id : (idx + 1)),
             lines: s.lines || '',
             shot: s.shot || '',
             estSec: s.estSec,
-            promptText: (s.promptText || ['Common', headerSrv2, 'Visual', (s.shot || '')].join('\n')),
+            promptText: (s.promptText || ['Common', headerCleanSrv, 'Visual', (s.shot || '')].join('\n')),
             imageDataUrl: s.imageDataUrl || '',
             imgLoading: false,
             imgError: '',
@@ -358,7 +371,7 @@
             editingPrompt: !!s.editingPrompt,
             };
         });
-        state = { payload: serverData.payload || {}, header: headerSrv2, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
+        state = { payload: serverData.payload || {}, header: headerCleanSrv, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
         ctx.setState(state);
         await ui.refreshAssets();
       } else if (stored) {
@@ -367,13 +380,14 @@
         aspectRatio = savedRatio || aspectRatio;
         var headerInitRaw = (stored.header || stored.payload?.header || (loadHeader ? loadHeader() : '') || '');
         var headerInit2 = withAspectInHeader ? withAspectInHeader(headerInitRaw, aspectRatio) : headerInitRaw;
+        var headerCleanInit = cleanHeader(headerInit2);
         var sceneListInit = (stored.scenes || []).map(function (s, idx) {
           return {
             id: (s.id != null ? s.id : (idx + 1)),
             lines: s.lines || '',
             shot: s.shot || '',
             estSec: s.estSec,
-            promptText: (s.promptText || ['Common', headerInit2, 'Visual', (s.shot || '')].join('\n')),
+            promptText: (s.promptText || ['Common', headerCleanInit, 'Visual', (s.shot || '')].join('\n')),
             imageDataUrl: s.imageDataUrl || '',
             imgLoading: false,
             imgError: '',
@@ -385,7 +399,7 @@
             editingPrompt: !!s.editingPrompt,
             };
         });
-        state = { payload: stored.payload, header: headerInit2, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
+        state = { payload: stored.payload, header: headerCleanInit, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
         ctx.setState(state);
         await ui.refreshAssets();
       } else {
@@ -411,7 +425,7 @@
     if (scenes && scenes.length) {
       pipelineScenes.classList.remove('empty');
       var rows = scenes.map(function (s) {
-        var computedPrompt = ['Common', header, 'Visual', (s.shot || '')].join('\\n');
+        var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
         var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
         var img = (updatedScene.imgLoading
