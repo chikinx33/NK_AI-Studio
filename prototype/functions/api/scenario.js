@@ -34,7 +34,9 @@ export async function onRequestPost(context) {
   const styleText = (body.style || "").trim();
   const needs = (body.needs || []).join(", ");
   const duration = body.duration || "60";
-  const extraNotes = (body.banned || "").trim(); // UI에서 추가 설명 필드로 사용
+  // UI 라벨은 "추가 항목/필수 지시"이지만 기존 호환성을 위해 banned도 함께 수용
+  const extraNotes = (body.extraNotes || body.banned || "").trim();
+  const aspectRatio = body.aspectRatio || "";
   const lang = body.language === "en" ? "en" : "ko";
 
   const durationToScenes = {
@@ -50,11 +52,22 @@ export async function onRequestPost(context) {
 
   const toneCombined = [toneText, tones].filter(Boolean).join(", ");
   const styleCombined = [styleText, styles].filter(Boolean).join(", ");
-  const styleBan = "3D, 토이, 만화/카툰, 몽환적/꿈결 스타일 금지 (지정된 스타일을 우선)";
+  const styleBan = "사용자가 요청하지 않았다면 3D, 토이, 만화/카툰, 몽환적/꿈결 스타일을 피함 (지정된 스타일을 우선)";
+
+  const genreTemplateKo =
+    purposeCategory.includes("교양") || purposeCategory.includes("과학")
+      ? "- 구조: 훅(흥미 유발 1문장) → 간결 정의 → 일상 비유 → 핵심 근거/검증 → 한줄 요약"
+      : "";
+  const genreTemplateEn =
+    purposeCategory.toLowerCase().includes("science") ||
+    purposeCategory.toLowerCase().includes("edu")
+      ? "- Structure: hook → concise definition → everyday analogy → key evidence → one-line takeaway"
+      : "";
 
   const sysKo = `당신은 숏폼/릴스/쇼츠 같은 짧은 영상 시나리오를 작성하는 어시스턴트입니다.
-- JSON만 반환: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
+- JSON만 반환: {"scenes":[{"id":1,"title":"짧은 씬 제목","lines":"대사/내레이션 2-3문장","shot":"시각 묘사 한 줄","estSec":8},...]}
 - 입력값(topic, target, purposeCategory, purposeTags, needs, tone/toneText, style/styleText, extraNotes)을 모두 반영하세요.
+- 모든 scene에 title(6~12자)과 shot(시각 묘사 한 줄)을 반드시 포함하세요.
 - 역할을 섞지 마세요:
   · Topic = 전체 줄거리/세계/소재 결정 (톤·스타일 아님)
   · Genre = 내러티브 구조만 결정 (문체·시각 묘사 아님)
@@ -70,11 +83,13 @@ export async function onRequestPost(context) {
 - [Style 금지 예시] 사용자가 요청하지 않았다면 “soft-rendered pastel whimsical animated world”, “stylized playful characters”, “toy-like” 등의 기본 스타일을 넣지 마세요.
 - [Tone 고정] 톤 지시는 그대로 따르고, 임의 톤을 추가하지 마세요.
 - [Mandatory Directives] extraNotes는 해석 없이 그대로 지켜야 할 규칙으로 적용하세요.
-- 마크다운/추가 설명 없이 JSON만 반환.`;
+- 마크다운/추가 설명 없이 JSON만 반환.
+${genreTemplateKo}`;
 
   const sysEn = `You write short-form video scenarios.
-- Return JSON only: {"scenes":[{"id":1,"title":"","lines":"","estSec":8},...]}
+- Return JSON only: {"scenes":[{"id":1,"title":"Short title","lines":"2-3 sentences","shot":"one-line visual","estSec":8},...]}
 - Use every input (topic, target, purposeCategory, purposeTags, needs, tone/toneText, style/styleText, extraNotes). If detailed selections exist, prefer them over free text.
+- Every scene must include a title (6-12 chars) and a shot (one-line visual).
 - Keep roles separate:
   · Topic = through-line plot/world/subject (not tone/style)
   · Genre = narrative structure only
@@ -83,39 +98,46 @@ export async function onRequestPost(context) {
   · Tone = voice/emotion, Style = visual look reflected in shot
 - Produce ${sceneCount} scenes whose estSec sum should stay as close as possible to ${duration}s (±10%). Keep estSec per scene reasonable (>=3s), and adjust the last scene if needed so the total fits the target duration.
 - Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
-- For 30m+ long-form, keep per-scene estSec between 10??0 seconds.
+- For 30m+ long-form, keep per-scene estSec between 10~20 seconds.
 - Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
 - [Style lock] Follow given style; do NOT switch to other looks (e.g., avoid ${styleBan}). Do not default to soft-rendered pastel/whimsical/animated worlds unless the user asked for them.
 - [Tone lock] Follow given tone; do NOT add unrelated tones.
 - [Mandatory Directives] Treat extraNotes as hard rules with no paraphrasing or relaxation.
-- No markdown or extra explanations.`;
+- No markdown or extra explanations.
+${genreTemplateEn}`;
 
   const userPrompt =
     lang === "en"
       ? `Topic: ${topic}
-Audience: ${target}
+Audience: ${target || "(not provided)"}
 Purpose category: ${purposeCategory}
 Purpose tags: ${purposeTags}
 Needs: ${needs}
-Tone: ${toneCombined}
-Style: ${styleCombined}
-Additional notes: ${extraNotes}
+Tone (tags): ${tones}
+Tone (freeform): ${toneText}
+Style (tags): ${styles}
+Style (freeform): ${styleText}
+Additional notes (mandatory): ${extraNotes}
+Aspect ratio: ${aspectRatio || "(not provided)"}
 Duration target: ${duration}s
 Please respond in English.`
       : `주제: ${topic}
-      시청 타겟: ${target}
+시청 타겟: ${target || "(미입력)"}
 목적 대분류: ${purposeCategory}
 목적 태그: ${purposeTags}
 니즈: ${needs}
-Tone 지시: ${toneCombined || "지정 없음"}
-Style 지시: ${styleCombined || "지정 없음"}
+Tone(태그): ${tones}
+Tone(자유입력): ${toneText}
+Style(태그): ${styles}
+Style(자유입력): ${styleText}
 Mandatory Directives: ${extraNotes || "없음"}
+화면비: ${aspectRatio || "(미입력)"}
 목표 길이: ${duration}초(±10%)
 한국어로 JSON만 반환하세요.`;
 
   let scenes;
   try {
-    // ?�으�?즉시 fallback ?�성
+    // OPENAI 키가 없으면 즉시 fallback 생성
     if (!env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY missing");
     }
@@ -170,14 +192,15 @@ Mandatory Directives: ${extraNotes || "없음"}
       );
       return {
         id: s.id != null ? s.id : idx + 1,
-        title: s.title || "",
+        title: s.title || `씬 ${idx + 1}`,
         lines,
         shot,
         estSec
       };
     });
+    scenes = rebalanceEstSec(scenes, Number(duration) || 0);
   } catch (err) {
-    // 근본 ?�인: 모델/???�청 ?�패 ??UI가 비�? ?�도�??�전??기본 ?�나리오�?반환
+    // 근본 원인(모델/요청 실패 등)으로 UI가 비지 않도록 기본 시나리오를 반환
     scenes = fallbackScenes(topic, target, duration, sceneCount);
     return new Response(JSON.stringify({ scenes, fallback: true, error: err?.message || 'fallback_used' }), {
       status: 200,
@@ -191,6 +214,23 @@ Mandatory Directives: ${extraNotes || "없음"}
   });
 }
 
+function rebalanceEstSec(scenes = [], target = 0) {
+  const minSec = 3;
+  if (!Array.isArray(scenes) || !scenes.length || !target) return scenes;
+  const total = scenes.reduce((sum, s) => sum + (Number(s.estSec) || minSec), 0);
+  if (!total) return scenes;
+  const scaled = scenes.map((s) => {
+    const raw = Number(s.estSec) || minSec;
+    return Math.max(Math.round((raw / total) * target), minSec);
+  });
+  // 보정: 반올림 오차로 목표와 차이가 날 경우 마지막 씬에 더하거나 뺀다.
+  const diff = target - scaled.reduce((a, b) => a + b, 0);
+  if (scaled.length) {
+    scaled[scaled.length - 1] = Math.max(scaled[scaled.length - 1] + diff, minSec);
+  }
+  return scenes.map((s, i) => Object.assign({}, s, { estSec: scaled[i] || minSec }));
+}
+
 function fallbackScenes(topic, target, duration, sceneCount) {
   const count = Number(sceneCount) || 4;
   const per = Math.max(Math.floor((Number(duration) || 60) / count), 5);
@@ -200,6 +240,7 @@ function fallbackScenes(topic, target, duration, sceneCount) {
   for (let i = 0; i < count; i++) {
     scenes.push({
       id: i + 1,
+      title: `씬 ${i + 1}`,
       lines: `${t} 이야기의 핵심 포인트 ${i + 1}. ${audience}가 이해하기 쉬운 짧은 설명.`,
       shot: `장면 ${i + 1}의 시각적 아이디어를 한 줄로`,
       estSec: per
