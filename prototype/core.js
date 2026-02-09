@@ -50,9 +50,14 @@
 
   core.setLoading = function (loading) {
     var submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
-    var overlay = document.getElementById('scenario-loading') || document.getElementById('dashboard-loading');
+    var overlay =
+      document.getElementById('page-loading') ||
+      document.getElementById('scenario-loading') ||
+      document.getElementById('dashboard-loading');
     var err = document.getElementById('scenario-error');
     var confirmBtn = document.getElementById('confirm-scenes');
+    var main = document.querySelector('.main');
+
     if (submitBtn) {
       submitBtn.disabled = loading;
       submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
@@ -61,9 +66,8 @@
       confirmBtn.disabled = loading;
       confirmBtn.textContent = loading ? '컨펌 중...' : '최종 컨펌 → 프로덕션';
     }
-    if (overlay) {
-      overlay.classList.toggle('hidden', !loading);
-    }
+    if (overlay) overlay.classList.toggle('hidden', !loading);
+    if (main) main.classList.toggle('loading-blur', !!loading);
     if (loading && err) err.classList.add('hidden');
   };
 
