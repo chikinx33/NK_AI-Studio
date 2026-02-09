@@ -1013,24 +1013,25 @@
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var scene = st.scenes[idx];
     var common = st.header || (st.payload && st.payload.header) || '';
-    var styleLock = '';
     var styleArr = [];
     if (st.payload) {
       styleArr = [...(st.payload.styles || []), st.payload.style || ''].filter(Boolean);
     }
-    if (styleArr.length) {
-      styleLock =
-        'Style Rules: use only [' +
-        styleArr.join(', ') +
-        '] as specified by the user. Do NOT switch to animation/cartoon/toy/pastel/soft-render/3D character styles unless explicitly requested.';
-    }
-    // common 프롬프트를 최우선으로 API에 전달
+    var styleLock = styleArr.length
+      ? 'Style: follow exactly [' + styleArr.join(', ') + '] provided by the user; do not add other looks.'
+      : '';
+
+    // 단순·우선순위화된 이미지 프롬프트
+    var primaryVisual = scene.shot || '';
+    var extraContext = scene.promptText || '';
+    var narration = scene.lines || '';
     var finalPrompt = [
-      common ? ('Common:\n' + common) : '',
+      common ? ('Common guidance: ' + common) : '',
       styleLock,
-      scene.promptText ? ('Scene Prompt:\n' + scene.promptText) : '',
-      'Scene Visual:\n' + (scene.shot || ''),
-      'Narration (Korean): ' + (scene.lines || '')
+      primaryVisual ? ('Primary visual (render this): ' + primaryVisual) : '',
+      extraContext ? ('Extra context (do not override primary visual): ' + extraContext) : '',
+      narration ? ('Narration context only, do NOT draw text: ' + narration) : '',
+      'Aspect ratio: ' + aspectRatio
     ].filter(Boolean).join('\n\n');
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
