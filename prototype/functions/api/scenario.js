@@ -169,6 +169,7 @@ ${tagRuleEn}`;
     "사회 · 공감": "사실 기반, 인터뷰/이슈 맥락을 균형 있게"
   };
   const genrePurposeKo = genrePurposesKo[purposeCategory] || "";
+  const genrePurposeEn = ""; // English genre purpose; if blank, model infers
 
   const userPrompt =
     lang === "en"
