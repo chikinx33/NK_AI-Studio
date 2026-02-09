@@ -1089,13 +1089,25 @@
     var primaryVisual = scene.shot || '';
     // 이미지 모델 혼선을 줄이기 위해 중복된 Common/Visual 라벨은 제외
     var extraContext = ''; // scene.promptText는 Common/Visual 라벨을 포함하므로 사용하지 않음
+
+    // 추가 가이드: 불필요한 인물 생성 방지 및 수학/공식 시각화 강화
+    var visualHasPeople = /(person|people|man|woman|girl|boy|human|사람|인물)/i.test(primaryVisual);
+    var visualHasMath = /(수식|공식|formula|equation|math|수학|그래프|graph|ζ\(s\)|zeta)/i.test(primaryVisual);
+    var hardFocusLine = 'Render ONLY the primary visual; ignore unrelated narrative elements.';
+    var noPeopleLine = visualHasPeople ? '' : 'Do not add human figures unless explicitly mentioned.';
+    var mathLine = visualHasMath
+      ? 'Render the formula clearly (e.g., ζ(s)=0) with readable lines; show grid/axes if relevant; keep background simple.'
+      : '';
     var narration = scene.lines || '';
     var finalPrompt = [
-      common ? ('Common guidance: ' + common) : '',
-      styleLock,
       primaryVisual ? ('Primary visual (render this): ' + primaryVisual) : '',
+      hardFocusLine,
+      noPeopleLine,
+      mathLine,
+      styleLock,
+      common ? ('Background context (do NOT render): ' + common) : '',
       extraContext ? ('Extra context (do not override primary visual): ' + extraContext) : '',
-      narration ? ('Narration context only, do NOT draw text: ' + narration) : '',
+      narration ? ('Narration context only, do NOT draw text or characters: ' + narration) : '',
       'Aspect ratio: ' + aspectRatio
     ].filter(Boolean).join('\n\n');
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });

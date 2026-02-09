@@ -91,6 +91,8 @@ export async function onRequestPost(context) {
 - JSON만 반환: {"scenes":[{"id":1,"title":"짧은 씬 제목","lines":"대사/내레이션 2-3문장","shot":"시각 묘사 한 줄","estSec":8},...]}
 - 입력값(topic, target, purposeCategory, purposeTags, needs, tone/toneText, style/styleText, extraNotes)을 모두 반영하세요.
 - 모든 scene에 title(6~12자)과 shot(시각 묘사 한 줄)을 반드시 포함하세요.
+- Genre 목적: ${genrePurposeKo || "장르 목적을 스스로 추론해 간결히 한 줄로 정리"}.
+- Tag 해석: 태그마다 설명 관점/예시/추상도/비유 필요 여부를 추론해, 각 태그 관점 문장을 최소 1개 포함. 태그가 낯설면 상식적 관행을 적용.
 - 역할 정의(섞지 말 것):
   · Topic = 줄거리/소재만 결정 (톤·스타일 금지)
   · Genre/Tags = 서술 관점·전개 틀만 결정 (플롯 뼈대). tag마다 해당 관점 문장 최소 1개.
@@ -118,6 +120,8 @@ ${tagRuleKo}`;
 - Return JSON only: {"scenes":[{"id":1,"title":"Short title","lines":"2-3 sentences","shot":"one-line visual","estSec":8},...]}
 - Use every input (topic, target, purposeCategory, purposeTags, needs, tone/toneText, style/styleText, extraNotes). If detailed selections exist, prefer them over free text.
 - Every scene must include a title (6-12 chars) and a shot (one-line visual).
+- Genre purpose: infer and state the genre’s goal in one concise line (e.g., clarity over drama for education).
+- Tag interpretation: For each tag, infer an explanation lens (examples? experiments? timeline? emotional response?) and include at least one sentence per tag. If a tag is unknown, apply a reasonable style consistent with the genre.
 - Role separation (do not mix):
   · Topic = plot/subject only (no tone/style)
   · Genre/Tags = narrative lens/framework only; for each tag, include ≥1 sentence from that perspective.
@@ -142,6 +146,29 @@ ${tagRuleEn}`;
 
   const toneTagsForPrompt = toneText ? "" : tones;
   const styleTagsForPrompt = styleText ? "" : styles;
+
+  // 장르 목적 한 줄 요약 (없으면 모델이 추론)
+  const genrePurposesKo = {
+    "키즈 · 영유아": "안전하고 쉽고 밝은 톤으로, 학습/놀이를 돕는 목적",
+    "스토리 · 서사": "몰입감 있는 이야기 전개, 감정선과 세계관을 선명히",
+    "지식 · 교양": "정확·명료한 설명, 과장 금지, 이해 우선",
+    "교육 · 학습": "목표 개념을 단계적으로 익히게 함, 실용 예시 제공",
+    "음식 · 요리": "조리 과정과 결과를 명확히, 위생/맛 표현",
+    "여행 · 관광": "장소 매력과 동선, 특징적 풍경/체험을 전달",
+    "라이프 · 일상": "생활 맥락과 진솔한 톤, 현실감 있는 디테일",
+    "리뷰 · 추천": "핵심 스펙/장단점/비교 포인트를 명확히",
+    "엔터테인먼트": "재미·리액션·템포를 중시, 가벼운 톤",
+    "게임": "게임플레이/공략 맥락, 시각적 하이라이트",
+    "음악 · 사운드": "소리/리듬/감정 전달, 시각적 메타포 활용",
+    "스포츠 · 피트니스": "동작 정확성, 페이스/세트/폼을 강조",
+    "취미 · 크리에이티브": "과정 중심, 도구/재료/완성품을 선명히",
+    "비즈니스 · 경제": "데이터·지표·전략을 명료히, 실용적 톤",
+    "테크 · IT": "원리·사용법·비교를 객관적으로, UI/기기 디테일",
+    "힐링 · 감성": "편안한 톤, 감정·풍경·색감을 부드럽게",
+    "종교 · 신앙": "경외·위로 톤, 교리/본문 맥락을 존중",
+    "사회 · 공감": "사실 기반, 인터뷰/이슈 맥락을 균형 있게"
+  };
+  const genrePurposeKo = genrePurposesKo[purposeCategory] || "";
 
   const userPrompt =
     lang === "en"
