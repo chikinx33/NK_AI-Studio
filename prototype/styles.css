@@ -366,8 +366,10 @@ body[data-embed="1"] {
   cursor: pointer;
 }
 
-.lib-item.selected {
-  outline: 2px solid var(--orange);
+.lib-item.selected,
+.lib-item.lib-selected {
+  outline: 4px solid #f97316; /* 진한 주황 테두리 */
+  outline-offset: 0;
   background: rgba(255, 122, 0, 0.08);
 }
 

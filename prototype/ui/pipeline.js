@@ -83,33 +83,65 @@
     modal.classList.remove('hidden');
   }
 
-  function openLibraryModal(items, kind, onSelect) {
+  function openLibraryModal(items, kind, onSelect, projectId) {
     const modal = document.getElementById('lib-modal');
     if (!modal) return;
     const box = modal.querySelector('.lib-content');
+    let selected = null; // { url, name }
     if (!box) return;
     if (!items || !items.length) {
       box.innerHTML = '<p class="muted">항목이 없습니다.</p>';
     } else {
       const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
+        const name = it.name || '';
         const thumb = (kind === 'image')
           ? '<img class="lib-thumb" src="' + url + '" alt="" />'
           : '<video class="lib-video" src="' + url + '" controls preload="metadata"></video>';
         return (
-          '<div class="lib-item" data-url="' + url + '" style="background:none;box-shadow:none;">' +
+          '<div class="lib-item" data-url="' + url + '" data-name="' + name + '" style="background:none;box-shadow:none;">' +
             thumb +
           '</div>'
         );
       }).join('');
-      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:12px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-grid">' + list + '</div>';
-      box.querySelectorAll('.lib-item').forEach(function (item) {
+      box.innerHTML = '' +
+        '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;">' +
+          '<span class="lib-title" style="font-weight:600;">라이브러리</span>' +
+          '<div style="flex:1;"></div>' +
+          '<button class="btn-primary" id="lib-use-btn">사용</button>' +
+          '<button class="btn-ghost" id="lib-delete-btn">삭제</button>' +
+          '<button class="btn-secondary lib-close-btn" id="lib-close">닫기</button>' +
+        '</div>' +
+        '<div class="lib-grid">' + list + '</div>';
+      const itemsEls = box.querySelectorAll('.lib-item');
+      itemsEls.forEach(function (item) {
         item.onclick = function () {
-          const u = item.dataset.url;
-          if (onSelect && u) onSelect(u);
-          closeModals();
+          itemsEls.forEach(el => el.classList.remove('lib-selected', 'selected'));
+          item.classList.add('lib-selected');
+          selected = { url: item.dataset.url, name: item.dataset.name };
         };
       });
+      const useBtn = box.querySelector('#lib-use-btn');
+      if (useBtn) useBtn.onclick = function () {
+        if (!selected || !selected.url) { alert('이미지를 먼저 선택하세요.'); return; }
+        if (onSelect) onSelect(selected.url);
+        closeModals();
+      };
+      const delBtn = box.querySelector('#lib-delete-btn');
+      if (delBtn) delBtn.onclick = async function () {
+        if (kind !== 'image') { alert('이미지 라이브러리에서만 삭제를 지원합니다.'); return; }
+        if (!projectId) { alert('프로젝트 ID를 찾을 수 없습니다.'); return; }
+        if (!selected || !selected.name) { alert('삭제할 이미지를 선택하세요.'); return; }
+        try {
+          const res = await NK.api.projectDelete(projectId, selected.name);
+          if (!res.ok) throw new Error(res.error || 'delete_failed');
+          // 삭제 성공: 리스트에서 제거하고 선택 초기화
+          const left = items.filter(it => it.name !== selected.name);
+          openLibraryModal(left, kind, onSelect, projectId);
+        } catch (err) {
+          alert('삭제 실패: ' + (err && err.message ? err.message : err));
+        }
+      };
       const closeBtn = box.querySelector('#lib-close');
       if (closeBtn) closeBtn.onclick = () => closeModals();
     }
@@ -641,10 +673,10 @@
               openLibraryModal(items, 'image', function (url) {
                 st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
                 refreshAndPersist(true);
-              });
+              }, projectId);
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
-              openLibraryModal([], 'image', null);
+              openLibraryModal([], 'image', null, projectId);
             }
             return;
           }
@@ -700,10 +732,10 @@
               openLibraryModal(vitems, 'video', function (url) {
                 st.scenes[idx] = Object.assign({}, scene, { videoUrl: url, videoError: '', videoStatus: 'done' });
                 refreshAndPersist(true);
-              });
+              }, projectId);
             } catch (err) {
               alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
-              openLibraryModal([], 'video', null);
+              openLibraryModal([], 'video', null, projectId);
             }
             return;
           }
