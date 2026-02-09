@@ -33,15 +33,11 @@
   - 한 문장 안에서 필요시 “no people / no text” 등 부정도 함께 명시해 네거티브 남발을 줄인다.
 - 렌더 우선순위: **Visual > Style lock > Common**. Common은 참고용이며 “do NOT render” 표시로 전달.
 
-### 개선된 예시 (위 수학 시나리오)
+### 개선된 예시 (수학 시나리오)
 - Common 예시  
-  - “Photoreal, clean studio lighting, deep teal/dark navy palette, sharp focus, thin neon highlights on mathematical lines; camera steady tripod; keep shots consistent in palette/lighting across scenes; no anime/cel shading; no subtitles/speech bubbles.”
-- Scene 1 Visual 예시  
-  - “Wide shot, dark lab wall, glowing ζ(s)=0 formula floating in front of a glass board, only equations and grid visible, no people, no text overlays, photoreal lighting, subtle volumetric light.”
-- Scene 2 Visual 예시  
-  - “Medium shot of hands annotating a printed complex plane chart on a desk, soft key light from left, shallow depth of field, no faces visible, no on-screen text.”
-- Scene 3 Visual 예시  
-  - “Close-up of a monitor showing a clean line chart of zero distributions, dark UI, teal accent lines, no speech bubbles, photoreal.”
+  - “Photoreal; deep teal/navy palette; clean studio lighting with subtle rim; neon highlights on math lines; steady camera; shots keep same palette/lighting; no anime/cel shading; no subtitles/speech bubbles.”
+- Scene Visual 예시  
+  - “Photoreal, wide shot of ζ(s)=0 formula glowing on glass grid in dark lab; no people; no text overlays; subtle volumetric light; 16:9.”
 
 ## 6. 이미지 프롬프트(pipeline.js) 구성
 - Primary visual: `scene.shot`(위 Visual)를 그대로 렌더 지시.
