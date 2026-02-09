@@ -396,6 +396,13 @@ body[data-embed="1"] {
   text-overflow: ellipsis;
 }
 
+.lib-empty {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
 [data-theme="light"] .nav-sub-delete {
   border-color: #d0d8ea;
   background: #eef2fb;

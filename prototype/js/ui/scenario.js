@@ -159,7 +159,7 @@
     const one = (arr) => Array.isArray(arr) && arr.length ? [arr[0]] : [];
     renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[defaultCat] || [], one(p.purposeTags), true);
     renderTagButtons(document.getElementById('needs-tags'), NK.core.needsList || [], one(p.needs), true);
-    renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], toArray(p.tones), false);
+    renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], toArray(p.tones), true);
     renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], toArray(p.styles), true);
 
     scenario.renderScenes(normalizeScenes(draft.scenes || []));

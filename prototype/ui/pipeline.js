@@ -90,7 +90,19 @@
     let selected = null; // { url, name }
     if (!box) return;
     if (!items || !items.length) {
-      box.innerHTML = '<p class="muted">항목이 없습니다.</p>';
+      box.innerHTML = '' +
+        '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;">' +
+          '<span class="lib-title" style="font-weight:600;">라이브러리</span>' +
+          '<div style="flex:1;"></div>' +
+          '<button class="btn-primary" id="lib-use-btn" disabled>사용</button>' +
+          '<button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button>' +
+          '<button class="btn-secondary lib-close-btn" id="lib-close">닫기</button>' +
+        '</div>' +
+        '<div class="lib-empty"><p class="muted">항목이 없습니다.</p></div>';
+      const closeBtn = box.querySelector('#lib-close');
+      if (closeBtn) closeBtn.onclick = () => closeModals();
+      modal.classList.remove('hidden');
+      return;
     } else {
       const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
