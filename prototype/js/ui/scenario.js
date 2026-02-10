@@ -133,11 +133,25 @@
   };
 
   // ---------- load draft into form ----------
+  const sanitizeHeader = (text) => {
+    if (!text) return '';
+    return String(text)
+      .split(/\n+/)
+      .map(line => line.replace(/종횡비/gi, '').trim())
+      .filter(line => line
+        && !/(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration)/i.test(line)
+        && !/(연속성|흐름이\s*자연스럽|매끄럽게\s*연결)/i.test(line)
+      )
+      .join('\n')
+      .trim();
+  };
+
   const loadDraft = (draft) => {
     const form = document.getElementById('scenario-form');
     if (!form || !draft) return;
     const p = draft.payload || {};
-    const header = draft.header || p.header || '';
+    const rawHeader = draft.header || p.header || '';
+    const header = sanitizeHeader(rawHeader);
     currentPayload = Object.assign({}, p || {}, { header });
     const defaults = NK.config.DEFAULTS || {};
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
@@ -283,7 +297,7 @@
           draft = draft || { id: Date.now(), title: payload.topic || '새 프로젝트' };
           draft.payload = payload;
           draft.scenes = normalized;
-          draft.header = res.header || headerText || draft.header || '';
+          draft.header = sanitizeHeader(res.header || headerText || draft.header || '');
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           NK.store.saveDrafts([draft]);

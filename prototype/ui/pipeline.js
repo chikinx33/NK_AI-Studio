@@ -205,7 +205,7 @@
         // 화면비/분량/연속성 문구는 이미지 프롬프트에서 제외
         if (!line) return false;
         if (/(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration)/i.test(line)) return false;
-        if (/연속성\s*규칙/i.test(line)) return false;
+        if (/(연속성|흐름이\s*자연스럽|매끄럽게\s*연결)/i.test(line)) return false;
         return true;
       })
       .join('\n')
