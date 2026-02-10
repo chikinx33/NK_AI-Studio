@@ -524,78 +524,7 @@
         var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
         var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
-        var img = (updatedScene.imgLoading
-          ? '<div class="image-placeholder tall loading"><span>생성 중...</span></div>'
-          : (updatedScene.imgError
-            ? '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>'
-            : (updatedScene.imageDataUrl
-              ? '<div class="image-box"><img class="scene-img" data-src="' + updatedScene.imageDataUrl + '" src="' + updatedScene.imageDataUrl + '" alt="scene image" /></div>'
-              : '<div class="image-placeholder tall no-plus"><span>image</span></div>')));
-        var videoCard = (function () {
-          if (updatedScene.videoUrl) {
-            var note = updatedScene.videoMethod === 'inline' ? '<div class="video-note">내장 재생(임시 변환)</div>' : '';
-            return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + updatedScene.videoUrl + '" type="video/mp4" /></video>' + note + '</div>';
-          }
-          if (updatedScene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>영상 생성중...</span></div>';
-          if (updatedScene.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
-          return '<div class="video-placeholder"><span>video</span></div>';
-        })();
-        var err = '';
-        return (
-          '<div class="scene-row">' +
-          '<div class="scene-cell story">' +
-          '<div class="story-inner">' +
-          '<p class="eyebrow">Scene ' + s.id + '</p>' +
-          '<p class="story-lines" data-id="' + s.id + '">' + (s.lines || '') + '</p>' +
-          '<div class="voice-block" style="margin-top:8px;">' +
-            '<div class="voice-title-row">' +
-              '<span class="voice-title">AI 보이스</span>' +
-            '</div>' +
-            '<div class="voice-row voice-controls">' +
-              '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
-                '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
-                '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
-              '</select>' +
-              '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
-            '</div>' +
-            '<div class="voice-player" data-id="' + s.id + '" style="margin-top:10px;">' +
-              '<audio controls preload="auto" style="width:100%;" ' + (updatedScene.voiceUrl ? '' : 'disabled') + ' src="' + (updatedScene.voiceUrl || '') + '"></audio>' +
-            '</div>' +
-          '</div>' +
-          '</div>' +
-          '</div>' +
-          '<div class="scene-cell prompt">' +
-          '<p class="eyebrow">Common</p>' +
-          '<p class="prompt-common" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + header + '</p>' +
-          '<p class="eyebrow">Visual</p>' +
-          '<p class="prompt-visual" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + (s.shot || '') + '</p>' +
-          '<p class="eyebrow">Duration</p>' +
-          '<p class="prompt-duration" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(s.estSec) || 0, 1)) + 's.</p>' +
-          '<div class="cell-actions br">' +
-          (s.editingPrompt
-            ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + s.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + s.id + '">취소</button>'
-            : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + s.id + '">편집</button>') +
-          '</div>' +
-          '</div>' +
-          '<div class="scene-cell image"><div class="scene-media-stack">' + img + videoCard + '</div>' + err + '</div>' +
-          '<div class="scene-cell actions">' +
-          '<div class="action-buttons grid">' +
-          '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + s.id + '"' + (updatedScene.imgLoading ? ' disabled' : '') + '>' + (updatedScene.imgLoading ? '이미지 생성중...' : '이미지 생성') + '</button>' +
-          '<button class="btn-secondary compact" data-action="delete-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>삭제</button>' +
-          '<button class="btn-secondary compact" data-action="upload-image" data-id="' + s.id + '">업로드</button>' +
-          '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">라이브러리</button>' +
-          '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (updatedScene.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
-          '</div>' +
-          '<div class="action-buttons grid video-actions">' +
-          '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">영상 생성</button>' +
-          '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>삭제</button>' +
-          '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">업로드</button>' +
-          '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">라이브러리</button>' +
-          '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (updatedScene.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
-          '</div>' +
-          '</div>' +
-          '</div>'
-        );
+        return buildSceneRowHtml(updatedScene, header);
       }).join('');
       state.scenes = scenes.map(function (s) {
         var computedPrompt = ['Common', header, 'Visual', (s.shot || ''), 'Duration', ((Math.max(Number(s.estSec) || 0, 1)) + 's.')].join('\\n');
@@ -741,7 +670,7 @@
 
           var refreshAndPersist = function (persist) {
             ctx.setState(st);
-            ui.render();
+            updateSceneRow(idx, st.header || '');
             if (persist && ctx.persistPipeline) ctx.persistPipeline();
           };
 
@@ -922,7 +851,7 @@
                 voiceVoiceId: vid
               });
               ctx.setState(cur);
-              ui.render();
+              updateSceneRow(ii, cur.header || '');
               if (ctx.persistPipeline) ctx.persistPipeline();
             }, 1200);
             return;
@@ -1006,7 +935,7 @@
     }
     st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
     ctx.setState(st);
-    ui.render();
+    updateSceneRow(i, st.header || '');
     try {
     // Veo fast 모델은 4/6/8초만 허용 → 근접값으로 스냅
     var snapDuration = (function (sec) {
@@ -1053,7 +982,7 @@
         videoJobId: jobId
       });
       ctx.setState(st);
-      ui.render();
+      updateSceneRow(i, st.header || '');
 
       // 폴링을 반드시 시작: jobId가 없으면 즉시 에러
       const pollingJobId = jobId || resp.job_id || resp.id || '';
@@ -1066,7 +995,7 @@
           videoError: 'no jobId in videoStart response'
         });
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(i, st.header || '');
         showCopyableError('영상 생성 실패: jobId 없음', JSON.stringify(resp || {}, null, 2));
       }
       } catch (err) {
@@ -1077,7 +1006,7 @@
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
         showCopyableError('영상 생성 실패: ' + msg, detail ? ('상세: ' + detail) : '');
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(i, st.header || '');
       }
       if (ctx.persistPipeline) ctx.persistPipeline();
     }
@@ -1100,13 +1029,13 @@
         st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error.message || 'video_error' });
         console.error('videoStatus error (done+error):', res.error);
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(idx, st.header || '');
         return;
       }
       if (res.done && !playback) {
         st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: 'done but no playback (가공 실패)' });
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(idx, st.header || '');
         return;
       }
       if (playback) {
@@ -1116,7 +1045,7 @@
           videoError: ''
         });
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(idx, st.header || '');
         if (ctx.persistPipeline) ctx.persistPipeline();
         return;
       }
@@ -1124,13 +1053,13 @@
         st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error || 'video_error' });
         console.error('videoStatus error status flag:', res);
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(idx, st.header || '');
         return;
       }
       if (attempt + 1 >= maxAttempts) {
         st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: 'timeout' });
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(idx, st.header || '');
         return;
       }
       setTimeout(() => pollVideoStatus(projectId, jobId, idx, attempt + 1), delay);
@@ -1142,7 +1071,7 @@
       console.error('videoStatus polling error:', msg, detail);
       st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
       ctx.setState(st);
-      ui.render();
+      updateSceneRow(idx, st.header || '');
     }
   }
   ui.refreshAssets = async function () {
@@ -1240,13 +1169,14 @@
     console.log('Imagen prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
-    ui.render();
+    updateSceneRow(idx, st.header || '');
     try {
       var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: pid });
       var dataUrl = (json.dataUrl || json.bytesBase64Encoded || '');
       if (!dataUrl) throw new Error('이미지 데이터가 비었습니다.');
       st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: dataUrl, imgLoading: false, imgError: '', promptText: scene.promptText });
       ctx.setState(st);
+      updateSceneRow(idx, st.header || '');
       console.log('Scene ' + scene.id + ' 이미지 생성 완료');
     } catch (err) {
       var msg = (err && err.message) || '';
@@ -1258,15 +1188,15 @@
         console.warn('이미지 생성 실패(500), 재시도 ' + (rc + 1) + '/2...');
         st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: ('재시도 중... (' + (rc + 1) + '/2)') });
         ctx.setState(st);
-        ui.render();
+        updateSceneRow(idx, st.header || '');
         await new Promise(function (resolve) { return setTimeout(resolve, 2000 * Math.pow(2, rc)); });
         return ui.generateImageForIdx(idx, rc + 1);
       }
       var errorMessage = (err && err.message) || '이미지 생성 실패';
       st.scenes[idx] = Object.assign({}, scene, { imgLoading: false, imgError: errorMessage + (detail ? ' ' + detail : '') });
       ctx.setState(st);
+      updateSceneRow(idx, st.header || '');
     }
-    ui.render();
     if (ctx.persistPipeline) ctx.persistPipeline();
   };
 })(); 
@@ -1281,4 +1211,87 @@
     try { navigator.clipboard && navigator.clipboard.writeText(msg); } catch (_) { }
     try { window.prompt(title + '\n아래 내용을 복사하세요:', msg); return; } catch (_) { }
     alert(msg);
+  }
+  function buildSceneRowHtml(s, header) {
+    var img = (s.imgLoading
+      ? '<div class="image-placeholder tall loading"><span>생성 중...</span></div>'
+      : (s.imgError
+        ? '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>'
+        : (s.imageDataUrl
+          ? '<div class="image-box"><img class="scene-img" loading="lazy" decoding="async" data-src="' + s.imageDataUrl + '" src="' + s.imageDataUrl + '" alt="scene image" /></div>'
+          : '<div class="image-placeholder tall no-plus"><span>image</span></div>')));
+    var videoCard = (function () {
+      if (s.videoUrl) {
+        var note = s.videoMethod === 'inline' ? '<div class="video-note">내장 재생(임시 변환)</div>' : '';
+        return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + s.videoUrl + '" type="video/mp4" /></video>' + note + '</div>';
+      }
+      if (s.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>영상 생성중...</span></div>';
+      if (s.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
+      return '<div class="video-placeholder"><span>video</span></div>';
+    })();
+    return (
+      '<div class="scene-row" data-id="' + s.id + '">' +
+      '<div class="scene-cell story">' +
+      '<div class="story-inner">' +
+      '<p class="eyebrow">Scene ' + s.id + '</p>' +
+      '<p class="story-lines" data-id="' + s.id + '">' + (s.lines || '') + '</p>' +
+      '<div class="voice-block" style="margin-top:8px;">' +
+        '<div class="voice-title-row">' +
+          '<span class="voice-title">AI 보이스</span>' +
+        '</div>' +
+        '<div class="voice-row voice-controls">' +
+          '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
+            '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
+            '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
+          '</select>' +
+          '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
+        '</div>' +
+        '<div class="voice-player" data-id="' + s.id + '" style="margin-top:10px;">' +
+          '<audio controls preload="auto" style="width:100%;" ' + (s.voiceUrl ? '' : 'disabled') + ' src="' + (s.voiceUrl || '') + '"></audio>' +
+        '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '<div class="scene-cell prompt">' +
+      '<p class="eyebrow">Common</p>' +
+      '<p class="prompt-common" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + header + '</p>' +
+      '<p class="eyebrow">Visual</p>' +
+      '<p class="prompt-visual" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + (s.shot || '') + '</p>' +
+      '<p class="eyebrow">Duration</p>' +
+      '<p class="prompt-duration" data-id="' + s.id + '"' + (s.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(s.estSec) || 0, 1)) + 's.</p>' +
+      '<div class="cell-actions br">' +
+      (s.editingPrompt
+        ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + s.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + s.id + '">취소</button>'
+        : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + s.id + '">편집</button>') +
+      '</div>' +
+      '</div>' +
+      '<div class="scene-cell image"><div class="scene-media-stack">' + img + videoCard + '</div></div>' +
+      '<div class="scene-cell actions">' +
+      '<div class="action-buttons grid">' +
+      '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + s.id + '"' + (s.imgLoading ? ' disabled' : '') + '>' + (s.imgLoading ? '이미지 생성중...' : '이미지 생성') + '</button>' +
+      '<button class="btn-secondary compact" data-action="delete-image" data-id="' + s.id + '"' + (s.imageDataUrl ? '' : ' disabled') + '>삭제</button>' +
+      '<button class="btn-secondary compact" data-action="upload-image" data-id="' + s.id + '">업로드</button>' +
+      '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">라이브러리</button>' +
+      '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (s.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
+      '</div>' +
+      '<div class="action-buttons grid video-actions">' +
+      '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">영상 생성</button>' +
+      '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (s.videoUrl ? '' : ' disabled') + '>삭제</button>' +
+      '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">업로드</button>' +
+      '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">라이브러리</button>' +
+      '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (s.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  function updateSceneRow(idx, headerText) {
+    var st = ctx.getState();
+    if (!st || !st.scenes || st.scenes.length <= idx) return;
+    var scene = st.scenes[idx];
+    var header = headerText || st.header || '';
+    var row = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
+    if (!row) { ui.render(); return; }
+    row.outerHTML = buildSceneRowHtml(scene, header);
   }

@@ -48,8 +48,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     const projectTag = (projTag || "default").toString();
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    // 표준 경로: projects/{projectId}/video/
-    const videoPrefix = `${basePrefix}/projects/${projectTag}/video/`;
+    // 표준 경로: projects/{projectId}/videos/
+    const videoPrefix = `${basePrefix}/projects/${projectTag}/videos/`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoPrefix}`;
 
     if (videoModel !== "veo" && videoModel !== "grok") {
