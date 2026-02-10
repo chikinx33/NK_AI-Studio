@@ -111,15 +111,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         instances: [
           {
             prompt: promptText,
-            referenceImages: [
-              {
-                image: {
-                  bytesBase64Encoded: parsedImage.base64,
-                  mimeType: parsedImage.mimeType || "image/png",
-                },
-                referenceType: "asset",
-              },
-            ],
+            image: {
+              bytesBase64Encoded: parsedImage.base64,
+              mimeType: parsedImage.mimeType || "image/png",
+            },
           },
         ],
         parameters: {
