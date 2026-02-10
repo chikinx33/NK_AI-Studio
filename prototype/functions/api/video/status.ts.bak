@@ -84,7 +84,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     const accessToken = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: 'https://www.googleapis.com/auth/cloud-platform' });
 
-    // 1) fetchPredictOperation만 사용 (operations.get에서 HTML 반환되는 문제 회피)
+    // 1) fetchPredictOperation
     const urlFetch = `https://${match[2]}-aiplatform.googleapis.com/v1/${endpointName}:fetchPredictOperation`;
     log('fetchPredictOperation', { endpointName, operationName: jobId });
     const res = await fetch(urlFetch, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ operationName: jobId }) });
@@ -94,7 +94,22 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const errBody = (detail as any)?.error || detail;
       return corsJson({ ok: false, job_id: jobId, done: false, error: { code: errBody?.code || res.status, message: errBody?.message || `fetchPredictOperation failed (${res.status})` }, response: null, rawOperation: detail, playback: null }, res.status);
     }
-    const op: any = safeJson(text);
+    const dataFetch = safeJson(text);
+
+    // 2) operations.get (region endpoint; google.com 금지)
+    let dataOp: any = null;
+    try {
+      const resOp = await fetch(`https://${match[2]}-aiplatform.googleapis.com/v1/${jobId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const textOp = await resOp.text();
+      const looksHtml = /^\s*</.test(textOp || '') && textOp.toLowerCase().includes('<html');
+      if (looksHtml) {
+        dataOp = { error: { code: 'HTML_RESPONSE', message: 'operation get returned HTML (check endpoint/url)' }, done: true, response: null, rawHtml: textOp };
+      } else {
+        dataOp = safeJson(textOp);
+      }
+    } catch (err) {
+      log('operation_get_error', err);
+    }
 
     const summarize = (obj: any): any => {
       if (!obj || typeof obj !== 'object') return obj;
@@ -111,12 +126,29 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return out;
     };
 
-    const rawOperation = { fetchPredictOperation: summarize(op) };
-    console.log('[video-status] fetch done', { jobId, done: !!op.done, hasResponse: !!op.response, hasError: !!op.error });
+    const opSource =
+      (dataFetch && typeof dataFetch === 'object' && (dataFetch as any).response) ? dataFetch :
+      (dataOp && typeof dataOp === 'object' && !Array.isArray(dataOp) ? dataOp : dataFetch);
 
+    const rawOperation = { fetchPredictOperation: summarize(dataFetch), operationGet: summarize(dataOp) };
+    console.log('[video-status] fetch done', { jobId, done: !!((dataFetch as any)?.done || (dataOp as any)?.done), hasResponse: !!(opSource as any)?.response, hasError: !!(opSource as any)?.error });
+
+    const op: any = opSource || {};
     let done = !!op.done;
-    let opError = op.error || null;
+    let opError = (opSource === dataFetch && dataFetch.response) ? null : (op.error || null);
     let opResponse = op.response || null;
+
+    // fetchPredictOperation에서 바로 error를 내려주는 경우 처리
+    if (!done && dataFetch && (dataFetch as any).error) {
+      opError = (dataFetch as any).error;
+      opResponse = (dataFetch as any).response || null;
+      done = true;
+    }
+    // fetchPredictOperation done=true인데 operationGet이 404 문자열인 경우에도 done 처리
+    if (!done && dataFetch && (dataFetch as any).done) {
+      done = true;
+      opResponse = opResponse || (dataFetch as any).response || null;
+    }
 
     const pick = (r: any) =>
       r?.videos?.[0]?.gcsUri ||
