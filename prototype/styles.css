@@ -1608,9 +1608,13 @@ a.btn-primary:active {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  justify-content: flex-start;
-  gap: 16px;
+  grid-template-columns: repeat(4, 1fr); /* 항상 4열 유지 */
+  gap: 18px;
+  justify-items: stretch;
+}
+
+#dashboard-drafts {
+  padding-top: 72px; /* 테마 버튼과 완전히 분리되도록 여백 확대 */
 }
 
 .draft-card {
