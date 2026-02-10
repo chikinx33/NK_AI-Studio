@@ -109,7 +109,7 @@
         const name = it.name || '';
         const thumb = (kind === 'image')
           ? '<img class="lib-thumb" src="' + url + '" alt="" />'
-          : '<video class="lib-video" src="' + url + '" controls preload="metadata"></video>';
+          : '<video class="lib-thumb" src="' + url + '" muted playsinline preload="metadata"></video>';
         return (
           '<div class="lib-item" data-url="' + url + '" data-name="' + name + '" style="background:none;box-shadow:none;">' +
             thumb +
