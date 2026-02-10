@@ -1092,30 +1092,9 @@
     }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var scene = st.scenes[idx];
-    var common = st.header || (st.payload && st.payload.header) || '';
-    var styleArr = [];
-    if (st.payload) {
-      styleArr = [...(st.payload.styles || []), st.payload.style || ''].filter(Boolean);
-    }
-    var hasRealistic = styleArr.some(function (s) { return /실사|real/i.test(s); });
-    var styleLock = styleArr.length
-      ? 'Style: follow exactly [' + styleArr.join(', ') + '] provided by the user; do not add other looks.'
-      : '';
-    // 실사 요구가 있거나 스타일이 비었을 때 기본 네거티브/포지티브를 추가해 애니/만화 편향을 억제
-    var defaultRealistic = hasRealistic || !styleArr.length
-      ? 'Style guard: photorealistic, real human materials/lighting; no anime, no cartoon, no cel shading, no illustration look.'
-      : '';
-
-    // 단순 프롬프트: Visual(shot) + Style + Aspect만 전달
+    // 이미지 생성은 오직 Visual(shot) 텍스트만 사용한다.
     var primaryVisual = (scene.shot || '').trim();
-    // Visual에 부정/구체 지시를 한 문장 안에 직접 포함하도록 UI 가이드 필요
-    var finalPrompt = [
-      primaryVisual ? ('Primary visual (render exactly this): ' + primaryVisual) : '',
-      'Render only described subjects/setting; do not add extra characters, text, or speech bubbles.',
-      styleLock,
-      defaultRealistic,
-      'Aspect ratio: ' + aspectRatio
-    ].filter(Boolean).join('\n\n');
+    var finalPrompt = primaryVisual;
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
     ui.render();
