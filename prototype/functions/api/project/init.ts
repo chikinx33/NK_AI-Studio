@@ -38,7 +38,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const folders = ["image", "video", "sfx", "bgm", "caption", "reference"];
+    const folders = ["image", "videos", "sfx", "bgm", "caption", "reference"];
     const token = await getGoogleAccessToken({
       clientEmail,
       privateKeyPem: privateKeyRaw,
@@ -121,3 +121,5 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
   const origin = request.headers.get("Origin");
   return new Response(null, { status: 204, headers: corsHeaders(origin) });
 };
+
+
