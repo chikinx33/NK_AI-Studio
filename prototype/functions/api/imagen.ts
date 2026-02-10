@@ -14,6 +14,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // 이미지 모델에 전달할 최종 프롬프트 (사용자 Visual 그대로)
     const finalPrompt = prompt;
+    const negativePrompt = (body?.negativePrompt ?? '').toString().trim();
 
     // Cloudflare Pages > Variables and Secrets 에 등록한 값들
     const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
@@ -50,11 +51,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        instances: [{ prompt: finalPrompt }],
+        instances: [{
+          prompt: { text: finalPrompt }
+        }],
         parameters: {
           sampleCount: 1,
           aspectRatio: aspectFinal,
           personGeneration: "allow_all",
+          ...(negativePrompt ? { negativePrompt } : {})
         },
       }),
     });

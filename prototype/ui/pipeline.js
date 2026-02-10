@@ -1107,14 +1107,14 @@
     }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var scene = st.scenes[idx];
-    // 이미지 프롬프트: Common(전역 스타일/연출) + 해당 씬 Visual을 함께 전달
+    // 이미지 프롬프트: Common 스타일 지침과 Visual을 단순 문장으로 결합해 파서 오인 방지
     var common = cleanHeader(st.header || '');
     var primaryVisual = (scene.shot || '').trim();
     var promptBlocks = [];
-    if (common) promptBlocks.push('Common 스타일·연출 지침:\n' + common);
-    promptBlocks.push('Visual(이 장면만 렌더):\n' + primaryVisual);
-    promptBlocks.push('텍스트/워터마크 추가 금지, Common에서 지정한 스타일 외 룩을 추가하지 마세요.');
-    var finalPrompt = promptBlocks.join('\n\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
+    if (common) promptBlocks.push(common);
+    if (primaryVisual) promptBlocks.push(primaryVisual);
+    promptBlocks.push('텍스트/워터마크를 넣지 말고, 지정된 스타일만 사용.');
+    var finalPrompt = promptBlocks.join('\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
     console.log('Imagen prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
