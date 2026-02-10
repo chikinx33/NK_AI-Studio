@@ -135,13 +135,20 @@
   // ---------- load draft into form ----------
   const sanitizeHeader = (text) => {
     if (!text) return '';
+    const aspectPattern = /(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration|종횡비)/i;
+    const continuityPattern = /(연속성|흐름이\s*자연스럽|매끄럽게\s*연결)/i;
+    const visualStylePattern = /비주얼\s*스타일/i;
     return String(text)
       .split(/\n+/)
-      .map(line => line.replace(/종횡비/gi, '').trim())
-      .filter(line => line
-        && !/(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration)/i.test(line)
-        && !/(연속성|흐름이\s*자연스럽|매끄럽게\s*연결)/i.test(line)
-      )
+      .map((line) => {
+        let l = line;
+        // 비주얼 스타일 항목은 Common에서 숨김
+        if (visualStylePattern.test(l)) return '';
+        if (aspectPattern.test(l) || continuityPattern.test(l)) return '';
+        l = l.replace(/규칙\s*없음/gi, '').trim();
+        return l.trim();
+      })
+      .filter(Boolean)
       .join('\n')
       .trim();
   };

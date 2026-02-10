@@ -194,20 +194,21 @@
   // Header에서 화면비/분량 문구를 제거해 프롬프트에 중복 반영되지 않도록 정리
   function cleanHeader(text) {
     if (!text) return '';
+    const aspectPattern = /(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration|종횡비)/i;
+    const continuityPattern = /(연속성|흐름이\s*자연스럽|매끄럽게\s*연결)/i;
+    const visualStylePattern = /비주얼\s*스타일/i;
     return String(text)
       .split(/\n+/)
       .map(function (line) {
-        // 종횡비 토큰 제거 (이미 별도 파라미터 처리)
-        line = line.replace(/\b종횡비\b/gi, '').trim();
-        return line;
+        let l = line;
+        // 비주얼 스타일 항목은 Common에서 표시/전달하지 않음
+        if (visualStylePattern.test(l)) return '';
+        // 비주얼 스타일이 아닌 라인은 토큰이 포함되면 통째로 제거
+        if (aspectPattern.test(l) || continuityPattern.test(l)) return '';
+        l = l.replace(/규칙\s*없음/gi, '').trim();
+        return l.trim();
       })
-      .filter(function (line) {
-        // 화면비/분량/연속성 문구는 이미지 프롬프트에서 제외
-        if (!line) return false;
-        if (/(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration)/i.test(line)) return false;
-        if (/(연속성|흐름이\s*자연스럽|매끄럽게\s*연결)/i.test(line)) return false;
-        return true;
-      })
+      .filter(Boolean)
       .join('\n')
       .trim();
   }
