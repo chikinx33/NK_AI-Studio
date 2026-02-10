@@ -260,7 +260,10 @@
     } catch (_) { }
     return '';
   };
-  ui.init = function (c) { ctx = c || {}; };
+  ui.init = function (c) {
+    ctx = c || {};
+    ui.__ctx = ctx; // 외부 헬퍼가 ctx에 접근할 수 있도록 공유
+  };
   // 영상 모델 셀렉트 전용 스타일을 주입해 테마에 맞는 형태로 표시
   (function injectVideoModelStyle() {
     if (document.getElementById('video-model-style')) return;
@@ -1292,11 +1295,14 @@
   }
 
   function updateSceneRow(idx, headerText) {
-    var st = ctx.getState();
+    // ctx는 IIFE 내부 변수라 외부 헬퍼에서 접근할 수 있도록 ui.__ctx를 참조
+    var ctxRef = (typeof ctx !== 'undefined' && ctx) || (window.NK && NK.uiPipeline && NK.uiPipeline.__ctx) || null;
+    if (!ctxRef || !ctxRef.getState) return;
+    var st = ctxRef.getState();
     if (!st || !st.scenes || st.scenes.length <= idx) return;
     var scene = st.scenes[idx];
     var header = headerText || st.header || '';
     var row = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
-    if (!row) { ui.render(); return; }
+    if (!row) { if (NK.uiPipeline && NK.uiPipeline.render) NK.uiPipeline.render(); return; }
     row.outerHTML = buildSceneRowHtml(scene, header);
   }

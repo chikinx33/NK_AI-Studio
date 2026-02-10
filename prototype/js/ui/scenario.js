@@ -362,6 +362,16 @@
           NK.store.saveDrafts([draft]);
           if (NK.api?.projectSave) {
             await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });
+            // 저장 직후 사이드바/대시보드 카드에 메타(장르/타겟/길이) 반영
+            try {
+              if (NK.ui?.dashboard?.renderSidebarProjectCard) {
+                NK.ui.dashboard.renderSidebarProjectCard(draft);
+              }
+              if (NK.ui?.dashboard?.renderDrafts) {
+                NK.ui.dashboard.renderDrafts();
+              }
+              if (NK.state?.set) NK.state.set({ currentProject: draft });
+            } catch (_) { }
           }
           alert('저장되었습니다.');
         } catch (err) {

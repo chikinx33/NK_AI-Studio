@@ -328,16 +328,17 @@
       return;
     }
 
-    const ar = draft.payload?.aspectRatio || '16:9';
+    const payload = draft.payload || {};
+    const ar = payload.aspectRatio || '16:9';
     const dur = (() => {
-      const n = Number(draft.payload?.duration) || 0;
+      const n = Number(payload.duration) || 0;
       if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
       if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
       return n ? `${n}s` : '-';
     })();
-    const cat = draft.payload?.purposeCategory || '';
-    const tags = Array.isArray(draft.payload?.purposeTags) ? draft.payload.purposeTags.join(', ') : '';
-    const tgt = draft.payload?.target || '';
+    const cat = payload.purposeCategory || '';
+    const tags = Array.isArray(payload.purposeTags) ? payload.purposeTags.join(', ') : '';
+    const tgt = payload.target || '';
     const genre = `${cat} ${tags}`.trim();
     const desc = [
       `장르 : ${genre || '-'}`,
@@ -362,5 +363,20 @@
     `;
     container.style.display = 'block';
   };
+
+  // 사이드바 카드 내 버튼 클릭 시 currentProject를 기준으로 이동
+  document.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('[data-action^="sidebar-edit-"]');
+    if (!btn) return;
+    const action = btn.getAttribute('data-action');
+    const current = NK.state?.runtime?.currentProject;
+    const pid = current?.id;
+    if (!pid) return;
+    let url = null;
+    if (action === 'sidebar-edit-scenario') url = `scenario.html?projectId=${encodeURIComponent(pid)}`;
+    else if (action === 'sidebar-edit-scenes') url = `scenes.html?projectId=${encodeURIComponent(pid)}`;
+    else if (action === 'sidebar-edit-media') url = `media.html?projectId=${encodeURIComponent(pid)}`;
+    if (url) NK.navigation.loadStage(url);
+  });
 
 })();
