@@ -1608,7 +1608,7 @@ a.btn-primary:active {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 320px));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   justify-content: flex-start;
   gap: 16px;
 }
