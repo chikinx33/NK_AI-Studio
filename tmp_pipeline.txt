@@ -988,14 +988,11 @@
     var maxAttempts = 18; // 18*5s = 90s
     var delay = 5000;
     try {
-      var st = ctx.getState();
-      if (!st || !st.scenes || st.scenes.length <= idx) return;
-      var sceneId = st.scenes[idx].id;
-      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId, sceneId: sceneId });
+      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId, sceneId: st.scenes[idx].id });
       console.log('videoStatus', { jobId, res });
       var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url || '';
       var status = res.status || '';
-      st = ctx.getState();
+      var st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
       if (res.done && res.error) {
         st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error.message || 'video_error' });
