@@ -354,9 +354,12 @@
     if (!pipelineMeta || !pipelineScenes || !ctx) return;
     var isFile = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
     var state = ctx.getState();
-    if (state -and state.header) {
+    if (state && state.header) {
       var cleaned = cleanHeader(state.header);
-      if (cleaned -ne state.header) { state = Object.assign({}, state, { header: cleaned }); ctx.setState(state); }
+      if (cleaned !== state.header) {
+        // 렌더용으로만 정제된 헤더를 사용해 사이클을 막는다.
+        state = Object.assign({}, state, { header: cleaned });
+      }
     }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var persistPipeline = ctx.persistPipeline;
