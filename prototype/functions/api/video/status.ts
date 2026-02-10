@@ -40,6 +40,41 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, response: null, rawOperation: null, playback: null }, 500);
     }
 
+    const isGrok = jobId.startsWith('grok:');
+
+    if (isGrok) {
+      const xaiKey = env.XAI_API_KEY as string | undefined;
+      if (!xaiKey) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'XAI_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
+      }
+      const reqId = jobId.replace(/^grok:/, '');
+      const url = `https://api.x.ai/v1/videos/${reqId}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${xaiKey}` } });
+      const txt = await res.text();
+      const json = safeJson(txt);
+      if (!res.ok) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: json?.error || txt }, response: json, rawOperation: json, playback: null }, res.status);
+      }
+      const status = (json?.status || '').toLowerCase();
+      const done = status === 'completed' || status === 'done';
+      const playback =
+        json?.video?.url ||
+        json?.data?.[0]?.url ||
+        json?.url ||
+        null;
+      return corsJson({
+        ok: true,
+        job_id: jobId,
+        done,
+        error: done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null,
+        response: json,
+        rawOperation: json,
+        playback: done ? playback : null,
+        playbackUrl: done ? playback : null,
+        status: done ? (playback ? 'done' : 'done_no_output') : 'processing'
+      }, 200);
+    }
+
     const re = /^projects\/([^/]+)\/locations\/([^/]+)\/publishers\/([^/]+)\/models\/([^/]+)\/operations\/([^/]+)$/;
     const match = jobId.match(re);
     if (!match) {

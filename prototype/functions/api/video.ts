@@ -105,7 +105,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         }
       }
 
-      const grokUrl = "https://api.x.ai/v1/video/generations";
+      const grokUrl = "https://api.x.ai/v1/videos/generations";
       const grokBody: any = {
         model: modelId || "grok-imagine-video",
         prompt: promptText,
@@ -127,16 +127,23 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         return json({ error: "grok_error", status: grokRes.status, detail: safeJson(grokText) }, grokRes.status);
       }
       const grokJson = safeJson(grokText);
+      const reqId =
+        grokJson?.request_id ||
+        grokJson?.id ||
+        grokJson?.data?.[0]?.id ||
+        "";
       const playback =
         grokJson?.data?.[0]?.url ||
         grokJson?.output_url ||
         grokJson?.url ||
         grokJson?.video_url ||
         null;
-      if (!playback) {
-        return json({ error: "grok_no_playback", detail: grokJson }, 500);
-      }
-      return json({ playbackUrl: playback, job_id: grokJson?.id || grokJson?.request_id || "" }, 200);
+      // 응답에 즉시 url이 없으면 폴링용 job_id만 반환
+      return json({
+        job_id: reqId ? `grok:${reqId}` : "",
+        playbackUrl: playback || null,
+        status: playback ? "done" : "processing"
+      }, playback ? 200 : 202);
     }
 
     // Veo branch

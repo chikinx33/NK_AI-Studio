@@ -135,18 +135,24 @@
   // ---------- load draft into form ----------
   const sanitizeHeader = (text) => {
     if (!text) return '';
-    const aspectPattern = /(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration|종횡비)/i;
-    const continuityPattern = /(연속성|흐름이\s*자연스럽|매끄럽게\s*연결)/i;
-    const visualStylePattern = /비주얼\s*스타일/i;
+    const stripTokens = (line) => {
+      return line
+        .replace(/비주얼\s*스타일[^.\n]*/gi, '')
+        .replace(/종횡비[^.\n]*/gi, '')
+        .replace(/aspect\s*ratio[^.\n]*/gi, '')
+        .replace(/화면\s*비율[^.\n]*/gi, '')
+        .replace(/target\s*duration[^.\n]*/gi, '')
+        .replace(/분량[^.\n]*/gi, '')
+        .replace(/연속성[^.\n]*/gi, '')
+        .replace(/흐름이\s*자연스럽[^.\n]*/gi, '')
+        .replace(/매끄럽게\s*연결[^.\n]*/gi, '')
+        .replace(/규칙\s*없음/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+    };
     return String(text)
       .split(/\n+/)
-      .map((line) => {
-        let l = line;
-        // 비주얼 스타일 항목은 Common에서 숨김
-        if (visualStylePattern.test(l)) return '';
-        if (aspectPattern.test(l) || continuityPattern.test(l)) return '';
-        return l.trim();
-      })
+      .map(stripTokens)
       .filter(Boolean)
       .join('\n')
       .trim();
