@@ -12,13 +12,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "prompt is required" }, 400);
     }
 
-    // 공통 가드 규칙: 다중 패널/텍스트/자막 금지 등
-    const guardRules = [
-      "Single frame only; do not split into multiple panels or pages.",
-      "No subtitles, captions, on-screen text, speech bubbles, UI, or watermarks in the image.",
-      "Render one final image, not a storyboard."
-    ];
-    const finalPrompt = `${prompt}\n\nGlobal guard: ${guardRules.join(" ")}`;
+    // 이미지 모델에 전달할 최종 프롬프트 (사용자 Visual 그대로)
+    const finalPrompt = prompt;
 
     // Cloudflare Pages > Variables and Secrets 에 등록한 값들
     const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
