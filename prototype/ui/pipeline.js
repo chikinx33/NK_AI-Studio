@@ -262,12 +262,14 @@
         gap: 12px;
         width: 100%;
         flex-wrap: wrap;
+        padding-left: 6px;
       }
       .video-model-left {
         display: flex;
         align-items: center;
         gap: 10px;
         min-width: 220px;
+        padding-left: 4px;
       }
       .video-model-select {
         appearance: none;
@@ -276,15 +278,17 @@
         padding: 8px 36px 8px 14px;
         border-radius: 12px;
         border: 1px solid rgba(255,255,255,0.14);
-        background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
-        color: inherit;
+        background: linear-gradient(135deg, rgba(15, 26, 46, 0.9), rgba(11, 20, 36, 0.85));
+        color: #e8f1ff;
         font-size: 13px;
         line-height: 1.4;
         position: relative;
+        box-shadow: 0 0 0 1px rgba(123,215,255,0.25), 0 6px 16px rgba(0,0,0,0.25);
       }
       [data-theme="light"] .video-model-select {
         border: 1px solid rgba(0,0,0,0.12);
-        background: linear-gradient(135deg, rgba(0,0,0,0.03), rgba(0,0,0,0.01));
+        background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(245,245,245,0.9));
+        color: #1f2a36;
       }
       .video-model-select:focus {
         outline: 1px solid var(--accent, #7bd7ff);
@@ -292,8 +296,9 @@
       }
       .video-model-label {
         font-size: 13px;
-        color: rgba(255,255,255,0.78);
+        color: rgba(255,255,255,0.85);
         letter-spacing: 0.01em;
+        min-width: 90px;
       }
       [data-theme="light"] .video-model-label { color: rgba(0,0,0,0.72); }
       .video-model-select::-ms-expand { display: none; }
@@ -1043,7 +1048,7 @@
         });
         ctx.setState(st);
         ui.render();
-        alert('영상 생성 응답에 jobId가 없습니다. 서버 응답을 확인해주세요.');
+        showCopyableError('영상 생성 실패: jobId 없음', JSON.stringify(resp || {}, null, 2));
       }
       } catch (err) {
         st = ctx.getState() || st;
@@ -1051,7 +1056,7 @@
         const detail = (err && err.detail) ? err.detail : '';
         console.error('videoStart error:', msg, detail);
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
-        alert('영상 생성 실패: ' + msg + (detail ? '\n상세: ' + detail : ''));
+        showCopyableError('영상 생성 실패: ' + msg, detail ? ('상세: ' + detail) : '');
         ctx.setState(st);
         ui.render();
       }
@@ -1250,3 +1255,11 @@
 
 
 
+  // 복사 가능한 에러 알림 (alert 대체)
+  function showCopyableError(title, detail) {
+    var msg = detail ? (title + '\n' + detail) : title;
+    console.error(msg);
+    try { navigator.clipboard && navigator.clipboard.writeText(msg); } catch (_) { }
+    try { window.prompt(title + '\n아래 내용을 복사하세요:', msg); return; } catch (_) { }
+    alert(msg);
+  }

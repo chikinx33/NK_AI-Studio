@@ -78,8 +78,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
             const stamp = Date.now();
             const objectName = `${basePrefix}/projects/${projectTag}/grok/${stamp}-${sceneId}.png`;
             const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-            const b64 = imageDataUrl.split(",")[1] || "";
-            const buf = base64ToUint8(b64);
+          const b64 = imageDataUrl.split(",")[1] || "";
+          const buf = base64ToUint8(b64);
             const upRes = await fetch(uploadUrl, {
               method: "POST",
               headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "image/png" },
@@ -277,6 +277,13 @@ function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | n
   const [, mime, b64] = match;
   if (!b64) return null;
   return { base64: b64.trim(), mimeType: mime || 'image/png' };
+}
+
+function base64ToUint8(base64: string) {
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; ++i) arr[i] = raw.charCodeAt(i);
+  return arr;
 }
 
 // Veo fast는 4/6/8초만 허용 → 근접값으로 스냅
