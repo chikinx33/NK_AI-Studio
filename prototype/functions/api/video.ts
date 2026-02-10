@@ -48,9 +48,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     const projectTag = (projTag || "default").toString();
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    // 표준 경로: projects/{projectId}/videos/
-    const videoPrefix = `${basePrefix}/projects/${projectTag}/videos/`;
-    const outputGcsUri = `gs://${outParsed.bucket}/${videoPrefix}`;
+    // 표준 경로: projects/{projectId}/videos/{timestamp-sceneId}.mp4 (파일 단일 경로, 서브폴더 방지)
+    const stamp = Date.now();
+    const videoObject = `${basePrefix}/projects/${projectTag}/videos/${stamp}-${sceneId}.mp4`;
+    const outputGcsUri = `gs://${outParsed.bucket}/${videoObject}`;
 
     if (videoModel !== "veo" && videoModel !== "grok") {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);

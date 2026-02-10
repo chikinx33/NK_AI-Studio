@@ -62,6 +62,50 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         json?.data?.[0]?.url ||
         json?.url ||
         null;
+
+      // Grok도 결과를 우리 GCS 평면 경로(/videos/{stamp}-{sceneId}.mp4)에 저장해 서브폴더 생성을 막는다.
+      let flattenedPlayback = playback;
+      if (done && playback && env.VIDEO_OUTPUT_GCS_URI) {
+        try {
+          const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI as string);
+          if (outParsed && clientEmail && privateKeyRaw) {
+            const bufRes = await fetch(playback);
+            const buf = await bufRes.arrayBuffer();
+            if (bufRes.ok) {
+              const objectBase = outParsed.object.replace(/\/$/, "");
+              const stamp = Date.now();
+              const sceneSafe = sceneIdParam || 'grok';
+              const objectName = `${objectBase}/projects/${projectTag || 'default'}/videos/${stamp}-${sceneSafe}.mp4`;
+              const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+              const accessTokenUpload = await getGoogleAccessToken({
+                clientEmail,
+                privateKeyPem: privateKeyRaw,
+                scope: "https://www.googleapis.com/auth/cloud-platform",
+              });
+              const upRes = await fetch(uploadUrl, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "video/mp4" },
+                body: buf
+              });
+              const upTxt = await upRes.text();
+              if (upRes.ok) {
+                flattenedPlayback = await signGcsUrl({
+                  bucket: outParsed.bucket,
+                  object: objectName,
+                  clientEmail,
+                  privateKeyPem: privateKeyRaw,
+                  expiresInSec: 3600,
+                }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
+              } else {
+                log('grok_flat_upload_failed', { status: upRes.status, detail: safeJson(upTxt) });
+              }
+            }
+          }
+        } catch (err) {
+          log('grok_flatten_error', err);
+        }
+      }
+
       return corsJson({
         ok: true,
         job_id: jobId,
@@ -69,8 +113,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         error: done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null,
         response: json,
         rawOperation: json,
-        playback: done ? playback : null,
-        playbackUrl: done ? playback : null,
+        playback: done ? (flattenedPlayback || playback) : null,
+        playbackUrl: done ? (flattenedPlayback || playback) : null,
         status: done ? (playback ? 'done' : 'done_no_output') : 'processing'
       }, 200);
     }

@@ -354,6 +354,10 @@
     if (!pipelineMeta || !pipelineScenes || !ctx) return;
     var isFile = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
     var state = ctx.getState();
+    if (state -and state.header) {
+      var cleaned = cleanHeader(state.header);
+      if (cleaned -ne state.header) { state = Object.assign({}, state, { header: cleaned }); ctx.setState(state); }
+    }
     var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
     var persistPipeline = ctx.persistPipeline;
     var updateDraftFromPipeline = ctx.updateDraftFromPipeline;
@@ -1326,3 +1330,4 @@
     if (!row) { if (NK.uiPipeline && NK.uiPipeline.render) NK.uiPipeline.render(); return; }
     row.outerHTML = buildSceneRowHtml(scene, header);
   }
+
