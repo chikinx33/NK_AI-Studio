@@ -54,10 +54,90 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
 
+    // Grok Imagine branch
     if (videoModel === "grok") {
-      return json({ error: "grok_not_implemented", message: "Grok Imagine 연동은 백엔드 지원이 필요합니다." }, 501);
+      const xaiKey = env.XAI_API_KEY as string | undefined;
+      if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
+
+      // image_url: grok은 공개 URL을 요구할 수 있으므로 data:인 경우 업로드 후 URL 확보 시도
+      let imageUrl = "";
+      if (imageDataUrl) {
+        if (/^https?:/i.test(imageDataUrl) || imageDataUrl.startsWith("gs://")) {
+          imageUrl = imageDataUrl.startsWith("gs://") ? gcsToHttps(imageDataUrl) : imageDataUrl;
+        } else if (imageDataUrl.startsWith("data:")) {
+          try {
+            if (!baseOutput) return json({ error: "Image is data URL; set VIDEO_OUTPUT_GCS_URI to upload it" }, 400);
+            const outParsed = parseGcsUri(baseOutput);
+            if (!outParsed) return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
+            const accessTokenUpload = await getGoogleAccessToken({
+              clientEmail,
+              privateKeyPem: privateKeyRaw,
+              scope: "https://www.googleapis.com/auth/cloud-platform",
+            });
+            const basePrefix = outParsed.object.replace(/\/$/, "");
+            const stamp = Date.now();
+            const objectName = `${basePrefix}/projects/${projectTag}/grok/${stamp}-${sceneId}.png`;
+            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+            const b64 = imageDataUrl.split(",")[1] || "";
+            const buf = base64ToUint8(b64);
+            const upRes = await fetch(uploadUrl, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "image/png" },
+              body: buf
+            });
+            const upTxt = await upRes.text();
+            if (!upRes.ok) {
+              return json({ error: "upload_failed", detail: upTxt }, 500);
+            }
+            const signed = await signGcsUrl({
+              bucket: outParsed.bucket,
+              object: objectName,
+              clientEmail,
+              privateKeyPem: privateKeyRaw,
+              expiresInSec: 3600,
+            }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
+            imageUrl = signed;
+          } catch (err: any) {
+            return json({ error: "image_upload_error", detail: err?.message || err }, 500);
+          }
+        }
+      }
+
+      const grokUrl = "https://api.x.ai/v1/video/generations";
+      const grokBody: any = {
+        model: modelId || "grok-imagine-video",
+        prompt: promptText,
+        duration: snapDuration,
+        aspect_ratio: aspectRatio,
+      };
+      if (imageUrl) grokBody.image_url = imageUrl;
+
+      const grokRes = await fetch(grokUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${xaiKey}`,
+        },
+        body: JSON.stringify(grokBody),
+      });
+      const grokText = await grokRes.text();
+      if (!grokRes.ok) {
+        return json({ error: "grok_error", status: grokRes.status, detail: safeJson(grokText) }, grokRes.status);
+      }
+      const grokJson = safeJson(grokText);
+      const playback =
+        grokJson?.data?.[0]?.url ||
+        grokJson?.output_url ||
+        grokJson?.url ||
+        grokJson?.video_url ||
+        null;
+      if (!playback) {
+        return json({ error: "grok_no_playback", detail: grokJson }, 500);
+      }
+      return json({ playbackUrl: playback, job_id: grokJson?.id || grokJson?.request_id || "" }, 200);
     }
 
+    // Veo branch
     const accessToken = await getGoogleAccessToken({
       clientEmail,
       privateKeyPem: privateKeyRaw,

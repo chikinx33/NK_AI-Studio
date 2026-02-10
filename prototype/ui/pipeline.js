@@ -938,12 +938,6 @@
       return best;
     })(scene.estSec);
 
-    var videoModel = st.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'veo';
-    if (videoModel === 'grok') {
-      alert('Grok Imagine 연동은 준비 중입니다. xAI API 키/엔드포인트 설정 후 백엔드 지원이 필요합니다.');
-      return;
-    }
-
     var payload = {
       projectId: projectId,
       projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
