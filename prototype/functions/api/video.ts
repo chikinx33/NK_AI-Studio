@@ -191,8 +191,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // Veo는 Long Running Predict API를 사용해야 함
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predictLongRunning`;
-    // durationSeconds는 4/6/8만 허용 → 근접값으로 스냅
-    const snapDuration = snapToAllowedDuration(durationSeconds);
     log('request', { sceneId, modelId, durationSeconds: snapDuration, aspectRatio, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
 
     const vertexRes = await fetch(url, {

@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --orange: #ff7a00;
   --teal: #0bbfa5;
   --blue: #5c7cff;
@@ -1608,9 +1608,9 @@ a.btn-primary:active {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 426px);
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   justify-content: flex-start;
-  gap: 16px;
+  gap: 14px;
 }
 
 .draft-card {
