@@ -134,8 +134,8 @@ export async function onRequestPost(context) {
 - Scene 개수 규칙: 15초=4, 30초=7, 45초=10, 60초=12, 30분=120, 1시간=240, 2시간=480.
 - 30분 이상 롱폼은 Scene 당 estSec를 10~20초 사이로 유지.
 - 각 Scene의 lines는 2~3문장, 시청자 눈높이에 맞춘 어휘·톤을 느끼게 작성하세요.
-- 각 Scene의 shot(시각 묘사)은 반드시 한 줄이며 다음 형식을 지키세요:  
-  `Subject & action; Location/Background; Lighting; Camera angle & framing; Style cues; Constraints(no text/no speech bubble/no extra people unless specified)`  
+- 각 Scene의 shot(시각 묘사)은 반드시 한 줄이며 다음 형식을 지키세요:
+  Subject & action; Location/Background; Lighting; Camera angle & framing; Style cues; Constraints(no text/no speech bubble/no extra people unless specified)
   지정된 스타일을 shot에만 반영하세요.
 - [Style 고정] 스타일 지시를 우선하며, 지정된 스타일 외 임의 스타일을 추가하지 마세요.
 - [Tone 고정] 톤 지시는 그대로 따르고, 임의 톤을 추가하지 마세요.
@@ -164,9 +164,9 @@ ${tagRuleKo}`;
 - Produce ${sceneCount} scenes whose estSec sum should stay as close as possible to ${duration}s (±10%). Keep estSec per scene reasonable (>=3s), and adjust the last scene if needed so the total fits the target duration.
 - Scene count rules: 15s=4, 30s=7, 45s=10, 60s=12, 30m=120, 1h=240, 2h=480.
 - For 30m+ long-form, keep per-scene estSec between 10~20 seconds.
-- Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-line shot (visual description) that reflects the style.
-- Shot format (one line):  
-  `Subject & action; Location/Background; Lighting; Camera angle & framing; Style cues; Constraints(no text/no speech bubble/no extra people unless specified)`  
+- Each scene: 2-3 sentences tuned to the audience; tone/style felt in wording; include a one-sentence shot (visual description) that reflects the style.
+- Shot format (one sentence):
+  Subject & action; Location/Background; Lighting; Camera angle & framing; Style cues; Constraints(no text/no speech bubble/no extra people unless specified)
   Apply style only in shot.
 - [Style lock] Follow given style; do NOT switch to other looks unless the user requested them.
 - [Tone lock] Follow given tone; do NOT add unrelated tones.
