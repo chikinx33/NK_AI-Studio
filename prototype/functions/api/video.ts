@@ -159,6 +159,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       imageDataUrl_len: (imageDataUrl || '').length
     });
 
+    // duration 스냅 (Veo/Grok 공용)
+    const snapDuration = snapToAllowedDuration(durationSeconds);
+
     // imageDataUrl 처리: data:URL이면 그대로, gs:// 또는 https:// 이면 다운로드 후 base64 변환
     let parsedImage = parseDataUrl(imageDataUrl);
     if (!parsedImage) {
