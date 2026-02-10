@@ -341,7 +341,7 @@
       };
     }
     // 페이지 로딩 종료 처리 (초기 렌더 완료 후)
-    setTimeout(finishLoading, 120);
+    finishLoading();
     window.addEventListener('load', finishLoading);
 
     // 공통 프롬프트 팝업
