@@ -389,6 +389,46 @@ async function getGoogleAccessToken(opts: {
   return json.access_token as string;
 }
 
+// GCS 서명 URL (V4)
+async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {
+  const now = new Date();
+  const pad = (n: number) => `${n}`.padStart(2, "0");
+  const date = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}`;
+  const time = `${date}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+  const credential = `${opts.clientEmail}/${date}/auto/storage/goog4_request`;
+  const host = "storage.googleapis.com";
+  const canonicalUri = `/${encodeURIComponent(opts.bucket)}/${opts.object.split("/").map(encodeURIComponent).join("/")}`;
+  const signedHeaders = "host";
+  const query = new URLSearchParams({
+    "X-Goog-Algorithm": "GOOG4-RSA-SHA256",
+    "X-Goog-Credential": credential,
+    "X-Goog-Date": time,
+    "X-Goog-Expires": `${opts.expiresInSec}`,
+    "X-Goog-SignedHeaders": signedHeaders
+  });
+  const canonicalQuery = query.toString();
+  const canonicalRequest = ["GET", canonicalUri, canonicalQuery, `host:${host}`, "", signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");
+  const hashedRequest = await sha256Hex(canonicalRequest);
+  const stringToSign = ["GOOG4-RSA-SHA256", time, `${date}/auto/storage/goog4_request`, hashedRequest].join("\n");
+  const signatureB64url = await signRS256(stringToSign, opts.privateKeyPem);
+  const signatureHex = b64urlToHex(signatureB64url);
+  const finalQuery = `${canonicalQuery}&X-Goog-Signature=${signatureHex}`;
+  return `https://${host}${canonicalUri}?${finalQuery}`;
+}
+
+async function sha256Hex(input: string) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function b64urlToHex(b64url: string) {
+  const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
+  const bin = atob(b64);
+  let out = "";
+  for (let i = 0; i < bin.length; i++) out += bin.charCodeAt(i).toString(16).padStart(2, "0");
+  return out;
+}
+
 function base64url(input: string) {
   const bytes = new TextEncoder().encode(input);
   let str = "";

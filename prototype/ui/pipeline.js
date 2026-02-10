@@ -285,6 +285,18 @@
         position: relative;
         box-shadow: 0 0 0 1px rgba(123,215,255,0.25), 0 6px 16px rgba(0,0,0,0.25);
       }
+      .video-model-select option {
+        color: #111827;
+        background: #f7fbff;
+      }
+      [data-theme="dark"] .video-model-select option {
+        color: #0f1724;
+        background: #e9f2ff;
+      }
+      .video-model-select option[disabled] {
+        color: rgba(0,0,0,0.35);
+        background: #f0f4f9;
+      }
       [data-theme="light"] .video-model-select {
         border: 1px solid rgba(0,0,0,0.12);
         background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(245,245,245,0.9));
