@@ -196,8 +196,17 @@
     if (!text) return '';
     return String(text)
       .split(/\n+/)
+      .map(function (line) {
+        // 종횡비 토큰 제거 (이미 별도 파라미터 처리)
+        line = line.replace(/\b종횡비\b/gi, '').trim();
+        return line;
+      })
       .filter(function (line) {
-        return !/(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration)/i.test(line);
+        // 화면비/분량/연속성 문구는 이미지 프롬프트에서 제외
+        if (!line) return false;
+        if (/(aspect\s*ratio|화면\s*비율|target\s*duration|타겟|분량|duration)/i.test(line)) return false;
+        if (/연속성\s*규칙/i.test(line)) return false;
+        return true;
       })
       .join('\n')
       .trim();
