@@ -1109,7 +1109,7 @@
     var scene = st.scenes[idx];
     // 이미지 생성은 오직 Visual(shot) 텍스트만 사용한다.
     var primaryVisual = (scene.shot || '').trim();
-    var finalPrompt = primaryVisual;
+    var finalPrompt = primaryVisual.replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
     console.log('Imagen prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
