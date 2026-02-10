@@ -205,7 +205,6 @@
         if (visualStylePattern.test(l)) return '';
         // 비주얼 스타일이 아닌 라인은 토큰이 포함되면 통째로 제거
         if (aspectPattern.test(l) || continuityPattern.test(l)) return '';
-        l = l.replace(/규칙\s*없음/gi, '').trim();
         return l.trim();
       })
       .filter(Boolean)

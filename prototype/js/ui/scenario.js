@@ -145,7 +145,6 @@
         // 비주얼 스타일 항목은 Common에서 숨김
         if (visualStylePattern.test(l)) return '';
         if (aspectPattern.test(l) || continuityPattern.test(l)) return '';
-        l = l.replace(/규칙\s*없음/gi, '').trim();
         return l.trim();
       })
       .filter(Boolean)
