@@ -114,6 +114,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       objectName,
       model: modelVersion,
       location,
+      promptEcho: finalPrompt,
+      aspectApplied: aspectFinal,
     });
   } catch (e: any) {
     return json({ error: e?.message ?? "Unknown error" }, 500);
