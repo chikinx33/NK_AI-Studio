@@ -19,6 +19,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       aspectRatio = "16:9",
       videoModel = "veo"
     } = body || {};
+    // durationSeconds는 4/6/8만 허용 → 근접값으로 스냅 (Veo/Grok 공용)
+    const snapDuration = snapToAllowedDuration(durationSeconds);
 
     if (!promptText || !imageDataUrl) {
       return json({ error: "promptText and imageDataUrl are required" }, 400);
@@ -158,9 +160,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       outputGcsUri,
       imageDataUrl_len: (imageDataUrl || '').length
     });
-
-    // duration 스냅 (Veo/Grok 공용)
-    const snapDuration = snapToAllowedDuration(durationSeconds);
 
     // imageDataUrl 처리: data:URL이면 그대로, gs:// 또는 https:// 이면 다운로드 후 base64 변환
     let parsedImage = parseDataUrl(imageDataUrl);
