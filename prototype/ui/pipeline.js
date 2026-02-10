@@ -668,12 +668,27 @@
             return;
           }
 
-          if (action === 'regen-image') {
-            if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
-            btn.disabled = true;
-            await ui.generateImageForIdx(idx);
-            return;
-          }
+      if (action === 'regen-image') {
+        if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+        // 화면에 편집 중인 내용이 있다면 먼저 state에 반영
+        var commonEl2 = pipelineScenes.querySelector('.prompt-common[data-id="' + id + '"]');
+        var visualEl2 = pipelineScenes.querySelector('.prompt-visual[data-id="' + id + '"]');
+        var durEl2 = pipelineScenes.querySelector('.prompt-duration[data-id="' + id + '"]');
+        var common2 = (commonEl2 && commonEl2.textContent) ? commonEl2.textContent.trim() : (scene.promptText || '').split('\n')[0] || '';
+        var visual2 = (visualEl2 && visualEl2.textContent) ? visualEl2.textContent.trim() : (scene.shot || '');
+        var durTxt2 = (durEl2 && durEl2.textContent) ? durEl2.textContent.replace(/[^0-9.]/g, '') : '';
+        var est2 = Number(durTxt2) || scene.estSec || 0;
+        st.scenes[idx] = Object.assign({}, scene, {
+          promptText: [common2, visual2, 'Duration', (est2 ? est2 + 's.' : '')].join('\n'),
+          promptEdited: true,
+          shot: visual2,
+          estSec: est2,
+          editingPrompt: false
+        });
+        btn.disabled = true;
+        await ui.generateImageForIdx(idx);
+        return;
+      }
           if (action === 'delete-image') {
             st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: '', imgError: '', imgLoading: false });
             refreshAndPersist(true);
