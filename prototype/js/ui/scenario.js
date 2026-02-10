@@ -88,8 +88,6 @@
     const styleStr = [...(p.styles || []), p.style || ''].filter(Boolean).join(', ');
     if (styleStr) parts.push(`Style: ${styleStr}`);
     if (p.banned) parts.push(`Directives: ${p.banned}`);
-    if (p.aspectRatio) parts.push(`Aspect: ${p.aspectRatio}`);
-    if (p.duration) parts.push(`Target: ${p.duration}s`);
     return parts.join(' · ');
   };
 
@@ -139,15 +137,20 @@
       return line
         .replace(/비주얼\s*스타일[^.\n]*/gi, '')
         .replace(/종횡비[^.\n]*/gi, '')
+        .replace(/^\s*\d+\s*:\s*\d+\s*$/g, '') // 16:9 등 비율만 있는 줄
+        .replace(/[#>\-\s]*\d+\s*:\s*\d+\s*/gi, '') // 문장 내 비율 토큰 제거
         .replace(/aspect\s*ratio[^.\n]*/gi, '')
         .replace(/화면\s*비율[^.\n]*/gi, '')
         .replace(/target\s*duration[^.\n]*/gi, '')
-        .replace(/타겟\s*:\s*\d+\s*초?/gi, '')
-        .replace(/target\s*:\s*\d+\s*s?/gi, '')
+        .replace(/[#>\-\s]*타겟\s*[:.]?\s*\d+\s*(초|s)?/gi, '')
+        .replace(/[#>\-\s]*target\s*[:.]?\s*\d+\s*s?/gi, '')
+        .replace(/^\s*\d+\s*(초|s)\s*$/gi, '')
         .replace(/분량[^.\n]*/gi, '')
         .replace(/연속성[^.\n]*/gi, '')
+        .replace(/이야기의?\s*흐름[^.\n]*/gi, '')
         .replace(/흐름이\s*자연스럽[^.\n]*/gi, '')
         .replace(/매끄럽게\s*연결[^.\n]*/gi, '')
+        .replace(/일관되도록\s*유지[^.\n]*/gi, '')
         .replace(/규칙\s*없음/gi, '')
         .replace(/\s{2,}/g, ' ')
         .trim();
