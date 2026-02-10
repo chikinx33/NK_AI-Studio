@@ -42,6 +42,36 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     const isGrok = jobId.startsWith('grok:');
 
+    const flattenPlayback = async (playbackUrl: string, sceneId: string | null) => {
+      if (!playbackUrl || !env.VIDEO_OUTPUT_GCS_URI) return playbackUrl;
+      try {
+        const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI as string);
+        if (!outParsed || !clientEmail || !privateKeyRaw) return playbackUrl;
+        const bufRes = await fetch(playbackUrl);
+        if (!bufRes.ok) return playbackUrl;
+        const buf = await bufRes.arrayBuffer();
+        const objectBase = outParsed.object.replace(/\/$/, "");
+        const stamp = Date.now();
+        const sceneSafe = sceneId || 'scene';
+        const objectName = `${objectBase}/projects/${projectTag || 'default'}/videos/${stamp}-${sceneSafe}.mp4`;
+        const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+        const accessTokenUpload = await getGoogleAccessToken({
+          clientEmail,
+          privateKeyPem: privateKeyRaw,
+          scope: "https://www.googleapis.com/auth/cloud-platform",
+        });
+        const upRes = await fetch(uploadUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "video/mp4" }, body: buf });
+        const upTxt = await upRes.text();
+        if (!upRes.ok) { log('flatten_upload_failed', { status: upRes.status, detail: safeJson(upTxt) }); return playbackUrl; }
+        try {
+          return await signGcsUrl({ bucket: outParsed.bucket, object: objectName, clientEmail, privateKeyPem: privateKeyRaw, expiresInSec: 3600 });
+        } catch (err) {
+          log('flatten_sign_error', err); return gcsToHttps(`gs://${outParsed.bucket}/${objectName}`);
+        }
+      } catch (err) { log('flatten_error', err); return playbackUrl; }
+    };
+    
+
     if (isGrok) {
       const xaiKey = env.XAI_API_KEY as string | undefined;
       if (!xaiKey) {
@@ -64,8 +94,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         null;
 
       // Grok도 결과를 우리 GCS 평면 경로(/videos/{stamp}-{sceneId}.mp4)에 저장해 서브폴더 생성을 막는다.
-      let flattenedPlayback = playback;
-      if (done && playback && env.VIDEO_OUTPUT_GCS_URI) {
+            if (done && playback && env.VIDEO_OUTPUT_GCS_URI) {
         try {
           const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI as string);
           if (outParsed && clientEmail && privateKeyRaw) {
@@ -113,8 +142,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         error: done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null,
         response: json,
         rawOperation: json,
-        playback: done ? (flattenedPlayback || playback) : null,
-        playbackUrl: done ? (flattenedPlayback || playback) : null,
+        playback: done ? playback : null,\n      playbackUrl: done ? playback : null,
         status: done ? (playback ? 'done' : 'done_no_output') : 'processing'
       }, 200);
     }
@@ -188,9 +216,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return projectTag || guessFromUri(opResponse?.outputGcsUri || opResponse?.outputUri) || guessFromUri(op?.outputGcsUri || op?.outputUri) || 'default';
     };
 
-    let playback = done ? (pick(opResponse) || pick(op)) : null;
-
-    // bytesBase64Encoded → GCS 업로드 후 playback 제공 (Signed URL)
+    let playback = done ? (pick(opResponse) || pick(op)) : null;\n    const flattenedPlayback = done ? await flattenPlayback(playback || '', sceneIdParam || match[5]) : playback;\n\n    // bytesBase64Encoded → GCS 업로드 후 playback 제공 (Signed URL)
     if (done && !playback) {
       const b64 =
         opResponse?.videos?.[0]?.bytesBase64Encoded ||
@@ -413,6 +439,12 @@ function b64urlToHex(b64url: string) {
   const bin = atob(b64);
   return Array.from(bin).map(c => c.charCodeAt(0).toString(16).padStart(2, "0")).join("");
 }
+
+
+
+
+
+
 
 
 
