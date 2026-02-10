@@ -17,6 +17,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       imageDataUrl = "",
       durationSeconds = 6,
       aspectRatio = "16:9",
+      videoModel = "veo"
     } = body || {};
 
     if (!promptText || !imageDataUrl) {
@@ -26,7 +27,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
-    const modelId = (env.VIDEO_MODEL_ID as string | undefined) || "veo-3.1-fast-generate-001";
+    const modelId = videoModel === "veo"
+      ? ((env.VIDEO_MODEL_ID as string | undefined) || "veo-3.1-fast-generate-001")
+      : videoModel;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
 
     if (!projectId || !clientEmail || !privateKeyRaw) {
@@ -46,6 +49,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 표준 경로: projects/{projectId}/video/
     const videoPrefix = `${basePrefix}/projects/${projectTag}/video/`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoPrefix}`;
+
+    if (videoModel !== "veo" && videoModel !== "grok") {
+      return json({ error: "unsupported_video_model", detail: videoModel }, 400);
+    }
+
+    if (videoModel === "grok") {
+      return json({ error: "grok_not_implemented", message: "Grok Imagine 연동은 백엔드 지원이 필요합니다." }, 501);
+    }
 
     const accessToken = await getGoogleAccessToken({
       clientEmail,

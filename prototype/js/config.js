@@ -2,7 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '1.486';
+    config.APP_VERSION = '1.487';
 
     // Storage Keys
     config.KEYS = {
@@ -15,7 +15,8 @@
         USER: 'nk_login_user',
         CURRENT_STAGE: 'nk_current_stage',
         CURRENT_PROJECT: 'nk_current_project',
-        SELECTED_DRAFT: 'nk_selected_draft'
+        SELECTED_DRAFT: 'nk_selected_draft',
+        VIDEO_MODEL: 'nk_video_model'
     };
 
     // Auth Configuration

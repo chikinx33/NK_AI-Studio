@@ -423,14 +423,21 @@
     var scenes = state.scenes;
     var savedAt = state.savedAt;
     var header = state.header;
+    var videoModel = state.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'veo';
     pipelineMeta.innerHTML = (
       '<div class="pipeline-actions">' +
+      '<label class="label-inline" style="margin-right:8px;">영상생성 모델</label>' +
+      '<select id="video-model-select" class="select-sm" style="margin-right:12px;">' +
+        '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo (기본)</option>' +
+        '<option value="grok"' + (videoModel === 'grok' ? ' selected' : '') + '>Grok Imagine (준비 필요)</option>' +
+      '</select>' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 생성</button>' +
       '<button class="btn-ghost theme-toggle top-theme" data-theme-toggle onclick="toggleTheme(\'local\')" aria-label="테마 전환"></button>' +
       '</div>'
     );
+    state.videoModel = videoModel;
     if (scenes && scenes.length) {
       pipelineScenes.classList.remove('empty');
       var rows = scenes.map(function (s) {
@@ -604,6 +611,17 @@
         alert('저장되었습니다.');
       };
     }
+    var modelSelect = document.getElementById('video-model-select');
+    if (modelSelect) {
+      modelSelect.onchange = function () {
+        var val = modelSelect.value || 'veo';
+        var st2 = ctx.getState() || {};
+        st2.videoModel = val;
+        ctx.setState(st2);
+        try { localStorage.setItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model', val); } catch (_) { }
+      };
+    }
+
     var bulkGen = document.getElementById('bulk-generate');
     if (bulkGen) {
       bulkGen.onclick = async function () {
@@ -920,6 +938,12 @@
       return best;
     })(scene.estSec);
 
+    var videoModel = st.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'veo';
+    if (videoModel === 'grok') {
+      alert('Grok Imagine 연동은 준비 중입니다. xAI API 키/엔드포인트 설정 후 백엔드 지원이 필요합니다.');
+      return;
+    }
+
     var payload = {
       projectId: projectId,
       projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
@@ -929,7 +953,8 @@
       script: scene.lines,
       aspectRatio: st.aspectRatio || "16:9",
       durationSeconds: snapDuration,
-      imageDataUrl: imageUrl
+      imageDataUrl: imageUrl,
+      videoModel: videoModel
     };
       console.log('videoStart payload', {
         projectId,
