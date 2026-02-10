@@ -50,7 +50,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const accessToken = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: 'https://www.googleapis.com/auth/cloud-platform' });
 
     // 1) fetchPredictOperation
-    const urlFetch = `https://aiplatform.googleapis.com/v1/${endpointName}:fetchPredictOperation`;
+    const urlFetch = `https://${match[2]}-aiplatform.googleapis.com/v1/${endpointName}:fetchPredictOperation`;
     log('fetchPredictOperation', { endpointName, operationName: jobId });
     const res = await fetch(urlFetch, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ operationName: jobId }) });
     const text = await res.text();
@@ -64,7 +64,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     // 2) operations.get (region endpoint; google.com 금지)
     let dataOp: any = null;
     try {
-      const resOp = await fetch(`https://us-central1-aiplatform.googleapis.com/v1/${jobId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      const resOp = await fetch(`https://${match[2]}-aiplatform.googleapis.com/v1/${jobId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
       const textOp = await resOp.text();
       const looksHtml = /^\s*</.test(textOp || '') && textOp.toLowerCase().includes('<html');
       if (looksHtml) {
