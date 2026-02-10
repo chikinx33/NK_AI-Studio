@@ -384,8 +384,8 @@ body[data-embed="1"] {
 }
 
 .lib-item video.lib-thumb {
-    aspect-ratio: 1 / 1;
-  }
+  aspect-ratio: 16 / 9;
+}
 
 .lib-meta {
   padding: 6px 8px;
@@ -1608,10 +1608,9 @@ a.btn-primary:active {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
-  justify-content: stretch;
-  gap: 18px;
-  margin-top: 64px; /* 테마 토글과 겹치지 않도록 충분한 상단 여유 */
+  grid-template-columns: repeat(auto-fill, minmax(260px, 320px));
+  justify-content: flex-start;
+  gap: 16px;
 }
 
 .draft-card {

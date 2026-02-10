@@ -93,46 +93,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         json?.url ||
         null;
 
-      // Grok도 결과를 우리 GCS 평면 경로(/videos/{stamp}-{sceneId}.mp4)에 저장해 서브폴더 생성을 막는다.
-            if (done && playback && env.VIDEO_OUTPUT_GCS_URI) {
-        try {
-          const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI as string);
-          if (outParsed && clientEmail && privateKeyRaw) {
-            const bufRes = await fetch(playback);
-            const buf = await bufRes.arrayBuffer();
-            if (bufRes.ok) {
-              const objectBase = outParsed.object.replace(/\/$/, "");
-              const stamp = Date.now();
-              const sceneSafe = sceneIdParam || 'grok';
-              const objectName = `${objectBase}/projects/${projectTag || 'default'}/videos/${stamp}-${sceneSafe}.mp4`;
-              const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-              const accessTokenUpload = await getGoogleAccessToken({
-                clientEmail,
-                privateKeyPem: privateKeyRaw,
-                scope: "https://www.googleapis.com/auth/cloud-platform",
-              });
-              const upRes = await fetch(uploadUrl, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "video/mp4" },
-                body: buf
-              });
-              const upTxt = await upRes.text();
-              if (upRes.ok) {
-                flattenedPlayback = await signGcsUrl({
-                  bucket: outParsed.bucket,
-                  object: objectName,
-                  clientEmail,
-                  privateKeyPem: privateKeyRaw,
-                  expiresInSec: 3600,
-                }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
-              } else {
-                log('grok_flat_upload_failed', { status: upRes.status, detail: safeJson(upTxt) });
-              }
-            }
-          }
-        } catch (err) {
-          log('grok_flatten_error', err);
-        }
+      let flattenedPlayback = playback;
+      if (done && playback) {
+        flattenedPlayback = await flattenPlayback(playback, sceneIdParam || 'grok');
       }
 
       return corsJson({
@@ -142,7 +105,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         error: done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null,
         response: json,
         rawOperation: json,
-        playback: done ? playback : null,\n      playbackUrl: done ? playback : null,
+        playback: done ? (flattenedPlayback || playback) : null,
+        playbackUrl: done ? (flattenedPlayback || playback) : null,
         status: done ? (playback ? 'done' : 'done_no_output') : 'processing'
       }, 200);
     }
@@ -216,7 +180,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return projectTag || guessFromUri(opResponse?.outputGcsUri || opResponse?.outputUri) || guessFromUri(op?.outputGcsUri || op?.outputUri) || 'default';
     };
 
-    let playback = done ? (pick(opResponse) || pick(op)) : null;\n    const flattenedPlayback = done ? await flattenPlayback(playback || '', sceneIdParam || match[5]) : playback;\n\n    // bytesBase64Encoded → GCS 업로드 후 playback 제공 (Signed URL)
+    let playback = done ? (pick(opResponse) || pick(op)) : null;
+    const flattenedPlayback = done ? await flattenPlayback(playback || '', sceneIdParam || match[5]) : playback;
+
+    // bytesBase64Encoded → GCS 업로드 후 playback 제공 (Signed URL)
     if (done && !playback) {
       const b64 =
         opResponse?.videos?.[0]?.bytesBase64Encoded ||
