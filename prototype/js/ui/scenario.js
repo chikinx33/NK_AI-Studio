@@ -152,6 +152,8 @@
         .replace(/매끄럽게\s*연결[^.\n]*/gi, '')
         .replace(/일관되도록\s*유지[^.\n]*/gi, '')
         .replace(/규칙\s*없음/gi, '')
+        .replace(/^#+\s*/g, '') // Markdown 헤더 기호 제거
+        .replace(/##+/g, '') // 남은 이중 해시 제거
         .replace(/\s{2,}/g, ' ')
         .trim();
     };
