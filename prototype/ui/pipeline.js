@@ -911,22 +911,33 @@
     ctx.setState(st);
     ui.render();
     try {
-      var payload = {
-        projectId: projectId,
-        projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
-        sceneId: scene.id,
-        // 서버에 꼭 전달해야 하는 값: promptText, imageDataUrl
-        promptText: finalPrompt,
-        script: scene.lines,
-        aspectRatio: st.aspectRatio || "16:9",
-        durationSeconds: Math.max(Number(scene.estSec) || 0, 1),
-        imageDataUrl: imageUrl
-      };
+    // Veo fast 모델은 4/6/8초만 허용 → 근접값으로 스냅
+    var snapDuration = (function (sec) {
+      var allowed = [4, 6, 8];
+      var n = Math.max(1, Math.floor(Number(sec) || 0));
+      var best = allowed[0];
+      var diff = Math.abs(n - best);
+      allowed.forEach(function (v) { var d = Math.abs(n - v); if (d < diff) { diff = d; best = v; } });
+      return best;
+    })(scene.estSec);
+
+    var payload = {
+      projectId: projectId,
+      projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
+      sceneId: scene.id,
+      // 서버에 꼭 전달해야 하는 값: promptText, imageDataUrl
+      promptText: finalPrompt,
+      script: scene.lines,
+      aspectRatio: st.aspectRatio || "16:9",
+      durationSeconds: snapDuration,
+      imageDataUrl: imageUrl
+    };
       console.log('videoStart payload', {
         projectId,
         sceneId: scene.id,
         aspectRatio: payload.aspectRatio,
         durationSeconds: payload.durationSeconds,
+        durationSnappedFrom: scene.estSec,
         // 프롬프트 전문을 그대로 확인
         promptText: payload.promptText,
         script: payload.script,

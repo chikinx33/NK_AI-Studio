@@ -97,7 +97,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // Veo는 Long Running Predict API를 사용해야 함
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predictLongRunning`;
-    log('request', { sceneId, modelId, durationSeconds, aspectRatio, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
+    // durationSeconds는 4/6/8만 허용 → 근접값으로 스냅
+    const snapDuration = snapToAllowedDuration(durationSeconds);
+    log('request', { sceneId, modelId, durationSeconds: snapDuration, aspectRatio, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
 
     const vertexRes = await fetch(url, {
       method: "POST",
@@ -108,14 +110,22 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify({
         instances: [
           {
-            prompt: { text: promptText },
-            image: { bytesBase64Encoded: parsedImage.base64, mimeType: parsedImage.mimeType || 'image/png' },
+            prompt: promptText,
+            referenceImages: [
+              {
+                image: {
+                  bytesBase64Encoded: parsedImage.base64,
+                  mimeType: parsedImage.mimeType || "image/png",
+                },
+                referenceType: "asset",
+              },
+            ],
           },
         ],
         parameters: {
-          durationSeconds: Number(durationSeconds) || 6,
+          durationSeconds: snapDuration,
           aspectRatio: aspectRatio || "16:9",
-          outputGcsUri,
+          storageUri: outputGcsUri, // 저장 위치
         },
       }),
     });
@@ -181,6 +191,22 @@ function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | n
   const [, mime, b64] = match;
   if (!b64) return null;
   return { base64: b64.trim(), mimeType: mime || 'image/png' };
+}
+
+// Veo fast는 4/6/8초만 허용 → 근접값으로 스냅
+function snapToAllowedDuration(sec: number) {
+  const allowed = [4, 6, 8];
+  const n = Math.max(1, Math.floor(Number(sec) || 0));
+  let best = allowed[0];
+  let diff = Math.abs(n - best);
+  for (const v of allowed) {
+    const d = Math.abs(n - v);
+    if (d < diff) {
+      diff = d;
+      best = v;
+    }
+  }
+  return best;
 }
 
 function gcsToHttps(uri: string) {
