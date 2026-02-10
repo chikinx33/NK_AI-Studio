@@ -249,6 +249,58 @@
     return '';
   };
   ui.init = function (c) { ctx = c || {}; };
+  // 영상 모델 셀렉트 전용 스타일을 주입해 테마에 맞는 형태로 표시
+  (function injectVideoModelStyle() {
+    if (document.getElementById('video-model-style')) return;
+    var style = document.createElement('style');
+    style.id = 'video-model-style';
+    style.textContent = `
+      .video-model-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        width: 100%;
+        flex-wrap: wrap;
+      }
+      .video-model-left {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 220px;
+      }
+      .video-model-select {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        padding: 8px 36px 8px 14px;
+        border-radius: 12px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+        color: inherit;
+        font-size: 13px;
+        line-height: 1.4;
+        position: relative;
+      }
+      [data-theme="light"] .video-model-select {
+        border: 1px solid rgba(0,0,0,0.12);
+        background: linear-gradient(135deg, rgba(0,0,0,0.03), rgba(0,0,0,0.01));
+      }
+      .video-model-select:focus {
+        outline: 1px solid var(--accent, #7bd7ff);
+        box-shadow: 0 0 0 3px rgba(123,215,255,0.15);
+      }
+      .video-model-label {
+        font-size: 13px;
+        color: rgba(255,255,255,0.78);
+        letter-spacing: 0.01em;
+      }
+      [data-theme="light"] .video-model-label { color: rgba(0,0,0,0.72); }
+      .video-model-select::-ms-expand { display: none; }
+    `;
+    document.head.appendChild(style);
+  })();
+
   ui.render = async function () {
     if (!subscribed && NK.state && NK.state.subscribe) {
       subscribed = true;
@@ -425,16 +477,20 @@
     var header = state.header;
     var videoModel = state.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'veo';
     pipelineMeta.innerHTML = (
-      '<div class="pipeline-actions">' +
-      '<label class="label-inline" style="margin-right:8px;">영상생성 모델</label>' +
-      '<select id="video-model-select" class="select-sm" style="margin-right:12px;">' +
-        '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo (기본)</option>' +
-        '<option value="grok"' + (videoModel === 'grok' ? ' selected' : '') + '>Grok Imagine (준비 필요)</option>' +
-      '</select>' +
-      '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
-      '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
-      '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 생성</button>' +
-      '<button class="btn-ghost theme-toggle top-theme" data-theme-toggle onclick="toggleTheme(\'local\')" aria-label="테마 전환"></button>' +
+      '<div class="pipeline-actions video-model-bar">' +
+        '<div class="video-model-left">' +
+          '<span class="video-model-label">영상생성 모델</span>' +
+          '<select id="video-model-select" class="video-model-select">' +
+            '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo</option>' +
+            '<option value="grok"' + (videoModel === 'grok' ? ' selected' : '') + '>Grok Imagine</option>' +
+          '</select>' +
+        '</div>' +
+        '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
+          '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
+          '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
+          '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 생성</button>' +
+          '<button class="btn-ghost theme-toggle top-theme" data-theme-toggle onclick="toggleTheme(\'local\')" aria-label="테마 전환"></button>' +
+        '</div>' +
       '</div>'
     );
     state.videoModel = videoModel;
