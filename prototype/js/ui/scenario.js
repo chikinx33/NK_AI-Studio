@@ -144,6 +144,7 @@
         .replace(/target\s*duration[^.\n]*/gi, '')
         .replace(/[#>\-\s]*타겟\s*[:.]?\s*\d+\s*(초|s)?/gi, '')
         .replace(/[#>\-\s]*target\s*[:.]?\s*\d+\s*s?/gi, '')
+        .replace(/타겟\s*\d+\s*초?/gi, '')
         .replace(/^\s*\d+\s*(초|s)\s*$/gi, '')
         .replace(/분량[^.\n]*/gi, '')
         .replace(/연속성[^.\n]*/gi, '')
@@ -151,6 +152,7 @@
         .replace(/흐름이\s*자연스럽[^.\n]*/gi, '')
         .replace(/매끄럽게\s*연결[^.\n]*/gi, '')
         .replace(/일관되도록\s*유지[^.\n]*/gi, '')
+        .replace(/필수\s*지침\s*없음/gi, '')
         .replace(/규칙\s*없음/gi, '')
         .replace(/^#+\s*/g, '') // Markdown 헤더 기호 제거
         .replace(/##+/g, '') // 남은 이중 해시 제거

@@ -2,7 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '1.516';
+    config.APP_VERSION = '1.518';
 
     // Storage Keys
     config.KEYS = {
@@ -49,6 +49,8 @@
     };
 
 })();
+
+
 
 
 

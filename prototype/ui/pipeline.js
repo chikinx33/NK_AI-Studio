@@ -205,6 +205,7 @@
         .replace(/target\s*duration[^.\n]*/gi, '')
         .replace(/[#>\-\s]*타겟\s*[:.]?\s*\d+\s*(초|s)?/gi, '')
         .replace(/[#>\-\s]*target\s*[:.]?\s*\d+\s*s?/gi, '')
+        .replace(/타겟\s*\d+\s*초?/gi, '')
         .replace(/^\s*\d+\s*(초|s)\s*$/gi, '')
         .replace(/분량[^.\n]*/gi, '')
         .replace(/연속성[^.\n]*/gi, '')
@@ -212,6 +213,7 @@
         .replace(/흐름이\s*자연스럽[^.\n]*/gi, '')
         .replace(/매끄럽게\s*연결[^.\n]*/gi, '')
         .replace(/일관되도록\s*유지[^.\n]*/gi, '')
+        .replace(/필수\s*지침\s*없음/gi, '')
         .replace(/규칙\s*없음/gi, '')
         .replace(/^#+\s*/g, '') // Markdown 헤더 기호 제거
         .replace(/##+/g, '') // 남은 이중 해시 제거
@@ -789,6 +791,22 @@
           }
           if (action === 'video') {
             if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            // 화면에 편집 중인 프롬프트가 있으면 저장 상태로 반영
+            var commonEl3 = pipelineScenes.querySelector('.prompt-common[data-id="' + id + '"]');
+            var visualEl3 = pipelineScenes.querySelector('.prompt-visual[data-id="' + id + '"]');
+            var durEl3 = pipelineScenes.querySelector('.prompt-duration[data-id="' + id + '"]');
+            var common3 = (commonEl3 && commonEl3.textContent) ? commonEl3.textContent.trim() : (scene.promptText || '').split('\n')[0] || '';
+            var visual3 = (visualEl3 && visualEl3.textContent) ? visualEl3.textContent.trim() : (scene.shot || '');
+            var durTxt3 = (durEl3 && durEl3.textContent) ? durEl3.textContent.replace(/[^0-9.]/g, '') : '';
+            var est3 = Number(durTxt3) || scene.estSec || 0;
+            st.scenes[idx] = Object.assign({}, scene, {
+              promptText: [common3, visual3, 'Duration', (est3 ? est3 + 's.' : '')].join('\n'),
+              promptEdited: true,
+              shot: visual3,
+              estSec: est3,
+              editingPrompt: false
+            });
+            ctx.setState(st);
             await startVideoForIdx(idx);
             return;
           }
