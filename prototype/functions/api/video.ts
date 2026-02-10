@@ -31,7 +31,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const modelId = videoModel === "veo"
       ? ((env.VIDEO_MODEL_ID as string | undefined) || "veo-3.1-fast-generate-001")
-      : videoModel;
+      : ((env.GROK_MODEL_ID as string | undefined) || "grok-imagine-video");
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
 
     if (!projectId || !clientEmail || !privateKeyRaw) {
