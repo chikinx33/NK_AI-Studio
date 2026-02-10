@@ -31,16 +31,9 @@
 - **Visual(shot)**: 해당 씬 하나를 그릴 구체 연출.  
   - 포함: 주피사체/배경, 행동, 카메라 앵글·렌즈·구도, 조명·시간대, 색감, 질감, 필요한 소 props, 인물 유무, 텍스트 표시 여부(없음 권장).  
 
-### 예시(샘플)
-- Common 예시  
-  - “Photoreal; deep teal/navy palette; clean studio lighting with subtle rim; neon highlights on math lines; steady camera; shots keep same palette/lighting; no anime/cel shading; no subtitles/speech bubbles.”
-- Scene Visual 예시  
-  - “Photoreal, wide shot of ζ(s)=0 formula glowing on glass grid in dark lab; no people; no text overlays; subtle volumetric light; 16:9.”
-
 ## 6. 이미지 프롬프트(pipeline.js) 구성
 - Primary visual: `scene.shot`(위 Visual)를 그대로 렌더 지시.
 - Style lock: 선택 스타일만 사용, 다른 룩 추가 금지.
-- Background context: Common을 `do NOT render`로 전달(톤·룩 참고만).
 - Narration 미반영: 텍스트/인물 유인을 줄이기 위해 narration은 렌더하지 않는 컨텍스트로만 전달.
 - Aspect ratio는 별도 파라미터로 전달하며 Common/Visual 문구에는 포함하지 않는다.
 
