@@ -201,6 +201,8 @@
         .replace(/aspect\s*ratio[^.\n]*/gi, '')
         .replace(/화면\s*비율[^.\n]*/gi, '')
         .replace(/target\s*duration[^.\n]*/gi, '')
+        .replace(/타겟\s*:\s*\d+\s*초?/gi, '')
+        .replace(/target\s*:\s*\d+\s*s?/gi, '')
         .replace(/분량[^.\n]*/gi, '')
         .replace(/연속성[^.\n]*/gi, '')
         .replace(/흐름이\s*자연스럽[^.\n]*/gi, '')
