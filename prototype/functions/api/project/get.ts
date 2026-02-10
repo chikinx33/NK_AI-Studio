@@ -43,6 +43,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const downloadUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}?alt=media`;
     const res = await fetch(downloadUrl, { headers: { Authorization: `Bearer ${token}` } });
     const text = await res.text();
+    // data.json이 아직 없을 때(최초 프로젝트) 404가 날 수 있음: 빈 데이터로 응답하여 UX 중단을 막는다.
+    if (res.status === 404) {
+      return send({ payload: null, scenes: [], source: "empty" }, 200, origin);
+    }
     if (!res.ok) return send({ error: text || 'not_found' }, res.status, origin);
     const toGcsPath = (url?: string) => {
       if (!url) return '';

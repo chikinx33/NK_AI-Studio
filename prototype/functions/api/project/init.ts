@@ -55,6 +55,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       });
       results.push({ folder, status: res.status, objectName });
     }
+
+    // reference/data.json 초기화해 처음 로딩 시 404가 발생하지 않도록 한다.
+    const dataObject = `${basePrefix}/projects/${projectId}/reference/data.json`;
+    const dataUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(dataObject)}`;
+    const dataRes = await fetch(dataUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ scenes: [], payload: null }),
+    });
+    results.push({ folder: "reference-data", status: dataRes.status, objectName: dataObject });
     return send({ initialized: results.filter(r => r.status >= 200 && r.status < 300).length, results }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, null);
