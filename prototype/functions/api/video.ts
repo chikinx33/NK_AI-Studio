@@ -112,12 +112,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         prompt: promptText,
         duration: snapDuration,
         aspect_ratio: aspectRatio,
-        // 해상도 상향 시도 (720p 요청)
-        resolution: "1280x720", // 일부 API 필드
-        size: "1280x720",       // 일부 API 필드
-        quality: "high",        // 품질 우선
-        width: 1280,
-        height: 720,
+        // 해상도 설정 (API 스펙: 480p 또는 720p)
+        resolution: "720p",
       };
       if (imageUrl) {
         grokBody.image_url = imageUrl;
