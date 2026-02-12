@@ -113,7 +113,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         duration: snapDuration,
         aspect_ratio: aspectRatio,
       };
-      if (imageUrl) grokBody.image_url = imageUrl;
+      if (imageUrl) {
+        grokBody.image_url = imageUrl;
+        // Grok API 스펙 불확실성 해소를 위해 가능한 필드명 모두 추가
+        grokBody.image = imageUrl;
+        grokBody.init_image = imageUrl;
+        grokBody.source_image = imageUrl;
+        grokBody.input_image = imageUrl;
+        // 모델이 이미지를 우선하도록 프롬프트 강제 보강
+        grokBody.prompt = "Animate this image. " + promptText;
+      }
 
       const grokRes = await fetch(grokUrl, {
         method: "POST",
