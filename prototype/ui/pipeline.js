@@ -530,8 +530,8 @@
       '</div>' +
       '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
-      '<button class="btn-secondary" id="bulk-generate" ' + (state.isPlaceholder ? 'disabled' : '') + '>이미지 일괄 생성</button>' +
-      '<button class="btn-secondary" id="bulk-video" ' + (state.isPlaceholder ? 'disabled' : '') + '>영상 일괄 생성</button>' +
+      '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
+      '<button class="btn-secondary" id="bulk-video" disabled>영상 일괄 생성</button>' +
       '<button class="btn-ghost theme-toggle top-theme" data-theme-toggle onclick="toggleTheme(\'local\')" aria-label="테마 전환"></button>' +
       '</div>' +
       '</div>'
