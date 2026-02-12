@@ -325,6 +325,10 @@
           if (NK.api?.projectSave) {
             await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title });
           }
+          if (NK.state) {
+            if (NK.state.set) NK.state.set({ currentProject: draft });
+            if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
+          }
           loadDraft(draft);
           alert('시나리오를 생성했습니다.');
         }
@@ -374,7 +378,10 @@
               if (NK.ui?.dashboard?.renderDrafts) {
                 NK.ui.dashboard.renderDrafts();
               }
-              if (NK.state?.set) NK.state.set({ currentProject: draft });
+              if (NK.state) {
+                if (NK.state.set) NK.state.set({ currentProject: draft });
+                if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
+              }
             } catch (_) { }
           }
           alert('저장되었습니다.');
