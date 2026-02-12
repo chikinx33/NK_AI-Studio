@@ -968,6 +968,30 @@
         alert('영상 생성을 위해서는 이미지가 필요합니다. 이미지를 생성하거나 업로드한 후 다시 시도해주세요.');
         return;
       }
+
+      // base64 이미지인 경우 자동 업로드하여 URL로 변환 (Grok 등 외부 API 호환성)
+      if (imageUrl.startsWith('data:')) {
+        try {
+          console.log('Auto-uploading base64 image for video generation...');
+          var arr = imageUrl.split(','), mime = arr[0].match(/:(.*?);/)[1];
+          var bstr = atob(arr[1]), n = bstr.length, u8 = new Uint8Array(n);
+          while (n--) u8[n] = bstr.charCodeAt(n);
+          var blob = new Blob([u8], { type: mime });
+          var file = new File([blob], "image.png", { type: mime });
+          var upRes = await NK.api.imageUpload(projectId, file);
+          if (upRes.signedUrl || upRes.url || upRes.dataUrl) {
+            imageUrl = upRes.signedUrl || upRes.url || upRes.dataUrl;
+            // 상태 업데이트하여 재사용
+            st.scenes[i] = Object.assign({}, st.scenes[i], { imageDataUrl: imageUrl });
+            ctx.setState(st);
+            // 업로드된 URL로 scene 객체도 갱신
+            scene = st.scenes[i];
+          }
+        } catch (e) {
+          console.warn('Image auto-upload failed, falling back to base64', e);
+        }
+      }
+
       st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
       ctx.setState(st);
       updateSceneRow(i, st.header || '');
@@ -992,6 +1016,7 @@
           aspectRatio: st.aspectRatio || "16:9",
           durationSeconds: snapDuration,
           imageDataUrl: imageUrl,
+          image: imageUrl, // 일부 API는 image 필드를 사용
           videoModel: videoModel
         };
         console.log('videoStart payload', {
