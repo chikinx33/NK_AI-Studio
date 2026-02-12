@@ -81,8 +81,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
             const stamp = Date.now();
             const objectName = `${basePrefix}/projects/${projectTag}/grok/${stamp}-${sceneId}.png`;
             const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-          const b64 = imageDataUrl.split(",")[1] || "";
-          const buf = base64ToUint8(b64);
+            const b64 = imageDataUrl.split(",")[1] || "";
+            const buf = base64ToUint8(b64);
             const upRes = await fetch(uploadUrl, {
               method: "POST",
               headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "image/png" },
@@ -139,6 +139,41 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         grokJson?.url ||
         grokJson?.video_url ||
         null;
+
+      // Grok 영상이 생성되었다면 GCS 버킷에도 미러링 업로드 (사용자 요청 사항)
+      if (playback && playback.startsWith("http")) {
+        try {
+          const outParsed = parseGcsUri(outputGcsUri); // outputGcsUri는 함수 상단에서 이미 정의됨
+          if (outParsed) {
+            log('mirroring_grok_video_start', playback, 'to', outputGcsUri);
+            const vidRes = await fetch(playback);
+            if (vidRes.ok) {
+              const vidBuf = await vidRes.arrayBuffer();
+              const accessToken = await getGoogleAccessToken({
+                clientEmail,
+                privateKeyPem: privateKeyRaw,
+                scope: "https://www.googleapis.com/auth/cloud-platform",
+              });
+              const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(outParsed.object)}`;
+              const upRes = await fetch(uploadUrl, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "video/mp4" },
+                body: vidBuf
+              });
+              if (!upRes.ok) {
+                log('mirroring_grok_video_fail_upload', upRes.status, await upRes.text());
+              } else {
+                log('mirroring_grok_video_success');
+              }
+            } else {
+              log('mirroring_grok_video_fail_download', vidRes.status);
+            }
+          }
+        } catch (err: any) {
+          log('mirroring_grok_video_error', err?.message);
+        }
+      }
+
       // 응답에 즉시 url이 없으면 폴링용 job_id만 반환
       return json({
         job_id: reqId ? `grok:${reqId}` : "",
@@ -247,8 +282,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         method: "POST",
         headers: { Authorization: `Bearer ${accessTokenMarker}`, "Content-Type": "text/plain" },
         body: "1"
-      }).catch(() => {});
-    } catch (_) {}
+      }).catch(() => { });
+    } catch (_) { }
 
     const resJson = safeJson(text);
     const operationName =
