@@ -1011,12 +1011,16 @@
           projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
           sceneId: scene.id,
           // 서버에 꼭 전달해야 하는 값: promptText, imageDataUrl
-          promptText: finalPrompt,
+          // Grok 모델일 경우 이미지 기반 생성을 강력히 요청하는 문구 추가
+          promptText: (imageUrl && videoModel === 'grok') ? ("Animate this image. " + finalPrompt) : finalPrompt,
           script: scene.lines,
           aspectRatio: st.aspectRatio || "16:9",
           durationSeconds: snapDuration,
           imageDataUrl: imageUrl,
-          image: imageUrl, // 일부 API는 image 필드를 사용
+          image: imageUrl,
+          image_url: imageUrl,
+          init_image: imageUrl,
+          source_image: imageUrl,
           videoModel: videoModel
         };
         console.log('videoStart payload', {
