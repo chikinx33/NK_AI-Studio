@@ -1035,9 +1035,14 @@
         }
       } catch (err) {
         st = ctx.getState() || st;
-        const msg = (err && err.message) ? err.message : 'video_error';
+        var msg = (err && err.message) ? err.message : 'video_error';
         const detail = (err && err.detail) ? err.detail : '';
         console.error('videoStart error:', msg, detail);
+
+        if (msg.indexOf('Responsible AI') !== -1 || msg.indexOf('sensitive words') !== -1) {
+          msg = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
+        }
+
         st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
         showCopyableError('영상 생성 실패: ' + msg, detail ? ('상세: ' + detail) : '');
         ctx.setState(st);
@@ -1060,8 +1065,13 @@
       var status = res.status || '';
       st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
+
       if (res.done && res.error) {
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error.message || 'video_error' });
+        var errMsg = res.error.message || 'video_error';
+        if (errMsg.indexOf('Responsible AI') !== -1 || errMsg.indexOf('sensitive words') !== -1) {
+          errMsg = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
+        }
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: errMsg });
         console.error('videoStatus error (done+error):', res.error);
         ctx.setState(st);
         updateSceneRow(idx, st.header || '');
@@ -1085,7 +1095,11 @@
         return;
       }
       if (status && status.toLowerCase() === 'error') {
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: res.error || 'video_error' });
+        var errMsg2 = res.error || 'video_error';
+        if (typeof errMsg2 === 'string' && (errMsg2.indexOf('Responsible AI') !== -1 || errMsg2.indexOf('sensitive words') !== -1)) {
+          errMsg2 = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
+        }
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: errMsg2 });
         console.error('videoStatus error status flag:', res);
         ctx.setState(st);
         updateSceneRow(idx, st.header || '');
@@ -1101,8 +1115,13 @@
     } catch (err) {
       var st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
-      const msg = (err && err.message) ? err.message : 'video_error';
+      var msg = (err && err.message) ? err.message : 'video_error';
       const detail = (err && err.detail) ? err.detail : '';
+
+      if (msg.indexOf('Responsible AI') !== -1 || msg.indexOf('sensitive words') !== -1) {
+        msg = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
+      }
+
       console.error('videoStatus polling error:', msg, detail);
       st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
       ctx.setState(st);
