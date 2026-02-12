@@ -116,13 +116,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         resolution: "720p",
       };
       if (imageUrl) {
-        grokBody.image_url = imageUrl;
-        // Grok API 스펙 불확실성 해소를 위해 가능한 필드명 모두 추가
-        grokBody.image = imageUrl;
-        grokBody.init_image = imageUrl;
-        grokBody.source_image = imageUrl;
-        grokBody.input_image = imageUrl;
-        // 모델이 이미지를 우선하도록 프롬프트 강제 보강
+        // API 에러(expected struct ImageUrl)에 따라 객체 형태로 변경
+        const imgObj = { url: imageUrl };
+        grokBody.image_url = imgObj;
+        grokBody.image = imgObj;
+        // 문자열 필드는 에러 유발 가능성 있으므로 제거
+        // 프롬프트 보강 유지
         grokBody.prompt = "Animate this image. " + promptText;
       }
 
