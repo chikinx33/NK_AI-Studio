@@ -1053,7 +1053,7 @@
   };
 
   async function pollVideoStatus(projectId, jobId, idx, attempt) {
-    var maxAttempts = 18; // 18*5s = 90s
+    var maxAttempts = 120; // 120*5s = 600s (10분)
     var delay = 5000;
     try {
       var st = ctx.getState();
@@ -1106,7 +1106,7 @@
         return;
       }
       if (attempt + 1 >= maxAttempts) {
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: 'timeout' });
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: '응답 시간 초과 (작업은 진행 중일 수 있음)' });
         ctx.setState(st);
         updateSceneRow(idx, st.header || '');
         return;
