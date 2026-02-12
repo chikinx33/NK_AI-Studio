@@ -518,7 +518,7 @@
     var scenes = state.scenes;
     var savedAt = state.savedAt;
     var header = state.header;
-    var videoModel = state.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'veo';
+    var videoModel = state.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'grok';
     pipelineMeta.innerHTML = (
       '<div class="pipeline-actions video-model-bar">' +
       '<div class="video-model-left">' +
