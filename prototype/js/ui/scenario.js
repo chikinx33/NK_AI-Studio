@@ -1,4 +1,4 @@
-﻿;(function () {
+﻿; (function () {
   const NK = window.NK || (window.NK = {});
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
@@ -142,9 +142,9 @@
         .replace(/aspect\s*ratio[^.\n]*/gi, '')
         .replace(/화면\s*비율[^.\n]*/gi, '')
         .replace(/target\s*duration[^.\n]*/gi, '')
-        .replace(/[#>\-\s]*타겟\s*[:.]?\s*\d+\s*(초|s)?/gi, '')
-        .replace(/[#>\-\s]*target\s*[:.]?\s*\d+\s*s?/gi, '')
-        .replace(/타겟\s*\d+\s*초?/gi, '')
+        .replace(/[#>\-\s]*타겟\s*[:.]?\s*\d+\s*(초|s)?\s*[.]?/gi, '')
+        .replace(/[#>\-\s]*target\s*[:.]?\s*\d+\s*s?\s*[.]?/gi, '')
+        .replace(/타겟\s*\d+\s*(초|s)?\s*[.]?/gi, '')
         .replace(/^\s*\d+\s*(초|s)\s*$/gi, '')
         .replace(/분량[^.\n]*/gi, '')
         .replace(/연속성[^.\n]*/gi, '')
@@ -342,26 +342,26 @@
 
     // 저장 버튼
     const saveBtn = document.getElementById('save-draft');
-      if (saveBtn) {
-        saveBtn.onclick = async () => {
-          NK.core.setLoading(true);
-          try {
-            draft = draft || { id: Date.now(), title: '새 프로젝트' };
-            draft.payload = collectPayload();
-            draft.scenes = Array.from(document.querySelectorAll('.scenario-card')).map(card => {
-              const id = Number(card.querySelector('.est-input')?.dataset.id);
-              const estTxt = card.querySelector('.est-input')?.value || '';
-              const est = parseEst(estTxt);
-              const lines = card.querySelector('.view-lines')?.textContent?.trim() || '';
-              const shot = card.querySelector('.view-shot')?.textContent?.trim() || '';
-              return {
-                id,
-                title: '', // 제목은 미사용
-                lines,
-                shot,
-                estSec: est
-              };
-            });
+    if (saveBtn) {
+      saveBtn.onclick = async () => {
+        NK.core.setLoading(true);
+        try {
+          draft = draft || { id: Date.now(), title: '새 프로젝트' };
+          draft.payload = collectPayload();
+          draft.scenes = Array.from(document.querySelectorAll('.scenario-card')).map(card => {
+            const id = Number(card.querySelector('.est-input')?.dataset.id);
+            const estTxt = card.querySelector('.est-input')?.value || '';
+            const est = parseEst(estTxt);
+            const lines = card.querySelector('.view-lines')?.textContent?.trim() || '';
+            const shot = card.querySelector('.view-shot')?.textContent?.trim() || '';
+            return {
+              id,
+              title: '', // 제목은 미사용
+              lines,
+              shot,
+              estSec: est
+            };
+          });
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           NK.store.saveDrafts([draft]);
           if (NK.api?.projectSave) {
