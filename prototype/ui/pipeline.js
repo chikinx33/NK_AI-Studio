@@ -1060,8 +1060,10 @@
       if (!st || !st.scenes || st.scenes.length <= idx) return;
       var sceneId = st.scenes[idx].id;
       var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId, sceneId: sceneId });
-      console.log('videoStatus', { jobId, res });
-      var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url || '';
+      // console.log('videoStatus', { jobId, res });
+      var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url ||
+        (res.response && res.response.video && res.response.video.url) ||
+        (res.response && res.response.url) || '';
       var status = res.status || '';
       st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
