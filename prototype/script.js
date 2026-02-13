@@ -4,6 +4,14 @@
 
   let currentLang = 'ko';
   let currentTheme = 'dark';
+  const STAGE_HTML_MAP = {
+    dashboard: 'dashboard.html',
+    scenario: 'scenario.html',
+    scenes: 'scenes.html',
+    media: 'media.html',
+    publish: 'publish.html'
+  };
+  const RESTORABLE_STAGES = ['scenario', 'scenes', 'media', 'publish'];
 
   // 서버 → 로컬 동기화 (프로젝트 리스트 병합)
   const syncProjectsFromServer = async () => {
@@ -75,10 +83,29 @@
     }
   };
 
+  const resolveInitialStageForMain = (urlParams) => {
+    try {
+      const fromQuery = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
+      if (RESTORABLE_STAGES.includes(fromQuery)) return fromQuery;
+    } catch (_) { }
+
+    try {
+      const fromSession = NK.navigation.normalizeStageName(sessionStorage.getItem('nk_current_stage') || '');
+      if (RESTORABLE_STAGES.includes(fromSession)) return fromSession;
+    } catch (_) { }
+
+    try {
+      const fromLocal = NK.navigation.normalizeStageName(localStorage.getItem('nk_current_stage') || '');
+      if (RESTORABLE_STAGES.includes(fromLocal)) return fromLocal;
+    } catch (_) { }
+
+    return 'dashboard';
+  };
+
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.545';
+    NK.config.APP_VERSION = '1.558';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -94,10 +121,13 @@
     }
     const currentPath = window.location.pathname;
     const stage = NK.navigation.normalizeStageName(currentPath);
+    const isAiVideoShell = !isIframe && currentPath.toLowerCase().includes('ai-video.html');
+    const initialStage = isAiVideoShell ? resolveInitialStageForMain(urlParams) : stage;
+    const effectiveStage = initialStage || stage;
 
     // 2. 스테이지 상태 초기화 (네비게이션 파싱 후)
-    if (stage) {
-      NK.navigation.setStage(stage);
+    if (effectiveStage) {
+      NK.navigation.setStage(effectiveStage);
     }
 
     // 3. 부모 창 전용 로직 (사이드바, 메시지 수신) - 구독을 먼저 설정해야 초기 상태 반영됨
@@ -106,7 +136,7 @@
     }
 
     // 저장된 프로젝트 정보 복구 (대시보드가 아닐 때만 복구하여 처음부터 노출 방지)
-    const isDashboard = !stage || stage === 'dashboard';
+    const isDashboard = !effectiveStage || effectiveStage === 'dashboard';
     if (!isDashboard) {
       const savedProj = localStorage.getItem(KEY.SELECTED_DRAFT) || localStorage.getItem('nk_current_project');
       if (savedProj) {
@@ -130,19 +160,20 @@
     }
 
     // 아이프레임 내부라면 부모에게 알림
-    if (isIframe && stage && window.parent) {
-      window.parent.postMessage({ type: 'stage-changed', stage: stage }, '*');
+    if (isIframe && effectiveStage && window.parent) {
+      window.parent.postMessage({ type: 'stage-changed', stage: effectiveStage }, '*');
     }
 
     // 기본 대시보드 로드 (부모 창인 경우에만)
-    const isOptionsPage = stage === 'options';
+    const isOptionsPage = effectiveStage === 'options';
     const isMainPage = !isIframe && !isOptionsPage && (
-      stage === 'dashboard' ||
-      currentPath.toLowerCase().includes('ai-video.html')
+      effectiveStage === 'dashboard' ||
+      isAiVideoShell
     );
 
     if (isMainPage) {
-      NK.navigation.loadStage('dashboard.html');
+      const target = STAGE_HTML_MAP[effectiveStage] || 'dashboard.html';
+      NK.navigation.loadStage(target);
     }
 
     // 4. 각 페이지별 전용 UI 렌더링
@@ -199,6 +230,11 @@
         };
         NK.uiPipeline.init(pipelineContext);
         NK.uiPipeline.render();
+      }
+    }
+    if (document.getElementById('postprod-root')) {
+      if (NK.ui && NK.ui.postProduction && NK.ui.postProduction.init) {
+        NK.ui.postProduction.init();
       }
     }
   };

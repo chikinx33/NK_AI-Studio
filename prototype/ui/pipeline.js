@@ -1170,22 +1170,21 @@
     var needVid = st.scenes.some(function (s) { return s.videoUrl && String(s.videoUrl).indexOf('data:') !== 0; });
     if (!needImg && !needVid) return;
     try {
-      var imgRes = needImg ? fetch('/api/image/library?projectId=' + encodeURIComponent(pid)) : null;
-      var vidRes = needVid ? fetch('/api/video/library?projectId=' + encodeURIComponent(pid)) : null;
-      var pair = await Promise.all([imgRes, vidRes]);
       var imgItems = [];
-      if (pair[0]) {
+      if (needImg) {
         try {
-          var t1 = await pair[0].text();
-          var j1 = JSON.parse(t1);
+          var j1 = (NK.api && NK.api.library)
+            ? await NK.api.library('image', pid)
+            : null;
           imgItems = Array.isArray(j1.items) ? j1.items : [];
         } catch (_) { imgItems = []; }
       }
       var vidItems = [];
-      if (pair[1]) {
+      if (needVid) {
         try {
-          var t2 = await pair[1].text();
-          var j2 = JSON.parse(t2);
+          var j2 = (NK.api && NK.api.library)
+            ? await NK.api.library('video', pid)
+            : null;
           vidItems = Array.isArray(j2.items) ? j2.items : [];
         } catch (_) { vidItems = []; }
       }
@@ -1230,7 +1229,9 @@
       }
       st._assetsRefreshed = true;
       ctx.setState(st);
-    } catch (_) { }
+    } catch (err) {
+      console.warn('refreshAssets failed:', err && err.message ? err.message : err);
+    }
   };
   ui.generateImageForIdx = async function (idx, retryCount) {
     if (!ctx) return;
@@ -1383,4 +1384,3 @@ function updateSceneRow(idx, headerText) {
   if (!row) { if (NK.uiPipeline && NK.uiPipeline.render) NK.uiPipeline.render(); return; }
   row.outerHTML = buildSceneRowHtml(scene, header);
 }
-

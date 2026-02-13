@@ -1,0 +1,1528 @@
+;(function () {
+  var NK = window.NK || (window.NK = {});
+  var ui = NK.ui || (NK.ui = {});
+  var post = ui.postProduction || (ui.postProduction = {});
+
+  var state = {
+    zoom: 50,
+    currentTime: 0,
+    pxPerSecond: 80,
+    laneWidth: 960,
+    snapStep: 0.5,
+    snapOptions: [0.1, 0.5, 1],
+    model: null,
+    projectId: '',
+    isPointerDown: false,
+    drag: null,
+    justDragged: false,
+    selectedClipId: '',
+    history: [],
+    historyIndex: -1,
+    historyProjectId: '',
+    hotkeyBound: false,
+    saveBusy: false,
+    dirty: false,
+    renderMeta: null,
+    renderTimer: null,
+    isPlaying: false,
+    playFrame: 0,
+    playLastTick: 0,
+    previewClipId: '',
+    previewClipUrl: '',
+    subscribed: false
+  };
+
+  function safeParse(text) {
+    try { return JSON.parse(text); } catch (_) { return null; }
+  }
+
+  function toNumber(v, fallback) {
+    var n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function clamp(v, min, max) {
+    return Math.min(max, Math.max(min, v));
+  }
+
+  function escapeHtml(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function firstFilled(values) {
+    for (var i = 0; i < values.length; i++) {
+      var v = values[i];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return '';
+  }
+
+  function isVideoUrl(url) {
+    if (!url) return false;
+    var clean = String(url).toLowerCase();
+    if (clean.indexOf('data:video/') === 0) return true;
+    clean = clean.split('?')[0];
+    return /\.(mp4|m4v|webm|mov)$/i.test(clean);
+  }
+
+  function formatTime(sec) {
+    var s = Math.max(0, Math.floor(Number(sec) || 0));
+    var m = Math.floor(s / 60);
+    var rs = s % 60;
+    return m + ':' + String(rs).padStart(2, '0');
+  }
+
+  function getQueryProjectId() {
+    try {
+      var qp = new URLSearchParams(window.location.search);
+      return qp.get('projectId') || qp.get('pid') || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function getProjectById(projectId) {
+    if (!projectId || !NK.store || !NK.store.getDrafts) return null;
+    try {
+      var drafts = NK.store.getDrafts();
+      if (!Array.isArray(drafts)) return null;
+      return drafts.find(function (d) { return String(d && d.id) === String(projectId); }) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function resolveProject() {
+    try {
+      var current = NK.state && NK.state.runtime && NK.state.runtime.currentProject;
+      if (current && current.id) {
+        var fullCurrent = getProjectById(current.id);
+        return fullCurrent || current;
+      }
+    } catch (_) { }
+
+    try {
+      var saved = safeParse(localStorage.getItem('nk_selected_draft'));
+      if (saved && saved.id) {
+        var fullSaved = getProjectById(saved.id);
+        return fullSaved || saved;
+      }
+    } catch (_) { }
+
+    var pid = getQueryProjectId();
+    if (pid) return getProjectById(pid);
+
+    return null;
+  }
+
+  function round1(v) {
+    return Math.round((Number(v) || 0) * 10) / 10;
+  }
+
+  function sanitizeSnapStep(v) {
+    var n = Number(v);
+    if (!Number.isFinite(n)) return 0.5;
+    var allowed = state.snapOptions || [0.1, 0.5, 1];
+    return allowed.includes(n) ? n : 0.5;
+  }
+
+  function loadSnapStep() {
+    try {
+      var raw = localStorage.getItem('nk_post_snap_step');
+      state.snapStep = sanitizeSnapStep(raw || state.snapStep);
+    } catch (_) {
+      state.snapStep = sanitizeSnapStep(state.snapStep);
+    }
+  }
+
+  function saveSnapStep(step) {
+    try { localStorage.setItem('nk_post_snap_step', String(step)); } catch (_) { }
+  }
+
+  function roundToStep(v, step) {
+    var n = Number(v) || 0;
+    var s = Number(step) || 0;
+    if (s <= 0) return round1(n);
+    return round1(Math.round(n / s) * s);
+  }
+
+  function getTimelineEdits(project) {
+    var rootEdits = project && project.postTimelineEdits;
+    var payloadEdits = project && project.payload && project.payload.postTimelineEdits;
+    var rootOk = rootEdits && typeof rootEdits === 'object';
+    var payloadOk = payloadEdits && typeof payloadEdits === 'object';
+    if (rootOk && payloadOk) return Object.assign({}, payloadEdits, rootEdits);
+    if (rootOk) return rootEdits;
+    if (payloadOk) return payloadEdits;
+    return {};
+  }
+
+  function getProjectByStateId() {
+    if (!state.projectId) return null;
+    return getProjectById(state.projectId);
+  }
+
+  function getRenderMeta(project) {
+    var rootMeta = project && project.renderMeta;
+    var payloadMeta = project && project.payload && project.payload.renderMeta;
+    var rootOk = rootMeta && typeof rootMeta === 'object';
+    var payloadOk = payloadMeta && typeof payloadMeta === 'object';
+    if (rootOk && payloadOk) return Object.assign({}, payloadMeta, rootMeta);
+    if (rootOk) return Object.assign({}, rootMeta);
+    if (payloadOk) return Object.assign({}, payloadMeta);
+    return {
+      status: 'idle',
+      progress: 0,
+      lastSavedAt: '',
+      lastRenderedAt: '',
+      outputVideoUrl: '',
+      outputSrtUrl: '',
+      error: ''
+    };
+  }
+
+  function persistTimelineEdit(clipId, nextStart, nextEnd) {
+    if (!clipId || !state.projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return;
+    var drafts = NK.store.getDrafts();
+    if (!Array.isArray(drafts)) return;
+    var idx = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
+    if (idx < 0) return;
+
+    var target = Object.assign({}, drafts[idx]);
+    var edits = Object.assign({}, getTimelineEdits(target));
+    var prev = Object.assign({}, edits[clipId] || {});
+    edits[clipId] = Object.assign({}, prev, {
+      start: round1(nextStart),
+      end: round1(nextEnd),
+      deleted: false
+    });
+    var nextPayload = Object.assign({}, target.payload || {});
+    nextPayload.postTimelineEdits = edits;
+    target.payload = nextPayload;
+    target.postTimelineEdits = edits;
+    drafts[idx] = target;
+    NK.store.saveDrafts(drafts);
+  }
+
+  function persistTimelineDeleted(clipId, deleted) {
+    if (!clipId || !state.projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return;
+    var drafts = NK.store.getDrafts();
+    if (!Array.isArray(drafts)) return;
+    var idx = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
+    if (idx < 0) return;
+
+    var target = Object.assign({}, drafts[idx]);
+    var edits = Object.assign({}, getTimelineEdits(target));
+    var prev = Object.assign({}, edits[clipId] || {});
+    edits[clipId] = Object.assign({}, prev, { deleted: !!deleted });
+    var nextPayload = Object.assign({}, target.payload || {});
+    nextPayload.postTimelineEdits = edits;
+    target.payload = nextPayload;
+    target.postTimelineEdits = edits;
+    drafts[idx] = target;
+    NK.store.saveDrafts(drafts);
+  }
+
+  function persistRenderMeta(metaPatch) {
+    if (!state.projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return;
+    var drafts = NK.store.getDrafts();
+    if (!Array.isArray(drafts)) return;
+    var idx = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
+    if (idx < 0) return;
+
+    var target = Object.assign({}, drafts[idx]);
+    var currentMeta = getRenderMeta(target);
+    var nextMeta = Object.assign({}, currentMeta, metaPatch || {});
+    state.renderMeta = nextMeta;
+
+    var nextPayload = Object.assign({}, target.payload || {});
+    nextPayload.renderMeta = nextMeta;
+    target.payload = nextPayload;
+    target.renderMeta = nextMeta;
+    drafts[idx] = target;
+    NK.store.saveDrafts(drafts);
+  }
+
+  function setDirty(v) {
+    state.dirty = !!v;
+    updateRenderPanelUi();
+  }
+
+  function stopRenderTimer() {
+    if (state.renderTimer) {
+      clearInterval(state.renderTimer);
+      state.renderTimer = null;
+    }
+  }
+
+  function getRenderStatusLabel(status) {
+    var map = {
+      idle: '대기',
+      needs_save: '저장 필요',
+      rendering: '렌더링 중',
+      done: '렌더링 완료',
+      failed: '렌더링 실패'
+    };
+    return map[status] || '대기';
+  }
+
+  function getRenderStatusClass(status) {
+    if (status === 'done') return 'done';
+    if (status === 'rendering') return 'running';
+    if (status === 'failed') return 'failed';
+    if (status === 'needs_save') return 'needs-save';
+    return 'idle';
+  }
+
+  async function saveProjectNow() {
+    if (state.saveBusy) return;
+    if (!state.projectId) {
+      alert('저장할 프로젝트를 찾을 수 없습니다.');
+      return;
+    }
+    if (!NK.api || !NK.api.projectSave) {
+      alert('저장 API를 사용할 수 없습니다.');
+      return;
+    }
+
+    var saveBtn = document.getElementById('postprod-save-btn');
+    var originalText = saveBtn ? saveBtn.textContent : '';
+    try {
+      state.saveBusy = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = '저장 중...';
+      }
+
+      var project = getProjectByStateId();
+      if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
+
+      var payload = Object.assign({}, project.payload || {});
+      payload.postTimelineEdits = getTimelineEdits(project);
+      payload.renderMeta = Object.assign({}, getRenderMeta(project), state.renderMeta || {});
+      if (String(payload.renderMeta.outputSrtUrl || '').indexOf('blob:') === 0) {
+        payload.renderMeta.outputSrtUrl = '';
+      }
+      if (String(payload.renderMeta.outputVideoUrl || '').indexOf('blob:') === 0) {
+        payload.renderMeta.outputVideoUrl = '';
+      }
+
+      await NK.api.projectSave(
+        state.projectId,
+        payload,
+        Array.isArray(project.scenes) ? project.scenes : [],
+        {
+          header: project.header || '',
+          aspectRatio: project.aspectRatio || payload.aspectRatio || '',
+          title: project.title || ''
+        }
+      );
+
+      var nowIso = new Date().toISOString();
+      persistRenderMeta({
+        status: state.renderMeta && state.renderMeta.status === 'rendering' ? 'rendering' : 'idle',
+        lastSavedAt: nowIso,
+        error: ''
+      });
+      setDirty(false);
+      alert('저장되었습니다.');
+    } catch (err) {
+      alert('저장 실패: ' + (err && err.message ? err.message : err));
+    } finally {
+      state.saveBusy = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalText || '저장하기';
+      }
+    }
+  }
+
+  function toSrtTime(sec) {
+    var s = Math.max(0, Number(sec) || 0);
+    var h = Math.floor(s / 3600);
+    var m = Math.floor((s % 3600) / 60);
+    var rs = s % 60;
+    var whole = Math.floor(rs);
+    var ms = Math.round((rs - whole) * 1000);
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(whole).padStart(2, '0') + ',' + String(ms).padStart(3, '0');
+  }
+
+  function buildSrtFromModel() {
+    if (!state.model) return '';
+    var track = (state.model.tracks || []).find(function (t) { return t && t.key === 'subtitles'; });
+    var clips = (track && track.clips) ? track.clips : [];
+    if (!clips.length) return '';
+    return clips.map(function (c, i) {
+      return (i + 1) + '\n' + toSrtTime(c.start) + ' --> ' + toSrtTime(c.end) + '\n' + (c.label || '') + '\n';
+    }).join('\n');
+  }
+
+  async function downloadUrl(url, filename) {
+    if (!url) return;
+    try {
+      var res = await fetch(url);
+      if (!res.ok) throw new Error('download_failed');
+      var blob = await res.blob();
+      var a = document.createElement('a');
+      var objectUrl = URL.createObjectURL(blob);
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(objectUrl);
+        document.body.removeChild(a);
+      }, 120);
+    } catch (_) {
+      var a2 = document.createElement('a');
+      a2.href = url;
+      a2.download = filename;
+      document.body.appendChild(a2);
+      a2.click();
+      document.body.removeChild(a2);
+    }
+  }
+
+  function updateRenderPanelUi() {
+    var meta = state.renderMeta || getRenderMeta(null);
+    var status = meta.status || 'idle';
+    if (state.dirty && status !== 'rendering') status = 'needs_save';
+    var canRender = !state.dirty && !state.saveBusy && status !== 'rendering';
+    var canRerender = !state.dirty && !state.saveBusy && status !== 'rendering' && (status === 'done' || status === 'failed');
+    var hasVideo = !!(meta.outputVideoUrl || (state.model && state.model.primaryVideoUrl));
+    var hasSrt = !!buildSrtFromModel();
+
+    var badge = document.getElementById('postprod-render-badge');
+    if (badge) {
+      badge.className = 'postprod-render-badge ' + getRenderStatusClass(status);
+      badge.textContent = getRenderStatusLabel(status);
+    }
+    var progressEl = document.getElementById('postprod-render-progress');
+    if (progressEl) progressEl.textContent = (status === 'rendering') ? (Math.round(Number(meta.progress) || 0) + '%') : '';
+    var saveStateEl = document.getElementById('postprod-save-state');
+    if (saveStateEl) {
+      if (state.saveBusy) saveStateEl.textContent = '저장 중...';
+      else if (state.dirty) saveStateEl.textContent = '편집 변경사항이 있습니다.';
+      else if (meta.lastSavedAt) saveStateEl.textContent = '마지막 저장: ' + new Date(meta.lastSavedAt).toLocaleString();
+      else saveStateEl.textContent = '아직 저장되지 않았습니다.';
+    }
+    var renderInfo = document.getElementById('postprod-render-info');
+    if (renderInfo) {
+      if (status === 'failed' && meta.error) renderInfo.textContent = meta.error;
+      else if (meta.lastRenderedAt) renderInfo.textContent = '마지막 렌더: ' + new Date(meta.lastRenderedAt).toLocaleString();
+      else renderInfo.textContent = '';
+    }
+    var startBtn = document.getElementById('postprod-render-btn');
+    if (startBtn) startBtn.disabled = !canRender;
+    var rerenderBtn = document.getElementById('postprod-rerender-btn');
+    if (rerenderBtn) rerenderBtn.disabled = !canRerender;
+    var mp4Btn = document.getElementById('postprod-download-mp4-btn');
+    if (mp4Btn) mp4Btn.disabled = !(status === 'done' && hasVideo);
+    var srtBtn = document.getElementById('postprod-download-srt-btn');
+    if (srtBtn) srtBtn.disabled = !(status === 'done' && hasSrt);
+  }
+
+  function startRenderProcess(isRerender) {
+    if (state.saveBusy) return;
+    if (state.dirty) {
+      alert('렌더링 전에 먼저 저장해 주세요.');
+      return;
+    }
+    stopRenderTimer();
+    var baseVideo = '';
+    if (state.model) baseVideo = state.model.primaryVideoUrl || '';
+    persistRenderMeta({
+      status: 'rendering',
+      progress: 0,
+      error: '',
+      outputVideoUrl: baseVideo,
+      outputSrtUrl: ''
+    });
+    updateRenderPanelUi();
+
+    state.renderTimer = setInterval(function () {
+      var cur = state.renderMeta || getRenderMeta(null);
+      var next = Math.min(100, (Number(cur.progress) || 0) + 8);
+      var done = next >= 100;
+      persistRenderMeta({
+        status: done ? 'done' : 'rendering',
+        progress: next,
+        lastRenderedAt: done ? new Date().toISOString() : (cur.lastRenderedAt || ''),
+        error: done ? '' : (cur.error || '')
+      });
+      updateRenderPanelUi();
+      if (done) stopRenderTimer();
+    }, isRerender ? 180 : 220);
+  }
+
+  async function downloadSrtNow() {
+    var srtText = buildSrtFromModel();
+    if (!srtText) {
+      alert('다운로드할 SRT가 없습니다.');
+      return;
+    }
+    var blob = new Blob([srtText], { type: 'text/plain;charset=utf-8' });
+    var objectUrl = URL.createObjectURL(blob);
+    await downloadUrl(objectUrl, 'captions.srt');
+    setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 200);
+  }
+
+  async function downloadMp4Now() {
+    var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
+    var url = (meta && meta.outputVideoUrl) || (state.model && state.model.primaryVideoUrl) || '';
+    if (!url) {
+      alert('다운로드할 영상이 없습니다.');
+      return;
+    }
+    await downloadUrl(url, 'final-render.mp4');
+  }
+
+  function canUndo() {
+    return state.historyIndex >= 0;
+  }
+
+  function canRedo() {
+    return state.historyIndex < state.history.length - 1;
+  }
+
+  function resetHistory(projectId) {
+    state.history = [];
+    state.historyIndex = -1;
+    state.historyProjectId = String(projectId || '');
+  }
+
+  function pushHistory(action) {
+    if (!action || !action.clipId) return;
+    if (state.historyIndex < state.history.length - 1) {
+      state.history = state.history.slice(0, state.historyIndex + 1);
+    }
+    state.history.push(action);
+    if (state.history.length > 200) {
+      state.history.shift();
+    }
+    state.historyIndex = state.history.length - 1;
+  }
+
+  function applyTimelineEdits(model, editMap) {
+    var maxEnd = model.totalDuration;
+    model.tracks.forEach(function (track) {
+      var clips = Array.isArray(track.clips) ? track.clips : [];
+      track.clips = clips.map(function (clip) {
+        var edit = editMap && editMap[clip.id];
+        if (!edit) {
+          maxEnd = Math.max(maxEnd, clip.end);
+          return clip;
+        }
+        if (edit.deleted === true) {
+          return null;
+        }
+        var start = clamp(toNumber(edit.start, clip.start), 0, Math.max(0, model.totalDuration - 0.2));
+        var end = clamp(toNumber(edit.end, clip.end), start + 0.2, model.totalDuration);
+        maxEnd = Math.max(maxEnd, end);
+        return Object.assign({}, clip, { start: start, end: end });
+      }).filter(Boolean);
+    });
+    model.totalDuration = Math.max(model.totalDuration, Math.ceil(maxEnd));
+  }
+
+  function findClip(clipId) {
+    if (!state.model || !clipId) return null;
+    var tracks = state.model.tracks || [];
+    for (var i = 0; i < tracks.length; i++) {
+      var clips = tracks[i].clips || [];
+      for (var j = 0; j < clips.length; j++) {
+        if (clips[j] && clips[j].id === clipId) return clips[j];
+      }
+    }
+    return null;
+  }
+
+  function findClipMeta(clipId) {
+    if (!state.model || !clipId) return null;
+    var tracks = state.model.tracks || [];
+    for (var i = 0; i < tracks.length; i++) {
+      var track = tracks[i];
+      var clips = track && Array.isArray(track.clips) ? track.clips : [];
+      for (var j = 0; j < clips.length; j++) {
+        if (clips[j] && clips[j].id === clipId) {
+          return { track: track, clip: clips[j], trackIndex: i, clipIndex: j };
+        }
+      }
+    }
+    return null;
+  }
+
+  function getNeighborBounds(clipMeta) {
+    if (!clipMeta || !clipMeta.track || !clipMeta.clip || !state.model) {
+      return { prevEnd: 0, nextStart: state.model ? state.model.totalDuration : 0 };
+    }
+    var ownId = clipMeta.clip.id;
+    var siblings = (clipMeta.track.clips || []).slice().sort(function (a, b) {
+      var diff = (a.start - b.start);
+      if (diff !== 0) return diff;
+      return (a.end - b.end);
+    });
+    var idx = siblings.findIndex(function (c) { return c && c.id === ownId; });
+    var prev = idx > 0 ? siblings[idx - 1] : null;
+    var next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
+    return {
+      prevEnd: prev ? prev.end : 0,
+      nextStart: next ? next.start : state.model.totalDuration
+    };
+  }
+
+  function normalizeSubtitles(scene, baseStart, sceneDuration, sceneIndex) {
+    var clips = [];
+    var list = Array.isArray(scene && scene.subtitles) ? scene.subtitles : [];
+    for (var i = 0; i < list.length; i++) {
+      var sub = list[i] || {};
+      var subStart = clamp(toNumber(sub.start, 0), 0, Math.max(0, sceneDuration - 0.2));
+      var subEndRaw = toNumber(sub.end, subStart + 1.2);
+      var subEnd = clamp(subEndRaw, subStart + 0.2, sceneDuration);
+      var text = firstFilled([sub.text, sub.caption, sub.label]) || ('자막 ' + (i + 1));
+      clips.push({
+        id: 'sub-' + sceneIndex + '-' + i,
+        label: text,
+        start: baseStart + subStart,
+        end: baseStart + subEnd
+      });
+    }
+    var single = firstFilled([scene && scene.subtitleText, scene && scene.caption]);
+    if (!clips.length && single) {
+      clips.push({
+        id: 'sub-' + sceneIndex,
+        label: single,
+        start: baseStart,
+        end: baseStart + sceneDuration
+      });
+    }
+    return clips;
+  }
+
+  function buildTimelineModel(project) {
+    var scenes = Array.isArray(project && project.scenes) ? project.scenes : [];
+    var visuals = [];
+    var audio = [];
+    var subtitles = [];
+    var music = [];
+    var cursor = 0;
+    var firstVideoUrl = '';
+    var firstImageUrl = '';
+
+    for (var i = 0; i < scenes.length; i++) {
+      var scene = scenes[i] || {};
+      var sceneDuration = Math.max(1, Math.round(toNumber(scene.estSec, toNumber(scene.durationSec, 4))));
+      var sceneStart = cursor;
+      var sceneEnd = sceneStart + sceneDuration;
+      var sceneLabel = firstFilled([scene.title]) || ('씬 ' + (i + 1));
+
+      var visualUrl = firstFilled([
+        scene.videoUrl,
+        scene.generatedVideoUrl,
+        scene.imageDataUrl,
+        scene.generatedImageUrl,
+        scene.imageUrl
+      ]);
+      var visualType = visualUrl ? (isVideoUrl(visualUrl) ? 'video' : 'image') : 'empty';
+      var visualLabel = visualType === 'empty' ? (sceneLabel + ' · 미디어 없음') : sceneLabel;
+      visuals.push({
+        id: 'vis-' + i,
+        label: visualLabel,
+        start: sceneStart,
+        end: sceneEnd,
+        url: visualUrl,
+        empty: visualType === 'empty'
+      });
+
+      if (!firstVideoUrl && visualType === 'video') firstVideoUrl = visualUrl;
+      if (!firstImageUrl && visualType === 'image') firstImageUrl = visualUrl;
+
+      var audioUrl = firstFilled([scene.voiceUrl, scene.audioUrl, scene.ttsUrl]);
+      if (audioUrl) {
+        audio.push({
+          id: 'aud-' + i,
+          label: '씬 ' + (i + 1) + ' 보이스',
+          start: sceneStart,
+          end: sceneEnd,
+          url: audioUrl
+        });
+      }
+
+      subtitles = subtitles.concat(normalizeSubtitles(scene, sceneStart, sceneDuration, i));
+      cursor = sceneEnd;
+    }
+
+    var totalDuration = Math.max(12, Math.ceil(cursor || 0));
+    var musicUrl = firstFilled([
+      project && project.musicUrl,
+      project && project.bgmUrl,
+      project && project.payload && project.payload.musicUrl
+    ]);
+    if (musicUrl) {
+      music.push({
+        id: 'music-0',
+        label: 'BGM',
+        start: 0,
+        end: totalDuration,
+        url: musicUrl
+      });
+    }
+
+    var model = {
+      projectId: project && project.id ? String(project.id) : '',
+      projectTitle: firstFilled([project && project.title]) || '포스트 프로덕션',
+      totalDuration: totalDuration,
+      primaryVideoUrl: firstVideoUrl,
+      primaryImageUrl: firstImageUrl,
+      tracks: [
+        { key: 'subtitles', badge: 'T1', name: 'Subtitles', clips: subtitles },
+        { key: 'visuals', badge: 'V1', name: 'Visuals', clips: visuals },
+        { key: 'audio', badge: 'A1', name: 'Audio', clips: audio },
+        { key: 'music', badge: 'M1', name: 'Music', clips: music }
+      ]
+    };
+
+    applyTimelineEdits(model, getTimelineEdits(project));
+    return model;
+  }
+
+  function buildRulerHtml(totalDuration, laneWidth) {
+    var marks = [];
+    var seconds = Math.ceil(totalDuration);
+    for (var i = 0; i <= seconds; i++) {
+      var left = Math.round((i / totalDuration) * laneWidth);
+      var label = i % 2 === 0 ? '<span>' + i + '</span>' : '';
+      marks.push('<div class="postprod-ruler-mark" style="left:' + left + 'px">' + label + '</div>');
+    }
+    return marks.join('');
+  }
+
+  function buildSnapOptionsHtml() {
+    return (state.snapOptions || [0.1, 0.5, 1]).map(function (step) {
+      var selected = Number(state.snapStep) === Number(step) ? ' selected' : '';
+      return '<option value="' + step + '"' + selected + '>' + step + 's</option>';
+    }).join('');
+  }
+
+  function buildTrackRowsHtml(model, laneWidth, playheadLeft) {
+    return model.tracks.map(function (track) {
+      var clips = track.clips || [];
+      var clipsHtml = clips.map(function (clip) {
+        var left = Math.round((clip.start / model.totalDuration) * laneWidth);
+        var width = Math.max(36, Math.round(((clip.end - clip.start) / model.totalDuration) * laneWidth));
+        var clipClass = 'postprod-clip' + (clip.empty ? ' is-empty' : '') + (state.selectedClipId === clip.id ? ' is-selected' : '');
+        var title = escapeHtml(track.name + ' · ' + clip.label);
+        return (
+          '<button type="button" class="' + clipClass + '" data-start="' + clip.start + '" data-end="' + clip.end + '" data-clip-id="' + clip.id + '" title="' + title + '" style="left:' + left + 'px;width:' + width + 'px">' +
+          '<span class="postprod-clip-handle left" data-handle="left"></span>' +
+          '<span class="postprod-clip-text">' + escapeHtml(clip.label) + '</span>' +
+          '<span class="postprod-clip-handle right" data-handle="right"></span>' +
+          '</button>'
+        );
+      }).join('');
+
+      if (!clips.length) {
+        clipsHtml = '<div class="postprod-track-empty">클립 없음</div>';
+      }
+
+      return (
+        '<div class="postprod-track-row postprod-track-' + track.key + '" style="width:' + (laneWidth + 170) + 'px">' +
+        '<div class="postprod-track-label"><span class="track-badge">' + track.badge + '</span><span class="track-name">' + track.name + '</span></div>' +
+        '<div class="postprod-track-lane" style="width:' + laneWidth + 'px">' +
+        clipsHtml +
+        '<div class="postprod-playhead" style="left:' + playheadLeft + 'px"></div>' +
+        '</div>' +
+        '</div>'
+      );
+    }).join('');
+  }
+
+  function getVisualTrack(model) {
+    var tracks = model && Array.isArray(model.tracks) ? model.tracks : [];
+    return tracks.find(function (t) { return t && t.key === 'visuals'; }) || null;
+  }
+
+  function getActiveVisualClip(sec) {
+    var track = getVisualTrack(state.model);
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    if (!clips.length) return null;
+    var time = Number(sec) || 0;
+    for (var i = 0; i < clips.length; i++) {
+      var c = clips[i];
+      if (c && time >= c.start && time < c.end) return c;
+    }
+    if (time >= clips[clips.length - 1].end) return clips[clips.length - 1];
+    return clips[0];
+  }
+
+  function setPlayButtonUi() {
+    var playBtn = document.getElementById('postprod-play-toggle');
+    if (!playBtn) return;
+    playBtn.textContent = state.isPlaying ? '일시정지' : '재생';
+  }
+
+  function stopPlayback() {
+    state.isPlaying = false;
+    state.playLastTick = 0;
+    if (state.playFrame) {
+      cancelAnimationFrame(state.playFrame);
+      state.playFrame = 0;
+    }
+    var video = document.getElementById('postprod-preview-video');
+    if (video) {
+      try { video.pause(); } catch (_) { }
+    }
+    setPlayButtonUi();
+  }
+
+  function syncPreviewMedia(sec) {
+    var video = document.getElementById('postprod-preview-video');
+    var image = document.getElementById('postprod-preview-image');
+    var empty = document.getElementById('postprod-preview-empty');
+    if (!video || !image || !empty) return;
+
+    var clip = getActiveVisualClip(sec);
+    if (!clip || clip.empty || !clip.url) {
+      video.style.display = 'none';
+      image.style.display = 'none';
+      empty.style.display = 'flex';
+      state.previewClipId = '';
+      state.previewClipUrl = '';
+      return;
+    }
+
+    var isVideo = isVideoUrl(clip.url);
+    if (!isVideo) {
+      if (state.previewClipUrl !== clip.url) {
+        image.src = clip.url;
+      }
+      video.style.display = 'none';
+      image.style.display = 'block';
+      empty.style.display = 'none';
+      try { video.pause(); } catch (_) { }
+      state.previewClipId = clip.id;
+      state.previewClipUrl = clip.url;
+      return;
+    }
+
+    var clipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
+    var sourceChanged = state.previewClipId !== clip.id || state.previewClipUrl !== clip.url || !video.getAttribute('src');
+    var seekAndPlay = function () {
+      if (Math.abs((video.currentTime || 0) - clipTime) > 0.12) {
+        try { video.currentTime = clipTime; } catch (_) { }
+      }
+      if (state.isPlaying) {
+        video.play().catch(function () { });
+      } else {
+        try { video.pause(); } catch (_) { }
+      }
+    };
+
+    if (sourceChanged) {
+      video.src = clip.url;
+      video.load();
+      var onLoaded = function () {
+        video.removeEventListener('loadedmetadata', onLoaded);
+        seekAndPlay();
+      };
+      video.addEventListener('loadedmetadata', onLoaded);
+    } else {
+      seekAndPlay();
+    }
+
+    video.style.display = 'block';
+    image.style.display = 'none';
+    empty.style.display = 'none';
+    state.previewClipId = clip.id;
+    state.previewClipUrl = clip.url;
+  }
+
+  function startPlayback() {
+    if (!state.model || state.isPlaying) return;
+    if (state.currentTime >= state.model.totalDuration) {
+      setCurrentTime(0, true);
+    }
+    state.isPlaying = true;
+    state.playLastTick = 0;
+    setPlayButtonUi();
+    syncPreviewMedia(state.currentTime);
+
+    var step = function (ts) {
+      if (!state.isPlaying || !state.model) return;
+      if (!state.playLastTick) state.playLastTick = ts;
+      var delta = Math.max(0, (ts - state.playLastTick) / 1000);
+      state.playLastTick = ts;
+      var next = state.currentTime + delta;
+      if (next >= state.model.totalDuration) {
+        setCurrentTime(state.model.totalDuration, true);
+        stopPlayback();
+        return;
+      }
+      setCurrentTime(next, true);
+      state.playFrame = requestAnimationFrame(step);
+    };
+    state.playFrame = requestAnimationFrame(step);
+  }
+
+  function buildPreviewHtml(model) {
+    return (
+      '<div class="postprod-preview-stack">' +
+      '<video id="postprod-preview-video" class="postprod-video" preload="metadata" playsinline></video>' +
+      '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
+      '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
+      '<div class="postprod-play-glyph">▶</div>' +
+      '<p>프로덕션 결과 미디어가 아직 없습니다.</p>' +
+      '</div>' +
+      '</div>'
+    );
+  }
+
+  function buildRenderPreviewHtml(model, meta) {
+    var videoUrl = (meta && meta.outputVideoUrl) || (model && model.primaryVideoUrl) || '';
+    if (videoUrl) {
+      return '<video id="postprod-render-video" class="postprod-render-video" controls preload="metadata" src="' + escapeHtml(videoUrl) + '"></video>';
+    }
+    var imageUrl = (model && model.primaryImageUrl) || '';
+    if (imageUrl) {
+      return '<img class="postprod-render-image" src="' + escapeHtml(imageUrl) + '" alt="렌더 미리보기" />';
+    }
+    return '<div class="postprod-render-empty">렌더링 결과가 아직 없습니다.</div>';
+  }
+
+  function renderLayout(model) {
+    var root = document.getElementById('postprod-root');
+    if (!root) return;
+
+    state.model = model;
+    state.currentTime = clamp(state.currentTime, 0, model.totalDuration);
+    state.pxPerSecond = Math.max(36, Math.round(36 + (state.zoom * 1.1)));
+    var laneWidth = Math.max(960, Math.ceil(model.totalDuration * state.pxPerSecond));
+    state.laneWidth = laneWidth;
+    var playheadLeft = Math.round((state.currentTime / model.totalDuration) * laneWidth);
+    var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
+    var status = (meta && meta.status) || 'idle';
+    if (state.dirty && status !== 'rendering') status = 'needs_save';
+
+    root.innerHTML =
+      '<section class="postprod-workspace">' +
+      '<div class="postprod-editor-column">' +
+      '<div class="postprod-shell">' +
+      '<div class="card postprod-player-panel">' +
+      '<div class="postprod-panel-header">' +
+      '<h2>편집</h2>' +
+      '</div>' +
+      '<div class="postprod-preview-stage">' +
+      buildPreviewHtml(model) +
+      '</div>' +
+      '<div class="postprod-player-foot">' +
+      '<button class="btn-secondary compact postprod-play-toggle" id="postprod-play-toggle">재생</button>' +
+      '<div class="postprod-time-readout"><span id="postprod-time-now">' + formatTime(state.currentTime) + '</span> / <span id="postprod-time-total">' + formatTime(model.totalDuration) + '</span></div>' +
+      '</div>' +
+      '</div>' +
+
+      '<div class="card postprod-toolbar">' +
+      '<div class="postprod-toolbar-group">' +
+      '<label>자막</label>' +
+      '<button class="postprod-pill active" type="button">ON</button>' +
+      '<select disabled><option>Pretendard</option></select>' +
+      '<select disabled><option>크게</option></select>' +
+      '<button class="postprod-color-chip" type="button" aria-label="글자색"></button>' +
+      '<button class="postprod-color-chip dark" type="button" aria-label="배경색"></button>' +
+      '<select disabled><option>없음</option></select>' +
+      '<label for="postprod-snap-step">스냅</label>' +
+      '<select id="postprod-snap-step">' + buildSnapOptionsHtml() + '</select>' +
+      '</div>' +
+      '<div class="postprod-toolbar-group zoom-group">' +
+      '<label for="postprod-zoom-range">타임라인 배율</label>' +
+      '<input id="postprod-zoom-range" type="range" min="20" max="120" value="' + state.zoom + '" />' +
+      '<span id="postprod-zoom-text">' + state.zoom + '%</span>' +
+      '</div>' +
+      '<div class="postprod-toolbar-group history-group">' +
+      '<button class="btn-secondary compact postprod-history-btn" id="postprod-undo-btn"' + (canUndo() ? '' : ' disabled') + '>되돌리기</button>' +
+      '<button class="btn-secondary compact postprod-history-btn" id="postprod-redo-btn"' + (canRedo() ? '' : ' disabled') + '>다시 실행</button>' +
+      '<button class="btn-secondary compact postprod-history-btn danger" id="postprod-delete-btn"' + (state.selectedClipId ? '' : ' disabled') + '>선택 삭제</button>' +
+      '</div>' +
+      '</div>' +
+
+      '<div class="card postprod-timeline-panel">' +
+      '<div class="postprod-timeline-head">' +
+      '<h3>자막 타임라인</h3>' +
+      '<div class="postprod-scrub-wrap">' +
+      '<input id="postprod-scrub-range" type="range" min="0" max="' + model.totalDuration + '" value="' + state.currentTime + '" step="0.1" />' +
+      '</div>' +
+      '</div>' +
+      '<div class="postprod-timeline-scroll" id="postprod-timeline-scroll">' +
+      '<div class="postprod-ruler-row" style="width:' + (laneWidth + 170) + 'px">' +
+      '<div class="postprod-track-label ruler-label">TRACKS</div>' +
+      '<div class="postprod-ruler" style="width:' + laneWidth + 'px">' +
+      buildRulerHtml(model.totalDuration, laneWidth) +
+      '<div class="postprod-playhead ruler-playhead" style="left:' + playheadLeft + 'px"></div>' +
+      '</div>' +
+      '</div>' +
+      buildTrackRowsHtml(model, laneWidth, playheadLeft) +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+
+      '<aside class="card postprod-render-panel">' +
+      '<div class="postprod-render-head">' +
+      '<h3>렌더링</h3>' +
+      '<span id="postprod-render-badge" class="postprod-render-badge ' + getRenderStatusClass(status) + '">' + getRenderStatusLabel(status) + '</span>' +
+      '</div>' +
+      '<div class="postprod-render-actions top">' +
+      '<button class="btn-primary compact postprod-save-btn" id="postprod-save-btn"' + (state.saveBusy ? ' disabled' : '') + '>' + (state.saveBusy ? '저장 중...' : '저장하기') + '</button>' +
+      '<button class="btn-secondary compact" id="postprod-render-btn">렌더링 시작</button>' +
+      '<button class="btn-secondary compact" id="postprod-rerender-btn">다시 렌더링</button>' +
+      '</div>' +
+      '<p class="postprod-save-state" id="postprod-save-state"></p>' +
+      '<p class="postprod-render-progress" id="postprod-render-progress"></p>' +
+      '<p class="postprod-render-info" id="postprod-render-info"></p>' +
+
+      '<div class="postprod-resource-card">' +
+      '<p class="title">컴퓨팅 리소스</p>' +
+      '<div class="postprod-resource-grid">' +
+      '<div><span>CPU</span><strong>고성능</strong></div>' +
+      '<div><span>RAM</span><strong>8GB+</strong></div>' +
+      '<div><span>Graphics</span><strong>브라우저 가속</strong></div>' +
+      '<div><span>품질</span><strong>표준</strong></div>' +
+      '</div>' +
+      '</div>' +
+
+      '<div class="postprod-render-preview">' +
+      buildRenderPreviewHtml(model, meta) +
+      '</div>' +
+
+      '<div class="postprod-render-actions bottom">' +
+      '<button class="btn-secondary compact" id="postprod-download-srt-btn">SRT 다운로드</button>' +
+      '<button class="btn-primary compact" id="postprod-download-mp4-btn">MP4 다운로드</button>' +
+      '</div>' +
+      '</aside>' +
+      '</section>';
+  }
+
+  function updatePlayheadUi() {
+    if (!state.model) return;
+    var left = Math.round((state.currentTime / state.model.totalDuration) * state.laneWidth);
+    document.querySelectorAll('.postprod-playhead').forEach(function (el) {
+      el.style.left = left + 'px';
+    });
+  }
+
+  function seekByTimelinePointer(evt, laneEl) {
+    if (!evt || !laneEl || !state.model) return;
+    var rect = laneEl.getBoundingClientRect();
+    if (!rect || rect.width <= 0) return;
+    var x = clamp(evt.clientX - rect.left, 0, rect.width);
+    var ratio = x / rect.width;
+    var sec = ratio * state.model.totalDuration;
+    setCurrentTime(sec, true);
+  }
+
+  function updateTimeUi() {
+    var model = state.model;
+    if (!model) return;
+    var nowEl = document.getElementById('postprod-time-now');
+    var scrubEl = document.getElementById('postprod-scrub-range');
+    if (nowEl) nowEl.textContent = formatTime(state.currentTime);
+    if (scrubEl) scrubEl.value = String(state.currentTime);
+    updatePlayheadUi();
+  }
+
+  function setCurrentTime(sec, syncPreview) {
+    var model = state.model;
+    if (!model) return;
+    state.currentTime = clamp(toNumber(sec, 0), 0, model.totalDuration);
+    updateTimeUi();
+    if (syncPreview !== false) {
+      syncPreviewMedia(state.currentTime);
+    }
+  }
+
+  function updateClipElement(clipEl, start, end) {
+    if (!clipEl || !state.model) return;
+    var left = Math.round((start / state.model.totalDuration) * state.laneWidth);
+    var width = Math.max(36, Math.round(((end - start) / state.model.totalDuration) * state.laneWidth));
+    clipEl.style.left = left + 'px';
+    clipEl.style.width = width + 'px';
+    clipEl.dataset.start = String(start);
+    clipEl.dataset.end = String(end);
+  }
+
+  function updateHistoryButtons() {
+    var undoBtn = document.getElementById('postprod-undo-btn');
+    var redoBtn = document.getElementById('postprod-redo-btn');
+    if (undoBtn) undoBtn.disabled = !canUndo();
+    if (redoBtn) redoBtn.disabled = !canRedo();
+    var delBtn = document.getElementById('postprod-delete-btn');
+    if (delBtn) delBtn.disabled = !state.selectedClipId;
+  }
+
+  function updateSelectionUi() {
+    document.querySelectorAll('.postprod-clip[data-clip-id]').forEach(function (clipEl) {
+      var isSelected = state.selectedClipId && clipEl.getAttribute('data-clip-id') === state.selectedClipId;
+      clipEl.classList.toggle('is-selected', !!isSelected);
+    });
+    updateHistoryButtons();
+  }
+
+  function selectClip(clipId) {
+    state.selectedClipId = clipId || '';
+    updateSelectionUi();
+  }
+
+  function clearClipSelection() {
+    if (!state.selectedClipId) return;
+    state.selectedClipId = '';
+    updateSelectionUi();
+  }
+
+  function deleteClipById(clipId, withHistory) {
+    if (!clipId) return false;
+    var clip = findClip(clipId);
+    if (!clip) return false;
+
+    var beforeStart = clip.start;
+    var beforeEnd = clip.end;
+    persistTimelineDeleted(clipId, true);
+    if (withHistory) {
+      pushHistory({
+        type: 'delete',
+        clipId: clipId,
+        beforeStart: beforeStart,
+        beforeEnd: beforeEnd,
+        afterStart: beforeStart,
+        afterEnd: beforeEnd,
+        beforeDeleted: false,
+        afterDeleted: true
+      });
+    }
+    if (state.selectedClipId === clipId) state.selectedClipId = '';
+    setDirty(true);
+    post.render();
+    return true;
+  }
+
+  function deleteSelectedClip() {
+    if (!state.selectedClipId) return;
+    var deleted = deleteClipById(state.selectedClipId, true);
+    if (deleted) updateHistoryButtons();
+  }
+
+  function setClipRange(clipId, start, end, persist) {
+    var clip = findClip(clipId);
+    if (!clip || !state.model) return false;
+    var minLen = 0.2;
+    var s = round1(clamp(toNumber(start, clip.start), 0, state.model.totalDuration));
+    var e = round1(clamp(toNumber(end, clip.end), s + minLen, state.model.totalDuration));
+    clip.start = s;
+    clip.end = e;
+    var clipEl = document.querySelector('.postprod-clip[data-clip-id="' + clipId + '"]');
+    if (clipEl) updateClipElement(clipEl, clip.start, clip.end);
+    if (persist) persistTimelineEdit(clipId, clip.start, clip.end);
+    return true;
+  }
+
+  function applyHistoryAction(action, toAfter) {
+    if (!action || !action.clipId) return;
+    var type = action.type || 'range';
+    var start = toAfter ? action.afterStart : action.beforeStart;
+    var end = toAfter ? action.afterEnd : action.beforeEnd;
+    if (type === 'delete') {
+      var deleted = !!(toAfter ? action.afterDeleted : action.beforeDeleted);
+      persistTimelineDeleted(action.clipId, deleted);
+      if (!deleted) {
+        persistTimelineEdit(action.clipId, start, end);
+        state.selectedClipId = action.clipId;
+      } else if (state.selectedClipId === action.clipId) {
+        state.selectedClipId = '';
+      }
+      post.render();
+      setDirty(true);
+      setCurrentTime(start, true);
+      return;
+    }
+    var ok = setClipRange(action.clipId, start, end, true);
+    if (ok) {
+      state.selectedClipId = action.clipId;
+      updateSelectionUi();
+      setDirty(true);
+      setCurrentTime(start, true);
+    }
+  }
+
+  function undoEdit() {
+    if (!canUndo()) return;
+    var action = state.history[state.historyIndex];
+    applyHistoryAction(action, false);
+    state.historyIndex -= 1;
+    updateHistoryButtons();
+  }
+
+  function redoEdit() {
+    if (!canRedo()) return;
+    var nextIndex = state.historyIndex + 1;
+    var action = state.history[nextIndex];
+    applyHistoryAction(action, true);
+    state.historyIndex = nextIndex;
+    updateHistoryButtons();
+  }
+
+  function onGlobalKeyDown(evt) {
+    if (!evt) return;
+    var target = evt.target;
+    var tag = target && target.tagName ? String(target.tagName).toLowerCase() : '';
+    var isEditable = (target && target.isContentEditable) || tag === 'input' || tag === 'textarea' || tag === 'select';
+    if (isEditable) return;
+    var key = String(evt.key || '').toLowerCase();
+    if (key === 'delete' || key === 'backspace') {
+      if (state.selectedClipId) {
+        evt.preventDefault();
+        deleteSelectedClip();
+      }
+      return;
+    }
+
+    var meta = !!(evt.ctrlKey || evt.metaKey);
+    if (!meta) return;
+    var isUndo = key === 'z' && !evt.shiftKey;
+    var isRedo = key === 'y' || (key === 'z' && evt.shiftKey);
+    if (isUndo) {
+      evt.preventDefault();
+      undoEdit();
+      return;
+    }
+    if (isRedo) {
+      evt.preventDefault();
+      redoEdit();
+    }
+  }
+
+  function beginClipDrag(evt, clipEl, mode) {
+    var clipId = clipEl && clipEl.getAttribute('data-clip-id');
+    var clipMeta = findClipMeta(clipId);
+    var clip = clipMeta && clipMeta.clip;
+    if (!clip || !state.model) return;
+    var neighbor = getNeighborBounds(clipMeta);
+
+    evt.preventDefault();
+    evt.stopPropagation();
+    state.isPointerDown = true;
+    state.drag = {
+      mode: mode,
+      clipId: clipId,
+      clipEl: clipEl,
+      startX: evt.clientX,
+      origStart: clip.start,
+      origEnd: clip.end,
+      duration: clip.end - clip.start,
+      nextStart: clip.start,
+      nextEnd: clip.end,
+      prevBoundEnd: neighbor.prevEnd,
+      nextBoundStart: neighbor.nextStart,
+      moved: false
+    };
+    selectClip(clipId);
+    clipEl.classList.add('is-dragging');
+    document.body.classList.add('postprod-dragging');
+    window.addEventListener('pointermove', onWindowPointerMove, true);
+    window.addEventListener('pointerup', onWindowPointerUp, true);
+    window.addEventListener('pointercancel', onWindowPointerUp, true);
+  }
+
+  function updateClipDrag(evt) {
+    if (!state.drag || !state.model) return;
+    var d = state.drag;
+    var dx = evt.clientX - d.startX;
+    var deltaSec = (dx / state.laneWidth) * state.model.totalDuration;
+    if (Math.abs(dx) > 3) d.moved = true;
+    var minLen = 0.2;
+    var start = d.origStart;
+    var end = d.origEnd;
+    var prevEnd = clamp(d.prevBoundEnd, 0, state.model.totalDuration);
+    var nextStart = clamp(d.nextBoundStart, 0, state.model.totalDuration);
+    var snap = function (v) { return roundToStep(v, state.snapStep); };
+
+    if (d.mode === 'move') {
+      var minStart = prevEnd;
+      var maxStart = nextStart - d.duration;
+      if (maxStart < minStart) maxStart = minStart;
+      start = clamp(d.origStart + deltaSec, minStart, maxStart);
+      start = clamp(snap(start), minStart, maxStart);
+      end = start + d.duration;
+    } else if (d.mode === 'resize-left') {
+      var leftMin = prevEnd;
+      var leftMax = d.origEnd - minLen;
+      if (leftMax < leftMin) leftMax = leftMin;
+      start = clamp(d.origStart + deltaSec, leftMin, leftMax);
+      start = clamp(snap(start), leftMin, leftMax);
+      end = d.origEnd;
+    } else if (d.mode === 'resize-right') {
+      start = d.origStart;
+      var rightMin = d.origStart + minLen;
+      var rightMax = nextStart;
+      if (rightMax < rightMin) rightMax = rightMin;
+      end = clamp(d.origEnd + deltaSec, rightMin, rightMax);
+      end = clamp(snap(end), rightMin, rightMax);
+    }
+
+    d.nextStart = round1(clamp(start, 0, state.model.totalDuration));
+    d.nextEnd = round1(clamp(end, d.nextStart + minLen, state.model.totalDuration));
+    updateClipElement(d.clipEl, d.nextStart, d.nextEnd);
+  }
+
+  function endClipDrag() {
+    if (!state.drag) return;
+    window.removeEventListener('pointermove', onWindowPointerMove, true);
+    window.removeEventListener('pointerup', onWindowPointerUp, true);
+    window.removeEventListener('pointercancel', onWindowPointerUp, true);
+    var d = state.drag;
+    d.clipEl.classList.remove('is-dragging');
+    document.body.classList.remove('postprod-dragging');
+
+    var clip = findClip(d.clipId);
+    if (clip) {
+      var beforeStart = d.origStart;
+      var beforeEnd = d.origEnd;
+      clip.start = d.nextStart;
+      clip.end = d.nextEnd;
+      persistTimelineEdit(d.clipId, clip.start, clip.end);
+      var changed = Math.abs(beforeStart - clip.start) > 0.001 || Math.abs(beforeEnd - clip.end) > 0.001;
+      if (changed) {
+        pushHistory({
+          type: 'range',
+          clipId: d.clipId,
+          beforeStart: beforeStart,
+          beforeEnd: beforeEnd,
+          afterStart: clip.start,
+          afterEnd: clip.end
+        });
+        setDirty(true);
+      }
+      setCurrentTime(clip.start, true);
+    }
+    state.justDragged = !!d.moved;
+    state.isPointerDown = false;
+    state.drag = null;
+    updateHistoryButtons();
+  }
+
+  function onWindowPointerMove(evt) {
+    if (!state.isPointerDown || !state.drag) return;
+    updateClipDrag(evt);
+  }
+
+  function onWindowPointerUp() {
+    endClipDrag();
+  }
+
+  function bindEvents() {
+    var root = document.getElementById('postprod-root');
+    if (!root || !state.model) return;
+
+    var snapSelect = document.getElementById('postprod-snap-step');
+    if (snapSelect) {
+      snapSelect.onchange = function () {
+        state.snapStep = sanitizeSnapStep(snapSelect.value);
+        saveSnapStep(state.snapStep);
+      };
+    }
+
+    var zoomRange = document.getElementById('postprod-zoom-range');
+    var zoomText = document.getElementById('postprod-zoom-text');
+    if (zoomRange) {
+      zoomRange.oninput = function () {
+        stopPlayback();
+        state.zoom = clamp(toNumber(zoomRange.value, 50), 20, 120);
+        if (zoomText) zoomText.textContent = state.zoom + '%';
+        renderLayout(state.model);
+        bindEvents();
+        setCurrentTime(state.currentTime, true);
+      };
+    }
+
+    var scrub = document.getElementById('postprod-scrub-range');
+    if (scrub) {
+      scrub.oninput = function () {
+        setCurrentTime(scrub.value, true);
+      };
+    }
+
+    var playBtn = document.getElementById('postprod-play-toggle');
+    if (playBtn) {
+      playBtn.onclick = function () {
+        if (state.isPlaying) stopPlayback();
+        else startPlayback();
+      };
+    }
+
+    var undoBtn = document.getElementById('postprod-undo-btn');
+    if (undoBtn) undoBtn.onclick = undoEdit;
+    var redoBtn = document.getElementById('postprod-redo-btn');
+    if (redoBtn) redoBtn.onclick = redoEdit;
+    var delBtn = document.getElementById('postprod-delete-btn');
+    if (delBtn) delBtn.onclick = deleteSelectedClip;
+    var saveBtn = document.getElementById('postprod-save-btn');
+    if (saveBtn) saveBtn.onclick = saveProjectNow;
+    var renderBtn = document.getElementById('postprod-render-btn');
+    if (renderBtn) renderBtn.onclick = function () { startRenderProcess(false); };
+    var rerenderBtn = document.getElementById('postprod-rerender-btn');
+    if (rerenderBtn) rerenderBtn.onclick = function () { startRenderProcess(true); };
+    var srtBtn = document.getElementById('postprod-download-srt-btn');
+    if (srtBtn) srtBtn.onclick = downloadSrtNow;
+    var mp4Btn = document.getElementById('postprod-download-mp4-btn');
+    if (mp4Btn) mp4Btn.onclick = downloadMp4Now;
+    updateHistoryButtons();
+    updateRenderPanelUi();
+    setPlayButtonUi();
+    syncPreviewMedia(state.currentTime);
+
+    root.querySelectorAll('.postprod-clip[data-clip-id]').forEach(function (clipEl) {
+      var leftHandle = clipEl.querySelector('[data-handle="left"]');
+      var rightHandle = clipEl.querySelector('[data-handle="right"]');
+
+      clipEl.onpointerdown = function (evt) {
+        if (evt.button !== 0) return;
+        var target = evt.target;
+        if (target && target.getAttribute && target.getAttribute('data-handle') === 'left') {
+          beginClipDrag(evt, clipEl, 'resize-left');
+          return;
+        }
+        if (target && target.getAttribute && target.getAttribute('data-handle') === 'right') {
+          beginClipDrag(evt, clipEl, 'resize-right');
+          return;
+        }
+        beginClipDrag(evt, clipEl, 'move');
+      };
+
+      clipEl.onclick = function () {
+        if (state.justDragged) {
+          state.justDragged = false;
+          return;
+        }
+        if (state.drag) return;
+        selectClip(clipEl.getAttribute('data-clip-id'));
+        setCurrentTime(clipEl.getAttribute('data-start'), true);
+      };
+
+      if (leftHandle) {
+        leftHandle.onclick = function (evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+        };
+      }
+      if (rightHandle) {
+        rightHandle.onclick = function (evt) {
+          evt.preventDefault();
+          evt.stopPropagation();
+        };
+      }
+    });
+
+    var ruler = root.querySelector('.postprod-ruler');
+    if (ruler) {
+      ruler.onclick = function (evt) {
+        if (state.drag) return;
+        seekByTimelinePointer(evt, ruler);
+      };
+    }
+
+    root.querySelectorAll('.postprod-track-lane').forEach(function (laneEl) {
+      laneEl.onclick = function (evt) {
+        if (state.drag) return;
+        if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
+        seekByTimelinePointer(evt, laneEl);
+      };
+    });
+
+    root.onclick = function (evt) {
+      if (!evt.target) return;
+      var clickedClip = evt.target.closest('.postprod-clip[data-clip-id]');
+      if (!clickedClip) clearClipSelection();
+    };
+  }
+
+  post.render = function () {
+    var root = document.getElementById('postprod-root');
+    if (!root) return;
+
+    var project = resolveProject();
+    var scenes = project && Array.isArray(project.scenes) ? project.scenes : [];
+    if (!project || !scenes.length) {
+      stopRenderTimer();
+      stopPlayback();
+      state.projectId = '';
+      state.model = null;
+      state.selectedClipId = '';
+      state.renderMeta = null;
+      state.dirty = false;
+      root.innerHTML =
+        '<section class="postprod-shell">' +
+        '<div class="card postprod-empty">' +
+        '<h2>포스트 프로덕션 준비 중</h2>' +
+        '<p>프로덕션에서 생성된 이미지/영상을 먼저 저장하면 타임라인이 자동으로 구성됩니다.</p>' +
+        '</div>' +
+        '</section>';
+      return;
+    }
+
+    var model = buildTimelineModel(project);
+    if (String(state.historyProjectId || '') !== String(model.projectId || '')) {
+      resetHistory(model.projectId || '');
+    }
+    if (state.selectedClipId) {
+      var exists = false;
+      model.tracks.forEach(function (track) {
+        if (exists) return;
+        exists = (track.clips || []).some(function (clip) { return clip && clip.id === state.selectedClipId; });
+      });
+      if (!exists) state.selectedClipId = '';
+    }
+    var nextProjectId = model.projectId || '';
+    var projectChanged = String(state.projectId || '') !== String(nextProjectId);
+    if (projectChanged) {
+      stopRenderTimer();
+      stopPlayback();
+      state.dirty = false;
+    }
+    state.projectId = nextProjectId;
+    state.renderMeta = getRenderMeta(project);
+    if (state.renderMeta && state.renderMeta.status === 'rendering' && !state.renderTimer) {
+      persistRenderMeta({
+        status: 'idle',
+        progress: 0,
+        error: ''
+      });
+    }
+    state.drag = null;
+    state.isPointerDown = false;
+    state.justDragged = false;
+    renderLayout(model);
+    bindEvents();
+    setCurrentTime(state.currentTime, true);
+  };
+
+  post.init = function () {
+    var root = document.getElementById('postprod-root');
+    if (!root) return;
+
+    if (!state.subscribed && NK.state && NK.state.subscribe) {
+      NK.state.subscribe(function () {
+        post.render();
+      });
+      state.subscribed = true;
+    }
+
+    loadSnapStep();
+    if (!state.hotkeyBound) {
+      window.addEventListener('keydown', onGlobalKeyDown);
+      state.hotkeyBound = true;
+    }
+    post.render();
+  };
+})();
