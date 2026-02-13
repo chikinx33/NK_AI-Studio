@@ -2869,9 +2869,15 @@ a.btn-primary:active {
 
 .postprod-preview-stack .postprod-video,
 .postprod-preview-stack .postprod-image,
+.postprod-preview-stack .postprod-preview-gap,
 .postprod-preview-stack .postprod-preview-empty {
   position: absolute;
   inset: 0;
+}
+
+.postprod-preview-gap {
+  display: none;
+  background: #000;
 }
 
 .postprod-preview-empty {
@@ -3217,7 +3223,8 @@ a.btn-primary:active {
 }
 
 .postprod-scrub-wrap {
-  width: 220px;
+  flex: 1;
+  min-width: 280px;
 }
 
 .postprod-scrub-wrap input[type="range"] {
@@ -3513,7 +3520,8 @@ a.btn-primary:active {
   }
 
   .postprod-scrub-wrap {
-    width: 140px;
+    width: 100%;
+    min-width: 0;
   }
 
   .postprod-track-label {

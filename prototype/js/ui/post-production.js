@@ -136,6 +136,7 @@
   function getSceneImageUrl(scene) {
     return firstFilled([
       scene && scene.imageDataUrl,
+      scene && scene.imagePath,
       scene && scene.generatedImageUrl,
       scene && scene.imageUrl
     ]);
@@ -144,8 +145,28 @@
   function getSceneVideoUrl(scene) {
     return firstFilled([
       scene && scene.videoUrl,
+      scene && scene.videoPlaybackUrl,
+      scene && scene.outputVideoUrl,
       scene && scene.generatedVideoUrl
+      ,scene && scene.videoPath
     ]);
+  }
+
+  function findSceneVideoFromLibrary(scene, vidItems) {
+    if (!scene || !Array.isArray(vidItems) || !vidItems.length) return '';
+    var sid = String(scene.id || '').trim();
+    if (!sid) return '';
+    var sidLower = sid.toLowerCase();
+    var matched = vidItems.find(function (it) {
+      var name = String((it && it.name) || '').toLowerCase();
+      if (!name) return false;
+      if (name.endsWith('-' + sidLower + '.mp4')) return true;
+      if (name.indexOf('/videos/') < 0) return false;
+      if (name.indexOf('scene-' + sidLower + '-') >= 0) return true;
+      if (name.indexOf('-' + sidLower + '-') >= 0) return true;
+      return false;
+    });
+    return matched ? String(matched.signedUrl || '') : '';
   }
 
   function projectNeedsAssetRefresh(project) {
@@ -154,7 +175,9 @@
     for (var i = 0; i < scenes.length; i++) {
       var s = scenes[i] || {};
       if (isSceneMediaUrlStale(getSceneImageUrl(s))) return true;
-      if (isSceneMediaUrlStale(getSceneVideoUrl(s))) return true;
+      var sceneVideoUrl = getSceneVideoUrl(s);
+      if (!sceneVideoUrl) return true;
+      if (isSceneMediaUrlStale(sceneVideoUrl)) return true;
     }
     return false;
   }
@@ -169,7 +192,8 @@
     for (var i = 0; i < scenes.length; i++) {
       var s = scenes[i] || {};
       if (isSceneMediaUrlStale(getSceneImageUrl(s))) needImg = true;
-      if (isSceneMediaUrlStale(getSceneVideoUrl(s))) needVid = true;
+      var sceneVideoUrl = getSceneVideoUrl(s);
+      if (!sceneVideoUrl || isSceneMediaUrlStale(sceneVideoUrl)) needVid = true;
     }
     if (!needImg && !needVid) return false;
 
@@ -210,6 +234,17 @@
           next = Object.assign({}, next, {
             videoUrl: vidSigned,
             generatedVideoUrl: vidSigned,
+            videoStatus: 'done',
+            videoError: ''
+          });
+        }
+      } else if (needVid && !vidUrl) {
+        var vidFallback = findSceneVideoFromLibrary(next, vidItems);
+        if (vidFallback) {
+          changed = true;
+          next = Object.assign({}, next, {
+            videoUrl: vidFallback,
+            generatedVideoUrl: vidFallback,
             videoStatus: 'done',
             videoError: ''
           });
@@ -1112,8 +1147,12 @@
 
       var visualUrl = firstFilled([
         scene.videoUrl,
+        scene.videoPlaybackUrl,
+        scene.outputVideoUrl,
         scene.generatedVideoUrl,
+        scene.videoPath,
         scene.imageDataUrl,
+        scene.imagePath,
         scene.generatedImageUrl,
         scene.imageUrl
       ]);
@@ -1288,10 +1327,25 @@
     var time = Number(sec) || 0;
     for (var i = 0; i < clips.length; i++) {
       var c = clips[i];
-      if (c && time >= c.start && time < c.end) return c;
+      if (!c) continue;
+      var isLast = i === clips.length - 1;
+      if (time >= c.start && (time < c.end || (isLast && Math.abs(time - c.end) < 0.001))) return c;
     }
-    if (time >= clips[clips.length - 1].end) return clips[clips.length - 1];
-    return clips[0];
+    return null;
+  }
+
+  function isInVisualGap(sec) {
+    if (!state.model) return false;
+    var track = getVisualTrack(state.model);
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    if (!clips.length) return false;
+    var time = Number(sec) || 0;
+    if (time < 0 || time > state.model.totalDuration) return false;
+    for (var i = 0; i < clips.length; i++) {
+      var c = clips[i];
+      if (c && time >= c.start && time < c.end) return false;
+    }
+    return true;
   }
 
   function setPlayButtonUi() {
@@ -1318,12 +1372,29 @@
     var video = document.getElementById('postprod-preview-video');
     var image = document.getElementById('postprod-preview-image');
     var empty = document.getElementById('postprod-preview-empty');
-    if (!video || !image || !empty) return;
+    var gap = document.getElementById('postprod-preview-gap');
+    if (!video || !image || !empty || !gap) return;
 
     var clip = getActiveVisualClip(sec);
-    if (!clip || clip.empty || !clip.url) {
+    if (!clip) {
       video.style.display = 'none';
       image.style.display = 'none';
+      try { video.pause(); } catch (_) { }
+      if (isInVisualGap(sec)) {
+        gap.style.display = 'block';
+        empty.style.display = 'none';
+      } else {
+        gap.style.display = 'none';
+        empty.style.display = 'flex';
+      }
+      state.previewClipId = '';
+      state.previewClipUrl = '';
+      return;
+    }
+    if (clip.empty || !clip.url) {
+      video.style.display = 'none';
+      image.style.display = 'none';
+      gap.style.display = 'none';
       empty.style.display = 'flex';
       state.previewClipId = '';
       state.previewClipUrl = '';
@@ -1337,6 +1408,7 @@
       }
       video.style.display = 'none';
       image.style.display = 'block';
+      gap.style.display = 'none';
       empty.style.display = 'none';
       try { video.pause(); } catch (_) { }
       state.previewClipId = clip.id;
@@ -1371,6 +1443,7 @@
 
     video.style.display = 'block';
     image.style.display = 'none';
+    gap.style.display = 'none';
     empty.style.display = 'none';
     state.previewClipId = clip.id;
     state.previewClipUrl = clip.url;
@@ -1408,6 +1481,7 @@
       '<div class="postprod-preview-stack">' +
       '<video id="postprod-preview-video" class="postprod-video" preload="metadata" playsinline></video>' +
       '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
+      '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
       '<div class="postprod-play-glyph">▶</div>' +
       '<p>프로덕션 결과 미디어가 아직 없습니다.</p>' +
