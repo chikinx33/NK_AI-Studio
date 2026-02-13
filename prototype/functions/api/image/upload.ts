@@ -1,21 +1,30 @@
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>
-const send = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } })
+const corsHeaders = (origin?: string | null) => ({
+  "Content-Type": "application/json; charset=utf-8",
+  "Access-Control-Allow-Origin": origin || "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Vary": "Origin"
+})
+const send = (data: any, status = 200, origin?: string | null) =>
+  new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) })
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
+    const origin = request.headers.get("Origin")
     const fd = await request.formData()
     const projectId = String(fd.get("projectId") || "").trim()
     const file = fd.get("file") as File | null
     if (!projectId || !file) {
-      return send({ error: "projectId and file are required" }, 400)
+      return send({ error: "projectId and file are required" }, 400, origin)
     }
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined
     if (!clientEmail || !privateKeyRaw || !baseOutput) {
-      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500)
+      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500, origin)
     }
     const outParsed = parseGcsUri(baseOutput)
-    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500)
+    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin)
     const basePrefix = outParsed.object.replace(/\/$/, "")
     const safeName = (file.name || "image.png").replace(/[^a-zA-Z0-9._-]+/g, "_")
     const stamp = Date.now()
@@ -26,13 +35,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const upRes = await fetch(uploadUrl, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": file.type || "image/png" }, body: buf })
     const upText = await upRes.text()
     if (!upRes.ok) {
-      return send({ error: "Upload failed", status: upRes.status, detail: safeJson(upText) }, upRes.status)
+      return send({ error: "Upload failed", status: upRes.status, detail: safeJson(upText) }, upRes.status, origin)
     }
     const signedUrl = await signGcsUrl({ bucket: outParsed.bucket, object: objectName, clientEmail, privateKeyPem: privateKeyRaw, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`))
-    return send({ signedUrl, objectName })
+    return send({ signedUrl, objectName }, 200, origin)
   } catch (e: any) {
-    return send({ error: e?.message || "Unknown error" }, 500)
+    return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"))
   }
+}
+export const onRequestOptions: PagesFunction = async ({ request }) => {
+  return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) })
 }
 function safeJson(text: string) { try { return JSON.parse(text) } catch { return text } }
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
