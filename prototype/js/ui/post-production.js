@@ -503,15 +503,16 @@
     return raw || '알 수 없는 오류';
   }
 
-  async function saveProjectNow() {
+  async function saveProjectNow(options) {
+    options = options || {};
     if (state.saveBusy) return;
     if (!state.projectId) {
       alert('저장할 프로젝트를 찾을 수 없습니다.');
-      return;
+      return false;
     }
     if (!NK.api || !NK.api.projectSave) {
       alert('저장 API를 사용할 수 없습니다.');
-      return;
+      return false;
     }
 
     var saveBtn = document.getElementById('postprod-save-btn');
@@ -555,9 +556,11 @@
         error: ''
       });
       setDirty(false);
-      alert('저장되었습니다.');
+      if (!options.silentSuccess) alert('저장되었습니다.');
+      return true;
     } catch (err) {
-      alert('저장 실패: ' + getSaveErrorMessage(err));
+      if (!options.silentError) alert('저장 실패: ' + getSaveErrorMessage(err));
+      return false;
     } finally {
       state.saveBusy = false;
       if (saveBtn) {
@@ -617,8 +620,8 @@
     var meta = state.renderMeta || getRenderMeta(null);
     var status = meta.status || 'idle';
     if (state.dirty && status !== 'rendering') status = 'needs_save';
-    var canRender = !state.dirty && !state.saveBusy && status !== 'rendering';
-    var canRerender = !state.dirty && !state.saveBusy && status !== 'rendering' && (status === 'done' || status === 'failed');
+    var canRender = !state.saveBusy && status !== 'rendering';
+    var canRerender = !state.saveBusy && status !== 'rendering' && (status === 'done' || status === 'failed');
     var hasVideo = !!(meta.outputVideoUrl || (state.model && state.model.primaryVideoUrl));
     var hasSrt = !!buildSrtFromModel();
 
@@ -922,8 +925,8 @@
   async function startRenderProcess(isRerender) {
     if (state.saveBusy) return;
     if (state.dirty) {
-      alert('렌더링 전에 먼저 저장해 주세요.');
-      return;
+      var saved = await saveProjectNow({ silentSuccess: true });
+      if (!saved || state.dirty || state.saveBusy) return;
     }
     if (!state.model) {
       alert('렌더링할 타임라인이 없습니다.');
