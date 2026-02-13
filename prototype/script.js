@@ -12,6 +12,7 @@
     publish: 'publish.html'
   };
   const RESTORABLE_STAGES = ['scenario', 'scenes', 'media', 'publish'];
+  const STAGE_TARGET_KEY = 'nk_current_stage_href';
 
   // 서버 → 로컬 동기화 (프로젝트 리스트 병합)
   const syncProjectsFromServer = async () => {
@@ -83,29 +84,70 @@
     }
   };
 
-  const resolveInitialStageForMain = (urlParams) => {
+  const normalizeStageTarget = (raw) => {
+    var candidate = String(raw || '').trim();
+    if (!candidate) return '';
+    try {
+      var u = new URL(candidate, window.location.href);
+      var parts = String(u.pathname || '').split('/');
+      var file = parts.pop() || '';
+      var qp = new URLSearchParams(String(u.search || ''));
+      qp.delete('embed');
+      qp.delete('stage');
+      qp.delete('stageHref');
+      if (file) {
+        candidate = file + (qp.toString() ? ('?' + qp.toString()) : '');
+      }
+    } catch (_) { }
+
+    var norm = NK.navigation.normalizeStageName(candidate);
+    if (!norm || norm === 'options') return '';
+    if (norm === 'dashboard') return 'dashboard.html';
+    if (STAGE_HTML_MAP[norm]) {
+      if (/\.html?(\?|$)/i.test(candidate) && !/ai-video\.html/i.test(candidate)) return candidate;
+      return STAGE_HTML_MAP[norm];
+    }
+    return '';
+  };
+
+  const resolveInitialStageTarget = (urlParams) => {
+    try {
+      const fromHrefQuery = normalizeStageTarget(urlParams.get('stageHref') || '');
+      if (fromHrefQuery) return fromHrefQuery;
+    } catch (_) { }
+
     try {
       const fromQuery = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
-      if (RESTORABLE_STAGES.includes(fromQuery)) return fromQuery;
+      if (RESTORABLE_STAGES.includes(fromQuery)) return STAGE_HTML_MAP[fromQuery];
+    } catch (_) { }
+
+    try {
+      const fromSessionHref = normalizeStageTarget(sessionStorage.getItem(STAGE_TARGET_KEY) || '');
+      if (fromSessionHref) return fromSessionHref;
+    } catch (_) { }
+
+    try {
+      const fromLocalHref = normalizeStageTarget(localStorage.getItem(STAGE_TARGET_KEY) || '');
+      if (fromLocalHref) return fromLocalHref;
     } catch (_) { }
 
     try {
       const fromSession = NK.navigation.normalizeStageName(sessionStorage.getItem('nk_current_stage') || '');
-      if (RESTORABLE_STAGES.includes(fromSession)) return fromSession;
+      if (RESTORABLE_STAGES.includes(fromSession)) return STAGE_HTML_MAP[fromSession];
     } catch (_) { }
 
     try {
       const fromLocal = NK.navigation.normalizeStageName(localStorage.getItem('nk_current_stage') || '');
-      if (RESTORABLE_STAGES.includes(fromLocal)) return fromLocal;
+      if (RESTORABLE_STAGES.includes(fromLocal)) return STAGE_HTML_MAP[fromLocal];
     } catch (_) { }
 
-    return 'dashboard';
+    return 'dashboard.html';
   };
 
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.558';
+    NK.config.APP_VERSION = '1.561';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -122,7 +164,8 @@
     const currentPath = window.location.pathname;
     const stage = NK.navigation.normalizeStageName(currentPath);
     const isAiVideoShell = !isIframe && currentPath.toLowerCase().includes('ai-video.html');
-    const initialStage = isAiVideoShell ? resolveInitialStageForMain(urlParams) : stage;
+    const initialTarget = isAiVideoShell ? resolveInitialStageTarget(urlParams) : '';
+    const initialStage = isAiVideoShell ? NK.navigation.normalizeStageName(initialTarget) : stage;
     const effectiveStage = initialStage || stage;
 
     // 2. 스테이지 상태 초기화 (네비게이션 파싱 후)
@@ -172,7 +215,9 @@
     );
 
     if (isMainPage) {
-      const target = STAGE_HTML_MAP[effectiveStage] || 'dashboard.html';
+      const target = isAiVideoShell
+        ? (initialTarget || STAGE_HTML_MAP[effectiveStage] || 'dashboard.html')
+        : (STAGE_HTML_MAP[effectiveStage] || 'dashboard.html');
       NK.navigation.loadStage(target);
     }
 

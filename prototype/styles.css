@@ -2792,7 +2792,7 @@ a.btn-primary:active {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  padding: 8px 12px 0;
+  padding: 10px 0;
   flex: 0 0 auto;
 }
 

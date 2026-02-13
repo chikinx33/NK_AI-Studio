@@ -1,12 +1,20 @@
 ﻿; (function () {
     var NK = window.NK || (window.NK = {});
     var nav = NK.navigation || (NK.navigation = {});
+    var STAGE_HREF_KEY = 'nk_current_stage_href';
 
     nav.loadStage = function (name) {
-        let targetName = name;
+        let targetName = String(name || '').trim();
+        if (!targetName) targetName = 'dashboard.html';
 
         const isIframe = window.self !== window.top;
         const st = nav.normalizeStageName(targetName);
+        if (st && st !== 'options') {
+            try {
+                sessionStorage.setItem(STAGE_HREF_KEY, targetName);
+                localStorage.setItem(STAGE_HREF_KEY, targetName);
+            } catch (_) { }
+        }
         const pid = (function () {
             try {
                 if (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
@@ -46,6 +54,10 @@
         try {
             sessionStorage.setItem('nk_current_stage', stage);
             localStorage.setItem('nk_current_stage', stage);
+            if (stage === 'dashboard') {
+                sessionStorage.setItem(STAGE_HREF_KEY, 'dashboard.html');
+                localStorage.setItem(STAGE_HREF_KEY, 'dashboard.html');
+            }
         } catch (_) { }
         // 전역 상태 업데이트 (구독자들에게 알림)
         if (NK.state) NK.state.set({ currentStage: stage });
