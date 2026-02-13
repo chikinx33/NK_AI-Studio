@@ -147,7 +147,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.561';
+    NK.config.APP_VERSION = '1.562';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -163,9 +163,10 @@
     }
     const currentPath = window.location.pathname;
     const stage = NK.navigation.normalizeStageName(currentPath);
-    const isAiVideoShell = !isIframe && currentPath.toLowerCase().includes('ai-video.html');
-    const initialTarget = isAiVideoShell ? resolveInitialStageTarget(urlParams) : '';
-    const initialStage = isAiVideoShell ? NK.navigation.normalizeStageName(initialTarget) : stage;
+    const isAiVideoShellPath = currentPath.toLowerCase().includes('ai-video.html');
+    const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
+    const initialTarget = (isAiVideoShellPath || isShellPage) ? resolveInitialStageTarget(urlParams) : '';
+    const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
     const effectiveStage = initialStage || stage;
 
     // 2. 스테이지 상태 초기화 (네비게이션 파싱 후)
@@ -211,11 +212,12 @@
     const isOptionsPage = effectiveStage === 'options';
     const isMainPage = !isIframe && !isOptionsPage && (
       effectiveStage === 'dashboard' ||
-      isAiVideoShell
+      isAiVideoShellPath ||
+      isShellPage
     );
 
     if (isMainPage) {
-      const target = isAiVideoShell
+      const target = (isAiVideoShellPath || isShellPage)
         ? (initialTarget || STAGE_HTML_MAP[effectiveStage] || 'dashboard.html')
         : (STAGE_HTML_MAP[effectiveStage] || 'dashboard.html');
       NK.navigation.loadStage(target);

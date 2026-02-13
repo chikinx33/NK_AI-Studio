@@ -46,6 +46,18 @@
             const iframe = nav.ensureStageView();
             if (iframe) iframe.src = url;
             nav.setStage(st);
+            try {
+                const pageUrl = new URL(window.location.href);
+                if (st && st !== 'options') {
+                    pageUrl.searchParams.set('stageHref', targetName);
+                    if (pid) pageUrl.searchParams.set('projectId', String(pid));
+                    else pageUrl.searchParams.delete('projectId');
+                } else {
+                    pageUrl.searchParams.delete('stageHref');
+                    pageUrl.searchParams.delete('projectId');
+                }
+                window.history.replaceState({}, '', pageUrl.toString());
+            } catch (_) { }
         }
     };
 
