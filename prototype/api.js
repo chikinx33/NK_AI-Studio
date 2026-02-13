@@ -26,6 +26,44 @@
     if (path.startsWith('http')) return path;
     return base.replace(/\/+$/, '') + path;
   };
+  const DEFAULT_TIMEOUT_MS = 30000;
+
+  const fetchWithTimeout = async (url, options, timeoutMs) => {
+    const ms = Math.max(1000, Number(timeoutMs) || DEFAULT_TIMEOUT_MS);
+    const opts = Object.assign({}, options || {});
+
+    // AbortController를 지원하지 않는 환경에서도 무한 대기를 막기 위해 race를 사용한다.
+    if (typeof AbortController === 'undefined') {
+      return Promise.race([
+        fetch(url, opts),
+        new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('request_timeout')), ms);
+        })
+      ]);
+    }
+
+    const ctrl = new AbortController();
+    const userSignal = opts.signal;
+    if (userSignal && userSignal.aborted) ctrl.abort();
+    if (userSignal && userSignal.addEventListener) {
+      userSignal.addEventListener('abort', () => ctrl.abort(), { once: true });
+    }
+    opts.signal = ctrl.signal;
+
+    const timer = setTimeout(() => ctrl.abort(), ms);
+    try {
+      return await fetch(url, opts);
+    } catch (err) {
+      if (ctrl.signal && ctrl.signal.aborted) {
+        const timeoutErr = new Error('request_timeout');
+        timeoutErr.code = 'timeout';
+        throw timeoutErr;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
 
   var j = function (t) { try { return JSON.parse(t); } catch (_) { return {}; } };
   var e = function (t) { try { return JSON.parse(t).error; } catch (_) { return t; } };
@@ -185,11 +223,11 @@
       aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',
       title: (opts && opts.title) || ''
     };
-    var res = await fetch(withBase('/api/project/save'), {
+    var res = await fetchWithTimeout(withBase('/api/project/save'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
-    });
+    }, 25000);
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
     return j(text);

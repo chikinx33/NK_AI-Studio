@@ -495,6 +495,14 @@
     return 'idle';
   }
 
+  function getSaveErrorMessage(err) {
+    var raw = String((err && err.message) || err || '');
+    if (/request_timeout|timeout|aborted/i.test(raw)) {
+      return '저장 요청이 시간 내 완료되지 않았습니다. 네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.';
+    }
+    return raw || '알 수 없는 오류';
+  }
+
   async function saveProjectNow() {
     if (state.saveBusy) return;
     if (!state.projectId) {
@@ -549,7 +557,7 @@
       setDirty(false);
       alert('저장되었습니다.');
     } catch (err) {
-      alert('저장 실패: ' + (err && err.message ? err.message : err));
+      alert('저장 실패: ' + getSaveErrorMessage(err));
     } finally {
       state.saveBusy = false;
       if (saveBtn) {
