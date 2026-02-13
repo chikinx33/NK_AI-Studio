@@ -10,6 +10,7 @@
     currentTime: 0,
     pxPerSecond: 80,
     laneWidth: 960,
+    timelineDuration: 1,
     snapStep: 0.5,
     snapOptions: [0.1, 0.5, 1],
     model: null,
@@ -801,7 +802,7 @@
       };
     });
 
-    var total = Math.max(1, Number(model.totalDuration) || 1);
+    var total = Math.max(1, Number(getTimelinePlaybackDuration(model)) || 1);
     var processed = 0;
     var loadedVisualCount = 0;
     var failedVisualCount = 0;
@@ -1032,6 +1033,47 @@
     state.historyIndex = state.history.length - 1;
   }
 
+  function getTimelineTrack(model, key) {
+    var tracks = model && Array.isArray(model.tracks) ? model.tracks : [];
+    return tracks.find(function (t) { return t && t.key === key; }) || null;
+  }
+
+  function getTrackMaxEnd(track) {
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    var maxEnd = 0;
+    clips.forEach(function (clip) {
+      if (!clip) return;
+      maxEnd = Math.max(maxEnd, toNumber(clip.end, 0));
+    });
+    return maxEnd;
+  }
+
+  function getTimelineContentDuration(model) {
+    var target = model || state.model;
+    if (!target) return 1;
+    var visualTrack = getTimelineTrack(target, 'visuals');
+    var visualEnd = getTrackMaxEnd(visualTrack);
+    if (visualEnd > 0) return Math.max(1, Math.ceil(visualEnd));
+
+    var tracks = target && Array.isArray(target.tracks) ? target.tracks : [];
+    var fallbackEnd = 0;
+    tracks.forEach(function (track) {
+      fallbackEnd = Math.max(fallbackEnd, getTrackMaxEnd(track));
+    });
+    return Math.max(1, Math.ceil(fallbackEnd || toNumber(target.totalDuration, 1) || 1));
+  }
+
+  function getTimelinePlaybackDuration(model) {
+    return Math.max(1, getTimelineContentDuration(model));
+  }
+
+  function getTimelineViewportDuration(model) {
+    var target = model || state.model;
+    if (!target) return 1;
+    if (state.fitTimeline) return getTimelineContentDuration(target);
+    return Math.max(1, toNumber(target.totalDuration, 1) || 1);
+  }
+
   function applyTimelineEdits(model, editMap) {
     var maxEnd = model.totalDuration;
     model.tracks.forEach(function (track) {
@@ -1052,6 +1094,7 @@
       }).filter(Boolean);
     });
     model.totalDuration = Math.max(model.totalDuration, Math.ceil(maxEnd));
+    model.contentDuration = getTimelineContentDuration(model);
   }
 
   function findClip(clipId) {
@@ -1113,7 +1156,8 @@
         id: 'sub-' + sceneIndex + '-' + i,
         label: text,
         start: baseStart + subStart,
-        end: baseStart + subEnd
+        end: baseStart + subEnd,
+        baseDuration: Math.max(0.2, subEnd - subStart)
       });
     }
     var single = firstFilled([scene && scene.subtitleText, scene && scene.caption]);
@@ -1122,7 +1166,8 @@
         id: 'sub-' + sceneIndex,
         label: single,
         start: baseStart,
-        end: baseStart + sceneDuration
+        end: baseStart + sceneDuration,
+        baseDuration: Math.max(0.2, sceneDuration)
       });
     }
     return clips;
@@ -1163,6 +1208,7 @@
         label: visualLabel,
         start: sceneStart,
         end: sceneEnd,
+        baseDuration: Math.max(0.2, sceneDuration),
         url: visualUrl,
         empty: visualType === 'empty'
       });
@@ -1177,6 +1223,7 @@
           label: '씬 ' + (i + 1) + ' 보이스',
           start: sceneStart,
           end: sceneEnd,
+          baseDuration: Math.max(0.2, sceneDuration),
           url: audioUrl
         });
       }
@@ -1197,6 +1244,7 @@
         label: 'BGM',
         start: 0,
         end: totalDuration,
+        baseDuration: Math.max(0.2, totalDuration),
         url: musicUrl
       });
     }
@@ -1205,6 +1253,7 @@
       projectId: project && project.id ? String(project.id) : '',
       projectTitle: firstFilled([project && project.title]) || '포스트 프로덕션',
       totalDuration: totalDuration,
+      contentDuration: Math.max(1, Math.ceil(cursor || 0)),
       primaryVideoUrl: firstVideoUrl,
       primaryImageUrl: firstImageUrl,
       tracks: [
@@ -1216,6 +1265,7 @@
     };
 
     applyTimelineEdits(model, getTimelineEdits(project));
+    model.contentDuration = getTimelineContentDuration(model);
     return model;
   }
 
@@ -1275,23 +1325,32 @@
     if (!laneWidth) return;
     state.fitTimeline = true;
     state.fitLaneWidth = laneWidth;
-    var zoomApprox = ((laneWidth / Math.max(1, state.model.totalDuration)) - 36) / 1.1;
+    var fitDuration = getTimelineContentDuration(state.model);
+    var zoomApprox = ((laneWidth / Math.max(1, fitDuration)) - 36) / 1.1;
     state.zoom = quantizeZoom(zoomApprox);
     renderLayout(state.model);
     bindEvents();
     setCurrentTime(state.currentTime, true);
   }
 
-  function buildTrackRowsHtml(model, laneWidth, playheadLeft) {
+  function buildTrackRowsHtml(model, laneWidth, playheadLeft, timelineDuration) {
+    var duration = Math.max(1, toNumber(timelineDuration, model.totalDuration) || 1);
     return model.tracks.map(function (track) {
       var clips = track.clips || [];
       var clipsHtml = clips.map(function (clip) {
-        var left = Math.round((clip.start / model.totalDuration) * laneWidth);
-        var width = Math.max(36, Math.round(((clip.end - clip.start) / model.totalDuration) * laneWidth));
+        var left = Math.round((clip.start / duration) * laneWidth);
+        var width = Math.max(36, Math.round(((clip.end - clip.start) / duration) * laneWidth));
         var clipClass = 'postprod-clip' + (clip.empty ? ' is-empty' : '') + (state.selectedClipId === clip.id ? ' is-selected' : '');
         var title = escapeHtml(track.name + ' · ' + clip.label);
+        var baseDuration = Math.max(0.2, toNumber(clip.baseDuration, clip.end - clip.start));
+        var extraDuration = Math.max(0, (clip.end - clip.start) - baseDuration);
+        var extraWidth = Math.max(0, Math.round((extraDuration / duration) * laneWidth));
+        var extraOverlay = extraWidth > 0
+          ? '<span class="postprod-clip-extra" aria-hidden="true" style="width:' + extraWidth + 'px"></span>'
+          : '';
         return (
           '<button type="button" class="' + clipClass + '" data-start="' + clip.start + '" data-end="' + clip.end + '" data-clip-id="' + clip.id + '" title="' + title + '" style="left:' + left + 'px;width:' + width + 'px">' +
+          extraOverlay +
           '<span class="postprod-clip-handle left" data-handle="left"></span>' +
           '<span class="postprod-clip-text">' + escapeHtml(clip.label) + '</span>' +
           '<span class="postprod-clip-handle right" data-handle="right"></span>' +
@@ -1340,7 +1399,7 @@
     var clips = track && Array.isArray(track.clips) ? track.clips : [];
     if (!clips.length) return false;
     var time = Number(sec) || 0;
-    if (time < 0 || time > state.model.totalDuration) return false;
+    if (time < 0 || time > getTimelinePlaybackDuration(state.model)) return false;
     for (var i = 0; i < clips.length; i++) {
       var c = clips[i];
       if (c && time >= c.start && time < c.end) return false;
@@ -1452,7 +1511,8 @@
 
   function startPlayback() {
     if (!state.model || state.isPlaying) return;
-    if (state.currentTime >= state.model.totalDuration) {
+    var playbackDuration = getTimelinePlaybackDuration(state.model);
+    if (state.currentTime >= playbackDuration) {
       setCurrentTime(0, true);
     }
     state.isPlaying = true;
@@ -1466,8 +1526,8 @@
       var delta = Math.max(0, (ts - state.playLastTick) / 1000);
       state.playLastTick = ts;
       var next = state.currentTime + delta;
-      if (next >= state.model.totalDuration) {
-        setCurrentTime(state.model.totalDuration, true);
+      if (next >= playbackDuration) {
+        setCurrentTime(playbackDuration, true);
         stopPlayback();
         return;
       }
@@ -1508,14 +1568,17 @@
     if (!root) return;
 
     state.model = model;
-    state.currentTime = clamp(state.currentTime, 0, model.totalDuration);
+    var playbackDuration = getTimelinePlaybackDuration(model);
+    var timelineDuration = getTimelineViewportDuration(model);
+    state.timelineDuration = timelineDuration;
+    state.currentTime = clamp(state.currentTime, 0, playbackDuration);
     state.pxPerSecond = Math.max(36, Math.round(36 + (state.zoom * 1.1)));
     var laneWidthByZoom = Math.ceil(model.totalDuration * state.pxPerSecond);
     var laneWidth = state.fitTimeline && state.fitLaneWidth > 0
       ? Math.max(60, state.fitLaneWidth)
       : Math.max(960, laneWidthByZoom);
     state.laneWidth = laneWidth;
-    var playheadLeft = Math.round((state.currentTime / model.totalDuration) * laneWidth);
+    var playheadLeft = Math.round((state.currentTime / Math.max(1, timelineDuration)) * laneWidth);
     var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
     var status = (meta && meta.status) || 'idle';
     if (state.dirty && status !== 'rendering') status = 'needs_save';
@@ -1533,7 +1596,7 @@
       '</div>' +
       '<div class="postprod-player-foot">' +
       '<button class="btn-secondary compact postprod-play-toggle" id="postprod-play-toggle">재생</button>' +
-      '<div class="postprod-time-readout"><span id="postprod-time-now">' + formatTime(state.currentTime) + '</span> / <span id="postprod-time-total">' + formatTime(model.totalDuration) + '</span></div>' +
+      '<div class="postprod-time-readout"><span id="postprod-time-now">' + formatTime(state.currentTime) + '</span> / <span id="postprod-time-total">' + formatTime(playbackDuration) + '</span></div>' +
       '</div>' +
       '</div>' +
 
@@ -1568,18 +1631,18 @@
       '<div class="postprod-timeline-head">' +
       '<h3>자막 타임라인</h3>' +
       '<div class="postprod-scrub-wrap">' +
-      '<input id="postprod-scrub-range" type="range" min="0" max="' + model.totalDuration + '" value="' + state.currentTime + '" step="0.1" />' +
+      '<input id="postprod-scrub-range" type="range" min="0" max="' + playbackDuration + '" value="' + state.currentTime + '" step="0.1" />' +
       '</div>' +
       '</div>' +
       '<div class="postprod-timeline-scroll" id="postprod-timeline-scroll">' +
       '<div class="postprod-ruler-row" style="width:' + (laneWidth + 170) + 'px">' +
       '<div class="postprod-track-label ruler-label">TRACKS</div>' +
       '<div class="postprod-ruler" style="width:' + laneWidth + 'px">' +
-      buildRulerHtml(model.totalDuration, laneWidth) +
+      buildRulerHtml(timelineDuration, laneWidth) +
       '<div class="postprod-playhead ruler-playhead" style="left:' + playheadLeft + 'px"></div>' +
       '</div>' +
       '</div>' +
-      buildTrackRowsHtml(model, laneWidth, playheadLeft) +
+      buildTrackRowsHtml(model, laneWidth, playheadLeft, timelineDuration) +
       '</div>' +
       '</div>' +
       '</div>' +
@@ -1623,7 +1686,8 @@
 
   function updatePlayheadUi() {
     if (!state.model) return;
-    var left = Math.round((state.currentTime / state.model.totalDuration) * state.laneWidth);
+    var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
+    var left = Math.round((state.currentTime / duration) * state.laneWidth);
     document.querySelectorAll('.postprod-playhead').forEach(function (el) {
       el.style.left = left + 'px';
     });
@@ -1635,7 +1699,8 @@
     if (!rect || rect.width <= 0) return;
     var x = clamp(evt.clientX - rect.left, 0, rect.width);
     var ratio = x / rect.width;
-    var sec = ratio * state.model.totalDuration;
+    var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
+    var sec = ratio * duration;
     setCurrentTime(sec, true);
   }
 
@@ -1652,7 +1717,7 @@
   function setCurrentTime(sec, syncPreview) {
     var model = state.model;
     if (!model) return;
-    state.currentTime = clamp(toNumber(sec, 0), 0, model.totalDuration);
+    state.currentTime = clamp(toNumber(sec, 0), 0, getTimelinePlaybackDuration(model));
     updateTimeUi();
     if (syncPreview !== false) {
       syncPreviewMedia(state.currentTime);
@@ -1661,12 +1726,31 @@
 
   function updateClipElement(clipEl, start, end) {
     if (!clipEl || !state.model) return;
-    var left = Math.round((start / state.model.totalDuration) * state.laneWidth);
-    var width = Math.max(36, Math.round(((end - start) / state.model.totalDuration) * state.laneWidth));
+    var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
+    var left = Math.round((start / duration) * state.laneWidth);
+    var width = Math.max(36, Math.round(((end - start) / duration) * state.laneWidth));
     clipEl.style.left = left + 'px';
     clipEl.style.width = width + 'px';
     clipEl.dataset.start = String(start);
     clipEl.dataset.end = String(end);
+
+    var clipId = clipEl.getAttribute('data-clip-id');
+    var clip = clipId ? findClip(clipId) : null;
+    var baseDuration = Math.max(0.2, toNumber(clip && clip.baseDuration, end - start));
+    var extraDuration = Math.max(0, (end - start) - baseDuration);
+    var extraWidth = Math.max(0, Math.round((extraDuration / duration) * state.laneWidth));
+    var extraEl = clipEl.querySelector('.postprod-clip-extra');
+    if (extraWidth > 0) {
+      if (!extraEl) {
+        extraEl = document.createElement('span');
+        extraEl.className = 'postprod-clip-extra';
+        extraEl.setAttribute('aria-hidden', 'true');
+        clipEl.insertBefore(extraEl, clipEl.firstChild);
+      }
+      extraEl.style.width = extraWidth + 'px';
+    } else if (extraEl) {
+      extraEl.remove();
+    }
   }
 
   function updateHistoryButtons() {
@@ -1854,7 +1938,8 @@
     if (!state.drag || !state.model) return;
     var d = state.drag;
     var dx = evt.clientX - d.startX;
-    var deltaSec = (dx / state.laneWidth) * state.model.totalDuration;
+    var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
+    var deltaSec = (dx / state.laneWidth) * duration;
     if (Math.abs(dx) > 3) d.moved = true;
     var minLen = 0.2;
     var start = d.origStart;
