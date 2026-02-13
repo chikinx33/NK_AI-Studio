@@ -1,18 +1,27 @@
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>
-const send = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json; charset=utf-8" } })
+const corsHeaders = (origin?: string | null) => ({
+  "Content-Type": "application/json; charset=utf-8",
+  "Access-Control-Allow-Origin": origin || "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Vary": "Origin"
+})
+const send = (data: any, status = 200, origin?: string | null) =>
+  new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) })
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
+    const origin = request.headers.get("Origin")
     const url = new URL(request.url)
     const projectId = (url.searchParams.get("projectId") || "").trim()
-    if (!projectId) return send({ error: "projectId is required" }, 400)
+    if (!projectId) return send({ error: "projectId is required" }, 400, origin)
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined
     if (!clientEmail || !privateKeyRaw || !baseOutput) {
-      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500)
+      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/VIDEO_OUTPUT_GCS_URI" }, 500, origin)
     }
     const outParsed = parseGcsUri(baseOutput)
-    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500)
+    if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin)
     const basePrefix = outParsed.object.replace(/\/$/, "")
     const prefix = `${basePrefix}/projects/${projectId}/image/`
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" })
@@ -24,7 +33,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) } })
     const text = await res.text()
     if (!res.ok) {
-      return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status)
+      return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status, origin)
     }
     const json = safeJson(text)
     const items = Array.isArray(json.items) ? json.items : []
@@ -36,10 +45,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       result.push({ name, size: Number(it.size || 0), contentType: String(it.contentType || ""), timeCreated: String(it.timeCreated || ""), updated: String(it.updated || ""), signedUrl: signed })
     }
     result.sort((a, b) => (new Date(b.updated).getTime() - new Date(a.updated).getTime()))
-    return send({ items: result, prefix })
+    return send({ items: result, prefix }, 200, origin)
   } catch (e: any) {
-    return send({ error: e?.message || "Unknown error" }, 500)
+    return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"))
   }
+}
+export const onRequestOptions: PagesFunction = async ({ request }) => {
+  return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) })
 }
 function safeJson(text: string) { try { return JSON.parse(text) } catch { return text } }
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
