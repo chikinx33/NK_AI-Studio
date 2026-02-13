@@ -1276,8 +1276,10 @@
     try {
       var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: pid });
       var dataUrl = (json.dataUrl || json.bytesBase64Encoded || '');
-      if (!dataUrl) throw new Error('이미지 데이터가 비었습니다.');
-      st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: dataUrl, imgLoading: false, imgError: '', promptText: scene.promptText });
+      var signedUrl = String(json.signedUrl || '').trim();
+      var imageRef = signedUrl || dataUrl;
+      if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
+      st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: imageRef, imgLoading: false, imgError: '', promptText: scene.promptText });
       ctx.setState(st);
       updateSceneRow(idx, st.header || '');
       console.log('Scene ' + scene.id + ' 이미지 생성 완료');
