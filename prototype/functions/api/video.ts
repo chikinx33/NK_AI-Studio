@@ -149,9 +149,25 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         grokJson?.url ||
         grokJson?.video_url ||
         null;
+      let mirroredPlayback: string | null = null;
 
       // Grok 영상이 생성되었다면 GCS 버킷에도 미러링 업로드 (사용자 요청 사항)
-      if (playback && playback.startsWith("http")) {
+      if (playback && playback.startsWith("gs://")) {
+        try {
+          const parsed = parseGcsUri(playback);
+          if (parsed) {
+            mirroredPlayback = await signGcsUrl({
+              bucket: parsed.bucket,
+              object: parsed.object,
+              clientEmail,
+              privateKeyPem: privateKeyRaw,
+              expiresInSec: 3600,
+            });
+          }
+        } catch (_) {
+          mirroredPlayback = gcsToHttps(playback);
+        }
+      } else if (playback && playback.startsWith("http")) {
         try {
           const outParsed = parseGcsUri(outputGcsUri); // outputGcsUri는 함수 상단에서 이미 정의됨
           if (outParsed) {
@@ -174,6 +190,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
                 log('mirroring_grok_video_fail_upload', upRes.status, await upRes.text());
               } else {
                 log('mirroring_grok_video_success');
+                try {
+                  mirroredPlayback = await signGcsUrl({
+                    bucket: outParsed.bucket,
+                    object: outParsed.object,
+                    clientEmail,
+                    privateKeyPem: privateKeyRaw,
+                    expiresInSec: 3600,
+                  });
+                } catch (_) {
+                  mirroredPlayback = gcsToHttps(outputGcsUri);
+                }
               }
             } else {
               log('mirroring_grok_video_fail_download', vidRes.status);
@@ -187,9 +214,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       // 응답에 즉시 url이 없으면 폴링용 job_id만 반환
       return json({
         job_id: reqId ? `grok:${reqId}` : "",
-        playbackUrl: playback || null,
-        status: playback ? "done" : "processing"
-      }, playback ? 200 : 202);
+        playbackUrl: mirroredPlayback,
+        status: mirroredPlayback ? "done" : "processing"
+      }, mirroredPlayback ? 200 : 202);
     }
 
     // Veo branch

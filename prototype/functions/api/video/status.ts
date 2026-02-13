@@ -43,32 +43,66 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const isGrok = jobId.startsWith('grok:');
 
     const flattenPlayback = async (playbackUrl: string, sceneId: string | null) => {
-      if (!playbackUrl || !env.VIDEO_OUTPUT_GCS_URI) return playbackUrl;
+      if (!playbackUrl) return '';
       try {
         const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI as string);
-        if (!outParsed || !clientEmail || !privateKeyRaw) return playbackUrl;
-        const bufRes = await fetch(playbackUrl);
-        if (!bufRes.ok) return playbackUrl;
-        const buf = await bufRes.arrayBuffer();
+        if (!outParsed || !clientEmail || !privateKeyRaw) return '';
         const objectBase = outParsed.object.replace(/\/$/, "");
+        const projectFolder = projectTag || 'default';
+        const targetPrefix = `${objectBase}/projects/${projectFolder}/videos/`;
+
+        const signAsStorageUrl = async (bucket: string, object: string) => {
+          try {
+            return await signGcsUrl({
+              bucket,
+              object,
+              clientEmail,
+              privateKeyPem: privateKeyRaw,
+              expiresInSec: 3600
+            });
+          } catch (_) {
+            return gcsToHttps(`gs://${bucket}/${object}`);
+          }
+        };
+
+        let sourceUrl = playbackUrl;
+        let sourceParsed: { bucket: string; object: string } | null = null;
+        if (playbackUrl.startsWith('gs://')) {
+          sourceParsed = parseGcsUri(playbackUrl);
+          sourceUrl = gcsToHttps(playbackUrl);
+        } else {
+          sourceParsed = parseStorageHttpsUrl(playbackUrl);
+        }
+
+        if (
+          sourceParsed &&
+          sourceParsed.bucket === outParsed.bucket &&
+          sourceParsed.object.indexOf(targetPrefix) === 0
+        ) {
+          return await signAsStorageUrl(sourceParsed.bucket, sourceParsed.object);
+        }
+
+        const bufRes = await fetch(sourceUrl);
+        if (!bufRes.ok) return '';
+        const buf = await bufRes.arrayBuffer();
         const stamp = Date.now();
         const sceneSafe = sceneId || 'scene';
-        const objectName = `${objectBase}/projects/${projectTag || 'default'}/videos/${stamp}-${sceneSafe}.mp4`;
+        const objectName = `${targetPrefix}${stamp}-${sceneSafe}.mp4`;
         const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
         const accessTokenUpload = await getGoogleAccessToken({
           clientEmail,
           privateKeyPem: privateKeyRaw,
           scope: "https://www.googleapis.com/auth/cloud-platform",
         });
-        const upRes = await fetch(uploadUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "video/mp4" }, body: buf });
+        const upRes = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "video/mp4" },
+          body: buf
+        });
         const upTxt = await upRes.text();
-        if (!upRes.ok) { log('flatten_upload_failed', { status: upRes.status, detail: safeJson(upTxt) }); return playbackUrl; }
-        try {
-          return await signGcsUrl({ bucket: outParsed.bucket, object: objectName, clientEmail, privateKeyPem: privateKeyRaw, expiresInSec: 3600 });
-        } catch (err) {
-          log('flatten_sign_error', err); return gcsToHttps(`gs://${outParsed.bucket}/${objectName}`);
-        }
-      } catch (err) { log('flatten_error', err); return playbackUrl; }
+        if (!upRes.ok) { log('flatten_upload_failed', { status: upRes.status, detail: safeJson(upTxt) }); return ''; }
+        return await signAsStorageUrl(outParsed.bucket, objectName);
+      } catch (err) { log('flatten_error', err); return ''; }
     };
     
 
@@ -93,21 +127,24 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         json?.url ||
         null;
 
-      let flattenedPlayback = playback;
+      let flattenedPlayback = '';
       if (done && playback) {
         flattenedPlayback = await flattenPlayback(playback, sceneIdParam || 'grok');
       }
+      const flattenFailed = done && !!playback && !flattenedPlayback;
 
       return corsJson({
         ok: true,
         job_id: jobId,
         done,
-        error: done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null,
+        error: flattenFailed
+          ? { code: 'mirror_failed', message: '외부 영상을 프로젝트 videos 폴더로 복제하지 못했습니다.' }
+          : (done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null),
         response: json,
         rawOperation: json,
-        playback: done ? (flattenedPlayback || playback) : null,
-        playbackUrl: done ? (flattenedPlayback || playback) : null,
-        status: done ? (playback ? 'done' : 'done_no_output') : 'processing'
+        playback: done ? (flattenedPlayback || null) : null,
+        playbackUrl: done ? (flattenedPlayback || null) : null,
+        status: done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing'
       }, 200);
     }
 
@@ -181,7 +218,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     };
 
     let playback = done ? (pick(opResponse) || pick(op)) : null;
-    const flattenedPlayback = done ? await flattenPlayback(playback || '', sceneIdParam || match[5]) : playback;
+    const flattenedPlayback = done ? await flattenPlayback(playback || '', sceneIdParam || match[5]) : '';
+    if (done && flattenedPlayback) {
+      playback = flattenedPlayback;
+    } else if (done && playback && !flattenedPlayback) {
+      playback = null;
+    }
 
     // bytesBase64Encoded → GCS 업로드 후 playback 제공 (Signed URL)
     if (done && !playback) {
@@ -257,6 +299,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       }
     }
 
+    if (done && !opError && !playback) {
+      opError = { code: 'mirror_failed', message: '영상 복제 또는 재생 URL 생성에 실패했습니다.' };
+    }
+
     return corsJson({
       ok: true,
       job_id: jobId,
@@ -298,6 +344,23 @@ function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   const bucket = rest.slice(0, slash);
   const object = rest.slice(slash + 1);
   return { bucket, object };
+}
+
+function parseStorageHttpsUrl(url: string): { bucket: string; object: string } | null {
+  try {
+    const u = new URL(url);
+    if (u.hostname !== 'storage.googleapis.com') return null;
+    const path = String(u.pathname || '').replace(/^\/+/, '');
+    if (!path) return null;
+    const slash = path.indexOf('/');
+    if (slash === -1) return null;
+    const bucket = path.slice(0, slash);
+    const object = path.slice(slash + 1);
+    if (!bucket || !object) return null;
+    return { bucket, object };
+  } catch (_) {
+    return null;
+  }
 }
 
 async function getGoogleAccessToken(opts: { clientEmail: string; privateKeyPem: string; scope: string; }) {

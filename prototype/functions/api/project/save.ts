@@ -57,7 +57,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
       const imageUrl = typeof s?.imageDataUrl === "string" ? s.imageDataUrl : "";
       const imagePath = toGcsPath(imageUrl);
-      const videoUrl = typeof s?.videoUrl === "string" ? s.videoUrl : "";
+      const videoUrlRaw = typeof s?.videoUrl === "string" ? s.videoUrl : "";
+      const videoPath = toGcsPath(videoUrlRaw) || (typeof s?.videoPath === "string" ? s.videoPath : "");
+      const keepInlineVideo = String(videoUrlRaw).startsWith("data:video/");
+      const videoUrl = videoPath || (keepInlineVideo ? videoUrlRaw : "");
       const videoStatus = typeof s?.videoStatus === "string" ? s.videoStatus : "";
       const videoError = typeof s?.videoError === "string" ? s.videoError : "";
       const videoJobId = typeof s?.videoJobId === "string" ? s.videoJobId : "";
@@ -71,6 +74,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         imageDataUrl: imagePath || imageUrl,
         imagePath,
         videoUrl,
+        videoPath,
         videoStatus,
         videoError,
         videoJobId,

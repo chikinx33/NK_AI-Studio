@@ -191,6 +191,19 @@
     });
   }
 
+  function isBucketVideoUrl(url) {
+    var raw = String(url || '').trim();
+    if (!raw) return false;
+    if (raw.indexOf('data:video/') === 0) return true;
+    if (raw.indexOf('gs://') === 0) return true;
+    try {
+      var u = new URL(raw);
+      return u.hostname === 'storage.googleapis.com';
+    } catch (_) {
+      return raw.indexOf('storage.googleapis.com') >= 0;
+    }
+  }
+
   // Header에서 화면비/분량 문구를 제거해 프롬프트에 중복 반영되지 않도록 정리
   function cleanHeader(text) {
     if (!text) return '';
@@ -1036,7 +1049,8 @@
         });
         var resp = await NK.api.videoStart(payload);
         var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
-        var playback = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
+        var playbackRaw = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
+        var playback = isBucketVideoUrl(playbackRaw) ? playbackRaw : '';
         console.log('videoStart ok', { jobId, playback, resp });
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], {
@@ -1093,6 +1107,9 @@
       var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url ||
         (res.response && res.response.video && res.response.video.url) ||
         (res.response && res.response.url) || '';
+      if (playback && !isBucketVideoUrl(playback)) {
+        playback = '';
+      }
       var status = res.status || '';
       st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= idx) return;
