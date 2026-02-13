@@ -38,7 +38,8 @@
     subscribed: false,
     assetRefreshInFlight: false,
     assetRefreshProjectId: '',
-    assetRefreshTriedAt: 0
+    assetRefreshTriedAt: 0,
+    saveGuardTimer: 0
   };
 
   function safeParse(text) {
@@ -497,7 +498,7 @@
 
   function getSaveErrorMessage(err) {
     var raw = String((err && err.message) || err || '');
-    if (/request_timeout|timeout|aborted/i.test(raw)) {
+    if (/request_timeout|response_timeout|timeout|aborted/i.test(raw)) {
       return '저장 요청이 시간 내 완료되지 않았습니다. 네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.';
     }
     return raw || '알 수 없는 오류';
@@ -505,7 +506,7 @@
 
   async function saveProjectNow(options) {
     options = options || {};
-    if (state.saveBusy) return;
+    if (state.saveBusy) return false;
     if (!state.projectId) {
       alert('저장할 프로젝트를 찾을 수 없습니다.');
       return false;
@@ -519,6 +520,15 @@
     var originalText = saveBtn ? saveBtn.textContent : '';
     try {
       state.saveBusy = true;
+      if (state.saveGuardTimer) {
+        clearTimeout(state.saveGuardTimer);
+        state.saveGuardTimer = 0;
+      }
+      state.saveGuardTimer = setTimeout(function () {
+        if (!state.saveBusy) return;
+        state.saveBusy = false;
+        updateRenderPanelUi();
+      }, 40000);
       if (saveBtn) {
         saveBtn.disabled = true;
         saveBtn.textContent = '저장 중...';
@@ -562,6 +572,10 @@
       if (!options.silentError) alert('저장 실패: ' + getSaveErrorMessage(err));
       return false;
     } finally {
+      if (state.saveGuardTimer) {
+        clearTimeout(state.saveGuardTimer);
+        state.saveGuardTimer = 0;
+      }
       state.saveBusy = false;
       if (saveBtn) {
         saveBtn.disabled = false;

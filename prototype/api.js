@@ -65,6 +65,16 @@
     }
   };
 
+  const readTextWithTimeout = async (res, timeoutMs) => {
+    const ms = Math.max(1000, Number(timeoutMs) || DEFAULT_TIMEOUT_MS);
+    return Promise.race([
+      res.text(),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('response_timeout')), ms);
+      })
+    ]);
+  };
+
   var j = function (t) { try { return JSON.parse(t); } catch (_) { return {}; } };
   var e = function (t) { try { return JSON.parse(t).error; } catch (_) { return t; } };
 
@@ -228,7 +238,7 @@
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     }, 25000);
-    var text = await res.text();
+    var text = await readTextWithTimeout(res, 10000);
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
     return j(text);
   };
