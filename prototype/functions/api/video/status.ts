@@ -120,18 +120,40 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: json?.error || txt }, response: json, rawOperation: json, playback: null }, res.status);
       }
       const status = (json?.status || '').toLowerCase();
-      const done = status === 'completed' || status === 'done';
       const playback =
         json?.video?.url ||
         json?.data?.[0]?.url ||
         json?.url ||
         null;
+      const doneByStatus =
+        status === 'completed' ||
+        status === 'done' ||
+        status === 'succeeded' ||
+        status === 'success' ||
+        status === 'ready';
+      const doneByPlaybackHint = !status && !!playback;
+      let done = doneByStatus || doneByPlaybackHint;
 
       let flattenedPlayback = '';
       if (done && playback) {
         flattenedPlayback = await flattenPlayback(playback, sceneIdParam || 'grok');
       }
       const flattenFailed = done && !!playback && !flattenedPlayback;
+      if (doneByPlaybackHint && flattenFailed) {
+        // Grok 응답에 status 필드가 없을 때는 URL 준비 지연 가능성이 있어
+        // 즉시 실패 처리하지 않고 processing으로 재시도한다.
+        return corsJson({
+          ok: true,
+          job_id: jobId,
+          done: false,
+          error: null,
+          response: json,
+          rawOperation: json,
+          playback: null,
+          playbackUrl: null,
+          status: 'processing'
+        }, 200);
+      }
 
       return corsJson({
         ok: true,
