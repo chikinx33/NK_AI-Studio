@@ -1394,8 +1394,9 @@
     if (clip.empty || !clip.url) {
       video.style.display = 'none';
       image.style.display = 'none';
-      gap.style.display = 'none';
-      empty.style.display = 'flex';
+      try { video.pause(); } catch (_) { }
+      gap.style.display = 'block';
+      empty.style.display = 'none';
       state.previewClipId = '';
       state.previewClipUrl = '';
       return;
