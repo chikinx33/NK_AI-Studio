@@ -121,6 +121,15 @@
     dubbingEnabled: boolVal(payload?.dubbingEnabled, DEFAULT_SCENARIO_FLAGS.dubbingEnabled)
   });
 
+  const extractNarrationOnlyText = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const line = raw.split('\n').map(x => x.trim()).find(Boolean) || raw;
+    const m = line.match(/^(?:narration|나레이션)\s*[:：]?\s*["“”]?([\s\S]*?)["“”]?\s*$/i);
+    if (!m) return raw;
+    return String(m[1] || '').trim();
+  };
+
   const renderTagButtons = (box, list, selected = [], single = false) => {
     if (!box) return;
     box.innerHTML = (list || []).map(v => {
@@ -181,9 +190,11 @@
   const normalizeScenes = (scenes = []) => {
     return (Array.isArray(scenes) ? scenes : []).map((s, i) => {
       const est = parseEst(s.estSec || s.duration || s.len || s.length || 8);
-      const rawNarration = s.narration || s.lines || s.story || s.text || s.script || s.content || '';
+      const rawLine = String(s.lines || '').trim();
+      const cleanedLine = extractNarrationOnlyText(rawLine);
+      const rawNarration = s.narration || cleanedLine || s.story || s.text || s.script || s.content || '';
       const dialogues = normalizeDialogue(s.dialogue || s.dialogues || [], currentCharacters);
-      const lines = String(s.lines || rawNarration || '').trim();
+      const lines = String(cleanedLine || rawNarration || '').trim();
       const shot =
         s.shot ||
         s.visual ||
@@ -201,7 +212,7 @@
         .map((d) => `${d.speaker ? `${d.speaker}: ` : ''}${d.line || ''}`.trim())
         .filter(Boolean)
         .join('\n');
-      const legacyStory = lines || narration || dialogueText;
+      const legacyStory = lines || extractNarrationOnlyText(narration) || dialogueText;
       return {
         id: s.id != null ? s.id : (i + 1),
         lines: legacyStory,

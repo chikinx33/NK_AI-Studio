@@ -107,6 +107,8 @@ export async function onRequestPost(context) {
         throw new Error("Invalid scenes format from OpenAI");
       }
 
+      const noCharacterMode = characters.length === 0;
+      const narratorSpeaker = "@narrator";
       scenes = scenes.map((s, idx) => {
         const narrationRaw = s.narration || s.lines || s.story || s.text || s.script || s.content || "";
         const dialogueRaw = normalizeDialogue(s.dialogue || s.dialogues || []);
@@ -123,17 +125,26 @@ export async function onRequestPost(context) {
           }))
           .filter((d) => d.speaker || d.line);
         const visual = applyCharacterTokenHints(String(visualRaw || "").trim(), characters);
+        const noCharacterSafe = enforceNoCharacterPolicy({
+          narration,
+          dialogue,
+          visual,
+          noCharacterMode,
+          narratorSpeaker,
+          dubbingEnabled,
+          lang,
+        });
 
         return shapeSceneByMode({
           id: s.id != null ? s.id : idx + 1,
           title: s.title || `Scene ${idx + 1}`,
           estSec,
-          narration,
-          dialogue,
-          visual,
+          narration: noCharacterSafe.narration,
+          dialogue: noCharacterSafe.dialogue,
+          visual: noCharacterSafe.visual,
           narrationEnabled,
           dubbingEnabled,
-          defaultSpeaker: characters[0]?.token || (lang === "en" ? "@narrator" : "@내레이터"),
+          defaultSpeaker: characters[0]?.token || narratorSpeaker,
           lang,
         });
       });
@@ -236,6 +247,15 @@ function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, characters, t
       ? `If topic or lines mention a character name, prefer token form like @name.`
       : `주제나 문장에 캐릭터 이름이 있으면 @토큰 형태를 우선 사용.`)
     : "";
+  const noCharacterRule = !characters.length
+    ? (lang === "en"
+      ? `- Characterless mode: do not create named protagonists/supporting characters or @tokens.
+- Keep scene text focused on environment/action only.
+- If dubbingEnabled=true with no characters, use narrator-only speaker "@narrator".`
+      : `- 캐릭터 미등록 모드: 임의 주연/조연 이름, @토큰을 생성하지 마세요.
+- 장면 설명은 환경/행동 중심으로 작성하세요.
+- 캐릭터 없이 dubbingEnabled=true 인 경우 화자는 "@narrator"만 사용하세요.`)
+    : "";
 
   const mode = narrationEnabled
     ? (dubbingEnabled ? "A" : "B")
@@ -255,6 +275,7 @@ D) narrationEnabled=false, dubbingEnabled=false:
 - If dubbingEnabled is true, dialogue must contain at least one line with speaker and line.
 - Keep narration/dialogue text ready for TTS usage.
 ${charGuide}
+${noCharacterRule}
 ${taggingHint}`;
   }
 
@@ -271,6 +292,7 @@ D) narrationEnabled=OFF, dubbingEnabled=OFF
 - dubbingEnabled가 ON이면 dialogue는 최소 1개 이상의 {speaker,line}를 반드시 생성.
 - narration/dialogue 문구는 이후 TTS(음성 합성)에 바로 사용할 수 있는 문장으로 작성.
 ${charGuide}
+${noCharacterRule}
 ${taggingHint}`;
 }
 
@@ -337,10 +359,50 @@ function applyCharacterTokenHints(text, characters = []) {
   return out;
 }
 
+function enforceNoCharacterPolicy({
+  narration = "",
+  dialogue = [],
+  visual = "",
+  noCharacterMode = false,
+  narratorSpeaker = "@narrator",
+  dubbingEnabled = false,
+  lang = "ko",
+}) {
+  if (!noCharacterMode) {
+    return { narration, dialogue, visual };
+  }
+
+  const stripAtTokens = (txt) => String(txt || "")
+    .replace(/@[^\s"'`.,!?;:(){}\[\]<>]+/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const safeNarration = stripAtTokens(narration);
+  const safeVisual = stripAtTokens(visual);
+  const lineFallback = (lang === "en") ? "Narrator explains the scene." : "내레이터가 장면을 설명한다.";
+  const mergedLine = normalizeDialogue(dialogue)
+    .map((d) => String(d.line || "").trim())
+    .filter(Boolean)
+    .join(" ");
+
+  const safeDialogue = dubbingEnabled
+    ? [{
+      speaker: narratorSpeaker,
+      line: stripAtTokens(mergedLine || safeNarration || safeVisual || lineFallback),
+    }]
+    : [];
+
+  return {
+    narration: safeNarration,
+    dialogue: safeDialogue,
+    visual: safeVisual,
+  };
+}
+
 function shapeSceneByMode(input) {
   const narrationRaw = String(input.narration || "").trim();
   const narration = narrationRaw || (input.lang === "en" ? "The narrator describes the scene clearly." : "장면을 설명하는 나레이션이 이어진다.");
-  const defaultSpeaker = String(input.defaultSpeaker || "@내레이터").trim() || "@내레이터";
+  const defaultSpeaker = String(input.defaultSpeaker || "@narrator").trim() || "@narrator";
   let dialogue = normalizeDialogue(input.dialogue || []);
   if (input.dubbingEnabled && dialogue.length === 0) {
     dialogue = [{
@@ -371,32 +433,37 @@ function shapeSceneByMode(input) {
   if (input.dubbingEnabled) {
     out.dialogue = dialogue;
   }
-  out.lines = voiceScript || narration || visual;
+  out.script = voiceScript;
+  if (input.narrationEnabled && narration) {
+    out.lines = narration;
+  } else if (input.dubbingEnabled && dialogue.length) {
+    out.lines = dialogue.map((d) => String(d.line || "").trim()).filter(Boolean).join(" ");
+  } else {
+    out.lines = narration || visual;
+  }
   return out;
 }
-
 function composeVoiceScript({ lang = "ko", narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
   const rows = [];
   const safeNarration = String(narration || "").trim();
   const safeDialogue = normalizeDialogue(dialogue || []);
 
   if (lang === "en") {
-    if (narrationEnabled && safeNarration) rows.push(`Narration: "${safeNarration}"`);
+    if (narrationEnabled && safeNarration) rows.push(`Narration "${safeNarration}"`);
     if (dubbingEnabled && safeDialogue.length) {
-      rows.push("Dialogue:");
-      safeDialogue.forEach((d) => rows.push(`${d.speaker || "@speaker"}: "${d.line || "..."}"`));
+      rows.push("Dialogue");
+      safeDialogue.forEach((d) => rows.push(`${d.speaker || "@speaker"} "${d.line || "..."}"`));
     }
     return rows.join("\n").trim();
   }
 
-  if (narrationEnabled && safeNarration) rows.push(`나레이션: "${safeNarration}"`);
+  if (narrationEnabled && safeNarration) rows.push(`나레이션 "${safeNarration}"`);
   if (dubbingEnabled && safeDialogue.length) {
-    rows.push("대사:");
-    safeDialogue.forEach((d) => rows.push(`${d.speaker || "@화자"}: "${d.line || "..."}"`));
+    rows.push("대사");
+    safeDialogue.forEach((d) => rows.push(`${d.speaker || "@narrator"} "${d.line || "..."}"`));
   }
   return rows.join("\n").trim();
 }
-
 function rebalanceEstSec(scenes = [], target = 0) {
   const minSec = 3;
   if (!Array.isArray(scenes) || !scenes.length || !target) return scenes;
@@ -418,7 +485,7 @@ function fallbackScenes({ topic, target, duration, sceneCount, narrationEnabled,
   const per = Math.max(Math.floor((Number(duration) || 60) / count), 5);
   const t = topic || "주제 미정";
   const audience = target || "일반 시청자";
-  const defaultSpeaker = characters[0]?.token || "@내레이터";
+  const defaultSpeaker = characters[0]?.token || "@narrator";
   const scenes = [];
 
   for (let i = 0; i < count; i++) {
@@ -442,7 +509,6 @@ function fallbackScenes({ topic, target, duration, sceneCount, narrationEnabled,
 
   return scenes;
 }
-
 function toBool(value, fallback = false) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;

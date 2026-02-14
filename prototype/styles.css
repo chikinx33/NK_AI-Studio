@@ -1395,6 +1395,13 @@ a.btn-primary:active {
 
 #pipeline-scenes .story-lines {
   margin-bottom: 12px;
+  min-height: 72px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--layer-soft);
+  white-space: pre-wrap;
+  line-height: 1.45;
 }
 
 #pipeline-scenes .scene-cell.story .voice-block {
@@ -1527,6 +1534,11 @@ a.btn-primary:active {
 .scenario-card .view-shot-lines {
   min-height: 72px;
   max-height: 88px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--layer-soft);
+  box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   margin: 0;
@@ -1539,6 +1551,17 @@ a.btn-primary:active {
 .scenario-card .view-shot-lines {
   min-height: 72px;
   max-height: 88px;
+}
+
+.scenario-card .view-lines[contenteditable="true"],
+.scenario-card .view-shot-lines[contenteditable="true"] {
+  outline: none;
+}
+
+.scenario-card .view-lines[contenteditable="true"]:focus,
+.scenario-card .view-shot-lines[contenteditable="true"]:focus {
+  border-color: rgba(255, 122, 0, 0.75);
+  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.16);
 }
 
 .scenario-card .dialogue-block {

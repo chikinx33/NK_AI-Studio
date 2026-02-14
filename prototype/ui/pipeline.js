@@ -476,7 +476,10 @@
           return {
             id: (s.id != null ? s.id : (idx + 1)),
             lines: s.lines || '',
-            shot: s.shot || '',
+            shot: s.shot || s.visual || '',
+            narration: s.narration || '',
+            dialogue: s.dialogue || s.dialogues || [],
+            script: s.script || '',
             estSec: s.estSec,
             promptText: (s.promptText || ['Common', headerCleanSrv, 'Visual', (s.shot || '')].join('\n')),
             imageDataUrl: s.imageDataUrl || '',
@@ -504,7 +507,10 @@
           return {
             id: (s.id != null ? s.id : (idx + 1)),
             lines: s.lines || '',
-            shot: s.shot || '',
+            shot: s.shot || s.visual || '',
+            narration: s.narration || '',
+            dialogue: s.dialogue || s.dialogues || [],
+            script: s.script || '',
             estSec: s.estSec,
             promptText: (s.promptText || ['Common', headerCleanInit, 'Visual', (s.shot || '')].join('\n')),
             imageDataUrl: s.imageDataUrl || '',
@@ -1040,7 +1046,7 @@
           // 서버에 꼭 전달해야 하는 값: promptText, imageDataUrl
           // Grok 모델일 경우 이미지 기반 생성을 강력히 요청하는 문구 추가
           promptText: (imageUrl && videoModel === 'grok') ? ("Animate this image. " + finalPrompt) : finalPrompt,
-          script: voiceEnabled ? (scene.lines || '') : '',
+          script: voiceEnabled ? buildVoiceScriptForVideo(scene, statePayload) : '',
           narrationEnabled: toBool(statePayload.narrationEnabled, false),
           dubbingEnabled: toBool(statePayload.dubbingEnabled, false),
           aspectRatio: st.aspectRatio || "16:9",
@@ -1368,6 +1374,69 @@ function isVoiceFeatureEnabled(payload) {
   return !!(toBool(p.narrationEnabled, false) || toBool(p.dubbingEnabled, false));
 }
 
+function normalizeDialogueForScript(value) {
+  if (Array.isArray(value)) {
+    return value.map(function (d) {
+      return {
+        speaker: String((d && d.speaker) || '').trim(),
+        line: String((d && d.line) || '').trim()
+      };
+    }).filter(function (d) { return d.speaker || d.line; });
+  }
+  if (typeof value === 'string') {
+    return value.split('\n').map(function (line) { return String(line || '').trim(); }).filter(Boolean).map(function (line) {
+      var idx = line.indexOf(':');
+      if (idx > -1) {
+        return {
+          speaker: line.slice(0, idx).trim(),
+          line: line.slice(idx + 1).trim()
+        };
+      }
+      return { speaker: '', line: line };
+    }).filter(function (d) { return d.speaker || d.line; });
+  }
+  return [];
+}
+
+function extractNarrationDisplay(text) {
+  var raw = String(text || '').trim();
+  if (!raw) return '';
+  var first = raw.split(/\n+/).map(function (x) { return String(x || '').trim(); }).find(Boolean) || raw;
+  var m = first.match(/^(?:나레이션|Narration)\s*[:：]?\s*["“”]?([\s\S]*?)["“”]?\s*$/i);
+  return m ? String(m[1] || '').trim() : raw;
+}
+
+function buildVoiceScriptForVideo(scene, payload) {
+  var p = payload || {};
+  var narrationEnabled = toBool(p.narrationEnabled, false);
+  var dubbingEnabled = toBool(p.dubbingEnabled, false);
+  if (!narrationEnabled && !dubbingEnabled) return '';
+
+  var existing = String((scene && scene.script) || '').trim();
+  if (existing) return existing;
+
+  var narration = String((scene && scene.narration) || '').trim();
+  if (!narration) narration = extractNarrationDisplay((scene && scene.lines) || '');
+  var dialogue = normalizeDialogueForScript((scene && scene.dialogue) || []);
+
+  if (dubbingEnabled && !dialogue.length && narration) {
+    dialogue = [{ speaker: '@narrator', line: narration }];
+  }
+
+  var rows = [];
+  if (narrationEnabled && narration) rows.push('나레이션 "' + narration + '"');
+  if (dubbingEnabled && dialogue.length) {
+    rows.push('대사');
+    dialogue.forEach(function (d) {
+      rows.push((d.speaker || '@narrator') + ' "' + (d.line || '...') + '"');
+    });
+  }
+  if (rows.length) return rows.join('\n').trim();
+
+  var fallback = extractNarrationDisplay((scene && scene.lines) || '');
+  return fallback ? ('나레이션 "' + fallback + '"') : '';
+}
+
 function buildSceneRowHtml(s, header) {
   var st = (typeof ctx !== 'undefined' && ctx && ctx.getState) ? ctx.getState() : null;
   var voiceEnabled = isVoiceFeatureEnabled(st && st.payload ? st.payload : {});
@@ -1418,7 +1487,7 @@ function buildSceneRowHtml(s, header) {
     '<div class="scene-cell story">' +
     '<div class="story-inner">' +
     '<p class="eyebrow">Scene ' + s.id + '</p>' +
-    '<p class="story-lines" data-id="' + s.id + '">' + (s.lines || '') + '</p>' +
+    '<p class="story-lines" data-id="' + s.id + '">' + extractNarrationDisplay(s.lines || '') + '</p>' +
     voiceBlock +
     '</div>' +
     '</div>' +
