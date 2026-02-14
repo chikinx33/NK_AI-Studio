@@ -581,6 +581,7 @@
         saveBtn.disabled = false;
         saveBtn.textContent = originalText || '저장하기';
       }
+      updateRenderPanelUi();
     }
   }
 
