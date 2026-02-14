@@ -1531,10 +1531,11 @@ a.btn-primary:active {
 }
 
 .scenario-card .view-lines,
-.scenario-card .view-shot-lines {
-  min-height: 72px;
-  max-height: 88px;
-  padding: 10px 12px;
+.scenario-card .view-shot-lines,
+.scenario-card .view-dialogue-lines {
+  min-height: 58px;
+  max-height: 58px;
+  padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--layer-soft);
@@ -1549,17 +1550,19 @@ a.btn-primary:active {
 }
 
 .scenario-card .view-shot-lines {
-  min-height: 72px;
-  max-height: 88px;
+  min-height: 58px;
+  max-height: 58px;
 }
 
 .scenario-card .view-lines[contenteditable="true"],
-.scenario-card .view-shot-lines[contenteditable="true"] {
+.scenario-card .view-shot-lines[contenteditable="true"],
+.scenario-card .view-dialogue-lines[contenteditable="true"] {
   outline: none;
 }
 
 .scenario-card .view-lines[contenteditable="true"]:focus,
-.scenario-card .view-shot-lines[contenteditable="true"]:focus {
+.scenario-card .view-shot-lines[contenteditable="true"]:focus,
+.scenario-card .view-dialogue-lines[contenteditable="true"]:focus {
   border-color: rgba(255, 122, 0, 0.75);
   box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.16);
 }
@@ -1661,7 +1664,8 @@ a.btn-primary:active {
   color: var(--orange);
 }
 .scenario-card .view-lines::-webkit-scrollbar,
-.scenario-card .view-shot-lines::-webkit-scrollbar {
+.scenario-card .view-shot-lines::-webkit-scrollbar,
+.scenario-card .view-dialogue-lines::-webkit-scrollbar {
   width: 0;
   height: 0;
 }

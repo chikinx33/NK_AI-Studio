@@ -116,10 +116,47 @@
     return [];
   };
 
+  const dialogueToText = (list = []) => {
+    return (Array.isArray(list) ? list : [])
+      .map((d) => {
+        const speaker = String(d?.speaker || '').trim();
+        const line = String(d?.line || '').trim();
+        if (speaker && line) return `${speaker}: ${line}`;
+        return line || speaker || '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  };
+
   const getScenarioFlags = (payload = {}) => ({
     narrationEnabled: boolVal(payload?.narrationEnabled, DEFAULT_SCENARIO_FLAGS.narrationEnabled),
     dubbingEnabled: boolVal(payload?.dubbingEnabled, DEFAULT_SCENARIO_FLAGS.dubbingEnabled)
   });
+
+  const getUiLang = () => {
+    try {
+      const key = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
+      const raw = String(localStorage.getItem(key) || document.documentElement.getAttribute('lang') || 'ko').toLowerCase();
+      return raw === 'en' ? 'en' : 'ko';
+    } catch (_) {
+      return 'ko';
+    }
+  };
+
+  const getSceneFieldLabels = () => {
+    if (getUiLang() === 'en') {
+      return {
+        visual: 'Visualization',
+        narration: 'Narration',
+        dialogue: 'Dialogue'
+      };
+    }
+    return {
+      visual: '시각화',
+      narration: '나레이션',
+      dialogue: '대사'
+    };
+  };
 
   const extractNarrationOnlyText = (value) => {
     const raw = String(value || '').trim();
@@ -213,9 +250,12 @@
         .filter(Boolean)
         .join('\n');
       const legacyStory = lines || extractNarrationOnlyText(narration) || dialogueText;
+      const narrationText = extractNarrationOnlyText(narration || legacyStory);
       return {
         id: s.id != null ? s.id : (i + 1),
         lines: legacyStory,
+        narrationText,
+        dialogueText,
         narration,
         dialogue,
         shot: applyCharacterTokenHints(String(shot || '').trim(), currentCharacters),
@@ -263,12 +303,16 @@
       const id = Number(card.querySelector('.est-input')?.dataset.id);
       const estTxt = card.querySelector('.est-input')?.value || '';
       const est = parseEst(estTxt);
-      const sceneText = card.querySelector('.view-story')?.textContent?.trim() || '';
+      const narrationText = card.querySelector('.view-narration-lines')?.textContent?.trim() || '';
+      const dialogueText = card.querySelector('.view-dialogue-lines')?.textContent?.trim() || '';
+      const dialogue = normalizeDialogue(dialogueText, currentCharacters);
       const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
       return {
         id,
         title: '',
-        lines: sceneText,
+        lines: extractNarrationOnlyText(narrationText),
+        narration: extractNarrationOnlyText(narrationText),
+        dialogue,
         shot: visualText,
         visual: visualText,
         estSec: est
@@ -321,6 +365,7 @@
     const container = document.getElementById('scenario-cards');
     if (!container) return;
     const sceneList = normalizeScenes(scenes);
+    const labels = getSceneFieldLabels();
     const commonInfo = formatCommonInfo();
     if (!sceneList.length) {
       container.innerHTML = `
@@ -343,12 +388,16 @@
         </div>
         <div class="scene-visual-grid">
           <div class="field-block">
-            <p class="field-label muted small">Scene</p>
-            <p class="view-lines view-story" data-id="${s.id}" contenteditable="true">${s.lines || ''}</p>
+            <p class="field-label muted small">${labels.visual}</p>
+            <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${s.shot || ''}</p>
           </div>
           <div class="field-block">
-            <p class="field-label muted small">Visual</p>
-            <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${s.shot || '없음'}</p>
+            <p class="field-label muted small">${labels.narration}</p>
+            <p class="view-lines view-narration-lines" data-id="${s.id}" contenteditable="true">${s.narrationText || ''}</p>
+          </div>
+          <div class="field-block">
+            <p class="field-label muted small">${labels.dialogue}</p>
+            <p class="view-lines view-dialogue-lines" data-id="${s.id}" contenteditable="true">${s.dialogueText || dialogueToText(s.dialogue || [])}</p>
           </div>
         </div>
       </div>
@@ -588,6 +637,25 @@
         setActiveScenarioCard(card);
       });
     }
+
+    const rerenderForLocale = () => {
+      const latest = collectScenesFromCards();
+      const mergedScenes = mergeSceneSnapshots(draft?.scenes || [], latest);
+      if (draft) draft.scenes = mergedScenes;
+      scenario.renderScenes(mergedScenes.length ? mergedScenes : (draft?.scenes || []));
+    };
+
+    window.addEventListener('message', (evt) => {
+      const data = evt && evt.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'lang-apply') rerenderForLocale();
+    });
+
+    window.addEventListener('storage', (evt) => {
+      const key = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
+      if (!evt) return;
+      if (evt.key === key || evt.key === 'nk_lang') rerenderForLocale();
+    });
 
     // 카테고리 변경 시 목적 태그 재렌더
     if (form.purposeCategory) {
