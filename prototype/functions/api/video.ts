@@ -22,6 +22,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       aspectRatio = "16:9",
       videoModel = "veo"
     } = body || {};
+    const aspectFinal = normalizeAspectRatio(aspectRatio);
     const narrationEnabled = toBool((body as any)?.narrationEnabled, false);
     const dubbingEnabled = toBool((body as any)?.dubbingEnabled, false);
     const voiceEnabled = !!(narrationEnabled || dubbingEnabled);
@@ -124,7 +125,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         model: modelId || "grok-imagine-video",
         prompt: safePromptText,
         duration: snapDuration,
-        aspect_ratio: aspectRatio,
+        aspect_ratio: aspectFinal,
         // 해상도 설정 (API 스펙: 480p 또는 720p)
         resolution: "720p",
       };
@@ -247,7 +248,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       target: body?.target,
       tone: body?.tone || body?.tones,
       style: body?.style || body?.styles,
-      aspectRatio,
+      aspectRatio: aspectFinal,
       durationSeconds,
       promptText,
       safePromptText,
@@ -284,7 +285,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // Veo는 Long Running Predict API를 사용해야 함
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predictLongRunning`;
-    log('request', { sceneId, modelId, durationSeconds: snapDuration, aspectRatio, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
+    log('request', { sceneId, modelId, durationSeconds: snapDuration, aspectRatio: aspectFinal, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
 
     const vertexRes = await fetch(url, {
       method: "POST",
@@ -304,7 +305,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         ],
         parameters: {
           durationSeconds: snapDuration,
-          aspectRatio: aspectRatio || "16:9",
+          aspectRatio: aspectFinal,
           storageUri: outputGcsUri, // 저장 위치
         },
       }),
@@ -357,6 +358,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       job_id: operationName,
       outputGcsUri,
       model: modelId,
+      aspectApplied: aspectFinal,
     });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
@@ -424,6 +426,15 @@ function toBool(value: any, fallback = false) {
     if (["false", "0", "no", "off"].includes(v)) return false;
   }
   return !!fallback;
+}
+
+function pickAspectRatio(raw: any): string {
+  const text = String(raw ?? "").trim().replace(/\s+/g, "").replace("/", ":");
+  return (text === "16:9" || text === "9:16" || text === "1:1") ? text : "";
+}
+
+function normalizeAspectRatio(raw: any): string {
+  return pickAspectRatio(raw) || "16:9";
 }
 
 function json(data: any, status = 200) {

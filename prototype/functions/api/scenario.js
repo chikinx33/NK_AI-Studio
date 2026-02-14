@@ -109,6 +109,18 @@ export async function onRequestPost(context) {
 
       const noCharacterMode = characters.length === 0;
       const narratorSpeaker = "@narrator";
+      const cameraContext = {
+        lang,
+        topic,
+        purposeCategory,
+        purposeTags,
+        toneText,
+        tones,
+        styleText,
+        styles,
+        aspectRatio,
+        sceneCount,
+      };
       scenes = scenes.map((s, idx) => {
         const narrationRaw = s.narration || s.lines || s.story || s.text || s.script || s.content || "";
         const dialogueRaw = normalizeDialogue(s.dialogue || s.dialogues || []);
@@ -124,7 +136,8 @@ export async function onRequestPost(context) {
             line: applyCharacterTokenHints(String(d.line || "").trim(), characters),
           }))
           .filter((d) => d.speaker || d.line);
-        const visual = applyCharacterTokenHints(String(visualRaw || "").trim(), characters);
+        const visualBase = applyCharacterTokenHints(String(visualRaw || "").trim(), characters);
+        const visual = ensureCameraDirectionInVisual(visualBase, Object.assign({}, cameraContext, { idx }));
         const noCharacterSafe = enforceNoCharacterPolicy({
           narration,
           dialogue,
@@ -151,7 +164,7 @@ export async function onRequestPost(context) {
 
       scenes = rebalanceEstSec(scenes, Number(duration) || 0);
     } catch (err) {
-      scenes = fallbackScenes({
+      scenes = fallbackScenesV2({
         topic,
         target,
         duration,
@@ -159,6 +172,14 @@ export async function onRequestPost(context) {
         narrationEnabled,
         dubbingEnabled,
         characters,
+        lang,
+        purposeCategory,
+        purposeTags,
+        toneText,
+        tones,
+        styleText,
+        styles,
+        aspectRatio,
       });
       return new Response(JSON.stringify({ scenes, fallback: true, error: err?.message || "fallback_used" }), {
         status: 200,
@@ -190,6 +211,7 @@ Return JSON only.
 Output format: {"scenes":[...]}.
 Each scene must include id, estSec and visual.
 Produce exactly ${sceneCount} scenes and distribute timing close to ${duration}s.
+Visual must include explicit camera direction: shot size, camera angle, camera movement, and framing/composition.
 No markdown, no extra explanation.`;
 }
 
@@ -208,8 +230,9 @@ Style tags: ${input.styles || "(none)"}
 Additional notes: ${input.extraNotes || "(none)"}
 Aspect ratio: ${input.aspectRatio || "(not provided)"}
 Duration target: ${input.duration}s
+Camera direction requirement: each visual must include shot size, camera angle, camera movement, and framing.
 Formatting intent example:
-- Visual: "A boy approaches an old well."
+- Visual: "A boy approaches an old well, medium shot, eye-level angle, slow dolly-in, centered framing."
 - Narration: "The boy sat by the well and looked down."
 - Dialogue: [{"speaker":"@boy","line":"It is deeper than I thought."}]
 ${modeInstruction}`;
@@ -271,6 +294,7 @@ C) narrationEnabled=false, dubbingEnabled=true:
 - scene fields: dialogue(array<{speaker,line}>), visual(string)
 D) narrationEnabled=false, dubbingEnabled=false:
 - scene fields: lines(string), visual(string)
+- Every visual must include camera direction (shot size, camera angle, camera movement, framing).
 - If narrationEnabled is true, narration must be a full spoken sentence (not empty).
 - If dubbingEnabled is true, dialogue must contain at least one line with speaker and line.
 - Keep narration/dialogue text ready for TTS usage.
@@ -294,6 +318,69 @@ D) narrationEnabled=OFF, dubbingEnabled=OFF
 ${charGuide}
 ${noCharacterRule}
 ${taggingHint}`;
+}
+
+function hasCameraDirectionText(text = "") {
+  const t = String(text || "").toLowerCase();
+  if (!t) return false;
+  const cameraPatterns = [
+    /camera|angle|lens|shot|framing|composition|close[-\s]?up|medium shot|wide shot|over[-\s]?the[-\s]?shoulder/i,
+    /zoom|pan|tilt|dolly|tracking|handheld|crane|aerial|rack focus/i,
+    /카메라|앵글|렌즈|샷|구도|프레이밍|클로즈업|미디엄샷|와이드샷|오버숄더|줌|패닝|틸트|돌리|트래킹|핸드헬드|크레인|항공샷/i
+  ];
+  return cameraPatterns.some((re) => re.test(t));
+}
+
+function isDynamicToneText(input = "") {
+  const t = String(input || "").toLowerCase();
+  if (!t) return false;
+  return /(dynamic|action|fast|tense|thrill|urgent|energetic|긴박|액션|역동|빠른|스릴|긴장)/i.test(t);
+}
+
+function buildCameraDirectionSnippet(context = {}) {
+  const idx = Number(context.idx || 0);
+  const lang = context.lang === "en" ? "en" : "ko";
+  const toneMerged = [context.toneText, context.tones].filter(Boolean).join(" ");
+  const dynamic = isDynamicToneText(toneMerged);
+
+  const calmKo = [
+    "미디엄 샷, 아이레벨 앵글, 느린 돌리 인, 안정적인 중앙 구도",
+    "와이드 샷, 하이앵글, 부드러운 패닝, 전경과 배경이 보이는 레이어 구도",
+    "클로즈업, 로우앵글, 아주 느린 줌 인, 피사체 중심 구도"
+  ];
+  const dynamicKo = [
+    "미디엄 클로즈업, 로우앵글, 빠른 푸시 인, 비대칭 긴장 구도",
+    "와이드 샷, 아이레벨, 트래킹 이동, 속도감 있는 대각선 구도",
+    "클로즈업, 하이앵글, 짧은 핸드헬드 무빙, 강한 대비 구도"
+  ];
+
+  const calmEn = [
+    "medium shot, eye-level angle, slow dolly-in, stable centered framing",
+    "wide shot, high angle, gentle pan, layered foreground-background composition",
+    "close-up, low angle, very slow zoom-in, subject-centered framing"
+  ];
+  const dynamicEn = [
+    "medium close-up, low angle, quick push-in, asymmetrical tension framing",
+    "wide shot, eye-level angle, tracking move, diagonal dynamic composition",
+    "close-up, high angle, short handheld move, high-contrast framing"
+  ];
+
+  const pool = dynamic ? (lang === "en" ? dynamicEn : dynamicKo) : (lang === "en" ? calmEn : calmKo);
+  return pool[idx % pool.length];
+}
+
+function ensureCameraDirectionInVisual(visual = "", context = {}) {
+  const base = String(visual || "").trim();
+  const lang = context.lang === "en" ? "en" : "ko";
+  const camera = buildCameraDirectionSnippet(context);
+  const fallback = lang === "en"
+    ? `Scene direction, ${camera}.`
+    : `장면 연출, ${camera}.`;
+
+  if (!base) return fallback;
+  if (hasCameraDirectionText(base)) return base;
+  if (lang === "en") return `${base}. Camera direction: ${camera}.`;
+  return `${base}. 카메라 연출: ${camera}.`;
 }
 
 function normalizeCharacters(list = []) {
@@ -509,6 +596,73 @@ function fallbackScenes({ topic, target, duration, sceneCount, narrationEnabled,
 
   return scenes;
 }
+
+function fallbackScenesV2({
+  topic,
+  target,
+  duration,
+  sceneCount,
+  narrationEnabled,
+  dubbingEnabled,
+  characters,
+  lang = "ko",
+  purposeCategory = "",
+  purposeTags = "",
+  toneText = "",
+  tones = "",
+  styleText = "",
+  styles = "",
+  aspectRatio = "",
+}) {
+  const count = Number(sceneCount) || 4;
+  const per = Math.max(Math.floor((Number(duration) || 60) / count), 5);
+  const t = String(topic || "Untitled").trim();
+  const audience = String(target || "General audience").trim();
+  const defaultSpeaker = characters[0]?.token || "@narrator";
+  const scenes = [];
+  const cameraContext = {
+    lang,
+    topic: t,
+    purposeCategory,
+    purposeTags,
+    toneText,
+    tones,
+    styleText,
+    styles,
+    aspectRatio,
+    sceneCount: count,
+  };
+
+  for (let i = 0; i < count; i++) {
+    const narration = lang === "en"
+      ? `${t} progression ${i + 1}. Explain clearly for ${audience}.`
+      : `${t} 전개 ${i + 1}. ${audience} 기준으로 이해하기 쉽게 설명한다.`;
+    const visualSeed = lang === "en"
+      ? `Scene ${i + 1} key visual direction`
+      : `Scene ${i + 1}의 핵심 장면 설명`;
+    const visual = ensureCameraDirectionInVisual(visualSeed, Object.assign({}, cameraContext, { idx: i }));
+    const dialogue = [{
+      speaker: defaultSpeaker,
+      line: lang === "en" ? `${t} line ${i + 1}` : `${t} 관련 대사 ${i + 1}`
+    }];
+
+    scenes.push(shapeSceneByMode({
+      id: i + 1,
+      title: `Scene ${i + 1}`,
+      estSec: per,
+      narration,
+      dialogue,
+      visual,
+      narrationEnabled,
+      dubbingEnabled,
+      defaultSpeaker,
+      lang,
+    }));
+  }
+
+  return scenes;
+}
+
 function toBool(value, fallback = false) {
   if (typeof value === "boolean") return value;
   if (typeof value === "number") return value !== 0;

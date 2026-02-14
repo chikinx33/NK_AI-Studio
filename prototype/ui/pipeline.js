@@ -376,7 +376,7 @@
         state = Object.assign({}, state, { header: cleaned });
       }
     }
-    var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
+    var aspectRatio = resolveEffectiveAspectRatio(state, ctx);
     var persistPipeline = ctx.persistPipeline;
     var updateDraftFromPipeline = ctx.updateDraftFromPipeline;
     var withAspectInHeader = ctx.withAspectInHeader;
@@ -466,9 +466,11 @@
       }
 
       if (serverData) {
-        var serverRatio = serverData.aspectRatio || serverData.payload?.aspectRatio || aspectRatio;
+        var serverRatio = normalizeAspectRatio(serverData.aspectRatio || serverData.payload?.aspectRatio || aspectRatio);
         if (serverRatio && saveAspect) saveAspect(serverRatio);
         aspectRatio = serverRatio || aspectRatio;
+        var payloadSrv = Object.assign({}, serverData.payload || {});
+        payloadSrv.aspectRatio = normalizeAspectRatio(payloadSrv.aspectRatio || aspectRatio);
         var headerSrv = serverData.header || serverData.payload?.header || (loadHeader ? loadHeader() : '');
         var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
         var headerCleanSrv = cleanHeader(headerSrv2);
@@ -493,13 +495,15 @@
             editingPrompt: !!s.editingPrompt,
           };
         });
-        state = { payload: serverData.payload || {}, header: headerCleanSrv, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
+        state = { payload: payloadSrv, header: headerCleanSrv, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
         ctx.setState(state);
         await ui.refreshAssets();
       } else if (stored) {
-        var savedRatio = stored.aspectRatio;
+        var savedRatio = normalizeAspectRatio(stored.aspectRatio || stored.payload?.aspectRatio || aspectRatio);
         if (savedRatio && saveAspect) saveAspect(savedRatio);
         aspectRatio = savedRatio || aspectRatio;
+        var payloadStored = Object.assign({}, stored.payload || {});
+        payloadStored.aspectRatio = normalizeAspectRatio(payloadStored.aspectRatio || aspectRatio);
         var headerInitRaw = (stored.header || stored.payload?.header || (loadHeader ? loadHeader() : '') || '');
         var headerInit2 = withAspectInHeader ? withAspectInHeader(headerInitRaw, aspectRatio) : headerInitRaw;
         var headerCleanInit = cleanHeader(headerInit2);
@@ -524,11 +528,11 @@
             editingPrompt: !!s.editingPrompt,
           };
         });
-        state = { payload: stored.payload, header: headerCleanInit, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
+        state = { payload: payloadStored, header: headerCleanInit, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
         ctx.setState(state);
         await ui.refreshAssets();
       } else {
-        var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '' };
+        var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '', aspectRatio: aspectRatio };
         var headerInit = withAspectInHeader ? withAspectInHeader('', aspectRatio) : '';
         state = { payload: payload, header: headerInit, scenes: [], savedAt: '', aspectRatio: aspectRatio, isPlaceholder: true };
         ctx.setState(state);
@@ -961,6 +965,8 @@
       var scene = st.scenes[i];
       var projectId = st.draftId || getProjectId();
       if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+      var desiredAspectRatio = resolveEffectiveAspectRatio(st, ctx);
+      st = ensureStateAspectRatio(st, desiredAspectRatio);
       var header = st.header || '';
       var statePayload = st.payload || {};
       var audience = statePayload.target || '';
@@ -972,7 +978,7 @@
         (Array.isArray(statePayload.tones) && statePayload.tones.length) || statePayload.tone ? `Tone: ${[...(statePayload.tones || []), statePayload.tone || ''].filter(Boolean).join(', ')}` : '',
         (Array.isArray(statePayload.styles) && statePayload.styles.length) || statePayload.style ? `Style: ${[...(statePayload.styles || []), statePayload.style || ''].filter(Boolean).join(', ')}` : '',
         statePayload.needs && statePayload.needs.length ? `Needs: ${statePayload.needs.join(', ')}` : '',
-        statePayload.aspectRatio ? `AspectRatio: ${statePayload.aspectRatio}` : '',
+        desiredAspectRatio ? `AspectRatio: ${desiredAspectRatio}` : '',
         statePayload.duration ? `TargetDuration: ${statePayload.duration}s` : ''
       ].filter(Boolean).join('\n');
       var promptBase = [
@@ -1000,6 +1006,18 @@
       if (!imageUrl) {
         alert('영상 생성을 위해서는 이미지가 필요합니다. 이미지를 생성하거나 업로드한 후 다시 시도해주세요.');
         return;
+      }
+
+      try {
+        var normalizedImage = await enforceImageAspectRatio(imageUrl, desiredAspectRatio);
+        if (normalizedImage && normalizedImage.url && normalizedImage.url !== imageUrl) {
+          imageUrl = normalizedImage.url;
+          st.scenes[i] = Object.assign({}, st.scenes[i], { imageDataUrl: imageUrl });
+          ctx.setState(st);
+          scene = st.scenes[i];
+        }
+      } catch (aspectErr) {
+        console.warn('image aspect normalize skipped:', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
       }
 
       // base64 이미지인 경우 자동 업로드하여 URL로 변환 (Grok 등 외부 API 호환성)
@@ -1049,7 +1067,7 @@
           script: voiceEnabled ? buildVoiceScriptForVideo(scene, statePayload) : '',
           narrationEnabled: toBool(statePayload.narrationEnabled, false),
           dubbingEnabled: toBool(statePayload.dubbingEnabled, false),
-          aspectRatio: st.aspectRatio || "16:9",
+          aspectRatio: desiredAspectRatio,
           durationSeconds: snapDuration,
           imageDataUrl: imageUrl,
           image: imageUrl,
@@ -1070,16 +1088,27 @@
           imageDataUrl_preview: imageUrl.startsWith('data:') ? 'dataurl:' + imageUrl.length + ' chars' : imageUrl
         });
         var resp = await NK.api.videoStart(videoPayload);
-        var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
-        var playbackRaw = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
+        var rawResp = (resp && resp.raw) ? resp.raw : {};
+        var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || rawResp.job_id || rawResp.id || '';
+        var playbackRaw = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || rawResp.playbackUrl || rawResp.videoUrl || rawResp.outputUrl || rawResp.url || '';
         var playback = isBucketVideoUrl(playbackRaw) ? playbackRaw : '';
+        var outputGcsUri = resp.outputGcsUri || rawResp.outputGcsUri || rawResp.output_gcs_uri || '';
+        if (playback) {
+          try {
+            var adjustedPlayback = await enforceVideoAspectRatio(projectId, outputGcsUri, playback, desiredAspectRatio);
+            if (adjustedPlayback && adjustedPlayback.url) playback = adjustedPlayback.url;
+          } catch (aspectErr2) {
+            console.warn('video aspect normalize skipped:', aspectErr2 && aspectErr2.message ? aspectErr2.message : aspectErr2);
+          }
+        }
         console.log('videoStart ok', { jobId, playback, resp });
         st = ctx.getState() || st;
         st.scenes[i] = Object.assign({}, st.scenes[i], {
           videoUrl: playback,
           videoStatus: playback ? 'done' : 'processing',
           videoError: resp.error || '',
-          videoJobId: jobId
+          videoJobId: jobId,
+          videoOutputGcsUri: outputGcsUri
         });
         ctx.setState(st);
         updateSceneRow(i, st.header || '');
@@ -1154,6 +1183,14 @@
         return;
       }
       if (playback) {
+        var desiredAspectRatio = resolveEffectiveAspectRatio(st, ctx);
+        var outputHint = (st.scenes[idx] && st.scenes[idx].videoOutputGcsUri) || '';
+        try {
+          var adjustedPlayback = await enforceVideoAspectRatio(projectId, outputHint, playback, desiredAspectRatio);
+          if (adjustedPlayback && adjustedPlayback.url) playback = adjustedPlayback.url;
+        } catch (aspectErr) {
+          console.warn('video aspect normalize skipped (poll):', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
+        }
         st.scenes[idx] = Object.assign({}, st.scenes[idx], {
           videoUrl: playback,
           videoStatus: 'done',
@@ -1281,7 +1318,8 @@
       alert('프로젝트 ID를 찾을 수 없어 이미지를 생성할 수 없습니다. 왼쪽 상단에서 프로젝트를 다시 선택해 주세요.');
       return;
     }
-    var aspectRatio = ctx.getAspectRatio ? ctx.getAspectRatio() : '16:9';
+    var aspectRatio = resolveEffectiveAspectRatio(st, ctx);
+    st = ensureStateAspectRatio(st, aspectRatio);
     var scene = st.scenes[idx];
     // 이미지 프롬프트: Common 스타일 지침과 Visual을 단순 문장으로 결합해 파서 오인 방지
     var common = cleanHeader(st.header || '');
@@ -1301,6 +1339,8 @@
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
+      var normalized = await enforceImageAspectRatio(imageRef, aspectRatio);
+      if (normalized && normalized.url) imageRef = normalized.url;
       st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: imageRef, imgLoading: false, imgError: '', promptText: scene.promptText });
       ctx.setState(st);
       updateSceneRow(idx, st.header || '');
@@ -1328,8 +1368,229 @@
   };
 })();
 
+function pickValidAspectRatio(raw) {
+  var t = String(raw || '').trim();
+  if (!t) return '';
+  t = t.replace(/\s+/g, '').replace('/', ':');
+  if (t === '16:9' || t === '9:16' || t === '1:1') return t;
+  return '';
+}
 
+function normalizeAspectRatio(raw) {
+  return pickValidAspectRatio(raw) || '16:9';
+}
 
+function getAspectRatioSize(raw) {
+  var ratio = normalizeAspectRatio(raw);
+  if (ratio === '9:16') return { w: 9, h: 16 };
+  if (ratio === '1:1') return { w: 1, h: 1 };
+  return { w: 16, h: 9 };
+}
+
+function resolveEffectiveAspectRatio(state, ctxRef) {
+  var fromState = pickValidAspectRatio(state && state.aspectRatio);
+  if (fromState) return fromState;
+  var fromPayload = pickValidAspectRatio(state && state.payload && state.payload.aspectRatio);
+  if (fromPayload) return fromPayload;
+  var fromCtx = '';
+  try {
+    fromCtx = pickValidAspectRatio(ctxRef && ctxRef.getAspectRatio ? ctxRef.getAspectRatio() : '');
+  } catch (_) { }
+  if (fromCtx) return fromCtx;
+  return '16:9';
+}
+
+function ensureStateAspectRatio(state, rawRatio) {
+  if (!state || typeof state !== 'object') return state;
+  var ratio = normalizeAspectRatio(rawRatio);
+  var nextPayload = Object.assign({}, state.payload || {});
+  var changed = false;
+  if (nextPayload.aspectRatio !== ratio) {
+    nextPayload.aspectRatio = ratio;
+    changed = true;
+  }
+  if (state.aspectRatio !== ratio || changed) {
+    return Object.assign({}, state, { aspectRatio: ratio, payload: nextPayload });
+  }
+  return state;
+}
+
+function waitMs(ms) {
+  return new Promise(function (resolve) { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
+}
+
+function isAspectRatioClose(width, height, rawRatio, tolerance) {
+  var w = Number(width) || 0;
+  var h = Number(height) || 0;
+  if (!w || !h) return false;
+  var size = getAspectRatioSize(rawRatio);
+  var target = size.w / size.h;
+  var current = w / h;
+  var tol = Math.max(0.001, Number(tolerance) || 0.02);
+  return Math.abs(current - target) <= tol;
+}
+
+function loadImageByUrl(url) {
+  return new Promise(function (resolve, reject) {
+    var img = new Image();
+    img.decoding = 'async';
+    img.crossOrigin = 'anonymous';
+    img.onload = function () { resolve(img); };
+    img.onerror = function () { reject(new Error('image_load_failed')); };
+    img.src = url;
+  });
+}
+
+async function enforceImageAspectRatio(imageRef, rawRatio) {
+  var src = String(imageRef || '').trim();
+  if (!src || typeof document === 'undefined') return { url: src, changed: false };
+  var ratio = normalizeAspectRatio(rawRatio);
+  var loadUrl = toPlayableMediaUrl(src);
+  var img = await loadImageByUrl(loadUrl);
+  var w = Number(img.naturalWidth || 0);
+  var h = Number(img.naturalHeight || 0);
+  if (!w || !h) return { url: src, changed: false };
+  if (isAspectRatioClose(w, h, ratio, 0.01)) {
+    return { url: src, changed: false, width: w, height: h };
+  }
+
+  var ratioSize = getAspectRatioSize(ratio);
+  var targetRatio = ratioSize.w / ratioSize.h;
+  var curRatio = w / h;
+  var sx = 0;
+  var sy = 0;
+  var sw = w;
+  var sh = h;
+  if (curRatio > targetRatio) {
+    sw = Math.max(1, Math.round(h * targetRatio));
+    sx = Math.max(0, Math.floor((w - sw) / 2));
+  } else if (curRatio < targetRatio) {
+    sh = Math.max(1, Math.round(w / targetRatio));
+    sy = Math.max(0, Math.floor((h - sh) / 2));
+  }
+  var outW = Math.max(2, sw);
+  var outH = Math.max(2, Math.round(outW / targetRatio));
+  if (outH > sh) {
+    outH = Math.max(2, sh);
+    outW = Math.max(2, Math.round(outH * targetRatio));
+  }
+
+  var canvas = document.createElement('canvas');
+  canvas.width = outW;
+  canvas.height = outH;
+  var cctx = canvas.getContext('2d', { alpha: false });
+  if (!cctx) return { url: src, changed: false };
+  cctx.imageSmoothingEnabled = true;
+  cctx.imageSmoothingQuality = 'high';
+  cctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
+  var outDataUrl = canvas.toDataURL('image/png');
+  if (!outDataUrl) return { url: src, changed: false };
+  return { url: outDataUrl, changed: true, width: outW, height: outH };
+}
+
+function readVideoMeta(videoUrl) {
+  return new Promise(function (resolve, reject) {
+    var raw = String(videoUrl || '').trim();
+    if (!raw) return reject(new Error('video_url_missing'));
+    var mediaUrl = toPlayableMediaUrl(raw);
+    var video = document.createElement('video');
+    var done = false;
+    var finish = function (ok, payload) {
+      if (done) return;
+      done = true;
+      try {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+      } catch (_) { }
+      if (ok) resolve(payload);
+      else reject(payload);
+    };
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.onloadedmetadata = function () {
+      finish(true, {
+        width: Number(video.videoWidth || 0),
+        height: Number(video.videoHeight || 0),
+      });
+    };
+    video.onerror = function () {
+      finish(false, new Error('video_metadata_load_failed'));
+    };
+    video.src = mediaUrl;
+  });
+}
+
+function extractObjectNameFromMediaRef(rawRef) {
+  var raw = String(rawRef || '').trim();
+  if (!raw) return '';
+  if (raw.indexOf('gs://') === 0) {
+    var rest = raw.slice(5);
+    var slash = rest.indexOf('/');
+    return slash >= 0 ? rest.slice(slash + 1) : '';
+  }
+  try {
+    var u = new URL(raw, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
+    var objectName = String(u.searchParams.get('objectName') || '').trim();
+    if (objectName) return objectName.replace(/^\/+/, '');
+    var nested = String(u.searchParams.get('url') || '').trim();
+    if (nested) {
+      var nestedObject = extractObjectNameFromMediaRef(nested);
+      if (nestedObject) return nestedObject;
+    }
+    if (u.hostname === 'storage.googleapis.com') {
+      var path = String(u.pathname || '').replace(/^\/+/, '');
+      var slash2 = path.indexOf('/');
+      if (slash2 >= 0) return decodeURIComponent(path.slice(slash2 + 1));
+    }
+  } catch (_) { }
+  return '';
+}
+
+async function transcodeVideoObjectToAspect(projectId, sourceObjectName, rawRatio) {
+  if (!NK || !NK.api || !NK.api.postprodTranscodeStart || !NK.api.postprodTranscodeStatus) return '';
+  var ratio = normalizeAspectRatio(rawRatio);
+  var start = await NK.api.postprodTranscodeStart({
+    projectId: String(projectId || ''),
+    sourceObjectName: String(sourceObjectName || ''),
+    aspectRatio: ratio
+  });
+  var jobName = String((start && start.jobName) || '').trim();
+  var outputObjectName = String((start && start.outputObjectName) || '').trim();
+  if (!jobName || !outputObjectName) throw new Error('transcode_start_failed');
+
+  for (var i = 0; i < 240; i++) {
+    await waitMs(3000);
+    var status = await NK.api.postprodTranscodeStatus({ jobName: jobName, outputObjectName: outputObjectName });
+    var done = !!(status && status.done);
+    var state = String((status && status.status) || '').toUpperCase();
+    if (done && (state === 'SUCCEEDED' || state === 'DONE' || state === 'OUTPUT_READY')) {
+      return String((status && (status.signedUrl || status.proxyUrl || status.playbackUrl || status.url || '')) || '').trim();
+    }
+    if (done && (state === 'FAILED' || state === 'ERROR' || state === 'CANCELLED')) {
+      throw new Error('transcode_failed_' + state);
+    }
+  }
+  throw new Error('transcode_timeout');
+}
+
+async function enforceVideoAspectRatio(projectId, sourceHint, videoRef, rawRatio) {
+  var url = String(videoRef || '').trim();
+  if (!url || typeof document === 'undefined') return { url: url, changed: false };
+  var ratio = normalizeAspectRatio(rawRatio);
+  var meta = await readVideoMeta(url);
+  if (isAspectRatioClose(meta.width, meta.height, ratio, 0.02)) {
+    return { url: url, changed: false, width: meta.width, height: meta.height };
+  }
+  var sourceObjectName = extractObjectNameFromMediaRef(sourceHint) || extractObjectNameFromMediaRef(url);
+  if (!sourceObjectName) {
+    throw new Error('video_source_object_missing_for_aspect_fix');
+  }
+  var transcoded = await transcodeVideoObjectToAspect(projectId, sourceObjectName, ratio);
+  if (!transcoded) throw new Error('video_transcode_no_output');
+  return { url: transcoded, changed: true };
+}
 
 function toPlayableMediaUrl(url) {
   var raw = String(url || '').trim();
