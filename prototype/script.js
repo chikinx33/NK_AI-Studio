@@ -158,7 +158,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.636';
+    NK.config.APP_VERSION = '1.639';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -434,6 +434,8 @@
     let resizedIconDataUrl = '';
     let favoriteLoadSeq = 0;
     let profileLoadSeq = 0;
+    let favoriteDragId = '';
+    let suppressFavoriteOpenUntil = 0;
 
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
     const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
@@ -540,6 +542,19 @@
       await NK.api.userdataFavoritesSave(nextItems);
     };
 
+    const reorderFavoriteItems = (dragId, targetId) => {
+      const fromIndex = favoriteItems.findIndex((row) => String(row.id) === String(dragId));
+      const toIndex = favoriteItems.findIndex((row) => String(row.id) === String(targetId));
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return false;
+      const next = favoriteItems.slice();
+      const moved = next.splice(fromIndex, 1)[0];
+      let insertAt = toIndex;
+      if (fromIndex < toIndex) insertAt = toIndex - 1;
+      next.splice(insertAt, 0, moved);
+      favoriteItems = next;
+      return true;
+    };
+
     const readProfileUiLocal = (user) => {
       const key = profileUiStorageKey(user);
       if (!key) return null;
@@ -643,13 +658,73 @@
         const article = document.createElement('article');
         article.className = 'favorite-item';
         article.setAttribute('role', 'listitem');
+        article.draggable = true;
+        article.dataset.favoriteId = String(item.id || '');
+
+        article.addEventListener('dragstart', (evt) => {
+          favoriteDragId = String(item.id || '');
+          article.classList.add('is-dragging');
+          try {
+            if (evt.dataTransfer) {
+              evt.dataTransfer.effectAllowed = 'move';
+              evt.dataTransfer.setData('text/plain', favoriteDragId);
+            }
+          } catch (_) { }
+        });
+
+        article.addEventListener('dragover', (evt) => {
+          if (!favoriteDragId) return;
+          if (String(item.id || '') === favoriteDragId) return;
+          evt.preventDefault();
+          article.classList.add('is-drop-target');
+          try {
+            if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'move';
+          } catch (_) { }
+        });
+
+        article.addEventListener('dragleave', () => {
+          article.classList.remove('is-drop-target');
+        });
+
+        article.addEventListener('drop', async (evt) => {
+          evt.preventDefault();
+          evt.stopPropagation();
+          article.classList.remove('is-drop-target');
+          const droppedId = String(favoriteDragId || '').trim() || String(evt.dataTransfer?.getData('text/plain') || '').trim();
+          const targetId = String(item.id || '').trim();
+          if (!droppedId || !targetId || droppedId === targetId) return;
+          const changed = reorderFavoriteItems(droppedId, targetId);
+          if (!changed) return;
+          suppressFavoriteOpenUntil = Date.now() + 320;
+          renderFavorites(true);
+          const user = NK.auth.getUser();
+          if (!user) return;
+          try {
+            await saveFavoritesServer(user, favoriteItems);
+          } catch (err) {
+            const detail = String(err?.message || '').trim();
+            alert('정렬 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+          }
+        });
+
+        article.addEventListener('dragend', () => {
+          favoriteDragId = '';
+          article.classList.remove('is-dragging');
+          const activeTargets = favoriteListEl.querySelectorAll('.favorite-item.is-drop-target');
+          activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
+        });
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
+        deleteBtn.draggable = false;
         deleteBtn.className = 'favorite-delete-btn';
         deleteBtn.title = '삭제';
         deleteBtn.setAttribute('aria-label', `${item.title} 삭제`);
         deleteBtn.textContent = 'X';
+        deleteBtn.addEventListener('dragstart', (evt) => {
+          evt.preventDefault();
+          evt.stopPropagation();
+        });
         deleteBtn.addEventListener('click', async (evt) => {
           evt.preventDefault();
           evt.stopPropagation();
@@ -683,6 +758,7 @@
         button.appendChild(iconWrap);
         button.appendChild(titleEl);
         button.addEventListener('click', () => {
+          if (Date.now() < suppressFavoriteOpenUntil) return;
           const opened = openUrlInNewTab(item.url);
           if (!opened) {
             alert('새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.');
