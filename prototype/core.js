@@ -365,7 +365,7 @@
     },
     ko: {
       brand_title: 'NK_Studio',
-      brand_subtitle: '영상 제작 자동화 파이프라인',
+      brand_subtitle: '영상 제작 자동화',
       nav_dashboard: '대시보드',
       nav_scenario: '프리 프로덕션',
       nav_scenes: '프로덕션',

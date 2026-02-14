@@ -1675,9 +1675,10 @@ a.btn-primary:active {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr); /* 항상 4열 유지 */
+  grid-template-columns: repeat(4, 400px);
   gap: 18px;
-  justify-items: stretch;
+  justify-content: flex-start;
+  align-content: flex-start;
 }
 
 .series-filter-bar {
