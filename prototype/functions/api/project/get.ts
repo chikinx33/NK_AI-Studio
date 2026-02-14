@@ -53,16 +53,50 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
     if (!res.ok) return send({ error: text || 'not_found' }, res.status, origin);
     const toGcsPath = (url?: string) => {
-      if (!url) return '';
-      try {
-        if (url.startsWith('gs://')) return url;
-        const u = new URL(url);
-        if (u.host === 'storage.googleapis.com') {
-          const path = u.pathname.replace(/^\/+/, '');
-          if (path) return `gs://${path}`;
+      const parseRef = (input?: string, depth = 0): { bucket?: string; object: string } | null => {
+        const raw = String(input || "").trim();
+        if (!raw || depth > 2) return null;
+        if (raw.startsWith("gs://")) {
+          const rest = raw.slice(5).replace(/^\/+/, "");
+          const slash = rest.indexOf("/");
+          if (slash <= 0) return null;
+          return { bucket: rest.slice(0, slash), object: rest.slice(slash + 1) };
         }
-      } catch (_) { }
-      return '';
+        try {
+          const u = new URL(raw, "http://localhost");
+          const objectName = String(u.searchParams.get("objectName") || "").trim();
+          if (objectName) {
+            const nested = parseRef(objectName, depth + 1);
+            if (nested) return nested;
+            return { object: objectName.replace(/^\/+/, "") };
+          }
+          const nestedUrl = String(u.searchParams.get("url") || "").trim();
+          if (nestedUrl) {
+            const nested = parseRef(nestedUrl, depth + 1);
+            if (nested) return nested;
+          }
+          if (u.host === "storage.googleapis.com") {
+            const path = String(u.pathname || "").replace(/^\/+/, "");
+            const slash = path.indexOf("/");
+            if (slash <= 0) return null;
+            return {
+              bucket: path.slice(0, slash),
+              object: decodeURIComponent(path.slice(slash + 1)),
+            };
+          }
+        } catch (_) { }
+        return null;
+      };
+
+      const parsed = parseRef(url);
+      if (!parsed) return "";
+      const bucket = String(parsed.bucket || outParsed.bucket || "").trim();
+      let object = String(parsed.object || "").trim().replace(/^\/+/, "");
+      if (!bucket || !object) return "";
+      if (!parsed.bucket && object.startsWith(bucket + "/")) {
+        object = object.slice(bucket.length + 1);
+      }
+      return object ? `gs://${bucket}/${object}` : "";
     };
 
     const normalizeDialogue = (value: any) => {
@@ -99,9 +133,17 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const narration = typeof s?.narration === "string" ? s.narration : (typeof s?.lines === "string" ? s.lines : "");
       const dialogue = normalizeDialogue(s?.dialogue ?? s?.dialogues ?? []);
       const visual = typeof s?.visual === "string" ? s.visual : (typeof s?.shot === "string" ? s.shot : "");
-      const imageUrl = typeof s?.imageDataUrl === "string" ? s.imageDataUrl : "";
+      const imageUrl =
+        typeof s?.imageDataUrl === "string" ? s.imageDataUrl
+          : (typeof s?.imagePath === "string" ? s.imagePath
+            : (typeof s?.generatedImageUrl === "string" ? s.generatedImageUrl
+              : (typeof s?.imageUrl === "string" ? s.imageUrl : "")));
       const imagePath = toGcsPath(imageUrl) || (typeof s?.imagePath === "string" ? s.imagePath : "");
-      const videoUrl = typeof s?.videoUrl === "string" ? s.videoUrl : (typeof s?.videoPlaybackUrl === "string" ? s.videoPlaybackUrl : "");
+      const videoUrl =
+        typeof s?.videoUrl === "string" ? s.videoUrl
+          : (typeof s?.videoPlaybackUrl === "string" ? s.videoPlaybackUrl
+            : (typeof s?.videoPath === "string" ? s.videoPath
+              : (typeof s?.generatedVideoUrl === "string" ? s.generatedVideoUrl : "")));
       const videoPath = toGcsPath(videoUrl) || (typeof s?.videoPath === "string" ? s.videoPath : "");
       return {
         id: Number(s?.id ?? idx + 1),

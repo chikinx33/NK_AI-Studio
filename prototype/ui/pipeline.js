@@ -475,6 +475,8 @@
         var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
         var headerCleanSrv = cleanHeader(headerSrv2);
         var sceneSrv = (serverData.scenes || []).map(function (s, idx) {
+          var imageRefSrv = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || '';
+          var videoRefSrv = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
           return {
             id: (s.id != null ? s.id : (idx + 1)),
             lines: s.lines || '',
@@ -484,10 +486,10 @@
             script: s.script || '',
             estSec: s.estSec,
             promptText: (s.promptText || ['Common', headerCleanSrv, 'Visual', (s.shot || '')].join('\n')),
-            imageDataUrl: s.imageDataUrl || '',
+            imageDataUrl: imageRefSrv,
             imgLoading: false,
             imgError: '',
-            videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
+            videoUrl: videoRefSrv,
             videoStatus: s.videoStatus || '',
             videoError: s.videoError || '',
             videoJobId: s.videoJobId || '',
@@ -508,6 +510,8 @@
         var headerInit2 = withAspectInHeader ? withAspectInHeader(headerInitRaw, aspectRatio) : headerInitRaw;
         var headerCleanInit = cleanHeader(headerInit2);
         var sceneListInit = (stored.scenes || []).map(function (s, idx) {
+          var imageRefStored = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || '';
+          var videoRefStored = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
           return {
             id: (s.id != null ? s.id : (idx + 1)),
             lines: s.lines || '',
@@ -517,10 +521,10 @@
             script: s.script || '',
             estSec: s.estSec,
             promptText: (s.promptText || ['Common', headerCleanInit, 'Visual', (s.shot || '')].join('\n')),
-            imageDataUrl: s.imageDataUrl || '',
+            imageDataUrl: imageRefStored,
             imgLoading: false,
             imgError: '',
-            videoUrl: s.videoUrl || s.videoPlaybackUrl || '',
+            videoUrl: videoRefStored,
             videoStatus: s.videoStatus || '',
             videoError: s.videoError || '',
             videoJobId: s.videoJobId || '',
@@ -1264,33 +1268,76 @@
           vidItems = Array.isArray(j2.items) ? j2.items : [];
         } catch (_) { vidItems = []; }
       }
+      var decodeSafe = function (v) {
+        try { return decodeURIComponent(String(v || '')); } catch (_) { return String(v || ''); }
+      };
       var baseName = function (u) {
         try {
           var urlObj = new URL(String(u));
           var path = urlObj.pathname;
           var parts = path.split('/');
-          return decodeURIComponent(parts[parts.length - 1]);
+          return decodeSafe(parts[parts.length - 1]);
         } catch (_) {
           var parts2 = String(u).split(/[?#]/)[0].split('/');
-          return decodeURIComponent(parts2[parts2.length - 1]);
+          return decodeSafe(parts2[parts2.length - 1]);
         }
       };
-      var imgMap = new Map(imgItems.map(function (it) { return [String(it.name || '').split('/').pop(), String(it.signedUrl || '')]; }));
-      var vidMap = new Map(vidItems.map(function (it) { return [String(it.name || '').split('/').pop(), String(it.signedUrl || '')]; }));
+      var cleanObjectName = function (v) {
+        var raw = String(v || '').trim();
+        if (!raw) return '';
+        if (raw.indexOf('gs://') === 0) {
+          var rest = raw.slice(5);
+          var slash = rest.indexOf('/');
+          return slash >= 0 ? rest.slice(slash + 1) : '';
+        }
+        return raw.replace(/^\/+/, '');
+      };
+      var buildAssetIndex = function (items) {
+        var byObject = new Map();
+        var byBase = new Map();
+        (items || []).forEach(function (it) {
+          var signed = String((it && it.signedUrl) || '').trim();
+          if (!signed) return;
+          var itemName = String((it && it.name) || '').trim();
+          var objectCandidates = [
+            cleanObjectName(itemName),
+            extractObjectNameFromMediaRef(itemName),
+            extractObjectNameFromMediaRef(signed)
+          ].filter(Boolean);
+          objectCandidates.forEach(function (key) {
+            var normalizedKey = decodeSafe(String(key || '').replace(/^\/+/, ''));
+            if (normalizedKey && !byObject.has(normalizedKey)) byObject.set(normalizedKey, signed);
+          });
+          var bn = baseName(itemName) || baseName(signed);
+          if (bn && !byBase.has(bn)) byBase.set(bn, signed);
+        });
+        return { byObject: byObject, byBase: byBase };
+      };
+      var resolveSignedUrl = function (ref, index) {
+        if (!index) return '';
+        var rawRef = String(ref || '').trim();
+        if (!rawRef) return '';
+        var objKey = extractObjectNameFromMediaRef(rawRef) || cleanObjectName(rawRef);
+        objKey = decodeSafe(String(objKey || '').replace(/^\/+/, ''));
+        if (objKey && index.byObject.has(objKey)) return index.byObject.get(objKey) || '';
+        var bn = baseName(rawRef);
+        if (bn && index.byBase.has(bn)) return index.byBase.get(bn) || '';
+        return '';
+      };
+      var imgIndex = buildAssetIndex(imgItems);
+      var vidIndex = buildAssetIndex(vidItems);
       var changed = false;
       st.scenes = st.scenes.map(function (s) {
         var next = s;
         if (needImg && s.imageDataUrl && String(s.imageDataUrl).indexOf('data:') !== 0) {
-          var bn1 = baseName(s.imageDataUrl);
-          var signed1 = imgMap.get(bn1);
+          var signed1 = resolveSignedUrl(s.imageDataUrl, imgIndex);
           if (signed1 && signed1 !== s.imageDataUrl) {
             next = Object.assign({}, next, { imageDataUrl: signed1 });
             changed = true;
           }
         }
         if (needVid && s.videoUrl && String(s.videoUrl).indexOf('data:') !== 0) {
-          var bn2 = baseName(s.videoUrl);
-          var signed2 = vidMap.get(bn2);
+          var signed2 = resolveSignedUrl(s.videoUrl, vidIndex);
           if (signed2 && signed2 !== s.videoUrl) {
             next = Object.assign({}, next, { videoUrl: signed2, videoStatus: 'done', videoError: '' });
             changed = true;
