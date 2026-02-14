@@ -48,7 +48,7 @@
             nav.setStage(st);
             try {
                 const pageUrl = new URL(window.location.href);
-                if (st && st !== 'options') {
+                if (st && st !== 'options' && st !== 'dashboard') {
                     pageUrl.searchParams.set('stageHref', targetName);
                     if (pid) pageUrl.searchParams.set('projectId', String(pid));
                     else pageUrl.searchParams.delete('projectId');

@@ -13,6 +13,7 @@
   };
   const RESTORABLE_STAGES = ['scenario', 'scenes', 'media', 'publish'];
   const STAGE_TARGET_KEY = 'nk_current_stage_href';
+  const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
 
   // 서버 → 로컬 동기화 (프로젝트 리스트 병합)
   const syncProjectsFromServer = async () => {
@@ -111,6 +112,16 @@
   };
 
   const resolveInitialStageTarget = (urlParams) => {
+    try {
+      const forced = sessionStorage.getItem(FORCE_DASHBOARD_ENTRY_KEY) === '1'
+        || localStorage.getItem(FORCE_DASHBOARD_ENTRY_KEY) === '1';
+      if (forced) {
+        sessionStorage.removeItem(FORCE_DASHBOARD_ENTRY_KEY);
+        localStorage.removeItem(FORCE_DASHBOARD_ENTRY_KEY);
+        return 'dashboard.html';
+      }
+    } catch (_) { }
+
     try {
       const fromHrefQuery = normalizeStageTarget(urlParams.get('stageHref') || '');
       if (fromHrefQuery) return fromHrefQuery;
@@ -414,6 +425,20 @@
 
     const initialUser = NK.auth.getUser();
     setUI(NK.auth.isAuthed(), initialUser);
+
+    const aiVideoLink = document.querySelector('#login-icons .login-icon-link[href]');
+    if (aiVideoLink) {
+      aiVideoLink.addEventListener('click', () => {
+        try {
+          sessionStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
+          localStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
+          sessionStorage.removeItem(STAGE_TARGET_KEY);
+          localStorage.removeItem(STAGE_TARGET_KEY);
+          sessionStorage.removeItem('nk_current_stage');
+          localStorage.removeItem('nk_current_stage');
+        } catch (_) { }
+      });
+    }
 
     const handleEnter = (e) => {
       if (e.key === 'Enter') {
