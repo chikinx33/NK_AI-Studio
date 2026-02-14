@@ -52,6 +52,12 @@
     payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || NK.config.DEFAULTS?.DURATION || '15';
     payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || '16:9';
     if (form.target) payload.target = form.target.value;
+    // Keep project/episode metadata while editing scenario fields.
+    if (currentPayload && typeof currentPayload === 'object') {
+      if (currentPayload.seriesId && !payload.seriesId) payload.seriesId = currentPayload.seriesId;
+      if (currentPayload.seriesTitle && !payload.seriesTitle) payload.seriesTitle = currentPayload.seriesTitle;
+      if (currentPayload.episodeTitle && !payload.episodeTitle) payload.episodeTitle = currentPayload.episodeTitle;
+    }
     return payload;
   };
 
@@ -417,7 +423,6 @@
     });
   };
 })();
-
 
 
 

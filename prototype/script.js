@@ -158,7 +158,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.601';
+    NK.config.APP_VERSION = '1.608';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -479,11 +479,72 @@
     const input = document.getElementById('project-name-input');
     const btnCreate = document.getElementById('project-create');
     const btnCancel = document.getElementById('project-cancel');
-    const blurTargets = document.querySelectorAll('.main, .sidebar');
+    const blurTargets = document.querySelectorAll('.main, .sidebar, #dashboard-drafts');
     if (!overlay || !input || !btnCreate || !btnCancel) return;
+    if (overlay.dataset.projectOverlayReady === '1') return;
+    overlay.dataset.projectOverlayReady = '1';
     const createDefaultLabel = (btnCreate.textContent || '').trim() || '생성';
     const overlayCard = overlay.querySelector('.auth-card');
     let creating = false;
+    let mode = 'new-series';
+
+    const baseRow = input.closest('.form-row');
+    if (!baseRow || !overlayCard) return;
+
+    const ensureLabel = (row, text) => {
+      if (!row) return null;
+      let label = row.querySelector('label');
+      if (!label) {
+        label = document.createElement('label');
+        row.insertBefore(label, row.firstChild);
+      }
+      label.textContent = text;
+      return label;
+    };
+
+    const modeRow = document.createElement('div');
+    modeRow.className = 'project-create-mode';
+    modeRow.innerHTML = `
+      <button type="button" class="btn-secondary mode-btn-item active" data-mode="new-series">신규 프로젝트</button>
+      <button type="button" class="btn-secondary mode-btn-item" data-mode="episode">에피소드</button>
+    `;
+
+    const newSeriesRow = document.createElement('div');
+    newSeriesRow.className = 'form-row project-create-series-row';
+    newSeriesRow.innerHTML = `
+      <label>프로젝트</label>
+      <input id="project-series-input" placeholder="프로젝트 이름 (예: 우울의 숲)" />
+    `;
+
+    const existingSeriesRow = document.createElement('div');
+    existingSeriesRow.className = 'form-row project-create-series-select-row hidden';
+    existingSeriesRow.innerHTML = `
+      <label>카테고리</label>
+      <select id="project-series-select"></select>
+    `;
+
+    const hintRow = document.createElement('p');
+    hintRow.className = 'project-create-hint';
+    hintRow.id = 'project-create-hint';
+    const inputLine = document.createElement('div');
+    inputLine.className = 'project-create-input-line';
+
+    baseRow.classList.add('project-create-episode-row');
+    ensureLabel(baseRow, '에피소드');
+    input.placeholder = '에피소드 이름 (예: 시즌1 EP1)';
+
+    const actions = overlayCard.querySelector('.option-actions');
+    overlayCard.insertBefore(modeRow, baseRow);
+    overlayCard.insertBefore(inputLine, baseRow);
+    inputLine.appendChild(newSeriesRow);
+    inputLine.appendChild(existingSeriesRow);
+    inputLine.appendChild(baseRow);
+    if (actions) overlayCard.insertBefore(hintRow, actions);
+    else overlayCard.appendChild(hintRow);
+
+    const modeButtons = Array.from(modeRow.querySelectorAll('.mode-btn-item'));
+    const seriesInput = newSeriesRow.querySelector('#project-series-input');
+    const seriesSelect = existingSeriesRow.querySelector('#project-series-select');
 
     if (overlayCard && !overlayCard.querySelector('.project-create-loading')) {
       const loading = document.createElement('div');
@@ -492,12 +553,87 @@
       overlayCard.appendChild(loading);
     }
 
+    const getSeriesList = () => {
+      if (NK.service && NK.service.project && NK.service.project.listSeries) {
+        return NK.service.project.listSeries();
+      }
+      const drafts = NK.store.getDrafts();
+      const map = new Map();
+      drafts.forEach((d) => {
+        const did = String(d && d.id != null ? d.id : '').trim();
+        if (!did) return;
+        const sid = String(d?.payload?.seriesId || ('projects' + did)).trim();
+        const stitle = String(d?.payload?.seriesTitle || d?.seriesTitle || d?.title || sid).trim() || sid;
+        if (!map.has(sid)) map.set(sid, { id: sid, title: stitle, count: 0, latestEpisodeId: did });
+        const row = map.get(sid);
+        row.count += 1;
+        if (Number(did) > Number(row.latestEpisodeId || 0)) row.latestEpisodeId = did;
+      });
+      return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
+    };
+
+    const refreshSeriesOptions = () => {
+      if (!seriesSelect) return [];
+      const list = getSeriesList();
+      seriesSelect.innerHTML = '';
+      if (!list.length) {
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '기존 프로젝트가 없습니다';
+        seriesSelect.appendChild(opt);
+        seriesSelect.disabled = true;
+        return list;
+      }
+      list.forEach((s) => {
+        const opt = document.createElement('option');
+        opt.value = String(s.id);
+        opt.textContent = `${s.title} (${s.count}개 에피소드)`;
+        seriesSelect.appendChild(opt);
+      });
+      seriesSelect.disabled = false;
+      return list;
+    };
+
+    const setMode = (nextMode) => {
+      mode = nextMode === 'episode' ? 'episode' : 'new-series';
+      modeButtons.forEach((btn) => {
+        const active = btn.dataset.mode === mode;
+        btn.classList.toggle('active', active);
+      });
+      const list = refreshSeriesOptions();
+      newSeriesRow.classList.toggle('hidden', mode !== 'new-series');
+      existingSeriesRow.classList.toggle('hidden', mode !== 'episode');
+      if (mode === 'new-series') {
+        ensureLabel(baseRow, '첫 에피소드');
+        input.placeholder = '첫 에피소드 이름 (예: 시즌1 EP1)';
+        hintRow.textContent = '신규 프로젝트를 만들면 첫 에피소드가 함께 생성됩니다.';
+        btnCreate.disabled = creating;
+      } else if (!list.length) {
+        ensureLabel(baseRow, '에피소드');
+        input.placeholder = '에피소드 이름';
+        hintRow.textContent = '기존 프로젝트가 없습니다. 신규 프로젝트를 먼저 만들어 주세요.';
+        btnCreate.disabled = true;
+      } else {
+        ensureLabel(baseRow, '에피소드');
+        input.placeholder = '에피소드 이름';
+        hintRow.textContent = '기존 프로젝트를 선택한 뒤 새 에피소드를 생성합니다.';
+        btnCreate.disabled = creating;
+      }
+    };
+
     const setCreatingState = (isBusy) => {
       creating = !!isBusy;
       overlay.classList.toggle('is-creating', creating);
-      btnCreate.disabled = creating;
+      if (!creating) {
+        setMode(mode);
+      } else {
+        btnCreate.disabled = true;
+      }
       btnCancel.disabled = creating;
       input.disabled = creating;
+      if (seriesInput) seriesInput.disabled = creating;
+      if (seriesSelect) seriesSelect.disabled = creating || mode !== 'episode' || !seriesSelect.options.length || !seriesSelect.value;
+      modeButtons.forEach((btn) => { btn.disabled = creating; });
       btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
       blurTargets.forEach(el => {
         el.classList.toggle('blur-active', creating || !overlay.classList.contains('hidden'));
@@ -509,6 +645,7 @@
       if (creating) return;
       overlay.classList.add('hidden');
       input.value = '';
+      if (seriesInput) seriesInput.value = '';
       blurTargets.forEach(el => {
         el.classList.remove('blur-active');
         el.classList.remove('loading-blur');
@@ -519,11 +656,46 @@
 
     const create = async () => {
       if (creating) return;
-      const title = (input.value || '').trim() || '새 프로젝트';
+      const episodeTitleInput = (input.value || '').trim();
+      const seriesTitleInput = (seriesInput && seriesInput.value ? String(seriesInput.value).trim() : '');
+      const seriesList = refreshSeriesOptions();
+      let payload = null;
+      if (mode === 'new-series') {
+        if (!seriesTitleInput) {
+          alert('신규 프로젝트 이름을 입력해 주세요.');
+          if (seriesInput) seriesInput.focus();
+          return;
+        }
+        payload = {
+          mode: 'new-series',
+          seriesTitle: seriesTitleInput,
+          episodeTitle: episodeTitleInput || (seriesTitleInput + ' EP1')
+        };
+      } else {
+        if (!seriesList.length) {
+          alert('기존 프로젝트가 없습니다. 신규 프로젝트를 먼저 만들어 주세요.');
+          setMode('new-series');
+          if (seriesInput) seriesInput.focus();
+          return;
+        }
+        const selectedId = seriesSelect ? String(seriesSelect.value || '').trim() : '';
+        const selected = seriesList.find((s) => String(s.id) === selectedId) || null;
+        if (!selected) {
+          alert('에피소드를 추가할 프로젝트를 선택해 주세요.');
+          if (seriesSelect) seriesSelect.focus();
+          return;
+        }
+        payload = {
+          mode: 'episode',
+          seriesId: selected.id,
+          seriesTitle: selected.title,
+          episodeTitle: episodeTitleInput || (selected.title + ' 새 에피소드')
+        };
+      }
       setCreatingState(true);
       let created = false;
       try {
-        const draft = await NK.service.project.create(title);
+        const draft = await NK.service.project.create(payload);
         created = true;
         localStorage.setItem(KEY.SELECTED_DRAFT, JSON.stringify(draft));
         localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
@@ -553,13 +725,30 @@
 
     btnCreate.onclick = create;
     input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
+    if (seriesInput) {
+      seriesInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
+    }
+    if (seriesSelect) {
+      seriesSelect.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
+    }
+    modeButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        if (creating) return;
+        setMode(btn.dataset.mode || 'new-series');
+      });
+    });
 
     // 오버레이 열릴 때 배경 블러 처리
     const openFromAnywhere = () => {
       setCreatingState(false);
+      const seriesList = refreshSeriesOptions();
+      setMode(seriesList.length ? 'episode' : 'new-series');
       overlay.classList.remove('hidden');
       blurTargets.forEach(el => el.classList.add('blur-active'));
-      setTimeout(() => input.focus(), 0);
+      setTimeout(() => {
+        if (mode === 'new-series' && seriesInput) seriesInput.focus();
+        else input.focus();
+      }, 0);
     };
     // 빈 카드 클릭 처리 이미 renderDrafts 쪽에 존재하므로 여기서는 open 함수만 노출
     NK.ui.openProjectOverlay = openFromAnywhere;

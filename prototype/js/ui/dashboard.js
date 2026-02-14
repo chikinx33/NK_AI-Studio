@@ -1,8 +1,11 @@
-﻿; (function () {
+; (function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var dashboard = ui.dashboard || (ui.dashboard = {});
+
   var serverMerged = false;
+  var currentSeriesFilter = '__all__';
+
   const setDashLoading = (show, text) => {
     const overlay = document.getElementById('dashboard-loading');
     const blurTarget = document.getElementById('dashboard-drafts');
@@ -15,13 +18,43 @@
     if (blurTarget) blurTarget.classList.toggle('blur-active', !!show);
   };
 
-  /**
-   * 대시보드의 드래프트 리스트를 렌더링합니다.
-   */
+  const normalizeSeriesId = (value) => String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '');
+
+  const normalizeDraft = (draft) => {
+    const id = String(draft?.id || '').trim();
+    if (!id) return null;
+    const payload = Object.assign({}, draft?.payload || {});
+    const seriesId = normalizeSeriesId(payload.seriesId || draft?.seriesId) || ('projects' + id);
+    const seriesTitle = String(payload.seriesTitle || draft?.seriesTitle || draft?.title || seriesId).trim() || seriesId;
+    payload.seriesId = seriesId;
+    payload.seriesTitle = seriesTitle;
+    const title = String(draft?.title || payload.episodeTitle || seriesTitle || '제목없음').trim() || '제목없음';
+    return Object.assign({}, draft || {}, { id, title, seriesId, seriesTitle, payload });
+  };
+
+  const listSeriesFromDrafts = (drafts) => {
+    const map = new Map();
+    (Array.isArray(drafts) ? drafts : []).forEach((d) => {
+      const nd = normalizeDraft(d);
+      if (!nd) return;
+      if (!map.has(nd.seriesId)) map.set(nd.seriesId, { id: nd.seriesId, title: nd.seriesTitle, count: 0, latestEpisodeId: nd.id });
+      const row = map.get(nd.seriesId);
+      row.count += 1;
+      if (Number(nd.id) > Number(row.latestEpisodeId || 0)) row.latestEpisodeId = nd.id;
+    });
+    return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
+  };
+
+  const refreshSidebarCardFromState = () => {
+    if (!NK.ui || !NK.ui.dashboard || !NK.ui.dashboard.renderSidebarProjectCard) return;
+    const cur = NK.state?.runtime?.currentProject || null;
+    NK.ui.dashboard.renderSidebarProjectCard(cur);
+  };
+
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
-    // 전역 클릭 핸들러를 한 번만 등록해 iframe/부모 상태와 무관하게 동작하도록 보장
+
     if (!window.__nk_dashboard_global_click_bound) {
       window.__nk_dashboard_global_click_bound = true;
       document.addEventListener('click', (e) => {
@@ -33,7 +66,6 @@
       }, true);
     }
 
-    // 서버 프로젝트와 병합
     let drafts = NK.store.getDrafts();
     const mergeFromServer = async () => {
       if (!NK.api || !NK.api.projectList) return;
@@ -57,20 +89,21 @@
               const res = await NK.api.projectGet(id);
               const data = res?.data || {};
               const existingTitle = idx >= 0 ? drafts[idx].title : '';
-              const draft = {
+              const draft = normalizeDraft({
                 id,
-                title: data.title || data.payload?.topic || existingTitle || '프로젝트',
+                title: data.title || data.payload?.episodeTitle || data.payload?.topic || existingTitle || '프로젝트',
                 payload: data.payload || {},
                 scenes: data.scenes || [],
                 header: data.header || '',
-              };
+              });
+              if (!draft) continue;
               if (idx === -1) drafts.push(draft);
-              else drafts[idx] = draft; // 기존 항목도 최신 데이터로 덮어쓰기
+              else drafts[idx] = draft;
               changed = true;
             } catch (_) {
-              // data.json이 없거나 404라도 최소한 ID는 노출되도록 스텁 추가
               if (idx === -1) {
-                drafts.push({ id, title: existingTitle || '프로젝트', payload: {}, scenes: [], header: '' });
+                const stub = normalizeDraft({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
+                if (stub) drafts.push(stub);
                 changed = true;
               }
             }
@@ -81,22 +114,26 @@
           drafts = filtered;
           changed = true;
         }
-        if (changed) {
-          NK.store.saveDrafts(drafts);
-        }
+        if (changed) NK.store.saveDrafts(drafts);
       } catch (_) { }
       finally {
         setDashLoading(false);
       }
     };
-    // 병합 시도 후 최신 drafts 사용
-    // 비동기지만 UI 렌더 직전에 가장 최신 로컬 상태로 갱신
+
     if (NK.api && NK.api.projectList && !serverMerged) {
       mergeFromServer().then(() => dashboard.renderDrafts());
-      // 현재 렌더는 기존 drafts로 진행 (즉시 표시)
     }
 
-    drafts = NK.store.getDrafts();
+    drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+    const seriesList = listSeriesFromDrafts(drafts);
+    if (currentSeriesFilter !== '__all__' && !seriesList.some((s) => s.id === currentSeriesFilter)) {
+      currentSeriesFilter = '__all__';
+    }
+    const selectedSeries = seriesList.find((s) => s.id === currentSeriesFilter) || null;
+    const filteredDrafts = currentSeriesFilter === '__all__'
+      ? drafts
+      : drafts.filter((d) => d.seriesId === currentSeriesFilter);
 
     const fmtDuration = (sec) => {
       const n = Number(sec) || 0;
@@ -105,15 +142,24 @@
       return `${n}s`;
     };
 
-    const emptyCard = `
-      <article class="draft-card empty-project-card" data-action="create-project" aria-label="새 프로젝트">
-        <div class="empty-card-content">
-          <span class="plus-icon">+</span>
-        </div>
-      </article>
+    const filterBar = `
+      <div class="series-filter-bar">
+        <button class="btn-primary series-create-btn" data-action="create-project">신규</button>
+        <button class="chip series-chip ${currentSeriesFilter === '__all__' ? 'active' : ''}" data-action="series-filter" data-series-id="__all__">전체</button>
+        ${seriesList.map((s) => `
+          <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}" data-action="series-filter" data-series-id="${s.id}">
+            ${s.title} (${s.count})
+          </button>
+        `).join('')}
+      </div>
+      <div class="series-manage-bar">
+        <span class="series-manage-label">${selectedSeries ? `선택된 시리즈: ${selectedSeries.title}` : '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.'}</span>
+        <button class="btn-secondary compact ${selectedSeries ? '' : 'disabled'}" data-action="series-rename" ${selectedSeries ? '' : 'disabled'}>시리즈 이름 변경</button>
+        <button class="btn-secondary compact danger ${selectedSeries ? '' : 'disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'}>시리즈 삭제</button>
+      </div>
     `;
 
-    const list = drafts.map(d => {
+    const list = filteredDrafts.map(d => {
       const ar = d.payload?.aspectRatio || '16:9';
       const dur = fmtDuration(d.payload?.duration || 0);
       const cat = d.payload?.purposeCategory || '';
@@ -126,11 +172,12 @@
           <div class="draft-top">
             <div class="draft-thumb"></div>
             <div>
-          <div class="draft-title-row">
-            <h4 class="draft-title" data-id="${d.id}">${d.title || '제목없음'}</h4>
-            <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">✎</button>
-          </div>
+              <div class="draft-title-row">
+                <h4 class="draft-title" data-id="${d.id}">${d.title || '제목없음'}</h4>
+                <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">&#9998;</button>
+              </div>
               <div class="draft-meta">
+                <div>프로젝트 : ${d.seriesTitle || '-'}</div>
                 <div>장르 : ${genre || '-'}</div>
                 <div>타겟 : ${tgt || '-'}</div>
                 <div>길이 : ${dur}</div>
@@ -142,30 +189,100 @@
             <button class="btn-primary" data-action="draft-edit" data-id="${d.id}">Pre</button>
             <button class="btn-secondary" data-action="draft-production" data-id="${d.id}">Production</button>
             <button class="btn-secondary" data-action="draft-post" data-id="${d.id}">Post</button>
-            <button class="trash-btn action-trash" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">🗑</button>
+            <button class="trash-btn action-trash" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">&#128465;</button>
           </div>
         </article>
       `;
     }).join('');
 
-    container.innerHTML = emptyCard + list;
+    container.innerHTML = filterBar + list;
 
-    // 이벤트 리스너 추가
     container.onclick = (e) => {
       const btn = e.target.closest('[data-action]');
       if (!btn) return;
 
       const action = btn.dataset.action;
       const id = btn.dataset.id;
-
       const isIframe = window.self !== window.top;
       const isStandaloneStage = !isIframe && document.querySelector('.app.no-sidebar');
+
+      if (action === 'series-filter') {
+        currentSeriesFilter = String(btn.dataset.seriesId || '__all__');
+        dashboard.renderDrafts();
+        return;
+      }
+
+      if (action === 'series-rename') {
+        if (!selectedSeries) return;
+        (async () => {
+          var next = null;
+          if (NK.ui && NK.ui.dialog && NK.ui.dialog.prompt) {
+            next = await NK.ui.dialog.prompt('시리즈 새 이름을 입력해 주세요.', {
+              title: '시리즈 이름 변경',
+              defaultValue: selectedSeries.title || '',
+              okText: '변경',
+              cancelText: '취소'
+            });
+          } else {
+            next = prompt('시리즈 새 이름을 입력해 주세요.', selectedSeries.title || '');
+          }
+          if (next === null) return;
+          const nextTitle = String(next || '').trim();
+          if (!nextTitle) {
+            alert('시리즈 이름을 입력해 주세요.');
+            return;
+          }
+          setDashLoading(true, '시리즈 이름 변경 중...');
+          try {
+            const result = await NK.service.project.renameSeries(selectedSeries.id, nextTitle);
+            dashboard.renderDrafts();
+            refreshSidebarCardFromState();
+            if (result.failed > 0) {
+              alert(`시리즈 이름은 변경되었습니다. 서버 동기화 일부 실패: ${result.failed}개`);
+            } else {
+              alert('시리즈 이름이 변경되었습니다.');
+            }
+          } catch (err) {
+            alert('시리즈 이름 변경 실패: ' + (err?.message || err));
+          } finally {
+            setDashLoading(false);
+          }
+        })();
+        return;
+      }
+
+      if (action === 'series-delete') {
+        if (!selectedSeries) return;
+        const targetCount = Number(selectedSeries.count || 0);
+        const message = `시리즈 "${selectedSeries.title}"의 에피소드 ${targetCount}개를 모두 삭제합니다.\n계속하시겠습니까?`;
+        (async () => {
+          var ok = true;
+          if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
+            ok = await NK.ui.dialog.confirm(message, { title: '시리즈 삭제 확인' });
+          } else {
+            ok = confirm(message);
+          }
+          if (!ok) return;
+          setDashLoading(true, '시리즈 삭제 중...');
+          try {
+            await NK.service.project.deleteSeries(selectedSeries.id);
+            currentSeriesFilter = '__all__';
+            serverMerged = false;
+            dashboard.renderDrafts();
+            refreshSidebarCardFromState();
+            alert('시리즈와 하위 에피소드가 삭제되었습니다.');
+          } catch (err) {
+            alert('시리즈 삭제 실패: ' + (err?.message || err));
+          } finally {
+            setDashLoading(false);
+          }
+        })();
+        return;
+      }
 
       if (action === 'title-edit') {
         const titleEl = container.querySelector(`.draft-title[data-id="${id}"]`);
         if (!titleEl) return;
-
-        // 이미 편집 중이면 무시
         if (titleEl.isContentEditable) return;
 
         titleEl.contentEditable = 'true';
@@ -181,11 +298,13 @@
         const commit = () => {
           if (committed) return;
           committed = true;
-          const drafts = NK.store.getDrafts();
+          const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
           const draft = drafts.find(d => String(d.id) === String(id));
           if (!draft) return;
           const newTitle = (titleEl.textContent || '').trim() || '제목없음';
           draft.title = newTitle;
+          draft.payload = draft.payload || {};
+          draft.payload.episodeTitle = newTitle;
           NK.store.saveDrafts(drafts);
           try {
             localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
@@ -197,12 +316,11 @@
           titleEl.contentEditable = 'false';
           titleEl.classList.remove('editing');
           if (NK.api && NK.api.projectSave) {
-            // 서버에 제목만이라도 즉시 반영
             NK.api.projectSave(draft.id, draft.payload || {}, draft.scenes || [], {
               header: draft.header || '',
               aspectRatio: draft.payload?.aspectRatio,
               title: newTitle
-            }).catch(() => { /* ignore network errors */ });
+            }).catch(() => { });
           }
           alert('제목을 수정했습니다.');
         };
@@ -224,29 +342,24 @@
         };
         titleEl.onblur = () => { commit(); titleEl.onblur = null; titleEl.onkeydown = null; };
       } else if (action === 'draft-edit') {
-        const drafts = NK.store.getDrafts();
+        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
           localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
-
-          // 상태 방송 (부모에게 전달)
           NK.state.broadcast('update-project', { project: draft });
-
           const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
           if (isStandaloneStage) {
             window.location.href = url;
           } else {
             NK.navigation.loadStage(url);
-            // 보조 강제 내비게이션 (일부 환경에서 loadStage가 막히는 문제 대응)
-            setTimeout(() => { try { window.location.assign(url); } catch (_) {} }, 30);
-            // embed 환경에서 부모에 직접 로드 요청
-            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) {}
+            setTimeout(() => { try { window.location.assign(url); } catch (_) { } }, 30);
+            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) { }
           }
         }
       } else if (action === 'draft-production') {
-        const drafts = NK.store.getDrafts();
+        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
@@ -258,12 +371,12 @@
             window.location.href = url;
           } else {
             NK.navigation.loadStage(url);
-            setTimeout(() => { try { window.location.assign(url); } catch (_) {} }, 30);
-            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) {}
+            setTimeout(() => { try { window.location.assign(url); } catch (_) { } }, 30);
+            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) { }
           }
         }
       } else if (action === 'draft-post') {
-        const drafts = NK.store.getDrafts();
+        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
@@ -275,8 +388,8 @@
             window.location.href = url;
           } else {
             NK.navigation.loadStage(url);
-            setTimeout(() => { try { window.location.assign(url); } catch (_) {} }, 30);
-            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) {}
+            setTimeout(() => { try { window.location.assign(url); } catch (_) { } }, 30);
+            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) { }
           }
         }
       } else if (action === 'create-project') {
@@ -301,10 +414,9 @@
           NK.service.project.delete(id).catch((err) => {
             alert('삭제 중 오류가 발생했지만 로컬 목록은 정리했습니다. 새로고침 후 확인하세요.\n' + (err?.message || err));
           }).finally(() => {
-            serverMerged = false; // 다시 서버와 동기화하도록 플래그 리셋
+            serverMerged = false;
             setDashLoading(false);
             dashboard.renderDrafts();
-            // 사이드바 카드도 즉시 비워주기
             if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
               NK.ui.dashboard.renderSidebarProjectCard(null);
             }
@@ -313,18 +425,8 @@
       }
     };
 
-    // 높이 보정
-    const firstCard = container.querySelector('.draft-card:not(.empty-project-card)');
-    const emptyEl = container.querySelector('.empty-project-card');
-    if (emptyEl && firstCard) {
-      const h = firstCard.getBoundingClientRect().height;
-      if (h) emptyEl.style.height = `${Math.round(h)}px`;
-    }
   };
 
-  /**
-   * 사이드바의 프로젝트 카드를 렌더링합니다.
-   */
   dashboard.renderSidebarProjectCard = function (draft) {
     const container = document.getElementById('sidebar-project-card');
     if (!container) return;
@@ -335,18 +437,20 @@
       return;
     }
 
-    const ar = draft.payload?.aspectRatio || '16:9';
+    const normalized = normalizeDraft(draft) || draft;
+    const ar = normalized.payload?.aspectRatio || '16:9';
     const dur = (() => {
-      const n = Number(draft.payload?.duration) || 0;
+      const n = Number(normalized.payload?.duration) || 0;
       if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
       if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
       return n ? `${n}s` : '-';
     })();
-    const cat = draft.payload?.purposeCategory || '';
-    const tags = Array.isArray(draft.payload?.purposeTags) ? draft.payload.purposeTags.join(', ') : '';
-    const tgt = draft.payload?.target || '';
+    const cat = normalized.payload?.purposeCategory || '';
+    const tags = Array.isArray(normalized.payload?.purposeTags) ? normalized.payload.purposeTags.join(', ') : '';
+    const tgt = normalized.payload?.target || '';
     const genre = `${cat} ${tags}`.trim();
     const desc = [
+      `프로젝트 : ${normalized.seriesTitle || '-'}`,
       `장르 : ${genre || '-'}`,
       `타겟 : ${tgt || '-'}`,
       `길이 : ${dur}`,
@@ -357,7 +461,7 @@
       <div class="draft-top">
         <div class="draft-thumb"></div>
         <div class="sidebar-card-text">
-          <h4 class="sidebar-card-title">${draft.title || '제목없음'}</h4>
+          <h4 class="sidebar-card-title">${normalized.title || '제목없음'}</h4>
           <p class="sidebar-card-lines">${desc}</p>
         </div>
       </div>
@@ -369,5 +473,4 @@
     `;
     container.style.display = 'block';
   };
-
 })();
