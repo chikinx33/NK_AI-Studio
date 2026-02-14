@@ -704,14 +704,16 @@
 
   function chooseRecorderMimeType() {
     if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
+    // 브라우저 로컬 렌더는 webm 계열이 가장 안정적이고,
+    // 최종 mp4 보장은 서버 트랜스코딩에서 담당한다.
     var candidates = [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
       'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
       'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
       'video/mp4;codecs=avc1',
-      'video/mp4',
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm'
+      'video/mp4'
     ];
     for (var i = 0; i < candidates.length; i++) {
       if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
@@ -863,10 +865,6 @@
       } catch (_) { }
     }
     return false;
-  }
-
-  function isMp4MimeType(mime) {
-    return String(mime || '').toLowerCase().indexOf('video/mp4') === 0;
   }
 
   function waitMs(ms) {
@@ -1170,13 +1168,13 @@
       if (result && result.allVisualsFailed) {
         throw new Error('모든 씬 미디어 로드에 실패했습니다. 프로덕션에서 자산 URL을 갱신한 뒤 다시 시도해주세요.');
       }
-      var outputVideoUrl = '';
+      var outputVideoUrl = await transcodeRenderedBlobToMp4(
+        state.projectId,
+        result.blob,
+        result && result.mimeType,
+        renderJobId
+      );
       var outputVideoMime = 'video/mp4';
-      if (isMp4MimeType(result && result.mimeType)) {
-        outputVideoUrl = URL.createObjectURL(result.blob);
-      } else {
-        outputVideoUrl = await transcodeRenderedBlobToMp4(state.projectId, result.blob, result && result.mimeType, renderJobId);
-      }
       if (oldUrl && oldUrl.indexOf('blob:') === 0 && oldUrl !== outputVideoUrl) {
         try { URL.revokeObjectURL(oldUrl); } catch (_) { }
       }
