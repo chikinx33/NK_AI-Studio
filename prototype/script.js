@@ -158,7 +158,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.598';
+    NK.config.APP_VERSION = '1.600';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -481,19 +481,50 @@
     const btnCancel = document.getElementById('project-cancel');
     const blurTargets = document.querySelectorAll('.main, .sidebar');
     if (!overlay || !input || !btnCreate || !btnCancel) return;
+    const createDefaultLabel = (btnCreate.textContent || '').trim() || '생성';
+    const overlayCard = overlay.querySelector('.auth-card');
+    let creating = false;
+
+    if (overlayCard && !overlayCard.querySelector('.project-create-loading')) {
+      const loading = document.createElement('div');
+      loading.className = 'project-create-loading';
+      loading.innerHTML = '<div class="spinner" aria-hidden="true"></div><p>프로젝트 생성 중...</p>';
+      overlayCard.appendChild(loading);
+    }
+
+    const setCreatingState = (isBusy) => {
+      creating = !!isBusy;
+      overlay.classList.toggle('is-creating', creating);
+      btnCreate.disabled = creating;
+      btnCancel.disabled = creating;
+      input.disabled = creating;
+      btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
+      blurTargets.forEach(el => {
+        el.classList.toggle('blur-active', creating || !overlay.classList.contains('hidden'));
+        el.classList.toggle('loading-blur', creating);
+      });
+    };
 
     const close = () => {
+      if (creating) return;
       overlay.classList.add('hidden');
       input.value = '';
-      blurTargets.forEach(el => el.classList.remove('blur-active'));
+      blurTargets.forEach(el => {
+        el.classList.remove('blur-active');
+        el.classList.remove('loading-blur');
+      });
     };
 
     btnCancel.onclick = close;
 
     const create = async () => {
+      if (creating) return;
       const title = (input.value || '').trim() || '새 프로젝트';
+      setCreatingState(true);
+      let created = false;
       try {
         const draft = await NK.service.project.create(title);
+        created = true;
         localStorage.setItem(KEY.SELECTED_DRAFT, JSON.stringify(draft));
         localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
         localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
@@ -508,13 +539,15 @@
           NK.ui.dashboard.renderDrafts();
         }
         const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
+        setCreatingState(false);
+        close();
         NK.navigation.loadStage(url);
         // 즉시 하이라이트 반영
         updateSidebarHighlight('scenario');
       } catch (err) {
         alert('프로젝트 생성 실패: ' + (err?.message || err));
       } finally {
-        close();
+        if (!created) setCreatingState(false);
       }
     };
 
@@ -523,6 +556,7 @@
 
     // 오버레이 열릴 때 배경 블러 처리
     const openFromAnywhere = () => {
+      setCreatingState(false);
       overlay.classList.remove('hidden');
       blurTargets.forEach(el => el.classList.add('blur-active'));
       setTimeout(() => input.focus(), 0);

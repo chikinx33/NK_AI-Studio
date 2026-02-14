@@ -21,8 +21,9 @@ export function resolveUserId(raw: any, env?: any): string {
 }
 
 export function buildAiVideoUserRoot(basePrefix: string, userId: string): string {
-  const root = String(basePrefix || "").replace(/\/$/, "");
+  const root = normalizeBasePrefix(basePrefix);
   const uid = sanitizeUserId(userId);
+  if (!root) return `users/${uid}/${AI_VIDEO_SERVICE}`;
   return `${root}/users/${uid}/${AI_VIDEO_SERVICE}`;
 }
 
@@ -31,3 +32,12 @@ export function buildAiVideoProjectPrefix(basePrefix: string, userId: string, pr
   return `${root}/projects/${String(projectId || "").trim()}`;
 }
 
+function normalizeBasePrefix(basePrefix: string): string {
+  const raw = String(basePrefix || "").replace(/\/+$/, "");
+  if (!raw) return "";
+  const parts = raw.split("/").filter(Boolean);
+  if (parts.length && parts[parts.length - 1].toLowerCase() === "videos") {
+    parts.pop();
+  }
+  return parts.join("/");
+}

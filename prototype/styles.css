@@ -2754,6 +2754,47 @@ a.btn-primary:active {
   filter: blur(5px);
 }
 
+.main.loading-blur,
+.sidebar.loading-blur {
+  filter: blur(7px);
+  pointer-events: none;
+}
+
+#project-overlay .auth-card {
+  position: relative;
+}
+
+#project-overlay .project-create-loading {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  border-radius: 12px;
+  background: rgba(8, 12, 22, 0.58);
+  backdrop-filter: blur(2px);
+  z-index: 2;
+}
+
+#project-overlay .project-create-loading .spinner {
+  width: 30px;
+  height: 30px;
+  border-width: 3px;
+}
+
+#project-overlay .project-create-loading p {
+  margin: 0;
+  color: #f5f7fd;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+#project-overlay.is-creating .project-create-loading {
+  display: flex;
+}
+
 .auth-overlay {
   position: fixed;
   inset: 0;
