@@ -106,8 +106,19 @@
                     var cw = iframe.contentWindow;
                     if (!cw) return;
 
-                    var theme = (NK.state && NK.state.runtime && NK.state.runtime.theme) || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.THEME) || 'nk_theme') || 'dark';
-                    var lang = (NK.state && NK.state.runtime && NK.state.runtime.lang) || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang') || 'ko';
+                    var themeKey = (NK.config && NK.config.KEYS && NK.config.KEYS.THEME) || 'nk_theme';
+                    var langKey = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
+                    var storedTheme = localStorage.getItem(themeKey);
+                    var runtimeTheme = (NK.state && NK.state.runtime && NK.state.runtime.theme) || '';
+                    var storedLang = localStorage.getItem(langKey);
+                    var runtimeLang = (NK.state && NK.state.runtime && NK.state.runtime.lang) || '';
+
+                    var theme = (storedTheme === 'light' || storedTheme === 'dark')
+                        ? storedTheme
+                        : ((runtimeTheme === 'light' || runtimeTheme === 'dark') ? runtimeTheme : 'dark');
+                    var lang = (storedLang === 'en' || storedLang === 'ko')
+                        ? storedLang
+                        : ((runtimeLang === 'en' || runtimeLang === 'ko') ? runtimeLang : 'ko');
                     var safeLang = (lang === 'en' ? 'en' : 'ko');
                     var applySync = function () {
                         try {

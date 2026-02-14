@@ -397,9 +397,13 @@
     };
 
     common.applyTheme = function (theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem(NK.config.KEYS.THEME, theme);
-        common.updateThemeButton(theme, NK.state.runtime.lang);
+        var safeTheme = (theme === 'light') ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', safeTheme);
+        localStorage.setItem(NK.config.KEYS.THEME, safeTheme);
+        if (NK.state && NK.state.set) {
+            NK.state.set({ theme: safeTheme });
+        }
+        common.updateThemeButton(safeTheme, NK.state.runtime.lang);
     };
 
     common.updateThemeButton = function (theme, lang) {
