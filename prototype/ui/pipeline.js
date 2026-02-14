@@ -37,6 +37,7 @@
   async function downloadFile(url, filename) {
     try {
       if (!url) return;
+      var playableUrl = toPlayableMediaUrl(url);
       let blob;
       if (url.startsWith('data:')) {
         const arr = url.split(',');
@@ -47,7 +48,7 @@
         while (n--) u8[n] = bstr.charCodeAt(n);
         blob = new Blob([u8], { type: mime });
       } else {
-        const res = await fetch(url);
+        const res = await fetch(playableUrl);
         blob = await res.blob();
       }
       const a = document.createElement('a');
@@ -70,7 +71,7 @@
     const modal = document.getElementById('img-modal');
     if (!modal || !src) return;
     const img = modal.querySelector('img');
-    img.src = src;
+    img.src = toPlayableMediaUrl(src);
     modal.classList.remove('hidden');
   }
 
@@ -78,7 +79,7 @@
     const modal = document.getElementById('video-modal');
     if (!modal || !src) return;
     const video = modal.querySelector('video');
-    video.src = src;
+    video.src = toPlayableMediaUrl(src);
     video.load();
     modal.classList.remove('hidden');
   }
@@ -106,10 +107,11 @@
     } else {
       const list = items.map(function (it, i) {
         const url = it.signedUrl || it.url || '';
+        const thumbUrl = toPlayableMediaUrl(url);
         const name = it.name || '';
         const thumb = (kind === 'image')
-          ? '<img class="lib-thumb" src="' + url + '" alt="" />'
-          : '<video class="lib-thumb" src="' + url + '" muted playsinline preload="metadata"></video>';
+          ? '<img class="lib-thumb" src="' + thumbUrl + '" alt="" />'
+          : '<video class="lib-thumb" src="' + thumbUrl + '" muted playsinline preload="metadata"></video>';
         return (
           '<div class="lib-item" data-url="' + url + '" data-name="' + name + '" style="background:none;box-shadow:none;">' +
           thumb +
@@ -1309,6 +1311,18 @@
 
 
 
+function toPlayableMediaUrl(url) {
+  var raw = String(url || '').trim();
+  if (!raw) return '';
+  if (raw.indexOf('data:') === 0 || raw.indexOf('blob:') === 0) return raw;
+  var NK = window.NK || {};
+  if (!NK.api || !NK.api.mediaProxyUrl) return raw;
+  if (raw.indexOf('storage.googleapis.com') >= 0 || raw.indexOf('gs://') === 0) {
+    return NK.api.mediaProxyUrl(raw);
+  }
+  return raw;
+}
+
 // 복사 가능한 에러 알림 (alert 대체)
 function showCopyableError(title, detail) {
   var msg = detail ? (title + '\n' + detail) : title;
@@ -1318,17 +1332,19 @@ function showCopyableError(title, detail) {
   alert(msg);
 }
 function buildSceneRowHtml(s, header) {
+  var imagePlayableUrl = toPlayableMediaUrl(s.imageDataUrl || '');
+  var videoPlayableUrl = toPlayableMediaUrl(s.videoUrl || '');
   var img = (s.imgLoading
     ? '<div class="image-placeholder tall loading"><span>생성 중...</span></div>'
     : (s.imgError
       ? '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>'
       : (s.imageDataUrl
-        ? '<div class="image-box"><img class="scene-img" loading="lazy" decoding="async" data-src="' + s.imageDataUrl + '" src="' + s.imageDataUrl + '" alt="scene image" /></div>'
+        ? '<div class="image-box"><img class="scene-img" loading="lazy" decoding="async" data-src="' + imagePlayableUrl + '" src="' + imagePlayableUrl + '" alt="scene image" /></div>'
         : '<div class="image-placeholder tall no-plus"><span>image</span></div>')));
   var videoCard = (function () {
     if (s.videoUrl) {
       var note = s.videoMethod === 'inline' ? '<div class="video-note">내장 재생(임시 변환)</div>' : '';
-      return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + s.videoUrl + '" type="video/mp4" /></video>' + note + '</div>';
+      return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + videoPlayableUrl + '" type="video/mp4" /></video>' + note + '</div>';
     }
     if (s.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>영상 생성중...</span></div>';
     if (s.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';

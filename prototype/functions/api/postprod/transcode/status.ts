@@ -45,11 +45,25 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const text = await res.text();
     const json = safeJson(text) as any;
     if (!res.ok) {
-      return send({ error: "Transcoder status failed", status: res.status, detail: json }, res.status, origin);
+      const hint = getTranscoderHint(res.status, json);
+      return send(
+        {
+          error: "Transcoder status failed",
+          status: res.status,
+          detail: json,
+          hint: hint.message,
+          requiredRoles: hint.requiredRoles,
+        },
+        res.status,
+        origin
+      );
     }
 
     const state = String(json?.state || "").toUpperCase();
     if (state === "SUCCEEDED") {
+      const reqBase = new URL(request.url);
+      const proxyUrl =
+        `${reqBase.origin}/api/media/proxy?objectName=${encodeURIComponent(outputObjectName)}`;
       const signedUrl = await signGcsUrl({
         bucket: outParsed.bucket,
         object: outputObjectName,
@@ -57,7 +71,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         privateKeyPem: privateKeyRaw,
         expiresInSec: 3600,
       }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${outputObjectName}`));
-      return send({ done: true, status: state, signedUrl, outputObjectName }, 200, origin);
+      return send({ done: true, status: state, signedUrl, proxyUrl, outputObjectName }, 200, origin);
     }
 
     if (state === "FAILED" || state === "CANCELLED") {
@@ -106,6 +120,26 @@ function gcsToHttps(uri: string) {
 
 function safeJson(text: string) {
   try { return JSON.parse(text); } catch { return text; }
+}
+
+function getTranscoderHint(status: number, _detail: any): { message: string; requiredRoles: string[] } {
+  const requiredRoles = [
+    "roles/transcoder.admin",
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    "roles/storage.objectAdmin",
+  ];
+  if (status === 403) {
+    return {
+      message:
+        "Permission denied. Enable Transcoder API and grant the service account Transcoder + GCS read/write roles.",
+      requiredRoles,
+    };
+  }
+  return {
+    message: `Transcoder status request failed (${status}). Check jobName, location, and permissions.`,
+    requiredRoles,
+  };
 }
 
 async function getGoogleAccessToken(opts: { clientEmail: string; privateKeyPem: string; scope: string }) {

@@ -293,6 +293,17 @@
     return /\.(mp4|m4v|webm|mov)$/i.test(clean);
   }
 
+  function toPlayableMediaUrl(url) {
+    var raw = String(url || '').trim();
+    if (!raw) return '';
+    if (raw.indexOf('data:') === 0 || raw.indexOf('blob:') === 0) return raw;
+    if (!NK.api || !NK.api.mediaProxyUrl) return raw;
+    if (raw.indexOf('storage.googleapis.com') >= 0 || raw.indexOf('gs://') === 0) {
+      return NK.api.mediaProxyUrl(raw);
+    }
+    return raw;
+  }
+
   function formatTime(sec) {
     var s = Math.max(0, Math.floor(Number(sec) || 0));
     var m = Math.floor(s / 60);
@@ -511,6 +522,21 @@
     return raw || '알 수 없는 오류';
   }
 
+  function getRenderErrorMessage(err) {
+    var raw = String((err && err.message) || err || '').trim();
+    if (!raw) return '알 수 없는 오류';
+    if (/403\s+Transcoder job create failed/i.test(raw) || /transcode_start_failed/i.test(raw)) {
+      return '트랜스코더 작업 생성 권한이 없어 MP4 변환을 시작하지 못했습니다. 관리자에게 서비스 계정의 Transcoder/GCS 권한을 부여해 달라고 요청해 주세요.';
+    }
+    if (/transcode_failed_/i.test(raw)) {
+      return 'MP4 변환 작업이 중단되었습니다. 잠시 후 다시 시도하거나 관리자에게 트랜스코더 작업 상태를 확인해 달라고 요청해 주세요.';
+    }
+    if (/media_proxy_fetch_failed/i.test(raw) || /image_load_failed|video_load_failed|video_load_timeout/i.test(raw)) {
+      return '씬 미디어를 불러오지 못했습니다. 프로덕션 라이브러리에서 장면 미디어를 다시 선택한 뒤 저장하고 다시 렌더링해 주세요.';
+    }
+    return raw;
+  }
+
   async function saveProjectNow(options) {
     options = options || {};
     if (state.saveBusy) return false;
@@ -614,8 +640,9 @@
 
   async function downloadUrl(url, filename) {
     if (!url) return;
+    var resolvedUrl = toPlayableMediaUrl(url);
     try {
-      var res = await fetch(url);
+      var res = await fetch(resolvedUrl);
       if (!res.ok) throw new Error('download_failed');
       var blob = await res.blob();
       var a = document.createElement('a');
@@ -630,7 +657,7 @@
       }, 120);
     } catch (_) {
       var a2 = document.createElement('a');
-      a2.href = url;
+      a2.href = resolvedUrl;
       a2.download = filename;
       document.body.appendChild(a2);
       a2.click();
@@ -737,17 +764,19 @@
   function loadImageSource(url) {
     return new Promise(function (resolve, reject) {
       if (!url) { reject(new Error('empty_image_url')); return; }
+      var resolvedUrl = toPlayableMediaUrl(url);
       var img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = function () { resolve(img); };
       img.onerror = function () { reject(new Error('image_load_failed')); };
-      img.src = url;
+      img.src = resolvedUrl;
     });
   }
 
   function loadVideoSource(url, timeoutMs) {
     return new Promise(function (resolve, reject) {
       if (!url) { reject(new Error('empty_video_url')); return; }
+      var resolvedUrl = toPlayableMediaUrl(url);
       var safeTimeoutMs = Math.max(1500, Number(timeoutMs) || 20000);
       var video = document.createElement('video');
       video.crossOrigin = 'anonymous';
@@ -755,7 +784,7 @@
       video.playsInline = true;
       video.muted = true;
       video.loop = true;
-      video.src = url;
+      video.src = resolvedUrl;
       var done = false;
       var timeout = setTimeout(function () {
         if (done) return;
@@ -786,10 +815,11 @@
     } catch (_) {
       return new Promise(function (resolve, reject) {
         if (!url) { reject(new Error('empty_image_url')); return; }
+        var resolvedUrl = toPlayableMediaUrl(url);
         var img = new Image();
         img.onload = function () { resolve(img); };
         img.onerror = function () { reject(new Error('image_load_failed')); };
-        img.src = url;
+        img.src = resolvedUrl;
       });
     }
   }
@@ -800,13 +830,14 @@
     } catch (_) {
       return new Promise(function (resolve, reject) {
         if (!url) { reject(new Error('empty_video_url')); return; }
+        var resolvedUrl = toPlayableMediaUrl(url);
         var safeTimeoutMs = Math.max(1500, Number(timeoutMs) || 20000);
         var video = document.createElement('video');
         video.preload = 'auto';
         video.playsInline = true;
         video.muted = true;
         video.loop = true;
-        video.src = url;
+        video.src = resolvedUrl;
         var done = false;
         var timeout = setTimeout(function () {
           if (done) return;
@@ -917,9 +948,9 @@
       });
       var status = String((st && st.status) || '').toUpperCase();
       if (st && st.done && status === 'SUCCEEDED') {
-        var signed = String((st && st.signedUrl) || '').trim();
-        if (!signed) throw new Error('transcode_done_no_url');
-        return signed;
+        var finalUrl = String((st && st.proxyUrl) || (st && st.signedUrl) || '').trim();
+        if (!finalUrl) throw new Error('transcode_done_no_url');
+        return finalUrl;
       }
       if (st && st.done && status && status !== 'SUCCEEDED') {
         throw new Error('transcode_failed_' + status);
@@ -968,7 +999,8 @@
     if (!ctx) throw new Error('canvas_context_unavailable');
     var clips = getVisualClipsForRender(model);
     if (!clips.length) throw new Error('렌더링할 장면이 없습니다.');
-    if (clips.some(function (c) { return c && String(c.url || '').indexOf('gs://') === 0; })) {
+    var canProxyGs = !!(NK.api && NK.api.mediaProxyUrl);
+    if (!canProxyGs && clips.some(function (c) { return c && String(c.url || '').indexOf('gs://') === 0; })) {
       throw new Error('씬 미디어 URL이 갱신되지 않았습니다. 프로덕션 라이브러리를 열어 URL을 최신화한 뒤 다시 시도해주세요.');
     }
 
@@ -1189,7 +1221,7 @@
       updateRenderPanelUi();
     } catch (err) {
       if (state.renderJobId !== renderJobId) return;
-      var msg = (err && err.message) ? err.message : String(err || 'render_failed');
+      var msg = getRenderErrorMessage(err);
       if (msg === 'render_canceled') return;
       persistRenderMeta({
         status: 'failed',
@@ -1676,10 +1708,22 @@
       return;
     }
 
+    var playableUrl = toPlayableMediaUrl(clip.url);
+    if (!playableUrl) {
+      video.style.display = 'none';
+      image.style.display = 'none';
+      try { video.pause(); } catch (_) { }
+      gap.style.display = 'block';
+      empty.style.display = 'none';
+      state.previewClipId = '';
+      state.previewClipUrl = '';
+      return;
+    }
+
     var isVideo = isVideoUrl(clip.url);
     if (!isVideo) {
-      if (state.previewClipUrl !== clip.url) {
-        image.src = clip.url;
+      if (state.previewClipUrl !== playableUrl) {
+        image.src = playableUrl;
       }
       video.style.display = 'none';
       image.style.display = 'block';
@@ -1687,12 +1731,12 @@
       empty.style.display = 'none';
       try { video.pause(); } catch (_) { }
       state.previewClipId = clip.id;
-      state.previewClipUrl = clip.url;
+      state.previewClipUrl = playableUrl;
       return;
     }
 
     var clipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
-    var sourceChanged = state.previewClipId !== clip.id || state.previewClipUrl !== clip.url || !video.getAttribute('src');
+    var sourceChanged = state.previewClipId !== clip.id || state.previewClipUrl !== playableUrl || !video.getAttribute('src');
     var seekAndPlay = function () {
       if (Math.abs((video.currentTime || 0) - clipTime) > 0.12) {
         try { video.currentTime = clipTime; } catch (_) { }
@@ -1705,7 +1749,7 @@
     };
 
     if (sourceChanged) {
-      video.src = clip.url;
+      video.src = playableUrl;
       video.load();
       var onLoaded = function () {
         video.removeEventListener('loadedmetadata', onLoaded);
@@ -1721,7 +1765,7 @@
     gap.style.display = 'none';
     empty.style.display = 'none';
     state.previewClipId = clip.id;
-    state.previewClipUrl = clip.url;
+    state.previewClipUrl = playableUrl;
   }
 
   function startPlayback() {
@@ -1767,7 +1811,7 @@
   }
 
   function buildRenderPreviewHtml(model, meta) {
-    var videoUrl = (meta && meta.outputVideoUrl) || '';
+    var videoUrl = toPlayableMediaUrl((meta && meta.outputVideoUrl) || '');
     if (videoUrl) {
       return '<video id="postprod-render-video" class="postprod-render-video" controls preload="metadata" src="' + escapeHtml(videoUrl) + '"></video>';
     }

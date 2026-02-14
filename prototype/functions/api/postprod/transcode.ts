@@ -94,7 +94,18 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const text = await res.text();
     const json = safeJson(text);
     if (!res.ok) {
-      return send({ error: "Transcoder job create failed", status: res.status, detail: json }, res.status, origin);
+      const hint = getTranscoderHint(res.status, json);
+      return send(
+        {
+          error: "Transcoder job create failed",
+          status: res.status,
+          detail: json,
+          hint: hint.message,
+          requiredRoles: hint.requiredRoles,
+        },
+        res.status,
+        origin
+      );
     }
 
     const jobName = String((json as any)?.name || "").trim();
@@ -149,6 +160,26 @@ function getSizeByAspectRatio(ratio: string): { width: number; height: number } 
 
 function safeJson(text: string) {
   try { return JSON.parse(text); } catch { return text; }
+}
+
+function getTranscoderHint(status: number, _detail: any): { message: string; requiredRoles: string[] } {
+  const requiredRoles = [
+    "roles/transcoder.admin",
+    "roles/storage.objectViewer",
+    "roles/storage.objectCreator",
+    "roles/storage.objectAdmin",
+  ];
+  if (status === 403) {
+    return {
+      message:
+        "Permission denied. Enable Transcoder API and grant the service account Transcoder + GCS read/write roles.",
+      requiredRoles,
+    };
+  }
+  return {
+    message: `Transcoder request failed (${status}). Check location, bucket path, and service account permissions.`,
+    requiredRoles,
+  };
 }
 
 async function getGoogleAccessToken(opts: { clientEmail: string; privateKeyPem: string; scope: string }) {

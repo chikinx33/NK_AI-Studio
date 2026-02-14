@@ -183,6 +183,12 @@
     return j(text);
   };
 
+  api.mediaProxyUrl = function (rawUrl) {
+    var u = String(rawUrl || '').trim();
+    if (!u) return '';
+    return withBase('/api/media/proxy?url=' + encodeURIComponent(u));
+  };
+
   api.postprodTranscodeStart = async function (body) {
     var res = await fetch(withBase('/api/postprod/transcode'), {
       method: 'POST',
@@ -190,8 +196,16 @@
       body: JSON.stringify(body || {})
     });
     var text = await res.text();
-    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'postprod_transcode_start_error')));
-    return j(text);
+    var data = j(text);
+    if (!res.ok) {
+      var msg = (res.status + ' ' + ((data && data.error) || e(text) || 'postprod_transcode_start_error'));
+      if (data && data.hint) msg += ' | ' + String(data.hint);
+      var err = new Error(msg);
+      err.status = res.status;
+      err.detail = data;
+      throw err;
+    }
+    return data;
   };
 
   api.postprodTranscodeStatus = async function (params) {
@@ -201,8 +215,16 @@
     if (p.outputObjectName) q.set('outputObjectName', String(p.outputObjectName));
     var res = await fetch(withBase('/api/postprod/transcode/status?' + q.toString()));
     var text = await res.text();
-    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'postprod_transcode_status_error')));
-    return j(text);
+    var data = j(text);
+    if (!res.ok) {
+      var msg = (res.status + ' ' + ((data && data.error) || e(text) || 'postprod_transcode_status_error'));
+      if (data && data.hint) msg += ' | ' + String(data.hint);
+      var err = new Error(msg);
+      err.status = res.status;
+      err.detail = data;
+      throw err;
+    }
+    return data;
   };
 
   api.library = async function (kind, projectId) {
