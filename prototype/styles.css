@@ -2991,10 +2991,11 @@ a.btn-primary:active {
 }
 
 .favorite-list {
-  --favorite-icon-size: 60px;
+  --favorite-icon-size: 50px;
+  --favorite-cell-size: 72px;
   margin-top: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(72px, 72px));
+  grid-template-columns: repeat(5, var(--favorite-cell-size));
   column-gap: 6px;
   row-gap: 8px;
   justify-content: flex-start;
@@ -3022,6 +3023,7 @@ a.btn-primary:active {
 .favorite-item {
   position: relative;
   margin: 0;
+  width: var(--favorite-cell-size);
   border: none;
   background: transparent;
   border-radius: 0;
@@ -3042,7 +3044,7 @@ a.btn-primary:active {
 .favorite-delete-btn {
   position: absolute;
   top: -4px;
-  left: calc(var(--favorite-icon-size) - 12px);
+  left: calc((var(--favorite-cell-size) - var(--favorite-icon-size)) / 2 + var(--favorite-icon-size) - 12px);
   right: auto;
   width: 18px;
   height: 18px;
@@ -3079,10 +3081,10 @@ a.btn-primary:active {
   color: inherit;
   padding: 0;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   gap: 4px;
 }
 
@@ -3118,10 +3120,13 @@ a.btn-primary:active {
 
 .favorite-item-title {
   display: block;
-  width: var(--favorite-icon-size);
-  min-width: var(--favorite-icon-size);
-  max-width: var(--favorite-icon-size);
+  width: 100%;
+  min-width: 0;
+  max-width: var(--favorite-cell-size);
   text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   font-size: 12px;
   font-weight: 700;
   color: var(--text);
