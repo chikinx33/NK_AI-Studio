@@ -194,6 +194,12 @@
     return withBase('/api/media/proxy?url=' + encodeURIComponent(u));
   };
 
+  api.mediaProxyObjectUrl = function (objectName) {
+    var n = String(objectName || '').trim();
+    if (!n) return '';
+    return withBase('/api/media/proxy?objectName=' + encodeURIComponent(n));
+  };
+
   api.postprodTranscodeStart = async function (body) {
     var res = await fetch(withBase('/api/postprod/transcode'), {
       method: 'POST',

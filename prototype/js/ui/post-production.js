@@ -416,6 +416,8 @@
       lastRenderedAt: '',
       outputVideoUrl: '',
       outputVideoMime: '',
+      outputSourceObjectName: '',
+      transcodePending: false,
       outputSrtUrl: '',
       error: ''
     };
@@ -691,6 +693,7 @@
     var renderInfo = document.getElementById('postprod-render-info');
     if (renderInfo) {
       if (status === 'failed' && meta.error) renderInfo.textContent = meta.error;
+      else if (status === 'done' && meta.transcodePending) renderInfo.textContent = '렌더링은 완료되었습니다. MP4 변환은 다운로드 시 진행됩니다.';
       else if (meta.lastRenderedAt) renderInfo.textContent = '마지막 렌더: ' + new Date(meta.lastRenderedAt).toLocaleString();
       else renderInfo.textContent = '';
     }
@@ -902,6 +905,41 @@
     return new Promise(function (resolve) { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
   }
 
+  async function uploadRenderedBlobSource(projectId, blob, mimeType) {
+    if (!projectId) throw new Error('project_id_missing');
+    if (!blob || !blob.size) throw new Error('render_blob_missing');
+    if (!NK.api || !NK.api.videoUpload) {
+      throw new Error('postprod_upload_api_missing');
+    }
+
+    var ext = String(mimeType || '').toLowerCase().indexOf('webm') >= 0 ? 'webm' : 'mp4';
+    var uploadName = 'postprod-final-source.' + ext;
+    var uploadFile = null;
+    try {
+      uploadFile = new File([blob], uploadName, { type: mimeType || 'video/webm' });
+    } catch (_) {
+      uploadFile = blob;
+    }
+
+    var up = await NK.api.videoUpload(projectId, 'postprod-final', uploadFile);
+    var sourceObjectName = String((up && up.objectName) || '').trim();
+    if (!sourceObjectName) throw new Error('render_source_upload_failed');
+
+    var sourceUrl = '';
+    if (NK.api && NK.api.mediaProxyObjectUrl) {
+      sourceUrl = String(NK.api.mediaProxyObjectUrl(sourceObjectName) || '').trim();
+    }
+    if (!sourceUrl) {
+      sourceUrl = String((up && (up.signedUrl || up.url || up.playbackUrl)) || '').trim();
+    }
+
+    return {
+      sourceObjectName: sourceObjectName,
+      sourceUrl: sourceUrl,
+      sourceMime: String(mimeType || (up && up.contentType) || 'video/webm')
+    };
+  }
+
   async function transcodeRenderedBlobToMp4(projectId, blob, mimeType, renderJobId) {
     if (!projectId) throw new Error('project_id_missing');
     if (!blob || !blob.size) throw new Error('render_blob_missing');
@@ -941,6 +979,54 @@
     var maxAttempts = 160; // 약 8분
     for (var i = 0; i < maxAttempts; i++) {
       if (state.renderJobId !== renderJobId) throw new Error('render_canceled');
+      await waitMs(3000);
+      var st = await NK.api.postprodTranscodeStatus({
+        jobName: jobName,
+        outputObjectName: outputObjectName
+      });
+      var status = String((st && st.status) || '').toUpperCase();
+      if (st && st.done && status === 'SUCCEEDED') {
+        var finalUrl = String((st && st.proxyUrl) || (st && st.signedUrl) || '').trim();
+        if (!finalUrl) throw new Error('transcode_done_no_url');
+        return finalUrl;
+      }
+      if (st && st.done && status && status !== 'SUCCEEDED') {
+        throw new Error('transcode_failed_' + status);
+      }
+      if (state.renderMeta && state.renderMeta.status === 'rendering') {
+        var p = clamp(75 + ((i + 1) / maxAttempts) * 24, 75, 99);
+        setRenderMetaLocal({ progress: p });
+      }
+    }
+    throw new Error('transcode_timeout');
+  }
+
+  async function transcodeSourceObjectToMp4(projectId, sourceObjectName, renderJobId) {
+    if (!projectId) throw new Error('project_id_missing');
+    if (!sourceObjectName) throw new Error('render_source_missing');
+    if (!NK.api || !NK.api.postprodTranscodeStart || !NK.api.postprodTranscodeStatus) {
+      throw new Error('postprod_transcode_api_missing');
+    }
+
+    var project = getProjectByStateId() || resolveProject();
+    var aspectRatio = parseAspectRatio(
+      (project && project.aspectRatio) ||
+      (project && project.payload && project.payload.aspectRatio) ||
+      '16:9'
+    );
+
+    var start = await NK.api.postprodTranscodeStart({
+      projectId: projectId,
+      sourceObjectName: sourceObjectName,
+      aspectRatio: aspectRatio
+    });
+    var jobName = String((start && start.jobName) || '').trim();
+    var outputObjectName = String((start && start.outputObjectName) || '').trim();
+    if (!jobName || !outputObjectName) throw new Error('transcode_start_failed');
+
+    var maxAttempts = 160;
+    for (var i = 0; i < maxAttempts; i++) {
+      if (typeof renderJobId === 'number' && state.renderJobId !== renderJobId) throw new Error('render_canceled');
       await waitMs(3000);
       var st = await NK.api.postprodTranscodeStatus({
         jobName: jobName,
@@ -1190,7 +1276,9 @@
       progress: 0,
       error: '',
       outputSrtUrl: '',
-      outputVideoMime: oldMeta.outputVideoMime || ''
+      outputVideoMime: oldMeta.outputVideoMime || '',
+      outputSourceObjectName: '',
+      transcodePending: false
     });
     updateRenderPanelUi();
 
@@ -1200,13 +1288,15 @@
       if (result && result.allVisualsFailed) {
         throw new Error('모든 씬 미디어 로드에 실패했습니다. 프로덕션에서 자산 URL을 갱신한 뒤 다시 시도해주세요.');
       }
-      var outputVideoUrl = await transcodeRenderedBlobToMp4(
+      var uploaded = await uploadRenderedBlobSource(
         state.projectId,
         result.blob,
-        result && result.mimeType,
-        renderJobId
+        result && result.mimeType
       );
-      var outputVideoMime = 'video/mp4';
+      var outputVideoUrl = String((uploaded && uploaded.sourceUrl) || '').trim();
+      var outputVideoMime = String((uploaded && uploaded.sourceMime) || (result && result.mimeType) || 'video/webm').trim();
+      var outputSourceObjectName = String((uploaded && uploaded.sourceObjectName) || '').trim();
+      var pendingMp4 = outputVideoMime.indexOf('mp4') < 0;
       if (oldUrl && oldUrl.indexOf('blob:') === 0 && oldUrl !== outputVideoUrl) {
         try { URL.revokeObjectURL(oldUrl); } catch (_) { }
       }
@@ -1215,6 +1305,8 @@
         progress: 100,
         outputVideoUrl: outputVideoUrl,
         outputVideoMime: outputVideoMime,
+        outputSourceObjectName: outputSourceObjectName,
+        transcodePending: pendingMp4,
         lastRenderedAt: new Date().toISOString(),
         error: ''
       });
@@ -1246,12 +1338,47 @@
 
   async function downloadMp4Now() {
     var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
-    var url = (meta && meta.outputVideoUrl) || '';
+    var url = String((meta && meta.outputVideoUrl) || '').trim();
+    var mime = String((meta && meta.outputVideoMime) || '').toLowerCase();
     if (!url) {
       alert('다운로드할 영상이 없습니다.');
       return;
     }
-    await downloadUrl(url, 'final-render.mp4');
+    if (mime.indexOf('mp4') >= 0) {
+      await downloadUrl(url, 'final-render.mp4');
+      return;
+    }
+
+    var sourceObjectName = String((meta && meta.outputSourceObjectName) || '').trim();
+    if (!sourceObjectName) {
+      alert('MP4 변환용 소스 파일을 찾지 못했습니다. 렌더링을 다시 실행해 주세요.');
+      return;
+    }
+
+    setRenderMetaLocal({ status: 'rendering', progress: 74, error: '' });
+    try {
+      var mp4Url = await transcodeSourceObjectToMp4(state.projectId, sourceObjectName);
+      persistRenderMeta({
+        status: 'done',
+        progress: 100,
+        outputVideoUrl: mp4Url,
+        outputVideoMime: 'video/mp4',
+        outputSourceObjectName: sourceObjectName,
+        transcodePending: false,
+        error: ''
+      });
+      updateRenderPanelUi();
+      await downloadUrl(mp4Url, 'final-render.mp4');
+    } catch (err) {
+      var msg = getRenderErrorMessage(err);
+      persistRenderMeta({
+        status: 'done',
+        progress: 100,
+        transcodePending: true
+      });
+      updateRenderPanelUi();
+      alert('MP4 변환 실패: ' + msg + '\nWEBM 미리보기는 유지되며, 잠시 후 다시 다운로드를 시도할 수 있습니다.');
+    }
   }
 
   function canUndo() {
