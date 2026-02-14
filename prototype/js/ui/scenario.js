@@ -105,6 +105,15 @@
     return lines.join('\n');
   };
 
+  const setActiveScenarioCard = (targetCard) => {
+    const container = document.getElementById('scenario-cards');
+    if (!container || !targetCard) return;
+    container.querySelectorAll('.scenario-card.active-card').forEach(card => {
+      card.classList.remove('active-card');
+    });
+    targetCard.classList.add('active-card');
+  };
+
   // ---------- render scenes ----------
   scenario.renderScenes = function (scenes = []) {
     const container = document.getElementById('scenario-cards');
@@ -130,10 +139,20 @@
           </div>
           <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
         </div>
-        <p class="view-lines" data-id="${s.id}" contenteditable="true">${s.lines || ''}</p>
-        <p class="muted small">Visual: <span class="view-shot" data-id="${s.id}" contenteditable="true">${s.shot || '없음'}</span></p>
+        <div class="scene-visual-grid">
+          <div class="field-block">
+            <p class="field-label muted small">Scene</p>
+            <p class="view-lines" data-id="${s.id}" contenteditable="true">${s.lines || ''}</p>
+          </div>
+          <div class="field-block">
+            <p class="field-label muted small">Visual</p>
+            <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${s.shot || '없음'}</p>
+          </div>
+        </div>
       </div>
     `).join('');
+    const firstCard = container.querySelector('.scenario-card');
+    if (firstCard) firstCard.classList.add('active-card');
   };
 
   // ---------- load draft into form ----------
@@ -299,6 +318,21 @@
       }
     });
 
+    const cardsContainer = document.getElementById('scenario-cards');
+    if (cardsContainer) {
+      cardsContainer.addEventListener('click', (e) => {
+        const card = e.target && e.target.closest ? e.target.closest('.scenario-card') : null;
+        if (!card) return;
+        setActiveScenarioCard(card);
+      });
+
+      cardsContainer.addEventListener('focusin', (e) => {
+        const card = e.target && e.target.closest ? e.target.closest('.scenario-card') : null;
+        if (!card) return;
+        setActiveScenarioCard(card);
+      });
+    }
+
     // 카테고리 변경 시 목적 태그 재렌더
     if (form.purposeCategory) {
       form.purposeCategory.addEventListener('change', () => {
@@ -423,8 +457,6 @@
     });
   };
 })();
-
-
 
 
 

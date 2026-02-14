@@ -1429,13 +1429,49 @@ a.btn-primary:active {
 
 .scenario-card .card-top {
   flex: 0 0 auto;
+  margin-top: -2px;
+  margin-bottom: 8px;
 }
 
-.scenario-card .view-lines {
+.scenario-card .scene-visual-grid {
   flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+}
+
+.scenario-card .field-block {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  align-items: start;
+  gap: 6px;
+}
+
+.scenario-card .field-label {
+  margin: 0;
+  flex: 0 0 auto;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.scenario-card .view-lines,
+.scenario-card .view-shot-lines {
+  min-height: 72px;
+  max-height: 72px;
   overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.scenario-card .view-shot-lines {
+  min-height: 72px;
+  max-height: 72px;
 }
 
 .common-info-row {
@@ -1472,7 +1508,8 @@ a.btn-primary:active {
   border-color: var(--orange);
   color: var(--orange);
 }
-.scenario-card .view-lines::-webkit-scrollbar {
+.scenario-card .view-lines::-webkit-scrollbar,
+.scenario-card .view-shot-lines::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
@@ -1550,7 +1587,7 @@ a.btn-primary:active {
 }
 
 .scenario-card h5 {
-  margin: 4px 0;
+  margin: 0;
 }
 
 .scenario-card p {
