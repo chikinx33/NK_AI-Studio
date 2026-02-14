@@ -22,10 +22,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       aspectRatio = "16:9",
       videoModel = "veo"
     } = body || {};
+    const narrationEnabled = toBool((body as any)?.narrationEnabled, false);
+    const dubbingEnabled = toBool((body as any)?.dubbingEnabled, false);
+    const voiceEnabled = !!(narrationEnabled || dubbingEnabled);
+    const noSpeechDirective = "No speech, no dialogue, no voice-over, no lip sync, keep mouths closed.";
+    const safePromptText = voiceEnabled
+      ? String(promptText || "")
+      : `${String(promptText || "").trim()}\n${noSpeechDirective}`.trim();
     // durationSeconds는 4/6/8만 허용 → 근접값으로 스냅 (Veo/Grok 공용)
     const snapDuration = snapToAllowedDuration(durationSeconds);
 
-    if (!promptText || !imageDataUrl) {
+    if (!safePromptText || !imageDataUrl) {
       return json({ error: "promptText and imageDataUrl are required" }, 400);
     }
 
@@ -115,7 +122,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const grokUrl = "https://api.x.ai/v1/videos/generations";
       const grokBody: any = {
         model: modelId || "grok-imagine-video",
-        prompt: promptText,
+        prompt: safePromptText,
         duration: snapDuration,
         aspect_ratio: aspectRatio,
         // 해상도 설정 (API 스펙: 480p 또는 720p)
@@ -128,7 +135,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         grokBody.image = imgObj;
         // 문자열 필드는 에러 유발 가능성 있으므로 제거
         // 프롬프트 보강 유지
-        grokBody.prompt = "Animate this image. " + promptText;
+        grokBody.prompt = "Animate this image. " + safePromptText;
       }
 
       const grokRes = await fetch(grokUrl, {
@@ -243,6 +250,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       aspectRatio,
       durationSeconds,
       promptText,
+      safePromptText,
       outputGcsUri,
       imageDataUrl_len: (imageDataUrl || '').length
     });
@@ -287,7 +295,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify({
         instances: [
           {
-            prompt: promptText,
+            prompt: safePromptText,
             image: {
               bytesBase64Encoded: parsedImage.base64,
               mimeType: parsedImage.mimeType || "image/png",
@@ -405,6 +413,17 @@ function arrayBufferToBase64(buf: ArrayBuffer) {
     binary += String.fromCharCode(bytes[i]);
   }
   return btoa(binary);
+}
+
+function toBool(value: any, fallback = false) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const v = value.trim().toLowerCase();
+    if (["true", "1", "yes", "on"].includes(v)) return true;
+    if (["false", "0", "no", "off"].includes(v)) return false;
+  }
+  return !!fallback;
 }
 
 function json(data: any, status = 200) {

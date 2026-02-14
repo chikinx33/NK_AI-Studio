@@ -57,8 +57,40 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return '';
     };
 
+    const normalizeDialogue = (value: any) => {
+      if (Array.isArray(value)) {
+        return value
+          .map((d: any) => ({
+            speaker: typeof d?.speaker === "string" ? d.speaker.trim() : "",
+            line: typeof d?.line === "string" ? d.line.trim() : "",
+          }))
+          .filter((d: any) => d.speaker || d.line);
+      }
+      if (typeof value === "string") {
+        return value
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => {
+            const idx = line.indexOf(":");
+            if (idx > -1) {
+              return {
+                speaker: line.slice(0, idx).trim(),
+                line: line.slice(idx + 1).trim(),
+              };
+            }
+            return { speaker: "", line };
+          })
+          .filter((d) => d.speaker || d.line);
+      }
+      return [];
+    };
+
     const normalizeScene = (s: any, idx: number) => {
       const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
+      const narration = typeof s?.narration === "string" ? s.narration : (typeof s?.lines === "string" ? s.lines : "");
+      const dialogue = normalizeDialogue(s?.dialogue ?? s?.dialogues ?? []);
+      const visual = typeof s?.visual === "string" ? s.visual : (typeof s?.shot === "string" ? s.shot : "");
       const imageUrl = typeof s?.imageDataUrl === "string" ? s.imageDataUrl : "";
       const imagePath = toGcsPath(imageUrl);
       const videoUrlRaw = typeof s?.videoUrl === "string" ? s.videoUrl : "";
@@ -72,8 +104,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return {
         id: Number(s?.id ?? idx + 1),
         title: typeof s?.title === "string" ? s.title : "",
-        lines: typeof s?.lines === "string" ? s.lines : (typeof s?.dialogue === "string" ? s.dialogue : ""),
-        shot: typeof s?.shot === "string" ? s.shot : (typeof s?.visual === "string" ? s.visual : ""),
+        lines: narration,
+        narration,
+        dialogue,
+        shot: visual,
+        visual,
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: imagePath || imageUrl,
         imagePath,

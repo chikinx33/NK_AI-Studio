@@ -886,6 +886,11 @@
             return;
           }
           if (action === 'voice-generate') {
+            var voiceAllowed = isVoiceFeatureEnabled((st && st.payload) ? st.payload : {});
+            if (!voiceAllowed) {
+              alert('나레이션/더빙이 모두 OFF 상태입니다. 음성 생성이 비활성화되었습니다.');
+              return;
+            }
             const sel = pipelineScenes.querySelector('.voice-select[data-id="' + id + '"]');
             const vid = (sel && sel.value) ? sel.value : 'demo-male';
             st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: vid });
@@ -951,18 +956,18 @@
       var projectId = st.draftId || getProjectId();
       if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
       var header = st.header || '';
-      var payload = st.payload || {};
-      var audience = payload.target || '';
+      var statePayload = st.payload || {};
+      var audience = statePayload.target || '';
       var selections = [
-        payload.topic ? `Topic: ${payload.topic}` : '',
-        payload.purposeCategory ? `Genre/Purpose: ${payload.purposeCategory}` : '',
-        Array.isArray(payload.purposeTags) && payload.purposeTags.length ? `Tags: ${payload.purposeTags.join(', ')}` : '',
+        statePayload.topic ? `Topic: ${statePayload.topic}` : '',
+        statePayload.purposeCategory ? `Genre/Purpose: ${statePayload.purposeCategory}` : '',
+        Array.isArray(statePayload.purposeTags) && statePayload.purposeTags.length ? `Tags: ${statePayload.purposeTags.join(', ')}` : '',
         audience ? `Audience: ${audience}` : '',
-        (Array.isArray(payload.tones) && payload.tones.length) || payload.tone ? `Tone: ${[...(payload.tones || []), payload.tone || ''].filter(Boolean).join(', ')}` : '',
-        (Array.isArray(payload.styles) && payload.styles.length) || payload.style ? `Style: ${[...(payload.styles || []), payload.style || ''].filter(Boolean).join(', ')}` : '',
-        payload.needs && payload.needs.length ? `Needs: ${payload.needs.join(', ')}` : '',
-        payload.aspectRatio ? `AspectRatio: ${payload.aspectRatio}` : '',
-        payload.duration ? `TargetDuration: ${payload.duration}s` : ''
+        (Array.isArray(statePayload.tones) && statePayload.tones.length) || statePayload.tone ? `Tone: ${[...(statePayload.tones || []), statePayload.tone || ''].filter(Boolean).join(', ')}` : '',
+        (Array.isArray(statePayload.styles) && statePayload.styles.length) || statePayload.style ? `Style: ${[...(statePayload.styles || []), statePayload.style || ''].filter(Boolean).join(', ')}` : '',
+        statePayload.needs && statePayload.needs.length ? `Needs: ${statePayload.needs.join(', ')}` : '',
+        statePayload.aspectRatio ? `AspectRatio: ${statePayload.aspectRatio}` : '',
+        statePayload.duration ? `TargetDuration: ${statePayload.duration}s` : ''
       ].filter(Boolean).join('\n');
       var promptBase = [
         'Global',
@@ -977,6 +982,13 @@
       if (!finalPrompt || !finalPrompt.trim()) {
         alert('프롬프트가 비어 있어 영상 생성에 실패했습니다. 시나리오/스토리 탭에서 프롬프트를 입력해주세요.');
         return;
+      }
+      var voiceEnabled = isVoiceFeatureEnabled(statePayload);
+      if (!voiceEnabled) {
+        var noVoiceDirective = 'No speech, no dialogue, no voice-over, no lip sync, keep mouths closed.';
+        if (!/no\s*speech|lip\s*sync|voice-?over/i.test(finalPrompt)) {
+          finalPrompt = finalPrompt + '\n' + noVoiceDirective;
+        }
       }
       var imageUrl = scene.imageDataUrl || '';
       if (!imageUrl) {
@@ -1021,14 +1033,16 @@
           return best;
         })(scene.estSec);
 
-        var payload = {
+        var videoPayload = {
           projectId: projectId,
           projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
           sceneId: scene.id,
           // 서버에 꼭 전달해야 하는 값: promptText, imageDataUrl
           // Grok 모델일 경우 이미지 기반 생성을 강력히 요청하는 문구 추가
           promptText: (imageUrl && videoModel === 'grok') ? ("Animate this image. " + finalPrompt) : finalPrompt,
-          script: scene.lines,
+          script: voiceEnabled ? (scene.lines || '') : '',
+          narrationEnabled: toBool(statePayload.narrationEnabled, false),
+          dubbingEnabled: toBool(statePayload.dubbingEnabled, false),
           aspectRatio: st.aspectRatio || "16:9",
           durationSeconds: snapDuration,
           imageDataUrl: imageUrl,
@@ -1041,15 +1055,15 @@
         console.log('videoStart payload', {
           projectId,
           sceneId: scene.id,
-          aspectRatio: payload.aspectRatio,
-          durationSeconds: payload.durationSeconds,
+          aspectRatio: videoPayload.aspectRatio,
+          durationSeconds: videoPayload.durationSeconds,
           durationSnappedFrom: scene.estSec,
           // 프롬프트 전문을 그대로 확인
-          promptText: payload.promptText,
-          script: payload.script,
+          promptText: videoPayload.promptText,
+          script: videoPayload.script,
           imageDataUrl_preview: imageUrl.startsWith('data:') ? 'dataurl:' + imageUrl.length + ' chars' : imageUrl
         });
-        var resp = await NK.api.videoStart(payload);
+        var resp = await NK.api.videoStart(videoPayload);
         var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || '';
         var playbackRaw = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || '';
         var playback = isBucketVideoUrl(playbackRaw) ? playbackRaw : '';
@@ -1337,7 +1351,26 @@ function showCopyableError(title, detail) {
   try { window.prompt(title + '\n아래 내용을 복사하세요:', msg); return; } catch (_) { }
   alert(msg);
 }
+
+function toBool(v, fallback) {
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') {
+    var x = v.trim().toLowerCase();
+    if (x === 'true' || x === '1' || x === 'yes' || x === 'on') return true;
+    if (x === 'false' || x === '0' || x === 'no' || x === 'off') return false;
+  }
+  return !!fallback;
+}
+
+function isVoiceFeatureEnabled(payload) {
+  var p = payload || {};
+  return !!(toBool(p.narrationEnabled, false) || toBool(p.dubbingEnabled, false));
+}
+
 function buildSceneRowHtml(s, header) {
+  var st = (typeof ctx !== 'undefined' && ctx && ctx.getState) ? ctx.getState() : null;
+  var voiceEnabled = isVoiceFeatureEnabled(st && st.payload ? st.payload : {});
   var imagePlayableUrl = toPlayableMediaUrl(s.imageDataUrl || '');
   var videoPlayableUrl = toPlayableMediaUrl(s.videoUrl || '');
   var img = (s.imgLoading
@@ -1356,27 +1389,37 @@ function buildSceneRowHtml(s, header) {
     if (s.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
     return '<div class="video-placeholder"><span>video</span></div>';
   })();
+  var voiceBlock = voiceEnabled
+    ? (
+      '<div class="voice-block" style="margin-top:8px;">' +
+      '<div class="voice-title-row">' +
+      '<span class="voice-title">AI 보이스</span>' +
+      '</div>' +
+      '<div class="voice-row voice-controls">' +
+      '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
+      '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
+      '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
+      '</select>' +
+      '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
+      '</div>' +
+      '<div class="voice-player" data-id="' + s.id + '" style="margin-top:10px;">' +
+      '<audio controls preload="auto" style="width:100%;" ' + (s.voiceUrl ? '' : 'disabled') + ' src="' + (s.voiceUrl || '') + '"></audio>' +
+      '</div>' +
+      '</div>'
+    )
+    : (
+      '<div class="voice-block disabled" style="margin-top:8px;">' +
+      '<div class="voice-title-row"><span class="voice-title">AI 보이스 비활성</span></div>' +
+      '<p class="muted small">프리프로덕션에서 나레이션/더빙을 켜야 음성 생성이 가능합니다.</p>' +
+      '</div>'
+    );
   return (
     '<div class="scene-row" data-id="' + s.id + '">' +
     '<div class="scene-cell story">' +
     '<div class="story-inner">' +
     '<p class="eyebrow">Scene ' + s.id + '</p>' +
     '<p class="story-lines" data-id="' + s.id + '">' + (s.lines || '') + '</p>' +
-    '<div class="voice-block" style="margin-top:8px;">' +
-    '<div class="voice-title-row">' +
-    '<span class="voice-title">AI 보이스</span>' +
-    '</div>' +
-    '<div class="voice-row voice-controls">' +
-    '<select class="voice-select" data-id="' + s.id + '" style="flex:1; min-width:120px;">' +
-    '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
-    '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
-    '</select>' +
-    '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
-    '</div>' +
-    '<div class="voice-player" data-id="' + s.id + '" style="margin-top:10px;">' +
-    '<audio controls preload="auto" style="width:100%;" ' + (s.voiceUrl ? '' : 'disabled') + ' src="' + (s.voiceUrl || '') + '"></audio>' +
-    '</div>' +
-    '</div>' +
+    voiceBlock +
     '</div>' +
     '</div>' +
     '<div class="scene-cell prompt">' +

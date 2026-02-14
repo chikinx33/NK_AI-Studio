@@ -3,6 +3,12 @@
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
   let currentPayload = {};
+  const DEFAULT_SCENARIO_FLAGS = {
+    narrationEnabled: false,
+    dubbingEnabled: false
+  };
+  let currentCharacters = [];
+  let characterSeq = 1;
 
   // ---------- helpers ----------
   const fmtEst = (sec) => {
@@ -17,6 +23,103 @@
     const m = String(txt || '').match(/([0-9.]+)/);
     return m ? Math.max(Math.floor(Number(m[1]) || 0), 1) : 8;
   };
+
+  const boolVal = (v, fallback = false) => {
+    if (typeof v === 'boolean') return v;
+    if (typeof v === 'number') return v !== 0;
+    if (typeof v === 'string') {
+      const x = v.trim().toLowerCase();
+      if (x === 'true' || x === '1' || x === 'on' || x === 'yes') return true;
+      if (x === 'false' || x === '0' || x === 'off' || x === 'no') return false;
+    }
+    return !!fallback;
+  };
+
+  const sanitizeText = (v) => String(v == null ? '' : v).replace(/[<>]/g, '').trim();
+
+  const makeCharacterId = () => `char_${String(characterSeq++).padStart(3, '0')}`;
+
+  const normalizeCharacters = (list = []) => {
+    const seen = new Set();
+    const out = [];
+    (Array.isArray(list) ? list : []).forEach((c) => {
+      const raw = sanitizeText(c?.displayName || c?.name || c?.token || '');
+      if (!raw) return;
+      const displayName = raw.replace(/^@+/, '').trim();
+      if (!displayName) return;
+      const token = `@${displayName}`;
+      const key = token.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push({
+        characterId: sanitizeText(c?.characterId || c?.id) || makeCharacterId(),
+        displayName,
+        token
+      });
+    });
+    return out;
+  };
+
+  const syncCharacterSeq = (list = []) => {
+    let max = 0;
+    (Array.isArray(list) ? list : []).forEach((c) => {
+      const m = String(c?.characterId || '').match(/^char_(\d+)$/i);
+      if (m) max = Math.max(max, Number(m[1]) || 0);
+    });
+    characterSeq = Math.max(characterSeq, max + 1);
+  };
+
+  const applyCharacterTokenHints = (text, characters = []) => {
+    let out = String(text || '');
+    (Array.isArray(characters) ? characters : []).forEach((c) => {
+      const display = String(c?.displayName || '').trim();
+      const token = String(c?.token || '').trim();
+      if (!display || !token) return;
+      if (!out.includes(display) || out.includes(token)) return;
+      out = out.replaceAll(display, token);
+    });
+    return out;
+  };
+
+  const normalizeDialogue = (value = [], characters = []) => {
+    const tokens = new Set((Array.isArray(characters) ? characters : []).map(c => String(c?.token || '').trim()).filter(Boolean));
+    const toSpeaker = (v) => {
+      const raw = String(v || '').trim();
+      if (!raw) return '';
+      if (tokens.has(raw)) return raw;
+      if (raw.startsWith('@')) return raw;
+      return `@${raw.replace(/^@+/, '')}`;
+    };
+    if (Array.isArray(value)) {
+      return value.map((d) => ({
+        speaker: toSpeaker(d?.speaker),
+        line: String(d?.line || '').trim()
+      })).filter(d => d.speaker || d.line);
+    }
+    if (typeof value === 'string') {
+      return value
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const idx = line.indexOf(':');
+          if (idx > -1) {
+            return {
+              speaker: toSpeaker(line.slice(0, idx).trim()),
+              line: line.slice(idx + 1).trim()
+            };
+          }
+          return { speaker: '', line };
+        })
+        .filter(d => d.speaker || d.line);
+    }
+    return [];
+  };
+
+  const getScenarioFlags = (payload = {}) => ({
+    narrationEnabled: boolVal(payload?.narrationEnabled, DEFAULT_SCENARIO_FLAGS.narrationEnabled),
+    dubbingEnabled: boolVal(payload?.dubbingEnabled, DEFAULT_SCENARIO_FLAGS.dubbingEnabled)
+  });
 
   const renderTagButtons = (box, list, selected = [], single = false) => {
     if (!box) return;
@@ -52,6 +155,20 @@
     payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || NK.config.DEFAULTS?.DURATION || '15';
     payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || '16:9';
     if (form.target) payload.target = form.target.value;
+    const normalizedCharacters = normalizeCharacters(currentCharacters);
+    currentCharacters = normalizedCharacters;
+    syncCharacterSeq(currentCharacters);
+    payload.characters = normalizedCharacters.map((c) => ({
+      characterId: c.characterId,
+      displayName: c.displayName,
+      token: c.token
+    }));
+    payload.narrationEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active');
+    payload.dubbingEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active');
+    const matchedTokens = payload.characters
+      .filter(c => String(payload.topic || '').includes(c.displayName))
+      .map(c => c.token);
+    if (matchedTokens.length) payload.characterHints = matchedTokens;
     // Keep project/episode metadata while editing scenario fields.
     if (currentPayload && typeof currentPayload === 'object') {
       if (currentPayload.seriesId && !payload.seriesId) payload.seriesId = currentPayload.seriesId;
@@ -64,7 +181,9 @@
   const normalizeScenes = (scenes = []) => {
     return (Array.isArray(scenes) ? scenes : []).map((s, i) => {
       const est = parseEst(s.estSec || s.duration || s.len || s.length || 8);
-      const lines = s.lines || s.dialogue || s.text || s.script || s.content || '';
+      const rawNarration = s.narration || s.lines || s.story || s.text || s.script || s.content || '';
+      const dialogues = normalizeDialogue(s.dialogue || s.dialogues || [], currentCharacters);
+      const lines = String(s.lines || rawNarration || '').trim();
       const shot =
         s.shot ||
         s.visual ||
@@ -73,11 +192,25 @@
         s.image ||
         (lines ? String(lines).split(/(?<=[.!?])\s+/)[0] || '' : '') ||
         '';
+      const narration = applyCharacterTokenHints(String(rawNarration || lines || '').trim(), currentCharacters);
+      const dialogue = dialogues.map((d) => ({
+        speaker: applyCharacterTokenHints(d.speaker, currentCharacters),
+        line: applyCharacterTokenHints(d.line, currentCharacters)
+      }));
+      const dialogueText = dialogue
+        .map((d) => `${d.speaker ? `${d.speaker}: ` : ''}${d.line || ''}`.trim())
+        .filter(Boolean)
+        .join('\n');
+      const legacyStory = lines || narration || dialogueText;
       return {
         id: s.id != null ? s.id : (i + 1),
-        lines,
-        shot,
-        estSec: est
+        lines: legacyStory,
+        narration,
+        dialogue,
+        shot: applyCharacterTokenHints(String(shot || '').trim(), currentCharacters),
+        estSec: est,
+        narrationEnabled: boolVal(s?.narrationEnabled, boolVal(currentPayload?.narrationEnabled, false)),
+        dubbingEnabled: boolVal(s?.dubbingEnabled, boolVal(currentPayload?.dubbingEnabled, false))
       };
     });
   };
@@ -114,6 +247,64 @@
     targetCard.classList.add('active-card');
   };
 
+  const collectScenesFromCards = () => {
+    return Array.from(document.querySelectorAll('.scenario-card')).map((card) => {
+      const id = Number(card.querySelector('.est-input')?.dataset.id);
+      const estTxt = card.querySelector('.est-input')?.value || '';
+      const est = parseEst(estTxt);
+      const sceneText = card.querySelector('.view-story')?.textContent?.trim() || '';
+      const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
+      return {
+        id,
+        title: '',
+        lines: sceneText,
+        shot: visualText,
+        visual: visualText,
+        estSec: est
+      };
+    });
+  };
+
+  const mergeSceneSnapshots = (baseScenes = [], latestScenes = []) => {
+    const byId = new Map((Array.isArray(baseScenes) ? baseScenes : []).map((s) => [String(s?.id), s]));
+    return (Array.isArray(latestScenes) ? latestScenes : []).map((s) => {
+      const prev = byId.get(String(s?.id)) || {};
+      const narration = (s.narration !== undefined ? s.narration : prev.narration) || '';
+      const dialogue = (s.dialogue !== undefined ? s.dialogue : prev.dialogue) || [];
+      const visual = s.visual || s.shot || prev.visual || prev.shot || '';
+      const lines = s.lines || prev.lines || narration || '';
+      return Object.assign({}, prev, s, {
+        lines,
+        narration,
+        dialogue,
+        shot: visual,
+        visual
+      });
+    });
+  };
+
+  const renderCharacterChips = () => {
+    const box = document.getElementById('character-chips');
+    if (!box) return;
+    const list = normalizeCharacters(currentCharacters);
+    currentCharacters = list;
+    syncCharacterSeq(list);
+    box.innerHTML = list.map((c) => `
+      <span class="character-chip" data-character-id="${c.characterId}">
+        <span class="chip-token">${c.token}</span>
+        <button type="button" class="chip-remove" data-remove-character="${c.characterId}" aria-label="캐릭터 삭제">×</button>
+      </span>
+    `).join('');
+  };
+
+  const setScenarioToggleButtons = (flags = {}) => {
+    const normalized = getScenarioFlags(flags);
+    document.querySelectorAll('.scenario-flag-toggle').forEach((btn) => {
+      const key = btn.dataset.flag;
+      btn.classList.toggle('active', !!normalized[key]);
+    });
+  };
+
   // ---------- render scenes ----------
   scenario.renderScenes = function (scenes = []) {
     const container = document.getElementById('scenario-cards');
@@ -132,7 +323,7 @@
     }
     const commonBlock = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
     container.innerHTML = commonBlock + sceneList.map(s => `
-      <div class="scenario-card">
+      <div class="scenario-card" data-scene-id="${s.id}">
         <div class="card-top">
           <div>
             <h5>Scene ${s.id}</h5>
@@ -142,7 +333,7 @@
         <div class="scene-visual-grid">
           <div class="field-block">
             <p class="field-label muted small">Scene</p>
-            <p class="view-lines" data-id="${s.id}" contenteditable="true">${s.lines || ''}</p>
+            <p class="view-lines view-story" data-id="${s.id}" contenteditable="true">${s.lines || ''}</p>
           </div>
           <div class="field-block">
             <p class="field-label muted small">Visual</p>
@@ -198,7 +389,10 @@
     const p = draft.payload || {};
     const rawHeader = draft.header || p.header || '';
     const header = sanitizeHeader(rawHeader);
-    currentPayload = Object.assign({}, p || {}, { header });
+    const flags = getScenarioFlags(p || {});
+    currentCharacters = normalizeCharacters(p.characters || draft.characters || []);
+    syncCharacterSeq(currentCharacters);
+    currentPayload = Object.assign({}, p || {}, flags, { characters: currentCharacters, header });
     const defaults = NK.config.DEFAULTS || {};
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
     const defaultCat = p.purposeCategory || categories[0] || '';
@@ -215,6 +409,10 @@
     // toggles
     setActiveButtons('.duration-toggle', p.duration || defaults.DURATION || '15');
     setActiveButtons('.ratio-btn', p.aspectRatio || '16:9');
+    setScenarioToggleButtons(flags);
+    renderCharacterChips();
+    const characterInput = document.getElementById('character-input');
+    if (characterInput) characterInput.value = '';
 
     const one = (arr) => Array.isArray(arr) && arr.length ? [arr[0]] : [];
     renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[defaultCat] || [], one(p.purposeTags), true);
@@ -222,7 +420,7 @@
     renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], toArray(p.tones), true);
     renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], toArray(p.styles), true);
 
-    scenario.renderScenes(normalizeScenes(draft.scenes || []));
+    scenario.renderScenes(draft.scenes || []);
   };
 
   // ---------- init ----------
@@ -294,15 +492,53 @@
 
     // 저장된 초안 로드
     loadDraft(draft);
+    if (!draft) {
+      currentCharacters = [];
+      currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [] });
+      setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
+      renderCharacterChips();
+    }
+
+    const addCharacter = (name) => {
+      const displayName = sanitizeText(name).replace(/^@+/, '');
+      if (!displayName) return false;
+      const token = `@${displayName}`;
+      const exists = currentCharacters.some(c => String(c.token || '').toLowerCase() === token.toLowerCase());
+      if (exists) return false;
+      currentCharacters.push({
+        characterId: makeCharacterId(),
+        displayName,
+        token
+      });
+      renderCharacterChips();
+      return true;
+    };
+
+    const characterInput = document.getElementById('character-input');
+    if (characterInput) {
+      characterInput.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const ok = addCharacter(characterInput.value || '');
+        if (ok) characterInput.value = '';
+      });
+    }
 
     // 토글/버튼 클릭
     form.addEventListener('click', (e) => {
-      const btn = e.target.closest('.tag-toggle, .duration-toggle, .ratio-btn');
+      const btn = e.target.closest('.tag-toggle, .duration-toggle, .ratio-btn, .scenario-flag-toggle');
       if (!btn) return;
       if (btn.classList.contains('duration-toggle')) {
         setActiveButtons('.duration-toggle', btn.dataset.value);
       } else if (btn.classList.contains('ratio-btn')) {
         setActiveButtons('.ratio-btn', btn.dataset.ratio || btn.dataset.value);
+      } else if (btn.classList.contains('scenario-flag-toggle')) {
+        btn.classList.toggle('active');
+        currentPayload = Object.assign({}, currentPayload || {}, {
+          narrationEnabled: !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active'),
+          dubbingEnabled: !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active'),
+          characters: currentCharacters
+        });
       } else if (btn.classList.contains('tag-toggle')) {
         if (btn.dataset.single === '1') {
           btn.parentElement.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('active'));
@@ -316,6 +552,15 @@
         const sel = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
         renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], sel, true);
       }
+    });
+
+    form.addEventListener('click', (e) => {
+      const removeBtn = e.target.closest('[data-remove-character]');
+      if (!removeBtn) return;
+      const removeId = removeBtn.dataset.removeCharacter;
+      if (!removeId) return;
+      currentCharacters = currentCharacters.filter(c => String(c.characterId) !== String(removeId));
+      renderCharacterChips();
     });
 
     const cardsContainer = document.getElementById('scenario-cards');
@@ -340,6 +585,15 @@
         renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], [], true);
       });
     }
+
+    form.addEventListener('reset', () => {
+      setTimeout(() => {
+        currentCharacters = [];
+        renderCharacterChips();
+        setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
+        currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [] });
+      }, 0);
+    });
 
     // 시나리오 생성
     form.onsubmit = async (e) => {
@@ -392,20 +646,7 @@
         try {
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
           draft.payload = collectPayload();
-          draft.scenes = Array.from(document.querySelectorAll('.scenario-card')).map(card => {
-            const id = Number(card.querySelector('.est-input')?.dataset.id);
-            const estTxt = card.querySelector('.est-input')?.value || '';
-            const est = parseEst(estTxt);
-            const lines = card.querySelector('.view-lines')?.textContent?.trim() || '';
-            const shot = card.querySelector('.view-shot')?.textContent?.trim() || '';
-            return {
-              id,
-              title: '', // 제목은 미사용
-              lines,
-              shot,
-              estSec: est
-            };
-          });
+          draft.scenes = mergeSceneSnapshots(draft.scenes || [], collectScenesFromCards());
           localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
           NK.store.saveDrafts([draft]);
           if (NK.api?.projectSave) {
@@ -457,7 +698,3 @@
     });
   };
 })();
-
-
-
-

@@ -32,9 +32,12 @@
             return scenes.map((s, idx) => ({
                 id: s.id ?? idx + 1,
                 title: s.title ?? `Scene ${idx + 1}`,
-                lines: s.lines ?? (typeof s === 'string' ? s : ''),
+                lines: s.lines ?? s.narration ?? (typeof s === 'string' ? s : ''),
+                narration: s.narration ?? s.lines ?? '',
+                dialogue: Array.isArray(s.dialogue) ? s.dialogue : [],
                 estSec: s.estSec ?? NK.config.DEFAULTS.SCENE_EST,
-                shot: s.shot ?? ''
+                shot: s.shot ?? s.visual ?? '',
+                visual: s.visual ?? s.shot ?? ''
             }));
         }
         throw new Error('invalid_response');

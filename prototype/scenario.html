@@ -109,6 +109,20 @@
                 <div id="style-tags" class="tag-checkboxes"></div>
               </div>
               <div class="form-group">
+                <label>캐릭터</label>
+                <input id="character-input" type="text" placeholder="캐릭터 이름 입력 후 Enter (예: 토끼)" />
+              </div>
+              <div class="form-group">
+                <div id="character-chips" class="tag-checkboxes character-chips"></div>
+              </div>
+              <div class="form-group">
+                <label>생성 옵션</label>
+                <div class="scenario-switches" id="scenario-switches">
+                  <button type="button" class="scenario-flag-toggle" data-flag="narrationEnabled">나레이션 생성</button>
+                  <button type="button" class="scenario-flag-toggle" data-flag="dubbingEnabled">더빙(대사) 생성</button>
+                </div>
+              </div>
+              <div class="form-group">
                 <label>추가 항목</label>
                 <textarea name="banned" rows="2" placeholder="부연 설명을 입력하세요"></textarea>
               </div>
