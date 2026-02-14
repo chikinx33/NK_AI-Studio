@@ -354,8 +354,6 @@
             window.location.href = url;
           } else {
             NK.navigation.loadStage(url);
-            setTimeout(() => { try { window.location.assign(url); } catch (_) { } }, 30);
-            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) { }
           }
         }
       } else if (action === 'draft-production') {
@@ -371,8 +369,6 @@
             window.location.href = url;
           } else {
             NK.navigation.loadStage(url);
-            setTimeout(() => { try { window.location.assign(url); } catch (_) { } }, 30);
-            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) { }
           }
         }
       } else if (action === 'draft-post') {
@@ -388,8 +384,6 @@
             window.location.href = url;
           } else {
             NK.navigation.loadStage(url);
-            setTimeout(() => { try { window.location.assign(url); } catch (_) { } }, 30);
-            try { if (window.top && window.top !== window) window.top.postMessage({ type: 'load-stage', url }, '*'); } catch (_) { }
           }
         }
       } else if (action === 'create-project') {
