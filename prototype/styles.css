@@ -2734,22 +2734,8 @@ a.btn-primary:active {
 .user-dashboard-panel {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
   margin-top: 2px;
-}
-
-.user-dashboard-panel > .favorite-form {
-  position: relative;
-  margin-top: 28px;
-}
-
-.user-dashboard-panel > .favorite-form::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  border-top: 1px dashed color-mix(in srgb, var(--border) 55%, transparent 45%);
 }
 
 .user-widget {
@@ -2770,7 +2756,7 @@ a.btn-primary:active {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 .user-widget-head h4 {
@@ -2854,7 +2840,7 @@ a.btn-primary:active {
 .favorite-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -2862,10 +2848,82 @@ a.btn-primary:active {
 }
 
 .user-widget.favorite-widget.favorite-form {
-  padding: 52px 0 0;
+  padding: 0;
   border: none;
   border-radius: 0;
   background: transparent;
+}
+
+.favorite-form-toggle,
+.subscription-toggle {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 86%, transparent 14%);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.favorite-form-toggle:hover,
+.subscription-toggle:hover {
+  background: color-mix(in srgb, var(--panel) 72%, transparent 28%);
+}
+
+.favorite-form-toggle::after,
+.subscription-toggle::after {
+  content: "▾";
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--text);
+  background: color-mix(in srgb, var(--layer-strong) 84%, transparent 16%);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.favorite-form.is-collapsed .favorite-form-toggle::after,
+.subscription-widget.is-collapsed .subscription-toggle::after {
+  transform: rotate(-90deg);
+}
+
+.subscription-body,
+.favorite-form-body {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+  max-height: 420px;
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+  transition: max-height 0.28s ease, opacity 0.2s ease, transform 0.2s ease, margin-top 0.2s ease, visibility 0s linear 0s;
+}
+
+.subscription-widget.is-collapsed .subscription-body,
+.favorite-form.is-collapsed .favorite-form-body {
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: max-height 0.24s ease, opacity 0.16s ease, transform 0.16s ease, margin-top 0.16s ease, visibility 0s linear 0.24s;
+}
+
+.subscription-widget.is-collapsed .user-widget-head,
+.favorite-form.is-collapsed .user-widget-head {
+  margin-bottom: 0;
 }
 
 .fav-form-row {
@@ -2935,8 +2993,10 @@ a.btn-primary:active {
   --favorite-icon-size: 60px;
   margin-top: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 72px));
+  column-gap: 6px;
+  row-gap: 8px;
+  justify-content: flex-start;
   align-content: flex-start;
   flex: 1 1 auto;
   min-height: 0;
@@ -2981,7 +3041,8 @@ a.btn-primary:active {
 .favorite-delete-btn {
   position: absolute;
   top: -4px;
-  right: calc(50% - (var(--favorite-icon-size) / 2) - 4px);
+  left: calc(var(--favorite-icon-size) - 12px);
+  right: auto;
   width: 18px;
   height: 18px;
   border-radius: 999px;
@@ -3017,11 +3078,11 @@ a.btn-primary:active {
   color: inherit;
   padding: 0;
   cursor: pointer;
-  text-align: center;
+  text-align: left;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 4px;
 }
 
 .favorite-link-btn:hover {
@@ -3035,7 +3096,7 @@ a.btn-primary:active {
   min-height: var(--favorite-icon-size);
   max-width: var(--favorite-icon-size);
   max-height: var(--favorite-icon-size);
-  margin: 0 auto;
+  margin: 0;
   border-radius: 12px;
   overflow: hidden;
   border: none;
@@ -3056,6 +3117,10 @@ a.btn-primary:active {
 
 .favorite-item-title {
   display: block;
+  width: var(--favorite-icon-size);
+  min-width: var(--favorite-icon-size);
+  max-width: var(--favorite-icon-size);
+  text-align: center;
   font-size: 12px;
   font-weight: 700;
   color: var(--text);

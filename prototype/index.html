@@ -68,49 +68,53 @@
           <section class="card option-card user-dashboard-card is-locked" id="user-dashboard-card" aria-live="polite">
 
             <section class="user-dashboard-panel hidden" id="user-dashboard-panel">
-              <article class="user-widget subscription-widget" id="subscription-widget">
+              <article class="user-widget subscription-widget is-collapsed" id="subscription-widget">
                 <div class="user-widget-head">
                   <h4>구독 현황</h4>
-                  <span class="ui-chip">UI</span>
+                  <button type="button" class="subscription-toggle" id="subscription-toggle" aria-expanded="false" aria-label="구독 현황 펼치기"></button>
                 </div>
-                <div class="subscription-grid">
-                  <div class="subscription-item">
-                    <span class="muted">플랜</span>
-                    <strong id="subscription-plan">Free</strong>
+                <div class="subscription-body">
+                  <div class="subscription-grid">
+                    <div class="subscription-item">
+                      <span class="muted">플랜</span>
+                      <strong id="subscription-plan">Free</strong>
+                    </div>
+                    <div class="subscription-item">
+                      <span class="muted">상태</span>
+                      <strong id="subscription-status">미연결</strong>
+                    </div>
+                    <div class="subscription-item">
+                      <span class="muted">갱신일</span>
+                      <strong id="subscription-renew">-</strong>
+                    </div>
                   </div>
-                  <div class="subscription-item">
-                    <span class="muted">상태</span>
-                    <strong id="subscription-status">미연결</strong>
-                  </div>
-                  <div class="subscription-item">
-                    <span class="muted">갱신일</span>
-                    <strong id="subscription-renew">-</strong>
-                  </div>
+                  <p class="muted user-widget-help">결제 연동 전 단계라 현재는 UI만 표시됩니다.</p>
+                  <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
                 </div>
-                <p class="muted user-widget-help">결제 연동 전 단계라 현재는 UI만 표시됩니다.</p>
-                <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
               </article>
 
-              <form class="user-widget favorite-widget favorite-form hidden" id="favorite-form">
+              <form class="user-widget favorite-widget favorite-form is-collapsed hidden" id="favorite-form">
                 <div class="user-widget-head">
                   <h4>즐겨찾기 등록</h4>
-                  <span class="ui-chip">MENU</span>
+                  <button type="button" class="favorite-form-toggle" id="favorite-form-toggle" aria-expanded="false" aria-label="즐겨찾기 등록 펼치기"></button>
                 </div>
-                <div class="fav-form-row">
-                  <label for="favorite-title">메뉴 이름</label>
-                  <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
-                </div>
-                <div class="fav-form-row">
-                  <label for="favorite-link">링크 주소</label>
-                  <input type="url" id="favorite-link" placeholder="https://example.com" required />
-                </div>
-                <div class="fav-form-row">
-                  <label for="favorite-icon">아이콘</label>
-                  <input type="file" id="favorite-icon" accept="image/*" required />
-                </div>
-                <div class="favorite-form-actions">
-                  <button type="submit" class="btn-primary">등록</button>
-                  <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
+                <div class="favorite-form-body">
+                  <div class="fav-form-row">
+                    <label for="favorite-title">메뉴 이름</label>
+                    <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
+                  </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-link">링크 주소</label>
+                    <input type="url" id="favorite-link" placeholder="https://example.com" required />
+                  </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-icon">아이콘</label>
+                    <input type="file" id="favorite-icon" accept="image/*" required />
+                  </div>
+                  <div class="favorite-form-actions">
+                    <button type="submit" class="btn-primary">등록</button>
+                    <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
+                  </div>
                 </div>
               </form>
             </section>

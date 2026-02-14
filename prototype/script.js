@@ -158,7 +158,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.639';
+    NK.config.APP_VERSION = '1.646';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -414,7 +414,10 @@
     const dashboardCard = document.getElementById('user-dashboard-card');
     const dashboardPanel = document.getElementById('user-dashboard-panel');
     const dashboardLockMessage = document.getElementById('dashboard-lock-message');
+    const subscriptionWidget = document.getElementById('subscription-widget');
+    const subscriptionToggleBtn = document.getElementById('subscription-toggle');
     const favoriteForm = document.getElementById('favorite-form');
+    const favoriteFormToggleBtn = document.getElementById('favorite-form-toggle');
     const favoriteCancelFormBtn = document.getElementById('favorite-cancel-form');
     const favoriteListEl = document.getElementById('favorite-list');
     const favoriteTitleInput = document.getElementById('favorite-title');
@@ -436,6 +439,9 @@
     let profileLoadSeq = 0;
     let favoriteDragId = '';
     let suppressFavoriteOpenUntil = 0;
+    let favoriteFormCollapsed = true;
+    let subscriptionCollapsed = true;
+    let lastLoginState = false;
 
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
     const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
@@ -633,8 +639,46 @@
 
     const setFavoriteFormOpen = (open) => {
       if (!favoriteForm) return;
+      const wasHidden = favoriteForm.classList.contains('hidden');
       favoriteForm.classList.toggle('hidden', !open);
-      if (!open) resetFavoriteForm();
+      if (!open) {
+        favoriteFormCollapsed = true;
+        favoriteForm.classList.add('is-collapsed');
+        if (favoriteFormToggleBtn) {
+          favoriteFormToggleBtn.setAttribute('aria-expanded', 'false');
+          favoriteFormToggleBtn.setAttribute('aria-label', '즐겨찾기 등록 펼치기');
+        }
+        resetFavoriteForm();
+        return;
+      }
+      if (wasHidden) {
+        favoriteFormCollapsed = true;
+        favoriteForm.classList.add('is-collapsed');
+        if (favoriteFormToggleBtn) {
+          favoriteFormToggleBtn.setAttribute('aria-expanded', 'false');
+          favoriteFormToggleBtn.setAttribute('aria-label', '즐겨찾기 등록 펼치기');
+        }
+      }
+    };
+
+    const setFavoriteFormCollapsed = (collapsed) => {
+      if (!favoriteForm) return;
+      favoriteFormCollapsed = !!collapsed;
+      favoriteForm.classList.toggle('is-collapsed', favoriteFormCollapsed);
+      if (favoriteFormToggleBtn) {
+        favoriteFormToggleBtn.setAttribute('aria-expanded', favoriteFormCollapsed ? 'false' : 'true');
+        favoriteFormToggleBtn.setAttribute('aria-label', favoriteFormCollapsed ? '즐겨찾기 등록 펼치기' : '즐겨찾기 등록 접기');
+      }
+    };
+
+    const setSubscriptionCollapsed = (collapsed) => {
+      if (!subscriptionWidget) return;
+      subscriptionCollapsed = !!collapsed;
+      subscriptionWidget.classList.toggle('is-collapsed', subscriptionCollapsed);
+      if (subscriptionToggleBtn) {
+        subscriptionToggleBtn.setAttribute('aria-expanded', subscriptionCollapsed ? 'false' : 'true');
+        subscriptionToggleBtn.setAttribute('aria-label', subscriptionCollapsed ? '구독 현황 펼치기' : '구독 현황 접기');
+      }
     };
 
     const renderFavorites = (loggedIn) => {
@@ -828,6 +872,9 @@
       if (canUseDashboardUI()) {
         dashboardPanel.classList.toggle('hidden', !loggedIn);
         renderSubscriptionUi(loggedIn, user);
+        if (!loggedIn || !lastLoginState) {
+          setSubscriptionCollapsed(true);
+        }
       }
 
       if (canUseFavoriteUI()) {
@@ -836,6 +883,7 @@
           favoriteLoadSeq += 1;
         } else {
           setFavoriteFormOpen(true);
+          if (!lastLoginState) setFavoriteFormCollapsed(true);
         }
 
         favoriteItems = loggedIn ? readFavoritesLocal(user) : [];
@@ -853,14 +901,24 @@
           })
           .catch(() => { });
       }
+
+      lastLoginState = !!loggedIn;
     };
 
     const initialUser = NK.auth.getUser();
     setUI(NK.auth.isAuthed(), initialUser);
 
     if (canUseFavoriteUI()) {
+      if (favoriteFormToggleBtn) {
+        favoriteFormToggleBtn.addEventListener('click', () => {
+          if (!NK.auth.isAuthed()) return;
+          setFavoriteFormCollapsed(!favoriteFormCollapsed);
+        });
+      }
+
       favoriteCancelFormBtn.addEventListener('click', () => {
         resetFavoriteForm();
+        setFavoriteFormCollapsed(true);
       });
 
       favoriteIconInput.addEventListener('change', async (evt) => {
@@ -922,7 +980,8 @@
 
         favoriteItems = sanitizeFavoriteItems([entry, ...favoriteItems]);
         renderFavorites(true);
-        setFavoriteFormOpen(false);
+        resetFavoriteForm();
+        setFavoriteFormCollapsed(true);
         try {
           await saveFavoritesServer(user, favoriteItems);
           alert('즐겨찾기 메뉴가 등록되었습니다.');
@@ -930,6 +989,13 @@
           const detail = String(err?.message || '').trim();
           alert('서버 저장에 실패해 임시 저장되었습니다. 네트워크를 확인한 뒤 다시 저장해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
         }
+      });
+    }
+
+    if (subscriptionWidget && subscriptionToggleBtn) {
+      subscriptionToggleBtn.addEventListener('click', () => {
+        if (!NK.auth.isAuthed()) return;
+        setSubscriptionCollapsed(!subscriptionCollapsed);
       });
     }
 
