@@ -328,6 +328,54 @@
     return j(text);
   };
 
+  api.userdataFavoritesGet = async function () {
+    var url = withBase('/api/userdata/favorites/get?userId=' + encodeURIComponent(resolveUserId()));
+    var res = await fetch(url, { method: 'GET' });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_favorites_get_error')));
+    return j(text);
+  };
+
+  api.userdataFavoritesSave = async function (items) {
+    var payload = { userId: resolveUserId(), items: Array.isArray(items) ? items : [] };
+    var res = await fetchWithTimeout(withBase('/api/userdata/favorites/save'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }, 25000);
+    var text = await readTextWithTimeout(res, 10000);
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_favorites_save_error')));
+    return j(text);
+  };
+
+  api.userdataProfileGet = async function () {
+    var url = withBase('/api/userdata/profile/get?userId=' + encodeURIComponent(resolveUserId()));
+    var res = await fetch(url, { method: 'GET' });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_profile_get_error')));
+    return j(text);
+  };
+
+  api.userdataProfileSave = async function (profile) {
+    var payload = { userId: resolveUserId(), profile: profile || {} };
+    var res = await fetchWithTimeout(withBase('/api/userdata/profile/save'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }, 25000);
+    var text = await readTextWithTimeout(res, 10000);
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_profile_save_error')));
+    return j(text);
+  };
+
+  api.userdataSubscriptionGet = async function () {
+    var url = withBase('/api/userdata/subscription/get?userId=' + encodeURIComponent(resolveUserId()));
+    var res = await fetch(url, { method: 'GET' });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_subscription_get_error')));
+    return j(text);
+  };
+
   api.login = async function (id, pw) {
     var res = await fetch(withBase('/api/login'), {
       method: 'POST',

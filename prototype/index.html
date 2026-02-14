@@ -4,11 +4,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NK_Studio · 로그인</title>
+  <title>NK_Studio 로그인</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <script src="core.js" defer></script>
   <script src="js/config.js" defer></script>
@@ -30,38 +29,120 @@
 <body>
   <div class="grain"></div>
   <div class="app no-sidebar">
-
     <main class="main">
       <div class="main-body option-body">
         <div class="floating-actions">
           <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('local')" aria-label="테마 전환"></button>
         </div>
+
         <div class="login-icons" id="login-icons" aria-hidden="true">
           <a href="ai-video.html" class="login-icon-link">
-            <img src="images/icon-ai-video.png" alt="영상 편집 메인으로 이동" />
+            <img src="images/icon-ai-video.png" alt="영상 제작 메인으로 이동" />
           </a>
           <img src="images/icon-ai-image.png" alt="" />
           <img src="images/icon-ai-sound.png" alt="" />
           <img src="images/icon-ai-doc.png" alt="" />
         </div>
-        <div class="card option-card">
-          <h3 class="option-title">NK AI STUDIO</h3>
-          <div class="logo-box">
-            <img src="images/logo(500500).png" alt="logo" class="logo-img" />
+
+        <div class="option-card-grid">
+          <div class="card option-card" id="login-card">
+            <h3 class="option-title">NK AI STUDIO</h3>
+            <div class="logo-box">
+              <img src="images/logo(500500).png" alt="logo" class="logo-img" />
+            </div>
+            <div class="form-row">
+              <label for="opt-id">ID</label>
+              <input type="text" id="opt-id" placeholder="아이디" />
+            </div>
+            <div class="form-row">
+              <label for="opt-pw">PASS</label>
+              <input type="password" id="opt-pw" placeholder="비밀번호" />
+            </div>
+            <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
+            <div class="option-actions">
+              <button class="btn-primary" id="opt-auth-btn">로그인</button>
+            </div>
+            <div class="sidebar-version">ver</div>
           </div>
-          <div class="form-row">
-            <label for="opt-id">ID</label>
-            <input type="text" id="opt-id" placeholder="아이디" />
-          </div>
-          <div class="form-row">
-            <label for="opt-pw">PASS</label>
-            <input type="password" id="opt-pw" placeholder="비밀번호" />
-          </div>
-          <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
-          <div class="option-actions">
-            <button class="btn-primary" id="opt-auth-btn">로그인</button>
-          </div>
-          <div class="sidebar-version">ver</div>
+
+          <section class="card option-card user-dashboard-card is-locked" id="user-dashboard-card" aria-live="polite">
+
+            <section class="user-dashboard-panel hidden" id="user-dashboard-panel">
+              <article class="user-widget subscription-widget" id="subscription-widget">
+                <div class="user-widget-head">
+                  <h4>구독 현황</h4>
+                  <span class="ui-chip">UI</span>
+                </div>
+                <div class="subscription-grid">
+                  <div class="subscription-item">
+                    <span class="muted">플랜</span>
+                    <strong id="subscription-plan">Free</strong>
+                  </div>
+                  <div class="subscription-item">
+                    <span class="muted">상태</span>
+                    <strong id="subscription-status">미연결</strong>
+                  </div>
+                  <div class="subscription-item">
+                    <span class="muted">갱신일</span>
+                    <strong id="subscription-renew">-</strong>
+                  </div>
+                </div>
+                <p class="muted user-widget-help">결제 연동 전 단계라 현재는 UI만 표시됩니다.</p>
+                <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
+              </article>
+
+              <form class="user-widget profile-widget" id="profile-ui-form">
+                <div class="user-widget-head">
+                  <h4>프로필 편집</h4>
+                  <span class="ui-chip">UI</span>
+                </div>
+                <div class="profile-ui-row">
+                  <label for="profile-ui-name">닉네임</label>
+                  <input type="text" id="profile-ui-name" placeholder="표시 이름" maxlength="40" />
+                </div>
+                <div class="profile-ui-row">
+                  <label for="profile-ui-email">이메일</label>
+                  <input type="email" id="profile-ui-email" placeholder="name@example.com" maxlength="120" />
+                </div>
+                <div class="profile-ui-row">
+                  <label for="profile-ui-timezone">시간대</label>
+                  <select id="profile-ui-timezone">
+                    <option value="Asia/Seoul">Asia/Seoul</option>
+                    <option value="Asia/Tokyo">Asia/Tokyo</option>
+                    <option value="America/Los_Angeles">America/Los_Angeles</option>
+                    <option value="UTC">UTC</option>
+                  </select>
+                </div>
+                <div class="profile-ui-actions">
+                  <button type="submit" class="btn-primary">프로필 저장(UI)</button>
+                </div>
+              </form>
+            </section>
+          </section>
+
+          <section class="card option-card favorite-card is-locked" id="favorite-card" aria-live="polite">
+            <h3 class="option-title">즐겨찾기</h3>
+            <form class="favorite-form hidden" id="favorite-form">
+              <div class="fav-form-row">
+                <label for="favorite-title">메뉴 이름</label>
+                <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
+              </div>
+              <div class="fav-form-row">
+                <label for="favorite-link">링크 주소</label>
+                <input type="url" id="favorite-link" placeholder="https://example.com" required />
+              </div>
+              <div class="fav-form-row">
+                <label for="favorite-icon">아이콘</label>
+                <input type="file" id="favorite-icon" accept="image/*" required />
+              </div>
+              <div class="favorite-form-actions">
+                <button type="submit" class="btn-primary">등록</button>
+                <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
+              </div>
+            </form>
+
+            <div class="favorite-list empty" id="favorite-list" role="list"></div>
+          </section>
         </div>
       </div>
     </main>

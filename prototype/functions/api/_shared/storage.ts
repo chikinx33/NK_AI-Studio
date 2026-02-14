@@ -1,5 +1,6 @@
 export const AI_VIDEO_SERVICE = "ai-video";
 export const DEFAULT_OWNER_USER_ID = "owner";
+export const USERDATA_FOLDER = "userdata";
 
 export function sanitizeUserId(raw: any): string {
   const value = String(raw || "").trim();
@@ -20,16 +21,29 @@ export function resolveUserId(raw: any, env?: any): string {
   return DEFAULT_OWNER_USER_ID;
 }
 
-export function buildAiVideoUserRoot(basePrefix: string, userId: string): string {
+export function buildUserRoot(basePrefix: string, userId: string): string {
   const root = normalizeBasePrefix(basePrefix);
   const uid = sanitizeUserId(userId);
-  if (!root) return `users/${uid}/${AI_VIDEO_SERVICE}`;
-  return `${root}/users/${uid}/${AI_VIDEO_SERVICE}`;
+  if (!root) return `users/${uid}`;
+  return `${root}/users/${uid}`;
+}
+
+export function buildAiVideoUserRoot(basePrefix: string, userId: string): string {
+  return `${buildUserRoot(basePrefix, userId)}/${AI_VIDEO_SERVICE}`;
 }
 
 export function buildAiVideoProjectPrefix(basePrefix: string, userId: string, projectId: string): string {
   const root = buildAiVideoUserRoot(basePrefix, userId);
   return `${root}/projects${String(projectId || "").trim()}`;
+}
+
+export function buildUserDataRoot(basePrefix: string, userId: string): string {
+  return `${buildUserRoot(basePrefix, userId)}/${USERDATA_FOLDER}`;
+}
+
+export function buildUserDataObject(basePrefix: string, userId: string, fileName: string): string {
+  const safeName = String(fileName || "").trim().replace(/^\/+/, "").replace(/[^a-zA-Z0-9._-]/g, "_") || "data.json";
+  return `${buildUserDataRoot(basePrefix, userId)}/${safeName}`;
 }
 
 function normalizeBasePrefix(basePrefix: string): string {

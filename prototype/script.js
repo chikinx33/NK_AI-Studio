@@ -158,7 +158,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.608';
+    NK.config.APP_VERSION = '1.618';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -409,8 +409,293 @@
     const btn = document.getElementById('opt-auth-btn');
     const nameEl = document.getElementById('opt-username');
     const icons = document.getElementById('login-icons');
-    const formRows = document.querySelectorAll('.option-card .form-row');
+    const formRows = document.querySelectorAll('#login-card .form-row');
+    const favoriteCard = document.getElementById('favorite-card');
+    const dashboardCard = document.getElementById('user-dashboard-card');
+    const dashboardPanel = document.getElementById('user-dashboard-panel');
+    const dashboardLockMessage = document.getElementById('dashboard-lock-message');
+    const favoriteForm = document.getElementById('favorite-form');
+    const favoriteCancelFormBtn = document.getElementById('favorite-cancel-form');
+    const favoriteListEl = document.getElementById('favorite-list');
+    const favoriteTitleInput = document.getElementById('favorite-title');
+    const favoriteLinkInput = document.getElementById('favorite-link');
+    const favoriteIconInput = document.getElementById('favorite-icon');
+    const subscriptionManageBtn = document.getElementById('subscription-manage-btn');
+    const subscriptionPlanEl = document.getElementById('subscription-plan');
+    const subscriptionStatusEl = document.getElementById('subscription-status');
+    const subscriptionRenewEl = document.getElementById('subscription-renew');
+    const profileUiForm = document.getElementById('profile-ui-form');
+    const profileUiNameInput = document.getElementById('profile-ui-name');
+    const profileUiEmailInput = document.getElementById('profile-ui-email');
+    const profileUiTimezoneInput = document.getElementById('profile-ui-timezone');
     if (!idInput || !pwInput || !btn) return;
+
+    let favoriteItems = [];
+    let resizedIconDataUrl = '';
+    let favoriteLoadSeq = 0;
+    let profileLoadSeq = 0;
+
+    const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
+    const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && profileUiForm && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
+
+    const favoriteStorageKey = (user) => {
+      const safe = String(user || '').trim().toLowerCase();
+      if (!safe) return '';
+      return `nk_favorites_${safe}`;
+    };
+
+    const profileUiStorageKey = (user) => {
+      const safe = String(user || '').trim().toLowerCase();
+      if (!safe) return '';
+      return `nk_profile_ui_${safe}`;
+    };
+
+    const normalizeProfileUi = (input, user) => {
+      const source = input && typeof input === 'object' ? input : {};
+      return {
+        name: String(source.name || user || '').trim().slice(0, 120),
+        email: String(source.email || '').trim().slice(0, 240),
+        timezone: String(source.timezone || 'Asia/Seoul').trim() || 'Asia/Seoul',
+      };
+    };
+
+    const normalizeUrl = (raw) => {
+      const trimmed = String(raw || '').trim();
+      if (!trimmed) throw new Error('링크 주소를 입력해 주세요.');
+      const candidate = /^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+      let parsed = null;
+      try {
+        parsed = new URL(candidate);
+      } catch (_) {
+        throw new Error('유효한 링크 주소를 입력해 주세요.');
+      }
+      if (!/^https?:$/i.test(parsed.protocol)) {
+        throw new Error('http 또는 https 링크만 등록할 수 있습니다.');
+      }
+      return parsed.toString();
+    };
+
+    const sanitizeFavoriteItems = (items) => {
+      if (!Array.isArray(items)) return [];
+      return items
+        .map((item) => ({
+          id: String(item?.id || ''),
+          title: String(item?.title || '').trim(),
+          url: String(item?.url || '').trim(),
+          iconDataUrl: String(item?.iconDataUrl || '').trim(),
+        }))
+        .filter(item => item.title && /^https?:\/\//i.test(item.url) && /^data:image\//i.test(item.iconDataUrl))
+        .slice(0, 100);
+    };
+
+    const readFavoritesLocal = (user) => {
+      const key = favoriteStorageKey(user);
+      if (!key) return [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+        return sanitizeFavoriteItems(parsed);
+      } catch (_) {
+        return [];
+      }
+    };
+
+    const saveFavoritesLocal = (user, items) => {
+      const key = favoriteStorageKey(user);
+      if (!key) return;
+      try {
+        localStorage.setItem(key, JSON.stringify(items));
+      } catch (_) { }
+    };
+
+    const fetchFavoritesServer = async (user) => {
+      if (!user) return [];
+      if (!NK.api || !NK.api.userdataFavoritesGet) return readFavoritesLocal(user);
+      const res = await NK.api.userdataFavoritesGet();
+      const items = sanitizeFavoriteItems(res?.data?.items || []);
+      saveFavoritesLocal(user, items);
+      return items;
+    };
+
+    const saveFavoritesServer = async (user, items) => {
+      if (!user) return;
+      const nextItems = sanitizeFavoriteItems(items);
+      saveFavoritesLocal(user, nextItems);
+      if (!NK.api || !NK.api.userdataFavoritesSave) return;
+      await NK.api.userdataFavoritesSave(nextItems);
+    };
+
+    const readProfileUiLocal = (user) => {
+      const key = profileUiStorageKey(user);
+      if (!key) return null;
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+        if (!parsed || typeof parsed !== 'object') return null;
+        return {
+          name: String(parsed.name || '').trim(),
+          email: String(parsed.email || '').trim(),
+          timezone: String(parsed.timezone || '').trim(),
+        };
+      } catch (_) {
+        return null;
+      }
+    };
+
+    const saveProfileUiLocal = (user, data) => {
+      const key = profileUiStorageKey(user);
+      if (!key) return;
+      const payload = normalizeProfileUi(data, user);
+      try {
+        localStorage.setItem(key, JSON.stringify(payload));
+      } catch (_) { }
+    };
+
+    const fetchProfileUiServer = async (user) => {
+      if (!user) return normalizeProfileUi({}, user);
+      if (!NK.api || !NK.api.userdataProfileGet) return readProfileUiLocal(user) || normalizeProfileUi({}, user);
+      const res = await NK.api.userdataProfileGet();
+      const profile = normalizeProfileUi(res?.data?.profile || {}, user);
+      saveProfileUiLocal(user, profile);
+      return profile;
+    };
+
+    const saveProfileUiServer = async (user, profile) => {
+      if (!user) return;
+      const nextProfile = normalizeProfileUi(profile, user);
+      saveProfileUiLocal(user, nextProfile);
+      if (!NK.api || !NK.api.userdataProfileSave) return;
+      await NK.api.userdataProfileSave(nextProfile);
+    };
+
+    const renderSubscriptionUi = (loggedIn, user) => {
+      if (!canUseDashboardUI()) return;
+      if (!loggedIn) {
+        subscriptionPlanEl.textContent = '-';
+        subscriptionStatusEl.textContent = '로그인 필요';
+        subscriptionRenewEl.textContent = '-';
+        return;
+      }
+      subscriptionPlanEl.textContent = 'Free';
+      subscriptionStatusEl.textContent = 'UI 단계';
+      subscriptionRenewEl.textContent = '연동 전';
+    };
+
+    const renderProfileUi = (loggedIn, user) => {
+      if (!canUseDashboardUI()) return;
+      if (!loggedIn) {
+        if (profileUiNameInput) profileUiNameInput.value = '';
+        if (profileUiEmailInput) profileUiEmailInput.value = '';
+        if (profileUiTimezoneInput) profileUiTimezoneInput.value = 'Asia/Seoul';
+        return;
+      }
+
+      const local = normalizeProfileUi(readProfileUiLocal(user) || {}, user);
+      if (profileUiNameInput) profileUiNameInput.value = local.name || String(user || '');
+      if (profileUiEmailInput) profileUiEmailInput.value = local.email || '';
+      if (profileUiTimezoneInput) profileUiTimezoneInput.value = local.timezone || 'Asia/Seoul';
+    };
+
+    const resetFavoriteForm = () => {
+      if (!favoriteForm) return;
+      favoriteForm.reset();
+      resizedIconDataUrl = '';
+    };
+
+    const setFavoriteFormOpen = (open) => {
+      if (!favoriteForm) return;
+      favoriteForm.classList.toggle('hidden', !open);
+      if (!open) resetFavoriteForm();
+    };
+
+    const renderFavorites = (loggedIn) => {
+      if (!canUseFavoriteUI()) return;
+      favoriteListEl.innerHTML = '';
+      if (!loggedIn) {
+        favoriteListEl.classList.add('hidden');
+        favoriteListEl.classList.add('empty');
+        return;
+      }
+
+      favoriteListEl.classList.remove('hidden');
+      if (!favoriteItems.length) {
+        favoriteListEl.classList.add('empty');
+        return;
+      }
+
+      favoriteListEl.classList.remove('empty');
+
+      favoriteItems.forEach((item) => {
+        const article = document.createElement('article');
+        article.className = 'favorite-item';
+        article.setAttribute('role', 'listitem');
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'favorite-link-btn';
+        button.title = item.title;
+        const iconWrap = document.createElement('span');
+        iconWrap.className = 'favorite-icon-wrap';
+        const iconImg = document.createElement('img');
+        iconImg.src = item.iconDataUrl;
+        iconImg.alt = `${item.title} 아이콘`;
+        iconWrap.appendChild(iconImg);
+
+        const titleEl = document.createElement('span');
+        titleEl.className = 'favorite-item-title';
+        titleEl.textContent = item.title;
+
+        button.appendChild(iconWrap);
+        button.appendChild(titleEl);
+        button.addEventListener('click', () => {
+          const popup = window.open(item.url, '_blank', 'noopener,noreferrer');
+          if (!popup) {
+            alert('새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.');
+          }
+        });
+
+        article.appendChild(button);
+        favoriteListEl.appendChild(article);
+      });
+    };
+
+    const resizeImageToSquare = (file, size = 100) => new Promise((resolve, reject) => {
+      if (!file || !file.type || !file.type.startsWith('image/')) {
+        reject(new Error('이미지 파일만 등록할 수 있습니다.'));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('아이콘 파일을 읽지 못했습니다.'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('이미지 파일 해석에 실패했습니다.'));
+        img.onload = () => {
+          try {
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('아이콘 처리를 위한 캔버스를 만들지 못했습니다.'));
+              return;
+            }
+            const sw = img.naturalWidth || img.width || size;
+            const sh = img.naturalHeight || img.height || size;
+            const scale = Math.max(size / sw, size / sh);
+            const dw = sw * scale;
+            const dh = sh * scale;
+            const dx = (size - dw) / 2;
+            const dy = (size - dh) / 2;
+            ctx.clearRect(0, 0, size, size);
+            ctx.drawImage(img, dx, dy, dw, dh);
+            resolve(canvas.toDataURL('image/png'));
+          } catch (_) {
+            reject(new Error('아이콘 리사이즈 중 오류가 발생했습니다.'));
+          }
+        };
+        img.src = String(reader.result || '');
+      };
+      reader.readAsDataURL(file);
+    });
 
     const setUI = (loggedIn, user = '') => {
       if (nameEl) {
@@ -421,10 +706,163 @@
       btn.textContent = loggedIn ? '로그아웃' : '로그인';
       btn.dataset.state = loggedIn ? 'logout' : 'login';
       if (icons) icons.classList.toggle('blurred', !loggedIn);
+
+      if (favoriteCard) favoriteCard.classList.toggle('is-locked', !loggedIn);
+      if (dashboardCard) dashboardCard.classList.toggle('is-locked', !loggedIn);
+      if (dashboardLockMessage) dashboardLockMessage.classList.toggle('hidden', loggedIn);
+
+      if (canUseDashboardUI()) {
+        dashboardPanel.classList.toggle('hidden', !loggedIn);
+        if (!loggedIn) profileLoadSeq += 1;
+        renderSubscriptionUi(loggedIn, user);
+        renderProfileUi(loggedIn, user);
+        if (loggedIn && user) {
+          const seq = ++profileLoadSeq;
+          fetchProfileUiServer(user)
+            .then((profile) => {
+              if (!NK.auth.isAuthed()) return;
+              if (seq !== profileLoadSeq) return;
+              if (String(NK.auth.getUser() || '') !== String(user || '')) return;
+              const merged = normalizeProfileUi(profile, user);
+              if (profileUiNameInput) profileUiNameInput.value = merged.name || String(user || '');
+              if (profileUiEmailInput) profileUiEmailInput.value = merged.email || '';
+              if (profileUiTimezoneInput) profileUiTimezoneInput.value = merged.timezone || 'Asia/Seoul';
+            })
+            .catch(() => { });
+        }
+      }
+
+      if (canUseFavoriteUI()) {
+        if (!loggedIn) {
+          setFavoriteFormOpen(false);
+          favoriteLoadSeq += 1;
+        } else {
+          setFavoriteFormOpen(true);
+        }
+
+        favoriteItems = loggedIn ? readFavoritesLocal(user) : [];
+        renderFavorites(loggedIn);
+
+        if (!loggedIn || !user) return;
+        const seq = ++favoriteLoadSeq;
+        fetchFavoritesServer(user)
+          .then((items) => {
+            if (!NK.auth.isAuthed()) return;
+            if (seq !== favoriteLoadSeq) return;
+            if (String(NK.auth.getUser() || '') !== String(user || '')) return;
+            favoriteItems = items;
+            renderFavorites(true);
+          })
+          .catch(() => { });
+      }
     };
 
     const initialUser = NK.auth.getUser();
     setUI(NK.auth.isAuthed(), initialUser);
+
+    if (canUseFavoriteUI()) {
+      favoriteCancelFormBtn.addEventListener('click', () => {
+        resetFavoriteForm();
+      });
+
+      favoriteIconInput.addEventListener('change', async (evt) => {
+        const file = evt.target?.files && evt.target.files[0];
+        if (!file) {
+          resizedIconDataUrl = '';
+          return;
+        }
+        try {
+          resizedIconDataUrl = await resizeImageToSquare(file, 100);
+        } catch (err) {
+          resizedIconDataUrl = '';
+          favoriteIconInput.value = '';
+          alert(err?.message || '아이콘 등록에 실패했습니다.');
+        }
+      });
+
+      favoriteForm.addEventListener('submit', async (evt) => {
+        evt.preventDefault();
+        const user = NK.auth.getUser();
+        if (!user) {
+          alert('로그인 후 등록해 주세요.');
+          return;
+        }
+
+        const title = String(favoriteTitleInput?.value || '').trim();
+        const rawUrl = String(favoriteLinkInput?.value || '').trim();
+
+        if (!title) {
+          alert('메뉴 이름을 입력해 주세요.');
+          favoriteTitleInput && favoriteTitleInput.focus();
+          return;
+        }
+        if (!rawUrl) {
+          alert('링크 주소를 입력해 주세요.');
+          favoriteLinkInput && favoriteLinkInput.focus();
+          return;
+        }
+        if (!resizedIconDataUrl) {
+          alert('아이콘 이미지를 등록해 주세요.');
+          favoriteIconInput && favoriteIconInput.focus();
+          return;
+        }
+
+        let normalized = '';
+        try {
+          normalized = normalizeUrl(rawUrl);
+        } catch (err) {
+          alert(err?.message || '유효한 링크 주소를 입력해 주세요.');
+          return;
+        }
+
+        const entry = {
+          id: `fav_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          title,
+          url: normalized,
+          iconDataUrl: resizedIconDataUrl,
+        };
+
+        favoriteItems = sanitizeFavoriteItems([entry, ...favoriteItems]);
+        renderFavorites(true);
+        setFavoriteFormOpen(false);
+        try {
+          await saveFavoritesServer(user, favoriteItems);
+          alert('즐겨찾기 메뉴가 등록되었습니다.');
+        } catch (err) {
+          const detail = String(err?.message || '').trim();
+          alert('서버 저장에 실패해 임시 저장되었습니다. 네트워크를 확인한 뒤 다시 저장해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+        }
+      });
+    }
+
+    if (subscriptionManageBtn) {
+      subscriptionManageBtn.addEventListener('click', () => {
+        alert('구독 관리 UI 단계입니다. 결제/구독 연동은 다음 작업에서 연결됩니다.');
+      });
+    }
+
+    if (profileUiForm) {
+      profileUiForm.addEventListener('submit', async (evt) => {
+        evt.preventDefault();
+        const user = String(NK.auth.getUser() || '').trim();
+        if (!user) {
+          alert('로그인 후 저장할 수 있습니다.');
+          return;
+        }
+        const payload = normalizeProfileUi({
+          name: String(profileUiNameInput?.value || '').trim(),
+          email: String(profileUiEmailInput?.value || '').trim(),
+          timezone: String(profileUiTimezoneInput?.value || '').trim() || 'Asia/Seoul',
+        }, user);
+        try {
+          await saveProfileUiServer(user, payload);
+          alert('프로필이 서버에 저장되었습니다.');
+        } catch (err) {
+          const detail = String(err?.message || '').trim();
+          alert('프로필 서버 저장에 실패해 임시 저장되었습니다. 네트워크를 확인한 뒤 다시 저장해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+        }
+      });
+    }
 
     const aiVideoLink = document.querySelector('#login-icons .login-icon-link[href]');
     if (aiVideoLink) {
