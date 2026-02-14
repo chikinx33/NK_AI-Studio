@@ -36,6 +36,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       privateKeyPem: privateKeyRaw,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
+    const userProject =
+      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+      (env.GOOGLE_PROJECT_ID as string | undefined) ||
+      "";
 
     const jobUrl = `https://transcoder.googleapis.com/v1/${jobName}`;
     const res = await fetch(jobUrl, {
@@ -67,8 +71,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         requestUrl: request.url,
         clientEmail,
         privateKeyPem: privateKeyRaw,
+        token,
+        userProject,
       });
-      return send({ done: true, status: state, outputObjectName, ...resolved }, 200, origin);
+      if (!resolved) {
+        return send({ done: false, status: "OUTPUT_PENDING", raw: json }, 200, origin);
+      }
+      return send({ done: true, status: state, outputObjectName: resolved.outputObjectName, ...resolved }, 200, origin);
     }
 
     if (state === "FAILED" || state === "CANCELLED") {
@@ -83,13 +92,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
           "",
         clientEmail,
         privateKeyPem: privateKeyRaw,
+        expectedOutputObjectName: outputObjectName,
       });
-      if (recovered) {
+      if (recovered && recovered.outputObjectName) {
         return send(
           {
             done: true,
             status: "SUCCEEDED",
-            outputObjectName,
+            outputObjectName: recovered.outputObjectName,
             recoveredFromJobState: state,
             ...recovered,
           },
@@ -123,25 +133,71 @@ async function tryRecoverOutputAfterFailedJob(opts: {
   userProject: string;
   clientEmail: string;
   privateKeyPem: string;
+  expectedOutputObjectName: string;
 }) {
-  const metaUrl =
-    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(opts.bucket)}` +
-    `/o/${encodeURIComponent(opts.object)}`;
-  const metaRes = await fetch(metaUrl, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${opts.token}`,
-      ...(opts.userProject ? { "X-Goog-User-Project": opts.userProject } : {}),
-    },
-  });
-  if (!metaRes.ok) return null;
-  return resolveOutputUrls({
-    outputObjectName: opts.object,
+  const resolved = await resolveOutputUrls({
+    outputObjectName: opts.expectedOutputObjectName || opts.object,
     bucket: opts.bucket,
     requestUrl: opts.requestUrl,
     clientEmail: opts.clientEmail,
     privateKeyPem: opts.privateKeyPem,
+    token: opts.token,
+    userProject: opts.userProject,
   });
+  return (resolved && resolved.outputObjectName) ? resolved : null;
+}
+
+async function resolveExistingOutputObject(opts: {
+  bucket: string;
+  outputObjectName: string;
+  token: string;
+  userProject: string;
+}) {
+  const expected = String(opts.outputObjectName || "").trim().replace(/^\/+/, "");
+  if (!expected) return "";
+
+  const candidates: string[] = [];
+  const pushCandidate = (name: string) => {
+    const v = String(name || "").trim().replace(/^\/+/, "");
+    if (!v) return;
+    if (candidates.indexOf(v) >= 0) return;
+    candidates.push(v);
+  };
+
+  pushCandidate(expected);
+  if (/\.mp4$/i.test(expected)) {
+    pushCandidate(expected.replace(/\.mp4$/i, ""));
+  } else {
+    pushCandidate(`${expected}.mp4`);
+  }
+
+  for (const candidate of candidates) {
+    const ok = await objectExists({
+      bucket: opts.bucket,
+      object: candidate,
+      token: opts.token,
+      userProject: opts.userProject,
+    });
+    if (ok) return candidate;
+  }
+
+  const prefix = expected.includes("/") ? expected.slice(0, expected.lastIndexOf("/") + 1) : "";
+  if (!prefix) return "";
+  const listed = await listObjectsByPrefix({
+    bucket: opts.bucket,
+    prefix,
+    token: opts.token,
+    userProject: opts.userProject,
+  });
+  if (!listed.length) return "";
+  listed.sort((a, b) => {
+    const at = Date.parse(String(a.updated || a.timeCreated || 0)) || 0;
+    const bt = Date.parse(String(b.updated || b.timeCreated || 0)) || 0;
+    return bt - at;
+  });
+  const mp4 = listed.find((it) => /\.mp4$/i.test(String(it.name || "")));
+  if (mp4 && mp4.name) return String(mp4.name);
+  return String(listed[0].name || "");
 }
 
 async function resolveOutputUrls(opts: {
@@ -150,18 +206,64 @@ async function resolveOutputUrls(opts: {
   requestUrl: string;
   clientEmail: string;
   privateKeyPem: string;
+  token: string;
+  userProject: string;
 }) {
+  const resolvedObjectName = await resolveExistingOutputObject({
+    bucket: opts.bucket,
+    outputObjectName: opts.outputObjectName,
+    token: opts.token,
+    userProject: opts.userProject,
+  });
+  const targetObjectName = resolvedObjectName;
+  if (!targetObjectName) return null;
   const reqBase = new URL(opts.requestUrl);
   const proxyUrl =
-    `${reqBase.origin}/api/media/proxy?objectName=${encodeURIComponent(opts.outputObjectName)}`;
+    `${reqBase.origin}/api/media/proxy?objectName=${encodeURIComponent(targetObjectName)}`;
   const signedUrl = await signGcsUrl({
     bucket: opts.bucket,
-    object: opts.outputObjectName,
+    object: targetObjectName,
     clientEmail: opts.clientEmail,
     privateKeyPem: opts.privateKeyPem,
     expiresInSec: 3600,
-  }).catch(() => gcsToHttps(`gs://${opts.bucket}/${opts.outputObjectName}`));
-  return { signedUrl, proxyUrl };
+  }).catch(() => gcsToHttps(`gs://${opts.bucket}/${targetObjectName}`));
+  return { signedUrl, proxyUrl, outputObjectName: targetObjectName };
+}
+
+async function objectExists(opts: { bucket: string; object: string; token: string; userProject: string }) {
+  const metaUrl =
+    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(opts.bucket)}` +
+    `/o/${encodeURIComponent(opts.object)}`;
+  const res = await fetch(metaUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${opts.token}`,
+      ...(opts.userProject ? { "X-Goog-User-Project": opts.userProject } : {}),
+    },
+  });
+  return res.ok;
+}
+
+async function listObjectsByPrefix(opts: { bucket: string; prefix: string; token: string; userProject: string }) {
+  const listUrl =
+    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(opts.bucket)}/o` +
+    `?prefix=${encodeURIComponent(opts.prefix)}`;
+  const res = await fetch(listUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${opts.token}`,
+      ...(opts.userProject ? { "X-Goog-User-Project": opts.userProject } : {}),
+    },
+  });
+  if (!res.ok) return [];
+  const text = await res.text();
+  const json = safeJson(text) as any;
+  const items = Array.isArray(json?.items) ? json.items : [];
+  return items.map((it: any) => ({
+    name: String(it?.name || ""),
+    updated: String(it?.updated || ""),
+    timeCreated: String(it?.timeCreated || ""),
+  })).filter((it: any) => !!it.name);
 }
 
 export const onRequestOptions: PagesFunction = async ({ request }) => {

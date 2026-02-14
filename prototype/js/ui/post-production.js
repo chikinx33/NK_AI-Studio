@@ -1497,8 +1497,17 @@
         showMessageDialog('다운로드할 영상이 없습니다.', '다운로드');
         return;
       }
-      await downloadUrl(url, 'final-render.mp4');
-      return;
+      try {
+        await downloadUrl(url, 'final-render.mp4');
+        return;
+      } catch (err) {
+        var raw = String((err && err.message) || err || '');
+        var notFound = /404|media_proxy_fetch_failed|not[\s_-]?found/i.test(raw);
+        if (!notFound || !sourceObjectName) {
+          showMessageDialog('MP4 다운로드 실패: ' + getRenderErrorMessage(err), 'MP4 다운로드');
+          return;
+        }
+      }
     }
     if (!sourceObjectName) {
       showMessageDialog('MP4 변환용 소스 파일을 찾지 못했습니다. 렌더링을 다시 실행해 주세요.', 'MP4 다운로드');
