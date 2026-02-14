@@ -1,6 +1,6 @@
 // prototype/functions/api/project/list.ts
 // List project IDs under:
-// {basePrefix}/users/{userId}/ai-video/projects/
+// {basePrefix}/users/{userId}/ai-video/projects{projectId}/
 import { buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -37,7 +37,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!parsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = parsed.object.replace(/\/$/, "");
     const userRoot = buildAiVideoUserRoot(basePrefix, userId);
-    const prefix = `${userRoot}/projects/`;
+    const prefix = `${userRoot}/projects`;
 
     const token = await getGoogleAccessToken({
       clientEmail,
@@ -62,7 +62,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const json = safeJson(text);
     const prefixes: string[] = Array.isArray(json.prefixes) ? json.prefixes : [];
     const ids = prefixes
-      .map((p) => p.replace(prefix, "").replace(/\/$/, ""))
+      .map((p) => p.replace(prefix, "").replace(/^\/+/, "").replace(/\/$/, ""))
       .filter(Boolean)
       .slice(0, 200);
     return send({ ok: true, ids }, 200, origin);

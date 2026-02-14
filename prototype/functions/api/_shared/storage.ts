@@ -29,7 +29,7 @@ export function buildAiVideoUserRoot(basePrefix: string, userId: string): string
 
 export function buildAiVideoProjectPrefix(basePrefix: string, userId: string, projectId: string): string {
   const root = buildAiVideoUserRoot(basePrefix, userId);
-  return `${root}/projects/${String(projectId || "").trim()}`;
+  return `${root}/projects${String(projectId || "").trim()}`;
 }
 
 function normalizeBasePrefix(basePrefix: string): string {

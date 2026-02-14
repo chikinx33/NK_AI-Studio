@@ -1,6 +1,6 @@
 // prototype/functions/api/video/library.ts
 // List GCS videos from:
-// {basePrefix}/users/{userId}/ai-video/projects/{projectId}/videos/
+// {basePrefix}/users/{userId}/ai-video/projects{projectId}/videos/
 import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;

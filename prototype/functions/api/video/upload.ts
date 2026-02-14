@@ -1,6 +1,6 @@
 // prototype/functions/api/video/upload.ts
 // Upload local video file to:
-// {basePrefix}/users/{userId}/ai-video/projects/{projectId}/videos/
+// {basePrefix}/users/{userId}/ai-video/projects{projectId}/videos/
 import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;

@@ -53,7 +53,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const userId = resolveUserId(rawUserId, env);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
-    // 표준 경로: users/{userId}/ai-video/projects/{projectId}/videos/{timestamp-sceneId}.mp4
+    // 표준 경로: users/{userId}/ai-video/projects{projectId}/videos/{timestamp-sceneId}.mp4
     const stamp = Date.now();
     const videoObject = `${projectPrefix}/videos/${stamp}-${sceneId}.mp4`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoObject}`;

@@ -1,6 +1,6 @@
 // prototype/functions/api/project/delete.ts
 // Delete objects under:
-// {basePrefix}/users/{userId}/ai-video/projects/{projectId}/
+// {basePrefix}/users/{userId}/ai-video/projects{projectId}/
 import { buildAiVideoProjectPrefix, buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -43,7 +43,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const userRoot = buildAiVideoUserRoot(basePrefix, userId);
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
-    const prefix = deleteAll ? `${userRoot}/projects/` : `${projectPrefix}/`;
+    const prefix = deleteAll ? `${userRoot}/projects` : `${projectPrefix}/`;
 
     // Validate prefix boundaries (simple sanity check)
     if (!deleteAll && !/^[a-zA-Z0-9._-]+$/.test(projectId)) {

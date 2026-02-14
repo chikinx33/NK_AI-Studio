@@ -236,7 +236,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         if (!u) return '';
         try {
           const m =
+            u.match(/users\/[^/]+\/ai-video\/projects([^/]+)\/videos/i) ||
             u.match(/users\/[^/]+\/ai-video\/projects\/([^/]+)\/videos/i) ||
+            u.match(/projects([^/]+)\/videos/i) ||
             u.match(/projects\/([^/]+)\/videos/i) ||
             u.match(/projects\/([^/]+)\/video/i);
           return m ? m[1] : '';
