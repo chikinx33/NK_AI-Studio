@@ -86,6 +86,73 @@ body::-webkit-scrollbar {
   z-index: 0;
 }
 
+.nk-dialog-root {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(6, 10, 20, 0.64);
+  z-index: 10000;
+}
+
+.nk-dialog-root.is-open {
+  display: flex;
+}
+
+.nk-dialog-panel {
+  width: min(640px, 100%);
+  max-height: min(84vh, 760px);
+  overflow: auto;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, #ffffff 8%) 0%, var(--panel) 100%);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.nk-dialog-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--text);
+}
+
+.nk-dialog-message {
+  margin: 0;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 72%, transparent 28%);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.nk-dialog-input {
+  display: none;
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+
+.nk-dialog-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .app {
   display: grid;
   grid-template-columns: 250px 1fr;

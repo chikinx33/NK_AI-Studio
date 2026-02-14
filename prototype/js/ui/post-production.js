@@ -612,6 +612,12 @@
   function showMessageDialog(message, title) {
     var text = String(message || '').trim();
     if (!text) return;
+    try {
+      if (NK && NK.ui && NK.ui.dialog && NK.ui.dialog.alert) {
+        NK.ui.dialog.alert(text, { title: String(title || '알림'), copy: true });
+        return;
+      }
+    } catch (_) { }
     var dlg = ensureMessageDialog();
     if (!dlg || !dlg.root) {
       if (typeof window !== 'undefined' && window.alert) window.alert(text);

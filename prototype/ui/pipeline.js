@@ -1328,6 +1328,12 @@ function showCopyableError(title, detail) {
   var msg = detail ? (title + '\n' + detail) : title;
   console.error(msg);
   try { navigator.clipboard && navigator.clipboard.writeText(msg); } catch (_) { }
+  try {
+    if (window.NK && NK.ui && NK.ui.dialog && NK.ui.dialog.alert) {
+      NK.ui.dialog.alert(msg, { title: String(title || '알림'), copy: true });
+      return;
+    }
+  } catch (_) { }
   try { window.prompt(title + '\n아래 내용을 복사하세요:', msg); return; } catch (_) { }
   alert(msg);
 }

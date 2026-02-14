@@ -42,6 +42,200 @@
     }
   };
 
+  (function initDialogSystem() {
+    var ui = NK.ui || (NK.ui = {});
+    var dialog = ui.dialog || (ui.dialog = {});
+    var mounted = false;
+    var busy = false;
+    var queue = [];
+    var refs = null;
+    var mountWaitBound = false;
+
+    function toText(value) {
+      if (value == null) return '';
+      if (typeof value === 'string') return value;
+      if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+      try { return JSON.stringify(value, null, 2); } catch (_) { }
+      try { return String(value); } catch (_) { return ''; }
+    }
+
+    function ensureMounted() {
+      if (mounted) return true;
+      if (typeof document === 'undefined' || !document.body) return false;
+
+      var root = document.createElement('div');
+      root.id = 'nk-dialog-root';
+      root.className = 'nk-dialog-root';
+      root.innerHTML =
+        '<div class="nk-dialog-panel" role="dialog" aria-modal="true" aria-labelledby="nk-dialog-title">' +
+        '<h3 id="nk-dialog-title" class="nk-dialog-title">알림</h3>' +
+        '<pre id="nk-dialog-message" class="nk-dialog-message"></pre>' +
+        '<input id="nk-dialog-input" class="nk-dialog-input" type="text" />' +
+        '<div class="nk-dialog-actions">' +
+        '<button type="button" class="btn-secondary compact" id="nk-dialog-copy">복사</button>' +
+        '<button type="button" class="btn-secondary compact" id="nk-dialog-cancel">취소</button>' +
+        '<button type="button" class="btn-primary compact" id="nk-dialog-ok">확인</button>' +
+        '</div>' +
+        '</div>';
+      document.body.appendChild(root);
+
+      refs = {
+        root: root,
+        title: root.querySelector('#nk-dialog-title'),
+        message: root.querySelector('#nk-dialog-message'),
+        input: root.querySelector('#nk-dialog-input'),
+        copy: root.querySelector('#nk-dialog-copy'),
+        cancel: root.querySelector('#nk-dialog-cancel'),
+        ok: root.querySelector('#nk-dialog-ok'),
+      };
+
+      root.addEventListener('click', function (evt) {
+        if (evt && evt.target === root) closeCurrent(false);
+      });
+      refs.ok && refs.ok.addEventListener('click', function () { closeCurrent(true); });
+      refs.cancel && refs.cancel.addEventListener('click', function () { closeCurrent(false); });
+      refs.copy && refs.copy.addEventListener('click', function () { copyCurrentMessage(); });
+      document.addEventListener('keydown', function (evt) {
+        if (!refs || !refs.root || !refs.root.classList.contains('is-open')) return;
+        if (evt.key === 'Escape') {
+          evt.preventDefault();
+          closeCurrent(false);
+          return;
+        }
+        if (evt.key === 'Enter' && !evt.shiftKey) {
+          evt.preventDefault();
+          closeCurrent(true);
+        }
+      });
+
+      mounted = true;
+      return true;
+    }
+
+    async function copyCurrentMessage() {
+      if (!refs || !refs.message) return;
+      var msg = String(refs.message.textContent || '');
+      if (!msg) return;
+      var ok = false;
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(msg);
+          ok = true;
+        }
+      } catch (_) { }
+      if (!ok) {
+        try {
+          var ta = document.createElement('textarea');
+          ta.value = msg;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          ok = !!document.execCommand('copy');
+          document.body.removeChild(ta);
+        } catch (_) { ok = false; }
+      }
+      if (refs.copy) {
+        var prev = refs.copy.textContent;
+        refs.copy.textContent = ok ? '복사됨' : '복사 실패';
+        setTimeout(function () {
+          if (refs && refs.copy) refs.copy.textContent = prev || '복사';
+        }, 1200);
+      }
+    }
+
+    function renderCurrent(item) {
+      if (!item || !refs) return;
+      var mode = item.mode || 'alert';
+      var opts = item.opts || {};
+      var title = String(opts.title || (mode === 'confirm' ? '확인' : '알림'));
+      var message = toText(item.message || '');
+      if (refs.title) refs.title.textContent = title;
+      if (refs.message) refs.message.textContent = message;
+
+      var useInput = mode === 'prompt';
+      if (refs.input) {
+        refs.input.style.display = useInput ? 'block' : 'none';
+        refs.input.value = useInput ? String(opts.defaultValue || '') : '';
+      }
+      if (refs.cancel) refs.cancel.style.display = (mode === 'confirm' || mode === 'prompt') ? 'inline-flex' : 'none';
+      if (refs.copy) refs.copy.style.display = opts.copy ? 'inline-flex' : 'none';
+      if (refs.ok) refs.ok.textContent = String(opts.okText || '확인');
+      if (refs.cancel) refs.cancel.textContent = String(opts.cancelText || '취소');
+
+      refs.root.classList.add('is-open');
+      refs.root.setAttribute('aria-hidden', 'false');
+      if (useInput && refs.input && refs.input.focus) refs.input.focus();
+      else if (refs.ok && refs.ok.focus) refs.ok.focus();
+    }
+
+    function closeCurrent(ok) {
+      if (!busy || !refs) return;
+      var current = queue.length ? queue[0] : null;
+      if (!current) return;
+      queue.shift();
+      refs.root.classList.remove('is-open');
+      refs.root.setAttribute('aria-hidden', 'true');
+
+      var mode = current.mode || 'alert';
+      if (mode === 'confirm') current.resolve(!!ok);
+      else if (mode === 'prompt') current.resolve(ok ? String((refs.input && refs.input.value) || '') : null);
+      else current.resolve();
+
+      busy = false;
+      flushQueue();
+    }
+
+    function flushQueue() {
+      if (busy) return;
+      if (!queue.length) return;
+      if (!ensureMounted()) {
+        if (mountWaitBound || typeof document === 'undefined') return;
+        mountWaitBound = true;
+        var wake = function () {
+          mountWaitBound = false;
+          flushQueue();
+        };
+        document.addEventListener('DOMContentLoaded', wake, { once: true });
+        if (typeof window !== 'undefined') window.addEventListener('load', wake, { once: true });
+        return;
+      }
+      busy = true;
+      renderCurrent(queue[0]);
+    }
+
+    function enqueue(mode, message, opts) {
+      return new Promise(function (resolve) {
+        queue.push({
+          mode: mode,
+          message: message,
+          opts: opts || {},
+          resolve: resolve,
+        });
+        flushQueue();
+      });
+    }
+
+    dialog.alert = function (message, opts) {
+      return enqueue('alert', message, opts || {});
+    };
+    dialog.confirm = function (message, opts) {
+      return enqueue('confirm', message, opts || {});
+    };
+    dialog.prompt = function (message, opts) {
+      return enqueue('prompt', message, opts || {});
+    };
+
+    if (typeof window !== 'undefined' && !window.__nk_custom_alert_installed) {
+      window.__nk_custom_alert_installed = true;
+      window.alert = function (message) {
+        dialog.alert(message, { title: '알림' });
+      };
+    }
+  })();
+
   core.withAspectInHeader = function (headerText, ratio) {
     var text = headerText || '';
     var cleaned = text.replace(/\[?\s*aspect\s*ratio\s*:\s*.*?\]?/ig, '').replace(/\s{2,}/g, ' ').trim();
