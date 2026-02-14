@@ -2698,16 +2698,21 @@ a.btn-primary:active {
 .login-icons {
   display: flex;
   justify-content: center;
-  gap: 30px;
+  gap: 22px;
+  --login-icon-slot: 150px;
+  --login-icon-visual: 122px;
   margin: 0;
+  transform: translateY(-6px);
   filter: blur(0);
   opacity: 1;
   transition: filter 0.25s ease, opacity 0.25s ease;
 }
 
 .login-icons img {
-  width: 150px;
-  height: 150px;
+  width: var(--login-icon-slot);
+  height: var(--login-icon-slot);
+  padding: calc((var(--login-icon-slot) - var(--login-icon-visual)) / 2);
+  box-sizing: border-box;
   object-fit: contain;
   filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
 }
