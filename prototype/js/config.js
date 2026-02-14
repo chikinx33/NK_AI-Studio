@@ -10,6 +10,7 @@
         PIPELINE: 'nk_pipeline_last',
         HEADER: 'nk_global_header_v1',
         ASPECT: 'nk_aspect_ratio',
+        LANG: 'nk_lang',
         THEME: 'nk_theme',
         AUTH: 'nk_is_logged_in',
         USER: 'nk_login_user',

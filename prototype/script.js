@@ -1,6 +1,7 @@
 ﻿; (function () {
   const config = NK.config;
   const KEY = config.KEYS;
+  const LANG_KEY = KEY.LANG || 'nk_lang';
 
   let currentLang = 'ko';
   let currentTheme = 'dark';
@@ -14,6 +15,8 @@
   const RESTORABLE_STAGES = ['scenario', 'scenes', 'media', 'publish'];
   const STAGE_TARGET_KEY = 'nk_current_stage_href';
   const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
+  let syncMessageBound = false;
+  let storageSyncBound = false;
 
   // 서버 → 로컬 동기화 (프로젝트 리스트 병합)
   const syncProjectsFromServer = async () => {
@@ -158,14 +161,17 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.658';
+    NK.config.APP_VERSION = '1.667';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
     // 2. 공통 환경 설정 (테마, 언어)
     currentTheme = localStorage.getItem(KEY.THEME) || 'dark';
+    currentLang = localStorage.getItem(LANG_KEY) || 'ko';
     NK.ui.common.applyTheme(currentTheme);
-    NK.ui.common.applyI18n('ko');
+    NK.ui.common.applyI18n(currentLang);
+    setupSyncMessageHandlers();
+    setupStorageSyncHandlers();
 
     const isIframe = window.self !== window.top;
     const urlParams = new URLSearchParams(window.location.search);
@@ -297,6 +303,51 @@
     }
   };
 
+  const setupSyncMessageHandlers = () => {
+    if (syncMessageBound) return;
+    syncMessageBound = true;
+    window.addEventListener('message', (e) => {
+      const data = e && e.data;
+      if (!data || typeof data !== 'object') return;
+
+      if (data.type === 'theme-apply' && data.theme) {
+        currentTheme = data.theme;
+        NK.ui.common.applyTheme(currentTheme);
+        // 부모창에서 받은 경우 자식 iframe에도 전파
+        if (window.self === window.top) broadcastTheme(currentTheme);
+      }
+      if (data.type === 'lang-apply' && data.lang) {
+        currentLang = (data.lang === 'en') ? 'en' : 'ko';
+        NK.ui.common.applyI18n(currentLang);
+        // 부모창에서 받은 경우 자식 iframe에도 전파
+        if (window.self === window.top) broadcastLang(currentLang);
+      }
+    });
+  };
+
+  const setupStorageSyncHandlers = () => {
+    if (storageSyncBound) return;
+    storageSyncBound = true;
+    window.addEventListener('storage', (e) => {
+      if (!e || !e.key) return;
+      if (e.key === KEY.THEME || e.key === 'nk_theme') {
+        const nextTheme = (e.newValue === 'light') ? 'light' : 'dark';
+        if (nextTheme !== currentTheme) {
+          currentTheme = nextTheme;
+          NK.ui.common.applyTheme(currentTheme);
+        }
+        return;
+      }
+      if (e.key === LANG_KEY || e.key === 'nk_lang') {
+        const nextLang = (e.newValue === 'en') ? 'en' : 'ko';
+        if (nextLang !== currentLang) {
+          currentLang = nextLang;
+          NK.ui.common.applyI18n(currentLang);
+        }
+      }
+    });
+  };
+
   /**
    * 부모 창(ai-video.html)에서만 작동하는 이벤트 및 네비게이션 설정
    */
@@ -387,12 +438,6 @@
       if (data.type === 'load-stage' && data.url) {
         NK.navigation.loadStage(data.url);
       }
-      if (data.type === 'theme-apply' && data.theme) {
-        currentTheme = data.theme;
-        NK.ui.common.applyTheme(currentTheme);
-        // 부모창에서 받은 경우 자식 iframe에도 전파
-        if (window.self === window.top) broadcastTheme(currentTheme);
-      }
     });
   };
 
@@ -400,6 +445,7 @@
   window.addEventListener('load', () => {
     setTimeout(() => {
       try { broadcastTheme(currentTheme); } catch (_) { }
+      try { broadcastLang(currentLang); } catch (_) { }
     }, 50);
   });
 
@@ -1403,6 +1449,28 @@
       }
     } catch (_) { }
   };
+  const broadcastLang = (lang) => {
+    try {
+      const safeLang = (lang === 'en') ? 'en' : 'ko';
+      // 현재 문서에 있는 모든 iframe에 언어 적용 시도
+      document.querySelectorAll('iframe').forEach((f) => {
+        try {
+          const cw = f.contentWindow;
+          if (f.contentDocument && f.contentDocument.documentElement) {
+            f.contentDocument.documentElement.setAttribute('lang', safeLang);
+          }
+          if (cw && cw.NK && cw.NK.ui && cw.NK.ui.common && cw.NK.ui.common.applyI18n) {
+            cw.NK.ui.common.applyI18n(safeLang);
+          }
+          if (cw) cw.postMessage({ type: 'lang-apply', lang: safeLang }, '*');
+        } catch (_) { }
+      });
+      // 자신이 iframe일 경우 부모에게도 전파
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: 'lang-apply', lang: safeLang }, '*');
+      }
+    } catch (_) { }
+  };
   window.toggleTheme = (scope = 'global') => {
     currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
     NK.ui.common.applyTheme(currentTheme);
@@ -1413,9 +1481,15 @@
     }
   };
 
-  window.toggleLang = () => {
+  window.toggleLang = (scope = 'global') => {
     currentLang = currentLang === 'ko' ? 'en' : 'ko';
     NK.ui.common.applyI18n(currentLang);
+    try { localStorage.setItem(LANG_KEY, currentLang); } catch (_) { }
+    if (scope === 'global') {
+      broadcastLang(currentLang);
+      // iframe 로딩 타이밍을 대비해 한 번 더 전파
+      setTimeout(() => broadcastLang(currentLang), 100);
+    }
   };
 
   document.addEventListener('DOMContentLoaded', init);

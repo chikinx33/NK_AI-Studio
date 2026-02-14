@@ -101,6 +101,24 @@
             iframe.style.width = '100%';
             iframe.style.height = '100%';
             iframe.style.border = 'none';
+            iframe.addEventListener('load', function () {
+                try {
+                    var cw = iframe.contentWindow;
+                    if (!cw) return;
+
+                    var theme = (NK.state && NK.state.runtime && NK.state.runtime.theme) || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.THEME) || 'nk_theme') || 'dark';
+                    var lang = (NK.state && NK.state.runtime && NK.state.runtime.lang) || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang') || 'ko';
+                    var safeLang = (lang === 'en' ? 'en' : 'ko');
+                    var applySync = function () {
+                        try {
+                            cw.postMessage({ type: 'theme-apply', theme: theme }, '*');
+                            cw.postMessage({ type: 'lang-apply', lang: safeLang }, '*');
+                        } catch (_) { }
+                    };
+                    applySync();
+                    setTimeout(applySync, 120);
+                } catch (_) { }
+            });
             content.appendChild(iframe);
           }
           return iframe;
