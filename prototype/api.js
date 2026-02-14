@@ -186,6 +186,11 @@
   api.mediaProxyUrl = function (rawUrl) {
     var u = String(rawUrl || '').trim();
     if (!u) return '';
+    if (u.indexOf('/api/media/proxy?') >= 0) return u;
+    try {
+      var parsed = new URL(u, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
+      if (parsed.pathname === '/api/media/proxy') return u;
+    } catch (_) { }
     return withBase('/api/media/proxy?url=' + encodeURIComponent(u));
   };
 
