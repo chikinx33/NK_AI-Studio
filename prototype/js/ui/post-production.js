@@ -705,9 +705,10 @@
   function chooseRecorderMimeType() {
     if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
     var candidates = [
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm'
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
+      'video/mp4;codecs=avc1',
+      'video/mp4'
     ];
     for (var i = 0; i < candidates.length; i++) {
       if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
@@ -851,14 +852,14 @@
 
     var stream = canvas.captureStream(30);
     var mimeType = chooseRecorderMimeType();
+    if (!mimeType) {
+      throw new Error('현재 브라우저는 MP4 렌더링을 지원하지 않습니다. MP4 지원 브라우저에서 다시 시도해주세요.');
+    }
     var recorder = null;
     try {
-      recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 6000000 })
-        : new MediaRecorder(stream, { videoBitsPerSecond: 6000000 });
+      recorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 6000000 });
     } catch (_) {
-      recorder = new MediaRecorder(stream);
-      mimeType = recorder.mimeType || 'video/webm';
+      throw new Error('MP4 렌더러를 초기화하지 못했습니다. 브라우저 설정을 확인한 뒤 다시 시도해주세요.');
     }
 
     var chunks = [];
@@ -867,7 +868,7 @@
         if (evt && evt.data && evt.data.size > 0) chunks.push(evt.data);
       };
       recorder.onstop = function () {
-        resolve(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' }));
+        resolve(new Blob(chunks, { type: mimeType || 'video/mp4' }));
       };
     });
 
@@ -974,7 +975,7 @@
     }
     return {
       blob: blob,
-      mimeType: blob.type || recorder.mimeType || mimeType || 'video/webm',
+      mimeType: blob.type || mimeType || 'video/mp4',
       allVisualsFailed: loadedVisualCount <= 0 && failedVisualCount > 0
     };
   }
@@ -1053,7 +1054,7 @@
         status: 'done',
         progress: 100,
         outputVideoUrl: outputVideoUrl,
-        outputVideoMime: result.mimeType || 'video/webm',
+        outputVideoMime: result.mimeType || 'video/mp4',
         lastRenderedAt: new Date().toISOString(),
         error: ''
       });
@@ -1090,10 +1091,7 @@
       alert('다운로드할 영상이 없습니다.');
       return;
     }
-    var mime = String(meta && meta.outputVideoMime || '').toLowerCase();
-    var ext = mime.indexOf('webm') >= 0 ? 'webm' : 'mp4';
-    if (!mime && /\.webm(\?|$)/i.test(url)) ext = 'webm';
-    await downloadUrl(url, 'final-render.' + ext);
+    await downloadUrl(url, 'final-render.mp4');
   }
 
   function canUndo() {
