@@ -184,18 +184,25 @@
     return false;
   }
 
-  async function refreshProjectSceneAssets(project) {
+  async function refreshProjectSceneAssets(project, options) {
+    options = options || {};
+    var force = !!options.force;
     if (!project || !project.id || !NK.api || !NK.api.library) return false;
     var scenes = Array.isArray(project.scenes) ? project.scenes : [];
     if (!scenes.length) return false;
 
     var needImg = false;
     var needVid = false;
-    for (var i = 0; i < scenes.length; i++) {
-      var s = scenes[i] || {};
-      if (isSceneMediaUrlStale(getSceneImageUrl(s))) needImg = true;
-      var sceneVideoUrl = getSceneVideoUrl(s);
-      if (!sceneVideoUrl || isSceneMediaUrlStale(sceneVideoUrl)) needVid = true;
+    if (force) {
+      needImg = scenes.some(function (s) { return !!getSceneImageUrl(s); });
+      needVid = scenes.some(function (s) { return !!getSceneVideoUrl(s); });
+    } else {
+      for (var i = 0; i < scenes.length; i++) {
+        var s = scenes[i] || {};
+        if (isSceneMediaUrlStale(getSceneImageUrl(s))) needImg = true;
+        var sceneVideoUrl = getSceneVideoUrl(s);
+        if (!sceneVideoUrl || isSceneMediaUrlStale(sceneVideoUrl)) needVid = true;
+      }
     }
     if (!needImg && !needVid) return false;
 
@@ -214,7 +221,7 @@
       var next = s || {};
 
       var imgUrl = getSceneImageUrl(next);
-      if (needImg && isSceneMediaUrlStale(imgUrl)) {
+      if (needImg && (force || isSceneMediaUrlStale(imgUrl))) {
         var imgBn = baseName(imgUrl);
         var imgSigned = imgMap.get(imgBn);
         if (imgSigned && imgSigned !== imgUrl) {
@@ -228,7 +235,7 @@
       }
 
       var vidUrl = getSceneVideoUrl(next);
-      if (needVid && isSceneMediaUrlStale(vidUrl)) {
+      if (needVid && (force || isSceneMediaUrlStale(vidUrl))) {
         var vidBn = baseName(vidUrl);
         var vidSigned = vidMap.get(vidBn);
         if (vidSigned && vidSigned !== vidUrl) {
@@ -732,9 +739,10 @@
     });
   }
 
-  function loadVideoSource(url) {
+  function loadVideoSource(url, timeoutMs) {
     return new Promise(function (resolve, reject) {
       if (!url) { reject(new Error('empty_video_url')); return; }
+      var safeTimeoutMs = Math.max(1500, Number(timeoutMs) || 20000);
       var video = document.createElement('video');
       video.crossOrigin = 'anonymous';
       video.preload = 'auto';
@@ -747,7 +755,7 @@
         if (done) return;
         done = true;
         reject(new Error('video_load_timeout'));
-      }, 20000);
+      }, safeTimeoutMs);
       var onReady = function () {
         if (done) return;
         done = true;
@@ -764,6 +772,41 @@
       video.onerror = onErr;
       try { video.load(); } catch (_) { }
     });
+  }
+
+  function releaseVideoSource(video) {
+    if (!video) return;
+    try { video.pause(); } catch (_) { }
+    try {
+      video.removeAttribute('src');
+      video.load();
+    } catch (_) { }
+  }
+
+  async function hasLoadableVisualClip(model) {
+    var clips = getVisualClipsForRender(model);
+    if (!clips.length) return false;
+
+    for (var i = 0; i < clips.length; i++) {
+      var clip = clips[i];
+      var url = String(clip && clip.url || '').trim();
+      if (!url) continue;
+      try {
+        if (isVideoUrl(url)) {
+          var v = await loadVideoSource(url, 5000);
+          releaseVideoSource(v);
+          return true;
+        }
+        await Promise.race([
+          loadImageSource(url),
+          new Promise(function (_, reject) {
+            setTimeout(function () { reject(new Error('image_probe_timeout')); }, 5000);
+          })
+        ]);
+        return true;
+      } catch (_) { }
+    }
+    return false;
   }
 
   function runSegment(durationSec, frameFn, progressFn, shouldCancel) {
@@ -873,9 +916,7 @@
             drawBackground();
             drawContain(ctx, video, canvas.width, canvas.height);
           }, reportProgress, shouldCancel);
-          try { video.pause(); } catch (_) { }
-          video.removeAttribute('src');
-          try { video.load(); } catch (_) { }
+          releaseVideoSource(video);
           processed += duration;
           if (!okVideo) break;
         } catch (_) {
@@ -928,13 +969,14 @@
     try { recorder.stop(); } catch (_) { }
     var blob = await stopped;
     if (shouldCancel()) throw new Error('render_canceled');
-    if (loadedVisualCount <= 0) {
-      throw new Error('모든 씬 미디어 로드에 실패했습니다. 프로덕션 라이브러리에서 자산 URL을 갱신한 뒤 다시 시도해주세요.');
-    }
     if (!blob || !blob.size) {
       throw new Error('렌더링 결과 비디오를 생성하지 못했습니다.');
     }
-    return { blob: blob, mimeType: blob.type || recorder.mimeType || mimeType || 'video/webm' };
+    return {
+      blob: blob,
+      mimeType: blob.type || recorder.mimeType || mimeType || 'video/webm',
+      allVisualsFailed: loadedVisualCount <= 0 && failedVisualCount > 0
+    };
   }
 
   async function startRenderProcess(isRerender) {
@@ -959,6 +1001,24 @@
             renderLayout(state.model);
             bindEvents();
             setCurrentTime(state.currentTime, true);
+          }
+        }
+      } catch (_) { }
+    }
+
+    if (project && NK.api && NK.api.library) {
+      try {
+        var hasLoadable = await hasLoadableVisualClip(state.model);
+        if (!hasLoadable) {
+          var forcedChanged = await refreshProjectSceneAssets(project, { force: true });
+          if (forcedChanged) {
+            var refreshedProject2 = resolveProject();
+            if (refreshedProject2) {
+              state.model = buildTimelineModel(refreshedProject2);
+              renderLayout(state.model);
+              bindEvents();
+              setCurrentTime(state.currentTime, true);
+            }
           }
         }
       } catch (_) { }
@@ -995,6 +1055,9 @@
         error: ''
       });
       updateRenderPanelUi();
+      if (result && result.allVisualsFailed) {
+        alert('원본 씬 미디어 로드에 실패하여 플레이스홀더 프레임으로 렌더링했습니다. 프로덕션에서 미디어 URL을 갱신한 뒤 다시 렌더링해 주세요.');
+      }
     } catch (err) {
       if (state.renderJobId !== renderJobId) return;
       var msg = (err && err.message) ? err.message : String(err || 'render_failed');
