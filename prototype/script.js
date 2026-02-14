@@ -158,7 +158,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.626';
+    NK.config.APP_VERSION = '1.636';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -644,6 +644,27 @@
         article.className = 'favorite-item';
         article.setAttribute('role', 'listitem');
 
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'favorite-delete-btn';
+        deleteBtn.title = '삭제';
+        deleteBtn.setAttribute('aria-label', `${item.title} 삭제`);
+        deleteBtn.textContent = 'X';
+        deleteBtn.addEventListener('click', async (evt) => {
+          evt.preventDefault();
+          evt.stopPropagation();
+          const user = NK.auth.getUser();
+          if (!user) return;
+          favoriteItems = favoriteItems.filter((row) => String(row.id) !== String(item.id));
+          renderFavorites(true);
+          try {
+            await saveFavoritesServer(user, favoriteItems);
+          } catch (err) {
+            const detail = String(err?.message || '').trim();
+            alert('삭제 내용을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+          }
+        });
+
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'favorite-link-btn';
@@ -668,6 +689,7 @@
           }
         });
 
+        article.appendChild(deleteBtn);
         article.appendChild(button);
         favoriteListEl.appendChild(article);
       });

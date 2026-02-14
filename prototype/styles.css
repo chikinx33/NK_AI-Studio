@@ -2734,8 +2734,22 @@ a.btn-primary:active {
 .user-dashboard-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 18px;
   margin-top: 2px;
+}
+
+.user-dashboard-panel > .favorite-form {
+  position: relative;
+  margin-top: 28px;
+}
+
+.user-dashboard-panel > .favorite-form::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  border-top: 1px dashed color-mix(in srgb, var(--border) 55%, transparent 45%);
 }
 
 .user-widget {
@@ -2743,6 +2757,13 @@ a.btn-primary:active {
   border-radius: 12px;
   background: color-mix(in srgb, var(--bg-2) 88%, transparent 12%);
   padding: 12px;
+}
+
+.user-widget.subscription-widget {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .user-widget-head {
@@ -2773,27 +2794,31 @@ a.btn-primary:active {
 .subscription-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 14px;
 }
 
 .subscription-item {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--panel) 92%, transparent 8%);
-  padding: 8px 10px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .subscription-item strong {
-  font-size: 13px;
+  font-size: 16px;
   line-height: 1.3;
 }
 
 .user-widget-help {
-  margin: 8px 0 10px;
+  margin: 10px 0 12px;
   font-size: 12px;
+}
+
+#subscription-manage-btn {
+  margin-top: 2px;
 }
 
 .profile-ui-row {
@@ -2829,7 +2854,7 @@ a.btn-primary:active {
 .favorite-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -2837,7 +2862,7 @@ a.btn-primary:active {
 }
 
 .user-widget.favorite-widget.favorite-form {
-  padding: 0;
+  padding: 52px 0 0;
   border: none;
   border-radius: 0;
   background: transparent;
@@ -2907,7 +2932,7 @@ a.btn-primary:active {
 }
 
 .favorite-list {
-  --favorite-icon-size: 100px;
+  --favorite-icon-size: 80px;
   margin-top: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
@@ -2934,11 +2959,36 @@ a.btn-primary:active {
 }
 
 .favorite-item {
+  position: relative;
   margin: 0;
   border: none;
   background: transparent;
   border-radius: 0;
   overflow: visible;
+}
+
+.favorite-delete-btn {
+  position: absolute;
+  top: -4px;
+  right: calc(50% - (var(--favorite-icon-size) / 2) - 4px);
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 85%, transparent 15%);
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 2;
+  padding: 0;
+}
+
+.favorite-delete-btn:hover {
+  background: color-mix(in srgb, var(--panel) 65%, transparent 35%);
 }
 
 .favorite-link-btn {
@@ -2967,7 +3017,7 @@ a.btn-primary:active {
   max-width: var(--favorite-icon-size);
   max-height: var(--favorite-icon-size);
   margin: 0 auto;
-  border-radius: 0;
+  border-radius: 12px;
   overflow: hidden;
   border: none;
   background: transparent;
@@ -2982,6 +3032,7 @@ a.btn-primary:active {
   max-height: var(--favorite-icon-size);
   object-fit: cover;
   display: block;
+  border-radius: 12px;
 }
 
 .favorite-item-title {
