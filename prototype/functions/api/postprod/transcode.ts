@@ -20,6 +20,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectId = String(body?.projectId || "").trim();
     const sourceObjectName = String(body?.sourceObjectName || "").trim();
     const aspectRatio = String(body?.aspectRatio || "16:9").trim();
+    const sourceDurationSec = Number(body?.sourceDurationSec || 0);
     const location = String(env.TRANSCODER_LOCATION || "us-central1").trim();
 
     if (!projectId || !sourceObjectName) {
@@ -55,10 +56,28 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     });
 
     const url = `https://transcoder.googleapis.com/v1/projects/${encodeURIComponent(googleProjectId)}/locations/${encodeURIComponent(location)}/jobs`;
-    const payload = {
-      inputUri,
+    const editEnd = normalizeDurationSec(sourceDurationSec);
+    const payload: any = {
       outputUri,
       config: {
+        inputs: [
+          {
+            key: "input0",
+            uri: inputUri,
+          },
+        ],
+        ...(editEnd > 0
+          ? {
+              editList: [
+                {
+                  key: "atom0",
+                  inputs: ["input0"],
+                  startTimeOffset: "0s",
+                  endTimeOffset: `${editEnd}s`,
+                },
+              ],
+            }
+          : {}),
         elementaryStreams: [
           {
             key: "video-stream0",
@@ -127,6 +146,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
 };
+
+function normalizeDurationSec(raw: number): number {
+  const n = Number(raw);
+  if (!isFinite(n) || n <= 0) return 0;
+  return Math.max(0.2, Math.round(n * 1000) / 1000);
+}
 
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

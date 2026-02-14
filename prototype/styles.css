@@ -3131,6 +3131,60 @@ a.btn-primary:active {
   color: var(--muted);
 }
 
+.nk-copy-alert {
+  position: fixed;
+  inset: 0;
+  background: rgba(7, 10, 18, 0.62);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 9999;
+}
+
+.nk-copy-alert.is-open {
+  display: flex;
+}
+
+.nk-copy-alert-dialog {
+  width: min(760px, 100%);
+  max-height: min(82vh, 760px);
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.45);
+  padding: 14px;
+}
+
+.nk-copy-alert-title {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.nk-copy-alert-text {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(10, 14, 26, 0.75);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.nk-copy-alert-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .postprod-pill {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.08);

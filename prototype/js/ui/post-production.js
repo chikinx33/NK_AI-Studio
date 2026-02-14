@@ -417,6 +417,7 @@
       outputVideoUrl: '',
       outputVideoMime: '',
       outputSourceObjectName: '',
+      outputDurationSec: 0,
       transcodePending: false,
       outputSrtUrl: '',
       error: ''
@@ -516,6 +517,111 @@
     return 'idle';
   }
 
+  var messageDialog = null;
+
+  function ensureMessageDialog() {
+    if (messageDialog && messageDialog.root && messageDialog.root.parentNode) return messageDialog;
+    if (typeof document === 'undefined' || !document.body) return null;
+
+    var root = document.createElement('div');
+    root.id = 'nk-copy-alert';
+    root.className = 'nk-copy-alert';
+    root.innerHTML =
+      '<div class="nk-copy-alert-dialog" role="dialog" aria-modal="true" aria-labelledby="nk-copy-alert-title">' +
+      '<h4 id="nk-copy-alert-title" class="nk-copy-alert-title">알림</h4>' +
+      '<pre id="nk-copy-alert-text" class="nk-copy-alert-text"></pre>' +
+      '<div class="nk-copy-alert-actions">' +
+      '<button type="button" class="btn-secondary compact" id="nk-copy-alert-copy">복사</button>' +
+      '<button type="button" class="btn-primary compact" id="nk-copy-alert-close">닫기</button>' +
+      '</div>' +
+      '</div>';
+    document.body.appendChild(root);
+
+    var titleEl = root.querySelector('#nk-copy-alert-title');
+    var textEl = root.querySelector('#nk-copy-alert-text');
+    var copyBtn = root.querySelector('#nk-copy-alert-copy');
+    var closeBtn = root.querySelector('#nk-copy-alert-close');
+
+    var close = function () {
+      root.classList.remove('is-open');
+      root.setAttribute('aria-hidden', 'true');
+    };
+    var open = function () {
+      root.classList.add('is-open');
+      root.setAttribute('aria-hidden', 'false');
+      if (closeBtn && closeBtn.focus) closeBtn.focus();
+    };
+
+    root.addEventListener('click', function (evt) {
+      if (!evt) return;
+      if (evt.target === root) close();
+    });
+    if (closeBtn) closeBtn.addEventListener('click', close);
+    if (copyBtn) {
+      copyBtn.addEventListener('click', async function () {
+        var msg = String((textEl && textEl.textContent) || '');
+        var ok = await copyText(msg);
+        var original = copyBtn.textContent;
+        copyBtn.textContent = ok ? '복사됨' : '복사 실패';
+        setTimeout(function () { copyBtn.textContent = original || '복사'; }, 1200);
+      });
+    }
+    document.addEventListener('keydown', function (evt) {
+      if (!evt || evt.key !== 'Escape') return;
+      if (root.classList.contains('is-open')) close();
+    });
+
+    messageDialog = {
+      root: root,
+      titleEl: titleEl,
+      textEl: textEl,
+      open: open,
+      close: close
+    };
+    return messageDialog;
+  }
+
+  async function copyText(text) {
+    var value = String(text || '');
+    if (!value) return false;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch (_) { }
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = value;
+      ta.setAttribute('readonly', 'readonly');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      var ok = false;
+      try { ok = !!document.execCommand('copy'); } catch (_) { ok = false; }
+      document.body.removeChild(ta);
+      return ok;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function showMessageDialog(message, title) {
+    var text = String(message || '').trim();
+    if (!text) return;
+    var dlg = ensureMessageDialog();
+    if (!dlg || !dlg.root) {
+      if (typeof window !== 'undefined' && window.alert) window.alert(text);
+      return;
+    }
+    if (dlg.titleEl) dlg.titleEl.textContent = String(title || '알림');
+    if (dlg.textEl) dlg.textEl.textContent = text;
+    dlg.open();
+  }
+
   function getSaveErrorMessage(err) {
     var raw = String((err && err.message) || err || '');
     if (/request_timeout|response_timeout|timeout|aborted/i.test(raw)) {
@@ -563,11 +669,11 @@
     options = options || {};
     if (state.saveBusy) return false;
     if (!state.projectId) {
-      alert('저장할 프로젝트를 찾을 수 없습니다.');
+      showMessageDialog('저장할 프로젝트를 찾을 수 없습니다.', '저장');
       return false;
     }
     if (!NK.api || !NK.api.projectSave) {
-      alert('저장 API를 사용할 수 없습니다.');
+      showMessageDialog('저장 API를 사용할 수 없습니다.', '저장');
       return false;
     }
 
@@ -621,10 +727,10 @@
         error: ''
       });
       setDirty(false);
-      if (!options.silentSuccess) alert('저장되었습니다.');
+      if (!options.silentSuccess) showMessageDialog('저장되었습니다.', '저장');
       return true;
     } catch (err) {
-      if (!options.silentError) alert('저장 실패: ' + getSaveErrorMessage(err));
+      if (!options.silentError) showMessageDialog('저장 실패: ' + getSaveErrorMessage(err), '저장 실패');
       return false;
     } finally {
       if (state.saveGuardTimer) {
@@ -769,9 +875,9 @@
     // 브라우저 로컬 렌더는 webm 계열이 가장 안정적이고,
     // 최종 mp4 보장은 서버 트랜스코딩에서 담당한다.
     var candidates = [
-      'video/webm;codecs=vp9',
       'video/webm;codecs=vp8',
       'video/webm',
+      'video/webm;codecs=vp9',
       'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
       'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
       'video/mp4;codecs=avc1',
@@ -999,10 +1105,11 @@
       '16:9'
     );
 
-    return runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId);
+    var sourceDurationSec = Math.max(0.2, Number(getTimelinePlaybackDuration(state.model)) || 0);
+    return runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId, sourceDurationSec);
   }
 
-  async function transcodeSourceObjectToMp4(projectId, sourceObjectName, renderJobId) {
+  async function transcodeSourceObjectToMp4(projectId, sourceObjectName, renderJobId, sourceDurationSec) {
     if (!projectId) throw new Error('project_id_missing');
     if (!sourceObjectName) throw new Error('render_source_missing');
     if (!NK.api || !NK.api.postprodTranscodeStart || !NK.api.postprodTranscodeStatus) {
@@ -1020,7 +1127,7 @@
     var attempts = 2;
     for (var attempt = 0; attempt < attempts; attempt++) {
       try {
-        return await runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId);
+        return await runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId, sourceDurationSec);
       } catch (err) {
         lastErr = err;
         var raw = String((err && err.message) || err || '');
@@ -1035,12 +1142,15 @@
     throw (lastErr || new Error('transcode_failed'));
   }
 
-  async function runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId) {
-    var start = await NK.api.postprodTranscodeStart({
+  async function runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId, sourceDurationSec) {
+    var reqBody = {
       projectId: projectId,
       sourceObjectName: sourceObjectName,
       aspectRatio: aspectRatio
-    });
+    };
+    var dur = Number(sourceDurationSec);
+    if (isFinite(dur) && dur > 0) reqBody.sourceDurationSec = Math.max(0.2, Math.round(dur * 1000) / 1000);
+    var start = await NK.api.postprodTranscodeStart(reqBody);
     var jobName = String((start && start.jobName) || '').trim();
     var outputObjectName = String((start && start.outputObjectName) || '').trim();
     if (!jobName || !outputObjectName) throw new Error('transcode_start_failed');
@@ -1251,7 +1361,8 @@
     return {
       blob: blob,
       mimeType: blob.type || recorder.mimeType || mimeType || 'video/webm',
-      allVisualsFailed: loadedVisualCount <= 0 && failedVisualCount > 0
+      allVisualsFailed: loadedVisualCount <= 0 && failedVisualCount > 0,
+      durationSec: Math.max(0.2, Number(total) || 0)
     };
   }
 
@@ -1262,7 +1373,7 @@
       if (!saved || state.dirty || state.saveBusy) return;
     }
     if (!state.model) {
-      alert('렌더링할 타임라인이 없습니다.');
+      showMessageDialog('렌더링할 타임라인이 없습니다.', '렌더링');
       return;
     }
 
@@ -1313,6 +1424,7 @@
       outputSrtUrl: '',
       outputVideoMime: oldMeta.outputVideoMime || '',
       outputSourceObjectName: '',
+      outputDurationSec: Number(oldMeta.outputDurationSec) || 0,
       transcodePending: false
     });
     updateRenderPanelUi();
@@ -1341,6 +1453,7 @@
         outputVideoUrl: outputVideoUrl,
         outputVideoMime: outputVideoMime,
         outputSourceObjectName: outputSourceObjectName,
+        outputDurationSec: Math.max(0.2, Number((result && result.durationSec) || getTimelinePlaybackDuration(state.model)) || 0),
         transcodePending: pendingMp4,
         lastRenderedAt: new Date().toISOString(),
         error: ''
@@ -1362,7 +1475,7 @@
   async function downloadSrtNow() {
     var srtText = buildSrtFromModel();
     if (!srtText) {
-      alert('다운로드할 SRT가 없습니다.');
+      showMessageDialog('다운로드할 SRT가 없습니다.', '다운로드');
       return;
     }
     var blob = new Blob([srtText], { type: 'text/plain;charset=utf-8' });
@@ -1381,20 +1494,24 @@
         url = NK.api.mediaProxyObjectUrl(sourceObjectName);
       }
       if (!url) {
-        alert('다운로드할 영상이 없습니다.');
+        showMessageDialog('다운로드할 영상이 없습니다.', '다운로드');
         return;
       }
       await downloadUrl(url, 'final-render.mp4');
       return;
     }
     if (!sourceObjectName) {
-      alert('MP4 변환용 소스 파일을 찾지 못했습니다. 렌더링을 다시 실행해 주세요.');
+      showMessageDialog('MP4 변환용 소스 파일을 찾지 못했습니다. 렌더링을 다시 실행해 주세요.', 'MP4 다운로드');
       return;
     }
 
     setRenderMetaLocal({ status: 'rendering', progress: 74, error: '' });
     try {
-      var mp4Url = await transcodeSourceObjectToMp4(state.projectId, sourceObjectName);
+      var sourceDurationSec = Number((meta && meta.outputDurationSec) || 0);
+      if (!(sourceDurationSec > 0)) {
+        sourceDurationSec = Math.max(0.2, Number(getTimelinePlaybackDuration(state.model)) || 0);
+      }
+      var mp4Url = await transcodeSourceObjectToMp4(state.projectId, sourceObjectName, undefined, sourceDurationSec);
       persistRenderMeta({
         status: 'done',
         progress: 100,
@@ -1414,7 +1531,7 @@
         transcodePending: true
       });
       updateRenderPanelUi();
-      alert('MP4 변환 실패: ' + msg + '\nWEBM 미리보기는 유지되며, 잠시 후 다시 다운로드를 시도할 수 있습니다.');
+      showMessageDialog('MP4 변환 실패: ' + msg + '\nWEBM 미리보기는 유지되며, 잠시 후 다시 다운로드를 시도할 수 있습니다.', 'MP4 변환 실패');
     }
   }
 
