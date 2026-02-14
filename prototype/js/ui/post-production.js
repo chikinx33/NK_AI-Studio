@@ -708,7 +708,10 @@
       'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
       'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
       'video/mp4;codecs=avc1',
-      'video/mp4'
+      'video/mp4',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
     ];
     for (var i = 0; i < candidates.length; i++) {
       if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
@@ -775,6 +778,58 @@
     });
   }
 
+  async function loadImageSourceWithFallback(url) {
+    try {
+      return await loadImageSource(url);
+    } catch (_) {
+      return new Promise(function (resolve, reject) {
+        if (!url) { reject(new Error('empty_image_url')); return; }
+        var img = new Image();
+        img.onload = function () { resolve(img); };
+        img.onerror = function () { reject(new Error('image_load_failed')); };
+        img.src = url;
+      });
+    }
+  }
+
+  async function loadVideoSourceWithFallback(url, timeoutMs) {
+    try {
+      return await loadVideoSource(url, timeoutMs);
+    } catch (_) {
+      return new Promise(function (resolve, reject) {
+        if (!url) { reject(new Error('empty_video_url')); return; }
+        var safeTimeoutMs = Math.max(1500, Number(timeoutMs) || 20000);
+        var video = document.createElement('video');
+        video.preload = 'auto';
+        video.playsInline = true;
+        video.muted = true;
+        video.loop = true;
+        video.src = url;
+        var done = false;
+        var timeout = setTimeout(function () {
+          if (done) return;
+          done = true;
+          reject(new Error('video_load_timeout'));
+        }, safeTimeoutMs);
+        var onReady = function () {
+          if (done) return;
+          done = true;
+          clearTimeout(timeout);
+          resolve(video);
+        };
+        var onErr = function () {
+          if (done) return;
+          done = true;
+          clearTimeout(timeout);
+          reject(new Error('video_load_failed'));
+        };
+        video.onloadedmetadata = onReady;
+        video.onerror = onErr;
+        try { video.load(); } catch (_) { }
+      });
+    }
+  }
+
   function releaseVideoSource(video) {
     if (!video) return;
     try { video.pause(); } catch (_) { }
@@ -808,6 +863,75 @@
       } catch (_) { }
     }
     return false;
+  }
+
+  function isMp4MimeType(mime) {
+    return String(mime || '').toLowerCase().indexOf('video/mp4') === 0;
+  }
+
+  function waitMs(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
+  }
+
+  async function transcodeRenderedBlobToMp4(projectId, blob, mimeType, renderJobId) {
+    if (!projectId) throw new Error('project_id_missing');
+    if (!blob || !blob.size) throw new Error('render_blob_missing');
+    if (!NK.api || !NK.api.videoUpload || !NK.api.postprodTranscodeStart || !NK.api.postprodTranscodeStatus) {
+      throw new Error('postprod_transcode_api_missing');
+    }
+
+    var ext = String(mimeType || '').toLowerCase().indexOf('webm') >= 0 ? 'webm' : 'mp4';
+    var uploadName = 'postprod-final-source.' + ext;
+    var uploadFile = null;
+    try {
+      uploadFile = new File([blob], uploadName, { type: mimeType || 'video/webm' });
+    } catch (_) {
+      uploadFile = blob;
+    }
+
+    var up = await NK.api.videoUpload(projectId, 'postprod-final', uploadFile);
+    var sourceObjectName = String((up && up.objectName) || '').trim();
+    if (!sourceObjectName) throw new Error('render_source_upload_failed');
+
+    var project = getProjectByStateId() || resolveProject();
+    var aspectRatio = parseAspectRatio(
+      (project && project.aspectRatio) ||
+      (project && project.payload && project.payload.aspectRatio) ||
+      '16:9'
+    );
+
+    var start = await NK.api.postprodTranscodeStart({
+      projectId: projectId,
+      sourceObjectName: sourceObjectName,
+      aspectRatio: aspectRatio
+    });
+    var jobName = String((start && start.jobName) || '').trim();
+    var outputObjectName = String((start && start.outputObjectName) || '').trim();
+    if (!jobName || !outputObjectName) throw new Error('transcode_start_failed');
+
+    var maxAttempts = 160; // 약 8분
+    for (var i = 0; i < maxAttempts; i++) {
+      if (state.renderJobId !== renderJobId) throw new Error('render_canceled');
+      await waitMs(3000);
+      var st = await NK.api.postprodTranscodeStatus({
+        jobName: jobName,
+        outputObjectName: outputObjectName
+      });
+      var status = String((st && st.status) || '').toUpperCase();
+      if (st && st.done && status === 'SUCCEEDED') {
+        var signed = String((st && st.signedUrl) || '').trim();
+        if (!signed) throw new Error('transcode_done_no_url');
+        return signed;
+      }
+      if (st && st.done && status && status !== 'SUCCEEDED') {
+        throw new Error('transcode_failed_' + status);
+      }
+      if (state.renderMeta && state.renderMeta.status === 'rendering') {
+        var p = clamp(75 + ((i + 1) / maxAttempts) * 24, 75, 99);
+        setRenderMetaLocal({ progress: p });
+      }
+    }
+    throw new Error('transcode_timeout');
   }
 
   function runSegment(durationSec, frameFn, progressFn, shouldCancel) {
@@ -852,14 +976,14 @@
 
     var stream = canvas.captureStream(30);
     var mimeType = chooseRecorderMimeType();
-    if (!mimeType) {
-      throw new Error('현재 브라우저는 MP4 렌더링을 지원하지 않습니다. MP4 지원 브라우저에서 다시 시도해주세요.');
-    }
     var recorder = null;
     try {
-      recorder = new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 6000000 });
+      recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 6000000 })
+        : new MediaRecorder(stream, { videoBitsPerSecond: 6000000 });
     } catch (_) {
-      throw new Error('MP4 렌더러를 초기화하지 못했습니다. 브라우저 설정을 확인한 뒤 다시 시도해주세요.');
+      recorder = new MediaRecorder(stream);
+      mimeType = recorder.mimeType || mimeType || 'video/webm';
     }
 
     var chunks = [];
@@ -868,7 +992,7 @@
         if (evt && evt.data && evt.data.size > 0) chunks.push(evt.data);
       };
       recorder.onstop = function () {
-        resolve(new Blob(chunks, { type: mimeType || 'video/mp4' }));
+        resolve(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' }));
       };
     });
 
@@ -975,7 +1099,7 @@
     }
     return {
       blob: blob,
-      mimeType: blob.type || mimeType || 'video/mp4',
+      mimeType: blob.type || recorder.mimeType || mimeType || 'video/webm',
       allVisualsFailed: loadedVisualCount <= 0 && failedVisualCount > 0
     };
   }
@@ -1046,7 +1170,13 @@
       if (result && result.allVisualsFailed) {
         throw new Error('모든 씬 미디어 로드에 실패했습니다. 프로덕션에서 자산 URL을 갱신한 뒤 다시 시도해주세요.');
       }
-      var outputVideoUrl = URL.createObjectURL(result.blob);
+      var outputVideoUrl = '';
+      var outputVideoMime = 'video/mp4';
+      if (isMp4MimeType(result && result.mimeType)) {
+        outputVideoUrl = URL.createObjectURL(result.blob);
+      } else {
+        outputVideoUrl = await transcodeRenderedBlobToMp4(state.projectId, result.blob, result && result.mimeType, renderJobId);
+      }
       if (oldUrl && oldUrl.indexOf('blob:') === 0 && oldUrl !== outputVideoUrl) {
         try { URL.revokeObjectURL(oldUrl); } catch (_) { }
       }
@@ -1054,7 +1184,7 @@
         status: 'done',
         progress: 100,
         outputVideoUrl: outputVideoUrl,
-        outputVideoMime: result.mimeType || 'video/mp4',
+        outputVideoMime: outputVideoMime,
         lastRenderedAt: new Date().toISOString(),
         error: ''
       });

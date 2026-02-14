@@ -183,6 +183,28 @@
     return j(text);
   };
 
+  api.postprodTranscodeStart = async function (body) {
+    var res = await fetch(withBase('/api/postprod/transcode'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {})
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'postprod_transcode_start_error')));
+    return j(text);
+  };
+
+  api.postprodTranscodeStatus = async function (params) {
+    var p = params || {};
+    var q = new URLSearchParams();
+    if (p.jobName) q.set('jobName', String(p.jobName));
+    if (p.outputObjectName) q.set('outputObjectName', String(p.outputObjectName));
+    var res = await fetch(withBase('/api/postprod/transcode/status?' + q.toString()));
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'postprod_transcode_status_error')));
+    return j(text);
+  };
+
   api.library = async function (kind, projectId) {
     var url = kind === 'image'
       ? withBase('/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')))
