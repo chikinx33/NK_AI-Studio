@@ -91,56 +91,32 @@
                 <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
               </article>
 
-              <form class="user-widget profile-widget" id="profile-ui-form">
+              <form class="user-widget favorite-widget hidden" id="favorite-form">
                 <div class="user-widget-head">
-                  <h4>프로필 편집</h4>
-                  <span class="ui-chip">UI</span>
+                  <h4>즐겨찾기 등록</h4>
+                  <span class="ui-chip">MENU</span>
                 </div>
-                <div class="profile-ui-row">
-                  <label for="profile-ui-name">닉네임</label>
-                  <input type="text" id="profile-ui-name" placeholder="표시 이름" maxlength="40" />
+                <div class="fav-form-row">
+                  <label for="favorite-title">메뉴 이름</label>
+                  <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
                 </div>
-                <div class="profile-ui-row">
-                  <label for="profile-ui-email">이메일</label>
-                  <input type="email" id="profile-ui-email" placeholder="name@example.com" maxlength="120" />
+                <div class="fav-form-row">
+                  <label for="favorite-link">링크 주소</label>
+                  <input type="url" id="favorite-link" placeholder="https://example.com" required />
                 </div>
-                <div class="profile-ui-row">
-                  <label for="profile-ui-timezone">시간대</label>
-                  <select id="profile-ui-timezone">
-                    <option value="Asia/Seoul">Asia/Seoul</option>
-                    <option value="Asia/Tokyo">Asia/Tokyo</option>
-                    <option value="America/Los_Angeles">America/Los_Angeles</option>
-                    <option value="UTC">UTC</option>
-                  </select>
+                <div class="fav-form-row">
+                  <label for="favorite-icon">아이콘</label>
+                  <input type="file" id="favorite-icon" accept="image/*" required />
                 </div>
-                <div class="profile-ui-actions">
-                  <button type="submit" class="btn-primary">프로필 저장(UI)</button>
+                <div class="favorite-form-actions">
+                  <button type="submit" class="btn-primary">등록</button>
+                  <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
                 </div>
               </form>
             </section>
           </section>
 
           <section class="card option-card favorite-card is-locked" id="favorite-card" aria-live="polite">
-            <h3 class="option-title">즐겨찾기</h3>
-            <form class="favorite-form hidden" id="favorite-form">
-              <div class="fav-form-row">
-                <label for="favorite-title">메뉴 이름</label>
-                <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
-              </div>
-              <div class="fav-form-row">
-                <label for="favorite-link">링크 주소</label>
-                <input type="url" id="favorite-link" placeholder="https://example.com" required />
-              </div>
-              <div class="fav-form-row">
-                <label for="favorite-icon">아이콘</label>
-                <input type="file" id="favorite-icon" accept="image/*" required />
-              </div>
-              <div class="favorite-form-actions">
-                <button type="submit" class="btn-primary">등록</button>
-                <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
-              </div>
-            </form>
-
             <div class="favorite-list empty" id="favorite-list" role="list"></div>
           </section>
         </div>
@@ -150,3 +126,4 @@
 </body>
 
 </html>
+

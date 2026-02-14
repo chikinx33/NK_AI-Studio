@@ -158,7 +158,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.618';
+    NK.config.APP_VERSION = '1.626';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -436,7 +436,7 @@
     let profileLoadSeq = 0;
 
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
-    const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && profileUiForm && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
+    const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
 
     const favoriteStorageKey = (user) => {
       const safe = String(user || '').trim().toLowerCase();
@@ -473,6 +473,22 @@
         throw new Error('http 또는 https 링크만 등록할 수 있습니다.');
       }
       return parsed.toString();
+    };
+
+    const openUrlInNewTab = (url) => {
+      try {
+        const popup = window.open('', '_blank');
+        if (!popup) return false;
+        try { popup.opener = null; } catch (_) { }
+        try {
+          popup.location.replace(String(url || ''));
+        } catch (_) {
+          try { popup.location.href = String(url || ''); } catch (_) { }
+        }
+        return true;
+      } catch (_) {
+        return false;
+      }
     };
 
     const sanitizeFavoriteItems = (items) => {
@@ -646,8 +662,8 @@
         button.appendChild(iconWrap);
         button.appendChild(titleEl);
         button.addEventListener('click', () => {
-          const popup = window.open(item.url, '_blank', 'noopener,noreferrer');
-          if (!popup) {
+          const opened = openUrlInNewTab(item.url);
+          if (!opened) {
             alert('새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.');
           }
         });
@@ -713,23 +729,7 @@
 
       if (canUseDashboardUI()) {
         dashboardPanel.classList.toggle('hidden', !loggedIn);
-        if (!loggedIn) profileLoadSeq += 1;
         renderSubscriptionUi(loggedIn, user);
-        renderProfileUi(loggedIn, user);
-        if (loggedIn && user) {
-          const seq = ++profileLoadSeq;
-          fetchProfileUiServer(user)
-            .then((profile) => {
-              if (!NK.auth.isAuthed()) return;
-              if (seq !== profileLoadSeq) return;
-              if (String(NK.auth.getUser() || '') !== String(user || '')) return;
-              const merged = normalizeProfileUi(profile, user);
-              if (profileUiNameInput) profileUiNameInput.value = merged.name || String(user || '');
-              if (profileUiEmailInput) profileUiEmailInput.value = merged.email || '';
-              if (profileUiTimezoneInput) profileUiTimezoneInput.value = merged.timezone || 'Asia/Seoul';
-            })
-            .catch(() => { });
-        }
       }
 
       if (canUseFavoriteUI()) {

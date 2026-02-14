@@ -2722,6 +2722,8 @@ a.btn-primary:active {
 
 .favorite-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .user-lock-message {
@@ -2827,11 +2829,18 @@ a.btn-primary:active {
 .favorite-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: color-mix(in srgb, var(--bg-2) 90%, transparent 10%);
+}
+
+.user-widget.favorite-widget.favorite-form {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .fav-form-row {
@@ -2891,7 +2900,7 @@ a.btn-primary:active {
 }
 
 .favorite-form-actions {
-  margin-top: 4px;
+  margin-top: 14px;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
@@ -2899,11 +2908,29 @@ a.btn-primary:active {
 
 .favorite-list {
   --favorite-icon-size: 100px;
-  margin-top: 12px;
+  margin-top: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 12px;
   align-content: flex-start;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.favorite-card .favorite-list.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  text-align: center;
+}
+
+.favorite-card .favorite-list.empty::before {
+  content: "즐겨찾기 아이콘을 등록해주세요.";
+  color: #7fc8ff;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .favorite-item {
