@@ -644,7 +644,7 @@
     if (state.dirty && status !== 'rendering') status = 'needs_save';
     var canRender = !state.saveBusy && status !== 'rendering';
     var canRerender = !state.saveBusy && status !== 'rendering' && (status === 'done' || status === 'failed');
-    var hasVideo = !!(meta.outputVideoUrl || (state.model && state.model.primaryVideoUrl));
+    var hasVideo = !!(meta.outputVideoUrl);
     var hasSrt = !!buildSrtFromModel();
 
     var badge = document.getElementById('postprod-render-badge');
@@ -793,12 +793,12 @@
       if (!url) continue;
       try {
         if (isVideoUrl(url)) {
-          var v = await loadVideoSource(url, 5000);
+          var v = await loadVideoSourceWithFallback(url, 5000);
           releaseVideoSource(v);
           return true;
         }
         await Promise.race([
-          loadImageSource(url),
+          loadImageSourceWithFallback(url),
           new Promise(function (_, reject) {
             setTimeout(function () { reject(new Error('image_probe_timeout')); }, 5000);
           })
@@ -909,7 +909,7 @@
       var duration = Math.max(0.2, clip.end - clip.start);
       if (isVideoUrl(clip.url)) {
         try {
-          var video = await loadVideoSource(clip.url);
+          var video = await loadVideoSourceWithFallback(clip.url);
           loadedVisualCount += 1;
           try { await video.play(); } catch (_) { }
           var okVideo = await runSegment(duration, function () {
@@ -933,7 +933,7 @@
         }
       } else {
         try {
-          var image = await loadImageSource(clip.url);
+          var image = await loadImageSourceWithFallback(clip.url);
           loadedVisualCount += 1;
           var okImage = await runSegment(duration, function () {
             drawBackground();
@@ -1042,6 +1042,9 @@
     try {
       var result = await buildRenderedVideoBlob(state.model, renderJobId);
       if (state.renderJobId !== renderJobId) return;
+      if (result && result.allVisualsFailed) {
+        throw new Error('모든 씬 미디어 로드에 실패했습니다. 프로덕션에서 자산 URL을 갱신한 뒤 다시 시도해주세요.');
+      }
       var outputVideoUrl = URL.createObjectURL(result.blob);
       if (oldUrl && oldUrl.indexOf('blob:') === 0 && oldUrl !== outputVideoUrl) {
         try { URL.revokeObjectURL(oldUrl); } catch (_) { }
@@ -1055,9 +1058,6 @@
         error: ''
       });
       updateRenderPanelUi();
-      if (result && result.allVisualsFailed) {
-        alert('원본 씬 미디어 로드에 실패하여 플레이스홀더 프레임으로 렌더링했습니다. 프로덕션에서 미디어 URL을 갱신한 뒤 다시 렌더링해 주세요.');
-      }
     } catch (err) {
       if (state.renderJobId !== renderJobId) return;
       var msg = (err && err.message) ? err.message : String(err || 'render_failed');
@@ -1085,7 +1085,7 @@
 
   async function downloadMp4Now() {
     var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
-    var url = (meta && meta.outputVideoUrl) || (state.model && state.model.primaryVideoUrl) || '';
+    var url = (meta && meta.outputVideoUrl) || '';
     if (!url) {
       alert('다운로드할 영상이 없습니다.');
       return;
@@ -1641,13 +1641,9 @@
   }
 
   function buildRenderPreviewHtml(model, meta) {
-    var videoUrl = (meta && meta.outputVideoUrl) || (model && model.primaryVideoUrl) || '';
+    var videoUrl = (meta && meta.outputVideoUrl) || '';
     if (videoUrl) {
       return '<video id="postprod-render-video" class="postprod-render-video" controls preload="metadata" src="' + escapeHtml(videoUrl) + '"></video>';
-    }
-    var imageUrl = (model && model.primaryImageUrl) || '';
-    if (imageUrl) {
-      return '<img class="postprod-render-image" src="' + escapeHtml(imageUrl) + '" alt="렌더 미리보기" />';
     }
     return '<div class="postprod-render-empty">렌더링 결과가 아직 없습니다.</div>';
   }
