@@ -61,20 +61,42 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     const state = String(json?.state || "").toUpperCase();
     if (state === "SUCCEEDED") {
-      const reqBase = new URL(request.url);
-      const proxyUrl =
-        `${reqBase.origin}/api/media/proxy?objectName=${encodeURIComponent(outputObjectName)}`;
-      const signedUrl = await signGcsUrl({
+      const resolved = await resolveOutputUrls({
+        outputObjectName,
         bucket: outParsed.bucket,
-        object: outputObjectName,
+        requestUrl: request.url,
         clientEmail,
         privateKeyPem: privateKeyRaw,
-        expiresInSec: 3600,
-      }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${outputObjectName}`));
-      return send({ done: true, status: state, signedUrl, proxyUrl, outputObjectName }, 200, origin);
+      });
+      return send({ done: true, status: state, outputObjectName, ...resolved }, 200, origin);
     }
 
     if (state === "FAILED" || state === "CANCELLED") {
+      const recovered = await tryRecoverOutputAfterFailedJob({
+        bucket: outParsed.bucket,
+        object: outputObjectName,
+        requestUrl: request.url,
+        token,
+        userProject:
+          (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+          (env.GOOGLE_PROJECT_ID as string | undefined) ||
+          "",
+        clientEmail,
+        privateKeyPem: privateKeyRaw,
+      });
+      if (recovered) {
+        return send(
+          {
+            done: true,
+            status: "SUCCEEDED",
+            outputObjectName,
+            recoveredFromJobState: state,
+            ...recovered,
+          },
+          200,
+          origin
+        );
+      }
       return send(
         {
           done: true,
@@ -92,6 +114,55 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
 };
+
+async function tryRecoverOutputAfterFailedJob(opts: {
+  bucket: string;
+  object: string;
+  requestUrl: string;
+  token: string;
+  userProject: string;
+  clientEmail: string;
+  privateKeyPem: string;
+}) {
+  const metaUrl =
+    `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(opts.bucket)}` +
+    `/o/${encodeURIComponent(opts.object)}`;
+  const metaRes = await fetch(metaUrl, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${opts.token}`,
+      ...(opts.userProject ? { "X-Goog-User-Project": opts.userProject } : {}),
+    },
+  });
+  if (!metaRes.ok) return null;
+  return resolveOutputUrls({
+    outputObjectName: opts.object,
+    bucket: opts.bucket,
+    requestUrl: opts.requestUrl,
+    clientEmail: opts.clientEmail,
+    privateKeyPem: opts.privateKeyPem,
+  });
+}
+
+async function resolveOutputUrls(opts: {
+  outputObjectName: string;
+  bucket: string;
+  requestUrl: string;
+  clientEmail: string;
+  privateKeyPem: string;
+}) {
+  const reqBase = new URL(opts.requestUrl);
+  const proxyUrl =
+    `${reqBase.origin}/api/media/proxy?objectName=${encodeURIComponent(opts.outputObjectName)}`;
+  const signedUrl = await signGcsUrl({
+    bucket: opts.bucket,
+    object: opts.outputObjectName,
+    clientEmail: opts.clientEmail,
+    privateKeyPem: opts.privateKeyPem,
+    expiresInSec: 3600,
+  }).catch(() => gcsToHttps(`gs://${opts.bucket}/${opts.outputObjectName}`));
+  return { signedUrl, proxyUrl };
+}
 
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });

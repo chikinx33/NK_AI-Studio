@@ -531,12 +531,32 @@
       return '트랜스코더 작업 생성 권한이 없어 MP4 변환을 시작하지 못했습니다. 관리자에게 서비스 계정의 Transcoder/GCS 권한을 부여해 달라고 요청해 주세요.';
     }
     if (/transcode_failed_/i.test(raw)) {
+      var failDetail = parseTranscodeFailDetail(raw);
+      if (failDetail) {
+        return 'MP4 변환 작업이 중단되었습니다. 원인: ' + failDetail;
+      }
       return 'MP4 변환 작업이 중단되었습니다. 잠시 후 다시 시도하거나 관리자에게 트랜스코더 작업 상태를 확인해 달라고 요청해 주세요.';
+    }
+    if (/transcode_timeout/i.test(raw)) {
+      return 'MP4 변환 작업이 예상 시간 내에 끝나지 않았습니다. 잠시 후 다운로드를 다시 시도해 주세요.';
+    }
+    if (/transcode_done_no_url/i.test(raw)) {
+      return 'MP4 파일은 생성되었지만 다운로드 URL을 받지 못했습니다. 잠시 후 다시 시도해 주세요.';
     }
     if (/media_proxy_fetch_failed/i.test(raw) || /image_load_failed|video_load_failed|video_load_timeout/i.test(raw)) {
       return '씬 미디어를 불러오지 못했습니다. 프로덕션 라이브러리에서 장면 미디어를 다시 선택한 뒤 저장하고 다시 렌더링해 주세요.';
     }
     return raw;
+  }
+
+  function parseTranscodeFailDetail(raw) {
+    var text = String(raw || '');
+    var m = text.match(/transcode_failed_[A-Z_]+(?:::(.+))?/i);
+    var detail = m && m[1] ? String(m[1]) : '';
+    detail = detail.replace(/\s+/g, ' ').trim();
+    if (!detail) return '';
+    if (detail.length > 220) detail = detail.slice(0, 220) + '...';
+    return detail;
   }
 
   async function saveProjectNow(options) {
@@ -979,38 +999,7 @@
       '16:9'
     );
 
-    var start = await NK.api.postprodTranscodeStart({
-      projectId: projectId,
-      sourceObjectName: sourceObjectName,
-      aspectRatio: aspectRatio
-    });
-    var jobName = String((start && start.jobName) || '').trim();
-    var outputObjectName = String((start && start.outputObjectName) || '').trim();
-    if (!jobName || !outputObjectName) throw new Error('transcode_start_failed');
-
-    var maxAttempts = 160; // 약 8분
-    for (var i = 0; i < maxAttempts; i++) {
-      if (state.renderJobId !== renderJobId) throw new Error('render_canceled');
-      await waitMs(3000);
-      var st = await NK.api.postprodTranscodeStatus({
-        jobName: jobName,
-        outputObjectName: outputObjectName
-      });
-      var status = String((st && st.status) || '').toUpperCase();
-      if (st && st.done && status === 'SUCCEEDED') {
-        var finalUrl = String((st && st.proxyUrl) || (st && st.signedUrl) || '').trim();
-        if (!finalUrl) throw new Error('transcode_done_no_url');
-        return finalUrl;
-      }
-      if (st && st.done && status && status !== 'SUCCEEDED') {
-        throw new Error('transcode_failed_' + status);
-      }
-      if (state.renderMeta && state.renderMeta.status === 'rendering') {
-        var p = clamp(75 + ((i + 1) / maxAttempts) * 24, 75, 99);
-        setRenderMetaLocal({ progress: p });
-      }
-    }
-    throw new Error('transcode_timeout');
+    return runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId);
   }
 
   async function transcodeSourceObjectToMp4(projectId, sourceObjectName, renderJobId) {
@@ -1027,6 +1016,26 @@
       '16:9'
     );
 
+    var lastErr = null;
+    var attempts = 2;
+    for (var attempt = 0; attempt < attempts; attempt++) {
+      try {
+        return await runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId);
+      } catch (err) {
+        lastErr = err;
+        var raw = String((err && err.message) || err || '');
+        if (!/transcode_failed_|transcode_timeout|Transcoder status failed|postprod_transcode_status_error/i.test(raw)) {
+          throw err;
+        }
+        if (attempt < attempts - 1) {
+          await waitMs(1800);
+        }
+      }
+    }
+    throw (lastErr || new Error('transcode_failed'));
+  }
+
+  async function runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId) {
     var start = await NK.api.postprodTranscodeStart({
       projectId: projectId,
       sourceObjectName: sourceObjectName,
@@ -1036,7 +1045,7 @@
     var outputObjectName = String((start && start.outputObjectName) || '').trim();
     if (!jobName || !outputObjectName) throw new Error('transcode_start_failed');
 
-    var maxAttempts = 160;
+    var maxAttempts = 240;
     for (var i = 0; i < maxAttempts; i++) {
       if (typeof renderJobId === 'number' && state.renderJobId !== renderJobId) throw new Error('render_canceled');
       await waitMs(3000);
@@ -1051,7 +1060,7 @@
         return finalUrl;
       }
       if (st && st.done && status && status !== 'SUCCEEDED') {
-        throw new Error('transcode_failed_' + status);
+        throw buildTranscodeFailedError(status, st);
       }
       if (state.renderMeta && state.renderMeta.status === 'rendering') {
         var p = clamp(75 + ((i + 1) / maxAttempts) * 24, 75, 99);
@@ -1059,6 +1068,20 @@
       }
     }
     throw new Error('transcode_timeout');
+  }
+
+  function buildTranscodeFailedError(status, payload) {
+    var reason = '';
+    if (payload) {
+      if (typeof payload.error === 'string') reason = payload.error;
+      else if (payload.error && typeof payload.error.message === 'string') reason = payload.error.message;
+      else if (typeof payload.failureReason === 'string') reason = payload.failureReason;
+      else if (payload.raw && typeof payload.raw.failureReason === 'string') reason = payload.raw.failureReason;
+      else if (payload.raw && payload.raw.error && typeof payload.raw.error.message === 'string') reason = payload.raw.error.message;
+    }
+    reason = String(reason || '').replace(/\s+/g, ' ').trim();
+    if (reason.length > 400) reason = reason.slice(0, 400);
+    return new Error('transcode_failed_' + status + (reason ? ('::' + reason) : ''));
   }
 
   function runSegment(durationSec, frameFn, progressFn, shouldCancel) {
