@@ -667,13 +667,24 @@
     }
   }
 
+  function getRenderableOutputVideoUrl(meta) {
+    var m = meta || {};
+    var direct = String(m.outputVideoUrl || '').trim();
+    if (direct) return toPlayableMediaUrl(direct);
+    var objectName = String(m.outputSourceObjectName || '').trim();
+    if (objectName && NK.api && NK.api.mediaProxyObjectUrl) {
+      return toPlayableMediaUrl(NK.api.mediaProxyObjectUrl(objectName));
+    }
+    return '';
+  }
+
   function updateRenderPanelUi() {
     var meta = state.renderMeta || getRenderMeta(null);
     var status = meta.status || 'idle';
     if (state.dirty && status !== 'rendering') status = 'needs_save';
     var canRender = !state.saveBusy && status !== 'rendering';
     var canRerender = !state.saveBusy && status !== 'rendering' && (status === 'done' || status === 'failed');
-    var hasVideo = !!(meta.outputVideoUrl);
+    var hasVideo = !!getRenderableOutputVideoUrl(meta);
     var hasSrt = !!buildSrtFromModel();
 
     var badge = document.getElementById('postprod-render-badge');
@@ -697,6 +708,7 @@
       else if (meta.lastRenderedAt) renderInfo.textContent = '마지막 렌더: ' + new Date(meta.lastRenderedAt).toLocaleString();
       else renderInfo.textContent = '';
     }
+    syncRenderPreviewUi(meta);
     var startBtn = document.getElementById('postprod-render-btn');
     if (startBtn) startBtn.disabled = !canRender;
     var rerenderBtn = document.getElementById('postprod-rerender-btn');
@@ -1338,18 +1350,20 @@
 
   async function downloadMp4Now() {
     var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
-    var url = String((meta && meta.outputVideoUrl) || '').trim();
+    var url = getRenderableOutputVideoUrl(meta);
     var mime = String((meta && meta.outputVideoMime) || '').toLowerCase();
-    if (!url) {
-      alert('다운로드할 영상이 없습니다.');
-      return;
-    }
+    var sourceObjectName = String((meta && meta.outputSourceObjectName) || '').trim();
     if (mime.indexOf('mp4') >= 0) {
+      if (!url && sourceObjectName && NK.api && NK.api.mediaProxyObjectUrl) {
+        url = NK.api.mediaProxyObjectUrl(sourceObjectName);
+      }
+      if (!url) {
+        alert('다운로드할 영상이 없습니다.');
+        return;
+      }
       await downloadUrl(url, 'final-render.mp4');
       return;
     }
-
-    var sourceObjectName = String((meta && meta.outputSourceObjectName) || '').trim();
     if (!sourceObjectName) {
       alert('MP4 변환용 소스 파일을 찾지 못했습니다. 렌더링을 다시 실행해 주세요.');
       return;
@@ -1938,11 +1952,21 @@
   }
 
   function buildRenderPreviewHtml(model, meta) {
-    var videoUrl = toPlayableMediaUrl((meta && meta.outputVideoUrl) || '');
+    var videoUrl = getRenderableOutputVideoUrl(meta);
     if (videoUrl) {
       return '<video id="postprod-render-video" class="postprod-render-video" controls preload="metadata" src="' + escapeHtml(videoUrl) + '"></video>';
     }
     return '<div class="postprod-render-empty">렌더링 결과가 아직 없습니다.</div>';
+  }
+
+  function syncRenderPreviewUi(meta) {
+    var wrap = document.getElementById('postprod-render-preview');
+    if (!wrap) return;
+    var src = getRenderableOutputVideoUrl(meta);
+    var prevSrc = String(wrap.getAttribute('data-render-src') || '');
+    if (src === prevSrc) return;
+    wrap.setAttribute('data-render-src', src || '');
+    wrap.innerHTML = buildRenderPreviewHtml(state.model || null, meta || null);
   }
 
   function renderLayout(model) {
@@ -2054,7 +2078,7 @@
       '</div>' +
       '</div>' +
 
-      '<div class="postprod-render-preview">' +
+      '<div id="postprod-render-preview" class="postprod-render-preview" data-render-src="' + escapeHtml(getRenderableOutputVideoUrl(meta)) + '">' +
       buildRenderPreviewHtml(model, meta) +
       '</div>' +
 
