@@ -1,5 +1,7 @@
 // prototype/functions/api/project/get.ts
 // Fetch project data.json from GCS reference folder
+import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 // Open CORS so file://, localhost, and custom domains can all reach this endpoint.
@@ -22,6 +24,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const projectId = String(url.searchParams.get("projectId") || "").trim();
     if (!projectId) return send({ error: "projectId is required" }, 400, origin);
     if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "Invalid projectId format" }, 400, origin);
+    const userId = resolveUserId(url.searchParams.get("userId") || "", env);
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
@@ -32,7 +35,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const objectName = `${basePrefix}/projects/${projectId}/reference/data.json`;
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
+    const objectName = `${projectPrefix}/reference/data.json`;
 
     const token = await getGoogleAccessToken({
       clientEmail,

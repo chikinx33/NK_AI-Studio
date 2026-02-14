@@ -1,5 +1,7 @@
 // prototype/functions/api/project/init.ts
 // Initialize GCS folder structure for a projectId by creating .keep files.
+import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 // Open CORS for local file/localhost/custom domains so every client can initialize projects.
@@ -29,6 +31,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) {
       return send({ error: "Invalid projectId format" }, 400, origin);
     }
+    const userId = resolveUserId(body.userId, env);
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
@@ -38,6 +41,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const folders = ["image", "videos", "sfx", "bgm", "caption", "reference"];
     const token = await getGoogleAccessToken({
       clientEmail,
@@ -46,7 +50,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     });
     const results: Array<{ folder: string; status: number; objectName: string }> = [];
     for (const folder of folders) {
-      const objectName = `${basePrefix}/projects/${projectId}/${folder}/.keep`;
+      const objectName = `${projectPrefix}/${folder}/.keep`;
       const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
       const res = await fetch(uploadUrl, {
         method: "POST",
@@ -57,7 +61,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     // reference/data.json 초기화해 처음 로딩 시 404가 발생하지 않도록 한다.
-    const dataObject = `${basePrefix}/projects/${projectId}/reference/data.json`;
+    const dataObject = `${projectPrefix}/reference/data.json`;
     const dataUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(dataObject)}`;
     const dataRes = await fetch(dataUrl, {
       method: "POST",

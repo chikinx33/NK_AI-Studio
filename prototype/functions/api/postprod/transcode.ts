@@ -1,3 +1,4 @@
+import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const corsHeaders = (origin?: string | null) => ({
@@ -18,6 +19,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body?.projectId || "").trim();
+    const userId = resolveUserId(body?.userId, env);
     const sourceObjectName = String(body?.sourceObjectName || "").trim();
     const aspectRatio = String(body?.aspectRatio || "16:9").trim();
     const sourceDurationSec = Number(body?.sourceDurationSec || 0);
@@ -43,7 +45,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const stamp = Date.now();
-    const outputPrefix = `${basePrefix}/projects/${projectId}/postprod/final/${stamp}`;
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
+    const outputPrefix = `${projectPrefix}/postprod/final/${stamp}`;
     const outputObjectName = `${outputPrefix}/final-render.mp4`;
     const inputUri = `gs://${source.bucket}/${source.object}`;
     const outputUri = `gs://${outParsed.bucket}/${outputPrefix}/`;

@@ -27,6 +27,18 @@
     return base.replace(/\/+$/, '') + path;
   };
   const DEFAULT_TIMEOUT_MS = 30000;
+  const resolveUserId = () => {
+    try {
+      var raw = '';
+      if (NK.auth && NK.auth.getUser) raw = String(NK.auth.getUser() || '');
+      if (!raw && NK.config && NK.config.KEYS && NK.config.KEYS.USER) {
+        raw = String(localStorage.getItem(NK.config.KEYS.USER) || '');
+      }
+      raw = raw.trim().toLowerCase();
+      raw = raw.replace(/[^a-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+      return raw || 'owner';
+    } catch (_) { return 'owner'; }
+  };
 
   const fetchWithTimeout = async (url, options, timeoutMs) => {
     const ms = Math.max(1000, Number(timeoutMs) || DEFAULT_TIMEOUT_MS);
@@ -111,10 +123,12 @@
   };
 
   api.imagen = async function (body) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/imagen'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
+      body: JSON.stringify(payload)
     });
     var text = await res.text();
     if (!res.ok) {
@@ -127,10 +141,12 @@
   };
 
   api.videoStart = async function (body) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/video'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
+      body: JSON.stringify(payload)
     });
     var text = await res.text();
     if (!res.ok) {
@@ -154,6 +170,7 @@
     var q = new URLSearchParams();
     if (p.projectId) q.set('projectId', String(p.projectId));
     if (p.sceneId) q.set('sceneId', String(p.sceneId));
+    q.set('userId', String(p.userId || resolveUserId()));
     var job = p.jobId || p.job_id || p.job || '';
     if (job) q.set('job_id', String(job));
     var res = await fetch(withBase('/api/video/status?' + q.toString()));
@@ -165,6 +182,7 @@
   api.imageUpload = async function (projectId, file) {
     var fd = new FormData();
     fd.append('projectId', String(projectId || ''));
+    fd.append('userId', resolveUserId());
     fd.append('file', file);
     var res = await fetch(withBase('/api/image/upload'), { method: 'POST', body: fd });
     var text = await res.text();
@@ -175,6 +193,7 @@
   api.videoUpload = async function (projectId, sceneId, file) {
     var fd = new FormData();
     fd.append('projectId', String(projectId || ''));
+    fd.append('userId', resolveUserId());
     fd.append('sceneId', String(sceneId || ''));
     fd.append('file', file);
     var res = await fetch(withBase('/api/video/upload'), { method: 'POST', body: fd });
@@ -201,10 +220,12 @@
   };
 
   api.postprodTranscodeStart = async function (body) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/postprod/transcode'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {})
+      body: JSON.stringify(payload)
     });
     var text = await res.text();
     var data = j(text);
@@ -239,9 +260,10 @@
   };
 
   api.library = async function (kind, projectId) {
+    var uid = resolveUserId();
     var url = kind === 'image'
-      ? withBase('/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')))
-      : withBase('/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')));
+      ? withBase('/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid))
+      : withBase('/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid));
     var res = await fetch(url);
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'library_error');
@@ -252,7 +274,7 @@
     var res = await fetch(withBase('/api/project/delete'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: String(projectId || ''), confirm: 'yes', objectName: String(objectName || '') })
+      body: JSON.stringify({ projectId: String(projectId || ''), userId: resolveUserId(), confirm: 'yes', objectName: String(objectName || '') })
     });
     var text = await res.text();
     var data = j(text);
@@ -263,7 +285,7 @@
     var res = await fetch(withBase('/api/project/init'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectId: String(projectId || '') })
+      body: JSON.stringify({ projectId: String(projectId || ''), userId: resolveUserId() })
     });
     var text = await res.text();
     var ok = res.ok;
@@ -272,7 +294,7 @@
   };
 
   api.projectGet = async function (projectId) {
-    var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')));
+    var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(resolveUserId()));
     var res = await fetch(url, { method: 'GET' });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'get_error')));
@@ -282,6 +304,7 @@
   api.projectSave = async function (projectId, payload, scenes, opts) {
     var body = {
       projectId: String(projectId || ''),
+      userId: resolveUserId(),
       payload: payload || {},
       scenes: Array.isArray(scenes) ? scenes : [],
       header: opts && opts.header ? opts.header : '',
@@ -299,7 +322,7 @@
   };
 
   api.projectList = async function () {
-    var res = await fetch(withBase('/api/project/list'), { method: 'GET' });
+    var res = await fetch(withBase('/api/project/list?userId=' + encodeURIComponent(resolveUserId())), { method: 'GET' });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'list_error')));
     return j(text);

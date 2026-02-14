@@ -1,5 +1,8 @@
 // prototype/functions/api/project/list.ts
-// List project IDs under projects/ prefix in GCS (lightweight).
+// List project IDs under:
+// {basePrefix}/users/{userId}/ai-video/projects/
+import { buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 // Allow any origin (file://, localhost, custom domains) so that local/server dashboards
@@ -22,6 +25,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
+    const reqUrl = new URL(request.url);
+    const userId = resolveUserId(reqUrl.searchParams.get("userId") || "", env);
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
@@ -31,7 +36,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const parsed = parseGcsUri(baseOutput);
     if (!parsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = parsed.object.replace(/\/$/, "");
-    const prefix = `${basePrefix}/projects/`;
+    const userRoot = buildAiVideoUserRoot(basePrefix, userId);
+    const prefix = `${userRoot}/projects/`;
 
     const token = await getGoogleAccessToken({
       clientEmail,

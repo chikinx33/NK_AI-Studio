@@ -1,3 +1,5 @@
+import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>
 const corsHeaders = (origin?: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -13,6 +15,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const origin = request.headers.get("Origin")
     const url = new URL(request.url)
     const projectId = (url.searchParams.get("projectId") || "").trim()
+    const userId = resolveUserId(url.searchParams.get("userId") || "", env)
     if (!projectId) return send({ error: "projectId is required" }, 400, origin)
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined
@@ -23,7 +26,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput)
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin)
     const basePrefix = outParsed.object.replace(/\/$/, "")
-    const prefix = `${basePrefix}/projects/${projectId}/image/`
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId)
+    const prefix = `${projectPrefix}/image/`
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" })
     const userProject =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||

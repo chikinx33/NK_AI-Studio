@@ -1,5 +1,7 @@
 // prototype/functions/api/project/save.ts
 // Save project payload/scenes to GCS reference folder as data.json
+import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 // Open CORS so local/remote dashboards can both save projects to the same bucket.
@@ -22,6 +24,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectId = String(body.projectId || "").trim();
     if (!projectId) return send({ error: "projectId is required" }, 400, origin);
     if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "Invalid projectId format" }, 400, origin);
+    const userId = resolveUserId(body.userId, env);
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
@@ -32,7 +35,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const objectName = `${basePrefix}/projects/${projectId}/reference/data.json`;
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
+    const objectName = `${projectPrefix}/reference/data.json`;
 
     const token = await getGoogleAccessToken({
       clientEmail,
@@ -86,6 +90,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const payload = {
       projectId,
+      userId,
       title: body.title || "",
       payload: body.payload || {},
       scenes,

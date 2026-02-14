@@ -1,3 +1,5 @@
+import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>
 const corsHeaders = (origin?: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -13,6 +15,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const origin = request.headers.get("Origin")
     const fd = await request.formData()
     const projectId = String(fd.get("projectId") || "").trim()
+    const userId = resolveUserId(String(fd.get("userId") || "").trim(), env)
     const file = fd.get("file") as File | null
     if (!projectId || !file) {
       return send({ error: "projectId and file are required" }, 400, origin)
@@ -26,9 +29,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput)
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin)
     const basePrefix = outParsed.object.replace(/\/$/, "")
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId)
     const safeName = (file.name || "image.png").replace(/[^a-zA-Z0-9._-]+/g, "_")
     const stamp = Date.now()
-    const objectName = `${basePrefix}/projects/${projectId}/image/${stamp}-${safeName}`
+    const objectName = `${projectPrefix}/image/${stamp}-${safeName}`
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" })
     const buf = await file.arrayBuffer()
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`

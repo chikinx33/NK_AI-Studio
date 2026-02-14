@@ -1,5 +1,8 @@
 // prototype/functions/api/project/delete.ts
-// Delete all objects under projects/{projectId}/ prefix with safety checks.
+// Delete objects under:
+// {basePrefix}/users/{userId}/ai-video/projects/{projectId}/
+import { buildAiVideoProjectPrefix, buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 // Open CORS for local/server dashboards.
@@ -23,6 +26,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body.projectId || "").trim();
+    const userId = resolveUserId(body.userId, env);
     const confirm = String(body.confirm || "").trim() === "yes";
     const deleteAll = String(body.all || "").trim() === "true";
     if (!projectId || !confirm) {
@@ -37,7 +41,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const prefix = deleteAll ? `${basePrefix}/projects/` : `${basePrefix}/projects/${projectId}/`;
+    const userRoot = buildAiVideoUserRoot(basePrefix, userId);
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
+    const prefix = deleteAll ? `${userRoot}/projects/` : `${projectPrefix}/`;
 
     // Validate prefix boundaries (simple sanity check)
     if (!deleteAll && !/^[a-zA-Z0-9._-]+$/.test(projectId)) {
@@ -56,7 +62,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const objectName = String((body.objectName || body.object || "")).trim();
     if (objectName) {
-      const allowedPrefix = `${basePrefix}/projects/${projectId}/`;
+      const allowedPrefix = `${projectPrefix}/`;
       if (!objectName.startsWith(allowedPrefix)) {
         return send({ error: "Invalid objectName for project" }, 400, origin);
       }

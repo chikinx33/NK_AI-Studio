@@ -1,5 +1,8 @@
 // prototype/functions/api/video/upload.ts
-// Upload local video file to GCS under projects/{projectId}/videos/{sceneId}/ and return signed URL.
+// Upload local video file to:
+// {basePrefix}/users/{userId}/ai-video/projects/{projectId}/videos/
+import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const corsHeaders = (origin?: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -16,6 +19,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const origin = request.headers.get("Origin");
     const fd = await request.formData();
     const projectId = String(fd.get("projectId") || "").trim();
+    const userId = resolveUserId(String(fd.get("userId") || "").trim(), env);
     const sceneId = String(fd.get("sceneId") || "").trim();
     const file = fd.get("file") as File | null;
     if (!projectId || !sceneId || !file) {
@@ -30,9 +34,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const safeName = (file.name || "video.mp4").replace(/[^a-zA-Z0-9._-]+/g, "_");
     const stamp = Date.now();
-    const objectName = `${basePrefix}/projects/${projectId}/videos/${stamp}-scene-${sceneId}-${safeName}`;
+    const objectName = `${projectPrefix}/videos/${stamp}-scene-${sceneId}-${safeName}`;
 
     const token = await getGoogleAccessToken({
       clientEmail,

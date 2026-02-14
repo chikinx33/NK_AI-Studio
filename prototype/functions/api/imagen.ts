@@ -1,4 +1,6 @@
 // prototype/functions/api/imagen.ts
+import { buildAiVideoProjectPrefix, resolveUserId } from "./_shared/storage";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
@@ -83,14 +85,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const projTagRaw = (body?.projectId ?? body?.projTag ?? "").toString().trim();
     const projTag = projTagRaw || "default";
+    const userId = resolveUserId(body?.userId, env);
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
     let signedUrl = "";
     let objectName = "";
     if (outParsed) {
       const basePrefix = outParsed.object.replace(/\/$/, "");
+      const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projTag);
       const stamp = Date.now();
-      objectName = `${basePrefix}/projects/${projTag}/image/${stamp}-${crypto.randomUUID()}.png`;
+      objectName = `${projectPrefix}/image/${stamp}-${crypto.randomUUID()}.png`;
       const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
       const bytes = base64ToUint8(bytesBase64Encoded);
       const upRes = await fetch(uploadUrl, {

@@ -3,6 +3,8 @@
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
+import { buildAiVideoProjectPrefix, resolveUserId } from "./_shared/storage";
+
 (globalThis as any).g = globalThis;
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const log = (...args: any[]) => console.log('[video]', ...args);
@@ -13,6 +15,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const {
       sceneId = "scene",
       projTag = "",
+      userId: rawUserId = "",
       promptText = "",
       imageDataUrl = "",
       durationSeconds = 6,
@@ -47,10 +50,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI (expect gs://bucket/prefix)" }, 500);
     }
     const projectTag = (projTag || "default").toString();
+    const userId = resolveUserId(rawUserId, env);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    // 표준 경로: projects/{projectId}/videos/{timestamp-sceneId}.mp4 (파일 단일 경로, 서브폴더 방지)
+    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
+    // 표준 경로: users/{userId}/ai-video/projects/{projectId}/videos/{timestamp-sceneId}.mp4
     const stamp = Date.now();
-    const videoObject = `${basePrefix}/projects/${projectTag}/videos/${stamp}-${sceneId}.mp4`;
+    const videoObject = `${projectPrefix}/videos/${stamp}-${sceneId}.mp4`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoObject}`;
 
     if (videoModel !== "veo" && videoModel !== "grok") {
@@ -78,8 +83,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
               scope: "https://www.googleapis.com/auth/cloud-platform",
             });
             const basePrefix = outParsed.object.replace(/\/$/, "");
+            const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
             const stamp = Date.now();
-            const objectName = `${basePrefix}/projects/${projectTag}/grok/${stamp}-${sceneId}.png`;
+            const objectName = `${projectPrefix}/grok/${stamp}-${sceneId}.png`;
             const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
             const b64 = imageDataUrl.split(",")[1] || "";
             const buf = base64ToUint8(b64);
@@ -308,7 +314,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // Ensure project marker object exists for folder visualization
     try {
-      const markerName = `${basePrefix}/projects/${projectTag}/.keep`;
+      const markerName = `${projectPrefix}/.keep`;
       const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(markerName)}`;
       const accessTokenMarker = await getGoogleAccessToken({
         clientEmail,
