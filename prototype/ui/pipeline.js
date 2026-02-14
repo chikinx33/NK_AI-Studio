@@ -1398,14 +1398,14 @@ function buildSceneRowHtml(s, header) {
     '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + s.id + '"' + (s.imgLoading ? ' disabled' : '') + '>' + (s.imgLoading ? '이미지 생성중...' : '이미지 생성') + '</button>' +
     '<button class="btn-secondary compact" data-action="delete-image" data-id="' + s.id + '"' + (s.imageDataUrl ? '' : ' disabled') + '>삭제</button>' +
     '<button class="btn-secondary compact" data-action="upload-image" data-id="' + s.id + '">업로드</button>' +
-    '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">라이브러리</button>' +
+    '<button class="btn-secondary compact" data-action="library-image" data-id="' + s.id + '">저장소</button>' +
     '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (s.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
     '</div>' +
     '<div class="action-buttons grid video-actions">' +
     '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">영상 생성</button>' +
     '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (s.videoUrl ? '' : ' disabled') + '>삭제</button>' +
     '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">업로드</button>' +
-    '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">라이브러리</button>' +
+    '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">저장소</button>' +
     '<button class="btn-secondary compact" data-action="download-video" data-id="' + s.id + '"' + (s.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
     '</div>' +
     '</div>' +
