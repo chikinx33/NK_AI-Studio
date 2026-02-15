@@ -3063,7 +3063,7 @@ a.btn-primary:active {
 }
 
 .login-icons img.is-disabled {
-  opacity: 0.38;
+  opacity: 0.22;
   cursor: not-allowed;
 }
 
