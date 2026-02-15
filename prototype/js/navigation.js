@@ -107,22 +107,30 @@
                     if (!cw) return;
 
                     var themeKey = (NK.config && NK.config.KEYS && NK.config.KEYS.THEME) || 'nk_theme';
+                    var themeVariantKey = (NK.config && NK.config.KEYS && NK.config.KEYS.THEME_VARIANT) || 'nk_theme_variant';
                     var langKey = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
                     var storedTheme = localStorage.getItem(themeKey);
+                    var storedThemeVariant = localStorage.getItem(themeVariantKey);
                     var runtimeTheme = (NK.state && NK.state.runtime && NK.state.runtime.theme) || '';
+                    var runtimeThemeVariant = (NK.state && NK.state.runtime && NK.state.runtime.themeVariant) || '';
                     var storedLang = localStorage.getItem(langKey);
                     var runtimeLang = (NK.state && NK.state.runtime && NK.state.runtime.lang) || '';
 
-                    var theme = (storedTheme === 'light' || storedTheme === 'dark')
-                        ? storedTheme
-                        : ((runtimeTheme === 'light' || runtimeTheme === 'dark') ? runtimeTheme : 'dark');
+                    var theme = (storedTheme === 'light')
+                        ? 'light'
+                        : ((runtimeTheme === 'light') ? 'light' : 'dark');
+                    var fallbackThemeVariant = theme === 'light' ? 'light-classic' : 'dark-classic';
+                    var themeVariant = String(storedThemeVariant || runtimeThemeVariant || '').trim();
+                    if (!themeVariant || themeVariant.indexOf(theme + '-') !== 0) {
+                        themeVariant = fallbackThemeVariant;
+                    }
                     var lang = (storedLang === 'en' || storedLang === 'ko')
                         ? storedLang
                         : ((runtimeLang === 'en' || runtimeLang === 'ko') ? runtimeLang : 'ko');
                     var safeLang = (lang === 'en' ? 'en' : 'ko');
                     var applySync = function () {
                         try {
-                            cw.postMessage({ type: 'theme-apply', theme: theme }, '*');
+                            cw.postMessage({ type: 'theme-apply', theme: theme, variant: themeVariant }, '*');
                             cw.postMessage({ type: 'lang-apply', lang: safeLang }, '*');
                         } catch (_) { }
                     };

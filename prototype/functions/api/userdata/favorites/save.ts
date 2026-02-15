@@ -21,6 +21,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const userId = resolveUserId(body.userId, env);
     const items = sanitizeFavoriteItems(body.items);
     const categoryNames = sanitizeCategoryNames(body.categoryNames);
+    const themePresets = sanitizeThemePresets(body.themePresets);
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
@@ -36,6 +37,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       userId,
       items,
       categoryNames,
+      themePresets,
       updatedAt: new Date().toISOString(),
     };
     const token = await getGoogleAccessToken({
@@ -89,6 +91,14 @@ type FavoriteItem = {
 };
 const FAVORITE_CATEGORY_COUNT = 4;
 const FAVORITE_SLOT_COUNT = FAVORITE_CATEGORY_COUNT * 12;
+const THEME_PRESET_IDS = {
+  dark: ["dark-classic", "dark-midnight", "dark-forest", "dark-slate", "dark-royal"],
+  light: ["light-classic", "light-sky", "light-sand", "light-mint", "light-rose"],
+} as const;
+const THEME_PRESET_DEFAULTS = {
+  dark: THEME_PRESET_IDS.dark[0],
+  light: THEME_PRESET_IDS.light[0],
+} as const;
 const FAVORITE_DEFAULT_CATEGORY_NAMES = Array.from({ length: FAVORITE_CATEGORY_COUNT }, (_, idx) => `카테고리 ${idx + 1}`);
 
 function sanitizeFavoriteItems(input: any): FavoriteItem[] {
@@ -162,6 +172,16 @@ function sanitizeCategoryNames(input: any): string[] {
     next.push((raw || fallback).slice(0, 24));
   }
   return next;
+}
+
+function sanitizeThemePresets(input: any): { dark: string; light: string } {
+  const source = input && typeof input === "object" ? input : {};
+  const darkRaw = String(source.dark || "").trim();
+  const lightRaw = String(source.light || "").trim();
+  return {
+    dark: THEME_PRESET_IDS.dark.includes(darkRaw as any) ? darkRaw : THEME_PRESET_DEFAULTS.dark,
+    light: THEME_PRESET_IDS.light.includes(lightRaw as any) ? lightRaw : THEME_PRESET_DEFAULTS.light,
+  };
 }
 
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {

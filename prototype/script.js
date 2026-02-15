@@ -2,9 +2,33 @@
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
+  const THEME_KEY = KEY.THEME || 'nk_theme';
+  const THEME_VARIANT_KEY = KEY.THEME_VARIANT || 'nk_theme_variant';
+  const THEME_PRESETS_KEY = KEY.THEME_PRESETS || 'nk_theme_presets_active';
+  const THEME_PRESET_LIST = {
+    dark: [
+      { id: 'dark-classic', label: '다크 클래식', swatch: ['#0f172a', '#0d152a'] },
+      { id: 'dark-midnight', label: '다크 미드나잇', swatch: ['#050714', '#0c1230'] },
+      { id: 'dark-forest', label: '다크 포레스트', swatch: ['#06130f', '#0c231b'] },
+      { id: 'dark-slate', label: '다크 하이콘트라스트', swatch: ['#050505', '#181818'] },
+      { id: 'dark-royal', label: '다크 신스웨이브', swatch: ['#140820', '#2a0f3f'] },
+    ],
+    light: [
+      { id: 'light-classic', label: '라이트 클래식', swatch: ['#f7f9fd', '#eef2fb'] },
+      { id: 'light-sky', label: '라이트 스카이', swatch: ['#eef5ff', '#dcecff'] },
+      { id: 'light-sand', label: '라이트 샌드', swatch: ['#fff6ea', '#ffe7cd'] },
+      { id: 'light-mint', label: '라이트 민트', swatch: ['#ebfff8', '#d4f9ee'] },
+      { id: 'light-rose', label: '라이트 로즈', swatch: ['#fff2f7', '#ffe1ee'] },
+    ],
+  };
+  const THEME_PRESET_DEFAULTS = {
+    dark: THEME_PRESET_LIST.dark[0].id,
+    light: THEME_PRESET_LIST.light[0].id,
+  };
 
   let currentLang = 'ko';
   let currentTheme = 'dark';
+  let currentThemeVariant = THEME_PRESET_DEFAULTS.dark;
   const STAGE_HTML_MAP = {
     dashboard: 'dashboard.html',
     scenario: 'scenario.html',
@@ -17,6 +41,86 @@
   const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
   let syncMessageBound = false;
   let storageSyncBound = false;
+
+  const sanitizeThemeMode = (theme) => (String(theme || '').trim().toLowerCase() === 'light' ? 'light' : 'dark');
+
+  const getThemePresetIds = (mode) => {
+    const safeMode = sanitizeThemeMode(mode);
+    const options = Array.isArray(THEME_PRESET_LIST[safeMode]) ? THEME_PRESET_LIST[safeMode] : [];
+    return options.map((row) => String(row?.id || '').trim()).filter(Boolean);
+  };
+
+  const sanitizeThemeVariant = (mode, variant) => {
+    const safeMode = sanitizeThemeMode(mode);
+    const candidate = String(variant || '').trim();
+    const ids = getThemePresetIds(safeMode);
+    if (ids.includes(candidate)) return candidate;
+    return THEME_PRESET_DEFAULTS[safeMode];
+  };
+
+  const sanitizeThemePresets = (input) => {
+    const source = input && typeof input === 'object' ? input : {};
+    return {
+      dark: sanitizeThemeVariant('dark', source.dark),
+      light: sanitizeThemeVariant('light', source.light),
+    };
+  };
+
+  const readThemePresets = () => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(THEME_PRESETS_KEY) || '{}');
+      return sanitizeThemePresets(parsed);
+    } catch (_) {
+      return sanitizeThemePresets({});
+    }
+  };
+
+  const saveThemePresets = (input) => {
+    const safe = sanitizeThemePresets(input);
+    try {
+      localStorage.setItem(THEME_PRESETS_KEY, JSON.stringify(safe));
+    } catch (_) { }
+    return safe;
+  };
+
+  const resolveThemeVariant = (mode, presets) => {
+    const safeMode = sanitizeThemeMode(mode);
+    const safePresets = sanitizeThemePresets(presets);
+    return sanitizeThemeVariant(safeMode, safePresets[safeMode]);
+  };
+
+  const readStoredThemeMode = () => {
+    try {
+      return sanitizeThemeMode(localStorage.getItem(THEME_KEY) || 'dark');
+    } catch (_) {
+      return 'dark';
+    }
+  };
+
+  const readStoredThemeVariant = (mode, presets) => {
+    const safeMode = sanitizeThemeMode(mode);
+    const fallback = resolveThemeVariant(safeMode, presets);
+    try {
+      return sanitizeThemeVariant(safeMode, localStorage.getItem(THEME_VARIANT_KEY) || fallback);
+    } catch (_) {
+      return fallback;
+    }
+  };
+
+  const applyThemeState = (theme, opts = {}) => {
+    const safeTheme = sanitizeThemeMode(theme);
+    const safePresets = opts.persistPresets
+      ? saveThemePresets(opts.presets || readThemePresets())
+      : sanitizeThemePresets(opts.presets || readThemePresets());
+    const safeVariant = sanitizeThemeVariant(
+      safeTheme,
+      opts.variant || readStoredThemeVariant(safeTheme, safePresets),
+    );
+    currentTheme = safeTheme;
+    currentThemeVariant = safeVariant;
+    NK.ui.common.applyTheme(safeTheme, { variant: safeVariant });
+    return { theme: safeTheme, variant: safeVariant, presets: safePresets };
+  };
 
   const loginBrandStorageKey = (user) => {
     const safe = String(user || '').trim().toLowerCase();
@@ -196,14 +300,20 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.708';
+    NK.config.APP_VERSION = '1.713';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
     // 2. 공통 환경 설정 (테마, 언어)
-    currentTheme = localStorage.getItem(KEY.THEME) || 'dark';
+    const initialThemePresets = readThemePresets();
+    currentTheme = readStoredThemeMode();
+    currentThemeVariant = readStoredThemeVariant(currentTheme, initialThemePresets);
     currentLang = localStorage.getItem(LANG_KEY) || 'ko';
-    NK.ui.common.applyTheme(currentTheme);
+    applyThemeState(currentTheme, {
+      variant: currentThemeVariant,
+      presets: initialThemePresets,
+      persistPresets: true,
+    });
     NK.ui.common.applyI18n(currentLang);
     applyUserStudioTitleToSidebar();
     setupSyncMessageHandlers();
@@ -347,10 +457,9 @@
       if (!data || typeof data !== 'object') return;
 
       if (data.type === 'theme-apply' && data.theme) {
-        currentTheme = data.theme;
-        NK.ui.common.applyTheme(currentTheme);
+        const applied = applyThemeState(data.theme, { variant: data.variant });
         // 부모창에서 받은 경우 자식 iframe에도 전파
-        if (window.self === window.top) broadcastTheme(currentTheme);
+        if (window.self === window.top) broadcastTheme(applied.theme, applied.variant);
       }
       if (data.type === 'lang-apply' && data.lang) {
         currentLang = (data.lang === 'en') ? 'en' : 'ko';
@@ -367,11 +476,12 @@
     storageSyncBound = true;
     window.addEventListener('storage', (e) => {
       if (!e || !e.key) return;
-      if (e.key === KEY.THEME || e.key === 'nk_theme') {
-        const nextTheme = (e.newValue === 'light') ? 'light' : 'dark';
-        if (nextTheme !== currentTheme) {
-          currentTheme = nextTheme;
-          NK.ui.common.applyTheme(currentTheme);
+      if (e.key === THEME_KEY || e.key === 'nk_theme' || e.key === THEME_VARIANT_KEY || e.key === THEME_PRESETS_KEY) {
+        const nextPresets = readThemePresets();
+        const nextTheme = readStoredThemeMode();
+        const nextVariant = readStoredThemeVariant(nextTheme, nextPresets);
+        if (nextTheme !== currentTheme || nextVariant !== currentThemeVariant) {
+          applyThemeState(nextTheme, { variant: nextVariant, presets: nextPresets });
         }
         return;
       }
@@ -486,7 +596,7 @@
   // 초기 로드 시 현재 테마를 iframe에도 한번 전파(iframe가 늦게 만들어지는 경우 대비)
   window.addEventListener('load', () => {
     setTimeout(() => {
-      try { broadcastTheme(currentTheme); } catch (_) { }
+      try { broadcastTheme(currentTheme, currentThemeVariant); } catch (_) { }
       try { broadcastLang(currentLang); } catch (_) { }
     }, 50);
   });
@@ -515,6 +625,10 @@
     const favoriteCategorySelectInput = document.getElementById('favorite-category-select');
     const favoriteLinkInput = document.getElementById('favorite-link');
     const favoriteIconInput = document.getElementById('favorite-icon');
+    const themePresetWidget = document.getElementById('theme-preset-widget');
+    const themePresetToggleBtn = document.getElementById('theme-preset-toggle');
+    const themeDarkOptionsEl = document.getElementById('theme-dark-options');
+    const themeLightOptionsEl = document.getElementById('theme-light-options');
     const subscriptionManageBtn = document.getElementById('subscription-manage-btn');
     const subscriptionPlanEl = document.getElementById('subscription-plan');
     const subscriptionStatusEl = document.getElementById('subscription-status');
@@ -533,7 +647,9 @@
     let suppressFavoriteOpenUntil = 0;
     let favoriteFormCollapsed = true;
     let subscriptionCollapsed = true;
+    let themePresetCollapsed = true;
     let lastLoginState = false;
+    let favoriteThemePresets = readThemePresets();
     const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
     const DEFAULT_LOGIN_CARD_ICON = String(loginCardLogoEl?.getAttribute('src') || 'images/logo(500500).png').trim() || 'images/logo(500500).png';
     const FAVORITE_CATEGORY_COUNT = 4;
@@ -547,6 +663,7 @@
 
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
     const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
+    const canUseThemePresetUI = () => !!(themePresetWidget && themePresetToggleBtn && themeDarkOptionsEl && themeLightOptionsEl);
 
     const favoriteStorageKey = (user) => {
       const safe = String(user || '').trim().toLowerCase();
@@ -759,30 +876,43 @@
 
     const readFavoritesLocal = (user) => {
       const key = favoriteStorageKey(user);
-      if (!key) return { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
+      if (!key) {
+        return {
+          items: [],
+          categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice(),
+          themePresets: readThemePresets(),
+        };
+      }
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || '[]');
         if (Array.isArray(parsed)) {
           return {
             items: sanitizeFavoriteItems(parsed),
             categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice(),
+            themePresets: readThemePresets(),
           };
         }
         return {
           items: sanitizeFavoriteItems(parsed?.items || []),
           categoryNames: sanitizeFavoriteCategoryNames(parsed?.categoryNames || []),
+          themePresets: sanitizeThemePresets(parsed?.themePresets || {}),
         };
       } catch (_) {
-        return { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
+        return {
+          items: [],
+          categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice(),
+          themePresets: readThemePresets(),
+        };
       }
     };
 
-    const saveFavoritesLocal = (user, items, categoryNames) => {
+    const saveFavoritesLocal = (user, items, categoryNames, themePresets) => {
       const key = favoriteStorageKey(user);
       if (!key) return;
       const payload = {
         items: sanitizeFavoriteItems(items),
         categoryNames: sanitizeFavoriteCategoryNames(categoryNames),
+        themePresets: sanitizeThemePresets(themePresets),
       };
       try {
         localStorage.setItem(key, JSON.stringify(payload));
@@ -790,24 +920,33 @@
     };
 
     const fetchFavoritesServer = async (user) => {
-      if (!user) return { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
+      if (!user) {
+        return {
+          items: [],
+          categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice(),
+          themePresets: readThemePresets(),
+        };
+      }
       if (!NK.api || !NK.api.userdataFavoritesGet) return readFavoritesLocal(user);
       const res = await NK.api.userdataFavoritesGet();
       const snapshot = {
         items: sanitizeFavoriteItems(res?.data?.items || []),
         categoryNames: sanitizeFavoriteCategoryNames(res?.data?.categoryNames || []),
+        themePresets: sanitizeThemePresets(res?.data?.themePresets || {}),
       };
-      saveFavoritesLocal(user, snapshot.items, snapshot.categoryNames);
+      saveFavoritesLocal(user, snapshot.items, snapshot.categoryNames, snapshot.themePresets);
       return snapshot;
     };
 
-    const saveFavoritesServer = async (user, items, categoryNames) => {
+    const saveFavoritesServer = async (user, items, categoryNames, themePresets = favoriteThemePresets) => {
       if (!user) return;
       const nextItems = sanitizeFavoriteItems(items);
       const nextCategoryNames = sanitizeFavoriteCategoryNames(categoryNames);
-      saveFavoritesLocal(user, nextItems, nextCategoryNames);
+      const nextThemePresets = sanitizeThemePresets(themePresets);
+      favoriteThemePresets = nextThemePresets;
+      saveFavoritesLocal(user, nextItems, nextCategoryNames, nextThemePresets);
       if (!NK.api || !NK.api.userdataFavoritesSave) return;
-      await NK.api.userdataFavoritesSave(nextItems, nextCategoryNames);
+      await NK.api.userdataFavoritesSave(nextItems, nextCategoryNames, nextThemePresets);
     };
 
     const clearFavoriteDropTargets = () => {
@@ -972,6 +1111,16 @@
       }
     };
 
+    const setThemePresetCollapsed = (collapsed) => {
+      if (!themePresetWidget) return;
+      themePresetCollapsed = !!collapsed;
+      themePresetWidget.classList.toggle('is-collapsed', themePresetCollapsed);
+      if (themePresetToggleBtn) {
+        themePresetToggleBtn.setAttribute('aria-expanded', themePresetCollapsed ? 'false' : 'true');
+        themePresetToggleBtn.setAttribute('aria-label', themePresetCollapsed ? '테마 선택 펼치기' : '테마 선택 접기');
+      }
+    };
+
     const renderFavoriteCategorySelect = () => {
       if (!favoriteCategorySelectInput) return;
       const selected = parseFavoriteCategoryIndex(favoriteCategorySelectInput.value);
@@ -983,6 +1132,64 @@
         favoriteCategorySelectInput.appendChild(option);
       });
       favoriteCategorySelectInput.value = String(selected);
+    };
+
+    const renderThemePresetOptions = (loggedIn) => {
+      if (!canUseThemePresetUI()) return;
+      if (!loggedIn) return;
+
+      const renderOneMode = (mode, rootEl) => {
+        const safeMode = sanitizeThemeMode(mode);
+        rootEl.innerHTML = '';
+        const selectedVariant = sanitizeThemeVariant(safeMode, favoriteThemePresets[safeMode]);
+        THEME_PRESET_LIST[safeMode].forEach((preset, idx) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'theme-preset-btn';
+          btn.dataset.themeMode = safeMode;
+          btn.dataset.themeVariant = preset.id;
+          const swatch = Array.isArray(preset.swatch) ? preset.swatch : [];
+          btn.style.setProperty('--theme-swatch-a', String(swatch[0] || '#1f2a44'));
+          btn.style.setProperty('--theme-swatch-b', String(swatch[1] || '#0f172a'));
+          const active = preset.id === selectedVariant;
+          btn.classList.toggle('is-selected', active);
+          btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+          btn.setAttribute('aria-label', `${safeMode === 'dark' ? '다크' : '라이트'} 테마 ${idx + 1} 선택`);
+          btn.title = preset.label;
+          btn.addEventListener('click', async () => {
+            if (!NK.auth.isAuthed()) return;
+            const nextPresets = sanitizeThemePresets({ ...favoriteThemePresets, [safeMode]: preset.id });
+            const changed = nextPresets[safeMode] !== favoriteThemePresets[safeMode];
+            favoriteThemePresets = nextPresets;
+            saveThemePresets(nextPresets);
+            renderThemePresetOptions(true);
+
+            if (safeMode === currentTheme) {
+              const applied = applyThemeState(currentTheme, {
+                variant: nextPresets[safeMode],
+                presets: nextPresets,
+                persistPresets: true,
+              });
+              broadcastTheme(applied.theme, applied.variant);
+              setTimeout(() => broadcastTheme(applied.theme, applied.variant), 100);
+            }
+
+            if (!changed) return;
+            const user = String(NK.auth.getUser() || '').trim();
+            if (!user) return;
+            try {
+              await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames, favoriteThemePresets);
+            } catch (err) {
+              const detail = String(err?.message || '').trim();
+              alert('테마 설정을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+            }
+          });
+          rootEl.appendChild(btn);
+        });
+      };
+
+      renderOneMode('dark', themeDarkOptionsEl);
+      renderOneMode('light', themeLightOptionsEl);
     };
 
     const renameFavoriteCategory = async (categoryIndex) => {
@@ -1337,6 +1544,13 @@
         }
       }
 
+      if (canUseThemePresetUI()) {
+        themePresetWidget.classList.toggle('hidden', !loggedIn);
+        if (!loggedIn || !lastLoginState) {
+          setThemePresetCollapsed(true);
+        }
+      }
+
       if (canUseFavoriteUI()) {
         if (!loggedIn) {
           setFavoriteFormOpen(false);
@@ -1348,25 +1562,46 @@
 
         const localFavorite = loggedIn
           ? readFavoritesLocal(user)
-          : { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
+          : {
+            items: [],
+            categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice(),
+            themePresets: readThemePresets(),
+          };
         favoriteItems = localFavorite.items;
         favoriteCategoryNames = sanitizeFavoriteCategoryNames(localFavorite.categoryNames);
+        favoriteThemePresets = sanitizeThemePresets(localFavorite.themePresets || {});
+        saveThemePresets(favoriteThemePresets);
+        applyThemeState(currentTheme, {
+          variant: resolveThemeVariant(currentTheme, favoriteThemePresets),
+          presets: favoriteThemePresets,
+          persistPresets: true,
+        });
         renderFavoriteCategorySelect();
         renderFavorites(loggedIn);
+        renderThemePresetOptions(loggedIn);
 
-        if (!loggedIn || !user) return;
-        const seq = ++favoriteLoadSeq;
-        fetchFavoritesServer(user)
-          .then((snapshot) => {
-            if (!NK.auth.isAuthed()) return;
-            if (seq !== favoriteLoadSeq) return;
-            if (String(NK.auth.getUser() || '') !== String(user || '')) return;
-            favoriteItems = snapshot.items;
-            favoriteCategoryNames = sanitizeFavoriteCategoryNames(snapshot.categoryNames);
-            renderFavoriteCategorySelect();
-            renderFavorites(true);
-          })
-          .catch(() => { });
+        if (loggedIn && user) {
+          const seq = ++favoriteLoadSeq;
+          fetchFavoritesServer(user)
+            .then((snapshot) => {
+              if (!NK.auth.isAuthed()) return;
+              if (seq !== favoriteLoadSeq) return;
+              if (String(NK.auth.getUser() || '') !== String(user || '')) return;
+              favoriteItems = snapshot.items;
+              favoriteCategoryNames = sanitizeFavoriteCategoryNames(snapshot.categoryNames);
+              favoriteThemePresets = sanitizeThemePresets(snapshot.themePresets || favoriteThemePresets);
+              saveThemePresets(favoriteThemePresets);
+              applyThemeState(currentTheme, {
+                variant: resolveThemeVariant(currentTheme, favoriteThemePresets),
+                presets: favoriteThemePresets,
+                persistPresets: true,
+              });
+              renderFavoriteCategorySelect();
+              renderFavorites(true);
+              renderThemePresetOptions(true);
+            })
+            .catch(() => { });
+        }
       }
 
       lastLoginState = !!loggedIn;
@@ -1469,6 +1704,13 @@
       subscriptionToggleBtn.addEventListener('click', () => {
         if (!NK.auth.isAuthed()) return;
         setSubscriptionCollapsed(!subscriptionCollapsed);
+      });
+    }
+
+    if (canUseThemePresetUI() && themePresetToggleBtn) {
+      themePresetToggleBtn.addEventListener('click', () => {
+        if (!NK.auth.isAuthed()) return;
+        setThemePresetCollapsed(!themePresetCollapsed);
       });
     }
 
@@ -1853,26 +2095,29 @@
 
   // 전역 노출 함수 (버튼 onclick용)
   // scope: 'global' => 부모+iframe 전체 전파, 'local' => 현재 문서만
-  const broadcastTheme = (theme) => {
+  const broadcastTheme = (theme, variant) => {
+    const safeTheme = sanitizeThemeMode(theme);
+    const safeVariant = sanitizeThemeVariant(safeTheme, variant || currentThemeVariant);
     try {
       // 현재 문서에 있는 모든 iframe에 테마 적용 시도
       document.querySelectorAll('iframe').forEach((f) => {
         try {
           const cw = f.contentWindow;
           if (cw && cw.NK && cw.NK.ui && cw.NK.ui.common && cw.NK.ui.common.applyTheme) {
-            cw.NK.ui.common.applyTheme(theme);
+            cw.NK.ui.common.applyTheme(safeTheme, { variant: safeVariant });
           } else {
             // fallback: data-theme 속성만 강제
             if (f.contentDocument && f.contentDocument.documentElement) {
-              f.contentDocument.documentElement.setAttribute('data-theme', theme);
+              f.contentDocument.documentElement.setAttribute('data-theme', safeTheme);
+              f.contentDocument.documentElement.setAttribute('data-theme-variant', safeVariant);
             }
-            if (cw) cw.postMessage({ type: 'theme-apply', theme }, '*');
+            if (cw) cw.postMessage({ type: 'theme-apply', theme: safeTheme, variant: safeVariant }, '*');
           }
         } catch (_) { }
       });
       // 자신이 iframe일 경우 부모에게도 전파
       if (window.parent && window.parent !== window) {
-        window.parent.postMessage({ type: 'theme-apply', theme }, '*');
+        window.parent.postMessage({ type: 'theme-apply', theme: safeTheme, variant: safeVariant }, '*');
       }
     } catch (_) { }
   };
@@ -1899,12 +2144,14 @@
     } catch (_) { }
   };
   window.toggleTheme = (scope = 'global') => {
-    currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    NK.ui.common.applyTheme(currentTheme);
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const presets = readThemePresets();
+    const nextVariant = resolveThemeVariant(nextTheme, presets);
+    const applied = applyThemeState(nextTheme, { variant: nextVariant, presets, persistPresets: true });
     if (scope === 'global') {
-      broadcastTheme(currentTheme);
+      broadcastTheme(applied.theme, applied.variant);
       // iframe 로딩 타이밍을 대비해 한 번 더 전파
-      setTimeout(() => broadcastTheme(currentTheme), 100);
+      setTimeout(() => broadcastTheme(applied.theme, applied.variant), 100);
     }
   };
 

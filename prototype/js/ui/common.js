@@ -396,12 +396,21 @@
         common.updateThemeButton(NK.state.runtime.theme, safeLang);
     };
 
-    common.applyTheme = function (theme) {
+    common.applyTheme = function (theme, options) {
+        var opts = options && typeof options === 'object' ? options : {};
         var safeTheme = (theme === 'light') ? 'light' : 'dark';
+        var variantKey = (NK.config && NK.config.KEYS && NK.config.KEYS.THEME_VARIANT) || 'nk_theme_variant';
+        var safeVariant = String(opts.variant || '').trim();
+        var fallbackVariant = safeTheme === 'light' ? 'light-classic' : 'dark-classic';
+        if (!safeVariant || safeVariant.indexOf(safeTheme + '-') !== 0) {
+            safeVariant = fallbackVariant;
+        }
         document.documentElement.setAttribute('data-theme', safeTheme);
+        document.documentElement.setAttribute('data-theme-variant', safeVariant);
         localStorage.setItem(NK.config.KEYS.THEME, safeTheme);
+        localStorage.setItem(variantKey, safeVariant);
         if (NK.state && NK.state.set) {
-            NK.state.set({ theme: safeTheme });
+            NK.state.set({ theme: safeTheme, themeVariant: safeVariant });
         }
         common.updateThemeButton(safeTheme, NK.state.runtime.lang);
     };

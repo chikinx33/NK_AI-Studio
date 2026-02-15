@@ -336,11 +336,12 @@
     return j(text);
   };
 
-  api.userdataFavoritesSave = async function (items, categoryNames) {
+  api.userdataFavoritesSave = async function (items, categoryNames, themePresets) {
     var payload = {
       userId: resolveUserId(),
       items: Array.isArray(items) ? items : [],
-      categoryNames: Array.isArray(categoryNames) ? categoryNames : []
+      categoryNames: Array.isArray(categoryNames) ? categoryNames : [],
+      themePresets: (themePresets && typeof themePresets === 'object') ? themePresets : {}
     };
     var res = await fetchWithTimeout(withBase('/api/userdata/favorites/save'), {
       method: 'POST',

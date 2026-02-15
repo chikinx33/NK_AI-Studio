@@ -58,7 +58,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (res.status === 404) {
       return send({
         ok: true,
-        data: { userId, items: [], categoryNames: sanitizeCategoryNames([]), updatedAt: "" }
+        data: {
+          userId,
+          items: [],
+          categoryNames: sanitizeCategoryNames([]),
+          themePresets: sanitizeThemePresets({}),
+          updatedAt: "",
+        }
       }, 200, origin);
     }
     if (!res.ok) return send({ error: text || "favorites_get_failed" }, res.status, origin);
@@ -66,8 +72,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const parsed = safeJson(text) || {};
     const items = sanitizeFavoriteItems(parsed.items);
     const categoryNames = sanitizeCategoryNames(parsed.categoryNames);
+    const themePresets = sanitizeThemePresets(parsed.themePresets);
     const updatedAt = typeof parsed.updatedAt === "string" ? parsed.updatedAt : "";
-    return send({ ok: true, data: { userId, items, categoryNames, updatedAt } }, 200, origin);
+    return send({ ok: true, data: { userId, items, categoryNames, themePresets, updatedAt } }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
@@ -89,6 +96,14 @@ type FavoriteItem = {
 };
 const FAVORITE_CATEGORY_COUNT = 4;
 const FAVORITE_SLOT_COUNT = FAVORITE_CATEGORY_COUNT * 12;
+const THEME_PRESET_IDS = {
+  dark: ["dark-classic", "dark-midnight", "dark-forest", "dark-slate", "dark-royal"],
+  light: ["light-classic", "light-sky", "light-sand", "light-mint", "light-rose"],
+} as const;
+const THEME_PRESET_DEFAULTS = {
+  dark: THEME_PRESET_IDS.dark[0],
+  light: THEME_PRESET_IDS.light[0],
+} as const;
 const FAVORITE_DEFAULT_CATEGORY_NAMES = Array.from({ length: FAVORITE_CATEGORY_COUNT }, (_, idx) => `카테고리 ${idx + 1}`);
 
 function sanitizeFavoriteItems(input: any): FavoriteItem[] {
@@ -162,6 +177,16 @@ function sanitizeCategoryNames(input: any): string[] {
     next.push((raw || fallback).slice(0, 24));
   }
   return next;
+}
+
+function sanitizeThemePresets(input: any): { dark: string; light: string } {
+  const source = input && typeof input === "object" ? input : {};
+  const darkRaw = String(source.dark || "").trim();
+  const lightRaw = String(source.light || "").trim();
+  return {
+    dark: THEME_PRESET_IDS.dark.includes(darkRaw as any) ? darkRaw : THEME_PRESET_DEFAULTS.dark,
+    light: THEME_PRESET_IDS.light.includes(lightRaw as any) ? lightRaw : THEME_PRESET_DEFAULTS.light,
+  };
 }
 
 function safeJson(text: string): any {

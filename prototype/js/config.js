@@ -12,6 +12,8 @@
         ASPECT: 'nk_aspect_ratio',
         LANG: 'nk_lang',
         THEME: 'nk_theme',
+        THEME_VARIANT: 'nk_theme_variant',
+        THEME_PRESETS: 'nk_theme_presets_active',
         AUTH: 'nk_is_logged_in',
         USER: 'nk_login_user',
         CURRENT_STAGE: 'nk_current_stage',
