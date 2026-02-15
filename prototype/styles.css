@@ -3193,6 +3193,7 @@ a.btn-primary:active {
 .favorite-list {
   --favorite-icon-size: clamp(36px, 3.8vh, 42px);
   --favorite-cell-size: clamp(48px, 4.8vh, 56px);
+  --favorite-col-gap: 10px;
   margin-top: 0;
   position: relative;
   display: grid;
@@ -3227,11 +3228,12 @@ a.btn-primary:active {
 .favorite-category {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  row-gap: 14px;
+  row-gap: 0;
   min-height: 0;
 }
 
 .favorite-category-head {
+  --favorite-category-tone: color-mix(in srgb, var(--muted) 40%, transparent 60%);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3240,13 +3242,13 @@ a.btn-primary:active {
 .favorite-category-line {
   flex: 1 1 auto;
   min-width: 0;
-  border-top: 1px solid color-mix(in srgb, var(--border) 52%, transparent 48%);
+  border-top: 1px solid var(--favorite-category-tone);
 }
 
 .favorite-category-name-btn {
   border: none;
   background: transparent;
-  color: color-mix(in srgb, var(--muted) 99%, var(--text) 1%);
+  color: var(--favorite-category-tone);
   font-size: 10px;
   font-weight: 700;
   line-height: 1;
@@ -3261,9 +3263,12 @@ a.btn-primary:active {
 
 .favorite-category-grid {
   display: grid;
-  grid-template-columns: repeat(6, var(--favorite-cell-size));
-  column-gap: 6px;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  column-gap: var(--favorite-col-gap);
   row-gap: 10px;
+  height: 100%;
+  box-sizing: border-box;
+  padding-block: clamp(12px, 1.8vh, 18px);
   justify-content: center;
   align-content: center;
 }
@@ -3271,7 +3276,7 @@ a.btn-primary:active {
 .favorite-item {
   position: relative;
   margin: 0;
-  width: var(--favorite-cell-size);
+  width: 100%;
   border: none;
   background: transparent;
   border-radius: 0;
@@ -3314,7 +3319,7 @@ a.btn-primary:active {
 .favorite-delete-btn {
   position: absolute;
   top: -3px;
-  left: calc((var(--favorite-cell-size) - var(--favorite-icon-size)) / 2 + var(--favorite-icon-size) - 10px);
+  left: calc(50% + (var(--favorite-icon-size) / 2) - 10px);
   right: auto;
   width: 16px;
   height: 16px;
@@ -3392,11 +3397,11 @@ a.btn-primary:active {
   display: block;
   width: 100%;
   min-width: 0;
-  max-width: var(--favorite-cell-size);
+  max-width: 100%;
   text-align: center;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: 10px;
   font-weight: 700;
   color: var(--text);
