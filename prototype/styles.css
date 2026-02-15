@@ -630,6 +630,18 @@ body[data-embed="1"] {
   z-index: 5;
 }
 
+.option-corner-title {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 5;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--text) 86%, transparent 14%);
+  user-select: none;
+}
+
 /* 임베드된(아이프레임 내부) 페이지의 메인 영역은 패딩 유지 */
 [data-embed="1"] .main {
   padding: 16px 24px 24px;
@@ -2897,9 +2909,8 @@ a.btn-primary:active {
   --login-icon-visual: 122px;
   margin: 0;
   transform: translateY(-6px);
-  filter: blur(0);
   opacity: 1;
-  transition: filter 0.25s ease, opacity 0.25s ease;
+  transition: opacity 0.25s ease;
 }
 
 .login-icons img {
@@ -2908,7 +2919,7 @@ a.btn-primary:active {
   padding: calc((var(--login-icon-slot) - var(--login-icon-visual)) / 2);
   box-sizing: border-box;
   object-fit: contain;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+  filter: none;
 }
 
 .login-icon-link {
@@ -2916,7 +2927,7 @@ a.btn-primary:active {
 }
 
 .login-icons.blurred {
-  filter: blur(6px);
+  filter: none;
   opacity: 0.45;
 }
 
