@@ -20,6 +20,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const body = await request.json().catch(() => ({} as any));
     const userId = resolveUserId(body.userId, env);
     const items = sanitizeFavoriteItems(body.items);
+    const categoryNames = sanitizeCategoryNames(body.categoryNames);
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
@@ -34,6 +35,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const payload = {
       userId,
       items,
+      categoryNames,
       updatedAt: new Date().toISOString(),
     };
     const token = await getGoogleAccessToken({
@@ -85,6 +87,9 @@ type FavoriteItem = {
   iconDataUrl: string;
   slot: number;
 };
+const FAVORITE_CATEGORY_COUNT = 4;
+const FAVORITE_SLOT_COUNT = FAVORITE_CATEGORY_COUNT * 12;
+const FAVORITE_DEFAULT_CATEGORY_NAMES = Array.from({ length: FAVORITE_CATEGORY_COUNT }, (_, idx) => `카테고리 ${idx + 1}`);
 
 function sanitizeFavoriteItems(input: any): FavoriteItem[] {
   if (!Array.isArray(input)) return [];
@@ -99,7 +104,7 @@ function sanitizeFavoriteItems(input: any): FavoriteItem[] {
       slot: parseSlot(item?.slot),
     }))
     .filter((item) => !!item.title && /^https?:\/\//i.test(item.url) && /^data:image\//i.test(item.iconDataUrl))
-    .slice(0, 100);
+    .slice(0, FAVORITE_SLOT_COUNT);
 
   return normalizeSlots(normalized);
 }
@@ -108,7 +113,7 @@ function parseSlot(raw: any): number {
   const num = Number(raw);
   if (!Number.isFinite(num)) return -1;
   const slot = Math.trunc(num);
-  if (slot < 0 || slot > 10000) return -1;
+  if (slot < 0 || slot >= FAVORITE_SLOT_COUNT) return -1;
   return slot;
 }
 
@@ -128,19 +133,35 @@ function normalizeSlots(items: FavoriteItem[]): FavoriteItem[] {
   });
 
   const nextSlot = () => {
-    let slot = 0;
-    while (used.has(slot)) slot += 1;
-    used.add(slot);
-    return slot;
+    for (let slot = 0; slot < FAVORITE_SLOT_COUNT; slot += 1) {
+      if (!used.has(slot)) {
+        used.add(slot);
+        return slot;
+      }
+    }
+    return -1;
   };
 
   floating.forEach((item) => {
-    item.slot = nextSlot();
+    const slot = nextSlot();
+    if (slot < 0) return;
+    item.slot = slot;
     fixed.push(item);
   });
 
   fixed.sort((a, b) => (a.slot - b.slot) || (a._order - b._order));
   return fixed.map(({ _order, ...item }) => item);
+}
+
+function sanitizeCategoryNames(input: any): string[] {
+  const source = Array.isArray(input) ? input : [];
+  const next: string[] = [];
+  for (let idx = 0; idx < FAVORITE_CATEGORY_COUNT; idx += 1) {
+    const fallback = FAVORITE_DEFAULT_CATEGORY_NAMES[idx];
+    const raw = String(source[idx] || "").trim();
+    next.push((raw || fallback).slice(0, 24));
+  }
+  return next;
 }
 
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {

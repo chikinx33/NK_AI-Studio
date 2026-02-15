@@ -336,8 +336,12 @@
     return j(text);
   };
 
-  api.userdataFavoritesSave = async function (items) {
-    var payload = { userId: resolveUserId(), items: Array.isArray(items) ? items : [] };
+  api.userdataFavoritesSave = async function (items, categoryNames) {
+    var payload = {
+      userId: resolveUserId(),
+      items: Array.isArray(items) ? items : [],
+      categoryNames: Array.isArray(categoryNames) ? categoryNames : []
+    };
     var res = await fetchWithTimeout(withBase('/api/userdata/favorites/save'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

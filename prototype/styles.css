@@ -3140,7 +3140,8 @@ a.btn-primary:active {
 }
 
 .fav-form-row input,
-.fav-form-row textarea {
+.fav-form-row textarea,
+.fav-form-row select {
   width: 100%;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -3190,18 +3191,18 @@ a.btn-primary:active {
 }
 
 .favorite-list {
-  --favorite-icon-size: 50px;
-  --favorite-cell-size: 72px;
+  --favorite-icon-size: clamp(36px, 3.8vh, 42px);
+  --favorite-cell-size: clamp(48px, 4.8vh, 56px);
   margin-top: 0;
   position: relative;
   display: grid;
-  grid-template-columns: repeat(5, var(--favorite-cell-size));
-  column-gap: 6px;
-  row-gap: 8px;
-  justify-content: flex-start;
-  align-content: flex-start;
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  row-gap: 0;
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  padding-right: 2px;
 }
 
 .favorite-card .favorite-list.empty {
@@ -3221,6 +3222,50 @@ a.btn-primary:active {
   font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
+}
+
+.favorite-category {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  row-gap: 14px;
+  min-height: 0;
+}
+
+.favorite-category-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.favorite-category-line {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 52%, transparent 48%);
+}
+
+.favorite-category-name-btn {
+  border: none;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 99%, var(--text) 1%);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.favorite-category-name-btn:hover {
+  color: color-mix(in srgb, var(--muted) 72%, #7fc8ff 28%);
+}
+
+.favorite-category-grid {
+  display: grid;
+  grid-template-columns: repeat(6, var(--favorite-cell-size));
+  column-gap: 6px;
+  row-gap: 10px;
+  justify-content: center;
+  align-content: center;
 }
 
 .favorite-item {
@@ -3256,7 +3301,7 @@ a.btn-primary:active {
   max-width: var(--favorite-icon-size);
   max-height: var(--favorite-icon-size);
   margin: 0 auto;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px dashed color-mix(in srgb, var(--border) 72%, transparent 28%);
   background: color-mix(in srgb, var(--panel) 32%, transparent 68%);
 }
@@ -3268,16 +3313,16 @@ a.btn-primary:active {
 
 .favorite-delete-btn {
   position: absolute;
-  top: -4px;
-  left: calc((var(--favorite-cell-size) - var(--favorite-icon-size)) / 2 + var(--favorite-icon-size) - 12px);
+  top: -3px;
+  left: calc((var(--favorite-cell-size) - var(--favorite-icon-size)) / 2 + var(--favorite-icon-size) - 10px);
   right: auto;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: color-mix(in srgb, var(--panel) 85%, transparent 15%);
   color: var(--text);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   line-height: 1;
   display: grid;
@@ -3310,7 +3355,7 @@ a.btn-primary:active {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .favorite-link-btn:hover {
@@ -3325,7 +3370,7 @@ a.btn-primary:active {
   max-width: var(--favorite-icon-size);
   max-height: var(--favorite-icon-size);
   margin: 0;
-  border-radius: 12px;
+  border-radius: 10px;
   overflow: hidden;
   border: none;
   background: transparent;
@@ -3340,7 +3385,7 @@ a.btn-primary:active {
   max-height: var(--favorite-icon-size);
   object-fit: cover;
   display: block;
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .favorite-item-title {
@@ -3352,10 +3397,10 @@ a.btn-primary:active {
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--text);
-  line-height: 1.3;
+  line-height: 1.2;
 }
 
 @media (max-width: 1280px) {

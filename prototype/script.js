@@ -161,7 +161,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.689';
+    NK.config.APP_VERSION = '1.696';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -467,6 +467,7 @@
     const favoriteCancelFormBtn = document.getElementById('favorite-cancel-form');
     const favoriteListEl = document.getElementById('favorite-list');
     const favoriteTitleInput = document.getElementById('favorite-title');
+    const favoriteCategorySelectInput = document.getElementById('favorite-category-select');
     const favoriteLinkInput = document.getElementById('favorite-link');
     const favoriteIconInput = document.getElementById('favorite-icon');
     const subscriptionManageBtn = document.getElementById('subscription-manage-btn');
@@ -488,10 +489,14 @@
     let favoriteFormCollapsed = true;
     let subscriptionCollapsed = true;
     let lastLoginState = false;
-    const FAVORITE_GRID_COLUMNS = 5;
-    const FAVORITE_DEFAULT_ROWS = 8;
-    const FAVORITE_DEFAULT_SLOT_COUNT = FAVORITE_GRID_COLUMNS * FAVORITE_DEFAULT_ROWS;
-    const FAVORITE_MAX_ITEMS = 100;
+    const FAVORITE_CATEGORY_COUNT = 4;
+    const FAVORITE_GRID_COLUMNS = 6;
+    const FAVORITE_GRID_ROWS = 2;
+    const FAVORITE_SLOTS_PER_CATEGORY = FAVORITE_GRID_COLUMNS * FAVORITE_GRID_ROWS;
+    const FAVORITE_DEFAULT_SLOT_COUNT = FAVORITE_CATEGORY_COUNT * FAVORITE_SLOTS_PER_CATEGORY;
+    const FAVORITE_MAX_ITEMS = FAVORITE_DEFAULT_SLOT_COUNT;
+    const FAVORITE_DEFAULT_CATEGORY_NAMES = Array.from({ length: FAVORITE_CATEGORY_COUNT }, (_, idx) => `카테고리 ${idx + 1}`);
+    let favoriteCategoryNames = FAVORITE_DEFAULT_CATEGORY_NAMES.slice();
 
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
     const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
@@ -553,9 +558,30 @@
       const num = Number(value);
       if (!Number.isFinite(num)) return -1;
       const slot = Math.trunc(num);
-      if (slot < 0 || slot > 10000) return -1;
+      if (slot < 0 || slot >= FAVORITE_DEFAULT_SLOT_COUNT) return -1;
       return slot;
     };
+
+    const parseFavoriteCategoryIndex = (value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 0;
+      const idx = Math.trunc(num);
+      if (idx < 0 || idx >= FAVORITE_CATEGORY_COUNT) return 0;
+      return idx;
+    };
+
+    const sanitizeFavoriteCategoryNames = (names) => {
+      const source = Array.isArray(names) ? names : [];
+      const next = [];
+      for (let i = 0; i < FAVORITE_CATEGORY_COUNT; i += 1) {
+        const fallback = FAVORITE_DEFAULT_CATEGORY_NAMES[i];
+        const raw = String(source[i] || '').trim();
+        next.push((raw || fallback).slice(0, 24));
+      }
+      return next;
+    };
+
+    const categoryStartSlot = (categoryIndex) => parseFavoriteCategoryIndex(categoryIndex) * FAVORITE_SLOTS_PER_CATEGORY;
 
     const normalizeFavoriteSlots = (items) => {
       if (!Array.isArray(items)) return [];
@@ -583,14 +609,19 @@
       });
 
       const pickNextSlot = () => {
-        let slot = 0;
-        while (usedSlots.has(slot)) slot += 1;
-        usedSlots.add(slot);
-        return slot;
+        for (let slot = 0; slot < FAVORITE_DEFAULT_SLOT_COUNT; slot += 1) {
+          if (!usedSlots.has(slot)) {
+            usedSlots.add(slot);
+            return slot;
+          }
+        }
+        return -1;
       };
 
       floating.forEach((item) => {
-        item.slot = pickNextSlot();
+        const slot = pickNextSlot();
+        if (slot < 0) return;
+        item.slot = slot;
         fixed.push(item);
       });
 
@@ -625,38 +656,55 @@
 
     const readFavoritesLocal = (user) => {
       const key = favoriteStorageKey(user);
-      if (!key) return [];
+      if (!key) return { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
       try {
         const parsed = JSON.parse(localStorage.getItem(key) || '[]');
-        return sanitizeFavoriteItems(parsed);
+        if (Array.isArray(parsed)) {
+          return {
+            items: sanitizeFavoriteItems(parsed),
+            categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice(),
+          };
+        }
+        return {
+          items: sanitizeFavoriteItems(parsed?.items || []),
+          categoryNames: sanitizeFavoriteCategoryNames(parsed?.categoryNames || []),
+        };
       } catch (_) {
-        return [];
+        return { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
       }
     };
 
-    const saveFavoritesLocal = (user, items) => {
+    const saveFavoritesLocal = (user, items, categoryNames) => {
       const key = favoriteStorageKey(user);
       if (!key) return;
+      const payload = {
+        items: sanitizeFavoriteItems(items),
+        categoryNames: sanitizeFavoriteCategoryNames(categoryNames),
+      };
       try {
-        localStorage.setItem(key, JSON.stringify(items));
+        localStorage.setItem(key, JSON.stringify(payload));
       } catch (_) { }
     };
 
     const fetchFavoritesServer = async (user) => {
-      if (!user) return [];
+      if (!user) return { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
       if (!NK.api || !NK.api.userdataFavoritesGet) return readFavoritesLocal(user);
       const res = await NK.api.userdataFavoritesGet();
-      const items = sanitizeFavoriteItems(res?.data?.items || []);
-      saveFavoritesLocal(user, items);
-      return items;
+      const snapshot = {
+        items: sanitizeFavoriteItems(res?.data?.items || []),
+        categoryNames: sanitizeFavoriteCategoryNames(res?.data?.categoryNames || []),
+      };
+      saveFavoritesLocal(user, snapshot.items, snapshot.categoryNames);
+      return snapshot;
     };
 
-    const saveFavoritesServer = async (user, items) => {
+    const saveFavoritesServer = async (user, items, categoryNames) => {
       if (!user) return;
       const nextItems = sanitizeFavoriteItems(items);
-      saveFavoritesLocal(user, nextItems);
+      const nextCategoryNames = sanitizeFavoriteCategoryNames(categoryNames);
+      saveFavoritesLocal(user, nextItems, nextCategoryNames);
       if (!NK.api || !NK.api.userdataFavoritesSave) return;
-      await NK.api.userdataFavoritesSave(nextItems);
+      await NK.api.userdataFavoritesSave(nextItems, nextCategoryNames);
     };
 
     const clearFavoriteDropTargets = () => {
@@ -665,24 +713,19 @@
       activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
     };
 
-    const findFirstAvailableFavoriteSlot = () => {
+    const findFirstAvailableFavoriteSlot = (categoryIndex) => {
+      const safeCategoryIndex = parseFavoriteCategoryIndex(categoryIndex);
+      const start = categoryStartSlot(safeCategoryIndex);
+      const end = start + FAVORITE_SLOTS_PER_CATEGORY;
       const usedSlots = new Set(
         favoriteItems
           .map((item) => parseFavoriteSlot(item?.slot))
           .filter((slot) => slot >= 0),
       );
-      let slot = 0;
-      while (usedSlots.has(slot)) slot += 1;
-      return slot;
-    };
-
-    const getFavoriteSlotCount = () => {
-      const maxSlot = favoriteItems.reduce((max, item) => {
-        const slot = parseFavoriteSlot(item?.slot);
-        if (slot < 0) return max;
-        return Math.max(max, slot);
-      }, -1);
-      return Math.max(FAVORITE_DEFAULT_SLOT_COUNT, maxSlot + 1);
+      for (let slot = start; slot < end; slot += 1) {
+        if (!usedSlots.has(slot)) return slot;
+      }
+      return -1;
     };
 
     const moveFavoriteItemToSlot = (dragId, targetSlot) => {
@@ -826,6 +869,57 @@
       }
     };
 
+    const renderFavoriteCategorySelect = () => {
+      if (!favoriteCategorySelectInput) return;
+      const selected = parseFavoriteCategoryIndex(favoriteCategorySelectInput.value);
+      favoriteCategorySelectInput.innerHTML = '';
+      favoriteCategoryNames.forEach((name, idx) => {
+        const option = document.createElement('option');
+        option.value = String(idx);
+        option.textContent = name;
+        favoriteCategorySelectInput.appendChild(option);
+      });
+      favoriteCategorySelectInput.value = String(selected);
+    };
+
+    const renameFavoriteCategory = async (categoryIndex) => {
+      const safeIndex = parseFavoriteCategoryIndex(categoryIndex);
+      const currentName = favoriteCategoryNames[safeIndex] || FAVORITE_DEFAULT_CATEGORY_NAMES[safeIndex];
+      const promptFn = NK.ui && NK.ui.dialog && NK.ui.dialog.prompt;
+      let nextRaw = null;
+      if (typeof promptFn === 'function') {
+        nextRaw = await promptFn('카테고리 이름을 입력해 주세요.', {
+          title: '카테고리 이름 수정',
+          defaultValue: currentName,
+          okText: '저장',
+          cancelText: '취소',
+        });
+      } else {
+        alert('입력 팝업을 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+        return;
+      }
+      if (nextRaw == null) return;
+      const nextName = String(nextRaw || '').trim().slice(0, 24);
+      if (!nextName) {
+        alert('카테고리 이름을 입력해 주세요.');
+        return;
+      }
+      if (nextName === currentName) return;
+      const nextNames = favoriteCategoryNames.slice();
+      nextNames[safeIndex] = nextName;
+      favoriteCategoryNames = sanitizeFavoriteCategoryNames(nextNames);
+      renderFavoriteCategorySelect();
+      renderFavorites(true);
+      const user = NK.auth.getUser();
+      if (!user) return;
+      try {
+        await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
+      } catch (err) {
+        const detail = String(err?.message || '').trim();
+        alert('카테고리 이름을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+      }
+    };
+
     const renderFavorites = (loggedIn) => {
       if (!canUseFavoriteUI()) return;
       favoriteListEl.innerHTML = '';
@@ -837,135 +931,180 @@
 
       favoriteListEl.classList.remove('hidden');
       favoriteListEl.classList.toggle('empty', !favoriteItems.length);
-      const totalSlots = getFavoriteSlotCount();
+      const itemsBySlot = new Map();
+      favoriteItems.forEach((item) => {
+        const slot = parseFavoriteSlot(item?.slot);
+        if (slot < 0 || itemsBySlot.has(slot)) return;
+        itemsBySlot.set(slot, item);
+      });
 
-      for (let slotIndex = 0; slotIndex < totalSlots; slotIndex += 1) {
-        const item = favoriteItems.find((row) => parseFavoriteSlot(row?.slot) === slotIndex);
-        const article = document.createElement('article');
-        article.className = 'favorite-item';
-        article.setAttribute('role', 'listitem');
-        article.dataset.slotIndex = String(slotIndex);
-        article.draggable = !!item;
-        if (item) article.dataset.favoriteId = String(item.id || '');
-        else article.classList.add('is-empty-slot');
+      for (let categoryIdx = 0; categoryIdx < FAVORITE_CATEGORY_COUNT; categoryIdx += 1) {
+        const categoryWrap = document.createElement('section');
+        categoryWrap.className = 'favorite-category';
+        categoryWrap.dataset.categoryIndex = String(categoryIdx);
 
-        article.addEventListener('dragover', (evt) => {
-          if (!favoriteDragId) return;
-          const draggedItem = favoriteItems.find((row) => String(row.id) === String(favoriteDragId));
-          if (!draggedItem) return;
-          if (parseFavoriteSlot(draggedItem.slot) === slotIndex) return;
-          evt.preventDefault();
-          article.classList.add('is-drop-target');
-          try {
-            if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'move';
-          } catch (_) { }
+        const head = document.createElement('div');
+        head.className = 'favorite-category-head';
+
+        const leftLine = document.createElement('span');
+        leftLine.className = 'favorite-category-line';
+
+        const titleBtn = document.createElement('button');
+        titleBtn.type = 'button';
+        titleBtn.className = 'favorite-category-name-btn';
+        titleBtn.textContent = favoriteCategoryNames[categoryIdx] || FAVORITE_DEFAULT_CATEGORY_NAMES[categoryIdx];
+        titleBtn.title = '카테고리 이름 수정';
+        titleBtn.setAttribute('aria-label', `${titleBtn.textContent} 이름 수정`);
+        titleBtn.addEventListener('click', async () => {
+          if (!NK.auth.isAuthed()) return;
+          await renameFavoriteCategory(categoryIdx);
         });
 
-        article.addEventListener('dragleave', () => {
-          article.classList.remove('is-drop-target');
-        });
+        const rightLine = document.createElement('span');
+        rightLine.className = 'favorite-category-line';
 
-        article.addEventListener('drop', async (evt) => {
-          evt.preventDefault();
-          evt.stopPropagation();
-          article.classList.remove('is-drop-target');
-          const droppedId = String(favoriteDragId || '').trim() || String(evt.dataTransfer?.getData('text/plain') || '').trim();
-          if (!droppedId) return;
-          const changed = moveFavoriteItemToSlot(droppedId, slotIndex);
-          if (!changed) return;
-          favoriteDragId = '';
-          suppressFavoriteOpenUntil = Date.now() + 320;
-          renderFavorites(true);
-          const user = NK.auth.getUser();
-          if (!user) return;
-          try {
-            await saveFavoritesServer(user, favoriteItems);
-          } catch (err) {
-            const detail = String(err?.message || '').trim();
-            alert('정렬 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+        head.appendChild(leftLine);
+        head.appendChild(titleBtn);
+        head.appendChild(rightLine);
+
+        const grid = document.createElement('div');
+        grid.className = 'favorite-category-grid';
+        grid.setAttribute('role', 'list');
+
+        const start = categoryStartSlot(categoryIdx);
+        const end = start + FAVORITE_SLOTS_PER_CATEGORY;
+        for (let slotIndex = start; slotIndex < end; slotIndex += 1) {
+          const item = itemsBySlot.get(slotIndex);
+          const article = document.createElement('article');
+          article.className = 'favorite-item';
+          article.setAttribute('role', 'listitem');
+          article.dataset.slotIndex = String(slotIndex);
+          article.draggable = !!item;
+          if (item) article.dataset.favoriteId = String(item.id || '');
+          else article.classList.add('is-empty-slot');
+
+          article.addEventListener('dragover', (evt) => {
+            if (!favoriteDragId) return;
+            const draggedItem = favoriteItems.find((row) => String(row.id) === String(favoriteDragId));
+            if (!draggedItem) return;
+            if (parseFavoriteSlot(draggedItem.slot) === slotIndex) return;
+            evt.preventDefault();
+            article.classList.add('is-drop-target');
+            try {
+              if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'move';
+            } catch (_) { }
+          });
+
+          article.addEventListener('dragleave', () => {
+            article.classList.remove('is-drop-target');
+          });
+
+          article.addEventListener('drop', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            article.classList.remove('is-drop-target');
+            const droppedId = String(favoriteDragId || '').trim() || String(evt.dataTransfer?.getData('text/plain') || '').trim();
+            if (!droppedId) return;
+            const changed = moveFavoriteItemToSlot(droppedId, slotIndex);
+            if (!changed) return;
+            favoriteDragId = '';
+            suppressFavoriteOpenUntil = Date.now() + 320;
+            renderFavorites(true);
+            const user = NK.auth.getUser();
+            if (!user) return;
+            try {
+              await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
+            } catch (err) {
+              const detail = String(err?.message || '').trim();
+              alert('정렬 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+            }
+          });
+
+          if (!item) {
+            const emptySlot = document.createElement('div');
+            emptySlot.className = 'favorite-empty-slot';
+            emptySlot.setAttribute('aria-hidden', 'true');
+            article.appendChild(emptySlot);
+            grid.appendChild(article);
+            continue;
           }
-        });
 
-        if (!item) {
-          const emptySlot = document.createElement('div');
-          emptySlot.className = 'favorite-empty-slot';
-          emptySlot.setAttribute('aria-hidden', 'true');
-          article.appendChild(emptySlot);
-          favoriteListEl.appendChild(article);
-          continue;
+          article.addEventListener('dragstart', (evt) => {
+            favoriteDragId = String(item.id || '');
+            article.classList.add('is-dragging');
+            try {
+              if (evt.dataTransfer) {
+                evt.dataTransfer.effectAllowed = 'move';
+                evt.dataTransfer.setData('text/plain', favoriteDragId);
+              }
+            } catch (_) { }
+          });
+
+          article.addEventListener('dragend', () => {
+            favoriteDragId = '';
+            article.classList.remove('is-dragging');
+            clearFavoriteDropTargets();
+          });
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.type = 'button';
+          deleteBtn.draggable = false;
+          deleteBtn.className = 'favorite-delete-btn';
+          deleteBtn.title = '삭제';
+          deleteBtn.setAttribute('aria-label', `${item.title} 삭제`);
+          deleteBtn.textContent = 'X';
+          deleteBtn.addEventListener('dragstart', (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+          });
+          deleteBtn.addEventListener('click', async (evt) => {
+            evt.preventDefault();
+            evt.stopPropagation();
+            const user = NK.auth.getUser();
+            if (!user) return;
+            favoriteItems = favoriteItems.filter((row) => String(row.id) !== String(item.id));
+            renderFavorites(true);
+            try {
+              await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
+            } catch (err) {
+              const detail = String(err?.message || '').trim();
+              alert('삭제 내용을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+            }
+          });
+
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'favorite-link-btn';
+          button.title = item.title;
+          const iconWrap = document.createElement('span');
+          iconWrap.className = 'favorite-icon-wrap';
+          const iconImg = document.createElement('img');
+          iconImg.src = item.iconDataUrl;
+          iconImg.alt = `${item.title} 아이콘`;
+          iconWrap.appendChild(iconImg);
+
+          const titleEl = document.createElement('span');
+          titleEl.className = 'favorite-item-title';
+          titleEl.textContent = item.title;
+
+          button.appendChild(iconWrap);
+          button.appendChild(titleEl);
+          button.addEventListener('click', () => {
+            if (Date.now() < suppressFavoriteOpenUntil) return;
+            const opened = openUrlInNewTab(item.url);
+            if (!opened) {
+              alert('새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.');
+            }
+          });
+
+          article.appendChild(deleteBtn);
+          article.appendChild(button);
+          grid.appendChild(article);
         }
 
-        article.addEventListener('dragstart', (evt) => {
-          favoriteDragId = String(item.id || '');
-          article.classList.add('is-dragging');
-          try {
-            if (evt.dataTransfer) {
-              evt.dataTransfer.effectAllowed = 'move';
-              evt.dataTransfer.setData('text/plain', favoriteDragId);
-            }
-          } catch (_) { }
-        });
-
-        article.addEventListener('dragend', () => {
-          favoriteDragId = '';
-          article.classList.remove('is-dragging');
-          clearFavoriteDropTargets();
-        });
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.type = 'button';
-        deleteBtn.draggable = false;
-        deleteBtn.className = 'favorite-delete-btn';
-        deleteBtn.title = '삭제';
-        deleteBtn.setAttribute('aria-label', `${item.title} 삭제`);
-        deleteBtn.textContent = 'X';
-        deleteBtn.addEventListener('dragstart', (evt) => {
-          evt.preventDefault();
-          evt.stopPropagation();
-        });
-        deleteBtn.addEventListener('click', async (evt) => {
-          evt.preventDefault();
-          evt.stopPropagation();
-          const user = NK.auth.getUser();
-          if (!user) return;
-          favoriteItems = favoriteItems.filter((row) => String(row.id) !== String(item.id));
-          renderFavorites(true);
-          try {
-            await saveFavoritesServer(user, favoriteItems);
-          } catch (err) {
-            const detail = String(err?.message || '').trim();
-            alert('삭제 내용을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
-          }
-        });
-
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'favorite-link-btn';
-        button.title = item.title;
-        const iconWrap = document.createElement('span');
-        iconWrap.className = 'favorite-icon-wrap';
-        const iconImg = document.createElement('img');
-        iconImg.src = item.iconDataUrl;
-        iconImg.alt = `${item.title} 아이콘`;
-        iconWrap.appendChild(iconImg);
-
-        const titleEl = document.createElement('span');
-        titleEl.className = 'favorite-item-title';
-        titleEl.textContent = item.title;
-
-        button.appendChild(iconWrap);
-        button.appendChild(titleEl);
-        button.addEventListener('click', () => {
-          if (Date.now() < suppressFavoriteOpenUntil) return;
-          const opened = openUrlInNewTab(item.url);
-          if (!opened) {
-            alert('새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.');
-          }
-        });
-
-        article.appendChild(deleteBtn);
-        article.appendChild(button);
-        favoriteListEl.appendChild(article);
+        categoryWrap.appendChild(head);
+        categoryWrap.appendChild(grid);
+        favoriteListEl.appendChild(categoryWrap);
       }
     };
 
@@ -1040,17 +1179,24 @@
           if (!lastLoginState) setFavoriteFormCollapsed(true);
         }
 
-        favoriteItems = loggedIn ? readFavoritesLocal(user) : [];
+        const localFavorite = loggedIn
+          ? readFavoritesLocal(user)
+          : { items: [], categoryNames: FAVORITE_DEFAULT_CATEGORY_NAMES.slice() };
+        favoriteItems = localFavorite.items;
+        favoriteCategoryNames = sanitizeFavoriteCategoryNames(localFavorite.categoryNames);
+        renderFavoriteCategorySelect();
         renderFavorites(loggedIn);
 
         if (!loggedIn || !user) return;
         const seq = ++favoriteLoadSeq;
         fetchFavoritesServer(user)
-          .then((items) => {
+          .then((snapshot) => {
             if (!NK.auth.isAuthed()) return;
             if (seq !== favoriteLoadSeq) return;
             if (String(NK.auth.getUser() || '') !== String(user || '')) return;
-            favoriteItems = items;
+            favoriteItems = snapshot.items;
+            favoriteCategoryNames = sanitizeFavoriteCategoryNames(snapshot.categoryNames);
+            renderFavoriteCategorySelect();
             renderFavorites(true);
           })
           .catch(() => { });
@@ -1099,6 +1245,7 @@
         }
 
         const title = String(favoriteTitleInput?.value || '').trim();
+        const selectedCategoryIndex = parseFavoriteCategoryIndex(favoriteCategorySelectInput?.value || 0);
         const rawUrl = String(favoriteLinkInput?.value || '').trim();
 
         if (!title) {
@@ -1130,15 +1277,19 @@
           title,
           url: normalized,
           iconDataUrl: resizedIconDataUrl,
-          slot: findFirstAvailableFavoriteSlot(),
+          slot: findFirstAvailableFavoriteSlot(selectedCategoryIndex),
         };
+        if (entry.slot < 0) {
+          alert('선택한 카테고리의 아이콘 슬롯이 가득 찼습니다.');
+          return;
+        }
 
         favoriteItems = sanitizeFavoriteItems([...favoriteItems, entry]);
         renderFavorites(true);
         resetFavoriteForm();
         setFavoriteFormCollapsed(true);
         try {
-          await saveFavoritesServer(user, favoriteItems);
+          await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
           alert('즐겨찾기 메뉴가 등록되었습니다.');
         } catch (err) {
           const detail = String(err?.message || '').trim();
