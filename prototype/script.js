@@ -18,6 +18,41 @@
   let syncMessageBound = false;
   let storageSyncBound = false;
 
+  const loginBrandStorageKey = (user) => {
+    const safe = String(user || '').trim().toLowerCase();
+    if (!safe) return '';
+    return `nk_login_brand_${safe}`;
+  };
+
+  const readUserStudioTitle = (user) => {
+    const key = loginBrandStorageKey(user);
+    if (!key) return '';
+    try {
+      const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+      const title = String(parsed?.title || '').trim().slice(0, 40);
+      return title;
+    } catch (_) {
+      return '';
+    }
+  };
+
+  const applyUserStudioTitleToSidebar = () => {
+    const titleEl = document.querySelector('.sidebar .brand-text .title[data-i18n="brand_title"]');
+    if (!titleEl) return;
+    if (!titleEl.dataset.defaultBrandTitle) {
+      titleEl.dataset.defaultBrandTitle = String(titleEl.textContent || '').trim() || 'NK_Studio';
+    }
+    const defaultTitle = titleEl.dataset.defaultBrandTitle || 'NK_Studio';
+    const authed = !!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed());
+    const user = String((NK.auth && NK.auth.getUser && NK.auth.getUser()) || '').trim();
+    if (!authed || !user) {
+      titleEl.textContent = defaultTitle;
+      return;
+    }
+    const studioTitle = readUserStudioTitle(user);
+    titleEl.textContent = studioTitle || defaultTitle;
+  };
+
   // 서버 → 로컬 동기화 (프로젝트 리스트 병합)
   const syncProjectsFromServer = async () => {
     try {
@@ -161,7 +196,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.704';
+    NK.config.APP_VERSION = '1.708';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -170,6 +205,7 @@
     currentLang = localStorage.getItem(LANG_KEY) || 'ko';
     NK.ui.common.applyTheme(currentTheme);
     NK.ui.common.applyI18n(currentLang);
+    applyUserStudioTitleToSidebar();
     setupSyncMessageHandlers();
     setupStorageSyncHandlers();
 
@@ -319,6 +355,7 @@
       if (data.type === 'lang-apply' && data.lang) {
         currentLang = (data.lang === 'en') ? 'en' : 'ko';
         NK.ui.common.applyI18n(currentLang);
+        applyUserStudioTitleToSidebar();
         // 부모창에서 받은 경우 자식 iframe에도 전파
         if (window.self === window.top) broadcastLang(currentLang);
       }
@@ -343,7 +380,12 @@
         if (nextLang !== currentLang) {
           currentLang = nextLang;
           NK.ui.common.applyI18n(currentLang);
+          applyUserStudioTitleToSidebar();
         }
+        return;
+      }
+      if (String(e.key || '').startsWith('nk_login_brand_') || e.key === KEY.AUTH || e.key === KEY.USER) {
+        applyUserStudioTitleToSidebar();
       }
     });
   };
@@ -457,9 +499,6 @@
     const icons = document.getElementById('login-icons');
     const loginCardTitleEl = document.getElementById('login-card-title');
     const loginCardLogoEl = document.getElementById('login-card-logo');
-    const loginBrandToolsEl = document.getElementById('login-brand-tools');
-    const loginTitleEditBtn = document.getElementById('login-title-edit-btn');
-    const loginIconEditBtn = document.getElementById('login-icon-edit-btn');
     const loginIconFileInput = document.getElementById('login-icon-file');
     const formRows = document.querySelectorAll('#login-card .form-row');
     const favoriteCard = document.getElementById('favorite-card');
@@ -572,9 +611,9 @@
       if (loginCardLogoEl) loginCardLogoEl.src = iconDataUrl || DEFAULT_LOGIN_CARD_ICON;
     };
 
-    const setLoginBrandToolsOpen = (open) => {
-      if (!loginBrandToolsEl) return;
-      loginBrandToolsEl.classList.toggle('is-open', !!open);
+    const setLoginBrandEditable = (editable) => {
+      if (loginCardTitleEl) loginCardTitleEl.classList.toggle('is-editable', !!editable);
+      if (loginCardLogoEl) loginCardLogoEl.classList.toggle('is-editable', !!editable);
     };
 
     const normalizeProfileUi = (input, user) => {
@@ -1212,8 +1251,8 @@
       reader.readAsDataURL(file);
     });
 
-    if (loginTitleEditBtn) {
-      loginTitleEditBtn.addEventListener('click', async () => {
+    if (loginCardTitleEl) {
+      loginCardTitleEl.addEventListener('click', async () => {
         const user = NK.auth.getUser();
         if (!user || !NK.auth.isAuthed()) {
           alert('로그인 후 수정할 수 있습니다.');
@@ -1238,8 +1277,8 @@
       });
     }
 
-    if (loginIconEditBtn && loginIconFileInput) {
-      loginIconEditBtn.addEventListener('click', () => {
+    if (loginCardLogoEl && loginIconFileInput) {
+      loginCardLogoEl.addEventListener('click', () => {
         const user = NK.auth.getUser();
         if (!user || !NK.auth.isAuthed()) {
           alert('로그인 후 등록할 수 있습니다.');
@@ -1280,10 +1319,10 @@
       if (loggedIn && user) {
         const brand = readLoginBrandLocal(user);
         applyLoginBrandToUi(brand);
-        setLoginBrandToolsOpen(true);
+        setLoginBrandEditable(true);
       } else {
         applyLoginBrandToUi({ title: DEFAULT_LOGIN_CARD_TITLE, iconDataUrl: '' });
-        setLoginBrandToolsOpen(false);
+        setLoginBrandEditable(false);
       }
 
       if (favoriteCard) favoriteCard.classList.toggle('is-locked', !loggedIn);
@@ -1872,6 +1911,7 @@
   window.toggleLang = (scope = 'global') => {
     currentLang = currentLang === 'ko' ? 'en' : 'ko';
     NK.ui.common.applyI18n(currentLang);
+    applyUserStudioTitleToSidebar();
     try { localStorage.setItem(LANG_KEY, currentLang); } catch (_) { }
     if (scope === 'global') {
       broadcastLang(currentLang);

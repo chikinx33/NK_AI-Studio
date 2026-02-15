@@ -2901,20 +2901,16 @@ a.btn-primary:active {
   object-fit: cover;
 }
 
-.login-brand-tools {
-  display: none;
-  justify-content: center;
-  gap: 8px;
-  margin-top: -8px;
-  margin-bottom: 8px;
-}
-
-.login-brand-tools.is-open {
-  display: flex;
-}
-
 .login-brand-file-input {
   display: none;
+}
+
+#login-card-title.is-editable {
+  cursor: pointer;
+}
+
+#login-card-logo.is-editable {
+  cursor: pointer;
 }
 
 .login-icons {
@@ -2936,6 +2932,11 @@ a.btn-primary:active {
   box-sizing: border-box;
   object-fit: contain;
   filter: none;
+}
+
+.login-icons img.is-disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .login-icon-link {
