@@ -74,9 +74,19 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(origin) });
 };
 
-function sanitizeFavoriteItems(input: any): Array<Record<string, string>> {
+type FavoriteItem = {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  url: string;
+  iconDataUrl: string;
+  slot: number;
+};
+
+function sanitizeFavoriteItems(input: any): FavoriteItem[] {
   if (!Array.isArray(input)) return [];
-  return input
+  const normalized = input
     .map((item: any) => ({
       id: String(item?.id || "").slice(0, 80),
       title: String(item?.title || "").trim().slice(0, 80),
@@ -84,9 +94,51 @@ function sanitizeFavoriteItems(input: any): Array<Record<string, string>> {
       description: String(item?.description || "").trim().slice(0, 200),
       url: String(item?.url || "").trim().slice(0, 1000),
       iconDataUrl: String(item?.iconDataUrl || "").trim(),
+      slot: parseSlot(item?.slot),
     }))
     .filter((item) => !!item.title && /^https?:\/\//i.test(item.url) && /^data:image\//i.test(item.iconDataUrl))
     .slice(0, 100);
+
+  return normalizeSlots(normalized);
+}
+
+function parseSlot(raw: any): number {
+  const num = Number(raw);
+  if (!Number.isFinite(num)) return -1;
+  const slot = Math.trunc(num);
+  if (slot < 0 || slot > 10000) return -1;
+  return slot;
+}
+
+function normalizeSlots(items: FavoriteItem[]): FavoriteItem[] {
+  const used = new Set<number>();
+  const fixed: Array<FavoriteItem & { _order: number }> = [];
+  const floating: Array<FavoriteItem & { _order: number }> = [];
+
+  items.forEach((item, idx) => {
+    const entry = { ...item, _order: idx };
+    if (entry.slot >= 0 && !used.has(entry.slot)) {
+      used.add(entry.slot);
+      fixed.push(entry);
+      return;
+    }
+    floating.push(entry);
+  });
+
+  const nextSlot = () => {
+    let slot = 0;
+    while (used.has(slot)) slot += 1;
+    used.add(slot);
+    return slot;
+  };
+
+  floating.forEach((item) => {
+    item.slot = nextSlot();
+    fixed.push(item);
+  });
+
+  fixed.sort((a, b) => (a.slot - b.slot) || (a._order - b._order));
+  return fixed.map(({ _order, ...item }) => item);
 }
 
 function safeJson(text: string): any {

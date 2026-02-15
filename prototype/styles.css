@@ -3193,6 +3193,7 @@ a.btn-primary:active {
   --favorite-icon-size: 50px;
   --favorite-cell-size: 72px;
   margin-top: 0;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(5, var(--favorite-cell-size));
   column-gap: 6px;
@@ -3204,15 +3205,18 @@ a.btn-primary:active {
 }
 
 .favorite-card .favorite-list.empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
   min-height: 100%;
-  text-align: center;
 }
 
 .favorite-card .favorite-list.empty::before {
   content: "즐겨찾기 아이콘을 등록해주세요.";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  text-align: center;
+  pointer-events: none;
   color: #7fc8ff;
   font-size: 12px;
   font-weight: 400;
@@ -3238,6 +3242,28 @@ a.btn-primary:active {
 .favorite-item.is-drop-target .favorite-icon-wrap {
   outline: 1px dashed color-mix(in srgb, #7fc8ff 70%, transparent 30%);
   outline-offset: 2px;
+}
+
+.favorite-item.is-empty-slot {
+  cursor: default;
+}
+
+.favorite-empty-slot {
+  width: var(--favorite-icon-size);
+  height: var(--favorite-icon-size);
+  min-width: var(--favorite-icon-size);
+  min-height: var(--favorite-icon-size);
+  max-width: var(--favorite-icon-size);
+  max-height: var(--favorite-icon-size);
+  margin: 0 auto;
+  border-radius: 12px;
+  border: 1px dashed color-mix(in srgb, var(--border) 72%, transparent 28%);
+  background: color-mix(in srgb, var(--panel) 32%, transparent 68%);
+}
+
+.favorite-item.is-empty-slot.is-drop-target .favorite-empty-slot {
+  border-color: color-mix(in srgb, #7fc8ff 74%, transparent 26%);
+  background: color-mix(in srgb, #7fc8ff 16%, transparent 84%);
 }
 
 .favorite-delete-btn {

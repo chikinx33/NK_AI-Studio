@@ -161,7 +161,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.688';
+    NK.config.APP_VERSION = '1.689';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -488,6 +488,10 @@
     let favoriteFormCollapsed = true;
     let subscriptionCollapsed = true;
     let lastLoginState = false;
+    const FAVORITE_GRID_COLUMNS = 5;
+    const FAVORITE_DEFAULT_ROWS = 8;
+    const FAVORITE_DEFAULT_SLOT_COUNT = FAVORITE_GRID_COLUMNS * FAVORITE_DEFAULT_ROWS;
+    const FAVORITE_MAX_ITEMS = 100;
 
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
     const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
@@ -545,17 +549,78 @@
       }
     };
 
+    const parseFavoriteSlot = (value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return -1;
+      const slot = Math.trunc(num);
+      if (slot < 0 || slot > 10000) return -1;
+      return slot;
+    };
+
+    const normalizeFavoriteSlots = (items) => {
+      if (!Array.isArray(items)) return [];
+      const usedSlots = new Set();
+      const fixed = [];
+      const floating = [];
+
+      items.forEach((item, index) => {
+        const slot = parseFavoriteSlot(item?.slot);
+        const normalized = {
+          id: String(item?.id || ''),
+          title: String(item?.title || '').trim(),
+          url: String(item?.url || '').trim(),
+          iconDataUrl: String(item?.iconDataUrl || '').trim(),
+          slot: -1,
+          _order: index,
+        };
+        if (slot >= 0 && !usedSlots.has(slot)) {
+          normalized.slot = slot;
+          usedSlots.add(slot);
+          fixed.push(normalized);
+          return;
+        }
+        floating.push(normalized);
+      });
+
+      const pickNextSlot = () => {
+        let slot = 0;
+        while (usedSlots.has(slot)) slot += 1;
+        usedSlots.add(slot);
+        return slot;
+      };
+
+      floating.forEach((item) => {
+        item.slot = pickNextSlot();
+        fixed.push(item);
+      });
+
+      fixed.sort((a, b) => {
+        if (a.slot !== b.slot) return a.slot - b.slot;
+        return a._order - b._order;
+      });
+
+      return fixed.map((item) => ({
+        id: item.id,
+        title: item.title,
+        url: item.url,
+        iconDataUrl: item.iconDataUrl,
+        slot: item.slot,
+      }));
+    };
+
     const sanitizeFavoriteItems = (items) => {
       if (!Array.isArray(items)) return [];
-      return items
+      const cleaned = items
         .map((item) => ({
           id: String(item?.id || ''),
           title: String(item?.title || '').trim(),
           url: String(item?.url || '').trim(),
           iconDataUrl: String(item?.iconDataUrl || '').trim(),
+          slot: parseFavoriteSlot(item?.slot),
         }))
         .filter(item => item.title && /^https?:\/\//i.test(item.url) && /^data:image\//i.test(item.iconDataUrl))
-        .slice(0, 100);
+        .slice(0, FAVORITE_MAX_ITEMS);
+      return normalizeFavoriteSlots(cleaned);
     };
 
     const readFavoritesLocal = (user) => {
@@ -594,16 +659,50 @@
       await NK.api.userdataFavoritesSave(nextItems);
     };
 
-    const reorderFavoriteItems = (dragId, targetId) => {
-      const fromIndex = favoriteItems.findIndex((row) => String(row.id) === String(dragId));
-      const toIndex = favoriteItems.findIndex((row) => String(row.id) === String(targetId));
-      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return false;
-      const next = favoriteItems.slice();
-      const moved = next.splice(fromIndex, 1)[0];
-      let insertAt = toIndex;
-      if (fromIndex < toIndex) insertAt = toIndex - 1;
-      next.splice(insertAt, 0, moved);
-      favoriteItems = next;
+    const clearFavoriteDropTargets = () => {
+      if (!favoriteListEl) return;
+      const activeTargets = favoriteListEl.querySelectorAll('.favorite-item.is-drop-target');
+      activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
+    };
+
+    const findFirstAvailableFavoriteSlot = () => {
+      const usedSlots = new Set(
+        favoriteItems
+          .map((item) => parseFavoriteSlot(item?.slot))
+          .filter((slot) => slot >= 0),
+      );
+      let slot = 0;
+      while (usedSlots.has(slot)) slot += 1;
+      return slot;
+    };
+
+    const getFavoriteSlotCount = () => {
+      const maxSlot = favoriteItems.reduce((max, item) => {
+        const slot = parseFavoriteSlot(item?.slot);
+        if (slot < 0) return max;
+        return Math.max(max, slot);
+      }, -1);
+      return Math.max(FAVORITE_DEFAULT_SLOT_COUNT, maxSlot + 1);
+    };
+
+    const moveFavoriteItemToSlot = (dragId, targetSlot) => {
+      const safeDragId = String(dragId || '').trim();
+      const safeTargetSlot = parseFavoriteSlot(targetSlot);
+      if (!safeDragId || safeTargetSlot < 0) return false;
+      const dragItem = favoriteItems.find((row) => String(row.id) === safeDragId);
+      if (!dragItem) return false;
+      const sourceSlot = parseFavoriteSlot(dragItem.slot);
+      if (sourceSlot === safeTargetSlot) return false;
+
+      const next = favoriteItems.map((row) => ({ ...row }));
+      const dragIndex = next.findIndex((row) => String(row.id) === safeDragId);
+      if (dragIndex < 0) return false;
+      const occupantIndex = next.findIndex((row) => parseFavoriteSlot(row.slot) === safeTargetSlot);
+      if (occupantIndex >= 0) {
+        next[occupantIndex].slot = sourceSlot;
+      }
+      next[dragIndex].slot = safeTargetSlot;
+      favoriteItems = normalizeFavoriteSlots(next);
       return true;
     };
 
@@ -737,34 +836,24 @@
       }
 
       favoriteListEl.classList.remove('hidden');
-      if (!favoriteItems.length) {
-        favoriteListEl.classList.add('empty');
-        return;
-      }
+      favoriteListEl.classList.toggle('empty', !favoriteItems.length);
+      const totalSlots = getFavoriteSlotCount();
 
-      favoriteListEl.classList.remove('empty');
-
-      favoriteItems.forEach((item) => {
+      for (let slotIndex = 0; slotIndex < totalSlots; slotIndex += 1) {
+        const item = favoriteItems.find((row) => parseFavoriteSlot(row?.slot) === slotIndex);
         const article = document.createElement('article');
         article.className = 'favorite-item';
         article.setAttribute('role', 'listitem');
-        article.draggable = true;
-        article.dataset.favoriteId = String(item.id || '');
-
-        article.addEventListener('dragstart', (evt) => {
-          favoriteDragId = String(item.id || '');
-          article.classList.add('is-dragging');
-          try {
-            if (evt.dataTransfer) {
-              evt.dataTransfer.effectAllowed = 'move';
-              evt.dataTransfer.setData('text/plain', favoriteDragId);
-            }
-          } catch (_) { }
-        });
+        article.dataset.slotIndex = String(slotIndex);
+        article.draggable = !!item;
+        if (item) article.dataset.favoriteId = String(item.id || '');
+        else article.classList.add('is-empty-slot');
 
         article.addEventListener('dragover', (evt) => {
           if (!favoriteDragId) return;
-          if (String(item.id || '') === favoriteDragId) return;
+          const draggedItem = favoriteItems.find((row) => String(row.id) === String(favoriteDragId));
+          if (!draggedItem) return;
+          if (parseFavoriteSlot(draggedItem.slot) === slotIndex) return;
           evt.preventDefault();
           article.classList.add('is-drop-target');
           try {
@@ -781,10 +870,10 @@
           evt.stopPropagation();
           article.classList.remove('is-drop-target');
           const droppedId = String(favoriteDragId || '').trim() || String(evt.dataTransfer?.getData('text/plain') || '').trim();
-          const targetId = String(item.id || '').trim();
-          if (!droppedId || !targetId || droppedId === targetId) return;
-          const changed = reorderFavoriteItems(droppedId, targetId);
+          if (!droppedId) return;
+          const changed = moveFavoriteItemToSlot(droppedId, slotIndex);
           if (!changed) return;
+          favoriteDragId = '';
           suppressFavoriteOpenUntil = Date.now() + 320;
           renderFavorites(true);
           const user = NK.auth.getUser();
@@ -797,11 +886,30 @@
           }
         });
 
+        if (!item) {
+          const emptySlot = document.createElement('div');
+          emptySlot.className = 'favorite-empty-slot';
+          emptySlot.setAttribute('aria-hidden', 'true');
+          article.appendChild(emptySlot);
+          favoriteListEl.appendChild(article);
+          continue;
+        }
+
+        article.addEventListener('dragstart', (evt) => {
+          favoriteDragId = String(item.id || '');
+          article.classList.add('is-dragging');
+          try {
+            if (evt.dataTransfer) {
+              evt.dataTransfer.effectAllowed = 'move';
+              evt.dataTransfer.setData('text/plain', favoriteDragId);
+            }
+          } catch (_) { }
+        });
+
         article.addEventListener('dragend', () => {
           favoriteDragId = '';
           article.classList.remove('is-dragging');
-          const activeTargets = favoriteListEl.querySelectorAll('.favorite-item.is-drop-target');
-          activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
+          clearFavoriteDropTargets();
         });
 
         const deleteBtn = document.createElement('button');
@@ -858,7 +966,7 @@
         article.appendChild(deleteBtn);
         article.appendChild(button);
         favoriteListEl.appendChild(article);
-      });
+      }
     };
 
     const resizeImageToSquare = (file, size = 100) => new Promise((resolve, reject) => {
@@ -1022,9 +1130,10 @@
           title,
           url: normalized,
           iconDataUrl: resizedIconDataUrl,
+          slot: findFirstAvailableFavoriteSlot(),
         };
 
-        favoriteItems = sanitizeFavoriteItems([entry, ...favoriteItems]);
+        favoriteItems = sanitizeFavoriteItems([...favoriteItems, entry]);
         renderFavorites(true);
         resetFavoriteForm();
         setFavoriteFormCollapsed(true);
