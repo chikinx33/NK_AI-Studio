@@ -161,7 +161,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.703';
+    NK.config.APP_VERSION = '1.704';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -455,6 +455,12 @@
     const btn = document.getElementById('opt-auth-btn');
     const nameEl = document.getElementById('opt-username');
     const icons = document.getElementById('login-icons');
+    const loginCardTitleEl = document.getElementById('login-card-title');
+    const loginCardLogoEl = document.getElementById('login-card-logo');
+    const loginBrandToolsEl = document.getElementById('login-brand-tools');
+    const loginTitleEditBtn = document.getElementById('login-title-edit-btn');
+    const loginIconEditBtn = document.getElementById('login-icon-edit-btn');
+    const loginIconFileInput = document.getElementById('login-icon-file');
     const formRows = document.querySelectorAll('#login-card .form-row');
     const favoriteCard = document.getElementById('favorite-card');
     const dashboardCard = document.getElementById('user-dashboard-card');
@@ -489,6 +495,8 @@
     let favoriteFormCollapsed = true;
     let subscriptionCollapsed = true;
     let lastLoginState = false;
+    const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
+    const DEFAULT_LOGIN_CARD_ICON = String(loginCardLogoEl?.getAttribute('src') || 'images/logo(500500).png').trim() || 'images/logo(500500).png';
     const FAVORITE_CATEGORY_COUNT = 4;
     const FAVORITE_GRID_COLUMNS = 6;
     const FAVORITE_GRID_ROWS = 2;
@@ -511,6 +519,62 @@
       const safe = String(user || '').trim().toLowerCase();
       if (!safe) return '';
       return `nk_profile_ui_${safe}`;
+    };
+
+    const loginBrandStorageKey = (user) => {
+      const safe = String(user || '').trim().toLowerCase();
+      if (!safe) return '';
+      return `nk_login_brand_${safe}`;
+    };
+
+    const normalizeLoginCardTitle = (value) => {
+      const title = String(value || '').trim().slice(0, 40);
+      return title || DEFAULT_LOGIN_CARD_TITLE;
+    };
+
+    const normalizeLoginCardIconDataUrl = (value) => {
+      const url = String(value || '').trim();
+      if (!url) return '';
+      if (!/^data:image\//i.test(url)) return '';
+      return url;
+    };
+
+    const readLoginBrandLocal = (user) => {
+      const key = loginBrandStorageKey(user);
+      if (!key) return { title: DEFAULT_LOGIN_CARD_TITLE, iconDataUrl: '' };
+      try {
+        const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+        return {
+          title: normalizeLoginCardTitle(parsed?.title),
+          iconDataUrl: normalizeLoginCardIconDataUrl(parsed?.iconDataUrl),
+        };
+      } catch (_) {
+        return { title: DEFAULT_LOGIN_CARD_TITLE, iconDataUrl: '' };
+      }
+    };
+
+    const saveLoginBrandLocal = (user, brand) => {
+      const key = loginBrandStorageKey(user);
+      if (!key) return;
+      const payload = {
+        title: normalizeLoginCardTitle(brand?.title),
+        iconDataUrl: normalizeLoginCardIconDataUrl(brand?.iconDataUrl),
+      };
+      try {
+        localStorage.setItem(key, JSON.stringify(payload));
+      } catch (_) { }
+    };
+
+    const applyLoginBrandToUi = (brand) => {
+      const title = normalizeLoginCardTitle(brand?.title);
+      const iconDataUrl = normalizeLoginCardIconDataUrl(brand?.iconDataUrl);
+      if (loginCardTitleEl) loginCardTitleEl.textContent = title;
+      if (loginCardLogoEl) loginCardLogoEl.src = iconDataUrl || DEFAULT_LOGIN_CARD_ICON;
+    };
+
+    const setLoginBrandToolsOpen = (open) => {
+      if (!loginBrandToolsEl) return;
+      loginBrandToolsEl.classList.toggle('is-open', !!open);
     };
 
     const normalizeProfileUi = (input, user) => {
@@ -1148,6 +1212,61 @@
       reader.readAsDataURL(file);
     });
 
+    if (loginTitleEditBtn) {
+      loginTitleEditBtn.addEventListener('click', async () => {
+        const user = NK.auth.getUser();
+        if (!user || !NK.auth.isAuthed()) {
+          alert('로그인 후 수정할 수 있습니다.');
+          return;
+        }
+        const current = readLoginBrandLocal(user);
+        const promptFn = NK.ui && NK.ui.dialog && NK.ui.dialog.prompt;
+        if (typeof promptFn !== 'function') {
+          alert('입력 팝업을 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+          return;
+        }
+        const nextRaw = await promptFn('로그인 섹션 제목을 입력해 주세요.', {
+          title: '로그인 제목 수정',
+          defaultValue: normalizeLoginCardTitle(current.title),
+          okText: '저장',
+          cancelText: '취소',
+        });
+        if (nextRaw == null) return;
+        const nextTitle = normalizeLoginCardTitle(nextRaw);
+        saveLoginBrandLocal(user, { title: nextTitle, iconDataUrl: current.iconDataUrl });
+        applyLoginBrandToUi({ title: nextTitle, iconDataUrl: current.iconDataUrl });
+      });
+    }
+
+    if (loginIconEditBtn && loginIconFileInput) {
+      loginIconEditBtn.addEventListener('click', () => {
+        const user = NK.auth.getUser();
+        if (!user || !NK.auth.isAuthed()) {
+          alert('로그인 후 등록할 수 있습니다.');
+          return;
+        }
+        loginIconFileInput.click();
+      });
+
+      loginIconFileInput.addEventListener('change', async (evt) => {
+        const user = NK.auth.getUser();
+        if (!user || !NK.auth.isAuthed()) return;
+        const file = evt.target?.files && evt.target.files[0];
+        if (!file) return;
+        try {
+          const iconDataUrl = await resizeImageToSquare(file, 500);
+          const current = readLoginBrandLocal(user);
+          saveLoginBrandLocal(user, { title: current.title, iconDataUrl });
+          applyLoginBrandToUi({ title: current.title, iconDataUrl });
+          alert('로그인 아이콘이 등록되었습니다.');
+        } catch (err) {
+          alert(err?.message || '아이콘 등록에 실패했습니다.');
+        } finally {
+          loginIconFileInput.value = '';
+        }
+      });
+    }
+
     const setUI = (loggedIn, user = '') => {
       if (nameEl) {
         nameEl.textContent = loggedIn ? `${user} 님 로그인됨` : '';
@@ -1157,6 +1276,15 @@
       btn.textContent = loggedIn ? '로그아웃' : '로그인';
       btn.dataset.state = loggedIn ? 'logout' : 'login';
       if (icons) icons.classList.toggle('blurred', !loggedIn);
+
+      if (loggedIn && user) {
+        const brand = readLoginBrandLocal(user);
+        applyLoginBrandToUi(brand);
+        setLoginBrandToolsOpen(true);
+      } else {
+        applyLoginBrandToUi({ title: DEFAULT_LOGIN_CARD_TITLE, iconDataUrl: '' });
+        setLoginBrandToolsOpen(false);
+      }
 
       if (favoriteCard) favoriteCard.classList.toggle('is-locked', !loggedIn);
       if (dashboardCard) dashboardCard.classList.toggle('is-locked', !loggedIn);

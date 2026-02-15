@@ -2901,6 +2901,22 @@ a.btn-primary:active {
   object-fit: cover;
 }
 
+.login-brand-tools {
+  display: none;
+  justify-content: center;
+  gap: 8px;
+  margin-top: -8px;
+  margin-bottom: 8px;
+}
+
+.login-brand-tools.is-open {
+  display: flex;
+}
+
+.login-brand-file-input {
+  display: none;
+}
+
 .login-icons {
   display: flex;
   justify-content: center;
