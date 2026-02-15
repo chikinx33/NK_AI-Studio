@@ -3234,6 +3234,7 @@ a.btn-primary:active {
 
 .favorite-category-head {
   --favorite-category-tone: color-mix(in srgb, var(--muted) 40%, transparent 60%);
+  --favorite-category-line-tone: color-mix(in srgb, var(--muted) 16%, transparent 84%);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3242,7 +3243,7 @@ a.btn-primary:active {
 .favorite-category-line {
   flex: 1 1 auto;
   min-width: 0;
-  border-top: 1px solid var(--favorite-category-tone);
+  border-top: 1px solid var(--favorite-category-line-tone);
 }
 
 .favorite-category-name-btn {
