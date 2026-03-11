@@ -45,6 +45,22 @@
         return [];
     }
 
+    function normalizeTagTokenList(value) {
+        if (Array.isArray(value)) {
+            return value
+                .map(function (item) { return normalizeText(item); })
+                .map(function (item) { return item.replace(/^#+/, ''); })
+                .filter(Boolean)
+                .map(function (item) { return '#' + item; });
+        }
+        return String(value || '')
+            .split(/[\s,\n]+/)
+            .map(function (item) { return normalizeText(item); })
+            .map(function (item) { return item.replace(/^#+/, ''); })
+            .filter(Boolean)
+            .map(function (item) { return '#' + item; });
+    }
+
     function normalizeReferenceEntries(value) {
         var src = Array.isArray(value) ? value : [];
         return src.map(function (item, index) {
@@ -81,6 +97,8 @@
             var remotePostId = normalizeText(raw.remotePostId || raw.postId || raw.remoteId);
             var title = normalizeText(raw.title || raw.postTitle);
             var note = normalizeText(raw.note || raw.memo);
+            var caption = normalizeText(raw.caption || raw.captionDraft);
+            var hashtags = normalizeTagTokenList(raw.hashtags || raw.hashtagTokens || raw.hashtagDraft);
             var metrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : raw;
             if (!channelType && !remotePostId && !title && !publishedAt) return null;
             return {
@@ -92,6 +110,8 @@
                 remotePostId: remotePostId,
                 title: title,
                 note: note,
+                caption: caption,
+                hashtags: hashtags,
                 metrics: {
                     views: normalizeNumber(metrics.views),
                     likes: normalizeNumber(metrics.likes),
@@ -158,6 +178,7 @@
                 contentType: item.contentType,
                 capturedAt: item.publishedAt,
                 remotePostId: item.remotePostId,
+                hashtags: item.hashtags.slice(),
                 metrics: Object.assign({}, item.metrics)
             };
         });

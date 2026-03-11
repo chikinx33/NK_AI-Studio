@@ -131,6 +131,13 @@
     return '#' + raw;
   }
 
+  function parseHashtagTokens(value) {
+    return String(value || '')
+      .split(/[\s,\n]+/)
+      .map(normalizeHashtagToken)
+      .filter(Boolean);
+  }
+
   function compactSentence(value, maxLength) {
     var text = String(value || '').trim().replace(/\s+/g, ' ');
     if (!text) return '';
@@ -831,6 +838,8 @@
           remotePostId: nextRemoteId,
           title: nextTitle,
           note: String((resultNoteEl && resultNoteEl.value) || '').trim(),
+          caption: String((captionEl && captionEl.value) || readCaptionDraft(payload) || '').trim(),
+          hashtags: parseHashtagTokens((hashtagEl && hashtagEl.value) || readHashtagDraft(payload) || ''),
           metrics: {
             views: Math.max(0, Number((resultViewsEl && resultViewsEl.value) || 0) || 0),
             likes: Math.max(0, Number((resultLikesEl && resultLikesEl.value) || 0) || 0),

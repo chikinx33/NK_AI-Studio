@@ -40,6 +40,18 @@
     }
   }
 
+  function metricCardHtml(item) {
+    return (
+      '<div class="analytics-channel-metrics">' +
+      '<span>조회수</span><strong>' + escapeHtml(item.views) + '</strong>' +
+      '<span>좋아요</span><strong>' + escapeHtml(item.likes) + '</strong>' +
+      '<span>댓글</span><strong>' + escapeHtml(item.comments) + '</strong>' +
+      '<span>공유</span><strong>' + escapeHtml(item.shares) + '</strong>' +
+      '<span>클릭</span><strong>' + escapeHtml(item.clicks) + '</strong>' +
+      '</div>'
+    );
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -57,6 +69,8 @@
     var summary = NK.service.analytics.summarizeProject(project);
     var channels = NK.service.analytics.summarizeByChannel(project);
     var contentTypes = NK.service.analytics.summarizeByContentType(project);
+    var uploadTimes = NK.service.analytics.summarizeByUploadTime(project);
+    var hashtags = NK.service.analytics.summarizeByHashtag(project);
 
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -88,12 +102,8 @@
           '<span class="analytics-channel-badge">' + escapeHtml(channelLabel(item.channelType)) + '</span>' +
           '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
           '</div>' +
-          '<div class="analytics-channel-metrics">' +
-          '<span>조회수</span><strong>' + escapeHtml(item.views) + '</strong>' +
-          '<span>좋아요</span><strong>' + escapeHtml(item.likes) + '</strong>' +
-          '<span>댓글</span><strong>' + escapeHtml(item.comments) + '</strong>' +
-          '<span>공유</span><strong>' + escapeHtml(item.shares) + '</strong>' +
-          '<span>클릭</span><strong>' + escapeHtml(item.clicks) + '</strong>' +
+          metricCardHtml(item) +
+          '<div class="analytics-channel-metrics analytics-channel-meta">' +
           '<span>최근 게시</span><strong>' + escapeHtml(item.latestPublishedAt || '-') + '</strong>' +
           '</div>' +
           '<p class="analytics-channel-note">현재 저장된 게시 결과 기준으로 집계했습니다. 다음 단계에서는 콘텐츠 유형별, 업로드 시간별 분석을 이 화면에 이어 붙입니다.</p>' +
@@ -112,18 +122,47 @@
           '<span class="analytics-channel-badge">' + escapeHtml(contentTypeLabel(item.contentType)) + '</span>' +
           '<strong>' + escapeHtml(item.totalPosts) + '개 운영</strong>' +
           '</div>' +
-          '<div class="analytics-channel-metrics">' +
-          '<span>조회수</span><strong>' + escapeHtml(item.views) + '</strong>' +
-          '<span>좋아요</span><strong>' + escapeHtml(item.likes) + '</strong>' +
-          '<span>댓글</span><strong>' + escapeHtml(item.comments) + '</strong>' +
-          '<span>공유</span><strong>' + escapeHtml(item.shares) + '</strong>' +
-          '<span>클릭</span><strong>' + escapeHtml(item.clicks) + '</strong>' +
+          metricCardHtml(item) +
+          '<div class="analytics-channel-metrics analytics-channel-meta">' +
           '<span>주요 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
           '</div>' +
           '<p class="analytics-channel-note">현재는 게시 결과에 저장된 콘텐츠 유형 기준으로 집계합니다. 다음 단계에서는 업로드 시간, 해시태그 패턴까지 연결합니다.</p>' +
           '</article>'
         );
       }).join('') : '<div class="analytics-empty">아직 콘텐츠 유형별로 비교할 게시 결과가 없습니다.</div>') +
+      '</div>' +
+      '</section>' +
+      '<section class="analytics-panel">' +
+      '<div class="analytics-panel-head"><h3>업로드 시간별 성과</h3><span>언제 올릴 때 반응이 좋은지 비교</span></div>' +
+      '<div class="analytics-type-grid">' +
+      (uploadTimes.some(function (item) { return item.totalPosts > 0; }) ? uploadTimes.map(function (item) {
+        return (
+          '<article class="analytics-type-card">' +
+          '<div class="analytics-channel-top">' +
+          '<span class="analytics-channel-badge">' + escapeHtml(item.label) + '</span>' +
+          '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
+          '</div>' +
+          metricCardHtml(item) +
+          '<p class="analytics-channel-note">현재는 저장된 게시 시각 기준으로 오전, 오후, 저녁, 심야 구간을 나눠 집계합니다.</p>' +
+          '</article>'
+        );
+      }).join('') : '<div class="analytics-empty">업로드 시각이 저장된 게시 결과가 아직 없습니다.</div>') +
+      '</div>' +
+      '</section>' +
+      '<section class="analytics-panel">' +
+      '<div class="analytics-panel-head"><h3>해시태그 성과</h3><span>반응이 좋은 태그 패턴</span></div>' +
+      '<div class="analytics-hashtag-grid">' +
+      (hashtags.length ? hashtags.map(function (item) {
+        return (
+          '<article class="analytics-hashtag-card">' +
+          '<div class="analytics-channel-top">' +
+          '<span class="analytics-channel-badge">' + escapeHtml(item.hashtag) + '</span>' +
+          '<strong>' + escapeHtml(item.totalPosts) + '회 사용</strong>' +
+          '</div>' +
+          metricCardHtml(item) +
+          '</article>'
+        );
+      }).join('') : '<div class="analytics-empty">게시 결과에 저장된 해시태그가 아직 없습니다.</div>') +
       '</div>' +
       '</section>' +
       '<div class="analytics-toolbar">' +

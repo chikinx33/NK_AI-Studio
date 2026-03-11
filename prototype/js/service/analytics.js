@@ -33,6 +33,13 @@
         remotePostId: String(raw.remotePostId || raw.postId || '').trim(),
         title: String(raw.title || '').trim() || '게시 결과',
         note: String(raw.note || '').trim(),
+        caption: String(raw.caption || raw.captionDraft || '').trim(),
+        hashtags: Array.isArray(raw.hashtags)
+          ? raw.hashtags.map(function (tag) { return String(tag || '').trim(); }).filter(Boolean)
+          : String(raw.hashtagDraft || raw.hashtagTokens || '')
+            .split(/[\s,\n]+/)
+            .map(function (tag) { return String(tag || '').trim(); })
+            .filter(Boolean),
         metrics: {
           views: Math.max(0, Number(metrics.views || 0) || 0),
           likes: Math.max(0, Number(metrics.likes || 0) || 0),
@@ -148,5 +155,77 @@
     return Array.from(map.values()).sort(function (a, b) {
       return b.views - a.views || b.totalPosts - a.totalPosts;
     });
+  };
+
+  analytics.summarizeByUploadTime = function (projectOrId) {
+    var rows = readPublishResults(projectOrId);
+    var buckets = [
+      { id: 'morning', label: '오전 6시-11시', from: 6, to: 11 },
+      { id: 'afternoon', label: '오후 12시-17시', from: 12, to: 17 },
+      { id: 'evening', label: '저녁 18시-23시', from: 18, to: 23 },
+      { id: 'night', label: '심야 0시-5시', from: 0, to: 5 }
+    ];
+    var map = new Map();
+    buckets.forEach(function (bucket) {
+      map.set(bucket.id, {
+        bucketId: bucket.id,
+        label: bucket.label,
+        totalPosts: 0,
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        clicks: 0
+      });
+    });
+    rows.forEach(function (item) {
+      var date = item.publishedAt ? new Date(item.publishedAt) : null;
+      if (!(date && isFinite(date.getTime()))) return;
+      var hour = date.getHours();
+      var bucket = buckets.find(function (entry) { return hour >= entry.from && hour <= entry.to; }) || buckets[3];
+      var row = map.get(bucket.id);
+      row.totalPosts += 1;
+      row.views += item.metrics.views;
+      row.likes += item.metrics.likes;
+      row.comments += item.metrics.comments;
+      row.shares += item.metrics.shares;
+      row.clicks += item.metrics.clicks;
+    });
+    return Array.from(map.values()).sort(function (a, b) {
+      return b.views - a.views || b.totalPosts - a.totalPosts;
+    });
+  };
+
+  analytics.summarizeByHashtag = function (projectOrId) {
+    var rows = readPublishResults(projectOrId);
+    var map = new Map();
+    rows.forEach(function (item) {
+      var tags = Array.isArray(item.hashtags) ? item.hashtags : [];
+      tags.forEach(function (tag) {
+        var key = String(tag || '').trim();
+        if (!key) return;
+        if (!map.has(key)) {
+          map.set(key, {
+            hashtag: key,
+            totalPosts: 0,
+            views: 0,
+            likes: 0,
+            comments: 0,
+            shares: 0,
+            clicks: 0
+          });
+        }
+        var row = map.get(key);
+        row.totalPosts += 1;
+        row.views += item.metrics.views;
+        row.likes += item.metrics.likes;
+        row.comments += item.metrics.comments;
+        row.shares += item.metrics.shares;
+        row.clicks += item.metrics.clicks;
+      });
+    });
+    return Array.from(map.values()).sort(function (a, b) {
+      return b.views - a.views || b.totalPosts - a.totalPosts;
+    }).slice(0, 8);
   };
 })();
