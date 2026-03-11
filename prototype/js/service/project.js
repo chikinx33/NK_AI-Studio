@@ -63,10 +63,41 @@
         };
     }
 
+    function mergeKnowledgeSource(source) {
+        var raw = source && typeof source === 'object' ? source : {};
+        var nested = raw.knowledgeHub && typeof raw.knowledgeHub === 'object' ? raw.knowledgeHub : {};
+        return Object.assign({}, raw, nested);
+    }
+
+    function normalizeKnowledgeHub(source) {
+        var raw = mergeKnowledgeSource(source);
+        return {
+            brandVoice: normalizeText(raw.brandVoice),
+            brandStory: normalizeText(raw.brandStory),
+            brandCharacter: normalizeText(raw.brandCharacter),
+            worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
+            brandRules: normalizeTextList(raw.brandRules),
+            bannedExpressions: normalizeTextList(raw.bannedExpressions || raw.banned),
+            referenceContents: normalizeTextList(raw.referenceContents),
+            successCases: normalizeTextList(raw.successCases)
+        };
+    }
+
     function applyProjectCore(payload, draft) {
         var merged = Object.assign({}, (draft && draft.payload) || {}, payload || {});
         var core = normalizeProjectCore(merged);
+        var knowledge = normalizeKnowledgeHub(merged);
         var nextPayload = Object.assign({}, payload || {}, core);
+        nextPayload.knowledgeHub = knowledge;
+        nextPayload.brandVoice = knowledge.brandVoice;
+        nextPayload.brandStory = knowledge.brandStory;
+        nextPayload.brandCharacter = knowledge.brandCharacter;
+        nextPayload.brandRules = knowledge.brandRules.slice();
+        nextPayload.bannedExpressions = knowledge.bannedExpressions.slice();
+        nextPayload.referenceContents = knowledge.referenceContents.slice();
+        nextPayload.successCases = knowledge.successCases.slice();
+        if (!nextPayload.worldSetting && knowledge.worldSetting) nextPayload.worldSetting = knowledge.worldSetting;
+        if (!nextPayload.knowledgeWorld && knowledge.worldSetting) nextPayload.knowledgeWorld = knowledge.worldSetting;
         if (!nextPayload.target && core.targetAudience) nextPayload.target = core.targetAudience;
         if (!nextPayload.tone && core.brandTone) nextPayload.tone = core.brandTone;
         return nextPayload;
@@ -88,6 +119,7 @@
             seriesId: seriesId,
             seriesTitle: seriesTitle,
             projectCore: normalizeProjectCore(payload),
+            knowledgeHub: normalizeKnowledgeHub(payload),
             payload: payload
         });
     }
@@ -316,6 +348,10 @@
     project.getProjectCore = function (draftOrId) {
         var target = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
         return normalizeProjectCore((target && target.payload) || draftOrId || {});
+    };
+    project.getKnowledgeHub = function (draftOrId) {
+        var target = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
+        return normalizeKnowledgeHub((target && target.payload) || draftOrId || {});
     };
     project.applyProjectCore = function (payload, draftOrId) {
         var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : draftOrId;

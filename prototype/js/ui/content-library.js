@@ -102,6 +102,7 @@
       '<p class="content-library-description">' + escapeHtml(meta.brandSummary) + '</p>' +
       '</div>' +
       '<div class="content-library-hero-actions">' +
+      '<button class="btn-secondary" data-action="library-open-knowledge">Knowledge Hub</button>' +
       '<button class="btn-secondary" data-action="library-open-brand">Brand Studio</button>' +
       '<button class="btn-secondary" data-action="library-open-scenario">프리 프로덕션</button>' +
       '<button class="btn-secondary" data-action="library-open-scenes">프로덕션</button>' +
@@ -119,6 +120,7 @@
       '<div class="content-library-toolbar">' +
       '<span>현재 프로젝트의 Creative 결과물을 한 곳에서 확인합니다.</span>' +
       '<div class="content-library-toolbar-actions">' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId)) + '">Knowledge Hub</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId)) + '">Brand Studio</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId)) + '">시나리오 수정</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenes.html', projectId)) + '">생성 계속</a>' +
@@ -133,7 +135,8 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
-      if (action === 'library-open-brand') target = buildStageUrl('brand.html', projectId);
+      if (action === 'library-open-knowledge') target = buildStageUrl('knowledge.html', projectId);
+      else if (action === 'library-open-brand') target = buildStageUrl('brand.html', projectId);
       else if (action === 'library-open-scenario') target = buildStageUrl('scenario.html', projectId);
       else if (action === 'library-open-scenes') target = buildStageUrl('scenes.html', projectId);
       else if (action === 'library-open-media') target = buildStageUrl('media.html', projectId);

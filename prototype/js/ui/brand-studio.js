@@ -286,6 +286,7 @@
       '<p class="brand-studio-description">' + escapeHtml(payload.brandSummary || '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.') + '</p>' +
       '</div>' +
       '<div class="brand-studio-hero-actions">' +
+      '<button class="btn-secondary" data-action="brand-open-knowledge">Knowledge Hub</button>' +
       '<button class="btn-secondary" data-action="brand-open-library">Content Library</button>' +
       '<button class="btn-secondary" data-action="brand-open-scenario">프리 프로덕션</button>' +
       '<button class="btn-primary" data-action="brand-open-media">포스트 프로덕션</button>' +
@@ -413,6 +414,7 @@
       '<div class="brand-studio-toolbar">' +
       '<span>Brand Studio는 Content Library 이후 운영 단계입니다. 지금은 운영 기준 화면과 진입 동선이 연결된 상태입니다.</span>' +
       '<div class="brand-studio-toolbar-actions">' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId)) + '">지식 문맥</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId)) + '">소스 확인</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId)) + '">문맥 수정</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('media.html', projectId)) + '">최종 편집</a>' +
@@ -627,7 +629,8 @@
           });
         return;
       }
-      if (action === 'brand-open-library') target = buildStageUrl('library.html', projectId);
+      if (action === 'brand-open-knowledge') target = buildStageUrl('knowledge.html', projectId);
+      else if (action === 'brand-open-library') target = buildStageUrl('library.html', projectId);
       else if (action === 'brand-open-scenario') target = buildStageUrl('scenario.html', projectId);
       else if (action === 'brand-open-media') target = buildStageUrl('media.html', projectId);
       if (!target) return;
