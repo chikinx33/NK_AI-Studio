@@ -187,7 +187,7 @@ Brand Studio는 독립된 기능 페이지가 아니다.
 - [x] `Content Library` 기초 서비스 추가
 - [x] 대시보드에서 프로젝트별 콘텐츠 요약 표시
 - [x] `Project Core` 데이터 구조를 Brand Studio 기준으로 확장
-- [ ] `Content Library` 전용 화면 골격 추가
+- [x] `Content Library` 전용 화면 골격 추가
 
 ### V1 Brand Operations
 

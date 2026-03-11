@@ -33,10 +33,11 @@
     dashboard: 'dashboard.html',
     scenario: 'scenario.html',
     scenes: 'scenes.html',
+    library: 'library.html',
     media: 'media.html',
     publish: 'publish.html'
   };
-  const RESTORABLE_STAGES = ['scenario', 'scenes', 'media', 'publish'];
+  const RESTORABLE_STAGES = ['scenario', 'scenes', 'library', 'media', 'publish'];
   const STAGE_TARGET_KEY = 'nk_current_stage_href';
   const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
   let syncMessageBound = false;
@@ -379,6 +380,11 @@
     if (document.getElementById('scenario-form')) {
       NK.ui.scenario.init();
     }
+    if (document.getElementById('content-library-root')) {
+      if (NK.ui && NK.ui.contentLibrary && NK.ui.contentLibrary.init) {
+        NK.ui.contentLibrary.init();
+      }
+    }
     if (document.getElementById('pipeline-scenes')) {
       // 원본 pipeline.js 초기화 (컨텍스트 기반)
       if (NK.uiPipeline && NK.uiPipeline.init) {
@@ -543,6 +549,10 @@
       if (action === 'sidebar-edit-scenario') {
         persistCurrentProject();
         const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';
+        NK.navigation.loadStage(url);
+      } else if (action === 'sidebar-edit-library') {
+        persistCurrentProject();
+        const url = currentProject?.id ? `library.html?projectId=${encodeURIComponent(currentProject.id)}` : 'library.html';
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-scenes') {
         persistCurrentProject();
