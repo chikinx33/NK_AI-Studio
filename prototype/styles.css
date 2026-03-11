@@ -6159,6 +6159,12 @@ body.layout-fixed .lib-content {
   gap: 12px;
 }
 
+.analytics-recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .analytics-summary-card,
 .analytics-panel {
   border-radius: 20px;
@@ -6226,6 +6232,7 @@ body.layout-fixed .lib-content {
 .analytics-channel-card,
 .analytics-type-card,
 .analytics-hashtag-card,
+.analytics-recommendation-card,
 .analytics-empty {
   padding: 18px;
   border-radius: 18px;
@@ -6235,9 +6242,27 @@ body.layout-fixed .lib-content {
 
 .analytics-channel-card,
 .analytics-type-card,
-.analytics-hashtag-card {
+.analytics-hashtag-card,
+.analytics-recommendation-card {
   display: grid;
   gap: 12px;
+}
+
+.analytics-recommendation-card h4 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.analytics-recommendation-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.analytics-recommendation-card strong {
+  font-size: 14px;
+  line-height: 1.6;
 }
 
 .analytics-channel-top {
@@ -6371,6 +6396,10 @@ body.layout-fixed .lib-content {
   }
 
   .analytics-hashtag-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-recommendation-grid {
     grid-template-columns: 1fr;
   }
 }

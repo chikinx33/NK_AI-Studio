@@ -40,6 +40,17 @@
     }
   }
 
+  function recommendationCardHtml(item) {
+    return (
+      '<article class="analytics-recommendation-card">' +
+      '<span class="analytics-channel-badge">' + escapeHtml(item.category || '추천') + '</span>' +
+      '<h4>' + escapeHtml(item.title || '전략 추천') + '</h4>' +
+      '<p>' + escapeHtml(item.reason || '') + '</p>' +
+      '<strong>' + escapeHtml(item.action || '') + '</strong>' +
+      '</article>'
+    );
+  }
+
   function metricCardHtml(item) {
     return (
       '<div class="analytics-channel-metrics">' +
@@ -71,6 +82,9 @@
     var contentTypes = NK.service.analytics.summarizeByContentType(project);
     var uploadTimes = NK.service.analytics.summarizeByUploadTime(project);
     var hashtags = NK.service.analytics.summarizeByHashtag(project);
+    var recommendations = NK.service.strategyEngine
+      ? NK.service.strategyEngine.buildRecommendations(project)
+      : [];
 
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -92,6 +106,14 @@
       '<article class="analytics-summary-card"><span>총 반응</span><strong>' + escapeHtml(summary.likes + summary.comments + summary.shares) + '</strong></article>' +
       '<article class="analytics-summary-card"><span>상위 채널</span><strong>' + escapeHtml(channelLabel(summary.topChannel || '-')) + '</strong></article>' +
       '</div>' +
+      '<section class="analytics-panel">' +
+      '<div class="analytics-panel-head"><h3>전략 추천</h3><span>현재 데이터 기반 우선 액션</span></div>' +
+      '<div class="analytics-recommendation-grid">' +
+      (recommendations.length
+        ? recommendations.map(recommendationCardHtml).join('')
+        : '<div class="analytics-empty">아직 추천을 만들 만큼의 데이터가 없습니다.</div>') +
+      '</div>' +
+      '</section>' +
       '<section class="analytics-panel">' +
       '<div class="analytics-panel-head"><h3>채널별 성과</h3><span>V2 첫 분석 화면</span></div>' +
       '<div class="analytics-channel-grid">' +
