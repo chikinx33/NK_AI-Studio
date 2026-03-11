@@ -19,6 +19,7 @@
       case 'image': return '이미지';
       case 'video': return '영상';
       case 'reference': return '참조';
+      case 'publish-result': return '게시 결과';
       default: return '콘텐츠';
     }
   }
@@ -62,7 +63,7 @@
     var items = NK.service.contentLibrary.listProjectContents(project);
     var meta = projectMeta(project);
     var projectId = String(project.id || '').trim();
-    var groups = ['scene', 'text', 'image', 'video', 'reference'].map(function (type) {
+    var groups = ['scene', 'text', 'image', 'video', 'reference', 'publish-result'].map(function (type) {
       var rows = items.filter(function (item) { return item.type === type; });
       var body = rows.length
         ? rows.map(function (item) {

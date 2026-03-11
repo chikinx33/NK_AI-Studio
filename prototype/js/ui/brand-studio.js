@@ -75,6 +75,35 @@
     };
   }
 
+  function readPublishResults(payload) {
+    var src = payload && Array.isArray(payload.brandStudioPublishResults)
+      ? payload.brandStudioPublishResults
+      : (payload && Array.isArray(payload.publishResults) ? payload.publishResults : []);
+    return src.map(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : {};
+      var metrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : raw;
+      return {
+        id: String(raw.id || ('publish_' + (index + 1))).trim(),
+        channelType: String(raw.channelType || raw.channel || '').trim(),
+        contentType: String(raw.contentType || '').trim(),
+        status: String(raw.status || 'published').trim() || 'published',
+        publishedAt: String(raw.publishedAt || raw.capturedAt || '').trim(),
+        remotePostId: String(raw.remotePostId || raw.postId || '').trim(),
+        title: String(raw.title || '').trim(),
+        note: String(raw.note || '').trim(),
+        metrics: {
+          views: Math.max(0, Number(metrics.views || 0) || 0),
+          likes: Math.max(0, Number(metrics.likes || 0) || 0),
+          comments: Math.max(0, Number(metrics.comments || 0) || 0),
+          shares: Math.max(0, Number(metrics.shares || 0) || 0),
+          clicks: Math.max(0, Number(metrics.clicks || 0) || 0)
+        }
+      };
+    }).filter(function (item) {
+      return item.channelType || item.remotePostId || item.title;
+    });
+  }
+
   function firstFilled(values) {
     var src = Array.isArray(values) ? values : [];
     for (var i = 0; i < src.length; i++) {
@@ -257,6 +286,7 @@
     var knowledge = readKnowledge(payload);
     var channelConnections = readChannelConnections(payload);
     var publishPlan = readPublishPlan(payload);
+    var publishResults = readPublishResults(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
       ? NK.service.contentLibrary.summarizeProject(project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
@@ -345,6 +375,33 @@
         '</label>'
       );
     }).join('');
+    var publishResultCards = publishResults.length
+      ? publishResults.map(function (item) {
+        var channelTitle = channelTitleMap[item.channelType] || item.channelType || '채널 미지정';
+        return (
+          '<article class="brand-publish-result-card">' +
+          '<div class="brand-publish-result-top">' +
+          '<span class="brand-channel-badge">' + escapeHtml(channelTitle) + '</span>' +
+          '<button type="button" class="btn-secondary compact" data-action="brand-remove-publish-result" data-publish-result-id="' + escapeHtml(item.id) + '">삭제</button>' +
+          '</div>' +
+          '<strong>' + escapeHtml(item.title || item.remotePostId || '게시 결과') + '</strong>' +
+          '<p>' + escapeHtml([
+            item.status,
+            item.publishedAt,
+            item.remotePostId ? ('ID ' + item.remotePostId) : '',
+            item.note
+          ].filter(Boolean).join(' · ') || '세부 정보 없음') + '</p>' +
+          '<div class="brand-publish-result-metrics">' +
+          '<span>조회 ' + escapeHtml(item.metrics.views) + '</span>' +
+          '<span>좋아요 ' + escapeHtml(item.metrics.likes) + '</span>' +
+          '<span>댓글 ' + escapeHtml(item.metrics.comments) + '</span>' +
+          '<span>공유 ' + escapeHtml(item.metrics.shares) + '</span>' +
+          '<span>클릭 ' + escapeHtml(item.metrics.clicks) + '</span>' +
+          '</div>' +
+          '</article>'
+        );
+      }).join('')
+      : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
 
     var captionValue = savedCaption || '';
 
@@ -459,6 +516,44 @@
       '<p class="brand-caption-help">선택한 콘텐츠 유형, 연결된 채널, 캡션, 해시태그를 기준으로 예약 게시 계획의 최소 데이터 구조를 저장합니다.</p>' +
       '</div>' +
       '</section>' +
+      '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>게시 결과 수집</h3><span>V2 데이터 구조</span></div>' +
+      '<div class="brand-publish-planner">' +
+      '<div class="brand-publish-summary">' +
+      '<span class="brand-channel-summary-label">현재 누적</span>' +
+      '<strong>' + escapeHtml(publishResults.length) + '개 게시 결과</strong>' +
+      '<p>' + escapeHtml(publishResults.length ? '채널별 게시 결과와 반응 수치를 프로젝트에 누적하고 있습니다.' : '채널별 결과를 입력하면 이후 성과 분석의 기초 데이터가 됩니다.') + '</p>' +
+      '</div>' +
+      '<div class="brand-publish-result-form">' +
+      '<select id="brand-result-channel" class="brand-publish-input">' +
+      '<option value="">채널 선택</option>' +
+      channelConnections.map(function (item) {
+        return '<option value="' + escapeHtml(item.channelType) + '">' + escapeHtml(channelTitleMap[item.channelType] || item.channelType) + '</option>';
+      }).join('') +
+      '</select>' +
+      '<input id="brand-result-title" class="brand-publish-input" placeholder="게시 제목 또는 콘텐츠명" value="' + escapeHtml(selectedOption ? selectedOption.title : '') + '" />' +
+      '<input id="brand-result-remote-id" class="brand-publish-input" placeholder="게시물 ID 또는 링크 식별자" />' +
+      '<input id="brand-result-published-at" class="brand-publish-input" type="datetime-local" value="' + escapeHtml(publishPlan.scheduledAt || '') + '" />' +
+      '<select id="brand-result-status" class="brand-publish-input">' +
+      '<option value="published">게시 완료</option>' +
+      '<option value="scheduled">예약됨</option>' +
+      '<option value="failed">실패</option>' +
+      '</select>' +
+      '<textarea id="brand-result-note" class="brand-caption-textarea brand-publish-note" placeholder="게시 결과 메모를 남겨 주세요."></textarea>' +
+      '<div class="brand-publish-metric-grid">' +
+      '<input id="brand-result-views" class="brand-publish-input" type="number" min="0" placeholder="조회수" />' +
+      '<input id="brand-result-likes" class="brand-publish-input" type="number" min="0" placeholder="좋아요" />' +
+      '<input id="brand-result-comments" class="brand-publish-input" type="number" min="0" placeholder="댓글" />' +
+      '<input id="brand-result-shares" class="brand-publish-input" type="number" min="0" placeholder="공유" />' +
+      '<input id="brand-result-clicks" class="brand-publish-input" type="number" min="0" placeholder="클릭" />' +
+      '</div>' +
+      '<div class="brand-caption-actions">' +
+      '<button class="btn-primary" data-action="brand-save-publish-result" ' + (channelConnections.length ? '' : 'disabled') + '>게시 결과 저장</button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="brand-publish-result-grid">' + publishResultCards + '</div>' +
+      '</div>' +
+      '</section>' +
       '<div class="brand-studio-layout">' +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 운영 준비도</h3><span>현재 프로젝트 기준</span></div>' +
@@ -510,6 +605,17 @@
       var captionEl = root.querySelector('#brand-caption-textarea');
       var hashtagEl = root.querySelector('#brand-hashtag-textarea');
       var publishInputEl = root.querySelector('#brand-publish-datetime');
+      var resultChannelEl = root.querySelector('#brand-result-channel');
+      var resultTitleEl = root.querySelector('#brand-result-title');
+      var resultRemoteIdEl = root.querySelector('#brand-result-remote-id');
+      var resultPublishedAtEl = root.querySelector('#brand-result-published-at');
+      var resultStatusEl = root.querySelector('#brand-result-status');
+      var resultNoteEl = root.querySelector('#brand-result-note');
+      var resultViewsEl = root.querySelector('#brand-result-views');
+      var resultLikesEl = root.querySelector('#brand-result-likes');
+      var resultCommentsEl = root.querySelector('#brand-result-comments');
+      var resultSharesEl = root.querySelector('#brand-result-shares');
+      var resultClicksEl = root.querySelector('#brand-result-clicks');
       if (action === 'brand-select-content-type') {
         var typeId = String(btn.dataset.contentType || '').trim();
         if (!typeId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
@@ -692,6 +798,99 @@
           })
           .catch(function (err) {
             alert('예약 계획 삭제 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-save-publish-result') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload || !resultChannelEl) return;
+        var nextChannel = String(resultChannelEl.value || '').trim();
+        var nextTitle = String((resultTitleEl && resultTitleEl.value) || '').trim();
+        var nextRemoteId = String((resultRemoteIdEl && resultRemoteIdEl.value) || '').trim();
+        var nextPublishedAt = String((resultPublishedAtEl && resultPublishedAtEl.value) || '').trim();
+        if (!nextChannel) {
+          alert('결과를 저장할 채널을 선택해 주세요.');
+          resultChannelEl.focus();
+          return;
+        }
+        if (!nextTitle && !nextRemoteId) {
+          alert('게시 제목 또는 게시물 ID 중 하나는 입력해 주세요.');
+          if (resultTitleEl) resultTitleEl.focus();
+          return;
+        }
+        var nextResult = {
+          id: 'publish_' + Date.now(),
+          channelType: nextChannel,
+          contentType: selectedType || (publishPlan.contentType || ''),
+          status: String((resultStatusEl && resultStatusEl.value) || 'published').trim() || 'published',
+          publishedAt: nextPublishedAt,
+          remotePostId: nextRemoteId,
+          title: nextTitle,
+          note: String((resultNoteEl && resultNoteEl.value) || '').trim(),
+          metrics: {
+            views: Math.max(0, Number((resultViewsEl && resultViewsEl.value) || 0) || 0),
+            likes: Math.max(0, Number((resultLikesEl && resultLikesEl.value) || 0) || 0),
+            comments: Math.max(0, Number((resultCommentsEl && resultCommentsEl.value) || 0) || 0),
+            shares: Math.max(0, Number((resultSharesEl && resultSharesEl.value) || 0) || 0),
+            clicks: Math.max(0, Number((resultClicksEl && resultClicksEl.value) || 0) || 0)
+          }
+        };
+        var nextResults = publishResults.concat([nextResult]);
+        var nextSnapshots = nextResults.map(function (item) {
+          return {
+            id: item.id,
+            channelType: item.channelType,
+            contentType: item.contentType,
+            capturedAt: item.publishedAt,
+            remotePostId: item.remotePostId,
+            metrics: Object.assign({}, item.metrics)
+          };
+        });
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          brandStudioPublishResults: nextResults,
+          publishResults: nextResults,
+          analyticsSnapshots: nextSnapshots
+        })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+            alert('게시 결과를 저장했습니다.');
+          })
+          .catch(function (err) {
+            alert('게시 결과 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-remove-publish-result') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var removeId = String(btn.dataset.publishResultId || '').trim();
+        var remainingResults = publishResults.filter(function (item) { return String(item.id) !== removeId; });
+        var remainingSnapshots = remainingResults.map(function (item) {
+          return {
+            id: item.id,
+            channelType: item.channelType,
+            contentType: item.contentType,
+            capturedAt: item.publishedAt,
+            remotePostId: item.remotePostId,
+            metrics: Object.assign({}, item.metrics)
+          };
+        });
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          brandStudioPublishResults: remainingResults,
+          publishResults: remainingResults,
+          analyticsSnapshots: remainingSnapshots
+        })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('게시 결과 삭제 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;

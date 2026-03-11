@@ -77,6 +77,36 @@
         });
     }
 
+    function publishResults(project) {
+        var payload = project && project.payload || {};
+        var src = Array.isArray(payload.brandStudioPublishResults)
+            ? payload.brandStudioPublishResults
+            : (Array.isArray(payload.publishResults) ? payload.publishResults : []);
+        return src.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var metrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : raw;
+            return {
+                id: String(raw.id || ('publish_' + (index + 1))).trim(),
+                channelType: String(raw.channelType || raw.channel || '').trim(),
+                contentType: String(raw.contentType || '').trim(),
+                status: String(raw.status || 'published').trim(),
+                publishedAt: String(raw.publishedAt || raw.capturedAt || '').trim(),
+                remotePostId: String(raw.remotePostId || raw.postId || '').trim(),
+                title: String(raw.title || raw.remotePostId || ('게시 결과 ' + (index + 1))).trim(),
+                note: String(raw.note || '').trim(),
+                metrics: {
+                    views: Number(metrics.views || 0) || 0,
+                    likes: Number(metrics.likes || 0) || 0,
+                    comments: Number(metrics.comments || 0) || 0,
+                    shares: Number(metrics.shares || 0) || 0,
+                    clicks: Number(metrics.clicks || 0) || 0
+                }
+            };
+        }).filter(function (item) {
+            return item.channelType || item.title || item.remotePostId;
+        });
+    }
+
     library.listProjectContents = function (projectOrId) {
         var project = normalizeProject(projectOrId);
         if (!project) return [];
@@ -147,6 +177,22 @@
                 title: entry.title,
                 text: firstFilled([entry.note, entry.source, entry.type]),
                 url: entry.source,
+                status: 'ready'
+            });
+        });
+
+        publishResults(project).forEach(function (entry) {
+            items.push({
+                id: projectId + ':publish:' + entry.id,
+                projectId: projectId,
+                type: 'publish-result',
+                title: entry.title,
+                text: firstFilled([
+                    entry.channelType + ' · 조회수 ' + String(entry.metrics.views || 0),
+                    entry.note,
+                    entry.status
+                ]),
+                url: '',
                 status: 'ready'
             });
         });

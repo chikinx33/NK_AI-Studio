@@ -64,6 +64,45 @@
         }).filter(Boolean);
     }
 
+    function normalizeNumber(value) {
+        var n = Number(value);
+        if (!isFinite(n) || n < 0) return 0;
+        return Math.floor(n);
+    }
+
+    function normalizePublishResults(value) {
+        var src = Array.isArray(value) ? value : [];
+        return src.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var channelType = normalizeText(raw.channelType || raw.channel || raw.platform);
+            var status = normalizeText(raw.status || 'published') || 'published';
+            var contentType = normalizeText(raw.contentType);
+            var publishedAt = normalizeText(raw.publishedAt || raw.capturedAt || raw.date);
+            var remotePostId = normalizeText(raw.remotePostId || raw.postId || raw.remoteId);
+            var title = normalizeText(raw.title || raw.postTitle);
+            var note = normalizeText(raw.note || raw.memo);
+            var metrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : raw;
+            if (!channelType && !remotePostId && !title && !publishedAt) return null;
+            return {
+                id: normalizeText(raw.id) || ('publish_' + String(index + 1).padStart(3, '0')),
+                channelType: channelType || 'unknown',
+                contentType: contentType || 'unknown',
+                status: status,
+                publishedAt: publishedAt,
+                remotePostId: remotePostId,
+                title: title,
+                note: note,
+                metrics: {
+                    views: normalizeNumber(metrics.views),
+                    likes: normalizeNumber(metrics.likes),
+                    comments: normalizeNumber(metrics.comments),
+                    shares: normalizeNumber(metrics.shares),
+                    clicks: normalizeNumber(metrics.clicks)
+                }
+            };
+        }).filter(Boolean);
+    }
+
     function normalizeProjectCore(source) {
         var raw = source || {};
         return {
@@ -110,10 +149,26 @@
         };
     }
 
+    function normalizeAnalyticsSnapshots(source) {
+        var raw = source || {};
+        return normalizePublishResults(raw.analyticsSnapshots || raw.publishResults || raw.brandStudioPublishResults).map(function (item) {
+            return {
+                id: item.id,
+                channelType: item.channelType,
+                contentType: item.contentType,
+                capturedAt: item.publishedAt,
+                remotePostId: item.remotePostId,
+                metrics: Object.assign({}, item.metrics)
+            };
+        });
+    }
+
     function applyProjectCore(payload, draft) {
         var merged = Object.assign({}, (draft && draft.payload) || {}, payload || {});
         var core = normalizeProjectCore(merged);
         var knowledge = normalizeKnowledgeHub(merged);
+        var publishResults = normalizePublishResults(merged.brandStudioPublishResults || merged.publishResults);
+        var analyticsSnapshots = normalizeAnalyticsSnapshots(merged);
         var nextPayload = Object.assign({}, payload || {}, core);
         nextPayload.knowledgeHub = knowledge;
         nextPayload.brandVoice = knowledge.brandVoice;
@@ -124,6 +179,9 @@
         nextPayload.referenceContents = knowledge.referenceContents.slice();
         nextPayload.referenceContentEntries = knowledge.referenceItems.slice();
         nextPayload.successCases = knowledge.successCases.slice();
+        nextPayload.brandStudioPublishResults = publishResults.slice();
+        nextPayload.publishResults = publishResults.slice();
+        nextPayload.analyticsSnapshots = analyticsSnapshots.slice();
         if (!nextPayload.worldSetting && knowledge.worldSetting) nextPayload.worldSetting = knowledge.worldSetting;
         if (!nextPayload.knowledgeWorld && knowledge.worldSetting) nextPayload.knowledgeWorld = knowledge.worldSetting;
         if (!nextPayload.target && core.targetAudience) nextPayload.target = core.targetAudience;
