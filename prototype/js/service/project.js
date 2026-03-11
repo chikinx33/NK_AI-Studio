@@ -50,6 +50,105 @@
         });
     }
 
+    function parseProjectIdFromSearch(search) {
+        try {
+            var qp = new URLSearchParams(String(search || ''));
+            return String(qp.get('projectId') || qp.get('pid') || '').trim();
+        } catch (_) {
+            return '';
+        }
+    }
+
+    function getDraftById(id) {
+        var targetId = String(id || '').trim();
+        if (!targetId) return null;
+        try {
+            var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+            return drafts.find(function (d) { return String(d.id) === targetId; }) || null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function readStoredSelectedDraft() {
+        try {
+            var raw = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
+            return raw ? normalizeDraft(JSON.parse(raw)) : null;
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function readStoredCurrentProject() {
+        try {
+            var raw = localStorage.getItem(NK.config.KEYS.CURRENT_PROJECT) || localStorage.getItem('nk_current_project');
+            if (!raw) return null;
+            var parsed = JSON.parse(raw);
+            if (!parsed || !parsed.id) return null;
+            return {
+                id: String(parsed.id).trim(),
+                title: String(parsed.title || '').trim()
+            };
+        } catch (_) {
+            return null;
+        }
+    }
+
+    function writeCurrentProjectStorage(draft) {
+        var normalized = normalizeDraft(draft);
+        if (!normalized) return null;
+        try {
+            localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(normalized));
+            localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: normalized.id, title: normalized.title }));
+            localStorage.setItem('nk_current_project', JSON.stringify({ id: normalized.id, title: normalized.title }));
+        } catch (_) { }
+        return normalized;
+    }
+
+    function clearCurrentProjectStorage() {
+        try { localStorage.removeItem(NK.config.KEYS.SELECTED_DRAFT); } catch (_) { }
+        try { localStorage.removeItem(NK.config.KEYS.CURRENT_PROJECT); } catch (_) { }
+        try { localStorage.removeItem('nk_current_project'); } catch (_) { }
+    }
+
+    function resolveCurrentProject(options) {
+        var opts = options || {};
+        var requestedId = parseProjectIdFromSearch(opts.search);
+        if (requestedId) {
+            var byUrl = getDraftById(requestedId);
+            if (byUrl) return byUrl;
+        }
+
+        try {
+            var runtime = NK.state && NK.state.runtime ? NK.state.runtime.currentProject : null;
+            var normalizedRuntime = normalizeDraft(runtime);
+            if (normalizedRuntime) {
+                if (!requestedId || String(normalizedRuntime.id) === requestedId) return normalizedRuntime;
+            }
+        } catch (_) { }
+
+        var selected = readStoredSelectedDraft();
+        if (selected) {
+            if (!requestedId || String(selected.id) === requestedId) return selected;
+        }
+
+        var summary = readStoredCurrentProject();
+        if (summary && summary.id) {
+            var bySummary = getDraftById(summary.id);
+            if (bySummary) return bySummary;
+            return summary;
+        }
+
+        if (requestedId) return { id: requestedId, title: '' };
+
+        try {
+            var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+            if (drafts.length === 1) return drafts[0];
+        } catch (_) { }
+
+        return null;
+    }
+
     function updateSelectedDraftAfterBulk(drafts) {
         try {
             var savedSel = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
@@ -57,16 +156,10 @@
             var sel = JSON.parse(savedSel);
             var next = (drafts || []).find(function (d) { return String(d.id) === String(sel && sel.id); }) || null;
             if (!next) {
-                localStorage.removeItem(NK.config.KEYS.SELECTED_DRAFT);
-                localStorage.removeItem(NK.config.KEYS.CURRENT_PROJECT);
-                localStorage.removeItem('nk_current_project');
-                if (NK.state && NK.state.set) NK.state.set({ currentProject: null });
+                project.clearCurrent();
                 return;
             }
-            localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(next));
-            localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: next.id, title: next.title }));
-            localStorage.setItem('nk_current_project', JSON.stringify({ id: next.id, title: next.title }));
-            if (NK.state && NK.state.set) NK.state.set({ currentProject: next });
+            project.setCurrent(next);
         } catch (_) { }
     }
 
@@ -152,6 +245,27 @@
 
     project.listSeries = function () {
         return listSeriesFromDrafts(NK.store.getDrafts().map(normalizeDraft).filter(Boolean));
+    };
+
+    project.getDraftById = getDraftById;
+    project.resolveCurrent = resolveCurrentProject;
+    project.getCurrentProjectId = function (options) {
+        var current = resolveCurrentProject(options);
+        return String(current && current.id || '').trim();
+    };
+    project.getCurrentProjectTitle = function (options) {
+        var current = resolveCurrentProject(options);
+        return String(current && current.title || '').trim();
+    };
+    project.setCurrent = function (draft) {
+        var normalized = writeCurrentProjectStorage(draft);
+        if (!normalized) return null;
+        if (NK.state && NK.state.set) NK.state.set({ currentProject: normalized });
+        return normalized;
+    };
+    project.clearCurrent = function () {
+        clearCurrentProjectStorage();
+        if (NK.state && NK.state.set) NK.state.set({ currentProject: null });
     };
 
     /**

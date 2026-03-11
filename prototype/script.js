@@ -211,17 +211,7 @@
       if (st === 'dashboard') return;
     } catch (_) { }
     const hasContent = !!(container.innerHTML && container.innerHTML.trim().length);
-    let draft = NK.state?.runtime?.currentProject || null;
-    if (!draft) {
-      try {
-        const saved = localStorage.getItem(KEY.SELECTED_DRAFT);
-        if (saved) draft = JSON.parse(saved);
-      } catch (_) { }
-      // state에 없고 로컬에 있으면 state도 세팅
-      if (draft && NK.state && NK.state.set) {
-        NK.state.set({ currentProject: draft });
-      }
-    }
+    let draft = NK.service?.project?.resolveCurrent({ search: window.location.search }) || null;
     if (!hasContent && draft && NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
       NK.ui.dashboard.renderSidebarProjectCard(draft);
     }
@@ -300,7 +290,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.715';
+    NK.config.APP_VERSION = '1.716';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -345,24 +335,14 @@
     // 저장된 프로젝트 정보 복구 (대시보드가 아닐 때만 복구하여 처음부터 노출 방지)
     const isDashboard = !effectiveStage || effectiveStage === 'dashboard';
     if (!isDashboard) {
-      const savedProj = localStorage.getItem(KEY.SELECTED_DRAFT) || localStorage.getItem('nk_current_project');
-      if (savedProj) {
-        try {
-          const projData = JSON.parse(savedProj);
-          if (projData && !projData.payload && projData.id) {
-            const drafts = NK.store.getDrafts();
-            const fullDraft = drafts.find(d => String(d.id) === String(projData.id));
-            if (fullDraft) NK.state.set({ currentProject: fullDraft });
-            else NK.state.set({ currentProject: projData });
-          } else {
-            NK.state.set({ currentProject: projData });
-          }
-        } catch (_) { }
+      const resolvedProject = NK.service?.project?.resolveCurrent({ search: window.location.search }) || null;
+      if (resolvedProject && NK.service?.project?.setCurrent) {
+        NK.service.project.setCurrent(resolvedProject);
       }
     } else {
       // 대시보드일 때는 프로젝트 카드를 명시적으로 숨김
       if (!isIframe) {
-        NK.state.set({ currentProject: null });
+        NK.service?.project?.clearCurrent?.();
       }
     }
 
@@ -541,11 +521,7 @@
       const persistCurrentProject = () => {
         const cp = NK.state?.runtime?.currentProject;
         if (!cp) return;
-        try {
-          localStorage.setItem(KEY.SELECTED_DRAFT, JSON.stringify(cp));
-          localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: cp.id, title: cp.title }));
-          localStorage.setItem('nk_current_project', JSON.stringify({ id: cp.id, title: cp.title }));
-        } catch (_) { }
+        NK.service?.project?.setCurrent?.(cp);
       };
 
       // 대시보드/메인 클릭: 전체 페이지 전환을 막고 iframe으로만 로드
@@ -2014,10 +1990,7 @@
       try {
         const draft = await NK.service.project.create(payload);
         created = true;
-        localStorage.setItem(KEY.SELECTED_DRAFT, JSON.stringify(draft));
-        localStorage.setItem(KEY.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
-        localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
-        NK.state.set({ currentProject: draft });
+        NK.service.project.setCurrent(draft);
         if (NK.state && NK.state.broadcast) {
           NK.state.broadcast('update-project', { project: draft });
         }

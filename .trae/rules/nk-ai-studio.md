@@ -6,3 +6,4 @@
 한글이 있는 파일은 UTF8 인코딩 유지하세요.
 # 개발 작업을 마친 후 사이드 바 하단의 버전 표시를 매 번 업데이트하세요. Auto-Generated Rules
 - **Version Control**: After ANY code change, increment `APP_VERSION` in `script.js` immediately.
+- **Delivery Rule**: After coding work, commit and push the changes so the latest web-deployable state is available for browser testing. If commit/push cannot be completed, report the exact blocker immediately.

@@ -8,29 +8,10 @@
   var SAMPLE_VOICE_URL = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
   var getProjectId = function () {
     if (lastProjectId) return lastProjectId;
-    try {
-      var qp = new URLSearchParams(window.location.search);
-      var pidUrl = qp.get('projectId') || qp.get('pid');
-      if (pidUrl) return pidUrl;
-    } catch (_) { }
-    try {
-      var sel = localStorage.getItem('nk_selected_draft');
-      if (sel) { var d = JSON.parse(sel); if (d && d.id) return d.id; }
-    } catch (_) { }
-    try {
-      var cur = localStorage.getItem('nk_current_project');
-      if (cur) { var c = JSON.parse(cur); if (c && c.id) return c.id; }
-    } catch (_) { }
-    try {
-      if (NK && NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
-        return NK.state.runtime.currentProject.id;
-      }
-    } catch (_) { }
-    try {
-      var drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
-      if (Array.isArray(drafts) && drafts.length === 1) return drafts[0].id;
-    } catch (_) { }
-    return null;
+    var resolved = NK.service && NK.service.project && NK.service.project.getCurrentProjectId
+      ? NK.service.project.getCurrentProjectId({ search: window.location.search })
+      : '';
+    return resolved || null;
   };
 
   // 공통 모달 / 다운로드 헬퍼
@@ -258,25 +239,9 @@
   }
 
   var getProjectTitle = function () {
-    try {
-      if (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.title) {
-        return NK.state.runtime.currentProject.title;
-      }
-    } catch (_) { }
-    try {
-      var cur = localStorage.getItem('nk_current_project');
-      if (cur) { var c = JSON.parse(cur); if (c && c.title) return c.title; }
-    } catch (_) { }
-    try {
-      var sel = localStorage.getItem('nk_selected_draft');
-      if (sel) { var d = JSON.parse(sel); if (d && d.title) return d.title; }
-    } catch (_) { }
-    try {
-      var drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
-      var pid = getProjectId();
-      var found = drafts.find(function (v) { return String(v.id) === String(pid); });
-      if (found && found.title) return found.title;
-    } catch (_) { }
+    if (NK.service && NK.service.project && NK.service.project.getCurrentProjectTitle) {
+      return NK.service.project.getCurrentProjectTitle({ search: window.location.search }) || '';
+    }
     return '';
   };
   ui.init = function (c) {
