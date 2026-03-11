@@ -29,6 +29,17 @@
     }
   }
 
+  function contentTypeLabel(type) {
+    switch (String(type || '').trim()) {
+      case 'sns-post': return 'SNS 게시물';
+      case 'shorts-promo': return '쇼츠 홍보';
+      case 'promo-image': return '홍보 이미지';
+      case 'blog-post': return '블로그 글';
+      case 'unknown': return '미분류';
+      default: return String(type || 'Unknown');
+    }
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -45,6 +56,7 @@
     var payload = project.payload || {};
     var summary = NK.service.analytics.summarizeProject(project);
     var channels = NK.service.analytics.summarizeByChannel(project);
+    var contentTypes = NK.service.analytics.summarizeByContentType(project);
 
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -88,6 +100,30 @@
           '</article>'
         );
       }).join('') : '<div class="analytics-empty">아직 게시 결과가 없습니다. Brand Studio에서 먼저 게시 결과를 기록해 주세요.</div>') +
+      '</div>' +
+      '</section>' +
+      '<section class="analytics-panel">' +
+      '<div class="analytics-panel-head"><h3>콘텐츠 유형별 성과</h3><span>어떤 포맷이 강한지 비교</span></div>' +
+      '<div class="analytics-type-grid">' +
+      (contentTypes.length ? contentTypes.map(function (item) {
+        return (
+          '<article class="analytics-type-card">' +
+          '<div class="analytics-channel-top">' +
+          '<span class="analytics-channel-badge">' + escapeHtml(contentTypeLabel(item.contentType)) + '</span>' +
+          '<strong>' + escapeHtml(item.totalPosts) + '개 운영</strong>' +
+          '</div>' +
+          '<div class="analytics-channel-metrics">' +
+          '<span>조회수</span><strong>' + escapeHtml(item.views) + '</strong>' +
+          '<span>좋아요</span><strong>' + escapeHtml(item.likes) + '</strong>' +
+          '<span>댓글</span><strong>' + escapeHtml(item.comments) + '</strong>' +
+          '<span>공유</span><strong>' + escapeHtml(item.shares) + '</strong>' +
+          '<span>클릭</span><strong>' + escapeHtml(item.clicks) + '</strong>' +
+          '<span>주요 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
+          '</div>' +
+          '<p class="analytics-channel-note">현재는 게시 결과에 저장된 콘텐츠 유형 기준으로 집계합니다. 다음 단계에서는 업로드 시간, 해시태그 패턴까지 연결합니다.</p>' +
+          '</article>'
+        );
+      }).join('') : '<div class="analytics-empty">아직 콘텐츠 유형별로 비교할 게시 결과가 없습니다.</div>') +
       '</div>' +
       '</section>' +
       '<div class="analytics-toolbar">' +

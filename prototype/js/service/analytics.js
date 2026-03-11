@@ -116,4 +116,37 @@
       return b.views - a.views || b.totalPosts - a.totalPosts;
     });
   };
+
+  analytics.summarizeByContentType = function (projectOrId) {
+    var rows = readPublishResults(projectOrId);
+    var map = new Map();
+    rows.forEach(function (item) {
+      var key = item.contentType || 'unknown';
+      if (!map.has(key)) {
+        map.set(key, {
+          contentType: key,
+          totalPosts: 0,
+          views: 0,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          clicks: 0,
+          topChannel: ''
+        });
+      }
+      var row = map.get(key);
+      row.totalPosts += 1;
+      row.views += item.metrics.views;
+      row.likes += item.metrics.likes;
+      row.comments += item.metrics.comments;
+      row.shares += item.metrics.shares;
+      row.clicks += item.metrics.clicks;
+      if (!row.topChannel && item.channelType) {
+        row.topChannel = item.channelType;
+      }
+    });
+    return Array.from(map.values()).sort(function (a, b) {
+      return b.views - a.views || b.totalPosts - a.totalPosts;
+    });
+  };
 })();

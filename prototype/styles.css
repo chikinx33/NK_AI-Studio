@@ -6211,7 +6211,14 @@ body.layout-fixed .lib-content {
   gap: 12px;
 }
 
+.analytics-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .analytics-channel-card,
+.analytics-type-card,
 .analytics-empty {
   padding: 18px;
   border-radius: 18px;
@@ -6219,7 +6226,8 @@ body.layout-fixed .lib-content {
   background: rgba(10, 18, 34, 0.45);
 }
 
-.analytics-channel-card {
+.analytics-channel-card,
+.analytics-type-card {
   display: grid;
   gap: 12px;
 }
@@ -6343,6 +6351,10 @@ body.layout-fixed .lib-content {
   }
 
   .analytics-channel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-type-grid {
     grid-template-columns: 1fr;
   }
 }
