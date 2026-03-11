@@ -5555,6 +5555,64 @@ body.layout-fixed .lib-content {
   justify-content: flex-end;
 }
 
+.brand-publish-planner {
+  display: grid;
+  gap: 14px;
+}
+
+.brand-publish-summary {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.52);
+  display: grid;
+  gap: 6px;
+}
+
+.brand-publish-fields {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 12px;
+}
+
+.brand-publish-field {
+  display: grid;
+  gap: 10px;
+}
+
+.brand-publish-channel-list {
+  display: grid;
+  gap: 10px;
+}
+
+.brand-publish-channel-option {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 46px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+}
+
+.brand-publish-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.62);
+  color: var(--text);
+}
+
+.brand-publish-empty {
+  padding: 16px;
+  border-radius: 14px;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+}
+
 .brand-studio-summary-card,
 .brand-studio-panel,
 .brand-studio-op-card {
@@ -5700,6 +5758,10 @@ body.layout-fixed .lib-content {
   }
 
   .brand-channel-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-publish-fields {
     grid-template-columns: 1fr;
   }
 

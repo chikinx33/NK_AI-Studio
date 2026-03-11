@@ -42,6 +42,23 @@
     }).filter(function (item) { return item.channelType; });
   }
 
+  function readPublishPlan(payload) {
+    var plan = payload && payload.brandStudioPublishPlan && typeof payload.brandStudioPublishPlan === 'object'
+      ? payload.brandStudioPublishPlan
+      : null;
+    if (!plan) {
+      return { channels: [], scheduledAt: '', status: '' };
+    }
+    return {
+      channels: Array.isArray(plan.channels)
+        ? plan.channels.map(function (item) { return String(item || '').trim(); }).filter(Boolean)
+        : [],
+      scheduledAt: String(plan.scheduledAt || '').trim(),
+      status: String(plan.status || '').trim(),
+      contentType: String(plan.contentType || '').trim()
+    };
+  }
+
   function firstFilled(values) {
     var src = Array.isArray(values) ? values : [];
     for (var i = 0; i < src.length; i++) {
@@ -173,6 +190,7 @@
     var savedCaption = readCaptionDraft(payload);
     var savedHashtags = readHashtagDraft(payload);
     var channelConnections = readChannelConnections(payload);
+    var publishPlan = readPublishPlan(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
       ? NK.service.contentLibrary.summarizeProject(project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
@@ -244,6 +262,16 @@
         '<button class="btn-secondary compact" data-action="brand-toggle-channel" data-channel-type="' + escapeHtml(item.id) + '">' + (connected ? '연결 해제' : '채널 연결') + '</button>' +
         '</div>' +
         '</article>'
+      );
+    }).join('');
+    var publishChannelOptions = channelConnections.map(function (item) {
+      var checked = publishPlan.channels.indexOf(item.channelType) >= 0;
+      var title = channelTitleMap[item.channelType] || item.channelType;
+      return (
+        '<label class="brand-publish-channel-option">' +
+        '<input type="checkbox" data-publish-channel="' + escapeHtml(item.channelType) + '" ' + (checked ? 'checked' : '') + ' />' +
+        '<span>' + escapeHtml(title) + ' · ' + escapeHtml(item.accountName || '계정명 없음') + '</span>' +
+        '</label>'
       );
     }).join('');
 
@@ -325,6 +353,31 @@
       '</div>' +
       '<div class="brand-channel-grid">' + channelCards + '</div>' +
       '</section>' +
+      '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>예약 게시</h3><span>V1 데이터 구조</span></div>' +
+      '<div class="brand-publish-planner">' +
+      '<div class="brand-publish-summary">' +
+      '<span class="brand-channel-summary-label">현재 계획</span>' +
+      '<strong>' + escapeHtml(publishPlan.scheduledAt ? publishPlan.scheduledAt : '아직 저장된 예약 없음') + '</strong>' +
+      '<p>' + escapeHtml(publishPlan.channels.length ? publishPlan.channels.map(function (item) { return channelTitleMap[item] || item; }).join(', ') : '채널을 선택하고 예약 시각을 저장하면 게시 계획이 프로젝트에 남습니다.') + '</p>' +
+      '</div>' +
+      '<div class="brand-publish-fields">' +
+      '<div class="brand-publish-field">' +
+      '<span class="brand-caption-meta-label">예약 채널</span>' +
+      '<div class="brand-publish-channel-list">' + (publishChannelOptions || '<div class="brand-publish-empty">먼저 채널을 연결해 주세요.</div>') + '</div>' +
+      '</div>' +
+      '<div class="brand-publish-field">' +
+      '<span class="brand-caption-meta-label">예약 시각</span>' +
+      '<input id="brand-publish-datetime" class="brand-publish-input" type="datetime-local" value="' + escapeHtml(publishPlan.scheduledAt || '') + '" />' +
+      '</div>' +
+      '</div>' +
+      '<div class="brand-caption-actions">' +
+      '<button class="btn-primary" data-action="brand-save-publish-plan" ' + (channelConnections.length && selectedOption ? '' : 'disabled') + '>예약 계획 저장</button>' +
+      '<button class="btn-secondary" data-action="brand-clear-publish-plan" ' + (publishPlan.scheduledAt || publishPlan.channels.length ? '' : 'disabled') + '>예약 계획 비우기</button>' +
+      '</div>' +
+      '<p class="brand-caption-help">선택한 콘텐츠 유형, 연결된 채널, 캡션, 해시태그를 기준으로 예약 게시 계획의 최소 데이터 구조를 저장합니다.</p>' +
+      '</div>' +
+      '</section>' +
       '<div class="brand-studio-layout">' +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 운영 준비도</h3><span>현재 프로젝트 기준</span></div>' +
@@ -374,6 +427,7 @@
       var target = '';
       var captionEl = root.querySelector('#brand-caption-textarea');
       var hashtagEl = root.querySelector('#brand-hashtag-textarea');
+      var publishInputEl = root.querySelector('#brand-publish-datetime');
       if (action === 'brand-select-content-type') {
         var typeId = String(btn.dataset.contentType || '').trim();
         if (!typeId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
@@ -516,6 +570,61 @@
       }
       if (action === 'brand-select-next') {
         alert(selectedOption ? ('선택한 유형: ' + selectedOption.title + '\n다음 단계로 캡션/해시태그 흐름을 연결할 예정입니다.') : '먼저 콘텐츠 유형을 선택해 주세요.');
+        return;
+      }
+      if (action === 'brand-save-publish-plan') {
+        if (!selectedOption || !channelConnections.length || !publishInputEl || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var scheduledAt = String(publishInputEl.value || '').trim();
+        var selectedChannels = Array.from(root.querySelectorAll('[data-publish-channel]:checked'))
+          .map(function (input) { return String(input.getAttribute('data-publish-channel') || '').trim(); })
+          .filter(Boolean);
+        if (!selectedChannels.length) {
+          alert('예약할 채널을 선택해 주세요.');
+          return;
+        }
+        if (!scheduledAt) {
+          alert('예약 시각을 입력해 주세요.');
+          publishInputEl.focus();
+          return;
+        }
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          brandStudioPublishPlan: {
+            channels: selectedChannels,
+            scheduledAt: scheduledAt,
+            status: 'scheduled',
+            contentType: selectedType,
+            captionDraft: readCaptionDraft(payload),
+            hashtagDraft: readHashtagDraft(payload)
+          }
+        })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+            alert('예약 게시 계획을 저장했습니다.');
+          })
+          .catch(function (err) {
+            alert('예약 계획 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-clear-publish-plan') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          brandStudioPublishPlan: null
+        })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('예약 계획 삭제 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
         return;
       }
       if (action === 'brand-open-library') target = buildStageUrl('library.html', projectId);
