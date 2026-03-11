@@ -501,6 +501,7 @@
       <div class="sidebar-card-actions">
         <button class="btn-secondary" data-action="sidebar-edit-scenario">프리 프로덕션</button>
         <button class="btn-secondary" data-action="sidebar-edit-library">콘텐츠 저장소</button>
+        <button class="btn-secondary" data-action="sidebar-edit-brand">Brand Studio</button>
         <button class="btn-secondary" data-action="sidebar-edit-scenes">프로덕션</button>
         <button class="btn-secondary" data-action="sidebar-edit-media">포스트 프로덕션</button>
       </div>

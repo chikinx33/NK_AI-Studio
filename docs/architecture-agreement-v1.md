@@ -191,7 +191,7 @@ Brand Studio는 독립된 기능 페이지가 아니다.
 
 ### V1 Brand Operations
 
-- [ ] Brand Studio 화면 골격 추가
+- [x] Brand Studio 화면 골격 추가
 - [ ] SNS 콘텐츠 유형 선택 UI 추가
 - [ ] 캡션 생성 흐름 추가
 - [ ] 해시태그 생성 흐름 추가
