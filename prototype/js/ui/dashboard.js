@@ -28,6 +28,9 @@
   const normalizeSeriesId = (value) => String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '');
 
   const normalizeDraft = (draft) => {
+    if (NK.service?.project?.normalizeDraft) {
+      return NK.service.project.normalizeDraft(draft);
+    }
     const id = String(draft?.id || '').trim();
     if (!id) return null;
     const payload = Object.assign({}, draft?.payload || {});
@@ -181,6 +184,8 @@
       const cat = d.payload?.purposeCategory || '';
       const tags = Array.isArray(d.payload?.purposeTags) ? d.payload.purposeTags.join(', ') : '';
       const tgt = d.payload?.target || '';
+      const projectType = d.payload?.projectType || '';
+      const brandSummary = d.payload?.brandSummary || '';
       const genre = `${cat} ${tags}`.trim();
       const summary = getContentSummary(d);
 
@@ -195,6 +200,8 @@
               </div>
               <div class="draft-meta">
                 <div>프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
+                <div>유형 : ${escapeHtml(projectType || '-')}</div>
+                <div>브랜드 요약 : ${escapeHtml(brandSummary || '-')}</div>
                 <div>장르 : ${escapeHtml(genre || '-')}</div>
                 <div>타겟 : ${escapeHtml(tgt || '-')}</div>
                 <div>길이 : ${escapeHtml(dur)}</div>
@@ -453,10 +460,14 @@
     const cat = normalized.payload?.purposeCategory || '';
     const tags = Array.isArray(normalized.payload?.purposeTags) ? normalized.payload.purposeTags.join(', ') : '';
     const tgt = normalized.payload?.target || '';
+    const projectType = normalized.payload?.projectType || '';
+    const brandSummary = normalized.payload?.brandSummary || '';
     const genre = `${cat} ${tags}`.trim();
     const summary = getContentSummary(normalized);
     const desc = [
       `프로젝트 : ${normalized.seriesTitle || '-'}`,
+      `유형 : ${projectType || '-'}`,
+      `브랜드 요약 : ${brandSummary || '-'}`,
       `장르 : ${genre || '-'}`,
       `타겟 : ${tgt || '-'}`,
       `길이 : ${dur}`,

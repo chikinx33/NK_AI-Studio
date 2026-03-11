@@ -13,11 +13,70 @@
         return String(Date.now() + Math.floor(Math.random() * 1000));
     }
 
+    var PROJECT_CORE_STRING_FIELDS = [
+        'projectType',
+        'contentStyle',
+        'brandSummary',
+        'coreMessage',
+        'targetAudience',
+        'brandVoice',
+        'brandTone',
+        'brandStory',
+        'brandCharacter'
+    ];
+    var PROJECT_CORE_LIST_FIELDS = ['brandKeywords', 'brandRules', 'connectedChannels'];
+
+    function normalizeText(value) {
+        return String(value || '').replace(/[<>]/g, '').trim();
+    }
+
+    function normalizeTextList(value) {
+        if (Array.isArray(value)) {
+            return value
+                .map(function (item) { return normalizeText(item); })
+                .filter(Boolean);
+        }
+        if (typeof value === 'string') {
+            return value
+                .split(/[,\n]/)
+                .map(function (item) { return normalizeText(item); })
+                .filter(Boolean);
+        }
+        return [];
+    }
+
+    function normalizeProjectCore(source) {
+        var raw = source || {};
+        return {
+            projectType: normalizeText(raw.projectType),
+            contentStyle: normalizeText(raw.contentStyle),
+            brandSummary: normalizeText(raw.brandSummary),
+            coreMessage: normalizeText(raw.coreMessage),
+            targetAudience: normalizeText(raw.targetAudience || raw.target),
+            brandVoice: normalizeText(raw.brandVoice),
+            brandTone: normalizeText(raw.brandTone || raw.tone),
+            brandStory: normalizeText(raw.brandStory),
+            brandCharacter: normalizeText(raw.brandCharacter),
+            brandKeywords: normalizeTextList(raw.brandKeywords),
+            brandRules: normalizeTextList(raw.brandRules),
+            connectedChannels: normalizeTextList(raw.connectedChannels)
+        };
+    }
+
+    function applyProjectCore(payload, draft) {
+        var merged = Object.assign({}, (draft && draft.payload) || {}, payload || {});
+        var core = normalizeProjectCore(merged);
+        var nextPayload = Object.assign({}, payload || {}, core);
+        if (!nextPayload.target && core.targetAudience) nextPayload.target = core.targetAudience;
+        if (!nextPayload.tone && core.brandTone) nextPayload.tone = core.brandTone;
+        return nextPayload;
+    }
+
     function normalizeDraft(raw) {
         var draft = raw || {};
         var id = String(draft.id || '').trim();
         if (!id) return null;
-        var payload = Object.assign({}, draft.payload || {});
+        var payload = applyProjectCore(Object.assign({}, draft.payload || {}), draft);
         var seriesId = normalizeSeriesId(payload.seriesId || draft.seriesId) || ('projects' + id);
         var seriesTitle = String(payload.seriesTitle || draft.seriesTitle || draft.title || seriesId).trim() || seriesId;
         payload.seriesId = seriesId;
@@ -28,6 +87,7 @@
             title: title,
             seriesId: seriesId,
             seriesTitle: seriesTitle,
+            projectCore: normalizeProjectCore(payload),
             payload: payload
         });
     }
@@ -166,10 +226,11 @@
     async function syncDraftToServer(draft) {
         if (!NK.api || !NK.api.projectSave) return { ok: false, reason: 'api_missing' };
         try {
-            await NK.api.projectSave(String(draft.id), draft.payload || {}, draft.scenes || [], {
-                header: draft.header || '',
-                aspectRatio: draft.payload?.aspectRatio || '',
-                title: draft.title || ''
+            var normalized = normalizeDraft(draft) || draft;
+            await NK.api.projectSave(String(normalized.id), normalized.payload || {}, normalized.scenes || [], {
+                header: normalized.header || '',
+                aspectRatio: normalized.payload?.aspectRatio || '',
+                title: normalized.title || ''
             });
             return { ok: true };
         } catch (err) {
@@ -201,12 +262,16 @@
 
         var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         var seriesList = listSeriesFromDrafts(drafts);
+        var requestedCore = normalizeProjectCore(arg || {});
+        var inheritedCore = requestedCore;
 
         if (mode === 'episode') {
             var matched = seriesList.find(function (s) { return String(s.id) === String(seriesId); });
             if (!matched) throw new Error('series_not_found');
+            var matchedDraft = drafts.find(function (d) { return String(d.seriesId) === String(seriesId); }) || null;
             seriesTitle = seriesTitle || matched.title;
             if (!episodeTitle) episodeTitle = seriesTitle + ' 새 에피소드';
+            inheritedCore = normalizeProjectCore((matchedDraft && matchedDraft.payload) || {});
         } else {
             if (!seriesTitle) throw new Error('series_title_required');
             seriesId = seriesId || ('projects' + Date.now());
@@ -220,13 +285,13 @@
             title: episodeTitle,
             seriesId: seriesId,
             seriesTitle: seriesTitle,
-            payload: {
+            payload: applyProjectCore({
                 topic: '',
                 aspectRatio: ratio,
                 seriesId: seriesId,
                 seriesTitle: seriesTitle,
                 episodeTitle: episodeTitle
-            },
+            }, { payload: inheritedCore }),
             scenes: []
         };
 
@@ -247,6 +312,15 @@
         return listSeriesFromDrafts(NK.store.getDrafts().map(normalizeDraft).filter(Boolean));
     };
 
+    project.normalizeDraft = normalizeDraft;
+    project.getProjectCore = function (draftOrId) {
+        var target = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
+        return normalizeProjectCore((target && target.payload) || draftOrId || {});
+    };
+    project.applyProjectCore = function (payload, draftOrId) {
+        var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : draftOrId;
+        return applyProjectCore(payload, draft);
+    };
     project.getDraftById = getDraftById;
     project.resolveCurrent = resolveCurrentProject;
     project.getCurrentProjectId = function (options) {

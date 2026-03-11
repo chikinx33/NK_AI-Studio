@@ -221,6 +221,9 @@
       if (currentPayload.seriesTitle && !payload.seriesTitle) payload.seriesTitle = currentPayload.seriesTitle;
       if (currentPayload.episodeTitle && !payload.episodeTitle) payload.episodeTitle = currentPayload.episodeTitle;
     }
+    if (NK.service?.project?.applyProjectCore) {
+      return NK.service.project.applyProjectCore(payload, currentPayload);
+    }
     return payload;
   };
 

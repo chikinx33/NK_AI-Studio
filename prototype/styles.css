@@ -3823,6 +3823,55 @@ a.btn-primary:active {
   max-width: none;
 }
 
+#project-overlay .project-create-profile-line {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 0 0 18px;
+}
+
+#project-overlay .project-create-profile-line .form-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0;
+}
+
+#project-overlay .project-create-profile-line .project-create-brand-summary-row {
+  grid-column: 2 / span 1;
+}
+
+#project-overlay .project-create-profile-line .project-create-core-message-row {
+  grid-column: 1 / span 2;
+}
+
+#project-overlay .project-create-profile-line .form-row label {
+  flex: none;
+  width: auto;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+#project-overlay .project-create-profile-line input,
+#project-overlay .project-create-profile-line select,
+#project-overlay .project-create-profile-line textarea {
+  width: 100%;
+  max-width: none;
+}
+
+#project-overlay .project-create-profile-line textarea {
+  min-height: 92px;
+  resize: vertical;
+  font-size: 15px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  color: var(--text);
+}
+
 #project-overlay .project-create-mode {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3869,6 +3918,13 @@ a.btn-primary:active {
   }
   #project-overlay .project-create-input-line {
     grid-template-columns: 1fr;
+  }
+  #project-overlay .project-create-profile-line {
+    grid-template-columns: 1fr;
+  }
+  #project-overlay .project-create-profile-line .project-create-brand-summary-row,
+  #project-overlay .project-create-profile-line .project-create-core-message-row {
+    grid-column: auto;
   }
 }
 

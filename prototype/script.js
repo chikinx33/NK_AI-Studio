@@ -1813,7 +1813,7 @@
     const existingSeriesRow = document.createElement('div');
     existingSeriesRow.className = 'form-row project-create-series-select-row hidden';
     existingSeriesRow.innerHTML = `
-      <label>카테고리</label>
+      <label>프로젝트</label>
       <select id="project-series-select"></select>
     `;
 
@@ -1822,6 +1822,31 @@
     hintRow.id = 'project-create-hint';
     const inputLine = document.createElement('div');
     inputLine.className = 'project-create-input-line';
+    const profileLine = document.createElement('div');
+    profileLine.className = 'project-create-profile-line';
+    profileLine.innerHTML = `
+      <div class="form-row project-create-project-type-row">
+        <label>프로젝트 유형</label>
+        <select id="project-type-select">
+          <option value="">선택 안 함</option>
+          <option value="캐릭터 IP">캐릭터 IP</option>
+          <option value="애니메이션 IP">애니메이션 IP</option>
+          <option value="게임 프로젝트">게임 프로젝트</option>
+          <option value="앱 서비스">앱 서비스</option>
+          <option value="책 / 출판">책 / 출판</option>
+          <option value="유튜브 콘텐츠">유튜브 콘텐츠</option>
+          <option value="광고 프로젝트">광고 프로젝트</option>
+        </select>
+      </div>
+      <div class="form-row project-create-brand-summary-row">
+        <label>브랜드 요약</label>
+        <textarea id="project-brand-summary-input" rows="3" placeholder="이 프로젝트가 어떤 브랜드/콘텐츠인지 짧게 적어 주세요."></textarea>
+      </div>
+      <div class="form-row project-create-core-message-row">
+        <label>핵심 메시지</label>
+        <input id="project-core-message-input" placeholder="사용자에게 남기고 싶은 핵심 메시지" />
+      </div>
+    `;
 
     baseRow.classList.add('project-create-episode-row');
     ensureLabel(baseRow, '에피소드');
@@ -1833,12 +1858,20 @@
     inputLine.appendChild(newSeriesRow);
     inputLine.appendChild(existingSeriesRow);
     inputLine.appendChild(baseRow);
-    if (actions) overlayCard.insertBefore(hintRow, actions);
-    else overlayCard.appendChild(hintRow);
+    if (actions) {
+      overlayCard.insertBefore(profileLine, actions);
+      overlayCard.insertBefore(hintRow, actions);
+    } else {
+      overlayCard.appendChild(profileLine);
+      overlayCard.appendChild(hintRow);
+    }
 
     const modeButtons = Array.from(modeRow.querySelectorAll('.mode-btn-item'));
     const seriesInput = newSeriesRow.querySelector('#project-series-input');
     const seriesSelect = existingSeriesRow.querySelector('#project-series-select');
+    const projectTypeSelect = profileLine.querySelector('#project-type-select');
+    const brandSummaryInput = profileLine.querySelector('#project-brand-summary-input');
+    const coreMessageInput = profileLine.querySelector('#project-core-message-input');
 
     if (overlayCard && !overlayCard.querySelector('.project-create-loading')) {
       const loading = document.createElement('div');
@@ -1897,6 +1930,7 @@
       const list = refreshSeriesOptions();
       newSeriesRow.classList.toggle('hidden', mode !== 'new-series');
       existingSeriesRow.classList.toggle('hidden', mode !== 'episode');
+      profileLine.classList.toggle('hidden', mode !== 'new-series');
       if (mode === 'new-series') {
         ensureLabel(baseRow, '첫 에피소드');
         input.placeholder = '첫 에피소드 이름 (예: 시즌1 EP1)';
@@ -1927,6 +1961,9 @@
       input.disabled = creating;
       if (seriesInput) seriesInput.disabled = creating;
       if (seriesSelect) seriesSelect.disabled = creating || mode !== 'episode' || !seriesSelect.options.length || !seriesSelect.value;
+      if (projectTypeSelect) projectTypeSelect.disabled = creating || mode !== 'new-series';
+      if (brandSummaryInput) brandSummaryInput.disabled = creating || mode !== 'new-series';
+      if (coreMessageInput) coreMessageInput.disabled = creating || mode !== 'new-series';
       modeButtons.forEach((btn) => { btn.disabled = creating; });
       btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
       blurTargets.forEach(el => {
@@ -1940,6 +1977,9 @@
       overlay.classList.add('hidden');
       input.value = '';
       if (seriesInput) seriesInput.value = '';
+      if (projectTypeSelect) projectTypeSelect.value = '';
+      if (brandSummaryInput) brandSummaryInput.value = '';
+      if (coreMessageInput) coreMessageInput.value = '';
       blurTargets.forEach(el => {
         el.classList.remove('blur-active');
         el.classList.remove('loading-blur');
@@ -1952,6 +1992,9 @@
       if (creating) return;
       const episodeTitleInput = (input.value || '').trim();
       const seriesTitleInput = (seriesInput && seriesInput.value ? String(seriesInput.value).trim() : '');
+      const projectType = projectTypeSelect ? String(projectTypeSelect.value || '').trim() : '';
+      const brandSummary = brandSummaryInput ? String(brandSummaryInput.value || '').trim() : '';
+      const coreMessage = coreMessageInput ? String(coreMessageInput.value || '').trim() : '';
       const seriesList = refreshSeriesOptions();
       let payload = null;
       if (mode === 'new-series') {
@@ -1963,7 +2006,10 @@
         payload = {
           mode: 'new-series',
           seriesTitle: seriesTitleInput,
-          episodeTitle: episodeTitleInput || (seriesTitleInput + ' EP1')
+          episodeTitle: episodeTitleInput || (seriesTitleInput + ' EP1'),
+          projectType,
+          brandSummary,
+          coreMessage
         };
       } else {
         if (!seriesList.length) {
@@ -2016,8 +2062,16 @@
 
     btnCreate.onclick = create;
     input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
-    if (seriesInput) {
+      if (seriesInput) {
       seriesInput.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
+    }
+    if (brandSummaryInput) {
+      brandSummaryInput.onkeydown = (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault();
+          create();
+        }
+      };
     }
     if (seriesSelect) {
       seriesSelect.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
