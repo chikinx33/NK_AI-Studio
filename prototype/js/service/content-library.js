@@ -55,6 +55,28 @@
         ]);
     }
 
+    function referenceEntries(project) {
+        var payload = project && project.payload || {};
+        var src = [];
+        if (payload.knowledgeHub && Array.isArray(payload.knowledgeHub.referenceItems)) {
+            src = payload.knowledgeHub.referenceItems;
+        } else if (Array.isArray(payload.referenceContentEntries)) {
+            src = payload.referenceContentEntries;
+        }
+        return src.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            return {
+                id: String(raw.id || ('ref_' + (index + 1))).trim(),
+                type: String(raw.type || 'reference').trim() || 'reference',
+                title: String(raw.title || raw.source || ('참조 콘텐츠 ' + (index + 1))).trim(),
+                source: String(raw.source || '').trim(),
+                note: String(raw.note || '').trim()
+            };
+        }).filter(function (item) {
+            return item.title || item.source || item.note;
+        });
+    }
+
     library.listProjectContents = function (projectOrId) {
         var project = normalizeProject(projectOrId);
         if (!project) return [];
@@ -116,6 +138,18 @@
                 });
             }
         }
+
+        referenceEntries(project).forEach(function (entry) {
+            items.push({
+                id: projectId + ':reference:' + entry.id,
+                projectId: projectId,
+                type: 'reference',
+                title: entry.title,
+                text: firstFilled([entry.note, entry.source, entry.type]),
+                url: entry.source,
+                status: 'ready'
+            });
+        });
 
         return items;
     };

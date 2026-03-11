@@ -45,6 +45,25 @@
         return [];
     }
 
+    function normalizeReferenceEntries(value) {
+        var src = Array.isArray(value) ? value : [];
+        return src.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var type = normalizeText(raw.type || raw.referenceType || 'reference') || 'reference';
+            var title = normalizeText(raw.title || raw.name || raw.label);
+            var source = normalizeText(raw.source || raw.url || raw.link);
+            var note = normalizeText(raw.note || raw.memo || raw.description);
+            if (!title && !source && !note) return null;
+            return {
+                id: normalizeText(raw.id) || ('ref_' + String(index + 1).padStart(3, '0')),
+                type: type,
+                title: title || source || ('참조 콘텐츠 ' + (index + 1)),
+                source: source,
+                note: note
+            };
+        }).filter(Boolean);
+    }
+
     function normalizeProjectCore(source) {
         var raw = source || {};
         return {
@@ -71,6 +90,13 @@
 
     function normalizeKnowledgeHub(source) {
         var raw = mergeKnowledgeSource(source);
+        var referenceEntries = normalizeReferenceEntries(raw.referenceItems || raw.referenceEntries || raw.referenceContentEntries);
+        var referenceContents = normalizeTextList(raw.referenceContents);
+        if (!referenceContents.length && referenceEntries.length) {
+            referenceContents = referenceEntries.map(function (item) {
+                return [item.type, item.title, item.note].filter(Boolean).join(' ');
+            }).filter(Boolean);
+        }
         return {
             brandVoice: normalizeText(raw.brandVoice),
             brandStory: normalizeText(raw.brandStory),
@@ -78,7 +104,8 @@
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
             bannedExpressions: normalizeTextList(raw.bannedExpressions || raw.banned),
-            referenceContents: normalizeTextList(raw.referenceContents),
+            referenceContents: referenceContents,
+            referenceItems: referenceEntries,
             successCases: normalizeTextList(raw.successCases)
         };
     }
@@ -95,6 +122,7 @@
         nextPayload.brandRules = knowledge.brandRules.slice();
         nextPayload.bannedExpressions = knowledge.bannedExpressions.slice();
         nextPayload.referenceContents = knowledge.referenceContents.slice();
+        nextPayload.referenceContentEntries = knowledge.referenceItems.slice();
         nextPayload.successCases = knowledge.successCases.slice();
         if (!nextPayload.worldSetting && knowledge.worldSetting) nextPayload.worldSetting = knowledge.worldSetting;
         if (!nextPayload.knowledgeWorld && knowledge.worldSetting) nextPayload.knowledgeWorld = knowledge.worldSetting;

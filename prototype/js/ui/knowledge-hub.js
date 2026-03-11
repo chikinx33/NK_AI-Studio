@@ -45,8 +45,36 @@
       brandRules: [],
       bannedExpressions: [],
       referenceContents: [],
+      referenceItems: [],
       successCases: []
     };
+  }
+
+  function referenceTypeLabel(type) {
+    switch (String(type || '').trim()) {
+      case 'video': return '영상';
+      case 'image': return '이미지';
+      case 'post': return '게시물';
+      case 'channel': return '채널';
+      case 'article': return '문서';
+      default: return '참조';
+    }
+  }
+
+  function buildReferenceDraft(root, knowledge) {
+    var typeEl = root.querySelector('#knowledge-reference-type');
+    var titleEl = root.querySelector('#knowledge-reference-title');
+    var sourceEl = root.querySelector('#knowledge-reference-source');
+    var noteEl = root.querySelector('#knowledge-reference-note');
+    var nextItem = {
+      id: 'ref_' + Date.now(),
+      type: String((typeEl && typeEl.value) || 'reference').trim() || 'reference',
+      title: String((titleEl && titleEl.value) || '').trim(),
+      source: String((sourceEl && sourceEl.value) || '').trim(),
+      note: String((noteEl && noteEl.value) || '').trim()
+    };
+    if (!nextItem.title && !nextItem.source && !nextItem.note) return null;
+    return (knowledge.referenceItems || []).concat([nextItem]);
   }
 
   function renderEmpty(root, message) {
@@ -68,8 +96,23 @@
     var knowledge = readKnowledge(project);
     var rulesCount = knowledge.brandRules.length;
     var bannedCount = knowledge.bannedExpressions.length;
-    var referencesCount = knowledge.referenceContents.length;
+    var referencesCount = (knowledge.referenceItems || []).length || knowledge.referenceContents.length;
     var successesCount = knowledge.successCases.length;
+    var referenceCards = (knowledge.referenceItems || []).length
+      ? knowledge.referenceItems.map(function (item) {
+        return (
+          '<article class="knowledge-reference-card">' +
+          '<div class="knowledge-reference-top">' +
+          '<span class="knowledge-reference-badge">' + escapeHtml(referenceTypeLabel(item.type)) + '</span>' +
+          '<button type="button" class="btn-secondary compact" data-action="knowledge-remove-reference" data-reference-id="' + escapeHtml(item.id) + '">삭제</button>' +
+          '</div>' +
+          '<strong>' + escapeHtml(item.title || '참조 콘텐츠') + '</strong>' +
+          '<p>' + escapeHtml(item.note || item.source || '메모 없음') + '</p>' +
+          (item.source ? '<a class="btn-secondary compact" href="' + escapeHtml(item.source) + '" target="_blank" rel="noopener noreferrer">열기</a>' : '') +
+          '</article>'
+        );
+      }).join('')
+      : '<div class="knowledge-reference-empty">아직 저장된 참조 콘텐츠가 없습니다.</div>';
 
     root.innerHTML =
       '<section class="knowledge-hub-page">' +
@@ -111,8 +154,25 @@
       '<section class="knowledge-hub-panel">' +
       '<div class="knowledge-hub-panel-head"><h3>참조와 학습</h3><span>좋았던 레퍼런스와 성공 패턴</span></div>' +
       '<div class="knowledge-hub-form-grid">' +
-      '<label class="knowledge-hub-field"><span>참조 콘텐츠</span><textarea id="knowledge-references" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 인스타 릴스 15초 카드뉴스 톤">' + escapeHtml(joinLines(knowledge.referenceContents)) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>과거 성공 사례</span><textarea id="knowledge-success-cases" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 오전 9시 업로드한 짧은 문장형 게시물 반응이 좋았음">' + escapeHtml(joinLines(knowledge.successCases)) + '</textarea></label>' +
+      '<div class="knowledge-hub-field knowledge-reference-builder">' +
+      '<span>참조 콘텐츠 구조</span>' +
+      '<div class="knowledge-reference-form">' +
+      '<select id="knowledge-reference-type" class="knowledge-reference-input">' +
+      '<option value="reference">참조</option>' +
+      '<option value="video">영상</option>' +
+      '<option value="image">이미지</option>' +
+      '<option value="post">게시물</option>' +
+      '<option value="channel">채널</option>' +
+      '<option value="article">문서</option>' +
+      '</select>' +
+      '<input id="knowledge-reference-title" class="knowledge-reference-input" placeholder="참조 제목" />' +
+      '<input id="knowledge-reference-source" class="knowledge-reference-input" placeholder="링크 또는 출처" />' +
+      '<textarea id="knowledge-reference-note" class="knowledge-reference-textarea" placeholder="왜 참고하는지 메모를 남겨 주세요."></textarea>' +
+      '<button type="button" class="btn-secondary" data-action="knowledge-add-reference">참조 추가</button>' +
+      '</div>' +
+      '<div class="knowledge-reference-grid">' + referenceCards + '</div>' +
+      '</div>' +
       '</div>' +
       '</section>' +
       '<section class="knowledge-hub-panel">' +
@@ -152,7 +212,10 @@
           worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
           brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
           bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
-          referenceContents: splitLines((root.querySelector('#knowledge-references') || {}).value || ''),
+          referenceItems: (knowledge.referenceItems || []).slice(),
+          referenceContents: (knowledge.referenceItems || []).map(function (item) {
+            return [item.type, item.title, item.note].filter(Boolean).join(' ');
+          }).filter(Boolean),
           successCases: splitLines((root.querySelector('#knowledge-success-cases') || {}).value || '')
         };
         btn.disabled = true;
@@ -164,6 +227,7 @@
           brandRules: nextKnowledge.brandRules,
           bannedExpressions: nextKnowledge.bannedExpressions,
           referenceContents: nextKnowledge.referenceContents,
+          referenceContentEntries: nextKnowledge.referenceItems,
           successCases: nextKnowledge.successCases,
           worldSetting: nextKnowledge.worldSetting,
           knowledgeWorld: nextKnowledge.worldSetting
@@ -174,6 +238,81 @@
           })
           .catch(function (err) {
             alert('Knowledge Hub 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'knowledge-add-reference') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextItems = buildReferenceDraft(root, knowledge);
+        if (!nextItems) {
+          alert('참조 제목, 출처, 메모 중 하나는 입력해 주세요.');
+          return;
+        }
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          knowledgeHub: {
+            brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
+            brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
+            brandCharacter: String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim(),
+            worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
+            brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
+            bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
+            referenceItems: nextItems,
+            referenceContents: nextItems.map(function (item) {
+              return [item.type, item.title, item.note].filter(Boolean).join(' ');
+            }).filter(Boolean),
+            successCases: splitLines((root.querySelector('#knowledge-success-cases') || {}).value || '')
+          },
+          referenceContentEntries: nextItems,
+          referenceContents: nextItems.map(function (item) {
+            return [item.type, item.title, item.note].filter(Boolean).join(' ');
+          }).filter(Boolean)
+        })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('참조 콘텐츠 추가 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'knowledge-remove-reference') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var removeId = String(btn.dataset.referenceId || '').trim();
+        var remaining = (knowledge.referenceItems || []).filter(function (item) {
+          return String(item.id || '') !== removeId;
+        });
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          knowledgeHub: {
+            brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
+            brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
+            brandCharacter: String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim(),
+            worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
+            brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
+            bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
+            referenceItems: remaining,
+            referenceContents: remaining.map(function (item) {
+              return [item.type, item.title, item.note].filter(Boolean).join(' ');
+            }).filter(Boolean),
+            successCases: splitLines((root.querySelector('#knowledge-success-cases') || {}).value || '')
+          },
+          referenceContentEntries: remaining,
+          referenceContents: remaining.map(function (item) {
+            return [item.type, item.title, item.note].filter(Boolean).join(' ');
+          }).filter(Boolean)
+        })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('참조 콘텐츠 삭제 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;

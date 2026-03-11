@@ -202,7 +202,7 @@ Brand Studio는 독립된 기능 페이지가 아니다.
 
 - [x] Knowledge Hub 데이터 구조 추가
 - [x] 브랜드 규칙 기반 생성 입력 연결
-- [ ] 프로젝트별 참조 콘텐츠 저장 구조 추가
+- [x] 프로젝트별 참조 콘텐츠 저장 구조 추가
 
 ### V2 Brand Intelligence
 
