@@ -22,7 +22,7 @@
     } catch (_) { }
     var isEmbedded = (function () { try { return window.self !== window.top; } catch (_) { return true; } })();
     var hasSidebar = !!document.querySelector('.sidebar');
-    if (!isEmbedded && hasSidebar && (current === 'scenario' || current === 'scenes' || current === 'library' || current === 'brand' || current === 'knowledge' || current === 'media' || current === 'publish')) {
+    if (!isEmbedded && hasSidebar && (current === 'scenario' || current === 'scenes' || current === 'library' || current === 'brand' || current === 'knowledge' || current === 'analytics' || current === 'media' || current === 'publish')) {
       try { window.location.href = 'ai-video.html'; } catch (_) {}
       return;
     }

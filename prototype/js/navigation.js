@@ -82,7 +82,7 @@
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
             const name = base.replace(/\.html?$/, '');
-            if (['scenario', 'scenes', 'library', 'brand', 'knowledge', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
+            if (['scenario', 'scenes', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
                 return name === 'ai-video' ? 'dashboard' : name;
             }
             if (name === 'index' || name === '') return 'options';
