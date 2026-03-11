@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var dashboard = ui.dashboard || (ui.dashboard = {});

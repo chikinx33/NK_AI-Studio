@@ -1,4 +1,4 @@
-// prototype/functions/api/imagen.ts
+﻿// prototype/functions/api/imagen.ts
 import { buildAiVideoProjectPrefix, resolveUserId } from "./_shared/storage";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;

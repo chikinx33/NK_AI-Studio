@@ -1,4 +1,4 @@
-// prototype/functions/api/project/init.ts
+﻿// prototype/functions/api/project/init.ts
 // Initialize GCS folder structure for a projectId by creating .keep files.
 import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
 

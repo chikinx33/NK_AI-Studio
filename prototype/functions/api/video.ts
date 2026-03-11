@@ -1,4 +1,4 @@
-// prototype/functions/api/video.ts
+﻿// prototype/functions/api/video.ts
 // Minimal Veo (image -> video) trigger endpoint for Cloudflare Pages Functions.
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 

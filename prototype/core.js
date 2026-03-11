@@ -1,4 +1,4 @@
-;(function () {
+﻿;(function () {
   var NK = window.NK || (window.NK = {});
   var core = NK.core || (NK.core = {});
 

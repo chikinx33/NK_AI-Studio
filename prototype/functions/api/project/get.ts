@@ -1,4 +1,4 @@
-// prototype/functions/api/project/get.ts
+﻿// prototype/functions/api/project/get.ts
 // Fetch project data.json from GCS reference folder
 import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
 

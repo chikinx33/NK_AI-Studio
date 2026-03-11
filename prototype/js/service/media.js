@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
     var NK = window.NK || (window.NK = {});
     var service = NK.service || (NK.service = {});
     var media = service.media || (service.media = {});

@@ -1,4 +1,4 @@
-const corsHeaders = (origin) => ({
+﻿const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",

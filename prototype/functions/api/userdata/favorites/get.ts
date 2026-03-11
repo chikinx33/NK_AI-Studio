@@ -1,4 +1,4 @@
-import { buildUserDataObject, resolveUserId } from "../../_shared/storage";
+﻿import { buildUserDataObject, resolveUserId } from "../../_shared/storage";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 

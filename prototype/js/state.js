@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
     var NK = window.NK || (window.NK = {});
     var state = NK.state || (NK.state = {});
 
