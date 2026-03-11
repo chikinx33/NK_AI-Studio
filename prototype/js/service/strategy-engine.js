@@ -38,6 +38,22 @@
     return Array.isArray(list) && list.length ? list[0] : null;
   }
 
+  function toTagList(value) {
+    if (Array.isArray(value)) {
+      return value.map(function (item) { return String(item || '').trim(); }).filter(Boolean);
+    }
+    return String(value || '')
+      .split(/[,\n]/)
+      .map(function (item) { return String(item || '').trim(); })
+      .filter(Boolean);
+  }
+
+  function normalizeHashtagToken(value) {
+    var raw = String(value || '').trim().replace(/^#+/, '');
+    if (!raw) return '';
+    return '#' + raw.replace(/[^0-9A-Za-z가-힣_]+/g, '');
+  }
+
   strategy.buildRecommendations = function (projectOrId) {
     var project = normalizeProject(projectOrId);
     if (!project || !NK.service || !NK.service.analytics) return [];
@@ -117,5 +133,96 @@
     }
 
     return recommendations.slice(0, 5);
+  };
+
+  strategy.buildContentSuggestions = function (projectOrId) {
+    var project = normalizeProject(projectOrId);
+    if (!project || !NK.service || !NK.service.analytics) return [];
+
+    var payload = project.payload || {};
+    var byChannel = NK.service.analytics.summarizeByChannel(project);
+    var byType = NK.service.analytics.summarizeByContentType(project);
+    var byTime = NK.service.analytics.summarizeByUploadTime(project).filter(function (item) { return item.totalPosts > 0; });
+    var byHashtag = NK.service.analytics.summarizeByHashtag(project);
+    var topChannel = firstItem(byChannel);
+    var topType = firstItem(byType);
+    var bestTime = firstItem(byTime);
+    var bestTag = firstItem(byHashtag);
+    var knowledge = payload.knowledgeHub && typeof payload.knowledgeHub === 'object' ? payload.knowledgeHub : payload;
+    var brandSummary = String(payload.brandSummary || project.seriesTitle || project.title || '').trim();
+    var coreMessage = String(payload.coreMessage || '').trim();
+    var voice = String(knowledge.brandVoice || '').trim();
+    var rules = toTagList(knowledge.brandRules);
+    var suggestions = [];
+
+    if (topType) {
+      var primaryType = topType.contentType || 'sns-post';
+      var primaryTag = bestTag ? bestTag.hashtag : normalizeHashtagToken(payload.projectType || project.seriesTitle || 'project');
+      suggestions.push({
+        id: 'suggest_primary_' + primaryType,
+        title: contentTypeLabel(primaryType) + ' 확장안',
+        contentType: primaryType,
+        targetChannel: topChannel ? topChannel.channelType : '',
+        recommendedTime: bestTime ? bestTime.label : '',
+        summary: '현재 가장 강한 포맷을 같은 프로젝트 문맥으로 다시 확장하는 제안입니다.',
+        captionDraft: [
+          brandSummary,
+          coreMessage ? ('핵심 메시지 "' + coreMessage + '"를 중심으로 다시 정리한 ' + contentTypeLabel(primaryType) + ' 초안입니다.') : '',
+          topChannel ? (channelLabel(topChannel.channelType) + ' 반응 흐름에 맞춰 전달합니다.') : '',
+          voice ? ('말투는 ' + voice + ' 기준을 유지합니다.') : '',
+          '다음 업데이트를 자연스럽게 이어 볼 수 있도록 짧고 선명하게 구성합니다.'
+        ].filter(Boolean).join(' '),
+        hashtags: [primaryTag].concat(
+          toTagList(payload.brandKeywords).slice(0, 2).map(normalizeHashtagToken).filter(Boolean)
+        ).filter(Boolean),
+        reason: topChannel
+          ? (channelLabel(topChannel.channelType) + '와 ' + contentTypeLabel(primaryType) + ' 조합이 현재 가장 강합니다.')
+          : (contentTypeLabel(primaryType) + ' 포맷이 현재 가장 강합니다.')
+      });
+    }
+
+    if (bestTime && topChannel) {
+      suggestions.push({
+        id: 'suggest_time_' + topChannel.channelType,
+        title: bestTime.label + ' 예약 게시안',
+        contentType: topType ? topType.contentType : 'sns-post',
+        targetChannel: topChannel.channelType,
+        recommendedTime: bestTime.label,
+        summary: '성과가 좋았던 시간대에 맞춰 같은 채널용 초안을 다시 제안합니다.',
+        captionDraft: [
+          brandSummary,
+          channelLabel(topChannel.channelType) + '용 예약 게시 초안입니다.',
+          coreMessage ? ('이번 게시에서는 "' + coreMessage + '"를 더 직접적으로 전달합니다.') : '',
+          bestTime.label + ' 업로드 성과를 다시 검증하기 위한 운영안입니다.'
+        ].filter(Boolean).join(' '),
+        hashtags: (bestTag ? [bestTag.hashtag] : []).concat(
+          toTagList(payload.brandKeywords).slice(0, 2).map(normalizeHashtagToken).filter(Boolean)
+        ).filter(Boolean),
+        reason: bestTime.label + ' 구간의 반응이 가장 좋았습니다.'
+      });
+    }
+
+    if (rules.length) {
+      suggestions.push({
+        id: 'suggest_rule_consistency',
+        title: '브랜드 규칙 유지형 콘텐츠안',
+        contentType: topType ? topType.contentType : 'sns-post',
+        targetChannel: topChannel ? topChannel.channelType : '',
+        recommendedTime: bestTime ? bestTime.label : '',
+        summary: '브랜드 규칙을 유지한 채 포맷 실험을 이어가는 안전한 제안입니다.',
+        captionDraft: [
+          brandSummary,
+          '브랜드 규칙 "' + rules[0] + '"를 유지한 운영 초안입니다.',
+          coreMessage ? ('핵심 메시지는 "' + coreMessage + '"로 고정합니다.') : '',
+          '포맷 실험은 하되 브랜드 정체성은 흔들리지 않도록 구성합니다.'
+        ].filter(Boolean).join(' '),
+        hashtags: (bestTag ? [bestTag.hashtag] : []).concat(
+          normalizeHashtagToken(project.seriesTitle || project.title || 'brand')
+        ).filter(Boolean),
+        reason: '브랜드 규칙이 이미 정리돼 있어 일관성을 유지하면서 확장하기 좋습니다.'
+      });
+    }
+
+    return suggestions.slice(0, 3);
   };
 })();

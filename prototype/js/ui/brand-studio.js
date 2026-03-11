@@ -31,6 +31,20 @@
     return String(payload && payload.brandStudioHashtagDraft || '').trim();
   }
 
+  function readAutoSuggestion(payload) {
+    var src = payload && payload.brandStudioAutoSuggestion && typeof payload.brandStudioAutoSuggestion === 'object'
+      ? payload.brandStudioAutoSuggestion
+      : null;
+    if (!src) return null;
+    return {
+      id: String(src.id || '').trim(),
+      title: String(src.title || '').trim(),
+      targetChannel: String(src.targetChannel || '').trim(),
+      recommendedTime: String(src.recommendedTime || '').trim(),
+      reason: String(src.reason || '').trim()
+    };
+  }
+
   function readKnowledge(payload) {
     var src = payload && payload.knowledgeHub && typeof payload.knowledgeHub === 'object'
       ? payload.knowledgeHub
@@ -290,6 +304,7 @@
     var selectedType = readBrandContentType(payload);
     var savedCaption = readCaptionDraft(payload);
     var savedHashtags = readHashtagDraft(payload);
+    var autoSuggestion = readAutoSuggestion(payload);
     var knowledge = readKnowledge(payload);
     var channelConnections = readChannelConnections(payload);
     var publishPlan = readPublishPlan(payload);
@@ -434,6 +449,19 @@
       '<article class="brand-studio-summary-card"><span>타깃</span><strong>' + escapeHtml(payload.targetAudience || payload.target || '-') + '</strong></article>' +
       '<article class="brand-studio-summary-card"><span>소스 자산</span><strong>씬 ' + escapeHtml(summary.scenes) + ' · 이미지 ' + escapeHtml(summary.images) + ' · 영상 ' + escapeHtml(summary.videos) + '</strong></article>' +
       '</div>' +
+      (autoSuggestion
+        ? '<section class="brand-studio-panel brand-auto-suggestion-panel">' +
+          '<div class="brand-studio-panel-head"><h3>적용된 자동 제안</h3><span>Analytics에서 가져온 초안</span></div>' +
+          '<div class="brand-auto-suggestion-card">' +
+          '<strong>' + escapeHtml(autoSuggestion.title || '자동 제안') + '</strong>' +
+          '<p>' + escapeHtml(autoSuggestion.reason || '추천 근거 없음') + '</p>' +
+          '<div class="brand-auto-suggestion-meta">' +
+          '<span>채널: ' + escapeHtml(autoSuggestion.targetChannel || '-') + '</span>' +
+          '<span>추천 시간: ' + escapeHtml(autoSuggestion.recommendedTime || '-') + '</span>' +
+          '</div>' +
+          '</div>' +
+          '</section>'
+        : '') +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>적용 중인 Knowledge 규칙</h3><span>브랜드 문맥 자동 반영</span></div>' +
       '<div class="brand-knowledge-grid">' +

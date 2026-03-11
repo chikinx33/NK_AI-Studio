@@ -51,6 +51,22 @@
     );
   }
 
+  function suggestionCardHtml(item) {
+    return (
+      '<article class="analytics-suggestion-card">' +
+      '<span class="analytics-channel-badge">' + escapeHtml(item.targetChannel ? channelLabel(item.targetChannel) : '자동 제안') + '</span>' +
+      '<h4>' + escapeHtml(item.title || '콘텐츠 제안') + '</h4>' +
+      '<p>' + escapeHtml(item.summary || '') + '</p>' +
+      '<strong>' + escapeHtml(item.reason || '') + '</strong>' +
+      '<div class="analytics-suggestion-meta">' +
+      '<span>유형: ' + escapeHtml(contentTypeLabel(item.contentType || 'sns-post')) + '</span>' +
+      '<span>추천 시간: ' + escapeHtml(item.recommendedTime || '-') + '</span>' +
+      '</div>' +
+      '<button type="button" class="btn-primary compact" data-action="analytics-apply-suggestion" data-suggestion-id="' + escapeHtml(item.id || '') + '">Brand Studio에 적용</button>' +
+      '</article>'
+    );
+  }
+
   function metricCardHtml(item) {
     return (
       '<div class="analytics-channel-metrics">' +
@@ -85,6 +101,9 @@
     var recommendations = NK.service.strategyEngine
       ? NK.service.strategyEngine.buildRecommendations(project)
       : [];
+    var suggestions = NK.service.strategyEngine
+      ? NK.service.strategyEngine.buildContentSuggestions(project)
+      : [];
 
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -112,6 +131,14 @@
       (recommendations.length
         ? recommendations.map(recommendationCardHtml).join('')
         : '<div class="analytics-empty">아직 추천을 만들 만큼의 데이터가 없습니다.</div>') +
+      '</div>' +
+      '</section>' +
+      '<section class="analytics-panel">' +
+      '<div class="analytics-panel-head"><h3>콘텐츠 자동 제안</h3><span>바로 Brand Studio 초안으로 적용</span></div>' +
+      '<div class="analytics-suggestion-grid">' +
+      (suggestions.length
+        ? suggestions.map(suggestionCardHtml).join('')
+        : '<div class="analytics-empty">자동 제안을 만들 만큼의 데이터가 없습니다.</div>') +
       '</div>' +
       '</section>' +
       '<section class="analytics-panel">' +
@@ -202,6 +229,40 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
+      if (action === 'analytics-apply-suggestion') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload || !NK.service.strategyEngine) return;
+        var suggestionId = String(btn.dataset.suggestionId || '').trim();
+        var suggestion = suggestions.find(function (item) { return String(item.id || '') === suggestionId; }) || null;
+        if (!suggestion) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          brandStudioContentType: suggestion.contentType || 'sns-post',
+          brandStudioCaptionDraft: String(suggestion.captionDraft || '').trim(),
+          brandStudioHashtagDraft: Array.isArray(suggestion.hashtags) ? suggestion.hashtags.join(' ') : '',
+          brandStudioAutoSuggestion: {
+            id: suggestion.id,
+            title: suggestion.title,
+            targetChannel: suggestion.targetChannel,
+            recommendedTime: suggestion.recommendedTime,
+            reason: suggestion.reason
+          }
+        })
+          .then(function () {
+            var url = buildStageUrl('brand.html', projectId);
+            if (window.self !== window.top && window.parent) {
+              window.parent.postMessage({ type: 'load-stage', url: url }, '*');
+            } else {
+              window.location.href = url;
+            }
+          })
+          .catch(function (err) {
+            alert('자동 제안 적용 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
       if (action === 'analytics-open-brand') target = buildStageUrl('brand.html', projectId);
       else if (action === 'analytics-open-library') target = buildStageUrl('library.html', projectId);
       else if (action === 'analytics-open-knowledge') target = buildStageUrl('knowledge.html', projectId);

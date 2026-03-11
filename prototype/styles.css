@@ -5737,6 +5737,48 @@ body.layout-fixed .lib-content {
   line-height: 1.45;
 }
 
+.brand-auto-suggestion-panel {
+  background: linear-gradient(160deg, rgba(255, 140, 0, 0.08), rgba(10, 18, 34, 0.76));
+}
+
+.brand-auto-suggestion-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 140, 0, 0.35);
+  background: rgba(10, 18, 34, 0.45);
+  display: grid;
+  gap: 10px;
+}
+
+.brand-auto-suggestion-card strong {
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.brand-auto-suggestion-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.brand-auto-suggestion-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.brand-auto-suggestion-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 140, 0, 0.12);
+  color: var(--accent);
+}
+
 .brand-studio-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
@@ -6165,6 +6207,12 @@ body.layout-fixed .lib-content {
   gap: 12px;
 }
 
+.analytics-suggestion-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .analytics-summary-card,
 .analytics-panel {
   border-radius: 20px;
@@ -6233,6 +6281,7 @@ body.layout-fixed .lib-content {
 .analytics-type-card,
 .analytics-hashtag-card,
 .analytics-recommendation-card,
+.analytics-suggestion-card,
 .analytics-empty {
   padding: 18px;
   border-radius: 18px;
@@ -6243,7 +6292,8 @@ body.layout-fixed .lib-content {
 .analytics-channel-card,
 .analytics-type-card,
 .analytics-hashtag-card,
-.analytics-recommendation-card {
+.analytics-recommendation-card,
+.analytics-suggestion-card {
   display: grid;
   gap: 12px;
 }
@@ -6263,6 +6313,41 @@ body.layout-fixed .lib-content {
 .analytics-recommendation-card strong {
   font-size: 14px;
   line-height: 1.6;
+}
+
+.analytics-suggestion-card h4 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.analytics-suggestion-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.analytics-suggestion-card strong {
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.analytics-suggestion-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.analytics-suggestion-meta span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 140, 0, 0.12);
+  color: var(--accent);
 }
 
 .analytics-channel-top {
@@ -6400,6 +6485,10 @@ body.layout-fixed .lib-content {
   }
 
   .analytics-recommendation-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-suggestion-grid {
     grid-template-columns: 1fr;
   }
 }
