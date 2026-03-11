@@ -47,6 +47,7 @@ export async function onRequestPost(context) {
     const extraNotes = String(body.extraNotes || body.banned || "").trim();
     const aspectRatio = String(body.aspectRatio || "").trim();
     const lang = body.language === "en" ? "en" : "ko";
+    const knowledgeHub = normalizeKnowledgeHubInput(body);
 
     const characters = normalizeCharacters(body.characters || []);
     const narrationEnabled = toBool(body.narrationEnabled, false);
@@ -66,6 +67,7 @@ export async function onRequestPost(context) {
       styleText,
       styles,
       extraNotes,
+      knowledgeHub,
       aspectRatio,
       duration,
       narrationEnabled,
@@ -202,6 +204,7 @@ function buildSystemPromptKo(sceneCount, duration) {
 응답 형식: {"scenes":[...]}.
 각 scene에는 id, estSec, visual은 항상 포함한다.
 총 scene 개수는 ${sceneCount}개로 만들고 총 길이는 ${duration}초 목표에 가깝게 분배한다.
+사용자 추가 지시사항과 브랜드 규칙, 금지 표현은 반드시 우선 적용한다.
 마크다운/설명 문장 없이 JSON만 출력한다.`;
 }
 
@@ -212,6 +215,7 @@ Output format: {"scenes":[...]}.
 Each scene must include id, estSec and visual.
 Produce exactly ${sceneCount} scenes and distribute timing close to ${duration}s.
 Visual must include explicit camera direction: shot size, camera angle, camera movement, and framing/composition.
+Treat user directives, brand rules, and banned expressions as mandatory constraints.
 No markdown, no extra explanation.`;
 }
 
@@ -228,6 +232,14 @@ Tone tags: ${input.tones || "(none)"}
 Style freeform: ${input.styleText || "(none)"}
 Style tags: ${input.styles || "(none)"}
 Additional notes: ${input.extraNotes || "(none)"}
+Brand voice: ${input.knowledgeHub.brandVoice || "(none)"}
+Brand story: ${input.knowledgeHub.brandStory || "(none)"}
+Brand character: ${input.knowledgeHub.brandCharacter || "(none)"}
+World setting: ${input.knowledgeHub.worldSetting || "(none)"}
+Brand rules: ${input.knowledgeHub.brandRules.length ? input.knowledgeHub.brandRules.join(", ") : "(none)"}
+Banned expressions: ${input.knowledgeHub.bannedExpressions.length ? input.knowledgeHub.bannedExpressions.join(", ") : "(none)"}
+Reference contents: ${input.knowledgeHub.referenceContents.length ? input.knowledgeHub.referenceContents.join(", ") : "(none)"}
+Past success cases: ${input.knowledgeHub.successCases.length ? input.knowledgeHub.successCases.join(", ") : "(none)"}
 Aspect ratio: ${input.aspectRatio || "(not provided)"}
 Duration target: ${input.duration}s
 Camera direction requirement: each visual must include shot size, camera angle, camera movement, and framing.
@@ -248,6 +260,14 @@ ${modeInstruction}`;
 스타일(자유입력): ${input.styleText || "(없음)"}
 스타일 태그: ${input.styles || "(없음)"}
 추가 지시사항: ${input.extraNotes || "(없음)"}
+브랜드 보이스: ${input.knowledgeHub.brandVoice || "(없음)"}
+브랜드 스토리: ${input.knowledgeHub.brandStory || "(없음)"}
+대표 캐릭터/주체: ${input.knowledgeHub.brandCharacter || "(없음)"}
+세계관/배경: ${input.knowledgeHub.worldSetting || "(없음)"}
+브랜드 규칙: ${input.knowledgeHub.brandRules.length ? input.knowledgeHub.brandRules.join(", ") : "(없음)"}
+금지 표현: ${input.knowledgeHub.bannedExpressions.length ? input.knowledgeHub.bannedExpressions.join(", ") : "(없음)"}
+참조 콘텐츠: ${input.knowledgeHub.referenceContents.length ? input.knowledgeHub.referenceContents.join(", ") : "(없음)"}
+과거 성공 패턴: ${input.knowledgeHub.successCases.length ? input.knowledgeHub.successCases.join(", ") : "(없음)"}
 화면비: ${input.aspectRatio || "(미입력)"}
 목표 길이: ${input.duration}초
 표현 예시:
@@ -318,6 +338,31 @@ D) narrationEnabled=OFF, dubbingEnabled=OFF
 ${charGuide}
 ${noCharacterRule}
 ${taggingHint}`;
+}
+
+function normalizeTextList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  return String(value || "")
+    .split(/[,\n]/)
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function normalizeKnowledgeHubInput(body = {}) {
+  const nested = body.knowledgeHub && typeof body.knowledgeHub === "object" ? body.knowledgeHub : {};
+  const source = Object.assign({}, body, nested);
+  return {
+    brandVoice: String(source.brandVoice || "").trim(),
+    brandStory: String(source.brandStory || "").trim(),
+    brandCharacter: String(source.brandCharacter || "").trim(),
+    worldSetting: String(source.worldSetting || source.knowledgeWorld || "").trim(),
+    brandRules: normalizeTextList(source.brandRules),
+    bannedExpressions: normalizeTextList(source.bannedExpressions || source.banned),
+    referenceContents: normalizeTextList(source.referenceContents),
+    successCases: normalizeTextList(source.successCases),
+  };
 }
 
 function hasCameraDirectionText(text = "") {

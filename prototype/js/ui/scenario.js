@@ -133,6 +133,51 @@
     dubbingEnabled: boolVal(payload?.dubbingEnabled, DEFAULT_SCENARIO_FLAGS.dubbingEnabled)
   });
 
+  const readKnowledgeHub = (payload = {}) => {
+    const src = payload?.knowledgeHub && typeof payload.knowledgeHub === 'object'
+      ? payload.knowledgeHub
+      : payload || {};
+    return {
+      brandVoice: sanitizeText(src.brandVoice || ''),
+      brandStory: sanitizeText(src.brandStory || ''),
+      brandCharacter: sanitizeText(src.brandCharacter || ''),
+      worldSetting: sanitizeText(src.worldSetting || src.knowledgeWorld || ''),
+      brandRules: toArray(src.brandRules),
+      bannedExpressions: toArray(src.bannedExpressions || src.banned),
+      referenceContents: toArray(src.referenceContents),
+      successCases: toArray(src.successCases)
+    };
+  };
+
+  const buildKnowledgeDrivenNotes = (manualText, knowledge) => {
+    const lines = [];
+    const manual = sanitizeText(manualText || '');
+    if (manual) lines.push(`사용자 추가 지시: ${manual}`);
+    if (knowledge.brandVoice) lines.push(`브랜드 보이스: ${knowledge.brandVoice}`);
+    if (knowledge.brandStory) lines.push(`브랜드 스토리: ${knowledge.brandStory}`);
+    if (knowledge.brandCharacter) lines.push(`대표 캐릭터/주체: ${knowledge.brandCharacter}`);
+    if (knowledge.worldSetting) lines.push(`세계관/배경: ${knowledge.worldSetting}`);
+    if (knowledge.brandRules.length) lines.push(`반드시 지킬 브랜드 규칙: ${knowledge.brandRules.join(', ')}`);
+    if (knowledge.bannedExpressions.length) lines.push(`금지 표현: ${knowledge.bannedExpressions.join(', ')}`);
+    if (knowledge.referenceContents.length) lines.push(`참조 콘텐츠 방향: ${knowledge.referenceContents.join(', ')}`);
+    if (knowledge.successCases.length) lines.push(`과거 성공 패턴: ${knowledge.successCases.join(', ')}`);
+    return lines.join('\n');
+  };
+
+  const renderKnowledgeHint = (payload = {}) => {
+    const box = document.getElementById('scenario-knowledge-hint');
+    if (!box) return;
+    const knowledge = readKnowledgeHub(payload);
+    const lines = [];
+    if (knowledge.brandVoice) lines.push(`보이스: ${knowledge.brandVoice}`);
+    if (knowledge.brandRules.length) lines.push(`규칙 ${knowledge.brandRules.length}개`);
+    if (knowledge.bannedExpressions.length) lines.push(`금지 ${knowledge.bannedExpressions.length}개`);
+    if (knowledge.referenceContents.length) lines.push(`참조 ${knowledge.referenceContents.length}개`);
+    box.textContent = lines.length
+      ? `Knowledge Hub 적용 중 · ${lines.join(' · ')}`
+      : 'Knowledge Hub 문맥이 아직 없습니다. 필요하면 Knowledge Hub에서 브랜드 규칙을 먼저 입력해 주세요.';
+  };
+
   const getUiLang = () => {
     try {
       const key = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
@@ -222,8 +267,14 @@
       if (currentPayload.episodeTitle && !payload.episodeTitle) payload.episodeTitle = currentPayload.episodeTitle;
     }
     if (NK.service?.project?.applyProjectCore) {
-      return NK.service.project.applyProjectCore(payload, currentPayload);
+      Object.assign(payload, NK.service.project.applyProjectCore(payload, currentPayload));
     }
+    const knowledge = readKnowledgeHub(payload);
+    const manualDirectives = form.banned ? String(form.banned.value || '').trim() : '';
+    payload.manualDirectives = manualDirectives;
+    payload.extraNotes = buildKnowledgeDrivenNotes(manualDirectives, knowledge);
+    payload.banned = payload.extraNotes;
+    payload.knowledgeHub = Object.assign({}, knowledge);
     return payload;
   };
 
@@ -271,6 +322,7 @@
 
   const formatCommonInfo = () => {
     const p = currentPayload || {};
+    const knowledge = readKnowledgeHub(p);
     const parts = [];
     if (p.topic) parts.push(`Topic: ${p.topic}`);
     if (p.purposeCategory) parts.push(`Genre: ${p.purposeCategory}${p.purposeTags?.length ? ` (${p.purposeTags.join(', ')})` : ''}`);
@@ -281,14 +333,23 @@
     const styleStr = [...(p.styles || []), p.style || ''].filter(Boolean).join(', ');
     if (styleStr) parts.push(`Style: ${styleStr}`);
     if (p.banned) parts.push(`Directives: ${p.banned}`);
+    if (knowledge.brandRules.length) parts.push(`Knowledge rules: ${knowledge.brandRules.length}개`);
+    if (knowledge.bannedExpressions.length) parts.push(`Blocked terms: ${knowledge.bannedExpressions.length}개`);
     return parts.join(' · ');
   };
 
   const buildCommonDetail = () => {
     const p = currentPayload || {};
+    const knowledge = readKnowledgeHub(p);
     const lines = [];
     lines.push('Common');
     lines.push(p.header || '(Common 블록이 아직 생성되지 않았습니다)');
+    if (knowledge.brandVoice) lines.push(`Brand voice: ${knowledge.brandVoice}`);
+    if (knowledge.brandStory) lines.push(`Brand story: ${knowledge.brandStory}`);
+    if (knowledge.brandCharacter) lines.push(`Brand character: ${knowledge.brandCharacter}`);
+    if (knowledge.worldSetting) lines.push(`World setting: ${knowledge.worldSetting}`);
+    if (knowledge.brandRules.length) lines.push(`Brand rules: ${knowledge.brandRules.join(', ')}`);
+    if (knowledge.bannedExpressions.length) lines.push(`Banned expressions: ${knowledge.bannedExpressions.join(', ')}`);
     return lines.join('\n');
   };
 
@@ -467,7 +528,7 @@
     if (form.target) form.target.value = defaultTarget;
     if (form.tone) form.tone.value = p.tone || '';
     if (form.style) form.style.value = p.style || '';
-    if (form.banned) form.banned.value = p.banned || '';
+    if (form.banned) form.banned.value = p.manualDirectives || p.extraNotesManual || p.banned || '';
 
     // toggles
     setActiveButtons('.duration-toggle', p.duration || defaults.DURATION || '15');
@@ -482,6 +543,7 @@
     renderTagButtons(document.getElementById('needs-tags'), NK.core.needsList || [], one(p.needs), true);
     renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], toArray(p.tones), true);
     renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], toArray(p.styles), true);
+    renderKnowledgeHint(currentPayload);
 
     scenario.renderScenes(draft.scenes || []);
   };
@@ -565,6 +627,7 @@
       currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [] });
       setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
       renderCharacterChips();
+      renderKnowledgeHint(currentPayload);
     }
 
     const addCharacter = (name) => {
@@ -620,6 +683,8 @@
         const sel = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
         renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], sel, true);
       }
+      currentPayload = Object.assign({}, currentPayload || {}, collectPayload());
+      renderKnowledgeHint(currentPayload);
     });
 
     form.addEventListener('click', (e) => {
@@ -679,6 +744,7 @@
         renderCharacterChips();
         setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
         currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [] });
+        renderKnowledgeHint(currentPayload);
       }, 0);
     });
 

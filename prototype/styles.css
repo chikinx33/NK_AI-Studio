@@ -1189,6 +1189,12 @@ a.btn-primary:active {
   flex-shrink: 0;
 }
 
+.scenario-knowledge-hint {
+  flex: 1;
+  margin: 0;
+  line-height: 1.5;
+}
+
 [data-theme="light"] .scenario-form label {
   color: #0d172f;
 }
@@ -5335,6 +5341,31 @@ body.layout-fixed .lib-content {
   gap: 12px;
 }
 
+.brand-knowledge-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.brand-knowledge-card {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+  display: grid;
+  gap: 8px;
+}
+
+.brand-knowledge-card span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brand-knowledge-card strong {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
 .brand-content-type-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -5928,6 +5959,10 @@ body.layout-fixed .lib-content {
 
   .brand-content-type-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-knowledge-grid {
+    grid-template-columns: 1fr;
   }
 
   .brand-caption-meta {

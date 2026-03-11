@@ -31,6 +31,22 @@
     return String(payload && payload.brandStudioHashtagDraft || '').trim();
   }
 
+  function readKnowledge(payload) {
+    var src = payload && payload.knowledgeHub && typeof payload.knowledgeHub === 'object'
+      ? payload.knowledgeHub
+      : payload || {};
+    return {
+      brandVoice: String(src.brandVoice || '').trim(),
+      brandStory: String(src.brandStory || '').trim(),
+      brandCharacter: String(src.brandCharacter || '').trim(),
+      worldSetting: String(src.worldSetting || src.knowledgeWorld || '').trim(),
+      brandRules: toTagList(src.brandRules),
+      bannedExpressions: toTagList(src.bannedExpressions || src.banned),
+      referenceContents: toTagList(src.referenceContents),
+      successCases: toTagList(src.successCases)
+    };
+  }
+
   function readChannelConnections(payload) {
     var src = payload && Array.isArray(payload.brandStudioChannels) ? payload.brandStudioChannels : [];
     return src.map(function (item) {
@@ -86,7 +102,48 @@
     return '#' + raw;
   }
 
-  function buildHashtagDraft(project, selectedOption, sourceTexts) {
+  function compactSentence(value, maxLength) {
+    var text = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!text) return '';
+    var limit = Number(maxLength) || 120;
+    if (text.length <= limit) return text;
+    return text.slice(0, Math.max(limit - 1, 1)).trim() + '…';
+  }
+
+  function scrubBannedText(text, bannedExpressions) {
+    var output = String(text || '');
+    toTagList(bannedExpressions).forEach(function (term) {
+      var token = String(term || '').trim();
+      if (!token) return;
+      output = output.split(token).join('');
+    });
+    return output.replace(/\s{2,}/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
+  }
+
+  function buildCaptionDraft(project, selectedOption, sourceTexts, knowledge) {
+    var payload = (project && project.payload) || {};
+    var sourceLine = compactSentence(firstFilled(sourceTexts), 90);
+    var storyLine = compactSentence(knowledge.brandStory, 90);
+    var worldLine = compactSentence(knowledge.worldSetting, 70);
+    var successLine = compactSentence(knowledge.successCases[0], 64);
+    var ruleLead = compactSentence(knowledge.brandRules[0], 50);
+    var parts = [
+      firstFilled([payload.brandSummary, project && (project.seriesTitle || project.title), payload.coreMessage]),
+      selectedOption ? (selectedOption.title + ' 형식으로 정리한 브랜드 운영 문구입니다.') : '',
+      payload.coreMessage ? ('핵심 메시지는 "' + payload.coreMessage + '" 입니다.') : '',
+      storyLine ? ('브랜드 맥락은 ' + storyLine) : '',
+      worldLine ? ('배경 문맥은 ' + worldLine) : '',
+      sourceLine ? ('이번 포인트는 ' + sourceLine + ' 입니다.') : '',
+      successLine ? ('기존에 반응이 좋았던 흐름은 ' + successLine + ' 입니다.') : '',
+      ruleLead ? ('운영 규칙은 "' + ruleLead + '"를 우선합니다.') : '',
+      knowledge.brandVoice ? ('말투 기준은 ' + compactSentence(knowledge.brandVoice, 60) + ' 입니다.') : '',
+      payload.targetAudience || payload.target ? (String(payload.targetAudience || payload.target) + '에게 자연스럽게 전달되도록 구성했습니다.') : '',
+      '자세한 내용은 프로젝트 업데이트에서 계속 이어집니다.'
+    ].filter(Boolean);
+    return scrubBannedText(parts.join(' '), knowledge.bannedExpressions);
+  }
+
+  function buildHashtagDraft(project, selectedOption, sourceTexts, knowledge) {
     var payload = (project && project.payload) || {};
     var tokens = [];
 
@@ -101,7 +158,11 @@
     pushToken(payload.projectType);
     pushToken(payload.targetAudience || payload.target);
     pushToken(selectedOption && selectedOption.title);
+    pushToken(knowledge.brandCharacter);
+    pushToken(knowledge.worldSetting);
     toTagList(payload.brandKeywords).slice(0, 4).forEach(pushToken);
+    toTagList(knowledge.referenceContents).slice(0, 2).forEach(pushToken);
+    toTagList(knowledge.successCases).slice(0, 2).forEach(pushToken);
     toTagList(payload.purposeTags).slice(0, 3).forEach(pushToken);
 
     var sourceLine = firstFilled(sourceTexts);
@@ -109,7 +170,11 @@
       sourceLine.split(/\s+/).slice(0, 3).forEach(pushToken);
     }
 
-    return tokens.slice(0, 8).join(' ');
+    return tokens.filter(function (token) {
+      return !knowledge.bannedExpressions.some(function (term) {
+        return token.toLowerCase().indexOf(String(term || '').trim().toLowerCase()) >= 0;
+      });
+    }).slice(0, 8).join(' ');
   }
 
   function channelOptions() {
@@ -189,6 +254,7 @@
     var selectedType = readBrandContentType(payload);
     var savedCaption = readCaptionDraft(payload);
     var savedHashtags = readHashtagDraft(payload);
+    var knowledge = readKnowledge(payload);
     var channelConnections = readChannelConnections(payload);
     var publishPlan = readPublishPlan(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
@@ -224,6 +290,11 @@
         title: '다음 운영 단계',
         ready: true,
         desc: '현재 기준 추천 단계는 "' + String(summary.nextAction || '준비 중') + '" 입니다.'
+      },
+      {
+        title: '브랜드 규칙 문맥',
+        ready: !!(knowledge.brandVoice || knowledge.brandRules.length || knowledge.bannedExpressions.length),
+        desc: 'Knowledge Hub의 브랜드 보이스, 규칙, 금지 표현이 생성 입력에 직접 반영됩니다.'
       }
     ];
 
@@ -298,6 +369,15 @@
       '<article class="brand-studio-summary-card"><span>타깃</span><strong>' + escapeHtml(payload.targetAudience || payload.target || '-') + '</strong></article>' +
       '<article class="brand-studio-summary-card"><span>소스 자산</span><strong>씬 ' + escapeHtml(summary.scenes) + ' · 이미지 ' + escapeHtml(summary.images) + ' · 영상 ' + escapeHtml(summary.videos) + '</strong></article>' +
       '</div>' +
+      '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>적용 중인 Knowledge 규칙</h3><span>브랜드 문맥 자동 반영</span></div>' +
+      '<div class="brand-knowledge-grid">' +
+      '<article class="brand-knowledge-card"><span>브랜드 보이스</span><strong>' + escapeHtml(knowledge.brandVoice || '-') + '</strong></article>' +
+      '<article class="brand-knowledge-card"><span>브랜드 규칙</span><strong>' + escapeHtml(knowledge.brandRules.length ? knowledge.brandRules.join(', ') : '-') + '</strong></article>' +
+      '<article class="brand-knowledge-card"><span>금지 표현</span><strong>' + escapeHtml(knowledge.bannedExpressions.length ? knowledge.bannedExpressions.join(', ') : '-') + '</strong></article>' +
+      '<article class="brand-knowledge-card"><span>참조/성공 패턴</span><strong>' + escapeHtml(firstFilled([knowledge.referenceContents.join(', '), knowledge.successCases.join(', ')]) || '-') + '</strong></article>' +
+      '</div>' +
+      '</section>' +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>SNS 콘텐츠 유형</h3><span>V1 첫 진입점</span></div>' +
       '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
@@ -448,18 +528,7 @@
       }
       if (action === 'brand-generate-caption' || action === 'brand-regenerate-caption') {
         if (!selectedOption || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var sourceLine = firstFilled(sourceTexts).slice(0, 140);
-        var typeLead = selectedOption.title;
-        var projectLead = firstFilled([payload.brandSummary, payload.coreMessage, project.seriesTitle, project.title]);
-        var audienceLead = firstFilled([payload.targetAudience, payload.target, '프로젝트 팔로워']);
-        var detailLine = sourceLine ? ('대표 포인트는 ' + sourceLine + '입니다.') : '';
-        var nextCaption = [
-          projectLead,
-          audienceLead + '에게 맞춘 ' + typeLead + ' 운영 캡션입니다.',
-          payload.coreMessage ? ('핵심 메시지는 "' + payload.coreMessage + '" 입니다.') : '',
-          detailLine,
-          '지금 이 프로젝트의 다음 업데이트를 계속 확인해 주세요.'
-        ].filter(Boolean).join(' ');
+        var nextCaption = buildCaptionDraft(project, selectedOption, sourceTexts, knowledge);
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioCaptionDraft: nextCaption })
           .then(function (result) {
@@ -497,7 +566,7 @@
       }
       if (action === 'brand-generate-hashtags' || action === 'brand-regenerate-hashtags') {
         if (!selectedOption || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextTags = buildHashtagDraft(project, selectedOption, sourceTexts);
+        var nextTags = buildHashtagDraft(project, selectedOption, sourceTexts, knowledge);
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioHashtagDraft: nextTags })
           .then(function (result) {
