@@ -52,6 +52,15 @@
     return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
   };
 
+  const getContentSummary = (draft) => {
+    try {
+      if (NK.service && NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject) {
+        return NK.service.contentLibrary.summarizeProject(draft);
+      }
+    } catch (_) { }
+    return { scenes: 0, texts: 0, images: 0, videos: 0, completedScenes: 0, nextAction: '시나리오 작성' };
+  };
+
   const refreshSidebarCardFromState = () => {
     if (!NK.ui || !NK.ui.dashboard || !NK.ui.dashboard.renderSidebarProjectCard) return;
     const cur = NK.state?.runtime?.currentProject || null;
@@ -173,6 +182,7 @@
       const tags = Array.isArray(d.payload?.purposeTags) ? d.payload.purposeTags.join(', ') : '';
       const tgt = d.payload?.target || '';
       const genre = `${cat} ${tags}`.trim();
+      const summary = getContentSummary(d);
 
       return `
         <article class="draft-card">
@@ -189,6 +199,8 @@
                 <div>타겟 : ${escapeHtml(tgt || '-')}</div>
                 <div>길이 : ${escapeHtml(dur)}</div>
                 <div>비율 : ${escapeHtml(ar)}</div>
+                <div>콘텐츠 : 씬 ${escapeHtml(summary.scenes)} · 이미지 ${escapeHtml(summary.images)} · 영상 ${escapeHtml(summary.videos)}</div>
+                <div>다음 단계 : ${escapeHtml(summary.nextAction)}</div>
               </div>
             </div>
           </div>
@@ -442,12 +454,15 @@
     const tags = Array.isArray(normalized.payload?.purposeTags) ? normalized.payload.purposeTags.join(', ') : '';
     const tgt = normalized.payload?.target || '';
     const genre = `${cat} ${tags}`.trim();
+    const summary = getContentSummary(normalized);
     const desc = [
       `프로젝트 : ${normalized.seriesTitle || '-'}`,
       `장르 : ${genre || '-'}`,
       `타겟 : ${tgt || '-'}`,
       `길이 : ${dur}`,
-      `비율 : ${ar}`
+      `비율 : ${ar}`,
+      `콘텐츠 : 씬 ${summary.scenes} · 이미지 ${summary.images} · 영상 ${summary.videos}`,
+      `다음 단계 : ${summary.nextAction}`
     ].join('\n');
 
     container.innerHTML = `

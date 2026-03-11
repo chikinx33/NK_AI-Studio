@@ -175,3 +175,44 @@ Brand Studio는 독립된 기능 페이지가 아니다.
 - 시스템 구조가 복잡해져도 사용자는 단순한 흐름으로 느껴야 한다.
 
 이 원칙은 모든 UI/DB/모듈 설계보다 우선한다.
+
+## 12. Development Checklist
+
+다음 체크리스트를 기준으로 개발을 진행하고, 완료 시 하나씩 체크한다.
+
+### V1 Foundation
+
+- [x] Architecture Agreement v1 문서 확정
+- [x] 사용 편의성 원칙을 최상위 설계 규칙으로 반영
+- [x] `Content Library` 기초 서비스 추가
+- [x] 대시보드에서 프로젝트별 콘텐츠 요약 표시
+- [ ] `Project Core` 데이터 구조를 Brand Studio 기준으로 확장
+- [ ] `Content Library` 전용 화면 골격 추가
+
+### V1 Brand Operations
+
+- [ ] Brand Studio 화면 골격 추가
+- [ ] SNS 콘텐츠 유형 선택 UI 추가
+- [ ] 캡션 생성 흐름 추가
+- [ ] 해시태그 생성 흐름 추가
+- [ ] 채널 연결 구조 추가
+- [ ] 예약 게시 데이터 구조 추가
+
+### V1.5 Knowledge-driven Content
+
+- [ ] Knowledge Hub 데이터 구조 추가
+- [ ] 브랜드 규칙 기반 생성 입력 연결
+- [ ] 프로젝트별 참조 콘텐츠 저장 구조 추가
+
+### V2 Brand Intelligence
+
+- [ ] 게시 결과 수집 구조 추가
+- [ ] 채널별 성과 분석 화면 추가
+- [ ] 콘텐츠 유형 성과 분석 추가
+- [ ] 업로드 시간/해시태그 성과 분석 추가
+
+### V3 Creator OS
+
+- [ ] 전략 추천 엔진 설계
+- [ ] 콘텐츠 자동 제안 흐름 설계
+- [ ] 브랜드 성장 지원 루프 연결
