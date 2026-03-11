@@ -31,6 +31,17 @@
     return String(payload && payload.brandStudioHashtagDraft || '').trim();
   }
 
+  function readChannelConnections(payload) {
+    var src = payload && Array.isArray(payload.brandStudioChannels) ? payload.brandStudioChannels : [];
+    return src.map(function (item) {
+      return {
+        channelType: String(item && item.channelType || '').trim(),
+        accountName: String(item && item.accountName || '').trim(),
+        status: String(item && item.status || 'connected').trim() || 'connected'
+      };
+    }).filter(function (item) { return item.channelType; });
+  }
+
   function firstFilled(values) {
     var src = Array.isArray(values) ? values : [];
     for (var i = 0; i < src.length; i++) {
@@ -84,6 +95,35 @@
     return tokens.slice(0, 8).join(' ');
   }
 
+  function channelOptions() {
+    return [
+      {
+        id: 'youtube',
+        title: 'YouTube',
+        desc: '롱폼, 쇼츠, 커뮤니티 운영까지 확장 가능한 기본 채널입니다.',
+        formats: '쇼츠 · 영상 설명 · 썸네일'
+      },
+      {
+        id: 'instagram',
+        title: 'Instagram',
+        desc: '이미지, 릴스, 카드형 프로모션 운영에 적합한 채널입니다.',
+        formats: '피드 · 릴스 · 캡션'
+      },
+      {
+        id: 'tiktok',
+        title: 'TikTok',
+        desc: '짧은 포맷 중심 확산 채널로 빠른 반응 테스트에 적합합니다.',
+        formats: '짧은 영상 · 설명 문구'
+      },
+      {
+        id: 'x',
+        title: 'X',
+        desc: '짧은 문장형 공지, 반응 체크, 링크 확산에 적합합니다.',
+        formats: '짧은 글 · 링크 · 태그'
+      }
+    ];
+  }
+
   function contentTypeOptions() {
     return [
       {
@@ -132,10 +172,16 @@
     var selectedType = readBrandContentType(payload);
     var savedCaption = readCaptionDraft(payload);
     var savedHashtags = readHashtagDraft(payload);
+    var channelConnections = readChannelConnections(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
       ? NK.service.contentLibrary.summarizeProject(project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
     var options = contentTypeOptions();
+    var channelRows = channelOptions();
+    var channelTitleMap = {};
+    channelRows.forEach(function (item) {
+      channelTitleMap[item.id] = item.title;
+    });
     var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
     var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
       ? NK.service.contentLibrary.listProjectContents(project)
@@ -178,6 +224,26 @@
         '<p>' + escapeHtml(item.desc) + '</p>' +
         '<span class="brand-content-type-output">' + escapeHtml(item.outputs) + '</span>' +
         '</button>'
+      );
+    }).join('');
+    var channelCards = channelRows.map(function (item) {
+      var current = channelConnections.find(function (row) { return row.channelType === item.id; }) || null;
+      var connected = !!current;
+      return (
+        '<article class="brand-channel-card ' + (connected ? 'is-connected' : '') + '">' +
+        '<div class="brand-channel-card-top">' +
+        '<div>' +
+        '<span class="brand-channel-badge">' + (connected ? '연결됨' : '미연결') + '</span>' +
+        '<h4>' + escapeHtml(item.title) + '</h4>' +
+        '</div>' +
+        '<span class="brand-channel-formats">' + escapeHtml(item.formats) + '</span>' +
+        '</div>' +
+        '<p>' + escapeHtml(item.desc) + '</p>' +
+        '<input class="brand-channel-input" id="brand-channel-input-' + escapeHtml(item.id) + '" data-channel-type="' + escapeHtml(item.id) + '" placeholder="@account 또는 채널명" value="' + escapeHtml(current ? current.accountName : '') + '" />' +
+        '<div class="brand-channel-actions">' +
+        '<button class="btn-secondary compact" data-action="brand-toggle-channel" data-channel-type="' + escapeHtml(item.id) + '">' + (connected ? '연결 해제' : '채널 연결') + '</button>' +
+        '</div>' +
+        '</article>'
       );
     }).join('');
 
@@ -249,6 +315,15 @@
       '</div>' +
       '<p class="brand-caption-help">프로젝트명, 브랜드 키워드, 콘텐츠 유형, 타깃, 기존 콘텐츠 문맥을 합쳐 해시태그를 추천합니다.</p>' +
       '</div>' +
+      '</section>' +
+      '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>채널 연결</h3><span>프로젝트별 운영 채널</span></div>' +
+      '<div class="brand-channel-summary">' +
+      '<span class="brand-channel-summary-label">현재 연결</span>' +
+      '<strong>' + escapeHtml(channelConnections.length) + '개 채널</strong>' +
+      '<p>' + escapeHtml(channelConnections.length ? channelConnections.map(function (item) { return channelTitleMap[item.channelType] || item.channelType; }).join(', ') : '아직 연결된 채널이 없습니다.') + '</p>' +
+      '</div>' +
+      '<div class="brand-channel-grid">' + channelCards + '</div>' +
       '</section>' +
       '<div class="brand-studio-layout">' +
       '<section class="brand-studio-panel">' +
@@ -396,6 +471,43 @@
           })
           .catch(function (err) {
             alert('해시태그 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-toggle-channel') {
+        var channelType = String(btn.dataset.channelType || '').trim();
+        var inputEl = root.querySelector('#brand-channel-input-' + channelType);
+        if (!channelType || !inputEl || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var accountName = String(inputEl.value || '').trim();
+        var nextConnections = channelConnections.slice();
+        var existingIdx = nextConnections.findIndex(function (row) { return row.channelType === channelType; });
+        if (existingIdx >= 0) {
+          nextConnections.splice(existingIdx, 1);
+        } else {
+          if (!accountName) {
+            alert('채널 계정 이름을 입력해 주세요.');
+            inputEl.focus();
+            return;
+          }
+          nextConnections.push({
+            channelType: channelType,
+            accountName: accountName,
+            status: 'connected'
+          });
+        }
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          brandStudioChannels: nextConnections,
+          connectedChannels: nextConnections.map(function (row) { return row.channelType; })
+        })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('채널 연결 저장 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;

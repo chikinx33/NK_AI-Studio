@@ -5486,6 +5486,75 @@ body.layout-fixed .lib-content {
   min-height: 140px;
 }
 
+.brand-channel-summary {
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.52);
+  display: grid;
+  gap: 6px;
+}
+
+.brand-channel-summary-label,
+.brand-channel-formats,
+.brand-channel-badge {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brand-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.brand-channel-card {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+  display: grid;
+  gap: 12px;
+}
+
+.brand-channel-card.is-connected {
+  border-color: rgba(255, 140, 0, 0.55);
+  box-shadow: 0 18px 36px rgba(255, 140, 0, 0.08);
+}
+
+.brand-channel-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: start;
+}
+
+.brand-channel-card h4 {
+  margin: 6px 0 0;
+  font-size: 18px;
+}
+
+.brand-channel-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.brand-channel-input {
+  width: 100%;
+  min-height: 46px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.62);
+  color: var(--text);
+}
+
+.brand-channel-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .brand-studio-summary-card,
 .brand-studio-panel,
 .brand-studio-op-card {
@@ -5627,6 +5696,10 @@ body.layout-fixed .lib-content {
   }
 
   .brand-hashtag-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-channel-grid {
     grid-template-columns: 1fr;
   }
 
