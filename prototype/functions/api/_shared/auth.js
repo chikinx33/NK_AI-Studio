@@ -74,9 +74,18 @@ export function sanitizeUserId(raw) {
 }
 
 function readSecret(env) {
-  const secret = String(env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET) || "").trim();
-  if (!secret) throw new Error("AUTH_SESSION_SECRET missing");
-  return secret;
+  const direct = String(env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET) || "").trim();
+  if (direct) return direct;
+  const derived = String(
+    env && (
+      env.AUTH_PW ||
+      env.GOOGLE_PRIVATE_KEY ||
+      env.GOOGLE_PROJECT_ID ||
+      "nk_studio_legacy_session_secret_v1"
+    ) || ""
+  ).trim();
+  if (!derived) throw new Error("AUTH_SESSION_SECRET missing");
+  return derived;
 }
 
 function readToken(request, allowQueryToken) {

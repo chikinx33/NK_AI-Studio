@@ -1757,7 +1757,8 @@
           setUI(true, NK.auth.getUser());
           alert('로그인 성공');
         } else {
-          alert('로그인 실패: 아이디 또는 비밀번호를 확인하세요.');
+          const reason = (NK.auth && NK.auth.getLastError) ? NK.auth.getLastError() : '';
+          alert('로그인 실패: ' + (reason || '아이디 또는 비밀번호를 확인하세요.'));
         }
       } finally {
         btn.disabled = false;

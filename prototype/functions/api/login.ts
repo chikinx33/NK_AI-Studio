@@ -3,6 +3,8 @@
 import { issueSessionToken, sanitizeUserId } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
+const LEGACY_AUTH_ID = "limfactory";
+const LEGACY_AUTH_PW = "limfactory1234";
 
 const corsHeaders = (origin: string | null) => ({
   'Content-Type': 'application/json; charset=utf-8',
@@ -26,11 +28,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const pw = String(body.pw || '').trim();
     if (!id || !pw) return json({ error: 'ID and PW are required' }, 400, origin);
 
-    const envId = sanitizeUserId(env.AUTH_ID || "");
-    const envPw = String(env.AUTH_PW || "").trim();
-    if (!envId || !envPw) {
-      return json({ error: 'AUTH_ID and AUTH_PW must be configured' }, 500, origin);
-    }
+    const envId = sanitizeUserId(env.AUTH_ID || LEGACY_AUTH_ID);
+    const envPw = String(env.AUTH_PW || LEGACY_AUTH_PW).trim();
 
     const ok = id === envId && pw === envPw;
     if (!ok) return json({ error: 'Invalid credentials' }, 401, origin);

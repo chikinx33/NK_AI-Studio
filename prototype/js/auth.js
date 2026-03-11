@@ -2,6 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var auth = NK.auth || (NK.auth = {});
     const KEYS = NK.config.KEYS;
+    let lastError = '';
 
     auth.getToken = function () {
         try { return localStorage.getItem(KEYS.AUTH_TOKEN) || ''; } catch (_) { return ''; }
@@ -25,18 +26,27 @@
         try { return localStorage.getItem(KEYS.USER) || ''; } catch (_) { return ''; }
     };
 
+    auth.getLastError = function () {
+        return String(lastError || '');
+    };
+
     auth.login = async function (id, pw) {
         try {
             const res = await NK.api.login(id, pw);
             if (res && res.ok && res.token) {
+                lastError = '';
                 auth.setAuthed(true, res.user || id, res.token);
                 return true;
             }
-        } catch (_) { }
+            lastError = '로그인 응답이 올바르지 않습니다.';
+        } catch (err) {
+            lastError = String(err && err.message ? err.message : 'login_error');
+        }
         return false;
     };
 
     auth.logout = function () {
+        lastError = '';
         auth.setAuthed(false);
     };
 
