@@ -528,8 +528,13 @@
     }
 
     let draft = null;
-    const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
-    if (saved) draft = JSON.parse(saved);
+    if (NK.service?.project?.resolveCurrent) {
+      draft = NK.service.project.resolveCurrent({ search: location.search }) || null;
+    }
+    if (!draft) {
+      const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
+      if (saved) draft = JSON.parse(saved);
+    }
     const pid = draft?.id || new URLSearchParams(location.search).get('projectId');
 
     // 서버 최신 데이터를 우선 로드
@@ -544,7 +549,7 @@
             scenes: srv.data.scenes || draft?.scenes || [],
             header: srv.data.header || draft?.header || ''
           };
-          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
           if (NK.state?.set) NK.state.set({ currentProject: draft });
         }
       } catch (_) { }
@@ -693,7 +698,7 @@
           draft.scenes = normalized;
           draft.header = sanitizeHeader(res.header || headerText || draft.header || '');
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
-          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
           NK.store.saveDrafts([draft]);
           if (NK.api?.projectSave) {
             await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title });
@@ -726,7 +731,7 @@
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
           draft.payload = collectPayload();
           draft.scenes = mergeSceneSnapshots(draft.scenes || [], collectScenesFromCards());
-          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
+          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
           NK.store.saveDrafts([draft]);
           if (NK.api?.projectSave) {
             await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });

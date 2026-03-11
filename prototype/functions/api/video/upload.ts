@@ -1,7 +1,8 @@
 // prototype/functions/api/video/upload.ts
 // Upload local video file to:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/videos/
-import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const corsHeaders = (origin?: string | null) => ({
@@ -17,9 +18,11 @@ const send = (data: any, status = 200, origin?: string | null) =>
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const origin = request.headers.get("Origin");
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const fd = await request.formData();
     const projectId = String(fd.get("projectId") || "").trim();
-    const userId = resolveUserId(String(fd.get("userId") || "").trim(), env);
+    const userId = auth.userId;
     const sceneId = String(fd.get("sceneId") || "").trim();
     const file = fd.get("file") as File | null;
     if (!projectId || !sceneId || !file) {

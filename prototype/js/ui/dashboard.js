@@ -6,6 +6,13 @@
   var serverMerged = false;
   var currentSeriesFilter = '__all__';
 
+  const escapeHtml = (value) => String(value == null ? '' : value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
   const setDashLoading = (show, text) => {
     const overlay = document.getElementById('dashboard-loading');
     const blurTarget = document.getElementById('dashboard-drafts');
@@ -147,13 +154,13 @@
         <button class="btn-primary series-create-btn" data-action="create-project">신규</button>
         <button class="chip series-chip ${currentSeriesFilter === '__all__' ? 'active' : ''}" data-action="series-filter" data-series-id="__all__">전체</button>
         ${seriesList.map((s) => `
-          <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}" data-action="series-filter" data-series-id="${s.id}">
-            ${s.title} (${s.count})
+          <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}" data-action="series-filter" data-series-id="${escapeHtml(s.id)}">
+            ${escapeHtml(s.title)} (${s.count})
           </button>
         `).join('')}
       </div>
       <div class="series-manage-bar">
-        <span class="series-manage-label">${selectedSeries ? `선택된 시리즈: ${selectedSeries.title}` : '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.'}</span>
+        <span class="series-manage-label">${selectedSeries ? `선택된 시리즈: ${escapeHtml(selectedSeries.title)}` : '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.'}</span>
         <button class="btn-secondary compact ${selectedSeries ? '' : 'disabled'}" data-action="series-rename" ${selectedSeries ? '' : 'disabled'}>시리즈 이름 변경</button>
         <button class="btn-secondary compact danger ${selectedSeries ? '' : 'disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'}>시리즈 삭제</button>
       </div>
@@ -173,23 +180,23 @@
             <div class="draft-thumb"></div>
             <div>
               <div class="draft-title-row">
-                <h4 class="draft-title" data-id="${d.id}">${d.title || '제목없음'}</h4>
-                <button class="edit-btn" data-action="title-edit" data-id="${d.id}" aria-label="제목 수정">&#9998;</button>
+                <h4 class="draft-title" data-id="${escapeHtml(d.id)}">${escapeHtml(d.title || '제목없음')}</h4>
+                <button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>
               </div>
               <div class="draft-meta">
-                <div>프로젝트 : ${d.seriesTitle || '-'}</div>
-                <div>장르 : ${genre || '-'}</div>
-                <div>타겟 : ${tgt || '-'}</div>
-                <div>길이 : ${dur}</div>
-                <div>비율 : ${ar}</div>
+                <div>프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
+                <div>장르 : ${escapeHtml(genre || '-')}</div>
+                <div>타겟 : ${escapeHtml(tgt || '-')}</div>
+                <div>길이 : ${escapeHtml(dur)}</div>
+                <div>비율 : ${escapeHtml(ar)}</div>
               </div>
             </div>
           </div>
           <div class="draft-actions">
-            <button class="btn-primary" data-action="draft-edit" data-id="${d.id}">Pre</button>
-            <button class="btn-secondary" data-action="draft-production" data-id="${d.id}">Production</button>
-            <button class="btn-secondary" data-action="draft-post" data-id="${d.id}">Post</button>
-            <button class="trash-btn action-trash" data-action="draft-delete" data-id="${d.id}" aria-label="삭제">&#128465;</button>
+            <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}">Pre</button>
+            <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}">Production</button>
+            <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}">Post</button>
+            <button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>
           </div>
         </article>
       `;
@@ -306,12 +313,10 @@
           draft.payload = draft.payload || {};
           draft.payload.episodeTitle = newTitle;
           NK.store.saveDrafts(drafts);
-          try {
-            localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
-            localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
-            localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
-            if (NK.state && NK.state.set) NK.state.set({ currentProject: draft });
-          } catch (_) { }
+          const currentId = NK.service?.project?.getCurrentProjectId ? NK.service.project.getCurrentProjectId() : '';
+          if (String(currentId) === String(draft.id) && NK.service?.project?.setCurrent) {
+            NK.service.project.setCurrent(draft);
+          }
           titleEl.textContent = newTitle;
           titleEl.contentEditable = 'false';
           titleEl.classList.remove('editing');
@@ -345,9 +350,7 @@
         const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
-          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
-          localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
-          localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
           NK.state.broadcast('update-project', { project: draft });
           const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
           if (isStandaloneStage) {
@@ -360,9 +363,7 @@
         const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
-          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
-          localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
-          localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
           NK.state.broadcast('update-project', { project: draft });
           const url = draft.id ? `scenes.html?projectId=${encodeURIComponent(draft.id)}` : 'scenes.html';
           if (isStandaloneStage) {
@@ -375,9 +376,7 @@
         const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
-          localStorage.setItem(NK.config.KEYS.SELECTED_DRAFT, JSON.stringify(draft));
-          localStorage.setItem(NK.config.KEYS.CURRENT_PROJECT, JSON.stringify({ id: draft.id, title: draft.title }));
-          localStorage.setItem('nk_current_project', JSON.stringify({ id: draft.id, title: draft.title }));
+          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
           NK.state.broadcast('update-project', { project: draft });
           const url = draft.id ? `media.html?projectId=${encodeURIComponent(draft.id)}` : 'media.html';
           if (isStandaloneStage) {
@@ -455,8 +454,8 @@
       <div class="draft-top">
         <div class="draft-thumb"></div>
         <div class="sidebar-card-text">
-          <h4 class="sidebar-card-title">${normalized.title || '제목없음'}</h4>
-          <p class="sidebar-card-lines">${desc}</p>
+          <h4 class="sidebar-card-title">${escapeHtml(normalized.title || '제목없음')}</h4>
+          <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
         </div>
       </div>
       <div class="sidebar-card-actions">

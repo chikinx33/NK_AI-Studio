@@ -333,6 +333,16 @@
 
   function resolveProject() {
     try {
+      if (NK.service && NK.service.project && NK.service.project.resolveCurrent) {
+        var resolved = NK.service.project.resolveCurrent({ search: window.location.search });
+        if (resolved && resolved.id) {
+          var fullResolved = getProjectById(resolved.id);
+          return fullResolved || resolved;
+        }
+      }
+    } catch (_) { }
+
+    try {
       var current = NK.state && NK.state.runtime && NK.state.runtime.currentProject;
       if (current && current.id) {
         var fullCurrent = getProjectById(current.id);

@@ -27,6 +27,22 @@
     return base.replace(/\/+$/, '') + path;
   };
   const DEFAULT_TIMEOUT_MS = 30000;
+  const getAuthToken = () => {
+    try {
+      if (NK.auth && NK.auth.getToken) return String(NK.auth.getToken() || '').trim();
+    } catch (_) { }
+    try {
+      return String(localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || '').trim();
+    } catch (_) {
+      return '';
+    }
+  };
+  const buildAuthHeaders = (headers) => {
+    var out = Object.assign({}, headers || {});
+    var token = getAuthToken();
+    if (token) out.Authorization = 'Bearer ' + token;
+    return out;
+  };
   const resolveUserId = () => {
     try {
       var raw = '';
@@ -127,7 +143,7 @@
     if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/imagen'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     });
     var text = await res.text();
@@ -145,7 +161,7 @@
     if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/video'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     });
     var text = await res.text();
@@ -173,7 +189,9 @@
     q.set('userId', String(p.userId || resolveUserId()));
     var job = p.jobId || p.job_id || p.job || '';
     if (job) q.set('job_id', String(job));
-    var res = await fetch(withBase('/api/video/status?' + q.toString()));
+    var res = await fetch(withBase('/api/video/status?' + q.toString()), {
+      headers: buildAuthHeaders()
+    });
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'status_error');
     return j(text);
@@ -184,7 +202,11 @@
     fd.append('projectId', String(projectId || ''));
     fd.append('userId', resolveUserId());
     fd.append('file', file);
-    var res = await fetch(withBase('/api/image/upload'), { method: 'POST', body: fd });
+    var res = await fetch(withBase('/api/image/upload'), {
+      method: 'POST',
+      headers: buildAuthHeaders(),
+      body: fd
+    });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'upload_error')));
     return j(text);
@@ -196,7 +218,11 @@
     fd.append('userId', resolveUserId());
     fd.append('sceneId', String(sceneId || ''));
     fd.append('file', file);
-    var res = await fetch(withBase('/api/video/upload'), { method: 'POST', body: fd });
+    var res = await fetch(withBase('/api/video/upload'), {
+      method: 'POST',
+      headers: buildAuthHeaders(),
+      body: fd
+    });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'upload_error')));
     return j(text);
@@ -205,18 +231,32 @@
   api.mediaProxyUrl = function (rawUrl) {
     var u = String(rawUrl || '').trim();
     if (!u) return '';
-    if (u.indexOf('/api/media/proxy?') >= 0) return u;
+    var token = getAuthToken();
+    var appendToken = function (url) {
+      if (!token) return url;
+      try {
+        var parsedUrl = new URL(url, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
+        if (!parsedUrl.searchParams.get('nk_token')) parsedUrl.searchParams.set('nk_token', token);
+        if (/^https?:/i.test(url)) return parsedUrl.toString();
+        return parsedUrl.pathname + parsedUrl.search + parsedUrl.hash;
+      } catch (_) {
+        return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'nk_token=' + encodeURIComponent(token);
+      }
+    };
+    if (u.indexOf('/api/media/proxy?') >= 0) return appendToken(u);
     try {
       var parsed = new URL(u, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
-      if (parsed.pathname === '/api/media/proxy') return u;
+      if (parsed.pathname === '/api/media/proxy') return appendToken(u);
     } catch (_) { }
-    return withBase('/api/media/proxy?url=' + encodeURIComponent(u));
+    var tail = token ? ('&nk_token=' + encodeURIComponent(token)) : '';
+    return withBase('/api/media/proxy?url=' + encodeURIComponent(u) + tail);
   };
 
   api.mediaProxyObjectUrl = function (objectName) {
     var n = String(objectName || '').trim();
     if (!n) return '';
-    return withBase('/api/media/proxy?objectName=' + encodeURIComponent(n));
+    var token = getAuthToken();
+    return withBase('/api/media/proxy?objectName=' + encodeURIComponent(n) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
   };
 
   api.postprodTranscodeStart = async function (body) {
@@ -224,7 +264,7 @@
     if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/postprod/transcode'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     });
     var text = await res.text();
@@ -245,7 +285,9 @@
     var q = new URLSearchParams();
     if (p.jobName) q.set('jobName', String(p.jobName));
     if (p.outputObjectName) q.set('outputObjectName', String(p.outputObjectName));
-    var res = await fetch(withBase('/api/postprod/transcode/status?' + q.toString()));
+    var res = await fetch(withBase('/api/postprod/transcode/status?' + q.toString()), {
+      headers: buildAuthHeaders()
+    });
     var text = await res.text();
     var data = j(text);
     if (!res.ok) {
@@ -264,7 +306,7 @@
     var url = kind === 'image'
       ? withBase('/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid))
       : withBase('/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid));
-    var res = await fetch(url);
+    var res = await fetch(url, { headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'library_error');
     return j(text);
@@ -273,7 +315,7 @@
   api.projectDelete = async function (projectId, objectName) {
     var res = await fetch(withBase('/api/project/delete'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ projectId: String(projectId || ''), userId: resolveUserId(), confirm: 'yes', objectName: String(objectName || '') })
     });
     var text = await res.text();
@@ -284,7 +326,7 @@
   api.projectInit = async function (projectId) {
     var res = await fetch(withBase('/api/project/init'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ projectId: String(projectId || ''), userId: resolveUserId() })
     });
     var text = await res.text();
@@ -295,7 +337,7 @@
 
   api.projectGet = async function (projectId) {
     var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(resolveUserId()));
-    var res = await fetch(url, { method: 'GET' });
+    var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'get_error')));
     return j(text);
@@ -313,7 +355,7 @@
     };
     var res = await fetchWithTimeout(withBase('/api/project/save'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(body)
     }, 25000);
     var text = await readTextWithTimeout(res, 10000);
@@ -322,7 +364,10 @@
   };
 
   api.projectList = async function () {
-    var res = await fetch(withBase('/api/project/list?userId=' + encodeURIComponent(resolveUserId())), { method: 'GET' });
+    var res = await fetch(withBase('/api/project/list?userId=' + encodeURIComponent(resolveUserId())), {
+      method: 'GET',
+      headers: buildAuthHeaders()
+    });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'list_error')));
     return j(text);
@@ -330,7 +375,7 @@
 
   api.userdataFavoritesGet = async function () {
     var url = withBase('/api/userdata/favorites/get?userId=' + encodeURIComponent(resolveUserId()));
-    var res = await fetch(url, { method: 'GET' });
+    var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_favorites_get_error')));
     return j(text);
@@ -345,7 +390,7 @@
     };
     var res = await fetchWithTimeout(withBase('/api/userdata/favorites/save'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     }, 25000);
     var text = await readTextWithTimeout(res, 10000);
@@ -355,7 +400,7 @@
 
   api.userdataProfileGet = async function () {
     var url = withBase('/api/userdata/profile/get?userId=' + encodeURIComponent(resolveUserId()));
-    var res = await fetch(url, { method: 'GET' });
+    var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_profile_get_error')));
     return j(text);
@@ -365,7 +410,7 @@
     var payload = { userId: resolveUserId(), profile: profile || {} };
     var res = await fetchWithTimeout(withBase('/api/userdata/profile/save'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
     }, 25000);
     var text = await readTextWithTimeout(res, 10000);
@@ -375,7 +420,7 @@
 
   api.userdataSubscriptionGet = async function () {
     var url = withBase('/api/userdata/subscription/get?userId=' + encodeURIComponent(resolveUserId()));
-    var res = await fetch(url, { method: 'GET' });
+    var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'userdata_subscription_get_error')));
     return j(text);

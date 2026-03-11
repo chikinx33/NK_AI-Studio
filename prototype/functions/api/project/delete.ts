@@ -1,7 +1,8 @@
 // prototype/functions/api/project/delete.ts
 // Delete objects under:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/
-import { buildAiVideoProjectPrefix, buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoUserRoot } from "../_shared/storage";
+import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -24,9 +25,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body.projectId || "").trim();
-    const userId = resolveUserId(body.userId, env);
+    const userId = auth.userId;
     const confirm = String(body.confirm || "").trim() === "yes";
     const deleteAll = String(body.all || "").trim() === "true";
     if (!projectId || !confirm) {
@@ -47,7 +50,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // Validate prefix boundaries (simple sanity check)
     if (!deleteAll && !/^[a-zA-Z0-9._-]+$/.test(projectId)) {
-      return send({ error: "Invalid projectId format" }, 400);
+      return send({ error: "Invalid projectId format" }, 400, origin);
     }
 
     const token = await getGoogleAccessToken({

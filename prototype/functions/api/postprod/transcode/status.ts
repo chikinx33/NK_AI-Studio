@@ -1,3 +1,6 @@
+import { buildUserRoot } from "../../_shared/storage";
+import { authorizeRequest } from "../../_shared/auth.js";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const corsHeaders = (origin?: string | null) => ({
@@ -14,6 +17,8 @@ const send = (data: any, status = 200, origin?: string | null) =>
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const url = new URL(request.url);
     const jobName = String(url.searchParams.get("jobName") || "").trim();
     const outputObjectName = String(url.searchParams.get("outputObjectName") || "").trim();
@@ -30,6 +35,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
+    const basePrefix = outParsed.object.replace(/\/$/, "");
+    const userRoot = buildUserRoot(basePrefix, auth.userId);
+    if (!outputObjectName.startsWith(`${userRoot}/`)) {
+      return send({ error: "outputObjectName is outside user scope" }, 403, origin);
+    }
 
     const token = await getGoogleAccessToken({
       clientEmail,

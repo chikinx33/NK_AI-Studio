@@ -1,4 +1,5 @@
-import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildUserRoot } from "../_shared/storage";
+import { authorizeRequest } from "../_shared/auth.js";
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const corsHeaders = (origin?: string | null) => ({
@@ -17,9 +18,11 @@ type GcsPath = { bucket: string; object: string };
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body?.projectId || "").trim();
-    const userId = resolveUserId(body?.userId, env);
+    const userId = auth.userId;
     const sourceObjectName = String(body?.sourceObjectName || "").trim();
     const aspectRatio = String(body?.aspectRatio || "16:9").trim();
     const sourceDurationSec = Number(body?.sourceDurationSec || 0);
@@ -39,11 +42,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
+    const basePrefix = outParsed.object.replace(/\/$/, "");
+    const userRoot = buildUserRoot(basePrefix, userId);
 
     const source = normalizeSource(sourceObjectName, outParsed.bucket);
     if (!source) return send({ error: "Invalid sourceObjectName" }, 400, origin);
+    if (!source.object.startsWith(`${userRoot}/`)) {
+      return send({ error: "sourceObjectName is outside user scope" }, 403, origin);
+    }
 
-    const basePrefix = outParsed.object.replace(/\/$/, "");
     const stamp = Date.now();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const outputPrefix = `${projectPrefix}/postprod/final/${stamp}`;

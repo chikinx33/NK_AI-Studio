@@ -1,6 +1,7 @@
 ﻿// prototype/functions/api/project/init.ts
 // Initialize GCS folder structure for a projectId by creating .keep files.
-import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -23,6 +24,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const body = await request.json().catch(() => ({} as any));
     const projectId = String(body.projectId || "").trim();
     if (!projectId) {
@@ -31,7 +34,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) {
       return send({ error: "Invalid projectId format" }, 400, origin);
     }
-    const userId = resolveUserId(body.userId, env);
+    const userId = auth.userId;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;

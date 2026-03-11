@@ -44,7 +44,7 @@
       }, 100);
     } catch (e) {
       console.error('download failed', e);
-      alert('?ㅼ슫濡쒕뱶 ?ㅽ뙣: ' + (e && e.message ? e.message : e));
+      alert('다운로드 실패: ' + (e && e.message ? e.message : e));
     }
   }
 

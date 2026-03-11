@@ -1,9 +1,14 @@
 ﻿// prototype/functions/api/imagen.ts
-import { buildAiVideoProjectPrefix, resolveUserId } from "./_shared/storage";
+import { buildAiVideoProjectPrefix } from "./_shared/storage";
+import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) {
+      return json({ error: auth.error }, auth.status);
+    }
     const body = await request.json().catch(() => ({} as any));
     const prompt = (body?.prompt ?? "").toString().trim();
     const aspectIncoming = (body?.aspectRatio ?? "16:9").toString().trim();
@@ -85,7 +90,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const projTagRaw = (body?.projectId ?? body?.projTag ?? "").toString().trim();
     const projTag = projTagRaw || "default";
-    const userId = resolveUserId(body?.userId, env);
+    const userId = auth.userId;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
     let signedUrl = "";

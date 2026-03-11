@@ -1,3 +1,6 @@
+import { buildUserRoot } from "../_shared/storage";
+import { authorizeRequest } from "../_shared/auth.js";
+
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const corsHeaders = (origin?: string | null, extra?: Record<string, string>) => ({
@@ -20,9 +23,17 @@ type GcsPath = { bucket: string; object: string };
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
+    const auth = await authorizeRequest(request, env, { allowQueryToken: true });
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const reqUrl = new URL(request.url);
     const rawUrl = String(reqUrl.searchParams.get("url") || "").trim();
     const objectName = String(reqUrl.searchParams.get("objectName") || "").trim();
+
+    const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
+    const out = parseGcsUri(String(baseOutput || ""));
+    if (!out) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
+    const basePrefix = out.object.replace(/\/$/, "");
+    const userRoot = buildUserRoot(basePrefix, auth.userId);
 
     let target: GcsPath | null = null;
     if (objectName) target = parseObjectNameTarget(objectName, env);
@@ -30,6 +41,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
     if (!target) {
       return send({ error: "url or objectName must point to a valid GCS object" }, 400, origin);
+    }
+    if (target.bucket !== out.bucket || !target.object.startsWith(`${userRoot}/`)) {
+      return send({ error: "target is outside user scope" }, 403, origin);
     }
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;

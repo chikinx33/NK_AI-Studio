@@ -1,4 +1,5 @@
-import { buildUserDataObject, resolveUserId } from "../../_shared/storage";
+import { buildUserDataObject } from "../../_shared/storage";
+import { authorizeRequest } from "../../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -17,8 +18,10 @@ const send = (data: any, status = 200, origin: string | null = null) =>
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const body = await request.json().catch(() => ({} as any));
-    const userId = resolveUserId(body.userId, env);
+    const userId = auth.userId;
     const profile = sanitizeProfile(body.profile || {});
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;

@@ -1,4 +1,5 @@
-import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>
 const corsHeaders = (origin?: string | null) => ({
@@ -13,9 +14,11 @@ const send = (data: any, status = 200, origin?: string | null) =>
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
     const origin = request.headers.get("Origin")
+    const auth = await authorizeRequest(request, env)
+    if (!auth.ok) return send({ error: auth.error }, auth.status, origin)
     const url = new URL(request.url)
     const projectId = (url.searchParams.get("projectId") || "").trim()
-    const userId = resolveUserId(url.searchParams.get("userId") || "", env)
+    const userId = auth.userId
     if (!projectId) return send({ error: "projectId is required" }, 400, origin)
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined

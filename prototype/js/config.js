@@ -2,7 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '1.533';
+    config.APP_VERSION = '1.534';
 
     // Storage Keys
     config.KEYS = {
@@ -16,17 +16,15 @@
         THEME_PRESETS: 'nk_theme_presets_active',
         AUTH: 'nk_is_logged_in',
         USER: 'nk_login_user',
+        AUTH_TOKEN: 'nk_auth_token',
         CURRENT_STAGE: 'nk_current_stage',
         CURRENT_PROJECT: 'nk_current_project',
         SELECTED_DRAFT: 'nk_selected_draft',
         VIDEO_MODEL: 'nk_video_model'
     };
 
-    // Auth Configuration
-    config.AUTH = {
-        DEFAULT_ID: 'limfactory',
-        DEFAULT_PW: 'limfactory1234'
-    };
+    // Auth configuration is server-driven.
+    config.AUTH = {};
 
     // API Base
     // - localStorage 'nk_api_base' has highest priority (see api.js)

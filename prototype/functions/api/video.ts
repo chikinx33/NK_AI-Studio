@@ -3,7 +3,8 @@
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
-import { buildAiVideoProjectPrefix, resolveUserId } from "./_shared/storage";
+import { buildAiVideoProjectPrefix } from "./_shared/storage";
+import { authorizeRequest } from "./_shared/auth.js";
 
 (globalThis as any).g = globalThis;
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -11,6 +12,8 @@ const log = (...args: any[]) => console.log('[video]', ...args);
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) return json({ error: auth.error }, auth.status);
     const body = await request.json().catch(() => ({} as any));
     const {
       sceneId = "scene",
@@ -58,7 +61,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI (expect gs://bucket/prefix)" }, 500);
     }
     const projectTag = (projTag || "default").toString();
-    const userId = resolveUserId(rawUserId, env);
+    const userId = auth.userId;
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
     // 표준 경로: users/{userId}/ai-video/projects{projectId}/videos/{timestamp-sceneId}.mp4

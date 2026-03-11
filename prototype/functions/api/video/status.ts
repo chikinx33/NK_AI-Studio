@@ -1,7 +1,8 @@
 ﻿// prototype/functions/api/video/status.ts
 // Poll Veo operation status and return a playable video URL (signed GCS URL if possible).
 // Contracts: job_id (legacy) OR jobId accepted. projectId/sceneId optional metadata.
-import { buildAiVideoProjectPrefix, resolveUserId } from "../_shared/storage";
+import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { authorizeRequest } from "../_shared/auth.js";
 
 (globalThis as any).g = globalThis; // some bundled helpers expect g
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -23,10 +24,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   let jobId = '';
   try {
     const url = new URL(request.url);
+    const auth = await authorizeRequest(request, env);
+    if (!auth.ok) {
+      return corsJson({ ok: false, job_id: '', done: false, error: { code: auth.status, message: auth.error }, response: null, rawOperation: null, playback: null }, auth.status);
+    }
     const jobIdRaw = url.searchParams.get('job_id') || url.searchParams.get('jobId') || '';
     const projectTag = (url.searchParams.get('projectId') || '').trim();
     const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();
-    const userId = resolveUserId(url.searchParams.get('userId') || '', env);
+    const userId = auth.userId;
 
     if (!jobIdRaw.trim()) {
       return corsJson({ ok: false, job_id: '', done: false, error: { code: 'BAD_REQUEST', message: 'job_id is required' }, response: null, rawOperation: null, playback: null }, 400);
