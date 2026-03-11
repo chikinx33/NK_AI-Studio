@@ -27,6 +27,10 @@
     return String(payload && payload.brandStudioCaptionDraft || '').trim();
   }
 
+  function readHashtagDraft(payload) {
+    return String(payload && payload.brandStudioHashtagDraft || '').trim();
+  }
+
   function firstFilled(values) {
     var src = Array.isArray(values) ? values : [];
     for (var i = 0; i < src.length; i++) {
@@ -34,6 +38,50 @@
       if (value) return value;
     }
     return '';
+  }
+
+  function toTagList(value) {
+    if (Array.isArray(value)) {
+      return value.map(function (item) { return String(item || '').trim(); }).filter(Boolean);
+    }
+    return String(value || '')
+      .split(/[,\n]/)
+      .map(function (item) { return String(item || '').trim(); })
+      .filter(Boolean);
+  }
+
+  function normalizeHashtagToken(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return '';
+    raw = raw.replace(/^#+/, '').replace(/[^0-9A-Za-z가-힣_]+/g, '');
+    if (!raw) return '';
+    return '#' + raw;
+  }
+
+  function buildHashtagDraft(project, selectedOption, sourceTexts) {
+    var payload = (project && project.payload) || {};
+    var tokens = [];
+
+    function pushToken(value) {
+      var tag = normalizeHashtagToken(value);
+      if (!tag) return;
+      if (tokens.indexOf(tag) >= 0) return;
+      tokens.push(tag);
+    }
+
+    pushToken(project && (project.seriesTitle || project.title));
+    pushToken(payload.projectType);
+    pushToken(payload.targetAudience || payload.target);
+    pushToken(selectedOption && selectedOption.title);
+    toTagList(payload.brandKeywords).slice(0, 4).forEach(pushToken);
+    toTagList(payload.purposeTags).slice(0, 3).forEach(pushToken);
+
+    var sourceLine = firstFilled(sourceTexts);
+    if (sourceLine) {
+      sourceLine.split(/\s+/).slice(0, 3).forEach(pushToken);
+    }
+
+    return tokens.slice(0, 8).join(' ');
   }
 
   function contentTypeOptions() {
@@ -83,6 +131,7 @@
     var payload = project.payload || {};
     var selectedType = readBrandContentType(payload);
     var savedCaption = readCaptionDraft(payload);
+    var savedHashtags = readHashtagDraft(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
       ? NK.service.contentLibrary.summarizeProject(project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
@@ -185,6 +234,22 @@
       '<p class="brand-caption-help">프로젝트 요약, 핵심 메시지, 타깃, 선택한 콘텐츠 유형을 기반으로 캡션을 구성합니다.</p>' +
       '</div>' +
       '</section>' +
+      '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>해시태그 생성</h3><span>프로젝트 키워드 기반</span></div>' +
+      '<div class="brand-hashtag-generator">' +
+      '<div class="brand-hashtag-meta">' +
+      '<div><span class="brand-caption-meta-label">브랜드 키워드</span><strong>' + escapeHtml(toTagList(payload.brandKeywords).length ? toTagList(payload.brandKeywords).join(', ') : '아직 없음') + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">추천 기준</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '콘텐츠 유형 미선택') + '</strong></div>' +
+      '</div>' +
+      '<textarea id="brand-hashtag-textarea" class="brand-caption-textarea brand-hashtag-textarea" placeholder="#해시태그 형식으로 생성됩니다.">' + escapeHtml(savedHashtags || '') + '</textarea>' +
+      '<div class="brand-caption-actions">' +
+      '<button class="btn-secondary" data-action="brand-generate-hashtags" ' + (selectedOption ? '' : 'disabled') + '>자동 생성</button>' +
+      '<button class="btn-secondary" data-action="brand-regenerate-hashtags" ' + (selectedOption ? '' : 'disabled') + '>다시 생성</button>' +
+      '<button class="btn-primary" data-action="brand-save-hashtags" ' + (selectedOption ? '' : 'disabled') + '>해시태그 저장</button>' +
+      '</div>' +
+      '<p class="brand-caption-help">프로젝트명, 브랜드 키워드, 콘텐츠 유형, 타깃, 기존 콘텐츠 문맥을 합쳐 해시태그를 추천합니다.</p>' +
+      '</div>' +
+      '</section>' +
       '<div class="brand-studio-layout">' +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 운영 준비도</h3><span>현재 프로젝트 기준</span></div>' +
@@ -233,6 +298,7 @@
       var action = String(btn.dataset.action || '').trim();
       var target = '';
       var captionEl = root.querySelector('#brand-caption-textarea');
+      var hashtagEl = root.querySelector('#brand-hashtag-textarea');
       if (action === 'brand-select-content-type') {
         var typeId = String(btn.dataset.contentType || '').trim();
         if (!typeId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
@@ -292,6 +358,44 @@
           })
           .catch(function (err) {
             alert('캡션 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-generate-hashtags' || action === 'brand-regenerate-hashtags') {
+        if (!selectedOption || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextTags = buildHashtagDraft(project, selectedOption, sourceTexts);
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioHashtagDraft: nextTags })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('해시태그 생성 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-save-hashtags') {
+        if (!selectedOption || !hashtagEl || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextTagsText = String(hashtagEl.value || '').trim();
+        if (!nextTagsText) {
+          alert('저장할 해시태그를 입력해 주세요.');
+          hashtagEl.focus();
+          return;
+        }
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioHashtagDraft: nextTagsText })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+            alert('해시태그를 저장했습니다.');
+          })
+          .catch(function (err) {
+            alert('해시태그 저장 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;

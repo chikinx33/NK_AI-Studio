@@ -5462,6 +5462,30 @@ body.layout-fixed .lib-content {
   line-height: 1.55;
 }
 
+.brand-hashtag-generator {
+  display: grid;
+  gap: 14px;
+}
+
+.brand-hashtag-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.brand-hashtag-meta > div {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+  display: grid;
+  gap: 6px;
+}
+
+.brand-hashtag-textarea {
+  min-height: 140px;
+}
+
 .brand-studio-summary-card,
 .brand-studio-panel,
 .brand-studio-op-card {
@@ -5599,6 +5623,10 @@ body.layout-fixed .lib-content {
   }
 
   .brand-caption-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-hashtag-meta {
     grid-template-columns: 1fr;
   }
 
