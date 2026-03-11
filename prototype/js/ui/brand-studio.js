@@ -23,6 +23,19 @@
     return String(payload && payload.brandStudioContentType || '').trim();
   }
 
+  function readCaptionDraft(payload) {
+    return String(payload && payload.brandStudioCaptionDraft || '').trim();
+  }
+
+  function firstFilled(values) {
+    var src = Array.isArray(values) ? values : [];
+    for (var i = 0; i < src.length; i++) {
+      var value = String(src[i] || '').trim();
+      if (value) return value;
+    }
+    return '';
+  }
+
   function contentTypeOptions() {
     return [
       {
@@ -69,11 +82,19 @@
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
     var selectedType = readBrandContentType(payload);
+    var savedCaption = readCaptionDraft(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
       ? NK.service.contentLibrary.summarizeProject(project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
     var options = contentTypeOptions();
     var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
+    var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
+      ? NK.service.contentLibrary.listProjectContents(project)
+      : [];
+    var sourceTexts = contentItems
+      .filter(function (item) { return item.type === 'text'; })
+      .map(function (item) { return String(item.text || '').trim(); })
+      .filter(Boolean);
 
     var readiness = [
       {
@@ -111,6 +132,8 @@
       );
     }).join('');
 
+    var captionValue = savedCaption || '';
+
     root.innerHTML =
       '<section class="brand-studio-page">' +
       '<div class="brand-studio-hero">' +
@@ -144,6 +167,22 @@
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId)) + '">소스 확인</a>' +
       '<button class="btn-primary compact" data-action="brand-select-next" ' + (selectedOption ? '' : 'disabled') + '>이 유형으로 계속</button>' +
       '</div>' +
+      '</div>' +
+      '</section>' +
+      '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>캡션 생성</h3><span>선택한 콘텐츠 유형 기준</span></div>' +
+      '<div class="brand-caption-generator">' +
+      '<div class="brand-caption-meta">' +
+      '<div><span class="brand-caption-meta-label">콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">참조 소스</span><strong>' + escapeHtml(sourceTexts.length ? ('텍스트 소스 ' + sourceTexts.length + '개') : '아직 없음') + '</strong></div>' +
+      '</div>' +
+      '<textarea id="brand-caption-textarea" class="brand-caption-textarea" placeholder="캡션이 여기에 생성됩니다.">' + escapeHtml(captionValue) + '</textarea>' +
+      '<div class="brand-caption-actions">' +
+      '<button class="btn-secondary" data-action="brand-generate-caption" ' + (selectedOption ? '' : 'disabled') + '>자동 생성</button>' +
+      '<button class="btn-secondary" data-action="brand-regenerate-caption" ' + (selectedOption ? '' : 'disabled') + '>다시 생성</button>' +
+      '<button class="btn-primary" data-action="brand-save-caption" ' + (selectedOption ? '' : 'disabled') + '>캡션 저장</button>' +
+      '</div>' +
+      '<p class="brand-caption-help">프로젝트 요약, 핵심 메시지, 타깃, 선택한 콘텐츠 유형을 기반으로 캡션을 구성합니다.</p>' +
       '</div>' +
       '</section>' +
       '<div class="brand-studio-layout">' +
@@ -193,6 +232,7 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
+      var captionEl = root.querySelector('#brand-caption-textarea');
       if (action === 'brand-select-content-type') {
         var typeId = String(btn.dataset.contentType || '').trim();
         if (!typeId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
@@ -203,6 +243,55 @@
           })
           .catch(function (err) {
             alert('콘텐츠 유형 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-generate-caption' || action === 'brand-regenerate-caption') {
+        if (!selectedOption || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var sourceLine = firstFilled(sourceTexts).slice(0, 140);
+        var typeLead = selectedOption.title;
+        var projectLead = firstFilled([payload.brandSummary, payload.coreMessage, project.seriesTitle, project.title]);
+        var audienceLead = firstFilled([payload.targetAudience, payload.target, '프로젝트 팔로워']);
+        var detailLine = sourceLine ? ('대표 포인트는 ' + sourceLine + '입니다.') : '';
+        var nextCaption = [
+          projectLead,
+          audienceLead + '에게 맞춘 ' + typeLead + ' 운영 캡션입니다.',
+          payload.coreMessage ? ('핵심 메시지는 "' + payload.coreMessage + '" 입니다.') : '',
+          detailLine,
+          '지금 이 프로젝트의 다음 업데이트를 계속 확인해 주세요.'
+        ].filter(Boolean).join(' ');
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioCaptionDraft: nextCaption })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('캡션 생성 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-save-caption') {
+        if (!selectedOption || !captionEl || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextText = String(captionEl.value || '').trim();
+        if (!nextText) {
+          alert('저장할 캡션을 입력해 주세요.');
+          captionEl.focus();
+          return;
+        }
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioCaptionDraft: nextText })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+            alert('캡션을 저장했습니다.');
+          })
+          .catch(function (err) {
+            alert('캡션 저장 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;

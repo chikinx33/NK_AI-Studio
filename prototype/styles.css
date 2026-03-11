@@ -5412,6 +5412,56 @@ body.layout-fixed .lib-content {
   gap: 10px;
 }
 
+.brand-caption-generator {
+  display: grid;
+  gap: 14px;
+}
+
+.brand-caption-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.brand-caption-meta > div {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+  display: grid;
+  gap: 6px;
+}
+
+.brand-caption-meta-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brand-caption-textarea {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  padding: 16px 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.62);
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 15px;
+}
+
+.brand-caption-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.brand-caption-help {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
 .brand-studio-summary-card,
 .brand-studio-panel,
 .brand-studio-op-card {
@@ -5546,6 +5596,10 @@ body.layout-fixed .lib-content {
 
   .brand-content-type-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-caption-meta {
+    grid-template-columns: 1fr;
   }
 
   .brand-studio-layout {
