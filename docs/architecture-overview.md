@@ -2,11 +2,28 @@
 
 ## Current Shape
 
-This repository is a browser-first prototype for an AI-assisted video production workflow.
+This repository is a browser-first prototype that started as an AI-assisted video production workflow and is now being expanded toward a `Creator Operating System`.
 
 - `prototype/`: main application
 - `docs/`: product, UI, and prompt rules
 - `prototype/functions/api/`: Cloudflare Pages Functions for AI/media backends
+
+## Target Product Identity
+
+The agreed target identity is not just an AI creation tool.
+
+NK AI Studio is being positioned as:
+
+- `Project Core`: shared operating context
+- `Creative Studio`: creation
+- `Brand Studio`: operation
+- `Knowledge Hub`: brand context
+- `Brand Intelligence`: analysis and strategy
+
+Reference:
+
+- `docs/architecture-agreement-v1.md`
+- `docs/brand-studio-v1-plan.md`
 
 ## Runtime Layers
 
@@ -33,6 +50,8 @@ This repository is a browser-first prototype for an AI-assisted video production
 - `prototype/ui/pipeline.js`: scene-level production UI, image/video generation, prompt editing
 - `prototype/js/ui/post-production.js`: post-production flow
 
+These UI modules currently correspond to the early `Creative Studio` portion of the target architecture.
+
 ### 4. Server functions
 
 - `prototype/functions/api/scenario.js`: OpenAI-based scene generation with fallback scenes
@@ -42,7 +61,7 @@ This repository is a browser-first prototype for an AI-assisted video production
 
 ## Primary Data Model
 
-The effective project model is a draft/project object with:
+The current effective project model is a draft/project object with:
 
 - `id`
 - `title`
@@ -62,7 +81,16 @@ Historically, current project context was read from multiple places:
 
 This has started to be consolidated in `prototype/js/service/project.js`.
 
-## Main Flow
+In the target architecture, this project object is expected to evolve into `Project Core`, with separate but connected models for:
+
+- project profile
+- content library
+- channels
+- publish jobs
+- knowledge base
+- analytics snapshots
+
+## Current Main Flow
 
 1. Create or select a project
 2. Enter scenario inputs in `scenario.html`
@@ -72,54 +100,55 @@ This has started to be consolidated in `prototype/js/service/project.js`.
 6. Generate image/video assets per scene
 7. Move to post-production / render
 
+This is the current creation flow only.
+
+## Target End-to-End Flow
+
+1. Creative result creation
+2. Content Library storage
+3. Brand Studio operation
+4. Channel publish or scheduling
+5. Response data accumulation
+6. Brand Intelligence analysis
+
 ## Current Architectural Risks
 
 ### Encoding instability
 
-Several documents and code strings are visibly garbled. This is the highest operational risk because it affects prompts, UI copy, and maintainability.
+Korean strings and prompt text must remain trustworthy, otherwise prompt quality and maintainability both degrade.
 
 ### Too much orchestration in `script.js`
 
-`prototype/script.js` currently owns:
-
-- bootstrapping
-- stage restore
-- theme/lang sync
-- project restore
-- sidebar state
-- overlay interactions
-- login-related UI
-
-This makes regression risk high.
+`prototype/script.js` still owns bootstrapping, stage restore, theme/lang sync, project restore, sidebar state, overlay interactions, and login-related UI.
 
 ### `pipeline.js` is both controller and renderer
 
-`prototype/ui/pipeline.js` mixes:
-
-- project resolution
-- server fetch/sync logic
-- asset generation flow
-- modal handling
-- DOM rendering
-- media helpers
-
-This is the second major refactor target after encoding and project-context cleanup.
+`prototype/ui/pipeline.js` still mixes project resolution, fetch/sync logic, asset generation flow, modal handling, DOM rendering, and media helpers.
 
 ### Multiple persistence sources
 
-There is still a split between:
+Project-related state is still split across local drafts, selected project snapshot, current project summary, server snapshot, and pipeline cache.
 
-- local drafts
-- selected project snapshot
-- current project summary
-- server snapshot
-- pipeline cache
+### Brand layers are not yet first-class
 
-The project context is now partially centralized, but the write-path still exists in multiple UI files.
+The current prototype is strong in creation flow, but `Brand Studio`, `Knowledge Hub`, and `Brand Intelligence` are not yet implemented as first-class architectural layers.
 
 ## Recommended Next Refactor Boundary
 
 1. Finish centralizing current-project read/write into `project.js`
-2. Extract pipeline rendering helpers from `pipeline.js`
-3. Extract stage restore/sidebar logic from `script.js`
-4. Normalize project persistence contract between local draft and server snapshot
+2. Normalize `Content Library` as the shared result store between Creative and Brand flows
+3. Introduce `Project Profile` and `Channel` models
+4. Extract pipeline rendering helpers from `pipeline.js`
+5. Extract stage restore/sidebar logic from `script.js`
+6. Define a clean persistence contract between local draft and server snapshot
+
+## Usability Constraint
+
+As the system expands, usability takes priority over internal purity.
+
+That means:
+
+- the user must not lose project context
+- common flows must feel shorter, not longer
+- Brand Studio must not feel like a disconnected admin tool
+- the platform should present one continuous operating flow even if the internal architecture becomes layered
