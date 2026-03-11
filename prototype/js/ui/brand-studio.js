@@ -19,6 +19,39 @@
     return safePage + '?projectId=' + encodeURIComponent(safeProjectId);
   }
 
+  function readBrandContentType(payload) {
+    return String(payload && payload.brandStudioContentType || '').trim();
+  }
+
+  function contentTypeOptions() {
+    return [
+      {
+        id: 'sns-post',
+        title: 'SNS 게시물',
+        desc: '짧은 문구와 대표 이미지를 중심으로 운영하는 기본 포맷입니다.',
+        outputs: '본문 · 캡션 · 해시태그'
+      },
+      {
+        id: 'shorts-promo',
+        title: '쇼츠 홍보',
+        desc: '기존 영상/씬 자산을 짧은 홍보 포맷으로 다시 운영하는 흐름입니다.',
+        outputs: '짧은 영상 · 캡션 · 업로드 문구'
+      },
+      {
+        id: 'promo-image',
+        title: '홍보 이미지',
+        desc: '카드형 프로모션이나 SNS 썸네일 중심 운영에 적합합니다.',
+        outputs: '대표 이미지 · 카피 · 해시태그'
+      },
+      {
+        id: 'blog-post',
+        title: '블로그 글',
+        desc: '프로젝트 메시지를 문서형 콘텐츠로 확장하는 운영 포맷입니다.',
+        outputs: '본문 초안 · 요약 문구 · 태그'
+      }
+    ];
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="brand-studio-page">' +
@@ -35,9 +68,12 @@
   function renderProject(root, project) {
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
+    var selectedType = readBrandContentType(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
       ? NK.service.contentLibrary.summarizeProject(project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
+    var options = contentTypeOptions();
+    var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
 
     var readiness = [
       {
@@ -63,6 +99,17 @@
       { title: '해시태그 구성', desc: '콘텐츠 유형과 타깃에 맞는 해시태그 추천 흐름이 여기 붙습니다.', status: '다음 단계' },
       { title: '채널 배포', desc: '채널 연결과 예약 게시가 이 영역에 연결됩니다.', status: '후속 구현' }
     ];
+    var contentTypeCards = options.map(function (item) {
+      var isActive = item.id === selectedType;
+      return (
+        '<button type="button" class="brand-content-type-card ' + (isActive ? 'is-active' : '') + '" data-action="brand-select-content-type" data-content-type="' + escapeHtml(item.id) + '">' +
+        '<span class="brand-content-type-state">' + (isActive ? '선택됨' : '선택') + '</span>' +
+        '<strong>' + escapeHtml(item.title) + '</strong>' +
+        '<p>' + escapeHtml(item.desc) + '</p>' +
+        '<span class="brand-content-type-output">' + escapeHtml(item.outputs) + '</span>' +
+        '</button>'
+      );
+    }).join('');
 
     root.innerHTML =
       '<section class="brand-studio-page">' +
@@ -84,6 +131,21 @@
       '<article class="brand-studio-summary-card"><span>타깃</span><strong>' + escapeHtml(payload.targetAudience || payload.target || '-') + '</strong></article>' +
       '<article class="brand-studio-summary-card"><span>소스 자산</span><strong>씬 ' + escapeHtml(summary.scenes) + ' · 이미지 ' + escapeHtml(summary.images) + ' · 영상 ' + escapeHtml(summary.videos) + '</strong></article>' +
       '</div>' +
+      '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>SNS 콘텐츠 유형</h3><span>V1 첫 진입점</span></div>' +
+      '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
+      '<div class="brand-studio-selection-summary">' +
+      '<div>' +
+      '<span class="brand-studio-selection-label">현재 선택</span>' +
+      '<strong>' + escapeHtml(selectedOption ? selectedOption.title : '아직 선택되지 않음') + '</strong>' +
+      '<p>' + escapeHtml(selectedOption ? selectedOption.outputs : '먼저 콘텐츠 유형을 선택하면 다음 캡션/해시태그 흐름이 이 기준으로 이어집니다.') + '</p>' +
+      '</div>' +
+      '<div class="brand-studio-selection-actions">' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId)) + '">소스 확인</a>' +
+      '<button class="btn-primary compact" data-action="brand-select-next" ' + (selectedOption ? '' : 'disabled') + '>이 유형으로 계속</button>' +
+      '</div>' +
+      '</div>' +
+      '</section>' +
       '<div class="brand-studio-layout">' +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 운영 준비도</h3><span>현재 프로젝트 기준</span></div>' +
@@ -131,6 +193,26 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
+      if (action === 'brand-select-content-type') {
+        var typeId = String(btn.dataset.contentType || '').trim();
+        if (!typeId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioContentType: typeId })
+          .then(function (result) {
+            if (result && result.draft) renderProject(root, result.draft);
+          })
+          .catch(function (err) {
+            alert('콘텐츠 유형 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-select-next') {
+        alert(selectedOption ? ('선택한 유형: ' + selectedOption.title + '\n다음 단계로 캡션/해시태그 흐름을 연결할 예정입니다.') : '먼저 콘텐츠 유형을 선택해 주세요.');
+        return;
+      }
       if (action === 'brand-open-library') target = buildStageUrl('library.html', projectId);
       else if (action === 'brand-open-scenario') target = buildStageUrl('scenario.html', projectId);
       else if (action === 'brand-open-media') target = buildStageUrl('media.html', projectId);

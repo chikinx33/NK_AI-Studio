@@ -5335,6 +5335,83 @@ body.layout-fixed .lib-content {
   gap: 12px;
 }
 
+.brand-content-type-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.brand-content-type-card {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.55);
+  color: var(--text);
+  border-radius: 18px;
+  padding: 18px;
+  text-align: left;
+  display: grid;
+  gap: 10px;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.brand-content-type-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 140, 0, 0.4);
+}
+
+.brand-content-type-card.is-active {
+  border-color: rgba(255, 140, 0, 0.75);
+  box-shadow: 0 18px 36px rgba(255, 140, 0, 0.12);
+  background: linear-gradient(160deg, rgba(255, 140, 0, 0.12), rgba(10, 18, 34, 0.76));
+}
+
+.brand-content-type-state,
+.brand-content-type-output,
+.brand-studio-selection-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brand-content-type-card strong {
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.brand-content-type-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.brand-studio-selection-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.52);
+}
+
+.brand-studio-selection-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.brand-studio-selection-summary p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.brand-studio-selection-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .brand-studio-summary-card,
 .brand-studio-panel,
 .brand-studio-op-card {
@@ -5467,6 +5544,10 @@ body.layout-fixed .lib-content {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .brand-content-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .brand-studio-layout {
     grid-template-columns: 1fr;
   }
@@ -5477,8 +5558,13 @@ body.layout-fixed .lib-content {
     grid-template-columns: 1fr;
   }
 
+  .brand-content-type-grid {
+    grid-template-columns: 1fr;
+  }
+
   .brand-studio-hero,
-  .brand-studio-toolbar {
+  .brand-studio-toolbar,
+  .brand-studio-selection-summary {
     flex-direction: column;
   }
 }

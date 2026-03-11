@@ -341,6 +341,28 @@
         clearCurrentProjectStorage();
         if (NK.state && NK.state.set) NK.state.set({ currentProject: null });
     };
+    project.updatePayload = async function (draftOrId, patch) {
+        var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
+        if (!draft || !draft.id) throw new Error('project_not_found');
+
+        var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        var idx = drafts.findIndex(function (row) { return String(row.id) === String(draft.id); });
+        if (idx < 0) throw new Error('project_not_found');
+
+        var target = Object.assign({}, drafts[idx]);
+        target.payload = Object.assign({}, target.payload || {}, patch || {});
+        target.payload = applyProjectCore(target.payload, target);
+        drafts[idx] = normalizeDraft(target);
+        NK.store.saveDrafts(drafts);
+        project.setCurrent(drafts[idx]);
+
+        var sync = await syncDraftToServer(drafts[idx]);
+        return {
+            ok: !!sync.ok,
+            draft: drafts[idx],
+            reason: sync.reason || ''
+        };
+    };
 
     /**
      * Rename a series title and sync all episode metadata.
