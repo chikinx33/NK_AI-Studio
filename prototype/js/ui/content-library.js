@@ -106,9 +106,6 @@
       '<div class="content-library-hero-actions">' +
       '<button class="btn-secondary" data-action="library-open-knowledge">Knowledge Hub</button>' +
       '<button class="btn-secondary" data-action="library-open-brand">Brand Studio</button>' +
-      '<button class="btn-secondary" data-action="library-open-scenario">프리 프로덕션</button>' +
-      '<button class="btn-secondary" data-action="library-open-scenes">프로덕션</button>' +
-      '<button class="btn-primary" data-action="library-open-media">포스트 프로덕션</button>' +
       '</div>' +
       '</div>' +
       '<div class="content-library-summary-grid">' +

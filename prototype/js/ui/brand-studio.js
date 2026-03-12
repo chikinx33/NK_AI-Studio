@@ -439,8 +439,6 @@
       '<button class="btn-secondary" data-action="brand-open-analytics">Analytics</button>' +
       '<button class="btn-secondary" data-action="brand-open-knowledge">Knowledge Hub</button>' +
       '<button class="btn-secondary" data-action="brand-open-library">Content Library</button>' +
-      '<button class="btn-secondary" data-action="brand-open-scenario">프리 프로덕션</button>' +
-      '<button class="btn-primary" data-action="brand-open-media">포스트 프로덕션</button>' +
       '</div>' +
       '</div>' +
       '<div class="brand-studio-summary-grid">' +
