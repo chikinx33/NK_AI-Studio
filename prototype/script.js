@@ -294,7 +294,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.720';
+    NK.config.APP_VERSION = '1.721';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -638,6 +638,7 @@
     const favoriteCancelFormBtn = document.getElementById('favorite-cancel-form');
     const favoriteListEl = document.getElementById('favorite-list');
     const favoritePaginationEl = document.getElementById('favorite-pagination');
+    const favoriteTransferBoxEl = document.getElementById('favorite-transfer-box');
     const favoriteTitleInput = document.getElementById('favorite-title');
     const favoriteCategorySelectInput = document.getElementById('favorite-category-select');
     const favoriteLinkInput = document.getElementById('favorite-link');
@@ -1009,9 +1010,11 @@
     };
 
     const clearFavoriteDropTargets = () => {
-      if (!favoriteListEl) return;
-      const activeTargets = favoriteListEl.querySelectorAll('.favorite-item.is-drop-target');
-      activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
+      if (favoriteListEl) {
+        const activeTargets = favoriteListEl.querySelectorAll('.favorite-item.is-drop-target');
+        activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
+      }
+      if (favoriteTransferBoxEl) favoriteTransferBoxEl.classList.remove('is-drop-target');
     };
 
     const clampFavoritePageIndex = (value) => {
@@ -1023,6 +1026,47 @@
     const favoritePageForCategory = (categoryIndex) => {
       const safeCategoryIndex = parseFavoriteCategoryIndex(categoryIndex);
       return clampFavoritePageIndex(Math.floor(safeCategoryIndex / FAVORITE_CATEGORIES_PER_PAGE));
+    };
+
+    const favoriteCategoryForSlot = (slot) => {
+      const safeSlot = parseFavoriteSlot(slot);
+      if (safeSlot < 0) return -1;
+      return Math.floor(safeSlot / FAVORITE_SLOTS_PER_CATEGORY);
+    };
+
+    const favoritePageForSlot = (slot) => {
+      const categoryIndex = favoriteCategoryForSlot(slot);
+      if (categoryIndex < 0) return 0;
+      return favoritePageForCategory(categoryIndex);
+    };
+
+    const pageCategoryRange = (pageIndex) => {
+      const safePageIndex = clampFavoritePageIndex(pageIndex);
+      const startCategoryIndex = safePageIndex * FAVORITE_CATEGORIES_PER_PAGE;
+      const endCategoryIndex = Math.min(startCategoryIndex + FAVORITE_CATEGORIES_PER_PAGE, FAVORITE_CATEGORY_COUNT);
+      return { startCategoryIndex, endCategoryIndex };
+    };
+
+    const oppositeFavoritePage = (pageIndex) => {
+      if (FAVORITE_PAGE_COUNT <= 1) return 0;
+      return clampFavoritePageIndex(pageIndex) === 0 ? 1 : 0;
+    };
+
+    const findFirstAvailableFavoriteSlotInPage = (pageIndex) => {
+      const usedSlots = new Set(
+        favoriteItems
+          .map((item) => parseFavoriteSlot(item?.slot))
+          .filter((slot) => slot >= 0),
+      );
+      const { startCategoryIndex, endCategoryIndex } = pageCategoryRange(pageIndex);
+      for (let categoryIndex = startCategoryIndex; categoryIndex < endCategoryIndex; categoryIndex += 1) {
+        const startSlot = categoryStartSlot(categoryIndex);
+        const endSlot = startSlot + FAVORITE_SLOTS_PER_CATEGORY;
+        for (let slot = startSlot; slot < endSlot; slot += 1) {
+          if (!usedSlots.has(slot)) return slot;
+        }
+      }
+      return -1;
     };
 
     const renderFavoritePagination = (loggedIn) => {
@@ -1055,12 +1099,21 @@
         dots.appendChild(dotBtn);
       }
 
-      const status = document.createElement('span');
-      status.className = 'favorite-page-status';
-      status.textContent = `${favoritePageIndex + 1} / ${FAVORITE_PAGE_COUNT}`;
-
       favoritePaginationEl.appendChild(dots);
-      favoritePaginationEl.appendChild(status);
+    };
+
+    const renderFavoriteTransferBox = (loggedIn) => {
+      if (!favoriteTransferBoxEl) return;
+      if (!loggedIn || FAVORITE_PAGE_COUNT <= 1) {
+        favoriteTransferBoxEl.classList.add('hidden');
+        favoriteTransferBoxEl.classList.remove('is-drop-target');
+        return;
+      }
+      const targetPageIndex = oppositeFavoritePage(favoritePageIndex);
+      favoriteTransferBoxEl.classList.remove('hidden');
+      favoriteTransferBoxEl.dataset.targetPage = String(targetPageIndex);
+      favoriteTransferBoxEl.setAttribute('aria-label', `현재 페이지의 즐겨찾기를 다른 페이지 빈 칸으로 이동`);
+      favoriteTransferBoxEl.title = '다른 페이지 빈 칸으로 이동';
     };
 
     const findFirstAvailableFavoriteSlot = (categoryIndex) => {
@@ -1348,14 +1401,14 @@
         favoriteListEl.classList.add('empty');
         favoriteListEl.style.removeProperty('--favorite-visible-category-count');
         renderFavoritePagination(false);
+        renderFavoriteTransferBox(false);
         return;
       }
 
       favoritePageIndex = clampFavoritePageIndex(favoritePageIndex);
       favoriteListEl.classList.remove('hidden');
       favoriteListEl.classList.toggle('empty', !favoriteItems.length);
-      const startCategoryIndex = favoritePageIndex * FAVORITE_CATEGORIES_PER_PAGE;
-      const endCategoryIndex = Math.min(startCategoryIndex + FAVORITE_CATEGORIES_PER_PAGE, FAVORITE_CATEGORY_COUNT);
+      const { startCategoryIndex, endCategoryIndex } = pageCategoryRange(favoritePageIndex);
       favoriteListEl.style.setProperty('--favorite-visible-category-count', String(Math.max(1, endCategoryIndex - startCategoryIndex)));
       const itemsBySlot = new Map();
       favoriteItems.forEach((item) => {
@@ -1536,6 +1589,7 @@
       }
 
       renderFavoritePagination(true);
+      renderFavoriteTransferBox(true);
     };
 
     const resizeImageToSquare = (file, size = 100) => new Promise((resolve, reject) => {
@@ -1735,6 +1789,58 @@
     setUI(NK.auth.isAuthed(), initialUser);
 
     if (canUseFavoriteUI()) {
+      if (favoriteTransferBoxEl) {
+        favoriteTransferBoxEl.addEventListener('dragover', (evt) => {
+          if (!favoriteDragId) return;
+          const draggedItem = favoriteItems.find((row) => String(row.id) === String(favoriteDragId));
+          if (!draggedItem) return;
+          const draggedPageIndex = favoritePageForSlot(draggedItem.slot);
+          const targetPageIndex = oppositeFavoritePage(favoritePageIndex);
+          if (draggedPageIndex !== favoritePageIndex) return;
+          if (targetPageIndex === draggedPageIndex) return;
+          if (findFirstAvailableFavoriteSlotInPage(targetPageIndex) < 0) return;
+          evt.preventDefault();
+          favoriteTransferBoxEl.classList.add('is-drop-target');
+          try {
+            if (evt.dataTransfer) evt.dataTransfer.dropEffect = 'move';
+          } catch (_) { }
+        });
+
+        favoriteTransferBoxEl.addEventListener('dragleave', () => {
+          favoriteTransferBoxEl.classList.remove('is-drop-target');
+        });
+
+        favoriteTransferBoxEl.addEventListener('drop', async (evt) => {
+          evt.preventDefault();
+          evt.stopPropagation();
+          favoriteTransferBoxEl.classList.remove('is-drop-target');
+          const droppedId = String(favoriteDragId || '').trim() || String(evt.dataTransfer?.getData('text/plain') || '').trim();
+          if (!droppedId) return;
+          const targetPageIndex = oppositeFavoritePage(favoritePageIndex);
+          const targetSlot = findFirstAvailableFavoriteSlotInPage(targetPageIndex);
+          if (targetSlot < 0) {
+            favoriteDragId = '';
+            alert('이동할 페이지에 빈 공간이 없습니다.');
+            return;
+          }
+          const changed = moveFavoriteItemToSlot(droppedId, targetSlot);
+          favoriteDragId = '';
+          if (!changed) return;
+          favoritePageIndex = targetPageIndex;
+          suppressFavoriteOpenUntil = Date.now() + 320;
+          renderFavorites(true);
+          const user = NK.auth.getUser();
+          if (!user) return;
+          try {
+            await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
+          } catch (err) {
+            if (err?.code === 'session_expired') return;
+            const detail = String(err?.message || '').trim();
+            alert('페이지 이동 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
+          }
+        });
+      }
+
       if (favoriteFormToggleBtn) {
         favoriteFormToggleBtn.addEventListener('click', () => {
           if (!NK.auth.isAuthed()) return;

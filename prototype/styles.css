@@ -3467,11 +3467,9 @@ a.btn-primary:active {
 .favorite-pagination {
   flex: 0 0 auto;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 8px 0 2px;
+  padding: 8px 56px 2px 0;
 }
 
 .favorite-page-dots {
@@ -3502,11 +3500,46 @@ a.btn-primary:active {
   transform: scale(1.08);
 }
 
-.favorite-page-status {
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  color: color-mix(in srgb, var(--muted) 82%, transparent 18%);
+.favorite-transfer-box {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent 16%);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent 12%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--layer-strong) 24%, transparent 76%);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
+}
+
+.favorite-transfer-box::before,
+.favorite-transfer-box::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+}
+
+.favorite-transfer-box::before {
+  width: 11px;
+  height: 11px;
+  border: 1px solid color-mix(in srgb, var(--text) 78%, transparent 22%);
+  border-radius: 3px;
+}
+
+.favorite-transfer-box::after {
+  width: 14px;
+  height: 14px;
+  border-right: 2px solid #7fc8ff;
+  border-bottom: 2px solid #7fc8ff;
+  transform: translate(-4px, -4px) rotate(-45deg);
+}
+
+.favorite-transfer-box.is-drop-target {
+  border-color: color-mix(in srgb, #7fc8ff 72%, transparent 28%);
+  background: color-mix(in srgb, #7fc8ff 20%, transparent 80%);
+  transform: scale(1.06);
 }
 
 .favorite-card .favorite-list.empty {
