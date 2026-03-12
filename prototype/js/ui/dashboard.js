@@ -70,6 +70,12 @@
     NK.ui.dashboard.renderSidebarProjectCard(cur);
   };
 
+  const setSidebarProjectLayout = (hasProject) => {
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+    sidebar.classList.toggle('has-project-selection', !!hasProject);
+  };
+
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
@@ -184,10 +190,7 @@
       const cat = d.payload?.purposeCategory || '';
       const tags = Array.isArray(d.payload?.purposeTags) ? d.payload.purposeTags.join(', ') : '';
       const tgt = d.payload?.target || '';
-      const projectType = d.payload?.projectType || '';
-      const brandSummary = d.payload?.brandSummary || '';
       const genre = `${cat} ${tags}`.trim();
-      const summary = getContentSummary(d);
 
       return `
         <article class="draft-card">
@@ -200,22 +203,18 @@
               </div>
               <div class="draft-meta">
                 <div>프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
-                <div>유형 : ${escapeHtml(projectType || '-')}</div>
-                <div>브랜드 요약 : ${escapeHtml(brandSummary || '-')}</div>
                 <div>장르 : ${escapeHtml(genre || '-')}</div>
                 <div>타겟 : ${escapeHtml(tgt || '-')}</div>
                 <div>길이 : ${escapeHtml(dur)}</div>
                 <div>비율 : ${escapeHtml(ar)}</div>
-                <div>콘텐츠 : 씬 ${escapeHtml(summary.scenes)} · 이미지 ${escapeHtml(summary.images)} · 영상 ${escapeHtml(summary.videos)}</div>
-                <div>다음 단계 : ${escapeHtml(summary.nextAction)}</div>
               </div>
             </div>
           </div>
           <div class="draft-actions">
             <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}">Pre</button>
-            <button class="btn-secondary" data-action="draft-library" data-id="${escapeHtml(d.id)}">Library</button>
             <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}">Production</button>
             <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}">Post</button>
+            <button class="btn-secondary" data-action="draft-library" data-id="${escapeHtml(d.id)}">Library</button>
             <button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>
           </div>
         </article>
@@ -460,6 +459,7 @@
     if (!draft) {
       container.innerHTML = '';
       container.style.display = 'none';
+      setSidebarProjectLayout(false);
       return;
     }
 
@@ -474,20 +474,13 @@
     const cat = normalized.payload?.purposeCategory || '';
     const tags = Array.isArray(normalized.payload?.purposeTags) ? normalized.payload.purposeTags.join(', ') : '';
     const tgt = normalized.payload?.target || '';
-    const projectType = normalized.payload?.projectType || '';
-    const brandSummary = normalized.payload?.brandSummary || '';
     const genre = `${cat} ${tags}`.trim();
-    const summary = getContentSummary(normalized);
     const desc = [
       `프로젝트 : ${normalized.seriesTitle || '-'}`,
-      `유형 : ${projectType || '-'}`,
-      `브랜드 요약 : ${brandSummary || '-'}`,
       `장르 : ${genre || '-'}`,
       `타겟 : ${tgt || '-'}`,
       `길이 : ${dur}`,
-      `비율 : ${ar}`,
-      `콘텐츠 : 씬 ${summary.scenes} · 이미지 ${summary.images} · 영상 ${summary.videos}`,
-      `다음 단계 : ${summary.nextAction}`
+      `비율 : ${ar}`
     ].join('\n');
 
     container.innerHTML = `
@@ -500,14 +493,11 @@
       </div>
       <div class="sidebar-card-actions">
         <button class="btn-secondary" data-action="sidebar-edit-scenario">프리 프로덕션</button>
-        <button class="btn-secondary" data-action="sidebar-edit-library">콘텐츠 저장소</button>
-        <button class="btn-secondary" data-action="sidebar-edit-brand">Brand Studio</button>
-        <button class="btn-secondary" data-action="sidebar-edit-knowledge">Knowledge Hub</button>
-        <button class="btn-secondary" data-action="sidebar-edit-analytics">Analytics</button>
         <button class="btn-secondary" data-action="sidebar-edit-scenes">프로덕션</button>
         <button class="btn-secondary" data-action="sidebar-edit-media">포스트 프로덕션</button>
       </div>
     `;
     container.style.display = 'block';
+    setSidebarProjectLayout(true);
   };
 })();
