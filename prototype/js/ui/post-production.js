@@ -2749,24 +2749,32 @@
         var sizePx = Math.max(18, Math.round(22 * (state.captionSizeScale || 1)));
         var bg = String(state.captionBg || '').trim();
         var padY = Math.max(6, Math.round(sizePx * 0.5));
-        var style =
-          'display:block;aria-hidden=false;' +
-          'font:' + '700 ' + sizePx + 'px ' + (state.captionFont || 'sans-serif') + ';' +
-          'color:' + (state.captionColor || '#ffffff') + ';' +
-          (bg && bg !== 'transparent' ? ('background:' + bg + ';border:1px solid rgba(255,255,255,0.16);') : 'background:transparent;') +
-          'border-radius:6px;' +
-          'line-height:1.28;' +
-          'margin:0 auto;' +
-          'display:inline-block;' +
-          'padding:' + padY + 'px 14px;';
+        sub.style.position = 'absolute';
+        sub.style.left = '0';
+        sub.style.right = '0';
+        sub.style.bottom = '6%';
+        sub.style.pointerEvents = 'none';
+        sub.style.textAlign = 'center';
+        sub.style.paddingLeft = '6%';
+        sub.style.paddingRight = '6%';
+        sub.style.zIndex = '5';
+        var innerStyle = [
+          'display:inline-block',
+          'font:' + '700 ' + sizePx + 'px ' + (state.captionFont || 'sans-serif'),
+          'color:' + (state.captionColor || '#ffffff'),
+          (bg && bg !== 'transparent' ? ('background:' + bg + ';border:1px solid rgba(255,255,255,0.16)') : 'background:transparent'),
+          'border-radius:6px',
+          'line-height:1.28',
+          'margin:0 auto',
+          'padding:' + padY + 'px 14px'
+        ].join(';');
         var eff = String(state.captionEffect || 'none');
         if (eff === 'shadow') {
-          style += 'text-shadow: 0 1px 0 rgba(0,0,0,0.6), 0 0 4px rgba(0,0,0,0.6);';
+          innerStyle += ';text-shadow: 0 1px 0 rgba(0,0,0,0.6), 0 0 4px rgba(0,0,0,0.6)';
         } else if (eff === 'outline') {
-          style += 'text-shadow: -1px 0 0 rgba(0,0,0,0.9), 1px 0 0 rgba(0,0,0,0.9), 0 -1px 0 rgba(0,0,0,0.9), 0 1px 0 rgba(0,0,0,0.9);';
+          innerStyle += ';text-shadow: -1px 0 0 rgba(0,0,0,0.9), 1px 0 0 rgba(0,0,0,0.9), 0 -1px 0 rgba(0,0,0,0.9), 0 1px 0 rgba(0,0,0,0.9)';
         }
-        sub.setAttribute('style', sub.getAttribute('style').split(';').slice(0,6).join(';') + ';text-align:center;');
-        sub.innerHTML = '<div style="' + style + '">' + labels.map(function (t) { return escapeHtml(t); }).join('<br/>') + '</div>';
+        sub.innerHTML = '<div style="' + innerStyle + '">' + labels.map(function (t) { return escapeHtml(t); }).join('<br/>') + '</div>';
         sub.style.display = 'block';
         sub.setAttribute('aria-hidden', 'false');
       }
@@ -2803,10 +2811,10 @@
 
   function buildPreviewHtml(model) {
     return (
-      '<div class="postprod-preview-stack">' +
+      '<div class="postprod-preview-stack" style="position:relative;">' +
       '<div id="postprod-preview-video-host" class="postprod-preview-video-host"></div>' +
       '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
-      '<div id="postprod-preview-subtitles" class="postprod-preview-subtitles" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:6%;display:none;pointer-events:none;text-align:center;padding:0 6%;"></div>' +
+      '<div id="postprod-preview-subtitles" class="postprod-preview-subtitles" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:6%;display:none;pointer-events:none;text-align:center;padding:0 6%;z-index:5;"></div>' +
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
       '<div class="postprod-play-glyph">▶</div>' +
