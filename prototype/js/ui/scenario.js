@@ -178,6 +178,18 @@
       : 'Knowledge Hub 문맥이 아직 없습니다. 필요하면 Knowledge Hub에서 브랜드 규칙을 먼저 입력해 주세요.';
   };
 
+  const setScenarioLoading = (show, message) => {
+    const overlay = document.getElementById('scenario-loading');
+    if (!overlay) return;
+    overlay.classList.toggle('hidden', !show);
+    const textEl = overlay.querySelector('p');
+    if (textEl) {
+      textEl.textContent = show
+        ? (message || '시나리오 생성 중...')
+        : '작업 중...';
+    }
+  };
+
   const getUiLang = () => {
     try {
       const key = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
@@ -755,6 +767,9 @@
       if (errEl) errEl.classList.add('hidden');
       NK.core.setLoading(true);
       const payload = collectPayload();
+      const topicLength = String(payload?.topic || '').length;
+      const isLongInput = topicLength >= 2800;
+      setScenarioLoading(true, isLongInput ? '긴 입력을 파트별로 분석하는 중...' : '시나리오 생성 중...');
       try {
         const res = await NK.api.scenario(payload);
         const headerText = (NK.service?.project?.getPromptHeader)
@@ -777,7 +792,22 @@
             if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
           }
           loadDraft(draft);
-          alert('시나리오를 생성했습니다.');
+          if (errEl) {
+            const notices = [];
+            if (res?.fallback) notices.push('일부 오류로 기본 시나리오를 사용했습니다.');
+            if (res?.meta?.partial) notices.push(`긴 입력 중 일부 파트가 실패해 생성 가능한 씬만 반영했습니다. (${res.meta.failedChunks || 0}개 파트 실패)`);
+            if (notices.length) {
+              errEl.textContent = `안내: ${notices.join(' ')}`;
+              errEl.classList.remove('hidden');
+            } else {
+              errEl.classList.add('hidden');
+            }
+          }
+          if (res?.meta?.chunked) {
+            alert(`시나리오를 생성했습니다. 긴 입력을 ${res.meta.chunkCount}개 파트로 나누어 처리했습니다.`);
+          } else {
+            alert('시나리오를 생성했습니다.');
+          }
         }
       } catch (err) {
         if (errEl) {
@@ -787,6 +817,7 @@
           alert('시나리오 생성 실패: ' + (err?.message || err));
         }
       } finally {
+        setScenarioLoading(false);
         NK.core.setLoading(false);
       }
     };

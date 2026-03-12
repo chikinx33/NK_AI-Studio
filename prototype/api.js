@@ -119,21 +119,24 @@
   };
 
   api.scenario = async function (payload) {
-    var res = await fetch(withBase('/api/scenario'), {
+    var res = await fetchWithTimeout(withBase('/api/scenario'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload || {})
-    });
-    var text = await res.text();
+    }, 60000);
+    var text = await readTextWithTimeout(res, 60000);
     if (!res.ok) {
       var err = new Error(e(text) || 'api_error');
       err.status = res.status;
+      err.detail = text;
       throw err;
     }
     var data = j(text);
     // 응답에 scenes가 없거나 파싱 실패 시 명시적으로 오류를 던져 UI가 감지하도록 함
     if (!data || !Array.isArray(data.scenes) || data.scenes.length === 0) {
-      throw new Error('scenario_response_invalid');
+      var invalidErr = new Error('scenario_response_invalid');
+      invalidErr.detail = text;
+      throw invalidErr;
     }
     return data;
   };

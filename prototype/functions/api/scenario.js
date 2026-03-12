@@ -17,6 +17,11 @@ const durationToScenes = {
   "7200": 480,
 };
 
+const LONG_TOPIC_CHUNK_THRESHOLD = 2800;
+const TOPIC_CHUNK_SIZE = 2200;
+const MAX_COMPLETION_RETRIES = 3;
+const BASE_RETRY_DELAY_MS = 1500;
+
 export async function onRequestPost(context) {
   const { request, env } = context;
   const origin = request.headers.get("Origin");
@@ -54,117 +59,38 @@ export async function onRequestPost(context) {
     const dubbingEnabled = toBool(body.dubbingEnabled, false);
     const sceneCount = durationToScenes[duration] || 7;
 
-    const sys = lang === "en" ? buildSystemPromptEn(sceneCount, duration) : buildSystemPromptKo(sceneCount, duration);
-    const userPrompt = buildUserPrompt({
-      lang,
-      topic,
-      target,
-      purposeCategory,
-      purposeTags,
-      needs,
-      toneText,
-      tones,
-      styleText,
-      styles,
-      extraNotes,
-      knowledgeHub,
-      aspectRatio,
-      duration,
-      narrationEnabled,
-      dubbingEnabled,
-      characters,
-    });
-
     let scenes;
+    let generationMeta = {
+      chunked: false,
+      chunkCount: 1,
+      sourceLength: topic.length,
+      failedChunks: 0,
+      partial: false,
+    };
     try {
-      if (!env.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
-
-      const completion = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          response_format: { type: "json_object" },
-          messages: [
-            { role: "system", content: sys },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.5,
-        }),
-      });
-
-      if (!completion.ok) {
-        const text = await completion.text();
-        throw new Error(`OpenAI error: ${completion.status} ${text}`);
-      }
-
-      const data = await completion.json();
-      const text = data.choices?.[0]?.message?.content;
-      const parsed = JSON.parse(text || "{}");
-      scenes = parsed.scenes || parsed;
-      if (!Array.isArray(scenes) || scenes.length === 0) {
-        throw new Error("Invalid scenes format from OpenAI");
-      }
-
-      const noCharacterMode = characters.length === 0;
-      const narratorSpeaker = "@narrator";
-      const cameraContext = {
+      const generated = await generateScenarioScenes({
+        env,
         lang,
         topic,
+        target,
         purposeCategory,
         purposeTags,
+        needs,
         toneText,
         tones,
         styleText,
         styles,
+        extraNotes,
+        knowledgeHub,
         aspectRatio,
+        duration,
+        narrationEnabled,
+        dubbingEnabled,
+        characters,
         sceneCount,
-      };
-      scenes = scenes.map((s, idx) => {
-        const narrationRaw = s.narration || s.lines || s.story || s.text || s.script || s.content || "";
-        const dialogueRaw = normalizeDialogue(s.dialogue || s.dialogues || []);
-        const firstLine = String(narrationRaw || "").split(/(?<=[.!?])\s+/)[0] || narrationRaw || "";
-        const visualRaw = s.visual || s.shot || s.scene_visual || s.camera || s.image || firstLine || `Scene ${idx + 1} visual`;
-        const fallbackPer = Math.max(Math.floor((Number(duration) || 60) / (sceneCount || 7)), 3);
-        const estSec = Math.max(Math.floor(Number(s.estSec || s.duration || s.len || s.length || fallbackPer)), 3);
-
-        const narration = applyCharacterTokenHints(String(narrationRaw || "").trim(), characters);
-        const dialogue = normalizeDialogue(dialogueRaw)
-          .map((d) => ({
-            speaker: applyCharacterTokenHints(String(d.speaker || "").trim(), characters),
-            line: applyCharacterTokenHints(String(d.line || "").trim(), characters),
-          }))
-          .filter((d) => d.speaker || d.line);
-        const visualBase = applyCharacterTokenHints(String(visualRaw || "").trim(), characters);
-        const visual = ensureCameraDirectionInVisual(visualBase, Object.assign({}, cameraContext, { idx }));
-        const noCharacterSafe = enforceNoCharacterPolicy({
-          narration,
-          dialogue,
-          visual,
-          noCharacterMode,
-          narratorSpeaker,
-          dubbingEnabled,
-          lang,
-        });
-
-        return shapeSceneByMode({
-          id: s.id != null ? s.id : idx + 1,
-          title: s.title || `Scene ${idx + 1}`,
-          estSec,
-          narration: noCharacterSafe.narration,
-          dialogue: noCharacterSafe.dialogue,
-          visual: noCharacterSafe.visual,
-          narrationEnabled,
-          dubbingEnabled,
-          defaultSpeaker: characters[0]?.token || narratorSpeaker,
-          lang,
-        });
       });
-
-      scenes = rebalanceEstSec(scenes, Number(duration) || 0);
+      scenes = generated.scenes;
+      generationMeta = generated.meta;
     } catch (err) {
       scenes = fallbackScenesV2({
         topic,
@@ -183,13 +109,18 @@ export async function onRequestPost(context) {
         styles,
         aspectRatio,
       });
-      return new Response(JSON.stringify({ scenes, fallback: true, error: err?.message || "fallback_used" }), {
+      return new Response(JSON.stringify({
+        scenes,
+        fallback: true,
+        error: err?.message || "fallback_used",
+        meta: generationMeta,
+      }), {
         status: 200,
         headers: corsHeaders(origin),
       });
     }
 
-    return new Response(JSON.stringify({ scenes }), {
+    return new Response(JSON.stringify({ scenes, meta: generationMeta }), {
       status: 200,
       headers: corsHeaders(origin),
     });
@@ -220,6 +151,7 @@ No markdown, no extra explanation.`;
 }
 
 function buildUserPrompt(input) {
+  const chunkGuide = input.chunkGuide ? `\n${input.chunkGuide}` : "";
   const modeInstruction = buildModePrompt(input);
   if (input.lang === "en") {
     return `Topic: ${input.topic}
@@ -243,6 +175,7 @@ Past success cases: ${input.knowledgeHub.successCases.length ? input.knowledgeHu
 Aspect ratio: ${input.aspectRatio || "(not provided)"}
 Duration target: ${input.duration}s
 Camera direction requirement: each visual must include shot size, camera angle, camera movement, and framing.
+${chunkGuide}
 Formatting intent example:
 - Visual: "A boy approaches an old well, medium shot, eye-level angle, slow dolly-in, centered framing."
 - Narration: "The boy sat by the well and looked down."
@@ -270,11 +203,455 @@ ${modeInstruction}`;
 과거 성공 패턴: ${input.knowledgeHub.successCases.length ? input.knowledgeHub.successCases.join(", ") : "(없음)"}
 화면비: ${input.aspectRatio || "(미입력)"}
 목표 길이: ${input.duration}초
+${chunkGuide}
 표현 예시:
 - Visual: "소년이 오래된 우물가에 다가간다."
 - Narration: "소년은 우물가에 앉아서 아래를 내려다보았다."
 - Dialogue: [{"speaker":"@소년","line":"생각보다 훨씬 깊네."}]
 ${modeInstruction}`;
+}
+
+async function generateScenarioScenes(input) {
+  if (!input?.env?.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+
+  const fullTopic = String(input.topic || "").trim();
+  const rawChunks = fullTopic.length > LONG_TOPIC_CHUNK_THRESHOLD
+    ? splitLongTextIntoChunks(fullTopic, TOPIC_CHUNK_SIZE)
+    : [fullTopic];
+  const chunks = collapseChunksToSceneBudget(rawChunks, Math.max(1, Number(input.sceneCount) || 1));
+  const sceneCounts = distributeIntegerByWeight(chunks, Math.max(1, Number(input.sceneCount) || 1));
+  const durationTargets = distributeIntegerByWeight(
+    sceneCounts.map((count) => "x".repeat(Math.max(1, Number(count) || 1))),
+    Math.max(Number(input.duration) || 0, sceneCounts.length * 3),
+    3
+  );
+  const merged = [];
+  const failedChunks = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunkText = String(chunks[i] || "").trim();
+    if (!chunkText) continue;
+    const chunkSceneCount = Math.max(1, Number(sceneCounts[i]) || 1);
+    const chunkDuration = Math.max(chunkSceneCount * 3, Number(durationTargets[i]) || chunkSceneCount * 3);
+    const sys = input.lang === "en"
+      ? buildSystemPromptEn(chunkSceneCount, chunkDuration)
+      : buildSystemPromptKo(chunkSceneCount, chunkDuration);
+    const userPrompt = buildUserPrompt({
+      lang: input.lang,
+      topic: chunkText,
+      target: input.target,
+      purposeCategory: input.purposeCategory,
+      purposeTags: input.purposeTags,
+      needs: input.needs,
+      toneText: input.toneText,
+      tones: input.tones,
+      styleText: input.styleText,
+      styles: input.styles,
+      extraNotes: input.extraNotes,
+      knowledgeHub: input.knowledgeHub,
+      aspectRatio: input.aspectRatio,
+      duration: String(chunkDuration),
+      narrationEnabled: input.narrationEnabled,
+      dubbingEnabled: input.dubbingEnabled,
+      characters: input.characters,
+      chunkGuide: buildChunkGuide({
+        lang: input.lang,
+        index: i,
+        total: chunks.length,
+        requestedSceneCount: chunkSceneCount,
+      }),
+    });
+
+    try {
+      const rawScenes = await requestScenarioChunk(input.env.OPENAI_API_KEY, sys, userPrompt);
+      const shaped = shapeScenesFromModel(rawScenes, {
+        lang: input.lang,
+        topic: chunkText,
+        purposeCategory: input.purposeCategory,
+        purposeTags: input.purposeTags,
+        toneText: input.toneText,
+        tones: input.tones,
+        styleText: input.styleText,
+        styles: input.styles,
+        aspectRatio: input.aspectRatio,
+        sceneCount: chunkSceneCount,
+        duration: chunkDuration,
+        narrationEnabled: input.narrationEnabled,
+        dubbingEnabled: input.dubbingEnabled,
+        characters: input.characters,
+      });
+      const normalizedChunkScenes = fitScenesToRequestedCount(shaped, chunkSceneCount, {
+        topic: chunkText,
+        target: input.target,
+        duration: String(chunkDuration),
+        sceneCount: chunkSceneCount,
+        narrationEnabled: input.narrationEnabled,
+        dubbingEnabled: input.dubbingEnabled,
+        characters: input.characters,
+        lang: input.lang,
+        purposeCategory: input.purposeCategory,
+        purposeTags: input.purposeTags,
+        toneText: input.toneText,
+        tones: input.tones,
+        styleText: input.styleText,
+        styles: input.styles,
+        aspectRatio: input.aspectRatio,
+      });
+      const balanced = rebalanceEstSec(normalizedChunkScenes, chunkDuration);
+      merged.push(...balanced);
+    } catch (err) {
+      failedChunks.push({
+        index: i + 1,
+        message: err?.message || "chunk_failed",
+      });
+      if (chunks.length === 1) throw err;
+    }
+  }
+
+  if (!merged.length) {
+    throw new Error(failedChunks[0]?.message || "Invalid scenes format from OpenAI");
+  }
+
+  const normalizedScenes = merged.map((scene, index) => Object.assign({}, scene, {
+    id: index + 1,
+    title: `Scene ${index + 1}`,
+  }));
+
+  return {
+    scenes: rebalanceEstSec(normalizedScenes, Number(input.duration) || 0),
+    meta: {
+      chunked: chunks.length > 1,
+      chunkCount: chunks.length,
+      sourceLength: fullTopic.length,
+      failedChunks: failedChunks.length,
+      partial: failedChunks.length > 0,
+    },
+  };
+}
+
+async function requestScenarioChunk(apiKey, sys, userPrompt) {
+  const payload = {
+    model: "gpt-4o-mini",
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: sys },
+      { role: "user", content: userPrompt },
+    ],
+    temperature: 0.5,
+  };
+  const responseText = await retryAsync(async () => {
+    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const text = await completion.text();
+    if (!completion.ok) {
+      throw new Error(`OpenAI error: ${completion.status} ${text}`);
+    }
+    return text;
+  }, MAX_COMPLETION_RETRIES, BASE_RETRY_DELAY_MS);
+
+  const data = JSON.parse(responseText || "{}");
+  const content = data.choices?.[0]?.message?.content;
+  const parsed = JSON.parse(cleanJsonResponse(content || "{}"));
+  const scenes = parsed.scenes || parsed;
+  if (!Array.isArray(scenes) || scenes.length === 0) {
+    throw new Error("Invalid scenes format from OpenAI");
+  }
+  return scenes;
+}
+
+function shapeScenesFromModel(rawScenes = [], options = {}) {
+  const characters = Array.isArray(options.characters) ? options.characters : [];
+  const noCharacterMode = characters.length === 0;
+  const narratorSpeaker = "@narrator";
+  const cameraContext = {
+    lang: options.lang,
+    topic: options.topic,
+    purposeCategory: options.purposeCategory,
+    purposeTags: options.purposeTags,
+    toneText: options.toneText,
+    tones: options.tones,
+    styleText: options.styleText,
+    styles: options.styles,
+    aspectRatio: options.aspectRatio,
+    sceneCount: options.sceneCount,
+  };
+  return (Array.isArray(rawScenes) ? rawScenes : []).map((s, idx) => {
+    const narrationRaw = s.narration || s.lines || s.story || s.text || s.script || s.content || "";
+    const dialogueRaw = normalizeDialogue(s.dialogue || s.dialogues || []);
+    const firstLine = String(narrationRaw || "").split(/(?<=[.!?])\s+/)[0] || narrationRaw || "";
+    const visualRaw = s.visual || s.shot || s.scene_visual || s.camera || s.image || firstLine || `Scene ${idx + 1} visual`;
+    const fallbackPer = Math.max(Math.floor((Number(options.duration) || 60) / (Number(options.sceneCount) || 7)), 3);
+    const estSec = Math.max(Math.floor(Number(s.estSec || s.duration || s.len || s.length || fallbackPer)), 3);
+
+    const narration = applyCharacterTokenHints(String(narrationRaw || "").trim(), characters);
+    const dialogue = normalizeDialogue(dialogueRaw)
+      .map((d) => ({
+        speaker: applyCharacterTokenHints(String(d.speaker || "").trim(), characters),
+        line: applyCharacterTokenHints(String(d.line || "").trim(), characters),
+      }))
+      .filter((d) => d.speaker || d.line);
+    const visualBase = applyCharacterTokenHints(String(visualRaw || "").trim(), characters);
+    const visual = ensureCameraDirectionInVisual(visualBase, Object.assign({}, cameraContext, { idx }));
+    const noCharacterSafe = enforceNoCharacterPolicy({
+      narration,
+      dialogue,
+      visual,
+      noCharacterMode,
+      narratorSpeaker,
+      dubbingEnabled: !!options.dubbingEnabled,
+      lang: options.lang,
+    });
+
+    return shapeSceneByMode({
+      id: s.id != null ? s.id : idx + 1,
+      title: s.title || `Scene ${idx + 1}`,
+      estSec,
+      narration: noCharacterSafe.narration,
+      dialogue: noCharacterSafe.dialogue,
+      visual: noCharacterSafe.visual,
+      narrationEnabled: !!options.narrationEnabled,
+      dubbingEnabled: !!options.dubbingEnabled,
+      defaultSpeaker: characters[0]?.token || narratorSpeaker,
+      lang: options.lang,
+    });
+  });
+}
+
+function fitScenesToRequestedCount(scenes = [], requestedCount = 1, fallbackInput = {}) {
+  const limit = Math.max(1, Number(requestedCount) || 1);
+  const baseScenes = (Array.isArray(scenes) ? scenes : []).slice(0, limit);
+  if (baseScenes.length >= limit) return baseScenes;
+
+  const fallbackScenes = fallbackScenesV2(fallbackInput).slice(0, limit);
+  if (!baseScenes.length) return fallbackScenes;
+
+  const fillers = fallbackScenes.slice(baseScenes.length);
+  return baseScenes.concat(fillers).slice(0, limit);
+}
+
+async function retryAsync(task, maxRetries = 3, baseDelayMs = 1000) {
+  let lastError;
+  for (let attempt = 1; attempt <= Math.max(1, maxRetries); attempt++) {
+    try {
+      return await task();
+    } catch (err) {
+      lastError = err;
+      if (attempt >= maxRetries || !isRetryableError(err)) throw err;
+      await wait(baseDelayMs * attempt);
+    }
+  }
+  throw lastError;
+}
+
+function isRetryableError(err) {
+  const text = String(err?.message || err || "").toLowerCase();
+  return /\b429\b/.test(text) || /\b500\b|\b502\b|\b503\b|\b504\b/.test(text) || /timeout|temporar|rate limit|overloaded/.test(text);
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(0, Number(ms) || 0)));
+}
+
+function buildChunkGuide({ lang = "ko", index = 0, total = 1, requestedSceneCount = 1 }) {
+  if (total <= 1) return "";
+  if (lang === "en") {
+    return `Chunk guide: this request handles part ${index + 1}/${total} of a long source. Generate only ${requestedSceneCount} scenes from this part, keep continuity with the same project, and do not summarize omitted parts.`;
+  }
+  return `청크 가이드: 이 요청은 긴 원문의 ${index + 1}/${total}번째 파트만 처리합니다. 이 파트 내용만 기반으로 정확히 ${requestedSceneCount}개 씬을 만들고, 다른 파트 내용을 요약하거나 끌어오지 마세요.`;
+}
+
+function splitLongTextIntoChunks(text = "", maxChunkSize = 2200) {
+  const source = String(text || "").trim();
+  if (!source) return [""];
+  const paragraphs = source.split(/\n{2,}/).map((part) => String(part || "").trim()).filter(Boolean);
+  const chunks = [];
+  let currentChunk = "";
+
+  const flush = () => {
+    const normalized = currentChunk.trim();
+    if (normalized) chunks.push(normalized);
+    currentChunk = "";
+  };
+
+  const pushUnit = (unit) => {
+    const candidate = currentChunk ? `${currentChunk}\n\n${unit}` : unit;
+    if (candidate.length <= maxChunkSize) {
+      currentChunk = candidate;
+      return;
+    }
+    flush();
+    currentChunk = unit;
+  };
+
+  const longUnits = paragraphs.length ? paragraphs : [source];
+  longUnits.forEach((paragraph) => {
+    if (paragraph.length <= maxChunkSize) {
+      pushUnit(paragraph);
+      return;
+    }
+    const sentences = paragraph.split(/(?<=[.!?。！？])\s+/).map((sentence) => String(sentence || "").trim()).filter(Boolean);
+    if (!sentences.length) {
+      for (let cursor = 0; cursor < paragraph.length; cursor += maxChunkSize) {
+        pushUnit(paragraph.slice(cursor, cursor + maxChunkSize));
+      }
+      return;
+    }
+    sentences.forEach((sentence) => {
+      if (sentence.length <= maxChunkSize) {
+        const candidate = currentChunk ? `${currentChunk} ${sentence}` : sentence;
+        if (candidate.length <= maxChunkSize) {
+          currentChunk = candidate;
+        } else {
+          flush();
+          currentChunk = sentence;
+        }
+        return;
+      }
+      flush();
+      for (let cursor = 0; cursor < sentence.length; cursor += maxChunkSize) {
+        chunks.push(sentence.slice(cursor, cursor + maxChunkSize).trim());
+      }
+    });
+  });
+  flush();
+  return chunks.length ? chunks : [source];
+}
+
+function collapseChunksToSceneBudget(chunks = [], maxChunks = 1) {
+  const list = (Array.isArray(chunks) ? chunks : []).map((chunk) => String(chunk || "").trim()).filter(Boolean);
+  if (!list.length) return [""];
+  const limit = Math.max(1, Number(maxChunks) || 1);
+  if (list.length <= limit) return list;
+  const grouped = [];
+  for (let i = 0; i < limit; i++) {
+    const start = Math.floor((i * list.length) / limit);
+    const end = Math.floor(((i + 1) * list.length) / limit);
+    grouped.push(list.slice(start, Math.max(start + 1, end)).join("\n\n").trim());
+  }
+  return grouped.filter(Boolean);
+}
+
+function distributeIntegerByWeight(items = [], target = 0, minPerItem = 1) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return [];
+  const safeTarget = Math.max(Number(target) || 0, list.length * Math.max(0, Number(minPerItem) || 0));
+  const base = Math.max(0, Number(minPerItem) || 0);
+  const lengths = list.map((item) => Math.max(String(item || "").length, 1));
+  const totalWeight = lengths.reduce((sum, value) => sum + value, 0) || list.length;
+  const allocations = list.map(() => base);
+  let remaining = safeTarget - allocations.reduce((sum, value) => sum + value, 0);
+  if (remaining <= 0) return allocations;
+
+  const remainders = lengths.map((weight, index) => {
+    const raw = (weight / totalWeight) * remaining;
+    const whole = Math.floor(raw);
+    allocations[index] += whole;
+    return { index, frac: raw - whole };
+  });
+
+  let distributed = allocations.reduce((sum, value) => sum + value, 0);
+  let leftovers = safeTarget - distributed;
+  remainders.sort((a, b) => b.frac - a.frac);
+  for (let i = 0; i < leftovers; i++) {
+    const targetRow = remainders[i % remainders.length];
+    allocations[targetRow.index] += 1;
+  }
+  return allocations;
+}
+
+function cleanJsonResponse(text = "") {
+  let cleaned = String(text || "").trim();
+  if (!cleaned) return '{"scenes":[]}';
+
+  if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
+  else if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
+  cleaned = cleaned.trim();
+
+  const firstBracket = cleaned.search(/[\[{]/);
+  if (firstBracket === -1) return '{"scenes":[]}';
+  const firstToken = cleaned[firstBracket];
+  cleaned = cleaned.slice(firstBracket);
+
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  let lastValidIndex = -1;
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const char = cleaned[i];
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (char === "\\") {
+      escapeNext = true;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "[" || char === "{") depth += 1;
+    if (char === "]" || char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        lastValidIndex = i;
+        break;
+      }
+    }
+  }
+
+  if (lastValidIndex !== -1) {
+    return cleaned.slice(0, lastValidIndex + 1).trim();
+  }
+
+  const lastCompleteEnd = findLastCompleteSceneObject(cleaned);
+  if (lastCompleteEnd <= 0) {
+    return firstToken === "[" ? "[]" : '{"scenes":[]}';
+  }
+  let recovered = cleaned.slice(0, lastCompleteEnd);
+  if (recovered.includes('"scenes"')) recovered += "]}";
+  else if (firstToken === "[") recovered += "]";
+  else recovered += "}";
+  return recovered.trim();
+}
+
+function findLastCompleteSceneObject(json = "") {
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+  let lastCompleteEnd = -1;
+
+  for (let i = 0; i < json.length; i++) {
+    const char = json[i];
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (char === "\\") {
+      escapeNext = true;
+      continue;
+    }
+    if (char === "\"") {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 1) lastCompleteEnd = i + 1;
+    }
+  }
+  return lastCompleteEnd;
 }
 
 function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, characters, topic }) {
