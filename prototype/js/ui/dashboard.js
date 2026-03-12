@@ -486,11 +486,9 @@
     container.innerHTML = `
       <div class="draft-top">
         <div class="draft-thumb"></div>
-        <div class="sidebar-card-text">
-          <h4 class="sidebar-card-title">${escapeHtml(normalized.title || '제목없음')}</h4>
-          <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
-        </div>
+        <h4 class="sidebar-card-title">${escapeHtml(normalized.title || '제목없음')}</h4>
       </div>
+      <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
       <div class="sidebar-card-actions">
         <button class="btn-secondary" data-action="sidebar-edit-scenario">프리 프로덕션</button>
         <button class="btn-secondary" data-action="sidebar-edit-scenes">프로덕션</button>
