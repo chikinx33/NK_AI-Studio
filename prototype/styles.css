@@ -1707,7 +1707,7 @@ a.btn-primary:active {
 .scenario-card .field-block {
   min-height: 0;
   display: grid;
-  grid-template-columns: 54px 1fr;
+  grid-template-columns: 88px minmax(0, 1fr);
   align-items: start;
   gap: 6px;
 }
@@ -1741,6 +1741,11 @@ a.btn-primary:active {
 .scenario-card .view-shot-lines {
   min-height: 58px;
   max-height: 58px;
+}
+
+.scenario-card .view-dialogue-lines {
+  min-height: 50px;
+  max-height: 50px;
 }
 
 .scenario-card .view-lines[contenteditable="true"],
