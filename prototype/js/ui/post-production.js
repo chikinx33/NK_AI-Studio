@@ -780,6 +780,10 @@
   }
 
   function buildSrtFromModel() {
+    var project = getProjectByStateId() || resolveProject();
+    if (NK.service && NK.service.exporter && NK.service.exporter.buildSrtText) {
+      return NK.service.exporter.buildSrtText(project, { maxChars: 22 });
+    }
     if (!state.model) return '';
     var track = (state.model.tracks || []).find(function (t) { return t && t.key === 'subtitles'; });
     var clips = (track && track.clips) ? track.clips : [];
@@ -1542,6 +1546,11 @@
   }
 
   async function downloadSrtNow() {
+    var project = getProjectByStateId() || resolveProject();
+    if (NK.service && NK.service.exporter && NK.service.exporter.downloadSrt) {
+      var ok = NK.service.exporter.downloadSrt(project, { maxChars: 22 });
+      if (ok) return;
+    }
     var srtText = buildSrtFromModel();
     if (!srtText) {
       showMessageDialog('다운로드할 SRT가 없습니다.', '다운로드');
@@ -1551,6 +1560,18 @@
     var objectUrl = URL.createObjectURL(blob);
     await downloadUrl(objectUrl, 'captions.srt');
     setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 200);
+  }
+
+  function downloadStoryboardNow() {
+    var project = getProjectByStateId() || resolveProject();
+    if (!(NK.service && NK.service.exporter && NK.service.exporter.downloadStoryboardXls)) {
+      showMessageDialog('스토리보드 내보내기 서비스를 찾지 못했습니다.', '스토리보드');
+      return;
+    }
+    var ok = NK.service.exporter.downloadStoryboardXls(project);
+    if (!ok) {
+      showMessageDialog('내보낼 스토리보드 데이터가 없습니다.', '스토리보드');
+    }
   }
 
   async function downloadMp4Now() {
@@ -1760,6 +1781,18 @@
   }
 
   function normalizeSubtitles(scene, baseStart, sceneDuration, sceneIndex) {
+    if (NK.service && NK.service.exporter && NK.service.exporter.listSubtitleEntries) {
+      var wrapped = { scenes: [Object.assign({}, scene, { estSec: sceneDuration })] };
+      return NK.service.exporter.listSubtitleEntries(wrapped, { maxChars: 22 }).map(function (clip, idx) {
+        return {
+          id: clip.id || ('sub-' + sceneIndex + '-' + idx),
+          label: clip.label,
+          start: round1(baseStart + Math.max(0, Number(clip.start || 0))),
+          end: round1(baseStart + Math.max(0.2, Number(clip.end || 0))),
+          baseDuration: Math.max(0.2, Number(clip.baseDuration || (clip.end - clip.start) || sceneDuration))
+        };
+      });
+    }
     var clips = [];
     var list = Array.isArray(scene && scene.subtitles) ? scene.subtitles : [];
     for (var i = 0; i < list.length; i++) {
@@ -2310,12 +2343,13 @@
       buildRenderPreviewHtml(model, meta) +
       '</div>' +
 
-      '<div class="postprod-render-actions bottom">' +
-      '<button class="btn-secondary compact" id="postprod-download-srt-btn">SRT 다운로드</button>' +
-      '<button class="btn-primary compact" id="postprod-download-mp4-btn">MP4 다운로드</button>' +
-      '</div>' +
-      '</aside>' +
-      '</section>';
+        '<div class="postprod-render-actions bottom">' +
+        '<button class="btn-secondary compact" id="postprod-download-srt-btn">SRT 다운로드</button>' +
+        '<button class="btn-secondary compact" id="postprod-download-storyboard-btn">스토리보드 XLS</button>' +
+        '<button class="btn-primary compact" id="postprod-download-mp4-btn">MP4 다운로드</button>' +
+        '</div>' +
+        '</aside>' +
+        '</section>';
   }
 
   function updatePlayheadUi() {
@@ -2720,6 +2754,8 @@
     if (rerenderBtn) rerenderBtn.onclick = function () { startRenderProcess(true); };
     var srtBtn = document.getElementById('postprod-download-srt-btn');
     if (srtBtn) srtBtn.onclick = downloadSrtNow;
+    var storyboardBtn = document.getElementById('postprod-download-storyboard-btn');
+    if (storyboardBtn) storyboardBtn.onclick = downloadStoryboardNow;
     var mp4Btn = document.getElementById('postprod-download-mp4-btn');
     if (mp4Btn) mp4Btn.onclick = downloadMp4Now;
     updateHistoryButtons();
