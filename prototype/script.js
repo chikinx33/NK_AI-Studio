@@ -294,7 +294,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.718';
+    NK.config.APP_VERSION = '1.719';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -669,8 +669,8 @@
     let favoriteThemePresets = readThemePresets();
     const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
     const DEFAULT_LOGIN_CARD_ICON = String(loginCardLogoEl?.getAttribute('src') || 'images/logo(500500).png').trim() || 'images/logo(500500).png';
-    const FAVORITE_CATEGORY_COUNT = 4;
-    const FAVORITE_CATEGORIES_PER_PAGE = 2;
+    const FAVORITE_CATEGORY_COUNT = 8;
+    const FAVORITE_CATEGORIES_PER_PAGE = 4;
     const FAVORITE_PAGE_COUNT = Math.max(1, Math.ceil(FAVORITE_CATEGORY_COUNT / FAVORITE_CATEGORIES_PER_PAGE));
     const FAVORITE_GRID_COLUMNS = 6;
     const FAVORITE_GRID_ROWS = 2;

@@ -3451,7 +3451,7 @@ a.btn-primary:active {
   --favorite-icon-size: clamp(36px, 3.8vh, 42px);
   --favorite-cell-size: clamp(48px, 4.8vh, 56px);
   --favorite-col-gap: 10px;
-  --favorite-visible-category-count: 2;
+  --favorite-visible-category-count: 4;
   margin-top: 0;
   position: relative;
   display: grid;
