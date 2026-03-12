@@ -1,4 +1,4 @@
-﻿;(function () {
+;(function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var post = ui.postProduction || (ui.postProduction = {});
@@ -1126,6 +1126,7 @@
       var entry = state.previewVideoCache[clipId];
       if (!entry || !entry.video) return;
       try { entry.video.pause(); } catch (_) { }
+      try { entry.video.muted = true; } catch (_) { }
     });
   }
 
@@ -1498,6 +1499,75 @@
     return new Map(pairs);
   }
 
+  function getAudioClipsForRender(model) {
+    var tracks = model && Array.isArray(model.tracks) ? model.tracks : [];
+    var out = [];
+    for (var i = 0; i < tracks.length; i++) {
+      var t = tracks[i];
+      if (!t || !Array.isArray(t.clips)) continue;
+      if (t.key === 'audio' || t.key === 'music') {
+        for (var j = 0; j < t.clips.length; j++) {
+          var c = t.clips[j];
+          if (!c || !c.url) continue;
+          if (!(c.end > c.start)) continue;
+          out.push({ id: c.id, start: Math.max(0, Number(c.start) || 0), end: Math.max(0.2, Number(c.end) || 0), url: c.url, type: t.key });
+        }
+      }
+    }
+    out.sort(function (a, b) { return a.start - b.start; });
+    return out;
+  }
+
+  async function preloadRenderAudioBuffers(clips, audioCtx) {
+    var pairs = await Promise.all((clips || []).map(async function (clip) {
+      try {
+        var u = toPlayableMediaUrl(clip && clip.url);
+        if (!u) return [clip.id, null];
+        var res = await fetch(u);
+        var buf = await res.arrayBuffer();
+        var decoded = await audioCtx.decodeAudioData(buf);
+        return [clip.id, decoded];
+      } catch (_) {
+        return [clip && clip.id, null];
+      }
+    }));
+    return new Map(pairs);
+  }
+
+  function scheduleRenderAudio(audioCtx, audioDest, clips, bufMap, baseTime) {
+    var master = audioCtx.createGain();
+    var voiceGain = audioCtx.createGain();
+    var musicGain = audioCtx.createGain();
+    voiceGain.gain.value = 1;
+    musicGain.gain.value = 0.6;
+    voiceGain.connect(master);
+    musicGain.connect(master);
+    master.connect(audioDest);
+    var sources = [];
+    for (var i = 0; i < clips.length; i++) {
+      var clip = clips[i];
+      var buf = bufMap.get(clip.id);
+      if (!buf) continue;
+      var src = audioCtx.createBufferSource();
+      src.buffer = buf;
+      if (clip.type === 'music') src.connect(musicGain); else src.connect(voiceGain);
+      var dur = Math.max(0.01, (clip.end - clip.start));
+      var playDur = Math.min(dur, buf.duration);
+      try { src.start(baseTime + clip.start, 0, playDur); } catch (_) { }
+      sources.push(src);
+    }
+    return { sources: sources, master: master, voiceGain: voiceGain, musicGain: musicGain };
+  }
+
+  function stopRenderAudio(sources, audioCtx) {
+    try {
+      (sources || []).forEach(function (s) { try { s.stop(0); } catch (_) { } });
+    } catch (_) { }
+    try {
+      if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+    } catch (_) { }
+  }
+
   function releaseRenderVisualSources(sourceMap) {
     if (!sourceMap || !sourceMap.forEach) return;
     sourceMap.forEach(function (entry) {
@@ -1630,14 +1700,26 @@
     }
 
     var stream = canvas.captureStream(30);
+    var audioCtx = null;
+    var audioDest = null;
+    var recordStream = stream;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioDest = audioCtx.createMediaStreamDestination();
+      recordStream = new MediaStream(stream.getVideoTracks().concat(audioDest.stream.getAudioTracks()));
+    } catch (_) {
+      recordStream = stream;
+      audioCtx = null;
+      audioDest = null;
+    }
     var mimeType = chooseRecorderMimeType();
     var recorder = null;
     try {
       recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType: mimeType, videoBitsPerSecond: 6000000 })
-        : new MediaRecorder(stream, { videoBitsPerSecond: 6000000 });
+        ? new MediaRecorder(recordStream, { mimeType: mimeType, videoBitsPerSecond: 6000000 })
+        : new MediaRecorder(recordStream, { videoBitsPerSecond: 6000000 });
     } catch (_) {
-      recorder = new MediaRecorder(stream);
+      recorder = new MediaRecorder(recordStream);
       mimeType = recorder.mimeType || mimeType || 'video/webm';
     }
 
@@ -1654,6 +1736,19 @@
     var total = Math.max(1, Number(getTimelinePlaybackDuration(model)) || 1);
     var processed = 0;
     var renderSources = await preloadRenderVisualSources(clips);
+    var decodedAudioMap = null;
+    var scheduledAudio = null;
+    var audioClips = getAudioClipsForRender(model);
+    if (audioCtx && audioDest) {
+      try { await audioCtx.resume(); } catch (_) { }
+      if (audioClips && audioClips.length) {
+        try {
+          decodedAudioMap = await preloadRenderAudioBuffers(audioClips, audioCtx);
+        } catch (_) {
+          decodedAudioMap = null;
+        }
+      }
+    }
     var loadedVisualCount = 0;
     var failedVisualCount = 0;
     var lastProgressUpdate = 0;
@@ -1672,6 +1767,34 @@
     };
 
     recorder.start(250);
+    if (audioCtx && audioDest) {
+      try {
+        if (decodedAudioMap) {
+          var baseTime = audioCtx.currentTime + 0.12;
+          scheduledAudio = scheduleRenderAudio(audioCtx, audioDest, audioClips, decodedAudioMap, baseTime);
+        } else {
+          var master = audioCtx.createGain();
+          var vGain = audioCtx.createGain();
+          var mGain = audioCtx.createGain();
+          vGain.gain.value = 1;
+          mGain.gain.value = 0.6;
+          vGain.connect(master);
+          mGain.connect(master);
+          master.connect(audioDest);
+          scheduledAudio = { sources: [], master: master, voiceGain: vGain, musicGain: mGain };
+        }
+        if (scheduledAudio && scheduledAudio.voiceGain) {
+          renderSources.forEach(function (entry) {
+            if (entry && entry.kind === 'video' && entry.source) {
+              try {
+                var node = audioCtx.createMediaElementSource(entry.source);
+                node.connect(scheduledAudio.voiceGain);
+              } catch (_) { }
+            }
+          });
+        }
+      } catch (_) { }
+    }
     drawBackground();
 
     var cursor = 0;
@@ -1774,6 +1897,9 @@
     try { recorder.stop(); } catch (_) { }
     var blob = await stopped;
     releaseRenderVisualSources(renderSources);
+    if (scheduledAudio || audioCtx) {
+      try { stopRenderAudio(scheduledAudio && scheduledAudio.sources || [], audioCtx); } catch (_) { }
+    }
     if (shouldCancel()) throw new Error('render_canceled');
     if (!blob || !blob.size) {
       throw new Error('렌더링 결과 비디오를 생성하지 못했습니다.');
@@ -2518,9 +2644,11 @@
         try { video.currentTime = clipTime; } catch (_) { }
       }
       if (state.isPlaying) {
+        try { video.muted = false; } catch (_) { }
         video.play().catch(function () { });
       } else {
         try { video.pause(); } catch (_) { }
+        try { video.muted = true; } catch (_) { }
       }
     };
 

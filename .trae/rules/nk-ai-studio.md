@@ -7,3 +7,10 @@
 # 개발 작업을 마친 후 사이드 바 하단의 버전 표시를 매 번 업데이트하세요. Auto-Generated Rules
 - **Version Control**: After ANY code change, increment `APP_VERSION` in `script.js` immediately.
 - **Delivery Rule**: After coding work, commit and push the changes so the latest web-deployable state is available for browser testing. If commit/push cannot be completed, report the exact blocker immediately.
+
+## 버전/커밋/푸시 정책
+- 작업 종료 시 즉시 버전 업데이트: prototype/script.js의 NK.config.APP_VERSION 증가
+- 변경사항 스테이징 및 커밋: git add -A → 의미 있는 한국어 커밋 메시지로 git commit
+- 원격 반영: git push (기본 원격 origin, 메인 브랜치 기준)
+- 민감정보(비밀키 등)는 커밋 대상에서 제외
+- 푸시 실패 시 원인과 오류 메시지를 즉시 기록·보고하고, 해결 후 재시도
