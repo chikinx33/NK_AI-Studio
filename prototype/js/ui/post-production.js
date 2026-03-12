@@ -35,6 +35,7 @@
     playLastTick: 0,
     previewClipId: '',
     previewClipUrl: '',
+    previewVideoCache: {},
     subscribed: false,
     assetRefreshInFlight: false,
     assetRefreshProjectId: '',
@@ -859,6 +860,12 @@
 
   function getRenderableOutputVideoUrl(meta) {
     var m = meta || {};
+    var finalObjectName = String(m.outputVideoObjectName || '').trim();
+    if (finalObjectName && NK.api && NK.api.mediaProxyObjectUrl) {
+      return toPlayableMediaUrl(NK.api.mediaProxyObjectUrl(finalObjectName));
+    }
+    var download = String(m.outputVideoDownloadUrl || '').trim();
+    if (download) return toPlayableMediaUrl(download);
     var direct = String(m.outputVideoUrl || '').trim();
     if (direct) return toPlayableMediaUrl(direct);
     var objectName = String(m.outputSourceObjectName || '').trim();
@@ -1077,6 +1084,172 @@
     } catch (_) { }
   }
 
+  function clearPreviewVideoCache() {
+    var cache = state.previewVideoCache || {};
+    Object.keys(cache).forEach(function (clipId) {
+      var entry = cache[clipId];
+      if (!entry || !entry.video) return;
+      if (entry.video.parentNode) {
+        try { entry.video.parentNode.removeChild(entry.video); } catch (_) { }
+      }
+      releaseVideoSource(entry.video);
+    });
+    state.previewVideoCache = {};
+    state.previewClipId = '';
+    state.previewClipUrl = '';
+  }
+
+  function getPreviewVideoHost() {
+    return document.getElementById('postprod-preview-video-host');
+  }
+
+  function mountPreviewVideo(entry, clipId) {
+    var host = getPreviewVideoHost();
+    if (!host || !entry || !entry.video) return null;
+    Object.keys(state.previewVideoCache || {}).forEach(function (id) {
+      var cacheEntry = state.previewVideoCache[id];
+      if (!cacheEntry || !cacheEntry.video) return;
+      if (id === String(clipId)) {
+        cacheEntry.video.id = 'postprod-preview-video';
+      } else {
+        cacheEntry.video.removeAttribute('id');
+      }
+    });
+    if (entry.video.parentNode !== host) host.appendChild(entry.video);
+    return entry.video;
+  }
+
+  function pausePreviewVideos(exceptClipId) {
+    var keepId = String(exceptClipId || '');
+    Object.keys(state.previewVideoCache || {}).forEach(function (clipId) {
+      if (keepId && clipId === keepId) return;
+      var entry = state.previewVideoCache[clipId];
+      if (!entry || !entry.video) return;
+      try { entry.video.pause(); } catch (_) { }
+    });
+  }
+
+  function createPreviewVideoCacheEntry(clipId, playableUrl) {
+    var video = document.createElement('video');
+    video.className = 'postprod-video';
+    video.preload = 'auto';
+    video.playsInline = true;
+    video.muted = true;
+    video.loop = true;
+    video.crossOrigin = 'anonymous';
+    video.setAttribute('playsinline', '');
+    video.src = playableUrl;
+
+    var entry = {
+      clipId: String(clipId || ''),
+      url: playableUrl,
+      video: video,
+      ready: false,
+      failed: false,
+      readyPromise: null
+    };
+
+    entry.readyPromise = new Promise(function (resolve, reject) {
+      var done = false;
+      var timeout = setTimeout(function () {
+        if (done) return;
+        done = true;
+        entry.failed = true;
+        cleanup();
+        reject(new Error('preview_video_load_timeout'));
+      }, 12000);
+      var cleanup = function () {
+        clearTimeout(timeout);
+        video.removeEventListener('loadedmetadata', onReady);
+        video.removeEventListener('error', onError);
+      };
+      var onReady = function () {
+        if (done) return;
+        done = true;
+        entry.ready = true;
+        cleanup();
+        try { video.pause(); } catch (_) { }
+        resolve(video);
+      };
+      var onError = function () {
+        if (done) return;
+        done = true;
+        entry.failed = true;
+        cleanup();
+        reject(new Error('preview_video_load_failed'));
+      };
+      video.addEventListener('loadedmetadata', onReady);
+      video.addEventListener('error', onError);
+      try {
+        video.load();
+        if (video.readyState >= 1) onReady();
+      } catch (_) { }
+    });
+
+    return entry;
+  }
+
+  function getPreviewVideoCacheEntry(clip) {
+    if (!clip || !clip.id || !clip.url) return null;
+    var clipId = String(clip.id);
+    var playableUrl = toPlayableMediaUrl(clip.url);
+    if (!playableUrl) return null;
+    var cache = state.previewVideoCache || (state.previewVideoCache = {});
+    var existing = cache[clipId];
+    if (existing && existing.url === playableUrl && existing.video && !existing.failed) return existing;
+    if (existing && existing.video) {
+      if (existing.video.parentNode) {
+        try { existing.video.parentNode.removeChild(existing.video); } catch (_) { }
+      }
+      releaseVideoSource(existing.video);
+    }
+    var next = createPreviewVideoCacheEntry(clipId, playableUrl);
+    cache[clipId] = next;
+    return next;
+  }
+
+  function prunePreviewVideoCache(keepIds) {
+    var keep = {};
+    (keepIds || []).forEach(function (id) {
+      var key = String(id || '');
+      if (key) keep[key] = true;
+    });
+    Object.keys(state.previewVideoCache || {}).forEach(function (clipId) {
+      if (keep[clipId]) return;
+      var entry = state.previewVideoCache[clipId];
+      if (!entry || !entry.video) {
+        delete state.previewVideoCache[clipId];
+        return;
+      }
+      if (entry.video.parentNode) {
+        try { entry.video.parentNode.removeChild(entry.video); } catch (_) { }
+      }
+      releaseVideoSource(entry.video);
+      delete state.previewVideoCache[clipId];
+    });
+  }
+
+  function warmPreviewVideoNeighbors(clip) {
+    if (!clip || !state.model) return;
+    var track = getVisualTrack(state.model);
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    if (!clips.length) return;
+    var idx = clips.findIndex(function (item) { return item && item.id === clip.id; });
+    if (idx < 0) return;
+    var keepIds = [clip.id];
+    [idx - 1, idx + 1].forEach(function (targetIdx) {
+      if (targetIdx < 0 || targetIdx >= clips.length) return;
+      var target = clips[targetIdx];
+      if (!target || target.empty || !target.url || !isVideoUrl(target.url)) return;
+      keepIds.push(target.id);
+      var entry = getPreviewVideoCacheEntry(target);
+      if (entry && entry.readyPromise) {
+        entry.readyPromise.catch(function () { });
+      }
+    });
+    prunePreviewVideoCache(keepIds);
+  }
+
   async function hasLoadableVisualClip(model) {
     var clips = getVisualClipsForRender(model);
     if (!clips.length) return false;
@@ -1263,6 +1436,158 @@
     return new Error('transcode_failed_' + status + (reason ? ('::' + reason) : ''));
   }
 
+  function waitForVideoSeek(video, timeSec, timeoutMs) {
+    return new Promise(function (resolve, reject) {
+      if (!video) { reject(new Error('seek_video_missing')); return; }
+      var target = Math.max(0, Number(timeSec) || 0);
+      if (Math.abs((video.currentTime || 0) - target) <= 0.05) {
+        resolve(video);
+        return;
+      }
+      var done = false;
+      var timeout = setTimeout(function () {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(new Error('seek_timeout'));
+      }, Math.max(800, Number(timeoutMs) || 2500));
+      var cleanup = function () {
+        clearTimeout(timeout);
+        video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('error', onError);
+      };
+      var onSeeked = function () {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(video);
+      };
+      var onError = function () {
+        if (done) return;
+        done = true;
+        cleanup();
+        reject(new Error('seek_failed'));
+      };
+      video.addEventListener('seeked', onSeeked);
+      video.addEventListener('error', onError);
+      try {
+        video.currentTime = target;
+      } catch (err) {
+        cleanup();
+        reject(err);
+      }
+    });
+  }
+
+  async function preloadRenderVisualSources(clips) {
+    var pairs = await Promise.all((clips || []).map(async function (clip) {
+      if (!clip || !clip.id || !clip.url) return [clip && clip.id, { kind: 'error', error: new Error('clip_url_missing') }];
+      try {
+        if (isVideoUrl(clip.url)) {
+          var video = await loadVideoSourceWithFallback(clip.url, 12000);
+          try { video.pause(); } catch (_) { }
+          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
+          return [clip.id, { kind: 'video', source: video }];
+        }
+        var image = await loadImageSourceWithFallback(clip.url);
+        return [clip.id, { kind: 'image', source: image }];
+      } catch (err) {
+        return [clip.id, { kind: 'error', error: err }];
+      }
+    }));
+    return new Map(pairs);
+  }
+
+  function releaseRenderVisualSources(sourceMap) {
+    if (!sourceMap || !sourceMap.forEach) return;
+    sourceMap.forEach(function (entry) {
+      if (!entry || entry.kind !== 'video' || !entry.source) return;
+      releaseVideoSource(entry.source);
+    });
+  }
+
+  function getActiveSubtitleLabels(model, sec) {
+    var track = getTimelineTrack(model, 'subtitles');
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    var time = Number(sec) || 0;
+    return clips
+      .filter(function (clip) {
+        if (!clip) return false;
+        var isLastMoment = Math.abs(time - clip.end) < 0.001;
+        return time >= clip.start && (time < clip.end || isLastMoment);
+      })
+      .map(function (clip) { return String(clip.label || '').trim(); })
+      .filter(Boolean);
+  }
+
+  function wrapCanvasText(ctx, text, maxWidth) {
+    var paragraphs = String(text || '').split(/\n+/);
+    var lines = [];
+    paragraphs.forEach(function (paragraph) {
+      var chars = Array.from(String(paragraph || ''));
+      if (!chars.length) return;
+      var line = '';
+      chars.forEach(function (ch) {
+        var next = line + ch;
+        if (line && ctx.measureText(next).width > maxWidth) {
+          lines.push(line);
+          line = ch;
+        } else {
+          line = next;
+        }
+      });
+      if (line) lines.push(line);
+    });
+    return lines;
+  }
+
+  function drawSubtitleOverlay(ctx, model, sec, width, height) {
+    if (!ctx || !model) return;
+    var labels = getActiveSubtitleLabels(model, sec);
+    if (!labels.length) return;
+
+    ctx.save();
+    var fontSize = Math.max(22, Math.round(width * 0.03));
+    var lineHeight = Math.round(fontSize * 1.28);
+    var maxWidth = Math.round(width * 0.8);
+    ctx.font = '700 ' + fontSize + 'px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+
+    var lines = [];
+    labels.forEach(function (label) {
+      wrapCanvasText(ctx, label, maxWidth).forEach(function (line) {
+        if (line) lines.push(line);
+      });
+    });
+    if (!lines.length) {
+      ctx.restore();
+      return;
+    }
+
+    var widest = 0;
+    lines.forEach(function (line) {
+      widest = Math.max(widest, ctx.measureText(line).width);
+    });
+    var padX = Math.round(fontSize * 0.7);
+    var padY = Math.round(fontSize * 0.45);
+    var boxWidth = Math.min(maxWidth + padX * 2, Math.ceil(widest) + padX * 2);
+    var boxHeight = (lines.length * lineHeight) + padY * 2;
+    var boxX = Math.round((width - boxWidth) / 2);
+    var boxY = Math.max(16, Math.round(height - boxHeight - Math.max(24, height * 0.06)));
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1);
+    ctx.fillStyle = '#ffffff';
+    lines.forEach(function (line, idx) {
+      ctx.fillText(line, width / 2, boxY + padY + (idx * lineHeight));
+    });
+    ctx.restore();
+  }
+
   function runSegment(durationSec, frameFn, progressFn, shouldCancel) {
     return new Promise(function (resolve) {
       var start = 0;
@@ -1328,6 +1653,7 @@
 
     var total = Math.max(1, Number(getTimelinePlaybackDuration(model)) || 1);
     var processed = 0;
+    var renderSources = await preloadRenderVisualSources(clips);
     var loadedVisualCount = 0;
     var failedVisualCount = 0;
     var lastProgressUpdate = 0;
@@ -1354,24 +1680,32 @@
       var clip = clips[i];
       var gap = Math.max(0, clip.start - cursor);
       if (gap > 0) {
-        var okGap = await runSegment(gap, function () {
+        var okGap = await runSegment(gap, function (localElapsed) {
           drawBackground();
+          drawSubtitleOverlay(ctx, model, cursor + localElapsed, canvas.width, canvas.height);
         }, reportProgress, shouldCancel);
         processed += gap;
         if (!okGap) break;
       }
 
       var duration = Math.max(0.2, clip.end - clip.start);
-      if (isVideoUrl(clip.url)) {
+      var renderEntry = renderSources.get(clip.id);
+      if (renderEntry && renderEntry.kind === 'video' && renderEntry.source) {
+        var video = renderEntry.source;
         try {
-          var video = await loadVideoSourceWithFallback(clip.url);
           loadedVisualCount += 1;
+          try { video.pause(); } catch (_) { }
+          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
           try { await video.play(); } catch (_) { }
-          var okVideo = await runSegment(duration, function () {
+          var okVideo = await runSegment(duration, function (localElapsed) {
             drawBackground();
+            if (Math.abs((video.currentTime || 0) - localElapsed) > 0.18) {
+              try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
+            }
             drawContain(ctx, video, canvas.width, canvas.height);
+            drawSubtitleOverlay(ctx, model, clip.start + localElapsed, canvas.width, canvas.height);
           }, reportProgress, shouldCancel);
-          releaseVideoSource(video);
+          try { video.pause(); } catch (_) { }
           processed += duration;
           if (!okVideo) break;
         } catch (_) {
@@ -1382,17 +1716,19 @@
             ctx.font = '600 28px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('영상 로드 실패', canvas.width / 2, canvas.height / 2);
+            drawSubtitleOverlay(ctx, model, clip.start, canvas.width, canvas.height);
           }, reportProgress, shouldCancel);
           processed += duration;
           if (!okVideoFallback) break;
         }
-      } else {
+      } else if (renderEntry && renderEntry.kind === 'image' && renderEntry.source) {
         try {
-          var image = await loadImageSourceWithFallback(clip.url);
+          var image = renderEntry.source;
           loadedVisualCount += 1;
-          var okImage = await runSegment(duration, function () {
+          var okImage = await runSegment(duration, function (localElapsed) {
             drawBackground();
             drawContain(ctx, image, canvas.width, canvas.height);
+            drawSubtitleOverlay(ctx, model, clip.start + localElapsed, canvas.width, canvas.height);
           }, reportProgress, shouldCancel);
           processed += duration;
           if (!okImage) break;
@@ -1404,10 +1740,23 @@
             ctx.font = '600 28px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('이미지 로드 실패', canvas.width / 2, canvas.height / 2);
+            drawSubtitleOverlay(ctx, model, clip.start, canvas.width, canvas.height);
           }, reportProgress, shouldCancel);
           processed += duration;
           if (!okImageFallback) break;
         }
+      } else {
+        failedVisualCount += 1;
+        var okMissing = await runSegment(duration, function (localElapsed) {
+          drawBackground();
+          ctx.fillStyle = '#f5c94b';
+          ctx.font = '600 28px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('씬 소스 없음', canvas.width / 2, canvas.height / 2);
+          drawSubtitleOverlay(ctx, model, clip.start + localElapsed, canvas.width, canvas.height);
+        }, reportProgress, shouldCancel);
+        processed += duration;
+        if (!okMissing) break;
       }
 
       cursor = Math.max(cursor, clip.end);
@@ -1415,14 +1764,16 @@
 
     if (!shouldCancel() && cursor < total) {
       var tail = total - cursor;
-      await runSegment(tail, function () {
+      await runSegment(tail, function (localElapsed) {
         drawBackground();
+        drawSubtitleOverlay(ctx, model, cursor + localElapsed, canvas.width, canvas.height);
       }, reportProgress, shouldCancel);
       processed += tail;
     }
 
     try { recorder.stop(); } catch (_) { }
     var blob = await stopped;
+    releaseRenderVisualSources(renderSources);
     if (shouldCancel()) throw new Error('render_canceled');
     if (!blob || !blob.size) {
       throw new Error('렌더링 결과 비디오를 생성하지 못했습니다.');
@@ -2069,25 +2420,22 @@
       cancelAnimationFrame(state.playFrame);
       state.playFrame = 0;
     }
-    var video = document.getElementById('postprod-preview-video');
-    if (video) {
-      try { video.pause(); } catch (_) { }
-    }
+    pausePreviewVideos('');
     setPlayButtonUi();
   }
 
   function syncPreviewMedia(sec) {
-    var video = document.getElementById('postprod-preview-video');
+    var host = getPreviewVideoHost();
     var image = document.getElementById('postprod-preview-image');
     var empty = document.getElementById('postprod-preview-empty');
     var gap = document.getElementById('postprod-preview-gap');
-    if (!video || !image || !empty || !gap) return;
+    if (!host || !image || !empty || !gap) return;
 
     var clip = getActiveVisualClip(sec);
     if (!clip) {
-      video.style.display = 'none';
+      host.style.display = 'none';
       image.style.display = 'none';
-      try { video.pause(); } catch (_) { }
+      pausePreviewVideos('');
       if (isInVisualGap(sec)) {
         gap.style.display = 'block';
         empty.style.display = 'none';
@@ -2100,9 +2448,9 @@
       return;
     }
     if (clip.empty || !clip.url) {
-      video.style.display = 'none';
+      host.style.display = 'none';
       image.style.display = 'none';
-      try { video.pause(); } catch (_) { }
+      pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
       state.previewClipId = '';
@@ -2112,9 +2460,9 @@
 
     var playableUrl = toPlayableMediaUrl(clip.url);
     if (!playableUrl) {
-      video.style.display = 'none';
+      host.style.display = 'none';
       image.style.display = 'none';
-      try { video.pause(); } catch (_) { }
+      pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
       state.previewClipId = '';
@@ -2123,23 +2471,49 @@
     }
 
     var isVideo = isVideoUrl(clip.url);
+    var clipChanged = state.previewClipId !== clip.id || state.previewClipUrl !== playableUrl;
     if (!isVideo) {
       if (state.previewClipUrl !== playableUrl) {
         image.src = playableUrl;
       }
-      video.style.display = 'none';
+      host.style.display = 'none';
       image.style.display = 'block';
       gap.style.display = 'none';
       empty.style.display = 'none';
-      try { video.pause(); } catch (_) { }
+      pausePreviewVideos('');
+      if (clipChanged) warmPreviewVideoNeighbors(clip);
       state.previewClipId = clip.id;
       state.previewClipUrl = playableUrl;
       return;
     }
 
     var clipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
-    var sourceChanged = state.previewClipId !== clip.id || state.previewClipUrl !== playableUrl || !video.getAttribute('src');
-    var seekAndPlay = function () {
+    var entry = getPreviewVideoCacheEntry(clip);
+    if (!entry) {
+      host.style.display = 'none';
+      image.style.display = 'none';
+      pausePreviewVideos('');
+      gap.style.display = 'block';
+      empty.style.display = 'none';
+      state.previewClipId = '';
+      state.previewClipUrl = '';
+      return;
+    }
+
+    if (clipChanged) warmPreviewVideoNeighbors(clip);
+    state.previewClipId = clip.id;
+    state.previewClipUrl = playableUrl;
+
+    var activateVideo = function () {
+      var activeClip = getActiveVisualClip(state.currentTime);
+      if (!activeClip || activeClip.id !== clip.id) return;
+      var video = mountPreviewVideo(entry, clip.id);
+      if (!video) return;
+      host.style.display = 'block';
+      image.style.display = 'none';
+      gap.style.display = 'none';
+      empty.style.display = 'none';
+      pausePreviewVideos(clip.id);
       if (Math.abs((video.currentTime || 0) - clipTime) > 0.12) {
         try { video.currentTime = clipTime; } catch (_) { }
       }
@@ -2150,24 +2524,27 @@
       }
     };
 
-    if (sourceChanged) {
-      video.src = playableUrl;
-      video.load();
-      var onLoaded = function () {
-        video.removeEventListener('loadedmetadata', onLoaded);
-        seekAndPlay();
-      };
-      video.addEventListener('loadedmetadata', onLoaded);
-    } else {
-      seekAndPlay();
+    if (entry.ready) {
+      activateVideo();
+      return;
     }
 
-    video.style.display = 'block';
+    host.style.display = 'none';
     image.style.display = 'none';
-    gap.style.display = 'none';
+    gap.style.display = 'block';
     empty.style.display = 'none';
-    state.previewClipId = clip.id;
-    state.previewClipUrl = playableUrl;
+    if (clipChanged) {
+      entry.readyPromise.then(function () {
+        activateVideo();
+      }).catch(function () {
+        var activeClip = getActiveVisualClip(state.currentTime);
+        if (!activeClip || activeClip.id !== clip.id) return;
+        host.style.display = 'none';
+        image.style.display = 'none';
+        gap.style.display = 'block';
+        empty.style.display = 'none';
+      });
+    }
   }
 
   function startPlayback() {
@@ -2201,7 +2578,7 @@
   function buildPreviewHtml(model) {
     return (
       '<div class="postprod-preview-stack">' +
-      '<video id="postprod-preview-video" class="postprod-video" preload="metadata" playsinline></video>' +
+      '<div id="postprod-preview-video-host" class="postprod-preview-video-host"></div>' +
       '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
@@ -2837,6 +3214,7 @@
     if (!project || !scenes.length) {
       stopRenderTimer();
       stopPlayback();
+      clearPreviewVideoCache();
       state.projectId = '';
       state.model = null;
       state.selectedClipId = '';
@@ -2888,6 +3266,7 @@
     if (projectChanged) {
       stopRenderTimer();
       stopPlayback();
+      clearPreviewVideoCache();
       state.dirty = false;
       state.assetRefreshInFlight = false;
       state.assetRefreshProjectId = '';

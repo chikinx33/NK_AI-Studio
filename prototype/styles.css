@@ -4333,6 +4333,11 @@ a.btn-primary:active {
   height: 100%;
 }
 
+.postprod-preview-video-host {
+  position: absolute;
+  inset: 0;
+}
+
 .postprod-video,
 .postprod-image {
   width: 100%;
@@ -4342,6 +4347,7 @@ a.btn-primary:active {
 }
 
 .postprod-preview-stack .postprod-video,
+.postprod-preview-stack .postprod-preview-video-host,
 .postprod-preview-stack .postprod-image,
 .postprod-preview-stack .postprod-preview-gap,
 .postprod-preview-stack .postprod-preview-empty {
