@@ -46,7 +46,8 @@
     captionSizeScale: 1,
     captionColor: '#ffffff',
     captionBg: 'rgba(0,0,0,0.72)',
-    captionEffect: 'shadow'
+    captionEffect: 'shadow',
+    sessionEdits: {}
   };
 
   function safeParse(text) {
@@ -444,6 +445,16 @@
     return {};
   }
 
+  function getMergedTimelineEdits(project) {
+    var saved = getTimelineEdits(project);
+    var session = state.sessionEdits || {};
+    var out = Object.assign({}, saved);
+    Object.keys(session).forEach(function (k) {
+      out[k] = Object.assign({}, out[k] || {}, session[k]);
+    });
+    return out;
+  }
+
   function getProjectByStateId() {
     if (!state.projectId) return null;
     return getProjectById(state.projectId);
@@ -475,45 +486,25 @@
   }
 
   function persistTimelineEdit(clipId, nextStart, nextEnd) {
-    if (!clipId || !state.projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return;
-    var drafts = NK.store.getDrafts();
-    if (!Array.isArray(drafts)) return;
-    var idx = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
-    if (idx < 0) return;
-
-    var target = Object.assign({}, drafts[idx]);
-    var edits = Object.assign({}, getTimelineEdits(target));
+    if (!clipId) return;
+    var edits = state.sessionEdits || (state.sessionEdits = {});
     var prev = Object.assign({}, edits[clipId] || {});
     edits[clipId] = Object.assign({}, prev, {
       start: round1(nextStart),
       end: round1(nextEnd),
       deleted: false
     });
-    var nextPayload = Object.assign({}, target.payload || {});
-    nextPayload.postTimelineEdits = edits;
-    target.payload = nextPayload;
-    target.postTimelineEdits = edits;
-    drafts[idx] = target;
-    NK.store.saveDrafts(drafts);
+    state.sessionEdits = edits;
+    setDirty(true);
   }
 
   function persistTimelineDeleted(clipId, deleted) {
-    if (!clipId || !state.projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return;
-    var drafts = NK.store.getDrafts();
-    if (!Array.isArray(drafts)) return;
-    var idx = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
-    if (idx < 0) return;
-
-    var target = Object.assign({}, drafts[idx]);
-    var edits = Object.assign({}, getTimelineEdits(target));
+    if (!clipId) return;
+    var edits = state.sessionEdits || (state.sessionEdits = {});
     var prev = Object.assign({}, edits[clipId] || {});
     edits[clipId] = Object.assign({}, prev, { deleted: !!deleted });
-    var nextPayload = Object.assign({}, target.payload || {});
-    nextPayload.postTimelineEdits = edits;
-    target.payload = nextPayload;
-    target.postTimelineEdits = edits;
-    drafts[idx] = target;
-    NK.store.saveDrafts(drafts);
+    state.sessionEdits = edits;
+    setDirty(true);
   }
 
   function persistRenderMeta(metaPatch) {
@@ -758,7 +749,7 @@
       if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
 
       var payload = Object.assign({}, project.payload || {});
-      payload.postTimelineEdits = getTimelineEdits(project);
+      payload.postTimelineEdits = getMergedTimelineEdits(project);
       payload.renderMeta = Object.assign({}, getRenderMeta(project), state.renderMeta || {});
       if (String(payload.renderMeta.outputSrtUrl || '').indexOf('blob:') === 0) {
         payload.renderMeta.outputSrtUrl = '';
@@ -780,6 +771,24 @@
           title: project.title || ''
         }
       );
+
+      // 로컬 드래프트에도 저장 반영 (세션 편집 → 영구 저장)
+      try {
+        if (NK.store && NK.store.getDrafts && NK.store.saveDrafts) {
+          var drafts = NK.store.getDrafts();
+          var di = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
+          if (di >= 0) {
+            var tgt = Object.assign({}, drafts[di]);
+            var nextPayload = Object.assign({}, tgt.payload || {}, { postTimelineEdits: payload.postTimelineEdits, renderMeta: payload.renderMeta });
+            tgt.payload = nextPayload;
+            tgt.postTimelineEdits = payload.postTimelineEdits;
+            tgt.renderMeta = payload.renderMeta;
+            drafts[di] = tgt;
+            NK.store.saveDrafts(drafts);
+          }
+        }
+      } catch (_) { }
+      state.sessionEdits = {};
 
       var nowIso = new Date().toISOString();
       persistRenderMeta({
@@ -1848,6 +1857,8 @@
           renderSources.forEach(function (entry) {
             if (entry && entry.kind === 'video' && entry.source) {
               try {
+                try { entry.source.muted = false; } catch (_) { }
+                try { entry.source.volume = 1; } catch (_) { }
                 var node = audioCtx.createMediaElementSource(entry.source);
                 node.connect(scheduledAudio.voiceGain);
               } catch (_) { }
@@ -3593,6 +3604,8 @@
     state.drag = null;
     state.isPointerDown = false;
     state.justDragged = false;
+    // 적용: 저장된 + 세션 편집 병합 반영
+    applyTimelineEdits(model, getMergedTimelineEdits(project));
     renderLayout(model);
     bindEvents();
     setCurrentTime(state.currentTime, true);
