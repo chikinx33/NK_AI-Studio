@@ -40,7 +40,13 @@
     assetRefreshInFlight: false,
     assetRefreshProjectId: '',
     assetRefreshTriedAt: 0,
-    saveGuardTimer: 0
+    saveGuardTimer: 0,
+    captionsEnabled: true,
+    captionFont: 'Pretendard, Segoe UI, Apple SD Gothic Neo, sans-serif',
+    captionSizeScale: 1,
+    captionColor: '#ffffff',
+    captionBg: 'rgba(0,0,0,0.72)',
+    captionEffect: 'shadow'
   };
 
   function safeParse(text) {
@@ -387,6 +393,37 @@
 
   function saveSnapStep(step) {
     try { localStorage.setItem('nk_post_snap_step', String(step)); } catch (_) { }
+  }
+
+  function loadCaptionPrefs() {
+    try {
+      var on = localStorage.getItem('nk_post_caption_on');
+      if (on != null) state.captionsEnabled = String(on) !== '0';
+      var font = localStorage.getItem('nk_post_caption_font');
+      if (font) state.captionFont = font;
+      var size = localStorage.getItem('nk_post_caption_size');
+      if (size) {
+        var n = Number(size);
+        if (isFinite(n) && n > 0.5 && n < 3) state.captionSizeScale = n;
+      }
+      var color = localStorage.getItem('nk_post_caption_color');
+      if (color) state.captionColor = color;
+      var bg = localStorage.getItem('nk_post_caption_bg');
+      if (bg) state.captionBg = bg;
+      var eff = localStorage.getItem('nk_post_caption_effect');
+      if (eff) state.captionEffect = eff;
+    } catch (_) { }
+  }
+
+  function saveCaptionPrefs() {
+    try {
+      localStorage.setItem('nk_post_caption_on', state.captionsEnabled ? '1' : '0');
+      localStorage.setItem('nk_post_caption_font', state.captionFont || '');
+      localStorage.setItem('nk_post_caption_size', String(state.captionSizeScale || 1));
+      localStorage.setItem('nk_post_caption_color', state.captionColor || '');
+      localStorage.setItem('nk_post_caption_bg', state.captionBg || '');
+      localStorage.setItem('nk_post_caption_effect', state.captionEffect || 'none');
+    } catch (_) { }
   }
 
   function roundToStep(v, step) {
@@ -1612,15 +1649,16 @@
   }
 
   function drawSubtitleOverlay(ctx, model, sec, width, height) {
-    if (!ctx || !model) return;
+    if (!ctx || !model || !state.captionsEnabled) return;
     var labels = getActiveSubtitleLabels(model, sec);
     if (!labels.length) return;
 
     ctx.save();
-    var fontSize = Math.max(22, Math.round(width * 0.03));
+    var base = Math.max(22, Math.round(width * 0.03));
+    var fontSize = Math.max(14, Math.round(base * (state.captionSizeScale || 1)));
     var lineHeight = Math.round(fontSize * 1.28);
     var maxWidth = Math.round(width * 0.8);
-    ctx.font = '700 ' + fontSize + 'px sans-serif';
+    ctx.font = '700 ' + fontSize + 'px ' + (state.captionFont || 'sans-serif');
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
@@ -1646,14 +1684,37 @@
     var boxX = Math.round((width - boxWidth) / 2);
     var boxY = Math.max(16, Math.round(height - boxHeight - Math.max(24, height * 0.06)));
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
-    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1);
-    ctx.fillStyle = '#ffffff';
+    var bg = String(state.captionBg || '').trim();
+    if (bg && bg !== 'transparent') {
+      ctx.fillStyle = bg;
+      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1);
+    }
+    var effect = String(state.captionEffect || 'none');
+    if (effect === 'shadow') {
+      ctx.shadowColor = 'rgba(0,0,0,0.8)';
+      ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.18));
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = Math.max(1, Math.round(fontSize * 0.06));
+    } else {
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
+    var txtColor = state.captionColor || '#ffffff';
+    ctx.fillStyle = txtColor;
+    var doOutline = (effect === 'outline');
+    if (doOutline) {
+      ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.12));
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    }
     lines.forEach(function (line, idx) {
-      ctx.fillText(line, width / 2, boxY + padY + (idx * lineHeight));
+      var y = boxY + padY + (idx * lineHeight);
+      if (doOutline) ctx.strokeText(line, width / 2, y);
+      ctx.fillText(line, width / 2, y);
     });
     ctx.restore();
   }
@@ -2555,6 +2616,7 @@
     var image = document.getElementById('postprod-preview-image');
     var empty = document.getElementById('postprod-preview-empty');
     var gap = document.getElementById('postprod-preview-gap');
+    var sub = document.getElementById('postprod-preview-subtitles');
     if (!host || !image || !empty || !gap) return;
 
     var clip = getActiveVisualClip(sec);
@@ -2569,6 +2631,7 @@
         gap.style.display = 'none';
         empty.style.display = 'flex';
       }
+      if (sub) { sub.style.display = 'none'; sub.setAttribute('aria-hidden', 'true'); sub.innerHTML = ''; }
       state.previewClipId = '';
       state.previewClipUrl = '';
       return;
@@ -2579,6 +2642,7 @@
       pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
+      if (sub) { sub.style.display = 'none'; sub.setAttribute('aria-hidden', 'true'); sub.innerHTML = ''; }
       state.previewClipId = '';
       state.previewClipUrl = '';
       return;
@@ -2591,6 +2655,7 @@
       pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
+      if (sub) { sub.style.display = 'none'; sub.setAttribute('aria-hidden', 'true'); sub.innerHTML = ''; }
       state.previewClipId = '';
       state.previewClipUrl = '';
       return;
@@ -2621,6 +2686,7 @@
       pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
+      if (sub) { sub.style.display = 'none'; sub.setAttribute('aria-hidden', 'true'); sub.innerHTML = ''; }
       state.previewClipId = '';
       state.previewClipUrl = '';
       return;
@@ -2673,6 +2739,38 @@
         empty.style.display = 'none';
       });
     }
+    if (sub) {
+      var labels = getActiveSubtitleLabels(state.model, sec);
+      if (!state.captionsEnabled || !labels.length) {
+        sub.style.display = 'none';
+        sub.setAttribute('aria-hidden', 'true');
+        sub.innerHTML = '';
+      } else {
+        var sizePx = Math.max(18, Math.round(22 * (state.captionSizeScale || 1)));
+        var bg = String(state.captionBg || '').trim();
+        var padY = Math.max(6, Math.round(sizePx * 0.5));
+        var style =
+          'display:block;aria-hidden=false;' +
+          'font:' + '700 ' + sizePx + 'px ' + (state.captionFont || 'sans-serif') + ';' +
+          'color:' + (state.captionColor || '#ffffff') + ';' +
+          (bg && bg !== 'transparent' ? ('background:' + bg + ';border:1px solid rgba(255,255,255,0.16);') : 'background:transparent;') +
+          'border-radius:6px;' +
+          'line-height:1.28;' +
+          'margin:0 auto;' +
+          'display:inline-block;' +
+          'padding:' + padY + 'px 14px;';
+        var eff = String(state.captionEffect || 'none');
+        if (eff === 'shadow') {
+          style += 'text-shadow: 0 1px 0 rgba(0,0,0,0.6), 0 0 4px rgba(0,0,0,0.6);';
+        } else if (eff === 'outline') {
+          style += 'text-shadow: -1px 0 0 rgba(0,0,0,0.9), 1px 0 0 rgba(0,0,0,0.9), 0 -1px 0 rgba(0,0,0,0.9), 0 1px 0 rgba(0,0,0,0.9);';
+        }
+        sub.setAttribute('style', sub.getAttribute('style').split(';').slice(0,6).join(';') + ';text-align:center;');
+        sub.innerHTML = '<div style="' + style + '">' + labels.map(function (t) { return escapeHtml(t); }).join('<br/>') + '</div>';
+        sub.style.display = 'block';
+        sub.setAttribute('aria-hidden', 'false');
+      }
+    }
   }
 
   function startPlayback() {
@@ -2708,6 +2806,7 @@
       '<div class="postprod-preview-stack">' +
       '<div id="postprod-preview-video-host" class="postprod-preview-video-host"></div>' +
       '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
+      '<div id="postprod-preview-subtitles" class="postprod-preview-subtitles" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:6%;display:none;pointer-events:none;text-align:center;padding:0 6%;"></div>' +
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
       '<div class="postprod-play-glyph">▶</div>' +
@@ -2775,12 +2874,24 @@
       '<div class="card postprod-toolbar">' +
       '<div class="postprod-toolbar-group">' +
       '<label>자막</label>' +
-      '<button class="postprod-pill active" type="button">ON</button>' +
-      '<select disabled><option>Pretendard</option></select>' +
-      '<select disabled><option>크게</option></select>' +
-      '<button class="postprod-color-chip" type="button" aria-label="글자색"></button>' +
-      '<button class="postprod-color-chip dark" type="button" aria-label="배경색"></button>' +
-      '<select disabled><option>없음</option></select>' +
+      '<button class="postprod-pill' + (state.captionsEnabled ? ' active' : '') + '" id="postprod-caption-toggle" type="button">' + (state.captionsEnabled ? 'ON' : 'OFF') + '</button>' +
+      '<select id="postprod-font-family">' +
+      '<option value="Pretendard, Segoe UI, Apple SD Gothic Neo, sans-serif"' + (String(state.captionFont).indexOf('Pretendard') >= 0 ? ' selected' : '') + '>Pretendard</option>' +
+      '<option value="Segoe UI, Apple SD Gothic Neo, sans-serif"' + (String(state.captionFont) === 'Segoe UI, Apple SD Gothic Neo, sans-serif' ? ' selected' : '') + '>Segoe UI</option>' +
+      '<option value="sans-serif"' + (String(state.captionFont) === 'sans-serif' ? ' selected' : '') + '>Sans</option>' +
+      '</select>' +
+      '<select id="postprod-font-size">' +
+      '<option value="0.85"' + (Number(state.captionSizeScale) < 1 ? ' selected' : '') + '>작게</option>' +
+      '<option value="1"' + (Math.abs(Number(state.captionSizeScale) - 1) < 0.01 ? ' selected' : '') + '>보통</option>' +
+      '<option value="1.25"' + (Number(state.captionSizeScale) > 1 ? ' selected' : '') + '>크게</option>' +
+      '</select>' +
+      '<button class="postprod-color-chip" id="postprod-color-text" type="button" aria-label="글자색" style="background:' + String(state.captionColor || '#ffffff') + '"></button>' +
+      '<button class="postprod-color-chip dark" id="postprod-color-bg" type="button" aria-label="배경색" style="background:' + String(state.captionBg || 'rgba(0,0,0,0.72)') + '"></button>' +
+      '<select id="postprod-caption-effect">' +
+      '<option value="none"' + (state.captionEffect === 'none' ? ' selected' : '') + '>없음</option>' +
+      '<option value="shadow"' + (state.captionEffect === 'shadow' ? ' selected' : '') + '>그림자</option>' +
+      '<option value="outline"' + (state.captionEffect === 'outline' ? ' selected' : '') + '>테두리</option>' +
+      '</select>' +
       '<label for="postprod-snap-step">스냅</label>' +
       '<select id="postprod-snap-step">' + buildSnapOptionsHtml() + '</select>' +
       '</div>' +
@@ -3198,6 +3309,68 @@
     var root = document.getElementById('postprod-root');
     if (!root || !state.model) return;
 
+    var capToggle = document.getElementById('postprod-caption-toggle');
+    if (capToggle) {
+      capToggle.onclick = function () {
+        state.captionsEnabled = !state.captionsEnabled;
+        capToggle.classList.toggle('active', state.captionsEnabled);
+        capToggle.textContent = state.captionsEnabled ? 'ON' : 'OFF';
+        saveCaptionPrefs();
+        syncPreviewMedia(state.currentTime);
+      };
+    }
+    var fontSel = document.getElementById('postprod-font-family');
+    if (fontSel) {
+      fontSel.onchange = function () {
+        state.captionFont = String(fontSel.value || '').trim() || 'sans-serif';
+        saveCaptionPrefs();
+        syncPreviewMedia(state.currentTime);
+      };
+    }
+    var sizeSel = document.getElementById('postprod-font-size');
+    if (sizeSel) {
+      sizeSel.onchange = function () {
+        var n = Number(sizeSel.value) || 1;
+        state.captionSizeScale = n;
+        saveCaptionPrefs();
+        syncPreviewMedia(state.currentTime);
+      };
+    }
+    var textChip = document.getElementById('postprod-color-text');
+    if (textChip) {
+      textChip.onclick = function () {
+        var palette = ['#ffffff', '#f5c94b', '#00e0ff', '#ff477e', '#000000'];
+        var cur = String(state.captionColor || '').toLowerCase();
+        var idx = Math.max(0, palette.findIndex(function (c) { return c.toLowerCase() === cur; }));
+        var next = palette[(idx + 1) % palette.length];
+        state.captionColor = next;
+        textChip.style.background = next;
+        saveCaptionPrefs();
+        syncPreviewMedia(state.currentTime);
+      };
+    }
+    var bgChip = document.getElementById('postprod-color-bg');
+    if (bgChip) {
+      bgChip.onclick = function () {
+        var palette = ['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.45)', 'transparent'];
+        var cur = String(state.captionBg || '').replace(/\s+/g, '');
+        var idx = Math.max(0, palette.findIndex(function (c) { return c.replace(/\s+/g, '') === cur; }));
+        var next = palette[(idx + 1) % palette.length];
+        state.captionBg = next;
+        bgChip.style.background = next;
+        saveCaptionPrefs();
+        syncPreviewMedia(state.currentTime);
+      };
+    }
+    var effSel = document.getElementById('postprod-caption-effect');
+    if (effSel) {
+      effSel.onchange = function () {
+        state.captionEffect = String(effSel.value || 'none');
+        saveCaptionPrefs();
+        syncPreviewMedia(state.currentTime);
+      };
+    }
+
     var snapSelect = document.getElementById('postprod-snap-step');
     if (snapSelect) {
       snapSelect.onchange = function () {
@@ -3429,6 +3602,7 @@
     }
 
     loadSnapStep();
+    loadCaptionPrefs();
     if (!state.hotkeyBound) {
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;
