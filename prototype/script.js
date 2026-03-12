@@ -294,7 +294,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.719';
+    NK.config.APP_VERSION = '1.720';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -662,6 +662,7 @@
     let profileLoadSeq = 0;
     let favoriteDragId = '';
     let suppressFavoriteOpenUntil = 0;
+    let favoriteSessionNoticeAt = 0;
     let favoriteFormCollapsed = true;
     let subscriptionCollapsed = true;
     let themePresetCollapsed = true;
@@ -947,15 +948,26 @@
           themePresets: readThemePresets(),
         };
       }
+      if (!NK.auth.isAuthed()) return readFavoritesLocal(user);
       if (!NK.api || !NK.api.userdataFavoritesGet) return readFavoritesLocal(user);
-      const res = await NK.api.userdataFavoritesGet();
-      const snapshot = {
-        items: sanitizeFavoriteItems(res?.data?.items || []),
-        categoryNames: sanitizeFavoriteCategoryNames(res?.data?.categoryNames || []),
-        themePresets: sanitizeThemePresets(res?.data?.themePresets || {}),
-      };
-      saveFavoritesLocal(user, snapshot.items, snapshot.categoryNames, snapshot.themePresets);
-      return snapshot;
+      try {
+        const res = await NK.api.userdataFavoritesGet();
+        const snapshot = {
+          items: sanitizeFavoriteItems(res?.data?.items || []),
+          categoryNames: sanitizeFavoriteCategoryNames(res?.data?.categoryNames || []),
+          themePresets: sanitizeThemePresets(res?.data?.themePresets || {}),
+        };
+        saveFavoritesLocal(user, snapshot.items, snapshot.categoryNames, snapshot.themePresets);
+        return snapshot;
+      } catch (err) {
+        const detail = String(err?.message || '').trim();
+        if (/\b(auth_required|invalid_session|session_expired)\b/i.test(detail)) {
+          if (NK.auth && NK.auth.logout) NK.auth.logout();
+          if (typeof setUI === 'function') setUI(false);
+          return readFavoritesLocal(user);
+        }
+        throw err;
+      }
     };
 
     const saveFavoritesServer = async (user, items, categoryNames, themePresets = favoriteThemePresets) => {
@@ -966,7 +978,34 @@
       favoriteThemePresets = nextThemePresets;
       saveFavoritesLocal(user, nextItems, nextCategoryNames, nextThemePresets);
       if (!NK.api || !NK.api.userdataFavoritesSave) return;
-      await NK.api.userdataFavoritesSave(nextItems, nextCategoryNames, nextThemePresets);
+      if (!NK.auth.isAuthed()) {
+        if (NK.auth && NK.auth.logout) NK.auth.logout();
+        if (typeof setUI === 'function') setUI(false);
+        if ((Date.now() - favoriteSessionNoticeAt) > 1200) {
+          favoriteSessionNoticeAt = Date.now();
+          alert('세션이 만료되었습니다. 방금 변경한 즐겨찾기 배치는 이 브라우저에 임시 저장되었으니 다시 로그인해 주세요.');
+        }
+        const expired = new Error('session_expired');
+        expired.code = 'session_expired';
+        throw expired;
+      }
+      try {
+        await NK.api.userdataFavoritesSave(nextItems, nextCategoryNames, nextThemePresets);
+      } catch (err) {
+        const detail = String(err?.message || '').trim();
+        if (/\b(auth_required|invalid_session|session_expired)\b/i.test(detail)) {
+          if (NK.auth && NK.auth.logout) NK.auth.logout();
+          if (typeof setUI === 'function') setUI(false);
+          if ((Date.now() - favoriteSessionNoticeAt) > 1200) {
+            favoriteSessionNoticeAt = Date.now();
+            alert('세션이 만료되었습니다. 방금 변경한 즐겨찾기 배치는 이 브라우저에 임시 저장되었으니 다시 로그인해 주세요.');
+          }
+          const expired = new Error('session_expired');
+          expired.code = 'session_expired';
+          throw expired;
+        }
+        throw err;
+      }
     };
 
     const clearFavoriteDropTargets = () => {
@@ -1249,6 +1288,7 @@
             try {
               await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames, favoriteThemePresets);
             } catch (err) {
+              if (err?.code === 'session_expired') return;
               const detail = String(err?.message || '').trim();
               alert('테마 설정을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
             }
@@ -1294,6 +1334,7 @@
       try {
         await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
       } catch (err) {
+        if (err?.code === 'session_expired') return;
         const detail = String(err?.message || '').trim();
         alert('카테고리 이름을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
       }
@@ -1400,6 +1441,7 @@
             try {
               await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
             } catch (err) {
+              if (err?.code === 'session_expired') return;
               const detail = String(err?.message || '').trim();
               alert('정렬 변경을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
             }
@@ -1452,6 +1494,7 @@
             try {
               await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
             } catch (err) {
+              if (err?.code === 'session_expired') return;
               const detail = String(err?.message || '').trim();
               alert('삭제 내용을 서버에 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
             }
@@ -1776,6 +1819,7 @@
           await saveFavoritesServer(user, favoriteItems, favoriteCategoryNames);
           alert('즐겨찾기 메뉴가 등록되었습니다.');
         } catch (err) {
+          if (err?.code === 'session_expired') return;
           const detail = String(err?.message || '').trim();
           alert('서버 저장에 실패해 임시 저장되었습니다. 네트워크를 확인한 뒤 다시 저장해 주세요.' + (detail ? ('\n원인: ' + detail) : ''));
         }
