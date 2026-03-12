@@ -425,6 +425,8 @@
       lastSavedAt: '',
       lastRenderedAt: '',
       outputVideoUrl: '',
+      outputVideoDownloadUrl: '',
+      outputVideoObjectName: '',
       outputVideoMime: '',
       outputSourceObjectName: '',
       outputDurationSec: 0,
@@ -665,6 +667,9 @@
     if (/transcode_done_no_url/i.test(raw)) {
       return 'MP4 파일은 생성되었지만 다운로드 URL을 받지 못했습니다. 잠시 후 다시 시도해 주세요.';
     }
+    if (/download_invalid_mp4|download_invalid_mime/i.test(raw)) {
+      return '다운로드된 파일이 유효한 MP4가 아닙니다. 변환 결과가 아직 준비되지 않았거나 오류 응답이 내려왔습니다. 잠시 후 다시 시도해 주세요.';
+    }
     if (/media_proxy_fetch_failed/i.test(raw) || /image_load_failed|video_load_failed|video_load_timeout/i.test(raw)) {
       return '씬 미디어를 불러오지 못했습니다. 프로덕션 라이브러리에서 장면 미디어를 다시 선택한 뒤 저장하고 다시 렌더링해 주세요.';
     }
@@ -722,6 +727,8 @@
       }
       if (String(payload.renderMeta.outputVideoUrl || '').indexOf('blob:') === 0) {
         payload.renderMeta.outputVideoUrl = '';
+        payload.renderMeta.outputVideoDownloadUrl = '';
+        payload.renderMeta.outputVideoObjectName = '';
         payload.renderMeta.outputVideoMime = '';
       }
 
@@ -782,13 +789,49 @@
     }).join('\n');
   }
 
-  async function downloadUrl(url, filename) {
+  function isProxyMediaUrl(url) {
+    var raw = String(url || '').trim();
+    if (!raw) return false;
+    return /\/api\/media\/proxy(\?|$)/i.test(raw);
+  }
+
+  async function blobStartsWithMp4Signature(blob) {
+    if (!blob || !blob.size || typeof blob.slice !== 'function') return false;
+    try {
+      var head = await blob.slice(0, 64).arrayBuffer();
+      var bytes = new Uint8Array(head);
+      if (bytes.length < 12) return false;
+      for (var i = 4; i <= Math.max(4, bytes.length - 8); i++) {
+        if (
+          bytes[i] === 0x66 &&
+          bytes[i + 1] === 0x74 &&
+          bytes[i + 2] === 0x79 &&
+          bytes[i + 3] === 0x70
+        ) {
+          return true;
+        }
+      }
+    } catch (_) { }
+    return false;
+  }
+
+  async function downloadUrl(url, filename, options) {
     if (!url) return;
+    options = options || {};
     var resolvedUrl = toPlayableMediaUrl(url);
     try {
       var res = await fetch(resolvedUrl);
       if (!res.ok) throw new Error('download_failed');
       var blob = await res.blob();
+      var expectedMime = String(options.expectedMime || '').toLowerCase();
+      if (expectedMime && String(blob.type || '').toLowerCase().indexOf(expectedMime) < 0) {
+        if (!(expectedMime === 'video/mp4' && await blobStartsWithMp4Signature(blob))) {
+          throw new Error('download_invalid_mime');
+        }
+      }
+      if (options.validateMp4 && !(await blobStartsWithMp4Signature(blob))) {
+        throw new Error('download_invalid_mp4');
+      }
       var a = document.createElement('a');
       var objectUrl = URL.createObjectURL(blob);
       a.href = objectUrl;
@@ -799,7 +842,8 @@
         URL.revokeObjectURL(objectUrl);
         document.body.removeChild(a);
       }, 120);
-    } catch (_) {
+    } catch (err) {
+      if (options.disableDirectFallback || isProxyMediaUrl(resolvedUrl)) throw err;
       var a2 = document.createElement('a');
       a2.href = resolvedUrl;
       a2.download = filename;
@@ -1181,9 +1225,14 @@
       });
       var status = String((st && st.status) || '').toUpperCase();
       if (st && st.done && status === 'SUCCEEDED') {
-        var finalUrl = String((st && st.proxyUrl) || (st && st.signedUrl) || '').trim();
-        if (!finalUrl) throw new Error('transcode_done_no_url');
-        return finalUrl;
+        var previewUrl = String((st && st.proxyUrl) || (st && st.signedUrl) || '').trim();
+        var downloadUrl = String((st && st.signedUrl) || (st && st.proxyUrl) || '').trim();
+        if (!previewUrl && !downloadUrl) throw new Error('transcode_done_no_url');
+        return {
+          previewUrl: previewUrl || downloadUrl,
+          downloadUrl: downloadUrl || previewUrl,
+          outputObjectName: String((st && st.outputObjectName) || outputObjectName || '').trim()
+        };
       }
       if (st && st.done && status && status !== 'SUCCEEDED') {
         throw buildTranscodeFailedError(status, st);
@@ -1438,6 +1487,8 @@
       progress: 0,
       error: '',
       outputSrtUrl: '',
+      outputVideoDownloadUrl: '',
+      outputVideoObjectName: '',
       outputVideoMime: oldMeta.outputVideoMime || '',
       outputSourceObjectName: '',
       outputDurationSec: Number(oldMeta.outputDurationSec) || 0,
@@ -1467,6 +1518,8 @@
         status: 'done',
         progress: 100,
         outputVideoUrl: outputVideoUrl,
+        outputVideoDownloadUrl: '',
+        outputVideoObjectName: '',
         outputVideoMime: outputVideoMime,
         outputSourceObjectName: outputSourceObjectName,
         outputDurationSec: Math.max(0.2, Number((result && result.durationSec) || getTimelinePlaybackDuration(state.model)) || 0),
@@ -1502,26 +1555,28 @@
 
   async function downloadMp4Now() {
     var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
-    var url = getRenderableOutputVideoUrl(meta);
+    var url = String((meta && meta.outputVideoDownloadUrl) || '').trim() || getRenderableOutputVideoUrl(meta);
     var mime = String((meta && meta.outputVideoMime) || '').toLowerCase();
+    var outputVideoObjectName = String((meta && meta.outputVideoObjectName) || '').trim();
     var sourceObjectName = String((meta && meta.outputSourceObjectName) || '').trim();
     if (mime.indexOf('mp4') >= 0) {
-      if (!url && sourceObjectName && NK.api && NK.api.mediaProxyObjectUrl) {
-        url = NK.api.mediaProxyObjectUrl(sourceObjectName);
+      if (!url && outputVideoObjectName && NK.api && NK.api.mediaProxyObjectUrl) {
+        url = NK.api.mediaProxyObjectUrl(outputVideoObjectName);
       }
-      if (!url) {
-        showMessageDialog('다운로드할 영상이 없습니다.', '다운로드');
-        return;
-      }
-      try {
-        await downloadUrl(url, 'final-render.mp4');
-        return;
-      } catch (err) {
-        var raw = String((err && err.message) || err || '');
-        var notFound = /404|media_proxy_fetch_failed|not[\s_-]?found/i.test(raw);
-        if (!notFound || !sourceObjectName) {
-          showMessageDialog('MP4 다운로드 실패: ' + getRenderErrorMessage(err), 'MP4 다운로드');
+      if (url) {
+        try {
+          await downloadUrl(url, 'final-render.mp4', {
+            expectedMime: 'video/mp4',
+            validateMp4: true
+          });
           return;
+        } catch (err) {
+          var raw = String((err && err.message) || err || '');
+          var notFound = /404|media_proxy_fetch_failed|not[\s_-]?found/i.test(raw);
+          if (!notFound || !sourceObjectName) {
+            showMessageDialog('MP4 다운로드 실패: ' + getRenderErrorMessage(err), 'MP4 다운로드');
+            return;
+          }
         }
       }
     }
@@ -1536,18 +1591,26 @@
       if (!(sourceDurationSec > 0)) {
         sourceDurationSec = Math.max(0.2, Number(getTimelinePlaybackDuration(state.model)) || 0);
       }
-      var mp4Url = await transcodeSourceObjectToMp4(state.projectId, sourceObjectName, undefined, sourceDurationSec);
+      var transcodeResult = await transcodeSourceObjectToMp4(state.projectId, sourceObjectName, undefined, sourceDurationSec);
+      var mp4PreviewUrl = String((transcodeResult && transcodeResult.previewUrl) || '').trim();
+      var mp4DownloadUrl = String((transcodeResult && transcodeResult.downloadUrl) || '').trim();
+      var mp4ObjectName = String((transcodeResult && transcodeResult.outputObjectName) || '').trim();
       persistRenderMeta({
         status: 'done',
         progress: 100,
-        outputVideoUrl: mp4Url,
+        outputVideoUrl: mp4PreviewUrl || mp4DownloadUrl,
+        outputVideoDownloadUrl: mp4DownloadUrl || mp4PreviewUrl,
+        outputVideoObjectName: mp4ObjectName,
         outputVideoMime: 'video/mp4',
         outputSourceObjectName: sourceObjectName,
         transcodePending: false,
         error: ''
       });
       updateRenderPanelUi();
-      await downloadUrl(mp4Url, 'final-render.mp4');
+      await downloadUrl(mp4DownloadUrl || mp4PreviewUrl, 'final-render.mp4', {
+        expectedMime: 'video/mp4',
+        validateMp4: true
+      });
     } catch (err) {
       var msg = getRenderErrorMessage(err);
       persistRenderMeta({
