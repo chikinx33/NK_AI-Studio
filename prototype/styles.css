@@ -3451,16 +3451,62 @@ a.btn-primary:active {
   --favorite-icon-size: clamp(36px, 3.8vh, 42px);
   --favorite-cell-size: clamp(48px, 4.8vh, 56px);
   --favorite-col-gap: 10px;
+  --favorite-visible-category-count: 2;
   margin-top: 0;
   position: relative;
   display: grid;
-  grid-template-rows: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--favorite-visible-category-count), minmax(0, 1fr));
   row-gap: 0;
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
   overflow: hidden;
   padding-right: 2px;
+}
+
+.favorite-pagination {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 0 2px;
+}
+
+.favorite-page-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.favorite-page-dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent 18%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 60%, transparent 40%);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.favorite-page-dot:hover {
+  transform: scale(1.06);
+  border-color: color-mix(in srgb, #7fc8ff 56%, var(--border) 44%);
+}
+
+.favorite-page-dot.is-active {
+  border-color: color-mix(in srgb, #7fc8ff 72%, transparent 28%);
+  background: #7fc8ff;
+  transform: scale(1.08);
+}
+
+.favorite-page-status {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: color-mix(in srgb, var(--muted) 82%, transparent 18%);
 }
 
 .favorite-card .favorite-list.empty {

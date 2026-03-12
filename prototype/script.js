@@ -294,7 +294,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.716';
+    NK.config.APP_VERSION = '1.718';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -637,6 +637,7 @@
     const favoriteFormToggleBtn = document.getElementById('favorite-form-toggle');
     const favoriteCancelFormBtn = document.getElementById('favorite-cancel-form');
     const favoriteListEl = document.getElementById('favorite-list');
+    const favoritePaginationEl = document.getElementById('favorite-pagination');
     const favoriteTitleInput = document.getElementById('favorite-title');
     const favoriteCategorySelectInput = document.getElementById('favorite-category-select');
     const favoriteLinkInput = document.getElementById('favorite-link');
@@ -669,6 +670,8 @@
     const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
     const DEFAULT_LOGIN_CARD_ICON = String(loginCardLogoEl?.getAttribute('src') || 'images/logo(500500).png').trim() || 'images/logo(500500).png';
     const FAVORITE_CATEGORY_COUNT = 4;
+    const FAVORITE_CATEGORIES_PER_PAGE = 2;
+    const FAVORITE_PAGE_COUNT = Math.max(1, Math.ceil(FAVORITE_CATEGORY_COUNT / FAVORITE_CATEGORIES_PER_PAGE));
     const FAVORITE_GRID_COLUMNS = 6;
     const FAVORITE_GRID_ROWS = 2;
     const FAVORITE_SLOTS_PER_CATEGORY = FAVORITE_GRID_COLUMNS * FAVORITE_GRID_ROWS;
@@ -676,6 +679,7 @@
     const FAVORITE_MAX_ITEMS = FAVORITE_DEFAULT_SLOT_COUNT;
     const FAVORITE_DEFAULT_CATEGORY_NAMES = Array.from({ length: FAVORITE_CATEGORY_COUNT }, (_, idx) => `카테고리 ${idx + 1}`);
     let favoriteCategoryNames = FAVORITE_DEFAULT_CATEGORY_NAMES.slice();
+    let favoritePageIndex = 0;
 
     const canUseFavoriteUI = () => !!(favoriteCard && favoriteForm && favoriteListEl);
     const canUseDashboardUI = () => !!(dashboardCard && dashboardPanel && subscriptionPlanEl && subscriptionStatusEl && subscriptionRenewEl);
@@ -971,6 +975,55 @@
       activeTargets.forEach((el) => el.classList.remove('is-drop-target'));
     };
 
+    const clampFavoritePageIndex = (value) => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return 0;
+      return Math.min(Math.max(Math.trunc(parsed), 0), FAVORITE_PAGE_COUNT - 1);
+    };
+
+    const favoritePageForCategory = (categoryIndex) => {
+      const safeCategoryIndex = parseFavoriteCategoryIndex(categoryIndex);
+      return clampFavoritePageIndex(Math.floor(safeCategoryIndex / FAVORITE_CATEGORIES_PER_PAGE));
+    };
+
+    const renderFavoritePagination = (loggedIn) => {
+      if (!favoritePaginationEl) return;
+      favoritePaginationEl.innerHTML = '';
+      if (!loggedIn || FAVORITE_PAGE_COUNT <= 1) {
+        favoritePaginationEl.classList.add('hidden');
+        return;
+      }
+
+      favoritePaginationEl.classList.remove('hidden');
+      const dots = document.createElement('div');
+      dots.className = 'favorite-page-dots';
+
+      for (let pageIdx = 0; pageIdx < FAVORITE_PAGE_COUNT; pageIdx += 1) {
+        const dotBtn = document.createElement('button');
+        dotBtn.type = 'button';
+        dotBtn.className = 'favorite-page-dot';
+        dotBtn.setAttribute('aria-label', `즐겨찾기 ${pageIdx + 1} / ${FAVORITE_PAGE_COUNT} 페이지 보기`);
+        if (pageIdx === favoritePageIndex) {
+          dotBtn.classList.add('is-active');
+          dotBtn.setAttribute('aria-current', 'page');
+        }
+        dotBtn.addEventListener('click', () => {
+          const nextPage = clampFavoritePageIndex(pageIdx);
+          if (nextPage === favoritePageIndex) return;
+          favoritePageIndex = nextPage;
+          renderFavorites(true);
+        });
+        dots.appendChild(dotBtn);
+      }
+
+      const status = document.createElement('span');
+      status.className = 'favorite-page-status';
+      status.textContent = `${favoritePageIndex + 1} / ${FAVORITE_PAGE_COUNT}`;
+
+      favoritePaginationEl.appendChild(dots);
+      favoritePaginationEl.appendChild(status);
+    };
+
     const findFirstAvailableFavoriteSlot = (categoryIndex) => {
       const safeCategoryIndex = parseFavoriteCategoryIndex(categoryIndex);
       const start = categoryStartSlot(safeCategoryIndex);
@@ -1252,11 +1305,17 @@
       if (!loggedIn) {
         favoriteListEl.classList.add('hidden');
         favoriteListEl.classList.add('empty');
+        favoriteListEl.style.removeProperty('--favorite-visible-category-count');
+        renderFavoritePagination(false);
         return;
       }
 
+      favoritePageIndex = clampFavoritePageIndex(favoritePageIndex);
       favoriteListEl.classList.remove('hidden');
       favoriteListEl.classList.toggle('empty', !favoriteItems.length);
+      const startCategoryIndex = favoritePageIndex * FAVORITE_CATEGORIES_PER_PAGE;
+      const endCategoryIndex = Math.min(startCategoryIndex + FAVORITE_CATEGORIES_PER_PAGE, FAVORITE_CATEGORY_COUNT);
+      favoriteListEl.style.setProperty('--favorite-visible-category-count', String(Math.max(1, endCategoryIndex - startCategoryIndex)));
       const itemsBySlot = new Map();
       favoriteItems.forEach((item) => {
         const slot = parseFavoriteSlot(item?.slot);
@@ -1264,7 +1323,7 @@
         itemsBySlot.set(slot, item);
       });
 
-      for (let categoryIdx = 0; categoryIdx < FAVORITE_CATEGORY_COUNT; categoryIdx += 1) {
+      for (let categoryIdx = startCategoryIndex; categoryIdx < endCategoryIndex; categoryIdx += 1) {
         const categoryWrap = document.createElement('section');
         categoryWrap.className = 'favorite-category';
         categoryWrap.dataset.categoryIndex = String(categoryIdx);
@@ -1432,6 +1491,8 @@
         categoryWrap.appendChild(grid);
         favoriteListEl.appendChild(categoryWrap);
       }
+
+      renderFavoritePagination(true);
     };
 
     const resizeImageToSquare = (file, size = 100) => new Promise((resolve, reject) => {
@@ -1571,9 +1632,13 @@
         if (!loggedIn) {
           setFavoriteFormOpen(false);
           favoriteLoadSeq += 1;
+          favoritePageIndex = 0;
         } else {
           setFavoriteFormOpen(true);
-          if (!lastLoginState) setFavoriteFormCollapsed(true);
+          if (!lastLoginState) {
+            setFavoriteFormCollapsed(true);
+            favoritePageIndex = 0;
+          }
         }
 
         const localFavorite = loggedIn
@@ -1702,6 +1767,7 @@
           return;
         }
 
+        favoritePageIndex = favoritePageForCategory(selectedCategoryIndex);
         favoriteItems = sanitizeFavoriteItems([...favoriteItems, entry]);
         renderFavorites(true);
         resetFavoriteForm();
