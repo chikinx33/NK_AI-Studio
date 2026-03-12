@@ -440,7 +440,7 @@
         var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
         var headerCleanSrv = cleanHeader(headerSrv2);
         var sceneSrv = (serverData.scenes || []).map(function (s, idx) {
-          var imageRefSrv = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || '';
+          var imageRefSrv = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
           var videoRefSrv = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
           return {
             id: (s.id != null ? s.id : (idx + 1)),
@@ -475,7 +475,7 @@
         var headerInit2 = withAspectInHeader ? withAspectInHeader(headerInitRaw, aspectRatio) : headerInitRaw;
         var headerCleanInit = cleanHeader(headerInit2);
         var sceneListInit = (stored.scenes || []).map(function (s, idx) {
-          var imageRefStored = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || '';
+          var imageRefStored = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
           var videoRefStored = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
           return {
             id: (s.id != null ? s.id : (idx + 1)),
@@ -1211,7 +1211,10 @@
     if (st._assetsRefreshed) return;
     var pid = st.draftId || '';
     if (!pid) return;
-    var needImg = st.scenes.some(function (s) { return s.imageDataUrl && String(s.imageDataUrl).indexOf('data:') !== 0; });
+    var needImg = st.scenes.some(function (s) {
+      var ref = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
+      return ref && String(ref).indexOf('data:') !== 0;
+    });
     var needVid = st.scenes.some(function (s) { return s.videoUrl && String(s.videoUrl).indexOf('data:') !== 0; });
     if (!needImg && !needVid) return;
     try {
@@ -1294,8 +1297,9 @@
       var changed = false;
       st.scenes = st.scenes.map(function (s) {
         var next = s;
-        if (needImg && s.imageDataUrl && String(s.imageDataUrl).indexOf('data:') !== 0) {
-          var signed1 = resolveSignedUrl(s.imageDataUrl, imgIndex);
+        var imgRef = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
+        if (needImg && imgRef && String(imgRef).indexOf('data:') !== 0) {
+          var signed1 = resolveSignedUrl(imgRef, imgIndex);
           if (signed1 && signed1 !== s.imageDataUrl) {
             next = Object.assign({}, next, { imageDataUrl: signed1 });
             changed = true;
