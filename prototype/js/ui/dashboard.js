@@ -76,6 +76,17 @@
     sidebar.classList.toggle('has-project-selection', !!hasProject);
   };
 
+  const getSelectedProjectId = () => {
+    return String(NK.state?.runtime?.currentProject?.id || '').trim();
+  };
+
+  const selectProject = (draft) => {
+    if (!draft) return;
+    if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
+    if (NK.state?.set) NK.state.set({ currentProject: draft });
+    if (NK.state?.broadcast) NK.state.broadcast('update-project', { project: draft });
+  };
+
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
@@ -184,6 +195,7 @@
       </div>
     `;
 
+    const selectedProjectId = getSelectedProjectId();
     const list = filteredDrafts.map(d => {
       const ar = d.payload?.aspectRatio || '16:9';
       const dur = fmtDuration(d.payload?.duration || 0);
@@ -191,9 +203,10 @@
       const tags = Array.isArray(d.payload?.purposeTags) ? d.payload.purposeTags.join(', ') : '';
       const tgt = d.payload?.target || '';
       const genre = `${cat} ${tags}`.trim();
+      const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
 
       return `
-        <article class="draft-card">
+        <article class="draft-card ${isSelected ? 'is-selected' : ''}" data-draft-id="${escapeHtml(d.id)}">
           <div class="draft-top">
             <div class="draft-thumb"></div>
             <div>
@@ -225,6 +238,17 @@
 
     container.onclick = (e) => {
       const btn = e.target.closest('[data-action]');
+      const card = e.target.closest('.draft-card[data-draft-id]');
+      if (!btn && card) {
+        const cardId = String(card.getAttribute('data-draft-id') || '').trim();
+        if (!cardId) return;
+        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        const draft = drafts.find(d => String(d.id) === cardId);
+        if (!draft) return;
+        selectProject(draft);
+        dashboard.renderDrafts();
+        return;
+      }
       if (!btn) return;
 
       const action = btn.dataset.action;
@@ -369,8 +393,7 @@
         const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
-          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-          NK.state.broadcast('update-project', { project: draft });
+          selectProject(draft);
           const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
           if (isStandaloneStage) {
             window.location.href = url;
@@ -382,8 +405,7 @@
         const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
-          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-          NK.state.broadcast('update-project', { project: draft });
+          selectProject(draft);
           const url = draft.id ? `scenes.html?projectId=${encodeURIComponent(draft.id)}` : 'scenes.html';
           if (isStandaloneStage) {
             window.location.href = url;
@@ -395,8 +417,7 @@
         const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
-          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-          NK.state.broadcast('update-project', { project: draft });
+          selectProject(draft);
           const url = draft.id ? `library.html?projectId=${encodeURIComponent(draft.id)}` : 'library.html';
           if (isStandaloneStage) {
             window.location.href = url;
@@ -408,8 +429,7 @@
         const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
-          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-          NK.state.broadcast('update-project', { project: draft });
+          selectProject(draft);
           const url = draft.id ? `media.html?projectId=${encodeURIComponent(draft.id)}` : 'media.html';
           if (isStandaloneStage) {
             window.location.href = url;
