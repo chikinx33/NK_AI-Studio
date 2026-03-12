@@ -294,7 +294,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.732';
+    NK.config.APP_VERSION = '1.733';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -312,6 +312,9 @@
     applyUserStudioTitleToSidebar();
     setupSyncMessageHandlers();
     setupStorageSyncHandlers();
+    if (NK.store && NK.store.ready) {
+      try { await NK.store.ready(); } catch (_) { }
+    }
 
     const isIframe = window.self !== window.top;
     const urlParams = new URLSearchParams(window.location.search);
