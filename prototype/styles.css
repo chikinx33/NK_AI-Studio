@@ -5,6 +5,24 @@
   --radius: 14px;
 }
 
+[data-theme] {
+  --accent: var(--orange);
+  --shadow-1: var(--shadow);
+  --studio-hero-bg: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--panel) 94%, var(--bg) 6%),
+    color-mix(in srgb, var(--bg-2) 86%, var(--panel) 14%)
+  );
+  --studio-toolbar-bg: color-mix(in srgb, var(--panel) 78%, var(--bg-2) 22%);
+  --studio-soft-bg: color-mix(in srgb, var(--panel) 72%, var(--bg-2) 28%);
+  --studio-input-bg: color-mix(in srgb, var(--panel) 88%, var(--bg) 12%);
+  --studio-accent-bg: linear-gradient(
+    160deg,
+    rgba(255, 140, 0, 0.12),
+    color-mix(in srgb, var(--panel) 82%, var(--bg-2) 18%)
+  );
+}
+
 [data-theme="dark"] {
   --bg: #0f172a;
   --bg-2: #0b1224;
@@ -621,7 +639,7 @@ body[data-embed="1"] {
 
 #sidebar-project-card {
   margin-top: 16px;
-  padding: 16px;
+  padding: 12px;
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -630,13 +648,17 @@ body[data-embed="1"] {
 
 #sidebar-project-card .draft-top {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-bottom: 16px;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 #sidebar-project-card .draft-thumb {
-  margin: 0 auto;
+  width: 68px;
+  height: 68px;
+  margin: 0;
+  border-radius: 12px;
 }
 
 #sidebar-project-card .draft-title-row {
@@ -657,32 +679,40 @@ body[data-embed="1"] {
 #sidebar-project-card .sidebar-card-text {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 6px;
+  align-items: flex-start;
+  text-align: left;
+  gap: 4px;
   width: 100%;
-  margin-bottom: 10px;
+  margin-bottom: 0;
 }
 
 #sidebar-project-card .sidebar-card-title {
   font-weight: 700;
-  font-size: 18px;
-  line-height: 1.4;
+  font-size: 15px;
+  line-height: 1.35;
   white-space: normal;
   word-break: break-word;
   text-align: left;
   align-self: flex-start;
   width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 #sidebar-project-card .sidebar-card-lines {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 400;
   white-space: pre-line;
   word-break: break-word;
   text-align: left;
   width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 #sidebar-stage-actions {
@@ -701,7 +731,7 @@ body[data-embed="1"] {
 #sidebar-project-card .sidebar-card-actions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
@@ -709,6 +739,9 @@ body[data-embed="1"] {
   width: 100%;
   box-sizing: border-box;
   justify-content: center;
+  min-height: 38px;
+  padding: 8px 10px;
+  font-size: 12px;
 }
 
 #sidebar-project-card .sidebar-card-actions .btn-secondary.active {
@@ -780,6 +813,19 @@ body[data-embed="1"] {
   padding: 16px 24px 24px;
   grid-template-rows: auto 1fr;
   gap: 12px;
+}
+
+.app.no-sidebar .main-body {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.app.no-sidebar .main-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 .main::-webkit-scrollbar {
@@ -6559,6 +6605,59 @@ body.layout-fixed .lib-content {
 
 .analytics-toolbar span {
   color: var(--muted);
+}
+
+.content-library-hero,
+.brand-studio-hero,
+.knowledge-hub-hero,
+.analytics-hero {
+  background: var(--studio-hero-bg);
+  box-shadow: var(--shadow-1);
+}
+
+.content-library-toolbar,
+.brand-studio-toolbar,
+.knowledge-hub-toolbar,
+.analytics-toolbar {
+  background: var(--studio-toolbar-bg);
+}
+
+.brand-knowledge-card,
+.brand-content-type-card,
+.brand-studio-selection-summary,
+.brand-caption-meta > div,
+.brand-hashtag-meta > div,
+.brand-channel-summary,
+.brand-channel-card,
+.brand-publish-summary,
+.brand-publish-channel-option,
+.brand-publish-result-card,
+.brand-auto-suggestion-card,
+.brand-studio-check,
+.knowledge-reference-card,
+.knowledge-reference-empty,
+.knowledge-hub-pill,
+.analytics-channel-card,
+.analytics-type-card,
+.analytics-hashtag-card,
+.analytics-recommendation-card,
+.analytics-suggestion-card,
+.analytics-empty {
+  background: var(--studio-soft-bg);
+}
+
+.brand-caption-textarea,
+.brand-channel-input,
+.brand-publish-input,
+.knowledge-hub-field textarea,
+.knowledge-reference-input,
+.knowledge-reference-textarea {
+  background: var(--studio-input-bg);
+}
+
+.brand-content-type-card.is-active,
+.brand-auto-suggestion-panel {
+  background: var(--studio-accent-bg);
 }
 
 @media (max-width: 1100px) {
