@@ -1,4 +1,4 @@
-﻿; (function () {
+; (function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.uiPipeline || (NK.uiPipeline = {});
   var ctx = null;
@@ -1609,6 +1609,17 @@ function toPlayableMediaUrl(url) {
   if (!raw) return '';
   if (raw.indexOf('data:') === 0 || raw.indexOf('blob:') === 0) return raw;
   var NK = window.NK || {};
+  try {
+    if (NK.api && NK.api.mediaProxyObjectUrl) {
+      var hasProtocol = /^[a-z]+:\/\//i.test(raw);
+      var isGs = raw.indexOf('gs://') === 0;
+      var isPathLike = !hasProtocol && !isGs && /[\/\\]/.test(raw);
+      if (isPathLike) {
+        var objName = String(raw).replace(/^\/+/, '');
+        if (objName) return NK.api.mediaProxyObjectUrl(objName);
+      }
+    }
+  } catch (_) { }
   if (!NK.api || !NK.api.mediaProxyUrl) return raw;
   if (raw.indexOf('storage.googleapis.com') >= 0 || raw.indexOf('gs://') === 0) {
     return NK.api.mediaProxyUrl(raw);
