@@ -52,6 +52,14 @@
         title: String(raw.title || '').trim() || '게시 결과',
         projectId: String(raw.projectId || project.id || '').trim(),
         projectTitle: String(raw.projectTitle || project.title || project.seriesTitle || '').trim(),
+        seasonId: String(raw.seasonId || payload.seasonId || '').trim(),
+        seasonLabel: String(raw.seasonLabel || raw.seasonTitle || payload.seasonLabel || payload.seasonTitle || '').trim(),
+        campaignId: String(raw.campaignId || payload.campaignId || '').trim(),
+        campaignTitle: String(raw.campaignTitle || raw.campaignLabel || payload.campaignTitle || payload.campaignLabel || '').trim(),
+        purposeCategory: String(raw.purposeCategory || payload.purposeCategory || '').trim(),
+        purposeTags: Array.isArray(raw.purposeTags)
+          ? raw.purposeTags.map(function (tag) { return String(tag || '').trim(); }).filter(Boolean)
+          : (Array.isArray(payload.purposeTags) ? payload.purposeTags.map(function (tag) { return String(tag || '').trim(); }).filter(Boolean) : []),
         note: String(raw.note || '').trim(),
         caption: String(raw.caption || raw.captionDraft || '').trim(),
         hashtags: Array.isArray(raw.hashtags)
@@ -73,16 +81,36 @@
     });
   }
 
-  analytics.listPublishResults = readPublishResults;
-  analytics.listPublishResultsByBrand = function (brandOrId) {
-    var target = typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
-      ? NK.service.brand.getById(brandOrId)
-      : brandOrId;
-    return readPublishResults(target);
-  };
+  function normalizeFilterValue(value) {
+    return String(value || '').trim();
+  }
 
-  analytics.summarizeProject = function (projectOrId) {
-    var rows = readPublishResults(projectOrId);
+  function filterRows(rows, filters) {
+    var src = Array.isArray(rows) ? rows : [];
+    var opts = filters && typeof filters === 'object' ? filters : {};
+    var episode = normalizeFilterValue(opts.episodeId);
+    var channel = normalizeFilterValue(opts.channelType);
+    var contentType = normalizeFilterValue(opts.contentType);
+    var season = normalizeFilterValue(opts.seasonId);
+    var campaign = normalizeFilterValue(opts.campaignId);
+    var purpose = normalizeFilterValue(opts.purposeKey);
+    return src.filter(function (item) {
+      if (episode && normalizeFilterValue(item.projectId) !== episode) return false;
+      if (channel && normalizeFilterValue(item.channelType) !== channel) return false;
+      if (contentType && normalizeFilterValue(item.contentType) !== contentType) return false;
+      if (season && normalizeFilterValue(item.seasonId || item.seasonLabel) !== season) return false;
+      if (campaign && normalizeFilterValue(item.campaignId || item.campaignTitle) !== campaign) return false;
+      if (purpose) {
+        var purposeKey = normalizeFilterValue(item.purposeCategory || item.purposeTags && item.purposeTags[0]);
+        var matchesCategory = normalizeFilterValue(item.purposeCategory) === purpose;
+        var matchesTag = Array.isArray(item.purposeTags) && item.purposeTags.some(function (tag) { return normalizeFilterValue(tag) === purpose; });
+        if (!matchesCategory && !matchesTag && purposeKey !== purpose) return false;
+      }
+      return true;
+    });
+  }
+
+  function summarizeTotals(rows) {
     var totals = {
       totalPosts: rows.length,
       views: 0,
@@ -111,27 +139,95 @@
       }
     });
     return totals;
-  };
+  }
 
-  analytics.summarizeByChannel = function (projectOrId) {
-    var rows = readPublishResults(projectOrId);
+  function groupRows(rows, keyBuilder, seedBuilder, reduceFn) {
     var map = new Map();
     rows.forEach(function (item) {
-      var key = item.channelType || 'unknown';
-      if (!map.has(key)) {
-        map.set(key, {
-          channelType: key,
-          totalPosts: 0,
-          latestPublishedAt: '',
-          views: 0,
-          likes: 0,
-          comments: 0,
-          shares: 0,
-          clicks: 0,
-          topContentType: ''
+      var key = keyBuilder(item);
+      if (!map.has(key)) map.set(key, seedBuilder(item));
+      reduceFn(map.get(key), item);
+    });
+    return Array.from(map.values());
+  }
+
+  analytics.listPublishResults = readPublishResults;
+  analytics.listPublishResultsByBrand = function (brandOrId) {
+    var target = typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
+      ? NK.service.brand.getById(brandOrId)
+      : brandOrId;
+    return readPublishResults(target);
+  };
+  analytics.filterPublishResults = function (projectOrId, filters) {
+    return filterRows(readPublishResults(projectOrId), filters);
+  };
+  analytics.listFilterOptions = function (projectOrId) {
+    var rows = readPublishResults(projectOrId);
+    var episodeMap = new Map();
+    var channelMap = new Map();
+    var contentTypeMap = new Map();
+    var seasonMap = new Map();
+    var campaignMap = new Map();
+    var purposeMap = new Map();
+    rows.forEach(function (item) {
+      if (item.projectId || item.projectTitle) {
+        episodeMap.set(String(item.projectId || item.projectTitle), {
+          value: String(item.projectId || item.projectTitle),
+          label: String(item.projectTitle || item.projectId || '에피소드')
         });
       }
-      var row = map.get(key);
+      if (item.channelType) channelMap.set(String(item.channelType), { value: String(item.channelType), label: String(item.channelType) });
+      if (item.contentType) contentTypeMap.set(String(item.contentType), { value: String(item.contentType), label: String(item.contentType) });
+      if (item.seasonId || item.seasonLabel) {
+        seasonMap.set(String(item.seasonId || item.seasonLabel), {
+          value: String(item.seasonId || item.seasonLabel),
+          label: String(item.seasonLabel || item.seasonId)
+        });
+      }
+      if (item.campaignId || item.campaignTitle) {
+        campaignMap.set(String(item.campaignId || item.campaignTitle), {
+          value: String(item.campaignId || item.campaignTitle),
+          label: String(item.campaignTitle || item.campaignId)
+        });
+      }
+      if (item.purposeCategory) {
+        purposeMap.set(String(item.purposeCategory), { value: String(item.purposeCategory), label: String(item.purposeCategory) });
+      }
+      (Array.isArray(item.purposeTags) ? item.purposeTags : []).forEach(function (tag) {
+        if (tag) purposeMap.set(String(tag), { value: String(tag), label: String(tag) });
+      });
+    });
+    return {
+      episodes: Array.from(episodeMap.values()),
+      channels: Array.from(channelMap.values()),
+      contentTypes: Array.from(contentTypeMap.values()),
+      seasons: Array.from(seasonMap.values()),
+      campaigns: Array.from(campaignMap.values()),
+      purposes: Array.from(purposeMap.values())
+    };
+  };
+
+  analytics.summarizeProject = function (projectOrId, filters) {
+    return summarizeTotals(filterRows(readPublishResults(projectOrId), filters));
+  };
+
+  analytics.summarizeByChannel = function (projectOrId, filters) {
+    var rows = filterRows(readPublishResults(projectOrId), filters);
+    return groupRows(rows, function (item) {
+      return item.channelType || 'unknown';
+    }, function (item) {
+      return {
+        channelType: item.channelType || 'unknown',
+        totalPosts: 0,
+        latestPublishedAt: '',
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        clicks: 0,
+        topContentType: ''
+      };
+    }, function (row, item) {
       row.totalPosts += 1;
       row.views += item.metrics.views;
       row.likes += item.metrics.likes;
@@ -144,30 +240,27 @@
       if (!row.topContentType && item.contentType) {
         row.topContentType = item.contentType;
       }
-    });
-    return Array.from(map.values()).sort(function (a, b) {
+    }).sort(function (a, b) {
       return b.views - a.views || b.totalPosts - a.totalPosts;
     });
   };
 
-  analytics.summarizeByContentType = function (projectOrId) {
-    var rows = readPublishResults(projectOrId);
-    var map = new Map();
-    rows.forEach(function (item) {
-      var key = item.contentType || 'unknown';
-      if (!map.has(key)) {
-        map.set(key, {
-          contentType: key,
-          totalPosts: 0,
-          views: 0,
-          likes: 0,
-          comments: 0,
-          shares: 0,
-          clicks: 0,
-          topChannel: ''
-        });
-      }
-      var row = map.get(key);
+  analytics.summarizeByContentType = function (projectOrId, filters) {
+    var rows = filterRows(readPublishResults(projectOrId), filters);
+    return groupRows(rows, function (item) {
+      return item.contentType || 'unknown';
+    }, function (item) {
+      return {
+        contentType: item.contentType || 'unknown',
+        totalPosts: 0,
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        clicks: 0,
+        topChannel: ''
+      };
+    }, function (row, item) {
       row.totalPosts += 1;
       row.views += item.metrics.views;
       row.likes += item.metrics.likes;
@@ -177,32 +270,29 @@
       if (!row.topChannel && item.channelType) {
         row.topChannel = item.channelType;
       }
-    });
-    return Array.from(map.values()).sort(function (a, b) {
+    }).sort(function (a, b) {
       return b.views - a.views || b.totalPosts - a.totalPosts;
     });
   };
 
-  analytics.summarizeByEpisode = function (projectOrId) {
-    var rows = readPublishResults(projectOrId);
-    var map = new Map();
-    rows.forEach(function (item) {
-      var key = String(item.projectId || item.projectTitle || 'unknown').trim() || 'unknown';
-      if (!map.has(key)) {
-        map.set(key, {
-          projectId: String(item.projectId || '').trim(),
-          projectTitle: String(item.projectTitle || item.projectId || '미지정 에피소드').trim() || '미지정 에피소드',
-          totalPosts: 0,
-          latestPublishedAt: '',
-          views: 0,
-          likes: 0,
-          comments: 0,
-          shares: 0,
-          clicks: 0,
-          topChannel: ''
-        });
-      }
-      var row = map.get(key);
+  analytics.summarizeByEpisode = function (projectOrId, filters) {
+    var rows = filterRows(readPublishResults(projectOrId), filters);
+    return groupRows(rows, function (item) {
+      return String(item.projectId || item.projectTitle || 'unknown').trim() || 'unknown';
+    }, function (item) {
+      return {
+        projectId: String(item.projectId || '').trim(),
+        projectTitle: String(item.projectTitle || item.projectId || '미지정 에피소드').trim() || '미지정 에피소드',
+        totalPosts: 0,
+        latestPublishedAt: '',
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        clicks: 0,
+        topChannel: ''
+      };
+    }, function (row, item) {
       row.totalPosts += 1;
       row.views += item.metrics.views;
       row.likes += item.metrics.likes;
@@ -215,14 +305,13 @@
       if (!row.topChannel && item.channelType) {
         row.topChannel = item.channelType;
       }
-    });
-    return Array.from(map.values()).sort(function (a, b) {
+    }).sort(function (a, b) {
       return b.views - a.views || b.totalPosts - a.totalPosts;
     });
   };
 
-  analytics.summarizeByUploadTime = function (projectOrId) {
-    var rows = readPublishResults(projectOrId);
+  analytics.summarizeByUploadTime = function (projectOrId, filters) {
+    var rows = filterRows(readPublishResults(projectOrId), filters);
     var buckets = [
       { id: 'morning', label: '오전 6시-11시', from: 6, to: 11 },
       { id: 'afternoon', label: '오후 12시-17시', from: 12, to: 17 },
@@ -260,8 +349,8 @@
     });
   };
 
-  analytics.summarizeByHashtag = function (projectOrId) {
-    var rows = readPublishResults(projectOrId);
+  analytics.summarizeByHashtag = function (projectOrId, filters) {
+    var rows = filterRows(readPublishResults(projectOrId), filters);
     var map = new Map();
     rows.forEach(function (item) {
       var tags = Array.isArray(item.hashtags) ? item.hashtags : [];

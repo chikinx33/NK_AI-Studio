@@ -83,6 +83,36 @@
     );
   }
 
+  function normalizeFilters(filters) {
+    var src = filters && typeof filters === 'object' ? filters : {};
+    return {
+      episodeId: String(src.episodeId || '').trim(),
+      channelType: String(src.channelType || '').trim(),
+      contentType: String(src.contentType || '').trim(),
+      seasonId: String(src.seasonId || '').trim(),
+      campaignId: String(src.campaignId || '').trim(),
+      purposeKey: String(src.purposeKey || '').trim()
+    };
+  }
+
+  function selectHtml(key, options, currentValue, title, formatter) {
+    var rows = Array.isArray(options) ? options : [];
+    var current = String(currentValue || '').trim();
+    var toLabel = typeof formatter === 'function' ? formatter : function (item) { return item.label || item.value || ''; };
+    return (
+      '<label class="analytics-filter-field">' +
+      '<span>' + escapeHtml(title) + '</span>' +
+      '<select class="analytics-filter-select" data-analytics-filter="' + escapeHtml(key) + '">' +
+      '<option value="">전체</option>' +
+      rows.map(function (item) {
+        var value = String(item && item.value || '').trim();
+        return '<option value="' + escapeHtml(value) + '" ' + (value === current ? 'selected' : '') + '>' + escapeHtml(toLabel(item)) + '</option>';
+      }).join('') +
+      '</select>' +
+      '</label>'
+    );
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -94,19 +124,26 @@
       '</section>';
   }
 
-  function renderProject(root, project, brand) {
+  function renderProject(root, project, brand, filters) {
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
     var brandId = String(brand && brand.brandId || payload.brandId || '').trim();
     var analyticsTarget = brand || project;
-    var summary = NK.service.analytics.summarizeProject(analyticsTarget);
-    var channels = NK.service.analytics.summarizeByChannel(analyticsTarget);
-    var episodes = NK.service.analytics.summarizeByEpisode
-      ? NK.service.analytics.summarizeByEpisode(analyticsTarget)
+    var currentFilters = normalizeFilters(filters);
+    var filterOptions = NK.service.analytics.listFilterOptions
+      ? NK.service.analytics.listFilterOptions(analyticsTarget)
+      : { episodes: [], channels: [], contentTypes: [], seasons: [], campaigns: [], purposes: [] };
+    var filteredRows = NK.service.analytics.filterPublishResults
+      ? NK.service.analytics.filterPublishResults(analyticsTarget, currentFilters)
       : [];
-    var contentTypes = NK.service.analytics.summarizeByContentType(analyticsTarget);
-    var uploadTimes = NK.service.analytics.summarizeByUploadTime(analyticsTarget);
-    var hashtags = NK.service.analytics.summarizeByHashtag(analyticsTarget);
+    var summary = NK.service.analytics.summarizeProject(analyticsTarget, currentFilters);
+    var channels = NK.service.analytics.summarizeByChannel(analyticsTarget, currentFilters);
+    var episodes = NK.service.analytics.summarizeByEpisode
+      ? NK.service.analytics.summarizeByEpisode(analyticsTarget, currentFilters)
+      : [];
+    var contentTypes = NK.service.analytics.summarizeByContentType(analyticsTarget, currentFilters);
+    var uploadTimes = NK.service.analytics.summarizeByUploadTime(analyticsTarget, currentFilters);
+    var hashtags = NK.service.analytics.summarizeByHashtag(analyticsTarget, currentFilters);
     var recommendations = NK.service.strategyEngine
       ? NK.service.strategyEngine.buildRecommendations(analyticsTarget)
       : [];
@@ -134,6 +171,23 @@
       '<article class="analytics-summary-card"><span>총 반응</span><strong>' + escapeHtml(summary.likes + summary.comments + summary.shares) + '</strong></article>' +
       '<article class="analytics-summary-card"><span>상위 채널</span><strong>' + escapeHtml(channelLabel(summary.topChannel || '-')) + '</strong></article>' +
       '</div>' +
+      '<section class="analytics-panel">' +
+      '<div class="analytics-panel-head"><h3>분석 필터</h3><span>브랜드 전체에서 세부 활동으로 drill-down</span></div>' +
+      '<div class="analytics-filter-grid">' +
+      selectHtml('episodeId', filterOptions.episodes, currentFilters.episodeId, '에피소드') +
+      selectHtml('channelType', filterOptions.channels, currentFilters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) +
+      selectHtml('contentType', filterOptions.contentTypes, currentFilters.contentType, '콘텐츠 유형', function (item) { return contentTypeLabel(item.value || item.label); }) +
+      selectHtml('seasonId', filterOptions.seasons, currentFilters.seasonId, '시즌') +
+      selectHtml('campaignId', filterOptions.campaigns, currentFilters.campaignId, '캠페인') +
+      selectHtml('purposeKey', filterOptions.purposes, currentFilters.purposeKey, '운영 목적') +
+      '</div>' +
+      '<div class="analytics-filter-summary">' +
+      '<span>현재 필터 결과</span><strong>' + escapeHtml(filteredRows.length) + '개 게시 결과</strong>' +
+      '<button type="button" class="btn-secondary compact" data-action="analytics-clear-filters" ' + (
+        currentFilters.episodeId || currentFilters.channelType || currentFilters.contentType || currentFilters.seasonId || currentFilters.campaignId || currentFilters.purposeKey ? '' : 'disabled'
+      ) + '>필터 초기화</button>' +
+      '</div>' +
+      '</section>' +
       '<section class="analytics-panel">' +
       '<div class="analytics-panel-head"><h3>전략 추천</h3><span>현재 데이터 기반 우선 액션</span></div>' +
       '<div class="analytics-recommendation-grid">' +
@@ -259,6 +313,10 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
+      if (action === 'analytics-clear-filters') {
+        renderProject(root, project, brand, {});
+        return;
+      }
       if (action === 'analytics-apply-suggestion') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload || !NK.service.strategyEngine) return;
         var suggestionId = String(btn.dataset.suggestionId || '').trim();
@@ -303,6 +361,18 @@
         window.location.href = target;
       }
     };
+    root.onchange = function (evt) {
+      var select = evt.target && evt.target.matches ? evt.target : null;
+      if (!select || !select.matches('[data-analytics-filter]')) return;
+      renderProject(root, project, brand, {
+        episodeId: String((root.querySelector('[data-analytics-filter="episodeId"]') || {}).value || '').trim(),
+        channelType: String((root.querySelector('[data-analytics-filter="channelType"]') || {}).value || '').trim(),
+        contentType: String((root.querySelector('[data-analytics-filter="contentType"]') || {}).value || '').trim(),
+        seasonId: String((root.querySelector('[data-analytics-filter="seasonId"]') || {}).value || '').trim(),
+        campaignId: String((root.querySelector('[data-analytics-filter="campaignId"]') || {}).value || '').trim(),
+        purposeKey: String((root.querySelector('[data-analytics-filter="purposeKey"]') || {}).value || '').trim()
+      });
+    };
   }
 
   intelligence.init = function () {
@@ -321,6 +391,6 @@
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project, brand);
+    renderProject(root, project, brand, {});
   };
 })();

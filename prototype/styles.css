@@ -6577,6 +6577,52 @@ body.layout-fixed .lib-content {
   color: var(--muted);
 }
 
+.analytics-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.analytics-filter-field {
+  display: grid;
+  gap: 8px;
+}
+
+.analytics-filter-field span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.analytics-filter-select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.62);
+  color: var(--text);
+}
+
+.analytics-filter-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+}
+
+.analytics-filter-summary span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.analytics-filter-summary strong {
+  font-size: 16px;
+}
+
 .analytics-channel-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -6852,6 +6898,10 @@ body.layout-fixed .lib-content {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .analytics-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
   .analytics-channel-grid {
     grid-template-columns: 1fr;
   }
@@ -6905,6 +6955,11 @@ body.layout-fixed .lib-content {
   .analytics-hero,
   .analytics-toolbar {
     flex-direction: column;
+  }
+
+  .analytics-filter-summary {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .analytics-channel-metrics {
