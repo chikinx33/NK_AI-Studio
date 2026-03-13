@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config) window.NK.config.APP_VERSION = '1.771';
+  if (window.NK.config) window.NK.config.APP_VERSION = '1.772';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -2039,7 +2039,7 @@
     if (overlay.dataset.projectOverlayReady === '1') return;
     overlay.dataset.projectOverlayReady = '1';
     const createDefaultLabel = (btnCreate.textContent || '').trim() || '생성';
-    const editDefaultLabel = '저장';
+    const editDefaultLabel = '적용';
     const overlayCard = overlay.querySelector('.auth-card');
     let creating = false;
     let mode = 'new-series';
@@ -2251,7 +2251,7 @@
       if (projectTypeSelect) projectTypeSelect.value = profile.projectType || '';
       if (brandSummaryInput) brandSummaryInput.value = profile.brandSummary || '';
       if (coreMessageInput) coreMessageInput.value = profile.coreMessage || '';
-      btnCreate.textContent = creating ? '저장 중...' : editDefaultLabel;
+      btnCreate.textContent = creating ? '적용 중...' : editDefaultLabel;
     };
 
     const setMode = (nextMode) => {
@@ -2309,7 +2309,7 @@
         if (brandSummaryInput) brandSummaryInput.disabled = creating;
         if (coreMessageInput) coreMessageInput.disabled = creating;
         modeButtons.forEach((btn) => { btn.disabled = true; });
-        btnCreate.textContent = creating ? '저장 중...' : editDefaultLabel;
+        btnCreate.textContent = creating ? '적용 중...' : editDefaultLabel;
       } else {
         input.disabled = creating;
         if (seriesInput) seriesInput.disabled = creating;
