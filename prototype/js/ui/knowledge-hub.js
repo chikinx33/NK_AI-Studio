@@ -214,7 +214,6 @@
       '<p class="knowledge-hub-eyebrow">Knowledge Hub</p>' +
       '<h2>' + escapeHtml(brandTitle) + '</h2>' +
       '<p class="knowledge-hub-description">' + escapeHtml(brandSummary || '브랜드 요약이 아직 없습니다. Knowledge Hub를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
-      '<p class="knowledge-hub-description">이 화면은 브랜드 공용 지식 저장소이며, 현재 연결된 에피소드는 ' + escapeHtml(currentEpisodeTitle) + '입니다.</p>' +
       '</div>' +
       '<div class="knowledge-hub-hero-actions">' +
       '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
@@ -222,17 +221,18 @@
       '<button class="btn-primary" data-action="knowledge-save">Knowledge 저장</button>' +
       '</div>' +
       '</div>' +
-      '<div class="knowledge-hub-summary-grid">' +
-      '<article class="knowledge-hub-summary-card"><span>운영 브랜드</span><strong>' + escapeHtml(brandTitle || '-') + '</strong></article>' +
-      '<article class="knowledge-hub-summary-card"><span>현재 연결 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
-      '<article class="knowledge-hub-summary-card"><span>브랜드 보이스</span><strong>' + escapeHtml(knowledge.brandVoice || '-') + '</strong></article>' +
-      '<article class="knowledge-hub-summary-card"><span>세계관/배경</span><strong>' + escapeHtml(knowledge.worldSetting || '-') + '</strong></article>' +
-      '<article class="knowledge-hub-summary-card"><span>브랜드 규칙</span><strong>' + escapeHtml(rulesCount) + '개</strong></article>' +
-      '<article class="knowledge-hub-summary-card"><span>참조 콘텐츠</span><strong>' + escapeHtml(referencesCount) + '개</strong></article>' +
+      '<div class="knowledge-hub-context-bar">' +
+      '<div class="knowledge-hub-context-item"><span>운영 브랜드</span><strong>' + escapeHtml(brandTitle || '-') + '</strong></div>' +
+      '<div class="knowledge-hub-context-item"><span>현재 기준 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></div>' +
+      '<div class="knowledge-hub-context-item"><span>브랜드 규칙</span><strong>' + escapeHtml(rulesCount) + '개</strong></div>' +
+      '<div class="knowledge-hub-context-item"><span>참조 콘텐츠</span><strong>' + escapeHtml(referencesCount) + '개</strong></div>' +
       '</div>' +
-      '<div class="knowledge-hub-layout">' +
-      '<section class="knowledge-hub-panel">' +
-      '<div class="knowledge-hub-panel-head"><h3>브랜드 정체성</h3><span>AI가 계속 참고할 기본 문맥</span></div>' +
+      '<div class="knowledge-hub-workspace">' +
+      '<div class="knowledge-hub-main">' +
+      '<details class="knowledge-hub-disclosure" open>' +
+      '<summary><div><strong>브랜드 정체성</strong><span>AI가 계속 참고할 기본 문맥</span></div><span class="knowledge-hub-disclosure-meta">핵심 4개 필드</span></summary>' +
+      '<div class="knowledge-hub-disclosure-body">' +
+      '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
       '<div class="knowledge-hub-form-grid">' +
       '<label class="knowledge-hub-field"><span>브랜드 보이스</span><textarea id="knowledge-brand-voice" placeholder="예: 따뜻하지만 과장하지 않고, 짧고 명확하게 말한다.">' + escapeHtml(knowledge.brandVoice) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>브랜드 스토리</span><textarea id="knowledge-brand-story" placeholder="브랜드/시리즈가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.">' + escapeHtml(knowledge.brandStory) + '</textarea></label>' +
@@ -240,15 +240,35 @@
       '<label class="knowledge-hub-field"><span>세계관/배경</span><textarea id="knowledge-world-setting" placeholder="작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.">' + escapeHtml(knowledge.worldSetting) + '</textarea></label>' +
       '</div>' +
       '</section>' +
-      '<section class="knowledge-hub-panel">' +
-      '<div class="knowledge-hub-panel-head"><h3>브랜드 규칙</h3><span>반드시 지켜야 할 운영 기준</span></div>' +
+      '</div>' +
+      '</details>' +
+      '<details class="knowledge-hub-disclosure" open>' +
+      '<summary><div><strong>브랜드 규칙</strong><span>반드시 지켜야 할 운영 기준</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(rulesCount + bannedCount) + '개 항목</span></summary>' +
+      '<div class="knowledge-hub-disclosure-body">' +
+      '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
       '<div class="knowledge-hub-form-grid">' +
       '<label class="knowledge-hub-field"><span>브랜드 규칙</span><textarea id="knowledge-brand-rules" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 캐릭터 말투는 존댓말을 유지한다.">' + escapeHtml(joinLines(knowledge.brandRules)) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>금지 표현</span><textarea id="knowledge-banned" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 선정적 표현 금지">' + escapeHtml(joinLines(knowledge.bannedExpressions)) + '</textarea></label>' +
       '</div>' +
       '</section>' +
+      '</div>' +
+      '</details>' +
+      '</div>' +
+      '<div class="knowledge-hub-side">' +
       '<section class="knowledge-hub-panel">' +
-      '<div class="knowledge-hub-panel-head"><h3>참조와 학습</h3><span>좋았던 레퍼런스와 성공 패턴</span></div>' +
+      '<div class="knowledge-hub-panel-head"><h3>빠른 요약</h3><span>긴 설명 대신 현재 저장 상태만 확인</span></div>' +
+      '<div class="knowledge-hub-pill-grid">' +
+      '<div class="knowledge-hub-pill"><span>브랜드 보이스</span><strong>' + escapeHtml(knowledge.brandVoice ? '입력됨' : '비어 있음') + '</strong></div>' +
+      '<div class="knowledge-hub-pill"><span>세계관</span><strong>' + escapeHtml(knowledge.worldSetting ? '입력됨' : '비어 있음') + '</strong></div>' +
+      '<div class="knowledge-hub-pill"><span>금지 표현</span><strong>' + escapeHtml(bannedCount) + '개</strong></div>' +
+      '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +
+      '</div>' +
+      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 우선 갱신하고, 기존 호환을 위해 현재 연결 에피소드 payload의 <code>knowledgeHub</code>에도 함께 반영됩니다.</p>' +
+      '</section>' +
+      '<details class="knowledge-hub-disclosure" open>' +
+      '<summary><div><strong>참조와 학습</strong><span>좋았던 레퍼런스와 성공 패턴</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(referencesCount + successesCount) + '개 데이터</span></summary>' +
+      '<div class="knowledge-hub-disclosure-body">' +
+      '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
       '<div class="knowledge-hub-form-grid">' +
       '<label class="knowledge-hub-field"><span>과거 성공 사례</span><textarea id="knowledge-success-cases" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 오전 9시 업로드한 짧은 문장형 게시물 반응이 좋았음">' + escapeHtml(joinLines(knowledge.successCases)) + '</textarea></label>' +
       '<div class="knowledge-hub-field knowledge-reference-builder">' +
@@ -267,27 +287,12 @@
       '<textarea id="knowledge-reference-note" class="knowledge-reference-textarea" placeholder="왜 참고하는지 메모를 남겨 주세요."></textarea>' +
       '<button type="button" class="btn-secondary" data-action="knowledge-add-reference">참조 추가</button>' +
       '</div>' +
-      '<div class="knowledge-reference-grid">' + referenceCards + '</div>' +
+      '<div class="knowledge-reference-grid knowledge-reference-grid-scrollable">' + referenceCards + '</div>' +
       '</div>' +
       '</div>' +
       '</section>' +
-      '<section class="knowledge-hub-panel">' +
-      '<div class="knowledge-hub-panel-head"><h3>현재 저장 구조</h3><span>Brand Core 우선 저장</span></div>' +
-      '<div class="knowledge-hub-pill-grid">' +
-      '<div class="knowledge-hub-pill"><span>규칙</span><strong>' + escapeHtml(rulesCount) + '개</strong></div>' +
-      '<div class="knowledge-hub-pill"><span>금지 표현</span><strong>' + escapeHtml(bannedCount) + '개</strong></div>' +
-      '<div class="knowledge-hub-pill"><span>참조</span><strong>' + escapeHtml(referencesCount) + '개</strong></div>' +
-      '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +
       '</div>' +
-      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 기준으로 저장되고, 기존 호환을 위해 현재 연결 에피소드 payload의 <code>knowledgeHub</code>에도 함께 반영됩니다. 다음 단계에서는 Brand Studio 생성 입력과 직접 연결합니다.</p>' +
-      '</section>' +
-      '</div>' +
-      '<div class="knowledge-hub-toolbar">' +
-      '<span>사용자는 브랜드 지식을 한 곳에서 관리하고, 이후 각 에피소드 운영 단계에서 그대로 재사용할 수 있어야 합니다.</span>' +
-      '<div class="knowledge-hub-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId, brandId)) + '">Brand Studio</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">Content Library</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId, brandId)) + '">프리 프로덕션</a>' +
+      '</details>' +
       '</div>' +
       '</div>' +
       '</section>';

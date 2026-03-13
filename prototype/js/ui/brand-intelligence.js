@@ -95,6 +95,28 @@
     };
   }
 
+  function normalizeAnalyticsView(view) {
+    switch (String(view || '').trim()) {
+      case 'channel':
+      case 'episode':
+      case 'content':
+      case 'time':
+      case 'hashtag':
+        return String(view).trim();
+      default:
+        return 'overview';
+    }
+  }
+
+  function normalizeViewState(state) {
+    var src = state && typeof state === 'object' ? state : {};
+    var hasNestedState = Object.prototype.hasOwnProperty.call(src, 'filters') || Object.prototype.hasOwnProperty.call(src, 'activeView');
+    return {
+      filters: normalizeFilters(hasNestedState ? src.filters : src),
+      activeView: normalizeAnalyticsView(hasNestedState ? src.activeView : 'overview')
+    };
+  }
+
   function selectHtml(key, options, currentValue, title, formatter) {
     var rows = Array.isArray(options) ? options : [];
     var current = String(currentValue || '').trim();
@@ -128,13 +150,15 @@
       '</section>';
   }
 
-  function renderProject(root, project, brand, filters) {
+  function renderProject(root, project, brand, state) {
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
     var brandId = String(brand && brand.brandId || payload.brandId || '').trim();
     var currentEpisodeTitle = episodeLabel(project);
     var analyticsTarget = brand || project;
-    var currentFilters = normalizeFilters(filters);
+    var currentState = normalizeViewState(state);
+    var currentFilters = currentState.filters;
+    var activeView = currentState.activeView;
     var filterOptions = NK.service.analytics.listFilterOptions
       ? NK.service.analytics.listFilterOptions(analyticsTarget)
       : { episodes: [], channels: [], contentTypes: [], seasons: [], campaigns: [], purposes: [] };
@@ -155,7 +179,166 @@
     var suggestions = NK.service.strategyEngine
       ? NK.service.strategyEngine.buildContentSuggestions(analyticsTarget)
       : [];
+    var tabs = [
+      { id: 'overview', title: '개요' },
+      { id: 'channel', title: '채널' },
+      { id: 'episode', title: '에피소드' },
+      { id: 'content', title: '콘텐츠 유형' },
+      { id: 'time', title: '업로드 시간' },
+      { id: 'hashtag', title: '해시태그' }
+    ];
+    var tabsHtml = tabs.map(function (item) {
+      return (
+        '<button type="button" class="analytics-view-tab ' + (item.id === activeView ? 'is-active' : '') + '" data-action="analytics-change-view" data-analytics-view="' + escapeHtml(item.id) + '">' +
+        escapeHtml(item.title) +
+        '</button>'
+      );
+    }).join('');
+    var overviewBlocks = [
+      {
+        title: '상위 채널',
+        value: channelLabel(summary.topChannel || '-'),
+        detail: summary.totalPosts ? ('누적 게시 ' + summary.totalPosts + '개') : '게시 결과를 더 모아 주세요.'
+      },
+      {
+        title: '상위 에피소드',
+        value: episodes.length ? String(episodes[0].projectTitle || '에피소드') : '아직 없음',
+        detail: episodes.length ? ('게시 ' + episodes[0].totalPosts + '개 · 최근 ' + (episodes[0].latestPublishedAt || '-')) : '비교할 데이터가 없습니다.'
+      },
+      {
+        title: '강한 업로드 시간',
+        value: uploadTimes.length ? String(uploadTimes[0].label || '아직 없음') : '아직 없음',
+        detail: uploadTimes.length ? ('게시 ' + uploadTimes[0].totalPosts + '개') : '업로드 시각 데이터가 없습니다.'
+      }
+    ].map(function (item) {
+      return (
+        '<article class="analytics-overview-card">' +
+        '<span>' + escapeHtml(item.title) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '<p>' + escapeHtml(item.detail) + '</p>' +
+        '</article>'
+      );
+    }).join('');
+    var activePanelHtml = '';
+    if (activeView === 'channel') {
+      activePanelHtml =
+        '<section class="analytics-panel">' +
+        '<div class="analytics-panel-head"><h3>채널별 성과</h3><span>채널 성과만 집중해서 비교</span></div>' +
+        '<div class="analytics-channel-grid">' +
+        (channels.length ? channels.map(function (item) {
+          return (
+            '<article class="analytics-channel-card">' +
+            '<div class="analytics-channel-top">' +
+            '<span class="analytics-channel-badge">' + escapeHtml(channelLabel(item.channelType)) + '</span>' +
+            '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
+            '</div>' +
+            metricCardHtml(item) +
+            '<div class="analytics-channel-metrics analytics-channel-meta">' +
+            '<span>최근 게시</span><strong>' + escapeHtml(item.latestPublishedAt || '-') + '</strong>' +
+            '</div>' +
+            '</article>'
+          );
+        }).join('') : '<div class="analytics-empty">아직 게시 결과가 없습니다. Brand Studio에서 먼저 게시 결과를 기록해 주세요.</div>') +
+        '</div>' +
+        '</section>';
+    } else if (activeView === 'episode') {
+      activePanelHtml =
+        '<section class="analytics-panel">' +
+        '<div class="analytics-panel-head"><h3>에피소드별 성과</h3><span>브랜드 안에서 어떤 편이 잘 반응하는지 비교</span></div>' +
+        '<div class="analytics-type-grid">' +
+        (episodes.length ? episodes.map(function (item) {
+          return (
+            '<article class="analytics-type-card">' +
+            '<div class="analytics-channel-top">' +
+            '<span class="analytics-channel-badge">' + escapeHtml(item.projectTitle || '에피소드') + '</span>' +
+            '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
+            '</div>' +
+            metricCardHtml(item) +
+            '<div class="analytics-channel-metrics analytics-channel-meta">' +
+            '<span>상위 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
+            '<span>최근 게시</span><strong>' + escapeHtml(item.latestPublishedAt || '-') + '</strong>' +
+            '</div>' +
+            '</article>'
+          );
+        }).join('') : '<div class="analytics-empty">아직 에피소드별로 비교할 게시 결과가 없습니다.</div>') +
+        '</div>' +
+        '</section>';
+    } else if (activeView === 'content') {
+      activePanelHtml =
+        '<section class="analytics-panel">' +
+        '<div class="analytics-panel-head"><h3>콘텐츠 유형별 성과</h3><span>어떤 포맷이 강한지 비교</span></div>' +
+        '<div class="analytics-type-grid">' +
+        (contentTypes.length ? contentTypes.map(function (item) {
+          return (
+            '<article class="analytics-type-card">' +
+            '<div class="analytics-channel-top">' +
+            '<span class="analytics-channel-badge">' + escapeHtml(contentTypeLabel(item.contentType)) + '</span>' +
+            '<strong>' + escapeHtml(item.totalPosts) + '개 운영</strong>' +
+            '</div>' +
+            metricCardHtml(item) +
+            '<div class="analytics-channel-metrics analytics-channel-meta">' +
+            '<span>주요 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
+            '</div>' +
+            '</article>'
+          );
+        }).join('') : '<div class="analytics-empty">아직 콘텐츠 유형별로 비교할 게시 결과가 없습니다.</div>') +
+        '</div>' +
+        '</section>';
+    } else if (activeView === 'time') {
+      activePanelHtml =
+        '<section class="analytics-panel">' +
+        '<div class="analytics-panel-head"><h3>업로드 시간별 성과</h3><span>언제 올릴 때 반응이 좋은지 비교</span></div>' +
+        '<div class="analytics-type-grid">' +
+        (uploadTimes.some(function (item) { return item.totalPosts > 0; }) ? uploadTimes.map(function (item) {
+          return (
+            '<article class="analytics-type-card">' +
+            '<div class="analytics-channel-top">' +
+            '<span class="analytics-channel-badge">' + escapeHtml(item.label) + '</span>' +
+            '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
+            '</div>' +
+            metricCardHtml(item) +
+            '</article>'
+          );
+        }).join('') : '<div class="analytics-empty">업로드 시각이 저장된 게시 결과가 아직 없습니다.</div>') +
+        '</div>' +
+        '</section>';
+    } else if (activeView === 'hashtag') {
+      activePanelHtml =
+        '<section class="analytics-panel">' +
+        '<div class="analytics-panel-head"><h3>해시태그 성과</h3><span>반응이 좋은 태그 패턴</span></div>' +
+        '<div class="analytics-hashtag-grid">' +
+        (hashtags.length ? hashtags.map(function (item) {
+          return (
+            '<article class="analytics-hashtag-card">' +
+            '<div class="analytics-channel-top">' +
+            '<span class="analytics-channel-badge">' + escapeHtml(item.hashtag) + '</span>' +
+            '<strong>' + escapeHtml(item.totalPosts) + '회 사용</strong>' +
+            '</div>' +
+            metricCardHtml(item) +
+            '</article>'
+          );
+        }).join('') : '<div class="analytics-empty">게시 결과에 저장된 해시태그가 아직 없습니다.</div>') +
+        '</div>' +
+        '</section>';
+    } else {
+      activePanelHtml =
+        '<section class="analytics-panel">' +
+        '<div class="analytics-panel-head"><h3>핵심 개요</h3><span>추천과 요약을 먼저 보고, 필요할 때 탭으로 drill-down</span></div>' +
+        '<div class="analytics-overview-grid">' + overviewBlocks + '</div>' +
+        '<div class="analytics-recommendation-grid">' +
+        (recommendations.length
+          ? recommendations.slice(0, 2).map(recommendationCardHtml).join('')
+          : '<div class="analytics-empty">아직 추천을 만들 만큼의 데이터가 없습니다.</div>') +
+        '</div>' +
+        '<div class="analytics-suggestion-grid">' +
+        (suggestions.length
+          ? suggestions.slice(0, 2).map(suggestionCardHtml).join('')
+          : '<div class="analytics-empty">자동 제안을 만들 만큼의 데이터가 없습니다.</div>') +
+        '</div>' +
+        '</section>';
+    }
 
+    root.dataset.analyticsView = activeView;
     root.innerHTML =
       '<section class="analytics-page">' +
       '<div class="analytics-hero">' +
@@ -163,7 +346,6 @@
       '<p class="analytics-eyebrow">Brand Intelligence</p>' +
       '<h2>' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
       '<p class="analytics-description">' + escapeHtml(brand && brand.brandSummary || payload.brandSummary || '게시 결과를 수집하면 채널별 성과를 여기서 한눈에 확인할 수 있습니다.') + '</p>' +
-      '<p class="analytics-description">이 화면은 브랜드 전체 분석 화면이며, 현재 연결된 에피소드는 ' + escapeHtml(currentEpisodeTitle) + '입니다.</p>' +
       '</div>' +
       '<div class="analytics-hero-actions">' +
       '<button class="btn-secondary" data-action="analytics-open-brand">Brand Studio</button>' +
@@ -173,7 +355,7 @@
       '</div>' +
       '<div class="analytics-summary-grid">' +
       '<article class="analytics-summary-card"><span>분석 브랜드</span><strong>' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || '-') + '</strong></article>' +
-      '<article class="analytics-summary-card"><span>현재 연결 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
+      '<article class="analytics-summary-card"><span>현재 기준 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
       '<article class="analytics-summary-card"><span>누적 게시</span><strong>' + escapeHtml(summary.totalPosts) + '개</strong></article>' +
       '<article class="analytics-summary-card"><span>총 조회수</span><strong>' + escapeHtml(summary.views) + '</strong></article>' +
       '<article class="analytics-summary-card"><span>총 반응</span><strong>' + escapeHtml(summary.likes + summary.comments + summary.shares) + '</strong></article>' +
@@ -197,123 +379,10 @@
       '</div>' +
       '</section>' +
       '<section class="analytics-panel">' +
-      '<div class="analytics-panel-head"><h3>전략 추천</h3><span>현재 데이터 기반 우선 액션</span></div>' +
-      '<div class="analytics-recommendation-grid">' +
-      (recommendations.length
-        ? recommendations.map(recommendationCardHtml).join('')
-        : '<div class="analytics-empty">아직 추천을 만들 만큼의 데이터가 없습니다.</div>') +
-      '</div>' +
+      '<div class="analytics-panel-head"><h3>분석 보기</h3><span>기본은 개요, 세부 분석은 탭으로 전환</span></div>' +
+      '<div class="analytics-view-tabs">' + tabsHtml + '</div>' +
       '</section>' +
-      '<section class="analytics-panel">' +
-      '<div class="analytics-panel-head"><h3>콘텐츠 자동 제안</h3><span>바로 Brand Studio 초안으로 적용</span></div>' +
-      '<div class="analytics-suggestion-grid">' +
-      (suggestions.length
-        ? suggestions.map(suggestionCardHtml).join('')
-        : '<div class="analytics-empty">자동 제안을 만들 만큼의 데이터가 없습니다.</div>') +
-      '</div>' +
-      '</section>' +
-      '<section class="analytics-panel">' +
-      '<div class="analytics-panel-head"><h3>에피소드별 성과</h3><span>브랜드 안에서 어떤 편이 잘 반응하는지 비교</span></div>' +
-      '<div class="analytics-type-grid">' +
-      (episodes.length ? episodes.map(function (item) {
-        return (
-          '<article class="analytics-type-card">' +
-          '<div class="analytics-channel-top">' +
-          '<span class="analytics-channel-badge">' + escapeHtml(item.projectTitle || '에피소드') + '</span>' +
-          '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
-          '</div>' +
-          metricCardHtml(item) +
-          '<div class="analytics-channel-metrics analytics-channel-meta">' +
-          '<span>상위 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
-          '<span>최근 게시</span><strong>' + escapeHtml(item.latestPublishedAt || '-') + '</strong>' +
-          '</div>' +
-          '<p class="analytics-channel-note">같은 브랜드 안에서 어떤 에피소드가 더 강한지 비교합니다. 현재 연결 에피소드는 상단 카드에서 별도로 확인할 수 있습니다.</p>' +
-          '</article>'
-        );
-      }).join('') : '<div class="analytics-empty">아직 에피소드별로 비교할 게시 결과가 없습니다.</div>') +
-      '</div>' +
-      '</section>' +
-      '<section class="analytics-panel">' +
-      '<div class="analytics-panel-head"><h3>채널별 성과</h3><span>V2 첫 분석 화면</span></div>' +
-      '<div class="analytics-channel-grid">' +
-      (channels.length ? channels.map(function (item) {
-        return (
-          '<article class="analytics-channel-card">' +
-          '<div class="analytics-channel-top">' +
-          '<span class="analytics-channel-badge">' + escapeHtml(channelLabel(item.channelType)) + '</span>' +
-          '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
-          '</div>' +
-          metricCardHtml(item) +
-          '<div class="analytics-channel-metrics analytics-channel-meta">' +
-          '<span>최근 게시</span><strong>' + escapeHtml(item.latestPublishedAt || '-') + '</strong>' +
-          '</div>' +
-          '<p class="analytics-channel-note">현재 저장된 게시 결과 기준으로 집계했습니다. 다음 단계에서는 콘텐츠 유형별, 업로드 시간별 분석을 이 화면에 이어 붙입니다.</p>' +
-          '</article>'
-        );
-      }).join('') : '<div class="analytics-empty">아직 게시 결과가 없습니다. Brand Studio에서 먼저 게시 결과를 기록해 주세요.</div>') +
-      '</div>' +
-      '</section>' +
-      '<section class="analytics-panel">' +
-      '<div class="analytics-panel-head"><h3>콘텐츠 유형별 성과</h3><span>어떤 포맷이 강한지 비교</span></div>' +
-      '<div class="analytics-type-grid">' +
-      (contentTypes.length ? contentTypes.map(function (item) {
-        return (
-          '<article class="analytics-type-card">' +
-          '<div class="analytics-channel-top">' +
-          '<span class="analytics-channel-badge">' + escapeHtml(contentTypeLabel(item.contentType)) + '</span>' +
-          '<strong>' + escapeHtml(item.totalPosts) + '개 운영</strong>' +
-          '</div>' +
-          metricCardHtml(item) +
-          '<div class="analytics-channel-metrics analytics-channel-meta">' +
-          '<span>주요 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
-          '</div>' +
-          '<p class="analytics-channel-note">현재는 게시 결과에 저장된 콘텐츠 유형 기준으로 집계합니다. 다음 단계에서는 업로드 시간, 해시태그 패턴까지 연결합니다.</p>' +
-          '</article>'
-        );
-      }).join('') : '<div class="analytics-empty">아직 콘텐츠 유형별로 비교할 게시 결과가 없습니다.</div>') +
-      '</div>' +
-      '</section>' +
-      '<section class="analytics-panel">' +
-      '<div class="analytics-panel-head"><h3>업로드 시간별 성과</h3><span>언제 올릴 때 반응이 좋은지 비교</span></div>' +
-      '<div class="analytics-type-grid">' +
-      (uploadTimes.some(function (item) { return item.totalPosts > 0; }) ? uploadTimes.map(function (item) {
-        return (
-          '<article class="analytics-type-card">' +
-          '<div class="analytics-channel-top">' +
-          '<span class="analytics-channel-badge">' + escapeHtml(item.label) + '</span>' +
-          '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
-          '</div>' +
-          metricCardHtml(item) +
-          '<p class="analytics-channel-note">현재는 저장된 게시 시각 기준으로 오전, 오후, 저녁, 심야 구간을 나눠 집계합니다.</p>' +
-          '</article>'
-        );
-      }).join('') : '<div class="analytics-empty">업로드 시각이 저장된 게시 결과가 아직 없습니다.</div>') +
-      '</div>' +
-      '</section>' +
-      '<section class="analytics-panel">' +
-      '<div class="analytics-panel-head"><h3>해시태그 성과</h3><span>반응이 좋은 태그 패턴</span></div>' +
-      '<div class="analytics-hashtag-grid">' +
-      (hashtags.length ? hashtags.map(function (item) {
-        return (
-          '<article class="analytics-hashtag-card">' +
-          '<div class="analytics-channel-top">' +
-          '<span class="analytics-channel-badge">' + escapeHtml(item.hashtag) + '</span>' +
-          '<strong>' + escapeHtml(item.totalPosts) + '회 사용</strong>' +
-          '</div>' +
-          metricCardHtml(item) +
-          '</article>'
-        );
-      }).join('') : '<div class="analytics-empty">게시 결과에 저장된 해시태그가 아직 없습니다.</div>') +
-      '</div>' +
-      '</section>' +
-      '<div class="analytics-toolbar">' +
-      '<span>사용자는 채널별로 어떤 곳이 반응이 좋은지 한눈에 보고, 다음 운영 방향을 바로 정해야 합니다.</span>' +
-      '<div class="analytics-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId, brandId)) + '">Brand Studio</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">Knowledge Hub</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">Content Library</a>' +
-      '</div>' +
-      '</div>' +
+      activePanelHtml +
       '</section>';
 
     root.onclick = function (evt) {
@@ -321,8 +390,13 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
+      var viewToKeep = normalizeAnalyticsView(root.dataset.analyticsView || activeView);
       if (action === 'analytics-clear-filters') {
-        renderProject(root, project, brand, {});
+        renderProject(root, project, brand, { filters: {}, activeView: viewToKeep });
+        return;
+      }
+      if (action === 'analytics-change-view') {
+        renderProject(root, project, brand, { filters: currentFilters, activeView: String(btn.dataset.analyticsView || '').trim() });
         return;
       }
       if (action === 'analytics-apply-suggestion') {
@@ -373,12 +447,15 @@
       var select = evt.target && evt.target.matches ? evt.target : null;
       if (!select || !select.matches('[data-analytics-filter]')) return;
       renderProject(root, project, brand, {
-        episodeId: String((root.querySelector('[data-analytics-filter="episodeId"]') || {}).value || '').trim(),
-        channelType: String((root.querySelector('[data-analytics-filter="channelType"]') || {}).value || '').trim(),
-        contentType: String((root.querySelector('[data-analytics-filter="contentType"]') || {}).value || '').trim(),
-        seasonId: String((root.querySelector('[data-analytics-filter="seasonId"]') || {}).value || '').trim(),
-        campaignId: String((root.querySelector('[data-analytics-filter="campaignId"]') || {}).value || '').trim(),
-        purposeKey: String((root.querySelector('[data-analytics-filter="purposeKey"]') || {}).value || '').trim()
+        filters: {
+          episodeId: String((root.querySelector('[data-analytics-filter="episodeId"]') || {}).value || '').trim(),
+          channelType: String((root.querySelector('[data-analytics-filter="channelType"]') || {}).value || '').trim(),
+          contentType: String((root.querySelector('[data-analytics-filter="contentType"]') || {}).value || '').trim(),
+          seasonId: String((root.querySelector('[data-analytics-filter="seasonId"]') || {}).value || '').trim(),
+          campaignId: String((root.querySelector('[data-analytics-filter="campaignId"]') || {}).value || '').trim(),
+          purposeKey: String((root.querySelector('[data-analytics-filter="purposeKey"]') || {}).value || '').trim()
+        },
+        activeView: normalizeAnalyticsView(root.dataset.analyticsView || activeView)
       });
     };
   }

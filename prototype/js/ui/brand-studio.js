@@ -202,6 +202,13 @@
     return text.slice(0, Math.max(limit - 1, 1)).trim() + '…';
   }
 
+  function summarizeList(list, emptyLabel, limit) {
+    var rows = Array.isArray(list) ? list : [];
+    if (!rows.length) return String(emptyLabel || '아직 없음');
+    if (rows.length === 1) return compactSentence(rows[0], limit || 60);
+    return rows.length + '개 · ' + compactSentence(rows[0], limit || 52);
+  }
+
   function scrubBannedText(text, bannedExpressions) {
     var output = String(text || '');
     toTagList(bannedExpressions).forEach(function (term) {
@@ -457,35 +464,6 @@
       });
     }
 
-    var readiness = [
-      {
-        title: '프로젝트 문맥',
-        ready: !!(payload.projectType || brandView.summary || brandView.coreMessage),
-        desc: '프로젝트 유형, 브랜드 요약, 핵심 메시지가 있어야 브랜드 운영 기준이 선명해집니다.'
-      },
-      {
-        title: '콘텐츠 소스',
-        ready: Number(summary.images || 0) > 0 || Number(summary.videos || 0) > 0,
-        desc: 'Content Library의 이미지/영상 자산이 Brand Studio의 운영 소재가 됩니다.'
-      },
-      {
-        title: '다음 운영 단계',
-        ready: true,
-        desc: '현재 기준 추천 단계는 "' + String(summary.nextAction || '준비 중') + '" 입니다.'
-      },
-      {
-        title: '브랜드 규칙 문맥',
-        ready: !!(knowledge.brandVoice || knowledge.brandRules.length || knowledge.bannedExpressions.length),
-        desc: 'Knowledge Hub의 브랜드 보이스, 규칙, 금지 표현이 생성 입력에 직접 반영됩니다.'
-      }
-    ];
-
-    var ops = [
-      { title: 'SNS 콘텐츠 운영', desc: '프로젝트 문맥에 맞는 SNS 포맷 운영 화면을 여는 자리입니다.', status: '준비 중' },
-      { title: '캡션 생성', desc: '프로젝트 핵심 메시지와 브랜드 톤을 기반으로 문구를 구성할 예정입니다.', status: '다음 단계' },
-      { title: '해시태그 구성', desc: '콘텐츠 유형과 타깃에 맞는 해시태그 추천 흐름이 여기 붙습니다.', status: '다음 단계' },
-      { title: '채널 배포', desc: '채널 연결과 예약 게시가 이 영역에 연결됩니다.', status: '후속 구현' }
-    ];
     var contentTypeCards = options.map(function (item) {
       var isActive = item.id === selectedType;
       return (
@@ -604,6 +582,32 @@
       : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
 
     var captionValue = savedCaption || '';
+    var brandContextSummary = [
+      { label: '운영 브랜드', value: brandView.title || '-' },
+      { label: '현재 기준 에피소드', value: currentEpisodeTitle },
+      { label: '선택 자산', value: selectedAssetItems.length ? (selectedAssetItems.length + '개') : '미선택' },
+      { label: '게시 데이터', value: publishResults.length ? (publishResults.length + '건 누적') : '아직 없음' }
+    ].map(function (item) {
+      return (
+        '<div class="brand-studio-context-item">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '</div>'
+      );
+    }).join('');
+    var knowledgeCards = [
+      { label: '브랜드 보이스', value: compactSentence(knowledge.brandVoice || '아직 설정되지 않았습니다.', 72) },
+      { label: '운영 규칙', value: summarizeList(knowledge.brandRules, '규칙 없음', 54) },
+      { label: '금지 표현', value: summarizeList(knowledge.bannedExpressions, '금지 표현 없음', 48) },
+      { label: '참조/성공 패턴', value: summarizeList(knowledge.referenceContents.length ? knowledge.referenceContents : knowledge.successCases, '참조 데이터 없음', 54) }
+    ].map(function (item) {
+      return (
+        '<article class="brand-knowledge-card">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '</article>'
+      );
+    }).join('');
 
     root.innerHTML =
       '<section class="brand-studio-page">' +
@@ -612,7 +616,6 @@
       '<p class="brand-studio-eyebrow">Brand Operations</p>' +
       '<h2>' + escapeHtml(brandView.title || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
       '<p class="brand-studio-description">' + escapeHtml(brandView.summary || payload.brandSummary || '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.') + '</p>' +
-      '<p class="brand-studio-description">이 화면은 브랜드 운영 화면이며, 현재 연결된 에피소드는 ' + escapeHtml(currentEpisodeTitle) + '입니다.</p>' +
       '</div>' +
       '<div class="brand-studio-hero-actions">' +
       '<button class="btn-secondary" data-action="brand-open-analytics">Analytics</button>' +
@@ -620,14 +623,9 @@
       '<button class="btn-secondary" data-action="brand-open-library">Content Library</button>' +
       '</div>' +
       '</div>' +
-      '<div class="brand-studio-summary-grid">' +
-      '<article class="brand-studio-summary-card"><span>운영 브랜드</span><strong>' + escapeHtml(brandView.title || '-') + '</strong></article>' +
-      '<article class="brand-studio-summary-card"><span>현재 연결 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
-      '<article class="brand-studio-summary-card"><span>현재 에피소드 유형</span><strong>' + escapeHtml(payload.projectType || '-') + '</strong></article>' +
-      '<article class="brand-studio-summary-card"><span>핵심 메시지</span><strong>' + escapeHtml(brandView.coreMessage || payload.coreMessage || '-') + '</strong></article>' +
-      '<article class="brand-studio-summary-card"><span>타깃</span><strong>' + escapeHtml(brandView.targetAudience || payload.targetAudience || payload.target || '-') + '</strong></article>' +
-      '<article class="brand-studio-summary-card"><span>소스 자산</span><strong>씬 ' + escapeHtml(summary.scenes) + ' · 이미지 ' + escapeHtml(summary.images) + ' · 영상 ' + escapeHtml(summary.videos) + '</strong></article>' +
-      '</div>' +
+      '<div class="brand-studio-context-bar">' + brandContextSummary + '</div>' +
+      '<div class="brand-studio-workspace">' +
+      '<div class="brand-studio-main">' +
       (autoSuggestion
         ? '<section class="brand-studio-panel brand-auto-suggestion-panel">' +
           '<div class="brand-studio-panel-head"><h3>적용된 자동 제안</h3><span>Analytics에서 가져온 초안</span></div>' +
@@ -642,16 +640,12 @@
           '</section>'
         : '') +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>적용 중인 Knowledge 규칙</h3><span>브랜드 문맥 자동 반영</span></div>' +
-      '<div class="brand-knowledge-grid">' +
-      '<article class="brand-knowledge-card"><span>브랜드 보이스</span><strong>' + escapeHtml(knowledge.brandVoice || '-') + '</strong></article>' +
-      '<article class="brand-knowledge-card"><span>브랜드 규칙</span><strong>' + escapeHtml(knowledge.brandRules.length ? knowledge.brandRules.join(', ') : '-') + '</strong></article>' +
-      '<article class="brand-knowledge-card"><span>금지 표현</span><strong>' + escapeHtml(knowledge.bannedExpressions.length ? knowledge.bannedExpressions.join(', ') : '-') + '</strong></article>' +
-      '<article class="brand-knowledge-card"><span>참조/성공 패턴</span><strong>' + escapeHtml(firstFilled([knowledge.referenceContents.join(', '), knowledge.successCases.join(', ')]) || '-') + '</strong></article>' +
-      '</div>' +
+      '<div class="brand-studio-panel-head"><h3>Knowledge 스냅샷</h3><span>지금 필요한 규칙만 짧게 확인</span></div>' +
+      '<div class="brand-knowledge-grid">' + knowledgeCards + '</div>' +
+      '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 Knowledge Hub에서 관리합니다.</p>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>브랜드 자산 선택</h3><span>에피소드/이미지/글/게시 결과를 한 화면에서 선택</span></div>' +
+      '<div class="brand-studio-panel-head"><h3>브랜드 자산 선택</h3><span>긴 목록은 내부 스크롤로 제한하고, 필요한 자산만 고릅니다</span></div>' +
       '<div class="brand-asset-filter-row">' + assetTypeFilterButtons + '</div>' +
       '<div class="brand-asset-filter-row">' + assetProjectFilterButtons + '</div>' +
       '<div class="brand-asset-selection-summary">' +
@@ -661,33 +655,39 @@
       '<p>' + escapeHtml(selectedAssetSummary) + '</p>' +
       '</div>' +
       '<div class="brand-studio-selection-actions">' +
+      '<span class="brand-content-type-state">소스 자산: 씬 ' + escapeHtml(summary.scenes) + ' · 이미지 ' + escapeHtml(summary.images) + ' · 영상 ' + escapeHtml(summary.videos) + '</span>' +
       '<button class="btn-secondary compact" data-action="brand-clear-assets" ' + (selectedAssetItems.length ? '' : 'disabled') + '>선택 비우기</button>' +
       '</div>' +
       '</div>' +
-      '<div class="brand-asset-grid">' + assetCards + '</div>' +
+      '<div class="brand-asset-grid brand-asset-grid-scrollable">' + assetCards + '</div>' +
       '<p class="brand-caption-help">선택한 자산이 있으면 캡션과 해시태그 생성에 우선 반영합니다. 선택하지 않으면 브랜드 전체 텍스트 자산을 참고합니다.</p>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>SNS 콘텐츠 유형</h3><span>V1 첫 진입점</span></div>' +
+      '<div class="brand-studio-panel-head"><h3>SNS 콘텐츠 유형</h3><span>운영 포맷을 먼저 정하면 다음 입력이 단순해집니다</span></div>' +
       '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
       '<div class="brand-studio-selection-summary">' +
       '<div>' +
       '<span class="brand-studio-selection-label">현재 선택</span>' +
       '<strong>' + escapeHtml(selectedOption ? selectedOption.title : '아직 선택되지 않음') + '</strong>' +
-      '<p>' + escapeHtml(selectedOption ? selectedOption.outputs : '먼저 콘텐츠 유형을 선택하면 다음 캡션/해시태그 흐름이 이 기준으로 이어집니다.') + '</p>' +
+      '<p>' + escapeHtml(selectedOption ? selectedOption.outputs : '먼저 콘텐츠 유형을 선택하면 오른쪽 발행 초안 패널이 이 기준으로 이어집니다.') + '</p>' +
       '</div>' +
       '<div class="brand-studio-selection-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">소스 확인</a>' +
-      '<button class="btn-primary compact" data-action="brand-select-next" ' + (selectedOption ? '' : 'disabled') + '>이 유형으로 계속</button>' +
+      '<button class="btn-primary compact" data-action="brand-select-next" ' + (selectedOption ? '' : 'disabled') + '>발행 초안으로 이동</button>' +
       '</div>' +
       '</div>' +
       '</section>' +
-      '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>캡션 생성</h3><span>선택한 콘텐츠 유형 기준</span></div>' +
+      '</div>' +
+      '<div class="brand-studio-side">' +
+      '<section class="brand-studio-panel brand-studio-composer-panel" id="brand-publish-composer">' +
+      '<div class="brand-studio-panel-head"><h3>발행 초안</h3><span>캡션과 해시태그를 한 곳에서 정리</span></div>' +
+      '<div class="brand-studio-context-bar brand-studio-context-bar-compact">' +
+      '<div class="brand-studio-context-item"><span>콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</strong></div>' +
+      '<div class="brand-studio-context-item"><span>다음 단계</span><strong>' + escapeHtml(summary.nextAction || '준비 중') + '</strong></div>' +
+      '</div>' +
       '<div class="brand-caption-generator">' +
       '<div class="brand-caption-meta">' +
-      '<div><span class="brand-caption-meta-label">콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</strong></div>' +
       '<div><span class="brand-caption-meta-label">참조 소스</span><strong>' + escapeHtml(selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : (sourceTexts.length ? ('브랜드 텍스트 소스 ' + sourceTexts.length + '개') : '아직 없음')) + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">핵심 메시지</span><strong>' + escapeHtml(brandView.coreMessage || payload.coreMessage || '아직 없음') + '</strong></div>' +
       '</div>' +
       '<textarea id="brand-caption-textarea" class="brand-caption-textarea" placeholder="캡션이 여기에 생성됩니다.">' + escapeHtml(captionValue) + '</textarea>' +
       '<div class="brand-caption-actions">' +
@@ -695,15 +695,11 @@
       '<button class="btn-secondary" data-action="brand-regenerate-caption" ' + (selectedOption ? '' : 'disabled') + '>다시 생성</button>' +
       '<button class="btn-primary" data-action="brand-save-caption" ' + (selectedOption ? '' : 'disabled') + '>캡션 저장</button>' +
       '</div>' +
-      '<p class="brand-caption-help">브랜드 요약을 기본으로 쓰고, 현재 연결 에피소드의 핵심 메시지와 선택한 콘텐츠 유형을 더해 캡션을 구성합니다.</p>' +
       '</div>' +
-      '</section>' +
-      '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>해시태그 생성</h3><span>프로젝트 키워드 기반</span></div>' +
       '<div class="brand-hashtag-generator">' +
       '<div class="brand-hashtag-meta">' +
       '<div><span class="brand-caption-meta-label">브랜드 키워드</span><strong>' + escapeHtml(brandView.brandKeywords.length ? brandView.brandKeywords.join(', ') : '아직 없음') + '</strong></div>' +
-      '<div><span class="brand-caption-meta-label">추천 기준</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '콘텐츠 유형 미선택') + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">타깃</span><strong>' + escapeHtml(brandView.targetAudience || payload.targetAudience || payload.target || '아직 없음') + '</strong></div>' +
       '</div>' +
       '<textarea id="brand-hashtag-textarea" class="brand-caption-textarea brand-hashtag-textarea" placeholder="#해시태그 형식으로 생성됩니다.">' + escapeHtml(savedHashtags || '') + '</textarea>' +
       '<div class="brand-caption-actions">' +
@@ -711,21 +707,19 @@
       '<button class="btn-secondary" data-action="brand-regenerate-hashtags" ' + (selectedOption ? '' : 'disabled') + '>다시 생성</button>' +
       '<button class="btn-primary" data-action="brand-save-hashtags" ' + (selectedOption ? '' : 'disabled') + '>해시태그 저장</button>' +
       '</div>' +
-      '<p class="brand-caption-help">브랜드 키워드와 현재 연결 에피소드 문맥을 합쳐 해시태그를 추천합니다.</p>' +
       '</div>' +
+      '<p class="brand-caption-help">채널 연결, 예약, 게시 결과는 아래 접힘 섹션에서 관리합니다. 기본 화면은 초안 작성에 집중합니다.</p>' +
       '</section>' +
-      '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>채널 연결</h3><span>브랜드 공용 운영 채널</span></div>' +
+      '<details class="brand-studio-disclosure" ' + (!channelConnections.length || publishPlan.scheduledAt ? 'open' : '') + '>' +
+      '<summary><div><strong>채널 연결과 예약</strong><span>브랜드 공용 채널과 예약 게시 설정</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(channelConnections.length ? (channelConnections.length + '개 채널') : '미연결') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
       '<div class="brand-channel-summary">' +
       '<span class="brand-channel-summary-label">현재 연결</span>' +
       '<strong>' + escapeHtml(channelConnections.length) + '개 채널</strong>' +
       '<p>' + escapeHtml(channelConnections.length ? channelConnections.map(function (item) { return channelTitleMap[item.channelType] || item.channelType; }).join(', ') : '아직 연결된 브랜드 공용 채널이 없습니다.') + '</p>' +
       '</div>' +
       '<div class="brand-channel-grid">' + channelCards + '</div>' +
-      '<p class="brand-caption-help">여기서 연결한 채널은 Brand Core에 저장되어 같은 브랜드의 다른 에피소드에서도 공용으로 사용합니다.</p>' +
-      '</section>' +
-      '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>예약 게시</h3><span>브랜드 운영 V1 데이터 구조</span></div>' +
       '<div class="brand-publish-planner">' +
       '<div class="brand-publish-summary">' +
       '<span class="brand-channel-summary-label">현재 계획</span>' +
@@ -746,12 +740,14 @@
       '<button class="btn-primary" data-action="brand-save-publish-plan" ' + (channelConnections.length && selectedOption ? '' : 'disabled') + '>예약 계획 저장</button>' +
       '<button class="btn-secondary" data-action="brand-clear-publish-plan" ' + (publishPlan.scheduledAt || publishPlan.channels.length ? '' : 'disabled') + '>예약 계획 비우기</button>' +
       '</div>' +
-      '<p class="brand-caption-help">선택한 콘텐츠 유형, 연결된 채널, 캡션, 해시태그를 기준으로 현재 연결 에피소드에 기록하고 브랜드 분석에서 함께 집계합니다.</p>' +
       '</div>' +
       '</section>' +
-      '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>게시 결과 수집</h3><span>브랜드 분석 연결 데이터</span></div>' +
-      '<div class="brand-publish-planner">' +
+      '</div>' +
+      '</details>' +
+      '<details class="brand-studio-disclosure" ' + (publishResults.length ? 'open' : '') + '>' +
+      '<summary><div><strong>게시 결과 관리</strong><span>분석에 들어갈 실제 운영 데이터를 기록</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(publishResults.length ? (publishResults.length + '건 누적') : '아직 없음') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
       '<div class="brand-publish-summary">' +
       '<span class="brand-channel-summary-label">현재 누적</span>' +
       '<strong>' + escapeHtml(publishResults.length) + '개 게시 결과</strong>' +
@@ -783,50 +779,10 @@
       '<div class="brand-caption-actions">' +
       '<button class="btn-primary" data-action="brand-save-publish-result" ' + (channelConnections.length ? '' : 'disabled') + '>게시 결과 저장</button>' +
       '</div>' +
-      '</div>' +
       '<div class="brand-publish-result-grid">' + publishResultCards + '</div>' +
-      '</div>' +
-      '</section>' +
-      '<div class="brand-studio-layout">' +
-      '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>브랜드 운영 준비도</h3><span>현재 브랜드 기준</span></div>' +
-      '<div class="brand-studio-checklist">' +
-      readiness.map(function (item) {
-        return (
-          '<article class="brand-studio-check ' + (item.ready ? 'is-ready' : 'is-pending') + '">' +
-          '<div class="brand-studio-check-mark">' + (item.ready ? '완료' : '대기') + '</div>' +
-          '<div>' +
-          '<h4>' + escapeHtml(item.title) + '</h4>' +
-          '<p>' + escapeHtml(item.desc) + '</p>' +
-          '</div>' +
-          '</article>'
-        );
-      }).join('') +
-      '</div>' +
-      '</section>' +
-      '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>운영 모듈</h3><span>V1 기준 골격</span></div>' +
-      '<div class="brand-studio-ops-grid">' +
-      ops.map(function (item) {
-        return (
-          '<article class="brand-studio-op-card">' +
-          '<span class="brand-studio-op-status">' + escapeHtml(item.status) + '</span>' +
-          '<h4>' + escapeHtml(item.title) + '</h4>' +
-          '<p>' + escapeHtml(item.desc) + '</p>' +
-          '</article>'
-        );
-      }).join('') +
-      '</div>' +
       '</section>' +
       '</div>' +
-      '<div class="brand-studio-toolbar">' +
-      '<span>Brand Studio는 Content Library 이후의 브랜드 운영 단계입니다. 지금은 브랜드 기준 화면과 진입 동선이 연결된 상태입니다.</span>' +
-      '<div class="brand-studio-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('analytics.html', projectId, brandId)) + '">성과 분석</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">지식 문맥</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">소스 확인</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId, brandId)) + '">문맥 수정</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('media.html', projectId, brandId)) + '">최종 편집</a>' +
+      '</details>' +
       '</div>' +
       '</div>' +
       '</section>';
@@ -1049,7 +1005,13 @@
         return;
       }
       if (action === 'brand-select-next') {
-        alert(selectedOption ? ('선택한 유형: ' + selectedOption.title + '\n다음 단계로 캡션/해시태그 흐름을 연결할 예정입니다.') : '먼저 콘텐츠 유형을 선택해 주세요.');
+        if (!selectedOption) {
+          alert('먼저 콘텐츠 유형을 선택해 주세요.');
+          return;
+        }
+        var composerEl = root.querySelector('#brand-publish-composer');
+        if (composerEl && composerEl.scrollIntoView) composerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (captionEl) captionEl.focus();
         return;
       }
       if (action === 'brand-save-publish-plan') {
