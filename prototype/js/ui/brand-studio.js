@@ -23,6 +23,12 @@
     return safePage + '?' + parts.join('&');
   }
 
+  function applyCurrentLocale() {
+    if (!NK.ui || !NK.ui.common || !NK.ui.common.applyRuntimeLocale) return;
+    var lang = NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+    NK.ui.common.applyRuntimeLocale(lang);
+  }
+
   function readBrandView(brand, project) {
     var payload = (project && project.payload) || {};
     var src = brand && typeof brand === 'object' ? brand : {};
@@ -365,6 +371,7 @@
       '</div>' +
       '</div>' +
       '</section>';
+    applyCurrentLocale();
   }
 
   function renderProject(root, project, brand) {
@@ -786,6 +793,7 @@
       '</div>' +
       '</div>' +
       '</section>';
+    applyCurrentLocale();
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;

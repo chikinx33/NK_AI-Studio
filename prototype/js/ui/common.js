@@ -195,6 +195,7 @@
         'Brand Studio를 불러올 수 없습니다.': 'Unable to load Brand Studio.',
         '브랜드 요약이 아직 없습니다. Knowledge Hub를 먼저 채우면 이후 생성 품질이 안정됩니다.': 'No brand summary yet. Fill Knowledge Hub first to stabilize later generation quality.',
         '브랜드 스튜디오 품질이 올라갑니다.': 'Brand Studio quality improves.',
+        '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.': 'Add a brand summary first to improve Brand Studio quality.',
         '선택됨': 'Selected',
         '선택': 'Select',
         '선택 해제': 'Deselect',
@@ -239,6 +240,8 @@
         '브랜드 자산 선택': 'Select brand assets',
         '긴 목록은 내부 스크롤로 제한하고, 필요한 자산만 고릅니다': 'Long lists stay internally scrollable so you can pick only what you need',
         '현재 선택 자산': 'Current selected assets',
+        '선택 자산': 'Selected assets',
+        '게시 데이터': 'Publishing data',
         '미선택': 'Not selected',
         '선택 비우기': 'Clear selection',
         'SNS 콘텐츠 유형': 'SNS content type',
@@ -258,6 +261,12 @@
         'Analytics에서 가져온 초안': 'Draft imported from Analytics',
         'Knowledge 스냅샷': 'Knowledge snapshot',
         '지금 필요한 규칙만 짧게 확인': 'Check only the rules you need right now',
+        '운영 규칙': 'Operating rules',
+        '규칙 없음': 'No rules',
+        '참조/성공 패턴': 'References / success patterns',
+        '참조 데이터 없음': 'No reference data',
+        '아직 설정되지 않았습니다.': 'Not configured yet.',
+        '금지 표현 없음': 'No banned expressions',
         '브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 Knowledge Hub에서 관리합니다.': 'Brand voice and banned expressions are applied directly to caption and hashtag generation. Manage detailed edits in Knowledge Hub.',
         '캡션이 여기에 생성됩니다.': 'Caption is generated here.',
         '#해시태그 형식으로 생성됩니다.': 'Generated as #hashtags.',
@@ -308,6 +317,32 @@
         '필터 초기화': 'Reset filters',
         '분석 보기': 'Analytics view',
         '기본은 개요, 세부 분석은 탭으로 전환': 'Overview is the default, detailed analysis switches by tab',
+        '타깃': 'Target',
+        '전체 에피소드': 'All episodes',
+        '아직 선택된 브랜드 자산이 없습니다.': 'No brand assets selected yet.',
+        '미리보기 정보가 없습니다.': 'No preview available.',
+        '현재 필터에 맞는 브랜드 자산이 없습니다.': 'No brand assets match the current filter.',
+        '열기': 'Open',
+        '채널 미지정': 'No channel',
+        '시나리오 작성': 'Write scenario',
+        '실패': 'Failed',
+        '글': 'Text',
+        '자산': 'Asset',
+        '게시물': 'Post',
+        '제목 없음': 'Untitled',
+        '예: 따뜻하지만 과장하지 않고, 짧고 명확하게 말한다.': 'Example: warm, not exaggerated, and short and clear.',
+        '브랜드/시리즈가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.': 'Describe why the brand/series exists and what world it covers.',
+        '대표 캐릭터, 화자, 말하는 주체를 적어 주세요.': 'Describe the main character, narrator, or speaking subject.',
+        '작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.': 'Describe the work setting, service context, or brand world.',
+        '한 줄에 하나씩 입력해 주세요.\n예: 캐릭터 말투는 존댓말을 유지한다.': 'Enter one item per line.\nExample: Keep the character speaking politely.',
+        '한 줄에 하나씩 입력해 주세요.\n예: 선정적 표현 금지': 'Enter one item per line.\nExample: No sexually suggestive expressions.',
+        '한 줄에 하나씩 입력해 주세요.\n예: 오전 9시 업로드한 짧은 문장형 게시물 반응이 좋았음': 'Enter one item per line.\nExample: Short sentence-style posts uploaded at 9 AM performed well.',
+        '직장인': 'Office workers',
+        '학생': 'Students',
+        '학부모': 'Parents',
+        '개발자': 'Developers',
+        '소상공인': 'Small business owners',
+        '창업자': 'Founders',
         '게시 결과를 수집하면 채널별 성과를 여기서 한눈에 확인할 수 있습니다.': 'Once publish results are collected, you can review channel performance here at a glance.',
         '아직 게시 결과가 없습니다. Brand Studio에서 먼저 게시 결과를 기록해 주세요.': 'No publish results yet. Record publish results in Brand Studio first.',
         '아직 에피소드별로 비교할 게시 결과가 없습니다.': 'No publish results yet to compare by episode.',
@@ -374,6 +409,14 @@
         {
             re: /^시리즈 이름은 변경되었습니다\. 서버 동기화 일부 실패: (\d+)개$/,
             fn: function (m) { return 'Series name updated. Partial server sync failed: ' + m[1] + ' item(s).'; }
+        },
+        {
+            re: /^(\d+)차 광고$/,
+            fn: function (m) { return 'Ad ' + m[1]; }
+        },
+        {
+            re: /^(\d+)차 에피소드$/,
+            fn: function (m) { return 'Episode ' + m[1]; }
         },
         {
             re: /^재시도 중\.\.\. \((\d+)\/(\d+)\)$/,
@@ -478,6 +521,42 @@
         {
             re: /^클릭 (.+)$/,
             fn: function (m) { return 'Clicks ' + m[1]; }
+        },
+        {
+            re: /^(.+) 형식으로 정리한 브랜드 운영 문구입니다\.$/,
+            fn: function (m) { return 'Brand operating copy organized in ' + translateToEnglish(m[1]) + ' format.'; }
+        },
+        {
+            re: /^핵심 메시지는 "(.+)" 입니다\.$/,
+            fn: function (m) { return 'The core message is "' + translateToEnglish(m[1]) + '".'; }
+        },
+        {
+            re: /^브랜드 맥락은 (.+)$/,
+            fn: function (m) { return 'Brand context: ' + translateToEnglish(m[1]); }
+        },
+        {
+            re: /^배경 문맥은 (.+)$/,
+            fn: function (m) { return 'Background context: ' + translateToEnglish(m[1]); }
+        },
+        {
+            re: /^이번 포인트는 (.+) 입니다\.$/,
+            fn: function (m) { return 'Current focus: ' + translateToEnglish(m[1]) + '.'; }
+        },
+        {
+            re: /^기존에 반응이 좋았던 흐름은 (.+) 입니다\.$/,
+            fn: function (m) { return 'A previously strong-performing pattern is ' + translateToEnglish(m[1]) + '.'; }
+        },
+        {
+            re: /^운영 규칙은 "(.+)"를 우선합니다\.$/,
+            fn: function (m) { return 'Prioritize the operating rule "' + translateToEnglish(m[1]) + '".'; }
+        },
+        {
+            re: /^말투 기준은 (.+) 입니다\.$/,
+            fn: function (m) { return 'Tone guideline: ' + translateToEnglish(m[1]) + '.'; }
+        },
+        {
+            re: /^(.+)에게 자연스럽게 전달되도록 구성했습니다\.$/,
+            fn: function (m) { return 'Structured to feel natural for ' + translateToEnglish(m[1]) + '.'; }
         }
     ];
 
@@ -494,6 +573,7 @@
         { re: /글자색/g, to: 'Text color' },
         { re: /배경색/g, to: 'Background color' },
         { re: /시나리오 생성/g, to: 'Generate scenario' },
+        { re: /시나리오 작성/g, to: 'Write scenario' },
         { re: /초기화/g, to: 'Reset' },
         { re: /대본/g, to: 'Script' },
         { re: /개요/g, to: 'Overview' },
@@ -504,7 +584,14 @@
         { re: /톤/g, to: 'Tone' },
         { re: /스타일/g, to: 'Style' },
         { re: /추가 항목/g, to: 'Ntes' },
-        { re: /로딩 중\.\.\./g, to: 'Loading...' }
+        { re: /로딩 중\.\.\./g, to: 'Loading...' },
+        { re: /직장인/g, to: 'Office workers' },
+        { re: /학생/g, to: 'Students' },
+        { re: /학부모/g, to: 'Parents' },
+        { re: /개발자/g, to: 'Developers' },
+        { re: /소상공인/g, to: 'Small business owners' },
+        { re: /창업자/g, to: 'Founders' },
+        { re: /광고/g, to: 'Ad' }
     ];
 
     function getRuntimeLang() {

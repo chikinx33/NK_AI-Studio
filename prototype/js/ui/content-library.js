@@ -49,6 +49,12 @@
     return safePage + '?' + parts.join('&');
   }
 
+  function applyCurrentLocale() {
+    if (!NK.ui || !NK.ui.common || !NK.ui.common.applyRuntimeLocale) return;
+    var lang = NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+    NK.ui.common.applyRuntimeLocale(lang);
+  }
+
   function episodeLabel(project) {
     return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
   }
@@ -64,6 +70,7 @@
       '</div>' +
       '</div>' +
       '</section>';
+    applyCurrentLocale();
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
@@ -157,6 +164,7 @@
       '</div>' +
       groups +
       '</section>';
+    applyCurrentLocale();
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;

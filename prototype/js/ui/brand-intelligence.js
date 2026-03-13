@@ -23,6 +23,12 @@
     return safePage + '?' + parts.join('&');
   }
 
+  function applyCurrentLocale() {
+    if (!NK.ui || !NK.ui.common || !NK.ui.common.applyRuntimeLocale) return;
+    var lang = NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+    NK.ui.common.applyRuntimeLocale(lang);
+  }
+
   function channelLabel(type) {
     switch (String(type || '').trim()) {
       case 'youtube': return 'YouTube';
@@ -148,6 +154,7 @@
       '<div class="analytics-hero-actions"><a class="btn-primary" href="dashboard.html">대시보드로 이동</a></div>' +
       '</div>' +
       '</section>';
+    applyCurrentLocale();
   }
 
   function renderProject(root, project, brand, state) {
@@ -384,6 +391,7 @@
       '</section>' +
       activePanelHtml +
       '</section>';
+    applyCurrentLocale();
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
