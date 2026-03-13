@@ -32,6 +32,11 @@
         '삭제 확인': 'Delete confirmation',
         '삭제하시겠습니까?': 'Do you want to delete this item?',
         '프로젝트': 'Project',
+        '브랜드 운영': 'Brand Operations',
+        '브랜드 스튜디오': 'Brand Studio',
+        '지식 허브': 'Knowledge Hub',
+        '성과 분석': 'Analytics',
+        '콘텐츠 저장소': 'Content Library',
         '신규 프로젝트': 'New project',
         '에피소드': 'Episode',
         '첫 에피소드': 'First episode',
@@ -680,6 +685,15 @@
         { re: /광고/g, to: 'Ad' }
     ];
 
+    var KO_TEXT_EXACT = Object.keys(EN_TEXT_EXACT).reduce(function (acc, key) {
+        var en = String(EN_TEXT_EXACT[key] || '');
+        if (!en) return acc;
+        if (!Object.prototype.hasOwnProperty.call(acc, en)) {
+            acc[en] = key;
+        }
+        return acc;
+    }, {});
+
     function getRuntimeLang() {
         return (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
     }
@@ -743,6 +757,25 @@
         return lines.join('\n');
     }
 
+    function translateLineToKorean(line) {
+        var out = String(line || '');
+        if (!out) return out;
+        if (hasHangul(out)) return out;
+        if (KO_TEXT_EXACT[out]) return KO_TEXT_EXACT[out];
+        return out;
+    }
+
+    function translateToKorean(text) {
+        var raw = String(text || '');
+        if (!raw) return raw;
+        if (hasHangul(raw)) return raw;
+        var lines = raw.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+            lines[i] = translateLineToKorean(lines[i]);
+        }
+        return lines.join('\n');
+    }
+
     function processAttribute(el, attrName, lang) {
         if (!el || !el.getAttribute) return;
         var current = el.getAttribute(attrName);
@@ -753,7 +786,7 @@
             el.setAttribute(storeAttr, current);
         }
         var original = el.getAttribute(storeAttr);
-        var next = (lang === 'en') ? translateToEnglish(original) : original;
+        var next = (lang === 'en') ? translateToEnglish(original) : translateToKorean(original);
         if (next !== current) {
             el.setAttribute(attrName, next);
         }
@@ -770,7 +803,7 @@
             el.setAttribute(storeAttr, text);
         }
         var original = el.getAttribute(storeAttr);
-        var next = (lang === 'en') ? translateToEnglish(original) : original;
+        var next = (lang === 'en') ? translateToEnglish(original) : translateToKorean(original);
         if (next !== text) {
             el.textContent = next;
         }
@@ -786,7 +819,7 @@
                 originalTextNodeMap.set(node, text);
             }
             var original = originalTextNodeMap.get(node);
-            var next = (lang === 'en') ? translateToEnglish(original) : original;
+            var next = (lang === 'en') ? translateToEnglish(original) : translateToKorean(original);
             if (next !== text) {
                 node.nodeValue = next;
             }
@@ -925,7 +958,7 @@
     common.translateText = function (text, lang) {
         var safeLang = (lang === 'en') ? 'en' : 'ko';
         var raw = String(text == null ? '' : text);
-        return safeLang === 'en' ? translateToEnglish(raw) : raw;
+        return safeLang === 'en' ? translateToEnglish(raw) : translateToKorean(raw);
     };
 
     common.applyTheme = function (theme, options) {
