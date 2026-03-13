@@ -106,10 +106,12 @@
     }).filter(function (item) { return item.channelType; });
   }
 
-  function readPublishPlan(payload) {
-    var plan = payload && payload.brandStudioPublishPlan && typeof payload.brandStudioPublishPlan === 'object'
+  function readPublishPlan(brand, payload) {
+    var plan = brand && brand.brandStudioPublishPlan && typeof brand.brandStudioPublishPlan === 'object'
+      ? brand.brandStudioPublishPlan
+      : (payload && payload.brandStudioPublishPlan && typeof payload.brandStudioPublishPlan === 'object'
       ? payload.brandStudioPublishPlan
-      : null;
+      : null);
     if (!plan) {
       return { channels: [], scheduledAt: '', status: '' };
     }
@@ -123,10 +125,12 @@
     };
   }
 
-  function readPublishResults(payload) {
-    var src = payload && Array.isArray(payload.brandStudioPublishResults)
+  function readPublishResults(brand, payload) {
+    var src = brand && Array.isArray(brand.brandStudioPublishResults)
+      ? brand.brandStudioPublishResults
+      : (payload && Array.isArray(payload.brandStudioPublishResults)
       ? payload.brandStudioPublishResults
-      : (payload && Array.isArray(payload.publishResults) ? payload.publishResults : []);
+      : (payload && Array.isArray(payload.publishResults) ? payload.publishResults : []));
     return src.map(function (item, index) {
       var raw = item && typeof item === 'object' ? item : {};
       var metrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : raw;
@@ -366,8 +370,8 @@
     var autoSuggestion = readAutoSuggestion(payload);
     var knowledge = readKnowledge(brand && typeof brand === 'object' ? brand : payload);
     var channelConnections = readChannelConnections(brand, payload);
-    var publishPlan = readPublishPlan(payload);
-    var publishResults = readPublishResults(payload);
+    var publishPlan = readPublishPlan(brand, payload);
+    var publishResults = readPublishResults(brand, payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
       ? NK.service.contentLibrary.summarizeProject(brand || project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
@@ -424,6 +428,28 @@
         ? NK.service.brand.getById(nextBrandId)
         : null;
       renderProject(root, fallbackProject, nextBrand || brand);
+    }
+
+    function syncBrandAndProject(brandPatch, projectPatch) {
+      var tasks = [];
+      if (brandId && NK.service && NK.service.brand && NK.service.brand.update) {
+        tasks.push(Promise.resolve().then(function () {
+          return NK.service.brand.update(brandId, brandPatch || {});
+        }));
+      }
+      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+        tasks.push(NK.service.project.updatePayload(projectId, projectPatch || {}));
+      }
+      return Promise.all(tasks).then(function (results) {
+        var nextDraft = null;
+        for (var i = 0; i < results.length; i++) {
+          if (results[i] && results[i].draft) {
+            nextDraft = results[i].draft;
+            break;
+          }
+        }
+        return { draft: nextDraft || project };
+      });
     }
 
     var readiness = [
@@ -997,7 +1023,9 @@
           });
         }
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
+        syncBrandAndProject({
+          connectedChannels: nextConnections
+        }, {
           brandStudioChannels: nextConnections,
           connectedChannels: nextConnections.map(function (row) { return row.channelType; })
         })
@@ -1032,15 +1060,18 @@
           return;
         }
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
-          brandStudioPublishPlan: {
-            channels: selectedChannels,
-            scheduledAt: scheduledAt,
-            status: 'scheduled',
-            contentType: selectedType,
-            captionDraft: readCaptionDraft(payload),
-            hashtagDraft: readHashtagDraft(payload)
-          }
+        var nextPlan = {
+          channels: selectedChannels,
+          scheduledAt: scheduledAt,
+          status: 'scheduled',
+          contentType: selectedType,
+          captionDraft: readCaptionDraft(payload),
+          hashtagDraft: readHashtagDraft(payload)
+        };
+        syncBrandAndProject({
+          brandStudioPublishPlan: nextPlan
+        }, {
+          brandStudioPublishPlan: nextPlan
         })
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
@@ -1057,7 +1088,9 @@
       if (action === 'brand-clear-publish-plan') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
+        syncBrandAndProject({
+          brandStudioPublishPlan: null
+        }, {
           brandStudioPublishPlan: null
         })
           .then(function (result) {
@@ -1118,7 +1151,9 @@
           };
         });
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
+        syncBrandAndProject({
+          brandStudioPublishResults: nextResults
+        }, {
           brandStudioPublishResults: nextResults,
           publishResults: nextResults,
           analyticsSnapshots: nextSnapshots
@@ -1150,7 +1185,9 @@
           };
         });
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
+        syncBrandAndProject({
+          brandStudioPublishResults: remainingResults
+        }, {
           brandStudioPublishResults: remainingResults,
           publishResults: remainingResults,
           analyticsSnapshots: remainingSnapshots

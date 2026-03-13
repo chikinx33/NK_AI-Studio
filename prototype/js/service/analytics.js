@@ -25,6 +25,10 @@
 
   function readPublishResults(projectOrId) {
     if (isBrandTarget(projectOrId)) {
+      if (NK.service && NK.service.brand && NK.service.brand.listPublishResults) {
+        var directBrandResults = NK.service.brand.listPublishResults(projectOrId);
+        if (directBrandResults.length) return directBrandResults;
+      }
       return brandProjects(projectOrId).reduce(function (acc, project) {
         return acc.concat(readPublishResults(project));
       }, []);

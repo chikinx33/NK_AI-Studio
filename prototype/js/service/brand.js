@@ -26,6 +26,56 @@
         return String(fallbackPrefix || 'brand') + '_' + Date.now();
     }
 
+    function normalizePublishPlan(value) {
+        var raw = value && typeof value === 'object' ? value : null;
+        if (!raw) return null;
+        var channels = Array.isArray(raw.channels)
+            ? raw.channels.map(function (item) { return normalizeText(item); }).filter(Boolean)
+            : [];
+        var scheduledAt = normalizeText(raw.scheduledAt);
+        var status = normalizeText(raw.status);
+        var contentType = normalizeText(raw.contentType);
+        if (!channels.length && !scheduledAt && !status && !contentType) return null;
+        return {
+            channels: channels,
+            scheduledAt: scheduledAt,
+            status: status || 'scheduled',
+            contentType: contentType,
+            captionDraft: normalizeText(raw.captionDraft || raw.caption),
+            hashtagDraft: normalizeText(raw.hashtagDraft),
+            updatedAt: new Date().toISOString()
+        };
+    }
+
+    function normalizePublishResults(value) {
+        var src = Array.isArray(value) ? value : [];
+        return src.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var metrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : raw;
+            return {
+                id: normalizeText(raw.id || ('publish_' + (index + 1))) || ('publish_' + (index + 1)),
+                channelType: normalizeText(raw.channelType || raw.channel) || 'unknown',
+                contentType: normalizeText(raw.contentType) || 'unknown',
+                status: normalizeText(raw.status) || 'published',
+                publishedAt: normalizeText(raw.publishedAt || raw.capturedAt),
+                remotePostId: normalizeText(raw.remotePostId || raw.postId),
+                title: normalizeText(raw.title) || '게시 결과',
+                note: normalizeText(raw.note),
+                caption: normalizeText(raw.caption || raw.captionDraft),
+                hashtags: normalizeTextList(raw.hashtags || raw.hashtagDraft || raw.hashtagTokens),
+                metrics: {
+                    views: Math.max(0, Number(metrics.views || 0) || 0),
+                    likes: Math.max(0, Number(metrics.likes || 0) || 0),
+                    comments: Math.max(0, Number(metrics.comments || 0) || 0),
+                    shares: Math.max(0, Number(metrics.shares || 0) || 0),
+                    clicks: Math.max(0, Number(metrics.clicks || 0) || 0)
+                }
+            };
+        }).filter(function (item) {
+            return item.channelType || item.remotePostId || item.title;
+        });
+    }
+
     function storageKeys() {
         var keys = NK.config && NK.config.KEYS ? NK.config.KEYS : {};
         return {
@@ -108,6 +158,8 @@
             referenceContentEntries: Array.isArray(raw.referenceContentEntries) ? raw.referenceContentEntries.slice() : [],
             successCases: normalizeTextList(raw.successCases),
             connectedChannels: connectedChannels,
+            brandStudioPublishPlan: normalizePublishPlan(raw.brandStudioPublishPlan),
+            brandStudioPublishResults: normalizePublishResults(raw.brandStudioPublishResults),
             seriesIds: seriesIds,
             sourceProjectIds: sourceProjectIds,
             status: normalizeText(raw.status || 'active') || 'active',
@@ -332,6 +384,14 @@
     brand.getPrimaryProject = function (brandOrId) {
         var projects = brand.listProjects(brandOrId);
         return projects.length ? projects[0] : null;
+    };
+    brand.getPublishPlan = function (brandOrId) {
+        var target = resolveBrandLike(brandOrId);
+        return target && target.brandStudioPublishPlan ? normalizePublishPlan(target.brandStudioPublishPlan) : null;
+    };
+    brand.listPublishResults = function (brandOrId) {
+        var target = resolveBrandLike(brandOrId);
+        return target ? normalizePublishResults(target.brandStudioPublishResults) : [];
     };
     brand.getDisplayContext = function (options) {
         var currentBrand = brand.resolveCurrent(options);
