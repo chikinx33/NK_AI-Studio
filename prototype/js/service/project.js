@@ -13,6 +13,14 @@
         return String(Date.now() + Math.floor(Math.random() * 1000));
     }
 
+    function normalizeBrandId(value) {
+        var raw = String(value || '').trim().toLowerCase();
+        if (!raw) return '';
+        return raw
+            .replace(/\s+/g, '-')
+            .replace(/[^a-z0-9._-]+/g, '');
+    }
+
     var PROJECT_CORE_STRING_FIELDS = [
         'projectType',
         'contentStyle',
@@ -25,6 +33,32 @@
         'brandCharacter'
     ];
     var PROJECT_CORE_LIST_FIELDS = ['brandKeywords', 'brandRules', 'connectedChannels'];
+    var BRAND_SYNC_FIELDS = [
+        'brandId',
+        'brandTitle',
+        'brandRef',
+        'brandSummary',
+        'coreMessage',
+        'targetAudience',
+        'target',
+        'brandVoice',
+        'brandTone',
+        'brandStory',
+        'brandCharacter',
+        'worldSetting',
+        'knowledgeWorld',
+        'brandKeywords',
+        'brandRules',
+        'connectedChannels',
+        'bannedExpressions',
+        'referenceContents',
+        'referenceContentEntries',
+        'successCases',
+        'knowledgeHub',
+        'brandStudioChannels',
+        'seriesId',
+        'seriesTitle'
+    ];
 
     function normalizeText(value) {
         return String(value || '').replace(/[<>]/g, '').trim();
@@ -184,6 +218,103 @@
         });
     }
 
+    function normalizeBrandRef(source, draft) {
+        var raw = source && typeof source === 'object' ? source : {};
+        var ref = raw.brandRef && typeof raw.brandRef === 'object' ? raw.brandRef : {};
+        var brandId = normalizeBrandId(
+            raw.brandId || ref.id || raw.seriesId || (draft && draft.seriesId) || raw.seriesTitle || (draft && draft.seriesTitle) || (draft && draft.id)
+        ) || ('brand_' + String(draft && draft.id || Date.now()));
+        var brandTitle = normalizeText(
+            ref.title || raw.brandTitle || raw.seriesTitle || (draft && draft.seriesTitle) || raw.brandSummary || (draft && draft.title) || '새 브랜드'
+        ) || '새 브랜드';
+        return {
+            brandId: brandId,
+            brandTitle: brandTitle,
+            brandRef: {
+                id: brandId,
+                title: brandTitle
+            }
+        };
+    }
+
+    function cloneJson(value, fallback) {
+        try {
+            return JSON.parse(JSON.stringify(value == null ? fallback : value));
+        } catch (_) {
+            return fallback;
+        }
+    }
+
+    function extractBrandContext(source) {
+        var raw = source && typeof source === 'object' ? source : {};
+        var context = {};
+        var textFields = [
+            'brandId',
+            'brandTitle',
+            'brandSummary',
+            'coreMessage',
+            'targetAudience',
+            'target',
+            'brandVoice',
+            'brandTone',
+            'brandStory',
+            'brandCharacter',
+            'worldSetting',
+            'knowledgeWorld'
+        ];
+        var listFields = [
+            'brandKeywords',
+            'brandRules',
+            'connectedChannels',
+            'bannedExpressions',
+            'referenceContents',
+            'successCases'
+        ];
+
+        textFields.forEach(function (key) {
+            var value = normalizeText(raw[key]);
+            if (value) context[key] = value;
+        });
+        listFields.forEach(function (key) {
+            var value = normalizeTextList(raw[key]);
+            if (value.length) context[key] = value;
+        });
+
+        if (Array.isArray(raw.referenceContentEntries) && raw.referenceContentEntries.length) {
+            context.referenceContentEntries = cloneJson(raw.referenceContentEntries, []);
+        }
+        if (Array.isArray(raw.brandStudioChannels) && raw.brandStudioChannels.length) {
+            context.brandStudioChannels = cloneJson(raw.brandStudioChannels, []);
+        }
+        if (raw.brandRef && typeof raw.brandRef === 'object') {
+            context.brandRef = {
+                id: normalizeBrandId(raw.brandRef.id),
+                title: normalizeText(raw.brandRef.title)
+            };
+        }
+        if (raw.knowledgeHub && typeof raw.knowledgeHub === 'object') {
+            context.knowledgeHub = normalizeKnowledgeHub(raw.knowledgeHub);
+        }
+        return context;
+    }
+
+    function shouldSyncBrandFromPatch(patch) {
+        if (!patch || typeof patch !== 'object') return false;
+        return BRAND_SYNC_FIELDS.some(function (key) {
+            return Object.prototype.hasOwnProperty.call(patch, key);
+        });
+    }
+
+    function syncBrandFromDraft(draft) {
+        try {
+            if (NK.service && NK.service.brand && NK.service.brand.upsertFromProject) {
+                NK.service.brand.upsertFromProject(draft);
+            }
+        } catch (err) {
+            console.warn('Brand sync fail', err);
+        }
+    }
+
     function applyProjectCore(payload, draft) {
         var merged = Object.assign({}, (draft && draft.payload) || {}, payload || {});
         var core = normalizeProjectCore(merged);
@@ -191,6 +322,7 @@
         var publishResults = normalizePublishResults(merged.brandStudioPublishResults || merged.publishResults);
         var analyticsSnapshots = normalizeAnalyticsSnapshots(merged);
         var nextPayload = Object.assign({}, payload || {}, core);
+        var brandMeta = normalizeBrandRef(merged, draft);
         nextPayload.knowledgeHub = knowledge;
         nextPayload.brandVoice = knowledge.brandVoice;
         nextPayload.brandStory = knowledge.brandStory;
@@ -203,6 +335,9 @@
         nextPayload.brandStudioPublishResults = publishResults.slice();
         nextPayload.publishResults = publishResults.slice();
         nextPayload.analyticsSnapshots = analyticsSnapshots.slice();
+        nextPayload.brandId = brandMeta.brandId;
+        nextPayload.brandTitle = brandMeta.brandTitle;
+        nextPayload.brandRef = brandMeta.brandRef;
         if (!nextPayload.worldSetting && knowledge.worldSetting) nextPayload.worldSetting = knowledge.worldSetting;
         if (!nextPayload.knowledgeWorld && knowledge.worldSetting) nextPayload.knowledgeWorld = knowledge.worldSetting;
         if (!nextPayload.target && core.targetAudience) nextPayload.target = core.targetAudience;
@@ -220,11 +355,17 @@
         payload.seriesId = seriesId;
         payload.seriesTitle = seriesTitle;
         var title = String(draft.title || payload.episodeTitle || seriesTitle).trim() || '제목없음';
+        var brandMeta = normalizeBrandRef(payload, { id: id, title: title, seriesId: seriesId, seriesTitle: seriesTitle });
+        payload.brandId = brandMeta.brandId;
+        payload.brandTitle = brandMeta.brandTitle;
+        payload.brandRef = brandMeta.brandRef;
         return Object.assign({}, draft, {
             id: id,
             title: title,
             seriesId: seriesId,
             seriesTitle: seriesTitle,
+            brandId: brandMeta.brandId,
+            brandRef: brandMeta.brandRef,
             projectCore: normalizeProjectCore(payload),
             knowledgeHub: normalizeKnowledgeHub(payload),
             payload: payload
@@ -402,7 +543,7 @@
         var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         var seriesList = listSeriesFromDrafts(drafts);
         var requestedCore = normalizeProjectCore(arg || {});
-        var inheritedCore = requestedCore;
+        var inheritedContext = Object.assign({}, requestedCore, extractBrandContext(arg || {}));
 
         if (mode === 'episode') {
             var matched = seriesList.find(function (s) { return String(s.id) === String(seriesId); });
@@ -410,7 +551,7 @@
             var matchedDraft = drafts.find(function (d) { return String(d.seriesId) === String(seriesId); }) || null;
             seriesTitle = seriesTitle || matched.title;
             if (!episodeTitle) episodeTitle = seriesTitle + ' 새 에피소드';
-            inheritedCore = normalizeProjectCore((matchedDraft && matchedDraft.payload) || {});
+            inheritedContext = extractBrandContext((matchedDraft && matchedDraft.payload) || {});
         } else {
             if (!seriesTitle) throw new Error('series_title_required');
             seriesId = seriesId || ('projects' + Date.now());
@@ -427,15 +568,22 @@
             payload: applyProjectCore({
                 topic: '',
                 aspectRatio: ratio,
+                brandId: normalizeBrandId(inheritedContext.brandId || seriesId),
+                brandTitle: normalizeText(inheritedContext.brandTitle || seriesTitle) || seriesTitle,
+                brandRef: inheritedContext.brandRef || {
+                    id: normalizeBrandId(inheritedContext.brandId || seriesId),
+                    title: normalizeText(inheritedContext.brandTitle || seriesTitle) || seriesTitle
+                },
                 seriesId: seriesId,
                 seriesTitle: seriesTitle,
                 episodeTitle: episodeTitle
-            }, { payload: inheritedCore }),
+            }, { payload: inheritedContext }),
             scenes: []
         };
 
         drafts.unshift(newDraft);
         NK.store.saveDrafts(drafts.slice(0, 100));
+        syncBrandFromDraft(newDraft);
 
         try {
             await NK.api.projectInit(String(id));
@@ -460,6 +608,15 @@
         var target = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
         return normalizeKnowledgeHub((target && target.payload) || draftOrId || {});
     };
+    project.getBrandRef = function (draftOrId) {
+        var target = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
+        var src = (target && target.payload) || draftOrId || {};
+        return normalizeBrandRef(src, target || src);
+    };
+    project.getBrandId = function (draftOrId) {
+        var ref = project.getBrandRef(draftOrId);
+        return String(ref && ref.brandId || '').trim();
+    };
     project.applyProjectCore = function (payload, draftOrId) {
         var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : draftOrId;
         return applyProjectCore(payload, draft);
@@ -478,6 +635,11 @@
         var normalized = writeCurrentProjectStorage(draft);
         if (!normalized) return null;
         if (NK.state && NK.state.set) NK.state.set({ currentProject: normalized });
+        try {
+            if (NK.service && NK.service.brand && NK.service.brand.setCurrent) {
+                NK.service.brand.setCurrent(normalized.payload && normalized.payload.brandRef ? normalized.payload.brandRef : normalized);
+            }
+        } catch (_) { }
         return normalized;
     };
     project.clearCurrent = function () {
@@ -498,6 +660,7 @@
         drafts[idx] = normalizeDraft(target);
         NK.store.saveDrafts(drafts);
         project.setCurrent(drafts[idx]);
+        if (shouldSyncBrandFromPatch(patch)) syncBrandFromDraft(drafts[idx]);
 
         var sync = await syncDraftToServer(drafts[idx]);
         return {
