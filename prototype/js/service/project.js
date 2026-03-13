@@ -718,6 +718,72 @@
     };
 
     /**
+     * Update shared project profile fields for every episode in a series.
+     */
+    project.updateSeriesProfile = async function (seriesId, patch) {
+        var sid = normalizeSeriesId(seriesId);
+        if (!sid) throw new Error('series_id_required');
+
+        var normalizedPatch = {
+            projectType: normalizeText(patch && patch.projectType),
+            brandSummary: normalizeText(patch && patch.brandSummary),
+            coreMessage: normalizeText(patch && patch.coreMessage)
+        };
+
+        var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        var targets = drafts.filter(function (d) { return String(d.seriesId) === String(sid); });
+        if (!targets.length) throw new Error('series_not_found');
+
+        var primary = targets[0];
+        var brandId = normalizeBrandId(primary && primary.payload && primary.payload.brandId);
+
+        try {
+            if (brandId && NK.service && NK.service.brand && NK.service.brand.getById && NK.service.brand.update) {
+                var matchedBrand = NK.service.brand.getById(brandId);
+                if (matchedBrand) {
+                    NK.service.brand.update(brandId, {
+                        brandSummary: normalizedPatch.brandSummary,
+                        coreMessage: normalizedPatch.coreMessage
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn('Brand profile sync fail', err);
+        }
+
+        targets.forEach(function (draft) {
+            draft.payload = Object.assign({}, draft.payload || {}, normalizedPatch);
+            draft.payload = applyProjectCore(draft.payload, draft);
+        });
+
+        NK.store.saveDrafts(drafts);
+        updateSelectedDraftAfterBulk(drafts);
+
+        try {
+            syncBrandFromDraft(targets[0]);
+        } catch (err) {
+            console.warn('Brand profile mirror fail', err);
+        }
+
+        var synced = 0;
+        var failed = 0;
+        for (var i = 0; i < targets.length; i++) {
+            var result = await syncDraftToServer(targets[i]);
+            if (result.ok) synced += 1;
+            else failed += 1;
+        }
+
+        return {
+            ok: true,
+            seriesId: sid,
+            updatedCount: targets.length,
+            synced: synced,
+            failed: failed,
+            patch: normalizedPatch
+        };
+    };
+
+    /**
      * Delete all episodes under a series.
      */
     project.deleteSeries = async function (seriesId) {

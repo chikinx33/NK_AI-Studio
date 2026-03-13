@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config) window.NK.config.APP_VERSION = '1.770';
+  if (window.NK.config) window.NK.config.APP_VERSION = '1.771';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -2039,9 +2039,12 @@
     if (overlay.dataset.projectOverlayReady === '1') return;
     overlay.dataset.projectOverlayReady = '1';
     const createDefaultLabel = (btnCreate.textContent || '').trim() || '생성';
+    const editDefaultLabel = '저장';
     const overlayCard = overlay.querySelector('.auth-card');
     let creating = false;
     let mode = 'new-series';
+    let overlayPurpose = 'create';
+    let editingSeriesId = '';
 
     const applyCurrentLocale = () => {
       if (!NK.ui || !NK.ui.common || !NK.ui.common.applyRuntimeLocale) return;
@@ -2188,7 +2191,75 @@
       return list;
     };
 
+    const findSeriesDrafts = (seriesId) => {
+      const sid = String(seriesId || '').trim();
+      if (!sid) return [];
+      return NK.store.getDrafts()
+        .map((draft) => NK.service?.project?.normalizeDraft ? NK.service.project.normalizeDraft(draft) : draft)
+        .filter(Boolean)
+        .filter((draft) => String(draft.seriesId || draft?.payload?.seriesId || '').trim() === sid)
+        .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+    };
+
+    const resolveSeriesProfile = (seriesId) => {
+      const drafts = findSeriesDrafts(seriesId);
+      const primary = drafts[0] || null;
+      const payload = primary && primary.payload ? primary.payload : {};
+      const matchedBrand = (NK.service && NK.service.brand && NK.service.brand.getBySeriesId)
+        ? NK.service.brand.getBySeriesId(seriesId)
+        : null;
+      return {
+        seriesId: String(seriesId || '').trim(),
+        seriesTitle: String(primary?.seriesTitle || payload.seriesTitle || primary?.title || '').trim(),
+        episodeTitle: String(primary?.title || payload.episodeTitle || '').trim(),
+        projectType: String(payload.projectType || '').trim(),
+        brandSummary: String(matchedBrand?.brandSummary || payload.brandSummary || '').trim(),
+        coreMessage: String(matchedBrand?.coreMessage || payload.coreMessage || '').trim()
+      };
+    };
+
+    const applyOverlayPurpose = (purpose, options) => {
+      const nextPurpose = purpose === 'edit-series' ? 'edit-series' : 'create';
+      overlayPurpose = nextPurpose;
+      editingSeriesId = nextPurpose === 'edit-series' ? String(options?.seriesId || '').trim() : '';
+
+      if (nextPurpose !== 'edit-series') {
+        modeButtons.forEach((btn) => {
+          btn.disabled = creating;
+          btn.classList.remove('disabled');
+        });
+        btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
+        return;
+      }
+
+      const profile = resolveSeriesProfile(editingSeriesId);
+      mode = 'new-series';
+      modeButtons.forEach((btn) => {
+        const active = btn.dataset.mode === 'new-series';
+        btn.classList.toggle('active', active);
+        btn.disabled = true;
+        btn.classList.add('disabled');
+      });
+      newSeriesRow.classList.remove('hidden');
+      existingSeriesRow.classList.add('hidden');
+      profileLine.classList.remove('hidden');
+      ensureLabel(baseRow, '에피소드');
+      input.placeholder = '';
+      hintRow.textContent = '프로젝트 유형, 브랜드 요약, 핵심 메시지만 수정할 수 있습니다.';
+      if (seriesInput) seriesInput.value = profile.seriesTitle || '';
+      input.value = profile.episodeTitle || '';
+      if (projectTypeSelect) projectTypeSelect.value = profile.projectType || '';
+      if (brandSummaryInput) brandSummaryInput.value = profile.brandSummary || '';
+      if (coreMessageInput) coreMessageInput.value = profile.coreMessage || '';
+      btnCreate.textContent = creating ? '저장 중...' : editDefaultLabel;
+    };
+
     const setMode = (nextMode) => {
+      if (overlayPurpose === 'edit-series') {
+        mode = 'new-series';
+        applyOverlayPurpose('edit-series', { seriesId: editingSeriesId });
+        return;
+      }
       mode = nextMode === 'episode' ? 'episode' : 'new-series';
       modeButtons.forEach((btn) => {
         const active = btn.dataset.mode === mode;
@@ -2221,19 +2292,34 @@
       creating = !!isBusy;
       overlay.classList.toggle('is-creating', creating);
       if (!creating) {
-        setMode(mode);
+        if (overlayPurpose === 'edit-series') {
+          applyOverlayPurpose('edit-series', { seriesId: editingSeriesId });
+        } else {
+          setMode(mode);
+        }
       } else {
         btnCreate.disabled = true;
       }
       btnCancel.disabled = creating;
-      input.disabled = creating;
-      if (seriesInput) seriesInput.disabled = creating;
-      if (seriesSelect) seriesSelect.disabled = creating || mode !== 'episode' || !seriesSelect.options.length || !seriesSelect.value;
-      if (projectTypeSelect) projectTypeSelect.disabled = creating || mode !== 'new-series';
-      if (brandSummaryInput) brandSummaryInput.disabled = creating || mode !== 'new-series';
-      if (coreMessageInput) coreMessageInput.disabled = creating || mode !== 'new-series';
-      modeButtons.forEach((btn) => { btn.disabled = creating; });
-      btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
+      if (overlayPurpose === 'edit-series') {
+        input.disabled = true;
+        if (seriesInput) seriesInput.disabled = true;
+        if (seriesSelect) seriesSelect.disabled = true;
+        if (projectTypeSelect) projectTypeSelect.disabled = creating;
+        if (brandSummaryInput) brandSummaryInput.disabled = creating;
+        if (coreMessageInput) coreMessageInput.disabled = creating;
+        modeButtons.forEach((btn) => { btn.disabled = true; });
+        btnCreate.textContent = creating ? '저장 중...' : editDefaultLabel;
+      } else {
+        input.disabled = creating;
+        if (seriesInput) seriesInput.disabled = creating;
+        if (seriesSelect) seriesSelect.disabled = creating || mode !== 'episode' || !seriesSelect.options.length || !seriesSelect.value;
+        if (projectTypeSelect) projectTypeSelect.disabled = creating || mode !== 'new-series';
+        if (brandSummaryInput) brandSummaryInput.disabled = creating || mode !== 'new-series';
+        if (coreMessageInput) coreMessageInput.disabled = creating || mode !== 'new-series';
+        modeButtons.forEach((btn) => { btn.disabled = creating; });
+        btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
+      }
       blurTargets.forEach(el => {
         el.classList.toggle('blur-active', creating || !overlay.classList.contains('hidden'));
         el.classList.toggle('loading-blur', creating);
@@ -2244,11 +2330,15 @@
     const close = () => {
       if (creating) return;
       overlay.classList.add('hidden');
+      overlayPurpose = 'create';
+      editingSeriesId = '';
       input.value = '';
       if (seriesInput) seriesInput.value = '';
+      if (seriesSelect) seriesSelect.value = '';
       if (projectTypeSelect) projectTypeSelect.value = '';
       if (brandSummaryInput) brandSummaryInput.value = '';
       if (coreMessageInput) coreMessageInput.value = '';
+      modeButtons.forEach((btn) => btn.classList.remove('disabled'));
       blurTargets.forEach(el => {
         el.classList.remove('blur-active');
         el.classList.remove('loading-blur');
@@ -2266,6 +2356,42 @@
       const coreMessage = coreMessageInput ? String(coreMessageInput.value || '').trim() : '';
       const seriesList = refreshSeriesOptions();
       let payload = null;
+      if (overlayPurpose === 'edit-series') {
+        if (!editingSeriesId) {
+          alert('수정할 프로젝트를 찾을 수 없습니다.');
+          return;
+        }
+        setCreatingState(true);
+        let completed = false;
+        try {
+          const result = await NK.service.project.updateSeriesProfile(editingSeriesId, {
+            projectType,
+            brandSummary,
+            coreMessage
+          });
+          completed = true;
+          setCreatingState(false);
+          close();
+          if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) {
+            NK.ui.dashboard.renderDrafts();
+          }
+          if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
+            const current = NK.service?.project?.resolveCurrent ? NK.service.project.resolveCurrent({ search: window.location.search }) : null;
+            NK.ui.dashboard.renderSidebarProjectCard(current);
+          }
+          if (result && result.failed > 0) {
+            alert('프로젝트 정보는 수정되었습니다. 서버 동기화 일부 실패: ' + result.failed + '개');
+          } else {
+            alert('프로젝트 정보를 수정했습니다.');
+          }
+        } catch (err) {
+          alert('프로젝트 수정 실패: ' + (err?.message || err));
+        } finally {
+          if (!completed) setCreatingState(false);
+        }
+        return;
+      }
+
       if (mode === 'new-series') {
         if (!seriesTitleInput) {
           alert('신규 프로젝트 이름을 입력해 주세요.');
@@ -2356,6 +2482,8 @@
     const openFromAnywhere = () => {
       setCreatingState(false);
       const seriesList = refreshSeriesOptions();
+      overlayPurpose = 'create';
+      editingSeriesId = '';
       setMode(seriesList.length ? 'episode' : 'new-series');
       overlay.classList.remove('hidden');
       blurTargets.forEach(el => el.classList.add('blur-active'));
@@ -2365,8 +2493,30 @@
         else input.focus();
       }, 0);
     };
+    const openEditor = (options) => {
+      const targetSeriesId = String(options?.seriesId || '').trim();
+      if (!targetSeriesId) {
+        openFromAnywhere();
+        return;
+      }
+      setCreatingState(false);
+      refreshSeriesOptions();
+      overlay.classList.remove('hidden');
+      blurTargets.forEach(el => el.classList.add('blur-active'));
+      applyOverlayPurpose('edit-series', { seriesId: targetSeriesId });
+      applyCurrentLocale();
+      setTimeout(() => {
+        if (projectTypeSelect) projectTypeSelect.focus();
+      }, 0);
+    };
     // 빈 카드 클릭 처리 이미 renderDrafts 쪽에 존재하므로 여기서는 open 함수만 노출
-    NK.ui.openProjectOverlay = openFromAnywhere;
+    NK.ui.openProjectOverlay = function (options) {
+      if (options && options.mode === 'edit-series') {
+        openEditor(options);
+        return;
+      }
+      openFromAnywhere();
+    };
     applyCurrentLocale();
   };
 
