@@ -141,6 +141,28 @@
     return data;
   };
 
+  api.generateHashtags = async function (payload) {
+    var res = await fetchWithTimeout(withBase('/api/hashtags'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }, 30000);
+    var text = await readTextWithTimeout(res, 30000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'hashtag_api_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    var data = j(text);
+    if (!data || !Array.isArray(data.hashtags) || !data.hashtags.length) {
+      var invalidErr = new Error('hashtag_response_invalid');
+      invalidErr.detail = text;
+      throw invalidErr;
+    }
+    return data;
+  };
+
   api.imagen = async function (body) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();

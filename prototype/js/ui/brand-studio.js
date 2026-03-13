@@ -184,9 +184,27 @@
   function normalizeHashtagToken(value) {
     var raw = String(value || '').trim();
     if (!raw) return '';
-    raw = raw.replace(/^#+/, '').replace(/[^0-9A-Za-z가-힣_]+/g, '');
+    raw = raw.replace(/^#+/, '').replace(/\s+/g, '').replace(/[^0-9A-Za-z가-힣_]+/g, '');
     if (!raw) return '';
+    if (raw.length < 2 || raw.length > 18) return '';
     return '#' + raw;
+  }
+
+  function splitHashtagKeywordCandidates(value) {
+    var text = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!text) return [];
+    if (text.length <= 18 && !/[.!?]/.test(text)) return [text];
+    return text
+      .split(/[,\n/|]/)
+      .map(function (item) { return String(item || '').trim(); })
+      .filter(Boolean)
+      .reduce(function (acc, item) {
+        item.split(/\s+/).forEach(function (token) {
+          token = String(token || '').trim();
+          if (token && token.length >= 2 && token.length <= 18) acc.push(token);
+        });
+        return acc;
+      }, []);
   }
 
   function parseHashtagTokens(value) {
@@ -259,20 +277,24 @@
       tokens.push(tag);
     }
 
+    function pushKeywords(value) {
+      splitHashtagKeywordCandidates(value).forEach(pushToken);
+    }
+
     pushToken(brandView.title || (project && (project.seriesTitle || project.title)));
     pushToken(payload.projectType);
     pushToken(payload.targetAudience || payload.target);
     pushToken(selectedOption && selectedOption.title);
-    pushToken(knowledge.brandCharacter);
-    pushToken(knowledge.worldSetting);
+    pushKeywords(knowledge.brandCharacter);
+    pushKeywords(knowledge.worldSetting);
     toTagList(payload.brandKeywords).slice(0, 4).forEach(pushToken);
-    toTagList(knowledge.referenceContents).slice(0, 2).forEach(pushToken);
-    toTagList(knowledge.successCases).slice(0, 2).forEach(pushToken);
+    toTagList(knowledge.referenceContents).slice(0, 2).forEach(pushKeywords);
+    toTagList(knowledge.successCases).slice(0, 2).forEach(pushKeywords);
     toTagList(payload.purposeTags).slice(0, 3).forEach(pushToken);
 
     var sourceLine = firstFilled(sourceTexts);
     if (sourceLine) {
-      sourceLine.split(/\s+/).slice(0, 3).forEach(pushToken);
+      sourceLine.split(/\s+/).slice(0, 3).forEach(pushKeywords);
     }
 
     return tokens.filter(function (token) {
@@ -280,6 +302,36 @@
         return token.toLowerCase().indexOf(String(term || '').trim().toLowerCase()) >= 0;
       });
     }).slice(0, 8).join(' ');
+  }
+
+  function currentLanguage() {
+    return NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+  }
+
+  function buildHashtagRequestPayload(project, brandView, selectedOption, sourceTexts, knowledge) {
+    var payload = (project && project.payload) || {};
+    return {
+      language: currentLanguage(),
+      brandTitle: brandView.title || '',
+      brandSummary: brandView.summary || payload.brandSummary || '',
+      coreMessage: brandView.coreMessage || payload.coreMessage || '',
+      targetAudience: brandView.targetAudience || payload.targetAudience || payload.target || '',
+      contentType: selectedOption && selectedOption.title ? selectedOption.title : (payload.brandStudioContentType || ''),
+      brandKeywords: brandView.brandKeywords && brandView.brandKeywords.length
+        ? brandView.brandKeywords.slice(0, 6)
+        : toTagList(payload.brandKeywords).slice(0, 6),
+      sourceTexts: (Array.isArray(sourceTexts) ? sourceTexts : []).slice(0, 6),
+      knowledgeHub: {
+        brandVoice: knowledge.brandVoice || '',
+        brandStory: knowledge.brandStory || '',
+        brandCharacter: knowledge.brandCharacter || '',
+        worldSetting: knowledge.worldSetting || '',
+        brandRules: toTagList(knowledge.brandRules).slice(0, 8),
+        bannedExpressions: toTagList(knowledge.bannedExpressions).slice(0, 12),
+        referenceContents: toTagList(knowledge.referenceContents).slice(0, 6),
+        successCases: toTagList(knowledge.successCases).slice(0, 6)
+      }
+    };
   }
 
   function channelOptions() {
@@ -937,9 +989,30 @@
       }
       if (action === 'brand-generate-hashtags' || action === 'brand-regenerate-hashtags') {
         if (!selectedOption || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextTags = buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge);
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, { brandStudioHashtagDraft: nextTags })
+        Promise.resolve()
+          .then(function () {
+            if (!NK.api || !NK.api.generateHashtags) {
+              return {
+                text: buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge),
+                fallback: true
+              };
+            }
+            return NK.api.generateHashtags(buildHashtagRequestPayload(project, brandView, selectedOption, sourceTexts, knowledge))
+              .catch(function () {
+                return {
+                  text: buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge),
+                  fallback: true
+                };
+              });
+          })
+          .then(function (generated) {
+            var nextTags = String(generated && (generated.text || (Array.isArray(generated.hashtags) ? generated.hashtags.join(' ') : '')) || '').trim();
+            if (!nextTags) {
+              nextTags = buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge);
+            }
+            return NK.service.project.updatePayload(projectId, { brandStudioHashtagDraft: nextTags });
+          })
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
