@@ -241,7 +241,7 @@
                 <button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>
               </div>
               <div class="draft-meta">
-                <div>프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
+                <div class="draft-meta-project">프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
                 <div>장르 : ${escapeHtml(genre || '-')}</div>
                 <div>타겟 : ${escapeHtml(tgt || '-')}</div>
                 <div>길이 : ${escapeHtml(dur)}</div>

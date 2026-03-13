@@ -2296,6 +2296,12 @@ a.btn-primary:active {
   font-size: 14px;
 }
 
+.draft-meta-project {
+  color: #6fb8ff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
 .draft-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
