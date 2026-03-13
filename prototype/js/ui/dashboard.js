@@ -198,13 +198,21 @@
 
     const filterBar = `
       <div class="series-filter-bar">
-        <button class="btn-primary series-create-btn" data-action="create-project">신규</button>
-        <button class="chip series-chip ${currentSeriesFilter === '__all__' ? 'active' : ''}" data-action="series-filter" data-series-id="__all__">전체</button>
-        ${seriesList.map((s) => `
-          <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}" data-action="series-filter" data-series-id="${escapeHtml(s.id)}">
-            ${escapeHtml(s.title)} (${s.count})
-          </button>
-        `).join('')}
+        <div class="series-filter-header">
+          <div class="series-filter-title-block">
+            <p class="series-filter-eyebrow">Dashboard Categories</p>
+            <strong class="series-filter-title">프로젝트 카테고리</strong>
+          </div>
+          <button class="btn-primary series-create-btn" data-action="create-project">신규</button>
+        </div>
+        <div class="series-filter-chip-row">
+          <button class="chip series-chip ${currentSeriesFilter === '__all__' ? 'active' : ''}" data-action="series-filter" data-series-id="__all__">전체</button>
+          ${seriesList.map((s) => `
+            <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}" data-action="series-filter" data-series-id="${escapeHtml(s.id)}">
+              ${escapeHtml(s.title)} (${s.count})
+            </button>
+          `).join('')}
+        </div>
       </div>
       <div class="series-manage-bar">
         <span class="series-manage-label">${selectedSeries ? `선택된 시리즈: ${escapeHtml(selectedSeries.title)}` : '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.'}</span>
