@@ -14,6 +14,25 @@
     return projectOrId;
   }
 
+  function payloadForTarget(projectOrId) {
+    var target = normalizeProject(projectOrId);
+    if (!target) return {};
+    if (target.payload && typeof target.payload === 'object') return target.payload;
+    return {
+      brandSummary: String(target.brandSummary || '').trim(),
+      coreMessage: String(target.coreMessage || '').trim(),
+      brandKeywords: Array.isArray(target.brandKeywords) ? target.brandKeywords.slice() : [],
+      knowledgeHub: {
+        brandVoice: String(target.brandVoice || '').trim(),
+        brandStory: String(target.brandStory || '').trim(),
+        brandCharacter: String(target.brandCharacter || '').trim(),
+        brandRules: Array.isArray(target.brandRules) ? target.brandRules.slice() : [],
+        bannedExpressions: Array.isArray(target.bannedExpressions) ? target.bannedExpressions.slice() : [],
+        successCases: Array.isArray(target.successCases) ? target.successCases.slice() : []
+      }
+    };
+  }
+
   function channelLabel(type) {
     switch (String(type || '').trim()) {
       case 'youtube': return 'YouTube';
@@ -58,7 +77,7 @@
     var project = normalizeProject(projectOrId);
     if (!project || !NK.service || !NK.service.analytics) return [];
 
-    var payload = project.payload || {};
+    var payload = payloadForTarget(projectOrId);
     var summary = NK.service.analytics.summarizeProject(project);
     var byChannel = NK.service.analytics.summarizeByChannel(project);
     var byType = NK.service.analytics.summarizeByContentType(project);
@@ -139,7 +158,7 @@
     var project = normalizeProject(projectOrId);
     if (!project || !NK.service || !NK.service.analytics) return [];
 
-    var payload = project.payload || {};
+    var payload = payloadForTarget(projectOrId);
     var byChannel = NK.service.analytics.summarizeByChannel(project);
     var byType = NK.service.analytics.summarizeByContentType(project);
     var byTime = NK.service.analytics.summarizeByUploadTime(project).filter(function (item) { return item.totalPosts > 0; });
@@ -149,7 +168,7 @@
     var bestTime = firstItem(byTime);
     var bestTag = firstItem(byHashtag);
     var knowledge = payload.knowledgeHub && typeof payload.knowledgeHub === 'object' ? payload.knowledgeHub : payload;
-    var brandSummary = String(payload.brandSummary || project.seriesTitle || project.title || '').trim();
+    var brandSummary = String(payload.brandSummary || project.brandTitle || project.seriesTitle || project.title || '').trim();
     var coreMessage = String(payload.coreMessage || '').trim();
     var voice = String(knowledge.brandVoice || '').trim();
     var rules = toTagList(knowledge.brandRules);
@@ -157,7 +176,7 @@
 
     if (topType) {
       var primaryType = topType.contentType || 'sns-post';
-      var primaryTag = bestTag ? bestTag.hashtag : normalizeHashtagToken(payload.projectType || project.seriesTitle || 'project');
+      var primaryTag = bestTag ? bestTag.hashtag : normalizeHashtagToken(payload.projectType || project.brandTitle || project.seriesTitle || 'project');
       suggestions.push({
         id: 'suggest_primary_' + primaryType,
         title: contentTypeLabel(primaryType) + ' 확장안',
@@ -217,7 +236,7 @@
           '포맷 실험은 하되 브랜드 정체성은 흔들리지 않도록 구성합니다.'
         ].filter(Boolean).join(' '),
         hashtags: (bestTag ? [bestTag.hashtag] : []).concat(
-          normalizeHashtagToken(project.seriesTitle || project.title || 'brand')
+          normalizeHashtagToken(project.brandTitle || project.seriesTitle || project.title || 'brand')
         ).filter(Boolean),
         reason: '브랜드 규칙이 이미 정리돼 있어 일관성을 유지하면서 확장하기 좋습니다.'
       });

@@ -12,11 +12,15 @@
       .replace(/'/g, '&#39;');
   }
 
-  function buildStageUrl(page, projectId) {
+  function buildStageUrl(page, projectId, brandId) {
     var safePage = String(page || '').trim() || 'dashboard.html';
     var safeProjectId = String(projectId || '').trim();
-    if (!safeProjectId) return safePage;
-    return safePage + '?projectId=' + encodeURIComponent(safeProjectId);
+    var safeBrandId = String(brandId || '').trim();
+    var parts = [];
+    if (safeProjectId) parts.push('projectId=' + encodeURIComponent(safeProjectId));
+    if (safeBrandId) parts.push('brandId=' + encodeURIComponent(safeBrandId));
+    if (!parts.length) return safePage;
+    return safePage + '?' + parts.join('&');
   }
 
   function splitLines(value) {
@@ -34,6 +38,19 @@
   }
 
   function readKnowledge(project) {
+    if (project && project.brandId && !project.id) {
+      return {
+        brandVoice: String(project.brandVoice || '').trim(),
+        brandStory: String(project.brandStory || '').trim(),
+        brandCharacter: String(project.brandCharacter || '').trim(),
+        worldSetting: String(project.worldSetting || project.knowledgeWorld || '').trim(),
+        brandRules: Array.isArray(project.brandRules) ? project.brandRules.slice() : [],
+        bannedExpressions: Array.isArray(project.bannedExpressions) ? project.bannedExpressions.slice() : [],
+        referenceContents: Array.isArray(project.referenceContents) ? project.referenceContents.slice() : [],
+        referenceItems: Array.isArray(project.referenceContentEntries) ? project.referenceContentEntries.slice() : [],
+        successCases: Array.isArray(project.successCases) ? project.successCases.slice() : []
+      };
+    }
     if (NK.service && NK.service.project && NK.service.project.getKnowledgeHub) {
       return NK.service.project.getKnowledgeHub(project);
     }
@@ -90,14 +107,25 @@
       '</section>';
   }
 
-  function renderProject(root, project) {
+  function renderProject(root, project, brand) {
     var projectId = String(project && project.id || '').trim();
+    var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
     var payload = (project && project.payload) || {};
-    var knowledge = readKnowledge(project);
+    var knowledge = readKnowledge(brand || project);
+    var brandTitle = String(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '브랜드').trim();
+    var brandSummary = String(brand && brand.brandSummary || payload.brandSummary || '').trim();
     var rulesCount = knowledge.brandRules.length;
     var bannedCount = knowledge.bannedExpressions.length;
     var referencesCount = (knowledge.referenceItems || []).length || knowledge.referenceContents.length;
     var successesCount = knowledge.successCases.length;
+    function renderNext(nextProject) {
+      var fallbackProject = nextProject && nextProject.id ? nextProject : project;
+      var nextBrandId = String(fallbackProject && fallbackProject.payload && fallbackProject.payload.brandId || brandId).trim();
+      var nextBrand = (NK.service && NK.service.brand && NK.service.brand.getById && nextBrandId)
+        ? NK.service.brand.getById(nextBrandId)
+        : null;
+      renderProject(root, fallbackProject, nextBrand || brand);
+    }
     var referenceCards = (knowledge.referenceItems || []).length
       ? knowledge.referenceItems.map(function (item) {
         return (
@@ -119,8 +147,8 @@
       '<div class="knowledge-hub-hero">' +
       '<div>' +
       '<p class="knowledge-hub-eyebrow">Knowledge Hub</p>' +
-      '<h2>' + escapeHtml(project.seriesTitle || project.title || '프로젝트') + '</h2>' +
-      '<p class="knowledge-hub-description">' + escapeHtml(payload.brandSummary || '브랜드 요약이 아직 없습니다. Knowledge Hub를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
+      '<h2>' + escapeHtml(brandTitle) + '</h2>' +
+      '<p class="knowledge-hub-description">' + escapeHtml(brandSummary || '브랜드 요약이 아직 없습니다. Knowledge Hub를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
       '</div>' +
       '<div class="knowledge-hub-hero-actions">' +
       '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
@@ -183,15 +211,15 @@
       '<div class="knowledge-hub-pill"><span>참조</span><strong>' + escapeHtml(referencesCount) + '개</strong></div>' +
       '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +
       '</div>' +
-      '<p class="knowledge-hub-help">여기 저장한 내용은 프로젝트 payload의 <code>knowledgeHub</code> 객체로 정규화됩니다. 다음 단계에서는 Brand Studio 생성 입력과 직접 연결합니다.</p>' +
+      '<p class="knowledge-hub-help">여기 저장한 내용은 대표 프로젝트 payload의 <code>knowledgeHub</code>와 Brand Core에 함께 반영됩니다. 다음 단계에서는 Brand Studio 생성 입력과 직접 연결합니다.</p>' +
       '</section>' +
       '</div>' +
       '<div class="knowledge-hub-toolbar">' +
-      '<span>사용자는 프로젝트별로 브랜드 지식을 한 곳에서 관리하고, 이후 생성 단계에서 그대로 재사용할 수 있어야 합니다.</span>' +
+      '<span>사용자는 브랜드 지식을 한 곳에서 관리하고, 이후 각 에피소드 운영 단계에서 그대로 재사용할 수 있어야 합니다.</span>' +
       '<div class="knowledge-hub-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId)) + '">Brand Studio</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId)) + '">Content Library</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId)) + '">프리 프로덕션</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId, brandId)) + '">Brand Studio</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">Content Library</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId, brandId)) + '">프리 프로덕션</a>' +
       '</div>' +
       '</div>' +
       '</section>';
@@ -201,8 +229,8 @@
       var target = '';
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
-      if (action === 'knowledge-open-library') target = buildStageUrl('library.html', projectId);
-      else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId);
+      if (action === 'knowledge-open-library') target = buildStageUrl('library.html', projectId, brandId);
+      else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
       else if (action === 'knowledge-save') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var nextKnowledge = {
@@ -233,7 +261,7 @@
           knowledgeWorld: nextKnowledge.worldSetting
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
             alert('Knowledge Hub를 저장했습니다.');
           })
           .catch(function (err) {
@@ -272,7 +300,7 @@
           }).filter(Boolean)
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('참조 콘텐츠 추가 실패: ' + (err && err.message ? err.message : err));
@@ -309,7 +337,7 @@
           }).filter(Boolean)
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('참조 콘텐츠 삭제 실패: ' + (err && err.message ? err.message : err));
@@ -332,15 +360,19 @@
   knowledgeHub.init = function () {
     var root = document.getElementById('knowledge-hub-root');
     if (!root) return;
-    if (!NK.service || !NK.service.project) {
+    if (!NK.service || !NK.service.project || !NK.service.brand) {
       renderEmpty(root, 'Knowledge Hub를 불러올 수 없습니다.');
       return;
     }
-    var project = NK.service.project.resolveCurrent({ search: window.location.search });
+    var context = NK.service.brand.getDisplayContext
+      ? NK.service.brand.getDisplayContext({ search: window.location.search })
+      : { brand: null, project: NK.service.project.resolveCurrent({ search: window.location.search }) };
+    var project = context && context.project ? context.project : NK.service.project.resolveCurrent({ search: window.location.search });
+    var brand = context && context.brand ? context.brand : null;
     if (!project || !project.id) {
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project);
+    renderProject(root, project, brand);
   };
 })();

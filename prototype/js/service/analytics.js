@@ -14,7 +14,21 @@
     return projectOrId;
   }
 
+  function isBrandTarget(target) {
+    return !!(target && typeof target === 'object' && target.brandId && !target.id);
+  }
+
+  function brandProjects(target) {
+    if (!isBrandTarget(target) || !NK.service || !NK.service.brand || !NK.service.brand.listProjects) return [];
+    return NK.service.brand.listProjects(target);
+  }
+
   function readPublishResults(projectOrId) {
+    if (isBrandTarget(projectOrId)) {
+      return brandProjects(projectOrId).reduce(function (acc, project) {
+        return acc.concat(readPublishResults(project));
+      }, []);
+    }
     var project = normalizeProject(projectOrId);
     if (!project) return [];
     var payload = project.payload || {};
@@ -54,6 +68,12 @@
   }
 
   analytics.listPublishResults = readPublishResults;
+  analytics.listPublishResultsByBrand = function (brandOrId) {
+    var target = typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
+      ? NK.service.brand.getById(brandOrId)
+      : brandOrId;
+    return readPublishResults(target);
+  };
 
   analytics.summarizeProject = function (projectOrId) {
     var rows = readPublishResults(projectOrId);

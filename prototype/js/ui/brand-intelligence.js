@@ -12,11 +12,15 @@
       .replace(/'/g, '&#39;');
   }
 
-  function buildStageUrl(page, projectId) {
+  function buildStageUrl(page, projectId, brandId) {
     var safePage = String(page || '').trim() || 'dashboard.html';
     var safeProjectId = String(projectId || '').trim();
-    if (!safeProjectId) return safePage;
-    return safePage + '?projectId=' + encodeURIComponent(safeProjectId);
+    var safeBrandId = String(brandId || '').trim();
+    var parts = [];
+    if (safeProjectId) parts.push('projectId=' + encodeURIComponent(safeProjectId));
+    if (safeBrandId) parts.push('brandId=' + encodeURIComponent(safeBrandId));
+    if (!parts.length) return safePage;
+    return safePage + '?' + parts.join('&');
   }
 
   function channelLabel(type) {
@@ -90,19 +94,21 @@
       '</section>';
   }
 
-  function renderProject(root, project) {
+  function renderProject(root, project, brand) {
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
-    var summary = NK.service.analytics.summarizeProject(project);
-    var channels = NK.service.analytics.summarizeByChannel(project);
-    var contentTypes = NK.service.analytics.summarizeByContentType(project);
-    var uploadTimes = NK.service.analytics.summarizeByUploadTime(project);
-    var hashtags = NK.service.analytics.summarizeByHashtag(project);
+    var brandId = String(brand && brand.brandId || payload.brandId || '').trim();
+    var analyticsTarget = brand || project;
+    var summary = NK.service.analytics.summarizeProject(analyticsTarget);
+    var channels = NK.service.analytics.summarizeByChannel(analyticsTarget);
+    var contentTypes = NK.service.analytics.summarizeByContentType(analyticsTarget);
+    var uploadTimes = NK.service.analytics.summarizeByUploadTime(analyticsTarget);
+    var hashtags = NK.service.analytics.summarizeByHashtag(analyticsTarget);
     var recommendations = NK.service.strategyEngine
-      ? NK.service.strategyEngine.buildRecommendations(project)
+      ? NK.service.strategyEngine.buildRecommendations(analyticsTarget)
       : [];
     var suggestions = NK.service.strategyEngine
-      ? NK.service.strategyEngine.buildContentSuggestions(project)
+      ? NK.service.strategyEngine.buildContentSuggestions(analyticsTarget)
       : [];
 
     root.innerHTML =
@@ -110,8 +116,8 @@
       '<div class="analytics-hero">' +
       '<div>' +
       '<p class="analytics-eyebrow">Brand Intelligence</p>' +
-      '<h2>' + escapeHtml(project.seriesTitle || project.title || '프로젝트') + '</h2>' +
-      '<p class="analytics-description">' + escapeHtml(payload.brandSummary || '게시 결과를 수집하면 채널별 성과를 여기서 한눈에 확인할 수 있습니다.') + '</p>' +
+      '<h2>' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
+      '<p class="analytics-description">' + escapeHtml(brand && brand.brandSummary || payload.brandSummary || '게시 결과를 수집하면 채널별 성과를 여기서 한눈에 확인할 수 있습니다.') + '</p>' +
       '</div>' +
       '<div class="analytics-hero-actions">' +
       '<button class="btn-secondary" data-action="analytics-open-brand">Brand Studio</button>' +
@@ -217,9 +223,9 @@
       '<div class="analytics-toolbar">' +
       '<span>사용자는 채널별로 어떤 곳이 반응이 좋은지 한눈에 보고, 다음 운영 방향을 바로 정해야 합니다.</span>' +
       '<div class="analytics-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId)) + '">Brand Studio</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId)) + '">Knowledge Hub</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId)) + '">Content Library</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId, brandId)) + '">Brand Studio</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">Knowledge Hub</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">Content Library</a>' +
       '</div>' +
       '</div>' +
       '</section>';
@@ -248,7 +254,7 @@
           }
         })
           .then(function () {
-            var url = buildStageUrl('brand.html', projectId);
+            var url = buildStageUrl('brand.html', projectId, brandId);
             if (window.self !== window.top && window.parent) {
               window.parent.postMessage({ type: 'load-stage', url: url }, '*');
             } else {
@@ -263,9 +269,9 @@
           });
         return;
       }
-      if (action === 'analytics-open-brand') target = buildStageUrl('brand.html', projectId);
-      else if (action === 'analytics-open-library') target = buildStageUrl('library.html', projectId);
-      else if (action === 'analytics-open-knowledge') target = buildStageUrl('knowledge.html', projectId);
+      if (action === 'analytics-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
+      else if (action === 'analytics-open-library') target = buildStageUrl('library.html', projectId, brandId);
+      else if (action === 'analytics-open-knowledge') target = buildStageUrl('knowledge.html', projectId, brandId);
       if (!target) return;
       if (window.self !== window.top && window.parent) {
         window.parent.postMessage({ type: 'load-stage', url: target }, '*');
@@ -278,15 +284,19 @@
   intelligence.init = function () {
     var root = document.getElementById('analytics-root');
     if (!root) return;
-    if (!NK.service || !NK.service.project || !NK.service.analytics) {
+    if (!NK.service || !NK.service.project || !NK.service.analytics || !NK.service.brand) {
       renderEmpty(root, '분석 화면을 불러올 수 없습니다.');
       return;
     }
-    var project = NK.service.project.resolveCurrent({ search: window.location.search });
+    var context = NK.service.brand.getDisplayContext
+      ? NK.service.brand.getDisplayContext({ search: window.location.search })
+      : { brand: null, project: NK.service.project.resolveCurrent({ search: window.location.search }) };
+    var project = context && context.project ? context.project : NK.service.project.resolveCurrent({ search: window.location.search });
+    var brand = context && context.brand ? context.brand : null;
     if (!project || !project.id) {
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project);
+    renderProject(root, project, brand);
   };
 })();

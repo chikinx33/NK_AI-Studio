@@ -28,6 +28,15 @@
         return raw;
     }
 
+    function isBrandTarget(target) {
+        return !!(target && typeof target === 'object' && target.brandId && !target.id);
+    }
+
+    function brandProjects(target) {
+        if (!isBrandTarget(target) || !NK.service || !NK.service.brand || !NK.service.brand.listProjects) return [];
+        return NK.service.brand.listProjects(target);
+    }
+
     function sceneImageUrl(scene) {
         return firstFilled([
             scene && scene.imageDataUrl,
@@ -108,6 +117,11 @@
     }
 
     library.listProjectContents = function (projectOrId) {
+        if (isBrandTarget(projectOrId)) {
+            return brandProjects(projectOrId).reduce(function (acc, project) {
+                return acc.concat(library.listProjectContents(project));
+            }, []);
+        }
         var project = normalizeProject(projectOrId);
         if (!project) return [];
 
@@ -201,6 +215,39 @@
     };
 
     library.summarizeProject = function (projectOrId) {
+        if (isBrandTarget(projectOrId)) {
+            var projects = brandProjects(projectOrId);
+            if (!projects.length) {
+                return {
+                    scenes: 0,
+                    texts: 0,
+                    images: 0,
+                    videos: 0,
+                    completedScenes: 0,
+                    nextAction: '프로젝트 선택'
+                };
+            }
+            return projects.reduce(function (acc, project) {
+                var row = library.summarizeProject(project);
+                acc.scenes += Number(row.scenes || 0);
+                acc.texts += Number(row.texts || 0);
+                acc.images += Number(row.images || 0);
+                acc.videos += Number(row.videos || 0);
+                acc.completedScenes += Number(row.completedScenes || 0);
+                if (acc.nextAction === '브랜드 운영') acc.nextAction = String(row.nextAction || acc.nextAction);
+                else if (row.nextAction === '시나리오 작성' || row.nextAction === '이미지 생성' || row.nextAction === '영상 생성') {
+                    acc.nextAction = row.nextAction;
+                }
+                return acc;
+            }, {
+                scenes: 0,
+                texts: 0,
+                images: 0,
+                videos: 0,
+                completedScenes: 0,
+                nextAction: '브랜드 운영'
+            });
+        }
         var project = normalizeProject(projectOrId);
         if (!project) {
             return {
@@ -244,5 +291,15 @@
             completedScenes: completedScenes,
             nextAction: nextAction
         };
+    };
+    library.listBrandContents = function (brandOrId) {
+        return library.listProjectContents(typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
+            ? NK.service.brand.getById(brandOrId)
+            : brandOrId);
+    };
+    library.summarizeBrand = function (brandOrId) {
+        return library.summarizeProject(typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
+            ? NK.service.brand.getById(brandOrId)
+            : brandOrId);
     };
 })();

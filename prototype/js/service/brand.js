@@ -199,6 +199,23 @@
         });
     }
 
+    function listAllProjects() {
+        var svc = projectService();
+        if (!svc || !svc.normalizeDraft || !NK.store || !NK.store.getDrafts) return [];
+        try {
+            return NK.store.getDrafts().map(svc.normalizeDraft).filter(Boolean);
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function resolveBrandLike(brandOrId) {
+        if (!brandOrId) return null;
+        if (typeof brandOrId === 'string') return brand.getById(brandOrId);
+        if (brandOrId.brandId) return normalizeBrand(brandOrId);
+        return null;
+    }
+
     brand.normalizeBrand = normalizeBrand;
     brand.list = function () {
         return readBrands();
@@ -281,22 +298,9 @@
         var mergedProjectIds = existing.sourceProjectIds.concat(seed.sourceProjectIds).filter(function (item, index, arr) {
             return item && arr.indexOf(item) === index;
         });
-        return brand.update(existing.brandId, Object.assign({}, seed, {
-            brandTitle: existing.brandTitle || seed.brandTitle,
-            brandSummary: existing.brandSummary || seed.brandSummary,
-            coreMessage: existing.coreMessage || seed.coreMessage,
-            targetAudience: existing.targetAudience || seed.targetAudience,
-            brandVoice: existing.brandVoice || seed.brandVoice,
-            brandTone: existing.brandTone || seed.brandTone,
-            brandStory: existing.brandStory || seed.brandStory,
-            brandCharacter: existing.brandCharacter || seed.brandCharacter,
-            worldSetting: existing.worldSetting || seed.worldSetting,
-            brandRules: existing.brandRules.length ? existing.brandRules : seed.brandRules,
-            bannedExpressions: existing.bannedExpressions.length ? existing.bannedExpressions : seed.bannedExpressions,
-            brandKeywords: existing.brandKeywords.length ? existing.brandKeywords : seed.brandKeywords,
-            referenceContents: existing.referenceContents.length ? existing.referenceContents : seed.referenceContents,
-            successCases: existing.successCases.length ? existing.successCases : seed.successCases,
-            connectedChannels: existing.connectedChannels.length ? existing.connectedChannels : seed.connectedChannels,
+        return brand.update(existing.brandId, Object.assign({}, existing, seed, {
+            brandId: existing.brandId,
+            createdAt: existing.createdAt,
             seriesIds: mergedSeriesIds,
             sourceProjectIds: mergedProjectIds
         }));
@@ -314,5 +318,27 @@
                 title: targetBrand.brandTitle
             }
         });
+    };
+    brand.listProjects = function (brandOrId) {
+        var target = resolveBrandLike(brandOrId);
+        if (!target) return [];
+        return listAllProjects().filter(function (item) {
+            var payload = item && item.payload ? item.payload : {};
+            return String(payload.brandId || '') === String(target.brandId);
+        }).sort(function (a, b) {
+            return Number(b.id || 0) - Number(a.id || 0);
+        });
+    };
+    brand.getPrimaryProject = function (brandOrId) {
+        var projects = brand.listProjects(brandOrId);
+        return projects.length ? projects[0] : null;
+    };
+    brand.getDisplayContext = function (options) {
+        var currentBrand = brand.resolveCurrent(options);
+        var primaryProject = brand.getPrimaryProject(currentBrand);
+        return {
+            brand: currentBrand,
+            project: primaryProject
+        };
     };
 })(); 

@@ -12,11 +12,28 @@
       .replace(/'/g, '&#39;');
   }
 
-  function buildStageUrl(page, projectId) {
+  function buildStageUrl(page, projectId, brandId) {
     var safePage = String(page || '').trim() || 'dashboard.html';
     var safeProjectId = String(projectId || '').trim();
-    if (!safeProjectId) return safePage;
-    return safePage + '?projectId=' + encodeURIComponent(safeProjectId);
+    var safeBrandId = String(brandId || '').trim();
+    var parts = [];
+    if (safeProjectId) parts.push('projectId=' + encodeURIComponent(safeProjectId));
+    if (safeBrandId) parts.push('brandId=' + encodeURIComponent(safeBrandId));
+    if (!parts.length) return safePage;
+    return safePage + '?' + parts.join('&');
+  }
+
+  function readBrandView(brand, project) {
+    var payload = (project && project.payload) || {};
+    var src = brand && typeof brand === 'object' ? brand : {};
+    return {
+      brandId: String(src.brandId || payload.brandId || '').trim(),
+      title: String(src.brandTitle || payload.brandTitle || project && (project.seriesTitle || project.title) || '브랜드').trim(),
+      summary: String(src.brandSummary || payload.brandSummary || '').trim(),
+      coreMessage: String(src.coreMessage || payload.coreMessage || '').trim(),
+      targetAudience: String(src.targetAudience || payload.targetAudience || payload.target || '').trim(),
+      brandKeywords: Array.isArray(src.brandKeywords) ? src.brandKeywords.slice() : toTagList(payload.brandKeywords)
+    };
   }
 
   function readBrandContentType(payload) {
@@ -170,7 +187,7 @@
     return output.replace(/\s{2,}/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
 
-  function buildCaptionDraft(project, selectedOption, sourceTexts, knowledge) {
+  function buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge) {
     var payload = (project && project.payload) || {};
     var sourceLine = compactSentence(firstFilled(sourceTexts), 90);
     var storyLine = compactSentence(knowledge.brandStory, 90);
@@ -178,7 +195,7 @@
     var successLine = compactSentence(knowledge.successCases[0], 64);
     var ruleLead = compactSentence(knowledge.brandRules[0], 50);
     var parts = [
-      firstFilled([payload.brandSummary, project && (project.seriesTitle || project.title), payload.coreMessage]),
+      firstFilled([brandView.summary, brandView.title, payload.brandSummary, project && (project.seriesTitle || project.title), brandView.coreMessage, payload.coreMessage]),
       selectedOption ? (selectedOption.title + ' 형식으로 정리한 브랜드 운영 문구입니다.') : '',
       payload.coreMessage ? ('핵심 메시지는 "' + payload.coreMessage + '" 입니다.') : '',
       storyLine ? ('브랜드 맥락은 ' + storyLine) : '',
@@ -193,7 +210,7 @@
     return scrubBannedText(parts.join(' '), knowledge.bannedExpressions);
   }
 
-  function buildHashtagDraft(project, selectedOption, sourceTexts, knowledge) {
+  function buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge) {
     var payload = (project && project.payload) || {};
     var tokens = [];
 
@@ -204,7 +221,7 @@
       tokens.push(tag);
     }
 
-    pushToken(project && (project.seriesTitle || project.title));
+    pushToken(brandView.title || (project && (project.seriesTitle || project.title)));
     pushToken(payload.projectType);
     pushToken(payload.targetAudience || payload.target);
     pushToken(selectedOption && selectedOption.title);
@@ -298,19 +315,21 @@
       '</section>';
   }
 
-  function renderProject(root, project) {
+  function renderProject(root, project, brand) {
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
+    var brandView = readBrandView(brand, project);
+    var brandId = String(brandView.brandId || '').trim();
     var selectedType = readBrandContentType(payload);
     var savedCaption = readCaptionDraft(payload);
     var savedHashtags = readHashtagDraft(payload);
     var autoSuggestion = readAutoSuggestion(payload);
-    var knowledge = readKnowledge(payload);
+    var knowledge = readKnowledge(brand && typeof brand === 'object' ? brand : payload);
     var channelConnections = readChannelConnections(payload);
     var publishPlan = readPublishPlan(payload);
     var publishResults = readPublishResults(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
-      ? NK.service.contentLibrary.summarizeProject(project)
+      ? NK.service.contentLibrary.summarizeProject(brand || project)
       : { scenes: 0, images: 0, videos: 0, nextAction: '시나리오 작성' };
     var options = contentTypeOptions();
     var channelRows = channelOptions();
@@ -320,17 +339,26 @@
     });
     var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
     var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
-      ? NK.service.contentLibrary.listProjectContents(project)
+      ? NK.service.contentLibrary.listProjectContents(brand || project)
       : [];
     var sourceTexts = contentItems
       .filter(function (item) { return item.type === 'text'; })
       .map(function (item) { return String(item.text || '').trim(); })
       .filter(Boolean);
 
+    function renderNext(nextProject) {
+      var fallbackProject = nextProject && nextProject.id ? nextProject : project;
+      var nextBrandId = String(fallbackProject && fallbackProject.payload && fallbackProject.payload.brandId || brandId).trim();
+      var nextBrand = (NK.service && NK.service.brand && NK.service.brand.getById && nextBrandId)
+        ? NK.service.brand.getById(nextBrandId)
+        : null;
+      renderProject(root, fallbackProject, nextBrand || brand);
+    }
+
     var readiness = [
       {
         title: '프로젝트 문맥',
-        ready: !!(payload.projectType || payload.brandSummary || payload.coreMessage),
+        ready: !!(payload.projectType || brandView.summary || brandView.coreMessage),
         desc: '프로젝트 유형, 브랜드 요약, 핵심 메시지가 있어야 브랜드 운영 기준이 선명해집니다.'
       },
       {
@@ -432,8 +460,8 @@
       '<div class="brand-studio-hero">' +
       '<div>' +
       '<p class="brand-studio-eyebrow">Brand Operations</p>' +
-      '<h2>' + escapeHtml(project.seriesTitle || project.title || '프로젝트') + '</h2>' +
-      '<p class="brand-studio-description">' + escapeHtml(payload.brandSummary || '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.') + '</p>' +
+      '<h2>' + escapeHtml(brandView.title || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
+      '<p class="brand-studio-description">' + escapeHtml(brandView.summary || payload.brandSummary || '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.') + '</p>' +
       '</div>' +
       '<div class="brand-studio-hero-actions">' +
       '<button class="btn-secondary" data-action="brand-open-analytics">Analytics</button>' +
@@ -443,8 +471,8 @@
       '</div>' +
       '<div class="brand-studio-summary-grid">' +
       '<article class="brand-studio-summary-card"><span>프로젝트 유형</span><strong>' + escapeHtml(payload.projectType || '-') + '</strong></article>' +
-      '<article class="brand-studio-summary-card"><span>핵심 메시지</span><strong>' + escapeHtml(payload.coreMessage || '-') + '</strong></article>' +
-      '<article class="brand-studio-summary-card"><span>타깃</span><strong>' + escapeHtml(payload.targetAudience || payload.target || '-') + '</strong></article>' +
+      '<article class="brand-studio-summary-card"><span>핵심 메시지</span><strong>' + escapeHtml(brandView.coreMessage || payload.coreMessage || '-') + '</strong></article>' +
+      '<article class="brand-studio-summary-card"><span>타깃</span><strong>' + escapeHtml(brandView.targetAudience || payload.targetAudience || payload.target || '-') + '</strong></article>' +
       '<article class="brand-studio-summary-card"><span>소스 자산</span><strong>씬 ' + escapeHtml(summary.scenes) + ' · 이미지 ' + escapeHtml(summary.images) + ' · 영상 ' + escapeHtml(summary.videos) + '</strong></article>' +
       '</div>' +
       (autoSuggestion
@@ -479,7 +507,7 @@
       '<p>' + escapeHtml(selectedOption ? selectedOption.outputs : '먼저 콘텐츠 유형을 선택하면 다음 캡션/해시태그 흐름이 이 기준으로 이어집니다.') + '</p>' +
       '</div>' +
       '<div class="brand-studio-selection-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId)) + '">소스 확인</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">소스 확인</a>' +
       '<button class="btn-primary compact" data-action="brand-select-next" ' + (selectedOption ? '' : 'disabled') + '>이 유형으로 계속</button>' +
       '</div>' +
       '</div>' +
@@ -504,7 +532,7 @@
       '<div class="brand-studio-panel-head"><h3>해시태그 생성</h3><span>프로젝트 키워드 기반</span></div>' +
       '<div class="brand-hashtag-generator">' +
       '<div class="brand-hashtag-meta">' +
-      '<div><span class="brand-caption-meta-label">브랜드 키워드</span><strong>' + escapeHtml(toTagList(payload.brandKeywords).length ? toTagList(payload.brandKeywords).join(', ') : '아직 없음') + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">브랜드 키워드</span><strong>' + escapeHtml(brandView.brandKeywords.length ? brandView.brandKeywords.join(', ') : '아직 없음') + '</strong></div>' +
       '<div><span class="brand-caption-meta-label">추천 기준</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '콘텐츠 유형 미선택') + '</strong></div>' +
       '</div>' +
       '<textarea id="brand-hashtag-textarea" class="brand-caption-textarea brand-hashtag-textarea" placeholder="#해시태그 형식으로 생성됩니다.">' + escapeHtml(savedHashtags || '') + '</textarea>' +
@@ -517,7 +545,7 @@
       '</div>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>채널 연결</h3><span>프로젝트별 운영 채널</span></div>' +
+      '<div class="brand-studio-panel-head"><h3>채널 연결</h3><span>브랜드 공용 운영 채널</span></div>' +
       '<div class="brand-channel-summary">' +
       '<span class="brand-channel-summary-label">현재 연결</span>' +
       '<strong>' + escapeHtml(channelConnections.length) + '개 채널</strong>' +
@@ -526,12 +554,12 @@
       '<div class="brand-channel-grid">' + channelCards + '</div>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>예약 게시</h3><span>V1 데이터 구조</span></div>' +
+      '<div class="brand-studio-panel-head"><h3>예약 게시</h3><span>브랜드 운영 V1 데이터 구조</span></div>' +
       '<div class="brand-publish-planner">' +
       '<div class="brand-publish-summary">' +
       '<span class="brand-channel-summary-label">현재 계획</span>' +
       '<strong>' + escapeHtml(publishPlan.scheduledAt ? publishPlan.scheduledAt : '아직 저장된 예약 없음') + '</strong>' +
-      '<p>' + escapeHtml(publishPlan.channels.length ? publishPlan.channels.map(function (item) { return channelTitleMap[item] || item; }).join(', ') : '채널을 선택하고 예약 시각을 저장하면 게시 계획이 프로젝트에 남습니다.') + '</p>' +
+      '<p>' + escapeHtml(publishPlan.channels.length ? publishPlan.channels.map(function (item) { return channelTitleMap[item] || item; }).join(', ') : '채널을 선택하고 예약 시각을 저장하면 대표 프로젝트를 통해 브랜드 운영 계획을 남깁니다.') + '</p>' +
       '</div>' +
       '<div class="brand-publish-fields">' +
       '<div class="brand-publish-field">' +
@@ -547,16 +575,16 @@
       '<button class="btn-primary" data-action="brand-save-publish-plan" ' + (channelConnections.length && selectedOption ? '' : 'disabled') + '>예약 계획 저장</button>' +
       '<button class="btn-secondary" data-action="brand-clear-publish-plan" ' + (publishPlan.scheduledAt || publishPlan.channels.length ? '' : 'disabled') + '>예약 계획 비우기</button>' +
       '</div>' +
-      '<p class="brand-caption-help">선택한 콘텐츠 유형, 연결된 채널, 캡션, 해시태그를 기준으로 예약 게시 계획의 최소 데이터 구조를 저장합니다.</p>' +
+      '<p class="brand-caption-help">선택한 콘텐츠 유형, 연결된 채널, 캡션, 해시태그를 기준으로 대표 프로젝트에 저장하고 브랜드 분석에서 함께 집계합니다.</p>' +
       '</div>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>게시 결과 수집</h3><span>V2 데이터 구조</span></div>' +
+      '<div class="brand-studio-panel-head"><h3>게시 결과 수집</h3><span>브랜드 분석 연결 데이터</span></div>' +
       '<div class="brand-publish-planner">' +
       '<div class="brand-publish-summary">' +
       '<span class="brand-channel-summary-label">현재 누적</span>' +
       '<strong>' + escapeHtml(publishResults.length) + '개 게시 결과</strong>' +
-      '<p>' + escapeHtml(publishResults.length ? '채널별 게시 결과와 반응 수치를 프로젝트에 누적하고 있습니다.' : '채널별 결과를 입력하면 이후 성과 분석의 기초 데이터가 됩니다.') + '</p>' +
+      '<p>' + escapeHtml(publishResults.length ? '채널별 게시 결과와 반응 수치를 브랜드 분석 데이터에 누적하고 있습니다.' : '채널별 결과를 입력하면 이후 브랜드 성과 분석의 기초 데이터가 됩니다.') + '</p>' +
       '</div>' +
       '<div class="brand-publish-result-form">' +
       '<select id="brand-result-channel" class="brand-publish-input">' +
@@ -590,7 +618,7 @@
       '</section>' +
       '<div class="brand-studio-layout">' +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>브랜드 운영 준비도</h3><span>현재 프로젝트 기준</span></div>' +
+      '<div class="brand-studio-panel-head"><h3>브랜드 운영 준비도</h3><span>현재 브랜드 기준</span></div>' +
       '<div class="brand-studio-checklist">' +
       readiness.map(function (item) {
         return (
@@ -621,13 +649,13 @@
       '</section>' +
       '</div>' +
       '<div class="brand-studio-toolbar">' +
-      '<span>Brand Studio는 Content Library 이후 운영 단계입니다. 지금은 운영 기준 화면과 진입 동선이 연결된 상태입니다.</span>' +
+      '<span>Brand Studio는 Content Library 이후의 브랜드 운영 단계입니다. 지금은 브랜드 기준 화면과 진입 동선이 연결된 상태입니다.</span>' +
       '<div class="brand-studio-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('analytics.html', projectId)) + '">성과 분석</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId)) + '">지식 문맥</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId)) + '">소스 확인</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId)) + '">문맥 수정</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('media.html', projectId)) + '">최종 편집</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('analytics.html', projectId, brandId)) + '">성과 분석</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">지식 문맥</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('library.html', projectId, brandId)) + '">소스 확인</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId, brandId)) + '">문맥 수정</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('media.html', projectId, brandId)) + '">최종 편집</a>' +
       '</div>' +
       '</div>' +
       '</section>';
@@ -657,7 +685,7 @@
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioContentType: typeId })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('콘텐츠 유형 저장 실패: ' + (err && err.message ? err.message : err));
@@ -669,11 +697,11 @@
       }
       if (action === 'brand-generate-caption' || action === 'brand-regenerate-caption') {
         if (!selectedOption || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextCaption = buildCaptionDraft(project, selectedOption, sourceTexts, knowledge);
+        var nextCaption = buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge);
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioCaptionDraft: nextCaption })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('캡션 생성 실패: ' + (err && err.message ? err.message : err));
@@ -694,7 +722,7 @@
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioCaptionDraft: nextText })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
             alert('캡션을 저장했습니다.');
           })
           .catch(function (err) {
@@ -707,11 +735,11 @@
       }
       if (action === 'brand-generate-hashtags' || action === 'brand-regenerate-hashtags') {
         if (!selectedOption || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextTags = buildHashtagDraft(project, selectedOption, sourceTexts, knowledge);
+        var nextTags = buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge);
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioHashtagDraft: nextTags })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('해시태그 생성 실패: ' + (err && err.message ? err.message : err));
@@ -732,7 +760,7 @@
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioHashtagDraft: nextTagsText })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
             alert('해시태그를 저장했습니다.');
           })
           .catch(function (err) {
@@ -770,7 +798,7 @@
           connectedChannels: nextConnections.map(function (row) { return row.channelType; })
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('채널 연결 저장 실패: ' + (err && err.message ? err.message : err));
@@ -811,7 +839,7 @@
           }
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
             alert('예약 게시 계획을 저장했습니다.');
           })
           .catch(function (err) {
@@ -829,7 +857,7 @@
           brandStudioPublishPlan: null
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('예약 계획 삭제 실패: ' + (err && err.message ? err.message : err));
@@ -892,7 +920,7 @@
           analyticsSnapshots: nextSnapshots
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
             alert('게시 결과를 저장했습니다.');
           })
           .catch(function (err) {
@@ -924,7 +952,7 @@
           analyticsSnapshots: remainingSnapshots
         })
           .then(function (result) {
-            if (result && result.draft) renderProject(root, result.draft);
+            if (result && result.draft) renderNext(result.draft);
           })
           .catch(function (err) {
             alert('게시 결과 삭제 실패: ' + (err && err.message ? err.message : err));
@@ -934,11 +962,11 @@
           });
         return;
       }
-      if (action === 'brand-open-analytics') target = buildStageUrl('analytics.html', projectId);
-      else if (action === 'brand-open-knowledge') target = buildStageUrl('knowledge.html', projectId);
-      else if (action === 'brand-open-library') target = buildStageUrl('library.html', projectId);
-      else if (action === 'brand-open-scenario') target = buildStageUrl('scenario.html', projectId);
-      else if (action === 'brand-open-media') target = buildStageUrl('media.html', projectId);
+      if (action === 'brand-open-analytics') target = buildStageUrl('analytics.html', projectId, brandId);
+      else if (action === 'brand-open-knowledge') target = buildStageUrl('knowledge.html', projectId, brandId);
+      else if (action === 'brand-open-library') target = buildStageUrl('library.html', projectId, brandId);
+      else if (action === 'brand-open-scenario') target = buildStageUrl('scenario.html', projectId, brandId);
+      else if (action === 'brand-open-media') target = buildStageUrl('media.html', projectId, brandId);
       if (!target) return;
       if (window.self !== window.top && window.parent) {
         window.parent.postMessage({ type: 'load-stage', url: target }, '*');
@@ -951,15 +979,19 @@
   brandStudio.init = function () {
     var root = document.getElementById('brand-studio-root');
     if (!root) return;
-    if (!NK.service || !NK.service.project) {
+    if (!NK.service || !NK.service.project || !NK.service.brand) {
       renderEmpty(root, 'Brand Studio를 불러올 수 없습니다.');
       return;
     }
-    var project = NK.service.project.resolveCurrent({ search: window.location.search });
+    var context = NK.service.brand.getDisplayContext
+      ? NK.service.brand.getDisplayContext({ search: window.location.search })
+      : { brand: null, project: NK.service.project.resolveCurrent({ search: window.location.search }) };
+    var project = context && context.project ? context.project : NK.service.project.resolveCurrent({ search: window.location.search });
+    var brand = context && context.brand ? context.brand : null;
     if (!project || !project.id) {
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project);
+    renderProject(root, project, brand);
   };
 })();

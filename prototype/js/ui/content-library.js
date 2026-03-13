@@ -38,11 +38,15 @@
     };
   }
 
-  function buildStageUrl(page, projectId) {
+  function buildStageUrl(page, projectId, brandId) {
     var safePage = String(page || '').trim() || 'dashboard.html';
     var safeProjectId = String(projectId || '').trim();
-    if (!safeProjectId) return safePage;
-    return safePage + '?projectId=' + encodeURIComponent(safeProjectId);
+    var safeBrandId = String(brandId || '').trim();
+    var parts = [];
+    if (safeProjectId) parts.push('projectId=' + encodeURIComponent(safeProjectId));
+    if (safeBrandId) parts.push('brandId=' + encodeURIComponent(safeBrandId));
+    if (!parts.length) return safePage;
+    return safePage + '?' + parts.join('&');
   }
 
   function renderEmpty(root, message) {
@@ -58,11 +62,14 @@
       '</section>';
   }
 
-  function renderProject(root, project) {
-    var summary = NK.service.contentLibrary.summarizeProject(project);
-    var items = NK.service.contentLibrary.listProjectContents(project);
+  function renderProject(root, project, brand) {
+    var summary = NK.service.contentLibrary.summarizeProject(brand || project);
+    var items = NK.service.contentLibrary.listProjectContents(brand || project);
     var meta = projectMeta(project);
     var projectId = String(project.id || '').trim();
+    var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
+    var brandTitle = String(brand && brand.brandTitle || project.payload && project.payload.brandTitle || project.title || project.seriesTitle || '프로젝트').trim();
+    var brandSummary = String(brand && brand.brandSummary || meta.brandSummary || '').trim();
     var groups = ['scene', 'text', 'image', 'video', 'reference', 'publish-result'].map(function (type) {
       var rows = items.filter(function (item) { return item.type === type; });
       var body = rows.length
@@ -99,9 +106,9 @@
       '<section class="content-library-page">' +
       '<div class="content-library-hero">' +
       '<div>' +
-      '<p class="content-library-eyebrow">Project Context</p>' +
-      '<h2>' + escapeHtml(project.title || project.seriesTitle || '프로젝트') + '</h2>' +
-      '<p class="content-library-description">' + escapeHtml(meta.brandSummary) + '</p>' +
+      '<p class="content-library-eyebrow">Brand Assets</p>' +
+      '<h2>' + escapeHtml(brandTitle) + '</h2>' +
+      '<p class="content-library-description">' + escapeHtml(brandSummary) + '</p>' +
       '</div>' +
       '<div class="content-library-hero-actions">' +
       '<button class="btn-secondary" data-action="library-open-knowledge">Knowledge Hub</button>' +
@@ -117,13 +124,13 @@
       '<article class="content-library-summary-card"><span>이미지 / 영상</span><strong>' + escapeHtml(summary.images) + ' / ' + escapeHtml(summary.videos) + '</strong></article>' +
       '</div>' +
       '<div class="content-library-toolbar">' +
-      '<span>현재 프로젝트의 Creative 결과물을 한 곳에서 확인합니다.</span>' +
+      '<span>현재 브랜드에 연결된 Creative 결과물을 한 곳에서 확인합니다.</span>' +
       '<div class="content-library-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId)) + '">Knowledge Hub</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId)) + '">Brand Studio</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId)) + '">시나리오 수정</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenes.html', projectId)) + '">생성 계속</a>' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('media.html', projectId)) + '">편집 계속</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">Knowledge Hub</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId, brandId)) + '">Brand Studio</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId, brandId)) + '">시나리오 수정</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenes.html', projectId, brandId)) + '">생성 계속</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('media.html', projectId, brandId)) + '">편집 계속</a>' +
       '</div>' +
       '</div>' +
       groups +
@@ -134,11 +141,11 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
-      if (action === 'library-open-knowledge') target = buildStageUrl('knowledge.html', projectId);
-      else if (action === 'library-open-brand') target = buildStageUrl('brand.html', projectId);
-      else if (action === 'library-open-scenario') target = buildStageUrl('scenario.html', projectId);
-      else if (action === 'library-open-scenes') target = buildStageUrl('scenes.html', projectId);
-      else if (action === 'library-open-media') target = buildStageUrl('media.html', projectId);
+      if (action === 'library-open-knowledge') target = buildStageUrl('knowledge.html', projectId, brandId);
+      else if (action === 'library-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
+      else if (action === 'library-open-scenario') target = buildStageUrl('scenario.html', projectId, brandId);
+      else if (action === 'library-open-scenes') target = buildStageUrl('scenes.html', projectId, brandId);
+      else if (action === 'library-open-media') target = buildStageUrl('media.html', projectId, brandId);
       if (!target) return;
       if (window.self !== window.top && window.parent) {
         window.parent.postMessage({ type: 'load-stage', url: target }, '*');
@@ -151,15 +158,19 @@
   libraryUi.init = function () {
     var root = document.getElementById('content-library-root');
     if (!root) return;
-    if (!NK.service || !NK.service.contentLibrary || !NK.service.project) {
+    if (!NK.service || !NK.service.contentLibrary || !NK.service.project || !NK.service.brand) {
       renderEmpty(root, 'Content Library를 불러올 수 없습니다.');
       return;
     }
-    var project = NK.service.project.resolveCurrent({ search: window.location.search });
+    var context = NK.service.brand.getDisplayContext
+      ? NK.service.brand.getDisplayContext({ search: window.location.search })
+      : { brand: null, project: NK.service.project.resolveCurrent({ search: window.location.search }) };
+    var project = context && context.project ? context.project : NK.service.project.resolveCurrent({ search: window.location.search });
+    var brand = context && context.brand ? context.brand : null;
     if (!project || !project.id) {
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project);
+    renderProject(root, project, brand);
   };
 })();
