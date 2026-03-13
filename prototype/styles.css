@@ -5844,6 +5844,67 @@ body.layout-fixed .lib-content {
   padding-right: 4px;
 }
 
+.brand-asset-grid-scrollable,
+.brand-publish-channel-list,
+.brand-publish-result-grid,
+.knowledge-reference-grid-scrollable,
+.knowledge-hub-field textarea,
+.knowledge-reference-textarea,
+.brand-caption-textarea,
+.brand-publish-note {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(134, 157, 189, 0.44) transparent;
+}
+
+.brand-asset-grid-scrollable::-webkit-scrollbar,
+.brand-publish-channel-list::-webkit-scrollbar,
+.brand-publish-result-grid::-webkit-scrollbar,
+.knowledge-reference-grid-scrollable::-webkit-scrollbar,
+.knowledge-hub-field textarea::-webkit-scrollbar,
+.knowledge-reference-textarea::-webkit-scrollbar,
+.brand-caption-textarea::-webkit-scrollbar,
+.brand-publish-note::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.brand-asset-grid-scrollable::-webkit-scrollbar-track,
+.brand-publish-channel-list::-webkit-scrollbar-track,
+.brand-publish-result-grid::-webkit-scrollbar-track,
+.knowledge-reference-grid-scrollable::-webkit-scrollbar-track,
+.knowledge-hub-field textarea::-webkit-scrollbar-track,
+.knowledge-reference-textarea::-webkit-scrollbar-track,
+.brand-caption-textarea::-webkit-scrollbar-track,
+.brand-publish-note::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.brand-asset-grid-scrollable::-webkit-scrollbar-thumb,
+.brand-publish-channel-list::-webkit-scrollbar-thumb,
+.brand-publish-result-grid::-webkit-scrollbar-thumb,
+.knowledge-reference-grid-scrollable::-webkit-scrollbar-thumb,
+.knowledge-hub-field textarea::-webkit-scrollbar-thumb,
+.knowledge-reference-textarea::-webkit-scrollbar-thumb,
+.brand-caption-textarea::-webkit-scrollbar-thumb,
+.brand-publish-note::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(148, 171, 203, 0.7), rgba(92, 118, 154, 0.78));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.brand-asset-grid-scrollable::-webkit-scrollbar-thumb:hover,
+.brand-publish-channel-list::-webkit-scrollbar-thumb:hover,
+.brand-publish-result-grid::-webkit-scrollbar-thumb:hover,
+.knowledge-reference-grid-scrollable::-webkit-scrollbar-thumb:hover,
+.knowledge-hub-field textarea::-webkit-scrollbar-thumb:hover,
+.knowledge-reference-textarea::-webkit-scrollbar-thumb:hover,
+.brand-caption-textarea::-webkit-scrollbar-thumb:hover,
+.brand-publish-note::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(180, 199, 226, 0.82), rgba(112, 136, 170, 0.88));
+  background-clip: padding-box;
+}
+
 .brand-asset-card {
   padding: 18px;
   border-radius: 18px;
