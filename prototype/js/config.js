@@ -2,7 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '1.736';
+    config.APP_VERSION = '1.744';
 
     // Storage Keys
     config.KEYS = {
@@ -20,7 +20,9 @@
         CURRENT_STAGE: 'nk_current_stage',
         CURRENT_PROJECT: 'nk_current_project',
         SELECTED_DRAFT: 'nk_selected_draft',
-        VIDEO_MODEL: 'nk_video_model'
+        VIDEO_MODEL: 'nk_video_model',
+        BRANDS: 'nk_brands_v1',
+        CURRENT_BRAND: 'nk_current_brand'
     };
 
     // Auth configuration is server-driven.

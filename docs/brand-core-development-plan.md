@@ -131,11 +131,11 @@
 
 ### Phase 1. 데이터 모델 재설계
 
-- [ ] `Brand Core` 엔티티 정의
-- [ ] 기존 `seriesId`, `seriesTitle`, `episodeTitle`와 `brandId` 관계 정의
-- [ ] 에피소드 draft가 브랜드 문맥을 직접 저장하지 않고 참조하도록 구조 설계
-- [ ] 기존 payload에서 브랜드 필드를 어디까지 유지할지 마이그레이션 정책 결정
-- [ ] 브랜드 공용 채널/분석/자산 구조 정의
+- [x] `Brand Core` 엔티티 정의
+- [x] 기존 `seriesId`, `seriesTitle`, `episodeTitle`와 `brandId` 관계 정의
+- [x] 에피소드 draft가 브랜드 문맥을 직접 저장하지 않고 참조하도록 구조 설계
+- [x] 기존 payload에서 브랜드 필드를 어디까지 유지할지 마이그레이션 정책 결정
+- [x] 브랜드 공용 채널/분석/자산 구조 정의
 
 완료 기준:
 - 브랜드/에피소드/자산/분석 데이터 경계가 문서와 코드에서 동일하게 설명된다.
@@ -207,8 +207,11 @@
 
 ## 10. 바로 다음 개발 순서
 
-1. `Brand Core` 데이터 모델 문서화
-2. 현재 `project.js` 기준의 분리 포인트 정리
+1. 현재 `project.js` 기준의 분리 포인트 정리
+2. 브랜드 저장소/서비스 스켈레톤 설계
 3. 브랜드 ID 중심 라우팅 설계
 4. Brand Studio를 브랜드 운영 콘솔로 전환하는 첫 구현 시작
 
+## 11. Phase 1 산출물
+
+- [x] [Brand Core 데이터 모델 정의서](/f:/NKW/App/NK_Studio/docs/brand-core-data-model.md)
