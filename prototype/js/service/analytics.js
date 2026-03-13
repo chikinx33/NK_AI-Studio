@@ -3,6 +3,17 @@
   var service = NK.service || (NK.service = {});
   var analytics = service.analytics || (service.analytics = {});
 
+  function currentLang() {
+    return NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+  }
+
+  function translate(text) {
+    if (NK.ui && NK.ui.common && NK.ui.common.translateText) {
+      return NK.ui.common.translateText(text, currentLang());
+    }
+    return String(text || '');
+  }
+
   function normalizeProject(projectOrId) {
     if (!projectOrId) return null;
     if (typeof projectOrId === 'string') {
@@ -49,7 +60,7 @@
         status: String(raw.status || 'published').trim() || 'published',
         publishedAt: String(raw.publishedAt || raw.capturedAt || '').trim(),
         remotePostId: String(raw.remotePostId || raw.postId || '').trim(),
-        title: String(raw.title || '').trim() || '게시 결과',
+        title: String(raw.title || '').trim() || translate('게시 결과'),
         projectId: String(raw.projectId || project.id || '').trim(),
         projectTitle: String(raw.projectTitle || project.title || project.seriesTitle || '').trim(),
         seasonId: String(raw.seasonId || payload.seasonId || '').trim(),
@@ -173,7 +184,7 @@
       if (item.projectId || item.projectTitle) {
         episodeMap.set(String(item.projectId || item.projectTitle), {
           value: String(item.projectId || item.projectTitle),
-          label: String(item.projectTitle || item.projectId || '에피소드')
+          label: String(item.projectTitle || item.projectId || translate('에피소드'))
         });
       }
       if (item.channelType) channelMap.set(String(item.channelType), { value: String(item.channelType), label: String(item.channelType) });
@@ -282,7 +293,7 @@
     }, function (item) {
       return {
         projectId: String(item.projectId || '').trim(),
-        projectTitle: String(item.projectTitle || item.projectId || '미지정 에피소드').trim() || '미지정 에피소드',
+        projectTitle: String(item.projectTitle || item.projectId || translate('미지정 에피소드')).trim() || translate('미지정 에피소드'),
         totalPosts: 0,
         latestPublishedAt: '',
         views: 0,
@@ -313,10 +324,10 @@
   analytics.summarizeByUploadTime = function (projectOrId, filters) {
     var rows = filterRows(readPublishResults(projectOrId), filters);
     var buckets = [
-      { id: 'morning', label: '오전 6시-11시', from: 6, to: 11 },
-      { id: 'afternoon', label: '오후 12시-17시', from: 12, to: 17 },
-      { id: 'evening', label: '저녁 18시-23시', from: 18, to: 23 },
-      { id: 'night', label: '심야 0시-5시', from: 0, to: 5 }
+      { id: 'morning', label: translate('오전 6시-11시'), from: 6, to: 11 },
+      { id: 'afternoon', label: translate('오후 12시-17시'), from: 12, to: 17 },
+      { id: 'evening', label: translate('저녁 18시-23시'), from: 18, to: 23 },
+      { id: 'night', label: translate('심야 0시-5시'), from: 0, to: 5 }
     ];
     var map = new Map();
     buckets.forEach(function (bucket) {

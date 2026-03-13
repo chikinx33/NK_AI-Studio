@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config) window.NK.config.APP_VERSION = '1.766';
+  if (window.NK.config) window.NK.config.APP_VERSION = '1.767';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -296,7 +296,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.766';
+    NK.config.APP_VERSION = '1.767';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -2043,6 +2043,12 @@
     let creating = false;
     let mode = 'new-series';
 
+    const applyCurrentLocale = () => {
+      if (!NK.ui || !NK.ui.common || !NK.ui.common.applyRuntimeLocale) return;
+      const lang = currentLang === 'en' ? 'en' : 'ko';
+      NK.ui.common.applyRuntimeLocale(lang);
+    };
+
     const baseRow = input.closest('.form-row');
     if (!baseRow || !overlayCard) return;
 
@@ -2208,6 +2214,7 @@
         hintRow.textContent = '기존 프로젝트를 선택한 뒤 새 에피소드를 생성합니다.';
         btnCreate.disabled = creating;
       }
+      applyCurrentLocale();
     };
 
     const setCreatingState = (isBusy) => {
@@ -2231,6 +2238,7 @@
         el.classList.toggle('blur-active', creating || !overlay.classList.contains('hidden'));
         el.classList.toggle('loading-blur', creating);
       });
+      applyCurrentLocale();
     };
 
     const close = () => {
@@ -2351,6 +2359,7 @@
       setMode(seriesList.length ? 'episode' : 'new-series');
       overlay.classList.remove('hidden');
       blurTargets.forEach(el => el.classList.add('blur-active'));
+      applyCurrentLocale();
       setTimeout(() => {
         if (mode === 'new-series' && seriesInput) seriesInput.focus();
         else input.focus();
@@ -2358,6 +2367,7 @@
     };
     // 빈 카드 클릭 처리 이미 renderDrafts 쪽에 존재하므로 여기서는 open 함수만 노출
     NK.ui.openProjectOverlay = openFromAnywhere;
+    applyCurrentLocale();
   };
 
   const updateSidebarHighlight = (stage) => {
