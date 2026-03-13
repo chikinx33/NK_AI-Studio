@@ -6,6 +6,13 @@
     var ORIGINAL_PREFIX = 'data-nk-orig-';
     var localeObserver = null;
     var localeApplying = false;
+    var originalTextNodeMap = (typeof WeakMap === 'function') ? new WeakMap() : null;
+    var nativeAlert = (typeof window !== 'undefined' && typeof window.alert === 'function')
+        ? window.alert.bind(window)
+        : null;
+    var nativeConfirm = (typeof window !== 'undefined' && typeof window.confirm === 'function')
+        ? window.confirm.bind(window)
+        : null;
 
     var EN_TEXT_EXACT = {
         '로그인 하세요.': 'Please sign in.',
@@ -128,7 +135,215 @@
         '메뉴 이름을 입력해 주세요.': 'Please enter a menu name.',
         '아이콘 이미지를 등록해 주세요.': 'Please upload an icon image.',
         '즐겨찾기 메뉴가 등록되었습니다.': 'Favorite menu has been added.',
-        '새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.': 'New tab was blocked. Please disable the popup blocker in your browser.'
+        '새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.': 'New tab was blocked. Please disable the popup blocker in your browser.',
+        '텍스트': 'Text',
+        '이미지': 'Image',
+        '영상': 'Video',
+        '참조': 'Reference',
+        '문서': 'Document',
+        '콘텐츠': 'Content',
+        '게시 결과': 'Publish result',
+        '준비 완료': 'Ready',
+        '비어 있음': 'Empty',
+        '브랜드 요약이 아직 없습니다.': 'No brand summary yet.',
+        '핵심 메시지가 아직 없습니다.': 'No core message yet.',
+        '미지정 에피소드': 'Unassigned episode',
+        '선택된 프로젝트가 없습니다.': 'No project selected.',
+        '대시보드로 이동': 'Go to dashboard',
+        '운영 브랜드': 'Active brand',
+        '현재 연결 에피소드': 'Connected episode',
+        '현재 에피소드 유형': 'Current episode type',
+        '핵심 메시지': 'Core message',
+        '다음 단계': 'Next step',
+        '브랜드 전체 Scene': 'Brand-wide scenes',
+        '브랜드 전체 이미지 / 영상': 'Brand-wide images / videos',
+        '현재 브랜드에 연결된 Creative 결과물을 한 곳에서 확인합니다.': 'Review all creative outputs linked to the current brand in one place.',
+        '시나리오 수정': 'Edit scenario',
+        '생성 계속': 'Continue generating',
+        '편집 계속': 'Continue editing',
+        '브랜드 정체성': 'Brand identity',
+        'AI가 계속 참고할 기본 문맥': 'Core context the AI keeps referencing',
+        '핵심 4개 필드': '4 core fields',
+        '브랜드 보이스': 'Brand voice',
+        '브랜드 스토리': 'Brand story',
+        '캐릭터/주체': 'Character / narrator',
+        '세계관/배경': 'World / setting',
+        '브랜드 규칙': 'Brand rules',
+        '반드시 지켜야 할 운영 기준': 'Required operating rules',
+        '금지 표현': 'Banned expressions',
+        '빠른 요약': 'Quick summary',
+        '긴 설명 대신 현재 저장 상태만 확인': 'Check current saved status instead of long descriptions',
+        '입력됨': 'Filled',
+        '성공 사례': 'Success cases',
+        '여기 저장한 내용은 Brand Core를 우선 갱신하고, 기존 호환을 위해 현재 연결 에피소드 payload의 knowledgeHub에도 함께 반영됩니다.': 'What you save here updates Brand Core first, and is also mirrored into the current episode payload knowledgeHub for compatibility.',
+        '참조와 학습': 'References and learnings',
+        '좋았던 레퍼런스와 성공 패턴': 'Useful references and successful patterns',
+        '과거 성공 사례': 'Past success cases',
+        '참조 콘텐츠 구조': 'Reference content',
+        '참조 제목': 'Reference title',
+        '링크 또는 출처': 'Link or source',
+        '왜 참고하는지 메모를 남겨 주세요.': 'Leave a note about why this is useful.',
+        '참조 추가': 'Add reference',
+        '참조 콘텐츠': 'Reference content',
+        '메모 없음': 'No note',
+        'Knowledge 저장': 'Save knowledge',
+        'Knowledge Hub를 저장했습니다.': 'Knowledge Hub saved.',
+        '참조 제목, 출처, 메모 중 하나는 입력해 주세요.': 'Enter at least one of reference title, source, or note.',
+        'Content Library를 불러올 수 없습니다.': 'Unable to load Content Library.',
+        'Knowledge Hub를 불러올 수 없습니다.': 'Unable to load Knowledge Hub.',
+        '분석 화면을 불러올 수 없습니다.': 'Unable to load analytics.',
+        'Brand Studio를 불러올 수 없습니다.': 'Unable to load Brand Studio.',
+        '브랜드 요약이 아직 없습니다. Knowledge Hub를 먼저 채우면 이후 생성 품질이 안정됩니다.': 'No brand summary yet. Fill Knowledge Hub first to stabilize later generation quality.',
+        '브랜드 스튜디오 품질이 올라갑니다.': 'Brand Studio quality improves.',
+        '선택됨': 'Selected',
+        '선택': 'Select',
+        '선택 해제': 'Deselect',
+        '자산 선택': 'Select asset',
+        '연결됨': 'Connected',
+        '연결 해제': 'Disconnect',
+        '채널 연결': 'Connect channel',
+        '계정명 없음': 'No account name',
+        '자동 생성': 'Generate',
+        '다시 생성': 'Generate again',
+        '캡션 저장': 'Save caption',
+        '브랜드 키워드': 'Brand keywords',
+        '해시태그 저장': 'Save hashtags',
+        '채널 연결과 예약': 'Channel connections and scheduling',
+        '브랜드 공용 채널과 예약 게시 설정': 'Shared brand channels and scheduled publishing settings',
+        '현재 연결': 'Current connections',
+        '아직 연결된 브랜드 공용 채널이 없습니다.': 'No shared brand channels connected yet.',
+        '현재 계획': 'Current plan',
+        '아직 저장된 예약 없음': 'No saved schedule yet',
+        '예약 채널': 'Schedule channels',
+        '먼저 채널을 연결해 주세요.': 'Connect a channel first.',
+        '예약 시각': 'Scheduled time',
+        '예약 계획 저장': 'Save schedule plan',
+        '예약 계획 비우기': 'Clear schedule plan',
+        '게시 결과 관리': 'Manage publish results',
+        '분석에 들어갈 실제 운영 데이터를 기록': 'Record the real operating data used for analytics',
+        '현재 누적': 'Current total',
+        '채널 선택': 'Select channel',
+        '게시 제목 또는 콘텐츠명': 'Post title or content name',
+        '게시물 ID 또는 링크 식별자': 'Post ID or link identifier',
+        '게시 결과 메모를 남겨 주세요.': 'Leave a note about this publish result.',
+        '조회수': 'Views',
+        '좋아요': 'Likes',
+        '댓글': 'Comments',
+        '공유': 'Shares',
+        '클릭': 'Clicks',
+        '게시 결과 저장': 'Save publish result',
+        '아직 저장된 게시 결과가 없습니다.': 'No saved publish results yet.',
+        '세부 정보 없음': 'No detail',
+        '게시 완료': 'Published',
+        '예약됨': 'Scheduled',
+        '브랜드 자산 선택': 'Select brand assets',
+        '긴 목록은 내부 스크롤로 제한하고, 필요한 자산만 고릅니다': 'Long lists stay internally scrollable so you can pick only what you need',
+        '현재 선택 자산': 'Current selected assets',
+        '미선택': 'Not selected',
+        '선택 비우기': 'Clear selection',
+        'SNS 콘텐츠 유형': 'SNS content type',
+        '운영 포맷을 먼저 정하면 다음 입력이 단순해집니다': 'Choosing the operating format first simplifies the next inputs',
+        '현재 선택': 'Current selection',
+        '아직 선택되지 않음': 'Not selected yet',
+        '발행 초안으로 이동': 'Go to publishing draft',
+        '발행 초안': 'Publishing draft',
+        '캡션과 해시태그를 한 곳에서 정리': 'Manage caption and hashtags in one place',
+        '콘텐츠 유형': 'Content type',
+        '준비 중': 'Preparing',
+        '참조 소스': 'Reference source',
+        '아직 없음': 'Not yet',
+        '자동 제안': 'Auto suggestion',
+        '추천 근거 없음': 'No recommendation reason',
+        '적용된 자동 제안': 'Applied auto suggestion',
+        'Analytics에서 가져온 초안': 'Draft imported from Analytics',
+        'Knowledge 스냅샷': 'Knowledge snapshot',
+        '지금 필요한 규칙만 짧게 확인': 'Check only the rules you need right now',
+        '브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 Knowledge Hub에서 관리합니다.': 'Brand voice and banned expressions are applied directly to caption and hashtag generation. Manage detailed edits in Knowledge Hub.',
+        '캡션이 여기에 생성됩니다.': 'Caption is generated here.',
+        '#해시태그 형식으로 생성됩니다.': 'Generated as #hashtags.',
+        '채널별 게시 결과와 반응 수치를 브랜드 분석 데이터에 누적하고 있습니다.': 'Channel-level publish results and engagement metrics are being accumulated into brand analytics data.',
+        '채널별 결과를 입력하면 이후 브랜드 성과 분석의 기초 데이터가 됩니다.': 'Entering channel-level results creates the foundation for later brand performance analysis.',
+        '추천': 'Recommendation',
+        '전략 추천': 'Strategy recommendation',
+        '콘텐츠 제안': 'Content suggestion',
+        'Brand Studio에 적용': 'Apply to Brand Studio',
+        '개요': 'Overview',
+        '채널': 'Channel',
+        '콘텐츠 유형': 'Content type',
+        '업로드 시간': 'Upload time',
+        '해시태그': 'Hashtag',
+        '상위 채널': 'Top channel',
+        '상위 에피소드': 'Top episode',
+        '강한 업로드 시간': 'Strong upload time',
+        '게시 결과를 더 모아 주세요.': 'Collect more publish results.',
+        '비교할 데이터가 없습니다.': 'No data to compare yet.',
+        '업로드 시각 데이터가 없습니다.': 'No upload-time data yet.',
+        '채널별 성과': 'Performance by channel',
+        '채널 성과만 집중해서 비교': 'Compare only channel performance',
+        '최근 게시': 'Latest post',
+        '에피소드별 성과': 'Performance by episode',
+        '브랜드 안에서 어떤 편이 잘 반응하는지 비교': 'Compare which episodes perform well within the brand',
+        '주요 채널': 'Top channel',
+        '콘텐츠 유형별 성과': 'Performance by content type',
+        '어떤 포맷이 강한지 비교': 'Compare which formats are strong',
+        '업로드 시간별 성과': 'Performance by upload time',
+        '언제 올릴 때 반응이 좋은지 비교': 'Compare when posts perform best',
+        '해시태그 성과': 'Hashtag performance',
+        '반응이 좋은 태그 패턴': 'Tag patterns with good response',
+        '핵심 개요': 'Key overview',
+        '추천과 요약을 먼저 보고, 필요할 때 탭으로 drill-down': 'See recommendations and summary first, then drill down with tabs when needed',
+        '아직 추천을 만들 만큼의 데이터가 없습니다.': 'Not enough data to generate recommendations yet.',
+        '자동 제안을 만들 만큼의 데이터가 없습니다.': 'Not enough data to generate automatic suggestions yet.',
+        '분석 브랜드': 'Analysis brand',
+        '현재 기준 에피소드': 'Current baseline episode',
+        '누적 게시': 'Total posts',
+        '총 조회수': 'Total views',
+        '총 반응': 'Total engagement',
+        '분석 필터': 'Analytics filters',
+        '브랜드 전체에서 세부 활동으로 drill-down': 'Drill down from the whole brand into detailed activity',
+        '시즌': 'Season',
+        '캠페인': 'Campaign',
+        '운영 목적': 'Purpose',
+        '현재 필터 결과': 'Current filter result',
+        '필터 초기화': 'Reset filters',
+        '분석 보기': 'Analytics view',
+        '기본은 개요, 세부 분석은 탭으로 전환': 'Overview is the default, detailed analysis switches by tab',
+        '게시 결과를 수집하면 채널별 성과를 여기서 한눈에 확인할 수 있습니다.': 'Once publish results are collected, you can review channel performance here at a glance.',
+        '아직 게시 결과가 없습니다. Brand Studio에서 먼저 게시 결과를 기록해 주세요.': 'No publish results yet. Record publish results in Brand Studio first.',
+        '아직 에피소드별로 비교할 게시 결과가 없습니다.': 'No publish results yet to compare by episode.',
+        '아직 콘텐츠 유형별로 비교할 게시 결과가 없습니다.': 'No publish results yet to compare by content type.',
+        '업로드 시각이 저장된 게시 결과가 아직 없습니다.': 'No publish results with upload time saved yet.',
+        '게시 결과에 저장된 해시태그가 아직 없습니다.': 'No hashtags saved in publish results yet.',
+        '자동 제안 적용 실패: ': 'Failed to apply auto suggestion: ',
+        'Knowledge Hub 저장 실패: ': 'Failed to save Knowledge Hub: ',
+        '참조 콘텐츠 추가 실패: ': 'Failed to add reference content: ',
+        '참조 콘텐츠 삭제 실패: ': 'Failed to delete reference content: ',
+        '콘텐츠 유형 저장 실패: ': 'Failed to save content type: ',
+        '자산 유형 필터 저장 실패: ': 'Failed to save asset type filter: ',
+        '에피소드 필터 저장 실패: ': 'Failed to save episode filter: ',
+        '브랜드 자산 선택 저장 실패: ': 'Failed to save brand asset selection: ',
+        '선택 자산 초기화 실패: ': 'Failed to clear selected assets: ',
+        '캡션 생성 실패: ': 'Failed to generate caption: ',
+        '저장할 캡션을 입력해 주세요.': 'Enter a caption to save.',
+        '캡션을 저장했습니다.': 'Caption saved.',
+        '캡션 저장 실패: ': 'Failed to save caption: ',
+        '해시태그 생성 실패: ': 'Failed to generate hashtags: ',
+        '저장할 해시태그를 입력해 주세요.': 'Enter hashtags to save.',
+        '해시태그를 저장했습니다.': 'Hashtags saved.',
+        '해시태그 저장 실패: ': 'Failed to save hashtags: ',
+        '채널 계정 이름을 입력해 주세요.': 'Enter the channel account name.',
+        '채널 연결 저장 실패: ': 'Failed to save channel connection: ',
+        '먼저 콘텐츠 유형을 선택해 주세요.': 'Select a content type first.',
+        '예약할 채널을 선택해 주세요.': 'Select channels to schedule.',
+        '예약 시각을 입력해 주세요.': 'Enter the scheduled time.',
+        '예약 게시 계획을 저장했습니다.': 'Scheduled publishing plan saved.',
+        '예약 계획 저장 실패: ': 'Failed to save schedule plan: ',
+        '예약 계획 삭제 실패: ': 'Failed to delete schedule plan: ',
+        '결과를 저장할 채널을 선택해 주세요.': 'Select a channel for the result.',
+        '게시 제목 또는 게시물 ID 중 하나는 입력해 주세요.': 'Enter either a post title or a post ID.',
+        '게시 결과를 저장했습니다.': 'Publish result saved.',
+        '게시 결과 저장 실패: ': 'Failed to save publish result: ',
+        '게시 결과 삭제 실패: ': 'Failed to delete publish result: '
     };
 
     var EN_PATTERNS = [
@@ -163,6 +378,106 @@
         {
             re: /^재시도 중\.\.\. \((\d+)\/(\d+)\)$/,
             fn: function (m) { return 'Retrying... (' + m[1] + '/' + m[2] + ')'; }
+        },
+        {
+            re: /^아직 등록된 (.+)이 없습니다\.$/,
+            fn: function (m) { return 'No ' + translateToEnglish(m[1]) + ' added yet.'; }
+        },
+        {
+            re: /^이 화면은 브랜드 자산함이며, 현재 연결된 에피소드는 (.+)입니다\.$/,
+            fn: function (m) { return 'This is the brand asset library, and the connected episode is ' + m[1] + '.'; }
+        },
+        {
+            re: /^(\d+)개$/,
+            fn: function (m) { return m[1]; }
+        },
+        {
+            re: /^(\d+)개 항목$/,
+            fn: function (m) { return m[1] + ' items'; }
+        },
+        {
+            re: /^(\d+)개 데이터$/,
+            fn: function (m) { return m[1] + ' entries'; }
+        },
+        {
+            re: /^(\d+)개 채널$/,
+            fn: function (m) { return m[1] + ' channels'; }
+        },
+        {
+            re: /^(\d+)개 게시$/,
+            fn: function (m) { return m[1] + ' posts'; }
+        },
+        {
+            re: /^(\d+)개 운영$/,
+            fn: function (m) { return m[1] + ' operations'; }
+        },
+        {
+            re: /^(\d+)개 게시 결과$/,
+            fn: function (m) { return m[1] + ' publish results'; }
+        },
+        {
+            re: /^(\d+)건 누적$/,
+            fn: function (m) { return m[1] + ' total'; }
+        },
+        {
+            re: /^(\d+)회 사용$/,
+            fn: function (m) { return 'Used ' + m[1] + ' times'; }
+        },
+        {
+            re: /^누적 게시 (\d+)개$/,
+            fn: function (m) { return m[1] + ' total posts'; }
+        },
+        {
+            re: /^게시 (\d+)개 · 최근 (.+)$/,
+            fn: function (m) { return m[1] + ' posts · latest ' + m[2]; }
+        },
+        {
+            re: /^게시 (\d+)개$/,
+            fn: function (m) { return m[1] + ' posts'; }
+        },
+        {
+            re: /^선택 자산 (\d+)개$/,
+            fn: function (m) { return m[1] + ' selected assets'; }
+        },
+        {
+            re: /^브랜드 텍스트 소스 (\d+)개$/,
+            fn: function (m) { return m[1] + ' brand text sources'; }
+        },
+        {
+            re: /^소스 자산: 씬 (\d+) · 이미지 (\d+) · 영상 (\d+)$/,
+            fn: function (m) { return 'Source assets: scenes ' + m[1] + ' · images ' + m[2] + ' · videos ' + m[3]; }
+        },
+        {
+            re: /^채널: (.+)$/,
+            fn: function (m) { return 'Channel: ' + m[1]; }
+        },
+        {
+            re: /^추천 시간: (.+)$/,
+            fn: function (m) { return 'Suggested time: ' + m[1]; }
+        },
+        {
+            re: /^유형: (.+)$/,
+            fn: function (m) { return 'Type: ' + translateToEnglish(m[1]); }
+        },
+        {
+            re: /^조회 (.+)$/,
+            fn: function (m) { return 'Views ' + m[1]; }
+        },
+        {
+            re: /^좋아요 (.+)$/,
+            fn: function (m) { return 'Likes ' + m[1]; }
+        },
+        {
+            re: /^댓글 (.+)$/,
+            fn: function (m) { return 'Comments ' + m[1]; }
+        },
+        {
+            re: /^공유 (.+)$/,
+            fn: function (m) { return 'Shares ' + m[1]; }
+        },
+        {
+            re: /^클릭 (.+)$/,
+            fn: function (m) { return 'Clicks ' + m[1]; }
         }
     ];
 
@@ -191,6 +506,10 @@
         { re: /추가 항목/g, to: 'Ntes' },
         { re: /로딩 중\.\.\./g, to: 'Loading...' }
     ];
+
+    function getRuntimeLang() {
+        return (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
+    }
 
     function sanitizeAttrName(attrName) {
         return String(attrName || '').replace(/[^a-z0-9_-]/gi, '-').toLowerCase();
@@ -222,6 +541,21 @@
             out = out.replace(EN_TOKEN_RULES[j].re, EN_TOKEN_RULES[j].to);
         }
         return out;
+    }
+
+    function setupDialogLocalization() {
+        if (typeof window === 'undefined' || window.__nkDialogLocaleWrapped) return;
+        if (nativeAlert) {
+            window.alert = function (message) {
+                return nativeAlert(common.translateText(message, getRuntimeLang()));
+            };
+        }
+        if (nativeConfirm) {
+            window.confirm = function (message) {
+                return nativeConfirm(common.translateText(message, getRuntimeLang()));
+            };
+        }
+        window.__nkDialogLocaleWrapped = true;
     }
 
     function translateToEnglish(text) {
@@ -269,6 +603,23 @@
         }
     }
 
+    function processDirectTextNodes(el, lang) {
+        if (!el || !el.childNodes || !originalTextNodeMap) return;
+        Array.prototype.forEach.call(el.childNodes, function (node) {
+            if (!node || node.nodeType !== 3) return;
+            var text = String(node.nodeValue || '');
+            if (!text.trim()) return;
+            if (!originalTextNodeMap.has(node)) {
+                originalTextNodeMap.set(node, text);
+            }
+            var original = originalTextNodeMap.get(node);
+            var next = (lang === 'en') ? translateToEnglish(original) : original;
+            if (next !== text) {
+                node.nodeValue = next;
+            }
+        });
+    }
+
     function localizeElement(el, lang) {
         if (!el || el.nodeType !== 1) return;
         var tag = String(el.tagName || '').toUpperCase();
@@ -291,6 +642,7 @@
             }
         }
 
+        processDirectTextNodes(el, lang);
         processLeafText(el, lang);
     }
 
@@ -365,6 +717,7 @@
         var safeLang = (lang === 'en') ? 'en' : 'ko';
         var t = NK.core.translations[safeLang];
         if (!t) return;
+        setupDialogLocalization();
 
         document.querySelectorAll('[data-i18n]').forEach(function (el) {
             var key = el.getAttribute('data-i18n');
@@ -394,6 +747,12 @@
 
         common.applyRuntimeLocale(safeLang);
         common.updateThemeButton(NK.state.runtime.theme, safeLang);
+    };
+
+    common.translateText = function (text, lang) {
+        var safeLang = (lang === 'en') ? 'en' : 'ko';
+        var raw = String(text == null ? '' : text);
+        return safeLang === 'en' ? translateToEnglish(raw) : raw;
     };
 
     common.applyTheme = function (theme, options) {

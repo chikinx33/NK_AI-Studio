@@ -263,7 +263,7 @@
       '<div class="knowledge-hub-pill"><span>금지 표현</span><strong>' + escapeHtml(bannedCount) + '개</strong></div>' +
       '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +
       '</div>' +
-      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 우선 갱신하고, 기존 호환을 위해 현재 연결 에피소드 payload의 <code>knowledgeHub</code>에도 함께 반영됩니다.</p>' +
+      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 우선 갱신하고, 기존 호환을 위해 현재 연결 에피소드 payload의 knowledgeHub에도 함께 반영됩니다.</p>' +
       '</section>' +
       '<details class="knowledge-hub-disclosure" open>' +
       '<summary><div><strong>참조와 학습</strong><span>좋았던 레퍼런스와 성공 패턴</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(referencesCount + successesCount) + '개 데이터</span></summary>' +
