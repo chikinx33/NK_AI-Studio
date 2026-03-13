@@ -2298,7 +2298,7 @@ a.btn-primary:active {
 
 .draft-actions {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 10px;
   align-items: center;
   margin-top: 14px;

@@ -108,7 +108,7 @@
         const btn = e.target.closest('[data-action]');
         if (!btn) return;
         const action = btn.dataset.action || '';
-        if (!['draft-edit', 'draft-library', 'draft-production', 'draft-post'].includes(action)) return;
+        if (!['draft-edit', 'draft-production', 'draft-post'].includes(action)) return;
         try { if (container.onclick) container.onclick(e); } catch (_) { }
       }, true);
     }
@@ -253,7 +253,6 @@
             <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}">Pre</button>
             <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}">Production</button>
             <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}">Post</button>
-            <button class="btn-secondary" data-action="draft-library" data-id="${escapeHtml(d.id)}">Library</button>
             <button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>
           </div>
         </article>
@@ -433,18 +432,6 @@
         if (draft) {
           selectProject(draft);
           const url = draft.id ? `scenes.html?projectId=${encodeURIComponent(draft.id)}` : 'scenes.html';
-          if (isStandaloneStage) {
-            window.location.href = url;
-          } else {
-            NK.navigation.loadStage(url);
-          }
-        }
-      } else if (action === 'draft-library') {
-        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
-        const draft = drafts.find(d => String(d.id) === String(id));
-        if (draft) {
-          selectProject(draft);
-          const url = draft.id ? `library.html?projectId=${encodeURIComponent(draft.id)}` : 'library.html';
           if (isStandaloneStage) {
             window.location.href = url;
           } else {
