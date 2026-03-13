@@ -24,38 +24,13 @@
     var PROJECT_CORE_STRING_FIELDS = [
         'projectType',
         'contentStyle',
-        'brandSummary',
-        'coreMessage',
-        'targetAudience',
-        'brandVoice',
-        'brandTone',
-        'brandStory',
-        'brandCharacter'
+        'targetAudience'
     ];
-    var PROJECT_CORE_LIST_FIELDS = ['brandKeywords', 'brandRules', 'connectedChannels'];
+    var PROJECT_CORE_LIST_FIELDS = [];
     var BRAND_SYNC_FIELDS = [
         'brandId',
         'brandTitle',
         'brandRef',
-        'brandSummary',
-        'coreMessage',
-        'targetAudience',
-        'target',
-        'brandVoice',
-        'brandTone',
-        'brandStory',
-        'brandCharacter',
-        'worldSetting',
-        'knowledgeWorld',
-        'brandKeywords',
-        'brandRules',
-        'connectedChannels',
-        'bannedExpressions',
-        'referenceContents',
-        'referenceContentEntries',
-        'successCases',
-        'knowledgeHub',
-        'brandStudioChannels',
         'seriesId',
         'seriesTitle'
     ];
@@ -162,16 +137,7 @@
         return {
             projectType: normalizeText(raw.projectType),
             contentStyle: normalizeText(raw.contentStyle),
-            brandSummary: normalizeText(raw.brandSummary),
-            coreMessage: normalizeText(raw.coreMessage),
-            targetAudience: normalizeText(raw.targetAudience || raw.target),
-            brandVoice: normalizeText(raw.brandVoice),
-            brandTone: normalizeText(raw.brandTone || raw.tone),
-            brandStory: normalizeText(raw.brandStory),
-            brandCharacter: normalizeText(raw.brandCharacter),
-            brandKeywords: normalizeTextList(raw.brandKeywords),
-            brandRules: normalizeTextList(raw.brandRules),
-            connectedChannels: normalizeTextList(raw.connectedChannels)
+            targetAudience: normalizeText(raw.targetAudience || raw.target)
         };
     }
 
@@ -251,51 +217,48 @@
         var textFields = [
             'brandId',
             'brandTitle',
-            'brandSummary',
-            'coreMessage',
             'targetAudience',
-            'target',
-            'brandVoice',
-            'brandTone',
-            'brandStory',
-            'brandCharacter',
-            'worldSetting',
-            'knowledgeWorld'
-        ];
-        var listFields = [
-            'brandKeywords',
-            'brandRules',
-            'connectedChannels',
-            'bannedExpressions',
-            'referenceContents',
-            'successCases'
+            'target'
         ];
 
         textFields.forEach(function (key) {
             var value = normalizeText(raw[key]);
             if (value) context[key] = value;
         });
-        listFields.forEach(function (key) {
-            var value = normalizeTextList(raw[key]);
-            if (value.length) context[key] = value;
-        });
-
-        if (Array.isArray(raw.referenceContentEntries) && raw.referenceContentEntries.length) {
-            context.referenceContentEntries = cloneJson(raw.referenceContentEntries, []);
-        }
-        if (Array.isArray(raw.brandStudioChannels) && raw.brandStudioChannels.length) {
-            context.brandStudioChannels = cloneJson(raw.brandStudioChannels, []);
-        }
         if (raw.brandRef && typeof raw.brandRef === 'object') {
             context.brandRef = {
                 id: normalizeBrandId(raw.brandRef.id),
                 title: normalizeText(raw.brandRef.title)
             };
         }
-        if (raw.knowledgeHub && typeof raw.knowledgeHub === 'object') {
-            context.knowledgeHub = normalizeKnowledgeHub(raw.knowledgeHub);
-        }
         return context;
+    }
+
+    function readInheritedBrandContext(brandId) {
+        var safeBrandId = normalizeBrandId(brandId);
+        if (!safeBrandId || !NK.service || !NK.service.brand || !NK.service.brand.getById) return {};
+        var src = NK.service.brand.getById(safeBrandId);
+        if (!src) return {};
+        return {
+            brandSummary: normalizeText(src.brandSummary),
+            coreMessage: normalizeText(src.coreMessage),
+            targetAudience: normalizeText(src.targetAudience),
+            brandVoice: normalizeText(src.brandVoice),
+            brandTone: normalizeText(src.brandTone),
+            brandStory: normalizeText(src.brandStory),
+            brandCharacter: normalizeText(src.brandCharacter),
+            worldSetting: normalizeText(src.worldSetting),
+            brandKeywords: normalizeTextList(src.brandKeywords),
+            brandRules: normalizeTextList(src.brandRules),
+            connectedChannels: (Array.isArray(src.connectedChannels) ? src.connectedChannels : []).map(function (item) {
+                return normalizeText(item && item.channelType || item);
+            }).filter(Boolean),
+            bannedExpressions: normalizeTextList(src.bannedExpressions),
+            referenceContents: normalizeTextList(src.referenceContents),
+            referenceContentEntries: normalizeReferenceEntries(src.referenceContentEntries),
+            successCases: normalizeTextList(src.successCases),
+            knowledgeHub: normalizeKnowledgeHub(src)
+        };
     }
 
     function shouldSyncBrandFromPatch(patch) {
@@ -317,17 +280,24 @@
 
     function applyProjectCore(payload, draft) {
         var merged = Object.assign({}, (draft && draft.payload) || {}, payload || {});
-        var core = normalizeProjectCore(merged);
-        var knowledge = normalizeKnowledgeHub(merged);
+        var brandMeta = normalizeBrandRef(merged, draft);
+        var inheritedBrand = readInheritedBrandContext(brandMeta.brandId);
+        var mergedWithBrand = Object.assign({}, inheritedBrand, merged);
+        var core = normalizeProjectCore(mergedWithBrand);
+        var knowledge = normalizeKnowledgeHub(mergedWithBrand);
         var publishResults = normalizePublishResults(merged.brandStudioPublishResults || merged.publishResults);
         var analyticsSnapshots = normalizeAnalyticsSnapshots(merged);
         var nextPayload = Object.assign({}, payload || {}, core);
-        var brandMeta = normalizeBrandRef(merged, draft);
         nextPayload.knowledgeHub = knowledge;
+        nextPayload.brandSummary = normalizeText(merged.brandSummary || inheritedBrand.brandSummary);
+        nextPayload.coreMessage = normalizeText(merged.coreMessage || inheritedBrand.coreMessage);
         nextPayload.brandVoice = knowledge.brandVoice;
+        nextPayload.brandTone = normalizeText(merged.brandTone || merged.tone || inheritedBrand.brandTone);
         nextPayload.brandStory = knowledge.brandStory;
         nextPayload.brandCharacter = knowledge.brandCharacter;
+        nextPayload.brandKeywords = normalizeTextList(merged.brandKeywords || inheritedBrand.brandKeywords);
         nextPayload.brandRules = knowledge.brandRules.slice();
+        nextPayload.connectedChannels = normalizeTextList(merged.connectedChannels || inheritedBrand.connectedChannels);
         nextPayload.bannedExpressions = knowledge.bannedExpressions.slice();
         nextPayload.referenceContents = knowledge.referenceContents.slice();
         nextPayload.referenceContentEntries = knowledge.referenceItems.slice();
@@ -543,6 +513,7 @@
         var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         var seriesList = listSeriesFromDrafts(drafts);
         var requestedCore = normalizeProjectCore(arg || {});
+        var requestedBrandContext = (arg && typeof arg === 'object') ? cloneJson(arg, {}) : {};
         var inheritedContext = Object.assign({}, requestedCore, extractBrandContext(arg || {}));
 
         if (mode === 'episode') {
@@ -584,6 +555,13 @@
         drafts.unshift(newDraft);
         NK.store.saveDrafts(drafts.slice(0, 100));
         syncBrandFromDraft(newDraft);
+        try {
+            if (mode === 'new-series' && requestedBrandContext && Object.keys(requestedBrandContext).length && NK.service && NK.service.brand && NK.service.brand.update) {
+                NK.service.brand.update(String(newDraft.payload.brandId || ''), requestedBrandContext);
+            }
+        } catch (err) {
+            console.warn('Brand create sync fail', err);
+        }
 
         try {
             await NK.api.projectInit(String(id));
@@ -691,6 +669,16 @@
 
         NK.store.saveDrafts(drafts);
         updateSelectedDraftAfterBulk(drafts);
+        try {
+            if (NK.service && NK.service.brand && NK.service.brand.getBySeriesId && NK.service.brand.update) {
+                var matchedBrand = NK.service.brand.getBySeriesId(sid);
+                if (matchedBrand && matchedBrand.brandId) {
+                    NK.service.brand.update(matchedBrand.brandId, { brandTitle: title });
+                }
+            }
+        } catch (err) {
+            console.warn('Brand rename sync fail', err);
+        }
 
         var synced = 0;
         var failed = 0;
