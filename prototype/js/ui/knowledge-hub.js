@@ -37,6 +37,10 @@
       .join('\n');
   }
 
+  function episodeLabel(project) {
+    return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
+  }
+
   function readKnowledge(project) {
     if (project && project.brandId && !project.id) {
       return {
@@ -131,6 +135,7 @@
     var knowledge = readKnowledge(brand || project);
     var brandTitle = String(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '브랜드').trim();
     var brandSummary = String(brand && brand.brandSummary || payload.brandSummary || '').trim();
+    var currentEpisodeTitle = episodeLabel(project);
     var rulesCount = knowledge.brandRules.length;
     var bannedCount = knowledge.bannedExpressions.length;
     var referencesCount = (knowledge.referenceItems || []).length || knowledge.referenceContents.length;
@@ -209,6 +214,7 @@
       '<p class="knowledge-hub-eyebrow">Knowledge Hub</p>' +
       '<h2>' + escapeHtml(brandTitle) + '</h2>' +
       '<p class="knowledge-hub-description">' + escapeHtml(brandSummary || '브랜드 요약이 아직 없습니다. Knowledge Hub를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
+      '<p class="knowledge-hub-description">이 화면은 브랜드 공용 지식 저장소이며, 현재 연결된 에피소드는 ' + escapeHtml(currentEpisodeTitle) + '입니다.</p>' +
       '</div>' +
       '<div class="knowledge-hub-hero-actions">' +
       '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
@@ -217,6 +223,8 @@
       '</div>' +
       '</div>' +
       '<div class="knowledge-hub-summary-grid">' +
+      '<article class="knowledge-hub-summary-card"><span>운영 브랜드</span><strong>' + escapeHtml(brandTitle || '-') + '</strong></article>' +
+      '<article class="knowledge-hub-summary-card"><span>현재 연결 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
       '<article class="knowledge-hub-summary-card"><span>브랜드 보이스</span><strong>' + escapeHtml(knowledge.brandVoice || '-') + '</strong></article>' +
       '<article class="knowledge-hub-summary-card"><span>세계관/배경</span><strong>' + escapeHtml(knowledge.worldSetting || '-') + '</strong></article>' +
       '<article class="knowledge-hub-summary-card"><span>브랜드 규칙</span><strong>' + escapeHtml(rulesCount) + '개</strong></article>' +
@@ -227,7 +235,7 @@
       '<div class="knowledge-hub-panel-head"><h3>브랜드 정체성</h3><span>AI가 계속 참고할 기본 문맥</span></div>' +
       '<div class="knowledge-hub-form-grid">' +
       '<label class="knowledge-hub-field"><span>브랜드 보이스</span><textarea id="knowledge-brand-voice" placeholder="예: 따뜻하지만 과장하지 않고, 짧고 명확하게 말한다.">' + escapeHtml(knowledge.brandVoice) + '</textarea></label>' +
-      '<label class="knowledge-hub-field"><span>브랜드 스토리</span><textarea id="knowledge-brand-story" placeholder="프로젝트가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.">' + escapeHtml(knowledge.brandStory) + '</textarea></label>' +
+      '<label class="knowledge-hub-field"><span>브랜드 스토리</span><textarea id="knowledge-brand-story" placeholder="브랜드/시리즈가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.">' + escapeHtml(knowledge.brandStory) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>캐릭터/주체</span><textarea id="knowledge-brand-character" placeholder="대표 캐릭터, 화자, 말하는 주체를 적어 주세요.">' + escapeHtml(knowledge.brandCharacter) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>세계관/배경</span><textarea id="knowledge-world-setting" placeholder="작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.">' + escapeHtml(knowledge.worldSetting) + '</textarea></label>' +
       '</div>' +
@@ -271,7 +279,7 @@
       '<div class="knowledge-hub-pill"><span>참조</span><strong>' + escapeHtml(referencesCount) + '개</strong></div>' +
       '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +
       '</div>' +
-      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 기준으로 저장되고, 기존 호환을 위해 대표 프로젝트 payload의 <code>knowledgeHub</code>에도 함께 반영됩니다. 다음 단계에서는 Brand Studio 생성 입력과 직접 연결합니다.</p>' +
+      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 기준으로 저장되고, 기존 호환을 위해 현재 연결 에피소드 payload의 <code>knowledgeHub</code>에도 함께 반영됩니다. 다음 단계에서는 Brand Studio 생성 입력과 직접 연결합니다.</p>' +
       '</section>' +
       '</div>' +
       '<div class="knowledge-hub-toolbar">' +

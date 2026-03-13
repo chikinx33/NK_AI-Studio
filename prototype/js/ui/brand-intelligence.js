@@ -113,6 +113,10 @@
     );
   }
 
+  function episodeLabel(project) {
+    return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="analytics-page">' +
@@ -128,6 +132,7 @@
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
     var brandId = String(brand && brand.brandId || payload.brandId || '').trim();
+    var currentEpisodeTitle = episodeLabel(project);
     var analyticsTarget = brand || project;
     var currentFilters = normalizeFilters(filters);
     var filterOptions = NK.service.analytics.listFilterOptions
@@ -158,6 +163,7 @@
       '<p class="analytics-eyebrow">Brand Intelligence</p>' +
       '<h2>' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
       '<p class="analytics-description">' + escapeHtml(brand && brand.brandSummary || payload.brandSummary || '게시 결과를 수집하면 채널별 성과를 여기서 한눈에 확인할 수 있습니다.') + '</p>' +
+      '<p class="analytics-description">이 화면은 브랜드 전체 분석 화면이며, 현재 연결된 에피소드는 ' + escapeHtml(currentEpisodeTitle) + '입니다.</p>' +
       '</div>' +
       '<div class="analytics-hero-actions">' +
       '<button class="btn-secondary" data-action="analytics-open-brand">Brand Studio</button>' +
@@ -166,6 +172,8 @@
       '</div>' +
       '</div>' +
       '<div class="analytics-summary-grid">' +
+      '<article class="analytics-summary-card"><span>분석 브랜드</span><strong>' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || '-') + '</strong></article>' +
+      '<article class="analytics-summary-card"><span>현재 연결 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
       '<article class="analytics-summary-card"><span>누적 게시</span><strong>' + escapeHtml(summary.totalPosts) + '개</strong></article>' +
       '<article class="analytics-summary-card"><span>총 조회수</span><strong>' + escapeHtml(summary.views) + '</strong></article>' +
       '<article class="analytics-summary-card"><span>총 반응</span><strong>' + escapeHtml(summary.likes + summary.comments + summary.shares) + '</strong></article>' +
@@ -219,7 +227,7 @@
           '<span>상위 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
           '<span>최근 게시</span><strong>' + escapeHtml(item.latestPublishedAt || '-') + '</strong>' +
           '</div>' +
-          '<p class="analytics-channel-note">같은 브랜드 안에서 어떤 에피소드가 더 강한지 비교합니다. 다음 단계에서는 시즌/캠페인 필터를 추가할 예정입니다.</p>' +
+          '<p class="analytics-channel-note">같은 브랜드 안에서 어떤 에피소드가 더 강한지 비교합니다. 현재 연결 에피소드는 상단 카드에서 별도로 확인할 수 있습니다.</p>' +
           '</article>'
         );
       }).join('') : '<div class="analytics-empty">아직 에피소드별로 비교할 게시 결과가 없습니다.</div>') +

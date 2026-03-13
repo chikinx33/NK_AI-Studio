@@ -49,6 +49,10 @@
     return safePage + '?' + parts.join('&');
   }
 
+  function episodeLabel(project) {
+    return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="content-library-page">' +
@@ -70,6 +74,7 @@
     var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
     var brandTitle = String(brand && brand.brandTitle || project.payload && project.payload.brandTitle || project.title || project.seriesTitle || '프로젝트').trim();
     var brandSummary = String(brand && brand.brandSummary || meta.brandSummary || '').trim();
+    var currentEpisodeTitle = episodeLabel(project);
     var groups = ['scene', 'text', 'image', 'video', 'reference', 'publish-result'].map(function (type) {
       var rows = items.filter(function (item) { return item.type === type; });
       var body = rows.length
@@ -109,6 +114,7 @@
       '<p class="content-library-eyebrow">Brand Assets</p>' +
       '<h2>' + escapeHtml(brandTitle) + '</h2>' +
       '<p class="content-library-description">' + escapeHtml(brandSummary) + '</p>' +
+      '<p class="content-library-description">이 화면은 브랜드 자산함이며, 현재 연결된 에피소드는 ' + escapeHtml(currentEpisodeTitle) + '입니다.</p>' +
       '</div>' +
       '<div class="content-library-hero-actions">' +
       '<button class="btn-secondary" data-action="library-open-knowledge">Knowledge Hub</button>' +
@@ -116,12 +122,14 @@
       '</div>' +
       '</div>' +
       '<div class="content-library-summary-grid">' +
-      '<article class="content-library-summary-card"><span>프로젝트 유형</span><strong>' + escapeHtml(meta.projectType) + '</strong></article>' +
+      '<article class="content-library-summary-card"><span>운영 브랜드</span><strong>' + escapeHtml(brandTitle || '-') + '</strong></article>' +
+      '<article class="content-library-summary-card"><span>현재 연결 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
+      '<article class="content-library-summary-card"><span>현재 에피소드 유형</span><strong>' + escapeHtml(meta.projectType) + '</strong></article>' +
       '<article class="content-library-summary-card"><span>타깃</span><strong>' + escapeHtml(meta.targetAudience) + '</strong></article>' +
       '<article class="content-library-summary-card"><span>핵심 메시지</span><strong>' + escapeHtml(meta.coreMessage) + '</strong></article>' +
       '<article class="content-library-summary-card"><span>다음 단계</span><strong>' + escapeHtml(summary.nextAction) + '</strong></article>' +
-      '<article class="content-library-summary-card"><span>Scene</span><strong>' + escapeHtml(summary.scenes) + '</strong></article>' +
-      '<article class="content-library-summary-card"><span>이미지 / 영상</span><strong>' + escapeHtml(summary.images) + ' / ' + escapeHtml(summary.videos) + '</strong></article>' +
+      '<article class="content-library-summary-card"><span>브랜드 전체 Scene</span><strong>' + escapeHtml(summary.scenes) + '</strong></article>' +
+      '<article class="content-library-summary-card"><span>브랜드 전체 이미지 / 영상</span><strong>' + escapeHtml(summary.images) + ' / ' + escapeHtml(summary.videos) + '</strong></article>' +
       '</div>' +
       '<div class="content-library-toolbar">' +
       '<span>현재 브랜드에 연결된 Creative 결과물을 한 곳에서 확인합니다.</span>' +
