@@ -94,6 +94,23 @@
     return (knowledge.referenceItems || []).concat([nextItem]);
   }
 
+  function readKnowledgeDraft(root, referenceItems) {
+    var items = Array.isArray(referenceItems) ? referenceItems.slice() : [];
+    return {
+      brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
+      brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
+      brandCharacter: String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim(),
+      worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
+      brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
+      bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
+      referenceItems: items,
+      referenceContents: items.map(function (item) {
+        return [item.type, item.title, item.note].filter(Boolean).join(' ');
+      }).filter(Boolean),
+      successCases: splitLines((root.querySelector('#knowledge-success-cases') || {}).value || '')
+    };
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="knowledge-hub-page">' +
@@ -125,6 +142,49 @@
         ? NK.service.brand.getById(nextBrandId)
         : null;
       renderProject(root, fallbackProject, nextBrand || brand);
+    }
+    function syncBrandAndProject(nextKnowledge) {
+      var tasks = [];
+      if (brandId && NK.service && NK.service.brand && NK.service.brand.update) {
+        tasks.push(Promise.resolve().then(function () {
+          return NK.service.brand.update(brandId, {
+            brandVoice: nextKnowledge.brandVoice,
+            brandStory: nextKnowledge.brandStory,
+            brandCharacter: nextKnowledge.brandCharacter,
+            worldSetting: nextKnowledge.worldSetting,
+            brandRules: nextKnowledge.brandRules,
+            bannedExpressions: nextKnowledge.bannedExpressions,
+            referenceContents: nextKnowledge.referenceContents,
+            referenceContentEntries: nextKnowledge.referenceItems,
+            successCases: nextKnowledge.successCases
+          });
+        }));
+      }
+      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+        tasks.push(NK.service.project.updatePayload(projectId, {
+          knowledgeHub: nextKnowledge,
+          brandVoice: nextKnowledge.brandVoice,
+          brandStory: nextKnowledge.brandStory,
+          brandCharacter: nextKnowledge.brandCharacter,
+          brandRules: nextKnowledge.brandRules,
+          bannedExpressions: nextKnowledge.bannedExpressions,
+          referenceContents: nextKnowledge.referenceContents,
+          referenceContentEntries: nextKnowledge.referenceItems,
+          successCases: nextKnowledge.successCases,
+          worldSetting: nextKnowledge.worldSetting,
+          knowledgeWorld: nextKnowledge.worldSetting
+        }));
+      }
+      return Promise.all(tasks).then(function (results) {
+        var nextDraft = null;
+        for (var i = 0; i < results.length; i++) {
+          if (results[i] && results[i].draft) {
+            nextDraft = results[i].draft;
+            break;
+          }
+        }
+        return { draft: nextDraft || project };
+      });
     }
     var referenceCards = (knowledge.referenceItems || []).length
       ? knowledge.referenceItems.map(function (item) {
@@ -204,14 +264,14 @@
       '</div>' +
       '</section>' +
       '<section class="knowledge-hub-panel">' +
-      '<div class="knowledge-hub-panel-head"><h3>현재 저장 구조</h3><span>다음 단계 연결용</span></div>' +
+      '<div class="knowledge-hub-panel-head"><h3>현재 저장 구조</h3><span>Brand Core 우선 저장</span></div>' +
       '<div class="knowledge-hub-pill-grid">' +
       '<div class="knowledge-hub-pill"><span>규칙</span><strong>' + escapeHtml(rulesCount) + '개</strong></div>' +
       '<div class="knowledge-hub-pill"><span>금지 표현</span><strong>' + escapeHtml(bannedCount) + '개</strong></div>' +
       '<div class="knowledge-hub-pill"><span>참조</span><strong>' + escapeHtml(referencesCount) + '개</strong></div>' +
       '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +
       '</div>' +
-      '<p class="knowledge-hub-help">여기 저장한 내용은 대표 프로젝트 payload의 <code>knowledgeHub</code>와 Brand Core에 함께 반영됩니다. 다음 단계에서는 Brand Studio 생성 입력과 직접 연결합니다.</p>' +
+      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 기준으로 저장되고, 기존 호환을 위해 대표 프로젝트 payload의 <code>knowledgeHub</code>에도 함께 반영됩니다. 다음 단계에서는 Brand Studio 생성 입력과 직접 연결합니다.</p>' +
       '</section>' +
       '</div>' +
       '<div class="knowledge-hub-toolbar">' +
@@ -233,33 +293,9 @@
       else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
       else if (action === 'knowledge-save') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextKnowledge = {
-          brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
-          brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
-          brandCharacter: String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim(),
-          worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
-          brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
-          bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
-          referenceItems: (knowledge.referenceItems || []).slice(),
-          referenceContents: (knowledge.referenceItems || []).map(function (item) {
-            return [item.type, item.title, item.note].filter(Boolean).join(' ');
-          }).filter(Boolean),
-          successCases: splitLines((root.querySelector('#knowledge-success-cases') || {}).value || '')
-        };
+        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || []);
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
-          knowledgeHub: nextKnowledge,
-          brandVoice: nextKnowledge.brandVoice,
-          brandStory: nextKnowledge.brandStory,
-          brandCharacter: nextKnowledge.brandCharacter,
-          brandRules: nextKnowledge.brandRules,
-          bannedExpressions: nextKnowledge.bannedExpressions,
-          referenceContents: nextKnowledge.referenceContents,
-          referenceContentEntries: nextKnowledge.referenceItems,
-          successCases: nextKnowledge.successCases,
-          worldSetting: nextKnowledge.worldSetting,
-          knowledgeWorld: nextKnowledge.worldSetting
-        })
+        syncBrandAndProject(nextKnowledge)
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
             alert('Knowledge Hub를 저장했습니다.');
@@ -280,25 +316,7 @@
           return;
         }
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
-          knowledgeHub: {
-            brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
-            brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
-            brandCharacter: String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim(),
-            worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
-            brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
-            bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
-            referenceItems: nextItems,
-            referenceContents: nextItems.map(function (item) {
-              return [item.type, item.title, item.note].filter(Boolean).join(' ');
-            }).filter(Boolean),
-            successCases: splitLines((root.querySelector('#knowledge-success-cases') || {}).value || '')
-          },
-          referenceContentEntries: nextItems,
-          referenceContents: nextItems.map(function (item) {
-            return [item.type, item.title, item.note].filter(Boolean).join(' ');
-          }).filter(Boolean)
-        })
+        syncBrandAndProject(readKnowledgeDraft(root, nextItems))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -317,25 +335,7 @@
           return String(item.id || '') !== removeId;
         });
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
-          knowledgeHub: {
-            brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
-            brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
-            brandCharacter: String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim(),
-            worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
-            brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
-            bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
-            referenceItems: remaining,
-            referenceContents: remaining.map(function (item) {
-              return [item.type, item.title, item.note].filter(Boolean).join(' ');
-            }).filter(Boolean),
-            successCases: splitLines((root.querySelector('#knowledge-success-cases') || {}).value || '')
-          },
-          referenceContentEntries: remaining,
-          referenceContents: remaining.map(function (item) {
-            return [item.type, item.title, item.note].filter(Boolean).join(' ');
-          }).filter(Boolean)
-        })
+        syncBrandAndProject(readKnowledgeDraft(root, remaining))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
