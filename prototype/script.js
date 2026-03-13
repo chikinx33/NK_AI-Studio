@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config) window.NK.config.APP_VERSION = '1.773';
+  if (window.NK.config) window.NK.config.APP_VERSION = '1.774';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -2220,24 +2220,40 @@
       };
     };
 
+    const syncOverlayLabels = () => {
+      if (overlayTitle) {
+        overlayTitle.textContent = overlayPurpose === 'edit-series' ? '프로젝트 수정' : '프로젝트 생성';
+      }
+      btnCreate.textContent = overlayPurpose === 'edit-series'
+        ? (creating ? '적용 중...' : editDefaultLabel)
+        : (creating ? '생성 중...' : createDefaultLabel);
+      if (loadingMessage) {
+        loadingMessage.textContent = overlayPurpose === 'edit-series'
+          ? '프로젝트 수정 중...'
+          : '프로젝트 생성 중...';
+      }
+    };
+
     const applyOverlayPurpose = (purpose, options) => {
       const nextPurpose = purpose === 'edit-series' ? 'edit-series' : 'create';
       overlayPurpose = nextPurpose;
       editingSeriesId = nextPurpose === 'edit-series' ? String(options?.seriesId || '').trim() : '';
+      overlay.dataset.overlayPurpose = overlayPurpose;
 
       if (nextPurpose !== 'edit-series') {
-        if (overlayTitle) overlayTitle.textContent = '프로젝트 생성';
         modeButtons.forEach((btn) => {
           btn.disabled = creating;
           btn.classList.remove('disabled');
         });
-        btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
+        input.disabled = creating;
+        if (seriesInput) seriesInput.disabled = creating;
+        if (seriesSelect) seriesSelect.disabled = creating || mode !== 'episode' || !seriesSelect.options.length || !seriesSelect.value;
+        syncOverlayLabels();
         return;
       }
 
       const profile = resolveSeriesProfile(editingSeriesId);
       mode = 'new-series';
-      if (overlayTitle) overlayTitle.textContent = '프로젝트 수정';
       modeButtons.forEach((btn) => {
         const active = btn.dataset.mode === 'new-series';
         btn.classList.toggle('active', active);
@@ -2255,7 +2271,10 @@
       if (projectTypeSelect) projectTypeSelect.value = profile.projectType || '';
       if (brandSummaryInput) brandSummaryInput.value = profile.brandSummary || '';
       if (coreMessageInput) coreMessageInput.value = profile.coreMessage || '';
-      btnCreate.textContent = creating ? '적용 중...' : editDefaultLabel;
+      input.disabled = true;
+      if (seriesInput) seriesInput.disabled = true;
+      if (seriesSelect) seriesSelect.disabled = true;
+      syncOverlayLabels();
     };
 
     const setMode = (nextMode) => {
@@ -2304,11 +2323,7 @@
       } else {
         btnCreate.disabled = true;
       }
-      if (loadingMessage) {
-        loadingMessage.textContent = overlayPurpose === 'edit-series'
-          ? '프로젝트 수정 중...'
-          : '프로젝트 생성 중...';
-      }
+      syncOverlayLabels();
       btnCancel.disabled = creating;
       if (overlayPurpose === 'edit-series') {
         input.disabled = true;
@@ -2327,7 +2342,6 @@
         if (brandSummaryInput) brandSummaryInput.disabled = creating || mode !== 'new-series';
         if (coreMessageInput) coreMessageInput.disabled = creating || mode !== 'new-series';
         modeButtons.forEach((btn) => { btn.disabled = creating; });
-        btnCreate.textContent = creating ? '생성 중...' : createDefaultLabel;
       }
       blurTargets.forEach(el => {
         el.classList.toggle('blur-active', creating || !overlay.classList.contains('hidden'));
@@ -2341,7 +2355,7 @@
       overlay.classList.add('hidden');
       overlayPurpose = 'create';
       editingSeriesId = '';
-      if (overlayTitle) overlayTitle.textContent = '프로젝트 생성';
+      overlay.dataset.overlayPurpose = overlayPurpose;
       input.value = '';
       if (seriesInput) seriesInput.value = '';
       if (seriesSelect) seriesSelect.value = '';
@@ -2516,6 +2530,7 @@
       applyOverlayPurpose('edit-series', { seriesId: targetSeriesId });
       applyCurrentLocale();
       setTimeout(() => {
+        applyOverlayPurpose('edit-series', { seriesId: targetSeriesId });
         if (projectTypeSelect) projectTypeSelect.focus();
       }, 0);
     };
