@@ -60,10 +60,24 @@
       '<h2>Content Library</h2>' +
       '<p>' + escapeHtml(message || '선택된 프로젝트가 없습니다.') + '</p>' +
       '<div class="content-library-hero-actions">' +
-      '<a class="btn-primary" href="dashboard.html">대시보드로 이동</a>' +
+      '<button type="button" class="btn-primary" data-action="library-open-dashboard">대시보드로 이동</button>' +
       '</div>' +
       '</div>' +
       '</section>';
+
+    root.onclick = function (evt) {
+      var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
+      if (!btn) return;
+      var action = String(btn.dataset.action || '').trim();
+      if (action !== 'library-open-dashboard') return;
+      if (window.self !== window.top && window.parent) {
+        window.parent.postMessage({ type: 'load-stage', url: 'dashboard.html' }, '*');
+      } else if (NK.navigation && NK.navigation.loadStage) {
+        NK.navigation.loadStage('dashboard.html');
+      } else {
+        window.location.href = 'dashboard.html';
+      }
+    };
   }
 
   function renderProject(root, project, brand) {
