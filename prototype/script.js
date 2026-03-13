@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config) window.NK.config.APP_VERSION = '1.746';
+  if (window.NK.config) window.NK.config.APP_VERSION = '1.747';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -2458,7 +2458,6 @@
 
   document.addEventListener('DOMContentLoaded', init);
 })();
-
 
 
 

@@ -5658,6 +5658,109 @@ body.layout-fixed .lib-content {
   gap: 10px;
 }
 
+.brand-asset-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.brand-asset-filter {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.brand-asset-filter.is-active {
+  border-color: rgba(255, 140, 0, 0.75);
+  background: rgba(255, 140, 0, 0.14);
+}
+
+.brand-asset-filter strong {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.brand-asset-selection-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.52);
+}
+
+.brand-asset-selection-summary strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+.brand-asset-selection-summary p {
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+
+.brand-asset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.brand-asset-card {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.45);
+  display: grid;
+  gap: 10px;
+}
+
+.brand-asset-card.is-selected {
+  border-color: rgba(255, 140, 0, 0.75);
+  box-shadow: 0 18px 36px rgba(255, 140, 0, 0.12);
+  background: linear-gradient(160deg, rgba(255, 140, 0, 0.1), rgba(10, 18, 34, 0.76));
+}
+
+.brand-asset-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.brand-asset-card strong {
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.brand-asset-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.brand-asset-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.brand-asset-empty {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+}
+
 .brand-caption-generator {
   display: grid;
   gap: 14px;
@@ -6689,6 +6792,10 @@ body.layout-fixed .lib-content {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .brand-asset-grid {
+    grid-template-columns: 1fr;
+  }
+
   .brand-knowledge-grid {
     grid-template-columns: 1fr;
   }
@@ -6713,6 +6820,11 @@ body.layout-fixed .lib-content {
   .brand-publish-result-grid,
   .brand-publish-metric-grid {
     grid-template-columns: 1fr;
+  }
+
+  .brand-asset-selection-summary {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .brand-studio-layout {

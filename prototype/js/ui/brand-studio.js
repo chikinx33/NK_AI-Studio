@@ -48,6 +48,21 @@
     return String(payload && payload.brandStudioHashtagDraft || '').trim();
   }
 
+  function readSelectedAssetIds(payload) {
+    var src = payload && Array.isArray(payload.brandStudioSelectedAssetIds)
+      ? payload.brandStudioSelectedAssetIds
+      : [];
+    return src.map(function (item) { return String(item || '').trim(); }).filter(Boolean);
+  }
+
+  function readAssetTypeFilter(payload) {
+    return String(payload && payload.brandStudioAssetTypeFilter || 'all').trim() || 'all';
+  }
+
+  function readAssetProjectFilter(payload) {
+    return String(payload && payload.brandStudioAssetProjectFilter || 'all').trim() || 'all';
+  }
+
   function readAutoSuggestion(payload) {
     var src = payload && payload.brandStudioAutoSuggestion && typeof payload.brandStudioAutoSuggestion === 'object'
       ? payload.brandStudioAutoSuggestion
@@ -273,6 +288,26 @@
     ];
   }
 
+  function assetTypeLabel(type) {
+    switch (String(type || '').trim()) {
+      case 'text': return '글';
+      case 'image': return '이미지';
+      case 'video': return '영상';
+      case 'reference': return '참조';
+      case 'publish-result': return '게시 결과';
+      default: return '자산';
+    }
+  }
+
+  function assetPreviewText(item) {
+    if (!item) return '';
+    return compactSentence(firstFilled([
+      item.text,
+      item.title,
+      item.url
+    ]), 88);
+  }
+
   function contentTypeOptions() {
     return [
       {
@@ -323,6 +358,9 @@
     var selectedType = readBrandContentType(payload);
     var savedCaption = readCaptionDraft(payload);
     var savedHashtags = readHashtagDraft(payload);
+    var selectedAssetIds = readSelectedAssetIds(payload);
+    var assetTypeFilter = readAssetTypeFilter(payload);
+    var assetProjectFilter = readAssetProjectFilter(payload);
     var autoSuggestion = readAutoSuggestion(payload);
     var knowledge = readKnowledge(brand && typeof brand === 'object' ? brand : payload);
     var channelConnections = readChannelConnections(payload);
@@ -341,10 +379,41 @@
     var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
       ? NK.service.contentLibrary.listProjectContents(brand || project)
       : [];
-    var sourceTexts = contentItems
-      .filter(function (item) { return item.type === 'text'; })
-      .map(function (item) { return String(item.text || '').trim(); })
+    var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
+      ? NK.service.brand.listProjects(brand || brandId)
+      : [project];
+    var projectTitleMap = {};
+    projectRows.forEach(function (item) {
+      projectTitleMap[String(item.id || '').trim()] = String(item.title || item.seriesTitle || item.id || '').trim() || '프로젝트';
+    });
+    if (!projectTitleMap[projectId]) {
+      projectTitleMap[projectId] = String(project.title || project.seriesTitle || projectId).trim();
+    }
+    var assetItems = contentItems.filter(function (item) {
+      return ['text', 'image', 'video', 'reference', 'publish-result'].indexOf(String(item.type || '').trim()) >= 0;
+    });
+    var filteredAssetItems = assetItems.filter(function (item) {
+      var typeMatch = assetTypeFilter === 'all' || String(item.type || '').trim() === assetTypeFilter;
+      var projectMatch = assetProjectFilter === 'all' || String(item.projectId || '').trim() === assetProjectFilter;
+      return typeMatch && projectMatch;
+    });
+    var selectedAssetItems = assetItems.filter(function (item) {
+      return selectedAssetIds.indexOf(String(item.id || '').trim()) >= 0;
+    });
+    var sourceAssetItems = selectedAssetItems.length
+      ? selectedAssetItems
+      : assetItems.filter(function (item) { return item.type === 'text' || item.type === 'reference'; });
+    var sourceTexts = sourceAssetItems
+      .map(function (item) { return String(item.text || item.title || '').trim(); })
       .filter(Boolean);
+    var assetTypeFilters = [
+      { id: 'all', title: '전체' },
+      { id: 'video', title: '영상' },
+      { id: 'image', title: '이미지' },
+      { id: 'text', title: '글' },
+      { id: 'reference', title: '참조' },
+      { id: 'publish-result', title: '게시 결과' }
+    ];
 
     function renderNext(nextProject) {
       var fallbackProject = nextProject && nextProject.id ? nextProject : project;
@@ -395,6 +464,54 @@
         '</button>'
       );
     }).join('');
+    var assetTypeFilterButtons = assetTypeFilters.map(function (item) {
+      var isActive = item.id === assetTypeFilter;
+      var count = item.id === 'all'
+        ? assetItems.length
+        : assetItems.filter(function (row) { return row.type === item.id; }).length;
+      return (
+        '<button type="button" class="brand-asset-filter ' + (isActive ? 'is-active' : '') + '" data-action="brand-filter-assets-type" data-asset-type-filter="' + escapeHtml(item.id) + '">' +
+        '<span>' + escapeHtml(item.title) + '</span>' +
+        '<strong>' + escapeHtml(count) + '</strong>' +
+        '</button>'
+      );
+    }).join('');
+    var assetProjectFilterButtons = [
+      '<button type="button" class="brand-asset-filter ' + (assetProjectFilter === 'all' ? 'is-active' : '') + '" data-action="brand-filter-assets-project" data-asset-project-filter="all"><span>전체 에피소드</span><strong>' + escapeHtml(projectRows.length) + '</strong></button>'
+    ].concat(projectRows.map(function (item) {
+      var itemId = String(item.id || '').trim();
+      var count = assetItems.filter(function (row) { return String(row.projectId || '').trim() === itemId; }).length;
+      return (
+        '<button type="button" class="brand-asset-filter ' + (assetProjectFilter === itemId ? 'is-active' : '') + '" data-action="brand-filter-assets-project" data-asset-project-filter="' + escapeHtml(itemId) + '">' +
+        '<span>' + escapeHtml(projectTitleMap[itemId] || itemId) + '</span>' +
+        '<strong>' + escapeHtml(count) + '</strong>' +
+        '</button>'
+      );
+    })).join('');
+    var selectedAssetSummary = selectedAssetItems.length
+      ? selectedAssetItems.map(function (item) { return assetTypeLabel(item.type) + ' ' + (item.title || '자산'); }).slice(0, 3).join(' · ')
+      : '아직 선택된 브랜드 자산이 없습니다.';
+    var assetCards = filteredAssetItems.length
+      ? filteredAssetItems.map(function (item) {
+        var itemId = String(item.id || '').trim();
+        var isSelected = selectedAssetIds.indexOf(itemId) >= 0;
+        var projectTitle = projectTitleMap[String(item.projectId || '').trim()] || String(item.projectId || '프로젝트').trim();
+        return (
+          '<article class="brand-asset-card ' + (isSelected ? 'is-selected' : '') + '">' +
+          '<div class="brand-asset-card-top">' +
+          '<span class="brand-channel-badge">' + escapeHtml(assetTypeLabel(item.type)) + '</span>' +
+          '<span class="brand-content-type-state">' + escapeHtml(projectTitle) + '</span>' +
+          '</div>' +
+          '<strong>' + escapeHtml(item.title || '자산') + '</strong>' +
+          '<p>' + escapeHtml(assetPreviewText(item) || '미리보기 정보가 없습니다.') + '</p>' +
+          '<div class="brand-asset-actions">' +
+          '<button type="button" class="btn-secondary compact" data-action="brand-toggle-asset" data-asset-id="' + escapeHtml(itemId) + '">' + (isSelected ? '선택 해제' : '자산 선택') + '</button>' +
+          (item.url ? '<a class="btn-secondary compact" href="' + escapeHtml(item.url) + '" target="_blank" rel="noopener noreferrer">열기</a>' : '') +
+          '</div>' +
+          '</article>'
+        );
+      }).join('')
+      : '<div class="brand-asset-empty">현재 필터에 맞는 브랜드 자산이 없습니다.</div>';
     var channelCards = channelRows.map(function (item) {
       var current = channelConnections.find(function (row) { return row.channelType === item.id; }) || null;
       var connected = !!current;
@@ -498,6 +615,23 @@
       '</div>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>브랜드 자산 선택</h3><span>에피소드/이미지/글/게시 결과를 한 화면에서 선택</span></div>' +
+      '<div class="brand-asset-filter-row">' + assetTypeFilterButtons + '</div>' +
+      '<div class="brand-asset-filter-row">' + assetProjectFilterButtons + '</div>' +
+      '<div class="brand-asset-selection-summary">' +
+      '<div>' +
+      '<span class="brand-studio-selection-label">현재 선택 자산</span>' +
+      '<strong>' + escapeHtml(selectedAssetItems.length ? (selectedAssetItems.length + '개') : '미선택') + '</strong>' +
+      '<p>' + escapeHtml(selectedAssetSummary) + '</p>' +
+      '</div>' +
+      '<div class="brand-studio-selection-actions">' +
+      '<button class="btn-secondary compact" data-action="brand-clear-assets" ' + (selectedAssetItems.length ? '' : 'disabled') + '>선택 비우기</button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="brand-asset-grid">' + assetCards + '</div>' +
+      '<p class="brand-caption-help">선택한 자산이 있으면 캡션과 해시태그 생성에 우선 반영합니다. 선택하지 않으면 브랜드 전체 텍스트 자산을 참고합니다.</p>' +
+      '</section>' +
+      '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>SNS 콘텐츠 유형</h3><span>V1 첫 진입점</span></div>' +
       '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
       '<div class="brand-studio-selection-summary">' +
@@ -517,7 +651,7 @@
       '<div class="brand-caption-generator">' +
       '<div class="brand-caption-meta">' +
       '<div><span class="brand-caption-meta-label">콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</strong></div>' +
-      '<div><span class="brand-caption-meta-label">참조 소스</span><strong>' + escapeHtml(sourceTexts.length ? ('텍스트 소스 ' + sourceTexts.length + '개') : '아직 없음') + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">참조 소스</span><strong>' + escapeHtml(selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : (sourceTexts.length ? ('브랜드 텍스트 소스 ' + sourceTexts.length + '개') : '아직 없음')) + '</strong></div>' +
       '</div>' +
       '<textarea id="brand-caption-textarea" class="brand-caption-textarea" placeholder="캡션이 여기에 생성됩니다.">' + escapeHtml(captionValue) + '</textarea>' +
       '<div class="brand-caption-actions">' +
@@ -689,6 +823,73 @@
           })
           .catch(function (err) {
             alert('콘텐츠 유형 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-filter-assets-type') {
+        var nextTypeFilter = String(btn.dataset.assetTypeFilter || 'all').trim() || 'all';
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioAssetTypeFilter: nextTypeFilter })
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+          })
+          .catch(function (err) {
+            alert('자산 유형 필터 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-filter-assets-project') {
+        var nextProjectFilter = String(btn.dataset.assetProjectFilter || 'all').trim() || 'all';
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioAssetProjectFilter: nextProjectFilter })
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+          })
+          .catch(function (err) {
+            alert('에피소드 필터 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-toggle-asset') {
+        var assetId = String(btn.dataset.assetId || '').trim();
+        if (!assetId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextAssetIds = selectedAssetIds.slice();
+        var selectedIdx = nextAssetIds.indexOf(assetId);
+        if (selectedIdx >= 0) nextAssetIds.splice(selectedIdx, 1);
+        else nextAssetIds.push(assetId);
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextAssetIds })
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+          })
+          .catch(function (err) {
+            alert('브랜드 자산 선택 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-clear-assets') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: [] })
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+          })
+          .catch(function (err) {
+            alert('선택 자산 초기화 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;
