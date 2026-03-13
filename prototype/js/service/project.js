@@ -473,6 +473,31 @@
         } catch (_) { }
     }
 
+    function migrateLegacyDrafts() {
+        if (!NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return { migrated: 0, total: 0 };
+        var rawDrafts = NK.store.getDrafts();
+        var total = Array.isArray(rawDrafts) ? rawDrafts.length : 0;
+        if (!total) return { migrated: 0, total: 0 };
+        var changed = 0;
+        var nextDrafts = rawDrafts.map(function (item) {
+            var normalized = normalizeDraft(item);
+            if (!normalized) return item;
+            try {
+                var before = JSON.stringify(item || {});
+                var after = JSON.stringify(normalized);
+                if (before !== after) changed += 1;
+            } catch (_) {
+                changed += 1;
+            }
+            return normalized;
+        });
+        if (changed > 0) {
+            NK.store.saveDrafts(nextDrafts);
+            updateSelectedDraftAfterBulk(nextDrafts);
+        }
+        return { migrated: changed, total: total };
+    }
+
     async function syncDraftToServer(draft) {
         if (!NK.api || !NK.api.projectSave) return { ok: false, reason: 'api_missing' };
         try {
@@ -601,6 +626,7 @@
     };
     project.getDraftById = getDraftById;
     project.resolveCurrent = resolveCurrentProject;
+    project.migrateLegacyDrafts = migrateLegacyDrafts;
     project.getCurrentProjectId = function (options) {
         var current = resolveCurrentProject(options);
         return String(current && current.id || '').trim();

@@ -3,6 +3,38 @@
     var nav = NK.navigation || (NK.navigation = {});
     var STAGE_HREF_KEY = 'nk_current_stage_href';
 
+    function readCurrentContext() {
+        var projectId = '';
+        var brandId = '';
+        try {
+            if (NK.state && NK.state.runtime && NK.state.runtime.currentProject) {
+                var runtimeProject = NK.state.runtime.currentProject;
+                projectId = String(runtimeProject.id || '').trim();
+                brandId = String(runtimeProject.brandId || runtimeProject.payload && runtimeProject.payload.brandId || '').trim();
+            }
+            if (!projectId) {
+                var sel = localStorage.getItem('nk_selected_draft');
+                if (sel) {
+                    var draft = JSON.parse(sel);
+                    projectId = String(draft && draft.id || '').trim();
+                    if (!brandId) brandId = String(draft && draft.payload && draft.payload.brandId || '').trim();
+                }
+            }
+            if (!brandId && NK.service && NK.service.brand && NK.service.brand.getCurrent) {
+                var currentBrand = NK.service.brand.getCurrent();
+                brandId = String(currentBrand && currentBrand.brandId || '').trim();
+            }
+        } catch (_) { }
+        return { projectId: projectId, brandId: brandId };
+    }
+
+    function hasQueryValue(url, keys) {
+        var src = String(url || '');
+        return (Array.isArray(keys) ? keys : []).some(function (key) {
+            return new RegExp('([?&])' + key + '=').test(src);
+        });
+    }
+
     nav.loadStage = function (name) {
         let targetName = String(name || '').trim();
         if (!targetName) targetName = 'dashboard.html';
@@ -15,18 +47,12 @@
                 localStorage.setItem(STAGE_HREF_KEY, targetName);
             } catch (_) { }
         }
-        const pid = (function () {
-            try {
-                if (NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id) {
-                    return NK.state.runtime.currentProject.id;
-                }
-                const sel = localStorage.getItem('nk_selected_draft');
-                if (sel) { const d = JSON.parse(sel); if (d && d.id) return d.id; }
-            } catch (_) { }
-            return null;
-        })();
+        var context = readCurrentContext();
+        var pid = context.projectId || null;
+        var brandId = context.brandId || null;
         let url = targetName + (targetName.indexOf('?') >= 0 ? '&' : '?') + 'embed=1';
-        if (pid) url += '&projectId=' + encodeURIComponent(pid);
+        if (pid && !hasQueryValue(url, ['projectId', 'pid'])) url += '&projectId=' + encodeURIComponent(pid);
+        if (brandId && !hasQueryValue(url, ['brandId', 'bid'])) url += '&brandId=' + encodeURIComponent(brandId);
 
         // 옵션 페이지는 별도 창으로 전체 이동 (iframe 사용 안 함)
         if (!isIframe && st === 'options') {
@@ -52,9 +78,12 @@
                     pageUrl.searchParams.set('stageHref', targetName);
                     if (pid) pageUrl.searchParams.set('projectId', String(pid));
                     else pageUrl.searchParams.delete('projectId');
+                    if (brandId) pageUrl.searchParams.set('brandId', String(brandId));
+                    else pageUrl.searchParams.delete('brandId');
                 } else {
                     pageUrl.searchParams.delete('stageHref');
                     pageUrl.searchParams.delete('projectId');
+                    pageUrl.searchParams.delete('brandId');
                 }
                 window.history.replaceState({}, '', pageUrl.toString());
             } catch (_) { }

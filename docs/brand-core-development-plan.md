@@ -188,10 +188,10 @@
 
 ### Phase 6. 마이그레이션 및 안정화
 
-- [ ] 기존 에피소드 payload의 브랜드 정보 이관 스크립트 또는 호환 로직 추가
-- [ ] 기존 프로젝트가 깨지지 않도록 fallback 처리
-- [ ] 기존 Brand Studio 진입 링크 호환 처리
-- [ ] 회귀 테스트 체크리스트 작성
+- [x] 기존 에피소드 payload의 브랜드 정보 이관 스크립트 또는 호환 로직 추가
+- [x] 기존 프로젝트가 깨지지 않도록 fallback 처리
+- [x] 기존 Brand Studio 진입 링크 호환 처리
+- [x] 회귀 테스트 체크리스트 작성
 
 완료 기준:
 - 기존 프로젝트 데이터가 손실 없이 새 구조에서 열리고 운영된다.
@@ -207,12 +207,13 @@
 
 ## 10. 바로 다음 개발 순서
 
-1. 현재 `project.js` 기준의 분리 포인트 정리
-2. 브랜드 저장소/서비스 스켈레톤 설계
-3. 브랜드 ID 중심 라우팅 설계
-4. Brand Studio를 브랜드 운영 콘솔로 전환하는 첫 구현 시작
+1. 브랜드와 에피소드를 혼동하지 않도록 화면 문구와 정보 구조를 정리
+2. 회귀 체크리스트를 기준으로 수동 검증을 실행
+3. 저장/오류 피드백을 `alert()` 중심에서 인라인 피드백으로 전환
+4. 접근성 기준으로 라벨, 포커스, 키보드 흐름을 보강
 
 ## 11. Phase 1 산출물
 
 - [x] [Brand Core 데이터 모델 정의서](/f:/NKW/App/NK_Studio/docs/brand-core-data-model.md)
 - [x] [브랜드/에피소드 Override 정책](/f:/NKW/App/NK_Studio/docs/brand-override-policy.md)
+- [x] [브랜드 중심 운영 회귀 체크리스트](/f:/NKW/App/NK_Studio/docs/brand-core-regression-checklist.md)

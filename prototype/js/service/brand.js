@@ -2,6 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var service = NK.service || (NK.service = {});
     var brand = service.brand || (service.brand = {});
+    var migrationState = { ensured: false, running: false };
 
     function normalizeText(value) {
         return String(value || '').replace(/[<>]/g, '').trim();
@@ -176,6 +177,141 @@
         };
     }
 
+    function pickText(currentValue, incomingValue, preferIncoming) {
+        var current = normalizeText(currentValue);
+        var incoming = normalizeText(incomingValue);
+        if (preferIncoming) return incoming || current;
+        return current || incoming;
+    }
+
+    function mergeTextList(currentValue, incomingValue) {
+        return normalizeTextList([].concat(currentValue || [], incomingValue || [])).filter(function (item, index, arr) {
+            return item && arr.indexOf(item) === index;
+        });
+    }
+
+    function mergeReferenceEntries(currentValue, incomingValue) {
+        var map = new Map();
+        (Array.isArray(currentValue) ? currentValue : []).concat(Array.isArray(incomingValue) ? incomingValue : []).forEach(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var id = normalizeText(raw.id || raw.source || raw.title || ('ref_' + index));
+            if (!id) return;
+            if (!map.has(id)) {
+                map.set(id, {
+                    id: id,
+                    type: normalizeText(raw.type || raw.referenceType || 'reference') || 'reference',
+                    title: normalizeText(raw.title || raw.label || raw.name),
+                    source: normalizeText(raw.source || raw.url || raw.link),
+                    note: normalizeText(raw.note || raw.memo || raw.description)
+                });
+                return;
+            }
+            var existing = map.get(id);
+            map.set(id, {
+                id: id,
+                type: pickText(existing.type, raw.type || raw.referenceType, false) || 'reference',
+                title: pickText(existing.title, raw.title || raw.label || raw.name, false),
+                source: pickText(existing.source, raw.source || raw.url || raw.link, false),
+                note: pickText(existing.note, raw.note || raw.memo || raw.description, false)
+            });
+        });
+        return Array.from(map.values()).filter(function (item) {
+            return item.title || item.source || item.note;
+        });
+    }
+
+    function mergeChannels(currentValue, incomingValue) {
+        var map = new Map();
+        (Array.isArray(currentValue) ? currentValue : []).concat(Array.isArray(incomingValue) ? incomingValue : []).forEach(function (item) {
+            var row = item && typeof item === 'object' ? item : { channelType: item };
+            var key = normalizeText(row.channelType || row.id);
+            if (!key) return;
+            var existing = map.get(key) || {
+                channelType: key,
+                accountName: '',
+                accountRef: '',
+                authStatus: 'connected'
+            };
+            map.set(key, {
+                channelType: key,
+                accountName: pickText(existing.accountName, row.accountName || row.title, false),
+                accountRef: pickText(existing.accountRef, row.accountRef || row.ref, false),
+                authStatus: pickText(existing.authStatus, row.authStatus || row.status || 'connected', false) || 'connected'
+            });
+        });
+        return Array.from(map.values());
+    }
+
+    function publishResultKey(item, index) {
+        var row = item && typeof item === 'object' ? item : {};
+        return [
+            normalizeText(row.id || ('publish_' + index)),
+            normalizeText(row.projectId),
+            normalizeText(row.remotePostId),
+            normalizeText(row.channelType || row.channel),
+            normalizeText(row.publishedAt || row.capturedAt),
+            normalizeText(row.title)
+        ].join('|');
+    }
+
+    function mergePublishResults(currentValue, incomingValue) {
+        var map = new Map();
+        normalizePublishResults(currentValue).forEach(function (item, index) {
+            map.set(publishResultKey(item, index), item);
+        });
+        normalizePublishResults(incomingValue).forEach(function (item, index) {
+            var key = publishResultKey(item, index);
+            if (!map.has(key)) {
+                map.set(key, item);
+                return;
+            }
+            var existing = map.get(key);
+            map.set(key, normalizePublishResults([Object.assign({}, existing, item, {
+                metrics: Object.assign({}, existing.metrics || {}, item.metrics || {})
+            })])[0]);
+        });
+        return Array.from(map.values());
+    }
+
+    function mergePublishPlan(currentValue, incomingValue, preferIncoming) {
+        var current = normalizePublishPlan(currentValue);
+        var incoming = normalizePublishPlan(incomingValue);
+        if (preferIncoming) return incoming || current;
+        return current || incoming;
+    }
+
+    function mergeBrandRecords(currentValue, incomingValue, options) {
+        var current = normalizeBrand(currentValue || {});
+        var incoming = normalizeBrand(incomingValue || {});
+        var preferIncoming = !!(options && options.preferIncoming);
+        return normalizeBrand({
+            brandId: current.brandId || incoming.brandId,
+            brandTitle: pickText(current.brandTitle, incoming.brandTitle, preferIncoming),
+            brandSlug: pickText(current.brandSlug, incoming.brandSlug, preferIncoming),
+            brandSummary: pickText(current.brandSummary, incoming.brandSummary, preferIncoming),
+            coreMessage: pickText(current.coreMessage, incoming.coreMessage, preferIncoming),
+            targetAudience: pickText(current.targetAudience, incoming.targetAudience, preferIncoming),
+            brandVoice: pickText(current.brandVoice, incoming.brandVoice, preferIncoming),
+            brandTone: pickText(current.brandTone, incoming.brandTone, preferIncoming),
+            brandStory: pickText(current.brandStory, incoming.brandStory, preferIncoming),
+            brandCharacter: pickText(current.brandCharacter, incoming.brandCharacter, preferIncoming),
+            worldSetting: pickText(current.worldSetting, incoming.worldSetting, preferIncoming),
+            brandRules: mergeTextList(current.brandRules, incoming.brandRules),
+            bannedExpressions: mergeTextList(current.bannedExpressions, incoming.bannedExpressions),
+            brandKeywords: mergeTextList(current.brandKeywords, incoming.brandKeywords),
+            referenceContents: mergeTextList(current.referenceContents, incoming.referenceContents),
+            referenceContentEntries: mergeReferenceEntries(current.referenceContentEntries, incoming.referenceContentEntries),
+            successCases: mergeTextList(current.successCases, incoming.successCases),
+            connectedChannels: mergeChannels(current.connectedChannels, incoming.connectedChannels),
+            brandStudioPublishPlan: mergePublishPlan(current.brandStudioPublishPlan, incoming.brandStudioPublishPlan, preferIncoming),
+            brandStudioPublishResults: mergePublishResults(current.brandStudioPublishResults, incoming.brandStudioPublishResults),
+            seriesIds: mergeTextList(current.seriesIds, incoming.seriesIds),
+            sourceProjectIds: mergeTextList(current.sourceProjectIds, incoming.sourceProjectIds),
+            status: pickText(current.status, incoming.status, preferIncoming) || 'active',
+            createdAt: normalizeText(current.createdAt || incoming.createdAt) || new Date().toISOString()
+        });
+    }
+
     function readBrands() {
         try {
             var raw = localStorage.getItem(storageKeys().brands);
@@ -236,24 +372,29 @@
         var project = getProject(projectOrId);
         if (!project) return null;
         var payload = project.payload || {};
+        var knowledge = project.knowledgeHub && typeof project.knowledgeHub === 'object'
+            ? project.knowledgeHub
+            : (payload.knowledgeHub && typeof payload.knowledgeHub === 'object' ? payload.knowledgeHub : {});
         return normalizeBrand({
             brandId: deriveBrandIdFromProject(project),
             brandTitle: deriveBrandTitleFromProject(project),
             brandSummary: payload.brandSummary,
             coreMessage: payload.coreMessage,
             targetAudience: payload.targetAudience || payload.target,
-            brandVoice: payload.brandVoice,
+            brandVoice: knowledge.brandVoice || payload.brandVoice,
             brandTone: payload.brandTone || payload.tone,
-            brandStory: payload.brandStory,
-            brandCharacter: payload.brandCharacter,
-            worldSetting: payload.worldSetting || payload.knowledgeWorld,
-            brandRules: payload.brandRules,
-            bannedExpressions: payload.bannedExpressions,
+            brandStory: knowledge.brandStory || payload.brandStory,
+            brandCharacter: knowledge.brandCharacter || payload.brandCharacter,
+            worldSetting: knowledge.worldSetting || payload.worldSetting || payload.knowledgeWorld,
+            brandRules: knowledge.brandRules || payload.brandRules,
+            bannedExpressions: knowledge.bannedExpressions || payload.bannedExpressions,
             brandKeywords: payload.brandKeywords,
-            referenceContents: payload.referenceContents,
-            referenceContentEntries: payload.referenceContentEntries,
-            successCases: payload.successCases,
+            referenceContents: knowledge.referenceContents || payload.referenceContents,
+            referenceContentEntries: knowledge.referenceItems || payload.referenceContentEntries,
+            successCases: knowledge.successCases || payload.successCases,
             connectedChannels: payload.brandStudioChannels || payload.connectedChannels,
+            brandStudioPublishPlan: payload.brandStudioPublishPlan || payload.publishPlan,
+            brandStudioPublishResults: payload.brandStudioPublishResults || payload.publishResults,
             seriesIds: [payload.seriesId || project.seriesId].filter(Boolean),
             sourceProjectIds: [project.id].filter(Boolean)
         });
@@ -276,8 +417,21 @@
         return null;
     }
 
+    function ensureMigrated(options) {
+        if (migrationState.running) return;
+        if (migrationState.ensured && !(options && options.force)) return;
+        migrationState.running = true;
+        try {
+            brand.migrateLegacyProjects(options);
+            migrationState.ensured = true;
+        } finally {
+            migrationState.running = false;
+        }
+    }
+
     brand.normalizeBrand = normalizeBrand;
     brand.list = function () {
+        ensureMigrated();
         return readBrands();
     };
     brand.getById = function (brandId) {
@@ -293,6 +447,7 @@
         }) || null;
     };
     brand.getCurrent = function () {
+        ensureMigrated();
         var current = readCurrentBrandSummary();
         if (!current || !current.brandId) return null;
         return brand.getById(current.brandId) || current;
@@ -301,6 +456,7 @@
         return writeCurrentBrandSummary(item);
     };
     brand.resolveCurrent = function (options) {
+        ensureMigrated();
         var opts = options || {};
         var requestedId = parseBrandIdFromSearch(opts.search);
         if (requestedId) {
@@ -352,19 +508,59 @@
         if (!existing) {
             return brand.create(seed);
         }
-        var mergedSeriesIds = existing.seriesIds.concat(seed.seriesIds).filter(function (item, index, arr) {
-            return item && arr.indexOf(item) === index;
-        });
-        var mergedProjectIds = existing.sourceProjectIds.concat(seed.sourceProjectIds).filter(function (item, index, arr) {
-            return item && arr.indexOf(item) === index;
-        });
-        return brand.update(existing.brandId, Object.assign({}, existing, seed, {
+        var merged = mergeBrandRecords(existing, seed, { preferIncoming: true });
+        return brand.update(existing.brandId, Object.assign({}, merged, {
             brandId: existing.brandId,
-            createdAt: existing.createdAt,
-            seriesIds: mergedSeriesIds,
-            sourceProjectIds: mergedProjectIds
+            createdAt: existing.createdAt
         }));
     };
+    brand.migrateLegacyProjects = function (options) {
+        var opts = options || {};
+        var svc = projectService();
+        var normalizedDrafts = 0;
+        if (svc && svc.migrateLegacyDrafts) {
+            var draftMigration = svc.migrateLegacyDrafts();
+            normalizedDrafts = Number(draftMigration && draftMigration.migrated || 0) || 0;
+        }
+        var projects = listAllProjects();
+        var list = readBrands();
+        var map = new Map();
+        list.forEach(function (item) {
+            map.set(item.brandId, normalizeBrand(item));
+        });
+        var created = 0;
+        var updated = 0;
+        projects.forEach(function (project) {
+            var seed = buildBrandSeedFromProject(project);
+            if (!seed || !seed.brandId) return;
+            if (!map.has(seed.brandId)) {
+                map.set(seed.brandId, seed);
+                created += 1;
+                return;
+            }
+            map.set(seed.brandId, mergeBrandRecords(map.get(seed.brandId), seed, { preferIncoming: !!opts.preferProjectValues }));
+            updated += 1;
+        });
+        var nextList = Array.from(map.values()).map(normalizeBrand);
+        if (nextList.length || list.length) {
+            writeBrands(nextList);
+        }
+        var current = readCurrentBrandSummary();
+        if (!current || !current.brandId || !map.has(current.brandId)) {
+            var currentProject = svc && svc.resolveCurrent ? svc.resolveCurrent(opts) : null;
+            var currentBrand = currentProject ? map.get(deriveBrandIdFromProject(currentProject)) : null;
+            if (!currentBrand && nextList.length) currentBrand = nextList[0];
+            if (currentBrand && currentBrand.brandId) brand.setCurrent(currentBrand);
+        }
+        return {
+            normalizedDrafts: normalizedDrafts,
+            projectCount: projects.length,
+            brandCount: nextList.length,
+            created: created,
+            updated: updated
+        };
+    };
+    brand.ensureMigrated = ensureMigrated;
     brand.linkProject = async function (projectOrId, brandOrId) {
         var project = getProject(projectOrId);
         var svc = projectService();
@@ -380,6 +576,7 @@
         });
     };
     brand.listProjects = function (brandOrId) {
+        ensureMigrated();
         var target = resolveBrandLike(brandOrId);
         if (!target) return [];
         return listAllProjects().filter(function (item) {
@@ -390,20 +587,32 @@
         });
     };
     brand.getPrimaryProject = function (brandOrId) {
+        ensureMigrated();
         var projects = brand.listProjects(brandOrId);
         return projects.length ? projects[0] : null;
     };
     brand.getPublishPlan = function (brandOrId) {
+        ensureMigrated();
         var target = resolveBrandLike(brandOrId);
         return target && target.brandStudioPublishPlan ? normalizePublishPlan(target.brandStudioPublishPlan) : null;
     };
     brand.listPublishResults = function (brandOrId) {
+        ensureMigrated();
         var target = resolveBrandLike(brandOrId);
         return target ? normalizePublishResults(target.brandStudioPublishResults) : [];
     };
     brand.getDisplayContext = function (options) {
+        ensureMigrated(options);
         var currentBrand = brand.resolveCurrent(options);
         var primaryProject = brand.getPrimaryProject(currentBrand);
+        if (!primaryProject) {
+            var svc = projectService();
+            var fallbackProject = svc && svc.resolveCurrent ? svc.resolveCurrent(options) : null;
+            if (fallbackProject && fallbackProject.id) {
+                primaryProject = fallbackProject;
+                if (!currentBrand) currentBrand = buildBrandSeedFromProject(fallbackProject);
+            }
+        }
         return {
             brand: currentBrand,
             project: primaryProject
