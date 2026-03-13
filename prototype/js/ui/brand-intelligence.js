@@ -101,6 +101,9 @@
     var analyticsTarget = brand || project;
     var summary = NK.service.analytics.summarizeProject(analyticsTarget);
     var channels = NK.service.analytics.summarizeByChannel(analyticsTarget);
+    var episodes = NK.service.analytics.summarizeByEpisode
+      ? NK.service.analytics.summarizeByEpisode(analyticsTarget)
+      : [];
     var contentTypes = NK.service.analytics.summarizeByContentType(analyticsTarget);
     var uploadTimes = NK.service.analytics.summarizeByUploadTime(analyticsTarget);
     var hashtags = NK.service.analytics.summarizeByHashtag(analyticsTarget);
@@ -145,6 +148,27 @@
       (suggestions.length
         ? suggestions.map(suggestionCardHtml).join('')
         : '<div class="analytics-empty">자동 제안을 만들 만큼의 데이터가 없습니다.</div>') +
+      '</div>' +
+      '</section>' +
+      '<section class="analytics-panel">' +
+      '<div class="analytics-panel-head"><h3>에피소드별 성과</h3><span>브랜드 안에서 어떤 편이 잘 반응하는지 비교</span></div>' +
+      '<div class="analytics-type-grid">' +
+      (episodes.length ? episodes.map(function (item) {
+        return (
+          '<article class="analytics-type-card">' +
+          '<div class="analytics-channel-top">' +
+          '<span class="analytics-channel-badge">' + escapeHtml(item.projectTitle || '에피소드') + '</span>' +
+          '<strong>' + escapeHtml(item.totalPosts) + '개 게시</strong>' +
+          '</div>' +
+          metricCardHtml(item) +
+          '<div class="analytics-channel-metrics analytics-channel-meta">' +
+          '<span>상위 채널</span><strong>' + escapeHtml(channelLabel(item.topChannel || '-')) + '</strong>' +
+          '<span>최근 게시</span><strong>' + escapeHtml(item.latestPublishedAt || '-') + '</strong>' +
+          '</div>' +
+          '<p class="analytics-channel-note">같은 브랜드 안에서 어떤 에피소드가 더 강한지 비교합니다. 다음 단계에서는 시즌/캠페인 필터를 추가할 예정입니다.</p>' +
+          '</article>'
+        );
+      }).join('') : '<div class="analytics-empty">아직 에피소드별로 비교할 게시 결과가 없습니다.</div>') +
       '</div>' +
       '</section>' +
       '<section class="analytics-panel">' +

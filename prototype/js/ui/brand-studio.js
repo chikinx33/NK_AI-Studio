@@ -1128,6 +1128,8 @@
           publishedAt: nextPublishedAt,
           remotePostId: nextRemoteId,
           title: nextTitle,
+          projectId: projectId,
+          projectTitle: String(project.title || project.seriesTitle || projectId).trim(),
           note: String((resultNoteEl && resultNoteEl.value) || '').trim(),
           caption: String((captionEl && captionEl.value) || readCaptionDraft(payload) || '').trim(),
           hashtags: parseHashtagTokens((hashtagEl && hashtagEl.value) || readHashtagDraft(payload) || ''),

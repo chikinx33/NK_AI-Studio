@@ -60,6 +60,8 @@
                 publishedAt: normalizeText(raw.publishedAt || raw.capturedAt),
                 remotePostId: normalizeText(raw.remotePostId || raw.postId),
                 title: normalizeText(raw.title) || '게시 결과',
+                projectId: normalizeText(raw.projectId),
+                projectTitle: normalizeText(raw.projectTitle || raw.episodeTitle),
                 note: normalizeText(raw.note),
                 caption: normalizeText(raw.caption || raw.captionDraft),
                 hashtags: normalizeTextList(raw.hashtags || raw.hashtagDraft || raw.hashtagTokens),

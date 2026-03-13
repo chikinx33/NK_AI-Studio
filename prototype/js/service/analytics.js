@@ -50,6 +50,8 @@
         publishedAt: String(raw.publishedAt || raw.capturedAt || '').trim(),
         remotePostId: String(raw.remotePostId || raw.postId || '').trim(),
         title: String(raw.title || '').trim() || '게시 결과',
+        projectId: String(raw.projectId || project.id || '').trim(),
+        projectTitle: String(raw.projectTitle || project.title || project.seriesTitle || '').trim(),
         note: String(raw.note || '').trim(),
         caption: String(raw.caption || raw.captionDraft || '').trim(),
         hashtags: Array.isArray(raw.hashtags)
@@ -172,6 +174,44 @@
       row.comments += item.metrics.comments;
       row.shares += item.metrics.shares;
       row.clicks += item.metrics.clicks;
+      if (!row.topChannel && item.channelType) {
+        row.topChannel = item.channelType;
+      }
+    });
+    return Array.from(map.values()).sort(function (a, b) {
+      return b.views - a.views || b.totalPosts - a.totalPosts;
+    });
+  };
+
+  analytics.summarizeByEpisode = function (projectOrId) {
+    var rows = readPublishResults(projectOrId);
+    var map = new Map();
+    rows.forEach(function (item) {
+      var key = String(item.projectId || item.projectTitle || 'unknown').trim() || 'unknown';
+      if (!map.has(key)) {
+        map.set(key, {
+          projectId: String(item.projectId || '').trim(),
+          projectTitle: String(item.projectTitle || item.projectId || '미지정 에피소드').trim() || '미지정 에피소드',
+          totalPosts: 0,
+          latestPublishedAt: '',
+          views: 0,
+          likes: 0,
+          comments: 0,
+          shares: 0,
+          clicks: 0,
+          topChannel: ''
+        });
+      }
+      var row = map.get(key);
+      row.totalPosts += 1;
+      row.views += item.metrics.views;
+      row.likes += item.metrics.likes;
+      row.comments += item.metrics.comments;
+      row.shares += item.metrics.shares;
+      row.clicks += item.metrics.clicks;
+      if (item.publishedAt && (!row.latestPublishedAt || item.publishedAt > row.latestPublishedAt)) {
+        row.latestPublishedAt = item.publishedAt;
+      }
       if (!row.topChannel && item.channelType) {
         row.topChannel = item.channelType;
       }
