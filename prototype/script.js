@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config) window.NK.config.APP_VERSION = '1.772';
+  if (window.NK.config) window.NK.config.APP_VERSION = '1.773';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -2041,6 +2041,7 @@
     const createDefaultLabel = (btnCreate.textContent || '').trim() || '생성';
     const editDefaultLabel = '적용';
     const overlayCard = overlay.querySelector('.auth-card');
+    const overlayTitle = overlayCard ? overlayCard.querySelector('.auth-title') : null;
     let creating = false;
     let mode = 'new-series';
     let overlayPurpose = 'create';
@@ -2149,6 +2150,7 @@
       loading.innerHTML = '<div class="spinner" aria-hidden="true"></div><p>프로젝트 생성 중...</p>';
       overlayCard.appendChild(loading);
     }
+    const loadingMessage = overlayCard ? overlayCard.querySelector('.project-create-loading p') : null;
 
     const getSeriesList = () => {
       if (NK.service && NK.service.project && NK.service.project.listSeries) {
@@ -2224,6 +2226,7 @@
       editingSeriesId = nextPurpose === 'edit-series' ? String(options?.seriesId || '').trim() : '';
 
       if (nextPurpose !== 'edit-series') {
+        if (overlayTitle) overlayTitle.textContent = '프로젝트 생성';
         modeButtons.forEach((btn) => {
           btn.disabled = creating;
           btn.classList.remove('disabled');
@@ -2234,6 +2237,7 @@
 
       const profile = resolveSeriesProfile(editingSeriesId);
       mode = 'new-series';
+      if (overlayTitle) overlayTitle.textContent = '프로젝트 수정';
       modeButtons.forEach((btn) => {
         const active = btn.dataset.mode === 'new-series';
         btn.classList.toggle('active', active);
@@ -2300,6 +2304,11 @@
       } else {
         btnCreate.disabled = true;
       }
+      if (loadingMessage) {
+        loadingMessage.textContent = overlayPurpose === 'edit-series'
+          ? '프로젝트 수정 중...'
+          : '프로젝트 생성 중...';
+      }
       btnCancel.disabled = creating;
       if (overlayPurpose === 'edit-series') {
         input.disabled = true;
@@ -2332,6 +2341,7 @@
       overlay.classList.add('hidden');
       overlayPurpose = 'create';
       editingSeriesId = '';
+      if (overlayTitle) overlayTitle.textContent = '프로젝트 생성';
       input.value = '';
       if (seriesInput) seriesInput.value = '';
       if (seriesSelect) seriesSelect.value = '';
