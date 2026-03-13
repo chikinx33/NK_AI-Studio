@@ -93,13 +93,15 @@
     };
   }
 
-  function readChannelConnections(payload) {
-    var src = payload && Array.isArray(payload.brandStudioChannels) ? payload.brandStudioChannels : [];
+  function readChannelConnections(brand, payload) {
+    var brandChannels = brand && Array.isArray(brand.connectedChannels) ? brand.connectedChannels : [];
+    var projectChannels = payload && Array.isArray(payload.brandStudioChannels) ? payload.brandStudioChannels : [];
+    var src = brandChannels.length ? brandChannels : projectChannels;
     return src.map(function (item) {
       return {
         channelType: String(item && item.channelType || '').trim(),
         accountName: String(item && item.accountName || '').trim(),
-        status: String(item && item.status || 'connected').trim() || 'connected'
+        status: String(item && (item.status || item.authStatus) || 'connected').trim() || 'connected'
       };
     }).filter(function (item) { return item.channelType; });
   }
@@ -363,7 +365,7 @@
     var assetProjectFilter = readAssetProjectFilter(payload);
     var autoSuggestion = readAutoSuggestion(payload);
     var knowledge = readKnowledge(brand && typeof brand === 'object' ? brand : payload);
-    var channelConnections = readChannelConnections(payload);
+    var channelConnections = readChannelConnections(brand, payload);
     var publishPlan = readPublishPlan(payload);
     var publishResults = readPublishResults(payload);
     var summary = (NK.service.contentLibrary && NK.service.contentLibrary.summarizeProject)
@@ -683,9 +685,10 @@
       '<div class="brand-channel-summary">' +
       '<span class="brand-channel-summary-label">현재 연결</span>' +
       '<strong>' + escapeHtml(channelConnections.length) + '개 채널</strong>' +
-      '<p>' + escapeHtml(channelConnections.length ? channelConnections.map(function (item) { return channelTitleMap[item.channelType] || item.channelType; }).join(', ') : '아직 연결된 채널이 없습니다.') + '</p>' +
+      '<p>' + escapeHtml(channelConnections.length ? channelConnections.map(function (item) { return channelTitleMap[item.channelType] || item.channelType; }).join(', ') : '아직 연결된 브랜드 공용 채널이 없습니다.') + '</p>' +
       '</div>' +
       '<div class="brand-channel-grid">' + channelCards + '</div>' +
+      '<p class="brand-caption-help">여기서 연결한 채널은 Brand Core에 저장되어 같은 브랜드의 다른 에피소드에서도 공용으로 사용합니다.</p>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>예약 게시</h3><span>브랜드 운영 V1 데이터 구조</span></div>' +
