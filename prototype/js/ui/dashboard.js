@@ -5,6 +5,7 @@
 
   var serverMerged = false;
   var currentSeriesFilter = '__all__';
+  var DASHBOARD_LOADING_TEXT = '프로젝트 불러오는 중...';
 
   const escapeHtml = (value) => String(value == null ? '' : value)
     .replace(/&/g, '&amp;')
@@ -17,10 +18,8 @@
     const overlay = document.getElementById('dashboard-loading');
     const blurTarget = document.getElementById('dashboard-drafts');
     if (!overlay) return;
-    if (text) {
-      const p = overlay.querySelector('p');
-      if (p) p.textContent = text;
-    }
+    const p = overlay.querySelector('p');
+    if (p) p.textContent = text || DASHBOARD_LOADING_TEXT;
     overlay.classList.toggle('hidden', !show);
     if (blurTarget) blurTarget.classList.toggle('blur-active', !!show);
   };
@@ -53,6 +52,18 @@
       if (Number(nd.id) > Number(row.latestEpisodeId || 0)) row.latestEpisodeId = nd.id;
     });
     return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
+  };
+
+  const runTasksInBatches = async (items, worker, batchSize) => {
+    const src = Array.isArray(items) ? items.slice() : [];
+    const size = Math.max(1, Number(batchSize) || 6);
+    const results = [];
+    for (let i = 0; i < src.length; i += size) {
+      const chunk = src.slice(i, i + size);
+      const rows = await Promise.all(chunk.map((item, idx) => Promise.resolve().then(() => worker(item, i + idx))));
+      results.push.apply(results, rows);
+    }
+    return results;
   };
 
   const getContentSummary = (draft) => {
@@ -107,8 +118,9 @@
       if (!NK.api || !NK.api.projectList) return;
       if (serverMerged) return;
       serverMerged = true;
+      const showBlockingLoading = !(Array.isArray(drafts) && drafts.length);
       try {
-        setDashLoading(true, '동기화 중...');
+        if (showBlockingLoading) setDashLoading(true, DASHBOARD_LOADING_TEXT);
         const list = await NK.api.projectList();
         const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
         if (!ids.length) {
@@ -116,44 +128,50 @@
           NK.store.saveDrafts(drafts);
           return;
         }
+        drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         let changed = false;
         const idSet = new Set(ids.map((v) => String(v)));
-        for (const id of ids) {
-          const idx = drafts.findIndex(d => String(d.id) === String(id));
-          if (NK.api.projectGet) {
-            try {
-              const res = await NK.api.projectGet(id);
-              const data = res?.data || {};
-              const existingTitle = idx >= 0 ? drafts[idx].title : '';
-              const draft = normalizeDraft({
-                id,
-                title: data.title || data.payload?.episodeTitle || data.payload?.topic || existingTitle || '프로젝트',
-                payload: data.payload || {},
-                scenes: data.scenes || [],
-                header: data.header || '',
-              });
-              if (!draft) continue;
-              if (idx === -1) drafts.push(draft);
-              else drafts[idx] = draft;
-              changed = true;
-            } catch (_) {
-              if (idx === -1) {
-                const stub = normalizeDraft({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
-                if (stub) drafts.push(stub);
-                changed = true;
-              }
-            }
-          }
-        }
         const filtered = drafts.filter(d => idSet.has(String(d.id)));
         if (filtered.length !== drafts.length) {
           drafts = filtered;
           changed = true;
         }
+        const knownIds = new Set(drafts.map((d) => String(d.id)));
+        const missingIds = ids.filter((id) => !knownIds.has(String(id)));
         if (changed) NK.store.saveDrafts(drafts);
+        if (!missingIds.length || !NK.api.projectGet) return;
+
+        const fetchedDrafts = (await runTasksInBatches(missingIds, async (id) => {
+          try {
+            const res = await NK.api.projectGet(id);
+            const data = res?.data || {};
+            return normalizeDraft({
+              id,
+              title: data.title || data.payload?.episodeTitle || data.payload?.topic || '프로젝트',
+              payload: data.payload || {},
+              scenes: data.scenes || [],
+              header: data.header || '',
+            });
+          } catch (_) {
+            return normalizeDraft({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
+          }
+        }, 8)).filter(Boolean);
+
+        if (!fetchedDrafts.length) return;
+        const nextMap = new Map(drafts.map((draft) => [String(draft.id), draft]));
+        fetchedDrafts.forEach((draft) => {
+          nextMap.set(String(draft.id), draft);
+        });
+        const orderMap = new Map(ids.map((id, index) => [String(id), index]));
+        drafts = Array.from(nextMap.values()).sort((a, b) => {
+          const ai = orderMap.has(String(a.id)) ? orderMap.get(String(a.id)) : Number.MAX_SAFE_INTEGER;
+          const bi = orderMap.has(String(b.id)) ? orderMap.get(String(b.id)) : Number.MAX_SAFE_INTEGER;
+          return ai - bi;
+        });
+        NK.store.saveDrafts(drafts);
       } catch (_) { }
       finally {
-        setDashLoading(false);
+        if (showBlockingLoading) setDashLoading(false);
       }
     };
 
