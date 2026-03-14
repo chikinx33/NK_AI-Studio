@@ -765,6 +765,14 @@
     var selects = document.querySelectorAll('.voice-select');
     Array.prototype.forEach.call(selects, function (sel) {
       var cur = sel.value || '';
+      try {
+        var sid = sel.getAttribute('data-id') || '';
+        var stx = (window.NK && NK.uiPipeline && NK.uiPipeline.__ctx && NK.uiPipeline.__ctx.getState) ? NK.uiPipeline.__ctx.getState() : null;
+        var sc = (stx && stx.scenes) ? stx.scenes.find(function (s) { return String(s.id) === String(sid); }) : null;
+        if (sc && sc.voiceVoiceId) cur = sc.voiceVoiceId;
+      } catch (_) { }
+      if (cur === 'kr_female_narration') cur = 'voice:ko-KR-Neural2-A';
+      if (cur === 'kr_male_narration') cur = 'voice:ko-KR-Neural2-B';
       var groups = [];
       var femOpts = femaleList.map(function (v) { return buildOption('voice:' + v.name, '여성 · ' + v.name, cur === ('voice:' + v.name)); }).join('');
       var maleOpts = maleList.map(function (v) { return buildOption('voice:' + v.name, '남성 · ' + v.name, cur === ('voice:' + v.name)); }).join('');
@@ -785,6 +793,15 @@
         '<optgroup label="캐릭터">' + characterOpts + '</optgroup>';
       sel.innerHTML = html;
       if (!cur) sel.value = 'voice:' + (femaleList[0] ? femaleList[0].name : 'ko-KR-Studio-O');
+      else {
+        // 값이 없으면 가까운 대체값으로
+        if (!Array.prototype.some.call(sel.options, function (o) { return o.value === cur; })) {
+          var fallback = 'voice:' + (femaleList[0] ? femaleList[0].name : 'ko-KR-Studio-O');
+          sel.value = fallback;
+        } else {
+          sel.value = cur;
+        }
+      }
     });
     function maleBaseName(list) { return (list && list[0] && list[0].name) ? list[0].name : 'ko-KR-Neural2-C'; }
   }

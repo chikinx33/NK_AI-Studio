@@ -24,6 +24,13 @@
 }
 
 [data-theme="dark"] {
+  color-scheme: dark;
+}
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
   --bg: #0f172a;
   --bg-2: #0b1224;
   --card: #121d35;
@@ -1816,6 +1823,7 @@ a.btn-primary:active {
   background-position: calc(100% - 18px) 17px, calc(100% - 12px) 17px;
   background-size: 6px 6px, 6px 6px;
   background-repeat: no-repeat;
+  scrollbar-width: thin;
 }
 
 .voice-select:focus {
@@ -1828,10 +1836,18 @@ a.btn-primary:active {
   background: #0f172a;
   color: #f5f7ff;
 }
+.voice-select optgroup {
+  background: #0f172a;
+  color: #9fb7ff;
+}
 
 [data-theme="light"] .voice-select option {
   background: #ffffff;
   color: #0b0f1c;
+}
+[data-theme="light"] .voice-select optgroup {
+  background: #ffffff;
+  color: #24324e;
 }
 
 [data-theme="light"] .voice-block {
@@ -1844,6 +1860,26 @@ a.btn-primary:active {
   border-color: #c7d6ff;
   color: #1a2336;
 }
+
+/* Voice select scrollbar theming (WebKit) */
+.voice-select::-webkit-scrollbar {
+  width: 8px;
+}
+.voice-select::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+.voice-select::-webkit-scrollbar-thumb {
+  background: rgba(123, 215, 255, 0.35);
+  border-radius: 8px;
+}
+[data-theme="light"] .voice-select::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme="light"] .voice-select::-webkit-scrollbar-thumb {
+  background: rgba(28, 40, 66, 0.45);
+}
+
 
 .spinner {
   width: 34px;
