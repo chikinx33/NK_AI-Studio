@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config) window.NK.config.APP_VERSION = '1.787';
+  if (window.NK.config) window.NK.config.APP_VERSION = '1.788';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -296,7 +296,7 @@
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
     // 버전 규칙: 코드 변경 시 버전을 즉시 올린다.
-    NK.config.APP_VERSION = '1.787';
+    NK.config.APP_VERSION = '1.788';
     NK.core.APP_VERSION = NK.config.APP_VERSION;
     if (NK.core.applyVersionAndNav) NK.core.applyVersionAndNav();
 
@@ -441,9 +441,20 @@
             const drafts = NK.store.getDrafts();
             const idx = drafts.findIndex(d => String(d.id) === String(this._state.draftId));
             if (idx !== -1) {
-              drafts[idx].scenes = this._state.scenes;
-              drafts[idx].header = this._state.header;
+              drafts[idx] = Object.assign({}, drafts[idx], {
+                payload: this._state.payload || drafts[idx].payload || {},
+                scenes: this._state.scenes,
+                header: this._state.header,
+                aspectRatio: this._state.aspectRatio || drafts[idx].aspectRatio || ''
+              });
               NK.store.saveDrafts(drafts);
+              try {
+                if (NK.service && NK.service.project && NK.service.project.setCurrent) {
+                  NK.service.project.setCurrent(drafts[idx]);
+                } else if (NK.state && NK.state.set) {
+                  NK.state.set({ currentProject: drafts[idx] });
+                }
+              } catch (_) { }
             }
           }
         };

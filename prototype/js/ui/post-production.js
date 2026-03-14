@@ -339,6 +339,87 @@
     }
   }
 
+  function getPipelineProject(projectId) {
+    if (!projectId || !NK.store || !NK.store.getPipeline) return null;
+    try {
+      var cached = NK.store.getPipeline();
+      if (!cached || typeof cached !== 'object') return null;
+      var cachedId = String(cached.draftId || cached.projectId || '').trim();
+      if (!cachedId || cachedId !== String(projectId)) return null;
+      return cached;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function mergeSceneMediaFromPipeline(scene, pipelineScene) {
+    if (!scene || !pipelineScene) return scene;
+    var sceneImageUrl = getSceneImageUrl(scene);
+    var pipelineImageUrl = getSceneImageUrl(pipelineScene);
+    var sceneVideoUrl = getSceneVideoUrl(scene);
+    var pipelineVideoUrl = getSceneVideoUrl(pipelineScene);
+    if (sceneImageUrl || !pipelineImageUrl) return scene;
+
+    var next = Object.assign({}, scene, {
+      imageDataUrl: pipelineScene.imageDataUrl || pipelineScene.imagePath || pipelineScene.generatedImageUrl || pipelineScene.imageUrl || '',
+      imagePath: pipelineScene.imagePath || scene.imagePath || '',
+      generatedImageUrl: pipelineScene.generatedImageUrl || pipelineImageUrl,
+      imageUrl: pipelineScene.imageUrl || pipelineImageUrl
+    });
+
+    if (!sceneVideoUrl && pipelineVideoUrl) {
+      next.videoUrl = pipelineScene.videoUrl || pipelineScene.videoPlaybackUrl || pipelineScene.generatedVideoUrl || pipelineScene.videoPath || '';
+      next.generatedVideoUrl = pipelineScene.generatedVideoUrl || pipelineVideoUrl;
+      next.videoStatus = pipelineScene.videoStatus || (next.videoUrl ? 'done' : '');
+      next.videoError = pipelineScene.videoError || '';
+    }
+    return next;
+  }
+
+  function hydrateProjectScenesFromPipeline(project) {
+    if (!project || !project.id || !Array.isArray(project.scenes) || !project.scenes.length) return project;
+    var pipelineProject = getPipelineProject(project.id);
+    var pipelineScenes = pipelineProject && Array.isArray(pipelineProject.scenes) ? pipelineProject.scenes : [];
+    if (!pipelineScenes.length) return project;
+
+    var byId = new Map();
+    pipelineScenes.forEach(function (scene, index) {
+      var key = String(scene && scene.id || '').trim();
+      if (key) byId.set(key, scene);
+      byId.set('__index__' + index, scene);
+    });
+
+    var changed = false;
+    var nextScenes = project.scenes.map(function (scene, index) {
+      var source = byId.get(String(scene && scene.id || '').trim()) || byId.get('__index__' + index);
+      var merged = mergeSceneMediaFromPipeline(scene, source);
+      if (merged !== scene) changed = true;
+      return merged;
+    });
+
+    if (!changed) return project;
+
+    var nextProject = Object.assign({}, project, { scenes: nextScenes });
+    try {
+      if (NK.store && NK.store.getDrafts && NK.store.saveDrafts) {
+        var drafts = NK.store.getDrafts();
+        var idx = Array.isArray(drafts)
+          ? drafts.findIndex(function (d) { return String(d && d.id) === String(project.id); })
+          : -1;
+        if (idx >= 0) {
+          drafts[idx] = Object.assign({}, drafts[idx], { scenes: nextScenes });
+          NK.store.saveDrafts(drafts);
+        }
+      }
+      if (NK.state && NK.state.runtime && NK.state.runtime.currentProject &&
+          String(NK.state.runtime.currentProject.id) === String(project.id)) {
+        NK.state.runtime.currentProject = Object.assign({}, NK.state.runtime.currentProject, { scenes: nextScenes });
+      }
+    } catch (_) { }
+
+    return nextProject;
+  }
+
   function resolveProject() {
     try {
       if (NK.service && NK.service.project && NK.service.project.resolveCurrent) {
@@ -3529,7 +3610,7 @@
     var root = document.getElementById('postprod-root');
     if (!root) return;
 
-    var project = resolveProject();
+    var project = hydrateProjectScenesFromPipeline(resolveProject());
     var scenes = project && Array.isArray(project.scenes) ? project.scenes : [];
     if (!project || !scenes.length) {
       stopRenderTimer();
