@@ -87,6 +87,10 @@
     return (NK.service && NK.service.postprodState) ? NK.service.postprodState : null;
   }
 
+  function getPostprodRenderService() {
+    return (NK.service && NK.service.postprodRender) ? NK.service.postprodRender : null;
+  }
+
   function firstFilled(values) {
     for (var i = 0; i < values.length; i++) {
       var v = values[i];
@@ -1185,164 +1189,36 @@
     return false;
   }
 
-  function waitMs(ms) {
-    return new Promise(function (resolve) { setTimeout(resolve, Math.max(0, Number(ms) || 0)); });
-  }
-
   async function uploadRenderedBlobSource(projectId, blob, mimeType) {
-    if (!projectId) throw new Error('project_id_missing');
-    if (!blob || !blob.size) throw new Error('render_blob_missing');
-    if (!NK.api || !NK.api.videoUpload) {
-      throw new Error('postprod_upload_api_missing');
-    }
-
-    var ext = String(mimeType || '').toLowerCase().indexOf('webm') >= 0 ? 'webm' : 'mp4';
-    var uploadName = 'postprod-final-source.' + ext;
-    var uploadFile = null;
-    try {
-      uploadFile = new File([blob], uploadName, { type: mimeType || 'video/webm' });
-    } catch (_) {
-      uploadFile = blob;
-    }
-
-    var up = await NK.api.videoUpload(projectId, 'postprod-final', uploadFile);
-    var sourceObjectName = String((up && up.objectName) || '').trim();
-    if (!sourceObjectName) throw new Error('render_source_upload_failed');
-
-    var sourceUrl = '';
-    if (NK.api && NK.api.mediaProxyObjectUrl) {
-      sourceUrl = String(NK.api.mediaProxyObjectUrl(sourceObjectName) || '').trim();
-    }
-    if (!sourceUrl) {
-      sourceUrl = String((up && (up.signedUrl || up.url || up.playbackUrl)) || '').trim();
-    }
-
-    return {
-      sourceObjectName: sourceObjectName,
-      sourceUrl: sourceUrl,
-      sourceMime: String(mimeType || (up && up.contentType) || 'video/webm')
-    };
-  }
-
-  async function transcodeRenderedBlobToMp4(projectId, blob, mimeType, renderJobId) {
-    if (!projectId) throw new Error('project_id_missing');
-    if (!blob || !blob.size) throw new Error('render_blob_missing');
-    if (!NK.api || !NK.api.videoUpload || !NK.api.postprodTranscodeStart || !NK.api.postprodTranscodeStatus) {
-      throw new Error('postprod_transcode_api_missing');
-    }
-
-    var ext = String(mimeType || '').toLowerCase().indexOf('webm') >= 0 ? 'webm' : 'mp4';
-    var uploadName = 'postprod-final-source.' + ext;
-    var uploadFile = null;
-    try {
-      uploadFile = new File([blob], uploadName, { type: mimeType || 'video/webm' });
-    } catch (_) {
-      uploadFile = blob;
-    }
-
-    var up = await NK.api.videoUpload(projectId, 'postprod-final', uploadFile);
-    var sourceObjectName = String((up && up.objectName) || '').trim();
-    if (!sourceObjectName) throw new Error('render_source_upload_failed');
-
-    var project = getProjectByStateId() || resolveProject();
-    var aspectRatio = parseAspectRatio(
-      (project && project.aspectRatio) ||
-      (project && project.payload && project.payload.aspectRatio) ||
-      '16:9'
-    );
-
-    var sourceDurationSec = Math.max(0.2, Number(getTimelinePlaybackDuration(state.model)) || 0);
-    return runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId, sourceDurationSec);
+    var svc = getPostprodRenderService();
+    if (!svc || !svc.uploadRenderedBlobSource) throw new Error('postprod_render_service_missing');
+    return svc.uploadRenderedBlobSource(projectId, blob, mimeType);
   }
 
   async function transcodeSourceObjectToMp4(projectId, sourceObjectName, renderJobId, sourceDurationSec) {
-    if (!projectId) throw new Error('project_id_missing');
-    if (!sourceObjectName) throw new Error('render_source_missing');
-    if (!NK.api || !NK.api.postprodTranscodeStart || !NK.api.postprodTranscodeStatus) {
-      throw new Error('postprod_transcode_api_missing');
-    }
-
+    var svc = getPostprodRenderService();
+    if (!svc || !svc.transcodeSourceObjectToMp4) throw new Error('postprod_render_service_missing');
     var project = getProjectByStateId() || resolveProject();
     var aspectRatio = parseAspectRatio(
       (project && project.aspectRatio) ||
       (project && project.payload && project.payload.aspectRatio) ||
       '16:9'
     );
-
-    var lastErr = null;
-    var attempts = 2;
-    for (var attempt = 0; attempt < attempts; attempt++) {
-      try {
-        return await runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId, sourceDurationSec);
-      } catch (err) {
-        lastErr = err;
-        var raw = String((err && err.message) || err || '');
-        if (!/transcode_failed_|transcode_timeout|Transcoder status failed|postprod_transcode_status_error/i.test(raw)) {
-          throw err;
-        }
-        if (attempt < attempts - 1) {
-          await waitMs(1800);
-        }
-      }
-    }
-    throw (lastErr || new Error('transcode_failed'));
-  }
-
-  async function runTranscodeJob(projectId, sourceObjectName, aspectRatio, renderJobId, sourceDurationSec) {
-    var reqBody = {
+    return svc.transcodeSourceObjectToMp4({
       projectId: projectId,
       sourceObjectName: sourceObjectName,
-      aspectRatio: aspectRatio
-    };
-    var dur = Number(sourceDurationSec);
-    if (isFinite(dur) && dur > 0) reqBody.sourceDurationSec = Math.max(0.2, Math.round(dur * 1000) / 1000);
-    var start = await NK.api.postprodTranscodeStart(reqBody);
-    var jobName = String((start && start.jobName) || '').trim();
-    var outputObjectName = String((start && start.outputObjectName) || '').trim();
-    if (!jobName || !outputObjectName) throw new Error('transcode_start_failed');
-
-    var maxAttempts = 240;
-    for (var i = 0; i < maxAttempts; i++) {
-      if (typeof renderJobId === 'number' && state.renderJobId !== renderJobId) throw new Error('render_canceled');
-      await waitMs(3000);
-      var st = await NK.api.postprodTranscodeStatus({
-        jobName: jobName,
-        outputObjectName: outputObjectName
-      });
-      var status = String((st && st.status) || '').toUpperCase();
-      if (st && st.done && status === 'SUCCEEDED') {
-        var previewUrl = String((st && st.proxyUrl) || (st && st.signedUrl) || '').trim();
-        var downloadUrl = String((st && st.signedUrl) || (st && st.proxyUrl) || '').trim();
-        if (!previewUrl && !downloadUrl) throw new Error('transcode_done_no_url');
-        return {
-          previewUrl: previewUrl || downloadUrl,
-          downloadUrl: downloadUrl || previewUrl,
-          outputObjectName: String((st && st.outputObjectName) || outputObjectName || '').trim()
-        };
+      aspectRatio: aspectRatio,
+      renderJobId: renderJobId,
+      sourceDurationSec: sourceDurationSec,
+      shouldCancel: function () {
+        return typeof renderJobId === 'number' && state.renderJobId !== renderJobId;
+      },
+      onProgress: function (progress) {
+        if (state.renderMeta && state.renderMeta.status === 'rendering') {
+          setRenderMetaLocal({ progress: clamp(progress, 75, 99) });
+        }
       }
-      if (st && st.done && status && status !== 'SUCCEEDED') {
-        throw buildTranscodeFailedError(status, st);
-      }
-      if (state.renderMeta && state.renderMeta.status === 'rendering') {
-        var p = clamp(75 + ((i + 1) / maxAttempts) * 24, 75, 99);
-        setRenderMetaLocal({ progress: p });
-      }
-    }
-    throw new Error('transcode_timeout');
-  }
-
-  function buildTranscodeFailedError(status, payload) {
-    var reason = '';
-    if (payload) {
-      if (typeof payload.error === 'string') reason = payload.error;
-      else if (payload.error && typeof payload.error.message === 'string') reason = payload.error.message;
-      else if (typeof payload.failureReason === 'string') reason = payload.failureReason;
-      else if (payload.raw && typeof payload.raw.failureReason === 'string') reason = payload.raw.failureReason;
-      else if (payload.raw && payload.raw.error && typeof payload.raw.error.message === 'string') reason = payload.raw.error.message;
-    }
-    reason = String(reason || '').replace(/\s+/g, ' ').trim();
-    if (reason.length > 400) reason = reason.slice(0, 400);
-    return new Error('transcode_failed_' + status + (reason ? ('::' + reason) : ''));
+    });
   }
 
   function waitForVideoSeek(video, timeSec, timeoutMs) {
@@ -2008,7 +1884,10 @@
 
   async function downloadMp4Now() {
     var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
-    var url = String((meta && meta.outputVideoDownloadUrl) || '').trim() || getRenderableOutputVideoUrl(meta);
+    var renderApi = getPostprodRenderService();
+    var url = (renderApi && renderApi.resolveMp4DownloadUrl)
+      ? renderApi.resolveMp4DownloadUrl(meta)
+      : (String((meta && meta.outputVideoDownloadUrl) || '').trim() || getRenderableOutputVideoUrl(meta));
     var mime = String((meta && meta.outputVideoMime) || '').toLowerCase();
     var outputVideoObjectName = String((meta && meta.outputVideoObjectName) || '').trim();
     var sourceObjectName = String((meta && meta.outputSourceObjectName) || '').trim();
