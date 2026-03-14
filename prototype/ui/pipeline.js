@@ -697,280 +697,45 @@
 
     // 비디오 생성 공통 함수
     async function startVideoForIdx(i) {
-      var st = ctx.getState();
-      if (!st) return;
-      var scene = st.scenes[i];
-      if (!scene || isSceneVideoProcessing(scene)) return;
-      var projectId = st.draftId || getProjectId();
-      if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
-      var desiredAspectRatio = resolveEffectiveAspectRatio(st, ctx);
-      st = ensureStateAspectRatio(st, desiredAspectRatio);
-      var header = st.header || '';
-      var statePayload = st.payload || {};
-      var audience = statePayload.target || '';
-      var selections = [
-        statePayload.topic ? `Topic: ${statePayload.topic}` : '',
-        statePayload.purposeCategory ? `Genre/Purpose: ${statePayload.purposeCategory}` : '',
-        Array.isArray(statePayload.purposeTags) && statePayload.purposeTags.length ? `Tags: ${statePayload.purposeTags.join(', ')}` : '',
-        audience ? `Audience: ${audience}` : '',
-        (Array.isArray(statePayload.tones) && statePayload.tones.length) || statePayload.tone ? `Tone: ${[...(statePayload.tones || []), statePayload.tone || ''].filter(Boolean).join(', ')}` : '',
-        (Array.isArray(statePayload.styles) && statePayload.styles.length) || statePayload.style ? `Style: ${[...(statePayload.styles || []), statePayload.style || ''].filter(Boolean).join(', ')}` : '',
-        statePayload.needs && statePayload.needs.length ? `Needs: ${statePayload.needs.join(', ')}` : '',
-        desiredAspectRatio ? `AspectRatio: ${desiredAspectRatio}` : '',
-        statePayload.duration ? `TargetDuration: ${statePayload.duration}s` : ''
-      ].filter(Boolean).join('\n');
-      var promptBase = [
-        'Global',
-        header,
-        selections,
-        'Scene Visual',
-        (scene.shot || ''),
-        'Scene Duration',
-        ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')
-      ].filter(Boolean).join('\n');
-      var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
-      if (!finalPrompt || !finalPrompt.trim()) {
-        alert('프롬프트가 비어 있어 영상 생성에 실패했습니다. 시나리오/스토리 탭에서 프롬프트를 입력해주세요.');
-        return;
-      }
-      var voiceEnabled = isVoiceFeatureEnabled(statePayload);
-      if (!voiceEnabled) {
-        var noVoiceDirective = 'No speech, no dialogue, no voice-over, no lip sync, keep mouths closed.';
-        if (!/no\s*speech|lip\s*sync|voice-?over/i.test(finalPrompt)) {
-          finalPrompt = finalPrompt + '\n' + noVoiceDirective;
-        }
-      }
-      var imageUrl = scene.imageDataUrl || '';
-      if (!imageUrl) {
-        alert('영상 생성을 위해서는 이미지가 필요합니다. 이미지를 생성하거나 업로드한 후 다시 시도해주세요.');
-        return;
-      }
-
-      try {
-        var normalizedImage = await enforceImageAspectRatio(imageUrl, desiredAspectRatio);
-        if (normalizedImage && normalizedImage.url && normalizedImage.url !== imageUrl) {
-          imageUrl = normalizedImage.url;
-          st.scenes[i] = Object.assign({}, st.scenes[i], { imageDataUrl: imageUrl });
-          ctx.setState(st);
-          scene = st.scenes[i];
-        }
-      } catch (aspectErr) {
-        console.warn('image aspect normalize skipped:', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
-      }
-
-      // base64 이미지인 경우 자동 업로드하여 URL로 변환 (Grok 등 외부 API 호환성)
-      if (imageUrl.startsWith('data:')) {
-        try {
-          console.log('Auto-uploading base64 image for video generation...');
-          var arr = imageUrl.split(','), mime = arr[0].match(/:(.*?);/)[1];
-          var bstr = atob(arr[1]), n = bstr.length, u8 = new Uint8Array(n);
-          while (n--) u8[n] = bstr.charCodeAt(n);
-          var blob = new Blob([u8], { type: mime });
-          var file = new File([blob], "image.png", { type: mime });
-          var upRes = await NK.api.imageUpload(projectId, file);
-          if (upRes.signedUrl || upRes.url || upRes.dataUrl) {
-            imageUrl = upRes.signedUrl || upRes.url || upRes.dataUrl;
-            // 상태 업데이트하여 재사용
-            st.scenes[i] = Object.assign({}, st.scenes[i], { imageDataUrl: imageUrl });
-            ctx.setState(st);
-            // 업로드된 URL로 scene 객체도 갱신
-            scene = st.scenes[i];
-          }
-        } catch (e) {
-          console.warn('Image auto-upload failed, falling back to base64', e);
-        }
-      }
-
-      st.scenes[i] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
-      ctx.setState(st);
-      updateSceneRow(i, st.header || '');
-      try {
-        // Veo fast 모델은 4/6/8초만 허용 → 근접값으로 스냅
-        var snapDuration = (function (sec) {
-          var allowed = [4, 6, 8];
-          var n = Math.max(1, Math.floor(Number(sec) || 0));
-          var best = allowed[0];
-          var diff = Math.abs(n - best);
-          allowed.forEach(function (v) { var d = Math.abs(n - v); if (d < diff) { diff = d; best = v; } });
-          return best;
-        })(scene.estSec);
-
-        var videoPayload = {
-          projectId: projectId,
-          projTag: projectId, // 백엔드가 projTag로 GCS 경로를 구성하므로 명시
-          sceneId: scene.id,
-          // 서버에 꼭 전달해야 하는 값: promptText, imageDataUrl
-          // Grok 모델일 경우 이미지 기반 생성을 강력히 요청하는 문구 추가
-          promptText: (imageUrl && videoModel === 'grok') ? ("Animate this image. " + finalPrompt) : finalPrompt,
-          script: voiceEnabled ? buildVoiceScriptForVideo(scene, statePayload) : '',
-          narrationEnabled: toBool(statePayload.narrationEnabled, false),
-          dubbingEnabled: toBool(statePayload.dubbingEnabled, false),
-          aspectRatio: desiredAspectRatio,
-          durationSeconds: snapDuration,
-          imageDataUrl: imageUrl,
-          image: imageUrl,
-          image_url: imageUrl,
-          init_image: imageUrl,
-          source_image: imageUrl,
+      if (window.NK && NK.uiPipelineVideo && NK.uiPipelineVideo.startVideoForIdx) {
+        await NK.uiPipelineVideo.startVideoForIdx({
+          idx: i,
+          ctx: ctx,
+          getProjectId: getProjectId,
+          updateSceneRow: updateSceneRow,
+          pollVideoStatus: pollVideoStatus,
+          resolveEffectiveAspectRatio: resolveEffectiveAspectRatio,
+          ensureStateAspectRatio: ensureStateAspectRatio,
+          enforceImageAspectRatio: enforceImageAspectRatio,
+          enforceVideoAspectRatio: enforceVideoAspectRatio,
+          isSceneVideoProcessing: isSceneVideoProcessing,
+          isVoiceFeatureEnabled: isVoiceFeatureEnabled,
+          buildVoiceScriptForVideo: buildVoiceScriptForVideo,
+          toBool: toBool,
+          isBucketVideoUrl: isBucketVideoUrl,
+          showCopyableError: showCopyableError,
           videoModel: videoModel
-        };
-        console.log('videoStart payload', {
-          projectId,
-          sceneId: scene.id,
-          aspectRatio: videoPayload.aspectRatio,
-          durationSeconds: videoPayload.durationSeconds,
-          durationSnappedFrom: scene.estSec,
-          // 프롬프트 전문을 그대로 확인
-          promptText: videoPayload.promptText,
-          script: videoPayload.script,
-          imageDataUrl_preview: imageUrl.startsWith('data:') ? 'dataurl:' + imageUrl.length + ' chars' : imageUrl
         });
-        var resp = await NK.api.videoStart(videoPayload);
-        var rawResp = (resp && resp.raw) ? resp.raw : {};
-        var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || rawResp.job_id || rawResp.id || '';
-        var playbackRaw = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || rawResp.playbackUrl || rawResp.videoUrl || rawResp.outputUrl || rawResp.url || '';
-        var playback = isBucketVideoUrl(playbackRaw) ? playbackRaw : '';
-        var outputGcsUri = resp.outputGcsUri || rawResp.outputGcsUri || rawResp.output_gcs_uri || '';
-        if (playback) {
-          try {
-            var adjustedPlayback = await enforceVideoAspectRatio(projectId, outputGcsUri, playback, desiredAspectRatio);
-            if (adjustedPlayback && adjustedPlayback.url) playback = adjustedPlayback.url;
-          } catch (aspectErr2) {
-            console.warn('video aspect normalize skipped:', aspectErr2 && aspectErr2.message ? aspectErr2.message : aspectErr2);
-          }
-        }
-        console.log('videoStart ok', { jobId, playback, resp });
-        st = ctx.getState() || st;
-        st.scenes[i] = Object.assign({}, st.scenes[i], {
-          videoUrl: playback,
-          videoStatus: playback ? 'done' : 'processing',
-          videoError: resp.error || '',
-          videoJobId: jobId,
-          videoOutputGcsUri: outputGcsUri
-        });
-        ctx.setState(st);
-        updateSceneRow(i, st.header || '');
-
-        // 폴링을 반드시 시작: jobId가 없으면 즉시 에러
-        const pollingJobId = jobId || resp.job_id || resp.id || '';
-        if (pollingJobId) {
-          // 테스트 목적으로 1회 즉시 호출
-          pollVideoStatus(projectId, pollingJobId, i, 0);
-        } else {
-          st.scenes[i] = Object.assign({}, st.scenes[i], {
-            videoStatus: 'error',
-            videoError: 'no jobId in videoStart response'
-          });
-          ctx.setState(st);
-          updateSceneRow(i, st.header || '');
-          showCopyableError('영상 생성 실패: jobId 없음', JSON.stringify(resp || {}, null, 2));
-        }
-      } catch (err) {
-        st = ctx.getState() || st;
-        var msg = (err && err.message) ? err.message : 'video_error';
-        const detail = (err && err.detail) ? err.detail : '';
-        console.error('videoStart error:', msg, detail);
-
-        if (msg.indexOf('Responsible AI') !== -1 || msg.indexOf('sensitive words') !== -1) {
-          msg = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
-        }
-
-        st.scenes[i] = Object.assign({}, st.scenes[i], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
-        showCopyableError('영상 생성 실패: ' + msg, detail ? ('상세: ' + detail) : '');
-        ctx.setState(st);
-        updateSceneRow(i, st.header || '');
       }
-      if (ctx.persistPipeline) ctx.persistPipeline();
     }
   };
 
   async function pollVideoStatus(projectId, jobId, idx, attempt) {
-    var maxAttempts = 120; // 120*5s = 600s (10분)
-    var delay = 5000;
-    try {
-      var st = ctx.getState();
-      if (!st || !st.scenes || st.scenes.length <= idx) return;
-      var sceneId = st.scenes[idx].id;
-      var res = await NK.api.videoStatus({ projectId: projectId, jobId: jobId, sceneId: sceneId });
-      // console.log('videoStatus', { jobId, res });
-      var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url ||
-        (res.response && res.response.video && res.response.video.url) ||
-        (res.response && res.response.url) || '';
-      if (playback && !isBucketVideoUrl(playback)) {
-        playback = '';
-      }
-      var status = res.status || '';
-      st = ctx.getState();
-      if (!st || !st.scenes || st.scenes.length <= idx) return;
-
-      if (res.done && res.error) {
-        var errMsg = res.error.message || 'video_error';
-        if (errMsg.indexOf('Responsible AI') !== -1 || errMsg.indexOf('sensitive words') !== -1) {
-          errMsg = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
+    if (window.NK && NK.uiPipelineVideo && NK.uiPipelineVideo.pollVideoStatus) {
+      await NK.uiPipelineVideo.pollVideoStatus({
+        projectId: projectId,
+        jobId: jobId,
+        idx: idx,
+        attempt: attempt,
+        ctx: ctx,
+        updateSceneRow: updateSceneRow,
+        resolveEffectiveAspectRatio: resolveEffectiveAspectRatio,
+        enforceVideoAspectRatio: enforceVideoAspectRatio,
+        isBucketVideoUrl: isBucketVideoUrl,
+        scheduleNext: function (nextAttempt) {
+          pollVideoStatus(projectId, jobId, idx, nextAttempt);
         }
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: errMsg });
-        console.error('videoStatus error (done+error):', res.error);
-        ctx.setState(st);
-        updateSceneRow(idx, st.header || '');
-        return;
-      }
-      if (res.done && !playback) {
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: 'done but no playback (가공 실패)' });
-        ctx.setState(st);
-        updateSceneRow(idx, st.header || '');
-        return;
-      }
-      if (playback) {
-        var desiredAspectRatio = resolveEffectiveAspectRatio(st, ctx);
-        var outputHint = (st.scenes[idx] && st.scenes[idx].videoOutputGcsUri) || '';
-        try {
-          var adjustedPlayback = await enforceVideoAspectRatio(projectId, outputHint, playback, desiredAspectRatio);
-          if (adjustedPlayback && adjustedPlayback.url) playback = adjustedPlayback.url;
-        } catch (aspectErr) {
-          console.warn('video aspect normalize skipped (poll):', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
-        }
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], {
-          videoUrl: playback,
-          videoStatus: 'done',
-          videoError: ''
-        });
-        ctx.setState(st);
-        updateSceneRow(idx, st.header || '');
-        if (ctx.persistPipeline) ctx.persistPipeline();
-        return;
-      }
-      if (status && status.toLowerCase() === 'error') {
-        var errMsg2 = res.error || 'video_error';
-        if (typeof errMsg2 === 'string' && (errMsg2.indexOf('Responsible AI') !== -1 || errMsg2.indexOf('sensitive words') !== -1)) {
-          errMsg2 = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
-        }
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: errMsg2 });
-        console.error('videoStatus error status flag:', res);
-        ctx.setState(st);
-        updateSceneRow(idx, st.header || '');
-        return;
-      }
-      if (attempt + 1 >= maxAttempts) {
-        st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: '응답 시간 초과 (작업은 진행 중일 수 있음)' });
-        ctx.setState(st);
-        updateSceneRow(idx, st.header || '');
-        return;
-      }
-      setTimeout(() => pollVideoStatus(projectId, jobId, idx, attempt + 1), delay);
-    } catch (err) {
-      var st = ctx.getState();
-      if (!st || !st.scenes || st.scenes.length <= idx) return;
-      var msg = (err && err.message) ? err.message : 'video_error';
-      const detail = (err && err.detail) ? err.detail : '';
-
-      if (msg.indexOf('Responsible AI') !== -1 || msg.indexOf('sensitive words') !== -1) {
-        msg = '프롬프트에 민감/부적절한 단어가 포함되어 차단되었습니다.';
-      }
-
-      console.error('videoStatus polling error:', msg, detail);
-      st.scenes[idx] = Object.assign({}, st.scenes[idx], { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
-      ctx.setState(st);
-      updateSceneRow(idx, st.header || '');
+      });
     }
   }
   ui.refreshAssets = async function () {
