@@ -1,6 +1,3 @@
-// prototype/functions/api/tts.ts
-// Google Cloud Text-to-Speech synthesize and upload to GCS:
-// Saves to {basePrefix}/users/{userId}/ai-video/projects{projectId}/audio/{sceneId}.mp3
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 
@@ -38,11 +35,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const script = scriptRaw.slice(0, 5000);
     const voiceOpt = VOICE_MAP[voiceId] || VOICE_MAP.kr_female_narration;
 
-    const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
-    const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
+    const clientEmail = (env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL) as string | undefined;
+    const privateKeyRaw = (env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY) as string | undefined;
     const baseOutput = (env.AUDIO_OUTPUT_GCS_URI as string | undefined) || (env.VIDEO_OUTPUT_GCS_URI as string | undefined);
     if (!clientEmail || !privateKeyRaw || !baseOutput) {
-      return send({ error: "Missing GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY/AUDIO_OUTPUT_GCS_URI|VIDEO_OUTPUT_GCS_URI" }, 500, origin);
+      return send({ error: "Missing TTS_GOOGLE_CLIENT_EMAIL/TTS_GOOGLE_PRIVATE_KEY or GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY, and AUDIO_OUTPUT_GCS_URI|VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     }
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid AUDIO_OUTPUT_GCS_URI|VIDEO_OUTPUT_GCS_URI" }, 500, origin);
