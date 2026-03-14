@@ -545,6 +545,10 @@
         var finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
         return Object.assign({}, s, {
           promptText: finalPrompt,
+          voiceUrl: (s.voiceUrl || ''),
+          voiceStatus: (s.voiceStatus || ''),
+          voiceVoiceId: (s.voiceVoiceId || ''),
+          voiceError: (s.voiceError || ''),
           videoUrl: (s.videoUrl || s.videoPlaybackUrl || ''),
           videoStatus: (s.videoStatus || ''),
           videoMethod: (s.videoMethod || ''),
