@@ -6778,6 +6778,11 @@ body.layout-fixed .lib-content {
   gap: 10px;
 }
 
+.knowledge-hub-field-fill {
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .knowledge-hub-field span {
   font-size: 13px;
   color: var(--muted);
@@ -6875,7 +6880,8 @@ body.layout-fixed .lib-content {
 }
 
 #knowledge-world-setting {
-  min-height: 252px;
+  min-height: 0;
+  height: 100%;
 }
 
 .knowledge-reference-builder {
