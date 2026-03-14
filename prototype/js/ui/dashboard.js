@@ -94,7 +94,6 @@
   const selectProject = (draft) => {
     if (!draft) return;
     if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-    if (NK.state?.set) NK.state.set({ currentProject: draft });
     if (NK.state?.broadcast) NK.state.broadcast('update-project', { project: draft });
   };
 
@@ -125,7 +124,8 @@
         const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
         if (!ids.length) {
           drafts = [];
-          NK.store.saveDrafts(drafts);
+          if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
+          else NK.store.saveDrafts(drafts);
           return;
         }
         drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
@@ -138,7 +138,10 @@
         }
         const knownIds = new Set(drafts.map((d) => String(d.id)));
         const missingIds = ids.filter((id) => !knownIds.has(String(id)));
-        if (changed) NK.store.saveDrafts(drafts);
+        if (changed) {
+          if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
+          else NK.store.saveDrafts(drafts);
+        }
         if (!missingIds.length || !NK.api.projectGet) return;
 
         const fetchedDrafts = (await runTasksInBatches(missingIds, async (id) => {
@@ -168,7 +171,8 @@
           const bi = orderMap.has(String(b.id)) ? orderMap.get(String(b.id)) : Number.MAX_SAFE_INTEGER;
           return ai - bi;
         });
-        NK.store.saveDrafts(drafts);
+        if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
+        else NK.store.saveDrafts(drafts);
       } catch (_) { }
       finally {
         if (showBlockingLoading) setDashLoading(false);
@@ -389,21 +393,21 @@
           const draft = drafts.find(d => String(d.id) === String(id));
           if (!draft) return;
           const newTitle = (titleEl.textContent || '').trim() || '제목없음';
-          draft.title = newTitle;
-          draft.payload = draft.payload || {};
-          draft.payload.episodeTitle = newTitle;
-          NK.store.saveDrafts(drafts);
-          const currentId = NK.service?.project?.getCurrentProjectId ? NK.service.project.getCurrentProjectId() : '';
-          if (String(currentId) === String(draft.id) && NK.service?.project?.setCurrent) {
-            NK.service.project.setCurrent(draft);
-          }
+          const nextDraft = Object.assign({}, draft, {
+            title: newTitle,
+            payload: Object.assign({}, draft.payload || {}, { episodeTitle: newTitle })
+          });
+          const savedDraft = NK.service?.project?.updateLocal
+            ? NK.service.project.updateLocal(id, nextDraft, { forceCurrent: String(NK.service?.project?.getCurrentProjectId?.() || '') === String(id) })
+            : (draft.title = newTitle, draft.payload = Object.assign({}, draft.payload || {}, { episodeTitle: newTitle }), NK.store.saveDrafts(drafts), draft);
           titleEl.textContent = newTitle;
           titleEl.contentEditable = 'false';
           titleEl.classList.remove('editing');
           if (NK.api && NK.api.projectSave) {
-            NK.api.projectSave(draft.id, draft.payload || {}, draft.scenes || [], {
-              header: draft.header || '',
-              aspectRatio: draft.payload?.aspectRatio,
+            const targetDraft = savedDraft || nextDraft;
+            NK.api.projectSave(targetDraft.id, targetDraft.payload || {}, targetDraft.scenes || [], {
+              header: targetDraft.header || '',
+              aspectRatio: targetDraft.payload?.aspectRatio,
               title: newTitle
             }).catch(() => { });
           }

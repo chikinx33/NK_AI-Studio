@@ -488,6 +488,24 @@
         try { localStorage.removeItem('nk_current_project'); } catch (_) { }
     }
 
+    function getTrackedCurrentProjectId() {
+        try {
+            var runtimeId = String(NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id || '').trim();
+            if (runtimeId) return runtimeId;
+        } catch (_) { }
+        try {
+            var selected = readStoredSelectedDraft();
+            var selectedId = String(selected && selected.id || '').trim();
+            if (selectedId) return selectedId;
+        } catch (_) { }
+        try {
+            var summary = readStoredCurrentProject();
+            var summaryId = String(summary && summary.id || '').trim();
+            if (summaryId) return summaryId;
+        } catch (_) { }
+        return '';
+    }
+
     function resolveCurrentProject(options) {
         var opts = options || {};
         var requestedId = parseProjectIdFromSearch(opts.search);
@@ -644,12 +662,11 @@
             scenes: []
         };
 
-        drafts.unshift(newDraft);
-        NK.store.saveDrafts(drafts.slice(0, 100));
-        syncBrandFromDraft(newDraft);
+        var savedDraft = project.upsertLocalDraft(newDraft, { setCurrent: false, limit: 100, prepend: true }) || newDraft;
+        syncBrandFromDraft(savedDraft);
         try {
             if (mode === 'new-series' && requestedBrandContext && Object.keys(requestedBrandContext).length && NK.service && NK.service.brand && NK.service.brand.update) {
-                NK.service.brand.update(String(newDraft.payload.brandId || ''), requestedBrandContext);
+                NK.service.brand.update(String(savedDraft.payload.brandId || ''), requestedBrandContext);
             }
         } catch (err) {
             console.warn('Brand create sync fail', err);
@@ -657,12 +674,12 @@
 
         try {
             await NK.api.projectInit(String(id));
-            await syncDraftToServer(newDraft);
+            await syncDraftToServer(savedDraft);
         } catch (err) {
             console.warn('Project init/save error', err);
         }
 
-        return newDraft;
+        return savedDraft;
     };
 
     project.listSeries = function () {
@@ -717,6 +734,46 @@
         clearCurrentProjectStorage();
         if (NK.state && NK.state.set) NK.state.set({ currentProject: null });
     };
+    project.replaceLocalDrafts = function (drafts, options) {
+        if (!NK.store || !NK.store.saveDrafts) return [];
+        var opts = options || {};
+        var normalized = (Array.isArray(drafts) ? drafts : [])
+            .map(normalizeDraft)
+            .filter(Boolean);
+        if (Number(opts.limit) > 0) normalized = normalized.slice(0, Number(opts.limit));
+        NK.store.saveDrafts(normalized);
+
+        var trackedId = String(opts.currentId || getTrackedCurrentProjectId() || '').trim();
+        if (trackedId) {
+            var matched = normalized.find(function (row) { return String(row.id) === trackedId; }) || null;
+            if (matched) project.setCurrent(matched);
+            else if (opts.clearMissingCurrent !== false) project.clearCurrent();
+        } else {
+            updateSelectedDraftAfterBulk(normalized);
+        }
+        return normalized;
+    };
+    project.upsertLocalDraft = function (draft, options) {
+        var normalized = normalizeDraft(draft);
+        if (!normalized || !normalized.id || !NK.store || !NK.store.getDrafts) return null;
+        var opts = options || {};
+        var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        var idx = drafts.findIndex(function (row) { return String(row.id) === String(normalized.id); });
+        if (idx >= 0) drafts[idx] = normalized;
+        else if (opts.prepend === false) drafts.push(normalized);
+        else drafts.unshift(normalized);
+        var nextDrafts = project.replaceLocalDrafts(drafts, {
+            limit: Number(opts.limit) > 0 ? Number(opts.limit) : 100,
+            currentId: opts.setCurrent ? normalized.id : (opts.currentId || '')
+        });
+        if (opts.setCurrent && !(opts.currentId || '')) {
+            project.setCurrent(normalized);
+        } else if (opts.setCurrent) {
+            var matched = nextDrafts.find(function (row) { return String(row.id) === String(normalized.id); }) || normalized;
+            project.setCurrent(matched);
+        }
+        return nextDrafts.find(function (row) { return String(row.id) === String(normalized.id); }) || normalized;
+    };
     project.updateLocal = function (projectId, updater, options) {
         var targetId = String(projectId || '').trim();
         if (!targetId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return null;
@@ -733,16 +790,15 @@
             if (!normalized) return null;
 
             drafts[idx] = normalized;
-            NK.store.saveDrafts(drafts);
+            project.replaceLocalDrafts(drafts, {
+                limit: drafts.length,
+                currentId: opts.forceCurrent ? targetId : getTrackedCurrentProjectId(),
+                clearMissingCurrent: true
+            });
 
             var shouldSyncCurrent = !!opts.forceCurrent;
             if (!shouldSyncCurrent) {
-                try {
-                    var runtimeId = String(NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id || '').trim();
-                    var selectedId = String(readStoredSelectedDraft() && readStoredSelectedDraft().id || '').trim();
-                    var summaryId = String(readStoredCurrentProject() && readStoredCurrentProject().id || '').trim();
-                    shouldSyncCurrent = runtimeId === targetId || selectedId === targetId || summaryId === targetId;
-                } catch (_) { }
+                shouldSyncCurrent = getTrackedCurrentProjectId() === targetId;
             }
             if (shouldSyncCurrent) {
                 project.setCurrent(normalized);
@@ -756,22 +812,19 @@
         var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
         if (!draft || !draft.id) throw new Error('project_not_found');
 
-        var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
-        var idx = drafts.findIndex(function (row) { return String(row.id) === String(draft.id); });
-        if (idx < 0) throw new Error('project_not_found');
-
-        var target = Object.assign({}, drafts[idx]);
+        var current = getDraftById(draft.id);
+        if (!current) throw new Error('project_not_found');
+        var target = Object.assign({}, current);
         target.payload = Object.assign({}, target.payload || {}, patch || {});
         target.payload = applyProjectCore(target.payload, target);
-        drafts[idx] = normalizeDraft(target);
-        NK.store.saveDrafts(drafts);
-        project.setCurrent(drafts[idx]);
-        if (shouldSyncBrandFromPatch(patch)) syncBrandFromDraft(drafts[idx]);
+        var saved = project.updateLocal(draft.id, target, { forceCurrent: true });
+        if (!saved) throw new Error('project_not_found');
+        if (shouldSyncBrandFromPatch(patch)) syncBrandFromDraft(saved);
 
-        var sync = await syncDraftToServer(drafts[idx]);
+        var sync = await syncDraftToServer(saved);
         return {
             ok: !!sync.ok,
-            draft: drafts[idx],
+            draft: saved,
             reason: sync.reason || ''
         };
     };
@@ -795,8 +848,7 @@
             d.payload.seriesTitle = title;
         });
 
-        NK.store.saveDrafts(drafts);
-        updateSelectedDraftAfterBulk(drafts);
+        project.replaceLocalDrafts(drafts, { limit: drafts.length });
         try {
             if (NK.service && NK.service.brand && NK.service.brand.getBySeriesId && NK.service.brand.update) {
                 var matchedBrand = NK.service.brand.getBySeriesId(sid);
@@ -858,8 +910,7 @@
             draft.payload = applyProjectCore(draft.payload, draft);
         });
 
-        NK.store.saveDrafts(drafts);
-        updateSelectedDraftAfterBulk(drafts);
+        project.replaceLocalDrafts(drafts, { limit: drafts.length });
 
         try {
             syncBrandFromDraft(targets[0]);
@@ -910,8 +961,7 @@
         }
 
         var filtered = drafts.filter(function (d) { return String(d.seriesId) !== String(sid); });
-        NK.store.saveDrafts(filtered);
-        updateSelectedDraftAfterBulk(filtered);
+        project.replaceLocalDrafts(filtered, { limit: filtered.length });
 
         return {
             ok: true,
@@ -936,8 +986,7 @@
 
         var drafts = NK.store.getDrafts();
         var filtered = drafts.filter(function (d) { return String(d.id) !== String(id); });
-        NK.store.saveDrafts(filtered);
-        updateSelectedDraftAfterBulk(filtered.map(normalizeDraft).filter(Boolean));
+        project.replaceLocalDrafts(filtered, { limit: filtered.length });
         return { ok: apiOk };
     };
 

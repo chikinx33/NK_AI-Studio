@@ -1113,8 +1113,11 @@
             scenes: srv.data.scenes || draft?.scenes || [],
             header: srv.data.header || draft?.header || ''
           };
-          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-          if (NK.state?.set) NK.state.set({ currentProject: draft });
+          if (NK.service?.project?.upsertLocalDraft) {
+            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
+          } else if (NK.service?.project?.setCurrent) {
+            NK.service.project.setCurrent(draft);
+          }
         }
       } catch (_) { }
     }
@@ -1313,13 +1316,16 @@
           draft.scenes = normalized;
           draft.header = sanitizeHeader(res.header || headerText || draft.header || '');
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
-          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-          NK.store.saveDrafts([draft]);
+          if (NK.service?.project?.upsertLocalDraft) {
+            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
+          } else {
+            if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
+            NK.store.saveDrafts([draft]);
+          }
           if (NK.api?.projectSave) {
             await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title });
           }
           if (NK.state) {
-            if (NK.state.set) NK.state.set({ currentProject: draft });
             if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
           }
           loadDraft(draft);
@@ -1362,8 +1368,12 @@
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
           draft.payload = collectPayload();
           draft.scenes = mergeSceneSnapshots(draft.scenes || [], collectScenesFromCards());
-          if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-          NK.store.saveDrafts([draft]);
+          if (NK.service?.project?.upsertLocalDraft) {
+            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
+          } else {
+            if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
+            NK.store.saveDrafts([draft]);
+          }
           if (NK.api?.projectSave) {
             await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });
             // 저장 직후 사이드바/대시보드 카드에 메타(장르/타겟/길이) 반영
@@ -1375,7 +1385,6 @@
                 NK.ui.dashboard.renderDrafts();
               }
               if (NK.state) {
-                if (NK.state.set) NK.state.set({ currentProject: draft });
                 if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
               }
             } catch (_) { }
