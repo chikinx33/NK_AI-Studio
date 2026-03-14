@@ -528,7 +528,6 @@
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" disabled>영상 일괄 생성</button>' +
-      '<button class="btn-ghost theme-toggle top-theme" data-theme-toggle onclick="toggleTheme(\'local\')" aria-label="테마 전환"></button>' +
       '</div>' +
       '</div>'
     );
@@ -867,6 +866,7 @@
             return;
           }
           if (action === 'voice-generate') {
+            if (isSceneVoiceProcessing(scene)) return;
             var voiceAllowed = isVoiceFeatureEnabled((st && st.payload) ? st.payload : {});
             if (!voiceAllowed) {
               alert('나레이션/더빙이 모두 OFF 상태입니다. 음성 생성이 비활성화되었습니다.');
@@ -934,6 +934,7 @@
       var st = ctx.getState();
       if (!st) return;
       var scene = st.scenes[i];
+      if (!scene || isSceneVideoProcessing(scene)) return;
       var projectId = st.draftId || getProjectId();
       if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
       var desiredAspectRatio = resolveEffectiveAspectRatio(st, ctx);
@@ -1339,6 +1340,7 @@
     var aspectRatio = resolveEffectiveAspectRatio(st, ctx);
     st = ensureStateAspectRatio(st, aspectRatio);
     var scene = st.scenes[idx];
+    if (!scene || scene.imgLoading) return;
     // 이미지 프롬프트: Common 스타일 지침과 Visual을 단순 문장으로 결합해 파서 오인 방지
     var common = cleanHeader(st.header || '');
     var primaryVisual = (scene.shot || '').trim();
@@ -1664,6 +1666,14 @@ function isVoiceFeatureEnabled(payload) {
   return !!(toBool(p.narrationEnabled, false) || toBool(p.dubbingEnabled, false));
 }
 
+function isSceneVideoProcessing(scene) {
+  return String((scene && scene.videoStatus) || '').trim().toLowerCase() === 'processing';
+}
+
+function isSceneVoiceProcessing(scene) {
+  return /^생성\s*중/.test(String((scene && scene.voiceStatus) || '').trim());
+}
+
 function normalizeDialogueForScript(value) {
   if (Array.isArray(value)) {
     return value.map(function (d) {
@@ -1730,6 +1740,8 @@ function buildVoiceScriptForVideo(scene, payload) {
 function buildSceneRowHtml(s, header) {
   var st = (typeof ctx !== 'undefined' && ctx && ctx.getState) ? ctx.getState() : null;
   var voiceEnabled = isVoiceFeatureEnabled(st && st.payload ? st.payload : {});
+  var videoBusy = isSceneVideoProcessing(s);
+  var voiceBusy = isSceneVoiceProcessing(s);
   var imagePlayableUrl = toPlayableMediaUrl(s.imageDataUrl || '');
   var videoPlayableUrl = toPlayableMediaUrl(s.videoUrl || '');
   var img = (s.imgLoading
@@ -1759,7 +1771,7 @@ function buildSceneRowHtml(s, header) {
       '<option value="demo-male"' + ((s.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
       '<option value="demo-female"' + ((s.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
       '</select>' +
-      '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '">음성 생성</button>' +
+      '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + s.id + '"' + (voiceBusy ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +
       '<div class="voice-player" data-id="' + s.id + '" style="margin-top:10px;">' +
       '<audio controls preload="auto" style="width:100%;" ' + (s.voiceUrl ? '' : 'disabled') + ' src="' + (s.voiceUrl || '') + '"></audio>' +
@@ -1804,7 +1816,7 @@ function buildSceneRowHtml(s, header) {
     '<button class="btn-secondary compact" data-action="download-image" data-id="' + s.id + '"' + (s.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
     '</div>' +
     '<div class="action-buttons grid video-actions">' +
-    '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '">영상 생성</button>' +
+    '<button class="btn-secondary compact span2" data-action="video" data-id="' + s.id + '"' + (videoBusy ? ' disabled' : '') + '>' + (videoBusy ? '영상 생성중...' : '영상 생성') + '</button>' +
     '<button class="btn-secondary compact" data-action="delete-video" data-id="' + s.id + '"' + (s.videoUrl ? '' : ' disabled') + '>삭제</button>' +
     '<button class="btn-secondary compact" data-action="upload-video" data-id="' + s.id + '">업로드</button>' +
     '<button class="btn-secondary compact" data-action="library-video" data-id="' + s.id + '">저장소</button>' +
