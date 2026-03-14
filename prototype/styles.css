@@ -1777,13 +1777,13 @@ a.btn-primary:active {
 .scenario-card {
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 14px 18px;
+  padding: 16px 14px 20px;
   background: var(--panel);
   position: relative;
   display: flex;
   flex-direction: column;
   height: auto;
-  min-height: 240px;
+  min-height: 258px;
   --scene-field-height: 58px;
   --scene-dialogue-height: 44px;
   cursor: pointer;
