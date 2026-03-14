@@ -52,7 +52,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const userId: string = String(auth.userId || "").trim() || "owner";
     const projectIdStr: string = String(projectId || "").trim();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectIdStr);
-    const objectName = `${projectPrefix}/sfx/voice-${sceneId}.mp3`;
+    const objectName = `${projectPrefix}/sfx/voice-${sceneId}.wav`;
 
     const token = await getGoogleAccessToken({
       clientEmail: clientEmail as string,
@@ -60,18 +60,25 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
     const apiKey = String(env.GOOGLE_API_KEY || "").trim();
+    const promptPlusScript = (finalPrompt || "Speak like an epic fantasy narrator.") + "\n" + script;
     const reqBody = {
       contents: [
         {
           parts: [
-            { text: finalPrompt || "Speak like an epic fantasy narrator." },
-            { text: script }
+            { text: promptPlusScript }
           ]
         }
       ],
       generationConfig: {
         temperature: 0.7,
-        responseMimeType: "audio/mp3"
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "Kore"
+            }
+          }
+        }
       }
     };
     const glBase = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent";
@@ -112,7 +119,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "audio/mpeg",
+        "Content-Type": "audio/wav",
         ...(userProject ? { "X-Goog-User-Project": userProject } : {}),
       },
       body: audioBytes,
