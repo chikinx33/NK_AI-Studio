@@ -1296,7 +1296,7 @@
       e.preventDefault();
       const errEl = document.getElementById('scenario-error');
       if (errEl) errEl.classList.add('hidden');
-      NK.core.setLoading(true);
+      NK.core.setLoading(true, '생성중...');
       const payload = collectPayload();
       const topicLength = String(payload?.topic || '').length;
       const isLongInput = topicLength >= 2800;
@@ -1357,7 +1357,7 @@
     const saveBtn = document.getElementById('save-draft');
     if (saveBtn) {
       saveBtn.onclick = async () => {
-        NK.core.setLoading(true);
+        NK.core.setLoading(true, '저장중...');
         try {
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
           draft.payload = collectPayload();

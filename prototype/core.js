@@ -242,7 +242,7 @@
     return cleaned;
   };
 
-  core.setLoading = function (loading) {
+  core.setLoading = function (loading, message) {
     var submitBtn = document.querySelector('[form="scenario-form"][type="submit"]');
     var overlay =
       document.getElementById('page-loading') ||
@@ -251,14 +251,19 @@
     var err = document.getElementById('scenario-error');
     var confirmBtn = document.getElementById('confirm-scenes');
     var main = document.querySelector('.main');
+    var overlayText = overlay ? overlay.querySelector('p') : null;
+    var defaultMessage = '로딩중...';
 
     if (submitBtn) {
       submitBtn.disabled = loading;
-      submitBtn.textContent = loading ? '생성 중...' : '시나리오 생성';
+      submitBtn.textContent = loading ? '생성중...' : '시나리오 생성';
     }
     if (confirmBtn) {
       confirmBtn.disabled = loading;
-      confirmBtn.textContent = loading ? '컨펌 중...' : '최종 컨펌 → 프로덕션';
+      confirmBtn.textContent = loading ? '컨펌중...' : '최종 컨펌 → 프로덕션';
+    }
+    if (overlayText) {
+      overlayText.textContent = loading ? (message || defaultMessage) : defaultMessage;
     }
     if (overlay) overlay.classList.toggle('hidden', !loading);
     if (main) main.classList.toggle('loading-blur', !!loading);
