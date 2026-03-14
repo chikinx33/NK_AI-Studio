@@ -717,6 +717,41 @@
         clearCurrentProjectStorage();
         if (NK.state && NK.state.set) NK.state.set({ currentProject: null });
     };
+    project.updateLocal = function (projectId, updater, options) {
+        var targetId = String(projectId || '').trim();
+        if (!targetId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return null;
+        var opts = options || {};
+        try {
+            var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+            var idx = drafts.findIndex(function (row) { return String(row && row.id) === targetId; });
+            if (idx < 0) return null;
+
+            var current = drafts[idx];
+            var next = typeof updater === 'function' ? updater(cloneJson(current, current)) : updater;
+            if (!next || typeof next !== 'object') return null;
+            var normalized = normalizeDraft(next);
+            if (!normalized) return null;
+
+            drafts[idx] = normalized;
+            NK.store.saveDrafts(drafts);
+
+            var shouldSyncCurrent = !!opts.forceCurrent;
+            if (!shouldSyncCurrent) {
+                try {
+                    var runtimeId = String(NK.state && NK.state.runtime && NK.state.runtime.currentProject && NK.state.runtime.currentProject.id || '').trim();
+                    var selectedId = String(readStoredSelectedDraft() && readStoredSelectedDraft().id || '').trim();
+                    var summaryId = String(readStoredCurrentProject() && readStoredCurrentProject().id || '').trim();
+                    shouldSyncCurrent = runtimeId === targetId || selectedId === targetId || summaryId === targetId;
+                } catch (_) { }
+            }
+            if (shouldSyncCurrent) {
+                project.setCurrent(normalized);
+            }
+            return normalized;
+        } catch (_) {
+            return null;
+        }
+    };
     project.updatePayload = async function (draftOrId, patch) {
         var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
         if (!draft || !draft.id) throw new Error('project_not_found');

@@ -114,7 +114,11 @@
   }
 
   function updateDraftProject(projectId, updater) {
-    if (!projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return null;
+    if (!projectId) return null;
+    if (NK.service && NK.service.project && NK.service.project.updateLocal) {
+      return NK.service.project.updateLocal(projectId, updater);
+    }
+    if (!NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return null;
     try {
       var drafts = NK.store.getDrafts();
       if (!Array.isArray(drafts)) return null;

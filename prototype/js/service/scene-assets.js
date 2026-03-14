@@ -195,7 +195,13 @@
       return next;
     });
 
-    if (!changed || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return false;
+    if (!changed) return false;
+    if (NK.service && NK.service.project && NK.service.project.updateLocal) {
+      return !!NK.service.project.updateLocal(project.id, function (target) {
+        return Object.assign({}, target, { scenes: nextScenes });
+      });
+    }
+    if (!NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return false;
 
     var drafts = NK.store.getDrafts();
     if (!Array.isArray(drafts)) return false;
@@ -278,19 +284,25 @@
 
     var nextProject = Object.assign({}, project, { scenes: nextScenes });
     try {
-      if (NK.store && NK.store.getDrafts && NK.store.saveDrafts) {
-        var drafts = NK.store.getDrafts();
-        var idx = Array.isArray(drafts)
-          ? drafts.findIndex(function (d) { return String(d && d.id) === String(project.id); })
-          : -1;
-        if (idx >= 0) {
-          drafts[idx] = Object.assign({}, drafts[idx], { scenes: nextScenes });
-          NK.store.saveDrafts(drafts);
+      if (NK.service && NK.service.project && NK.service.project.updateLocal) {
+        NK.service.project.updateLocal(project.id, function (target) {
+          return Object.assign({}, target, { scenes: nextScenes });
+        });
+      } else {
+        if (NK.store && NK.store.getDrafts && NK.store.saveDrafts) {
+          var drafts = NK.store.getDrafts();
+          var idx = Array.isArray(drafts)
+            ? drafts.findIndex(function (d) { return String(d && d.id) === String(project.id); })
+            : -1;
+          if (idx >= 0) {
+            drafts[idx] = Object.assign({}, drafts[idx], { scenes: nextScenes });
+            NK.store.saveDrafts(drafts);
+          }
         }
-      }
-      if (NK.state && NK.state.runtime && NK.state.runtime.currentProject &&
-        String(NK.state.runtime.currentProject.id) === String(project.id)) {
-        NK.state.runtime.currentProject = Object.assign({}, NK.state.runtime.currentProject, { scenes: nextScenes });
+        if (NK.state && NK.state.runtime && NK.state.runtime.currentProject &&
+          String(NK.state.runtime.currentProject.id) === String(project.id)) {
+          NK.state.runtime.currentProject = Object.assign({}, NK.state.runtime.currentProject, { scenes: nextScenes });
+        }
       }
     } catch (_) { }
 
