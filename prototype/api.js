@@ -126,6 +126,15 @@
     return j(text);
   };
 
+  api.ttsVoices = async function () {
+    var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
+    var url = withBase('/api/tts/voices' + (token ? ('?nk_token=' + encodeURIComponent(token)) : ''));
+    var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error((e(text) || 'tts_voices_error'));
+    return j(text);
+  };
+
   api.promptHeader = async function (payload) {
     var res = await fetch(withBase('/api/prompt-header'), {
       method: 'POST',

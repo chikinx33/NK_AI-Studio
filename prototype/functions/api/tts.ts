@@ -35,6 +35,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     const script = scriptRaw.slice(0, 5000);
     const voiceOpt = VOICE_MAP[voiceId] || VOICE_MAP.kr_female_narration;
+    const voiceNameRaw = String(body.voiceName || "").trim();
+    const rateNum = Number(body.speakingRate || 1);
+    const pitchNum = Number(body.pitch || 0);
+    let vLang = voiceOpt.languageCode;
+    let vName = voiceOpt.name;
+    if (voiceNameRaw) {
+      vName = voiceNameRaw;
+      try { vLang = voiceNameRaw.split("-").slice(0, 2).join("-"); } catch { vLang = "ko-KR"; }
+    }
 
     const clientEmail = (env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL) as string | undefined;
     const privateKeyRaw = (env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY) as string | undefined;
@@ -57,6 +66,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     });
 
     const synthUrl = "https://texttospeech.googleapis.com/v1/text:synthesize";
+    const ssmlText = buildSsml(script, rateNum, pitchNum, String(body.ssml || ""));
     const synthRes = await fetch(synthUrl, {
       method: "POST",
       headers: {
@@ -64,9 +74,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        input: { text: script },
-        voice: { languageCode: voiceOpt.languageCode, name: voiceOpt.name },
-        audioConfig: { audioEncoding: "MP3" },
+        input: { ssml: ssmlText },
+        voice: { languageCode: vLang, name: vName },
+        audioConfig: { audioEncoding: "MP3", speakingRate: rateNum, pitch: pitchNum },
       }),
     });
     const synthText = await synthRes.text();
@@ -129,6 +139,16 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
 };
 
 function safeJson(text: string) { try { return JSON.parse(text); } catch { return text; } }
+function escapeXml(s: string) {
+  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+function buildSsml(text: string, rate: number, pitch: number, ssmlOverride: string) {
+  const t = escapeXml(text);
+  if (ssmlOverride && ssmlOverride.trim()) return ssmlOverride.trim();
+  const rateStr = isFinite(rate) ? Math.max(0.5, Math.min(2.0, rate)).toFixed(2) : "1.00";
+  const pitchStr = isFinite(pitch) ? (pitch >= 0 ? `+${pitch}st` : `${pitch}st`) : "+0st";
+  return `<speak><prosody rate="${rateStr}" pitch="${pitchStr}">${t}</prosody></speak>`;
+}
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri || !uri.startsWith("gs://")) return null;
   const rest = uri.slice(5);

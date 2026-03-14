@@ -687,6 +687,21 @@
         sampleVoiceUrl: SAMPLE_VOICE_URL
       });
     }
+    try {
+      if (!window.NK._voiceCatalogLoading && !window.NK._voiceCatalogLoaded) {
+        window.NK._voiceCatalogLoading = true;
+        NK.api.ttsVoices().then(function (res) {
+          var list = Array.isArray(res && res.voices) ? res.voices : [];
+          window.NK._voiceCatalog = list;
+          window.NK._voiceCatalogLoaded = true;
+          hydrateVoiceSelects();
+        }).catch(function () {
+          window.NK._voiceCatalogLoaded = false;
+        }).finally(function () { window.NK._voiceCatalogLoading = false; });
+      } else if (window.NK._voiceCatalogLoaded) {
+        hydrateVoiceSelects();
+      }
+    } catch (_) { }
 
     // 모달 오버레이 클릭 시 닫기
     ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
@@ -723,6 +738,56 @@
       }
     }
   };
+
+  function hydrateVoiceSelects() {
+    var list = Array.isArray(window.NK._voiceCatalog) ? window.NK._voiceCatalog : [];
+    if (!list.length) return;
+    var female = list.filter(function (v) { return String(v.ssmlGender || '').toUpperCase() === 'FEMALE'; });
+    var male = list.filter(function (v) { return String(v.ssmlGender || '').toUpperCase() === 'MALE'; });
+    var pick = function (arr, names) {
+      var out = [];
+      var want = names.filter(Boolean);
+      for (var i = 0; i < want.length; i++) {
+        var name = want[i];
+        var v = arr.find(function (x) { return x.name === name; });
+        if (v) out.push(v);
+      }
+      arr.forEach(function (v) { if (!out.find(function (x) { return x.name === v.name; })) out.push(v); });
+      return out;
+    };
+    var femalePref = ['ko-KR-Studio-O', 'ko-KR-Neural2-A', 'ko-KR-Neural2-E', 'ko-KR-Wavenet-A', 'ko-KR-Wavenet-B', 'ko-KR-Standard-A', 'ko-KR-Standard-B'];
+    var malePref = ['ko-KR-Studio-M', 'ko-KR-Neural2-C', 'ko-KR-Neural2-D', 'ko-KR-Neural2-F', 'ko-KR-Wavenet-C', 'ko-KR-Wavenet-D', 'ko-KR-Standard-C', 'ko-KR-Standard-D'];
+    var femaleList = pick(female, femalePref).slice(0, 12);
+    var maleList = pick(male, malePref).slice(0, 12);
+    var childBaseF = femaleList[0] ? femaleList[0].name : 'ko-KR-Neural2-A';
+    var childBaseM = maleList[0] ? maleList[0].name : 'ko-KR-Neural2-C';
+    var buildOption = function (value, label, selected) { return '<option value="' + value + '"' + (selected ? ' selected' : '') + '>' + label + '</option>'; };
+    var selects = document.querySelectorAll('.voice-select');
+    Array.prototype.forEach.call(selects, function (sel) {
+      var cur = sel.value || '';
+      var groups = [];
+      var femOpts = femaleList.map(function (v) { return buildOption('voice:' + v.name, '여성 · ' + v.name, cur === ('voice:' + v.name)); }).join('');
+      var maleOpts = maleList.map(function (v) { return buildOption('voice:' + v.name, '남성 · ' + v.name, cur === ('voice:' + v.name)); }).join('');
+      var childOpts = [
+        buildOption('preset:child:female:' + childBaseF + ':rate=1.15:pitch=6', '어린 소녀', cur.indexOf('preset:child:female:') === 0),
+        buildOption('preset:child:male:' + childBaseM + ':rate=1.12:pitch=4', '어린 소년', cur.indexOf('preset:child:male:') === 0)
+      ].join('');
+      var characterOpts = [
+        buildOption('preset:char:cute:' + childBaseF + ':rate=1.20:pitch=5', '귀여운 캐릭터', cur.indexOf('preset:char:cute:') === 0),
+        buildOption('preset:char:robot:' + maleBaseName(maleList) + ':rate=0.95:pitch=-2', '로봇', cur.indexOf('preset:char:robot:') === 0),
+        buildOption('preset:char:magician:' + maleBaseName(maleList) + ':rate=0.90:pitch=-1', '마법사', cur.indexOf('preset:char:magician:') === 0),
+        buildOption('preset:char:trick:' + childBaseM + ':rate=1.15:pitch=3', '장난꾸러기', cur.indexOf('preset:char:trick:') === 0)
+      ].join('');
+      var html = '' +
+        '<optgroup label="여성">' + femOpts + '</optgroup>' +
+        '<optgroup label="남성">' + maleOpts + '</optgroup>' +
+        '<optgroup label="어린이">' + childOpts + '</optgroup>' +
+        '<optgroup label="캐릭터">' + characterOpts + '</optgroup>';
+      sel.innerHTML = html;
+      if (!cur) sel.value = 'voice:' + (femaleList[0] ? femaleList[0].name : 'ko-KR-Studio-O');
+    });
+    function maleBaseName(list) { return (list && list[0] && list[0].name) ? list[0].name : 'ko-KR-Neural2-C'; }
+  }
 
   async function pollVideoStatus(projectId, jobId, idx, attempt) {
     if (window.NK && NK.uiPipelineVideo && NK.uiPipelineVideo.pollVideoStatus) {

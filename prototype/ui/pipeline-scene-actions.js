@@ -203,7 +203,7 @@
             return;
           }
           var sel = rootEl.querySelector('.voice-select[data-id="' + sceneId + '"]');
-          var voiceId = (sel && sel.value) ? sel.value : 'kr_female_narration';
+          var voiceVal = (sel && sel.value) ? sel.value : 'voice:ko-KR-Studio-O';
           var payloadForScript = (st && st.payload) ? st.payload : {};
           var scriptText = '';
           try {
@@ -214,12 +214,28 @@
           } catch (_) { scriptText = ''; }
           if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
           if (!scriptText) { alert('음성 생성에 사용할 스크립트가 없습니다.'); return; }
-          st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: voiceId, voiceError: '' });
+          st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: voiceVal, voiceError: '' });
           refreshAndPersist(false);
           var oldDisabled = btn.disabled;
           btn.disabled = true;
           try {
-            var resTts = await NK.api.tts({ projectId: projectId, sceneId: sceneId, script: scriptText, voiceId: voiceId });
+            var req = { projectId: projectId, sceneId: sceneId, script: scriptText };
+            if (voiceVal.indexOf('voice:') === 0) {
+              req.voiceName = voiceVal.slice(6);
+            } else if (voiceVal.indexOf('preset:') === 0) {
+              var parts = voiceVal.split(':');
+              var base = parts[3] || 'ko-KR-Neural2-A';
+              req.voiceName = base;
+              var cfg = voiceVal.split(':').slice(4).join(':');
+              var rateM = cfg.match(/rate=([0-9.]+)/);
+              var pitchM = cfg.match(/pitch=([+-]?[0-9]+)/);
+              if (rateM) req.speakingRate = Number(rateM[1]);
+              if (pitchM) req.pitch = Number(pitchM[1]);
+            } else if (/^kr_/.test(voiceVal)) {
+              if (voiceVal === 'kr_female_narration') req.voiceName = 'ko-KR-Neural2-A';
+              else if (voiceVal === 'kr_male_narration') req.voiceName = 'ko-KR-Neural2-B';
+            }
+            var resTts = await NK.api.tts(req);
             var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: vurl ? '완료' : '', voiceUrl: vurl, voiceError: vurl ? '' : '응답에 voiceUrl이 없습니다.' });
             refreshAndPersist(true);
