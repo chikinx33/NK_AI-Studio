@@ -533,6 +533,9 @@
     );
     state.videoModel = videoModel;
     if (scenes && scenes.length) {
+      var voiceCacheKey = 'nk_voice_cache_' + String(state.draftId || '');
+      var voiceCache = {};
+      try { voiceCache = JSON.parse(localStorage.getItem(voiceCacheKey) || '{}') || {}; } catch (_) { voiceCache = {}; }
       pipelineScenes.classList.remove('empty');
       var rows = scenes.map(function (s) {
         var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
@@ -543,9 +546,10 @@
       state.scenes = scenes.map(function (s) {
         var computedPrompt = ['Common', header, 'Visual', (s.shot || ''), 'Duration', ((Math.max(Number(s.estSec) || 0, 1)) + 's.')].join('\\n');
         var finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
+        var cachedVoiceUrl = String((voiceCache && voiceCache[String(s.id)]) || '');
         return Object.assign({}, s, {
           promptText: finalPrompt,
-          voiceUrl: (s.voiceUrl || ''),
+          voiceUrl: (s.voiceUrl || cachedVoiceUrl || ''),
           voiceStatus: (s.voiceStatus || ''),
           voiceVoiceId: (s.voiceVoiceId || ''),
           voiceError: (s.voiceError || ''),

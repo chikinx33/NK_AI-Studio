@@ -238,6 +238,15 @@
             var resTts = await NK.api.tts(req);
             var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: vurl ? '완료' : '', voiceUrl: vurl, voiceError: vurl ? '' : '응답에 voiceUrl이 없습니다.' });
+            try {
+              var cacheKey = 'nk_voice_cache_' + String(projectId || '');
+              var cacheMap = {};
+              try { cacheMap = JSON.parse(localStorage.getItem(cacheKey) || '{}') || {}; } catch (_) { cacheMap = {}; }
+              if (vurl) {
+                cacheMap[String(sceneId)] = vurl;
+                localStorage.setItem(cacheKey, JSON.stringify(cacheMap));
+              }
+            } catch (_) { }
             refreshAndPersist(true);
           } catch (err) {
             var em = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
