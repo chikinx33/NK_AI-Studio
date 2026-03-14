@@ -75,9 +75,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
     };
     const glBase = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent";
-    const glUrl = apiKey ? (glBase + "?key=" + encodeURIComponent(apiKey)) : glBase;
+    if (!apiKey) return send({ error: "GOOGLE_API_KEY missing" }, 500, origin);
+    const glUrl = glBase + "?key=" + encodeURIComponent(apiKey);
     const glHeaders: any = { "Content-Type": "application/json" };
-    if (!apiKey) glHeaders.Authorization = `Bearer ${token}`;
+    console.log("TTS request model: gemini-2.5-flash-tts");
+    console.log("TTS headers", glHeaders);
+    if (glHeaders.Authorization) console.warn("Authorization header detected in TTS request");
     const synthRes = await fetch(glUrl, {
       method: "POST",
       headers: glHeaders,
