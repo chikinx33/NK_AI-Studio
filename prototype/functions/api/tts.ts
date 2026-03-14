@@ -47,7 +47,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const userId: string = String(auth.userId || "").trim() || "owner";
     const projectIdStr: string = String(projectId || "").trim();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectIdStr);
-    const objectName = `${projectPrefix}/audio/${sceneId}.mp3`;
+    const objectName = `${projectPrefix}/sfx/voice-${sceneId}.mp3`;
 
     const token = await getGoogleAccessToken({
       clientEmail: clientEmail as string,
