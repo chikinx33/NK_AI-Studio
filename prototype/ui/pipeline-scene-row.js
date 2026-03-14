@@ -123,6 +123,8 @@
         '</div>'
       );
     }
+    var voiceId = String(scene.voiceVoiceId || 'kr_female_narration');
+    var errorLine = scene.voiceError ? ('<p class="small" style="color:#ff6b6b; margin:6px 0 0;">' + String(scene.voiceError) + '</p>') : '';
     return (
       '<div class="voice-block" style="margin-top:8px;">' +
       '<div class="voice-title-row">' +
@@ -130,14 +132,14 @@
       '</div>' +
       '<div class="voice-row voice-controls">' +
       '<select class="voice-select" data-id="' + scene.id + '" style="flex:1; min-width:120px;">' +
-      '<option value="demo-male"' + ((scene.voiceVoiceId || '') === 'demo-male' ? ' selected' : '') + '>남성 (데모)</option>' +
-      '<option value="demo-female"' + ((scene.voiceVoiceId || '') === 'demo-female' ? ' selected' : '') + '>여성 (데모)</option>' +
+      '<option value="kr_female_narration"' + (voiceId === 'kr_female_narration' ? ' selected' : '') + '>한국어 여성(나레이션)</option>' +
       '</select>' +
       '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + (voiceBusy ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +
       '<div class="voice-player" data-id="' + scene.id + '" style="margin-top:10px;">' +
       '<audio controls preload="auto" style="width:100%;" ' + (scene.voiceUrl ? '' : 'disabled') + ' src="' + (scene.voiceUrl || '') + '"></audio>' +
       '</div>' +
+      errorLine +
       '</div>'
     );
   }

@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.812';
+  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.813';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';

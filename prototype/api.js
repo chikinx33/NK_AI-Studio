@@ -1,4 +1,4 @@
-﻿;(function () {
+;(function () {
   var NK = window.NK || (window.NK = {});
   var api = NK.api || (NK.api = {});
 
@@ -105,6 +105,24 @@
 
   var j = function (t) { try { return JSON.parse(t); } catch (_) { return {}; } };
   var e = function (t) { try { return JSON.parse(t).error; } catch (_) { return t; } };
+
+  api.tts = async function (body) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
+    var res = await fetch(withBase('/api/tts'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload)
+    });
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'tts_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
 
   api.promptHeader = async function (payload) {
     var res = await fetch(withBase('/api/prompt-header'), {

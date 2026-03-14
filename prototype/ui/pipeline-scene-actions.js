@@ -203,23 +203,33 @@
             return;
           }
           var sel = rootEl.querySelector('.voice-select[data-id="' + sceneId + '"]');
-          var voiceId = (sel && sel.value) ? sel.value : 'demo-male';
-          st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: voiceId });
+          var voiceId = (sel && sel.value) ? sel.value : 'kr_female_narration';
+          var payloadForScript = (st && st.payload) ? st.payload : {};
+          var scriptText = '';
+          try {
+            scriptText = String(scene && scene.script ? scene.script : '').trim();
+            if (!scriptText && window.NK && NK.uiPipelineSceneRow && NK.uiPipelineSceneRow.buildVoiceScriptForVideo) {
+              scriptText = String(NK.uiPipelineSceneRow.buildVoiceScriptForVideo(scene, payloadForScript) || '').trim();
+            }
+          } catch (_) { scriptText = ''; }
+          if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+          if (!scriptText) { alert('음성 생성에 사용할 스크립트가 없습니다.'); return; }
+          st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: voiceId, voiceError: '' });
           refreshAndPersist(false);
-          setTimeout(function () {
-            var cur = ctx.getState();
-            if (!cur || !cur.scenes) return;
-            var currentIndex = cur.scenes.findIndex(function (s) { return String(s.id) === String(sceneId); });
-            if (currentIndex < 0) return;
-            cur.scenes[currentIndex] = Object.assign({}, cur.scenes[currentIndex], {
-              voiceStatus: '완료',
-              voiceUrl: opts.sampleVoiceUrl,
-              voiceVoiceId: voiceId
-            });
-            ctx.setState(cur);
-            if (opts.updateSceneRow) opts.updateSceneRow(currentIndex, cur.header || '');
-            if (ctx.persistPipeline) ctx.persistPipeline();
-          }, 1200);
+          var oldDisabled = btn.disabled;
+          btn.disabled = true;
+          try {
+            var resTts = await NK.api.tts({ projectId: projectId, sceneId: sceneId, script: scriptText, voiceId: voiceId });
+            var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
+            st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: vurl ? '완료' : '', voiceUrl: vurl, voiceError: vurl ? '' : '응답에 voiceUrl이 없습니다.' });
+            refreshAndPersist(true);
+          } catch (err) {
+            var msg = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
+            st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: '', voiceError: msg });
+            refreshAndPersist(false);
+          } finally {
+            btn.disabled = oldDisabled;
+          }
           return;
         }
       }
