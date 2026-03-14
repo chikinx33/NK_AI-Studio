@@ -2,6 +2,7 @@
   "name": "nk-studio",
   "private": true,
   "scripts": {
-    "test": "node --test prototype/tests/*.test.mjs"
+    "test": "node --test prototype/tests/*.test.mjs",
+    "start": "node server.js"
   }
 }
