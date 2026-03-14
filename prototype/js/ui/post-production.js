@@ -83,6 +83,10 @@
     return (NK.service && NK.service.sceneAssets) ? NK.service.sceneAssets : null;
   }
 
+  function getPostprodStateService() {
+    return (NK.service && NK.service.postprodState) ? NK.service.postprodState : null;
+  }
+
   function firstFilled(values) {
     for (var i = 0; i < values.length; i++) {
       var v = values[i];
@@ -208,23 +212,15 @@
   }
 
   function getQueryProjectId() {
-    try {
-      var qp = new URLSearchParams(window.location.search);
-      return qp.get('projectId') || qp.get('pid') || '';
-    } catch (_) {
-      return '';
-    }
+    var svc = getPostprodStateService();
+    if (svc && svc.getQueryProjectId) return svc.getQueryProjectId(window.location.search);
+    return '';
   }
 
   function getProjectById(projectId) {
-    if (!projectId || !NK.store || !NK.store.getDrafts) return null;
-    try {
-      var drafts = NK.store.getDrafts();
-      if (!Array.isArray(drafts)) return null;
-      return drafts.find(function (d) { return String(d && d.id) === String(projectId); }) || null;
-    } catch (_) {
-      return null;
-    }
+    var svc = getPostprodStateService();
+    if (svc && svc.getProjectById) return svc.getProjectById(projectId);
+    return null;
   }
 
   function getPipelineProject(projectId) {
@@ -246,35 +242,8 @@
   }
 
   function resolveProject() {
-    try {
-      if (NK.service && NK.service.project && NK.service.project.resolveCurrent) {
-        var resolved = NK.service.project.resolveCurrent({ search: window.location.search });
-        if (resolved && resolved.id) {
-          var fullResolved = getProjectById(resolved.id);
-          return fullResolved || resolved;
-        }
-      }
-    } catch (_) { }
-
-    try {
-      var current = NK.state && NK.state.runtime && NK.state.runtime.currentProject;
-      if (current && current.id) {
-        var fullCurrent = getProjectById(current.id);
-        return fullCurrent || current;
-      }
-    } catch (_) { }
-
-    try {
-      var saved = safeParse(localStorage.getItem('nk_selected_draft'));
-      if (saved && saved.id) {
-        var fullSaved = getProjectById(saved.id);
-        return fullSaved || saved;
-      }
-    } catch (_) { }
-
-    var pid = getQueryProjectId();
-    if (pid) return getProjectById(pid);
-
+    var svc = getPostprodStateService();
+    if (svc && svc.resolveProject) return svc.resolveProject({ search: window.location.search });
     return null;
   }
 
@@ -367,13 +336,8 @@
   }
 
   function getRenderMeta(project) {
-    var rootMeta = project && project.renderMeta;
-    var payloadMeta = project && project.payload && project.payload.renderMeta;
-    var rootOk = rootMeta && typeof rootMeta === 'object';
-    var payloadOk = payloadMeta && typeof payloadMeta === 'object';
-    if (rootOk && payloadOk) return Object.assign({}, payloadMeta, rootMeta);
-    if (rootOk) return Object.assign({}, rootMeta);
-    if (payloadOk) return Object.assign({}, payloadMeta);
+    var svc = getPostprodStateService();
+    if (svc && svc.getRenderMeta) return svc.getRenderMeta(project);
     return {
       status: 'idle',
       progress: 0,
@@ -414,23 +378,10 @@
   }
 
   function persistRenderMeta(metaPatch) {
-    if (!state.projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return;
-    var drafts = NK.store.getDrafts();
-    if (!Array.isArray(drafts)) return;
-    var idx = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
-    if (idx < 0) return;
-
-    var target = Object.assign({}, drafts[idx]);
-    var currentMeta = getRenderMeta(target);
-    var nextMeta = Object.assign({}, currentMeta, metaPatch || {});
-    state.renderMeta = nextMeta;
-
-    var nextPayload = Object.assign({}, target.payload || {});
-    nextPayload.renderMeta = nextMeta;
-    target.payload = nextPayload;
-    target.renderMeta = nextMeta;
-    drafts[idx] = target;
-    NK.store.saveDrafts(drafts);
+    var svc = getPostprodStateService();
+    if (!svc || !svc.persistRenderMeta || !state.projectId) return;
+    var nextProject = svc.persistRenderMeta(state.projectId, metaPatch);
+    state.renderMeta = getRenderMeta(nextProject);
   }
 
   function setDirty(v) {
@@ -680,18 +631,12 @@
 
       // 로컬 드래프트에도 저장 반영 (세션 편집 → 영구 저장)
       try {
-        if (NK.store && NK.store.getDrafts && NK.store.saveDrafts) {
-          var drafts = NK.store.getDrafts();
-          var di = drafts.findIndex(function (d) { return String(d && d.id) === String(state.projectId); });
-          if (di >= 0) {
-            var tgt = Object.assign({}, drafts[di]);
-            var nextPayload = Object.assign({}, tgt.payload || {}, { postTimelineEdits: payload.postTimelineEdits, renderMeta: payload.renderMeta });
-            tgt.payload = nextPayload;
-            tgt.postTimelineEdits = payload.postTimelineEdits;
-            tgt.renderMeta = payload.renderMeta;
-            drafts[di] = tgt;
-            NK.store.saveDrafts(drafts);
-          }
+        var svc = getPostprodStateService();
+        if (svc && svc.applySavedPostProductionPayload) {
+          svc.applySavedPostProductionPayload(state.projectId, {
+            postTimelineEdits: payload.postTimelineEdits,
+            renderMeta: payload.renderMeta
+          });
         }
       } catch (_) { }
       state.sessionEdits = {};
