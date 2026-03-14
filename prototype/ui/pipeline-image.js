@@ -33,7 +33,7 @@
     console.log('Imagen prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
-    opts.updateSceneRow(opts.idx, st.header || '');
+    opts.updateSceneRow(opts.idx, st.header || '', 'image');
 
     try {
       var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: projectId });
@@ -50,7 +50,7 @@
         promptText: scene.promptText
       });
       ctx.setState(st);
-      opts.updateSceneRow(opts.idx, st.header || '');
+      opts.updateSceneRow(opts.idx, st.header || '', 'image');
       console.log('Scene ' + scene.id + ' 이미지 생성 완료');
     } catch (err) {
       var msg = (err && err.message) || '';
@@ -62,14 +62,14 @@
         console.warn('이미지 생성 실패(500), 재시도 ' + (retryCount + 1) + '/2...');
         st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: '재시도 중... (' + (retryCount + 1) + '/2)' });
         ctx.setState(st);
-        opts.updateSceneRow(opts.idx, st.header || '');
+        opts.updateSceneRow(opts.idx, st.header || '', 'image');
         await new Promise(function (resolve) { return setTimeout(resolve, 2000 * Math.pow(2, retryCount)); });
         return opts.retryImage(opts.idx, retryCount + 1);
       }
       var errorMessage = (err && err.message) || '이미지 생성 실패';
       st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: false, imgError: errorMessage + (detail ? ' ' + detail : '') });
       ctx.setState(st);
-      opts.updateSceneRow(opts.idx, st.header || '');
+      opts.updateSceneRow(opts.idx, st.header || '', 'image');
     }
 
     if (ctx.persistPipeline) ctx.persistPipeline();

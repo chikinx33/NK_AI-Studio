@@ -136,7 +136,7 @@
 
     st.scenes[opts.idx] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
     ctx.setState(st);
-    opts.updateSceneRow(opts.idx, st.header || '');
+    opts.updateSceneRow(opts.idx, st.header || '', 'video');
 
     try {
       var durationSeconds = snapVideoDuration(scene.estSec);
@@ -193,7 +193,7 @@
         videoOutputGcsUri: outputGcsUri
       });
       ctx.setState(st);
-      opts.updateSceneRow(opts.idx, st.header || '');
+      opts.updateSceneRow(opts.idx, st.header || '', 'video');
 
       var pollingJobId = jobId || resp.job_id || resp.id || '';
       if (pollingJobId) {
@@ -204,7 +204,7 @@
           videoError: 'no jobId in videoStart response'
         });
         ctx.setState(st);
-        opts.updateSceneRow(opts.idx, st.header || '');
+        opts.updateSceneRow(opts.idx, st.header || '', 'video');
         opts.showCopyableError('영상 생성 실패: jobId 없음', JSON.stringify(resp || {}, null, 2));
       }
     } catch (err) {
@@ -248,13 +248,13 @@
         st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], { videoStatus: 'error', videoError: errMsg });
         console.error('videoStatus error (done+error):', res.error);
         ctx.setState(st);
-        opts.updateSceneRow(opts.idx, st.header || '');
+        opts.updateSceneRow(opts.idx, st.header || '', 'video');
         return;
       }
       if (res.done && !playback) {
         st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], { videoStatus: 'error', videoError: 'done but no playback (가공 실패)' });
         ctx.setState(st);
-        opts.updateSceneRow(opts.idx, st.header || '');
+        opts.updateSceneRow(opts.idx, st.header || '', 'video');
         return;
       }
       if (playback) {
@@ -305,7 +305,7 @@
         videoError: detail ? (msg + ' ' + detail) : msg
       });
       ctx.setState(currentState);
-      opts.updateSceneRow(opts.idx, currentState.header || '');
+      opts.updateSceneRow(opts.idx, currentState.header || '', 'video');
     }
   };
 })();

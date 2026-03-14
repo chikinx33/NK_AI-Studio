@@ -1005,7 +1005,7 @@ function buildSceneRowHtml(s, header) {
   });
 }
 
-function updateSceneRow(idx, headerText) {
+function updateSceneRow(idx, headerText, partHint) {
   // ctx는 IIFE 내부 변수라 외부 헬퍼에서 접근할 수 있도록 ui.__ctx를 참조
   var ctxRef = (typeof ctx !== 'undefined' && ctx) || (window.NK && NK.uiPipeline && NK.uiPipeline.__ctx) || null;
   if (!ctxRef || !ctxRef.getState) return;
@@ -1015,5 +1015,41 @@ function updateSceneRow(idx, headerText) {
   var header = headerText || st.header || '';
   var row = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
   if (!row) { if (NK.uiPipeline && NK.uiPipeline.render) NK.uiPipeline.render(); return; }
+
+  var helpers = getPipelineSceneRowHelpers();
+  var payload = st && st.payload ? st.payload : {};
+  var voiceEnabled = isVoiceFeatureEnabled(payload);
+  var voiceBusy = isSceneVoiceProcessing(scene);
+
+  if (partHint === 'voice' && helpers.buildVoiceBlock) {
+    var target = row.querySelector('.voice-block');
+    if (target) {
+      var html = helpers.buildVoiceBlock(scene, { voiceEnabled: voiceEnabled, voiceBusy: voiceBusy });
+      target.outerHTML = html;
+      return;
+    }
+  }
+  if (partHint === 'image' && helpers.buildImageCard) {
+    var stack = row.querySelector('.scene-media-stack');
+    if (stack) {
+      var oldImage = stack.querySelector('.image-box, .image-placeholder');
+      var imgHtml = helpers.buildImageCard(scene, toPlayableMediaUrl);
+      if (oldImage) oldImage.outerHTML = imgHtml;
+      else stack.insertAdjacentHTML('afterbegin', imgHtml);
+      return;
+    }
+  }
+  if (partHint === 'video' && helpers.buildVideoCard) {
+    var stack2 = row.querySelector('.scene-media-stack');
+    if (stack2) {
+      var oldVideo = stack2.querySelector('.video-box, .video-placeholder');
+      var vidHtml = helpers.buildVideoCard(scene, toPlayableMediaUrl);
+      if (oldVideo) oldVideo.outerHTML = vidHtml;
+      else stack2.insertAdjacentHTML('beforeend', vidHtml);
+      return;
+    }
+  }
+
+  // 폴백: 행 전체 재구성
   row.outerHTML = buildSceneRowHtml(scene, header);
 }

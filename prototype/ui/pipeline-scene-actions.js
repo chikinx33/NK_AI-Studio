@@ -43,9 +43,9 @@
         var scene = st.scenes[idx];
         var projectId = st.draftId || (opts.getProjectId ? opts.getProjectId() : '');
 
-        var refreshAndPersist = function (persist) {
+        var refreshAndPersist = function (persist, part) {
           ctx.setState(st);
-          if (opts.updateSceneRow) opts.updateSceneRow(idx, st.header || '');
+          if (opts.updateSceneRow) opts.updateSceneRow(idx, st.header || '', part);
           if (persist && ctx.persistPipeline) ctx.persistPipeline();
         };
 
@@ -80,7 +80,7 @@
         }
         if (action === 'delete-image') {
           st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: '', imgError: '', imgLoading: false });
-          refreshAndPersist(true);
+          refreshAndPersist(true, 'image');
           return;
         }
         if (action === 'upload-image') {
@@ -122,7 +122,7 @@
             }
             opts.openLibraryModal(items, 'image', function (url) {
               st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
-              refreshAndPersist(true);
+              refreshAndPersist(true, 'image');
             }, projectId);
           } catch (err) {
             alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
@@ -144,7 +144,7 @@
         }
         if (action === 'delete-video') {
           st.scenes[idx] = Object.assign({}, scene, { videoUrl: '', videoError: '', videoStatus: '' });
-          refreshAndPersist(true);
+          refreshAndPersist(true, 'video');
           return;
         }
         if (action === 'upload-video') {
@@ -159,7 +159,7 @@
               var respV = await NK.api.videoUpload(projectId, sceneId, fileV);
               var vurl = respV.signedUrl || respV.url || respV.playbackUrl || '';
               st.scenes[idx] = Object.assign({}, scene, { videoUrl: vurl, videoError: '', videoStatus: vurl ? 'done' : '' });
-              refreshAndPersist(true);
+              refreshAndPersist(true, 'video');
             } catch (err) {
               alert('비디오 업로드 실패: ' + (err && err.message ? err.message : err));
             }
@@ -182,7 +182,7 @@
             }
             opts.openLibraryModal(vitems, 'video', function (url) {
               st.scenes[idx] = Object.assign({}, scene, { videoUrl: url, videoError: '', videoStatus: 'done' });
-              refreshAndPersist(true);
+              refreshAndPersist(true, 'video');
             }, projectId);
           } catch (err) {
             alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));
@@ -215,7 +215,7 @@
           if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
           if (!scriptText) { alert('음성 생성에 사용할 스크립트가 없습니다.'); return; }
           st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: voiceVal, voiceError: '' });
-          refreshAndPersist(false);
+          refreshAndPersist(false, 'voice');
           var oldDisabled = btn.disabled;
           btn.disabled = true;
           try {
@@ -247,7 +247,7 @@
                 localStorage.setItem(cacheKey, JSON.stringify(cacheMap));
               }
             } catch (_) { }
-            refreshAndPersist(true);
+            refreshAndPersist(true, 'voice');
           } catch (err) {
             var em = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
             var msg = em;
@@ -272,7 +272,7 @@
               msg = '스토리지 버킷이 Requester Pays입니다. 서버에 X-Goog-User-Project가 설정되어야 합니다.';
             }
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: '', voiceError: msg });
-            refreshAndPersist(false);
+            refreshAndPersist(false, 'voice');
           } finally {
             btn.disabled = oldDisabled;
           }
