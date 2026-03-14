@@ -1329,15 +1329,32 @@ a.btn-primary:active {
 }
 
 .scenario-character-group {
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 100px) minmax(0, 1fr);
+  column-gap: 6px;
+  row-gap: 4px;
+  align-items: start;
 }
 
 .scenario-character-editor {
   flex: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   align-items: start;
+  grid-column: 1 / -1;
+}
+
+.scenario-character-group .scenario-check-label {
+  min-width: 0;
+  min-height: 34px;
+  align-self: center;
+}
+
+.scenario-character-group #character-input {
+  min-height: 38px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 
 .scenario-character-help {
@@ -1380,27 +1397,27 @@ a.btn-primary:active {
 
 .character-chips {
   display: grid;
-  gap: 8px;
-  min-height: 48px;
-  padding: 2px 0;
+  gap: 6px;
+  min-height: 38px;
+  padding: 0;
 }
 
 .scenario-character-empty {
   margin: 0;
-  min-height: 48px;
-  padding: 12px 14px;
+  min-height: 38px;
+  padding: 9px 12px;
   border-radius: 14px;
   border: 1px dashed var(--border);
   background: color-mix(in srgb, var(--panel) 80%, transparent 20%);
   color: var(--muted);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 .scenario-character-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 8px;
+  gap: 6px;
   align-items: center;
 }
 
@@ -1409,8 +1426,8 @@ a.btn-primary:active {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 42px;
-  padding: 0 12px;
+  min-height: 36px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--layer-soft);
@@ -1439,8 +1456,8 @@ a.btn-primary:active {
 .scenario-character-personality,
 .knowledge-character-personality {
   width: 100%;
-  min-height: 42px;
-  padding: 0 14px;
+  min-height: 36px;
+  padding: 0 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--panel);
