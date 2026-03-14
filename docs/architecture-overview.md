@@ -17,7 +17,7 @@ NK AI Studio is being positioned as:
 - `Project Core`: shared operating context
 - `Creative Studio`: creation
 - `Brand Studio`: operation
-- `Knowledge Hub`: brand context
+- `Brand Hub`: brand context
 - `Brand Intelligence`: analysis and strategy
 
 Reference:
@@ -131,7 +131,7 @@ Project-related state is still split across local drafts, selected project snaps
 
 ### Brand layers are not yet first-class
 
-The current prototype is strong in creation flow, but `Brand Studio`, `Knowledge Hub`, and `Brand Intelligence` are not yet implemented as first-class architectural layers.
+The current prototype is strong in creation flow, but `Brand Studio`, `Brand Hub`, and `Brand Intelligence` are not yet implemented as first-class architectural layers.
 
 ## Recommended Next Refactor Boundary
 

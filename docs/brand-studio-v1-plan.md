@@ -230,7 +230,7 @@ V1에서는 Future-ready Layers를 얇은 데이터 구조만 먼저 준비하�
 2. Content Library 공통화
 3. Brand Studio V1 UI/DB/API
 4. Channel 연결 및 예약 게시
-5. Knowledge Hub 입력 구조 준비
+5. Brand Hub 입력 구조 준비
 6. Analytics 수집 구조 준비
 
 ## 7. Success Criteria

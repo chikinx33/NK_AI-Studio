@@ -682,7 +682,7 @@
       '</div>' +
       '<div class="brand-studio-hero-actions">' +
       '<button class="btn-secondary" data-action="brand-open-analytics">Analytics</button>' +
-      '<button class="btn-secondary" data-action="brand-open-knowledge">Knowledge Hub</button>' +
+      '<button class="btn-secondary" data-action="brand-open-knowledge">브랜드 허브</button>' +
       '<button class="btn-secondary" data-action="brand-open-library">Content Library</button>' +
       '</div>' +
       '</div>' +
@@ -703,9 +703,9 @@
           '</section>'
         : '') +
       '<section class="brand-studio-panel">' +
-      '<div class="brand-studio-panel-head"><h3>Knowledge 스냅샷</h3><span>지금 필요한 규칙만 짧게 확인</span></div>' +
+      '<div class="brand-studio-panel-head"><h3>브랜드 허브 스냅샷</h3><span>지금 필요한 규칙만 짧게 확인</span></div>' +
       '<div class="brand-knowledge-grid">' + knowledgeCards + '</div>' +
-      '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 Knowledge Hub에서 관리합니다.</p>' +
+      '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 브랜드 허브에서 관리합니다.</p>' +
       '</section>' +
       '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 자산 선택</h3><span>긴 목록은 내부 스크롤로 제한하고, 필요한 자산만 고릅니다</span></div>' +

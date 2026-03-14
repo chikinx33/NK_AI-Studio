@@ -68,7 +68,7 @@
       tonePlaceholder: '톤 선택',
       stylePlaceholder: '스타일 선택',
       durationCustomPlaceholder: '직접 입력(초)',
-      knowledgeEmpty: '지식 허브에 저장된 내용이 아직 없습니다.',
+      knowledgeEmpty: '브랜드 허브에 저장된 내용이 아직 없습니다.',
       knowledgeLabels: {
         brandStory: '브랜드 스토리',
         worldSetting: '세계관/배경',
@@ -89,7 +89,7 @@
       tonePlaceholder: 'Select tone',
       stylePlaceholder: 'Select style',
       durationCustomPlaceholder: 'Enter seconds',
-      knowledgeEmpty: 'No Knowledge Hub content has been saved yet.',
+      knowledgeEmpty: 'No Brand Hub content has been saved yet.',
       knowledgeLabels: {
         brandStory: 'Brand story',
         worldSetting: 'World / setting',
@@ -809,7 +809,7 @@
     if (toneStr) parts.push(`Tone: ${toneStr}`);
     const styleStr = Array.from(new Set([...(p.styles || []), p.style || ''].filter(Boolean))).join(', ');
     if (styleStr) parts.push(`Style: ${styleStr}`);
-    if (knowledge.brandRules.length) parts.push(`Knowledge rules: ${knowledge.brandRules.length}개`);
+    if (knowledge.brandRules.length) parts.push(`Brand Hub rules: ${knowledge.brandRules.length}개`);
     if (knowledge.bannedExpressions.length) parts.push(`Blocked terms: ${knowledge.bannedExpressions.length}개`);
     return parts.join(' · ');
   };

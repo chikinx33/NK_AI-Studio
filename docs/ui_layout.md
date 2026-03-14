@@ -31,7 +31,7 @@ NK_Studio
 ├ Brand Studio
 ├ Channel Manager
 ├ Publish Queue
-├ Knowledge Hub
+├ Brand Hub
 └ Intelligence
 ```
 
@@ -84,7 +84,7 @@ NK_Studio
 - 채널별 게시 상태, 예약 시간, 완료/실패 상태, 오류 메시지
 - 게시 전 미리보기, 캡션, 해시태그, 예약 시간 검토
 
-### 9) Knowledge Hub
+### 9) Brand Hub
 
 - 캐릭터
 - 세계관

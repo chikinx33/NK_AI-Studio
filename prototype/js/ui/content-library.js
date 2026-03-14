@@ -138,7 +138,7 @@
       '<p class="content-library-description">이 화면은 브랜드 자산함이며, 현재 연결된 에피소드는 ' + escapeHtml(currentEpisodeTitle) + '입니다.</p>' +
       '</div>' +
       '<div class="content-library-hero-actions">' +
-      '<button class="btn-secondary" data-action="library-open-knowledge">Knowledge Hub</button>' +
+      '<button class="btn-secondary" data-action="library-open-knowledge">브랜드 허브</button>' +
       '<button class="btn-secondary" data-action="library-open-brand">Brand Studio</button>' +
       '</div>' +
       '</div>' +
@@ -155,7 +155,7 @@
       '<div class="content-library-toolbar">' +
       '<span>현재 브랜드에 연결된 Creative 결과물을 한 곳에서 확인합니다.</span>' +
       '<div class="content-library-toolbar-actions">' +
-      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">Knowledge Hub</a>' +
+      '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">브랜드 허브</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId, brandId)) + '">Brand Studio</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenario.html', projectId, brandId)) + '">시나리오 수정</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('scenes.html', projectId, brandId)) + '">생성 계속</a>' +

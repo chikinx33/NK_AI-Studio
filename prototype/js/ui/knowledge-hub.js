@@ -244,7 +244,7 @@
     root.innerHTML =
       '<section class="knowledge-hub-page">' +
       '<div class="knowledge-hub-hero empty">' +
-      '<h2>Knowledge Hub</h2>' +
+      '<h2>브랜드 허브</h2>' +
       '<p>' + escapeHtml(message || '먼저 프로젝트를 선택해 주세요.') + '</p>' +
       '<div class="knowledge-hub-hero-actions">' +
       '<a class="btn-primary" href="dashboard.html">대시보드로 이동</a>' +
@@ -342,14 +342,14 @@
       '<section class="knowledge-hub-page">' +
       '<div class="knowledge-hub-hero">' +
       '<div>' +
-      '<p class="knowledge-hub-eyebrow">Knowledge Hub</p>' +
+      '<p class="knowledge-hub-eyebrow">브랜드 허브</p>' +
       '<h2>' + escapeHtml(brandTitle) + '</h2>' +
-      '<p class="knowledge-hub-description">' + escapeHtml(brandSummary || '브랜드 요약이 아직 없습니다. Knowledge Hub를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
+      '<p class="knowledge-hub-description">' + escapeHtml(brandSummary || '브랜드 요약이 아직 없습니다. 브랜드 허브를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
       '</div>' +
       '<div class="knowledge-hub-hero-actions">' +
       '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
       '<button class="btn-secondary" data-action="knowledge-open-brand">Brand Studio</button>' +
-      '<button class="btn-primary" data-action="knowledge-save">Knowledge 저장</button>' +
+      '<button class="btn-primary" data-action="knowledge-save">브랜드 허브 저장</button>' +
       '</div>' +
       '</div>' +
       '<div class="knowledge-hub-context-bar">' +
@@ -461,10 +461,10 @@
         syncBrandAndProject(nextKnowledge)
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
-            alert('Knowledge Hub를 저장했습니다.');
+            alert('브랜드 허브를 저장했습니다.');
           })
           .catch(function (err) {
-            alert('Knowledge Hub 저장 실패: ' + (err && err.message ? err.message : err));
+            alert('브랜드 허브 저장 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;
@@ -555,7 +555,7 @@
     var root = document.getElementById('knowledge-hub-root');
     if (!root) return;
     if (!NK.service || !NK.service.project || !NK.service.brand) {
-      renderEmpty(root, 'Knowledge Hub를 불러올 수 없습니다.');
+      renderEmpty(root, '브랜드 허브를 불러올 수 없습니다.');
       return;
     }
     var context = NK.service.brand.getDisplayContext

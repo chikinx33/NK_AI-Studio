@@ -26,7 +26,7 @@
 - **Project Core**: 프로젝트 정보, 브랜드 문맥, 채널, 대표 자산
 - **Creative Studio**: 영상, 이미지, 음원, 문서 제작
 - **Brand Studio**: SNS 콘텐츠 생성, 캡션, 해시태그, 업로드, 예약 게시
-- **Knowledge Hub**: 캐릭터, 세계관, 브랜드 규칙, 참조 콘텐츠
+- **Brand Hub**: 캐릭터, 세계관, 브랜드 규칙, 참조 콘텐츠
 - **Brand Intelligence**: 채널 반응 분석, 콘텐츠 성과 분석, 전략 추천
 
 ## 5. 사용 범위

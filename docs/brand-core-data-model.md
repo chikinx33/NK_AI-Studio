@@ -8,7 +8,7 @@
 
 - `brandId`, `seriesId`, `episode/project`의 역할을 분리한다.
 - 브랜드 공용 문맥과 에피소드 개별 문맥의 경계를 명확히 한다.
-- Brand Studio, Knowledge Hub, Brand Intelligence가 어느 엔티티를 기준으로 동작해야 하는지 고정한다.
+- Brand Studio, Brand Hub, Brand Intelligence가 어느 엔티티를 기준으로 동작해야 하는지 고정한다.
 - 기존 draft payload를 새 구조로 옮길 때의 호환 정책을 정의한다.
 
 ## 2. 핵심 결론
@@ -16,7 +16,7 @@
 - 앞으로 운영의 최상위 단위는 `Brand Core`다.
 - `seriesId`는 제작 묶음 또는 연재 묶음을 나타내는 보조 식별자다.
 - 현재의 `draft/project`는 에피소드 또는 개별 제작 단위로 본다.
-- Brand Studio, Knowledge Hub, Brand Intelligence는 기본적으로 `brandId`를 기준으로 동작한다.
+- Brand Studio, Brand Hub, Brand Intelligence는 기본적으로 `brandId`를 기준으로 동작한다.
 
 정리하면:
 
@@ -56,7 +56,7 @@
 
 설명:
 
-- Knowledge Hub의 기본 저장 대상은 `Brand Core`다.
+- Brand Hub의 기본 저장 대상은 `Brand Core`다.
 - Brand Studio의 캡션/해시태그 기본값은 `Brand Core`를 우선 참조한다.
 - Brand Intelligence의 기본 집계 축은 `Brand Core`다.
 
@@ -276,7 +276,7 @@
 - 선택 단위: `Content Item`
 - 참고 문맥: `Brand Core`, `Channel Profile`
 
-### 6.4 Knowledge Hub
+### 6.4 Brand Hub
 
 - 기본 문맥: `brandId`
 - 저장 대상: `Brand Core`

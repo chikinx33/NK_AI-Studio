@@ -40,7 +40,7 @@ NK AI Studio 전체 구조는 다음 레이어를 기준으로 확장한다.
 - `Project Core`
 - `Creative Studio`
 - `Brand Studio`
-- `Knowledge Hub`
+- `Brand Hub`
 - `Brand Intelligence`
 
 구현 단계에서는 `Content Library`를 Creative 결과물과 Brand 운영을 연결하는 공용 저장 계층으로 사용한다.
@@ -90,9 +90,9 @@ Creative Studio에서 만든 결과물이나 외부/수동 업로드 콘텐츠�
 - 업로드
 - 예약 게시
 
-## 7. Knowledge Hub
+## 7. Brand Hub
 
-Knowledge Hub는 브랜드의 공용 지식 저장소이다.
+Brand Hub는 브랜드의 공용 지식 저장소이다.
 
 저장 범위:
 
@@ -105,7 +105,7 @@ Knowledge Hub는 브랜드의 공용 지식 저장소이다.
 - 참조 콘텐츠
 - 과거 성공 사례
 
-AI는 콘텐츠 생성 시 Knowledge Hub를 참고한다.
+AI는 콘텐츠 생성 시 Brand Hub를 참고한다.
 
 ## 8. Brand Intelligence
 
@@ -137,7 +137,7 @@ Brand Intelligence는 분석 및 전략 레이어이다.
 
 ### V1.5: Knowledge-driven Content
 
-- Knowledge Hub
+- Brand Hub
 - 브랜드 기반 콘텐츠 생성
 
 ### V2: Brand Intelligence
@@ -202,7 +202,7 @@ Brand Studio는 독립된 기능 페이지가 아니다.
 
 ### V1.5 Knowledge-driven Content
 
-- [x] Knowledge Hub 데이터 구조 추가
+- [x] Brand Hub 데이터 구조 추가
 - [x] 브랜드 규칙 기반 생성 입력 연결
 - [x] 프로젝트별 참조 콘텐츠 저장 구조 추가
 

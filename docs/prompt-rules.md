@@ -8,7 +8,7 @@
 - **Audience(Target) + Needs**: 어휘 난이도·예시 선택에만 영향. 플롯/스타일을 바꾸지 않음.
 - **Duration**: 씬 개수·길이 분배만 결정. 감정/스타일에 영향 금지.
 - **Tone(개요 톤)**: 이번 영상에만 적용되는 가변 말투·정서 표현. 시각 묘사 금지. 자유입력 있으면 태그 무시(단일 선택).
-- **Knowledge Hub Tone & Manner(brandVoice)**: 브랜드 전반에서 유지할 고정 화법/말투 기준. 개요 톤과 충돌 시 기본 화법은 brandVoice를 우선하고, 개요 톤은 회차별 분위기·감정 강도 조절에만 사용.
+- **Brand Hub Tone & Manner(brandVoice)**: 브랜드 전반에서 유지할 고정 화법/말투 기준. 개요 톤과 충돌 시 기본 화법은 brandVoice를 우선하고, 개요 톤은 회차별 분위기·감정 강도 조절에만 사용.
 - **Style**: 시각적 룩·질감·조명. 내러티브/톤 금지. 자유입력 있으면 태그 무시(단일 선택).
 - **Mandatory(manualDirectives / brandRules / bannedExpressions)**: 변형 없이 반드시 적용/금지. 충돌 시 개요 톤/스타일보다 우선.
 - **AspectRatio**: 16:9, 9:16, 1:1 등.

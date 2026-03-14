@@ -29,7 +29,7 @@
 - `successCases`
 - `connectedChannels`
 
-이 필드는 Knowledge Hub 또는 Brand Studio의 브랜드 설정에서 수정하며, 수정 즉시 같은 브랜드의 다른 에피소드에도 공통으로 적용된다.
+이 필드는 Brand Hub 또는 Brand Studio의 브랜드 설정에서 수정하며, 수정 즉시 같은 브랜드의 다른 에피소드에도 공통으로 적용된다.
 
 ## 3. Episode Override 허용 필드
 
