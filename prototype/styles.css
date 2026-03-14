@@ -1684,6 +1684,8 @@ a.btn-primary:active {
   flex-direction: column;
   height: auto;
   min-height: 240px;
+  --scene-field-height: 58px;
+  --scene-dialogue-height: 44px;
   cursor: pointer;
 }
 
@@ -1708,22 +1710,25 @@ a.btn-primary:active {
   min-height: 0;
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
-  align-items: start;
+  align-items: center;
   gap: 6px;
 }
 
 .scenario-card .field-label {
   margin: 0;
   flex: 0 0 auto;
-  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  line-height: 1.3;
   white-space: nowrap;
 }
 
 .scenario-card .view-lines,
 .scenario-card .view-shot-lines,
 .scenario-card .view-dialogue-lines {
-  min-height: 58px;
-  max-height: 58px;
+  min-height: var(--scene-field-height);
+  max-height: var(--scene-field-height);
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1739,13 +1744,13 @@ a.btn-primary:active {
 }
 
 .scenario-card .view-shot-lines {
-  min-height: 58px;
-  max-height: 58px;
+  min-height: var(--scene-field-height);
+  max-height: var(--scene-field-height);
 }
 
 .scenario-card .view-dialogue-lines {
-  min-height: 50px;
-  max-height: 50px;
+  min-height: var(--scene-dialogue-height);
+  max-height: var(--scene-dialogue-height);
 }
 
 .scenario-card .view-lines[contenteditable="true"],
