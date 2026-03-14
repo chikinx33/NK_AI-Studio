@@ -853,38 +853,6 @@
     return { width: 1280, height: 720 };
   }
 
-  function chooseRecorderMimeType() {
-    if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return '';
-    // 브라우저 로컬 렌더는 webm 계열이 가장 안정적이고,
-    // 최종 mp4 보장은 서버 트랜스코딩에서 담당한다.
-    var candidates = [
-      'video/webm;codecs=vp8',
-      'video/webm',
-      'video/webm;codecs=vp9',
-      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-      'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
-      'video/mp4;codecs=avc1',
-      'video/mp4'
-    ];
-    for (var i = 0; i < candidates.length; i++) {
-      if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
-    }
-    return '';
-  }
-
-  function drawContain(ctx, source, width, height) {
-    if (!ctx || !source) return;
-    var sw = Number(source.videoWidth || source.naturalWidth || source.width || 0);
-    var sh = Number(source.videoHeight || source.naturalHeight || source.height || 0);
-    if (!sw || !sh) return;
-    var scale = Math.min(width / sw, height / sh);
-    var dw = Math.round(sw * scale);
-    var dh = Math.round(sh * scale);
-    var dx = Math.round((width - dw) / 2);
-    var dy = Math.round((height - dh) / 2);
-    ctx.drawImage(source, dx, dy, dw, dh);
-  }
-
   function loadImageSource(url) {
     return new Promise(function (resolve, reject) {
       if (!url) { reject(new Error('empty_image_url')); return; }
@@ -1221,68 +1189,6 @@
     });
   }
 
-  function waitForVideoSeek(video, timeSec, timeoutMs) {
-    return new Promise(function (resolve, reject) {
-      if (!video) { reject(new Error('seek_video_missing')); return; }
-      var target = Math.max(0, Number(timeSec) || 0);
-      if (Math.abs((video.currentTime || 0) - target) <= 0.05) {
-        resolve(video);
-        return;
-      }
-      var done = false;
-      var timeout = setTimeout(function () {
-        if (done) return;
-        done = true;
-        cleanup();
-        reject(new Error('seek_timeout'));
-      }, Math.max(800, Number(timeoutMs) || 2500));
-      var cleanup = function () {
-        clearTimeout(timeout);
-        video.removeEventListener('seeked', onSeeked);
-        video.removeEventListener('error', onError);
-      };
-      var onSeeked = function () {
-        if (done) return;
-        done = true;
-        cleanup();
-        resolve(video);
-      };
-      var onError = function () {
-        if (done) return;
-        done = true;
-        cleanup();
-        reject(new Error('seek_failed'));
-      };
-      video.addEventListener('seeked', onSeeked);
-      video.addEventListener('error', onError);
-      try {
-        video.currentTime = target;
-      } catch (err) {
-        cleanup();
-        reject(err);
-      }
-    });
-  }
-
-  async function preloadRenderVisualSources(clips) {
-    var pairs = await Promise.all((clips || []).map(async function (clip) {
-      if (!clip || !clip.id || !clip.url) return [clip && clip.id, { kind: 'error', error: new Error('clip_url_missing') }];
-      try {
-        if (isVideoUrl(clip.url)) {
-          var video = await loadVideoSourceWithFallback(clip.url, 12000);
-          try { video.pause(); } catch (_) { }
-          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
-          return [clip.id, { kind: 'video', source: video }];
-        }
-        var image = await loadImageSourceWithFallback(clip.url);
-        return [clip.id, { kind: 'image', source: image }];
-      } catch (err) {
-        return [clip.id, { kind: 'error', error: err }];
-      }
-    }));
-    return new Map(pairs);
-  }
-
   function getAudioClipsForRender(model) {
     var tracks = model && Array.isArray(model.tracks) ? model.tracks : [];
     var out = [];
@@ -1302,64 +1208,6 @@
     return out;
   }
 
-  async function preloadRenderAudioBuffers(clips, audioCtx) {
-    var pairs = await Promise.all((clips || []).map(async function (clip) {
-      try {
-        var u = toPlayableMediaUrl(clip && clip.url);
-        if (!u) return [clip.id, null];
-        var res = await fetch(u);
-        var buf = await res.arrayBuffer();
-        var decoded = await audioCtx.decodeAudioData(buf);
-        return [clip.id, decoded];
-      } catch (_) {
-        return [clip && clip.id, null];
-      }
-    }));
-    return new Map(pairs);
-  }
-
-  function scheduleRenderAudio(audioCtx, audioDest, clips, bufMap, baseTime) {
-    var master = audioCtx.createGain();
-    var voiceGain = audioCtx.createGain();
-    var musicGain = audioCtx.createGain();
-    voiceGain.gain.value = 1;
-    musicGain.gain.value = 0.6;
-    voiceGain.connect(master);
-    musicGain.connect(master);
-    master.connect(audioDest);
-    var sources = [];
-    for (var i = 0; i < clips.length; i++) {
-      var clip = clips[i];
-      var buf = bufMap.get(clip.id);
-      if (!buf) continue;
-      var src = audioCtx.createBufferSource();
-      src.buffer = buf;
-      if (clip.type === 'music') src.connect(musicGain); else src.connect(voiceGain);
-      var dur = Math.max(0.01, (clip.end - clip.start));
-      var playDur = Math.min(dur, buf.duration);
-      try { src.start(baseTime + clip.start, 0, playDur); } catch (_) { }
-      sources.push(src);
-    }
-    return { sources: sources, master: master, voiceGain: voiceGain, musicGain: musicGain };
-  }
-
-  function stopRenderAudio(sources, audioCtx) {
-    try {
-      (sources || []).forEach(function (s) { try { s.stop(0); } catch (_) { } });
-    } catch (_) { }
-    try {
-      if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
-    } catch (_) { }
-  }
-
-  function releaseRenderVisualSources(sourceMap) {
-    if (!sourceMap || !sourceMap.forEach) return;
-    sourceMap.forEach(function (entry) {
-      if (!entry || entry.kind !== 'video' || !entry.source) return;
-      releaseVideoSource(entry.source);
-    });
-  }
-
   function getActiveSubtitleLabels(model, sec) {
     var track = getTimelineTrack(model, 'subtitles');
     var clips = track && Array.isArray(track.clips) ? track.clips : [];
@@ -1374,115 +1222,6 @@
       .filter(Boolean);
   }
 
-  function wrapCanvasText(ctx, text, maxWidth) {
-    var paragraphs = String(text || '').split(/\n+/);
-    var lines = [];
-    paragraphs.forEach(function (paragraph) {
-      var chars = Array.from(String(paragraph || ''));
-      if (!chars.length) return;
-      var line = '';
-      chars.forEach(function (ch) {
-        var next = line + ch;
-        if (line && ctx.measureText(next).width > maxWidth) {
-          lines.push(line);
-          line = ch;
-        } else {
-          line = next;
-        }
-      });
-      if (line) lines.push(line);
-    });
-    return lines;
-  }
-
-  function drawSubtitleOverlay(ctx, model, sec, width, height) {
-    if (!ctx || !model || !state.captionsEnabled) return;
-    var labels = getActiveSubtitleLabels(model, sec);
-    if (!labels.length) return;
-
-    ctx.save();
-    var base = Math.max(22, Math.round(width * 0.03));
-    var fontSize = Math.max(14, Math.round(base * (state.captionSizeScale || 1)));
-    var lineHeight = Math.round(fontSize * 1.28);
-    var maxWidth = Math.round(width * 0.8);
-    ctx.font = '700 ' + fontSize + 'px ' + (state.captionFont || 'sans-serif');
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-
-    var lines = [];
-    labels.forEach(function (label) {
-      wrapCanvasText(ctx, label, maxWidth).forEach(function (line) {
-        if (line) lines.push(line);
-      });
-    });
-    if (!lines.length) {
-      ctx.restore();
-      return;
-    }
-
-    var widest = 0;
-    lines.forEach(function (line) {
-      widest = Math.max(widest, ctx.measureText(line).width);
-    });
-    var padX = Math.round(fontSize * 0.7);
-    var padY = Math.round(fontSize * 0.45);
-    var boxWidth = Math.min(maxWidth + padX * 2, Math.ceil(widest) + padX * 2);
-    var boxHeight = (lines.length * lineHeight) + padY * 2;
-    var boxX = Math.round((width - boxWidth) / 2);
-    var boxY = Math.max(16, Math.round(height - boxHeight - Math.max(24, height * 0.06)));
-
-    var bg = String(state.captionBg || '').trim();
-    if (bg && bg !== 'transparent') {
-      ctx.fillStyle = bg;
-      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1);
-    }
-    var effect = String(state.captionEffect || 'none');
-    if (effect === 'shadow') {
-      ctx.shadowColor = 'rgba(0,0,0,0.8)';
-      ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.18));
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = Math.max(1, Math.round(fontSize * 0.06));
-    } else {
-      ctx.shadowColor = 'transparent';
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
-    }
-    var txtColor = state.captionColor || '#ffffff';
-    ctx.fillStyle = txtColor;
-    var doOutline = (effect === 'outline');
-    if (doOutline) {
-      ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.12));
-      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-    }
-    lines.forEach(function (line, idx) {
-      var y = boxY + padY + (idx * lineHeight);
-      if (doOutline) ctx.strokeText(line, width / 2, y);
-      ctx.fillText(line, width / 2, y);
-    });
-    ctx.restore();
-  }
-
-  function runSegment(durationSec, frameFn, progressFn, shouldCancel) {
-    return new Promise(function (resolve) {
-      var start = 0;
-      function step(ts) {
-        if (shouldCancel && shouldCancel()) { resolve(false); return; }
-        if (!start) start = ts;
-        var elapsed = Math.max(0, (ts - start) / 1000);
-        var t = Math.min(durationSec, elapsed);
-        frameFn(t);
-        if (progressFn) progressFn(t);
-        if (elapsed >= durationSec) { resolve(true); return; }
-        requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    });
-  }
-
   function getVisualClipsForRender(model) {
     var track = (model && model.tracks || []).find(function (t) { return t && t.key === 'visuals'; });
     var clips = track && Array.isArray(track.clips) ? track.clips : [];
@@ -1492,234 +1231,38 @@
   }
 
   async function buildRenderedVideoBlob(model, renderJobId) {
-    if (!model) throw new Error('timeline_model_missing');
-    if (typeof MediaRecorder === 'undefined') throw new Error('이 브라우저는 렌더링 녹화를 지원하지 않습니다.');
-    var canvas = document.createElement('canvas');
-    var size = getRenderFrameSize();
-    canvas.width = size.width;
-    canvas.height = size.height;
-    var ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('canvas_context_unavailable');
-    var clips = getVisualClipsForRender(model);
-    if (!clips.length) throw new Error('렌더링할 장면이 없습니다.');
-    var canProxyGs = !!(NK.api && NK.api.mediaProxyUrl);
-    if (!canProxyGs && clips.some(function (c) { return c && String(c.url || '').indexOf('gs://') === 0; })) {
-      throw new Error('씬 미디어 URL이 갱신되지 않았습니다. 프로덕션 라이브러리를 열어 URL을 최신화한 뒤 다시 시도해주세요.');
-    }
-
-    var stream = canvas.captureStream(30);
-    var audioCtx = null;
-    var audioDest = null;
-    var recordStream = stream;
-    try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      audioDest = audioCtx.createMediaStreamDestination();
-      recordStream = new MediaStream(stream.getVideoTracks().concat(audioDest.stream.getAudioTracks()));
-    } catch (_) {
-      recordStream = stream;
-      audioCtx = null;
-      audioDest = null;
-    }
-    var mimeType = chooseRecorderMimeType();
-    var recorder = null;
-    try {
-      recorder = mimeType
-        ? new MediaRecorder(recordStream, { mimeType: mimeType, videoBitsPerSecond: 6000000 })
-        : new MediaRecorder(recordStream, { videoBitsPerSecond: 6000000 });
-    } catch (_) {
-      recorder = new MediaRecorder(recordStream);
-      mimeType = recorder.mimeType || mimeType || 'video/webm';
-    }
-
-    var chunks = [];
-    var stopped = new Promise(function (resolve) {
-      recorder.ondataavailable = function (evt) {
-        if (evt && evt.data && evt.data.size > 0) chunks.push(evt.data);
-      };
-      recorder.onstop = function () {
-        resolve(new Blob(chunks, { type: recorder.mimeType || mimeType || 'video/webm' }));
-      };
+    var svc = getPostprodRenderService();
+    if (!svc || !svc.buildRenderedVideoBlob) throw new Error('postprod_render_service_missing');
+    return svc.buildRenderedVideoBlob({
+      model: model,
+      visualClips: getVisualClipsForRender(model),
+      audioClips: getAudioClipsForRender(model),
+      frameSize: getRenderFrameSize(),
+      playbackDuration: getTimelinePlaybackDuration(model),
+      canProxyGs: !!(NK.api && NK.api.mediaProxyUrl),
+      captions: {
+        enabled: state.captionsEnabled,
+        font: state.captionFont,
+        sizeScale: state.captionSizeScale,
+        color: state.captionColor,
+        bg: state.captionBg,
+        effect: state.captionEffect
+      },
+      getSubtitleLabels: function (sec) {
+        return getActiveSubtitleLabels(model, sec);
+      },
+      shouldCancel: function () {
+        return state.renderJobId !== renderJobId;
+      },
+      onProgress: function (progress) {
+        setRenderMetaLocal({ progress: clamp(progress, 0, 99.8) });
+      },
+      resolveMediaUrl: toPlayableMediaUrl,
+      isVideoUrl: isVideoUrl,
+      loadImageSourceWithFallback: loadImageSourceWithFallback,
+      loadVideoSourceWithFallback: loadVideoSourceWithFallback,
+      releaseVideoSource: releaseVideoSource
     });
-
-    var total = Math.max(1, Number(getTimelinePlaybackDuration(model)) || 1);
-    var processed = 0;
-    var renderSources = await preloadRenderVisualSources(clips);
-    var decodedAudioMap = null;
-    var scheduledAudio = null;
-    var audioClips = getAudioClipsForRender(model);
-    if (audioCtx && audioDest) {
-      try { await audioCtx.resume(); } catch (_) { }
-      if (audioClips && audioClips.length) {
-        try {
-          decodedAudioMap = await preloadRenderAudioBuffers(audioClips, audioCtx);
-        } catch (_) {
-          decodedAudioMap = null;
-        }
-      }
-    }
-    var loadedVisualCount = 0;
-    var failedVisualCount = 0;
-    var lastProgressUpdate = 0;
-    var shouldCancel = function () { return state.renderJobId !== renderJobId; };
-    var reportProgress = function (localElapsed) {
-      var p = ((processed + localElapsed) / total) * 100;
-      var now = Date.now();
-      if (now - lastProgressUpdate < 220) return;
-      lastProgressUpdate = now;
-      setRenderMetaLocal({ progress: clamp(p, 0, 99.8) });
-    };
-
-    var drawBackground = function () {
-      ctx.fillStyle = '#05070d';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    };
-
-    recorder.start(250);
-    if (audioCtx && audioDest) {
-      try {
-        if (decodedAudioMap) {
-          var baseTime = audioCtx.currentTime + 0.12;
-          scheduledAudio = scheduleRenderAudio(audioCtx, audioDest, audioClips, decodedAudioMap, baseTime);
-        } else {
-          var master = audioCtx.createGain();
-          var vGain = audioCtx.createGain();
-          var mGain = audioCtx.createGain();
-          vGain.gain.value = 1;
-          mGain.gain.value = 0.6;
-          vGain.connect(master);
-          mGain.connect(master);
-          master.connect(audioDest);
-          scheduledAudio = { sources: [], master: master, voiceGain: vGain, musicGain: mGain };
-        }
-        if (scheduledAudio && scheduledAudio.voiceGain) {
-          renderSources.forEach(function (entry) {
-            if (entry && entry.kind === 'video' && entry.source) {
-              try {
-                try { entry.source.muted = false; } catch (_) { }
-                try { entry.source.volume = 1; } catch (_) { }
-                var node = audioCtx.createMediaElementSource(entry.source);
-                node.connect(scheduledAudio.voiceGain);
-              } catch (_) { }
-            }
-          });
-        }
-      } catch (_) { }
-    }
-    drawBackground();
-
-    var cursor = 0;
-    for (var i = 0; i < clips.length; i++) {
-      if (shouldCancel()) break;
-      var clip = clips[i];
-      var gap = Math.max(0, clip.start - cursor);
-      if (gap > 0) {
-        var okGap = await runSegment(gap, function (localElapsed) {
-          drawBackground();
-          drawSubtitleOverlay(ctx, model, cursor + localElapsed, canvas.width, canvas.height);
-        }, reportProgress, shouldCancel);
-        processed += gap;
-        if (!okGap) break;
-      }
-
-      var duration = Math.max(0.2, clip.end - clip.start);
-      var renderEntry = renderSources.get(clip.id);
-      if (renderEntry && renderEntry.kind === 'video' && renderEntry.source) {
-        var video = renderEntry.source;
-        try {
-          loadedVisualCount += 1;
-          try { video.pause(); } catch (_) { }
-          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
-          try { await video.play(); } catch (_) { }
-          var okVideo = await runSegment(duration, function (localElapsed) {
-            drawBackground();
-            if (Math.abs((video.currentTime || 0) - localElapsed) > 0.18) {
-              try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
-            }
-            drawContain(ctx, video, canvas.width, canvas.height);
-            drawSubtitleOverlay(ctx, model, clip.start + localElapsed, canvas.width, canvas.height);
-          }, reportProgress, shouldCancel);
-          try { video.pause(); } catch (_) { }
-          processed += duration;
-          if (!okVideo) break;
-        } catch (_) {
-          failedVisualCount += 1;
-          var okVideoFallback = await runSegment(duration, function () {
-            drawBackground();
-            ctx.fillStyle = '#f5c94b';
-            ctx.font = '600 28px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('영상 로드 실패', canvas.width / 2, canvas.height / 2);
-            drawSubtitleOverlay(ctx, model, clip.start, canvas.width, canvas.height);
-          }, reportProgress, shouldCancel);
-          processed += duration;
-          if (!okVideoFallback) break;
-        }
-      } else if (renderEntry && renderEntry.kind === 'image' && renderEntry.source) {
-        try {
-          var image = renderEntry.source;
-          loadedVisualCount += 1;
-          var okImage = await runSegment(duration, function (localElapsed) {
-            drawBackground();
-            drawContain(ctx, image, canvas.width, canvas.height);
-            drawSubtitleOverlay(ctx, model, clip.start + localElapsed, canvas.width, canvas.height);
-          }, reportProgress, shouldCancel);
-          processed += duration;
-          if (!okImage) break;
-        } catch (_) {
-          failedVisualCount += 1;
-          var okImageFallback = await runSegment(duration, function () {
-            drawBackground();
-            ctx.fillStyle = '#f5c94b';
-            ctx.font = '600 28px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText('이미지 로드 실패', canvas.width / 2, canvas.height / 2);
-            drawSubtitleOverlay(ctx, model, clip.start, canvas.width, canvas.height);
-          }, reportProgress, shouldCancel);
-          processed += duration;
-          if (!okImageFallback) break;
-        }
-      } else {
-        failedVisualCount += 1;
-        var okMissing = await runSegment(duration, function (localElapsed) {
-          drawBackground();
-          ctx.fillStyle = '#f5c94b';
-          ctx.font = '600 28px sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('씬 소스 없음', canvas.width / 2, canvas.height / 2);
-          drawSubtitleOverlay(ctx, model, clip.start + localElapsed, canvas.width, canvas.height);
-        }, reportProgress, shouldCancel);
-        processed += duration;
-        if (!okMissing) break;
-      }
-
-      cursor = Math.max(cursor, clip.end);
-    }
-
-    if (!shouldCancel() && cursor < total) {
-      var tail = total - cursor;
-      await runSegment(tail, function (localElapsed) {
-        drawBackground();
-        drawSubtitleOverlay(ctx, model, cursor + localElapsed, canvas.width, canvas.height);
-      }, reportProgress, shouldCancel);
-      processed += tail;
-    }
-
-    try { recorder.stop(); } catch (_) { }
-    var blob = await stopped;
-    releaseRenderVisualSources(renderSources);
-    if (scheduledAudio || audioCtx) {
-      try { stopRenderAudio(scheduledAudio && scheduledAudio.sources || [], audioCtx); } catch (_) { }
-    }
-    if (shouldCancel()) throw new Error('render_canceled');
-    if (!blob || !blob.size) {
-      throw new Error('렌더링 결과 비디오를 생성하지 못했습니다.');
-    }
-    return {
-      blob: blob,
-      mimeType: blob.type || recorder.mimeType || mimeType || 'video/webm',
-      allVisualsFailed: loadedVisualCount <= 0 && failedVisualCount > 0,
-      durationSec: Math.max(0.2, Number(total) || 0)
-    };
   }
 
   async function startRenderProcess(isRerender) {
