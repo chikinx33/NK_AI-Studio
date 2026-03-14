@@ -1328,32 +1328,38 @@ a.btn-primary:active {
   flex-shrink: 0;
 }
 
-.scenario-character-group {
+.scenario-form .scenario-character-group {
   display: grid;
   grid-template-columns: minmax(0, 100px) minmax(0, 1fr);
   column-gap: 6px;
   row-gap: 6px;
   align-items: start;
+  margin-bottom: 4px;
 }
 
-.scenario-character-input-row {
+.scenario-form .scenario-character-input-row {
   grid-column: 2;
   min-width: 0;
   width: 100%;
 }
 
-.scenario-character-group .scenario-check-label {
+.scenario-form .scenario-character-group .scenario-check-label {
   min-width: 100px;
   width: 100px;
   min-height: 38px;
   align-self: flex-start;
 }
 
-.scenario-character-group .character-chips {
+.scenario-form .scenario-character-group .character-chips {
   grid-column: 1 / -1;
+  display: grid;
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  justify-content: stretch;
 }
 
-.scenario-character-group #character-input {
+.scenario-form .scenario-character-group #character-input {
   min-height: 38px;
   padding-top: 6px;
   padding-bottom: 6px;
@@ -1387,13 +1393,12 @@ a.btn-primary:active {
   justify-content: flex-end;
 }
 
-.character-chips {
+.scenario-form .character-chips {
   display: grid;
   gap: 6px;
   min-height: 38px;
   padding: 0;
   width: 100%;
-  justify-content: flex-start;
 }
 
 .scenario-character-empty {
@@ -1408,7 +1413,7 @@ a.btn-primary:active {
   line-height: 1.4;
 }
 
-.scenario-character-row {
+.scenario-form .scenario-character-row {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 8px;
@@ -6878,18 +6883,18 @@ body.layout-fixed .lib-content {
 }
 
 @media (max-width: 980px) {
-  .scenario-character-group {
+  .scenario-form .scenario-character-group {
     grid-template-columns: 1fr;
   }
 
-  .scenario-character-group .scenario-check-label,
-  .scenario-character-input-row,
-  .scenario-character-group .character-chips {
+  .scenario-form .scenario-character-group .scenario-check-label,
+  .scenario-form .scenario-character-input-row,
+  .scenario-form .scenario-character-group .character-chips {
     grid-column: 1;
     width: 100%;
   }
 
-  .scenario-character-group .scenario-check-label {
+  .scenario-form .scenario-character-group .scenario-check-label {
     min-width: 0;
   }
 }
