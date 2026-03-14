@@ -974,124 +974,12 @@
     }
   }
   ui.refreshAssets = async function () {
-    if (!ctx) return;
-    var st = ctx.getState();
-    if (!st || !st.scenes || !st.scenes.length) return;
-    if (st._assetsRefreshed) return;
-    var pid = st.draftId || '';
-    if (!pid) return;
-    var needImg = st.scenes.some(function (s) {
-      var ref = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
-      return ref && String(ref).indexOf('data:') !== 0;
-    });
-    var needVid = st.scenes.some(function (s) { return s.videoUrl && String(s.videoUrl).indexOf('data:') !== 0; });
-    if (!needImg && !needVid) return;
-    try {
-      var imgItems = [];
-      if (needImg) {
-        try {
-          var j1 = (NK.api && NK.api.library)
-            ? await NK.api.library('image', pid)
-            : null;
-          imgItems = Array.isArray(j1.items) ? j1.items : [];
-        } catch (_) { imgItems = []; }
-      }
-      var vidItems = [];
-      if (needVid) {
-        try {
-          var j2 = (NK.api && NK.api.library)
-            ? await NK.api.library('video', pid)
-            : null;
-          vidItems = Array.isArray(j2.items) ? j2.items : [];
-        } catch (_) { vidItems = []; }
-      }
-      var decodeSafe = function (v) {
-        try { return decodeURIComponent(String(v || '')); } catch (_) { return String(v || ''); }
-      };
-      var baseName = function (u) {
-        try {
-          var urlObj = new URL(String(u));
-          var path = urlObj.pathname;
-          var parts = path.split('/');
-          return decodeSafe(parts[parts.length - 1]);
-        } catch (_) {
-          var parts2 = String(u).split(/[?#]/)[0].split('/');
-          return decodeSafe(parts2[parts2.length - 1]);
-        }
-      };
-      var cleanObjectName = function (v) {
-        var raw = String(v || '').trim();
-        if (!raw) return '';
-        if (raw.indexOf('gs://') === 0) {
-          var rest = raw.slice(5);
-          var slash = rest.indexOf('/');
-          return slash >= 0 ? rest.slice(slash + 1) : '';
-        }
-        return raw.replace(/^\/+/, '');
-      };
-      var buildAssetIndex = function (items) {
-        var byObject = new Map();
-        var byBase = new Map();
-        (items || []).forEach(function (it) {
-          var signed = String((it && it.signedUrl) || '').trim();
-          if (!signed) return;
-          var itemName = String((it && it.name) || '').trim();
-          var objectCandidates = [
-            cleanObjectName(itemName),
-            extractObjectNameFromMediaRef(itemName),
-            extractObjectNameFromMediaRef(signed)
-          ].filter(Boolean);
-          objectCandidates.forEach(function (key) {
-            var normalizedKey = decodeSafe(String(key || '').replace(/^\/+/, ''));
-            if (normalizedKey && !byObject.has(normalizedKey)) byObject.set(normalizedKey, signed);
-          });
-          var bn = baseName(itemName) || baseName(signed);
-          if (bn && !byBase.has(bn)) byBase.set(bn, signed);
-        });
-        return { byObject: byObject, byBase: byBase };
-      };
-      var resolveSignedUrl = function (ref, index) {
-        if (!index) return '';
-        var rawRef = String(ref || '').trim();
-        if (!rawRef) return '';
-        var objKey = extractObjectNameFromMediaRef(rawRef) || cleanObjectName(rawRef);
-        objKey = decodeSafe(String(objKey || '').replace(/^\/+/, ''));
-        if (objKey && index.byObject.has(objKey)) return index.byObject.get(objKey) || '';
-        var bn = baseName(rawRef);
-        if (bn && index.byBase.has(bn)) return index.byBase.get(bn) || '';
-        return '';
-      };
-      var imgIndex = buildAssetIndex(imgItems);
-      var vidIndex = buildAssetIndex(vidItems);
-      var changed = false;
-      st.scenes = st.scenes.map(function (s) {
-        var next = s;
-        var imgRef = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
-        if (needImg && imgRef && String(imgRef).indexOf('data:') !== 0) {
-          var signed1 = resolveSignedUrl(imgRef, imgIndex);
-          if (signed1 && signed1 !== s.imageDataUrl) {
-            next = Object.assign({}, next, { imageDataUrl: signed1 });
-            changed = true;
-          }
-        }
-        if (needVid && s.videoUrl && String(s.videoUrl).indexOf('data:') !== 0) {
-          var signed2 = resolveSignedUrl(s.videoUrl, vidIndex);
-          if (signed2 && signed2 !== s.videoUrl) {
-            next = Object.assign({}, next, { videoUrl: signed2, videoStatus: 'done', videoError: '' });
-            changed = true;
-          }
-        }
-        return next;
+    if (window.NK && NK.uiPipelineAssets && NK.uiPipelineAssets.refreshAssets) {
+      await NK.uiPipelineAssets.refreshAssets({
+        ctx: ctx,
+        render: ui.render,
+        extractObjectNameFromMediaRef: extractObjectNameFromMediaRef
       });
-      ctx.setState(st);
-      if (changed) {
-        ui.render();
-        if (ctx.persistPipeline) ctx.persistPipeline();
-      }
-      st._assetsRefreshed = true;
-      ctx.setState(st);
-    } catch (err) {
-      console.warn('refreshAssets failed:', err && err.message ? err.message : err);
     }
   };
   ui.generateImageForIdx = async function (idx, retryCount) {
