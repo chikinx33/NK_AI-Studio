@@ -308,6 +308,28 @@
     return out;
   };
 
+  const extractLegacyCharacterNames = (value = '') => {
+    return String(value || '')
+      .split(/\n+/)
+      .map((line) => {
+        const raw = sanitizeText(line).replace(/^[\-*•\s]+/, '');
+        if (!raw) return '';
+        if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return '';
+        const match = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：(].*)?$/);
+        if (!match) return '';
+        const candidate = sanitizeText(match[1]).replace(/^@+/, '');
+        if (!candidate || /[.!?]/.test(candidate)) return '';
+        return candidate;
+      })
+      .filter(Boolean);
+  };
+
+  const normalizeKnowledgeCharacters = (list = [], fallbackText = '') => {
+    const normalized = normalizeCharacters(list);
+    if (normalized.length) return normalized;
+    return normalizeCharacters(extractLegacyCharacterNames(fallbackText));
+  };
+
   const syncCharacterSeq = (list = []) => {
     let max = 0;
     (Array.isArray(list) ? list : []).forEach((c) => {
@@ -393,6 +415,10 @@
       brandVoice: sanitizeText(src.brandVoice || ''),
       brandStory: sanitizeText(src.brandStory || ''),
       brandCharacter: sanitizeText(src.brandCharacter || ''),
+      characters: normalizeKnowledgeCharacters(
+        hasNested ? src.characters : (payload?.knowledgeCharacters || []),
+        src.brandCharacter || ''
+      ),
       worldSetting: sanitizeText(src.worldSetting || src.knowledgeWorld || ''),
       brandRules: toArray(src.brandRules),
       bannedExpressions: toArray(src.bannedExpressions || legacyBanned),
@@ -927,7 +953,9 @@
     const rawHeader = draft.header || p.header || '';
     const header = sanitizeHeader(rawHeader);
     const flags = getScenarioFlags(p || {});
-    currentCharacters = normalizeCharacters(p.characters || draft.characters || []);
+    const explicitCharacters = normalizeCharacters(p.characters || draft.characters || []);
+    const knowledgeCharacters = readKnowledgeHub(p || {}).characters || [];
+    currentCharacters = explicitCharacters.length ? explicitCharacters : normalizeKnowledgeCharacters(knowledgeCharacters, p.brandCharacter || '');
     syncCharacterSeq(currentCharacters);
     currentPayload = Object.assign({}, p || {}, flags, { characters: currentCharacters, header });
     const defaults = NK.config.DEFAULTS || {};
@@ -942,7 +970,10 @@
     const selectedDurationCustom = p.durationMode === 'custom'
       ? String(p.durationCustom || durationValue || '')
       : (hasPresetDuration(durationValue) ? '' : durationValue);
-    const charactersEnabled = boolVal(p.charactersEnabled, currentCharacters.length > 0);
+    const hasExplicitCharacterToggle = Object.prototype.hasOwnProperty.call(p || {}, 'charactersEnabled');
+    const charactersEnabled = hasExplicitCharacterToggle
+      ? boolVal(p.charactersEnabled, false)
+      : currentCharacters.length > 0;
 
     if (form.topic) form.topic.value = p.topic || draft.title || '';
     renderOverviewSelects({

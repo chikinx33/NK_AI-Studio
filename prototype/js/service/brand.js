@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
     var NK = window.NK || (window.NK = {});
     var service = NK.service || (NK.service = {});
     var brand = service.brand || (service.brand = {});
@@ -85,6 +85,50 @@
         });
     }
 
+    function extractLegacyCharacterNames(value) {
+        return String(value || '')
+            .split(/\n+/)
+            .map(function (line) {
+                var raw = normalizeText(line).replace(/^[\-*•\s]+/, '');
+                if (!raw) return '';
+                if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return '';
+                var m = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：(].*)?$/);
+                if (!m) return '';
+                var candidate = normalizeText(m[1]).replace(/^@+/, '');
+                if (!candidate || /[\.\!\?]/.test(candidate)) return '';
+                return candidate;
+            })
+            .filter(Boolean);
+    }
+
+    function normalizeCharacterEntries(value, fallbackText) {
+        var src = Array.isArray(value) ? value : [];
+        var out = [];
+        var seen = new Set();
+        src.forEach(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : { displayName: item };
+            var displayName = normalizeText(raw.displayName || raw.name || raw.token).replace(/^@+/, '');
+            if (!displayName) return;
+            var token = '@' + displayName;
+            var key = token.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            out.push({
+                characterId: normalizeText(raw.characterId || raw.id) || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: displayName,
+                token: token
+            });
+        });
+        if (out.length) return out;
+        return extractLegacyCharacterNames(fallbackText).map(function (displayName, index) {
+            return {
+                characterId: 'char_' + String(index + 1).padStart(3, '0'),
+                displayName: displayName,
+                token: '@' + displayName
+            };
+        });
+    }
+
     function storageKeys() {
         var keys = NK.config && NK.config.KEYS ? NK.config.KEYS : {};
         return {
@@ -159,6 +203,7 @@
             brandTone: normalizeText(raw.brandTone || raw.tone),
             brandStory: normalizeText(raw.brandStory),
             brandCharacter: normalizeText(raw.brandCharacter),
+            knowledgeCharacters: normalizeCharacterEntries(raw.knowledgeCharacters, raw.brandCharacter),
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
             bannedExpressions: normalizeTextList(raw.bannedExpressions),
@@ -187,6 +232,23 @@
     function mergeTextList(currentValue, incomingValue) {
         return normalizeTextList([].concat(currentValue || [], incomingValue || [])).filter(function (item, index, arr) {
             return item && arr.indexOf(item) === index;
+        });
+    }
+
+    function mergeCharacterEntries(currentValue, incomingValue) {
+        var map = new Map();
+        normalizeCharacterEntries(currentValue).concat(normalizeCharacterEntries(incomingValue)).forEach(function (item, index) {
+            var token = normalizeText(item && item.token).toLowerCase();
+            if (!token) return;
+            if (map.has(token)) return;
+            map.set(token, {
+                characterId: normalizeText(item.characterId) || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: normalizeText(item.displayName).replace(/^@+/, ''),
+                token: '@' + normalizeText(item.displayName || item.token).replace(/^@+/, '')
+            });
+        });
+        return Array.from(map.values()).filter(function (item) {
+            return item.displayName && item.token;
         });
     }
 
@@ -295,6 +357,7 @@
             brandTone: pickText(current.brandTone, incoming.brandTone, preferIncoming),
             brandStory: pickText(current.brandStory, incoming.brandStory, preferIncoming),
             brandCharacter: pickText(current.brandCharacter, incoming.brandCharacter, preferIncoming),
+            knowledgeCharacters: mergeCharacterEntries(current.knowledgeCharacters, incoming.knowledgeCharacters),
             worldSetting: pickText(current.worldSetting, incoming.worldSetting, preferIncoming),
             brandRules: mergeTextList(current.brandRules, incoming.brandRules),
             bannedExpressions: mergeTextList(current.bannedExpressions, incoming.bannedExpressions),
@@ -385,6 +448,7 @@
             brandTone: payload.brandTone || payload.tone,
             brandStory: knowledge.brandStory || payload.brandStory,
             brandCharacter: knowledge.brandCharacter || payload.brandCharacter,
+            knowledgeCharacters: knowledge.characters || payload.knowledgeCharacters,
             worldSetting: knowledge.worldSetting || payload.worldSetting || payload.knowledgeWorld,
             brandRules: knowledge.brandRules || payload.brandRules,
             bannedExpressions: knowledge.bannedExpressions || payload.bannedExpressions,

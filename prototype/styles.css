@@ -6719,6 +6719,65 @@ body.layout-fixed .lib-content {
   color: var(--muted);
 }
 
+.knowledge-character-field {
+  align-content: start;
+}
+
+.knowledge-character-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(10, 18, 34, 0.62);
+  color: var(--text);
+  font: inherit;
+}
+
+.knowledge-character-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.knowledge-character-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.knowledge-character-remove {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 1;
+}
+
+.knowledge-character-remove:hover {
+  color: var(--text);
+  border-color: rgba(255, 122, 0, 0.55);
+}
+
+.knowledge-character-help {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 .knowledge-hub-field textarea {
   width: 100%;
   min-height: 128px;

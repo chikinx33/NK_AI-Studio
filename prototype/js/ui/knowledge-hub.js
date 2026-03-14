@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var knowledgeHub = ui.knowledgeHub || (ui.knowledgeHub = {});
@@ -43,6 +43,65 @@
       .join('\n');
   }
 
+  function normalizeText(value) {
+    return String(value || '').replace(/[<>]/g, '').trim();
+  }
+
+  function extractLegacyCharacterNames(value) {
+    return String(value || '')
+      .split(/\n+/)
+      .map(function (line) {
+        var raw = normalizeText(line).replace(/^[\-*•\s]+/, '');
+        if (!raw) return '';
+        if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return '';
+        var m = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：(].*)?$/);
+        if (!m) return '';
+        var candidate = normalizeText(m[1]).replace(/^@+/, '');
+        if (!candidate || /[\.\!\?]/.test(candidate)) return '';
+        return candidate;
+      })
+      .filter(Boolean);
+  }
+
+  function normalizeCharacters(value, fallbackText) {
+    var src = Array.isArray(value) ? value : [];
+    var out = [];
+    var seen = {};
+    src.forEach(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : { displayName: item };
+      var displayName = normalizeText(raw.displayName || raw.name || raw.token).replace(/^@+/, '');
+      if (!displayName) return;
+      var token = '@' + displayName;
+      var key = token.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push({
+        characterId: normalizeText(raw.characterId || raw.id) || ('char_' + String(index + 1).padStart(3, '0')),
+        displayName: displayName,
+        token: token
+      });
+    });
+    if (out.length) return out;
+    return extractLegacyCharacterNames(fallbackText).map(function (displayName, index) {
+      return {
+        characterId: 'char_' + String(index + 1).padStart(3, '0'),
+        displayName: displayName,
+        token: '@' + displayName
+      };
+    });
+  }
+
+  function renderCharacterChips(list) {
+    return normalizeCharacters(list).map(function (item) {
+      return (
+        '<span class="knowledge-character-chip" data-character-token="' + escapeHtml(item.token) + '">' +
+        '<span>' + escapeHtml(item.token) + '</span>' +
+        '<button type="button" class="knowledge-character-remove" data-action="knowledge-remove-character" data-character-token="' + escapeHtml(item.token) + '" aria-label="캐릭터 삭제">×</button>' +
+        '</span>'
+      );
+    }).join('');
+  }
+
   function episodeLabel(project) {
     return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
   }
@@ -53,6 +112,7 @@
         brandVoice: String(project.brandVoice || '').trim(),
         brandStory: String(project.brandStory || '').trim(),
         brandCharacter: String(project.brandCharacter || '').trim(),
+        characters: normalizeCharacters(project.knowledgeCharacters, project.brandCharacter),
         worldSetting: String(project.worldSetting || project.knowledgeWorld || '').trim(),
         brandRules: Array.isArray(project.brandRules) ? project.brandRules.slice() : [],
         bannedExpressions: Array.isArray(project.bannedExpressions) ? project.bannedExpressions.slice() : [],
@@ -68,6 +128,7 @@
       brandVoice: '',
       brandStory: '',
       brandCharacter: '',
+      characters: [],
       worldSetting: '',
       brandRules: [],
       bannedExpressions: [],
@@ -104,12 +165,16 @@
     return (knowledge.referenceItems || []).concat([nextItem]);
   }
 
-  function readKnowledgeDraft(root, referenceItems) {
+  function readKnowledgeDraft(root, referenceItems, characters) {
     var items = Array.isArray(referenceItems) ? referenceItems.slice() : [];
+    var normalizedCharacters = normalizeCharacters(characters, (root.querySelector('#knowledge-brand-character') || {}).value || '');
+    var characterDescription = String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim();
     return {
       brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
       brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
-      brandCharacter: String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim(),
+      brandCharacter: characterDescription,
+      characters: normalizedCharacters,
+      knowledgeCharacters: normalizedCharacters,
       worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
       brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
       bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
@@ -140,6 +205,7 @@
     var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
     var payload = (project && project.payload) || {};
     var knowledge = readKnowledge(brand || project);
+    knowledge.characters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
     var brandTitle = String(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '브랜드').trim();
     var brandSummary = String(brand && brand.brandSummary || payload.brandSummary || '').trim();
     var currentEpisodeTitle = episodeLabel(project);
@@ -163,6 +229,7 @@
             brandVoice: nextKnowledge.brandVoice,
             brandStory: nextKnowledge.brandStory,
             brandCharacter: nextKnowledge.brandCharacter,
+            knowledgeCharacters: nextKnowledge.characters,
             worldSetting: nextKnowledge.worldSetting,
             brandRules: nextKnowledge.brandRules,
             bannedExpressions: nextKnowledge.bannedExpressions,
@@ -175,6 +242,7 @@
       if (NK.service && NK.service.project && NK.service.project.updatePayload) {
         tasks.push(NK.service.project.updatePayload(projectId, {
           knowledgeHub: nextKnowledge,
+          knowledgeCharacters: nextKnowledge.characters,
           brandVoice: nextKnowledge.brandVoice,
           brandStory: nextKnowledge.brandStory,
           brandCharacter: nextKnowledge.brandCharacter,
@@ -243,7 +311,11 @@
       '<div class="knowledge-hub-form-grid">' +
       '<label class="knowledge-hub-field"><span>톤&매너</span><textarea id="knowledge-brand-voice" placeholder="예: 따뜻하지만 과장하지 않고, 짧고 명확하게 말한다.">' + escapeHtml(knowledge.brandVoice) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>브랜드 스토리</span><textarea id="knowledge-brand-story" placeholder="브랜드/시리즈가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.">' + escapeHtml(knowledge.brandStory) + '</textarea></label>' +
-      '<label class="knowledge-hub-field"><span>캐릭터/주체</span><textarea id="knowledge-brand-character" placeholder="대표 캐릭터, 화자, 말하는 주체를 적어 주세요.">' + escapeHtml(knowledge.brandCharacter) + '</textarea></label>' +
+      '<div class="knowledge-hub-field knowledge-character-field"><span>캐릭터</span>' +
+      '<input id="knowledge-character-input" class="knowledge-character-input" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" />' +
+      '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterChips(knowledge.characters) + '</div>' +
+      '<p class="knowledge-character-help">@토큰 형식으로 저장되며 개요의 캐릭터 항목에 자동 등록됩니다.</p></div>' +
+      '<label class="knowledge-hub-field"><span>캐릭터/주체 설명</span><textarea id="knowledge-brand-character" placeholder="대표 캐릭터 소개, 화자 역할, 주체 설명이 필요하면 적어 주세요.">' + escapeHtml(knowledge.brandCharacter) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>세계관/배경</span><textarea id="knowledge-world-setting" placeholder="작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.">' + escapeHtml(knowledge.worldSetting) + '</textarea></label>' +
       '</div>' +
       '</section>' +
@@ -305,6 +377,31 @@
       '</section>';
     applyCurrentLocale();
 
+    var currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
+
+    function syncCharacterUi() {
+      var chipBox = root.querySelector('#knowledge-character-chips');
+      if (!chipBox) return;
+      chipBox.innerHTML = renderCharacterChips(currentCharacters);
+    }
+
+    function addCharacter(name) {
+      var displayName = normalizeText(name).replace(/^@+/, '');
+      if (!displayName) return false;
+      var token = '@' + displayName;
+      var exists = currentCharacters.some(function (item) {
+        return String(item.token || '').toLowerCase() === token.toLowerCase();
+      });
+      if (exists) return false;
+      currentCharacters.push({
+        characterId: 'char_' + String(Date.now()),
+        displayName: displayName,
+        token: token
+      });
+      syncCharacterUi();
+      return true;
+    }
+
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
       var target = '';
@@ -314,7 +411,7 @@
       else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
       else if (action === 'knowledge-save') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || []);
+        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters);
         btn.disabled = true;
         syncBrandAndProject(nextKnowledge)
           .then(function (result) {
@@ -337,7 +434,7 @@
           return;
         }
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, nextItems))
+        syncBrandAndProject(readKnowledgeDraft(root, nextItems, currentCharacters))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -356,7 +453,7 @@
           return String(item.id || '') !== removeId;
         });
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, remaining))
+        syncBrandAndProject(readKnowledgeDraft(root, remaining, currentCharacters))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -368,12 +465,31 @@
           });
         return;
       }
+      if (action === 'knowledge-remove-character') {
+        var removeToken = String(btn.dataset.characterToken || '').trim().toLowerCase();
+        if (!removeToken) return;
+        currentCharacters = currentCharacters.filter(function (item) {
+          return String(item.token || '').trim().toLowerCase() !== removeToken;
+        });
+        syncCharacterUi();
+        return;
+      }
 
       if (!target) return;
       if (window.self !== window.top && window.parent) {
         window.parent.postMessage({ type: 'load-stage', url: target }, '*');
       } else {
         window.location.href = target;
+      }
+    };
+
+    root.onkeydown = function (evt) {
+      var targetEl = evt.target;
+      if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
+      if (evt.key !== 'Enter') return;
+      evt.preventDefault();
+      if (addCharacter(targetEl.value || '')) {
+        targetEl.value = '';
       }
     };
   }

@@ -89,6 +89,50 @@
         }).filter(Boolean);
     }
 
+    function extractLegacyCharacterNames(value) {
+        return String(value || '')
+            .split(/\n+/)
+            .map(function (line) {
+                var raw = normalizeText(line).replace(/^[\-*•\s]+/, '');
+                if (!raw) return '';
+                if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return '';
+                var m = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：(].*)?$/);
+                if (!m) return '';
+                var candidate = normalizeText(m[1]).replace(/^@+/, '');
+                if (!candidate || /[\.\!\?]/.test(candidate)) return '';
+                return candidate;
+            })
+            .filter(Boolean);
+    }
+
+    function normalizeCharacterEntries(value, fallbackText) {
+        var src = Array.isArray(value) ? value : [];
+        var out = [];
+        var seen = new Set();
+        src.forEach(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : { displayName: item };
+            var displayName = normalizeText(raw.displayName || raw.name || raw.token).replace(/^@+/, '');
+            if (!displayName) return;
+            var token = '@' + displayName;
+            var key = token.toLowerCase();
+            if (seen.has(key)) return;
+            seen.add(key);
+            out.push({
+                characterId: normalizeText(raw.characterId || raw.id) || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: displayName,
+                token: token
+            });
+        });
+        if (out.length) return out;
+        return extractLegacyCharacterNames(fallbackText).map(function (displayName, index) {
+            return {
+                characterId: 'char_' + String(index + 1).padStart(3, '0'),
+                displayName: displayName,
+                token: '@' + displayName
+            };
+        });
+    }
+
     function normalizeNumber(value) {
         var n = Number(value);
         if (!isFinite(n) || n < 0) return 0;
@@ -150,9 +194,14 @@
     function normalizeKnowledgeHub(source) {
         var hasNested = !!(source && typeof source === 'object' && source.knowledgeHub && typeof source.knowledgeHub === 'object');
         var raw = mergeKnowledgeSource(source);
+        var nested = source && typeof source === 'object' && source.knowledgeHub && typeof source.knowledgeHub === 'object' ? source.knowledgeHub : {};
         var referenceEntries = normalizeReferenceEntries(raw.referenceItems || raw.referenceEntries || raw.referenceContentEntries);
         var referenceContents = normalizeTextList(raw.referenceContents);
         var legacyBanned = !hasNested && !normalizeText(raw.manualDirectives || raw.extraNotes) ? raw.banned : '';
+        var knowledgeCharacters = normalizeCharacterEntries(
+            Array.isArray(nested.characters) ? nested.characters : (source && source.knowledgeCharacters),
+            raw.brandCharacter
+        );
         if (!referenceContents.length && referenceEntries.length) {
             referenceContents = referenceEntries.map(function (item) {
                 return [item.type, item.title, item.note].filter(Boolean).join(' ');
@@ -165,6 +214,7 @@
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
             bannedExpressions: normalizeTextList(raw.bannedExpressions || legacyBanned),
+            characters: knowledgeCharacters,
             referenceContents: referenceContents,
             referenceItems: referenceEntries,
             successCases: normalizeTextList(raw.successCases)
@@ -252,6 +302,7 @@
             worldSetting: normalizeText(src.worldSetting),
             brandKeywords: normalizeTextList(src.brandKeywords),
             brandRules: normalizeTextList(src.brandRules),
+            knowledgeCharacters: normalizeCharacterEntries(src.knowledgeCharacters, src.brandCharacter),
             connectedChannels: (Array.isArray(src.connectedChannels) ? src.connectedChannels : []).map(function (item) {
                 return normalizeText(item && item.channelType || item);
             }).filter(Boolean),
@@ -291,6 +342,7 @@
         var analyticsSnapshots = normalizeAnalyticsSnapshots(merged);
         var nextPayload = Object.assign({}, payload || {}, core);
         nextPayload.knowledgeHub = knowledge;
+        nextPayload.knowledgeCharacters = cloneJson(knowledge.characters, []);
         nextPayload.brandSummary = normalizeText(merged.brandSummary || inheritedBrand.brandSummary);
         nextPayload.coreMessage = normalizeText(merged.coreMessage || inheritedBrand.coreMessage);
         nextPayload.brandVoice = knowledge.brandVoice;
