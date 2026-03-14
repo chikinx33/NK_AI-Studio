@@ -70,10 +70,10 @@
       durationCustomPlaceholder: '직접 입력(초)',
       knowledgeEmpty: '지식 허브에 저장된 내용이 아직 없습니다.',
       knowledgeLabels: {
-        brandVoice: '브랜드 보이스',
         brandStory: '브랜드 스토리',
-        brandCharacter: '대표 캐릭터/주체',
         worldSetting: '세계관/배경',
+        brandCharacter: '대표 캐릭터/주체',
+        brandVoice: '브랜드 화자',
         brandRules: '브랜드 규칙',
         bannedExpressions: '금지 표현',
         referenceContents: '참조 콘텐츠',
@@ -91,10 +91,10 @@
       durationCustomPlaceholder: 'Enter seconds',
       knowledgeEmpty: 'No Knowledge Hub content has been saved yet.',
       knowledgeLabels: {
-        brandVoice: 'Brand voice',
         brandStory: 'Brand story',
-        brandCharacter: 'Main character / subject',
         worldSetting: 'World / setting',
+        brandCharacter: 'Main character / subject',
+        brandVoice: 'Brand speaker',
         brandRules: 'Brand rules',
         bannedExpressions: 'Banned expressions',
         referenceContents: 'Reference content',
@@ -416,10 +416,10 @@
     const knowledge = readKnowledgeHub(payload);
     const uiText = getScenarioUiText();
     const summaryItems = [
-      knowledge.brandVoice ? { key: 'brandVoice', value: knowledge.brandVoice } : null,
       knowledge.brandStory ? { key: 'brandStory', value: knowledge.brandStory } : null,
-      knowledge.brandCharacter ? { key: 'brandCharacter', value: knowledge.brandCharacter } : null,
       knowledge.worldSetting ? { key: 'worldSetting', value: knowledge.worldSetting } : null,
+      knowledge.brandCharacter ? { key: 'brandCharacter', value: knowledge.brandCharacter } : null,
+      knowledge.brandVoice ? { key: 'brandVoice', value: knowledge.brandVoice } : null,
       knowledge.brandRules.length ? { key: 'brandRules', value: knowledge.brandRules.join(', ') } : null,
       knowledge.bannedExpressions.length ? { key: 'bannedExpressions', value: knowledge.bannedExpressions.join(', ') } : null,
       knowledge.referenceContents.length ? { key: 'referenceContents', value: knowledge.referenceContents.join(', ') } : null,
