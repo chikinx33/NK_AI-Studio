@@ -81,11 +81,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         }
       }
     };
-    const glBase = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent";
     if (!apiKey) return send({ error: "GOOGLE_API_KEY missing" }, 500, origin);
+    const preferModel = String(env.GEMINI_TTS_MODEL || "").trim() || "gemini-2.5-flash-preview-tts";
+    const chosenModel = await resolveTtsModel(apiKey, preferModel);
+    const glBase = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent`;
     const glUrl = glBase + "?key=" + encodeURIComponent(apiKey);
     const glHeaders: any = { "Content-Type": "application/json" };
-    console.log("TTS request model: gemini-2.5-flash-tts");
+    console.log("TTS request model: " + chosenModel);
     console.log("TTS headers", glHeaders);
     if (glHeaders.Authorization) console.warn("Authorization header detected in TTS request");
     const synthRes = await fetch(glUrl, {
@@ -190,6 +192,34 @@ function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   const bucket = rest.slice(0, slash);
   const object = rest.slice(slash + 1);
   return { bucket, object };
+}
+
+async function resolveTtsModel(apiKey: string, hint: string): Promise<string> {
+  try {
+    const listUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(apiKey);
+    const res = await fetch(listUrl, { method: "GET" });
+    const text = await res.text();
+    if (!res.ok) return hint;
+    const json = safeJson(text) || {};
+    const models = Array.isArray(json.models) ? json.models : [];
+    const has = (name: string) => models.find((m: any) =>
+      String(m?.name || "") === `models/${name}` &&
+      Array.isArray(m?.supportedGenerationMethods) &&
+      m.supportedGenerationMethods.includes("generateContent")
+    );
+    if (has(hint)) return hint;
+    const prefer = ["gemini-2.5-flash-preview-tts", "gemini-2.0-flash-tts", "gemini-2.5-flash-tts"];
+    for (const p of prefer) if (has(p)) return p;
+    const any = models.find((m: any) =>
+      /tts|audio/i.test(String(m?.name || "")) &&
+      Array.isArray(m?.supportedGenerationMethods) &&
+      m.supportedGenerationMethods.includes("generateContent")
+    );
+    if (any) return String(any.name).replace(/^models\//, "");
+    return hint;
+  } catch {
+    return hint;
+  }
 }
 function gcsToHttps(uri: string) {
   if (!uri.startsWith("gs://")) return uri;
