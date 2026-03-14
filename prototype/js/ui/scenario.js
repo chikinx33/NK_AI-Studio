@@ -651,7 +651,7 @@
       if (currentPayload.episodeTitle && !payload.episodeTitle) payload.episodeTitle = currentPayload.episodeTitle;
     }
     if (NK.service?.project?.applyProjectCore) {
-      Object.assign(payload, NK.service.project.applyProjectCore(payload, currentPayload));
+      Object.assign(payload, NK.service.project.applyProjectCore(payload, { payload: currentPayload }));
     }
     const knowledge = readKnowledgeHub(payload);
     payload.manualDirectives = '';
