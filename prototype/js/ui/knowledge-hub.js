@@ -47,20 +47,58 @@
     return String(value || '').replace(/[<>]/g, '').trim();
   }
 
-  function extractLegacyCharacterNames(value) {
+  function normalizeCharacterName(value) {
+    return normalizeText(value).replace(/^@+/, '').trim();
+  }
+
+  function normalizeCharacterPersonality(value) {
+    return normalizeText(value).replace(/\s+/g, ' ').trim();
+  }
+
+  function getRuntimeLang() {
+    return NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+  }
+
+  function getCharacterUiText() {
+    return getRuntimeLang() === 'en'
+      ? {
+        traitPlaceholder: 'Enter traits (optional)',
+        empty: 'No registered characters.',
+        detailHelp: 'Add a character first to show trait inputs here. You can leave them empty.'
+      }
+      : {
+        traitPlaceholder: '성격 입력(선택)',
+        empty: '등록된 캐릭터가 없습니다.',
+        detailHelp: '캐릭터를 먼저 추가하면 각 성격 입력칸이 여기에 표시됩니다. 비워둬도 저장할 수 있습니다.'
+      };
+  }
+
+  function parseCharacterNoteEntries(value) {
     return String(value || '')
       .split(/\n+/)
       .map(function (line) {
         var raw = normalizeText(line).replace(/^[\-*•\s]+/, '');
-        if (!raw) return '';
-        if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return '';
-        var m = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：(].*)?$/);
-        if (!m) return '';
-        var candidate = normalizeText(m[1]).replace(/^@+/, '');
-        if (!candidate || /[\.\!\?]/.test(candidate)) return '';
-        return candidate;
+        if (!raw) return null;
+        if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return null;
+        var m = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：]\s*(.*))?$/);
+        if (!m) return null;
+        var candidate = normalizeCharacterName(m[1]);
+        if (!candidate || /[\.\!\?]/.test(candidate)) return null;
+        return {
+          displayName: candidate,
+          personality: normalizeCharacterPersonality(m[2] || '')
+        };
       })
       .filter(Boolean);
+  }
+
+  function extractCharacterNoteRemainder(value) {
+    return String(value || '')
+      .split(/\r?\n/)
+      .map(function (line) { return String(line || '').trim(); })
+      .filter(Boolean)
+      .filter(function (line) { return !parseCharacterNoteEntries(line)[0]; })
+      .join('\n');
   }
 
   function normalizeCharacters(value, fallbackText) {
@@ -69,7 +107,7 @@
     var seen = {};
     src.forEach(function (item, index) {
       var raw = item && typeof item === 'object' ? item : { displayName: item };
-      var displayName = normalizeText(raw.displayName || raw.name || raw.token).replace(/^@+/, '');
+      var displayName = normalizeCharacterName(raw.displayName || raw.name || raw.token);
       if (!displayName) return;
       var token = '@' + displayName;
       var key = token.toLowerCase();
@@ -78,17 +116,25 @@
       out.push({
         characterId: normalizeText(raw.characterId || raw.id) || ('char_' + String(index + 1).padStart(3, '0')),
         displayName: displayName,
-        token: token
+        token: token,
+        personality: normalizeCharacterPersonality(raw.personality || raw.description || raw.profile || raw.note || '')
       });
     });
     if (out.length) return out;
-    return extractLegacyCharacterNames(fallbackText).map(function (displayName, index) {
+    return parseCharacterNoteEntries(fallbackText).map(function (item, index) {
       return {
         characterId: 'char_' + String(index + 1).padStart(3, '0'),
-        displayName: displayName,
-        token: '@' + displayName
+        displayName: item.displayName,
+        token: '@' + item.displayName,
+        personality: item.personality
       };
     });
+  }
+
+  function serializeCharacterNotes(list) {
+    return normalizeCharacters(list).map(function (item) {
+      return '• ' + item.displayName + (item.personality ? (' - ' + item.personality) : ' - ');
+    }).join('\n');
   }
 
   function renderCharacterChips(list) {
@@ -98,6 +144,22 @@
         '<span>' + escapeHtml(item.token) + '</span>' +
         '<button type="button" class="knowledge-character-remove" data-action="knowledge-remove-character" data-character-token="' + escapeHtml(item.token) + '" aria-label="캐릭터 삭제">×</button>' +
         '</span>'
+      );
+    }).join('');
+  }
+
+  function renderCharacterDetails(list) {
+    var uiText = getCharacterUiText();
+    var normalized = normalizeCharacters(list);
+    if (!normalized.length) {
+      return '<p class="scenario-character-empty">' + escapeHtml(uiText.empty) + '</p>';
+    }
+    return normalized.map(function (item) {
+      return (
+        '<label class="knowledge-character-row" data-character-id="' + escapeHtml(item.characterId) + '">' +
+        '<span class="knowledge-character-token">' + escapeHtml(item.token) + '</span>' +
+        '<input type="text" class="knowledge-character-personality" data-character-personality="' + escapeHtml(item.characterId) + '" value="' + escapeHtml(item.personality || '') + '" placeholder="' + escapeHtml(uiText.traitPlaceholder) + '" />' +
+        '</label>'
       );
     }).join('');
   }
@@ -165,10 +227,10 @@
     return (knowledge.referenceItems || []).concat([nextItem]);
   }
 
-  function readKnowledgeDraft(root, referenceItems, characters) {
+  function readKnowledgeDraft(root, referenceItems, characters, characterExtras) {
     var items = Array.isArray(referenceItems) ? referenceItems.slice() : [];
-    var normalizedCharacters = normalizeCharacters(characters, (root.querySelector('#knowledge-brand-character') || {}).value || '');
-    var characterDescription = String((root.querySelector('#knowledge-brand-character') || {}).value || '').trim();
+    var normalizedCharacters = normalizeCharacters(characters);
+    var characterDescription = [serializeCharacterNotes(normalizedCharacters), String(characterExtras || '').trim()].filter(Boolean).join('\n');
     return {
       brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
       brandStory: String((root.querySelector('#knowledge-brand-story') || {}).value || '').trim(),
@@ -206,6 +268,8 @@
     var payload = (project && project.payload) || {};
     var knowledge = readKnowledge(brand || project);
     knowledge.characters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
+    var characterUiText = getCharacterUiText();
+    var characterExtras = extractCharacterNoteRemainder(knowledge.brandCharacter);
     var brandTitle = String(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '브랜드').trim();
     var brandSummary = String(brand && brand.brandSummary || payload.brandSummary || '').trim();
     var currentEpisodeTitle = episodeLabel(project);
@@ -315,7 +379,7 @@
       '<input id="knowledge-character-input" class="knowledge-character-input" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" />' +
       '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterChips(knowledge.characters) + '</div>' +
       '<p class="knowledge-character-help">@토큰 형식으로 저장되며 개요의 캐릭터 항목에 자동 등록됩니다.</p></div>' +
-      '<label class="knowledge-hub-field"><span>캐릭터/주체 설명</span><textarea id="knowledge-brand-character" placeholder="대표 캐릭터 소개, 화자 역할, 주체 설명이 필요하면 적어 주세요.">' + escapeHtml(knowledge.brandCharacter) + '</textarea></label>' +
+      '<div class="knowledge-hub-field"><span>캐릭터/주체 설명</span><div id="knowledge-character-details" class="knowledge-character-details">' + renderCharacterDetails(knowledge.characters) + '</div><p class="knowledge-character-help">' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '<label class="knowledge-hub-field"><span>세계관/배경</span><textarea id="knowledge-world-setting" placeholder="작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.">' + escapeHtml(knowledge.worldSetting) + '</textarea></label>' +
       '</div>' +
       '</section>' +
@@ -381,12 +445,13 @@
 
     function syncCharacterUi() {
       var chipBox = root.querySelector('#knowledge-character-chips');
-      if (!chipBox) return;
-      chipBox.innerHTML = renderCharacterChips(currentCharacters);
+      var detailBox = root.querySelector('#knowledge-character-details');
+      if (chipBox) chipBox.innerHTML = renderCharacterChips(currentCharacters);
+      if (detailBox) detailBox.innerHTML = renderCharacterDetails(currentCharacters);
     }
 
     function addCharacter(name) {
-      var displayName = normalizeText(name).replace(/^@+/, '');
+      var displayName = normalizeCharacterName(name);
       if (!displayName) return false;
       var token = '@' + displayName;
       var exists = currentCharacters.some(function (item) {
@@ -396,7 +461,8 @@
       currentCharacters.push({
         characterId: 'char_' + String(Date.now()),
         displayName: displayName,
-        token: token
+        token: token,
+        personality: ''
       });
       syncCharacterUi();
       return true;
@@ -411,7 +477,7 @@
       else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
       else if (action === 'knowledge-save') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters);
+        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras);
         btn.disabled = true;
         syncBrandAndProject(nextKnowledge)
           .then(function (result) {
@@ -434,7 +500,7 @@
           return;
         }
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, nextItems, currentCharacters))
+        syncBrandAndProject(readKnowledgeDraft(root, nextItems, currentCharacters, characterExtras))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -453,7 +519,7 @@
           return String(item.id || '') !== removeId;
         });
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, remaining, currentCharacters))
+        syncBrandAndProject(readKnowledgeDraft(root, remaining, currentCharacters, characterExtras))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -491,6 +557,18 @@
       if (addCharacter(targetEl.value || '')) {
         targetEl.value = '';
       }
+    };
+
+    root.oninput = function (evt) {
+      var targetEl = evt.target;
+      if (!targetEl || !targetEl.matches || !targetEl.matches('[data-character-personality]')) return;
+      var characterId = String(targetEl.getAttribute('data-character-personality') || '').trim();
+      currentCharacters = normalizeCharacters(currentCharacters).map(function (item) {
+        if (String(item.characterId) !== characterId) return item;
+        return Object.assign({}, item, {
+          personality: normalizeCharacterPersonality(targetEl.value || '')
+        });
+      });
     };
   }
 

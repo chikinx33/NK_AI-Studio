@@ -97,16 +97,23 @@
                 <label data-i18n="scenario_style">스타일</label>
                 <select id="style-select"></select>
               </div>
-              <div class="form-group">
+              <div class="form-group scenario-character-group">
                 <label class="scenario-check-label" for="character-enabled">
                   <input id="character-enabled" type="checkbox" />
                   <span data-i18n="scenario_character">캐릭터</span>
                 </label>
-                <input id="character-input" type="text" placeholder="캐릭터 이름 입력 후 Enter (예: 토끼)" data-i18n-placeholder="scenario_character_placeholder" />
-              </div>
-              <div class="form-group character-chip-row">
-                <div class="scenario-label-spacer" aria-hidden="true"></div>
-                <div id="character-chips" class="tag-checkboxes character-chips"></div>
+                <div class="scenario-character-editor">
+                  <div class="scenario-character-column">
+                    <input id="character-input" type="text" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" data-i18n-placeholder="scenario_character_placeholder" />
+                    <div id="character-chips" class="tag-checkboxes character-chips"></div>
+                    <p class="scenario-character-help" data-i18n="scenario_character_help">@토큰 형식으로 저장되며 시나리오 생성에 바로 반영됩니다.</p>
+                  </div>
+                  <div class="scenario-character-notes">
+                    <span data-i18n="scenario_character_notes">캐릭터 성격</span>
+                    <div id="character-details" class="scenario-character-details"></div>
+                    <p class="scenario-character-help" data-i18n="scenario_character_detail_help">캐릭터를 추가하면 오른쪽에 성격 입력칸이 생깁니다. 비워둬도 생성할 수 있습니다.</p>
+                  </div>
+                </div>
               </div>
               <div class="form-group">
                 <label data-i18n="scenario_generation_options">생성 옵션</label>

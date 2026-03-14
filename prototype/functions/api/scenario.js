@@ -663,10 +663,26 @@ function findLastCompleteSceneObject(json = "") {
 }
 
 function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, characters, topic }) {
+  const formatCharacter = (character) => {
+    const token = String(character?.token || "").trim();
+    const displayName = String(character?.displayName || "").trim();
+    const personality = String(character?.personality || "").trim();
+    if (lang === "en") {
+      return personality
+        ? `${token}(${displayName} | traits: ${personality})`
+        : `${token}(${displayName})`;
+    }
+    return personality
+      ? `${token}(${displayName} · 성격: ${personality})`
+      : `${token}(${displayName})`;
+  };
+
   const charGuide = characters.length
     ? (lang === "en"
-      ? `Characters: ${characters.map((c) => `${c.token}(${c.displayName})`).join(", ")}.`
-      : `등록 캐릭터: ${characters.map((c) => `${c.token}(${c.displayName})`).join(", ")}.
+      ? `Characters: ${characters.map(formatCharacter).join(", ")}.
+If traits are provided, keep each character's speaking style and behavior consistent with those traits.`
+      : `등록 캐릭터: ${characters.map(formatCharacter).join(", ")}.
+성격이 주어진 캐릭터는 말투와 행동이 해당 성격에 맞게 일관되게 유지되도록 작성.
 캐릭터 이름이 문장에 등장하면 가능하면 @토큰으로 표기.`)
     : (lang === "en" ? "No registered characters." : "등록된 캐릭터 없음.");
 
@@ -828,6 +844,7 @@ function normalizeCharacters(list = []) {
         characterId: String(c?.characterId || c?.id || `char_${String(idx + 1).padStart(3, "0")}`),
         displayName,
         token,
+        personality: String(c?.personality || c?.description || c?.profile || c?.note || "").trim(),
       };
     })
     .filter(Boolean)

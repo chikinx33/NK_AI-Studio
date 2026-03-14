@@ -251,6 +251,11 @@
   };
   let currentCharacters = [];
   let characterSeq = 1;
+  const getRuntimeLang = () => (NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko');
+  const getScenarioText = (key, fallback = '') => {
+    const lang = getRuntimeLang();
+    return NK.core?.translations?.[lang]?.[key] || fallback;
+  };
 
   // ---------- helpers ----------
   const fmtEst = (sec) => {
@@ -287,13 +292,15 @@
 
   const makeCharacterId = () => `char_${String(characterSeq++).padStart(3, '0')}`;
 
+  const normalizeCharacterName = (value) => sanitizeText(value).replace(/^@+/, '').trim();
+
+  const normalizeCharacterPersonality = (value) => sanitizeText(value).replace(/\s+/g, ' ').trim();
+
   const normalizeCharacters = (list = []) => {
     const seen = new Set();
     const out = [];
     (Array.isArray(list) ? list : []).forEach((c) => {
-      const raw = sanitizeText(c?.displayName || c?.name || c?.token || '');
-      if (!raw) return;
-      const displayName = raw.replace(/^@+/, '').trim();
+      const displayName = normalizeCharacterName(c?.displayName || c?.name || c?.token || '');
       if (!displayName) return;
       const token = `@${displayName}`;
       const key = token.toLowerCase();
@@ -302,24 +309,28 @@
       out.push({
         characterId: sanitizeText(c?.characterId || c?.id) || makeCharacterId(),
         displayName,
-        token
+        token,
+        personality: normalizeCharacterPersonality(c?.personality || c?.description || c?.profile || c?.note || '')
       });
     });
     return out;
   };
 
-  const extractLegacyCharacterNames = (value = '') => {
+  const parseCharacterNoteEntries = (value = '') => {
     return String(value || '')
       .split(/\n+/)
       .map((line) => {
         const raw = sanitizeText(line).replace(/^[\-*•\s]+/, '');
-        if (!raw) return '';
-        if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return '';
-        const match = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：(].*)?$/);
-        if (!match) return '';
-        const candidate = sanitizeText(match[1]).replace(/^@+/, '');
-        if (!candidate || /[.!?]/.test(candidate)) return '';
-        return candidate;
+        if (!raw) return null;
+        if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return null;
+        const match = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：]\s*(.*))?$/);
+        if (!match) return null;
+        const candidate = normalizeCharacterName(match[1]);
+        if (!candidate || /[.!?]/.test(candidate)) return null;
+        return {
+          displayName: candidate,
+          personality: normalizeCharacterPersonality(match[2] || '')
+        };
       })
       .filter(Boolean);
   };
@@ -327,7 +338,7 @@
   const normalizeKnowledgeCharacters = (list = [], fallbackText = '') => {
     const normalized = normalizeCharacters(list);
     if (normalized.length) return normalized;
-    return normalizeCharacters(extractLegacyCharacterNames(fallbackText));
+    return normalizeCharacters(parseCharacterNoteEntries(fallbackText));
   };
 
   const syncCharacterSeq = (list = []) => {
@@ -595,6 +606,9 @@
     const chips = document.getElementById('character-chips');
     if (input) input.disabled = !enabled;
     if (chips) chips.classList.toggle('is-disabled', !enabled);
+    document.querySelectorAll('.scenario-character-personality').forEach((field) => {
+      field.disabled = !enabled;
+    });
   };
 
   const renderOverviewSelects = (state = {}) => {
@@ -689,7 +703,8 @@
     payload.characters = (payload.charactersEnabled ? normalizedCharacters : []).map((c) => ({
       characterId: c.characterId,
       displayName: c.displayName,
-      token: c.token
+      token: c.token,
+      personality: c.personality || ''
     }));
     payload.narrationEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active');
     payload.dubbingEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active');
@@ -843,15 +858,34 @@
 
   const renderCharacterChips = () => {
     const box = document.getElementById('character-chips');
-    if (!box) return;
     const list = normalizeCharacters(currentCharacters);
     currentCharacters = list;
     syncCharacterSeq(list);
-    box.innerHTML = list.map((c) => `
+    if (box) {
+      box.innerHTML = list.map((c) => `
       <span class="character-chip" data-character-id="${c.characterId}">
         <span class="chip-token">${c.token}</span>
         <button type="button" class="chip-remove" data-remove-character="${c.characterId}" aria-label="캐릭터 삭제">×</button>
       </span>
+    `).join('');
+    }
+    const detailBox = document.getElementById('character-details');
+    if (!detailBox) return;
+    if (!list.length) {
+      detailBox.innerHTML = `<p class="scenario-character-empty">${escapeHtml(getScenarioText('scenario_character_empty', '등록된 캐릭터가 없습니다.'))}</p>`;
+      return;
+    }
+    const placeholder = escapeHtml(getScenarioText('scenario_character_trait_placeholder', '성격 입력(선택)'));
+    detailBox.innerHTML = list.map((c) => `
+      <label class="scenario-character-row" data-character-id="${c.characterId}">
+        <span class="scenario-character-token">${escapeHtml(c.token)}</span>
+        <input
+          type="text"
+          class="scenario-character-personality"
+          data-character-personality="${c.characterId}"
+          value="${escapeHtml(c.personality || '')}"
+          placeholder="${placeholder}" />
+      </label>
     `).join('');
   };
 
@@ -991,7 +1025,6 @@
     if (customDurationInput) customDurationInput.value = selectedDurationCustom;
     const characterEnabledInput = document.getElementById('character-enabled');
     if (characterEnabledInput) characterEnabledInput.checked = charactersEnabled;
-
     // toggles
     setActiveButtons('.ratio-btn', p.aspectRatio || '16:9');
     setScenarioToggleButtons(flags);
@@ -1084,7 +1117,7 @@
 
     const addCharacter = (name) => {
       if (!getCharacterEnabled()) return false;
-      const displayName = sanitizeText(name).replace(/^@+/, '');
+      const displayName = normalizeCharacterName(name);
       if (!displayName) return false;
       const token = `@${displayName}`;
       const exists = currentCharacters.some(c => String(c.token || '').toLowerCase() === token.toLowerCase());
@@ -1092,9 +1125,11 @@
       currentCharacters.push({
         characterId: makeCharacterId(),
         displayName,
-        token
+        token,
+        personality: ''
       });
       renderCharacterChips();
+      syncCharacterUi();
       return true;
     };
 
@@ -1156,6 +1191,14 @@
       if (target.id === 'duration-custom-input') {
         syncDurationInputs('custom');
         syncOverviewPayload();
+      } else if (target.matches('[data-character-personality]')) {
+        const characterId = String(target.getAttribute('data-character-personality') || '').trim();
+        currentCharacters = normalizeCharacters(currentCharacters).map((character) => (
+          String(character.characterId) === characterId
+            ? Object.assign({}, character, { personality: normalizeCharacterPersonality(target.value || '') })
+            : character
+        ));
+        syncOverviewPayload();
       }
     });
 
@@ -1166,6 +1209,7 @@
       if (!removeId) return;
       currentCharacters = currentCharacters.filter(c => String(c.characterId) !== String(removeId));
       renderCharacterChips();
+      syncCharacterUi();
       syncOverviewPayload();
     });
 
@@ -1190,6 +1234,7 @@
       if (draft) draft.scenes = mergedScenes;
       renderOverviewSelects(getOverviewSelections());
       syncDurationInputs();
+      renderCharacterChips();
       syncCharacterUi();
       renderKnowledgeHint(currentPayload);
       scenario.renderScenes(mergedScenes.length ? mergedScenes : (draft?.scenes || []));

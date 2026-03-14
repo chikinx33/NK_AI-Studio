@@ -85,18 +85,29 @@
         });
     }
 
-    function extractLegacyCharacterNames(value) {
+    function normalizeCharacterName(value) {
+        return normalizeText(value).replace(/^@+/, '').trim();
+    }
+
+    function normalizeCharacterPersonality(value) {
+        return normalizeText(value).replace(/\s+/g, ' ').trim();
+    }
+
+    function parseLegacyCharacterEntries(value) {
         return String(value || '')
             .split(/\n+/)
             .map(function (line) {
                 var raw = normalizeText(line).replace(/^[\-*•\s]+/, '');
-                if (!raw) return '';
-                if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return '';
-                var m = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：(].*)?$/);
-                if (!m) return '';
-                var candidate = normalizeText(m[1]).replace(/^@+/, '');
-                if (!candidate || /[\.\!\?]/.test(candidate)) return '';
-                return candidate;
+                if (!raw) return null;
+                if (/^(브랜드\s*화자|화자|speaker)$/i.test(raw)) return null;
+                var m = raw.match(/^(@?[^\-–—:：()]{1,24}?)(?:\s*[\-–—:：]\s*(.*))?$/);
+                if (!m) return null;
+                var candidate = normalizeCharacterName(m[1]);
+                if (!candidate || /[\.\!\?]/.test(candidate)) return null;
+                return {
+                    displayName: candidate,
+                    personality: normalizeCharacterPersonality(m[2] || '')
+                };
             })
             .filter(Boolean);
     }
@@ -107,7 +118,7 @@
         var seen = new Set();
         src.forEach(function (item, index) {
             var raw = item && typeof item === 'object' ? item : { displayName: item };
-            var displayName = normalizeText(raw.displayName || raw.name || raw.token).replace(/^@+/, '');
+            var displayName = normalizeCharacterName(raw.displayName || raw.name || raw.token);
             if (!displayName) return;
             var token = '@' + displayName;
             var key = token.toLowerCase();
@@ -116,15 +127,17 @@
             out.push({
                 characterId: normalizeText(raw.characterId || raw.id) || ('char_' + String(index + 1).padStart(3, '0')),
                 displayName: displayName,
-                token: token
+                token: token,
+                personality: normalizeCharacterPersonality(raw.personality || raw.description || raw.profile || raw.note || '')
             });
         });
         if (out.length) return out;
-        return extractLegacyCharacterNames(fallbackText).map(function (displayName, index) {
+        return parseLegacyCharacterEntries(fallbackText).map(function (item, index) {
             return {
                 characterId: 'char_' + String(index + 1).padStart(3, '0'),
-                displayName: displayName,
-                token: '@' + displayName
+                displayName: item.displayName,
+                token: '@' + item.displayName,
+                personality: item.personality
             };
         });
     }
@@ -240,11 +253,19 @@
         normalizeCharacterEntries(currentValue).concat(normalizeCharacterEntries(incomingValue)).forEach(function (item, index) {
             var token = normalizeText(item && item.token).toLowerCase();
             if (!token) return;
-            if (map.has(token)) return;
+            if (map.has(token)) {
+                var existing = map.get(token);
+                if (!existing.personality && item && item.personality) {
+                    existing.personality = normalizeCharacterPersonality(item.personality);
+                    map.set(token, existing);
+                }
+                return;
+            }
             map.set(token, {
                 characterId: normalizeText(item.characterId) || ('char_' + String(index + 1).padStart(3, '0')),
                 displayName: normalizeText(item.displayName).replace(/^@+/, ''),
-                token: '@' + normalizeText(item.displayName || item.token).replace(/^@+/, '')
+                token: '@' + normalizeText(item.displayName || item.token).replace(/^@+/, ''),
+                personality: normalizeCharacterPersonality(item.personality || '')
             });
         });
         return Array.from(map.values()).filter(function (item) {
