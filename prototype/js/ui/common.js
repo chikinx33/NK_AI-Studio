@@ -170,6 +170,8 @@
         'AI가 계속 참고할 기본 문맥': 'Core context the AI keeps referencing',
         '핵심 4개 필드': '4 core fields',
         '브랜드 보이스': 'Brand voice',
+        '톤&매너': 'Tone & Manner',
+        '화자': 'Speaker',
         '브랜드 스토리': 'Brand story',
         '캐릭터/주체': 'Character / narrator',
         '세계관/배경': 'World / setting',

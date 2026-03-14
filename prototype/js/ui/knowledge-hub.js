@@ -241,7 +241,7 @@
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
       '<div class="knowledge-hub-form-grid">' +
-      '<label class="knowledge-hub-field"><span>브랜드 보이스</span><textarea id="knowledge-brand-voice" placeholder="예: 따뜻하지만 과장하지 않고, 짧고 명확하게 말한다.">' + escapeHtml(knowledge.brandVoice) + '</textarea></label>' +
+      '<label class="knowledge-hub-field"><span>톤&매너</span><textarea id="knowledge-brand-voice" placeholder="예: 따뜻하지만 과장하지 않고, 짧고 명확하게 말한다.">' + escapeHtml(knowledge.brandVoice) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>브랜드 스토리</span><textarea id="knowledge-brand-story" placeholder="브랜드/시리즈가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.">' + escapeHtml(knowledge.brandStory) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>캐릭터/주체</span><textarea id="knowledge-brand-character" placeholder="대표 캐릭터, 화자, 말하는 주체를 적어 주세요.">' + escapeHtml(knowledge.brandCharacter) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>세계관/배경</span><textarea id="knowledge-world-setting" placeholder="작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.">' + escapeHtml(knowledge.worldSetting) + '</textarea></label>' +
@@ -265,7 +265,7 @@
       '<section class="knowledge-hub-panel">' +
       '<div class="knowledge-hub-panel-head"><h3>빠른 요약</h3><span>긴 설명 대신 현재 저장 상태만 확인</span></div>' +
       '<div class="knowledge-hub-pill-grid">' +
-      '<div class="knowledge-hub-pill"><span>브랜드 보이스</span><strong>' + escapeHtml(knowledge.brandVoice ? '입력됨' : '비어 있음') + '</strong></div>' +
+      '<div class="knowledge-hub-pill"><span>톤&매너</span><strong>' + escapeHtml(knowledge.brandVoice ? '입력됨' : '비어 있음') + '</strong></div>' +
       '<div class="knowledge-hub-pill"><span>세계관</span><strong>' + escapeHtml(knowledge.worldSetting ? '입력됨' : '비어 있음') + '</strong></div>' +
       '<div class="knowledge-hub-pill"><span>금지 표현</span><strong>' + escapeHtml(bannedCount) + '개</strong></div>' +
       '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +

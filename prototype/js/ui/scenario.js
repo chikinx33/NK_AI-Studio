@@ -73,7 +73,7 @@
         brandStory: '브랜드 스토리',
         worldSetting: '세계관/배경',
         brandCharacter: '대표 캐릭터/주체',
-        brandVoice: '브랜드 화자',
+        brandVoice: '톤&매너',
         brandRules: '브랜드 규칙',
         bannedExpressions: '금지 표현',
         referenceContents: '참조 콘텐츠',
@@ -94,7 +94,7 @@
         brandStory: 'Brand story',
         worldSetting: 'World / setting',
         brandCharacter: 'Main character / subject',
-        brandVoice: 'Brand speaker',
+        brandVoice: 'Tone & Manner',
         brandRules: 'Brand rules',
         bannedExpressions: 'Banned expressions',
         referenceContents: 'Reference content',
@@ -432,7 +432,7 @@
     box.innerHTML = summaryItems.map((item) => `
       <div class="scenario-knowledge-item">
         <strong>${escapeHtml(uiText.knowledgeLabels[item.key] || item.key)}</strong>
-        <span>${escapeHtml(item.value)}</span>
+        <span>${escapeHtml(normalizeKnowledgeDisplayValue(item.key, item.value))}</span>
       </div>
     `).join('');
   };
@@ -475,6 +475,15 @@
   };
 
   const getScenarioUiText = () => SCENARIO_UI_TEXT[getUiLang()] || SCENARIO_UI_TEXT.ko;
+
+  const normalizeKnowledgeDisplayValue = (key, value) => {
+    const raw = String(value || '').trim();
+    if (!raw) return raw;
+    if (key !== 'brandCharacter') return raw;
+    return raw
+      .replace(/(^|\n)\s*브랜드 화자\s*(?=\n|$)/g, '$1화자')
+      .replace(/(^|\n)\s*Brand speaker\s*(?=\n|$)/gi, '$1Speaker');
+  };
 
   const translateScenarioOption = (value) => {
     const raw = String(value || '').trim();
