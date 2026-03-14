@@ -7187,6 +7187,16 @@ body.layout-fixed .lib-content {
   color: var(--text);
 }
 
+.analytics-filter-select option {
+  background: var(--bg-2);
+  color: var(--text);
+}
+
+[data-theme="light"] .analytics-filter-select option {
+  background: #ffffff;
+  color: #0f172a;
+}
+
 .analytics-filter-summary {
   display: flex;
   justify-content: space-between;
@@ -7408,6 +7418,9 @@ body.layout-fixed .lib-content {
 .brand-knowledge-card,
 .brand-content-type-card,
 .brand-studio-selection-summary,
+.brand-asset-selection-summary,
+.brand-asset-card,
+.brand-asset-empty,
 .brand-caption-meta > div,
 .brand-hashtag-meta > div,
 .brand-channel-summary,
@@ -7420,6 +7433,7 @@ body.layout-fixed .lib-content {
 .knowledge-reference-card,
 .knowledge-reference-empty,
 .knowledge-hub-pill,
+.analytics-filter-summary,
 .analytics-channel-card,
 .analytics-type-card,
 .analytics-hashtag-card,
@@ -7432,10 +7446,17 @@ body.layout-fixed .lib-content {
 .brand-caption-textarea,
 .brand-channel-input,
 .brand-publish-input,
+.analytics-filter-select,
 .knowledge-hub-field textarea,
 .knowledge-reference-input,
 .knowledge-reference-textarea {
   background: var(--studio-input-bg);
+}
+
+.brand-asset-selection-summary strong,
+.brand-asset-card strong,
+.analytics-filter-summary strong {
+  color: var(--text);
 }
 
 .brand-content-type-card.is-active,
