@@ -605,18 +605,27 @@
       var project = getProjectByStateId();
       if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
 
-      var payload = Object.assign({}, project.payload || {});
-      payload.postTimelineEdits = getMergedTimelineEdits(project);
-      payload.renderMeta = Object.assign({}, getRenderMeta(project), state.renderMeta || {});
-      if (String(payload.renderMeta.outputSrtUrl || '').indexOf('blob:') === 0) {
-        payload.renderMeta.outputSrtUrl = '';
-      }
-      if (String(payload.renderMeta.outputVideoUrl || '').indexOf('blob:') === 0) {
-        payload.renderMeta.outputVideoUrl = '';
-        payload.renderMeta.outputVideoDownloadUrl = '';
-        payload.renderMeta.outputVideoObjectName = '';
-        payload.renderMeta.outputVideoMime = '';
-      }
+      var svc = getPostprodStateService();
+      var payload = (svc && svc.buildSavePayload)
+        ? svc.buildSavePayload(project, {
+          postTimelineEdits: getMergedTimelineEdits(project),
+          renderMeta: state.renderMeta
+        })
+        : (function () {
+          var nextPayload = Object.assign({}, project.payload || {});
+          nextPayload.postTimelineEdits = getMergedTimelineEdits(project);
+          nextPayload.renderMeta = Object.assign({}, getRenderMeta(project), state.renderMeta || {});
+          if (String(nextPayload.renderMeta.outputSrtUrl || '').indexOf('blob:') === 0) {
+            nextPayload.renderMeta.outputSrtUrl = '';
+          }
+          if (String(nextPayload.renderMeta.outputVideoUrl || '').indexOf('blob:') === 0) {
+            nextPayload.renderMeta.outputVideoUrl = '';
+            nextPayload.renderMeta.outputVideoDownloadUrl = '';
+            nextPayload.renderMeta.outputVideoObjectName = '';
+            nextPayload.renderMeta.outputVideoMime = '';
+          }
+          return nextPayload;
+        })();
 
       await NK.api.projectSave(
         state.projectId,
@@ -629,24 +638,23 @@
         }
       );
 
-      // 로컬 드래프트에도 저장 반영 (세션 편집 → 영구 저장)
+      var nowIso = new Date().toISOString();
+      var nextProject = null;
       try {
-        var svc = getPostprodStateService();
-        if (svc && svc.applySavedPostProductionPayload) {
-          svc.applySavedPostProductionPayload(state.projectId, {
+        if (svc && svc.applySaveSuccess) {
+          nextProject = svc.applySaveSuccess(state.projectId, payload, {
+            savedAt: nowIso,
+            keepRendering: state.renderMeta && state.renderMeta.status === 'rendering'
+          });
+        } else if (svc && svc.applySavedPostProductionPayload) {
+          nextProject = svc.applySavedPostProductionPayload(state.projectId, {
             postTimelineEdits: payload.postTimelineEdits,
             renderMeta: payload.renderMeta
           });
         }
       } catch (_) { }
       state.sessionEdits = {};
-
-      var nowIso = new Date().toISOString();
-      persistRenderMeta({
-        status: state.renderMeta && state.renderMeta.status === 'rendering' ? 'rendering' : 'idle',
-        lastSavedAt: nowIso,
-        error: ''
-      });
+      state.renderMeta = getRenderMeta(nextProject || getProjectByStateId());
       setDirty(false);
       if (!options.silentSuccess) showMessageDialog('저장되었습니다.', '저장');
       return true;
@@ -814,8 +822,11 @@
   }
 
   function setRenderMetaLocal(metaPatch) {
+    var svc = getPostprodStateService();
     var base = state.renderMeta || getRenderMeta(getProjectByStateId());
-    state.renderMeta = Object.assign({}, base, metaPatch || {});
+    state.renderMeta = (svc && svc.mergeRenderMeta)
+      ? svc.mergeRenderMeta(getProjectByStateId(), base, metaPatch)
+      : Object.assign({}, base, metaPatch || {});
     updateRenderPanelUi();
   }
 
@@ -1885,19 +1896,23 @@
     var oldUrl = oldMeta.outputVideoUrl || '';
     var renderJobId = state.renderJobId + 1;
     state.renderJobId = renderJobId;
-
-    persistRenderMeta({
-      status: 'rendering',
-      progress: 0,
-      error: '',
-      outputSrtUrl: '',
-      outputVideoDownloadUrl: '',
-      outputVideoObjectName: '',
-      outputVideoMime: oldMeta.outputVideoMime || '',
-      outputSourceObjectName: '',
-      outputDurationSec: Number(oldMeta.outputDurationSec) || 0,
-      transcodePending: false
-    });
+    var renderSvc = getPostprodStateService();
+    persistRenderMeta(
+      (renderSvc && renderSvc.buildRenderStartMeta)
+        ? renderSvc.buildRenderStartMeta(oldMeta)
+        : {
+          status: 'rendering',
+          progress: 0,
+          error: '',
+          outputSrtUrl: '',
+          outputVideoDownloadUrl: '',
+          outputVideoObjectName: '',
+          outputVideoMime: oldMeta.outputVideoMime || '',
+          outputSourceObjectName: '',
+          outputDurationSec: Number(oldMeta.outputDurationSec) || 0,
+          transcodePending: false
+        }
+    );
     updateRenderPanelUi();
 
     try {
@@ -1918,29 +1933,46 @@
       if (oldUrl && oldUrl.indexOf('blob:') === 0 && oldUrl !== outputVideoUrl) {
         try { URL.revokeObjectURL(oldUrl); } catch (_) { }
       }
-      persistRenderMeta({
-        status: 'done',
-        progress: 100,
-        outputVideoUrl: outputVideoUrl,
-        outputVideoDownloadUrl: '',
-        outputVideoObjectName: '',
-        outputVideoMime: outputVideoMime,
-        outputSourceObjectName: outputSourceObjectName,
-        outputDurationSec: Math.max(0.2, Number((result && result.durationSec) || getTimelinePlaybackDuration(state.model)) || 0),
-        transcodePending: pendingMp4,
-        lastRenderedAt: new Date().toISOString(),
-        error: ''
-      });
+      persistRenderMeta(
+        (renderSvc && renderSvc.buildRenderSuccessMeta)
+          ? renderSvc.buildRenderSuccessMeta(state.renderMeta || oldMeta, {
+            outputVideoUrl: outputVideoUrl,
+            outputVideoDownloadUrl: '',
+            outputVideoObjectName: '',
+            outputVideoMime: outputVideoMime,
+            outputSourceObjectName: outputSourceObjectName,
+            outputDurationSec: Math.max(0.2, Number((result && result.durationSec) || getTimelinePlaybackDuration(state.model)) || 0),
+            transcodePending: pendingMp4,
+            lastRenderedAt: new Date().toISOString()
+          })
+          : {
+            status: 'done',
+            progress: 100,
+            outputVideoUrl: outputVideoUrl,
+            outputVideoDownloadUrl: '',
+            outputVideoObjectName: '',
+            outputVideoMime: outputVideoMime,
+            outputSourceObjectName: outputSourceObjectName,
+            outputDurationSec: Math.max(0.2, Number((result && result.durationSec) || getTimelinePlaybackDuration(state.model)) || 0),
+            transcodePending: pendingMp4,
+            lastRenderedAt: new Date().toISOString(),
+            error: ''
+          }
+      );
       updateRenderPanelUi();
     } catch (err) {
       if (state.renderJobId !== renderJobId) return;
       var msg = getRenderErrorMessage(err);
       if (msg === 'render_canceled') return;
-      persistRenderMeta({
-        status: 'failed',
-        progress: 0,
-        error: '렌더링 실패: ' + msg
-      });
+      persistRenderMeta(
+        (renderSvc && renderSvc.buildRenderFailureMeta)
+          ? renderSvc.buildRenderFailureMeta(state.renderMeta || oldMeta, '렌더링 실패: ' + msg)
+          : {
+            status: 'failed',
+            progress: 0,
+            error: '렌더링 실패: ' + msg
+          }
+      );
       updateRenderPanelUi();
     }
   }
@@ -2006,7 +2038,12 @@
       return;
     }
 
-    setRenderMetaLocal({ status: 'rendering', progress: 74, error: '' });
+    var renderSvc = getPostprodStateService();
+    setRenderMetaLocal(
+      (renderSvc && renderSvc.buildRenderProgressMeta)
+        ? renderSvc.buildRenderProgressMeta(state.renderMeta || meta, 74, { status: 'rendering' })
+        : { status: 'rendering', progress: 74, error: '' }
+    );
     try {
       var sourceDurationSec = Number((meta && meta.outputDurationSec) || 0);
       if (!(sourceDurationSec > 0)) {
@@ -2016,17 +2053,30 @@
       var mp4PreviewUrl = String((transcodeResult && transcodeResult.previewUrl) || '').trim();
       var mp4DownloadUrl = String((transcodeResult && transcodeResult.downloadUrl) || '').trim();
       var mp4ObjectName = String((transcodeResult && transcodeResult.outputObjectName) || '').trim();
-      persistRenderMeta({
-        status: 'done',
-        progress: 100,
-        outputVideoUrl: mp4PreviewUrl || mp4DownloadUrl,
-        outputVideoDownloadUrl: mp4DownloadUrl || mp4PreviewUrl,
-        outputVideoObjectName: mp4ObjectName,
-        outputVideoMime: 'video/mp4',
-        outputSourceObjectName: sourceObjectName,
-        transcodePending: false,
-        error: ''
-      });
+      persistRenderMeta(
+        (renderSvc && renderSvc.buildRenderSuccessMeta)
+          ? renderSvc.buildRenderSuccessMeta(state.renderMeta || meta, {
+            outputVideoUrl: mp4PreviewUrl || mp4DownloadUrl,
+            outputVideoDownloadUrl: mp4DownloadUrl || mp4PreviewUrl,
+            outputVideoObjectName: mp4ObjectName,
+            outputVideoMime: 'video/mp4',
+            outputSourceObjectName: sourceObjectName,
+            outputDurationSec: Number((meta && meta.outputDurationSec) || 0),
+            transcodePending: false,
+            lastRenderedAt: meta && meta.lastRenderedAt
+          })
+          : {
+            status: 'done',
+            progress: 100,
+            outputVideoUrl: mp4PreviewUrl || mp4DownloadUrl,
+            outputVideoDownloadUrl: mp4DownloadUrl || mp4PreviewUrl,
+            outputVideoObjectName: mp4ObjectName,
+            outputVideoMime: 'video/mp4',
+            outputSourceObjectName: sourceObjectName,
+            transcodePending: false,
+            error: ''
+          }
+      );
       updateRenderPanelUi();
       await downloadUrl(mp4DownloadUrl || mp4PreviewUrl, 'final-render.mp4', {
         expectedMime: 'video/mp4',
@@ -2034,11 +2084,19 @@
       });
     } catch (err) {
       var msg = getRenderErrorMessage(err);
-      persistRenderMeta({
-        status: 'done',
-        progress: 100,
-        transcodePending: true
-      });
+      persistRenderMeta(
+        (renderSvc && renderSvc.mergeRenderMeta)
+          ? renderSvc.mergeRenderMeta(null, state.renderMeta || meta, {
+            status: 'done',
+            progress: 100,
+            transcodePending: true
+          })
+          : {
+            status: 'done',
+            progress: 100,
+            transcodePending: true
+          }
+      );
       updateRenderPanelUi();
       showMessageDialog('MP4 변환 실패: ' + msg + '\nWEBM 미리보기는 유지되며, 잠시 후 다시 다운로드를 시도할 수 있습니다.', 'MP4 변환 실패');
     }

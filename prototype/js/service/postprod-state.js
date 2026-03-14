@@ -78,6 +78,41 @@
     };
   }
 
+  function mergeRenderMeta(project, currentMeta, metaPatch) {
+    var base = getRenderMeta(project);
+    if (currentMeta && typeof currentMeta === 'object') {
+      base = Object.assign({}, base, currentMeta);
+    }
+    if (metaPatch && typeof metaPatch === 'object') {
+      base = Object.assign({}, base, metaPatch);
+    }
+    return base;
+  }
+
+  function sanitizeRenderMetaForSave(meta) {
+    var next = mergeRenderMeta(null, meta);
+    if (String(next.outputSrtUrl || '').indexOf('blob:') === 0) {
+      next.outputSrtUrl = '';
+    }
+    if (String(next.outputVideoUrl || '').indexOf('blob:') === 0) {
+      next.outputVideoUrl = '';
+      next.outputVideoDownloadUrl = '';
+      next.outputVideoObjectName = '';
+      next.outputVideoMime = '';
+    }
+    return next;
+  }
+
+  function buildSavePayload(project, options) {
+    var opts = options || {};
+    var payload = Object.assign({}, (project && project.payload) || {});
+    if (Object.prototype.hasOwnProperty.call(opts, 'postTimelineEdits')) {
+      payload.postTimelineEdits = opts.postTimelineEdits || {};
+    }
+    payload.renderMeta = sanitizeRenderMetaForSave(mergeRenderMeta(project, opts.renderMeta));
+    return payload;
+  }
+
   function updateDraftProject(projectId, updater) {
     if (!projectId || !NK.store || !NK.store.getDrafts || !NK.store.saveDrafts) return null;
     try {
@@ -114,6 +149,29 @@
     });
   }
 
+  function applySaveSuccess(projectId, payload, options) {
+    var opts = options || {};
+    var savedAt = String(opts.savedAt || new Date().toISOString());
+    var keepRendering = !!opts.keepRendering;
+    return updateDraftProject(projectId, function (target) {
+      var nextPayload = Object.assign({}, target.payload || {}, payload || {});
+      var nextMeta = mergeRenderMeta(target, nextPayload.renderMeta, {
+        status: keepRendering ? 'rendering' : 'idle',
+        lastSavedAt: savedAt,
+        error: ''
+      });
+      nextPayload.renderMeta = nextMeta;
+      var next = Object.assign({}, target, {
+        payload: nextPayload,
+        renderMeta: nextMeta
+      });
+      if (Object.prototype.hasOwnProperty.call(nextPayload, 'postTimelineEdits')) {
+        next.postTimelineEdits = nextPayload.postTimelineEdits;
+      }
+      return next;
+    });
+  }
+
   function applySavedPostProductionPayload(projectId, patch) {
     patch = patch || {};
     return updateDraftProject(projectId, function (target) {
@@ -135,11 +193,69 @@
     });
   }
 
+  function buildRenderStartMeta(currentMeta) {
+    var meta = mergeRenderMeta(null, currentMeta);
+    return mergeRenderMeta(null, meta, {
+      status: 'rendering',
+      progress: 0,
+      error: '',
+      outputSrtUrl: '',
+      outputVideoDownloadUrl: '',
+      outputVideoObjectName: '',
+      outputVideoMime: meta.outputVideoMime || '',
+      outputSourceObjectName: '',
+      outputDurationSec: Number(meta.outputDurationSec) || 0,
+      transcodePending: false
+    });
+  }
+
+  function buildRenderProgressMeta(currentMeta, progress, options) {
+    var opts = options || {};
+    return mergeRenderMeta(null, currentMeta, {
+      status: opts.status || 'rendering',
+      progress: Number.isFinite(Number(progress)) ? Number(progress) : 0,
+      error: typeof opts.error === 'string' ? opts.error : ''
+    });
+  }
+
+  function buildRenderSuccessMeta(currentMeta, options) {
+    var opts = options || {};
+    return mergeRenderMeta(null, currentMeta, {
+      status: 'done',
+      progress: 100,
+      outputVideoUrl: String(opts.outputVideoUrl || '').trim(),
+      outputVideoDownloadUrl: String(opts.outputVideoDownloadUrl || '').trim(),
+      outputVideoObjectName: String(opts.outputVideoObjectName || '').trim(),
+      outputVideoMime: String(opts.outputVideoMime || '').trim(),
+      outputSourceObjectName: String(opts.outputSourceObjectName || '').trim(),
+      outputDurationSec: Number(opts.outputDurationSec) || 0,
+      transcodePending: !!opts.transcodePending,
+      lastRenderedAt: String(opts.lastRenderedAt || new Date().toISOString()),
+      error: ''
+    });
+  }
+
+  function buildRenderFailureMeta(currentMeta, errorMessage) {
+    return mergeRenderMeta(null, currentMeta, {
+      status: 'failed',
+      progress: 0,
+      error: String(errorMessage || '').trim()
+    });
+  }
+
   postprodState.getProjectById = getProjectById;
   postprodState.getQueryProjectId = getQueryProjectId;
   postprodState.resolveProject = resolveProject;
   postprodState.getRenderMeta = getRenderMeta;
+  postprodState.mergeRenderMeta = mergeRenderMeta;
+  postprodState.sanitizeRenderMetaForSave = sanitizeRenderMetaForSave;
+  postprodState.buildSavePayload = buildSavePayload;
   postprodState.updateDraftProject = updateDraftProject;
   postprodState.persistRenderMeta = persistRenderMeta;
+  postprodState.applySaveSuccess = applySaveSuccess;
   postprodState.applySavedPostProductionPayload = applySavedPostProductionPayload;
+  postprodState.buildRenderStartMeta = buildRenderStartMeta;
+  postprodState.buildRenderProgressMeta = buildRenderProgressMeta;
+  postprodState.buildRenderSuccessMeta = buildRenderSuccessMeta;
+  postprodState.buildRenderFailureMeta = buildRenderFailureMeta;
 })();
