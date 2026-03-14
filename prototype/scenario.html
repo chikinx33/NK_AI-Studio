@@ -82,6 +82,14 @@
                 </div>
               </div>
               <div class="form-group">
+                <label data-i18n="scenario_aspect_ratio">화면 비율</label>
+                <div class="ratio-group scenario-ratio-group" id="ratio-group">
+                  <button type="button" class="btn-secondary ratio-btn active" data-ratio="16:9">16:9</button>
+                  <button type="button" class="btn-secondary ratio-btn" data-ratio="9:16">9:16</button>
+                  <button type="button" class="btn-secondary ratio-btn" data-ratio="1:1">1:1</button>
+                </div>
+              </div>
+              <div class="form-group">
                 <label data-i18n="scenario_tone">톤</label>
                 <select id="tone-select"></select>
               </div>
@@ -118,11 +126,6 @@
                 <span data-i18n="scenario_script">대본</span>
               </div>
               <div class="caption-actions">
-                <div class="ratio-group" id="ratio-group">
-                  <button type="button" class="btn-secondary ratio-btn active" data-ratio="16:9">16:9</button>
-                  <button type="button" class="btn-secondary ratio-btn" data-ratio="9:16">9:16</button>
-                  <button type="button" class="btn-secondary ratio-btn" data-ratio="1:1">1:1</button>
-                </div>
                 <button type="submit" form="scenario-form" class="btn-primary" data-i18n="scenario_generate">시나리오 생성</button>
                 <button type="reset" form="scenario-form" class="btn-ghost" data-i18n="scenario_reset">초기화</button>
                 <button class="btn-secondary" id="save-draft" data-i18n="scenario_save">저장하기</button>

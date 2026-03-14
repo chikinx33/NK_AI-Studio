@@ -999,7 +999,7 @@
       durationPreset: NK.config.DEFAULTS?.DURATION || '15'
     });
 
-    // 화면 비율 버튼(16:9/9:16/1:1)이 폼 밖에 있어 클릭이 안 먹던 문제 해결
+    // 화면 비율 버튼 이벤트
     const ratioGroup = document.getElementById('ratio-group');
     if (ratioGroup) {
       ratioGroup.addEventListener('click', (e) => {

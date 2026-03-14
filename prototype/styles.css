@@ -1178,6 +1178,16 @@ a.btn-primary:active {
   padding: 10px 14px;
 }
 
+.scenario-form .scenario-ratio-group {
+  flex: 1;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.scenario-form .scenario-ratio-group .ratio-btn {
+  min-width: 68px;
+}
+
 .ratio-group .ratio-btn.active {
   background: linear-gradient(135deg, #ff7a00, #ff9f3a);
   color: #0b0b0b;
