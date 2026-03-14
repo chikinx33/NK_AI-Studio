@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --orange: #ff7a00;
   --teal: #0bbfa5;
   --blue: #5c7cff;
@@ -1463,7 +1463,7 @@ a.btn-primary:active {
   border-radius: 14px;
   border: 1px solid var(--border);
   background: var(--panel);
-  color: var(--text);
+  color: #1e3a8a;
   font: inherit;
   justify-self: stretch;
 }
@@ -1937,6 +1937,9 @@ a.btn-primary:active {
 .scenario-card .view-dialogue-lines {
   min-height: var(--scene-dialogue-height);
   max-height: var(--scene-dialogue-height);
+  white-space: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .scenario-card .view-lines[contenteditable="true"],

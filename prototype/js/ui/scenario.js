@@ -844,8 +844,9 @@
       const estTxt = card.querySelector('.est-input')?.value || '';
       const est = parseEst(estTxt);
       const narrationText = card.querySelector('.view-narration-lines')?.textContent?.trim() || '';
-      const dialogueText = card.querySelector('.view-dialogue-lines')?.textContent?.trim() || '';
-      const dialogue = normalizeDialogue(dialogueText, currentCharacters);
+      const uiDialogueText = card.querySelector('.view-dialogue-lines')?.textContent?.trim() || '';
+      const normalizedDialogueText = uiDialogueText.replace(/\s*·\s*/g, '\n');
+      const dialogue = normalizeDialogue(normalizedDialogueText, currentCharacters);
       const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
       return {
         id,
@@ -951,7 +952,8 @@
           </div>
           <div class="field-block">
             <p class="field-label muted small">${labels.dialogue}</p>
-            <p class="view-lines view-dialogue-lines" data-id="${s.id}" contenteditable="true">${s.dialogueText || dialogueToText(s.dialogue || [])}</p>
+            <p class="view-lines view-dialogue-lines" data-id="${s.id}" contenteditable="true">${String(s.dialogueText || dialogueToText(s.dialogue || []))
+              .replace(/\r?\n+/g, ' · ')}</p>
           </div>
         </div>
       </div>
@@ -1245,6 +1247,51 @@
         const card = e.target && e.target.closest ? e.target.closest('.scenario-card') : null;
         if (!card) return;
         setActiveScenarioCard(card);
+      });
+      
+      cardsContainer.addEventListener('keydown', (e) => {
+        const target = e.target;
+        if (!target || !(target instanceof HTMLElement)) return;
+        if (!target.matches('.view-dialogue-lines[contenteditable="true"]')) return;
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          try {
+            document.execCommand('insertText', false, ' · ');
+          } catch (_) {
+            const sel = window.getSelection();
+            if (!sel || !sel.rangeCount) return;
+            const range = sel.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(document.createTextNode(' · '));
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
+        }
+      });
+      
+      cardsContainer.addEventListener('paste', (e) => {
+        const target = e.target;
+        if (!target || !(target instanceof HTMLElement)) return;
+        if (!target.matches('.view-dialogue-lines[contenteditable="true"]')) return;
+        e.preventDefault();
+        let text = '';
+        try {
+          text = (e.clipboardData || window.clipboardData).getData('text');
+        } catch (_) { }
+        const oneLine = String(text || '').replace(/\r?\n+/g, ' · ');
+        try {
+          document.execCommand('insertText', false, oneLine);
+        } catch (_) {
+          const sel = window.getSelection();
+          if (!sel || !sel.rangeCount) return;
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode(oneLine));
+          range.collapse(false);
+          sel.removeAllRanges();
+          sel.addRange(range);
+        }
       });
     }
 
