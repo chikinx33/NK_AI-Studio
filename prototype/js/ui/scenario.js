@@ -382,22 +382,33 @@
   });
 
   const readKnowledgeHub = (payload = {}) => {
-    const src = payload?.knowledgeHub && typeof payload.knowledgeHub === 'object'
+    const hasNested = payload?.knowledgeHub && typeof payload.knowledgeHub === 'object';
+    const src = hasNested
       ? payload.knowledgeHub
       : payload || {};
+    const legacyBanned = !hasNested && !sanitizeText(payload?.manualDirectives || payload?.extraNotes || '')
+      ? src.banned
+      : '';
     return {
       brandVoice: sanitizeText(src.brandVoice || ''),
       brandStory: sanitizeText(src.brandStory || ''),
       brandCharacter: sanitizeText(src.brandCharacter || ''),
       worldSetting: sanitizeText(src.worldSetting || src.knowledgeWorld || ''),
       brandRules: toArray(src.brandRules),
-      bannedExpressions: toArray(src.bannedExpressions || src.banned),
+      bannedExpressions: toArray(src.bannedExpressions || legacyBanned),
       referenceContents: toArray(src.referenceContents),
       successCases: toArray(src.successCases)
     };
   };
 
-  const buildKnowledgeDrivenNotes = (manualText, knowledge) => {
+  const splitNoteLines = (value = '') => {
+    return String(value || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean);
+  };
+
+  const buildLegacyKnowledgeLines = (knowledge) => {
     const lines = [];
     if (knowledge.brandVoice) lines.push(`브랜드 보이스: ${knowledge.brandVoice}`);
     if (knowledge.brandStory) lines.push(`브랜드 스토리: ${knowledge.brandStory}`);
@@ -407,7 +418,18 @@
     if (knowledge.bannedExpressions.length) lines.push(`금지 표현: ${knowledge.bannedExpressions.join(', ')}`);
     if (knowledge.referenceContents.length) lines.push(`참조 콘텐츠 방향: ${knowledge.referenceContents.join(', ')}`);
     if (knowledge.successCases.length) lines.push(`과거 성공 패턴: ${knowledge.successCases.join(', ')}`);
-    return lines.join('\n');
+    return lines;
+  };
+
+  const extractManualDirectives = (payload = {}, knowledge = readKnowledgeHub(payload)) => {
+    const preferred = sanitizeText(payload?.manualDirectives || '');
+    if (preferred) return preferred;
+    const legacyRaw = sanitizeText(payload?.extraNotes || payload?.banned || '');
+    if (!legacyRaw) return '';
+    const autoLines = new Set(buildLegacyKnowledgeLines(knowledge));
+    return splitNoteLines(legacyRaw)
+      .filter(line => !autoLines.has(line))
+      .join('\n');
   };
 
   const renderKnowledgeHint = (payload = {}) => {
@@ -663,9 +685,9 @@
       Object.assign(payload, NK.service.project.applyProjectCore(payload, { payload: currentPayload }));
     }
     const knowledge = readKnowledgeHub(payload);
-    payload.manualDirectives = '';
-    payload.extraNotes = buildKnowledgeDrivenNotes('', knowledge);
-    payload.banned = payload.extraNotes;
+    payload.manualDirectives = extractManualDirectives(currentPayload, knowledge);
+    payload.extraNotes = payload.manualDirectives;
+    payload.banned = payload.manualDirectives;
     payload.knowledgeHub = Object.assign({}, knowledge);
     return payload;
   };

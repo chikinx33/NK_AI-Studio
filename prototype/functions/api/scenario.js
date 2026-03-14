@@ -49,7 +49,7 @@ export async function onRequestPost(context) {
     const styleText = String(body.style || "").trim();
     const needs = Array.isArray(body.needs) ? body.needs.filter(Boolean).map(String).join(", ") : "";
     const duration = String(body.duration || "60");
-    const extraNotes = String(body.extraNotes || body.banned || "").trim();
+    const manualDirectives = String(body.manualDirectives || body.extraNotes || body.banned || "").trim();
     const aspectRatio = String(body.aspectRatio || "").trim();
     const lang = body.language === "en" ? "en" : "ko";
     const knowledgeHub = normalizeKnowledgeHubInput(body);
@@ -80,7 +80,7 @@ export async function onRequestPost(context) {
         tones,
         styleText,
         styles,
-        extraNotes,
+        manualDirectives,
         knowledgeHub,
         aspectRatio,
         duration,
@@ -135,6 +135,10 @@ function buildSystemPromptKo(sceneCount, duration) {
 응답 형식: {"scenes":[...]}.
 각 scene에는 id, estSec, visual은 항상 포함한다.
 총 scene 개수는 ${sceneCount}개로 만들고 총 길이는 ${duration}초 목표에 가깝게 분배한다.
+브랜드 톤&매너는 모든 영상에서 유지해야 하는 고정 화법이다.
+개요 톤은 이번 영상에서만 적용되는 가변 정서/말투 조절값이다.
+브랜드 톤&매너와 개요 톤이 함께 있으면 브랜드 톤&매너를 기본 화법으로 유지하고, 개요 톤은 이번 영상의 분위기와 감정 강도에만 반영한다.
+충돌 시 우선순위는 추가 지시사항, 브랜드 규칙, 금지 표현, 브랜드 톤&매너, 개요 톤 순서다.
 사용자 추가 지시사항과 브랜드 규칙, 금지 표현은 반드시 우선 적용한다.
 마크다운/설명 문장 없이 JSON만 출력한다.`;
 }
@@ -146,7 +150,11 @@ Output format: {"scenes":[...]}.
 Each scene must include id, estSec and visual.
 Produce exactly ${sceneCount} scenes and distribute timing close to ${duration}s.
 Visual must include explicit camera direction: shot size, camera angle, camera movement, and framing/composition.
-Treat user directives, brand rules, and banned expressions as mandatory constraints.
+ Brand tone and manner is the fixed brand voice that must persist across every video.
+ Overview tone is the variable tone for this specific video only.
+ If both are present, keep the brand tone and manner as the base speaking style, and use the overview tone only to adjust this video's mood and emotional intensity.
+ Resolve conflicts in this order: manual directives, brand rules, banned expressions, brand tone and manner, then overview tone.
+ Treat user directives, brand rules, and banned expressions as mandatory constraints.
 No markdown, no extra explanation.`;
 }
 
@@ -159,12 +167,12 @@ Audience: ${input.target || "(not provided)"}
 Purpose category: ${input.purposeCategory || "(not provided)"}
 Purpose tags: ${input.purposeTags || "(none)"}
 Needs: ${input.needs || "(none)"}
-Tone freeform: ${input.toneText || "(none)"}
-Tone tags: ${input.tones || "(none)"}
+Overview tone freeform: ${input.toneText || "(none)"}
+Overview tone tags: ${input.tones || "(none)"}
 Style freeform: ${input.styleText || "(none)"}
 Style tags: ${input.styles || "(none)"}
-Additional notes: ${input.extraNotes || "(none)"}
-Brand voice: ${input.knowledgeHub.brandVoice || "(none)"}
+Manual directives: ${input.manualDirectives || "(none)"}
+Brand tone & manner: ${input.knowledgeHub.brandVoice || "(none)"}
 Brand story: ${input.knowledgeHub.brandStory || "(none)"}
 Brand character: ${input.knowledgeHub.brandCharacter || "(none)"}
 World setting: ${input.knowledgeHub.worldSetting || "(none)"}
@@ -188,12 +196,12 @@ ${modeInstruction}`;
 장르: ${input.purposeCategory || "(미입력)"}
 장르 태그: ${input.purposeTags || "(없음)"}
 니즈: ${input.needs || "(없음)"}
-톤(자유입력): ${input.toneText || "(없음)"}
-톤 태그: ${input.tones || "(없음)"}
+개요 톤(자유입력): ${input.toneText || "(없음)"}
+개요 톤 태그: ${input.tones || "(없음)"}
 스타일(자유입력): ${input.styleText || "(없음)"}
 스타일 태그: ${input.styles || "(없음)"}
-추가 지시사항: ${input.extraNotes || "(없음)"}
-브랜드 보이스: ${input.knowledgeHub.brandVoice || "(없음)"}
+수동 추가 지시사항: ${input.manualDirectives || "(없음)"}
+브랜드 톤&매너(고정 화법): ${input.knowledgeHub.brandVoice || "(없음)"}
 브랜드 스토리: ${input.knowledgeHub.brandStory || "(없음)"}
 대표 캐릭터/주체: ${input.knowledgeHub.brandCharacter || "(없음)"}
 세계관/배경: ${input.knowledgeHub.worldSetting || "(없음)"}
@@ -247,7 +255,7 @@ async function generateScenarioScenes(input) {
       tones: input.tones,
       styleText: input.styleText,
       styles: input.styles,
-      extraNotes: input.extraNotes,
+      manualDirectives: input.manualDirectives,
       knowledgeHub: input.knowledgeHub,
       aspectRatio: input.aspectRatio,
       duration: String(chunkDuration),
@@ -728,15 +736,19 @@ function normalizeTextList(value) {
 }
 
 function normalizeKnowledgeHubInput(body = {}) {
-  const nested = body.knowledgeHub && typeof body.knowledgeHub === "object" ? body.knowledgeHub : {};
+  const hasNested = body.knowledgeHub && typeof body.knowledgeHub === "object";
+  const nested = hasNested ? body.knowledgeHub : {};
   const source = Object.assign({}, body, nested);
+  const legacyBanned = !hasNested && !String(source.manualDirectives || source.extraNotes || "").trim()
+    ? source.banned
+    : "";
   return {
     brandVoice: String(source.brandVoice || "").trim(),
     brandStory: String(source.brandStory || "").trim(),
     brandCharacter: String(source.brandCharacter || "").trim(),
     worldSetting: String(source.worldSetting || source.knowledgeWorld || "").trim(),
     brandRules: normalizeTextList(source.brandRules),
-    bannedExpressions: normalizeTextList(source.bannedExpressions || source.banned),
+    bannedExpressions: normalizeTextList(source.bannedExpressions || legacyBanned),
     referenceContents: normalizeTextList(source.referenceContents),
     successCases: normalizeTextList(source.successCases),
   };

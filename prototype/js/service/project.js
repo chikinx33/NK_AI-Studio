@@ -148,9 +148,11 @@
     }
 
     function normalizeKnowledgeHub(source) {
+        var hasNested = !!(source && typeof source === 'object' && source.knowledgeHub && typeof source.knowledgeHub === 'object');
         var raw = mergeKnowledgeSource(source);
         var referenceEntries = normalizeReferenceEntries(raw.referenceItems || raw.referenceEntries || raw.referenceContentEntries);
         var referenceContents = normalizeTextList(raw.referenceContents);
+        var legacyBanned = !hasNested && !normalizeText(raw.manualDirectives || raw.extraNotes) ? raw.banned : '';
         if (!referenceContents.length && referenceEntries.length) {
             referenceContents = referenceEntries.map(function (item) {
                 return [item.type, item.title, item.note].filter(Boolean).join(' ');
@@ -162,7 +164,7 @@
             brandCharacter: normalizeText(raw.brandCharacter),
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
-            bannedExpressions: normalizeTextList(raw.bannedExpressions || raw.banned),
+            bannedExpressions: normalizeTextList(raw.bannedExpressions || legacyBanned),
             referenceContents: referenceContents,
             referenceItems: referenceEntries,
             successCases: normalizeTextList(raw.successCases)

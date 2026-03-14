@@ -106,7 +106,7 @@ function normalizeInput(body) {
     brandCharacter: sanitizeText(knowledge?.brandCharacter),
     worldSetting: sanitizeText(knowledge?.worldSetting || knowledge?.knowledgeWorld),
     brandRules: normalizeTextList(knowledge?.brandRules),
-    bannedExpressions: normalizeTextList(knowledge?.bannedExpressions || knowledge?.banned),
+    bannedExpressions: normalizeTextList(knowledge?.bannedExpressions),
     referenceContents: normalizeTextList(knowledge?.referenceContents),
     successCases: normalizeTextList(knowledge?.successCases),
   };

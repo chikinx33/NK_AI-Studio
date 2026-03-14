@@ -84,16 +84,20 @@
   }
 
   function readKnowledge(payload) {
-    var src = payload && payload.knowledgeHub && typeof payload.knowledgeHub === 'object'
+    var hasNested = !!(payload && payload.knowledgeHub && typeof payload.knowledgeHub === 'object');
+    var src = hasNested
       ? payload.knowledgeHub
       : payload || {};
+    var legacyBanned = !hasNested && !String(payload && (payload.manualDirectives || payload.extraNotes) || '').trim()
+      ? src.banned
+      : '';
     return {
       brandVoice: String(src.brandVoice || '').trim(),
       brandStory: String(src.brandStory || '').trim(),
       brandCharacter: String(src.brandCharacter || '').trim(),
       worldSetting: String(src.worldSetting || src.knowledgeWorld || '').trim(),
       brandRules: toTagList(src.brandRules),
-      bannedExpressions: toTagList(src.bannedExpressions || src.banned),
+      bannedExpressions: toTagList(src.bannedExpressions || legacyBanned),
       referenceContents: toTagList(src.referenceContents),
       successCases: toTagList(src.successCases)
     };

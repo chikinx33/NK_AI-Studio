@@ -161,7 +161,7 @@
             brandCharacter: normalizeText(raw.brandCharacter),
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
-            bannedExpressions: normalizeTextList(raw.bannedExpressions || raw.banned),
+            bannedExpressions: normalizeTextList(raw.bannedExpressions),
             brandKeywords: normalizeTextList(raw.brandKeywords),
             referenceContents: normalizeTextList(raw.referenceContents),
             referenceContentEntries: Array.isArray(raw.referenceContentEntries) ? raw.referenceContentEntries.slice() : [],
