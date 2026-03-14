@@ -341,6 +341,28 @@
     return normalizeCharacters(parseCharacterNoteEntries(fallbackText));
   };
 
+  const mergeCharacterSources = (explicitList = [], knowledgeList = [], fallbackText = '') => {
+    const explicit = normalizeCharacters(explicitList);
+    const knowledge = normalizeKnowledgeCharacters(knowledgeList, fallbackText);
+    if (!explicit.length) return knowledge;
+    const knowledgeMap = new Map(knowledge.map((item) => [String(item.token || '').toLowerCase(), item]));
+    const merged = explicit.map((item) => {
+      const matched = knowledgeMap.get(String(item.token || '').toLowerCase());
+      if (!matched) return item;
+      return Object.assign({}, matched, item, {
+        characterId: item.characterId || matched.characterId,
+        personality: normalizeCharacterPersonality(item.personality || matched.personality || '')
+      });
+    });
+    const explicitKeys = new Set(merged.map((item) => String(item.token || '').toLowerCase()));
+    knowledge.forEach((item) => {
+      const key = String(item.token || '').toLowerCase();
+      if (explicitKeys.has(key)) return;
+      merged.push(item);
+    });
+    return merged;
+  };
+
   const syncCharacterSeq = (list = []) => {
     let max = 0;
     (Array.isArray(list) ? list : []).forEach((c) => {
@@ -984,7 +1006,7 @@
     const flags = getScenarioFlags(p || {});
     const explicitCharacters = normalizeCharacters(p.characters || draft.characters || []);
     const knowledgeCharacters = readKnowledgeHub(p || {}).characters || [];
-    currentCharacters = explicitCharacters.length ? explicitCharacters : normalizeKnowledgeCharacters(knowledgeCharacters, p.brandCharacter || '');
+    currentCharacters = mergeCharacterSources(explicitCharacters, knowledgeCharacters, p.brandCharacter || '');
     syncCharacterSeq(currentCharacters);
     currentPayload = Object.assign({}, p || {}, flags, { characters: currentCharacters, header });
     const defaults = NK.config.DEFAULTS || {};

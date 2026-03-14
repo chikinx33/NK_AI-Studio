@@ -1305,6 +1305,8 @@ a.btn-primary:active {
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  min-height: 44px;
+  align-self: flex-start;
 }
 
 .scenario-form .scenario-check-label input[type="checkbox"] {
