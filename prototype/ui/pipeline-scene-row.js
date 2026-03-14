@@ -133,6 +133,7 @@
       '<div class="voice-row voice-controls">' +
       '<select class="voice-select" data-id="' + scene.id + '" style="flex:1; min-width:120px;">' +
       '<option value="kr_female_narration"' + (voiceId === 'kr_female_narration' ? ' selected' : '') + '>한국어 여성(나레이션)</option>' +
+      '<option value="kr_male_narration"' + (voiceId === 'kr_male_narration' ? ' selected' : '') + '>한국어 남성(나레이션)</option>' +
       '</select>' +
       '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + (voiceBusy ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +

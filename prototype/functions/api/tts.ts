@@ -15,6 +15,7 @@ const send = (data: any, status = 200, origin?: string | null) =>
 
 const VOICE_MAP: Record<string, { languageCode: string; name: string }> = {
   kr_female_narration: { languageCode: "ko-KR", name: "ko-KR-Neural2-A" },
+  kr_male_narration: { languageCode: "ko-KR", name: "ko-KR-Neural2-B" }
 };
 
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
