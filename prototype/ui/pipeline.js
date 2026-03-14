@@ -69,6 +69,7 @@
     const modal = document.getElementById('lib-modal');
     if (!modal) return;
     const box = modal.querySelector('.lib-content');
+    const kindLabel = kind === 'video' ? '영상' : '이미지';
     let selected = null; // { url, name }
     if (!box) return;
     if (!items || !items.length) {
@@ -138,22 +139,23 @@
       }
 
       if (useBtn) useBtn.onclick = function () {
-        if (!selected || !selected.url) { alert('이미지를 먼저 선택하세요.'); return; }
+        if (!selected || !selected.url) { alert(kindLabel + '를 먼저 선택하세요.'); return; }
         if (onSelect) onSelect(selected.url);
         closeModals();
       };
       if (delBtn) delBtn.onclick = async function () {
-        if (kind !== 'image') { alert('이미지 라이브러리에서만 삭제를 지원합니다.'); return; }
         if (!projectId) { alert('프로젝트 ID를 찾을 수 없습니다.'); return; }
-        if (!selected || !selected.name) { alert('삭제할 이미지를 선택하세요.'); return; }
+        if (!selected || !selected.name) { alert('삭제할 ' + kindLabel + '를 선택하세요.'); return; }
         try {
           const res = await NK.api.projectDelete(projectId, selected.name);
-          if (!res.ok) throw new Error(res.error || 'delete_failed');
+          if (!res.ok || !res.data || Number(res.data.deletedCount || 0) < 1) {
+            throw new Error(res.error || (res.data && res.data.error) || 'delete_failed');
+          }
           // 삭제 성공: 리스트에서 제거하고 선택 초기화
           const left = items.filter(it => it.name !== selected.name);
           openLibraryModal(left, kind, onSelect, projectId);
         } catch (err) {
-          alert('삭제 실패: ' + (err && err.message ? err.message : err));
+          alert(kindLabel + ' 삭제 실패: ' + (err && err.message ? err.message : err));
         }
       };
       updateLibActions();
