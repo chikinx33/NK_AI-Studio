@@ -34,16 +34,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return send({ error: "projectId, sceneId and script are required" }, 400, origin);
     }
     const script = scriptRaw.slice(0, 5000);
-    const voiceOpt = VOICE_MAP[voiceId] || VOICE_MAP.kr_female_narration;
+    const rateNum = Number(body.speakingRate || 1.05);
+    const pitchNum = Number(body.pitch || 2);
+    const promptRaw = String(body.prompt || "").trim();
     const voiceNameRaw = String(body.voiceName || "").trim();
-    const rateNum = Number(body.speakingRate || 1);
-    const pitchNum = Number(body.pitch || 0);
-    let vLang = voiceOpt.languageCode;
-    let vName = voiceOpt.name;
-    if (voiceNameRaw) {
-      vName = voiceNameRaw;
-      try { vLang = voiceNameRaw.split("-").slice(0, 2).join("-"); } catch { vLang = "ko-KR"; }
-    }
+    const finalPrompt = promptRaw || derivePromptFromVoice(voiceNameRaw || voiceId);
 
     const clientEmail = (env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL) as string | undefined;
     const privateKeyRaw = (env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY) as string | undefined;
@@ -64,27 +59,36 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       privateKeyPem: privateKeyRaw as string,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
-
-    const synthUrl = "https://texttospeech.googleapis.com/v1/text:synthesize";
-    const ssmlText = buildSsml(script, rateNum, pitchNum, String(body.ssml || ""));
-    const synthRes = await fetch(synthUrl, {
+    const apiKey = String(env.GOOGLE_API_KEY || "").trim();
+    const reqBody = {
+      contents: [
+        {
+          parts: [
+            { text: finalPrompt || "Speak like an epic fantasy narrator." },
+            { text: script }
+          ]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        responseMimeType: "audio/mp3"
+      }
+    };
+    const glBase = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent";
+    const glUrl = apiKey ? (glBase + "?key=" + encodeURIComponent(apiKey)) : glBase;
+    const glHeaders: any = { "Content-Type": "application/json" };
+    if (!apiKey) glHeaders.Authorization = `Bearer ${token}`;
+    const synthRes = await fetch(glUrl, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        input: { ssml: ssmlText },
-        voice: { languageCode: vLang, name: vName },
-        audioConfig: { audioEncoding: "MP3", speakingRate: rateNum, pitch: pitchNum },
-      }),
+      headers: glHeaders,
+      body: JSON.stringify(reqBody),
     });
     const synthText = await synthRes.text();
     if (!synthRes.ok) {
       return send({ error: "tts_failed", status: synthRes.status, detail: safeJson(synthText) }, synthRes.status, origin);
     }
     const synthJson = safeJson(synthText) || {};
-    const audioContent = String(synthJson.audioContent || "");
+    const audioContent = extractGeminiAudioBase64(synthJson) || "";
     if (!audioContent) {
       return send({ error: "no_audio_content" }, 502, origin);
     }
@@ -139,15 +143,34 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
 };
 
 function safeJson(text: string) { try { return JSON.parse(text); } catch { return text; } }
-function escapeXml(s: string) {
-  return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+function extractGeminiAudioBase64(json: any): string {
+  try {
+    const cands = json?.candidates || [];
+    for (const c of cands) {
+      const parts = c?.content?.parts || c?.content?.inlineData || [];
+      if (Array.isArray(parts)) {
+        for (const p of parts) {
+          if (p?.inlineData?.data) return String(p.inlineData.data);
+          if (p?.audio?.data) return String(p.audio.data);
+          if (p?.data) return String(p.data);
+        }
+      } else if (parts?.data) {
+        return String(parts.data);
+      }
+    }
+  } catch (_) {}
+  return "";
 }
-function buildSsml(text: string, rate: number, pitch: number, ssmlOverride: string) {
-  const t = escapeXml(text);
-  if (ssmlOverride && ssmlOverride.trim()) return ssmlOverride.trim();
-  const rateStr = isFinite(rate) ? Math.max(0.5, Math.min(2.0, rate)).toFixed(2) : "1.00";
-  const pitchStr = isFinite(pitch) ? (pitch >= 0 ? `+${pitch}st` : `${pitch}st`) : "+0st";
-  return `<speak><prosody rate="${rateStr}" pitch="${pitchStr}">${t}</prosody></speak>`;
+function derivePromptFromVoice(v: string): string {
+  const raw = String(v || "").trim();
+  if (!raw) return "Speak like an epic fantasy narrator.";
+  if (raw.indexOf("preset:child:female:") === 0) return "Speak like an excited young child.";
+  if (raw.indexOf("preset:child:male:") === 0) return "Speak like an excited young child.";
+  if (raw.indexOf("preset:char:cute:") === 0) return "Speak like a cheerful cartoon character.";
+  if (raw.indexOf("preset:char:robot:") === 0) return "Speak like a robotic AI assistant.";
+  if (raw.indexOf("preset:char:magician:") === 0) return "Speak like an old wizard.";
+  if (raw.indexOf("preset:char:trick:") === 0) return "Speak like a playful trickster.";
+  return "Speak like an epic fantasy narrator.";
 }
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri || !uri.startsWith("gs://")) return null;
