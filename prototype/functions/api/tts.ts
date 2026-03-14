@@ -20,7 +20,7 @@ const VOICE_MAP: Record<string, { languageCode: string; name: string }> = {
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   try {
-    const auth = await authorizeRequest(request, env);
+    const auth = await authorizeRequest(request, env, { allowQueryToken: true });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const text = await request.text();
     let body: any = {};

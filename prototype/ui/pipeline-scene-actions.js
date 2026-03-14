@@ -224,7 +224,13 @@
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: vurl ? '완료' : '', voiceUrl: vurl, voiceError: vurl ? '' : '응답에 voiceUrl이 없습니다.' });
             refreshAndPersist(true);
           } catch (err) {
-            var msg = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
+            var em = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
+            var msg = em;
+            if (/auth_required|invalid_session|session_expired/i.test(em)) {
+              msg = '로그인이 필요합니다. 로그인 후 다시 시도하세요.';
+            } else if (/Missing .*GOOGLE|AUDIO_OUTPUT_GCS_URI|VIDEO_OUTPUT_GCS_URI/i.test(em)) {
+              msg = '서버 설정이 누락되었습니다. 관리자 설정 확인이 필요합니다.';
+            }
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: '', voiceError: msg });
             refreshAndPersist(false);
           } finally {

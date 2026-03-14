@@ -109,7 +109,9 @@
   api.tts = async function (body) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
-    var res = await fetch(withBase('/api/tts'), {
+    var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
+    var url = withBase('/api/tts' + (token ? ('?nk_token=' + encodeURIComponent(token)) : ''));
+    var res = await fetch(url, {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
