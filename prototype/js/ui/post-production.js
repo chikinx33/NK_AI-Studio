@@ -91,6 +91,10 @@
     return (NK.service && NK.service.postprodRender) ? NK.service.postprodRender : null;
   }
 
+  function getPostprodPreviewService() {
+    return (NK.service && NK.service.postprodPreview) ? NK.service.postprodPreview : null;
+  }
+
   function firstFilled(values) {
     for (var i = 0; i < values.length; i++) {
       var v = values[i];
@@ -853,128 +857,29 @@
     return { width: 1280, height: 720 };
   }
 
-  function loadImageSource(url) {
-    return new Promise(function (resolve, reject) {
-      if (!url) { reject(new Error('empty_image_url')); return; }
-      var resolvedUrl = toPlayableMediaUrl(url);
-      var img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = function () { resolve(img); };
-      img.onerror = function () { reject(new Error('image_load_failed')); };
-      img.src = resolvedUrl;
-    });
-  }
-
-  function loadVideoSource(url, timeoutMs) {
-    return new Promise(function (resolve, reject) {
-      if (!url) { reject(new Error('empty_video_url')); return; }
-      var resolvedUrl = toPlayableMediaUrl(url);
-      var safeTimeoutMs = Math.max(1500, Number(timeoutMs) || 20000);
-      var video = document.createElement('video');
-      video.crossOrigin = 'anonymous';
-      video.preload = 'auto';
-      video.playsInline = true;
-      video.muted = true;
-      video.loop = true;
-      video.src = resolvedUrl;
-      var done = false;
-      var timeout = setTimeout(function () {
-        if (done) return;
-        done = true;
-        reject(new Error('video_load_timeout'));
-      }, safeTimeoutMs);
-      var onReady = function () {
-        if (done) return;
-        done = true;
-        clearTimeout(timeout);
-        resolve(video);
-      };
-      var onErr = function () {
-        if (done) return;
-        done = true;
-        clearTimeout(timeout);
-        reject(new Error('video_load_failed'));
-      };
-      video.onloadedmetadata = onReady;
-      video.onerror = onErr;
-      try { video.load(); } catch (_) { }
-    });
-  }
-
   async function loadImageSourceWithFallback(url) {
-    try {
-      return await loadImageSource(url);
-    } catch (_) {
-      return new Promise(function (resolve, reject) {
-        if (!url) { reject(new Error('empty_image_url')); return; }
-        var resolvedUrl = toPlayableMediaUrl(url);
-        var img = new Image();
-        img.onload = function () { resolve(img); };
-        img.onerror = function () { reject(new Error('image_load_failed')); };
-        img.src = resolvedUrl;
-      });
-    }
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.loadImageSourceWithFallback) throw new Error('postprod_preview_service_missing');
+    return svc.loadImageSourceWithFallback(url, { resolveMediaUrl: toPlayableMediaUrl });
   }
 
   async function loadVideoSourceWithFallback(url, timeoutMs) {
-    try {
-      return await loadVideoSource(url, timeoutMs);
-    } catch (_) {
-      return new Promise(function (resolve, reject) {
-        if (!url) { reject(new Error('empty_video_url')); return; }
-        var resolvedUrl = toPlayableMediaUrl(url);
-        var safeTimeoutMs = Math.max(1500, Number(timeoutMs) || 20000);
-        var video = document.createElement('video');
-        video.preload = 'auto';
-        video.playsInline = true;
-        video.muted = true;
-        video.loop = true;
-        video.src = resolvedUrl;
-        var done = false;
-        var timeout = setTimeout(function () {
-          if (done) return;
-          done = true;
-          reject(new Error('video_load_timeout'));
-        }, safeTimeoutMs);
-        var onReady = function () {
-          if (done) return;
-          done = true;
-          clearTimeout(timeout);
-          resolve(video);
-        };
-        var onErr = function () {
-          if (done) return;
-          done = true;
-          clearTimeout(timeout);
-          reject(new Error('video_load_failed'));
-        };
-        video.onloadedmetadata = onReady;
-        video.onerror = onErr;
-        try { video.load(); } catch (_) { }
-      });
-    }
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.loadVideoSourceWithFallback) throw new Error('postprod_preview_service_missing');
+    return svc.loadVideoSourceWithFallback(url, timeoutMs, { resolveMediaUrl: toPlayableMediaUrl });
   }
 
   function releaseVideoSource(video) {
-    if (!video) return;
-    try { video.pause(); } catch (_) { }
-    try {
-      video.removeAttribute('src');
-      video.load();
-    } catch (_) { }
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.releaseVideoSource) return;
+    svc.releaseVideoSource(video);
   }
 
   function clearPreviewVideoCache() {
-    var cache = state.previewVideoCache || {};
-    Object.keys(cache).forEach(function (clipId) {
-      var entry = cache[clipId];
-      if (!entry || !entry.video) return;
-      if (entry.video.parentNode) {
-        try { entry.video.parentNode.removeChild(entry.video); } catch (_) { }
-      }
-      releaseVideoSource(entry.video);
-    });
-    state.previewVideoCache = {};
+    var svc = getPostprodPreviewService();
+    state.previewVideoCache = (svc && svc.clearPreviewVideoCache)
+      ? svc.clearPreviewVideoCache(state.previewVideoCache, { releaseVideoSource: releaseVideoSource })
+      : {};
     state.previewClipId = '';
     state.previewClipUrl = '';
   }
@@ -985,176 +890,51 @@
 
   function mountPreviewVideo(entry, clipId) {
     var host = getPreviewVideoHost();
-    if (!host || !entry || !entry.video) return null;
-    Object.keys(state.previewVideoCache || {}).forEach(function (id) {
-      var cacheEntry = state.previewVideoCache[id];
-      if (!cacheEntry || !cacheEntry.video) return;
-      if (id === String(clipId)) {
-        cacheEntry.video.id = 'postprod-preview-video';
-      } else {
-        cacheEntry.video.removeAttribute('id');
-      }
-    });
-    if (entry.video.parentNode !== host) host.appendChild(entry.video);
-    return entry.video;
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.mountPreviewVideo) return null;
+    return svc.mountPreviewVideo(state.previewVideoCache, entry, clipId, host);
   }
 
   function pausePreviewVideos(exceptClipId) {
-    var keepId = String(exceptClipId || '');
-    Object.keys(state.previewVideoCache || {}).forEach(function (clipId) {
-      if (keepId && clipId === keepId) return;
-      var entry = state.previewVideoCache[clipId];
-      if (!entry || !entry.video) return;
-      try { entry.video.pause(); } catch (_) { }
-      try { entry.video.muted = true; } catch (_) { }
-    });
-  }
-
-  function createPreviewVideoCacheEntry(clipId, playableUrl) {
-    var video = document.createElement('video');
-    video.className = 'postprod-video';
-    video.preload = 'auto';
-    video.playsInline = true;
-    video.muted = true;
-    video.loop = true;
-    video.crossOrigin = 'anonymous';
-    video.setAttribute('playsinline', '');
-    video.src = playableUrl;
-
-    var entry = {
-      clipId: String(clipId || ''),
-      url: playableUrl,
-      video: video,
-      ready: false,
-      failed: false,
-      readyPromise: null
-    };
-
-    entry.readyPromise = new Promise(function (resolve, reject) {
-      var done = false;
-      var timeout = setTimeout(function () {
-        if (done) return;
-        done = true;
-        entry.failed = true;
-        cleanup();
-        reject(new Error('preview_video_load_timeout'));
-      }, 12000);
-      var cleanup = function () {
-        clearTimeout(timeout);
-        video.removeEventListener('loadedmetadata', onReady);
-        video.removeEventListener('error', onError);
-      };
-      var onReady = function () {
-        if (done) return;
-        done = true;
-        entry.ready = true;
-        cleanup();
-        try { video.pause(); } catch (_) { }
-        resolve(video);
-      };
-      var onError = function () {
-        if (done) return;
-        done = true;
-        entry.failed = true;
-        cleanup();
-        reject(new Error('preview_video_load_failed'));
-      };
-      video.addEventListener('loadedmetadata', onReady);
-      video.addEventListener('error', onError);
-      try {
-        video.load();
-        if (video.readyState >= 1) onReady();
-      } catch (_) { }
-    });
-
-    return entry;
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.pausePreviewVideos) return;
+    svc.pausePreviewVideos(state.previewVideoCache, exceptClipId);
   }
 
   function getPreviewVideoCacheEntry(clip) {
-    if (!clip || !clip.id || !clip.url) return null;
-    var clipId = String(clip.id);
-    var playableUrl = toPlayableMediaUrl(clip.url);
-    if (!playableUrl) return null;
-    var cache = state.previewVideoCache || (state.previewVideoCache = {});
-    var existing = cache[clipId];
-    if (existing && existing.url === playableUrl && existing.video && !existing.failed) return existing;
-    if (existing && existing.video) {
-      if (existing.video.parentNode) {
-        try { existing.video.parentNode.removeChild(existing.video); } catch (_) { }
-      }
-      releaseVideoSource(existing.video);
-    }
-    var next = createPreviewVideoCacheEntry(clipId, playableUrl);
-    cache[clipId] = next;
-    return next;
-  }
-
-  function prunePreviewVideoCache(keepIds) {
-    var keep = {};
-    (keepIds || []).forEach(function (id) {
-      var key = String(id || '');
-      if (key) keep[key] = true;
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.getPreviewVideoCacheEntry) return null;
+    var result = svc.getPreviewVideoCacheEntry(state.previewVideoCache, clip, {
+      resolveMediaUrl: toPlayableMediaUrl,
+      releaseVideoSource: releaseVideoSource
     });
-    Object.keys(state.previewVideoCache || {}).forEach(function (clipId) {
-      if (keep[clipId]) return;
-      var entry = state.previewVideoCache[clipId];
-      if (!entry || !entry.video) {
-        delete state.previewVideoCache[clipId];
-        return;
-      }
-      if (entry.video.parentNode) {
-        try { entry.video.parentNode.removeChild(entry.video); } catch (_) { }
-      }
-      releaseVideoSource(entry.video);
-      delete state.previewVideoCache[clipId];
-    });
+    state.previewVideoCache = result && result.cache ? result.cache : state.previewVideoCache;
+    return result ? result.entry : null;
   }
 
   function warmPreviewVideoNeighbors(clip) {
     if (!clip || !state.model) return;
     var track = getVisualTrack(state.model);
     var clips = track && Array.isArray(track.clips) ? track.clips : [];
-    if (!clips.length) return;
-    var idx = clips.findIndex(function (item) { return item && item.id === clip.id; });
-    if (idx < 0) return;
-    var keepIds = [clip.id];
-    [idx - 1, idx + 1].forEach(function (targetIdx) {
-      if (targetIdx < 0 || targetIdx >= clips.length) return;
-      var target = clips[targetIdx];
-      if (!target || target.empty || !target.url || !isVideoUrl(target.url)) return;
-      keepIds.push(target.id);
-      var entry = getPreviewVideoCacheEntry(target);
-      if (entry && entry.readyPromise) {
-        entry.readyPromise.catch(function () { });
-      }
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.warmPreviewVideoNeighbors) return;
+    state.previewVideoCache = svc.warmPreviewVideoNeighbors(state.previewVideoCache, clip, clips, {
+      resolveMediaUrl: toPlayableMediaUrl,
+      releaseVideoSource: releaseVideoSource,
+      isVideoUrl: isVideoUrl
     });
-    prunePreviewVideoCache(keepIds);
   }
 
   async function hasLoadableVisualClip(model) {
-    var clips = getVisualClipsForRender(model);
-    if (!clips.length) return false;
-
-    for (var i = 0; i < clips.length; i++) {
-      var clip = clips[i];
-      var url = String(clip && clip.url || '').trim();
-      if (!url) continue;
-      try {
-        if (isVideoUrl(url)) {
-          var v = await loadVideoSourceWithFallback(url, 5000);
-          releaseVideoSource(v);
-          return true;
-        }
-        await Promise.race([
-          loadImageSourceWithFallback(url),
-          new Promise(function (_, reject) {
-            setTimeout(function () { reject(new Error('image_probe_timeout')); }, 5000);
-          })
-        ]);
-        return true;
-      } catch (_) { }
-    }
-    return false;
+    var svc = getPostprodPreviewService();
+    if (!svc || !svc.hasLoadableVisualClip) return false;
+    return svc.hasLoadableVisualClip(getVisualClipsForRender(model), {
+      isVideoUrl: isVideoUrl,
+      resolveMediaUrl: toPlayableMediaUrl,
+      loadImageSourceWithFallback: loadImageSourceWithFallback,
+      loadVideoSourceWithFallback: loadVideoSourceWithFallback,
+      releaseVideoSource: releaseVideoSource
+    });
   }
 
   async function uploadRenderedBlobSource(projectId, blob, mimeType) {
