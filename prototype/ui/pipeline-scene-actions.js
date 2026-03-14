@@ -226,10 +226,23 @@
           } catch (err) {
             var em = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
             var msg = em;
+            var detailText = '';
+            try {
+              var raw = (err && err.detail) ? String(err.detail) : '';
+              if (raw) {
+                var dj = JSON.parse(raw);
+                if (dj && dj.detail) detailText = JSON.stringify(dj.detail);
+                if (!detailText && dj && dj.error && dj.error.message) detailText = String(dj.error.message);
+                if (!detailText && dj && dj.hint) detailText = String(dj.hint);
+              }
+            } catch (_) { }
+            if (detailText) msg = em + ' · ' + detailText;
             if (/auth_required|invalid_session|session_expired/i.test(em)) {
               msg = '로그인이 필요합니다. 로그인 후 다시 시도하세요.';
             } else if (/Missing .*GOOGLE|AUDIO_OUTPUT_GCS_URI|VIDEO_OUTPUT_GCS_URI/i.test(em)) {
               msg = '서버 설정이 누락되었습니다. 관리자 설정 확인이 필요합니다.';
+            } else if (/requester_pays/i.test(msg)) {
+              msg = '스토리지 버킷이 Requester Pays입니다. 서버에 X-Goog-User-Project가 설정되어야 합니다.';
             }
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: '', voiceError: msg });
             refreshAndPersist(false);

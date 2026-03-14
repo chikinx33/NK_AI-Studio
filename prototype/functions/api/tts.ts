@@ -80,14 +80,27 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const audioBytes = base64ToBytes(audioContent);
 
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+    const userProject =
+      (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
+      (env.GOOGLE_PROJECT_ID as string | undefined) ||
+      "";
     const upRes = await fetch(uploadUrl, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "audio/mpeg" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "audio/mpeg",
+        ...(userProject ? { "X-Goog-User-Project": userProject } : {}),
+      },
       body: audioBytes,
     });
     const upText = await upRes.text();
     if (!upRes.ok) {
-      return send({ error: "upload_failed", status: upRes.status, detail: safeJson(upText) }, upRes.status, origin);
+      const detail = safeJson(upText);
+      const hint =
+        upRes.status === 403 && String(upText).toLowerCase().includes("requester pays")
+          ? "requester_pays_missing_userProject"
+          : "";
+      return send({ error: "upload_failed", status: upRes.status, detail, hint }, upRes.status, origin);
     }
 
     const signedUrl = await signGcsUrl({
