@@ -241,6 +241,8 @@
               msg = '로그인이 필요합니다. 로그인 후 다시 시도하세요.';
             } else if (/Missing .*GOOGLE|AUDIO_OUTPUT_GCS_URI|VIDEO_OUTPUT_GCS_URI/i.test(em)) {
               msg = '서버 설정이 누락되었습니다. 관리자 설정 확인이 필요합니다.';
+            } else if (/invalid_user_project|User project specified.*invalid/i.test(msg)) {
+              msg = '과금 프로젝트(GCS_BILLING_PROJECT_ID)가 올바르지 않습니다. project ID(예: my-prod-123) 또는 숫자 project number를 입력하세요.';
             } else if (/requester_pays/i.test(msg)) {
               msg = '스토리지 버킷이 Requester Pays입니다. 서버에 X-Goog-User-Project가 설정되어야 합니다.';
             }

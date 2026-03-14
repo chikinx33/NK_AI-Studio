@@ -80,10 +80,16 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const audioBytes = base64ToBytes(audioContent);
 
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-    const userProject =
+    const userProjectRaw =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
       (env.GOOGLE_PROJECT_ID as string | undefined) ||
       "";
+    const userProject = String(userProjectRaw || "").trim();
+    const validProjectId = /^[a-z][a-z0-9-]{4,61}[a-z0-9]$/; // GCP project ID 형식
+    const validProjectNum = /^[0-9]{6,20}$/; // project number 형식
+    if (userProject && !(validProjectId.test(userProject) || validProjectNum.test(userProject))) {
+      return send({ error: "invalid_user_project", hint: "Set GCS_BILLING_PROJECT_ID to a valid project ID or number" }, 500, origin);
+    }
     const upRes = await fetch(uploadUrl, {
       method: "POST",
       headers: {
