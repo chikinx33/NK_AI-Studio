@@ -6874,6 +6874,10 @@ body.layout-fixed .lib-content {
   font-size: 15px;
 }
 
+#knowledge-world-setting {
+  min-height: 252px;
+}
+
 .knowledge-reference-builder {
   grid-column: 1 / -1;
 }
