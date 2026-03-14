@@ -525,8 +525,8 @@
     const textEl = overlay.querySelector('p');
     if (textEl) {
       textEl.textContent = show
-        ? (message || '시나리오 생성 중...')
-        : '작업 중...';
+        ? (message || '생성중...')
+        : '생성중...';
     }
   };
 
