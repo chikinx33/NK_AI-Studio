@@ -861,24 +861,18 @@
     const list = normalizeCharacters(currentCharacters);
     currentCharacters = list;
     syncCharacterSeq(list);
-    if (box) {
-      box.innerHTML = list.map((c) => `
-      <span class="character-chip" data-character-id="${c.characterId}">
-        <span class="chip-token">${c.token}</span>
-        <button type="button" class="chip-remove" data-remove-character="${c.characterId}" aria-label="캐릭터 삭제">×</button>
-      </span>
-    `).join('');
-    }
-    const detailBox = document.getElementById('character-details');
-    if (!detailBox) return;
     if (!list.length) {
-      detailBox.innerHTML = `<p class="scenario-character-empty">${escapeHtml(getScenarioText('scenario_character_empty', '등록된 캐릭터가 없습니다.'))}</p>`;
+      if (box) box.innerHTML = `<p class="scenario-character-empty">${escapeHtml(getScenarioText('scenario_character_empty', '등록된 캐릭터가 없습니다.'))}</p>`;
       return;
     }
     const placeholder = escapeHtml(getScenarioText('scenario_character_trait_placeholder', '성격 입력(선택)'));
-    detailBox.innerHTML = list.map((c) => `
+    if (box) {
+      box.innerHTML = list.map((c) => `
       <label class="scenario-character-row" data-character-id="${c.characterId}">
-        <span class="scenario-character-token">${escapeHtml(c.token)}</span>
+        <span class="character-chip">
+          <span class="chip-token">${escapeHtml(c.token)}</span>
+          <button type="button" class="chip-remove" data-remove-character="${c.characterId}" aria-label="캐릭터 삭제">×</button>
+        </span>
         <input
           type="text"
           class="scenario-character-personality"
@@ -887,6 +881,7 @@
           placeholder="${placeholder}" />
       </label>
     `).join('');
+    }
   };
 
   const setScenarioToggleButtons = (flags = {}) => {

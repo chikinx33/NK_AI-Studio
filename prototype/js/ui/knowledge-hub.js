@@ -137,18 +137,7 @@
     }).join('\n');
   }
 
-  function renderCharacterChips(list) {
-    return normalizeCharacters(list).map(function (item) {
-      return (
-        '<span class="knowledge-character-chip" data-character-token="' + escapeHtml(item.token) + '">' +
-        '<span>' + escapeHtml(item.token) + '</span>' +
-        '<button type="button" class="knowledge-character-remove" data-action="knowledge-remove-character" data-character-token="' + escapeHtml(item.token) + '" aria-label="캐릭터 삭제">×</button>' +
-        '</span>'
-      );
-    }).join('');
-  }
-
-  function renderCharacterDetails(list) {
+  function renderCharacterRows(list) {
     var uiText = getCharacterUiText();
     var normalized = normalizeCharacters(list);
     if (!normalized.length) {
@@ -157,7 +146,10 @@
     return normalized.map(function (item) {
       return (
         '<label class="knowledge-character-row" data-character-id="' + escapeHtml(item.characterId) + '">' +
-        '<span class="knowledge-character-token">' + escapeHtml(item.token) + '</span>' +
+        '<span class="knowledge-character-chip" data-character-token="' + escapeHtml(item.token) + '">' +
+        '<span>' + escapeHtml(item.token) + '</span>' +
+        '<button type="button" class="knowledge-character-remove" data-action="knowledge-remove-character" data-character-token="' + escapeHtml(item.token) + '" aria-label="캐릭터 삭제">×</button>' +
+        '</span>' +
         '<input type="text" class="knowledge-character-personality" data-character-personality="' + escapeHtml(item.characterId) + '" value="' + escapeHtml(item.personality || '') + '" placeholder="' + escapeHtml(uiText.traitPlaceholder) + '" />' +
         '</label>'
       );
@@ -377,9 +369,8 @@
       '<label class="knowledge-hub-field"><span>브랜드 스토리</span><textarea id="knowledge-brand-story" placeholder="브랜드/시리즈가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.">' + escapeHtml(knowledge.brandStory) + '</textarea></label>' +
       '<div class="knowledge-hub-field knowledge-character-field"><span>캐릭터</span>' +
       '<input id="knowledge-character-input" class="knowledge-character-input" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" />' +
-      '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterChips(knowledge.characters) + '</div>' +
-      '<p class="knowledge-character-help">@토큰 형식으로 저장되며 개요의 캐릭터 항목에 자동 등록됩니다.</p></div>' +
-      '<div class="knowledge-hub-field"><span>캐릭터/주체 설명</span><div id="knowledge-character-details" class="knowledge-character-details">' + renderCharacterDetails(knowledge.characters) + '</div><p class="knowledge-character-help">' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
+      '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterRows(knowledge.characters) + '</div>' +
+      '<p class="knowledge-character-help">@토큰 형식으로 저장되며 개요의 캐릭터 항목에 자동 등록됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '<label class="knowledge-hub-field"><span>세계관/배경</span><textarea id="knowledge-world-setting" placeholder="작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.">' + escapeHtml(knowledge.worldSetting) + '</textarea></label>' +
       '</div>' +
       '</section>' +
@@ -445,9 +436,7 @@
 
     function syncCharacterUi() {
       var chipBox = root.querySelector('#knowledge-character-chips');
-      var detailBox = root.querySelector('#knowledge-character-details');
-      if (chipBox) chipBox.innerHTML = renderCharacterChips(currentCharacters);
-      if (detailBox) detailBox.innerHTML = renderCharacterDetails(currentCharacters);
+      if (chipBox) chipBox.innerHTML = renderCharacterRows(currentCharacters);
     }
 
     function addCharacter(name) {
