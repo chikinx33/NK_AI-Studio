@@ -389,16 +389,6 @@
       '</details>' +
       '</div>' +
       '<div class="knowledge-hub-side">' +
-      '<section class="knowledge-hub-panel">' +
-      '<div class="knowledge-hub-panel-head"><h3>빠른 요약</h3><span>긴 설명 대신 현재 저장 상태만 확인</span></div>' +
-      '<div class="knowledge-hub-pill-grid">' +
-      '<div class="knowledge-hub-pill"><span>톤&매너</span><strong>' + escapeHtml(knowledge.brandVoice ? '입력됨' : '비어 있음') + '</strong></div>' +
-      '<div class="knowledge-hub-pill"><span>세계관</span><strong>' + escapeHtml(knowledge.worldSetting ? '입력됨' : '비어 있음') + '</strong></div>' +
-      '<div class="knowledge-hub-pill"><span>금지 표현</span><strong>' + escapeHtml(bannedCount) + '개</strong></div>' +
-      '<div class="knowledge-hub-pill"><span>성공 사례</span><strong>' + escapeHtml(successesCount) + '개</strong></div>' +
-      '</div>' +
-      '<p class="knowledge-hub-help">여기 저장한 내용은 Brand Core를 우선 갱신하고, 기존 호환을 위해 현재 연결 에피소드 payload의 knowledgeHub에도 함께 반영됩니다.</p>' +
-      '</section>' +
       '<details class="knowledge-hub-disclosure" open>' +
       '<summary><div><strong>참조와 학습</strong><span>좋았던 레퍼런스와 성공 패턴</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(referencesCount + successesCount) + '개 데이터</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
