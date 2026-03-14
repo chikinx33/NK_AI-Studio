@@ -357,9 +357,11 @@
 
   api.library = async function (kind, projectId) {
     var uid = resolveUserId();
-    var url = kind === 'image'
-      ? withBase('/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid))
-      : withBase('/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid));
+    var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
+    var base = kind === 'image'
+      ? '/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid)
+      : '/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid);
+    var url = withBase(base + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
     var res = await fetch(url, { headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'library_error');
