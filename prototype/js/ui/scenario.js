@@ -175,7 +175,7 @@
     if (knowledge.referenceContents.length) lines.push(`참조 ${knowledge.referenceContents.length}개`);
     box.textContent = lines.length
       ? `Knowledge Hub 적용 중 · ${lines.join(' · ')}`
-      : 'Knowledge Hub 문맥이 아직 없습니다. 필요하면 Knowledge Hub에서 브랜드 규칙을 먼저 입력해 주세요.';
+      : 'Knowledge Hub 규칙을 작성해 주세요.';
   };
 
   const setScenarioLoading = (show, message) => {
