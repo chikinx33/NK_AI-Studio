@@ -7,6 +7,248 @@
     narrationEnabled: false,
     dubbingEnabled: false
   };
+  const TARGET_OPTIONS = [
+    {
+      value: '영유아',
+      ko: '영유아 · 학습/놀이/감성 발달',
+      en: 'Infants · learning/play/emotional development'
+    },
+    {
+      value: '아동',
+      ko: '아동 · 기초 학습/호기심/놀이/이야기',
+      en: 'Children · basic learning/curiosity/play/stories'
+    },
+    {
+      value: '청소년',
+      ko: '청소년 · 학습/시험/자기 정체성/엔터테인먼트',
+      en: 'Teens · study/exams/identity/entertainment'
+    },
+    {
+      value: '청년',
+      ko: '청년 · 엔터테인먼트/감성/힐링/정보/자기계발',
+      en: 'Young adults · entertainment/emotion/healing/info/self-growth'
+    },
+    {
+      value: '직장인',
+      ko: '직장인 · 업무 효율/실용 정보/자기계발/스트레스 해소',
+      en: 'Office workers · productivity/practical info/self-growth/stress relief'
+    },
+    {
+      value: '중장년',
+      ko: '중장년 · 생활 정보/가정/경제/건강/취미/노후 설계',
+      en: 'Middle-aged adults · life info/family/economy/health/hobbies/retirement planning'
+    },
+    {
+      value: '시니어',
+      ko: '시니어 · 건강/여가/힐링/회고/정치',
+      en: 'Seniors · health/leisure/healing/reflection/current affairs'
+    },
+    {
+      value: '전 연령',
+      ko: '전 연령 · 공감/정보/엔터테인먼트',
+      en: 'All ages · empathy/info/entertainment'
+    }
+  ];
+  const DURATION_OPTIONS = [
+    { value: '15', ko: '15초', en: '15s' },
+    { value: '30', ko: '30초', en: '30s' },
+    { value: '45', ko: '45초', en: '45s' },
+    { value: '60', ko: '1분', en: '1m' },
+    { value: '1800', ko: '30분', en: '30m' },
+    { value: '3600', ko: '1시간', en: '1h' },
+    { value: '7200', ko: '2시간', en: '2h' }
+  ];
+  const SCENARIO_UI_TEXT = {
+    ko: {
+      genrePlaceholder: '장르 선택',
+      subgenrePlaceholder: '세부 장르 선택',
+      targetPlaceholder: '시청 타겟 선택',
+      purposePlaceholder: '시청 목적 선택',
+      durationPlaceholder: '길이 선택',
+      tonePlaceholder: '톤 선택',
+      stylePlaceholder: '스타일 선택',
+      durationCustomPlaceholder: '직접 입력(초)',
+      knowledgeEmpty: '지식 허브에 저장된 내용이 아직 없습니다.',
+      knowledgeLabels: {
+        brandVoice: '브랜드 보이스',
+        brandStory: '브랜드 스토리',
+        brandCharacter: '대표 캐릭터/주체',
+        worldSetting: '세계관/배경',
+        brandRules: '브랜드 규칙',
+        bannedExpressions: '금지 표현',
+        referenceContents: '참조 콘텐츠',
+        successCases: '성공 패턴'
+      }
+    },
+    en: {
+      genrePlaceholder: 'Select genre',
+      subgenrePlaceholder: 'Select subgenre',
+      targetPlaceholder: 'Select target',
+      purposePlaceholder: 'Select viewing purpose',
+      durationPlaceholder: 'Select duration',
+      tonePlaceholder: 'Select tone',
+      stylePlaceholder: 'Select style',
+      durationCustomPlaceholder: 'Enter seconds',
+      knowledgeEmpty: 'No Knowledge Hub content has been saved yet.',
+      knowledgeLabels: {
+        brandVoice: 'Brand voice',
+        brandStory: 'Brand story',
+        brandCharacter: 'Main character / subject',
+        worldSetting: 'World / setting',
+        brandRules: 'Brand rules',
+        bannedExpressions: 'Banned expressions',
+        referenceContents: 'Reference content',
+        successCases: 'Successful patterns'
+      }
+    }
+  };
+  const OPTION_LABELS_EN = {
+    '키즈 · 영유아': 'Kids · Infants',
+    '유아 교육': 'Early childhood education',
+    '키즈 놀이': 'Kids play',
+    '키즈 학습': 'Kids learning',
+    '동요': 'Nursery rhymes',
+    '율동': 'Dance songs',
+    '동화': 'Fairy tale',
+    '스토리 · 서사': 'Story · Narrative',
+    '창작': 'Creative storytelling',
+    '에피소드': 'Episode',
+    '세계관': 'Worldbuilding',
+    '판타지': 'Fantasy',
+    '힐링': 'Healing',
+    '지식 · 교양': 'Knowledge · Culture',
+    '상식': 'General knowledge',
+    '과학': 'Science',
+    '수학': 'Math',
+    '역사': 'History',
+    '인문학': 'Humanities',
+    '철학': 'Philosophy',
+    '심리': 'Psychology',
+    '시사': 'Current affairs',
+    '교육 · 학습': 'Education · Learning',
+    '공부법': 'Study methods',
+    '시험 대비': 'Exam prep',
+    '자격증': 'Certification',
+    '언어 학습': 'Language learning',
+    '코딩': 'Coding',
+    '튜토리얼': 'Tutorial',
+    '음식 · 요리': 'Food · Cooking',
+    '레시피': 'Recipe',
+    '먹방': 'Mukbang',
+    '맛집 소개': 'Restaurant guide',
+    '요리 과정': 'Cooking process',
+    '음식 리뷰': 'Food review',
+    '홈쿡': 'Home cooking',
+    '여행 · 관광': 'Travel · Tourism',
+    '국내 여행': 'Domestic travel',
+    '해외 여행': 'Overseas travel',
+    '관광지 소개': 'Attraction guide',
+    '숨은 명소': 'Hidden gems',
+    '랜선 여행': 'Virtual travel',
+    '라이프 · 일상': 'Life · Daily',
+    '브이로그': 'Vlog',
+    '일상 기록': 'Daily log',
+    '루틴': 'Routine',
+    '자취': 'Living alone',
+    '육아': 'Parenting',
+    '직장 생활': 'Work life',
+    '리뷰 · 추천': 'Review · Recommendations',
+    '제품': 'Product',
+    '서비스': 'Service',
+    '콘텐츠 추천': 'Content recommendation',
+    '앱': 'App',
+    '게임': 'Game',
+    '책': 'Book',
+    '영화': 'Movie',
+    '엔터테인먼트': 'Entertainment',
+    '코미디': 'Comedy',
+    '패러디': 'Parody',
+    '챌린지': 'Challenge',
+    '리액션': 'Reaction',
+    '밈 콘텐츠': 'Meme content',
+    '게임 플레이': 'Gameplay',
+    '공략': 'Walkthrough',
+    '하이라이트': 'Highlights',
+    '게임 리뷰': 'Game review',
+    '모바일 게임': 'Mobile games',
+    '음악 · 사운드': 'Music · Sound',
+    '음악 소개': 'Music introduction',
+    'BGM': 'BGM',
+    '커버': 'Cover',
+    'ASMR': 'ASMR',
+    '사운드 콘텐츠': 'Sound content',
+    '스포츠 · 피트니스': 'Sports · Fitness',
+    '운동 루틴': 'Workout routine',
+    '스트레칭': 'Stretching',
+    '홈트레이닝': 'Home training',
+    '스포츠 해설': 'Sports commentary',
+    '경기 요약': 'Match summary',
+    '취미 · 크리에이티브': 'Hobby · Creative',
+    '그림': 'Drawing',
+    'DIY': 'DIY',
+    '공예': 'Crafts',
+    '디자인': 'Design',
+    '글쓰기': 'Writing',
+    '사진': 'Photography',
+    '비즈니스 · 경제': 'Business · Economy',
+    '창업': 'Startup',
+    '재테크': 'Finance',
+    '경제 상식': 'Economic basics',
+    '마케팅': 'Marketing',
+    '브랜딩': 'Branding',
+    '테크 · IT': 'Tech · IT',
+    'AI': 'AI',
+    '신기술': 'Emerging tech',
+    '앱 소개': 'App introduction',
+    '기기 리뷰': 'Device review',
+    '생산성 툴': 'Productivity tools',
+    '힐링 · 감성': 'Healing · Mood',
+    '명상': 'Meditation',
+    '위로': 'Comfort',
+    '힐링 영상': 'Healing video',
+    '감성 브이로그': 'Emotional vlog',
+    '자연 풍경': 'Nature scenery',
+    '종교 · 신앙': 'Religion · Faith',
+    '말씀 묵상': 'Scripture meditation',
+    '설교 요약': 'Sermon summary',
+    '신앙 이야기': 'Faith story',
+    '간증': 'Testimony',
+    '기도': 'Prayer',
+    '사회 · 공감': 'Society · Empathy',
+    '인터뷰': 'Interview',
+    '다큐형 콘텐츠': 'Documentary format',
+    '사회 이슈': 'Social issues',
+    '공감 토크': 'Empathy talk',
+    '학습': 'Learning',
+    '놀이': 'Play',
+    '생활 정보': 'Lifestyle info',
+    '자기계발': 'Self-development',
+    '커리어': 'Career',
+    '건강': 'Health',
+    '여가': 'Leisure',
+    '가정': 'Family',
+    '라이프스타일': 'Lifestyle',
+    '광고': 'Advertising',
+    '차분': 'Calm',
+    '진지': 'Serious',
+    '유머': 'Humorous',
+    '공감': 'Empathetic',
+    '전문': 'Professional',
+    '친근': 'Friendly',
+    '설득': 'Persuasive',
+    '중립': 'Neutral',
+    '풍자': 'Satirical',
+    '스토리': 'Story-driven',
+    '실사': 'Live action',
+    '애니메이션(2D)': 'Animation (2D)',
+    '애니메이션(3D)': 'Animation (3D)',
+    '일러스트': 'Illustration',
+    '모션그래픽': 'Motion graphics',
+    '인포그래픽': 'Infographic',
+    '클레이(스톱모션)': 'Clay (stop motion)',
+    '스케치': 'Sketch',
+    '시네마틱': 'Cinematic'
+  };
   let currentCharacters = [];
   let characterSeq = 1;
 
@@ -36,6 +278,12 @@
   };
 
   const sanitizeText = (v) => String(v == null ? '' : v).replace(/[<>]/g, '').trim();
+  const escapeHtml = (v) => String(v == null ? '' : v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 
   const makeCharacterId = () => `char_${String(characterSeq++).padStart(3, '0')}`;
 
@@ -151,8 +399,6 @@
 
   const buildKnowledgeDrivenNotes = (manualText, knowledge) => {
     const lines = [];
-    const manual = sanitizeText(manualText || '');
-    if (manual) lines.push(`사용자 추가 지시: ${manual}`);
     if (knowledge.brandVoice) lines.push(`브랜드 보이스: ${knowledge.brandVoice}`);
     if (knowledge.brandStory) lines.push(`브랜드 스토리: ${knowledge.brandStory}`);
     if (knowledge.brandCharacter) lines.push(`대표 캐릭터/주체: ${knowledge.brandCharacter}`);
@@ -165,17 +411,30 @@
   };
 
   const renderKnowledgeHint = (payload = {}) => {
-    const box = document.getElementById('scenario-knowledge-hint');
+    const box = document.getElementById('scenario-knowledge-summary');
     if (!box) return;
     const knowledge = readKnowledgeHub(payload);
-    const lines = [];
-    if (knowledge.brandVoice) lines.push(`보이스: ${knowledge.brandVoice}`);
-    if (knowledge.brandRules.length) lines.push(`규칙 ${knowledge.brandRules.length}개`);
-    if (knowledge.bannedExpressions.length) lines.push(`금지 ${knowledge.bannedExpressions.length}개`);
-    if (knowledge.referenceContents.length) lines.push(`참조 ${knowledge.referenceContents.length}개`);
-    box.textContent = lines.length
-      ? `Knowledge Hub 적용 중 · ${lines.join(' · ')}`
-      : 'Knowledge Hub 규칙을 작성해 주세요.';
+    const uiText = getScenarioUiText();
+    const summaryItems = [
+      knowledge.brandVoice ? { key: 'brandVoice', value: knowledge.brandVoice } : null,
+      knowledge.brandStory ? { key: 'brandStory', value: knowledge.brandStory } : null,
+      knowledge.brandCharacter ? { key: 'brandCharacter', value: knowledge.brandCharacter } : null,
+      knowledge.worldSetting ? { key: 'worldSetting', value: knowledge.worldSetting } : null,
+      knowledge.brandRules.length ? { key: 'brandRules', value: knowledge.brandRules.join(', ') } : null,
+      knowledge.bannedExpressions.length ? { key: 'bannedExpressions', value: knowledge.bannedExpressions.join(', ') } : null,
+      knowledge.referenceContents.length ? { key: 'referenceContents', value: knowledge.referenceContents.join(', ') } : null,
+      knowledge.successCases.length ? { key: 'successCases', value: knowledge.successCases.join(', ') } : null
+    ].filter(Boolean);
+    if (!summaryItems.length) {
+      box.innerHTML = `<p class="scenario-knowledge-empty">${escapeHtml(uiText.knowledgeEmpty)}</p>`;
+      return;
+    }
+    box.innerHTML = summaryItems.map((item) => `
+      <div class="scenario-knowledge-item">
+        <strong>${escapeHtml(uiText.knowledgeLabels[item.key] || item.key)}</strong>
+        <span>${escapeHtml(item.value)}</span>
+      </div>
+    `).join('');
   };
 
   const setScenarioLoading = (show, message) => {
@@ -215,6 +474,19 @@
     };
   };
 
+  const getScenarioUiText = () => SCENARIO_UI_TEXT[getUiLang()] || SCENARIO_UI_TEXT.ko;
+
+  const translateScenarioOption = (value) => {
+    const raw = String(value || '').trim();
+    if (!raw || getUiLang() !== 'en') return raw;
+    return OPTION_LABELS_EN[raw] || raw;
+  };
+
+  const firstOf = (value) => {
+    if (Array.isArray(value)) return String(value.find(Boolean) || '').trim();
+    return String(value || '').trim();
+  };
+
   const extractNarrationOnlyText = (value) => {
     const raw = String(value || '').trim();
     if (!raw) return '';
@@ -224,12 +496,94 @@
     return String(m[1] || '').trim();
   };
 
-  const renderTagButtons = (box, list, selected = [], single = false) => {
-    if (!box) return;
-    box.innerHTML = (list || []).map(v => {
-      const active = selected.includes(v) ? 'active' : '';
-      return `<button type="button" class="tag-toggle ${active}" data-value="${v}" data-single="${single ? '1' : ''}">${v}</button>`;
-    }).join('');
+  const renderSelectOptions = (select, items = [], selectedValue = '', placeholder = '', options = {}) => {
+    if (!select) return;
+    const allowEmpty = options.allowEmpty !== false;
+    const current = String(selectedValue || '');
+    const normalized = (Array.isArray(items) ? items : []).map((item) => {
+      if (typeof item === 'string') {
+        return {
+          value: item,
+          label: translateScenarioOption(item)
+        };
+      }
+      return {
+        value: String(item?.value || ''),
+        label: getUiLang() === 'en' ? String(item?.en || item?.label || item?.ko || item?.value || '') : String(item?.ko || item?.label || item?.value || '')
+      };
+    });
+    const html = [];
+    if (allowEmpty) {
+      html.push(`<option value="">${escapeHtml(placeholder)}</option>`);
+    }
+    normalized.forEach((item) => {
+      const selected = item.value === current ? ' selected' : '';
+      html.push(`<option value="${escapeHtml(item.value)}"${selected}>${escapeHtml(item.label)}</option>`);
+    });
+    select.innerHTML = html.join('');
+    if (!allowEmpty && !normalized.some(item => item.value === current) && normalized[0]) {
+      select.value = normalized[0].value;
+    } else {
+      select.value = current;
+    }
+  };
+
+  const hasPresetDuration = (value) => DURATION_OPTIONS.some(item => item.value === String(value || ''));
+
+  const getCharacterEnabled = () => !!document.getElementById('character-enabled')?.checked;
+
+  const syncCharacterUi = () => {
+    const enabled = getCharacterEnabled();
+    const input = document.getElementById('character-input');
+    const chips = document.getElementById('character-chips');
+    if (input) input.disabled = !enabled;
+    if (chips) chips.classList.toggle('is-disabled', !enabled);
+  };
+
+  const renderOverviewSelects = (state = {}) => {
+    const uiText = getScenarioUiText();
+    const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
+    const categoryValue = String(state.purposeCategory || categories[0] || '');
+    const subgenres = NK.core.purposeCategories?.[categoryValue] || [];
+    renderSelectOptions(document.getElementById('purpose-category'), categories, categoryValue, uiText.genrePlaceholder, { allowEmpty: false });
+    renderSelectOptions(document.getElementById('purpose-tag-select'), subgenres, state.purposeTag, uiText.subgenrePlaceholder);
+    renderSelectOptions(document.getElementById('target-select'), TARGET_OPTIONS, state.target, uiText.targetPlaceholder, { allowEmpty: false });
+    renderSelectOptions(document.getElementById('needs-select'), NK.core.needsList || [], state.need, uiText.purposePlaceholder);
+    renderSelectOptions(document.getElementById('tone-select'), NK.core.toneList || [], state.tone, uiText.tonePlaceholder);
+    renderSelectOptions(document.getElementById('style-select'), NK.core.styleList || [], state.style, uiText.stylePlaceholder);
+    renderSelectOptions(document.getElementById('duration-select'), DURATION_OPTIONS, state.durationPreset, uiText.durationPlaceholder);
+    const durationCustomInput = document.getElementById('duration-custom-input');
+    if (durationCustomInput) durationCustomInput.placeholder = uiText.durationCustomPlaceholder;
+  };
+
+  const getOverviewSelections = () => ({
+    purposeCategory: document.getElementById('purpose-category')?.value || '',
+    purposeTag: document.getElementById('purpose-tag-select')?.value || '',
+    target: document.getElementById('target-select')?.value || '',
+    need: document.getElementById('needs-select')?.value || '',
+    tone: document.getElementById('tone-select')?.value || '',
+    style: document.getElementById('style-select')?.value || '',
+    durationPreset: document.getElementById('duration-select')?.value || '',
+    durationCustom: document.getElementById('duration-custom-input')?.value || '',
+    charactersEnabled: getCharacterEnabled()
+  });
+
+  const syncDurationInputs = (source = '') => {
+    const durationSelect = document.getElementById('duration-select');
+    const customInput = document.getElementById('duration-custom-input');
+    if (!durationSelect || !customInput) return;
+    const customValue = String(customInput.value || '').trim();
+    if (source === 'custom' && customValue) {
+      durationSelect.value = '';
+      return;
+    }
+    if (source === 'preset' && durationSelect.value) {
+      customInput.value = '';
+      return;
+    }
+    if (!customValue && !durationSelect.value) {
+      durationSelect.value = NK.config.DEFAULTS?.DURATION || '15';
+    }
   };
 
   const toArray = (v) => {
@@ -251,27 +605,45 @@
     const fd = new FormData(form);
     const payload = {};
     fd.forEach((v, k) => { payload[k] = v; });
-    payload.purposeTags = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
-    payload.needs = Array.from(document.querySelectorAll('#needs-tags .tag-toggle.active')).map(b => b.dataset.value);
-    payload.tones = Array.from(document.querySelectorAll('#tone-tags .tag-toggle.active')).map(b => b.dataset.value);
-    payload.styles = Array.from(document.querySelectorAll('#style-tags .tag-toggle.active')).map(b => b.dataset.value);
-    payload.duration = document.querySelector('.duration-toggle.active')?.dataset.value || NK.config.DEFAULTS?.DURATION || '15';
+    const purposeTag = document.getElementById('purpose-tag-select')?.value || '';
+    const need = document.getElementById('needs-select')?.value || '';
+    const tone = document.getElementById('tone-select')?.value || '';
+    const style = document.getElementById('style-select')?.value || '';
+    const durationPreset = document.getElementById('duration-select')?.value || '';
+    const durationCustom = String(document.getElementById('duration-custom-input')?.value || '').trim();
+    const hasCustomDuration = /^\d+$/.test(durationCustom) && Number(durationCustom) > 0;
+    payload.purposeTags = purposeTag ? [purposeTag] : [];
+    payload.needs = need ? [need] : [];
+    payload.tones = tone ? [tone] : [];
+    payload.styles = style ? [style] : [];
+    payload.tone = '';
+    payload.style = '';
+    payload.duration = hasCustomDuration
+      ? String(Math.max(1, Math.floor(Number(durationCustom) || 0)))
+      : (durationPreset || NK.config.DEFAULTS?.DURATION || '15');
+    payload.durationMode = hasCustomDuration ? 'custom' : 'preset';
+    payload.durationCustom = hasCustomDuration ? payload.duration : '';
     payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || '16:9';
     if (form.target) payload.target = form.target.value;
+    payload.charactersEnabled = getCharacterEnabled();
     const normalizedCharacters = normalizeCharacters(currentCharacters);
     currentCharacters = normalizedCharacters;
     syncCharacterSeq(currentCharacters);
-    payload.characters = normalizedCharacters.map((c) => ({
+    payload.characters = (payload.charactersEnabled ? normalizedCharacters : []).map((c) => ({
       characterId: c.characterId,
       displayName: c.displayName,
       token: c.token
     }));
     payload.narrationEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active');
     payload.dubbingEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active');
-    const matchedTokens = payload.characters
-      .filter(c => String(payload.topic || '').includes(c.displayName))
-      .map(c => c.token);
-    if (matchedTokens.length) payload.characterHints = matchedTokens;
+    if (payload.charactersEnabled) {
+      const matchedTokens = payload.characters
+        .filter(c => String(payload.topic || '').includes(c.displayName))
+        .map(c => c.token);
+      if (matchedTokens.length) payload.characterHints = matchedTokens;
+    } else {
+      payload.characterHints = [];
+    }
     // Keep project/episode metadata while editing scenario fields.
     if (currentPayload && typeof currentPayload === 'object') {
       if (currentPayload.seriesId && !payload.seriesId) payload.seriesId = currentPayload.seriesId;
@@ -282,9 +654,8 @@
       Object.assign(payload, NK.service.project.applyProjectCore(payload, currentPayload));
     }
     const knowledge = readKnowledgeHub(payload);
-    const manualDirectives = form.banned ? String(form.banned.value || '').trim() : '';
-    payload.manualDirectives = manualDirectives;
-    payload.extraNotes = buildKnowledgeDrivenNotes(manualDirectives, knowledge);
+    payload.manualDirectives = '';
+    payload.extraNotes = buildKnowledgeDrivenNotes('', knowledge);
     payload.banned = payload.extraNotes;
     payload.knowledgeHub = Object.assign({}, knowledge);
     return payload;
@@ -340,11 +711,10 @@
     if (p.purposeCategory) parts.push(`Genre: ${p.purposeCategory}${p.purposeTags?.length ? ` (${p.purposeTags.join(', ')})` : ''}`);
     if (p.target) parts.push(`Audience: ${p.target}`);
     if (p.needs?.length) parts.push(`Needs: ${p.needs.join(', ')}`);
-    const toneStr = [...(p.tones || []), p.tone || ''].filter(Boolean).join(', ');
+    const toneStr = Array.from(new Set([...(p.tones || []), p.tone || ''].filter(Boolean))).join(', ');
     if (toneStr) parts.push(`Tone: ${toneStr}`);
-    const styleStr = [...(p.styles || []), p.style || ''].filter(Boolean).join(', ');
+    const styleStr = Array.from(new Set([...(p.styles || []), p.style || ''].filter(Boolean))).join(', ');
     if (styleStr) parts.push(`Style: ${styleStr}`);
-    if (p.banned) parts.push(`Directives: ${p.banned}`);
     if (knowledge.brandRules.length) parts.push(`Knowledge rules: ${knowledge.brandRules.length}개`);
     if (knowledge.bannedExpressions.length) parts.push(`Blocked terms: ${knowledge.bannedExpressions.length}개`);
     return parts.join(' · ');
@@ -532,29 +902,42 @@
     const defaults = NK.config.DEFAULTS || {};
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
     const defaultCat = p.purposeCategory || categories[0] || '';
-    const targetSel = document.getElementById('target-select');
-    const defaultTarget = p.target || (targetSel && targetSel.options.length ? targetSel.options[0].value : '');
+    const selectedPurposeTag = firstOf(p.purposeTags);
+    const selectedNeed = firstOf(p.needs);
+    const selectedTone = firstOf(p.tones) || sanitizeText(p.tone || '');
+    const selectedStyle = firstOf(p.styles) || sanitizeText(p.style || '');
+    const durationValue = String(p.duration || defaults.DURATION || '15');
+    const selectedDurationPreset = hasPresetDuration(p.durationMode === 'custom' ? '' : durationValue) ? durationValue : '';
+    const selectedDurationCustom = p.durationMode === 'custom'
+      ? String(p.durationCustom || durationValue || '')
+      : (hasPresetDuration(durationValue) ? '' : durationValue);
+    const charactersEnabled = boolVal(p.charactersEnabled, currentCharacters.length > 0);
 
     if (form.topic) form.topic.value = p.topic || draft.title || '';
-    if (form.purposeCategory) form.purposeCategory.value = defaultCat;
-    if (form.target) form.target.value = defaultTarget;
-    if (form.tone) form.tone.value = p.tone || '';
-    if (form.style) form.style.value = p.style || '';
-    if (form.banned) form.banned.value = p.manualDirectives || p.extraNotesManual || p.banned || '';
+    renderOverviewSelects({
+      purposeCategory: defaultCat,
+      purposeTag: selectedPurposeTag,
+      target: p.target || TARGET_OPTIONS[0]?.value || '',
+      need: selectedNeed,
+      tone: selectedTone,
+      style: selectedStyle,
+      durationPreset: selectedDurationPreset || defaults.DURATION || '15',
+      durationCustom: selectedDurationCustom,
+      charactersEnabled
+    });
+    const customDurationInput = document.getElementById('duration-custom-input');
+    if (customDurationInput) customDurationInput.value = selectedDurationCustom;
+    const characterEnabledInput = document.getElementById('character-enabled');
+    if (characterEnabledInput) characterEnabledInput.checked = charactersEnabled;
 
     // toggles
-    setActiveButtons('.duration-toggle', p.duration || defaults.DURATION || '15');
     setActiveButtons('.ratio-btn', p.aspectRatio || '16:9');
     setScenarioToggleButtons(flags);
     renderCharacterChips();
+    syncCharacterUi();
+    syncDurationInputs(selectedDurationCustom ? 'custom' : 'preset');
     const characterInput = document.getElementById('character-input');
     if (characterInput) characterInput.value = '';
-
-    const one = (arr) => Array.isArray(arr) && arr.length ? [arr[0]] : [];
-    renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[defaultCat] || [], one(p.purposeTags), true);
-    renderTagButtons(document.getElementById('needs-tags'), NK.core.needsList || [], one(p.needs), true);
-    renderTagButtons(document.getElementById('tone-tags'), NK.core.toneList || [], toArray(p.tones), true);
-    renderTagButtons(document.getElementById('style-tags'), NK.core.styleList || [], toArray(p.styles), true);
     renderKnowledgeHint(currentPayload);
 
     scenario.renderScenes(draft.scenes || []);
@@ -578,20 +961,12 @@
     };
     if (main) main.classList.add('loading-blur');
 
-    // 장르(목적 대분류) 옵션을 주입 - 기본값이 비어 보이는 문제 대응
-    const ensurePurposeOptions = () => {
-      const sel = document.getElementById('purpose-category');
-      if (!sel || sel.options.length) return;
-      const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
-      categories.forEach((c, idx) => {
-        const opt = document.createElement('option');
-        opt.value = c;
-        opt.textContent = c;
-        if (idx === 0) opt.selected = true;
-        sel.appendChild(opt);
-      });
-    };
-    ensurePurposeOptions();
+    const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
+    renderOverviewSelects({
+      purposeCategory: categories[0] || '',
+      target: TARGET_OPTIONS[0]?.value || '',
+      durationPreset: NK.config.DEFAULTS?.DURATION || '15'
+    });
 
     // 화면 비율 버튼(16:9/9:16/1:1)이 폼 밖에 있어 클릭이 안 먹던 문제 해결
     const ratioGroup = document.getElementById('ratio-group');
@@ -636,13 +1011,17 @@
     loadDraft(draft);
     if (!draft) {
       currentCharacters = [];
-      currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [] });
+      const characterEnabledInput = document.getElementById('character-enabled');
+      if (characterEnabledInput) characterEnabledInput.checked = false;
+      currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [], charactersEnabled: false });
       setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
       renderCharacterChips();
+      syncCharacterUi();
       renderKnowledgeHint(currentPayload);
     }
 
     const addCharacter = (name) => {
+      if (!getCharacterEnabled()) return false;
       const displayName = sanitizeText(name).replace(/^@+/, '');
       if (!displayName) return false;
       const token = `@${displayName}`;
@@ -663,17 +1042,24 @@
         if (e.key !== 'Enter') return;
         e.preventDefault();
         const ok = addCharacter(characterInput.value || '');
-        if (ok) characterInput.value = '';
+        if (ok) {
+          characterInput.value = '';
+          currentPayload = Object.assign({}, currentPayload || {}, collectPayload());
+          renderKnowledgeHint(currentPayload);
+        }
       });
     }
 
+    const syncOverviewPayload = () => {
+      currentPayload = Object.assign({}, currentPayload || {}, collectPayload());
+      renderKnowledgeHint(currentPayload);
+    };
+
     // 토글/버튼 클릭
     form.addEventListener('click', (e) => {
-      const btn = e.target.closest('.tag-toggle, .duration-toggle, .ratio-btn, .scenario-flag-toggle');
+      const btn = e.target.closest('.ratio-btn, .scenario-flag-toggle');
       if (!btn) return;
-      if (btn.classList.contains('duration-toggle')) {
-        setActiveButtons('.duration-toggle', btn.dataset.value);
-      } else if (btn.classList.contains('ratio-btn')) {
+      if (btn.classList.contains('ratio-btn')) {
         setActiveButtons('.ratio-btn', btn.dataset.ratio || btn.dataset.value);
       } else if (btn.classList.contains('scenario-flag-toggle')) {
         btn.classList.toggle('active');
@@ -682,21 +1068,33 @@
           dubbingEnabled: !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active'),
           characters: currentCharacters
         });
-      } else if (btn.classList.contains('tag-toggle')) {
-        if (btn.dataset.single === '1') {
-          btn.parentElement.querySelectorAll('.tag-toggle').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
-        } else {
-          btn.classList.toggle('active');
-        }
       }
-      if (btn.closest('#purpose-tags') || btn.name === 'purposeCategory') {
-        const cat = form.purposeCategory ? form.purposeCategory.value : '';
-        const sel = Array.from(document.querySelectorAll('#purpose-tags .tag-toggle.active')).map(b => b.dataset.value);
-        renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], sel, true);
+      syncOverviewPayload();
+    });
+
+    form.addEventListener('change', (e) => {
+      const target = e.target;
+      if (!target) return;
+      if (target.id === 'purpose-category') {
+        renderOverviewSelects(Object.assign({}, getOverviewSelections(), {
+          purposeCategory: target.value,
+          purposeTag: ''
+        }));
+      } else if (target.id === 'duration-select') {
+        syncDurationInputs('preset');
+      } else if (target.id === 'character-enabled') {
+        syncCharacterUi();
       }
-      currentPayload = Object.assign({}, currentPayload || {}, collectPayload());
-      renderKnowledgeHint(currentPayload);
+      syncOverviewPayload();
+    });
+
+    form.addEventListener('input', (e) => {
+      const target = e.target;
+      if (!target) return;
+      if (target.id === 'duration-custom-input') {
+        syncDurationInputs('custom');
+        syncOverviewPayload();
+      }
     });
 
     form.addEventListener('click', (e) => {
@@ -706,6 +1104,7 @@
       if (!removeId) return;
       currentCharacters = currentCharacters.filter(c => String(c.characterId) !== String(removeId));
       renderCharacterChips();
+      syncOverviewPayload();
     });
 
     const cardsContainer = document.getElementById('scenario-cards');
@@ -727,6 +1126,10 @@
       const latest = collectScenesFromCards();
       const mergedScenes = mergeSceneSnapshots(draft?.scenes || [], latest);
       if (draft) draft.scenes = mergedScenes;
+      renderOverviewSelects(getOverviewSelections());
+      syncDurationInputs();
+      syncCharacterUi();
+      renderKnowledgeHint(currentPayload);
       scenario.renderScenes(mergedScenes.length ? mergedScenes : (draft?.scenes || []));
     };
 
@@ -742,20 +1145,24 @@
       if (evt.key === key || evt.key === 'nk_lang') rerenderForLocale();
     });
 
-    // 카테고리 변경 시 목적 태그 재렌더
-    if (form.purposeCategory) {
-      form.purposeCategory.addEventListener('change', () => {
-        const cat = form.purposeCategory.value;
-        renderTagButtons(document.getElementById('purpose-tags'), NK.core.purposeCategories[cat] || [], [], true);
-      });
-    }
-
     form.addEventListener('reset', () => {
       setTimeout(() => {
         currentCharacters = [];
+        renderOverviewSelects({
+          purposeCategory: categories[0] || '',
+          target: TARGET_OPTIONS[0]?.value || '',
+          durationPreset: NK.config.DEFAULTS?.DURATION || '15',
+          charactersEnabled: false
+        });
+        const durationCustomInput = document.getElementById('duration-custom-input');
+        if (durationCustomInput) durationCustomInput.value = '';
+        const characterEnabledInput = document.getElementById('character-enabled');
+        if (characterEnabledInput) characterEnabledInput.checked = false;
         renderCharacterChips();
+        syncDurationInputs();
+        syncCharacterUi();
         setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
-        currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [] });
+        currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [], charactersEnabled: false });
         renderKnowledgeHint(currentPayload);
       }, 0);
     });

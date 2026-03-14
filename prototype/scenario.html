@@ -51,88 +51,71 @@
         <section class="scenario-section" id="scenario-section">
           <div class="scenario-grid">
             <div class="section-caption left-caption caption-row">
-              <span>개요</span>
+              <span data-i18n="scenario_overview">개요</span>
             </div>
             <form class="card scenario-form" id="scenario-form">
               <div class="form-group">
-                <label>주제</label>
-                <textarea name="topic" rows="2" placeholder="예: 모양새 친구들" required></textarea>
+                <label data-i18n="scenario_topic">주제</label>
+                <textarea name="topic" rows="2" placeholder="예: 모양새 친구들" data-i18n-placeholder="scenario_topic_placeholder" required></textarea>
               </div>
               <div class="form-group">
-                <label>장르</label>
+                <label data-i18n="scenario_genre">장르</label>
                 <select id="purpose-category" name="purposeCategory" required></select>
               </div>
               <div class="form-group">
-                <div id="purpose-tags" class="tag-checkboxes"></div>
+                <label data-i18n="scenario_subgenre">세부 장르</label>
+                <select id="purpose-tag-select"></select>
               </div>
               <div class="form-group">
-                <label>시청 타겟</label>
-                <select name="target" id="target-select" required>
-                  <option value="영유아">영유아 · 학습/놀이/감성 발달</option>
-                  <option value="아동">아동 · 기초 학습/호기심/놀이/이야기</option>
-                  <option value="청소년">청소년 · 학습/시험/자기 정체성/엔터테인먼트</option>
-                  <option value="청년">청년 · 엔터테인먼트/감성/힐링/정보/자기계발</option>
-                  <option value="직장인">직장인 · 업무 효율/실용 정보/자기계발/스트레스 해소</option>
-                  <option value="중장년">중장년 · 생활 정보/가정/경제/건강/취미/노후 설계</option>
-                  <option value="시니어">시니어 · 건강/여가/힐링/회고/정치</option>
-                  <option value="전 연령">전 연령 · 공감/정보/엔터테인먼트</option>
-                </select>
+                <label data-i18n="scenario_target">시청 타겟</label>
+                <select name="target" id="target-select" required></select>
               </div>
               <div class="form-group">
-                <div class="tag-checkboxes" id="needs-tags">
-                  <!-- populated as toggle chips in JS -->
+                <label data-i18n="scenario_view_purpose">시청 목적</label>
+                <select id="needs-select"></select>
+              </div>
+              <div class="form-group">
+                <label data-i18n="scenario_duration">영상 길이</label>
+                <div class="scenario-inline-controls">
+                  <select id="duration-select"></select>
+                  <input id="duration-custom-input" type="number" min="1" step="1" placeholder="직접 입력(초)" data-i18n-placeholder="scenario_duration_custom_placeholder" />
                 </div>
               </div>
               <div class="form-group">
-                <label>영상 길이</label>
-                <div class="tag-checkboxes" id="duration-tags">
-                  <button type="button" class="duration-toggle active" data-value="15">15s</button>
-                  <button type="button" class="duration-toggle" data-value="30">30s</button>
-                  <button type="button" class="duration-toggle" data-value="45">45s</button>
-                  <button type="button" class="duration-toggle" data-value="60">1m</button>
-                  <button type="button" class="duration-toggle" data-value="1800">30m</button>
-                  <button type="button" class="duration-toggle" data-value="3600">1h</button>
-                  <button type="button" class="duration-toggle" data-value="7200">2h</button>
-                </div>
+                <label data-i18n="scenario_tone">톤</label>
+                <select id="tone-select"></select>
               </div>
               <div class="form-group">
-                <label>톤</label>
-                <input name="tone" type="text" placeholder="담백, 신뢰감, 유머러스..." />
+                <label data-i18n="scenario_style">스타일</label>
+                <select id="style-select"></select>
               </div>
               <div class="form-group">
-                <div id="tone-tags" class="tag-checkboxes"></div>
+                <label class="scenario-check-label" for="character-enabled">
+                  <input id="character-enabled" type="checkbox" />
+                  <span data-i18n="scenario_character">캐릭터</span>
+                </label>
+                <input id="character-input" type="text" placeholder="캐릭터 이름 입력 후 Enter (예: 토끼)" data-i18n-placeholder="scenario_character_placeholder" />
               </div>
-              <div class="form-group">
-                <label>스타일</label>
-                <input name="style" type="text" placeholder="실사, 애니메이션, 일러스트..." />
-              </div>
-              <div class="form-group">
-                <div id="style-tags" class="tag-checkboxes"></div>
-              </div>
-              <div class="form-group">
-                <label>캐릭터</label>
-                <input id="character-input" type="text" placeholder="캐릭터 이름 입력 후 Enter (예: 토끼)" />
-              </div>
-              <div class="form-group">
+              <div class="form-group character-chip-row">
+                <div class="scenario-label-spacer" aria-hidden="true"></div>
                 <div id="character-chips" class="tag-checkboxes character-chips"></div>
               </div>
               <div class="form-group">
-                <label>생성 옵션</label>
+                <label data-i18n="scenario_generation_options">생성 옵션</label>
                 <div class="scenario-switches" id="scenario-switches">
-                  <button type="button" class="scenario-flag-toggle" data-flag="narrationEnabled">나레이션 생성</button>
-                  <button type="button" class="scenario-flag-toggle" data-flag="dubbingEnabled">더빙(대사) 생성</button>
+                  <button type="button" class="scenario-flag-toggle" data-flag="narrationEnabled" data-i18n="scenario_narration_enabled">나레이션 생성</button>
+                  <button type="button" class="scenario-flag-toggle" data-flag="dubbingEnabled" data-i18n="scenario_dubbing_enabled">더빙(대사) 생성</button>
                 </div>
               </div>
               <div class="form-group">
-                <label>추가 항목</label>
-                <p id="scenario-knowledge-hint" class="muted tiny scenario-knowledge-hint">Knowledge Hub 문맥을 불러오는 중입니다.</p>
-                <textarea name="banned" rows="2" placeholder="부연 설명을 입력하세요"></textarea>
+                <label data-i18n="scenario_knowledge_hub">지식 허브</label>
+                <div id="scenario-knowledge-summary" class="scenario-knowledge-panel">Knowledge Hub 문맥을 불러오는 중입니다.</div>
               </div>
             </form>
 
             <div class="section-caption right-caption caption-row">
               <div class="caption-left">
-                <span>대본</span>
+                <span data-i18n="scenario_script">대본</span>
               </div>
               <div class="caption-actions">
                 <div class="ratio-group" id="ratio-group">
@@ -140,9 +123,9 @@
                   <button type="button" class="btn-secondary ratio-btn" data-ratio="9:16">9:16</button>
                   <button type="button" class="btn-secondary ratio-btn" data-ratio="1:1">1:1</button>
                 </div>
-                <button type="submit" form="scenario-form" class="btn-primary">시나리오 생성</button>
-                <button type="reset" form="scenario-form" class="btn-ghost">초기화</button>
-                <button class="btn-secondary" id="save-draft">저장하기</button>
+                <button type="submit" form="scenario-form" class="btn-primary" data-i18n="scenario_generate">시나리오 생성</button>
+                <button type="reset" form="scenario-form" class="btn-ghost" data-i18n="scenario_reset">초기화</button>
+                <button class="btn-secondary" id="save-draft" data-i18n="scenario_save">저장하기</button>
               </div>
             </div>
             <div class="card scenario-results results-card">

@@ -1220,7 +1220,7 @@ a.btn-primary:active {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
@@ -1230,12 +1230,6 @@ a.btn-primary:active {
   font-weight: 700;
   min-width: 100px;
   flex-shrink: 0;
-}
-
-.scenario-knowledge-hint {
-  flex: 1;
-  margin: 0;
-  line-height: 1.5;
 }
 
 [data-theme="light"] .scenario-form label {
@@ -1280,6 +1274,58 @@ a.btn-primary:active {
   font-style: normal;
 }
 
+.scenario-form .scenario-inline-controls {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.scenario-form .scenario-inline-controls select {
+  flex: 1 1 52%;
+}
+
+.scenario-form .scenario-inline-controls input {
+  flex: 1 1 48%;
+}
+
+.scenario-form .scenario-check-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.scenario-form .scenario-check-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  flex: 0 0 auto;
+  accent-color: #ff7a00;
+  margin: 0;
+}
+
+.scenario-form .scenario-check-label span {
+  color: inherit;
+  font: inherit;
+}
+
+.scenario-label-spacer {
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.character-chip-row {
+  align-items: flex-start;
+}
+
+.scenario-form #character-input:disabled,
+.scenario-form .character-chips.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 .inline {
   display: flex;
   gap: 12px;
@@ -1304,6 +1350,8 @@ a.btn-primary:active {
 .character-chips {
   justify-content: flex-start;
   gap: 8px;
+  min-height: 36px;
+  align-items: center;
 }
 
 .character-chip {
@@ -1340,6 +1388,36 @@ a.btn-primary:active {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.scenario-knowledge-panel {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  min-height: 76px;
+}
+
+.scenario-knowledge-item {
+  display: grid;
+  gap: 2px;
+}
+
+.scenario-knowledge-item strong {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.scenario-knowledge-item span,
+.scenario-knowledge-empty {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .scenario-flag-toggle {
