@@ -116,10 +116,19 @@
     var voiceEnabled = !!options.voiceEnabled;
     var voiceBusy = !!options.voiceBusy;
     try { console.debug('voice-render', { id: scene && scene.id, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, hasUrl: !!(scene && scene.voiceUrl) }); } catch (_) {}
-    var voiceId = String(scene.voiceVoiceId || 'kr_female_narration');
-    var isCustomVoice = /^voice:/.test(voiceId) || /^preset:/.test(voiceId);
+    var voiceId = String(scene.voiceVoiceId || 'engine:gemini:voice:Kore');
+    var isCustomVoice = /^voice:/.test(voiceId) || /^preset:/.test(voiceId) || /^engine:/.test(voiceId);
     var customLabel = '';
-    if (/^voice:/.test(voiceId)) {
+    if (/^engine:gemini:voice:/.test(voiceId)) {
+      customLabel = 'Gemini · ' + voiceId.split(':').slice(3).join(':');
+    } else if (/^engine:gemini:preset:/.test(voiceId)) {
+      if (voiceId.indexOf(':child:female:') > -1) customLabel = 'Gemini · Kore (어린 소녀)';
+      else if (voiceId.indexOf(':child:male:') > -1) customLabel = 'Gemini · Kore (어린 소년)';
+      else if (voiceId.indexOf(':char:robot:') > -1) customLabel = 'Gemini · Kore (로봇)';
+      else if (voiceId.indexOf(':char:magician:') > -1) customLabel = 'Gemini · Kore (마법사)';
+      else if (voiceId.indexOf(':char:trick:') > -1) customLabel = 'Gemini · Kore (장난꾸러기)';
+      else customLabel = 'Gemini · Kore';
+    } else if (/^voice:/.test(voiceId)) {
       var vn = voiceId.slice(6);
       customLabel = '보이스 ' + (vn || '');
     } else if (/^preset:/.test(voiceId)) {
@@ -134,8 +143,7 @@
       '<div class="voice-row voice-controls">' +
       '<select class="voice-select" data-id="' + scene.id + '" style="flex:1; min-width:120px;">' +
       (isCustomVoice ? ('<option value="' + voiceId + '" selected>' + customLabel + '</option>') : '') +
-      '<option value="kr_female_narration"' + (!isCustomVoice && voiceId === 'kr_female_narration' ? ' selected' : '') + '>한국어 여성(나레이션)</option>' +
-      '<option value="kr_male_narration"' + (!isCustomVoice && voiceId === 'kr_male_narration' ? ' selected' : '') + '>한국어 남성(나레이션)</option>' +
+      '<option value="engine:gemini:voice:Kore"' + (!isCustomVoice && voiceId === 'engine:gemini:voice:Kore' ? ' selected' : '') + '>Gemini · Kore</option>' +
       '</select>' +
       '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + ((voiceBusy || !voiceEnabled) ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +
