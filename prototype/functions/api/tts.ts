@@ -72,6 +72,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       generationConfig: {
         temperature: 0.7,
         responseModalities: ["AUDIO"],
+        responseMimeType: "audio/mp3",
+        audioConfig: { audioEncoding: "MP3" },
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: {
@@ -110,7 +112,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const audioBytes = base64ToBytes(audioContent);
 
     const mimeFromModel = String(audioInfo.mime || "").toLowerCase();
-    const isMp3 = /mpeg|mp3/.test(mimeFromModel);
+    const isMp3 = /mpeg|mp3/.test(mimeFromModel) || !mimeFromModel; // 기본 MP3
     const objNameFinal = isMp3 ? `${baseObjectName}.mp3` : `${baseObjectName}.wav`;
     const contentTypeFinal = isMp3 ? "audio/mpeg" : "audio/wav";
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
