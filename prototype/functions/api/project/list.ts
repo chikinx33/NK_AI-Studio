@@ -60,8 +60,22 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         ...(userProject ? { "X-Goog-User-Project": userProject } : {}),
       },
     });
-    const text = await res.text();
-    if (!res.ok) return send({ error: "list_failed", detail: safeJson(text) }, res.status, origin);
+    let text = await res.text();
+    if (!res.ok && userProject && res.status === 403) {
+      // Fallback: requester pays 권한 부족 시 userProject 없이 재시도
+      const urlNoUp = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o?delimiter=%2F&prefix=${encodeURIComponent(prefix)}&maxResults=200`;
+      const res2 = await fetch(urlNoUp, { headers: { Authorization: `Bearer ${token}` } });
+      const text2 = await res2.text();
+      if (res2.ok) {
+        text = text2;
+      } else {
+        const detail = safeJson(text);
+        const hint = "serviceusage.services.use 권한 또는 GCS_BILLING_PROJECT_ID 설정 확인";
+        return send({ error: "list_failed", detail, hint }, res.status, origin);
+      }
+    } else if (!res.ok) {
+      return send({ error: "list_failed", detail: safeJson(text) }, res.status, origin);
+    }
     const json = safeJson(text);
     const prefixes: string[] = Array.isArray(json.prefixes) ? json.prefixes : [];
     const ids = prefixes
