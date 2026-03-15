@@ -52,7 +52,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const userId: string = String(auth.userId || "").trim() || "owner";
     const projectIdStr: string = String(projectId || "").trim();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectIdStr);
-    const objectName = `${projectPrefix}/sfx/voice-${sceneId}.mp3`;
+    const baseObjectName = `${projectPrefix}/sfx/voice-${sceneId}`;
 
     const token = await getGoogleAccessToken({
       clientEmail: clientEmail as string,
@@ -121,9 +121,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const audioBytes = base64ToBytes(audioContent);
 
     const mimeFromModel = String(audioInfo.mime || "").toLowerCase();
-    const isMp3 = /mpeg|mp3/.test(mimeFromModel || "audio/mpeg");
-    const objNameFinal = objectName;
-    const contentTypeFinal = "audio/mpeg";
+    const isMp3 = /mpeg|mp3/.test(mimeFromModel);
+    const objNameFinal = isMp3 ? `${baseObjectName}.mp3` : `${baseObjectName}.wav`;
+    const contentTypeFinal = isMp3 ? "audio/mpeg" : "audio/wav";
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
     const userProjectRaw =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
@@ -172,10 +172,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       } catch (_) {}
     }
     if (signedUrl) {
-      return send({ voiceUrl: signedUrl, format: "mp3", objectName: objNameFinal }, 200, origin);
+      return send({ voiceUrl: signedUrl, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal }, 200, origin);
     }
     const dataUriFinal = `data:${contentTypeFinal};base64,${audioContent}`;
-    return send({ voiceUrl: dataUriFinal, format: "mp3", objectName: objNameFinal, warning: "sign_failed" }, 200, origin);
+    return send({ voiceUrl: dataUriFinal, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal, warning: "sign_failed" }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
