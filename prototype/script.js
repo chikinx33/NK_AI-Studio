@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.830';
+  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.831';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -205,7 +205,12 @@
         if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) NK.ui.dashboard.renderDrafts();
         refreshSidebarCard();
       }
-    } catch (_) { }
+    } catch (err) {
+      const msg = String(err && err.message ? err.message : '');
+      if (/invalid_session|auth_required|session_expired|\\b401\\b|\\b403\\b/i.test(msg)) {
+        try { if (NK.auth && NK.auth.logout) NK.auth.logout(); } catch (_) {}
+      }
+    }
   };
 
   // 사이드바 카드가 비어 있으면 현재 선택된/저장된 프로젝트로 다시 채운다.

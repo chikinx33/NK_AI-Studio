@@ -175,7 +175,13 @@
         if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
         else NK.store.saveDrafts(drafts);
         serverMerged = true;
-      } catch (_) { }
+      } catch (err) {
+        serverMerged = true;
+        const msg = String(err && err.message ? err.message : '');
+        if (/invalid_session|auth_required|session_expired|\\b401\\b|\\b403\\b/i.test(msg)) {
+          try { if (NK.auth && NK.auth.logout) NK.auth.logout(); } catch (_) {}
+        }
+      }
       finally {
         if (showBlockingLoading) setDashLoading(false);
       }
