@@ -39,7 +39,7 @@ export async function authorizeRequest(request, env, options = {}) {
     try {
       payload = await verifySessionToken(token, env);
     } catch (err) {
-      if (allowQuery && queryToken && queryToken !== token) {
+      if (allowQuery && queryToken) {
         payload = await verifySessionToken(queryToken, env);
         token = queryToken;
       } else {
