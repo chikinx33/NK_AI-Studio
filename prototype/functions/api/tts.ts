@@ -60,6 +60,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
     const apiKey = String(env.GOOGLE_API_KEY || "").trim();
+    const engine = String(body.engine || body.ttsEngine || "").toLowerCase();
     const promptPlusScript = (finalPrompt || "Speak like an epic fantasy narrator.") + "\n" + script;
     const reqBody = {
       contents: [
@@ -84,25 +85,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!apiKey) return send({ error: "GOOGLE_API_KEY missing" }, 500, origin);
     const preferModel = String(env.GEMINI_TTS_MODEL || "").trim() || "gemini-2.5-flash-preview-tts";
     const chosenModel = await resolveTtsModel(apiKey, preferModel);
-    const glBase = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent`;
-    const glUrl = glBase + "?key=" + encodeURIComponent(apiKey);
-    const glHeaders: any = { "Content-Type": "application/json" };
-    console.log("TTS request model: " + chosenModel);
-    console.log("TTS headers", glHeaders);
-    if (glHeaders.Authorization) console.warn("Authorization header detected in TTS request");
-    let synthRes = await fetch(glUrl, {
-      method: "POST",
-      headers: glHeaders,
-      body: JSON.stringify(reqBody),
-    });
-    let synthText = await synthRes.text();
     let audioInfo = null as null | { data: string; mime: string };
-    if (synthRes.ok) {
-      const synthJson = safeJson(synthText) || {};
-      audioInfo = extractGeminiAudio(synthJson);
-    }
-    if (!synthRes.ok || !audioInfo || !audioInfo.data) {
-      const ttsFallback = await synthesizeViaGoogleTts({
+    if (engine === "google") {
+      const ttsDirect = await synthesizeViaGoogleTts({
         token,
         text: script,
         languageCode: "ko-KR",
@@ -110,12 +95,43 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         speakingRate: rateNum,
         pitch: pitchNum
       }).catch(() => null as any);
-      if (!ttsFallback || !ttsFallback.base64) {
-        const status = synthRes?.status || 502;
-        const detail = synthText ? safeJson(synthText) : undefined;
-        return send({ error: "tts_failed", status, detail }, status, origin);
+      if (!ttsDirect || !ttsDirect.base64) {
+        return send({ error: "tts_failed", status: 502, detail: "google_tts_failed" }, 502, origin);
       }
-      audioInfo = { data: ttsFallback.base64, mime: "audio/mpeg" };
+      audioInfo = { data: ttsDirect.base64, mime: "audio/mpeg" };
+    } else {
+      const glBase = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosenModel)}:generateContent`;
+      const glUrl = glBase + "?key=" + encodeURIComponent(apiKey);
+      const glHeaders: any = { "Content-Type": "application/json" };
+      console.log("TTS request model: " + chosenModel);
+      console.log("TTS headers", glHeaders);
+      if (glHeaders.Authorization) console.warn("Authorization header detected in TTS request");
+      let synthRes = await fetch(glUrl, {
+        method: "POST",
+        headers: glHeaders,
+        body: JSON.stringify(reqBody),
+      });
+      let synthText = await synthRes.text();
+      if (synthRes.ok) {
+        const synthJson = safeJson(synthText) || {};
+        audioInfo = extractGeminiAudio(synthJson);
+      }
+      if (!synthRes.ok || !audioInfo || !audioInfo.data) {
+        const ttsFallback = await synthesizeViaGoogleTts({
+          token,
+          text: script,
+          languageCode: "ko-KR",
+          voiceName: voiceNameRaw || (VOICE_MAP[voiceId]?.name || "ko-KR-Neural2-A"),
+          speakingRate: rateNum,
+          pitch: pitchNum
+        }).catch(() => null as any);
+        if (!ttsFallback || !ttsFallback.base64) {
+          const status = synthRes?.status || 502;
+          const detail = synthText ? safeJson(synthText) : undefined;
+          return send({ error: "tts_failed", status, detail }, status, origin);
+        }
+        audioInfo = { data: ttsFallback.base64, mime: "audio/mpeg" };
+      }
     }
     const audioContent = audioInfo.data;
     const audioBytes = base64ToBytes(audioContent);

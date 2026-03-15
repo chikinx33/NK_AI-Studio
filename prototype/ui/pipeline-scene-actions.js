@@ -220,9 +220,17 @@
           btn.disabled = true;
           try {
             var req = { projectId: projectId, sceneId: sceneId, script: scriptText };
-            if (voiceVal.indexOf('voice:') === 0) {
+            if (voiceVal.indexOf('engine:gemini:voice:') === 0) {
+              req.engine = 'gemini';
+              req.voiceName = voiceVal.split(':').slice(3).join(':');
+            } else if (voiceVal.indexOf('engine:google:voice:') === 0) {
+              req.engine = 'google';
+              req.voiceName = voiceVal.split(':').slice(3).join(':');
+            } else if (voiceVal.indexOf('voice:') === 0) {
+              req.engine = 'google';
               req.voiceName = voiceVal.slice(6);
             } else if (voiceVal.indexOf('preset:') === 0) {
+              req.engine = 'google';
               var parts = voiceVal.split(':');
               var base = parts[3] || 'ko-KR-Neural2-A';
               req.voiceName = base;
@@ -232,6 +240,7 @@
               if (rateM) req.speakingRate = Number(rateM[1]);
               if (pitchM) req.pitch = Number(pitchM[1]);
             } else if (/^kr_/.test(voiceVal)) {
+              req.engine = 'google';
               if (voiceVal === 'kr_female_narration') req.voiceName = 'ko-KR-Neural2-A';
               else if (voiceVal === 'kr_male_narration') req.voiceName = 'ko-KR-Neural2-B';
             }
