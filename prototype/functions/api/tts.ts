@@ -90,23 +90,41 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     console.log("TTS request model: " + chosenModel);
     console.log("TTS headers", glHeaders);
     if (glHeaders.Authorization) console.warn("Authorization header detected in TTS request");
-    const synthRes = await fetch(glUrl, {
+    let synthRes = await fetch(glUrl, {
       method: "POST",
       headers: glHeaders,
       body: JSON.stringify(reqBody),
     });
-    const synthText = await synthRes.text();
-    if (!synthRes.ok) {
-      return send({ error: "tts_failed", status: synthRes.status, detail: safeJson(synthText) }, synthRes.status, origin);
+    let synthText = await synthRes.text();
+    let audioInfo = null as null | { data: string; mime: string };
+    if (synthRes.ok) {
+      const synthJson = safeJson(synthText) || {};
+      audioInfo = extractGeminiAudio(synthJson);
     }
-    const synthJson = safeJson(synthText) || {};
-    const audioContent = extractGeminiAudioBase64(synthJson) || "";
-    if (!audioContent) {
-      return send({ error: "no_audio_content" }, 502, origin);
+    if (!synthRes.ok || !audioInfo || !audioInfo.data) {
+      const ttsFallback = await synthesizeViaGoogleTts({
+        token,
+        text: script,
+        languageCode: "ko-KR",
+        voiceName: voiceNameRaw || (VOICE_MAP[voiceId]?.name || "ko-KR-Neural2-A"),
+        speakingRate: rateNum,
+        pitch: pitchNum
+      }).catch(() => null as any);
+      if (!ttsFallback || !ttsFallback.base64) {
+        const status = synthRes?.status || 502;
+        const detail = synthText ? safeJson(synthText) : undefined;
+        return send({ error: "tts_failed", status, detail }, status, origin);
+      }
+      audioInfo = { data: ttsFallback.base64, mime: "audio/mpeg" };
     }
+    const audioContent = audioInfo.data;
     const audioBytes = base64ToBytes(audioContent);
 
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+    const mimeFromModel = String(audioInfo.mime || "").toLowerCase();
+    const isMp3 = /mpeg|mp3/.test(mimeFromModel);
+    const objNameFinal = isMp3 ? objectName.replace(/\.wav$/i, ".mp3") : objectName;
+    const contentTypeFinal = isMp3 ? "audio/mpeg" : "audio/wav";
+    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
     const userProjectRaw =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
       (env.GOOGLE_PROJECT_ID as string | undefined) ||
@@ -121,30 +139,30 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "audio/wav",
+        "Content-Type": contentTypeFinal,
         ...(userProject ? { "X-Goog-User-Project": userProject } : {}),
       },
       body: audioBytes,
     });
     const upText = await upRes.text();
     if (!upRes.ok) {
-      const detail = safeJson(upText);
-      const hint =
-        upRes.status === 403 && String(upText).toLowerCase().includes("requester pays")
-          ? "requester_pays_missing_userProject"
-          : "";
-      return send({ error: "upload_failed", status: upRes.status, detail, hint }, upRes.status, origin);
+      const isRequesterPays = upRes.status === 403 && String(upText).toLowerCase().includes("requester pays");
+      const dataUri = `data:${contentTypeFinal};base64,${audioContent}`;
+      if (isRequesterPays) {
+        return send({ voiceUrl: dataUri, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal, warning: "upload_failed_requester_pays" }, 200, origin);
+      }
+      return send({ voiceUrl: dataUri, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal, warning: "upload_failed" }, 200, origin);
     }
 
     const signedUrl = await signGcsUrl({
       bucket: outParsed.bucket,
-      object: objectName,
+      object: objNameFinal,
       clientEmail: clientEmail as string,
       privateKeyPem: privateKeyRaw as string,
       expiresInSec: 3600,
     }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
 
-    return send({ voiceUrl: signedUrl, format: "mp3", objectName }, 200, origin);
+    return send({ voiceUrl: signedUrl, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
@@ -155,23 +173,45 @@ export const onRequestOptions: PagesFunction = async ({ request }) => {
 };
 
 function safeJson(text: string) { try { return JSON.parse(text); } catch { return text; } }
-function extractGeminiAudioBase64(json: any): string {
+function extractGeminiAudio(json: any): { data: string; mime: string } | null {
   try {
     const cands = json?.candidates || [];
     for (const c of cands) {
       const parts = c?.content?.parts || c?.content?.inlineData || [];
       if (Array.isArray(parts)) {
         for (const p of parts) {
-          if (p?.inlineData?.data) return String(p.inlineData.data);
-          if (p?.audio?.data) return String(p.audio.data);
-          if (p?.data) return String(p.data);
+          if (p?.inlineData?.data) return { data: String(p.inlineData.data), mime: String(p?.inlineData?.mimeType || "") };
+          if (p?.audio?.data) return { data: String(p.audio.data), mime: String(p?.audio?.mimeType || "") };
+          if (p?.data) return { data: String(p.data), mime: "" };
         }
       } else if (parts?.data) {
-        return String(parts.data);
+        return { data: String(parts.data), mime: "" };
       }
     }
   } catch (_) {}
-  return "";
+  return null;
+}
+async function synthesizeViaGoogleTts(opts: { token: string; text: string; languageCode: string; voiceName: string; speakingRate: number; pitch: number; }) {
+  const url = "https://texttospeech.googleapis.com/v1/text:synthesize";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${opts.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      input: { text: opts.text },
+      voice: { languageCode: opts.languageCode, name: opts.voiceName },
+      audioConfig: { audioEncoding: "MP3", speakingRate: opts.speakingRate, pitch: opts.pitch }
+    })
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text || "tts_v1_failed");
+  const json = safeJson(text) || {};
+  const b64 = String(json?.audioContent || "");
+  if (!b64) throw new Error("tts_v1_no_audio");
+  const bytes = base64ToBytes(b64);
+  return { base64: b64, bytes, mime: "audio/mpeg" };
 }
 function derivePromptFromVoice(v: string): string {
   const raw = String(v || "").trim();

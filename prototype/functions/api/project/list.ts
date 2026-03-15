@@ -1,7 +1,7 @@
 // prototype/functions/api/project/list.ts
 // List project IDs under:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/
-import { buildAiVideoUserRoot } from "../_shared/storage";
+import { buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -29,7 +29,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const auth = await authorizeRequest(request, env, { allowQueryToken: true });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const reqUrl = new URL(request.url);
-    const userId = auth.userId;
+    const userId = resolveUserId(auth.userId, env);
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
