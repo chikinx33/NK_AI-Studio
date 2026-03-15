@@ -22,11 +22,30 @@ export async function issueSessionToken(userId, env, ttlSec = DEFAULT_TTL_SEC) {
 
 export async function authorizeRequest(request, env, options = {}) {
   try {
-    const token = readToken(request, !!options.allowQueryToken);
-    if (!token) {
-      return { ok: false, status: 401, error: "auth_required" };
+    const allowQuery = !!options.allowQueryToken;
+    const authHeader = String(request.headers.get("Authorization") || "").trim();
+    const m = authHeader.match(/^Bearer\s+(.+)$/i);
+    const headerToken = m && m[1] ? m[1].trim() : "";
+    let queryToken = "";
+    if (allowQuery) {
+      try {
+        const url = new URL(request.url);
+        queryToken = String(url.searchParams.get("nk_token") || "").trim();
+      } catch (_) { }
     }
-    const payload = await verifySessionToken(token, env);
+    let token = headerToken || (allowQuery ? queryToken : "");
+    if (!token) return { ok: false, status: 401, error: "auth_required" };
+    let payload = null;
+    try {
+      payload = await verifySessionToken(token, env);
+    } catch (err) {
+      if (allowQuery && queryToken && queryToken !== token) {
+        payload = await verifySessionToken(queryToken, env);
+        token = queryToken;
+      } else {
+        throw err;
+      }
+    }
     if (!payload || !payload.sub) {
       return { ok: false, status: 401, error: "invalid_session" };
     }
