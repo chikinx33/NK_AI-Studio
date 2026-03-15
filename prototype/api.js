@@ -115,8 +115,8 @@
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload)
-    }, 60000);
-    var text = await readTextWithTimeout(res, 60000);
+    }, 120000);
+    var text = await readTextWithTimeout(res, 120000);
     if (!res.ok) {
       var err = new Error(e(text) || 'tts_error');
       err.status = res.status;

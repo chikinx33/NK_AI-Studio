@@ -117,6 +117,14 @@
     var voiceBusy = !!options.voiceBusy;
     try { console.debug('voice-render', { id: scene && scene.id, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, hasUrl: !!(scene && scene.voiceUrl) }); } catch (_) {}
     var voiceId = String(scene.voiceVoiceId || 'kr_female_narration');
+    var isCustomVoice = /^voice:/.test(voiceId) || /^preset:/.test(voiceId);
+    var customLabel = '';
+    if (/^voice:/.test(voiceId)) {
+      var vn = voiceId.slice(6);
+      customLabel = '보이스 ' + (vn || '');
+    } else if (/^preset:/.test(voiceId)) {
+      customLabel = '프리셋 ' + voiceId.split(':').slice(1).join(':');
+    }
     var errorLine = scene.voiceError ? ('<p class="small" style="color:#ff6b6b; margin:6px 0 0;">' + String(scene.voiceError) + '</p>') : '';
     return (
       '<div class="voice-block" style="margin-top:8px;">' +
@@ -125,8 +133,9 @@
       '</div>' +
       '<div class="voice-row voice-controls">' +
       '<select class="voice-select" data-id="' + scene.id + '" style="flex:1; min-width:120px;">' +
-      '<option value="kr_female_narration"' + (voiceId === 'kr_female_narration' ? ' selected' : '') + '>한국어 여성(나레이션)</option>' +
-      '<option value="kr_male_narration"' + (voiceId === 'kr_male_narration' ? ' selected' : '') + '>한국어 남성(나레이션)</option>' +
+      (isCustomVoice ? ('<option value="' + voiceId + '" selected>' + customLabel + '</option>') : '') +
+      '<option value="kr_female_narration"' + (!isCustomVoice && voiceId === 'kr_female_narration' ? ' selected' : '') + '>한국어 여성(나레이션)</option>' +
+      '<option value="kr_male_narration"' + (!isCustomVoice && voiceId === 'kr_male_narration' ? ' selected' : '') + '>한국어 남성(나레이션)</option>' +
       '</select>' +
       '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + ((voiceBusy || !voiceEnabled) ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +
