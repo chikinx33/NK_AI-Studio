@@ -1024,6 +1024,7 @@ function updateSceneRow(idx, headerText, partHint) {
   if (partHint === 'voice' && helpers.buildVoiceBlock) {
     var target = row.querySelector('.voice-block');
     if (target) {
+      try { console.debug('voice-update', { id: scene && scene.id, voiceUrl: scene && scene.voiceUrl, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy }); } catch (_) {}
       var html = helpers.buildVoiceBlock(scene, { voiceEnabled: voiceEnabled, voiceBusy: voiceBusy });
       target.outerHTML = html;
       return;

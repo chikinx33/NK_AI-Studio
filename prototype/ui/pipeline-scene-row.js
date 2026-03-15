@@ -115,14 +115,7 @@
   function buildVoiceBlock(scene, options) {
     var voiceEnabled = !!options.voiceEnabled;
     var voiceBusy = !!options.voiceBusy;
-    if (!voiceEnabled) {
-      return (
-        '<div class="voice-block disabled" style="margin-top:8px;">' +
-        '<div class="voice-title-row"><span class="voice-title">AI 보이스 비활성</span></div>' +
-        '<p class="muted small">프리프로덕션에서 나레이션/더빙을 켜야 음성 생성이 가능합니다.</p>' +
-        '</div>'
-      );
-    }
+    try { console.debug('voice-render', { id: scene && scene.id, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, hasUrl: !!(scene && scene.voiceUrl) }); } catch (_) {}
     var voiceId = String(scene.voiceVoiceId || 'kr_female_narration');
     var errorLine = scene.voiceError ? ('<p class="small" style="color:#ff6b6b; margin:6px 0 0;">' + String(scene.voiceError) + '</p>') : '';
     return (
@@ -135,11 +128,12 @@
       '<option value="kr_female_narration"' + (voiceId === 'kr_female_narration' ? ' selected' : '') + '>한국어 여성(나레이션)</option>' +
       '<option value="kr_male_narration"' + (voiceId === 'kr_male_narration' ? ' selected' : '') + '>한국어 남성(나레이션)</option>' +
       '</select>' +
-      '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + (voiceBusy ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
+      '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + ((voiceBusy || !voiceEnabled) ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +
       '<div class="voice-player" data-id="' + scene.id + '" style="margin-top:10px;">' +
       '<audio controls preload="auto" style="width:100%;" ' + (scene.voiceUrl ? '' : 'disabled') + ' src="' + (scene.voiceUrl || '') + '"></audio>' +
       '</div>' +
+      (!voiceEnabled ? '<p class="muted small">프리프로덕션에서 나레이션/더빙을 켜야 음성 생성이 가능합니다.</p>' : '') +
       errorLine +
       '</div>'
     );

@@ -237,6 +237,7 @@
             }
             var resTts = await NK.api.tts(req);
             var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
+            try { console.debug('voice-set', { id: sceneId, urlType: (vurl.indexOf('data:') === 0 ? 'data' : 'http'), url: vurl.slice(0, 80) }); } catch (_) {}
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: vurl ? '완료' : '', voiceUrl: vurl, voiceError: vurl ? '' : '응답에 voiceUrl이 없습니다.' });
             try {
               var cacheKey = 'nk_voice_cache_' + String(projectId || '');
