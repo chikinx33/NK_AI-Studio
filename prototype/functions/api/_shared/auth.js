@@ -134,7 +134,7 @@ function readToken(request, allowQueryToken) {
       t = t.slice(1, -1).trim();
     }
     t = t.replace(/\s+/g, "");
-    t = t.replace(/[^A-Za-z0-9._-]/g, "");
+    t = t.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+/g, "");
     return t;
   }
   if (!allowQueryToken) return "";
@@ -145,7 +145,7 @@ function readToken(request, allowQueryToken) {
       q = q.slice(1, -1).trim();
     }
     q = q.replace(/\s+/g, "");
-    q = q.replace(/[^A-Za-z0-9._-]/g, "");
+    q = q.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+/g, "");
     return q;
   } catch (_) {
     return "";
@@ -234,5 +234,6 @@ function normalizeWholeToken(s) {
     t = t.slice(1, -1).trim();
   }
   t = t.replace(/\s+/g, "");
+  t = t.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+/g, "");
   return t;
 }
