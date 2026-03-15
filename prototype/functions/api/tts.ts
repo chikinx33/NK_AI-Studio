@@ -154,15 +154,28 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return send({ voiceUrl: dataUri, format: "mp3", objectName: objNameFinal, warning: "upload_failed" }, 200, origin);
     }
 
-    const signedUrl = await signGcsUrl({
-      bucket: outParsed.bucket,
-      object: objNameFinal,
-      clientEmail: clientEmail as string,
-      privateKeyPem: privateKeyRaw as string,
-      expiresInSec: 3600,
-    }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
-
-    return send({ voiceUrl: signedUrl, format: "mp3", objectName: objNameFinal }, 200, origin);
+    let signedUrl: string | null = null;
+    let signError: any = null;
+    try {
+      signedUrl = await signGcsUrl({
+        bucket: outParsed.bucket,
+        object: objNameFinal,
+        clientEmail: clientEmail as string,
+        privateKeyPem: privateKeyRaw as string,
+        expiresInSec: 3600,
+      });
+    } catch (e: any) {
+      signError = e;
+      try {
+        const hint = detectSignFailureHint(e);
+        console.error("tts_sign_failed", { error: String(e && e.message ? e.message : e), hint });
+      } catch (_) {}
+    }
+    if (signedUrl) {
+      return send({ voiceUrl: signedUrl, format: "mp3", objectName: objNameFinal }, 200, origin);
+    }
+    const dataUriFinal = `data:${contentTypeFinal};base64,${audioContent}`;
+    return send({ voiceUrl: dataUriFinal, format: "mp3", objectName: objNameFinal, warning: "sign_failed" }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
@@ -269,6 +282,14 @@ function gcsToHttps(uri: string) {
   const bucket = rest.slice(0, slash);
   const object = rest.slice(slash + 1);
   return `https://storage.googleapis.com/${bucket}/${object}`;
+}
+function detectSignFailureHint(err: any): string {
+  const msg = String(err && err.message ? err.message : err || "").toLowerCase();
+  if (/pkcs8|asn1|pem|private key|importkey/.test(msg)) return "invalid_private_key_format";
+  if (/subtle|crypto|not implemented|unsupported/.test(msg)) return "crypto_subtle_unavailable";
+  if (/date|time|skew|x-goog-date|clock/.test(msg)) return "clock_skew";
+  if (/goog4|signature|signedheaders|credential|request/.test(msg)) return "gcs_signing_error";
+  return "signing_failed";
 }
 function base64ToBytes(b64: string) {
   const bin = atob(b64);
