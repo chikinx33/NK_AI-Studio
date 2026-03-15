@@ -1,4 +1,4 @@
-﻿// prototype/functions/api/project/get.ts
+// prototype/functions/api/project/get.ts
 // Fetch project data.json from GCS reference folder
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
@@ -21,7 +21,7 @@ const send = (data: any, status = 200, origin: string | null = null) =>
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
   try {
     const origin = request.headers.get("Origin");
-    const auth = await authorizeRequest(request, env);
+    const auth = await authorizeRequest(request, env, { allowQueryToken: true });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const url = new URL(request.url);
     const projectId = String(url.searchParams.get("projectId") || "").trim();

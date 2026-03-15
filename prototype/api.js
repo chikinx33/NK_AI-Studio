@@ -392,7 +392,8 @@
   };
 
   api.projectGet = async function (projectId) {
-    var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(resolveUserId()));
+    var token = getAuthToken();
+    var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(resolveUserId()) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
     var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'get_error')));
