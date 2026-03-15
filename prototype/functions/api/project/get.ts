@@ -148,6 +148,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
             : (typeof s?.videoPath === "string" ? s.videoPath
               : (typeof s?.generatedVideoUrl === "string" ? s.generatedVideoUrl : "")));
       const videoPath = toGcsPath(videoUrl) || (typeof s?.videoPath === "string" ? s.videoPath : "");
+      const voiceUrlRaw = typeof s?.voiceUrl === "string" ? s.voiceUrl : "";
+      const voiceObjectName = typeof s?.voiceObjectName === "string" ? s.voiceObjectName : "";
+      const voiceUrl = voiceObjectName ? "" : voiceUrlRaw;
       return {
         id: Number(s?.id ?? idx + 1),
         title: typeof s?.title === "string" ? s.title : "",
@@ -165,6 +168,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         videoError: typeof s?.videoError === "string" ? s.videoError : "",
         videoJobId: typeof s?.videoJobId === "string" ? s.videoJobId : "",
         videoMethod: typeof s?.videoMethod === "string" ? s.videoMethod : "",
+        voiceUrl,
+        voiceObjectName,
+        voiceStatus: typeof s?.voiceStatus === "string" ? s.voiceStatus : "",
+        voiceVoiceId: typeof s?.voiceVoiceId === "string" ? s.voiceVoiceId : "",
+        voiceError: typeof s?.voiceError === "string" ? s.voiceError : "",
       };
     };
 

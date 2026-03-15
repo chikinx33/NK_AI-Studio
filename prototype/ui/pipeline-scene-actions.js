@@ -244,10 +244,13 @@
               var cacheMap = {};
               try { cacheMap = JSON.parse(localStorage.getItem(cacheKey) || '{}') || {}; } catch (_) { cacheMap = {}; }
               if (vurl) {
-                cacheMap[String(sceneId)] = vurl;
+                var entry = cacheMap[String(sceneId)] || {};
+                var objName = String(resTts && resTts.objectName || '').trim();
+                cacheMap[String(sceneId)] = objName ? { objectName: objName, url: vurl } : vurl;
                 localStorage.setItem(cacheKey, JSON.stringify(cacheMap));
               }
             } catch (_) { }
+            st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceObjectName: String(resTts && resTts.objectName || '') });
             refreshAndPersist(true, 'voice');
           } catch (err) {
             var em = (err && err.message) ? String(err.message) : 'TTS 생성 실패';

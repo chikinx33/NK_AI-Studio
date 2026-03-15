@@ -462,6 +462,11 @@
             videoJobId: s.videoJobId || '',
             promptEdited: !!s.promptEdited,
             editingPrompt: !!s.editingPrompt,
+            voiceUrl: s.voiceUrl || '',
+            voiceObjectName: s.voiceObjectName || '',
+            voiceStatus: s.voiceStatus || '',
+            voiceError: s.voiceError || '',
+            voiceVoiceId: s.voiceVoiceId || '',
           };
         });
         state = { payload: payloadSrv, header: headerCleanSrv, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
@@ -497,6 +502,11 @@
             videoJobId: s.videoJobId || '',
             promptEdited: !!s.promptEdited,
             editingPrompt: !!s.editingPrompt,
+            voiceUrl: s.voiceUrl || '',
+            voiceObjectName: s.voiceObjectName || '',
+            voiceStatus: s.voiceStatus || '',
+            voiceError: s.voiceError || '',
+            voiceVoiceId: s.voiceVoiceId || '',
           };
         });
         state = { payload: payloadStored, header: headerCleanInit, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
@@ -546,12 +556,24 @@
       state.scenes = scenes.map(function (s) {
         var computedPrompt = ['Common', header, 'Visual', (s.shot || ''), 'Duration', ((Math.max(Number(s.estSec) || 0, 1)) + 's.')].join('\\n');
         var finalPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
-        var cachedVoiceUrl = String((voiceCache && voiceCache[String(s.id)]) || '');
+        var vcEntry = voiceCache && voiceCache[String(s.id)];
+        var cachedVoiceUrl = '';
+        if (vcEntry && typeof vcEntry === 'object' && vcEntry.objectName) {
+          try {
+            cachedVoiceUrl = NK.api && NK.api.mediaProxyObjectUrl ? NK.api.mediaProxyObjectUrl(vcEntry.objectName) : '';
+          } catch (_) { cachedVoiceUrl = ''; }
+        } else if (typeof vcEntry === 'string') {
+          cachedVoiceUrl = vcEntry;
+        }
+        if (!cachedVoiceUrl && s.voiceObjectName) {
+          try { cachedVoiceUrl = NK.api && NK.api.mediaProxyObjectUrl ? NK.api.mediaProxyObjectUrl(s.voiceObjectName) : ''; } catch (_) { cachedVoiceUrl = ''; }
+        }
         return Object.assign({}, s, {
           promptText: finalPrompt,
           voiceUrl: (s.voiceUrl || cachedVoiceUrl || ''),
           voiceStatus: (s.voiceStatus || ''),
           voiceVoiceId: (s.voiceVoiceId || ''),
+          voiceObjectName: (s.voiceObjectName || (vcEntry && vcEntry.objectName) || ''),
           voiceError: (s.voiceError || ''),
           videoUrl: (s.videoUrl || s.videoPlaybackUrl || ''),
           videoStatus: (s.videoStatus || ''),

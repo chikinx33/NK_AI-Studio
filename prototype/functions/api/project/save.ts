@@ -146,6 +146,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const videoError = typeof s?.videoError === "string" ? s.videoError : "";
       const videoJobId = typeof s?.videoJobId === "string" ? s.videoJobId : "";
       const videoMethod = typeof s?.videoMethod === "string" ? s.videoMethod : "";
+      const voiceUrlRaw = typeof s?.voiceUrl === "string" ? s.voiceUrl : "";
+      const voiceObjectName = typeof s?.voiceObjectName === "string" ? s.voiceObjectName : "";
+      const voiceUrl = voiceObjectName ? "" : voiceUrlRaw;
+      const voiceStatus = typeof s?.voiceStatus === "string" ? s.voiceStatus : "";
+      const voiceVoiceId = typeof s?.voiceVoiceId === "string" ? s.voiceVoiceId : "";
+      const voiceError = typeof s?.voiceError === "string" ? s.voiceError : "";
       return {
         id: Number(s?.id ?? idx + 1),
         title: typeof s?.title === "string" ? s.title : "",
@@ -163,6 +169,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         videoError,
         videoJobId,
         videoMethod,
+        voiceUrl,
+        voiceObjectName,
+        voiceStatus,
+        voiceVoiceId,
+        voiceError,
       };
     };
 
