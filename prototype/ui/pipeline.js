@@ -781,8 +781,14 @@
       if (cur.indexOf('engine:google:voice:') === 0) cur = 'engine:gemini:voice:Kore';
       if (cur.indexOf('voice:Kore') === 0) cur = 'engine:gemini:voice:Kore';
 
-      var geminiOpts = buildOption('engine:gemini:voice:Kore', 'Gemini · Kore', cur === 'engine:gemini:voice:Kore');
-      var html = '' + geminiOpts;
+      var opts = [];
+      opts.push(buildOption('engine:gemini:voice:Kore', 'Gemini · Kore (Neutral)', cur === 'engine:gemini:voice:Kore'));
+      opts.push(buildOption('engine:gemini:preset:child:female:Kore:rate=1.15:pitch=6', 'Gemini · Kore (어린 소녀)', cur.indexOf('engine:gemini:preset:child:female:') === 0));
+      opts.push(buildOption('engine:gemini:preset:child:male:Kore:rate=1.12:pitch=4', 'Gemini · Kore (어린 소년)', cur.indexOf('engine:gemini:preset:child:male:') === 0));
+      opts.push(buildOption('engine:gemini:preset:char:robot:Kore:rate=0.95:pitch=-2', 'Gemini · Kore (로봇)', cur.indexOf('engine:gemini:preset:char:robot:') === 0));
+      opts.push(buildOption('engine:gemini:preset:char:magician:Kore:rate=0.90:pitch=-1', 'Gemini · Kore (마법사)', cur.indexOf('engine:gemini:preset:char:magician:') === 0));
+      opts.push(buildOption('engine:gemini:preset:char:trick:Kore:rate=1.15:pitch=3', 'Gemini · Kore (장난꾸러기)', cur.indexOf('engine:gemini:preset:char:trick:') === 0));
+      var html = opts.join('');
       sel.innerHTML = html;
       if (!cur) sel.value = 'engine:gemini:voice:Kore';
       else {

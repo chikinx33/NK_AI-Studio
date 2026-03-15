@@ -223,16 +223,17 @@
             req.engine = 'gemini';
             if (voiceVal.indexOf('engine:gemini:voice:') === 0) {
               req.voiceName = voiceVal.split(':').slice(3).join(':') || 'Kore';
+            } else if (voiceVal.indexOf('engine:gemini:preset:') === 0) {
+              var tail = voiceVal.split(':').slice(2).join(':'); // preset:...:Kore:rate=..:pitch=..
+              req.voiceId = tail; // 서버에서 derivePromptFromVoice가 preset을 해석
+              req.voiceName = 'Kore';
+              var cfgText = tail.split(':').slice(4).join(':'); // rate=..:pitch=..
+              var rateM2 = cfgText.match(/rate=([0-9.]+)/);
+              var pitchM2 = cfgText.match(/pitch=([+-]?[0-9]+)/);
+              if (rateM2) req.speakingRate = Number(rateM2[1]);
+              if (pitchM2) req.pitch = Number(pitchM2[1]);
             } else {
               req.voiceName = 'Kore';
-              var cfg = '';
-              if (voiceVal.indexOf('preset:') === 0) {
-                cfg = voiceVal.split(':').slice(4).join(':');
-                var rateM = cfg.match(/rate=([0-9.]+)/);
-                var pitchM = cfg.match(/pitch=([+-]?[0-9]+)/);
-                if (rateM) req.speakingRate = Number(rateM[1]);
-                if (pitchM) req.pitch = Number(pitchM[1]);
-              }
             }
             var resTts = await NK.api.tts(req);
             var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
