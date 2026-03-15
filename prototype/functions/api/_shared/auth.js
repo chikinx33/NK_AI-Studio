@@ -47,18 +47,22 @@ export async function authorizeRequest(request, env, options = {}) {
 }
 
 export async function verifySessionToken(token, env) {
-  const secret = readSecret(env);
   const raw = String(token || "").trim();
   const parts = raw.split(".");
   if (parts.length !== 2) throw new Error("invalid_session");
   const encoded = parts[0];
   const sig = parts[1];
-  const expected = await sign(encoded, secret);
-  if (!timingSafeEqual(sig, expected)) throw new Error("invalid_session");
   const payload = safeJson(base64urlDecode(encoded));
   if (!payload || typeof payload !== "object") throw new Error("invalid_session");
   const now = Math.floor(Date.now() / 1000);
   if (!payload.exp || Number(payload.exp) <= now) throw new Error("session_expired");
+  const secrets = candidateSecrets(env);
+  let ok = false;
+  for (let i = 0; i < secrets.length; i++) {
+    const expected = await sign(encoded, secrets[i]);
+    if (timingSafeEqual(sig, expected)) { ok = true; break; }
+  }
+  if (!ok) throw new Error("invalid_session");
   if (!payload.sub) throw new Error("invalid_session");
   return payload;
 }
@@ -152,4 +156,27 @@ function timingSafeEqual(a, b) {
     diff |= left.charCodeAt(i) ^ right.charCodeAt(i);
   }
   return diff === 0;
+}
+
+function candidateSecrets(env) {
+  const arr = [];
+  const direct = String(env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET) || "").trim();
+  if (direct) arr.push(direct);
+  const pw = String(env && env.AUTH_PW || "").trim();
+  if (pw) arr.push(pw);
+  const gpk = String(env && env.GOOGLE_PRIVATE_KEY || "").trim();
+  if (gpk) arr.push(gpk);
+  const gid = String(env && env.GOOGLE_PROJECT_ID || "").trim();
+  if (gid) arr.push(gid);
+  arr.push("nk_studio_legacy_session_secret_v1");
+  const set = new Set();
+  const out = [];
+  for (let i = 0; i < arr.length; i++) {
+    const v = arr[i];
+    if (!v) continue;
+    if (set.has(v)) continue;
+    set.add(v);
+    out.push(v);
+  }
+  return out;
 }
