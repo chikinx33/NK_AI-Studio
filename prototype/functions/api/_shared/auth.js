@@ -119,6 +119,8 @@ function readToken(request, allowQueryToken) {
     if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
       t = t.slice(1, -1).trim();
     }
+    t = t.replace(/\s+/g, "");
+    t = t.replace(/[^A-Za-z0-9._-]/g, "");
     return t;
   }
   if (!allowQueryToken) return "";
@@ -128,6 +130,8 @@ function readToken(request, allowQueryToken) {
     if ((q.startsWith('"') && q.endsWith('"')) || (q.startsWith("'") && q.endsWith("'"))) {
       q = q.slice(1, -1).trim();
     }
+    q = q.replace(/\s+/g, "");
+    q = q.replace(/[^A-Za-z0-9._-]/g, "");
     return q;
   } catch (_) {
     return "";
