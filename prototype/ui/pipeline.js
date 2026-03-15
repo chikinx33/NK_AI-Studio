@@ -766,11 +766,6 @@
   };
 
   function hydrateVoiceSelects() {
-    var list = Array.isArray(window.NK._voiceCatalog) ? window.NK._voiceCatalog : [];
-    if (!list.length) return;
-    var koVoices = list.filter(function (v) {
-      return Array.isArray(v.languageCodes) && v.languageCodes.indexOf('ko-KR') >= 0 && v.name;
-    });
     var buildOption = function (value, label, selected) { return '<option value="' + value + '"' + (selected ? ' selected' : '') + '>' + label + '</option>'; };
     var selects = document.querySelectorAll('.voice-select');
     Array.prototype.forEach.call(selects, function (sel) {
@@ -781,20 +776,13 @@
         var sc = (stx && stx.scenes) ? stx.scenes.find(function (s) { return String(s.id) === String(sid); }) : null;
         if (sc && sc.voiceVoiceId) cur = sc.voiceVoiceId;
       } catch (_) { }
-      if (cur === 'kr_female_narration') cur = 'engine:google:voice:ko-KR-Neural2-A';
-      if (cur === 'kr_male_narration') cur = 'engine:google:voice:ko-KR-Neural2-B';
-      if (cur.indexOf('voice:ko-KR-') === 0) cur = 'engine:google:' + cur; // legacy -> google
+      if (cur === 'kr_female_narration' || cur === 'kr_male_narration') cur = 'engine:gemini:voice:Kore';
+      if (cur.indexOf('voice:ko-KR-') === 0) cur = 'engine:gemini:voice:Kore'; // legacy google -> gemini
+      if (cur.indexOf('engine:google:voice:') === 0) cur = 'engine:gemini:voice:Kore';
       if (cur.indexOf('voice:Kore') === 0) cur = 'engine:gemini:voice:Kore';
 
       var geminiOpts = buildOption('engine:gemini:voice:Kore', 'Gemini · Kore', cur === 'engine:gemini:voice:Kore');
-      var googleOpts = koVoices.map(function (v) {
-        var val = 'engine:google:voice:' + v.name;
-        var label = 'Google · ' + v.name;
-        return buildOption(val, label, cur === val);
-      }).join('');
-      var html = '' +
-        '<optgroup label="Gemini">' + geminiOpts + '</optgroup>' +
-        '<optgroup label="Google TTS">' + googleOpts + '</optgroup>';
+      var html = '' + geminiOpts;
       sel.innerHTML = html;
       if (!cur) sel.value = 'engine:gemini:voice:Kore';
       else {

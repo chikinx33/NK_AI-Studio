@@ -220,29 +220,19 @@
           btn.disabled = true;
           try {
             var req = { projectId: projectId, sceneId: sceneId, script: scriptText };
+            req.engine = 'gemini';
             if (voiceVal.indexOf('engine:gemini:voice:') === 0) {
-              req.engine = 'gemini';
-              req.voiceName = voiceVal.split(':').slice(3).join(':');
-            } else if (voiceVal.indexOf('engine:google:voice:') === 0) {
-              req.engine = 'google';
-              req.voiceName = voiceVal.split(':').slice(3).join(':');
-            } else if (voiceVal.indexOf('voice:') === 0) {
-              req.engine = 'google';
-              req.voiceName = voiceVal.slice(6);
-            } else if (voiceVal.indexOf('preset:') === 0) {
-              req.engine = 'google';
-              var parts = voiceVal.split(':');
-              var base = parts[3] || 'ko-KR-Neural2-A';
-              req.voiceName = base;
-              var cfg = voiceVal.split(':').slice(4).join(':');
-              var rateM = cfg.match(/rate=([0-9.]+)/);
-              var pitchM = cfg.match(/pitch=([+-]?[0-9]+)/);
-              if (rateM) req.speakingRate = Number(rateM[1]);
-              if (pitchM) req.pitch = Number(pitchM[1]);
-            } else if (/^kr_/.test(voiceVal)) {
-              req.engine = 'google';
-              if (voiceVal === 'kr_female_narration') req.voiceName = 'ko-KR-Neural2-A';
-              else if (voiceVal === 'kr_male_narration') req.voiceName = 'ko-KR-Neural2-B';
+              req.voiceName = voiceVal.split(':').slice(3).join(':') || 'Kore';
+            } else {
+              req.voiceName = 'Kore';
+              var cfg = '';
+              if (voiceVal.indexOf('preset:') === 0) {
+                cfg = voiceVal.split(':').slice(4).join(':');
+                var rateM = cfg.match(/rate=([0-9.]+)/);
+                var pitchM = cfg.match(/pitch=([+-]?[0-9]+)/);
+                if (rateM) req.speakingRate = Number(rateM[1]);
+                if (pitchM) req.pitch = Number(pitchM[1]);
+              }
             }
             var resTts = await NK.api.tts(req);
             var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
