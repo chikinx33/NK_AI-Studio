@@ -66,12 +66,26 @@ export async function authorizeRequest(request, env, options = {}) {
 }
 
 export async function verifySessionToken(token, env) {
-  const raw = String(token || "").trim();
-  const parts = raw.split(".");
-  if (parts.length !== 2) throw new Error("invalid_session");
-  const encoded = parts[0];
-  const sig = parts[1];
-  const payload = safeJson(base64urlDecode(encoded));
+  let raw = String(token || "").trim();
+  raw = normalizeWholeToken(raw);
+  let parts = raw.split(".");
+  if (parts.length !== 2) {
+    raw = raw.replace(/[^A-Za-z0-9._-]/g, "");
+    parts = raw.split(".");
+    if (parts.length !== 2) throw new Error("invalid_session");
+  }
+  let encoded = String(parts[0] || "");
+  let sig = String(parts[1] || "");
+  encoded = encoded.replace(/[^A-Za-z0-9_-]/g, "");
+  sig = sig.replace(/[^A-Za-z0-9_-]/g, "");
+  let payload = null;
+  try {
+    payload = safeJson(base64urlDecode(encoded));
+  } catch (_) {
+    // 최후 보정: 가능한 문자만 남기고 재시도
+    const cleaned = encoded.replace(/[^A-Za-z0-9_-]/g, "");
+    payload = safeJson(base64urlDecode(cleaned));
+  }
   if (!payload || typeof payload !== "object") throw new Error("invalid_session");
   const now = Math.floor(Date.now() / 1000);
   if (!payload.exp || Number(payload.exp) <= now) throw new Error("session_expired");
@@ -212,4 +226,13 @@ function candidateSecrets(env) {
     out.push(v);
   }
   return out;
+}
+
+function normalizeWholeToken(s) {
+  let t = String(s || "").trim();
+  if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+    t = t.slice(1, -1).trim();
+  }
+  t = t.replace(/\s+/g, "");
+  return t;
 }
