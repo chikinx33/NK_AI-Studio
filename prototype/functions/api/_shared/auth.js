@@ -114,11 +114,21 @@ function readSecret(env) {
 function readToken(request, allowQueryToken) {
   const auth = String(request.headers.get("Authorization") || "").trim();
   const match = auth.match(/^Bearer\s+(.+)$/i);
-  if (match && match[1]) return match[1].trim();
+  if (match && match[1]) {
+    let t = match[1].trim();
+    if ((t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))) {
+      t = t.slice(1, -1).trim();
+    }
+    return t;
+  }
   if (!allowQueryToken) return "";
   try {
     const url = new URL(request.url);
-    return String(url.searchParams.get("nk_token") || "").trim();
+    let q = String(url.searchParams.get("nk_token") || "").trim();
+    if ((q.startsWith('"') && q.endsWith('"')) || (q.startsWith("'") && q.endsWith("'"))) {
+      q = q.slice(1, -1).trim();
+    }
+    return q;
   } catch (_) {
     return "";
   }
