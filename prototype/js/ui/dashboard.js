@@ -116,6 +116,13 @@
     const mergeFromServer = async () => {
       if (!NK.api || !NK.api.projectList) return;
       if (serverMerged) return;
+      if (typeof window !== 'undefined') {
+        if (window.__nk_projects_sync_started) {
+          serverMerged = true;
+          return;
+        }
+        window.__nk_projects_sync_started = true;
+      }
       if (!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed())) return;
       const showBlockingLoading = !(Array.isArray(drafts) && drafts.length);
       try {

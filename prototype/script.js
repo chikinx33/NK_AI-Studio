@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.831';
+  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.832';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -385,7 +385,14 @@
       NK.ui.dashboard.renderDrafts();
       setupProjectOverlay();
       refreshSidebarCard();
-      syncProjectsFromServer();
+      try {
+        if (!window.__nk_projects_sync_started) {
+          window.__nk_projects_sync_started = true;
+          syncProjectsFromServer();
+        }
+      } catch (_) {
+        syncProjectsFromServer();
+      }
     }
     if (document.getElementById('opt-auth-btn')) {
       setupLoginPage();
