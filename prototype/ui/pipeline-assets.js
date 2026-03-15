@@ -115,7 +115,8 @@
       var vidIndex = buildAssetIndex(vidItems, extractObjectNameFromMediaRef);
       var changed = false;
 
-      st.scenes = st.scenes.map(function (scene) {
+      var latest = ctx.getState() || st;
+      var nextScenes = (latest.scenes || []).map(function (scene) {
         var next = scene;
         var imageRef = getSceneImageRef(scene);
         if (needImg && imageRef && String(imageRef).indexOf('data:') !== 0) {
@@ -125,7 +126,6 @@
             changed = true;
           }
         }
-
         var videoRef = getSceneVideoRef(scene);
         if (needVid && videoRef && String(videoRef).indexOf('data:') !== 0) {
           var signedVideo = resolveSignedUrl(videoRef, vidIndex, extractObjectNameFromMediaRef);
@@ -136,14 +136,12 @@
         }
         return next;
       });
-
-      ctx.setState(st);
+      var nextState = Object.assign({}, latest, { scenes: nextScenes, _assetsRefreshed: true });
+      ctx.setState(nextState);
       if (changed) {
         if (opts.render) await opts.render();
         if (ctx.persistPipeline) ctx.persistPipeline();
       }
-      st._assetsRefreshed = true;
-      ctx.setState(st);
     } catch (err) {
       console.warn('refreshAssets failed:', err && err.message ? err.message : err);
     }

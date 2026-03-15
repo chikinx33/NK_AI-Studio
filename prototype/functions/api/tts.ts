@@ -52,7 +52,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const userId: string = String(auth.userId || "").trim() || "owner";
     const projectIdStr: string = String(projectId || "").trim();
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectIdStr);
-    const objectName = `${projectPrefix}/sfx/voice-${sceneId}.wav`;
+    const objectName = `${projectPrefix}/sfx/voice-${sceneId}.mp3`;
 
     const token = await getGoogleAccessToken({
       clientEmail: clientEmail as string,
@@ -121,9 +121,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const audioBytes = base64ToBytes(audioContent);
 
     const mimeFromModel = String(audioInfo.mime || "").toLowerCase();
-    const isMp3 = /mpeg|mp3/.test(mimeFromModel);
-    const objNameFinal = isMp3 ? objectName.replace(/\.wav$/i, ".mp3") : objectName;
-    const contentTypeFinal = isMp3 ? "audio/mpeg" : "audio/wav";
+    const isMp3 = /mpeg|mp3/.test(mimeFromModel || "audio/mpeg");
+    const objNameFinal = objectName;
+    const contentTypeFinal = "audio/mpeg";
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
     const userProjectRaw =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
@@ -149,9 +149,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const isRequesterPays = upRes.status === 403 && String(upText).toLowerCase().includes("requester pays");
       const dataUri = `data:${contentTypeFinal};base64,${audioContent}`;
       if (isRequesterPays) {
-        return send({ voiceUrl: dataUri, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal, warning: "upload_failed_requester_pays" }, 200, origin);
+        return send({ voiceUrl: dataUri, format: "mp3", objectName: objNameFinal, warning: "upload_failed_requester_pays" }, 200, origin);
       }
-      return send({ voiceUrl: dataUri, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal, warning: "upload_failed" }, 200, origin);
+      return send({ voiceUrl: dataUri, format: "mp3", objectName: objNameFinal, warning: "upload_failed" }, 200, origin);
     }
 
     const signedUrl = await signGcsUrl({
@@ -162,7 +162,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       expiresInSec: 3600,
     }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
 
-    return send({ voiceUrl: signedUrl, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal }, 200, origin);
+    return send({ voiceUrl: signedUrl, format: "mp3", objectName: objNameFinal }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
