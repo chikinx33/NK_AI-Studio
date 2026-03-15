@@ -108,11 +108,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     const audioContent = audioInfo.data;
     const audioBytes = base64ToBytes(audioContent);
+    const sniff = sniffAudioFormat(audioBytes);
 
     const mimeFromModel = String(audioInfo.mime || "").toLowerCase();
-    const isMp3 = /mpeg|mp3/.test(mimeFromModel) || !mimeFromModel; // 기본 MP3
-    const objNameFinal = isMp3 ? `${baseObjectName}.mp3` : `${baseObjectName}.wav`;
-    const contentTypeFinal = isMp3 ? "audio/mpeg" : "audio/wav";
+    const looksMp3 = sniff === "mp3" || /mpeg|mp3/.test(mimeFromModel);
+    const looksWav = sniff === "wav" || /wav/.test(mimeFromModel);
+    const isMp3 = looksMp3 || (!looksWav); // 모호하면 mp3로
+    const objNameFinal = `${baseObjectName}.mp3`;
+    const contentTypeFinal = "audio/mpeg";
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
     const userProjectRaw =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
@@ -161,10 +164,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       } catch (_) {}
     }
     if (signedUrl) {
-      return send({ voiceUrl: signedUrl, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal }, 200, origin);
+      return send({ voiceUrl: signedUrl, format: "mp3", objectName: objNameFinal }, 200, origin);
     }
     const dataUriFinal = `data:${contentTypeFinal};base64,${audioContent}`;
-    return send({ voiceUrl: dataUriFinal, format: isMp3 ? "mp3" : "wav", objectName: objNameFinal, warning: "sign_failed" }, 200, origin);
+    return send({ voiceUrl: dataUriFinal, format: "mp3", objectName: objNameFinal, warning: "sign_failed" }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
@@ -289,6 +292,22 @@ function base64ToBytes(b64: string) {
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+}
+function sniffAudioFormat(bytes: Uint8Array): "mp3" | "wav" | "unknown" {
+  if (bytes.length >= 3) {
+    if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) return "mp3"; // ID3
+  }
+  if (bytes.length >= 2) {
+    const b0 = bytes[0], b1 = bytes[1];
+    // MP3 frame sync 11111111 111xxxxx (0xFF, 0xE0..0xFB)
+    if (b0 === 0xFF && (b1 & 0xE0) === 0xE0) return "mp3";
+  }
+  if (bytes.length >= 12) {
+    const r = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+    const w = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    if (r === "RIFF" && w === "WAVE") return "wav";
+  }
+  return "unknown";
 }
 async function getGoogleAccessToken(opts: { clientEmail: string; privateKeyPem: string; scope: string; }) {
   const now = Math.floor(Date.now() / 1000);
