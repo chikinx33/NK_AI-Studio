@@ -72,8 +72,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       generationConfig: {
         temperature: 0.7,
         responseModalities: ["AUDIO"],
-        responseMimeType: "audio/mp3",
-        audioConfig: { audioEncoding: "MP3" },
+        response_mime_type: "audio/mpeg",
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: {
