@@ -72,7 +72,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       generationConfig: {
         temperature: 0.7,
         responseModalities: ["AUDIO"],
-        response_mime_type: "audio/mpeg",
         speechConfig: {
           voiceConfig: {
             prebuiltVoiceConfig: {
@@ -180,14 +179,17 @@ function extractGeminiAudio(json: any): { data: string; mime: string } | null {
   try {
     const cands = json?.candidates || [];
     for (const c of cands) {
-      const parts = c?.content?.parts || c?.content?.inlineData || [];
+      const parts = c?.content?.parts || c?.content?.inlineData || c?.content?.inline_data || [];
       if (Array.isArray(parts)) {
         for (const p of parts) {
-          if (p?.inlineData?.data) return { data: String(p.inlineData.data), mime: String(p?.inlineData?.mimeType || "") };
-          if (p?.audio?.data) return { data: String(p.audio.data), mime: String(p?.audio?.mimeType || "") };
+          const inline = p?.inlineData || p?.inline_data;
+          if (inline?.data) return { data: String(inline.data), mime: String(inline?.mimeType || inline?.mime_type || "") };
+          if (p?.audio?.data) return { data: String(p.audio.data), mime: String(p?.audio?.mimeType || p?.audio?.mime_type || "") };
           if (p?.data) return { data: String(p.data), mime: "" };
         }
-      } else if (parts?.data) {
+      } else if (parts?.data || parts?.inlineData?.data || parts?.inline_data?.data) {
+        const inline = parts?.inlineData || parts?.inline_data;
+        if (inline?.data) return { data: String(inline.data), mime: String(inline?.mimeType || inline?.mime_type || "") };
         return { data: String(parts.data), mime: "" };
       }
     }
