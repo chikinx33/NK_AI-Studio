@@ -26,7 +26,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: corsHeaders(origin) });
     }
-    const auth = await authorizeRequest(request, env);
+    const auth = await authorizeRequest(request, env, { allowQueryToken: true });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const reqUrl = new URL(request.url);
     const userId = auth.userId;

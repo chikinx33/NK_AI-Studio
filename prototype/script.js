@@ -1,6 +1,6 @@
 ; (function () {
   window.NK = window.NK || {};
-  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.829';
+  if (window.NK.config && !window.NK.config.APP_VERSION) window.NK.config.APP_VERSION = '1.830';
   const config = NK.config;
   const KEY = config.KEYS;
   const LANG_KEY = KEY.LANG || 'nk_lang';
@@ -168,6 +168,7 @@
     try {
       const isFile = (typeof window !== 'undefined' && window.location && window.location.protocol === 'file:');
       if (isFile) return; // file://은 CORS 우회가 있어도 불필요 시 건너뜀
+      if (!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed())) return;
       if (!NK.api || !NK.api.projectList) return;
       const list = await NK.api.projectList();
       const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];

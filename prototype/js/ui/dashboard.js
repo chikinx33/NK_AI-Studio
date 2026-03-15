@@ -1,4 +1,4 @@
-﻿; (function () {
+; (function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var dashboard = ui.dashboard || (ui.dashboard = {});
@@ -116,7 +116,7 @@
     const mergeFromServer = async () => {
       if (!NK.api || !NK.api.projectList) return;
       if (serverMerged) return;
-      serverMerged = true;
+      if (!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed())) return;
       const showBlockingLoading = !(Array.isArray(drafts) && drafts.length);
       try {
         if (showBlockingLoading) setDashLoading(true, DASHBOARD_LOADING_TEXT);
@@ -126,6 +126,7 @@
           drafts = [];
           if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
           else NK.store.saveDrafts(drafts);
+          serverMerged = true;
           return;
         }
         drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
@@ -173,6 +174,7 @@
         });
         if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
         else NK.store.saveDrafts(drafts);
+        serverMerged = true;
       } catch (_) { }
       finally {
         if (showBlockingLoading) setDashLoading(false);

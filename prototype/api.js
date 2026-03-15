@@ -420,7 +420,9 @@
   };
 
   api.projectList = async function () {
-    var res = await fetch(withBase('/api/project/list?userId=' + encodeURIComponent(resolveUserId())), {
+    var token = getAuthToken();
+    var url = withBase('/api/project/list?userId=' + encodeURIComponent(resolveUserId()) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
+    var res = await fetch(url, {
       method: 'GET',
       headers: buildAuthHeaders()
     });
