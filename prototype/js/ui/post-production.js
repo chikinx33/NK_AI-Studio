@@ -195,10 +195,21 @@
 
   function isVideoUrl(url) {
     if (!url) return false;
-    var clean = String(url).toLowerCase();
-    if (clean.indexOf('data:video/') === 0) return true;
-    clean = clean.split('?')[0];
-    return /\.(mp4|m4v|webm|mov)$/i.test(clean);
+    var raw = String(url);
+    var lower = raw.toLowerCase();
+    if (lower.indexOf('data:video/') === 0) return true;
+    try {
+      var u = new URL(raw, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
+      if (u.pathname === '/api/media/proxy') {
+        var obj = u.searchParams.get('objectName') || '';
+        return /\.(mp4|m4v|webm|mov)$/i.test(String(obj).split('?')[0].split('#')[0]);
+      }
+      var path = String(u.pathname || '').split('?')[0].split('#')[0];
+      return /\.(mp4|m4v|webm|mov)$/i.test(path);
+    } catch (_) {
+      var clean = lower.split('?')[0].split('#')[0];
+      return /\.(mp4|m4v|webm|mov)$/i.test(clean);
+    }
   }
 
   function toPlayableMediaUrl(url) {
@@ -283,7 +294,8 @@
           NK.state.set({ runtime: rt });
         }
       } catch (_) { }
-    } catch (_) { }
+      return pid;
+    } catch (_) { return ''; }
   }
 
   function round1(v) {
@@ -2776,6 +2788,17 @@
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;
     }
-    Promise.resolve().then(refreshProjectFromServer).finally(function () { post.render(); });
+    Promise.resolve()
+      .then(refreshProjectFromServer)
+      .then(function (pid) {
+        try {
+          var project = pid ? getProjectById(pid) : resolveProject();
+          if (project && NK.service && NK.service.sceneAssets && NK.service.sceneAssets.refreshProjectSceneAssets) {
+            return NK.service.sceneAssets.refreshProjectSceneAssets(project, { force: true }).catch(function () { return false; });
+          }
+        } catch (_) { }
+        return false;
+      })
+      .finally(function () { post.render(); });
   };
 })();
