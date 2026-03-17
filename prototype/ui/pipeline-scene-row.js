@@ -118,7 +118,6 @@
     var mediaUrlResolver = typeof options.toPlayableMediaUrl === 'function'
       ? options.toPlayableMediaUrl
       : function (value) { return String(value || '').trim(); };
-    try { console.debug('voice-render', { id: scene && scene.id, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, hasUrl: !!(scene && scene.voiceUrl) }); } catch (_) {}
     var voiceId = String(scene.voiceVoiceId || 'engine:gemini:voice:Kore');
     var voiceOptions = [
       { id: 'engine:gemini:voice:Kore', label: 'Gemini · Kore (Neutral)' },

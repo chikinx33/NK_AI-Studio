@@ -3103,6 +3103,13 @@ a.btn-primary:active {
   word-break: break-word;
 }
 
+.prompt-common {
+  color: #1e3a8a;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .image-placeholder.tall {
   width: 100%;
   aspect-ratio: 16 / 9;
