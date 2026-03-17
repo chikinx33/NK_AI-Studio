@@ -97,6 +97,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify(reqBody),
     });
     let synthText = await synthRes.text();
+    const wantDebug = !!body.debug;
+    if (wantDebug) {
+      try {
+        console.log("TTS raw response status", synthRes.status);
+        console.log("TTS raw response length", synthText.length);
+        console.log("TTS raw response preview", synthText.slice(0, 2048));
+      } catch (_) {}
+    }
     if (synthRes.ok) {
       const synthJson = safeJson(synthText) || {};
       audioInfo = extractGeminiAudio(synthJson);
@@ -112,10 +120,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const mimeFromModel = String(audioInfo.mime || "").toLowerCase();
     const looksMp3 = sniff === "mp3" || /mpeg|mp3/.test(mimeFromModel);
-    const looksWav = sniff === "wav" || /wav/.test(mimeFromModel);
-    const isMp3 = looksMp3 || (!looksWav); // 모호하면 mp3로
-    const objNameFinal = `${baseObjectName}.mp3`;
-    const contentTypeFinal = "audio/mpeg";
+    const looksWav = sniff === "wav" || /wav|pcm/.test(mimeFromModel);
+    const chosenExt = looksMp3 ? "mp3" : (looksWav ? "wav" : "wav");
+    const objNameFinal = `${baseObjectName}.${chosenExt}`;
+    const contentTypeFinal = chosenExt === "mp3" ? "audio/mpeg" : "audio/wav";
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objNameFinal)}`;
     const userProjectRaw =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
@@ -141,9 +149,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const isRequesterPays = upRes.status === 403 && String(upText).toLowerCase().includes("requester pays");
       const dataUri = `data:${contentTypeFinal};base64,${audioContent}`;
       if (isRequesterPays) {
-        return send({ voiceUrl: dataUri, format: "mp3", objectName: objNameFinal, warning: "upload_failed_requester_pays" }, 200, origin);
+        return send({ voiceUrl: dataUri, format: chosenExt, objectName: objNameFinal, warning: "upload_failed_requester_pays" }, 200, origin);
       }
-      return send({ voiceUrl: dataUri, format: "mp3", objectName: objNameFinal, warning: "upload_failed" }, 200, origin);
+      return send({ voiceUrl: dataUri, format: chosenExt, objectName: objNameFinal, warning: "upload_failed" }, 200, origin);
     }
 
     let signedUrl: string | null = null;
@@ -164,10 +172,24 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       } catch (_) {}
     }
     if (signedUrl) {
-      return send({ voiceUrl: signedUrl, format: "mp3", objectName: objNameFinal }, 200, origin);
+      const debugMeta = wantDebug ? {
+        sniff,
+        mimeFromModel,
+        chosenExt,
+        sizeBytes: Number(audioBytes?.length || 0),
+        headHex: Array.from(audioBytes?.slice(0, 16) || []).map(b => b.toString(16).padStart(2, "0")).join(""),
+      } : undefined;
+      return send({ voiceUrl: signedUrl, format: chosenExt, objectName: objNameFinal, debug: debugMeta }, 200, origin);
     }
     const dataUriFinal = `data:${contentTypeFinal};base64,${audioContent}`;
-    return send({ voiceUrl: dataUriFinal, format: "mp3", objectName: objNameFinal, warning: "sign_failed" }, 200, origin);
+    const debugMeta2 = wantDebug ? {
+      sniff,
+      mimeFromModel,
+      chosenExt,
+      sizeBytes: Number(audioBytes?.length || 0),
+      headHex: Array.from(audioBytes?.slice(0, 16) || []).map(b => b.toString(16).padStart(2, "0")).join(""),
+    } : undefined;
+    return send({ voiceUrl: dataUriFinal, format: chosenExt, objectName: objNameFinal, warning: "sign_failed", debug: debugMeta2 }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
