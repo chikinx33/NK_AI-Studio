@@ -115,6 +115,9 @@
   function buildVoiceBlock(scene, options) {
     var voiceEnabled = !!options.voiceEnabled;
     var voiceBusy = !!options.voiceBusy;
+    var mediaUrlResolver = typeof options.toPlayableMediaUrl === 'function'
+      ? options.toPlayableMediaUrl
+      : function (value) { return String(value || '').trim(); };
     try { console.debug('voice-render', { id: scene && scene.id, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, hasUrl: !!(scene && scene.voiceUrl) }); } catch (_) {}
     var voiceId = String(scene.voiceVoiceId || 'engine:gemini:voice:Kore');
     var isCustomVoice = /^voice:/.test(voiceId) || /^preset:/.test(voiceId) || /^engine:/.test(voiceId);
@@ -135,6 +138,7 @@
       customLabel = '프리셋 ' + voiceId.split(':').slice(1).join(':');
     }
     var errorLine = scene.voiceError ? ('<p class="small" style="color:#ff6b6b; margin:6px 0 0;">' + String(scene.voiceError) + '</p>') : '';
+    var audioPlayableUrl = mediaUrlResolver(scene.voiceUrl || '');
     return (
       '<div class="voice-block" style="margin-top:8px;">' +
       '<div class="voice-title-row">' +
@@ -148,7 +152,7 @@
       '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + ((voiceBusy || !voiceEnabled) ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +
       '<div class="voice-player" data-id="' + scene.id + '" style="margin-top:10px;">' +
-      '<audio controls preload="auto" style="width:100%;" ' + (scene.voiceUrl ? '' : 'disabled') + ' src="' + (scene.voiceUrl || '') + '"></audio>' +
+      '<audio controls preload="auto" style="width:100%;" ' + (audioPlayableUrl ? '' : 'disabled') + ' src="' + (audioPlayableUrl || '') + '"></audio>' +
       '</div>' +
       (!voiceEnabled ? '<p class="muted small">프리프로덕션에서 나레이션/더빙을 켜야 음성 생성이 가능합니다.</p>' : '') +
       errorLine +
@@ -166,7 +170,8 @@
     var voiceBusy = isSceneVoiceProcessing(scene);
     var voiceBlock = buildVoiceBlock(scene, {
       voiceEnabled: isVoiceFeatureEnabled(statePayload),
-      voiceBusy: voiceBusy
+      voiceBusy: voiceBusy,
+      toPlayableMediaUrl: mediaUrlResolver
     });
     var img = buildImageCard(scene, mediaUrlResolver);
     var videoCard = buildVideoCard(scene, mediaUrlResolver);
