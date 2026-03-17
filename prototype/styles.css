@@ -2119,7 +2119,7 @@ a.btn-primary:active {
 }
 
 .scenario-card.active-card {
-  border: 2px solid #ff7a00;
+  border-color: #ff7a00;
   box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.25);
 }
 
@@ -3329,7 +3329,7 @@ a.btn-primary:active {
   position: relative;
 }
 .scene-cell.active-cell {
-  border: 2px solid #ff7a00 !important;
+  border: 1px solid #ff7a00 !important;
   box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.25);
 }
 
