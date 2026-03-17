@@ -550,6 +550,7 @@
       var rows = scenes.map(function (s) {
         var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
+        try { console.log('RENDER TRACE', 'ui.render', s.id, s.voiceUrl || ''); } catch (_) {}
         var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
         return buildSceneRowHtml(updatedScene, header);
       }).join('');
@@ -821,11 +822,27 @@
   }
   ui.refreshAssets = async function () {
     if (window.NK && NK.uiPipelineAssets && NK.uiPipelineAssets.refreshAssets) {
+      try {
+        var stCur = ctx.getState();
+        if (stCur && Array.isArray(stCur.scenes)) {
+          stCur.scenes.forEach(function (sc) {
+            try { console.log('RENDER TRACE', 'ui.refreshAssets:before', sc.id, sc.voiceUrl || ''); } catch (_) {}
+          });
+        }
+      } catch (_) {}
       await NK.uiPipelineAssets.refreshAssets({
         ctx: ctx,
         render: ui.render,
         extractObjectNameFromMediaRef: extractObjectNameFromMediaRef
       });
+      try {
+        var stAfter = ctx.getState();
+        if (stAfter && Array.isArray(stAfter.scenes)) {
+          stAfter.scenes.forEach(function (sc) {
+            try { console.log('RENDER TRACE', 'ui.refreshAssets:after', sc.id, sc.voiceUrl || ''); } catch (_) {}
+          });
+        }
+      } catch (_) {}
     }
   };
   ui.generateImageForIdx = async function (idx, retryCount) {
@@ -1015,6 +1032,7 @@ function updateSceneRow(idx, headerText, partHint) {
   if (partHint === 'voice' && helpers.buildVoiceBlock) {
     var target = row.querySelector('.voice-block');
     if (target) {
+      try { console.log('RENDER TRACE', 'updateSceneRow', scene.id, scene.voiceUrl || ''); } catch (_) {}
       var resolved = '';
       try {
         var raw = scene && scene.voiceUrl;
@@ -1065,6 +1083,7 @@ function updateSceneRow(idx, headerText, partHint) {
 
   // 폴백: 행 전체 재구성
   var rebuilt = buildSceneRowHtml(scene, header);
+  try { console.log('RENDER TRACE', 'row-rebuild', scene.id, scene.voiceUrl || ''); } catch (_) {}
   try { console.debug('row-rebuild', { id: scene && scene.id, hasAudioTag: rebuilt.indexOf('<audio') >= 0, length: rebuilt.length }); } catch (_) {}
   row.outerHTML = rebuilt;
   try {
