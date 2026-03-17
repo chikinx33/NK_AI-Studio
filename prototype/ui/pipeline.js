@@ -1028,8 +1028,16 @@ function updateSceneRow(idx, headerText, partHint) {
       target.outerHTML = html;
       try {
         var checkRow = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
+        var audioEl = checkRow ? checkRow.querySelector('audio') : null;
+        if (audioEl && resolved) {
+          if (!audioEl.src || audioEl.src !== resolved) {
+            audioEl.src = resolved;
+            try { audioEl.removeAttribute('disabled'); } catch (_) {}
+            try { audioEl.load(); } catch (_) {}
+          }
+        }
         var audioCount = checkRow ? checkRow.querySelectorAll('audio').length : 0;
-        console.debug('voice-block-after-replace', { id: scene && scene.id, audioCount: audioCount });
+        console.debug('voice-block-after-replace', { id: scene && scene.id, audioCount: audioCount, hydrated: !!(audioEl && audioEl.src) });
       } catch (_) {}
       return;
     }
@@ -1059,4 +1067,19 @@ function updateSceneRow(idx, headerText, partHint) {
   var rebuilt = buildSceneRowHtml(scene, header);
   try { console.debug('row-rebuild', { id: scene && scene.id, hasAudioTag: rebuilt.indexOf('<audio') >= 0, length: rebuilt.length }); } catch (_) {}
   row.outerHTML = rebuilt;
+  try {
+    var newRow = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
+    var audioEl2 = newRow ? newRow.querySelector('audio') : null;
+    var raw2 = scene && scene.voiceUrl;
+    var obj2 = scene && scene.voiceObjectName;
+    var viaObj2 = (obj2 && window.NK && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(obj2) : '';
+    var resolved2 = toPlayableMediaUrl(raw2 || viaObj2 || '');
+    if (audioEl2 && resolved2) {
+      audioEl2.src = resolved2;
+      try { audioEl2.removeAttribute('disabled'); } catch (_) {}
+      try { audioEl2.load(); } catch (_) {}
+    }
+    var audioCount2 = newRow ? newRow.querySelectorAll('audio').length : 0;
+    console.debug('row-rebuild-after', { id: scene && scene.id, audioCount: audioCount2, hydrated: !!(audioEl2 && audioEl2.src) });
+  } catch (_) {}
 }
