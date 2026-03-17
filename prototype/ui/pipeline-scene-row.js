@@ -140,14 +140,6 @@
       }
     } catch (_) { }
     var audioPlayableUrl = mediaUrlResolver(scene.voiceUrl || fallbackVoiceUrl || '');
-    try {
-      console.debug('voice-block-render', {
-        id: scene && scene.id,
-        voiceUrl: scene && scene.voiceUrl,
-        voiceObjectName: scene && scene.voiceObjectName,
-        audioPlayableUrl: audioPlayableUrl
-      });
-    } catch (_) {}
     return (
       '<div class="voice-block" style="margin-top:8px;">' +
       '<div class="voice-title-row">' +

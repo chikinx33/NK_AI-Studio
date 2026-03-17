@@ -550,7 +550,6 @@
       var rows = scenes.map(function (s) {
         var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
-        try { console.log('RENDER TRACE', 'ui.render', s.id, s.voiceUrl || ''); } catch (_) {}
         var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
         return buildSceneRowHtml(updatedScene, header);
       }).join('');
@@ -822,27 +821,11 @@
   }
   ui.refreshAssets = async function () {
     if (window.NK && NK.uiPipelineAssets && NK.uiPipelineAssets.refreshAssets) {
-      try {
-        var stCur = ctx.getState();
-        if (stCur && Array.isArray(stCur.scenes)) {
-          stCur.scenes.forEach(function (sc) {
-            try { console.log('RENDER TRACE', 'ui.refreshAssets:before', sc.id, sc.voiceUrl || ''); } catch (_) {}
-          });
-        }
-      } catch (_) {}
       await NK.uiPipelineAssets.refreshAssets({
         ctx: ctx,
         render: ui.render,
         extractObjectNameFromMediaRef: extractObjectNameFromMediaRef
       });
-      try {
-        var stAfter = ctx.getState();
-        if (stAfter && Array.isArray(stAfter.scenes)) {
-          stAfter.scenes.forEach(function (sc) {
-            try { console.log('RENDER TRACE', 'ui.refreshAssets:after', sc.id, sc.voiceUrl || ''); } catch (_) {}
-          });
-        }
-      } catch (_) {}
     }
   };
   ui.generateImageForIdx = async function (idx, retryCount) {
@@ -1032,7 +1015,6 @@ function updateSceneRow(idx, headerText, partHint) {
   if (partHint === 'voice' && helpers.buildVoiceBlock) {
     var target = row.querySelector('.voice-block');
     if (target) {
-      try { console.log('RENDER TRACE', 'updateSceneRow', scene.id, scene.voiceUrl || ''); } catch (_) {}
       var resolved = '';
       try {
         var raw = scene && scene.voiceUrl;
@@ -1040,9 +1022,7 @@ function updateSceneRow(idx, headerText, partHint) {
         var viaObj = (obj && window.NK && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(obj) : '';
         resolved = toPlayableMediaUrl(raw || viaObj || '');
       } catch (_) { resolved = ''; }
-      try { console.debug('voice-update', { id: scene && scene.id, voiceUrl: scene && scene.voiceUrl, voiceObjectName: scene && scene.voiceObjectName, playableUrl: resolved, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy }); } catch (_) {}
       var html = helpers.buildVoiceBlock(scene, { voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, toPlayableMediaUrl: toPlayableMediaUrl });
-      try { console.debug('voice-block-html', { id: scene && scene.id, hasAudioTag: html.indexOf('<audio') >= 0, length: html.length }); } catch (_) {}
       target.outerHTML = html;
       try {
         var checkRow = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
@@ -1055,7 +1035,6 @@ function updateSceneRow(idx, headerText, partHint) {
           }
         }
         var audioCount = checkRow ? checkRow.querySelectorAll('audio').length : 0;
-        console.debug('voice-block-after-replace', { id: scene && scene.id, audioCount: audioCount, hydrated: !!(audioEl && audioEl.src) });
       } catch (_) {}
       return;
     }
@@ -1083,8 +1062,6 @@ function updateSceneRow(idx, headerText, partHint) {
 
   // 폴백: 행 전체 재구성
   var rebuilt = buildSceneRowHtml(scene, header);
-  try { console.log('RENDER TRACE', 'row-rebuild', scene.id, scene.voiceUrl || ''); } catch (_) {}
-  try { console.debug('row-rebuild', { id: scene && scene.id, hasAudioTag: rebuilt.indexOf('<audio') >= 0, length: rebuilt.length }); } catch (_) {}
   row.outerHTML = rebuilt;
   try {
     var newRow = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
@@ -1099,6 +1076,5 @@ function updateSceneRow(idx, headerText, partHint) {
       try { audioEl2.load(); } catch (_) {}
     }
     var audioCount2 = newRow ? newRow.querySelectorAll('audio').length : 0;
-    console.debug('row-rebuild-after', { id: scene && scene.id, audioCount: audioCount2, hydrated: !!(audioEl2 && audioEl2.src) });
   } catch (_) {}
 }
