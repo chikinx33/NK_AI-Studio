@@ -22,7 +22,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const auth = await authorizeRequest(request, env, { allowQueryToken: true });
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const url = new URL(request.url);
-    const objectName = String(url.searchParams.get("objectName") || url.searchParams.get("url") || "").trim();
+    const objectName = String(url.searchParams.get("objectName") || "").trim();
     if (!objectName) return send({ error: "missing_objectName" }, 400, origin);
     const baseOutput = (env.AUDIO_OUTPUT_GCS_URI as string | undefined) || (env.VIDEO_OUTPUT_GCS_URI as string | undefined);
     if (!baseOutput) return send({ error: "missing_output_base" }, 500, origin);
@@ -44,7 +44,19 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       expiresInSec: 3600,
       userProject
     });
-    return Response.redirect(signed, 302);
+    const gcsResp = await fetch(signed, { method: "GET" });
+    if (!gcsResp.ok) {
+      const t = await gcsResp.text().catch(() => "");
+      return send({ error: "gcs_fetch_failed", status: gcsResp.status, detail: t }, 502, origin);
+    }
+    const buf = await gcsResp.arrayBuffer();
+    const type = gcsResp.headers.get("Content-Type") || "application/octet-stream";
+    const headers = {
+      ...corsHeaders(origin),
+      "Content-Type": type,
+      "Cache-Control": "public, max-age=3600"
+    };
+    return new Response(buf, { status: 200, headers });
   } catch (e: any) {
     return send({ error: e?.message || "proxy_error" }, 500, origin);
   }

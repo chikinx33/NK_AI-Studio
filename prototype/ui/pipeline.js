@@ -88,9 +88,9 @@
       return;
     } else {
       const list = items.map(function (it, i) {
-        const url = it.signedUrl || it.url || '';
-        const thumbUrl = toPlayableMediaUrl(url);
         const name = it.name || '';
+        const url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(name) : '';
+        const thumbUrl = url;
         const thumb = (kind === 'image')
           ? '<img class="lib-thumb" src="' + thumbUrl + '" alt="" />'
           : '<video class="lib-thumb" src="' + thumbUrl + '" muted playsinline preload="metadata"></video>';

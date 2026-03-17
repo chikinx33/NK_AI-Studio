@@ -145,8 +145,16 @@
     var rs = await Promise.all(reqs);
     var imgItems = (rs[0] && Array.isArray(rs[0].items)) ? rs[0].items : [];
     var vidItems = (rs[1] && Array.isArray(rs[1].items)) ? rs[1].items : [];
-    var imgMap = new Map(imgItems.map(function (it) { return [baseName(it && it.name), String(it && it.signedUrl || '')]; }));
-    var vidMap = new Map(vidItems.map(function (it) { return [baseName(it && it.name), String(it && it.signedUrl || '')]; }));
+    var imgMap = new Map(imgItems.map(function (it) {
+      var n = String((it && it.name) || '');
+      var proxy = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(n) : String((it && it.signedUrl) || '');
+      return [baseName(n), proxy];
+    }));
+    var vidMap = new Map(vidItems.map(function (it) {
+      var n = String((it && it.name) || '');
+      var proxy = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(n) : String((it && it.signedUrl) || '');
+      return [baseName(n), proxy];
+    }));
 
     var changed = false;
     var nextScenes = scenes.map(function (scene) {
@@ -155,13 +163,13 @@
       var imgUrl = getSceneImageUrl(next);
       if (needImg && (force || isSceneMediaUrlStale(imgUrl))) {
         var imgBn = baseName(imgUrl);
-        var imgSigned = imgMap.get(imgBn);
-        if (imgSigned && imgSigned !== imgUrl) {
+        var imgProxy = imgMap.get(imgBn);
+        if (imgProxy && imgProxy !== imgUrl) {
           changed = true;
           next = Object.assign({}, next, {
-            imageDataUrl: imgSigned,
-            generatedImageUrl: imgSigned,
-            imageUrl: imgSigned
+            imageDataUrl: imgProxy,
+            generatedImageUrl: imgProxy,
+            imageUrl: imgProxy
           });
         }
       }
@@ -169,12 +177,12 @@
       var vidUrl = getSceneVideoUrl(next);
       if (needVid && (force || isSceneMediaUrlStale(vidUrl))) {
         var vidBn = baseName(vidUrl);
-        var vidSigned = vidMap.get(vidBn);
-        if (vidSigned && vidSigned !== vidUrl) {
+        var vidProxy = vidMap.get(vidBn);
+        if (vidProxy && vidProxy !== vidUrl) {
           changed = true;
           next = Object.assign({}, next, {
-            videoUrl: vidSigned,
-            generatedVideoUrl: vidSigned,
+            videoUrl: vidProxy,
+            generatedVideoUrl: vidProxy,
             videoStatus: 'done',
             videoError: ''
           });
@@ -184,8 +192,8 @@
         if (vidFallback) {
           changed = true;
           next = Object.assign({}, next, {
-            videoUrl: vidFallback,
-            generatedVideoUrl: vidFallback,
+            videoUrl: (NK.api && NK.api.mediaProxyUrl) ? NK.api.mediaProxyUrl(vidFallback) : vidFallback,
+            generatedVideoUrl: (NK.api && NK.api.mediaProxyUrl) ? NK.api.mediaProxyUrl(vidFallback) : vidFallback,
             videoStatus: 'done',
             videoError: ''
           });

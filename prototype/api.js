@@ -286,24 +286,24 @@
     var u = String(rawUrl || '').trim();
     if (!u) return '';
     var token = getAuthToken();
-    var appendToken = function (url) {
-      if (!token) return url;
-      try {
-        var parsedUrl = new URL(url, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
-        if (!parsedUrl.searchParams.get('nk_token')) parsedUrl.searchParams.set('nk_token', token);
-        if (/^https?:/i.test(url)) return parsedUrl.toString();
-        return parsedUrl.pathname + parsedUrl.search + parsedUrl.hash;
-      } catch (_) {
-        return url + (url.indexOf('?') >= 0 ? '&' : '?') + 'nk_token=' + encodeURIComponent(token);
-      }
-    };
-    if (u.indexOf('/api/media/proxy?') >= 0) return appendToken(u);
-    try {
-      var parsed = new URL(u, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
-      if (parsed.pathname === '/api/media/proxy') return appendToken(u);
-    } catch (_) { }
     var tail = token ? ('&nk_token=' + encodeURIComponent(token)) : '';
-    return withBase('/api/media/proxy?url=' + encodeURIComponent(u) + tail);
+    var objectName = '';
+    try {
+      if (u.indexOf('gs://') === 0) {
+        var rest = u.slice(5);
+        var slash = rest.indexOf('/');
+        objectName = slash >= 0 ? rest.slice(slash + 1) : '';
+      } else {
+        var parsed = new URL(u, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
+        if (parsed.hostname === 'storage.googleapis.com') {
+          var path = String(parsed.pathname || '').replace(/^\/+/, '');
+          var firstSlash = path.indexOf('/');
+          objectName = firstSlash >= 0 ? decodeURIComponent(path.slice(firstSlash + 1)) : '';
+        }
+      }
+    } catch (_) { objectName = ''; }
+    if (!objectName) return '';
+    return withBase('/api/media/proxy?objectName=' + encodeURIComponent(objectName) + tail);
   };
 
   api.mediaProxyObjectUrl = function (objectName) {
