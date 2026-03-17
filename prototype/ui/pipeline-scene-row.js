@@ -120,23 +120,18 @@
       : function (value) { return String(value || '').trim(); };
     try { console.debug('voice-render', { id: scene && scene.id, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, hasUrl: !!(scene && scene.voiceUrl) }); } catch (_) {}
     var voiceId = String(scene.voiceVoiceId || 'engine:gemini:voice:Kore');
-    var isCustomVoice = /^voice:/.test(voiceId) || /^preset:/.test(voiceId) || /^engine:/.test(voiceId);
-    var customLabel = '';
-    if (/^engine:gemini:voice:/.test(voiceId)) {
-      customLabel = 'Gemini · ' + voiceId.split(':').slice(3).join(':');
-    } else if (/^engine:gemini:preset:/.test(voiceId)) {
-      if (voiceId.indexOf(':child:female:') > -1) customLabel = 'Gemini · Kore (어린 소녀)';
-      else if (voiceId.indexOf(':child:male:') > -1) customLabel = 'Gemini · Kore (어린 소년)';
-      else if (voiceId.indexOf(':char:robot:') > -1) customLabel = 'Gemini · Kore (로봇)';
-      else if (voiceId.indexOf(':char:magician:') > -1) customLabel = 'Gemini · Kore (마법사)';
-      else if (voiceId.indexOf(':char:trick:') > -1) customLabel = 'Gemini · Kore (장난꾸러기)';
-      else customLabel = 'Gemini · Kore';
-    } else if (/^voice:/.test(voiceId)) {
-      var vn = voiceId.slice(6);
-      customLabel = '보이스 ' + (vn || '');
-    } else if (/^preset:/.test(voiceId)) {
-      customLabel = '프리셋 ' + voiceId.split(':').slice(1).join(':');
-    }
+    var voiceOptions = [
+      { id: 'engine:gemini:voice:Kore', label: 'Gemini · Kore (Neutral)' },
+      { id: 'engine:gemini:preset:child:female:Kore:rate=1.08:pitch=4', label: 'Gemini · Kore (어린 소녀)' },
+      { id: 'engine:gemini:preset:child:male:Kore:rate=1.06:pitch=2', label: 'Gemini · Kore (어린 소년)' },
+      { id: 'engine:gemini:preset:char:robot:Kore:rate=1.00:pitch=0', label: 'Gemini · Kore (로봇)' },
+      { id: 'engine:gemini:preset:char:magician:Kore:rate=1.00:pitch=0', label: 'Gemini · Kore (마법사)' },
+      { id: 'engine:gemini:preset:char:trick:Kore:rate=1.05:pitch=1', label: 'Gemini · Kore (장난꾸러기)' }
+    ];
+    var optionsHtml = voiceOptions.map(function (o) {
+      var sel = (voiceId === o.id) ? ' selected' : '';
+      return '<option value="' + o.id + '"' + sel + '>' + o.label + '</option>';
+    }).join('');
     var errorLine = scene.voiceError ? ('<p class="small" style="color:#ff6b6b; margin:6px 0 0;">' + String(scene.voiceError) + '</p>') : '';
     var fallbackVoiceUrl = '';
     try {
@@ -160,8 +155,7 @@
       '</div>' +
       '<div class="voice-row voice-controls">' +
       '<select class="voice-select" data-id="' + scene.id + '" style="flex:1; min-width:120px;">' +
-      (isCustomVoice ? ('<option value="' + voiceId + '" selected>' + customLabel + '</option>') : '') +
-      '<option value="engine:gemini:voice:Kore"' + (!isCustomVoice && voiceId === 'engine:gemini:voice:Kore' ? ' selected' : '') + '>Gemini · Kore</option>' +
+      optionsHtml +
       '</select>' +
       '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + ((voiceBusy || !voiceEnabled) ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
       '</div>' +
