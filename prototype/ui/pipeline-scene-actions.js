@@ -258,6 +258,32 @@
             } catch (_) { }
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceObjectName: objNameResp });
             refreshAndPersist(true, 'voice');
+            setTimeout(function () {
+              try {
+                var current = (ctx && ctx.getState) ? ctx.getState() : st;
+                var sc = current && current.scenes ? current.scenes[idx] : scene;
+                var row = document.querySelector('.scene-row[data-id="' + sceneId + '"]');
+                var audioEl = row ? row.querySelector('audio') : null;
+                var rawUrl = sc && sc.voiceUrl ? sc.voiceUrl : '';
+                if (!rawUrl && sc && sc.voiceObjectName && NK.api && NK.api.mediaProxyObjectUrl) {
+                  rawUrl = NK.api.mediaProxyObjectUrl(sc.voiceObjectName);
+                }
+                var playableUrl = (typeof toPlayableMediaUrl === 'function') ? toPlayableMediaUrl(rawUrl) : (rawUrl || '');
+                var audioSrc = audioEl ? (audioEl.src || '') : '';
+                var inner = row ? String(row.innerHTML || '').slice(0, 360) : '';
+                console.debug('voice-final-state', {
+                  id: sc && sc.id,
+                  voiceUrl: sc && sc.voiceUrl,
+                  playableUrl: playableUrl,
+                  rowExists: !!row,
+                  audioExists: !!audioEl,
+                  audioSrc: audioSrc,
+                  playButtonExists: !!audioEl,
+                  playButtonDisabled: !!(audioEl && audioEl.disabled),
+                  innerHTML: inner
+                });
+              } catch (_) {}
+            }, 3000);
           } catch (err) {
             var em = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
             var msg = em;
