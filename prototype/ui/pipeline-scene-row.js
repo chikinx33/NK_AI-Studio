@@ -138,7 +138,13 @@
       customLabel = '프리셋 ' + voiceId.split(':').slice(1).join(':');
     }
     var errorLine = scene.voiceError ? ('<p class="small" style="color:#ff6b6b; margin:6px 0 0;">' + String(scene.voiceError) + '</p>') : '';
-    var audioPlayableUrl = mediaUrlResolver(scene.voiceUrl || '');
+    var fallbackVoiceUrl = '';
+    try {
+      if (!scene.voiceUrl && scene.voiceObjectName && window.NK && NK.api && NK.api.mediaProxyObjectUrl) {
+        fallbackVoiceUrl = NK.api.mediaProxyObjectUrl(scene.voiceObjectName);
+      }
+    } catch (_) { }
+    var audioPlayableUrl = mediaUrlResolver(scene.voiceUrl || fallbackVoiceUrl || '');
     return (
       '<div class="voice-block" style="margin-top:8px;">' +
       '<div class="voice-title-row">' +
