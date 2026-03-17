@@ -68,6 +68,8 @@
     var raw = String(url || '').trim();
     if (!raw) return '';
     if (raw.indexOf('data:') === 0 || raw.indexOf('blob:') === 0) return raw;
+    if (/^\/api\/media\/proxy(\?|$)/i.test(raw)) return raw;
+    if (/^https?:\/\//i.test(raw)) return raw;
     var NK = window.NK || {};
     try {
       if (NK.api && NK.api.mediaProxyObjectUrl) {
