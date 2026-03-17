@@ -3195,6 +3195,7 @@ a.btn-primary:active {
 .image-slot,
 .video-slot {
   width: 100%;
+  min-height: 160px;
 }
 
 .video-box {
@@ -3202,6 +3203,7 @@ a.btn-primary:active {
   border-radius: 12px;
   overflow: hidden;
   background: var(--layer-strong);
+  aspect-ratio: 16 / 9;
 }
 
 .scene-video {
