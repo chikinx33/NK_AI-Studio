@@ -112,7 +112,20 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!synthRes.ok || !audioInfo || !audioInfo.data) {
       const status = synthRes?.status || 502;
       const detail = synthText ? safeJson(synthText) : undefined;
-      return send({ error: "tts_failed", status, detail }, status, origin);
+      try {
+        const vmap = VOICE_MAP[voiceId] || { languageCode: "ko-KR", name: "ko-KR-Neural2-A" };
+        const v1 = await synthesizeViaGoogleTts({
+          token,
+          text: script,
+          languageCode: vmap.languageCode,
+          voiceName: vmap.name,
+          speakingRate: rateNum,
+          pitch: pitchNum
+        });
+        audioInfo = { data: v1.base64, mime: v1.mime };
+      } catch (fallbackErr: any) {
+        return send({ error: "tts_failed", status, detail, fallback_error: String(fallbackErr && fallbackErr.message ? fallbackErr.message : fallbackErr) }, status, origin);
+      }
     }
     const audioContent = audioInfo.data;
     let audioBytes = base64ToBytes(audioContent);
