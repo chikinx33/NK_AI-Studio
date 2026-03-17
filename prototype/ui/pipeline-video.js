@@ -106,6 +106,14 @@
       alert('영상 생성을 위해서는 이미지가 필요합니다. 이미지를 생성하거나 업로드한 후 다시 시도해주세요.');
       return;
     }
+    try {
+      if (ctx) {
+        ctx._cancelVideoPoll = ctx._cancelVideoPoll || {};
+        delete ctx._cancelVideoPoll[String(scene.id)];
+        ctx._cancelVideo = ctx._cancelVideo || {};
+        delete ctx._cancelVideo[String(scene.id)];
+      }
+    } catch (_) {}
 
     try {
       var normalizedImage = await opts.enforceImageAspectRatio(imageUrl, desiredAspectRatio);
@@ -216,14 +224,19 @@
       }
     } catch (err) {
       st = ctx.getState() || st;
+      var aborted = (err && (err.name === 'AbortError' || String(err.message || '').toLowerCase().indexOf('abort') >= 0));
       var msg = normalizeSafetyMessage(err && err.message ? err.message : 'video_error');
       var detail = (err && err.detail) ? err.detail : '';
       console.error('videoStart error:', msg, detail);
-      st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], {
-        videoStatus: 'error',
-        videoError: detail ? (msg + ' ' + detail) : msg
-      });
-      opts.showCopyableError('영상 생성 실패: ' + msg, detail ? ('상세: ' + detail) : '');
+      if (aborted) {
+        st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], { videoStatus: '', videoError: '' });
+      } else {
+        st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], {
+          videoStatus: 'error',
+          videoError: detail ? (msg + ' ' + detail) : msg
+        });
+        opts.showCopyableError('영상 생성 실패: ' + msg, detail ? ('상세: ' + detail) : '');
+      }
       ctx.setState(st);
       opts.updateSceneRow(opts.idx, st.header || '', 'video');
     }
@@ -245,6 +258,8 @@
       var cancelled = !!(opts.ctx && opts.ctx._cancelVideoPoll && opts.ctx._cancelVideoPoll[String(sid)]);
       if (cancelled) return;
       var res = await NK.api.videoStatus({ projectId: opts.projectId, jobId: opts.jobId, sceneId: sceneId }, { signal: undefined });
+      cancelled = !!(opts.ctx && opts.ctx._cancelVideoPoll && opts.ctx._cancelVideoPoll[String(sid)]);
+      if (cancelled) return;
       var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url ||
         (res.response && res.response.video && res.response.video.url) ||
         (res.response && res.response.url) || '';

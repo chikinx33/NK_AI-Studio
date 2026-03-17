@@ -255,6 +255,37 @@
     return null;
   }
 
+  async function refreshProjectFromServer() {
+    try {
+      var base = resolveProject();
+      var pid = (base && base.id) || getQueryProjectId() || '';
+      if (!pid || !NK.api || !NK.api.projectGet) return;
+      var res = await NK.api.projectGet(pid);
+      var data = (res && res.data) ? res.data : res;
+      if (!data || (!data.scenes && !data.payload)) return;
+      if (NK.service && NK.service.project && NK.service.project.updateLocal) {
+        NK.service.project.updateLocal(pid, function (cur) {
+          var next = Object.assign({}, cur || {}, {
+            title: data.title || (cur && cur.title) || '',
+            header: data.header || (cur && cur.header) || '',
+            aspectRatio: (data.aspectRatio || (data.payload && data.payload.aspectRatio) || (cur && cur.aspectRatio) || ''),
+            payload: Object.assign({}, (cur && cur.payload) || {}, data.payload || {}),
+            scenes: Array.isArray(data.scenes) ? data.scenes : ((cur && cur.scenes) || [])
+          });
+          return next;
+        });
+      }
+      try {
+        var updated = getProjectById(pid);
+        if (NK.state && NK.state.set && updated) {
+          var rt = (NK.state.runtime || {});
+          rt.currentProject = updated;
+          NK.state.set({ runtime: rt });
+        }
+      } catch (_) { }
+    } catch (_) { }
+  }
+
   function round1(v) {
     return Math.round((Number(v) || 0) * 10) / 10;
   }
@@ -2745,6 +2776,6 @@
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;
     }
-    post.render();
+    Promise.resolve().then(refreshProjectFromServer).finally(function () { post.render(); });
   };
 })();
