@@ -115,10 +115,21 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return send({ error: "tts_failed", status, detail }, status, origin);
     }
     const audioContent = audioInfo.data;
-    const audioBytes = base64ToBytes(audioContent);
-    const sniff = sniffAudioFormat(audioBytes);
-
+    let audioBytes = base64ToBytes(audioContent);
+    let sniff = sniffAudioFormat(audioBytes);
     const mimeFromModel = String(audioInfo.mime || "").toLowerCase();
+    const isRawPcm = /pcm/.test(mimeFromModel) && sniff === "unknown";
+    if (isRawPcm) {
+      try {
+        const sampleRate = Number(env.TTS_PCM_SAMPLE_RATE || 24000);
+        const channels = Number(env.TTS_PCM_CHANNELS || 1);
+        audioBytes = wrapPcmAsWav(audioBytes, sampleRate, channels);
+        sniff = "wav";
+      } catch (e) {
+        console.warn("pcm_wrap_failed", e && (e as any).message ? (e as any).message : e);
+      }
+    }
+
     const looksMp3 = sniff === "mp3" || /mpeg|mp3/.test(mimeFromModel);
     const looksWav = sniff === "wav" || /wav|pcm/.test(mimeFromModel);
     const chosenExt = looksMp3 ? "mp3" : (looksWav ? "wav" : "wav");
@@ -314,6 +325,36 @@ function base64ToBytes(b64: string) {
   const bytes = new Uint8Array(len);
   for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
   return bytes;
+}
+function wrapPcmAsWav(pcmBytes: Uint8Array, sampleRate: number, channels: number) {
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * channels * (bitsPerSample / 8);
+  const blockAlign = channels * (bitsPerSample / 8);
+  const dataSize = pcmBytes.length;
+  const riffSize = 36 + dataSize;
+  const header = new ArrayBuffer(44);
+  const v = new DataView(header);
+  // "RIFF"
+  v.setUint8(0, 0x52); v.setUint8(1, 0x49); v.setUint8(2, 0x46); v.setUint8(3, 0x46);
+  v.setUint32(4, riffSize, true);
+  // "WAVE"
+  v.setUint8(8, 0x57); v.setUint8(9, 0x41); v.setUint8(10, 0x56); v.setUint8(11, 0x45);
+  // "fmt "
+  v.setUint8(12, 0x66); v.setUint8(13, 0x6D); v.setUint8(14, 0x74); v.setUint8(15, 0x20);
+  v.setUint32(16, 16, true); // Subchunk1Size
+  v.setUint16(20, 1, true); // AudioFormat PCM
+  v.setUint16(22, channels, true);
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, byteRate, true);
+  v.setUint16(32, blockAlign, true);
+  v.setUint16(34, bitsPerSample, true);
+  // "data"
+  v.setUint8(36, 0x64); v.setUint8(37, 0x61); v.setUint8(38, 0x74); v.setUint8(39, 0x61);
+  v.setUint32(40, dataSize, true);
+  const out = new Uint8Array(44 + dataSize);
+  out.set(new Uint8Array(header), 0);
+  out.set(pcmBytes, 44);
+  return out;
 }
 function sniffAudioFormat(bytes: Uint8Array): "mp3" | "wav" | "unknown" {
   if (bytes.length >= 3) {
