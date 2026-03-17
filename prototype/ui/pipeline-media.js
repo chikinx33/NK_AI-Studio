@@ -69,8 +69,15 @@
     if (!raw) return '';
     if (raw.indexOf('data:') === 0 || raw.indexOf('blob:') === 0) return raw;
     if (/^\/api\/media\/proxy(\?|$)/i.test(raw)) return raw;
-    if (/^https?:\/\//i.test(raw)) return raw;
     var NK = window.NK || {};
+    try {
+      if (NK.api && NK.api.mediaProxyUrl) {
+        if (raw.indexOf('storage.googleapis.com') >= 0 || raw.indexOf('gs://') === 0) {
+          return NK.api.mediaProxyUrl(raw);
+        }
+      }
+    } catch (_) { }
+    if (/^https?:\/\//i.test(raw)) return raw;
     try {
       if (NK.api && NK.api.mediaProxyObjectUrl) {
         var hasProtocol = /^[a-z]+:\/\//i.test(raw);
@@ -82,10 +89,6 @@
         }
       }
     } catch (_) { }
-    if (!NK.api || !NK.api.mediaProxyUrl) return raw;
-    if (raw.indexOf('storage.googleapis.com') >= 0 || raw.indexOf('gs://') === 0) {
-      return NK.api.mediaProxyUrl(raw);
-    }
     return raw;
   }
 
