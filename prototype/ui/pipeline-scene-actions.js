@@ -73,8 +73,11 @@
 
         if (action === 'regen-image') {
           if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+          if (scene.imgLoading) {
+            if (ui && ui.cancelImageForIdx) ui.cancelImageForIdx(idx);
+            return;
+          }
           applyPromptDraft(false);
-          btn.disabled = true;
           await ui.generateImageForIdx(idx);
           return;
         }
@@ -137,6 +140,10 @@
         }
         if (action === 'video') {
           if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+          if (opts.isSceneVideoProcessing && opts.isSceneVideoProcessing(scene)) {
+            if (ui && ui.cancelVideoForIdx) ui.cancelVideoForIdx(idx);
+            return;
+          }
           applyPromptDraft(false);
           ctx.setState(st);
           await opts.startVideoForIdx(idx);
@@ -196,7 +203,10 @@
           return;
         }
         if (action === 'voice-generate') {
-          if (opts.isSceneVoiceProcessing && opts.isSceneVoiceProcessing(scene)) return;
+          if (opts.isSceneVoiceProcessing && opts.isSceneVoiceProcessing(scene)) {
+            if (ui && ui.cancelVoiceForIdx) ui.cancelVoiceForIdx(idx);
+            return;
+          }
           var voiceAllowed = opts.isVoiceFeatureEnabled ? opts.isVoiceFeatureEnabled((st && st.payload) ? st.payload : {}) : false;
           if (!voiceAllowed) {
             alert('나레이션/더빙이 모두 OFF 상태입니다. 음성 생성이 비활성화되었습니다.');
@@ -217,7 +227,7 @@
           st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '생성 중...', voiceVoiceId: voiceVal, voiceError: '' });
           refreshAndPersist(false, 'voice');
           var oldDisabled = btn.disabled;
-          btn.disabled = true;
+          btn.disabled = false;
           try {
             var req = { projectId: projectId, sceneId: sceneId, script: scriptText };
             req.engine = 'gemini';
@@ -235,7 +245,14 @@
             } else {
               req.voiceName = 'Kore';
             }
-            var resTts = await NK.api.tts(req);
+            var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            try {
+              if (ctx) {
+                ctx._cancelVoice = ctx._cancelVoice || {};
+                ctx._cancelVoice[String(sceneId)] = ctrl;
+              }
+            } catch (_) {}
+            var resTts = await NK.api.tts(req, { signal: ctrl ? ctrl.signal : undefined });
             var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
             var objNameResp = String(resTts && resTts.objectName || '').trim();
             try {

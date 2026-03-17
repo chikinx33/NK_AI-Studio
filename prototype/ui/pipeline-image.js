@@ -36,7 +36,14 @@
     opts.updateSceneRow(opts.idx, st.header || '', 'image');
 
     try {
-      var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: projectId });
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      try {
+        if (ctx) {
+          ctx._cancelImage = ctx._cancelImage || {};
+          ctx._cancelImage[String(scene.id)] = ctrl;
+        }
+      } catch (_) {}
+      var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: projectId }, { signal: ctrl ? ctrl.signal : undefined });
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;

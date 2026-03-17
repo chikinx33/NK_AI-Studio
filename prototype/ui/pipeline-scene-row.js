@@ -148,7 +148,7 @@
       '<select class="voice-select" data-id="' + scene.id + '" style="flex:1; min-width:120px;">' +
       optionsHtml +
       '</select>' +
-      '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + ((voiceBusy || !voiceEnabled) ? ' disabled' : '') + '>' + (voiceBusy ? '음성 생성중...' : '음성 생성') + '</button>' +
+      '<button class="btn-secondary compact" data-action="voice-generate" data-id="' + scene.id + '"' + (!voiceEnabled ? ' disabled' : '') + '>' + (voiceBusy ? '생성중(취소)' : '음성 생성') + '</button>' +
       '</div>' +
       '<div class="voice-player" data-id="' + scene.id + '" style="margin-top:10px;">' +
       '<audio controls preload="auto" style="width:100%;" ' + (audioPlayableUrl ? '' : 'disabled') + ' src="' + (audioPlayableUrl || '') + '"></audio>' +
@@ -200,14 +200,14 @@
       '<div class="scene-cell image"><div class="scene-media-stack"><div class="image-slot">' + img + '</div><div class="video-slot">' + videoCard + '</div></div></div>' +
       '<div class="scene-cell actions">' +
       '<div class="action-buttons grid">' +
-      '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + scene.id + '"' + (scene.imgLoading ? ' disabled' : '') + '>' + (scene.imgLoading ? '이미지 생성중...' : '이미지 생성') + '</button>' +
+      '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + scene.id + '">' + (scene.imgLoading ? '생성중(취소)' : '이미지 생성') + '</button>' +
       '<button class="btn-secondary compact" data-action="delete-image" data-id="' + scene.id + '"' + (scene.imageDataUrl ? '' : ' disabled') + '>삭제</button>' +
       '<button class="btn-secondary compact" data-action="upload-image" data-id="' + scene.id + '">업로드</button>' +
       '<button class="btn-secondary compact" data-action="library-image" data-id="' + scene.id + '">저장소</button>' +
       '<button class="btn-secondary compact" data-action="download-image" data-id="' + scene.id + '"' + (scene.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
       '</div>' +
       '<div class="action-buttons grid video-actions">' +
-      '<button class="btn-secondary compact span2" data-action="video" data-id="' + scene.id + '"' + (videoBusy ? ' disabled' : '') + '>' + (videoBusy ? '영상 생성중...' : '영상 생성') + '</button>' +
+      '<button class="btn-secondary compact span2" data-action="video" data-id="' + scene.id + '">' + (videoBusy ? '생성중(취소)' : '영상 생성') + '</button>' +
       '<button class="btn-secondary compact" data-action="delete-video" data-id="' + scene.id + '"' + (scene.videoUrl ? '' : ' disabled') + '>삭제</button>' +
       '<button class="btn-secondary compact" data-action="upload-video" data-id="' + scene.id + '">업로드</button>' +
       '<button class="btn-secondary compact" data-action="library-video" data-id="' + scene.id + '">저장소</button>' +

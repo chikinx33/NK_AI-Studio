@@ -814,11 +814,44 @@
         enforceVideoAspectRatio: enforceVideoAspectRatio,
         isBucketVideoUrl: isBucketVideoUrl,
         scheduleNext: function (nextAttempt) {
-          pollVideoStatus(projectId, jobId, idx, nextAttempt);
+          var st = ctx.getState() || {};
+          var sid = (st.scenes && st.scenes[idx] && st.scenes[idx].id) || '';
+          var cancelled = !!(ctx._cancelVideoPoll && ctx._cancelVideoPoll[String(sid)]);
+          if (!cancelled) pollVideoStatus(projectId, jobId, idx, nextAttempt);
         }
       });
     }
   }
+  ui.cancelVideoForIdx = function (idx) {
+    var st = ctx.getState();
+    if (!st || !st.scenes || st.scenes.length <= idx) return;
+    var scene = st.scenes[idx];
+    var id = scene.id;
+    try {
+      var map = ctx._cancelVideo || {};
+      var ctrl = map[String(id)];
+      if (ctrl && ctrl.abort) ctrl.abort();
+    } catch (_) {}
+    ctx._cancelVideoPoll = ctx._cancelVideoPoll || {};
+    ctx._cancelVideoPoll[String(id)] = true;
+    st.scenes[idx] = Object.assign({}, scene, { videoStatus: '', videoError: '' });
+    ctx.setState(st);
+    updateSceneRow(idx, st.header || '', 'video');
+  };
+  ui.cancelVoiceForIdx = function (idx) {
+    var st = ctx.getState();
+    if (!st || !st.scenes || st.scenes.length <= idx) return;
+    var scene = st.scenes[idx];
+    var id = scene.id;
+    try {
+      var map = ctx._cancelVoice || {};
+      var ctrl = map[String(id)];
+      if (ctrl && ctrl.abort) ctrl.abort();
+    } catch (_) {}
+    st.scenes[idx] = Object.assign({}, scene, { voiceStatus: '', voiceError: '' });
+    ctx.setState(st);
+    updateSceneRow(idx, st.header || '', 'voice');
+  };
   ui.refreshAssets = async function () {
     if (window.NK && NK.uiPipelineAssets && NK.uiPipelineAssets.refreshAssets) {
       await NK.uiPipelineAssets.refreshAssets({
@@ -845,6 +878,20 @@
         }
       });
     }
+  };
+  ui.cancelImageForIdx = function (idx) {
+    var st = ctx.getState();
+    if (!st || !st.scenes || st.scenes.length <= idx) return;
+    var scene = st.scenes[idx];
+    var id = scene.id;
+    try {
+      var map = ctx._cancelImage || {};
+      var ctrl = map[String(id)];
+      if (ctrl && ctrl.abort) ctrl.abort();
+    } catch (_) {}
+    st.scenes[idx] = Object.assign({}, scene, { imgLoading: false, imgError: '' });
+    ctx.setState(st);
+    updateSceneRow(idx, st.header || '', 'image');
   };
 })();
 

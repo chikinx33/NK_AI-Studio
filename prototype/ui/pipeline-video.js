@@ -168,7 +168,14 @@
         imageDataUrl_preview: imageUrl.indexOf('data:') === 0 ? 'dataurl:' + imageUrl.length + ' chars' : imageUrl
       });
 
-      var resp = await NK.api.videoStart(videoPayload);
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      try {
+        if (ctx) {
+          ctx._cancelVideo = ctx._cancelVideo || {};
+          ctx._cancelVideo[String(scene.id)] = ctrl;
+        }
+      } catch (_) {}
+      var resp = await NK.api.videoStart(videoPayload, { signal: ctrl ? ctrl.signal : undefined });
       var rawResp = (resp && resp.raw) ? resp.raw : {};
       var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || rawResp.job_id || rawResp.id || '';
       var playbackRaw = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || rawResp.playbackUrl || rawResp.videoUrl || rawResp.outputUrl || rawResp.url || '';
@@ -234,7 +241,10 @@
       var st = ctx.getState();
       if (!st || !st.scenes || st.scenes.length <= opts.idx) return;
       var sceneId = st.scenes[opts.idx].id;
-      var res = await NK.api.videoStatus({ projectId: opts.projectId, jobId: opts.jobId, sceneId: sceneId });
+      var sid = st && st.scenes && st.scenes[opts.idx] && st.scenes[opts.idx].id;
+      var cancelled = !!(opts.ctx && opts.ctx._cancelVideoPoll && opts.ctx._cancelVideoPoll[String(sid)]);
+      if (cancelled) return;
+      var res = await NK.api.videoStatus({ projectId: opts.projectId, jobId: opts.jobId, sceneId: sceneId }, { signal: undefined });
       var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url ||
         (res.response && res.response.video && res.response.video.url) ||
         (res.response && res.response.url) || '';

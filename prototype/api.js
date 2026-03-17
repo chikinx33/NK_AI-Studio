@@ -106,7 +106,7 @@
   var j = function (t) { try { return JSON.parse(t); } catch (_) { return {}; } };
   var e = function (t) { try { return JSON.parse(t).error; } catch (_) { return t; } };
 
-  api.tts = async function (body) {
+  api.tts = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
     var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
@@ -114,7 +114,8 @@
     var res = await fetchWithTimeout(url, {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
     }, 120000);
     var text = await readTextWithTimeout(res, 120000);
     if (!res.ok) {
@@ -192,13 +193,14 @@
     return data;
   };
 
-  api.imagen = async function (body) {
+  api.imagen = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/imagen'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
     });
     var text = await res.text();
     if (!res.ok) {
@@ -210,13 +212,14 @@
     return j(text);
   };
 
-  api.videoStart = async function (body) {
+  api.videoStart = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
     var res = await fetch(withBase('/api/video'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
     });
     var text = await res.text();
     if (!res.ok) {
@@ -235,7 +238,7 @@
     return { jobId, outputGcsUri, model, raw: data };
   };
 
-  api.videoStatus = async function (params) {
+  api.videoStatus = async function (params, opts) {
     var p = params || {};
     var q = new URLSearchParams();
     if (p.projectId) q.set('projectId', String(p.projectId));
@@ -244,7 +247,8 @@
     var job = p.jobId || p.job_id || p.job || '';
     if (job) q.set('job_id', String(job));
     var res = await fetch(withBase('/api/video/status?' + q.toString()), {
-      headers: buildAuthHeaders()
+      headers: buildAuthHeaders(),
+      signal: opts && opts.signal
     });
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'status_error');
