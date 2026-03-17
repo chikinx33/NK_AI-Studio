@@ -237,6 +237,12 @@
             }
             var resTts = await NK.api.tts(req);
             var vurl = resTts.voiceUrl || resTts.url || resTts.signedUrl || '';
+            var objNameResp = String(resTts && resTts.objectName || '').trim();
+            try {
+              if (!vurl && objNameResp && NK.api && NK.api.mediaProxyObjectUrl) {
+                vurl = NK.api.mediaProxyObjectUrl(objNameResp);
+              }
+            } catch (_) { }
             try { console.debug('voice-set', { id: sceneId, urlType: (vurl.indexOf('data:') === 0 ? 'data' : 'http'), url: vurl.slice(0, 80) }); } catch (_) {}
             st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceStatus: vurl ? '완료' : '', voiceUrl: vurl, voiceError: vurl ? '' : '응답에 voiceUrl이 없습니다.' });
             try {
@@ -245,12 +251,12 @@
               try { cacheMap = JSON.parse(localStorage.getItem(cacheKey) || '{}') || {}; } catch (_) { cacheMap = {}; }
               if (vurl) {
                 var entry = cacheMap[String(sceneId)] || {};
-                var objName = String(resTts && resTts.objectName || '').trim();
+                var objName = objNameResp;
                 cacheMap[String(sceneId)] = objName ? { objectName: objName, url: vurl } : vurl;
                 localStorage.setItem(cacheKey, JSON.stringify(cacheMap));
               }
             } catch (_) { }
-            st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceObjectName: String(resTts && resTts.objectName || '') });
+            st.scenes[idx] = Object.assign({}, st.scenes[idx], { voiceObjectName: objNameResp });
             refreshAndPersist(true, 'voice');
           } catch (err) {
             var em = (err && err.message) ? String(err.message) : 'TTS 생성 실패';
