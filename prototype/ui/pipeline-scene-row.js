@@ -197,7 +197,7 @@
         : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + scene.id + '">편집</button>') +
       '</div>' +
       '</div>' +
-      '<div class="scene-cell image"><div class="scene-media-stack">' + img + videoCard + '</div></div>' +
+      '<div class="scene-cell image"><div class="scene-media-stack"><div class="image-slot">' + img + '</div><div class="video-slot">' + videoCard + '</div></div></div>' +
       '<div class="scene-cell actions">' +
       '<div class="action-buttons grid">' +
       '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + scene.id + '"' + (scene.imgLoading ? ' disabled' : '') + '>' + (scene.imgLoading ? '이미지 생성중...' : '이미지 생성') + '</button>' +

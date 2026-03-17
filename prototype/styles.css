@@ -3192,6 +3192,10 @@ a.btn-primary:active {
   flex-direction: column;
   gap: 8px;
 }
+.image-slot,
+.video-slot {
+  width: 100%;
+}
 
 .video-box {
   border: 1px solid var(--border);

@@ -1042,20 +1042,20 @@ function updateSceneRow(idx, headerText, partHint) {
   if (partHint === 'image' && helpers.buildImageCard) {
     var stack = row.querySelector('.scene-media-stack');
     if (stack) {
-      var oldImage = stack.querySelector('.image-box, .image-placeholder');
+      var imgSlot = stack.querySelector('.image-slot');
       var imgHtml = helpers.buildImageCard(scene, toPlayableMediaUrl);
-      if (oldImage) oldImage.outerHTML = imgHtml;
-      else stack.insertAdjacentHTML('afterbegin', imgHtml);
+      if (imgSlot) imgSlot.innerHTML = imgHtml;
+      else stack.insertAdjacentHTML('afterbegin', '<div class="image-slot">' + imgHtml + '</div>');
       return;
     }
   }
   if (partHint === 'video' && helpers.buildVideoCard) {
     var stack2 = row.querySelector('.scene-media-stack');
     if (stack2) {
-      var oldVideo = stack2.querySelector('.video-box, .video-placeholder');
+      var vidSlot = stack2.querySelector('.video-slot');
       var vidHtml = helpers.buildVideoCard(scene, toPlayableMediaUrl);
-      if (oldVideo) oldVideo.outerHTML = vidHtml;
-      else stack2.insertAdjacentHTML('beforeend', vidHtml);
+      if (vidSlot) vidSlot.innerHTML = vidHtml;
+      else stack2.insertAdjacentHTML('beforeend', '<div class="video-slot">' + vidHtml + '</div>');
       return;
     }
   }
