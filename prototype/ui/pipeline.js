@@ -1015,9 +1015,22 @@ function updateSceneRow(idx, headerText, partHint) {
   if (partHint === 'voice' && helpers.buildVoiceBlock) {
     var target = row.querySelector('.voice-block');
     if (target) {
-      try { console.debug('voice-update', { id: scene && scene.id, voiceUrl: scene && scene.voiceUrl, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy }); } catch (_) {}
+      var resolved = '';
+      try {
+        var raw = scene && scene.voiceUrl;
+        var obj = scene && scene.voiceObjectName;
+        var viaObj = (obj && window.NK && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(obj) : '';
+        resolved = toPlayableMediaUrl(raw || viaObj || '');
+      } catch (_) { resolved = ''; }
+      try { console.debug('voice-update', { id: scene && scene.id, voiceUrl: scene && scene.voiceUrl, voiceObjectName: scene && scene.voiceObjectName, playableUrl: resolved, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy }); } catch (_) {}
       var html = helpers.buildVoiceBlock(scene, { voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, toPlayableMediaUrl: toPlayableMediaUrl });
+      try { console.debug('voice-block-html', { id: scene && scene.id, hasAudioTag: html.indexOf('<audio') >= 0, length: html.length }); } catch (_) {}
       target.outerHTML = html;
+      try {
+        var checkRow = document.querySelector('.scene-row[data-id="' + scene.id + '"]');
+        var audioCount = checkRow ? checkRow.querySelectorAll('audio').length : 0;
+        console.debug('voice-block-after-replace', { id: scene && scene.id, audioCount: audioCount });
+      } catch (_) {}
       return;
     }
   }
@@ -1043,5 +1056,7 @@ function updateSceneRow(idx, headerText, partHint) {
   }
 
   // 폴백: 행 전체 재구성
-  row.outerHTML = buildSceneRowHtml(scene, header);
+  var rebuilt = buildSceneRowHtml(scene, header);
+  try { console.debug('row-rebuild', { id: scene && scene.id, hasAudioTag: rebuilt.indexOf('<audio') >= 0, length: rebuilt.length }); } catch (_) {}
+  row.outerHTML = rebuilt;
 }
