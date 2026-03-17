@@ -218,7 +218,7 @@
       });
       opts.showCopyableError('영상 생성 실패: ' + msg, detail ? ('상세: ' + detail) : '');
       ctx.setState(st);
-      opts.updateSceneRow(opts.idx, st.header || '');
+      opts.updateSceneRow(opts.idx, st.header || '', 'video');
     }
 
     if (ctx.persistPipeline) ctx.persistPipeline();
@@ -272,7 +272,7 @@
           videoError: ''
         });
         ctx.setState(st);
-        opts.updateSceneRow(opts.idx, st.header || '');
+        opts.updateSceneRow(opts.idx, st.header || '', 'video');
         if (ctx.persistPipeline) ctx.persistPipeline();
         return;
       }
@@ -282,13 +282,13 @@
         st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], { videoStatus: 'error', videoError: errMsg2 });
         console.error('videoStatus error status flag:', res);
         ctx.setState(st);
-        opts.updateSceneRow(opts.idx, st.header || '');
+        opts.updateSceneRow(opts.idx, st.header || '', 'video');
         return;
       }
       if (opts.attempt + 1 >= maxAttempts) {
         st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], { videoStatus: 'error', videoError: '응답 시간 초과 (작업은 진행 중일 수 있음)' });
         ctx.setState(st);
-        opts.updateSceneRow(opts.idx, st.header || '');
+        opts.updateSceneRow(opts.idx, st.header || '', 'video');
         return;
       }
       setTimeout(function () {
