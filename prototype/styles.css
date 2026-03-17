@@ -4546,6 +4546,7 @@ a.btn-primary:active {
   border-radius: 8px;
   overflow: hidden;
   /* Ensure container doesn't force full width on children if they are tall */
+  aspect-ratio: 16 / 9;
 }
 
 .scene-img,
