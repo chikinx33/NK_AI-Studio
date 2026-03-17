@@ -1016,7 +1016,7 @@ function updateSceneRow(idx, headerText, partHint) {
     var target = row.querySelector('.voice-block');
     if (target) {
       try { console.debug('voice-update', { id: scene && scene.id, voiceUrl: scene && scene.voiceUrl, voiceEnabled: voiceEnabled, voiceBusy: voiceBusy }); } catch (_) {}
-      var html = helpers.buildVoiceBlock(scene, { voiceEnabled: voiceEnabled, voiceBusy: voiceBusy });
+      var html = helpers.buildVoiceBlock(scene, { voiceEnabled: voiceEnabled, voiceBusy: voiceBusy, toPlayableMediaUrl: toPlayableMediaUrl });
       target.outerHTML = html;
       return;
     }
