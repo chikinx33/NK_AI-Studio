@@ -29,36 +29,22 @@
     NK.ui.common.applyRuntimeLocale(lang);
   }
 
-  function getScrollContainer(node) {
-    var current = node && node.parentElement;
-    while (current) {
-      var style = window.getComputedStyle(current);
-      var overflowY = String(style && style.overflowY || '');
-      if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && current.scrollHeight > current.clientHeight) {
-        return current;
-      }
-      current = current.parentElement;
-    }
-    return document.scrollingElement || document.documentElement || document.body;
-  }
-
   function scrollDisclosureIntoView(disclosure) {
     if (!disclosure || !disclosure.open) return;
     window.requestAnimationFrame(function () {
       window.requestAnimationFrame(function () {
-        var margin = 20;
-        var scroller = getScrollContainer(disclosure);
+        var topMargin = 20;
+        var bottomMargin = 20;
         var rect = disclosure.getBoundingClientRect();
-        if (!scroller || scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement) {
-          var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-          var delta = rect.bottom - (viewportHeight - margin);
-          if (delta > 0) window.scrollBy({ top: delta, behavior: 'smooth' });
+        var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+        var deltaTop = rect.top - topMargin;
+        var deltaBottom = rect.bottom - (viewportHeight - bottomMargin);
+        if (deltaTop < 0) {
+          window.scrollBy({ top: deltaTop, behavior: 'smooth' });
           return;
         }
-        var scrollerRect = scroller.getBoundingClientRect();
-        var deltaInScroller = rect.bottom - (scrollerRect.bottom - margin);
-        if (deltaInScroller > 0) {
-          scroller.scrollTo({ top: scroller.scrollTop + deltaInScroller, behavior: 'smooth' });
+        if (deltaBottom > 0) {
+          window.scrollBy({ top: deltaBottom, behavior: 'smooth' });
         }
       });
     });
