@@ -2387,7 +2387,7 @@
         setProfileDisabledState(true);
       } else {
         ensureLabel(baseRow, '에피소드');
-        input.placeholder = '에피소드 이름';
+        input.placeholder = '에피소드 이름 (예: 시즌1 EP2)';
         hintRow.textContent = '기존 프로젝트를 선택한 뒤 새 에피소드를 생성합니다.';
         btnCreate.disabled = creating;
         // 에피소드 모드: 리스트 활성, 하단 인풋은 기존 정보로 채우고 비활성

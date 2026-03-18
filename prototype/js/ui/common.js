@@ -370,6 +370,7 @@
         '프로젝트 이름 (예: 우울의 숲)': 'Project name (e.g. Forest of Melancholy)',
         '에피소드 이름': 'Episode name',
         '에피소드 이름 (예: 시즌1 EP1)': 'Episode name (e.g. Season 1 EP1)',
+        '에피소드 이름 (예: 시즌1 EP2)': 'Episode name (e.g. Season 1 EP2)',
         '첫 에피소드': 'First episode',
         '프로젝트 유형': 'Project type',
         '선택 안 함': 'Not selected',
