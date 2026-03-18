@@ -81,23 +81,40 @@
       };
   }
 
+  function getPageScrollContainer(node) {
+    var current = node;
+    while (current) {
+      if (current.classList && current.classList.contains('main-body')) return current;
+      current = current.parentElement;
+    }
+    return document.scrollingElement || document.documentElement || document.body;
+  }
+
   function scrollDisclosureIntoView(disclosure) {
     if (!disclosure || !disclosure.open) return;
     window.requestAnimationFrame(function () {
       window.requestAnimationFrame(function () {
+        var scroller = getPageScrollContainer(disclosure);
         var topMargin = 20;
         var bottomMargin = 20;
         var rect = disclosure.getBoundingClientRect();
-        var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-        var deltaTop = rect.top - topMargin;
-        var deltaBottom = rect.bottom - (viewportHeight - bottomMargin);
+        var scrollerRect = scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement
+          ? { top: 0, bottom: window.innerHeight || document.documentElement.clientHeight || 0 }
+          : scroller.getBoundingClientRect();
+        var deltaTop = rect.top - (scrollerRect.top + topMargin);
+        var deltaBottom = rect.bottom - (scrollerRect.bottom - bottomMargin);
+        var targetDelta = 0;
         if (deltaTop < 0) {
-          window.scrollBy({ top: deltaTop, behavior: 'smooth' });
+          targetDelta = deltaTop;
+        } else if (deltaBottom > 0) {
+          targetDelta = deltaBottom;
+        }
+        if (!targetDelta) return;
+        if (scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement) {
+          window.scrollBy({ top: targetDelta, behavior: 'smooth' });
           return;
         }
-        if (deltaBottom > 0) {
-          window.scrollBy({ top: deltaBottom, behavior: 'smooth' });
-        }
+        scroller.scrollTo({ top: scroller.scrollTop + targetDelta, behavior: 'smooth' });
       });
     });
   }

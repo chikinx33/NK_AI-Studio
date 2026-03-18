@@ -29,25 +29,49 @@
     NK.ui.common.applyRuntimeLocale(lang);
   }
 
-  function scrollDisclosureIntoView(disclosure) {
-    if (!disclosure || !disclosure.open) return;
+  function getPageScrollContainer(node) {
+    var current = node;
+    while (current) {
+      if (current.classList && current.classList.contains('main-body')) return current;
+      current = current.parentElement;
+    }
+    return document.scrollingElement || document.documentElement || document.body;
+  }
+
+  function scrollNodeIntoPageView(node, align) {
+    if (!node) return;
     window.requestAnimationFrame(function () {
       window.requestAnimationFrame(function () {
+        var scroller = getPageScrollContainer(node);
         var topMargin = 20;
         var bottomMargin = 20;
-        var rect = disclosure.getBoundingClientRect();
-        var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
-        var deltaTop = rect.top - topMargin;
-        var deltaBottom = rect.bottom - (viewportHeight - bottomMargin);
-        if (deltaTop < 0) {
-          window.scrollBy({ top: deltaTop, behavior: 'smooth' });
+        var rect = node.getBoundingClientRect();
+        var scrollerRect = scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement
+          ? { top: 0, bottom: window.innerHeight || document.documentElement.clientHeight || 0 }
+          : scroller.getBoundingClientRect();
+        var deltaTop = rect.top - (scrollerRect.top + topMargin);
+        var deltaBottom = rect.bottom - (scrollerRect.bottom - bottomMargin);
+        var targetDelta = 0;
+        if (align === 'start') {
+          targetDelta = deltaTop;
+        } else if (deltaTop < 0) {
+          targetDelta = deltaTop;
+        } else if (deltaBottom > 0) {
+          targetDelta = deltaBottom;
+        }
+        if (!targetDelta) return;
+        if (scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement) {
+          window.scrollBy({ top: targetDelta, behavior: 'smooth' });
           return;
         }
-        if (deltaBottom > 0) {
-          window.scrollBy({ top: deltaBottom, behavior: 'smooth' });
-        }
+        scroller.scrollTo({ top: scroller.scrollTop + targetDelta, behavior: 'smooth' });
       });
     });
+  }
+
+  function scrollDisclosureIntoView(disclosure) {
+    if (!disclosure || !disclosure.open) return;
+    scrollNodeIntoPageView(disclosure);
   }
 
   function readDisclosureOpen(root, key, fallback) {
@@ -1269,7 +1293,7 @@
               var composer = root.querySelector('#brand-publish-composer');
               if (composer && !composer.open) composer.open = true;
               var captionBox = root.querySelector('#brand-caption-textarea');
-              if (composer && composer.scrollIntoView) composer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              scrollNodeIntoPageView(composer, 'start');
               if (captionBox) captionBox.focus();
             }, 30);
           })
@@ -1506,7 +1530,7 @@
         }
         var composerEl = root.querySelector('#brand-publish-composer');
         if (composerEl && !composerEl.open) composerEl.open = true;
-        if (composerEl && composerEl.scrollIntoView) composerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollNodeIntoPageView(composerEl, 'start');
         if (captionEl) captionEl.focus();
         return;
       }
