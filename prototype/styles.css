@@ -5916,6 +5916,12 @@ body.layout-fixed .lib-content {
   line-height: 1.4;
 }
 
+/* Inline context label/value styling for 1-line bars */
+.context-line { margin: 0; }
+.context-line .ctx-label { color: var(--muted); font-weight: 400; }
+.context-line .ctx-sep { color: var(--muted); }
+.context-line .ctx-value { color: var(--text); font-weight: 700; }
+
 .brand-studio-context-item p,
 .analytics-overview-card p {
   margin: 0;

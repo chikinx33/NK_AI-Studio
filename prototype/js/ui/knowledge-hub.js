@@ -358,10 +358,10 @@
       '</div>' +
       '</div>' +
       '<div class="knowledge-hub-context-bar">' +
-      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('운영 브랜드 · ' + (brandTitle || '-')) + '</strong></div>' +
-      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('현재 기준 에피소드 · ' + currentEpisodeTitle) + '</strong></div>' +
-      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('브랜드 규칙 · ' + rulesCount + '개') + '</strong></div>' +
-      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('참조 콘텐츠 · ' + referencesCount + '개') + '</strong></div>' +
+      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">운영 브랜드</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(brandTitle || '-') + '</strong></p></div>' +
+      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">현재 기준 에피소드</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(currentEpisodeTitle) + '</strong></p></div>' +
+      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">브랜드 규칙</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(String(rulesCount) + '개') + '</strong></p></div>' +
+      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">참조 콘텐츠</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(String(referencesCount) + '개') + '</strong></p></div>' +
       '</div>' +
       '<div class="knowledge-hub-workspace">' +
       '<div class="knowledge-hub-main">' +
