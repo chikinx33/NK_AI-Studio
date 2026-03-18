@@ -1074,11 +1074,12 @@ a.btn-primary:active {
   font-size: 0;
   background-position: center;
   background-repeat: no-repeat;
-  background-size: 12px 12px;
+  background-size: 24px 24px;
 }
 
 [data-theme="dark"] .theme-toggle {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='moonHalf' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23ffe071'/%3E%3Cstop offset='100%25' stop-color='%23f4c33a'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M32 8 A24 24 0 1 1 32 56 L32 8 Z' fill='url(%23moonHalf)' stroke='%23d8aa32' stroke-width='2' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 12px 12px;
 }
 
 [data-theme="light"] .theme-toggle {
@@ -2584,6 +2585,11 @@ a.btn-primary:active {
 [data-theme="light"] .draft-actions .btn-secondary {
   color: #0b0f1c;
   border-color: rgba(255, 140, 0, 0.4);
+}
+
+[data-theme="dark"] .draft-actions .btn-primary,
+[data-theme="dark"] .draft-actions .btn-secondary {
+  color: #0b0f1c;
 }
 
 .draft-actions .action-trash {
