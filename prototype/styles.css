@@ -4347,6 +4347,21 @@ a.btn-primary:active {
   margin: 0;
 }
 
+#project-overlay .form-row.is-disabled {
+  opacity: 0.32;
+}
+
+#project-overlay .form-row.is-disabled label {
+  color: color-mix(in srgb, var(--muted) 80%, transparent 20%);
+}
+
+#project-overlay .form-row input:disabled,
+#project-overlay .form-row select:disabled,
+#project-overlay .form-row textarea:disabled,
+#project-overlay .project-create-mode .mode-btn-item:disabled {
+  cursor: not-allowed;
+}
+
 #project-overlay .project-create-profile-line .project-create-brand-summary-row {
   grid-column: 2 / span 1;
 }

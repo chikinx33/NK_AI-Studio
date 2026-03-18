@@ -2166,6 +2166,30 @@
     const projectTypeSelect = profileLine.querySelector('#project-type-select');
     const brandSummaryInput = profileLine.querySelector('#project-brand-summary-input');
     const coreMessageInput = profileLine.querySelector('#project-core-message-input');
+    const projectTypeRow = profileLine.querySelector('.project-create-project-type-row');
+    const brandSummaryRow = profileLine.querySelector('.project-create-brand-summary-row');
+    const coreMessageRow = profileLine.querySelector('.project-create-core-message-row');
+
+    const setRowDisabledState = (row, disabled) => {
+      if (!row || !row.classList) return;
+      row.classList.toggle('is-disabled', !!disabled);
+      row.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    };
+
+    const setFieldDisabledState = (field, disabled) => {
+      if (!field) return;
+      field.disabled = !!disabled;
+      if (!disabled) field.removeAttribute('readonly');
+    };
+
+    const setProfileDisabledState = (disabled) => {
+      setFieldDisabledState(projectTypeSelect, disabled);
+      setFieldDisabledState(brandSummaryInput, disabled);
+      setFieldDisabledState(coreMessageInput, disabled);
+      setRowDisabledState(projectTypeRow, disabled);
+      setRowDisabledState(brandSummaryRow, disabled);
+      setRowDisabledState(coreMessageRow, disabled);
+    };
 
     if (overlayCard && !overlayCard.querySelector('.project-create-loading')) {
       const loading = document.createElement('div');
@@ -2278,6 +2302,9 @@
         input.disabled = creating;
         if (seriesInput) seriesInput.disabled = creating;
         if (seriesSelect) seriesSelect.disabled = creating || mode !== 'episode' || !seriesSelect.options.length || !seriesSelect.value;
+        setRowDisabledState(newSeriesRow, false);
+        setRowDisabledState(existingSeriesRow, mode !== 'episode');
+        setRowDisabledState(baseRow, false);
         syncOverlayLabels();
         return;
       }
@@ -2304,6 +2331,10 @@
       input.disabled = true;
       if (seriesInput) seriesInput.disabled = true;
       if (seriesSelect) seriesSelect.disabled = true;
+      setProfileDisabledState(false);
+      setRowDisabledState(newSeriesRow, true);
+      setRowDisabledState(existingSeriesRow, true);
+      setRowDisabledState(baseRow, true);
       syncOverlayLabels();
     };
 
@@ -2330,26 +2361,28 @@
         btnCreate.disabled = creating;
         // 신규 프로젝트 모드: 프로젝트 리스트 비활성, 하단 인풋 활성
         if (seriesSelect) seriesSelect.disabled = true;
+        setRowDisabledState(newSeriesRow, false);
+        setRowDisabledState(existingSeriesRow, true);
+        setRowDisabledState(baseRow, false);
         if (projectTypeSelect) {
-          projectTypeSelect.disabled = creating ? true : false;
           projectTypeSelect.value = '';
         }
         if (brandSummaryInput) {
-          brandSummaryInput.disabled = creating ? true : false;
           brandSummaryInput.value = '';
         }
         if (coreMessageInput) {
-          coreMessageInput.disabled = creating ? true : false;
           coreMessageInput.value = '';
         }
+        setProfileDisabledState(creating ? true : false);
       } else if (!list.length) {
         ensureLabel(baseRow, '에피소드');
         input.placeholder = '에피소드 이름';
         hintRow.textContent = '기존 프로젝트가 없습니다. 신규 프로젝트를 먼저 만들어 주세요.';
         btnCreate.disabled = true;
-        if (projectTypeSelect) projectTypeSelect.disabled = true;
-        if (brandSummaryInput) brandSummaryInput.disabled = true;
-        if (coreMessageInput) coreMessageInput.disabled = true;
+        setRowDisabledState(newSeriesRow, true);
+        setRowDisabledState(existingSeriesRow, true);
+        setRowDisabledState(baseRow, false);
+        setProfileDisabledState(true);
       } else {
         ensureLabel(baseRow, '에피소드');
         input.placeholder = '에피소드 이름';
@@ -2357,12 +2390,16 @@
         btnCreate.disabled = creating;
         // 에피소드 모드: 리스트 활성, 하단 인풋은 기존 정보로 채우고 비활성
         if (seriesSelect) seriesSelect.disabled = creating ? true : false;
+        setRowDisabledState(newSeriesRow, true);
+        setRowDisabledState(existingSeriesRow, false);
+        setRowDisabledState(baseRow, false);
         const selectedId = seriesSelect ? String(seriesSelect.value || (list[0] && list[0].id) || '').trim() : '';
         if (seriesSelect && !seriesSelect.value && list[0]) seriesSelect.value = String(list[0].id);
         const profile = selectedId ? resolveSeriesProfile(selectedId) : { projectType: '', brandSummary: '', coreMessage: '' };
-        if (projectTypeSelect) { projectTypeSelect.value = profile.projectType || ''; projectTypeSelect.disabled = true; }
-        if (brandSummaryInput) { brandSummaryInput.value = profile.brandSummary || ''; brandSummaryInput.disabled = true; }
-        if (coreMessageInput) { coreMessageInput.value = profile.coreMessage || ''; coreMessageInput.disabled = true; }
+        if (projectTypeSelect) { projectTypeSelect.value = profile.projectType || ''; }
+        if (brandSummaryInput) { brandSummaryInput.value = profile.brandSummary || ''; }
+        if (coreMessageInput) { coreMessageInput.value = profile.coreMessage || ''; }
+        setProfileDisabledState(true);
       }
       applyCurrentLocale();
     };
@@ -2385,18 +2422,14 @@
         input.disabled = true;
         if (seriesInput) seriesInput.disabled = true;
         if (seriesSelect) seriesSelect.disabled = true;
-        if (projectTypeSelect) projectTypeSelect.disabled = creating;
-        if (brandSummaryInput) brandSummaryInput.disabled = creating;
-        if (coreMessageInput) coreMessageInput.disabled = creating;
+        setProfileDisabledState(creating);
         modeButtons.forEach((btn) => { btn.disabled = true; });
         btnCreate.textContent = creating ? '적용 중...' : editDefaultLabel;
       } else {
         input.disabled = creating;
         if (seriesInput) seriesInput.disabled = creating;
         if (seriesSelect) seriesSelect.disabled = creating || mode !== 'episode' || !seriesSelect.options.length || !seriesSelect.value;
-        if (projectTypeSelect) projectTypeSelect.disabled = creating || mode !== 'new-series';
-        if (brandSummaryInput) brandSummaryInput.disabled = creating || mode !== 'new-series';
-        if (coreMessageInput) coreMessageInput.disabled = creating || mode !== 'new-series';
+        setProfileDisabledState(creating || mode !== 'new-series');
         modeButtons.forEach((btn) => { btn.disabled = creating; });
       }
       blurTargets.forEach(el => {
