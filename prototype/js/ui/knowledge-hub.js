@@ -126,6 +126,46 @@
     });
   }
 
+  function getFieldPersistKey(field) {
+    if (!field || !field.getAttribute) return '';
+    return String(
+      field.getAttribute('id') ||
+      field.getAttribute('data-character-personality') ||
+      ''
+    ).trim();
+  }
+
+  function captureFieldScrollState(root) {
+    var state = {};
+    var fields = root && root.querySelectorAll
+      ? root.querySelectorAll('textarea, input, select')
+      : [];
+    Array.prototype.forEach.call(fields, function (field) {
+      var key = getFieldPersistKey(field);
+      if (!key) return;
+      var scrollTop = Number(field.scrollTop || 0);
+      var scrollLeft = Number(field.scrollLeft || 0);
+      if (scrollTop <= 0 && scrollLeft <= 0) return;
+      state[key] = {
+        scrollTop: scrollTop,
+        scrollLeft: scrollLeft
+      };
+    });
+    return state;
+  }
+
+  function restoreFieldScrollState(root, state) {
+    if (!root || !state) return;
+    var fields = root.querySelectorAll ? root.querySelectorAll('textarea, input, select') : [];
+    Array.prototype.forEach.call(fields, function (field) {
+      var key = getFieldPersistKey(field);
+      var saved = key ? state[key] : null;
+      if (!saved) return;
+      field.scrollTop = Number(saved.scrollTop || 0);
+      field.scrollLeft = Number(saved.scrollLeft || 0);
+    });
+  }
+
   function parseCharacterNoteEntries(value) {
     return String(value || '')
       .split(/\n+/)
@@ -333,6 +373,7 @@
   }
 
   function renderProject(root, project, brand) {
+    var preservedFieldScroll = captureFieldScrollState(root);
     var projectId = String(project && project.id || '').trim();
     var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
     var payload = (project && project.payload) || {};
@@ -581,6 +622,7 @@
       '</div>' +
       '</section>';
     applyCurrentLocale();
+    restoreFieldScrollState(root, preservedFieldScroll);
 
     var currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
 

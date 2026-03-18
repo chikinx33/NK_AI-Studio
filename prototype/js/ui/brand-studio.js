@@ -53,6 +53,46 @@
     });
   }
 
+  function getFieldPersistKey(field) {
+    if (!field || !field.getAttribute) return '';
+    return String(
+      field.getAttribute('id') ||
+      field.getAttribute('data-character-personality') ||
+      ''
+    ).trim();
+  }
+
+  function captureFieldScrollState(root) {
+    var state = {};
+    var fields = root && root.querySelectorAll
+      ? root.querySelectorAll('textarea, input, select')
+      : [];
+    Array.prototype.forEach.call(fields, function (field) {
+      var key = getFieldPersistKey(field);
+      if (!key) return;
+      var scrollTop = Number(field.scrollTop || 0);
+      var scrollLeft = Number(field.scrollLeft || 0);
+      if (scrollTop <= 0 && scrollLeft <= 0) return;
+      state[key] = {
+        scrollTop: scrollTop,
+        scrollLeft: scrollLeft
+      };
+    });
+    return state;
+  }
+
+  function restoreFieldScrollState(root, state) {
+    if (!root || !state) return;
+    var fields = root.querySelectorAll ? root.querySelectorAll('textarea, input, select') : [];
+    Array.prototype.forEach.call(fields, function (field) {
+      var key = getFieldPersistKey(field);
+      var saved = key ? state[key] : null;
+      if (!saved) return;
+      field.scrollTop = Number(saved.scrollTop || 0);
+      field.scrollLeft = Number(saved.scrollLeft || 0);
+    });
+  }
+
   function triggerIpAssetHydration(root, brandId, brand, fallbackProject) {
     if (!root || !brandId || !NK.service || !NK.service.contentLibrary || !NK.service.contentLibrary.loadIpAssetsForBrand) return;
     var state = root.__brandStudioIpLoadState && typeof root.__brandStudioIpLoadState === 'object'
@@ -523,6 +563,7 @@
   }
 
   function renderProject(root, project, brand) {
+    var preservedFieldScroll = captureFieldScrollState(root);
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
     var brandView = readBrandView(brand, project);
@@ -1071,6 +1112,7 @@
       '</div>' +
       '</section>';
     applyCurrentLocale();
+    restoreFieldScrollState(root, preservedFieldScroll);
     bindDisclosureState(root);
 
     // If IP cache is empty, load IP assets across brand and re-render
