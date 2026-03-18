@@ -114,12 +114,44 @@
         var nextBrand = NK.service && NK.service.brand && NK.service.brand.getById && nextBrandId
           ? NK.service.brand.getById(nextBrandId)
           : null;
+        var active = document.activeElement;
+        var isEditingField = !!(active && root.contains(active) && active.matches && active.matches('input, textarea, select'));
+        if (isEditingField) {
+          state.deferred = {
+            project: nextProject,
+            brand: nextBrand || brand
+          };
+          return;
+        }
         renderProject(root, nextProject, nextBrand || brand);
       })
       .catch(function () {})
       .finally(function () {
         state.pending = false;
       });
+  }
+
+  function flushDeferredHydrationRender(root) {
+    var state = root && root.__brandStudioIpLoadState && typeof root.__brandStudioIpLoadState === 'object'
+      ? root.__brandStudioIpLoadState
+      : null;
+    if (!state || !state.deferred) return;
+    var active = document.activeElement;
+    var isEditingField = !!(active && root.contains(active) && active.matches && active.matches('input, textarea, select'));
+    if (isEditingField) return;
+    var deferred = state.deferred;
+    state.deferred = null;
+    renderProject(root, deferred.project, deferred.brand);
+  }
+
+  function bindDeferredHydrationFlush(root) {
+    if (!root || root.__brandStudioDeferredFlushBound) return;
+    root.__brandStudioDeferredFlushBound = true;
+    root.addEventListener('focusout', function () {
+      window.requestAnimationFrame(function () {
+        flushDeferredHydrationRender(root);
+      });
+    });
   }
 
   function readBrandView(brand, project) {
@@ -1604,6 +1636,7 @@
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
+    bindDeferredHydrationFlush(root);
     try {
       renderProject(root, project, brand);
     } catch (err) {
