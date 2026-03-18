@@ -29,6 +29,30 @@
     NK.ui.common.applyRuntimeLocale(lang);
   }
 
+  function readDisclosureOpen(root, key, fallback) {
+    var state = root && root.__brandStudioDisclosureState && typeof root.__brandStudioDisclosureState === 'object'
+      ? root.__brandStudioDisclosureState
+      : null;
+    if (state && Object.prototype.hasOwnProperty.call(state, key)) return !!state[key];
+    return !!fallback;
+  }
+
+  function bindDisclosureState(root) {
+    if (!root) return;
+    var state = root.__brandStudioDisclosureState && typeof root.__brandStudioDisclosureState === 'object'
+      ? root.__brandStudioDisclosureState
+      : (root.__brandStudioDisclosureState = {});
+    var disclosures = root.querySelectorAll ? root.querySelectorAll('.brand-studio-disclosure[data-disclosure-id]') : [];
+    Array.prototype.forEach.call(disclosures, function (disclosure) {
+      var key = String(disclosure.getAttribute('data-disclosure-id') || '').trim();
+      if (!key) return;
+      state[key] = disclosure.open;
+      disclosure.ontoggle = function () {
+        state[key] = disclosure.open;
+      };
+    });
+  }
+
   function readBrandView(brand, project) {
     var payload = (project && project.payload) || {};
     var src = brand && typeof brand === 'object' ? brand : {};
@@ -716,6 +740,11 @@
         );
       }).join('')
       : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
+    var isKnowledgeOpen = readDisclosureOpen(root, 'knowledge-snapshot', false);
+    var isAssetsOpen = readDisclosureOpen(root, 'asset-selection', !persistedSelectedAssetItems.length);
+    var isContentTypeOpen = readDisclosureOpen(root, 'content-type', !selectedType);
+    var isChannelPlanOpen = readDisclosureOpen(root, 'channel-plan', !channelConnections.length || !!publishPlan.scheduledAt);
+    var isPublishResultsOpen = readDisclosureOpen(root, 'publish-results', !!publishResults.length);
 
     var captionValue = savedCaption || buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge);
     var hashtagValue = savedHashtags || buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge);
@@ -851,7 +880,7 @@
           '</section>'
         : '') +
       '' +
-      '<details class="brand-studio-disclosure">' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="knowledge-snapshot" ' + (isKnowledgeOpen ? 'open' : '') + '>' +
       '<summary><div><strong>브랜드 허브 스냅샷</strong><span>지금 필요한 규칙만 짧게 확인</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(knowledge.brandRules.length ? (knowledge.brandRules.length + '개 규칙') : '간단 요약') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
@@ -861,7 +890,7 @@
       '</section>' +
       '</div>' +
       '</details>' +
-      '<details class="brand-studio-disclosure" ' + (!persistedSelectedAssetItems.length ? 'open' : '') + '>' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="asset-selection" ' + (isAssetsOpen ? 'open' : '') + '>' +
       '<summary><div><strong>브랜드 자산 선택</strong><span>자동 추천 자산을 기준으로 필요할 때만 수정합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedAssetItems.length ? (selectedAssetItems.length + '개 준비') : '없음') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
@@ -884,7 +913,7 @@
       '</section>' +
       '</div>' +
       '</details>' +
-      '<details class="brand-studio-disclosure" ' + (!selectedType ? 'open' : '') + '>' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="content-type" ' + (isContentTypeOpen ? 'open' : '') + '>' +
       '<summary><div><strong>SNS 콘텐츠 유형</strong><span>자동 기본값을 쓰거나 필요할 때만 변경합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
@@ -937,7 +966,7 @@
       '</div>' +
       '<p class="brand-caption-help">채널 연결, 예약, 게시 결과는 아래 접힘 섹션에서 관리합니다. 기본 화면은 초안 작성에 집중합니다.</p>' +
       '</section>' +
-      '<details class="brand-studio-disclosure" ' + (!channelConnections.length || publishPlan.scheduledAt ? 'open' : '') + '>' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="channel-plan" ' + (isChannelPlanOpen ? 'open' : '') + '>' +
       '<summary><div><strong>채널 연결과 예약</strong><span>브랜드 공용 채널과 예약 게시 설정</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(channelConnections.length ? (channelConnections.length + '개 채널') : '미연결') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
@@ -971,7 +1000,7 @@
       '</section>' +
       '</div>' +
       '</details>' +
-      '<details class="brand-studio-disclosure" ' + (publishResults.length ? 'open' : '') + '>' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="publish-results" ' + (isPublishResultsOpen ? 'open' : '') + '>' +
       '<summary><div><strong>게시 결과 관리</strong><span>분석에 들어갈 실제 운영 데이터를 기록</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(publishResults.length ? (publishResults.length + '건 누적') : '아직 없음') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
@@ -1014,6 +1043,7 @@
       '</div>' +
       '</section>';
     applyCurrentLocale();
+    bindDisclosureState(root);
 
     // If IP cache is empty, load IP assets across brand and re-render
     try {
