@@ -8853,6 +8853,30 @@ body {
   padding: 2px 0;
 }
 
+.knowledge-hub-context-bar {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: start;
+}
+
+.knowledge-hub-context-item:first-child {
+  grid-column: auto;
+}
+
+.knowledge-hub-context-item {
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  align-items: start;
+  min-height: 132px;
+  height: 100%;
+}
+
+.knowledge-hub-context-item span,
+.knowledge-hub-context-item strong,
+.knowledge-hub-context-item p {
+  align-self: start;
+}
+
 .studio-kpi-grid {
   grid-template-columns: 1.4fr 1fr;
   gap: 8px;
