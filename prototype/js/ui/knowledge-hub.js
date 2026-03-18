@@ -51,6 +51,13 @@
     return text.slice(0, Math.max(limit - 1, 1)).trim() + '…';
   }
 
+  function summarizeList(list, emptyLabel, limit) {
+    var rows = Array.isArray(list) ? list : [];
+    if (!rows.length) return String(emptyLabel || '아직 없음');
+    if (rows.length === 1) return compactSentence(rows[0], limit || 60);
+    return rows.length + '개 · ' + compactSentence(rows[0], limit || 52);
+  }
+
   function normalizeText(value) {
     return String(value || '').replace(/[<>]/g, '').trim();
   }
