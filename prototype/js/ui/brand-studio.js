@@ -54,6 +54,8 @@
         var targetDelta = 0;
         if (align === 'start') {
           targetDelta = deltaTop;
+        } else if (align === 'bottom') {
+          targetDelta = deltaBottom > 0 ? deltaBottom : 0;
         } else if (deltaTop < 0) {
           targetDelta = deltaTop;
         } else if (deltaBottom > 0) {
@@ -71,7 +73,7 @@
 
   function scrollDisclosureIntoView(disclosure) {
     if (!disclosure || !disclosure.open) return;
-    scrollNodeIntoPageView(disclosure);
+    scrollNodeIntoPageView(disclosure, 'bottom');
   }
 
   function readDisclosureOpen(root, key, fallback) {

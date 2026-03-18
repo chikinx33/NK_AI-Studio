@@ -104,9 +104,7 @@
         var deltaTop = rect.top - (scrollerRect.top + topMargin);
         var deltaBottom = rect.bottom - (scrollerRect.bottom - bottomMargin);
         var targetDelta = 0;
-        if (deltaTop < 0) {
-          targetDelta = deltaTop;
-        } else if (deltaBottom > 0) {
+        if (deltaBottom > 0) {
           targetDelta = deltaBottom;
         }
         if (!targetDelta) return;
