@@ -2105,7 +2105,7 @@
     `;
 
     const existingSeriesRow = document.createElement('div');
-    existingSeriesRow.className = 'form-row project-create-series-select-row hidden';
+    existingSeriesRow.className = 'form-row project-create-series-select-row';
     existingSeriesRow.innerHTML = `
       <label>에피소드</label>
       <select id="project-series-select"></select>
@@ -2318,7 +2318,7 @@
         btn.classList.add('disabled');
       });
       newSeriesRow.classList.remove('hidden');
-      existingSeriesRow.classList.add('hidden');
+      existingSeriesRow.classList.remove('hidden');
       profileLine.classList.remove('hidden');
       ensureLabel(baseRow, '에피소드');
       input.placeholder = '';
@@ -2350,8 +2350,8 @@
         btn.classList.toggle('active', active);
       });
       const list = refreshSeriesOptions();
-      newSeriesRow.classList.toggle('hidden', mode !== 'new-series');
-      existingSeriesRow.classList.toggle('hidden', mode !== 'episode');
+      newSeriesRow.classList.remove('hidden');
+      existingSeriesRow.classList.remove('hidden');
       // 디자인 일관성을 위해 하단 프로필 라인은 항상 노출하되, 모드에 따라 활성/비활성만 전환
       profileLine.classList.remove('hidden');
       if (mode === 'new-series') {
