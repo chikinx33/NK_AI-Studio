@@ -918,7 +918,7 @@
     var isKnowledgeOpen = readDisclosureOpen(root, 'knowledge-snapshot', false);
     var isAssetsOpen = readDisclosureOpen(root, 'asset-selection', false);
     var isContentTypeOpen = readDisclosureOpen(root, 'content-type', false);
-    var isComposerOpen = readDisclosureOpen(root, 'publish-composer', true);
+    var isComposerOpen = readDisclosureOpen(root, 'publish-composer', false);
     var isChannelPlanOpen = readDisclosureOpen(root, 'channel-plan', false);
     var isPublishResultsOpen = readDisclosureOpen(root, 'publish-results', false);
 
