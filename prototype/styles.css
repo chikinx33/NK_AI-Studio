@@ -7723,3 +7723,625 @@ body.layout-fixed .lib-content {
     grid-template-columns: 1fr;
   }
 }
+
+html,
+body {
+  font-family: 'Pretendard', 'Space Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #ff9f3f 0%, #ff7a00 48%, #ff5c00 100%);
+  color: #160d05;
+  box-shadow: 0 14px 34px rgba(255, 122, 0, 0.22);
+}
+
+.btn-secondary {
+  background: color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.04) 18%);
+  border: 1px solid color-mix(in srgb, var(--border) 72%, rgba(255, 255, 255, 0.18) 28%);
+  color: var(--text);
+}
+
+[data-theme="dark"] .btn-secondary {
+  color: color-mix(in srgb, var(--text) 86%, #9df1e2 14%);
+}
+
+.btn-ghost {
+  background: color-mix(in srgb, var(--panel) 74%, rgba(255, 255, 255, 0.04) 26%);
+}
+
+.btn-primary:hover,
+.btn-secondary:hover,
+.btn-ghost:hover {
+  transform: translateY(-2px);
+}
+
+.btn-secondary.compact,
+.btn-primary.compact {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.brand-studio-page,
+.knowledge-hub-page,
+.analytics-page,
+.content-library-page {
+  gap: 18px;
+  padding: 18px 0 36px;
+}
+
+.brand-studio-hero,
+.knowledge-hub-hero,
+.analytics-hero,
+.content-library-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);
+  gap: 20px;
+  padding: 28px;
+  border-radius: 30px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.14) 22%);
+  background:
+    radial-gradient(circle at top right, rgba(255, 173, 92, 0.18), transparent 30%),
+    radial-gradient(circle at bottom left, rgba(90, 149, 255, 0.12), transparent 28%),
+    linear-gradient(160deg, color-mix(in srgb, var(--panel) 92%, rgba(255, 255, 255, 0.03) 8%), color-mix(in srgb, var(--bg-2) 86%, var(--panel) 14%));
+  box-shadow:
+    0 24px 60px rgba(6, 12, 24, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.studio-page-hero-main,
+.studio-page-hero-side {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.studio-page-hero-side {
+  align-content: stretch;
+}
+
+.brand-studio-eyebrow,
+.knowledge-hub-eyebrow,
+.analytics-eyebrow,
+.content-library-eyebrow {
+  margin: 0;
+  color: color-mix(in srgb, var(--accent) 82%, #ffffff 18%);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.brand-studio-hero h2,
+.knowledge-hub-hero h2,
+.analytics-hero h2,
+.content-library-hero h2 {
+  margin: 0;
+  font-size: clamp(32px, 4vw, 44px);
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+  max-width: 12ch;
+  font-family: 'Space Grotesk', 'Pretendard', 'Inter', system-ui, sans-serif;
+}
+
+.brand-studio-description,
+.knowledge-hub-description,
+.analytics-description,
+.content-library-description {
+  margin: 0;
+  max-width: 760px;
+  color: color-mix(in srgb, var(--muted) 84%, #ffffff 16%);
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.studio-hero-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.studio-hero-pill {
+  display: inline-grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 11px 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, rgba(255, 255, 255, 0.2) 28%);
+  background: color-mix(in srgb, var(--panel) 80%, rgba(255, 255, 255, 0.04) 20%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.studio-hero-pill em {
+  margin: 0;
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.studio-hero-pill strong {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
+.studio-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  height: 100%;
+}
+
+.studio-kpi-card {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 152px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, rgba(255, 255, 255, 0.18) 28%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 86%, rgba(255, 255, 255, 0.02) 14%), color-mix(in srgb, var(--bg-2) 92%, rgba(255, 255, 255, 0.02) 8%));
+  box-shadow: 0 12px 32px rgba(6, 12, 24, 0.16);
+}
+
+.studio-kpi-card.is-accent {
+  background:
+    radial-gradient(circle at top right, rgba(255, 170, 80, 0.16), transparent 42%),
+    linear-gradient(180deg, rgba(255, 122, 0, 0.16), color-mix(in srgb, var(--panel) 88%, rgba(255, 255, 255, 0.02) 12%));
+  border-color: rgba(255, 157, 61, 0.42);
+}
+
+.studio-kpi-card span {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.studio-kpi-card strong {
+  font-size: clamp(24px, 2.6vw, 32px);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  font-family: 'Space Grotesk', 'Pretendard', 'Inter', system-ui, sans-serif;
+}
+
+.studio-kpi-card p {
+  margin: 0;
+  color: color-mix(in srgb, var(--muted) 82%, #ffffff 18%);
+  line-height: 1.58;
+}
+
+.brand-studio-hero-actions,
+.knowledge-hub-hero-actions,
+.analytics-hero-actions,
+.content-library-hero-actions,
+.content-library-toolbar-actions,
+.brand-studio-selection-actions,
+.brand-caption-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.brand-studio-context-bar,
+.knowledge-hub-context-bar,
+.analytics-summary-grid,
+.content-library-summary-grid {
+  gap: 12px;
+}
+
+.analytics-summary-grid,
+.content-library-summary-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.brand-studio-context-item,
+.knowledge-hub-context-item,
+.analytics-summary-card,
+.content-library-summary-card,
+.analytics-overview-card {
+  display: grid;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, rgba(255, 255, 255, 0.12) 24%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.02) 18%), color-mix(in srgb, var(--bg-2) 90%, rgba(255, 255, 255, 0.02) 10%));
+  box-shadow: 0 14px 36px rgba(5, 10, 22, 0.14);
+}
+
+.brand-studio-context-item span,
+.knowledge-hub-context-item span,
+.analytics-summary-card span,
+.content-library-summary-card span,
+.analytics-overview-card span {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.brand-studio-context-item strong,
+.knowledge-hub-context-item strong,
+.analytics-summary-card strong,
+.content-library-summary-card strong,
+.analytics-overview-card strong {
+  font-size: 20px;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.brand-studio-context-item p,
+.knowledge-hub-context-item p,
+.analytics-summary-card p,
+.content-library-summary-card p,
+.analytics-overview-card p {
+  margin: 0;
+  color: color-mix(in srgb, var(--muted) 84%, #ffffff 16%);
+  line-height: 1.58;
+}
+
+.brand-studio-panel,
+.knowledge-hub-panel,
+.analytics-panel,
+.content-library-section,
+.brand-studio-disclosure,
+.knowledge-hub-disclosure {
+  border-radius: 26px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.14) 22%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 84%, rgba(255, 255, 255, 0.02) 16%), color-mix(in srgb, var(--bg-2) 92%, rgba(255, 255, 255, 0.02) 8%));
+  box-shadow: 0 20px 48px rgba(5, 10, 22, 0.16);
+}
+
+.brand-studio-panel,
+.knowledge-hub-panel,
+.analytics-panel {
+  padding: 20px;
+  gap: 16px;
+}
+
+.content-library-section {
+  padding: 18px;
+  gap: 14px;
+}
+
+.brand-studio-panel-head,
+.knowledge-hub-panel-head,
+.analytics-panel-head,
+.content-library-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.brand-studio-panel-head h3,
+.knowledge-hub-panel-head h3,
+.analytics-panel-head h3,
+.content-library-section-head h3 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.18;
+  letter-spacing: -0.03em;
+}
+
+.brand-studio-panel-head span,
+.knowledge-hub-panel-head span,
+.analytics-panel-head span,
+.content-library-section-head span {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.content-library-section-head div {
+  display: grid;
+  gap: 6px;
+}
+
+.content-library-section-head p {
+  margin: 0;
+  color: color-mix(in srgb, var(--muted) 84%, #ffffff 16%);
+  line-height: 1.55;
+}
+
+.brand-studio-workspace,
+.knowledge-hub-workspace {
+  gap: 14px;
+}
+
+.brand-studio-main,
+.brand-studio-side,
+.knowledge-hub-main,
+.knowledge-hub-side {
+  gap: 14px;
+}
+
+.brand-studio-side {
+  top: 18px;
+}
+
+.brand-studio-composer-panel,
+.brand-auto-suggestion-panel {
+  background:
+    radial-gradient(circle at top right, rgba(255, 170, 80, 0.14), transparent 40%),
+    linear-gradient(180deg, rgba(255, 122, 0, 0.08), color-mix(in srgb, var(--panel) 90%, rgba(255, 255, 255, 0.02) 10%));
+}
+
+.brand-studio-selection-summary,
+.brand-asset-selection-summary,
+.analytics-filter-summary,
+.content-library-toolbar {
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  background: color-mix(in srgb, var(--panel) 80%, rgba(255, 255, 255, 0.04) 20%);
+}
+
+.brand-knowledge-card,
+.brand-content-type-card,
+.brand-asset-card,
+.brand-asset-empty,
+.brand-caption-meta > div,
+.brand-hashtag-meta > div,
+.brand-channel-summary,
+.brand-channel-card,
+.brand-publish-summary,
+.brand-publish-channel-option,
+.brand-publish-result-card,
+.knowledge-reference-card,
+.knowledge-reference-empty,
+.knowledge-hub-pill,
+.analytics-channel-card,
+.analytics-type-card,
+.analytics-hashtag-card,
+.analytics-recommendation-card,
+.analytics-suggestion-card,
+.analytics-empty,
+.content-library-item,
+.content-library-empty-group {
+  border-radius: 22px;
+  border: 1px solid color-mix(in srgb, var(--border) 76%, rgba(255, 255, 255, 0.14) 24%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.02) 18%), color-mix(in srgb, var(--bg-2) 90%, rgba(255, 255, 255, 0.02) 10%));
+  box-shadow: 0 14px 36px rgba(5, 10, 22, 0.12);
+}
+
+.content-library-grid,
+.brand-knowledge-grid,
+.brand-content-type-grid,
+.brand-asset-grid,
+.analytics-channel-grid,
+.analytics-type-grid,
+.analytics-hashtag-grid,
+.analytics-recommendation-grid,
+.analytics-suggestion-grid,
+.knowledge-reference-grid {
+  gap: 12px;
+}
+
+.content-library-item,
+.content-library-empty-group {
+  min-height: 184px;
+  padding: 16px;
+}
+
+.content-library-item h4,
+.brand-asset-card strong,
+.brand-knowledge-card strong,
+.knowledge-reference-card strong,
+.analytics-recommendation-card h4,
+.analytics-suggestion-card h4 {
+  font-size: 18px;
+  line-height: 1.32;
+  letter-spacing: -0.02em;
+}
+
+.content-library-item p,
+.brand-asset-card p,
+.knowledge-reference-card p,
+.analytics-channel-note,
+.analytics-empty,
+.analytics-recommendation-card p,
+.analytics-suggestion-card p {
+  line-height: 1.62;
+}
+
+.content-library-item-actions {
+  margin-top: auto;
+}
+
+.brand-content-type-card,
+.brand-asset-card {
+  padding: 16px;
+}
+
+.brand-content-type-card {
+  min-height: 188px;
+  gap: 10px;
+}
+
+.brand-content-type-card.is-active,
+.brand-asset-card.is-selected,
+.analytics-view-tab.is-active,
+.brand-asset-filter.is-active {
+  border-color: rgba(255, 157, 61, 0.62);
+  box-shadow:
+    0 18px 40px rgba(255, 122, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.brand-asset-filter,
+.analytics-view-tab {
+  min-height: 42px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%);
+  border: 1px solid color-mix(in srgb, var(--border) 76%, rgba(255, 255, 255, 0.12) 24%);
+}
+
+.brand-caption-textarea,
+.brand-channel-input,
+.brand-publish-input,
+.analytics-filter-select,
+.knowledge-hub-field textarea,
+.knowledge-reference-input,
+.knowledge-reference-textarea,
+.knowledge-character-input,
+.knowledge-character-personality {
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  background: color-mix(in srgb, var(--panel) 86%, rgba(255, 255, 255, 0.02) 14%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.knowledge-hub-field textarea,
+.knowledge-reference-textarea,
+.brand-caption-textarea {
+  min-height: 156px;
+}
+
+.knowledge-character-input,
+.analytics-filter-select,
+.knowledge-reference-input,
+.brand-channel-input,
+.brand-publish-input {
+  min-height: 48px;
+}
+
+.brand-studio-disclosure > summary,
+.knowledge-hub-disclosure > summary {
+  padding: 18px 20px;
+  background: color-mix(in srgb, var(--panel) 78%, rgba(255, 255, 255, 0.03) 22%);
+}
+
+.brand-studio-disclosure-body,
+.knowledge-hub-disclosure-body {
+  padding: 0 20px 20px;
+}
+
+.analytics-filter-grid,
+.knowledge-hub-form-grid {
+  gap: 12px;
+}
+
+.analytics-channel-top,
+.brand-asset-card-top,
+.knowledge-reference-top,
+.content-library-item-top {
+  align-items: flex-start;
+}
+
+.content-library-status,
+.brand-channel-badge,
+.analytics-channel-badge,
+.knowledge-reference-badge,
+.content-library-badge {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+}
+
+@media (max-width: 1200px) {
+  .brand-studio-hero,
+  .knowledge-hub-hero,
+  .analytics-hero,
+  .content-library-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .analytics-summary-grid,
+  .content-library-summary-grid,
+  .brand-studio-context-bar,
+  .knowledge-hub-context-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .brand-studio-page,
+  .knowledge-hub-page,
+  .analytics-page,
+  .content-library-page {
+    gap: 14px;
+    padding-top: 14px;
+  }
+
+  .brand-studio-hero,
+  .knowledge-hub-hero,
+  .analytics-hero,
+  .content-library-hero {
+    padding: 22px;
+    border-radius: 26px;
+  }
+
+  .studio-kpi-grid,
+  .analytics-summary-grid,
+  .content-library-summary-grid,
+  .brand-studio-context-bar,
+  .knowledge-hub-context-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-studio-workspace,
+  .knowledge-hub-workspace,
+  .analytics-overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .brand-studio-hero,
+  .knowledge-hub-hero,
+  .analytics-hero,
+  .content-library-hero {
+    padding: 18px;
+  }
+
+  .studio-kpi-grid,
+  .analytics-summary-grid,
+  .content-library-summary-grid,
+  .brand-studio-context-bar,
+  .knowledge-hub-context-bar,
+  .analytics-overview-grid,
+  .analytics-recommendation-grid,
+  .analytics-suggestion-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .studio-kpi-card {
+    min-height: 0;
+  }
+
+  .brand-studio-panel,
+  .knowledge-hub-panel,
+  .analytics-panel,
+  .content-library-section {
+    padding: 16px;
+  }
+
+  .brand-studio-panel-head,
+  .knowledge-hub-panel-head,
+  .analytics-panel-head,
+  .content-library-section-head {
+    flex-direction: column;
+  }
+}

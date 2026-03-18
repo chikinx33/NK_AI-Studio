@@ -201,6 +201,70 @@
         '</button>'
       );
     }).join('');
+    var activeTabTitle = (tabs.find(function (item) { return item.id === activeView; }) || tabs[0] || {}).title || '개요';
+    var activeFilterCount = [
+      currentFilters.episodeId,
+      currentFilters.channelType,
+      currentFilters.contentType,
+      currentFilters.seasonId,
+      currentFilters.campaignId,
+      currentFilters.purposeKey
+    ].filter(Boolean).length;
+    var analyticsHeroPills = [
+      { label: '현재 보기', value: activeTabTitle },
+      { label: '활성 필터', value: activeFilterCount ? (activeFilterCount + '개 적용') : '필터 없음' },
+      { label: '상위 채널', value: channelLabel(summary.topChannel || '-') },
+      { label: '자동 제안', value: suggestions.length ? (suggestions.length + '개') : '아직 없음' }
+    ].map(function (item) {
+      return '<span class="studio-hero-pill"><em>' + escapeHtml(item.label) + '</em><strong>' + escapeHtml(item.value) + '</strong></span>';
+    }).join('');
+    var analyticsHeroStats = [
+      {
+        label: '누적 게시',
+        value: String(summary.totalPosts) + '개',
+        detail: summary.totalPosts ? '채널별 실운영 데이터가 분석에 반영되고 있습니다.' : 'Brand Studio에서 게시 결과를 먼저 쌓아 주세요.',
+        accent: true
+      },
+      {
+        label: '총 조회수',
+        value: String(summary.views),
+        detail: summary.totalPosts ? '좋아요 ' + String(summary.likes) + ' · 댓글 ' + String(summary.comments) : '조회수 데이터가 아직 없습니다.'
+      },
+      {
+        label: '전략 추천',
+        value: recommendations.length + '개',
+        detail: recommendations.length ? '데이터를 바탕으로 바로 실행 가능한 운영 제안입니다.' : '추천을 만들 만큼의 데이터가 아직 부족합니다.'
+      },
+      {
+        label: '상위 채널',
+        value: channelLabel(summary.topChannel || '-'),
+        detail: channels.length ? ('최근 성과가 가장 좋은 채널은 ' + channelLabel(channels[0].channelType || '-')) : '비교 가능한 채널 데이터가 없습니다.'
+      }
+    ].map(function (item) {
+      return (
+        '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '<p>' + escapeHtml(item.detail) + '</p>' +
+        '</article>'
+      );
+    }).join('');
+    var analyticsSummaryCards = [
+      { label: '분석 브랜드', value: brand && brand.brandTitle || payload.brandTitle || '-', detail: '현재 브랜드 기준의 게시 결과를 집계합니다.' },
+      { label: '현재 기준 에피소드', value: currentEpisodeTitle, detail: '필요하면 아래 필터에서 다른 에피소드나 시즌으로 좁힐 수 있습니다.' },
+      { label: '누적 게시', value: String(summary.totalPosts) + '개', detail: summary.totalPosts ? '실제 성과 데이터가 누적되고 있습니다.' : '분석을 시작하려면 게시 결과 입력이 필요합니다.' },
+      { label: '총 조회수', value: String(summary.views), detail: '조회수 기반으로 상위 채널과 시간대를 계산합니다.' },
+      { label: '총 반응', value: String(summary.likes + summary.comments + summary.shares), detail: '좋아요, 댓글, 공유를 합산한 참여 반응입니다.' },
+      { label: '상위 채널', value: channelLabel(summary.topChannel || '-'), detail: '가장 높은 조회수를 만든 채널입니다.' }
+    ].map(function (item) {
+      return (
+        '<article class="analytics-summary-card">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '<p>' + escapeHtml(item.detail) + '</p>' +
+        '</article>'
+      );
+    }).join('');
     var overviewBlocks = [
       {
         title: '상위 채널',
@@ -349,25 +413,20 @@
     root.innerHTML =
       '<section class="analytics-page">' +
       '<div class="analytics-hero">' +
-      '<div>' +
+      '<div class="studio-page-hero-main">' +
       '<p class="analytics-eyebrow">Brand Intelligence</p>' +
       '<h2>' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
       '<p class="analytics-description">' + escapeHtml(brand && brand.brandSummary || payload.brandSummary || '게시 결과를 수집하면 채널별 성과를 여기서 한눈에 확인할 수 있습니다.') + '</p>' +
-      '</div>' +
+      '<div class="studio-hero-pill-row">' + analyticsHeroPills + '</div>' +
       '<div class="analytics-hero-actions">' +
       '<button class="btn-secondary" data-action="analytics-open-brand">Brand Studio</button>' +
       '<button class="btn-secondary" data-action="analytics-open-library">Content Library</button>' +
       '<button class="btn-secondary" data-action="analytics-open-knowledge">브랜드 허브</button>' +
       '</div>' +
       '</div>' +
-      '<div class="analytics-summary-grid">' +
-      '<article class="analytics-summary-card"><p class="context-line"><span class="ctx-label">분석 브랜드</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || '-') + '</strong></p></article>' +
-      '<article class="analytics-summary-card"><p class="context-line"><span class="ctx-label">현재 기준 에피소드</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(currentEpisodeTitle) + '</strong></p></article>' +
-      '<article class="analytics-summary-card"><p class="context-line"><span class="ctx-label">누적 게시</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(String(summary.totalPosts) + '개') + '</strong></p></article>' +
-      '<article class="analytics-summary-card"><p class="context-line"><span class="ctx-label">총 조회수</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(String(summary.views)) + '</strong></p></article>' +
-      '<article class="analytics-summary-card"><p class="context-line"><span class="ctx-label">총 반응</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(String(summary.likes + summary.comments + summary.shares)) + '</strong></p></article>' +
-      '<article class="analytics-summary-card"><p class="context-line"><span class="ctx-label">상위 채널</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(channelLabel(summary.topChannel || '-')) + '</strong></p></article>' +
+      '<div class="studio-page-hero-side"><div class="studio-kpi-grid">' + analyticsHeroStats + '</div></div>' +
       '</div>' +
+      '<div class="analytics-summary-grid">' + analyticsSummaryCards + '</div>' +
       '<section class="analytics-panel">' +
       '<div class="analytics-panel-head"><h3>분석 필터</h3><span>브랜드 전체에서 세부 활동으로 drill-down</span></div>' +
       '<div class="analytics-filter-grid">' +

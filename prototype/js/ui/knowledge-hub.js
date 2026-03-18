@@ -342,27 +342,97 @@
         );
       }).join('')
       : '<div class="knowledge-reference-empty">아직 저장된 참조 콘텐츠가 없습니다.</div>';
+    var mediaCount = contentItems.filter(function (item) {
+      var type = String(item && item.type || '').trim();
+      return type === 'image' || type === 'video';
+    }).length;
+    var knowledgeHeroPills = [
+      { label: '운영 브랜드', value: brandTitle || '-' },
+      { label: '현재 에피소드', value: currentEpisodeTitle },
+      { label: '저장된 규칙', value: (rulesCount + bannedCount) + '개' },
+      { label: '캐릭터', value: knowledge.characters.length ? (knowledge.characters.length + '명') : '아직 없음' }
+    ].map(function (item) {
+      return '<span class="studio-hero-pill"><em>' + escapeHtml(item.label) + '</em><strong>' + escapeHtml(item.value) + '</strong></span>';
+    }).join('');
+    var knowledgeHeroStats = [
+      {
+        label: '브랜드 규칙',
+        value: rulesCount + '개',
+        detail: rulesCount ? '생성 결과에 지속적으로 반영되는 운영 기준입니다.' : '반드시 지켜야 할 브랜드 기준을 먼저 적어 주세요.',
+        accent: true
+      },
+      {
+        label: '금지 표현',
+        value: bannedCount + '개',
+        detail: bannedCount ? summarizeList(knowledge.bannedExpressions, '금지 표현 없음', 72) : '금지 문구를 정리하면 톤 오류를 줄일 수 있습니다.'
+      },
+      {
+        label: '참조 / 성공 패턴',
+        value: String(referencesCount + successesCount) + '개',
+        detail: referencesCount ? '좋았던 레퍼런스와 링크를 바로 재활용할 수 있습니다.' : '참조 콘텐츠를 쌓아 두면 이후 생성 품질이 올라갑니다.'
+      },
+      {
+        label: '연결 자산',
+        value: mediaCount + '개',
+        detail: mediaCount ? '브랜드 자산과 캐릭터 문맥을 함께 운영할 수 있습니다.' : '아직 연결된 이미지·영상 자산이 많지 않습니다.'
+      }
+    ].map(function (item) {
+      return (
+        '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '<p>' + escapeHtml(item.detail) + '</p>' +
+        '</article>'
+      );
+    }).join('');
+    var knowledgeContextSummary = [
+      {
+        label: 'AI 기본 문맥',
+        value: knowledge.brandVoice ? '톤&매너 설정됨' : '톤 정리 필요',
+        detail: knowledge.brandVoice || 'AI가 계속 참고할 말투와 표현 원칙이 아직 없습니다.'
+      },
+      {
+        label: '브랜드 스토리',
+        value: knowledge.brandStory ? '브랜드 서사 입력됨' : '스토리 보강 필요',
+        detail: knowledge.brandStory || '왜 존재하는지, 어떤 세계를 다루는지 요약해 주세요.'
+      },
+      {
+        label: '세계관 / 배경',
+        value: knowledge.worldSetting ? '배경 정의됨' : '배경 정의 필요',
+        detail: knowledge.worldSetting || '배경 문맥이 비어 있으면 결과물이 쉽게 흔들립니다.'
+      },
+      {
+        label: '캐릭터 운영',
+        value: knowledge.characters.length ? (knowledge.characters.length + '명 관리 중') : '캐릭터 등록 필요',
+        detail: knowledge.characters.length ? '캐릭터 토큰과 성격이 자산 목록과 개요에 반영됩니다.' : characterUiText.detailHelp
+      }
+    ].map(function (item) {
+      return (
+        '<article class="knowledge-hub-context-item">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '<p>' + escapeHtml(item.detail) + '</p>' +
+        '</article>'
+      );
+    }).join('');
 
     root.innerHTML =
       '<section class="knowledge-hub-page">' +
       '<div class="knowledge-hub-hero">' +
-      '<div>' +
+      '<div class="studio-page-hero-main">' +
       '<p class="knowledge-hub-eyebrow">브랜드 허브</p>' +
       '<h2>' + escapeHtml(brandTitle) + '</h2>' +
       '<p class="knowledge-hub-description">' + escapeHtml(brandSummary || '브랜드 요약이 아직 없습니다. 브랜드 허브를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
-      '</div>' +
+      '<div class="studio-hero-pill-row">' + knowledgeHeroPills + '</div>' +
       '<div class="knowledge-hub-hero-actions">' +
       '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
       '<button class="btn-secondary" data-action="knowledge-open-brand">Brand Studio</button>' +
       '<button class="btn-primary" data-action="knowledge-save">브랜드 허브 저장</button>' +
       '</div>' +
       '</div>' +
-      '<div class="knowledge-hub-context-bar">' +
-      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">운영 브랜드</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(brandTitle || '-') + '</strong></p></div>' +
-      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">현재 기준 에피소드</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(currentEpisodeTitle) + '</strong></p></div>' +
-      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">브랜드 규칙</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(String(rulesCount) + '개') + '</strong></p></div>' +
-      '<div class="knowledge-hub-context-item"><p class="context-line"><span class="ctx-label">참조 콘텐츠</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(String(referencesCount) + '개') + '</strong></p></div>' +
+      '<div class="studio-page-hero-side"><div class="studio-kpi-grid">' + knowledgeHeroStats + '</div></div>' +
       '</div>' +
+      '<div class="knowledge-hub-context-bar">' + knowledgeContextSummary + '</div>' +
       '<div class="knowledge-hub-workspace">' +
       '<div class="knowledge-hub-main">' +
       '<details class="knowledge-hub-disclosure">' +

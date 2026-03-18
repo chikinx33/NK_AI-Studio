@@ -674,13 +674,79 @@
       : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
 
     var captionValue = savedCaption || '';
+    var latestPublishedAt = publishResults.reduce(function (acc, item) {
+      var current = String(item && item.publishedAt || '').trim();
+      if (!current) return acc;
+      return !acc || current > acc ? current : acc;
+    }, '');
+    var brandHeroPills = [
+      { label: '현재 에피소드', value: currentEpisodeTitle },
+      { label: '선택 포맷', value: selectedOption ? selectedOption.title : '콘텐츠 유형 선택 필요' },
+      { label: '자산 상태', value: selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : '브랜드 자산 탐색 가능' },
+      { label: '다음 단계', value: summary.nextAction || '준비 중' }
+    ].map(function (item) {
+      return '<span class="studio-hero-pill"><em>' + escapeHtml(item.label) + '</em><strong>' + escapeHtml(item.value) + '</strong></span>';
+    }).join('');
+    var brandHeroStats = [
+      {
+        label: '다음 액션',
+        value: summary.nextAction || '준비 중',
+        detail: selectedOption ? '현재 선택된 포맷 기준으로 초안을 이어갑니다.' : '콘텐츠 유형을 먼저 정하면 발행 초안이 정리됩니다.',
+        accent: true
+      },
+      {
+        label: '연결 채널',
+        value: channelConnections.length + '개',
+        detail: channelConnections.length ? channelConnections.map(function (item) { return channelTitleMap[item.channelType] || item.channelType; }).join(', ') : '브랜드 채널 연결이 아직 없습니다.'
+      },
+      {
+        label: '선택 자산',
+        value: selectedAssetItems.length ? (selectedAssetItems.length + '개') : '0개',
+        detail: selectedAssetSummary
+      },
+      {
+        label: '게시 데이터',
+        value: publishResults.length ? (publishResults.length + '건') : '0건',
+        detail: latestPublishedAt ? ('최근 게시 ' + latestPublishedAt) : '성과 데이터가 아직 없습니다.'
+      }
+    ].map(function (item) {
+      return (
+        '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
+        '<span>' + escapeHtml(item.label) + '</span>' +
+        '<strong>' + escapeHtml(item.value) + '</strong>' +
+        '<p>' + escapeHtml(item.detail) + '</p>' +
+        '</article>'
+      );
+    }).join('');
     var brandContextSummary = [
-      { label: '운영 브랜드', value: (brandView.title || '-') },
-      { label: '현재 기준 에피소드', value: currentEpisodeTitle },
-      { label: '선택 자산', value: (selectedAssetItems.length ? (selectedAssetItems.length + '개') : '미선택') },
-      { label: '게시 데이터', value: (publishResults.length ? (publishResults.length + '건 누적') : '아직 없음') }
+      {
+        label: '브랜드 문맥',
+        value: brandView.title || '-',
+        detail: compactSentence(brandView.summary || '브랜드 허브를 먼저 채우면 브랜드 운영 품질이 안정됩니다.', 112)
+      },
+      {
+        label: '자산 커버리지',
+        value: String(summary.images || 0) + ' 이미지 · ' + String(summary.videos || 0) + ' 영상',
+        detail: String(summary.scenes || 0) + '개 Scene에서 파생된 결과물'
+      },
+      {
+        label: '운영 가드레일',
+        value: knowledge.brandRules.length ? (knowledge.brandRules.length + '개 규칙') : '규칙 정리 필요',
+        detail: summarizeList(knowledge.brandRules, '브랜드 규칙이 아직 없습니다.', 92)
+      },
+      {
+        label: '금지 표현 / 참조',
+        value: String(knowledge.bannedExpressions.length) + ' / ' + String((knowledge.referenceContents.length ? knowledge.referenceContents : knowledge.successCases).length),
+        detail: summarizeList(knowledge.bannedExpressions.length ? knowledge.bannedExpressions : (knowledge.referenceContents.length ? knowledge.referenceContents : knowledge.successCases), '참조 데이터 없음', 92)
+      }
     ].map(function (row) {
-      return '<div class="brand-studio-context-item"><p class="context-line"><span class="ctx-label">' + escapeHtml(row.label) + '</span><span class="ctx-sep"> · </span><strong class="ctx-value">' + escapeHtml(row.value) + '</strong></p></div>';
+      return (
+        '<article class="brand-studio-context-item">' +
+        '<span>' + escapeHtml(row.label) + '</span>' +
+        '<strong>' + escapeHtml(row.value) + '</strong>' +
+        '<p>' + escapeHtml(row.detail) + '</p>' +
+        '</article>'
+      );
     }).join('');
     var knowledgeCards = [
       { label: '브랜드 보이스', value: compactSentence(knowledge.brandVoice || '아직 설정되지 않았습니다.', 72) },
@@ -699,16 +765,18 @@
     root.innerHTML =
       '<section class="brand-studio-page">' +
       '<div class="brand-studio-hero">' +
-      '<div>' +
+      '<div class="studio-page-hero-main">' +
       '<p class="brand-studio-eyebrow">Brand Operations</p>' +
       '<h2>' + escapeHtml(brandView.title || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
       '<p class="brand-studio-description">' + escapeHtml(brandView.summary || payload.brandSummary || '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.') + '</p>' +
-      '</div>' +
+      '<div class="studio-hero-pill-row">' + brandHeroPills + '</div>' +
       '<div class="brand-studio-hero-actions">' +
       '<button class="btn-secondary" data-action="brand-open-analytics">Analytics</button>' +
       '<button class="btn-secondary" data-action="brand-open-knowledge">브랜드 허브</button>' +
       '<button class="btn-secondary" data-action="brand-open-library">Content Library</button>' +
       '</div>' +
+      '</div>' +
+      '<div class="studio-page-hero-side"><div class="studio-kpi-grid">' + brandHeroStats + '</div></div>' +
       '</div>' +
       '<div class="brand-studio-context-bar">' + brandContextSummary + '</div>' +
       '<div class="brand-studio-workspace">' +
