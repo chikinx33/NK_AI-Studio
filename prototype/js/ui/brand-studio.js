@@ -457,8 +457,8 @@
       channelTitleMap[item.id] = item.title;
     });
     var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
-    var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
-      ? NK.service.contentLibrary.listProjectContents(brand || project)
+    var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.getCachedIpAssets && brandId)
+      ? (NK.service.contentLibrary.getCachedIpAssets(brandId) || [])
       : [];
     var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
       ? NK.service.brand.listProjects(brand || brandId)
@@ -503,7 +503,7 @@
         return '<option value="' + escapeHtml(String(it.id || '')) + '">' + escapeHtml(label) + '</option>';
       }).join('');
     var assetItems = contentItems.filter(function (item) {
-      return ['text', 'image', 'video', 'reference', 'publish-result'].indexOf(String(item.type || '').trim()) >= 0;
+      return ['image', 'video'].indexOf(String(item.type || '').trim()) >= 0;
     });
     var filteredAssetItems = assetItems.filter(function (item) {
       var typeMatch = assetTypeFilter === 'all' || String(item.type || '').trim() === assetTypeFilter;
@@ -522,10 +522,7 @@
     var assetTypeFilters = [
       { id: 'all', title: '전체' },
       { id: 'video', title: '영상' },
-      { id: 'image', title: '이미지' },
-      { id: 'text', title: '글' },
-      { id: 'reference', title: '참조' },
-      { id: 'publish-result', title: '게시 결과' }
+      { id: 'image', title: '이미지' }
     ];
 
     function renderNext(nextProject) {
@@ -741,12 +738,12 @@
       '<div class="brand-asset-filter-row">' + assetProjectFilterButtons + '</div>' +
       '<div class="brand-asset-selection-summary">' +
       '<div>' +
-      '<span class="brand-studio-selection-label">현재 선택 자산</span>' +
-      '<strong>' + escapeHtml(selectedAssetItems.length ? (selectedAssetItems.length + '개') : '미선택') + '</strong>' +
-      '<p>' + escapeHtml(selectedAssetSummary) + '</p>' +
+      '<span class="brand-studio-selection-label">IP 자산 요약</span>' +
+      '<strong>' + escapeHtml(String(assetItems.filter(function(i){return i.type===\"image\";}).length)) + ' 이미지 · ' + escapeHtml(String(assetItems.filter(function(i){return i.type===\"video\";}).length)) + ' 영상</strong>' +
+      '<p>' + escapeHtml(selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : 'IP 폴더 기반 결과물만 표시') + '</p>' +
       '</div>' +
       '<div class="brand-studio-selection-actions">' +
-      '<span class="brand-content-type-state">소스 자산: 씬 ' + escapeHtml(summary.scenes) + ' · 이미지 ' + escapeHtml(summary.images) + ' · 영상 ' + escapeHtml(summary.videos) + '</span>' +
+      '<span class="brand-content-type-state">브랜드 전체 에피소드의 결과물 집계</span>' +
       '<button class="btn-secondary compact" data-action="brand-clear-assets" ' + (selectedAssetItems.length ? '' : 'disabled') + '>선택 비우기</button>' +
       '</div>' +
       '</div>' +
@@ -878,6 +875,13 @@
       '</div>' +
       '</section>';
     applyCurrentLocale();
+
+    // If IP cache is empty, load IP assets across brand and re-render
+    try {
+      if ((contentItems || []).length === 0 && NK.service && NK.service.contentLibrary && NK.service.contentLibrary.loadIpAssetsForBrand && brandId) {
+        NK.service.contentLibrary.loadIpAssetsForBrand(brand || { brandId: brandId }).then(function(){ renderNext(project); }).catch(function(){});
+      }
+    } catch (_) {}
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;

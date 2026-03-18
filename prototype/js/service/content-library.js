@@ -12,6 +12,13 @@
         return '';
     }
 
+    function fileBaseName(name) {
+        var n = String(name || '').trim();
+        if (!n) return '';
+        var parts = n.split('/');
+        return parts[parts.length - 1] || n;
+    }
+
     function normalizeProject(projectOrId) {
         if (!projectOrId) return null;
 
@@ -301,5 +308,47 @@
         return library.summarizeProject(typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
             ? NK.service.brand.getById(brandOrId)
             : brandOrId);
+    };
+
+    // IP-wide assets (images/videos) aggregated from each project's IP folder
+    var _ipCache = {};
+    library.getCachedIpAssets = function (brandId) {
+        var id = String(brandId || '').trim();
+        return (_ipCache[id] && Array.isArray(_ipCache[id].items)) ? _ipCache[id].items : [];
+    };
+    library.loadIpAssetsForBrand = async function (brandOrId) {
+        var brand = typeof brandOrId === 'string' && NK.service && NK.service.brand && NK.service.brand.getById
+            ? NK.service.brand.getById(brandOrId)
+            : brandOrId;
+        var brandId = String(brand && brand.brandId || '').trim();
+        if (!brandId || !NK.service || !NK.service.brand || !NK.service.brand.listProjects || !NK.api || !NK.api.libraryIP) {
+            return [];
+        }
+        var projects = NK.service.brand.listProjects(brand);
+        var all = [];
+        for (var i = 0; i < projects.length; i++) {
+            var pid = String(projects[i] && projects[i].id || '').trim();
+            if (!pid) continue;
+            try {
+                var resp = await NK.api.libraryIP(pid);
+                var items = Array.isArray(resp && resp.items) ? resp.items : [];
+                items.forEach(function (it) {
+                    var name = String(it.name || '').trim();
+                    var lower = name.toLowerCase();
+                    var type = /\.(mp4)$/.test(lower) ? 'video' : 'image';
+                    var url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(name) : (it.signedUrl || '');
+                    all.push({
+                        id: 'ip:' + pid + ':' + name,
+                        projectId: pid,
+                        type: type,
+                        title: fileBaseName(name),
+                        url: url,
+                        status: 'ready'
+                    });
+                });
+            } catch (_) { }
+        }
+        _ipCache[brandId] = { items: all, ts: Date.now() };
+        return all;
     };
 })();

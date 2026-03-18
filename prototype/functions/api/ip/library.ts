@@ -48,7 +48,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const result: Array<{ name: string; size: number; contentType: string; timeCreated: string; updated: string; signedUrl: string }> = []
     for (const it of items) {
       const name = String(it.name || "")
-      if (!name || !/\.(png|jpg|jpeg|webp)$/i.test(name)) continue
+      if (!name || !/\.(png|jpg|jpeg|webp|mp4)$/i.test(name)) continue
       const signed = await signGcsUrl({ bucket: outParsed.bucket, object: name, clientEmail, privateKeyPem: privateKeyRaw, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${name}`))
       result.push({ name, size: Number(it.size || 0), contentType: String(it.contentType || ""), timeCreated: String(it.timeCreated || ""), updated: String(it.updated || ""), signedUrl: signed })
     }
