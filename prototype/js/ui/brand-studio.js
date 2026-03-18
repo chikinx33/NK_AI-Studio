@@ -53,6 +53,35 @@
     });
   }
 
+  function triggerIpAssetHydration(root, brandId, brand, fallbackProject) {
+    if (!root || !brandId || !NK.service || !NK.service.contentLibrary || !NK.service.contentLibrary.loadIpAssetsForBrand) return;
+    var state = root.__brandStudioIpLoadState && typeof root.__brandStudioIpLoadState === 'object'
+      ? root.__brandStudioIpLoadState
+      : (root.__brandStudioIpLoadState = {});
+    if (state.pending && state.brandId === brandId) return;
+    if (state.loaded && state.brandId === brandId) return;
+    state.brandId = brandId;
+    state.pending = true;
+    NK.service.contentLibrary.loadIpAssetsForBrand(brand || { brandId: brandId })
+      .then(function () {
+        state.loaded = true;
+        var currentProject = NK.service && NK.service.project && NK.service.project.resolveCurrent
+          ? NK.service.project.resolveCurrent({ search: window.location.search })
+          : null;
+        var nextProject = currentProject && currentProject.id ? currentProject : fallbackProject;
+        if (!nextProject || !nextProject.id) return;
+        var nextBrandId = String(nextProject && nextProject.payload && nextProject.payload.brandId || brandId).trim();
+        var nextBrand = NK.service && NK.service.brand && NK.service.brand.getById && nextBrandId
+          ? NK.service.brand.getById(nextBrandId)
+          : null;
+        renderProject(root, nextProject, nextBrand || brand);
+      })
+      .catch(function () {})
+      .finally(function () {
+        state.pending = false;
+      });
+  }
+
   function readBrandView(brand, project) {
     var payload = (project && project.payload) || {};
     var src = brand && typeof brand === 'object' ? brand : {};
@@ -894,7 +923,6 @@
       '<summary><div><strong>브랜드 자산 선택</strong><span>자동 추천 자산을 기준으로 필요할 때만 수정합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedAssetItems.length ? (selectedAssetItems.length + '개 준비') : '없음') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
-      '<div class="brand-studio-panel-head"><h3>브랜드 자산 선택</h3><span>긴 목록은 내부 스크롤로 제한하고, 필요한 자산만 고릅니다</span></div>' +
       '<div class="brand-asset-filter-row">' + assetTypeFilterButtons + '</div>' +
       '<div class="brand-asset-filter-row">' + assetProjectFilterButtons + '</div>' +
       '<div class="brand-asset-selection-summary">' +
@@ -1047,8 +1075,8 @@
 
     // If IP cache is empty, load IP assets across brand and re-render
     try {
-      if ((contentItems || []).length === 0 && NK.service && NK.service.contentLibrary && NK.service.contentLibrary.loadIpAssetsForBrand && brandId) {
-        NK.service.contentLibrary.loadIpAssetsForBrand(brand || { brandId: brandId }).then(function(){ renderNext(project); }).catch(function(){});
+      if ((contentItems || []).length === 0 && brandId) {
+        triggerIpAssetHydration(root, brandId, brand, project);
       }
     } catch (_) {}
 
