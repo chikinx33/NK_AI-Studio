@@ -30,6 +30,32 @@
     if (!scene || scene.imgLoading) return;
 
     var finalPrompt = buildImagePrompt(scene, st.header || '', opts.cleanHeader || function (text) { return String(text || ''); });
+    var rawP = finalPrompt;
+    try {
+      if (NK.service && NK.service.characterRegistry) {
+        var payload = st.payload || {};
+        var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload }) : (payload.brandId || '');
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, rawP, {});
+        try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id }); } catch (_) {}
+        var built = NK.service.characterRegistry.buildResolvedPrompt({
+          rawPrompt: rawP,
+          characters: res.characters || [],
+          brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
+          bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
+        });
+        try { console.log('Resolved prompt (image):', { sceneId: scene.id, resolvedPrompt: built.resolvedPrompt }); } catch (_) {}
+        finalPrompt = built.resolvedPrompt || finalPrompt;
+        var refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
+        st.scenes[opts.idx] = Object.assign({}, scene, {
+          rawPrompt: rawP,
+          resolvedPrompt: finalPrompt,
+          resolvedCharacterIds: built.resolvedCharacterIds || [],
+          characterReferenceAssetIds: refs || []
+        });
+        ctx.setState(st);
+        scene = st.scenes[opts.idx];
+      }
+    } catch (_) { }
     console.log('Imagen prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);

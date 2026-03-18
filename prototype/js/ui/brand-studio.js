@@ -456,10 +456,43 @@
     channelRows.forEach(function (item) {
       channelTitleMap[item.id] = item.title;
     });
+    var characters = (NK.service && NK.service.characterRegistry && NK.service.characterRegistry.listCharactersByBrand && brandId)
+      ? NK.service.characterRegistry.listCharactersByBrand(brandId)
+      : (Array.isArray(brand && brand.brandCharacters) ? brand.brandCharacters : []);
+    var assetMap = {};
+    contentItems.forEach(function (it) { assetMap[String(it.id || '')] = it; });
+    var characterCards = characters.length
+      ? characters.map(function (c) {
+        var mainAsset = assetMap[String(c.mainAssetId || '')];
+        var img = mainAsset && mainAsset.url ? ('<img class="chip-thumb" src="' + escapeHtml(mainAsset.url) + '" alt="" />') : '';
+        var missingNote = (!mainAsset && String(c.mainAssetId || '').trim()) ? '<span class="brand-channel-badge" style="margin-left:6px;color:#ff9;">대표 이미지 누락</span>' : '';
+        return (
+          '<article class="brand-asset-card">' +
+          '<div class="brand-asset-card-top">' +
+          '<span class="brand-channel-badge">' + (c.isActive ? '활성' : '비활성') + '</span>' +
+          '<span class="brand-content-type-state">' + escapeHtml(c.trigger || '') + '</span>' + missingNote +
+          '</div>' +
+          '<strong>' + (img ? img + ' ' : '') + escapeHtml(c.name || c.trigger || '캐릭터') + '</strong>' +
+          '<p>' + escapeHtml(c.description || (c.fixedTraits && c.fixedTraits.length ? c.fixedTraits.join(', ') : '') || '설명 없음') + '</p>' +
+          '<div class="brand-asset-actions">' +
+          '<button type="button" class="btn-secondary compact" data-action="character-edit" data-char-id="' + escapeHtml(c.id) + '">수정</button>' +
+          '<button type="button" class="btn-secondary compact" data-action="character-deactivate" data-char-id="' + escapeHtml(c.id) + '">' + (c.isActive ? '비활성화' : '활성화') + '</button>' +
+          '</div>' +
+          '</article>'
+        );
+      }).join('')
+      : '<div class="brand-asset-empty">등록된 캐릭터가 없습니다.</div>';
+    var assetOptions = contentItems
+      .filter(function (it) { return it.type === 'image' || it.type === 'video'; })
+      .map(function (it) {
+        var label = (projectTitleMap[String(it.projectId || '')] || it.projectId || '') + ' · ' + (it.type === 'image' ? '이미지 ' : '영상 ') + (it.title || it.id);
+        return '<option value="' + escapeHtml(String(it.id || '')) + '">' + escapeHtml(label) + '</option>';
+      }).join('');
     var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
     var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
       ? NK.service.contentLibrary.listProjectContents(brand || project)
       : [];
+    var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
     var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
       ? NK.service.brand.listProjects(brand || brandId)
       : [project];
@@ -703,6 +736,44 @@
           '</section>'
         : '') +
       '<section class="brand-studio-panel">' +
+      '<div class="brand-studio-panel-head"><h3>캐릭터 자산</h3><span>브랜드 공용 캐릭터를 등록해 운영 전 단계에서 공통 활용</span></div>' +
+      '<div class="brand-asset-selection-summary">' +
+      '<div>' +
+      '<span class="brand-studio-selection-label">등록 수</span>' +
+      '<strong>' + escapeHtml(String(characters.length)) + '명</strong>' +
+      '<p>' + escapeHtml(characters.length ? '수정 버튼으로 세부 정보 변경' : '아직 등록된 캐릭터가 없습니다.') + '</p>' +
+      '</div>' +
+      '<div class="brand-studio-selection-actions">' +
+      '<button class="btn-primary compact" data-action="character-open-new">캐릭터 추가</button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="brand-asset-grid brand-asset-grid-scrollable">' + characterCards + '</div>' +
+      '<details class="brand-studio-disclosure" id="character-form-box">' +
+      '<summary><div><strong>캐릭터 추가/수정</strong><span>trigger는 @필수 · 대표 이미지 없으면 경고</span></div><span class="brand-studio-disclosure-meta">입력 폼</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
+      '<input type="hidden" id="char-id" />' +
+      '<div class="brand-publish-fields">' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">이름</span><input id="char-name" class="brand-publish-input" placeholder="예: 세모" /></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">호출명(@)</span><input id="char-trigger" class="brand-publish-input" placeholder="@세모" /></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">별칭</span><input id="char-aliases" class="brand-publish-input" placeholder="쉼표로 구분" /></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">대표 이미지</span><select id="char-main-asset" class="brand-publish-input"><option value="">선택 안 함</option>' + assetOptions + '</select></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">참조 자산(다중)</span><select id="char-ref-assets" class="brand-publish-input" multiple size="5">' + assetOptions + '</select></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">설명</span><textarea id="char-desc" class="brand-caption-textarea" placeholder="캐릭터 설명"></textarea></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">고정 요소</span><textarea id="char-fixed" class="brand-caption-textarea" placeholder="쉼표/줄바꿈으로 여러 개 입력"></textarea></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">금지 요소</span><textarea id="char-banned" class="brand-caption-textarea" placeholder="쉼표/줄바꿈으로 여러 개 입력"></textarea></div>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">스타일 가이드</span><textarea id="char-style" class="brand-caption-textarea" placeholder=""></textarea></div>' +
+      '<div class="brand-publish-field"><label class="brand-caption-meta-label"><input type="checkbox" id="char-active" checked /> 활성</label></div>' +
+      '</div>' +
+      '<div class="brand-caption-actions">' +
+      '<button class="btn-primary" data-action="character-save">저장</button>' +
+      '<button class="btn-secondary" data-action="character-cancel">취소</button>' +
+      '</div>' +
+      '</section>' +
+      '</div>' +
+      '</details>' +
+      '</section>' +
+      '<section class="brand-studio-panel">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 허브 스냅샷</h3><span>지금 필요한 규칙만 짧게 확인</span></div>' +
       '<div class="brand-knowledge-grid">' + knowledgeCards + '</div>' +
       '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 브랜드 허브에서 관리합니다.</p>' +
@@ -856,6 +927,113 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
+      if (action === 'character-open-new') {
+        var formBox = root.querySelector('#character-form-box');
+        if (formBox && !formBox.open) formBox.open = true;
+        var fields = ['char-id','char-name','char-trigger','char-aliases','char-main-asset','char-desc','char-fixed','char-banned','char-style'];
+        fields.forEach(function (id) { var el = root.querySelector('#' + id); if (el) el.value = ''; });
+        var refSel = root.querySelector('#char-ref-assets'); if (refSel) { Array.from(refSel.options).forEach(function (o){ o.selected = false; }); }
+        var actEl = root.querySelector('#char-active'); if (actEl) actEl.checked = true;
+        return;
+      }
+      if (action === 'character-edit') {
+        var cid = String(btn.dataset.charId || '').trim();
+        var row = characters.find(function (c) { return String(c.id) === cid; }) || null;
+        if (!row) return;
+        var formBox2 = root.querySelector('#character-form-box');
+        if (formBox2 && !formBox2.open) formBox2.open = true;
+        var set = function (id, v) { var el = root.querySelector('#' + id); if (el) el.value = String(v || ''); };
+        set('char-id', row.id);
+        set('char-name', row.name || '');
+        set('char-trigger', row.trigger || '');
+        set('char-aliases', (Array.isArray(row.aliases) ? row.aliases.join(', ') : ''));
+        set('char-main-asset', row.mainAssetId || '');
+        set('char-desc', row.description || '');
+        set('char-fixed', (Array.isArray(row.fixedTraits) ? row.fixedTraits.join(', ') : ''));
+        set('char-banned', (Array.isArray(row.bannedTraits) ? row.bannedTraits.join(', ') : ''));
+        set('char-style', row.styleGuide || '');
+        var refSel2 = root.querySelector('#char-ref-assets');
+        if (refSel2) {
+          Array.from(refSel2.options).forEach(function (o){ o.selected = (Array.isArray(row.referenceAssetIds) ? row.referenceAssetIds : []).indexOf(String(o.value)) >= 0; });
+        }
+        var act2 = root.querySelector('#char-active'); if (act2) act2.checked = !!row.isActive;
+        return;
+      }
+      if (action === 'character-cancel') {
+        var formBox3 = root.querySelector('#character-form-box');
+        if (formBox3 && formBox3.open) formBox3.open = false;
+        return;
+      }
+      if (action === 'character-deactivate') {
+        var dcid = String(btn.dataset.charId || '').trim();
+        if (!brandId || !dcid || !NK.service || !NK.service.brand || !NK.service.brand.update) return;
+        var nextList = characters.map(function (c) {
+          if (String(c.id) !== dcid) return c;
+          return Object.assign({}, c, { isActive: !c.isActive, updatedAt: new Date().toISOString() });
+        });
+        btn.disabled = true;
+        NK.service.brand.update(brandId, { brandCharacters: nextList })
+          .then(function (res) { renderNext(res && res.brand ? project : (res && res.draft ? res.draft : project)); })
+          .catch(function (err) { alert('상태 변경 실패: ' + (err && err.message ? err.message : err)); })
+          .finally(function () { btn.disabled = false; });
+        return;
+      }
+      if (action === 'character-save') {
+        if (!brandId || !NK.service || !NK.service.brand || !NK.service.brand.update) return;
+        var idEl = root.querySelector('#char-id');
+        var nameEl = root.querySelector('#char-name');
+        var triggerEl = root.querySelector('#char-trigger');
+        var aliasesEl = root.querySelector('#char-aliases');
+        var mainEl = root.querySelector('#char-main-asset');
+        var refSel = root.querySelector('#char-ref-assets');
+        var descEl = root.querySelector('#char-desc');
+        var fixedEl = root.querySelector('#char-fixed');
+        var bannedEl = root.querySelector('#char-banned');
+        var styleEl = root.querySelector('#char-style');
+        var activeEl = root.querySelector('#char-active');
+        var cid2 = String((idEl && idEl.value) || '').trim();
+        var nm = String((nameEl && nameEl.value) || '').trim();
+        var trg = String((triggerEl && triggerEl.value) || '').trim();
+        if (trg && trg[0] !== '@') trg = '@' + trg.replace(/^@+/, '');
+        if (!/^@[0-9A-Za-z가-힣_]{1,24}$/.test(trg)) { alert('trigger는 @로 시작하며 1~24자여야 합니다. 예: @세모'); return; }
+        var dup = characters.some(function (c) { return String(c.trigger).toLowerCase() === String(trg).toLowerCase() && String(c.id) !== cid2; });
+        if (dup) { alert('같은 trigger가 이미 등록되어 있습니다.'); return; }
+        var mainId = String((mainEl && mainEl.value) || '').trim();
+        if (!mainId) { alert('대표 이미지가 비어 있습니다. 대표 이미지를 선택하지 않으면 품질이 낮아질 수 있습니다.'); }
+        var refs = [];
+        if (refSel) {
+          Array.from(refSel.options).forEach(function (o){ if (o.selected) refs.push(String(o.value)); });
+        }
+        var nextRow = {
+          id: cid2 || ('char_' + Date.now()),
+          trigger: trg,
+          name: nm || trg,
+          aliases: String((aliasesEl && aliasesEl.value) || '').split(/[,\n]/).map(function (t){ return String(t||'').trim(); }).filter(Boolean),
+          mainAssetId: mainId,
+          referenceAssetIds: refs,
+          description: String((descEl && descEl.value) || '').trim(),
+          fixedTraits: String((fixedEl && fixedEl.value) || '').split(/[,\n]/).map(function (t){ return String(t||'').trim(); }).filter(Boolean),
+          bannedTraits: String((bannedEl && bannedEl.value) || '').split(/[,\n]/).map(function (t){ return String(t||'').trim(); }).filter(Boolean),
+          defaultPromptPrefix: 'Keep character identity consistent.',
+          styleGuide: String((styleEl && styleEl.value) || '').trim(),
+          isActive: !!(activeEl && activeEl.checked),
+          createdAt: '',
+          updatedAt: new Date().toISOString()
+        };
+        var nextList2 = [];
+        var found = false;
+        characters.forEach(function (c) {
+          if (String(c.id) === String(nextRow.id)) { found = true; nextList2.push(Object.assign({}, c, nextRow, { createdAt: c.createdAt || nextRow.createdAt })); }
+          else nextList2.push(c);
+        });
+        if (!found) nextList2.unshift(nextRow);
+        btn.disabled = true;
+        NK.service.brand.update(brandId, { brandCharacters: nextList2 })
+          .then(function () { renderNext(project); })
+          .catch(function (err) { alert('저장 실패: ' + (err && err.message ? err.message : err)); })
+          .finally(function () { btn.disabled = false; });
+        return;
+      }
       var captionEl = root.querySelector('#brand-caption-textarea');
       var hashtagEl = root.querySelector('#brand-hashtag-textarea');
       var publishInputEl = root.querySelector('#brand-publish-datetime');

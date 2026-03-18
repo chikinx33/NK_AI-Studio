@@ -88,6 +88,32 @@
       ((Math.max(Number(scene.estSec) || 0, 1)) + 's.')
     ].filter(Boolean).join('\n');
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
+    var rawPromptForLog = finalPrompt;
+    try {
+      if (NK.service && NK.service.characterRegistry) {
+        var payload0 = st.payload || {};
+        var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload0 }) : (payload0.brandId || '');
+        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, rawPromptForLog, {});
+        try { console.log('Character parse (video):', { triggers: res0.triggers || [], missing: res0.missing || [], sceneId: scene.id }); } catch (_) {}
+        var built0 = NK.service.characterRegistry.buildResolvedPrompt({
+          rawPrompt: rawPromptForLog,
+          characters: res0.characters || [],
+          brandRules: Array.isArray(payload0.brandRules) ? payload0.brandRules : [],
+          bannedExpressions: Array.isArray(payload0.bannedExpressions) ? payload0.bannedExpressions : []
+        });
+        try { console.log('Resolved prompt (video):', { sceneId: scene.id, resolvedPrompt: built0.resolvedPrompt }); } catch (_) {}
+        finalPrompt = built0.resolvedPrompt || finalPrompt;
+        var refs0 = NK.service.characterRegistry.collectCharacterReferenceAssets(res0.characters || []);
+        st.scenes[opts.idx] = Object.assign({}, scene, {
+          rawPrompt: rawPromptForLog,
+          resolvedPrompt: finalPrompt,
+          resolvedCharacterIds: built0.resolvedCharacterIds || [],
+          characterReferenceAssetIds: refs0 || []
+        });
+        ctx.setState(st);
+        scene = st.scenes[opts.idx];
+      }
+    } catch (_) { }
     if (!finalPrompt || !finalPrompt.trim()) {
       alert('프롬프트가 비어 있어 영상 생성에 실패했습니다. 시나리오/스토리 탭에서 프롬프트를 입력해주세요.');
       return;

@@ -1,4 +1,4 @@
-﻿; (function () {
+; (function () {
     var NK = window.NK || (window.NK = {});
     var service = NK.service || (NK.service = {});
     var brand = service.brand || (service.brand = {});
@@ -6,6 +6,77 @@
 
     function normalizeText(value) {
         return String(value || '').replace(/[<>]/g, '').trim();
+    }
+
+    function normalizeTrigger(value) {
+        var raw = normalizeText(value).replace(/\s+/g, '');
+        if (!raw) return '';
+        if (raw[0] !== '@') raw = '@' + raw.replace(/^@+/, '');
+        if (!/^@[0-9A-Za-z가-힣_]{1,24}$/.test(raw)) return '';
+        return raw;
+    }
+
+    function normalizeBrandCharacters(value) {
+        var src = Array.isArray(value) ? value : [];
+        var rows = [];
+        for (var i = 0; i < src.length; i++) {
+            var item = src[i] && typeof src[i] === 'object' ? src[i] : {};
+            var id = normalizeText(item.id) || ('char_' + String(i + 1).padStart(3, '0'));
+            var trigger = normalizeTrigger(item.trigger || item.token || item.name);
+            if (!trigger) continue;
+            rows.push({
+                id: id,
+                trigger: trigger,
+                name: normalizeText(item.name || trigger.replace(/^@/, '')) || trigger,
+                aliases: normalizeTextList(item.aliases),
+                mainAssetId: normalizeText(item.mainAssetId),
+                referenceAssetIds: normalizeTextList(item.referenceAssetIds),
+                description: normalizeText(item.description),
+                fixedTraits: normalizeTextList(item.fixedTraits),
+                bannedTraits: normalizeTextList(item.bannedTraits),
+                defaultPromptPrefix: normalizeText(item.defaultPromptPrefix || 'Keep character identity consistent.'),
+                styleGuide: normalizeText(item.styleGuide),
+                isActive: item.isActive === false ? false : true,
+                createdAt: normalizeText(item.createdAt) || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
+        }
+        var map = new Map();
+        rows.forEach(function (c) {
+            var key = String(c.trigger).toLowerCase();
+            if (map.has(key)) return;
+            map.set(key, c);
+        });
+        return Array.from(map.values());
+    }
+
+    function mergeBrandCharacters(currentValue, incomingValue) {
+        var cur = normalizeBrandCharacters(currentValue);
+        var inc = normalizeBrandCharacters(incomingValue);
+        var map = new Map();
+        cur.forEach(function (c) { map.set(String(c.trigger).toLowerCase(), c); });
+        inc.forEach(function (c) {
+            var key = String(c.trigger).toLowerCase();
+            if (!map.has(key)) { map.set(key, c); return; }
+            var ex = map.get(key);
+            map.set(key, {
+                id: ex.id || c.id,
+                trigger: ex.trigger || c.trigger,
+                name: pickText(ex.name, c.name, true) || c.name,
+                aliases: mergeTextList(ex.aliases, c.aliases),
+                mainAssetId: pickText(ex.mainAssetId, c.mainAssetId, true),
+                referenceAssetIds: mergeTextList(ex.referenceAssetIds, c.referenceAssetIds),
+                description: pickText(ex.description, c.description, true),
+                fixedTraits: mergeTextList(ex.fixedTraits, c.fixedTraits),
+                bannedTraits: mergeTextList(ex.bannedTraits, c.bannedTraits),
+                defaultPromptPrefix: pickText(ex.defaultPromptPrefix, c.defaultPromptPrefix, true) || 'Keep character identity consistent.',
+                styleGuide: pickText(ex.styleGuide, c.styleGuide, true),
+                isActive: (c.isActive === false ? false : true) && (ex.isActive === false ? false : true),
+                createdAt: normalizeText(ex.createdAt || c.createdAt) || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            });
+        });
+        return Array.from(map.values());
     }
 
     function normalizeTextList(value) {
@@ -225,6 +296,7 @@
             referenceContentEntries: Array.isArray(raw.referenceContentEntries) ? raw.referenceContentEntries.slice() : [],
             successCases: normalizeTextList(raw.successCases),
             connectedChannels: connectedChannels,
+            brandCharacters: normalizeBrandCharacters(raw.brandCharacters),
             brandStudioPublishPlan: normalizePublishPlan(raw.brandStudioPublishPlan),
             brandStudioPublishResults: normalizePublishResults(raw.brandStudioPublishResults),
             seriesIds: seriesIds,
@@ -387,6 +459,7 @@
             referenceContentEntries: mergeReferenceEntries(current.referenceContentEntries, incoming.referenceContentEntries),
             successCases: mergeTextList(current.successCases, incoming.successCases),
             connectedChannels: mergeChannels(current.connectedChannels, incoming.connectedChannels),
+            brandCharacters: mergeBrandCharacters(current.brandCharacters, incoming.brandCharacters),
             brandStudioPublishPlan: mergePublishPlan(current.brandStudioPublishPlan, incoming.brandStudioPublishPlan, preferIncoming),
             brandStudioPublishResults: mergePublishResults(current.brandStudioPublishResults, incoming.brandStudioPublishResults),
             seriesIds: mergeTextList(current.seriesIds, incoming.seriesIds),
