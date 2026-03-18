@@ -915,10 +915,10 @@
       }).join('')
       : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
     var isKnowledgeOpen = readDisclosureOpen(root, 'knowledge-snapshot', false);
-    var isAssetsOpen = readDisclosureOpen(root, 'asset-selection', !persistedSelectedAssetItems.length);
-    var isContentTypeOpen = readDisclosureOpen(root, 'content-type', !selectedType);
-    var isChannelPlanOpen = readDisclosureOpen(root, 'channel-plan', !channelConnections.length || !!publishPlan.scheduledAt);
-    var isPublishResultsOpen = readDisclosureOpen(root, 'publish-results', !!publishResults.length);
+    var isAssetsOpen = readDisclosureOpen(root, 'asset-selection', false);
+    var isContentTypeOpen = readDisclosureOpen(root, 'content-type', false);
+    var isChannelPlanOpen = readDisclosureOpen(root, 'channel-plan', false);
+    var isPublishResultsOpen = readDisclosureOpen(root, 'publish-results', false);
 
     var captionValue = savedCaption || buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge);
     var hashtagValue = savedHashtags || buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge);
