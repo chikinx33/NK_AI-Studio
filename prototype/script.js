@@ -2314,22 +2314,39 @@
       const list = refreshSeriesOptions();
       newSeriesRow.classList.toggle('hidden', mode !== 'new-series');
       existingSeriesRow.classList.toggle('hidden', mode !== 'episode');
-      profileLine.classList.toggle('hidden', mode !== 'new-series');
+      // 디자인 일관성을 위해 하단 프로필 라인은 항상 노출하되, 모드에 따라 활성/비활성만 전환
+      profileLine.classList.remove('hidden');
       if (mode === 'new-series') {
         ensureLabel(baseRow, '첫 에피소드');
         input.placeholder = '첫 에피소드 이름 (예: 시즌1 EP1)';
         hintRow.textContent = '신규 프로젝트를 만들면 첫 에피소드가 함께 생성됩니다.';
         btnCreate.disabled = creating;
+        // 신규 프로젝트 모드: 프로젝트 리스트 비활성, 하단 인풋 활성
+        if (seriesSelect) seriesSelect.disabled = true;
+        if (projectTypeSelect) { projectTypeSelect.disabled = creating ? true : false; projectTypeSelect.value = projectTypeSelect.value || ''; }
+        if (brandSummaryInput) { brandSummaryInput.disabled = creating ? true : false; /* 값 유지(사용자가 입력) */ }
+        if (coreMessageInput) { coreMessageInput.disabled = creating ? true : false; /* 값 유지 */ }
       } else if (!list.length) {
         ensureLabel(baseRow, '에피소드');
         input.placeholder = '에피소드 이름';
         hintRow.textContent = '기존 프로젝트가 없습니다. 신규 프로젝트를 먼저 만들어 주세요.';
         btnCreate.disabled = true;
+        if (projectTypeSelect) projectTypeSelect.disabled = true;
+        if (brandSummaryInput) brandSummaryInput.disabled = true;
+        if (coreMessageInput) coreMessageInput.disabled = true;
       } else {
         ensureLabel(baseRow, '에피소드');
         input.placeholder = '에피소드 이름';
         hintRow.textContent = '기존 프로젝트를 선택한 뒤 새 에피소드를 생성합니다.';
         btnCreate.disabled = creating;
+        // 에피소드 모드: 리스트 활성, 하단 인풋은 기존 정보로 채우고 비활성
+        if (seriesSelect) seriesSelect.disabled = creating ? true : false;
+        const selectedId = seriesSelect ? String(seriesSelect.value || (list[0] && list[0].id) || '').trim() : '';
+        if (seriesSelect && !seriesSelect.value && list[0]) seriesSelect.value = String(list[0].id);
+        const profile = selectedId ? resolveSeriesProfile(selectedId) : { projectType: '', brandSummary: '', coreMessage: '' };
+        if (projectTypeSelect) { projectTypeSelect.value = profile.projectType || ''; projectTypeSelect.disabled = true; }
+        if (brandSummaryInput) { brandSummaryInput.value = profile.brandSummary || ''; brandSummaryInput.disabled = true; }
+        if (coreMessageInput) { coreMessageInput.value = profile.coreMessage || ''; coreMessageInput.disabled = true; }
       }
       applyCurrentLocale();
     };
@@ -2517,6 +2534,14 @@
     }
     if (seriesSelect) {
       seriesSelect.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); create(); } };
+      seriesSelect.onchange = () => {
+        if (mode !== 'episode') return;
+        const sid = String(seriesSelect.value || '').trim();
+        const profile = sid ? resolveSeriesProfile(sid) : { projectType: '', brandSummary: '', coreMessage: '' };
+        if (projectTypeSelect) { projectTypeSelect.value = profile.projectType || ''; projectTypeSelect.disabled = true; }
+        if (brandSummaryInput) { brandSummaryInput.value = profile.brandSummary || ''; brandSummaryInput.disabled = true; }
+        if (coreMessageInput) { coreMessageInput.value = profile.coreMessage || ''; coreMessageInput.disabled = true; }
+      };
     }
     modeButtons.forEach((btn) => {
       btn.addEventListener('click', () => {
