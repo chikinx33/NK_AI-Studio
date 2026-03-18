@@ -2297,7 +2297,7 @@ a.btn-primary:active {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 18px;
   justify-content: flex-start;
   align-content: flex-start;
@@ -2456,7 +2456,7 @@ a.btn-primary:active {
 }
 
 .draft-card:hover {
-  transform: translateY(-2px);
+  transform: none;
   border-color: rgba(255, 140, 0, 0.38);
 }
 
@@ -2476,8 +2476,8 @@ a.btn-primary:active {
 }
 
 .draft-thumb {
-  width: 140px;
-  height: 140px;
+  width: 100px;
+  height: 100px;
   border-radius: 14px;
   background: linear-gradient(135deg, rgba(255, 122, 0, 0.18), rgba(11, 191, 165, 0.18));
   border: 1px solid var(--border);
@@ -2487,8 +2487,8 @@ a.btn-primary:active {
 .draft-title {
   margin: 0;
   font-weight: 700;
-  font-size: 18px;
-  line-height: 30px;
+  font-size: 16px;
+  line-height: 28px;
 }
 
 .draft-title-row {
@@ -2559,7 +2559,7 @@ a.btn-primary:active {
 .draft-actions .btn-primary,
 .draft-actions .btn-secondary {
   min-width: 0;
-  height: 44px;
+  height: 38px;
   padding: 0 10px;
   justify-content: center;
   white-space: nowrap;
@@ -5641,7 +5641,7 @@ body.layout-fixed .lib-content {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 24px;
   background: linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(10, 16, 34, 0.88));
@@ -5663,7 +5663,7 @@ body.layout-fixed .lib-content {
 
 .content-library-hero h2 {
   margin: 0 0 10px;
-  font-size: 30px;
+  font-size: 24px;
 }
 
 .content-library-description {
@@ -5688,7 +5688,7 @@ body.layout-fixed .lib-content {
 }
 
 .content-library-summary-card {
-  padding: 14px;
+  padding: 10px;
   border-radius: 18px;
   background: var(--bg-2);
   border: 1px solid var(--border);
@@ -5711,7 +5711,7 @@ body.layout-fixed .lib-content {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 18px;
   background: rgba(10, 18, 34, 0.55);
@@ -5751,7 +5751,7 @@ body.layout-fixed .lib-content {
 .content-library-item,
 .content-library-empty-group {
   min-height: 156px;
-  padding: 14px;
+  padding: 10px;
   border-radius: 18px;
   border: 1px solid var(--border);
   background: var(--bg-2);
@@ -5836,7 +5836,7 @@ body.layout-fixed .lib-content {
   justify-content: space-between;
   gap: 12px;
   align-items: flex-start;
-  padding: 16px 18px;
+  padding: 12px 14px;
   border: 1px solid var(--border);
   border-radius: 24px;
   background: linear-gradient(145deg, rgba(18, 24, 44, 0.96), rgba(12, 20, 38, 0.88));
@@ -5857,7 +5857,7 @@ body.layout-fixed .lib-content {
 
 .brand-studio-hero h2 {
   margin: 0 0 10px;
-  font-size: 28px;
+  font-size: 24px;
 }
 
 .brand-studio-description {
@@ -5894,12 +5894,12 @@ body.layout-fixed .lib-content {
 .brand-studio-context-item,
 .knowledge-hub-context-item,
 .analytics-overview-card {
-  padding: 14px 16px;
-  border-radius: 16px;
+  padding: 10px 12px;
+  border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--studio-soft-bg);
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .brand-studio-context-item span,
@@ -5911,10 +5911,7 @@ body.layout-fixed .lib-content {
 
 .brand-studio-context-item strong,
 .knowledge-hub-context-item strong,
-.analytics-overview-card strong {
-  font-size: 17px;
-  line-height: 1.4;
-}
+.analytics-overview-card strong { font-size: 15px; line-height: 1.35; }
 
 /* Inline context label/value styling for 1-line bars */
 .context-line { margin: 0; }
@@ -5936,12 +5933,12 @@ body.layout-fixed .lib-content {
 }
 
 .brand-knowledge-card {
-  padding: 14px 16px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: rgba(10, 18, 34, 0.45);
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .brand-knowledge-card span {
@@ -5949,10 +5946,7 @@ body.layout-fixed .lib-content {
   color: var(--muted);
 }
 
-.brand-knowledge-card strong {
-  font-size: 16px;
-  line-height: 1.55;
-}
+.brand-knowledge-card strong { font-size: 14px; line-height: 1.45; }
 
 .brand-content-type-grid {
   display: grid;
@@ -5966,18 +5960,14 @@ body.layout-fixed .lib-content {
   background: rgba(10, 18, 34, 0.55);
   color: var(--text);
   border-radius: 18px;
-  padding: 14px;
+  padding: 10px;
   text-align: left;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   cursor: pointer;
   transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
-
-.brand-content-type-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(255, 140, 0, 0.4);
-}
+.brand-content-type-card:hover { transform: none; border-color: rgba(255, 140, 0, 0.4); }
 
 .brand-content-type-card.is-active {
   border-color: rgba(255, 140, 0, 0.75);
@@ -5992,10 +5982,7 @@ body.layout-fixed .lib-content {
   color: var(--muted);
 }
 
-.brand-content-type-card strong {
-  font-size: 18px;
-  line-height: 1.4;
-}
+.brand-content-type-card strong { font-size: 16px; line-height: 1.35; }
 
 .brand-content-type-card p {
   margin: 0;
@@ -6008,8 +5995,8 @@ body.layout-fixed .lib-content {
   justify-content: space-between;
   gap: 12px;
   align-items: center;
-  padding: 14px;
-  border-radius: 18px;
+  padding: 10px;
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: rgba(10, 18, 34, 0.52);
 }
@@ -6063,10 +6050,10 @@ body.layout-fixed .lib-content {
 .brand-asset-selection-summary {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
-  padding: 18px;
-  border-radius: 18px;
+  padding: 12px;
+  border-radius: 14px;
   border: 1px solid var(--border);
   background: rgba(10, 18, 34, 0.52);
 }
@@ -6085,7 +6072,7 @@ body.layout-fixed .lib-content {
 .brand-asset-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .brand-asset-grid-scrollable {
@@ -6819,9 +6806,9 @@ body.layout-fixed .lib-content {
 }
 
 .knowledge-hub-panel {
-  padding: 16px;
+  padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .knowledge-hub-panel-embedded {
@@ -6840,7 +6827,7 @@ body.layout-fixed .lib-content {
 
 .knowledge-hub-panel-head h3 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .knowledge-hub-panel-head span {
@@ -7191,7 +7178,7 @@ body.layout-fixed .lib-content {
 }
 
 .analytics-summary-card {
-  padding: 14px;
+  padding: 10px;
   display: grid;
   gap: 6px;
 }
@@ -7202,15 +7189,18 @@ body.layout-fixed .lib-content {
 }
 
 .analytics-summary-card strong {
-  font-size: 18px;
-  line-height: 1.45;
+  font-size: 16px;
+  line-height: 1.4;
 }
 
 .analytics-panel {
-  padding: 16px;
+  padding: 12px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
+
+/* 신규 버튼 세로 가운데 정렬 보정 */
+.series-create-btn { align-self: center; }
 
 .analytics-view-tabs {
   display: flex;

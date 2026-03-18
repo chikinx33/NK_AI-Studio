@@ -253,6 +253,7 @@
 
       return `
         <article class="draft-card ${isSelected ? 'is-selected' : ''}" data-draft-id="${escapeHtml(d.id)}">
+          <button class="trash-btn top-right action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>
           <div class="draft-top">
             <div class="draft-thumb"></div>
             <div>
@@ -273,7 +274,6 @@
             <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}">Pre</button>
             <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}">Production</button>
             <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}">Post</button>
-            <button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>
           </div>
         </article>
       `;
