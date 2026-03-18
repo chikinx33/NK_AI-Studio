@@ -338,6 +338,17 @@
     };
   }
 
+  function buildAutoSetupPayload(project, brandView, selectedOption, sourceTexts, knowledge, selectedType, selectedAssetIds, autoSelectedAssetIds) {
+    var nextType = selectedType || (selectedOption && selectedOption.id) || inferDefaultContentType(project);
+    var option = selectedOption || contentTypeOptions().find(function (item) { return item.id === nextType; }) || contentTypeOptions()[0] || null;
+    return {
+      brandStudioContentType: nextType,
+      brandStudioSelectedAssetIds: selectedAssetIds && selectedAssetIds.length ? selectedAssetIds.slice() : (autoSelectedAssetIds || []).slice(),
+      brandStudioCaptionDraft: buildCaptionDraft(project, brandView, option, sourceTexts, knowledge),
+      brandStudioHashtagDraft: buildHashtagDraft(project, brandView, option, sourceTexts, knowledge)
+    };
+  }
+
   function channelOptions() {
     return [
       {
@@ -815,6 +826,7 @@
       '<p class="brand-studio-description">' + escapeHtml(brandView.summary || payload.brandSummary || '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.') + '</p>' +
       '<div class="studio-hero-pill-row">' + brandHeroPills + '</div>' +
       '<div class="brand-studio-hero-actions">' +
+      '<button class="btn-primary" data-action="brand-oneclick-draft">원클릭 초안 만들기</button>' +
       '<button class="btn-secondary" data-action="brand-open-analytics">Analytics</button>' +
       '<button class="btn-secondary" data-action="brand-open-knowledge">브랜드 허브</button>' +
       '<button class="btn-secondary" data-action="brand-open-library">Content Library</button>' +
@@ -852,11 +864,16 @@
           '</section>'
         : '') +
       '' +
-      '<section class="brand-studio-panel">' +
+      '<details class="brand-studio-disclosure">' +
+      '<summary><div><strong>브랜드 허브 스냅샷</strong><span>지금 필요한 규칙만 짧게 확인</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(knowledge.brandRules.length ? (knowledge.brandRules.length + '개 규칙') : '간단 요약') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 허브 스냅샷</h3><span>지금 필요한 규칙만 짧게 확인</span></div>' +
       '<div class="brand-knowledge-grid">' + knowledgeCards + '</div>' +
       '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 브랜드 허브에서 관리합니다.</p>' +
       '</section>' +
+      '</div>' +
+      '</details>' +
       '<details class="brand-studio-disclosure" ' + (!persistedSelectedAssetItems.length ? 'open' : '') + '>' +
       '<summary><div><strong>브랜드 자산 선택</strong><span>자동 추천 자산을 기준으로 필요할 때만 수정합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedAssetItems.length ? (selectedAssetItems.length + '개 준비') : '없음') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
@@ -1054,15 +1071,31 @@
           });
         return;
       }
+      if (action === 'brand-oneclick-draft') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, buildAutoSetupPayload(project, brandView, selectedOption, sourceTexts, knowledge, selectedType, selectedAssetIds, autoSelectedAssetIds))
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+            setTimeout(function () {
+              var composer = root.querySelector('#brand-publish-composer');
+              var captionBox = root.querySelector('#brand-caption-textarea');
+              if (composer && composer.scrollIntoView) composer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              if (captionBox) captionBox.focus();
+            }, 30);
+          })
+          .catch(function (err) {
+            alert('원클릭 초안 생성 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
       if (action === 'brand-auto-setup') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         btn.disabled = true;
-        NK.service.project.updatePayload(projectId, {
-          brandStudioContentType: selectedType || (selectedOption && selectedOption.id) || inferDefaultContentType(project),
-          brandStudioSelectedAssetIds: selectedAssetIds.length ? selectedAssetIds : autoSelectedAssetIds,
-          brandStudioCaptionDraft: savedCaption || buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge),
-          brandStudioHashtagDraft: savedHashtags || buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge)
-        })
+        NK.service.project.updatePayload(projectId, buildAutoSetupPayload(project, brandView, selectedOption, sourceTexts, knowledge, selectedType, selectedAssetIds, autoSelectedAssetIds))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })

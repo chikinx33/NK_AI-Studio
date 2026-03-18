@@ -398,12 +398,12 @@
         '<div class="analytics-overview-grid">' + overviewBlocks + '</div>' +
         '<div class="analytics-recommendation-grid">' +
         (recommendations.length
-          ? recommendations.slice(0, 2).map(recommendationCardHtml).join('')
+          ? recommendations.slice(0, 1).map(recommendationCardHtml).join('')
           : '<div class="analytics-empty">아직 추천을 만들 만큼의 데이터가 없습니다.</div>') +
         '</div>' +
         '<div class="analytics-suggestion-grid">' +
         (suggestions.length
-          ? suggestions.slice(0, 2).map(suggestionCardHtml).join('')
+          ? suggestions.slice(0, 1).map(suggestionCardHtml).join('')
           : '<div class="analytics-empty">자동 제안을 만들 만큼의 데이터가 없습니다.</div>') +
         '</div>' +
         '</section>';

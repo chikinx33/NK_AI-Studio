@@ -8737,6 +8737,11 @@ body {
   gap: 8px;
 }
 
+.content-library-section-foot {
+  display: flex;
+  justify-content: center;
+}
+
 .analytics-panel-embedded {
   padding: 0;
   border: 0;
@@ -8747,6 +8752,10 @@ body {
 .brand-studio-quickstart-panel .brand-studio-check {
   padding: 12px;
   border-radius: 16px;
+}
+
+.brand-studio-hero-actions .btn-primary {
+  box-shadow: 0 10px 24px rgba(255, 122, 0, 0.18);
 }
 
 .brand-caption-actions,

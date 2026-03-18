@@ -127,6 +127,7 @@
     var referenceCount = countByType('reference');
     var publishCount = countByType('publish-result');
     var selectedType = String(state && state.selectedType || '').trim() || defaultLibraryType(items);
+    var expandedTypes = state && state.expandedTypes && typeof state.expandedTypes === 'object' ? state.expandedTypes : {};
     var typeTabs = [
       { id: 'all', title: '전체', count: items.length },
       { id: 'image', title: '이미지', count: imageCount },
@@ -198,8 +199,9 @@
       return selectedType === 'all' || type === selectedType;
     }).map(function (type) {
       var rows = items.filter(function (item) { return item.type === type; });
+      var visibleRows = expandedTypes[type] ? rows : rows.slice(0, 8);
       var body = rows.length
-        ? rows.map(function (item) {
+        ? visibleRows.map(function (item) {
           var hasUrl = !!String(item.url || '').trim();
           return (
             '<article class="content-library-item">' +
@@ -224,6 +226,9 @@
         '<span>' + escapeHtml(rows.length) + '개</span>' +
         '</div>' +
         '<div class="content-library-grid">' + body + '</div>' +
+        (rows.length > visibleRows.length
+          ? '<div class="content-library-section-foot"><button type="button" class="btn-secondary compact" data-action="library-expand-type" data-library-expand-type="' + escapeHtml(type) + '">더 보기</button></div>'
+          : '') +
         '</section>'
       );
     }).join('');
@@ -270,7 +275,12 @@
       else if (action === 'library-open-scenes') target = buildStageUrl('scenes.html', projectId, brandId);
       else if (action === 'library-open-media') target = buildStageUrl('media.html', projectId, brandId);
       else if (action === 'library-filter-type') {
-        renderProject(root, project, brand, { selectedType: String(btn.dataset.libraryType || '').trim() || 'all' });
+        renderProject(root, project, brand, { selectedType: String(btn.dataset.libraryType || '').trim() || 'all', expandedTypes: expandedTypes });
+        return;
+      } else if (action === 'library-expand-type') {
+        var nextExpanded = Object.assign({}, expandedTypes);
+        nextExpanded[String(btn.dataset.libraryExpandType || '').trim()] = true;
+        renderProject(root, project, brand, { selectedType: selectedType, expandedTypes: nextExpanded });
         return;
       }
       if (!target) return;

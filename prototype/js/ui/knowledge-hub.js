@@ -461,6 +461,7 @@
       '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
       '<button class="btn-secondary" data-action="knowledge-open-brand">Brand Studio</button>' +
       '<button class="btn-secondary" data-action="knowledge-apply-starter">기본값 채우기</button>' +
+      '<button class="btn-secondary" data-action="knowledge-save-and-open-brand">저장 후 Brand Studio</button>' +
       '<button class="btn-primary" data-action="knowledge-save">브랜드 허브 저장</button>' +
       '</div>' +
       '</div>' +
@@ -666,6 +667,26 @@
           })
           .catch(function (err) {
             alert('기본값 채우기 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      else if (action === 'knowledge-save-and-open-brand') {
+        btn.disabled = true;
+        syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras))
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+            var nextTarget = buildStageUrl('brand.html', projectId, brandId);
+            if (window.self !== window.top && window.parent) {
+              window.parent.postMessage({ type: 'load-stage', url: nextTarget }, '*');
+            } else {
+              window.location.href = nextTarget;
+            }
+          })
+          .catch(function (err) {
+            alert('저장 후 이동 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;
