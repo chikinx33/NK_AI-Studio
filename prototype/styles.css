@@ -8981,6 +8981,8 @@ body {
 }
 
 .brand-studio-side {
+  position: static;
+  top: auto;
   order: -1;
 }
 
