@@ -6957,7 +6957,7 @@ body.layout-fixed .lib-content {
   min-height: 128px;
   resize: vertical;
   padding: 14px 16px;
-  border-radius: 18px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: rgba(10, 18, 34, 0.62);
   color: var(--text);
