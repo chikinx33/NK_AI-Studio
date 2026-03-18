@@ -584,6 +584,13 @@
         Promise.resolve().then(function(){ return NK.api.libraryIP(pid); })
           .then(function (resp) {
             var items = Array.isArray(resp && resp.items) ? resp.items : [];
+            if (!items.length && NK.api && NK.api.projectInit) {
+              return NK.api.projectInit(pid).then(function(){ return NK.api.libraryIP(pid); });
+            }
+            return resp;
+          })
+          .then(function (resp2) {
+            var items = Array.isArray(resp2 && resp2.items) ? resp2.items : [];
             openIpLibrary(items, function (sel) {
               var ref = { id: 'ref_' + Date.now(), type: 'image', title: sel.name.split('/').pop(), source: sel.name, note: '' };
               var nextItems = (knowledge.referenceItems || []).concat([ref]);
