@@ -8286,7 +8286,7 @@ body {
 .knowledge-reference-textarea,
 .knowledge-character-input,
 .knowledge-character-personality {
-  border-radius: 18px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
   background: color-mix(in srgb, var(--panel) 86%, rgba(255, 255, 255, 0.02) 14%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
@@ -8684,7 +8684,12 @@ body {
 .analytics-filter-select,
 .knowledge-reference-input,
 .brand-channel-input,
-.brand-publish-input,
+.brand-publish-input {
+  min-height: 40px;
+  padding: 9px 13px;
+  border-radius: 10px;
+}
+
 .btn-primary,
 .btn-secondary,
 .btn-ghost {
