@@ -7779,6 +7779,8 @@ body {
 .knowledge-hub-page,
 .analytics-page,
 .content-library-page {
+  width: min(1480px, 100%);
+  margin: 0 auto;
   gap: 18px;
   padding: 18px 0 36px;
 }
@@ -7882,7 +7884,7 @@ body {
 
 .studio-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 12px;
   height: 100%;
 }
@@ -7897,6 +7899,18 @@ body {
   border: 1px solid color-mix(in srgb, var(--border) 72%, rgba(255, 255, 255, 0.18) 28%);
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 86%, rgba(255, 255, 255, 0.02) 14%), color-mix(in srgb, var(--bg-2) 92%, rgba(255, 255, 255, 0.02) 8%));
   box-shadow: 0 12px 32px rgba(6, 12, 24, 0.16);
+}
+
+.studio-kpi-card:first-child {
+  grid-column: span 3;
+  grid-row: span 2;
+  justify-content: end;
+}
+
+.studio-kpi-card:nth-child(2),
+.studio-kpi-card:nth-child(3),
+.studio-kpi-card:nth-child(4) {
+  grid-column: span 1;
 }
 
 .studio-kpi-card.is-accent {
@@ -7949,6 +7963,11 @@ body {
 .analytics-summary-grid,
 .content-library-summary-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.brand-studio-context-item:first-child,
+.knowledge-hub-context-item:first-child {
+  grid-column: span 2;
 }
 
 .brand-studio-context-item,
@@ -8134,10 +8153,48 @@ body {
   gap: 12px;
 }
 
+.brand-knowledge-grid,
+.brand-content-type-grid,
+.analytics-recommendation-grid,
+.analytics-suggestion-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.brand-knowledge-card,
+.brand-content-type-card,
+.analytics-recommendation-card,
+.analytics-suggestion-card {
+  grid-column: span 3;
+}
+
+.brand-knowledge-card:first-child,
+.brand-content-type-card:first-child,
+.analytics-recommendation-card:first-child,
+.analytics-suggestion-card:first-child {
+  grid-column: span 6;
+}
+
+.brand-knowledge-card:first-child strong,
+.analytics-recommendation-card:first-child h4,
+.analytics-suggestion-card:first-child h4 {
+  font-size: 20px;
+}
+
 .content-library-item,
 .content-library-empty-group {
   min-height: 184px;
   padding: 16px;
+}
+
+.content-library-grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.content-library-section:first-of-type .content-library-item:first-child,
+.content-library-section:nth-of-type(3) .content-library-item:first-child,
+.content-library-section:nth-of-type(4) .content-library-item:first-child {
+  grid-column: span 2;
+  min-height: 220px;
 }
 
 .content-library-item h4,
@@ -8175,6 +8232,13 @@ body {
   gap: 10px;
 }
 
+.brand-studio-selection-summary strong,
+.brand-asset-selection-summary strong,
+.analytics-filter-summary strong {
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
 .brand-content-type-card.is-active,
 .brand-asset-card.is-selected,
 .analytics-view-tab.is-active,
@@ -8192,6 +8256,25 @@ body {
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%);
   border: 1px solid color-mix(in srgb, var(--border) 76%, rgba(255, 255, 255, 0.12) 24%);
+}
+
+.analytics-view-tabs {
+  gap: 10px;
+}
+
+.analytics-view-tab {
+  font-weight: 600;
+}
+
+.brand-studio-disclosure > summary strong,
+.knowledge-hub-disclosure > summary strong {
+  font-size: 18px;
+  letter-spacing: -0.02em;
+}
+
+.brand-studio-disclosure > summary span,
+.knowledge-hub-disclosure > summary span {
+  font-size: 13px;
 }
 
 .brand-caption-textarea,
@@ -8268,11 +8351,40 @@ body {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .studio-kpi-card:first-child {
+    grid-column: span 4;
+    grid-row: auto;
+  }
+
+  .studio-kpi-card:nth-child(2),
+  .studio-kpi-card:nth-child(3),
+  .studio-kpi-card:nth-child(4) {
+    grid-column: span 2;
+  }
+
   .analytics-summary-grid,
   .content-library-summary-grid,
   .brand-studio-context-bar,
   .knowledge-hub-context-bar {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-knowledge-grid,
+  .brand-content-type-grid,
+  .analytics-recommendation-grid,
+  .analytics-suggestion-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-knowledge-card,
+  .brand-content-type-card,
+  .analytics-recommendation-card,
+  .analytics-suggestion-card,
+  .brand-knowledge-card:first-child,
+  .brand-content-type-card:first-child,
+  .analytics-recommendation-card:first-child,
+  .analytics-suggestion-card:first-child {
+    grid-column: span 1;
   }
 }
 
@@ -8301,10 +8413,21 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .brand-studio-context-item:first-child,
+  .knowledge-hub-context-item:first-child {
+    grid-column: span 2;
+  }
+
   .brand-studio-workspace,
   .knowledge-hub-workspace,
   .analytics-overview-grid {
     grid-template-columns: 1fr;
+  }
+
+  .content-library-section:first-of-type .content-library-item:first-child,
+  .content-library-section:nth-of-type(3) .content-library-item:first-child,
+  .content-library-section:nth-of-type(4) .content-library-item:first-child {
+    grid-column: span 1;
   }
 }
 
@@ -8331,6 +8454,15 @@ body {
     min-height: 0;
   }
 
+  .studio-kpi-card:first-child,
+  .studio-kpi-card:nth-child(2),
+  .studio-kpi-card:nth-child(3),
+  .studio-kpi-card:nth-child(4),
+  .brand-studio-context-item:first-child,
+  .knowledge-hub-context-item:first-child {
+    grid-column: span 1;
+  }
+
   .brand-studio-panel,
   .knowledge-hub-panel,
   .analytics-panel,
@@ -8343,5 +8475,12 @@ body {
   .analytics-panel-head,
   .content-library-section-head {
     flex-direction: column;
+  }
+
+  .brand-knowledge-grid,
+  .brand-content-type-grid,
+  .analytics-recommendation-grid,
+  .analytics-suggestion-grid {
+    grid-template-columns: 1fr;
   }
 }
