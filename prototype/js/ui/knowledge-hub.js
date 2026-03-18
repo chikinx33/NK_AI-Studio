@@ -51,13 +51,6 @@
     return text.slice(0, Math.max(limit - 1, 1)).trim() + '…';
   }
 
-  function summarizeList(list, emptyLabel, limit) {
-    var rows = Array.isArray(list) ? list : [];
-    if (!rows.length) return String(emptyLabel || '아직 없음');
-    if (rows.length === 1) return compactSentence(rows[0], limit || 60);
-    return rows.length + '개 · ' + compactSentence(rows[0], limit || 52);
-  }
-
   function normalizeText(value) {
     return String(value || '').replace(/[<>]/g, '').trim();
   }
@@ -398,30 +391,25 @@
       {
         label: '브랜드 규칙',
         value: rulesCount + '개',
-        detail: rulesCount ? '생성 결과에 지속적으로 반영되는 운영 기준입니다.' : '반드시 지켜야 할 브랜드 기준을 먼저 적어 주세요.',
         accent: true
       },
       {
         label: '금지 표현',
-        value: bannedCount + '개',
-        detail: bannedCount ? summarizeList(knowledge.bannedExpressions, '금지 표현 없음', 72) : '금지 문구를 정리하면 톤 오류를 줄일 수 있습니다.'
+        value: bannedCount + '개'
       },
       {
         label: '참조 / 성공 패턴',
-        value: String(referencesCount + successesCount) + '개',
-        detail: referencesCount ? '좋았던 레퍼런스와 링크를 바로 재활용할 수 있습니다.' : '참조 콘텐츠를 쌓아 두면 이후 생성 품질이 올라갑니다.'
+        value: String(referencesCount + successesCount) + '개'
       },
       {
         label: '연결 자산',
-        value: mediaCount + '개',
-        detail: mediaCount ? '브랜드 자산과 캐릭터 문맥을 함께 운영할 수 있습니다.' : '아직 연결된 이미지·영상 자산이 많지 않습니다.'
+        value: mediaCount + '개'
       }
     ].map(function (item) {
       return (
         '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
         '<span>' + escapeHtml(item.label) + '</span>' +
         '<strong>' + escapeHtml(item.value) + '</strong>' +
-        '<p>' + escapeHtml(item.detail) + '</p>' +
         '</article>'
       );
     }).join('');
