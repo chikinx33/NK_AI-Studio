@@ -6609,7 +6609,7 @@ body.layout-fixed .lib-content {
 
 .brand-studio-disclosure-body,
 .knowledge-hub-disclosure-body {
-  padding: 0 16px 16px;
+  padding: 12px 16px 16px;
 }
 
 .brand-studio-disclosure-meta,
@@ -8711,7 +8711,7 @@ body {
 
 .brand-studio-disclosure-body,
 .knowledge-hub-disclosure-body {
-  padding: 0 16px 16px;
+  padding: 12px 16px 16px;
 }
 
 .brand-studio-selection-summary,

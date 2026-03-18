@@ -1058,7 +1058,6 @@
       '<summary><div><strong>브랜드 허브 스냅샷</strong><span>지금 필요한 규칙만 짧게 확인</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(knowledge.brandRules.length ? (knowledge.brandRules.length + '개 규칙') : '간단 요약') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
-      '<div class="brand-studio-panel-head"><h3>브랜드 허브 스냅샷</h3><span>지금 필요한 규칙만 짧게 확인</span></div>' +
       '<div class="brand-knowledge-grid">' + knowledgeCards + '</div>' +
       '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 브랜드 허브에서 관리합니다.</p>' +
       '</section>' +
@@ -1090,7 +1089,6 @@
       '<summary><div><strong>SNS 콘텐츠 유형</strong><span>자동 기본값을 쓰거나 필요할 때만 변경합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
-      '<div class="brand-studio-panel-head"><h3>SNS 콘텐츠 유형</h3><span>운영 포맷을 먼저 정하면 다음 입력이 단순해집니다</span></div>' +
       '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
       '<div class="brand-studio-selection-summary">' +
       '<div>' +

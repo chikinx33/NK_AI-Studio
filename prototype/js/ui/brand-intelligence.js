@@ -424,7 +424,6 @@
       '<summary><div><strong>분석 필터</strong><span>브랜드 전체에서 세부 활동으로 drill-down</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(activeFilterCount ? (activeFilterCount + '개 적용') : '기본 상태') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="analytics-panel analytics-panel-embedded">' +
-      '<div class="analytics-panel-head"><h3>분석 필터</h3><span>브랜드 전체에서 세부 활동으로 drill-down</span></div>' +
       '<div class="analytics-filter-grid">' +
       selectHtml('episodeId', filterOptions.episodes, currentFilters.episodeId, '에피소드') +
       selectHtml('channelType', filterOptions.channels, currentFilters.channelType, '채널', function (item) { return channelLabel(item.value || item.label); }) +
