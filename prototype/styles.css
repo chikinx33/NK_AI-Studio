@@ -8912,6 +8912,8 @@ body {
   min-height: 0;
   padding: 12px;
   gap: 6px;
+  justify-items: end;
+  text-align: right;
   box-shadow: none;
   background: color-mix(in srgb, var(--panel) 86%, rgba(255, 255, 255, 0.02) 14%);
 }
@@ -8946,6 +8948,7 @@ body {
 .knowledge-hub-hero .studio-kpi-card {
   min-height: 102px;
   align-content: start;
+  justify-items: end;
 }
 
 .brand-studio-hero .studio-kpi-card:first-child,
