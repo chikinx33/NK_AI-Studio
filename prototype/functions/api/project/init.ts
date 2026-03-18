@@ -1,4 +1,4 @@
-﻿// prototype/functions/api/project/init.ts
+// prototype/functions/api/project/init.ts
 // Initialize GCS folder structure for a projectId by creating .keep files.
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
@@ -45,7 +45,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
-    const folders = ["image", "videos", "sfx", "bgm", "caption", "reference"];
+    const folders = ["image", "videos", "sfx", "bgm", "caption", "reference", "IP"];
     const token = await getGoogleAccessToken({
       clientEmail,
       privateKeyPem: privateKeyRaw,

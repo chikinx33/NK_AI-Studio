@@ -372,6 +372,16 @@
     return j(text);
   };
 
+  api.libraryIP = async function (projectId) {
+    var uid = resolveUserId();
+    var token = getAuthToken();
+    var url = withBase('/api/ip/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
+    var res = await fetch(url, { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(text || 'ip_library_error');
+    return j(text);
+  };
+
   api.projectDelete = async function (projectId, objectName) {
     var res = await fetch(withBase('/api/project/delete'), {
       method: 'POST',

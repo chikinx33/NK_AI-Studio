@@ -476,6 +476,7 @@
       '<input id="knowledge-reference-source" class="knowledge-reference-input" placeholder="링크 또는 출처" />' +
       '<textarea id="knowledge-reference-note" class="knowledge-reference-textarea" placeholder="왜 참고하는지 메모를 남겨 주세요."></textarea>' +
       '<button type="button" class="btn-secondary" data-action="knowledge-add-reference">참조 추가</button>' +
+      '<button type="button" class="btn-primary" data-action="knowledge-open-ip-library">IP 라이브러리</button>' +
       '</div>' +
       '<div class="knowledge-reference-grid knowledge-reference-grid-scrollable">' + referenceCards + '</div>' +
       '</div>' +
@@ -513,6 +514,62 @@
       return true;
     }
 
+    function openIpLibrary(items, onSelect) {
+      var modal = document.getElementById('lib-modal');
+      if (!modal) return;
+      var box = modal.querySelector('.lib-content');
+      var selected = null;
+      if (!box) return;
+      if (!items || !items.length) {
+        box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-primary" id="lib-use-btn" disabled>사용</button><button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-empty"><p class="muted">항목이 없습니다.</p></div>';
+        var closeBtn0 = box.querySelector('#lib-close'); if (closeBtn0) closeBtn0.onclick = function(){ modal.classList.add('hidden'); };
+        modal.classList.remove('hidden');
+        return;
+      }
+      var listHtml = items.map(function (it) {
+        var name = it.name || '';
+        var url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(name) : '';
+        return '<div class="lib-item" data-url="' + url + '" data-name="' + name + '" style="background:none;box-shadow:none;"><img class="lib-thumb" src="' + url + '" alt="" /></div>';
+      }).join('');
+      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-primary" id="lib-use-btn" disabled>사용</button><button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-grid">' + listHtml + '</div>';
+      var itemsEls = box.querySelectorAll('.lib-item');
+      itemsEls.forEach(function (el) {
+        el.onclick = function () {
+          var already = el.classList.contains('lib-selected');
+          itemsEls.forEach(function (x) { x.classList.remove('lib-selected', 'selected'); });
+          if (already) { selected = null; }
+          else { el.classList.add('lib-selected'); selected = { url: el.dataset.url, name: el.dataset.name }; }
+          updateActions();
+        };
+      });
+      var useBtn = box.querySelector('#lib-use-btn');
+      var delBtn = box.querySelector('#lib-delete-btn');
+      function updateActions() {
+        var active = !!(selected && selected.url);
+        if (useBtn) { useBtn.disabled = !active; useBtn.classList.toggle('disabled', !active); }
+        if (delBtn) { delBtn.disabled = !active; delBtn.classList.toggle('disabled', !active); }
+      }
+      if (useBtn) useBtn.onclick = function () {
+        if (!selected || !selected.url) { alert('이미지를 먼저 선택하세요.'); return; }
+        if (onSelect) onSelect(selected);
+        modal.classList.add('hidden');
+      };
+      if (delBtn) delBtn.onclick = async function () {
+        if (!selected || !selected.name) { alert('삭제할 이미지를 선택하세요.'); return; }
+        var pid = projectId;
+        try {
+          var res = await NK.api.projectDelete(pid, selected.name);
+          if (!res.ok || !res.data || Number(res.data.deletedCount || 0) < 1) throw new Error('delete_failed');
+          var left = items.filter(function (it) { return it.name !== selected.name; });
+          openIpLibrary(left, onSelect);
+        } catch (err) {
+          alert('삭제 실패: ' + (err && err.message ? err.message : err));
+        }
+      };
+      var closeBtn = box.querySelector('#lib-close'); if (closeBtn) closeBtn.onclick = function(){ modal.classList.add('hidden'); };
+      modal.classList.remove('hidden');
+    }
+
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
       var target = '';
@@ -520,6 +577,28 @@
       var action = String(btn.dataset.action || '').trim();
       if (action === 'knowledge-open-library') target = buildStageUrl('library.html', projectId, brandId);
       else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
+      else if (action === 'knowledge-open-ip-library') {
+        var pid = projectId;
+        if (!pid) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+        btn.disabled = true;
+        Promise.resolve().then(function(){ return NK.api.libraryIP(pid); })
+          .then(function (resp) {
+            var items = Array.isArray(resp && resp.items) ? resp.items : [];
+            openIpLibrary(items, function (sel) {
+              var ref = { id: 'ref_' + Date.now(), type: 'image', title: sel.name.split('/').pop(), source: sel.name, note: '' };
+              var nextItems = (knowledge.referenceItems || []).concat([ref]);
+              var nextKnowledge = Object.assign({}, knowledge, { referenceItems: nextItems });
+              return syncBrandAndProject(nextKnowledge).then(function (result) {
+                if (result && result.draft) renderNext(result.draft);
+              });
+            });
+          })
+          .catch(function (err) {
+            alert('Content Library를 불러올 수 없습니다.');
+          })
+          .finally(function () { btn.disabled = false; });
+        return;
+      }
       else if (action === 'char-open-new') {
         var box = root.querySelector('#char-form-box');
         if (box && !box.open) box.open = true;
