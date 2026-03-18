@@ -7779,7 +7779,7 @@ body {
 .knowledge-hub-page,
 .analytics-page,
 .content-library-page {
-  width: min(1480px, 100%);
+  width: min(1560px, calc(100vw - 32px));
   margin: 0 auto;
   gap: 18px;
   padding: 18px 0 36px;
@@ -8489,7 +8489,7 @@ body {
 .knowledge-hub-page,
 .analytics-page,
 .content-library-page {
-  width: min(1320px, 100%);
+  width: min(1560px, calc(100vw - 32px));
   gap: 12px;
   padding: 12px 0 28px;
 }
