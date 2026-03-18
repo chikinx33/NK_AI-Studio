@@ -2359,6 +2359,7 @@
         input.placeholder = '첫 에피소드 이름 (예: 시즌1 EP1)';
         hintRow.textContent = '신규 프로젝트를 만들면 첫 에피소드가 함께 생성됩니다.';
         btnCreate.disabled = creating;
+        if (seriesInput) seriesInput.disabled = creating ? true : false;
         // 신규 프로젝트 모드: 프로젝트 리스트 비활성, 하단 인풋 활성
         if (seriesSelect) seriesSelect.disabled = true;
         setRowDisabledState(newSeriesRow, false);
@@ -2379,6 +2380,7 @@
         input.placeholder = '에피소드 이름';
         hintRow.textContent = '기존 프로젝트가 없습니다. 신규 프로젝트를 먼저 만들어 주세요.';
         btnCreate.disabled = true;
+        if (seriesInput) seriesInput.disabled = true;
         setRowDisabledState(newSeriesRow, true);
         setRowDisabledState(existingSeriesRow, true);
         setRowDisabledState(baseRow, false);
@@ -2389,6 +2391,7 @@
         hintRow.textContent = '기존 프로젝트를 선택한 뒤 새 에피소드를 생성합니다.';
         btnCreate.disabled = creating;
         // 에피소드 모드: 리스트 활성, 하단 인풋은 기존 정보로 채우고 비활성
+        if (seriesInput) seriesInput.disabled = true;
         if (seriesSelect) seriesSelect.disabled = creating ? true : false;
         setRowDisabledState(newSeriesRow, true);
         setRowDisabledState(existingSeriesRow, false);
