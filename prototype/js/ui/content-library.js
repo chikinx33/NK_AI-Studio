@@ -71,6 +71,15 @@
     return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
   }
 
+  function defaultLibraryType(items) {
+    var preferred = ['image', 'video', 'publish-result', 'reference', 'text', 'scene'];
+    for (var i = 0; i < preferred.length; i++) {
+      var type = preferred[i];
+      if ((Array.isArray(items) ? items : []).some(function (item) { return item.type === type; })) return type;
+    }
+    return 'all';
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="content-library-page">' +
@@ -99,7 +108,7 @@
     };
   }
 
-  function renderProject(root, project, brand) {
+  function renderProject(root, project, brand, state) {
     var summary = NK.service.contentLibrary.summarizeProject(brand || project);
     var items = NK.service.contentLibrary.listProjectContents(brand || project);
     var meta = projectMeta(project);
@@ -117,6 +126,19 @@
     var videoCount = countByType('video');
     var referenceCount = countByType('reference');
     var publishCount = countByType('publish-result');
+    var selectedType = String(state && state.selectedType || '').trim() || defaultLibraryType(items);
+    var typeTabs = [
+      { id: 'all', title: '전체', count: items.length },
+      { id: 'image', title: '이미지', count: imageCount },
+      { id: 'video', title: '영상', count: videoCount },
+      { id: 'publish-result', title: '게시 결과', count: publishCount },
+      { id: 'reference', title: '참조', count: referenceCount },
+      { id: 'text', title: '텍스트', count: textCount },
+      { id: 'scene', title: 'Scene', count: sceneCount }
+    ];
+    var typeTabsHtml = typeTabs.map(function (item) {
+      return '<button type="button" class="analytics-view-tab ' + (item.id === selectedType ? 'is-active' : '') + '" data-action="library-filter-type" data-library-type="' + escapeHtml(item.id) + '">' + escapeHtml(item.title) + ' ' + escapeHtml(String(item.count)) + '</button>';
+    }).join('');
     var libraryHeroPills = [
       { label: '현재 에피소드', value: currentEpisodeTitle },
       { label: '프로젝트 유형', value: meta.projectType },
@@ -172,7 +194,9 @@
         '</article>'
       );
     }).join('');
-    var groups = ['scene', 'text', 'image', 'video', 'reference', 'publish-result'].map(function (type) {
+    var groups = ['scene', 'text', 'image', 'video', 'reference', 'publish-result'].filter(function (type) {
+      return selectedType === 'all' || type === selectedType;
+    }).map(function (type) {
       var rows = items.filter(function (item) { return item.type === type; });
       var body = rows.length
         ? rows.map(function (item) {
@@ -222,7 +246,7 @@
       '</div>' +
       '<div class="content-library-summary-grid">' + summaryCards + '</div>' +
       '<div class="content-library-toolbar">' +
-      '<span>현재 브랜드에 연결된 Creative 결과물을 한 곳에서 확인합니다.</span>' +
+      '<div class="content-library-toolbar-copy"><span>현재 브랜드에 연결된 Creative 결과물을 한 곳에서 확인합니다.</span><div class="analytics-view-tabs content-library-type-tabs">' + typeTabsHtml + '</div></div>' +
       '<div class="content-library-toolbar-actions">' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">브랜드 허브</a>' +
       '<a class="btn-secondary compact" href="' + escapeHtml(buildStageUrl('brand.html', projectId, brandId)) + '">Brand Studio</a>' +
@@ -245,6 +269,10 @@
       else if (action === 'library-open-scenario') target = buildStageUrl('scenario.html', projectId, brandId);
       else if (action === 'library-open-scenes') target = buildStageUrl('scenes.html', projectId, brandId);
       else if (action === 'library-open-media') target = buildStageUrl('media.html', projectId, brandId);
+      else if (action === 'library-filter-type') {
+        renderProject(root, project, brand, { selectedType: String(btn.dataset.libraryType || '').trim() || 'all' });
+        return;
+      }
       if (!target) return;
       if (window.self !== window.top && window.parent) {
         window.parent.postMessage({ type: 'load-stage', url: target }, '*');
@@ -270,6 +298,6 @@
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project, brand);
+    renderProject(root, project, brand, {});
   };
 })();

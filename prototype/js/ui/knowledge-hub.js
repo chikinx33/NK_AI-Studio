@@ -43,6 +43,14 @@
       .join('\n');
   }
 
+  function compactSentence(value, maxLength) {
+    var text = String(value || '').trim().replace(/\s+/g, ' ');
+    if (!text) return '';
+    var limit = Number(maxLength) || 120;
+    if (text.length <= limit) return text;
+    return text.slice(0, Math.max(limit - 1, 1)).trim() + '…';
+  }
+
   function normalizeText(value) {
     return String(value || '').replace(/[<>]/g, '').trim();
   }
@@ -240,6 +248,31 @@
     };
   }
 
+  function buildStarterKnowledge(knowledge, project, brandTitle, brandSummary) {
+    var payload = (project && project.payload) || {};
+    var next = Object.assign({}, knowledge || {});
+    var target = String(payload.targetAudience || payload.target || '').trim();
+    var coreMessage = String(payload.coreMessage || '').trim();
+    next.brandVoice = next.brandVoice || [
+      target ? (target + '에게') : '',
+      '짧고 명확하게 설명하되 과장하지 않는다.'
+    ].filter(Boolean).join(' ');
+    next.brandStory = next.brandStory || compactSentence(brandSummary || coreMessage || (brandTitle + '의 핵심 메시지를 중심으로 운영합니다.'), 120);
+    next.worldSetting = next.worldSetting || compactSentence([
+      brandTitle,
+      coreMessage ? ('핵심 메시지: ' + coreMessage) : '',
+      target ? ('주요 타깃: ' + target) : ''
+    ].filter(Boolean).join(' · '), 140);
+    next.brandRules = next.brandRules && next.brandRules.length ? next.brandRules : [
+      '핵심 메시지에서 벗어나는 과장 표현을 줄인다.',
+      '브랜드 말투와 어휘를 일관되게 유지한다.',
+      '사용자가 바로 이해할 수 있는 문장으로 정리한다.'
+    ];
+    next.bannedExpressions = next.bannedExpressions && next.bannedExpressions.length ? next.bannedExpressions : [];
+    next.successCases = next.successCases && next.successCases.length ? next.successCases : [];
+    return next;
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="knowledge-hub-page">' +
@@ -427,6 +460,7 @@
       '<div class="knowledge-hub-hero-actions">' +
       '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
       '<button class="btn-secondary" data-action="knowledge-open-brand">Brand Studio</button>' +
+      '<button class="btn-secondary" data-action="knowledge-apply-starter">기본값 채우기</button>' +
       '<button class="btn-primary" data-action="knowledge-save">브랜드 허브 저장</button>' +
       '</div>' +
       '</div>' +
@@ -622,6 +656,20 @@
             alert('Content Library를 불러올 수 없습니다.');
           })
           .finally(function () { btn.disabled = false; });
+        return;
+      }
+      else if (action === 'knowledge-apply-starter') {
+        btn.disabled = true;
+        syncBrandAndProject(buildStarterKnowledge(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras), project, brandTitle, brandSummary))
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+          })
+          .catch(function (err) {
+            alert('기본값 채우기 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
         return;
       }
       // 캐릭터 카드 제거에 따라 비활성화 토글 버튼도 제거됨

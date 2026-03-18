@@ -416,6 +416,34 @@
     ];
   }
 
+  function inferDefaultContentType(project) {
+    var payload = (project && project.payload) || {};
+    var raw = String(payload.projectType || payload.purposeCategory || '').trim().toLowerCase();
+    if (!raw) return 'sns-post';
+    if (raw.indexOf('blog') >= 0 || raw.indexOf('article') >= 0 || raw.indexOf('문서') >= 0) return 'blog-post';
+    if (raw.indexOf('image') >= 0 || raw.indexOf('poster') >= 0 || raw.indexOf('thumb') >= 0 || raw.indexOf('카드') >= 0) return 'promo-image';
+    if (raw.indexOf('video') >= 0 || raw.indexOf('short') >= 0 || raw.indexOf('쇼츠') >= 0 || raw.indexOf('릴스') >= 0) return 'shorts-promo';
+    return 'sns-post';
+  }
+
+  function pickAutoAssetIds(assetItems, projectId) {
+    var rows = Array.isArray(assetItems) ? assetItems.slice() : [];
+    return rows.sort(function (a, b) {
+      function score(item) {
+        var total = 0;
+        if (String(item && item.projectId || '').trim() === String(projectId || '').trim()) total += 100;
+        if (String(item && item.type || '').trim() === 'image') total += 20;
+        if (String(item && item.type || '').trim() === 'video') total += 10;
+        if (String(item && item.url || '').trim()) total += 5;
+        if (/대표|썸네일|thumbnail|cover/i.test(String(item && item.title || ''))) total += 3;
+        return total;
+      }
+      return score(b) - score(a);
+    }).slice(0, 2).map(function (item) {
+      return String(item && item.id || '').trim();
+    }).filter(Boolean);
+  }
+
   function renderEmpty(root, message) {
     root.innerHTML =
       '<section class="brand-studio-page">' +
@@ -456,7 +484,8 @@
     channelRows.forEach(function (item) {
       channelTitleMap[item.id] = item.title;
     });
-    var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
+    var effectiveSelectedType = selectedType || inferDefaultContentType(project);
+    var selectedOption = options.find(function (item) { return item.id === effectiveSelectedType; }) || options[0] || null;
     var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.getCachedIpAssets && brandId)
       ? (NK.service.contentLibrary.getCachedIpAssets(brandId) || [])
       : [];
@@ -510,12 +539,19 @@
       var projectMatch = assetProjectFilter === 'all' || String(item.projectId || '').trim() === assetProjectFilter;
       return typeMatch && projectMatch;
     });
+    var autoSelectedAssetIds = selectedAssetIds.length ? selectedAssetIds.slice() : pickAutoAssetIds(assetItems, projectId);
     var selectedAssetItems = assetItems.filter(function (item) {
+      return autoSelectedAssetIds.indexOf(String(item.id || '').trim()) >= 0;
+    });
+    var persistedSelectedAssetItems = assetItems.filter(function (item) {
       return selectedAssetIds.indexOf(String(item.id || '').trim()) >= 0;
     });
     var sourceAssetItems = selectedAssetItems.length
       ? selectedAssetItems
-      : assetItems.filter(function (item) { return item.type === 'text' || item.type === 'reference'; });
+      : contentItems.filter(function (item) {
+        var type = String(item && item.type || '').trim();
+        return type === 'text' || type === 'reference';
+      });
     var sourceTexts = sourceAssetItems
       .map(function (item) { return String(item.text || item.title || '').trim(); })
       .filter(Boolean);
@@ -557,10 +593,10 @@
     }
 
     var contentTypeCards = options.map(function (item) {
-      var isActive = item.id === selectedType;
+      var isActive = item.id === effectiveSelectedType;
       return (
         '<button type="button" class="brand-content-type-card ' + (isActive ? 'is-active' : '') + '" data-action="brand-select-content-type" data-content-type="' + escapeHtml(item.id) + '">' +
-        '<span class="brand-content-type-state">' + (isActive ? '선택됨' : '선택') + '</span>' +
+        '<span class="brand-content-type-state">' + (isActive ? (selectedType ? '선택됨' : '자동 기본값') : '선택') + '</span>' +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
         '<p>' + escapeHtml(item.desc) + '</p>' +
         '<span class="brand-content-type-output">' + escapeHtml(item.outputs) + '</span>' +
@@ -597,7 +633,7 @@
     var assetCards = filteredAssetItems.length
       ? filteredAssetItems.map(function (item) {
         var itemId = String(item.id || '').trim();
-        var isSelected = selectedAssetIds.indexOf(itemId) >= 0;
+        var isSelected = autoSelectedAssetIds.indexOf(itemId) >= 0;
         var projectTitle = projectTitleMap[String(item.projectId || '').trim()] || String(item.projectId || '프로젝트').trim();
         return (
           '<article class="brand-asset-card ' + (isSelected ? 'is-selected' : '') + '">' +
@@ -673,7 +709,15 @@
       }).join('')
       : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
 
-    var captionValue = savedCaption || '';
+    var captionValue = savedCaption || buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge);
+    var hashtagValue = savedHashtags || buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge);
+    var needsAutoSetup = !selectedType || !selectedAssetIds.length || !savedCaption || !savedHashtags;
+    var autoSetupSummary = [
+      selectedType ? '콘텐츠 유형 저장됨' : ('콘텐츠 유형 자동 기본값: ' + (selectedOption ? selectedOption.title : '-')),
+      persistedSelectedAssetItems.length ? ('선택 자산 저장됨 ' + persistedSelectedAssetItems.length + '개') : (selectedAssetItems.length ? ('추천 자산 준비됨 ' + selectedAssetItems.length + '개') : '추천 자산 없음'),
+      savedCaption ? '캡션 초안 저장됨' : '캡션 초안 자동 생성 가능',
+      savedHashtags ? '해시태그 저장됨' : '해시태그 자동 생성 가능'
+    ];
     var latestPublishedAt = publishResults.reduce(function (acc, item) {
       var current = String(item && item.publishedAt || '').trim();
       if (!current) return acc;
@@ -781,6 +825,19 @@
       '<div class="brand-studio-context-bar">' + brandContextSummary + '</div>' +
       '<div class="brand-studio-workspace">' +
       '<div class="brand-studio-main">' +
+      '<section class="brand-studio-panel brand-studio-quickstart-panel">' +
+      '<div class="brand-studio-panel-head"><h3>빠른 시작</h3><span>복잡한 선택 없이 기본 구성을 바로 채웁니다</span></div>' +
+      '<div class="brand-studio-checklist">' +
+      autoSetupSummary.map(function (item, index) {
+        var ready = index === 0 ? !!selectedType : (index === 1 ? !!persistedSelectedAssetItems.length : (index === 2 ? !!savedCaption : !!savedHashtags));
+        return '<article class="brand-studio-check ' + (ready ? 'is-ready' : 'is-pending') + '"><span class="brand-studio-check-mark">' + (ready ? '완료' : '자동') + '</span><div><h4>' + escapeHtml(item) + '</h4><p>' + escapeHtml(ready ? '이미 저장된 상태입니다.' : '버튼 한 번으로 기본 구성을 적용할 수 있습니다.') + '</p></div></article>';
+      }).join('') +
+      '</div>' +
+      '<div class="brand-studio-selection-actions">' +
+      '<button class="btn-primary" data-action="brand-auto-setup" ' + (needsAutoSetup ? '' : 'disabled') + '>자동 구성 적용</button>' +
+      '<span class="brand-caption-help">콘텐츠 유형, 추천 자산, 캡션, 해시태그를 현재 브랜드 문맥으로 기본 설정합니다.</span>' +
+      '</div>' +
+      '</section>' +
       (autoSuggestion
         ? '<section class="brand-studio-panel brand-auto-suggestion-panel">' +
           '<div class="brand-studio-panel-head"><h3>적용된 자동 제안</h3><span>Analytics에서 가져온 초안</span></div>' +
@@ -800,7 +857,10 @@
       '<div class="brand-knowledge-grid">' + knowledgeCards + '</div>' +
       '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 브랜드 허브에서 관리합니다.</p>' +
       '</section>' +
-      '<section class="brand-studio-panel">' +
+      '<details class="brand-studio-disclosure" ' + (!persistedSelectedAssetItems.length ? 'open' : '') + '>' +
+      '<summary><div><strong>브랜드 자산 선택</strong><span>자동 추천 자산을 기준으로 필요할 때만 수정합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedAssetItems.length ? (selectedAssetItems.length + '개 준비') : '없음') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
       '<div class="brand-studio-panel-head"><h3>브랜드 자산 선택</h3><span>긴 목록은 내부 스크롤로 제한하고, 필요한 자산만 고릅니다</span></div>' +
       '<div class="brand-asset-filter-row">' + assetTypeFilterButtons + '</div>' +
       '<div class="brand-asset-filter-row">' + assetProjectFilterButtons + '</div>' +
@@ -808,17 +868,22 @@
       '<div>' +
       '<span class="brand-studio-selection-label">IP 자산 요약</span>' +
       '<strong>' + escapeHtml(String(assetItems.filter(function(i){return i.type==="image";}).length)) + ' 이미지 · ' + escapeHtml(String(assetItems.filter(function(i){return i.type==="video";}).length)) + ' 영상</strong>' +
-      '<p>' + escapeHtml(selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : 'IP 폴더 기반 결과물만 표시') + '</p>' +
+      '<p>' + escapeHtml(persistedSelectedAssetItems.length ? ('선택 자산 ' + persistedSelectedAssetItems.length + '개') : (selectedAssetItems.length ? ('추천 자산 ' + selectedAssetItems.length + '개') : 'IP 폴더 기반 결과물만 표시')) + '</p>' +
       '</div>' +
       '<div class="brand-studio-selection-actions">' +
       '<span class="brand-content-type-state">브랜드 전체 에피소드의 결과물 집계</span>' +
-      '<button class="btn-secondary compact" data-action="brand-clear-assets" ' + (selectedAssetItems.length ? '' : 'disabled') + '>선택 비우기</button>' +
+      '<button class="btn-secondary compact" data-action="brand-clear-assets" ' + (persistedSelectedAssetItems.length ? '' : 'disabled') + '>선택 비우기</button>' +
       '</div>' +
       '</div>' +
       '<div class="brand-asset-grid brand-asset-grid-scrollable">' + assetCards + '</div>' +
       '<p class="brand-caption-help">선택한 자산이 있으면 캡션과 해시태그 생성에 우선 반영합니다. 선택하지 않으면 브랜드 전체 텍스트 자산을 참고합니다.</p>' +
       '</section>' +
-      '<section class="brand-studio-panel">' +
+      '</div>' +
+      '</details>' +
+      '<details class="brand-studio-disclosure" ' + (!selectedType ? 'open' : '') + '>' +
+      '<summary><div><strong>SNS 콘텐츠 유형</strong><span>자동 기본값을 쓰거나 필요할 때만 변경합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
       '<div class="brand-studio-panel-head"><h3>SNS 콘텐츠 유형</h3><span>운영 포맷을 먼저 정하면 다음 입력이 단순해집니다</span></div>' +
       '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
       '<div class="brand-studio-selection-summary">' +
@@ -832,6 +897,8 @@
       '</div>' +
       '</div>' +
       '</section>' +
+      '</div>' +
+      '</details>' +
       '</div>' +
       '<div class="brand-studio-side">' +
       '<section class="brand-studio-panel brand-studio-composer-panel" id="brand-publish-composer">' +
@@ -857,7 +924,7 @@
       '<div><span class="brand-caption-meta-label">브랜드 키워드</span><strong>' + escapeHtml(brandView.brandKeywords.length ? brandView.brandKeywords.join(', ') : '아직 없음') + '</strong></div>' +
       '<div><span class="brand-caption-meta-label">타깃</span><strong>' + escapeHtml(brandView.targetAudience || payload.targetAudience || payload.target || '아직 없음') + '</strong></div>' +
       '</div>' +
-      '<textarea id="brand-hashtag-textarea" class="brand-caption-textarea brand-hashtag-textarea" placeholder="#해시태그 형식으로 생성됩니다.">' + escapeHtml(savedHashtags || '') + '</textarea>' +
+      '<textarea id="brand-hashtag-textarea" class="brand-caption-textarea brand-hashtag-textarea" placeholder="#해시태그 형식으로 생성됩니다.">' + escapeHtml(hashtagValue) + '</textarea>' +
       '<div class="brand-caption-actions">' +
       '<button class="btn-secondary" data-action="brand-generate-hashtags" ' + (selectedOption ? '' : 'disabled') + '>자동 생성</button>' +
       '<button class="btn-secondary" data-action="brand-regenerate-hashtags" ' + (selectedOption ? '' : 'disabled') + '>다시 생성</button>' +
@@ -981,6 +1048,26 @@
           })
           .catch(function (err) {
             alert('콘텐츠 유형 저장 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+        return;
+      }
+      if (action === 'brand-auto-setup') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        btn.disabled = true;
+        NK.service.project.updatePayload(projectId, {
+          brandStudioContentType: selectedType || (selectedOption && selectedOption.id) || inferDefaultContentType(project),
+          brandStudioSelectedAssetIds: selectedAssetIds.length ? selectedAssetIds : autoSelectedAssetIds,
+          brandStudioCaptionDraft: savedCaption || buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge),
+          brandStudioHashtagDraft: savedHashtags || buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge)
+        })
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+          })
+          .catch(function (err) {
+            alert('자동 구성 적용 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
             btn.disabled = false;

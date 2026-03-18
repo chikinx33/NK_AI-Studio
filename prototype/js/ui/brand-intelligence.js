@@ -427,7 +427,10 @@
       '<div class="studio-page-hero-side"><div class="studio-kpi-grid">' + analyticsHeroStats + '</div></div>' +
       '</div>' +
       '<div class="analytics-summary-grid">' + analyticsSummaryCards + '</div>' +
-      '<section class="analytics-panel">' +
+      '<details class="brand-studio-disclosure analytics-filter-disclosure" ' + (activeFilterCount ? 'open' : '') + '>' +
+      '<summary><div><strong>분석 필터</strong><span>브랜드 전체에서 세부 활동으로 drill-down</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(activeFilterCount ? (activeFilterCount + '개 적용') : '기본 상태') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="analytics-panel analytics-panel-embedded">' +
       '<div class="analytics-panel-head"><h3>분석 필터</h3><span>브랜드 전체에서 세부 활동으로 drill-down</span></div>' +
       '<div class="analytics-filter-grid">' +
       selectHtml('episodeId', filterOptions.episodes, currentFilters.episodeId, '에피소드') +
@@ -444,6 +447,8 @@
       ) + '>필터 초기화</button>' +
       '</div>' +
       '</section>' +
+      '</div>' +
+      '</details>' +
       '<section class="analytics-panel">' +
       '<div class="analytics-panel-head"><h3>분석 보기</h3><span>기본은 개요, 세부 분석은 탭으로 전환</span></div>' +
       '<div class="analytics-view-tabs">' + tabsHtml + '</div>' +
