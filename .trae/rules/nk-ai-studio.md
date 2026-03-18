@@ -8,13 +8,6 @@
 - **Version Control**: 코드 변경 직후 `prototype/js/config.js`의 `NK.config.APP_VERSION`을 즉시 증가시킨다. `script.js`에는 최상위 폴백이 있으나, 실제 버전 관리는 `config.js`에서 한다.
 - **Delivery Rule**: After coding work, commit and push the changes so the latest web-deployable state is available for browser testing. If commit/push cannot be completed, report the exact blocker immediately.
 
-## 버전/커밋/푸시 정책
-- 작업 종료 시 즉시 버전 업데이트: `prototype/js/config.js`의 `NK.config.APP_VERSION` 증가 (사이드바 표시는 core.js의 applyVersionAndNav가 NK.core.APP_VERSION을 통해 반영)
-- 변경사항 스테이징 및 커밋: git add -A → 의미 있는 한국어 커밋 메시지로 git commit
-- 원격 반영: git push (기본 원격 origin, 메인 브랜치 기준)
-- 민감정보(비밀키 등)는 커밋 대상에서 제외
-- 푸시 실패 시 원인과 오류 메시지를 즉시 기록·보고하고, 해결 후 재시도
-
 ## 즉시 푸시 실행 절차(Assistant 실행 체크리스트)
 - 이 규칙은 대화 상 별도 확인 없이 매 작업 종료 시 자동 수행한다.
 - 순서:

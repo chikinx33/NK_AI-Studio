@@ -456,11 +456,25 @@
     channelRows.forEach(function (item) {
       channelTitleMap[item.id] = item.title;
     });
+    var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
+    var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
+      ? NK.service.contentLibrary.listProjectContents(brand || project)
+      : [];
+    var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
+      ? NK.service.brand.listProjects(brand || brandId)
+      : [project];
+    var projectTitleMap = {};
+    projectRows.forEach(function (item) {
+      projectTitleMap[String(item.id || '').trim()] = String(item.title || item.seriesTitle || item.id || '').trim() || '프로젝트';
+    });
+    if (!projectTitleMap[projectId]) {
+      projectTitleMap[projectId] = String(project.title || project.seriesTitle || projectId).trim();
+    }
+    var assetMap = {};
+    contentItems.forEach(function (it) { assetMap[String(it.id || '')] = it; });
     var characters = (NK.service && NK.service.characterRegistry && NK.service.characterRegistry.listCharactersByBrand && brandId)
       ? NK.service.characterRegistry.listCharactersByBrand(brandId)
       : (Array.isArray(brand && brand.brandCharacters) ? brand.brandCharacters : []);
-    var assetMap = {};
-    contentItems.forEach(function (it) { assetMap[String(it.id || '')] = it; });
     var characterCards = characters.length
       ? characters.map(function (c) {
         var mainAsset = assetMap[String(c.mainAssetId || '')];
@@ -488,21 +502,6 @@
         var label = (projectTitleMap[String(it.projectId || '')] || it.projectId || '') + ' · ' + (it.type === 'image' ? '이미지 ' : '영상 ') + (it.title || it.id);
         return '<option value="' + escapeHtml(String(it.id || '')) + '">' + escapeHtml(label) + '</option>';
       }).join('');
-    var selectedOption = options.find(function (item) { return item.id === selectedType; }) || null;
-    var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
-      ? NK.service.contentLibrary.listProjectContents(brand || project)
-      : [];
-    var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
-    var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
-      ? NK.service.brand.listProjects(brand || brandId)
-      : [project];
-    var projectTitleMap = {};
-    projectRows.forEach(function (item) {
-      projectTitleMap[String(item.id || '').trim()] = String(item.title || item.seriesTitle || item.id || '').trim() || '프로젝트';
-    });
-    if (!projectTitleMap[projectId]) {
-      projectTitleMap[projectId] = String(project.title || project.seriesTitle || projectId).trim();
-    }
     var assetItems = contentItems.filter(function (item) {
       return ['text', 'image', 'video', 'reference', 'publish-result'].indexOf(String(item.type || '').trim()) >= 0;
     });
