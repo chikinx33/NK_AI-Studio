@@ -678,17 +678,12 @@
 
     var captionValue = savedCaption || '';
     var brandContextSummary = [
-      { label: '운영 브랜드', value: brandView.title || '-' },
-      { label: '현재 기준 에피소드', value: currentEpisodeTitle },
-      { label: '선택 자산', value: selectedAssetItems.length ? (selectedAssetItems.length + '개') : '미선택' },
-      { label: '게시 데이터', value: publishResults.length ? (publishResults.length + '건 누적') : '아직 없음' }
-    ].map(function (item) {
-      return (
-        '<div class="brand-studio-context-item">' +
-        '<span>' + escapeHtml(item.label) + '</span>' +
-        '<strong>' + escapeHtml(item.value) + '</strong>' +
-        '</div>'
-      );
+      '운영 브랜드 · ' + (brandView.title || '-'),
+      '현재 기준 에피소드 · ' + currentEpisodeTitle,
+      '선택 자산 · ' + (selectedAssetItems.length ? (selectedAssetItems.length + '개') : '미선택'),
+      '게시 데이터 · ' + (publishResults.length ? (publishResults.length + '건 누적') : '아직 없음')
+    ].map(function (text) {
+      return '<div class="brand-studio-context-item"><strong>' + escapeHtml(text) + '</strong></div>';
     }).join('');
     var knowledgeCards = [
       { label: '브랜드 보이스', value: compactSentence(knowledge.brandVoice || '아직 설정되지 않았습니다.', 72) },

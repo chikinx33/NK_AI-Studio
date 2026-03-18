@@ -361,12 +361,12 @@
       '</div>' +
       '</div>' +
       '<div class="analytics-summary-grid">' +
-      '<article class="analytics-summary-card"><span>분석 브랜드</span><strong>' + escapeHtml(brand && brand.brandTitle || payload.brandTitle || '-') + '</strong></article>' +
-      '<article class="analytics-summary-card"><span>현재 기준 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></article>' +
-      '<article class="analytics-summary-card"><span>누적 게시</span><strong>' + escapeHtml(summary.totalPosts) + '개</strong></article>' +
-      '<article class="analytics-summary-card"><span>총 조회수</span><strong>' + escapeHtml(summary.views) + '</strong></article>' +
-      '<article class="analytics-summary-card"><span>총 반응</span><strong>' + escapeHtml(summary.likes + summary.comments + summary.shares) + '</strong></article>' +
-      '<article class="analytics-summary-card"><span>상위 채널</span><strong>' + escapeHtml(channelLabel(summary.topChannel || '-')) + '</strong></article>' +
+      '<article class="analytics-summary-card"><strong>' + escapeHtml('분석 브랜드 · ' + (brand && brand.brandTitle || payload.brandTitle || '-')) + '</strong></article>' +
+      '<article class="analytics-summary-card"><strong>' + escapeHtml('현재 기준 에피소드 · ' + currentEpisodeTitle) + '</strong></article>' +
+      '<article class="analytics-summary-card"><strong>' + escapeHtml('누적 게시 · ' + summary.totalPosts + '개') + '</strong></article>' +
+      '<article class="analytics-summary-card"><strong>' + escapeHtml('총 조회수 · ' + summary.views) + '</strong></article>' +
+      '<article class="analytics-summary-card"><strong>' + escapeHtml('총 반응 · ' + (summary.likes + summary.comments + summary.shares)) + '</strong></article>' +
+      '<article class="analytics-summary-card"><strong>' + escapeHtml('상위 채널 · ' + channelLabel(summary.topChannel || '-')) + '</strong></article>' +
       '</div>' +
       '<section class="analytics-panel">' +
       '<div class="analytics-panel-head"><h3>분석 필터</h3><span>브랜드 전체에서 세부 활동으로 drill-down</span></div>' +

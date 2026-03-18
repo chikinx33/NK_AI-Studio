@@ -1,4 +1,4 @@
-﻿; (function () {
+; (function () {
   var NK = window.NK || (window.NK = {});
   var ui = NK.ui || (NK.ui = {});
   var knowledgeHub = ui.knowledgeHub || (ui.knowledgeHub = {});
@@ -353,10 +353,10 @@
       '</div>' +
       '</div>' +
       '<div class="knowledge-hub-context-bar">' +
-      '<div class="knowledge-hub-context-item"><span>운영 브랜드</span><strong>' + escapeHtml(brandTitle || '-') + '</strong></div>' +
-      '<div class="knowledge-hub-context-item"><span>현재 기준 에피소드</span><strong>' + escapeHtml(currentEpisodeTitle) + '</strong></div>' +
-      '<div class="knowledge-hub-context-item"><span>브랜드 규칙</span><strong>' + escapeHtml(rulesCount) + '개</strong></div>' +
-      '<div class="knowledge-hub-context-item"><span>참조 콘텐츠</span><strong>' + escapeHtml(referencesCount) + '개</strong></div>' +
+      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('운영 브랜드 · ' + (brandTitle || '-')) + '</strong></div>' +
+      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('현재 기준 에피소드 · ' + currentEpisodeTitle) + '</strong></div>' +
+      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('브랜드 규칙 · ' + rulesCount + '개') + '</strong></div>' +
+      '<div class="knowledge-hub-context-item"><strong>' + escapeHtml('참조 콘텐츠 · ' + referencesCount + '개') + '</strong></div>' +
       '</div>' +
       '<div class="knowledge-hub-workspace">' +
       '<div class="knowledge-hub-main">' +
