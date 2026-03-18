@@ -688,6 +688,7 @@ body[data-embed="1"] {
   font-weight: 700;
   font-size: 15px;
   line-height: 1.35;
+  color: var(--text);
   white-space: normal;
   word-break: break-word;
   text-align: left;
@@ -725,7 +726,7 @@ body[data-embed="1"] {
 #sidebar-stage-actions .btn-secondary {
   width: 100%;
   justify-content: center;
-  color: #0b0f1c;
+  color: var(--text);
 }
 
 #sidebar-project-card .sidebar-card-actions {
@@ -742,6 +743,11 @@ body[data-embed="1"] {
   min-height: 38px;
   padding: 8px 10px;
   font-size: 12px;
+  color: var(--text);
+}
+
+[data-theme="light"] #sidebar-stage-actions .btn-secondary,
+[data-theme="light"] #sidebar-project-card .sidebar-card-actions .btn-secondary {
   color: #0b0f1c;
 }
 
