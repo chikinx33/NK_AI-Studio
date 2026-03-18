@@ -1072,7 +1072,7 @@ a.btn-primary:active {
   font-size: 0;
   background-position: center;
   background-repeat: no-repeat;
-  background-size: 24px 24px;
+  background-size: 12px 12px;
 }
 
 [data-theme="dark"] .theme-toggle {
