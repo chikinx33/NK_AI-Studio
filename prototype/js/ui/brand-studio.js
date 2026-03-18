@@ -81,6 +81,39 @@
     return state;
   }
 
+  function captureFieldValueState(root) {
+    var state = {};
+    var fields = root && root.querySelectorAll
+      ? root.querySelectorAll('textarea, input, select')
+      : [];
+    Array.prototype.forEach.call(fields, function (field) {
+      var key = getFieldPersistKey(field);
+      if (!key) return;
+      var type = String(field.type || '').toLowerCase();
+      state[key] = {
+        type: type,
+        value: type === 'checkbox' || type === 'radio' ? '' : String(field.value || ''),
+        checked: !!field.checked
+      };
+    });
+    return state;
+  }
+
+  function restoreFieldValueState(root, state) {
+    if (!root || !state) return;
+    var fields = root.querySelectorAll ? root.querySelectorAll('textarea, input, select') : [];
+    Array.prototype.forEach.call(fields, function (field) {
+      var key = getFieldPersistKey(field);
+      var saved = key ? state[key] : null;
+      if (!saved) return;
+      if (saved.type === 'checkbox' || saved.type === 'radio') {
+        field.checked = !!saved.checked;
+        return;
+      }
+      field.value = String(saved.value || '');
+    });
+  }
+
   function restoreFieldScrollState(root, state) {
     if (!root || !state) return;
     var fields = root.querySelectorAll ? root.querySelectorAll('textarea, input, select') : [];
@@ -594,8 +627,10 @@
     applyCurrentLocale();
   }
 
-  function renderProject(root, project, brand) {
+  function renderProject(root, project, brand, options) {
+    var renderOptions = options || {};
     var preservedFieldScroll = captureFieldScrollState(root);
+    var preservedFieldValues = renderOptions.preserveInputs === false ? null : captureFieldValueState(root);
     var projectId = String(project.id || '').trim();
     var payload = project.payload || {};
     var brandView = readBrandView(brand, project);
@@ -698,13 +733,13 @@
       { id: 'image', title: '이미지' }
     ];
 
-    function renderNext(nextProject) {
+    function renderNext(nextProject, options) {
       var fallbackProject = nextProject && nextProject.id ? nextProject : project;
       var nextBrandId = String(fallbackProject && fallbackProject.payload && fallbackProject.payload.brandId || brandId).trim();
       var nextBrand = (NK.service && NK.service.brand && NK.service.brand.getById && nextBrandId)
         ? NK.service.brand.getById(nextBrandId)
         : null;
-      renderProject(root, fallbackProject, nextBrand || brand);
+      renderProject(root, fallbackProject, nextBrand || brand, options || {});
     }
 
     function syncBrandAndProject(brandPatch, projectPatch) {
@@ -1144,6 +1179,7 @@
       '</div>' +
       '</section>';
     applyCurrentLocale();
+    restoreFieldValueState(root, preservedFieldValues);
     restoreFieldScrollState(root, preservedFieldScroll);
     bindDisclosureState(root);
 
@@ -1562,7 +1598,7 @@
           analyticsSnapshots: nextSnapshots
         })
           .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
+            if (result && result.draft) renderNext(result.draft, { preserveInputs: false });
             alert('게시 결과를 저장했습니다.');
           })
           .catch(function (err) {
