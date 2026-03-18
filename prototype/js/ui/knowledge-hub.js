@@ -391,23 +391,19 @@
       '</div>' +
       '<div class="knowledge-hub-workspace">' +
       '<div class="knowledge-hub-main">' +
-      '<details class="knowledge-hub-disclosure" open>' +
+      '<details class="knowledge-hub-disclosure">' +
       '<summary><div><strong>브랜드 정체성</strong><span>AI가 계속 참고할 기본 문맥</span></div><span class="knowledge-hub-disclosure-meta">핵심 4개 필드</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
       '<div class="knowledge-hub-form-grid">' +
       '<label class="knowledge-hub-field"><span>톤&매너</span><textarea id="knowledge-brand-voice" placeholder="예: 따뜻하지만 과장하지 않고, 짧고 명확하게 말한다.">' + escapeHtml(knowledge.brandVoice) + '</textarea></label>' +
       '<label class="knowledge-hub-field"><span>브랜드 스토리</span><textarea id="knowledge-brand-story" placeholder="브랜드/시리즈가 왜 존재하는지, 어떤 세계를 다루는지 적어 주세요.">' + escapeHtml(knowledge.brandStory) + '</textarea></label>' +
-      '<div class="knowledge-hub-field knowledge-character-field"><span>캐릭터</span>' +
-      '<input id="knowledge-character-input" class="knowledge-character-input" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" />' +
-      '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterRows(knowledge.characters) + '</div>' +
-      '<p class="knowledge-character-help">@토큰 형식으로 저장되며 개요의 캐릭터 항목에 자동 등록됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '<label class="knowledge-hub-field knowledge-hub-field-fill"><span>세계관/배경</span><textarea id="knowledge-world-setting" placeholder="작품 배경, 서비스 맥락, 브랜드 세계관을 적어 주세요.">' + escapeHtml(knowledge.worldSetting) + '</textarea></label>' +
       '</div>' +
       '</section>' +
       '</div>' +
       '</details>' +
-      '<details class="knowledge-hub-disclosure" open>' +
+      '<details class="knowledge-hub-disclosure">' +
       '<summary><div><strong>브랜드 규칙</strong><span>반드시 지켜야 할 운영 기준</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(rulesCount + bannedCount) + '개 항목</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
@@ -420,13 +416,17 @@
       '</details>' +
       '</div>' +
       '<div class="knowledge-hub-side">' +
-      '<details class="knowledge-hub-disclosure" open>' +
+      '<details class="knowledge-hub-disclosure">' +
       '<summary><div><strong>캐릭터 자산</strong><span>브랜드 공용 캐릭터 레코드</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(String(characters.length) + '명') + '</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
+      '<div class="knowledge-hub-field knowledge-character-field"><span>캐릭터</span>' +
+      '<input id="knowledge-character-input" class="knowledge-character-input" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" />' +
+      '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterRows(knowledge.characters) + '</div>' +
+      '<p class="knowledge-character-help">@토큰 형식으로 저장되며 캐릭터 자산 목록과 개요에 반영됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '<div class="knowledge-reference-grid knowledge-reference-grid-scrollable">' + characterCards + '</div>' +
       '<div class="brand-publish-summary" style="margin-top:10px;">' +
-      '<button class="btn-primary" data-action="char-open-new">캐릭터 추가</button>' +
+      '<button class="btn-primary" data-action="knowledge-open-ip-library">IP 라이브러리</button>' +
       '</div>' +
       '<details class="knowledge-hub-disclosure" id="char-form-box">' +
       '<summary><div><strong>캐릭터 추가/수정</strong><span>trigger는 @필수, 대표 이미지 없으면 경고</span></div></summary>' +
@@ -438,7 +438,6 @@
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">호출명(@)</span><input id="char-trigger" class="brand-publish-input" placeholder="@세모" /></div>' +
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">별칭</span><input id="char-aliases" class="brand-publish-input" placeholder="쉼표로 구분" /></div>' +
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">대표 이미지</span><select id="char-main-asset" class="brand-publish-input"><option value="">선택 안 함</option>' + assetOptions + '</select></div>' +
-      '<div class="brand-publish-field"><span class="brand-caption-meta-label">참조 자산(다중)</span><select id="char-ref-assets" class="brand-publish-input" multiple size="5">' + assetOptions + '</select></div>' +
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">설명</span><textarea id="char-desc" class="brand-caption-textarea" placeholder="캐릭터 설명"></textarea></div>' +
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">고정 요소</span><textarea id="char-fixed" class="brand-caption-textarea" placeholder="쉼표/줄바꿈으로 여러 개 입력"></textarea></div>' +
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">금지 요소</span><textarea id="char-banned" class="brand-caption-textarea" placeholder="쉼표/줄바꿈으로 여러 개 입력"></textarea></div>' +
@@ -455,7 +454,7 @@
       '</section>' +
       '</div>' +
       '</details>' +
-      '<details class="knowledge-hub-disclosure" open>' +
+      '<details class="knowledge-hub-disclosure">' +
       '<summary><div><strong>참조와 학습</strong><span>좋았던 레퍼런스와 성공 패턴</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(referencesCount + successesCount) + '개 데이터</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
@@ -476,7 +475,6 @@
       '<input id="knowledge-reference-source" class="knowledge-reference-input" placeholder="링크 또는 출처" />' +
       '<textarea id="knowledge-reference-note" class="knowledge-reference-textarea" placeholder="왜 참고하는지 메모를 남겨 주세요."></textarea>' +
       '<button type="button" class="btn-secondary" data-action="knowledge-add-reference">참조 추가</button>' +
-      '<button type="button" class="btn-primary" data-action="knowledge-open-ip-library">IP 라이브러리</button>' +
       '</div>' +
       '<div class="knowledge-reference-grid knowledge-reference-grid-scrollable">' + referenceCards + '</div>' +
       '</div>' +
@@ -606,14 +604,6 @@
           .finally(function () { btn.disabled = false; });
         return;
       }
-      else if (action === 'char-open-new') {
-        var box = root.querySelector('#char-form-box');
-        if (box && !box.open) box.open = true;
-        ['char-id','char-name','char-trigger','char-aliases','char-main-asset','char-desc','char-fixed','char-banned','char-style'].forEach(function(id){ var el = root.querySelector('#'+id); if (el) el.value = ''; });
-        var refSel = root.querySelector('#char-ref-assets'); if (refSel) { Array.from(refSel.options).forEach(function(o){ o.selected = false; }); }
-        var act = root.querySelector('#char-active'); if (act) act.checked = true;
-        return;
-      }
       else if (action === 'char-edit') {
         var cid = String(btn.dataset.charId || '').trim();
         var row = characters.find(function (c) { return String(c.id) === cid; }) || null;
@@ -630,10 +620,6 @@
         set('char-fixed', (Array.isArray(row.fixedTraits) ? row.fixedTraits.join(', ') : ''));
         set('char-banned', (Array.isArray(row.bannedTraits) ? row.bannedTraits.join(', ') : ''));
         set('char-style', row.styleGuide || '');
-        var refSel2 = root.querySelector('#char-ref-assets');
-        if (refSel2) {
-          Array.from(refSel2.options).forEach(function (o){ o.selected = (Array.isArray(row.referenceAssetIds) ? row.referenceAssetIds : []).indexOf(String(o.value)) >= 0; });
-        }
         var act2 = root.querySelector('#char-active'); if (act2) act2.checked = !!row.isActive;
         return;
       }
@@ -663,7 +649,6 @@
         var triggerEl = root.querySelector('#char-trigger');
         var aliasesEl = root.querySelector('#char-aliases');
         var mainEl = root.querySelector('#char-main-asset');
-        var refSelEl = root.querySelector('#char-ref-assets');
         var descEl = root.querySelector('#char-desc');
         var fixedEl = root.querySelector('#char-fixed');
         var bannedEl = root.querySelector('#char-banned');
@@ -678,15 +663,13 @@
         if (dup) { alert('같은 trigger가 이미 등록되어 있습니다.'); return; }
         var mainId = String((mainEl && mainEl.value) || '').trim();
         if (!mainId) { alert('대표 이미지가 비었습니다. 대표 이미지를 선택하지 않으면 품질이 낮아질 수 있습니다.'); }
-        var refs = [];
-        if (refSelEl) { Array.from(refSelEl.options).forEach(function (o){ if (o.selected) refs.push(String(o.value)); }); }
         var nextRow = {
           id: cid2 || ('char_' + Date.now()),
           trigger: trg,
           name: nm || trg,
           aliases: String((aliasesEl && aliasesEl.value) || '').split(/[,\n]/).map(function (t){ return String(t||'').trim(); }).filter(Boolean),
           mainAssetId: mainId,
-          referenceAssetIds: refs,
+          referenceAssetIds: [],
           description: String((descEl && descEl.value) || '').trim(),
           fixedTraits: String((fixedEl && fixedEl.value) || '').split(/[,\n]/).map(function (t){ return String(t||'').trim(); }).filter(Boolean),
           bannedTraits: String((bannedEl && bannedEl.value) || '').split(/[,\n]/).map(function (t){ return String(t||'').trim(); }).filter(Boolean),
@@ -789,8 +772,34 @@
       if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
       if (evt.key !== 'Enter') return;
       evt.preventDefault();
-      if (addCharacter(targetEl.value || '')) {
+      var raw = String(targetEl.value || '');
+      if (addCharacter(raw)) {
         targetEl.value = '';
+        var nameOnly = normalizeCharacterName(raw);
+        var trig = nameOnly ? ('@' + nameOnly) : '';
+        if (nameOnly && trig) {
+          var exists = (Array.isArray(characters) ? characters : []).some(function (c) { return String(c.trigger || '').toLowerCase() === trig.toLowerCase(); });
+          if (!exists && brandId && NK.service && NK.service.brand && NK.service.brand.update) {
+            var nextList = (Array.isArray(characters) ? characters.slice() : []);
+            nextList.unshift({
+              id: 'char_' + Date.now(),
+              trigger: trig,
+              name: nameOnly,
+              aliases: [],
+              mainAssetId: '',
+              referenceAssetIds: [],
+              description: '',
+              fixedTraits: [],
+              bannedTraits: [],
+              defaultPromptPrefix: 'Keep character identity consistent.',
+              styleGuide: '',
+              isActive: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+            NK.service.brand.update(brandId, { brandCharacters: nextList }).then(function(){ renderNext(project); }).catch(function(){});
+          }
+        }
       }
     };
 
