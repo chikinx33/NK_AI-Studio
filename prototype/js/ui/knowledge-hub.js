@@ -325,24 +325,7 @@
     var contentItems = (NK.service && NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents)
       ? NK.service.contentLibrary.listProjectContents(brand || project)
       : [];
-    var assetMap = {};
-    contentItems.forEach(function (it) { assetMap[String(it.id || '')] = it; });
     var characters = Array.isArray(brand && brand.brandCharacters) ? brand.brandCharacters : [];
-    var characterCards = characters.length
-      ? characters.map(function (c) {
-        var mainAsset = assetMap[String(c.mainAssetId || '')];
-        var img = mainAsset && mainAsset.url ? ('<img class="chip-thumb" src="' + escapeHtml(mainAsset.url) + '" alt="" />') : '';
-        var missingNote = (!mainAsset && String(c.mainAssetId || '').trim()) ? '<span class="knowledge-badge" style="margin-left:6px;color:#ff9;">대표 이미지 누락</span>' : '';
-        return (
-          '<article class="knowledge-reference-card">' +
-          '<div class="knowledge-reference-top"><span class="knowledge-reference-badge">' + escapeHtml(c.trigger || '@') + '</span><button type="button" class="btn-secondary compact" data-action="char-deactivate" data-char-id="' + escapeHtml(c.id) + '">' + (c.isActive ? '비활성화' : '활성화') + '</button></div>' +
-          '<strong>' + (img ? img + ' ' : '') + escapeHtml(c.name || c.trigger || '캐릭터') + '</strong>' +
-          '<p>' + escapeHtml(c.description || (Array.isArray(c.fixedTraits) && c.fixedTraits.length ? c.fixedTraits.join(', ') : '') || '설명 없음') + '</p>' +
-          (missingNote || '') +
-          '</article>'
-        );
-      }).join('')
-      : '<div class="knowledge-reference-empty">등록된 캐릭터가 없습니다.</div>';
     
     var referenceCards = (knowledge.referenceItems || []).length
       ? knowledge.referenceItems.map(function (item) {
@@ -415,7 +398,6 @@
       '<input id="knowledge-character-input" class="knowledge-character-input" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" />' +
       '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterRows(knowledge.characters) + '</div>' +
       '<p class="knowledge-character-help">@토큰 형식으로 저장되며 캐릭터 자산 목록과 개요에 반영됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
-      '<div class="knowledge-reference-grid knowledge-reference-grid-scrollable">' + characterCards + '</div>' +
       '<div class="brand-publish-summary" style="margin-top:10px;">' +
       '<button class="btn-primary" data-action="knowledge-open-ip-library">IP 라이브러리</button>' +
       '</div>' +
@@ -572,20 +554,7 @@
           .finally(function () { btn.disabled = false; });
         return;
       }
-      else if (action === 'char-deactivate') {
-        var dcid = String(btn.dataset.charId || '').trim();
-        if (!brandId || !dcid || !NK.service || !NK.service.brand || !NK.service.brand.update) return;
-        var nextList = characters.map(function (c) {
-          if (String(c.id) !== dcid) return c;
-          return Object.assign({}, c, { isActive: !c.isActive, updatedAt: new Date().toISOString() });
-        });
-        btn.disabled = true;
-        NK.service.brand.update(brandId, { brandCharacters: nextList })
-          .then(function () { renderNext(project); })
-          .catch(function (err) { alert('상태 변경 실패: ' + (err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; });
-        return;
-      }
+      // 캐릭터 카드 제거에 따라 비활성화 토글 버튼도 제거됨
       else if (action === 'knowledge-save') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras);
