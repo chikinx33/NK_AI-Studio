@@ -1329,6 +1329,11 @@
       renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
       return;
     }
-    renderProject(root, project, brand);
+    try {
+      renderProject(root, project, brand);
+    } catch (err) {
+      try { console.error('BrandStudio render error:', err); } catch (_) {}
+      renderEmpty(root, 'Brand Studio 렌더링 중 오류가 발생했습니다.');
+    }
   };
 })();
