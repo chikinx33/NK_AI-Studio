@@ -8859,10 +8859,22 @@ body {
   align-items: start;
 }
 
+.brand-studio-context-bar,
+.analytics-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  align-items: start;
+}
+
+.brand-studio-context-item:first-child {
+  grid-column: auto;
+}
+
 .knowledge-hub-context-item:first-child {
   grid-column: auto;
 }
 
+.brand-studio-context-item,
 .knowledge-hub-context-item {
   grid-template-rows: auto auto 1fr;
   align-content: start;
@@ -8871,9 +8883,23 @@ body {
   height: 100%;
 }
 
+.analytics-summary-card {
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  align-items: start;
+  min-height: 132px;
+  height: 100%;
+}
+
+.brand-studio-context-item span,
+.brand-studio-context-item strong,
+.brand-studio-context-item p,
 .knowledge-hub-context-item span,
 .knowledge-hub-context-item strong,
-.knowledge-hub-context-item p {
+.knowledge-hub-context-item p,
+.analytics-summary-card span,
+.analytics-summary-card strong,
+.analytics-summary-card p {
   align-self: start;
 }
 
@@ -8910,16 +8936,31 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.brand-studio-hero .studio-kpi-grid,
+.analytics-hero .studio-kpi-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.brand-studio-hero .studio-kpi-card,
+.analytics-hero .studio-kpi-card,
 .knowledge-hub-hero .studio-kpi-card {
   min-height: 102px;
   align-content: start;
 }
 
+.brand-studio-hero .studio-kpi-card:first-child,
+.analytics-hero .studio-kpi-card:first-child,
 .knowledge-hub-hero .studio-kpi-card:first-child {
   grid-column: auto;
   grid-row: auto;
 }
 
+.brand-studio-hero .studio-kpi-card:nth-child(2),
+.brand-studio-hero .studio-kpi-card:nth-child(3),
+.brand-studio-hero .studio-kpi-card:nth-child(4),
+.analytics-hero .studio-kpi-card:nth-child(2),
+.analytics-hero .studio-kpi-card:nth-child(3),
+.analytics-hero .studio-kpi-card:nth-child(4),
 .knowledge-hub-hero .studio-kpi-card:nth-child(2),
 .knowledge-hub-hero .studio-kpi-card:nth-child(3),
 .knowledge-hub-hero .studio-kpi-card:nth-child(4) {
@@ -9013,11 +9054,45 @@ body {
   background: color-mix(in srgb, var(--panel) 88%, rgba(255, 255, 255, 0.02) 12%);
 }
 
+.brand-studio-panel-embedded,
+.analytics-panel-embedded,
 .knowledge-hub-panel-embedded {
   padding: 0;
   border: 0;
   background: transparent;
   box-shadow: none;
+}
+
+.brand-studio-selection-summary,
+.brand-asset-selection-summary,
+.analytics-filter-summary,
+.brand-channel-summary,
+.brand-publish-summary {
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 86%, rgba(255, 255, 255, 0.06) 14%);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 980px) {
+  .brand-studio-context-bar,
+  .knowledge-hub-context-bar,
+  .analytics-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .brand-studio-context-bar,
+  .knowledge-hub-context-bar,
+  .analytics-summary-grid,
+  .brand-studio-hero .studio-kpi-grid,
+  .knowledge-hub-hero .studio-kpi-grid,
+  .analytics-hero .studio-kpi-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .analytics-view-tab,

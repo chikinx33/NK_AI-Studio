@@ -638,9 +638,6 @@
         '</button>'
       );
     })).join('');
-    var selectedAssetSummary = selectedAssetItems.length
-      ? selectedAssetItems.map(function (item) { return assetTypeLabel(item.type) + ' ' + (item.title || '자산'); }).slice(0, 3).join(' · ')
-      : '아직 선택된 브랜드 자산이 없습니다.';
     var assetCards = filteredAssetItems.length
       ? filteredAssetItems.map(function (item) {
         var itemId = String(item.id || '').trim();
@@ -729,11 +726,6 @@
       savedCaption ? '캡션 초안 저장됨' : '캡션 초안 자동 생성 가능',
       savedHashtags ? '해시태그 저장됨' : '해시태그 자동 생성 가능'
     ];
-    var latestPublishedAt = publishResults.reduce(function (acc, item) {
-      var current = String(item && item.publishedAt || '').trim();
-      if (!current) return acc;
-      return !acc || current > acc ? current : acc;
-    }, '');
     var brandHeroPills = [
       { label: '현재 에피소드', value: currentEpisodeTitle },
       { label: '선택 포맷', value: selectedOption ? selectedOption.title : '콘텐츠 유형 선택 필요' },
@@ -746,30 +738,25 @@
       {
         label: '다음 액션',
         value: summary.nextAction || '준비 중',
-        detail: selectedOption ? '현재 선택된 포맷 기준으로 초안을 이어갑니다.' : '콘텐츠 유형을 먼저 정하면 발행 초안이 정리됩니다.',
         accent: true
       },
       {
         label: '연결 채널',
-        value: channelConnections.length + '개',
-        detail: channelConnections.length ? channelConnections.map(function (item) { return channelTitleMap[item.channelType] || item.channelType; }).join(', ') : '브랜드 채널 연결이 아직 없습니다.'
+        value: channelConnections.length + '개'
       },
       {
         label: '선택 자산',
-        value: selectedAssetItems.length ? (selectedAssetItems.length + '개') : '0개',
-        detail: selectedAssetSummary
+        value: selectedAssetItems.length ? (selectedAssetItems.length + '개') : '0개'
       },
       {
         label: '게시 데이터',
-        value: publishResults.length ? (publishResults.length + '건') : '0건',
-        detail: latestPublishedAt ? ('최근 게시 ' + latestPublishedAt) : '성과 데이터가 아직 없습니다.'
+        value: publishResults.length ? (publishResults.length + '건') : '0건'
       }
     ].map(function (item) {
       return (
         '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
         '<span>' + escapeHtml(item.label) + '</span>' +
         '<strong>' + escapeHtml(item.value) + '</strong>' +
-        '<p>' + escapeHtml(item.detail) + '</p>' +
         '</article>'
       );
     }).join('');

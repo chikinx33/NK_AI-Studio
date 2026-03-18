@@ -222,30 +222,25 @@
       {
         label: '누적 게시',
         value: String(summary.totalPosts) + '개',
-        detail: summary.totalPosts ? '채널별 실운영 데이터가 분석에 반영되고 있습니다.' : 'Brand Studio에서 게시 결과를 먼저 쌓아 주세요.',
         accent: true
       },
       {
         label: '총 조회수',
-        value: String(summary.views),
-        detail: summary.totalPosts ? '좋아요 ' + String(summary.likes) + ' · 댓글 ' + String(summary.comments) : '조회수 데이터가 아직 없습니다.'
+        value: String(summary.views)
       },
       {
         label: '전략 추천',
-        value: recommendations.length + '개',
-        detail: recommendations.length ? '데이터를 바탕으로 바로 실행 가능한 운영 제안입니다.' : '추천을 만들 만큼의 데이터가 아직 부족합니다.'
+        value: recommendations.length + '개'
       },
       {
         label: '상위 채널',
-        value: channelLabel(summary.topChannel || '-'),
-        detail: channels.length ? ('최근 성과가 가장 좋은 채널은 ' + channelLabel(channels[0].channelType || '-')) : '비교 가능한 채널 데이터가 없습니다.'
+        value: channelLabel(summary.topChannel || '-')
       }
     ].map(function (item) {
       return (
         '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
         '<span>' + escapeHtml(item.label) + '</span>' +
         '<strong>' + escapeHtml(item.value) + '</strong>' +
-        '<p>' + escapeHtml(item.detail) + '</p>' +
         '</article>'
       );
     }).join('');
@@ -253,9 +248,7 @@
       { label: '분석 브랜드', value: brand && brand.brandTitle || payload.brandTitle || '-', detail: '현재 브랜드 기준의 게시 결과를 집계합니다.' },
       { label: '현재 기준 에피소드', value: currentEpisodeTitle, detail: '필요하면 아래 필터에서 다른 에피소드나 시즌으로 좁힐 수 있습니다.' },
       { label: '누적 게시', value: String(summary.totalPosts) + '개', detail: summary.totalPosts ? '실제 성과 데이터가 누적되고 있습니다.' : '분석을 시작하려면 게시 결과 입력이 필요합니다.' },
-      { label: '총 조회수', value: String(summary.views), detail: '조회수 기반으로 상위 채널과 시간대를 계산합니다.' },
-      { label: '총 반응', value: String(summary.likes + summary.comments + summary.shares), detail: '좋아요, 댓글, 공유를 합산한 참여 반응입니다.' },
-      { label: '상위 채널', value: channelLabel(summary.topChannel || '-'), detail: '가장 높은 조회수를 만든 채널입니다.' }
+      { label: '총 조회수', value: String(summary.views), detail: '조회수 기반으로 상위 채널과 시간대를 계산합니다.' }
     ].map(function (item) {
       return (
         '<article class="analytics-summary-card">' +
