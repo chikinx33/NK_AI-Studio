@@ -9084,11 +9084,55 @@ body {
   box-shadow: none;
 }
 
+.brand-composer-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.brand-composer-summary-grid > div {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, rgba(255, 255, 255, 0.08) 16%);
+  background: var(--studio-soft-bg);
+  display: grid;
+  gap: 6px;
+}
+
+.brand-composer-auto-suggestion {
+  display: grid;
+  gap: 8px;
+}
+
+.brand-studio-disclosure-featured {
+  position: relative;
+  border-color: color-mix(in srgb, rgba(255, 140, 0, 0.46) 68%, var(--border) 32%);
+  background:
+    radial-gradient(circle at top right, rgba(255, 156, 66, 0.14), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, rgba(255, 122, 0, 0.05) 8%), color-mix(in srgb, var(--bg-2) 96%, rgba(255, 255, 255, 0.02) 4%));
+  box-shadow: 0 14px 32px rgba(255, 122, 0, 0.12);
+}
+
+.brand-studio-disclosure-featured > summary {
+  background:
+    radial-gradient(circle at top right, rgba(255, 156, 66, 0.12), transparent 48%),
+    color-mix(in srgb, var(--panel) 90%, rgba(255, 122, 0, 0.04) 10%);
+}
+
+.brand-studio-disclosure-featured .brand-studio-composer-panel {
+  border-left: 0;
+  box-shadow: none;
+}
+
 @media (max-width: 980px) {
   .brand-studio-context-bar,
   .knowledge-hub-context-bar,
   .analytics-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-composer-summary-grid {
+    grid-template-columns: 1fr;
   }
 }
 

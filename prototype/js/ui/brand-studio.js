@@ -914,9 +914,11 @@
         );
       }).join('')
       : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
+    var isQuickstartOpen = readDisclosureOpen(root, 'quickstart', false);
     var isKnowledgeOpen = readDisclosureOpen(root, 'knowledge-snapshot', false);
     var isAssetsOpen = readDisclosureOpen(root, 'asset-selection', false);
     var isContentTypeOpen = readDisclosureOpen(root, 'content-type', false);
+    var isComposerOpen = readDisclosureOpen(root, 'publish-composer', true);
     var isChannelPlanOpen = readDisclosureOpen(root, 'channel-plan', false);
     var isPublishResultsOpen = readDisclosureOpen(root, 'publish-results', false);
 
@@ -929,6 +931,9 @@
       savedCaption ? '캡션 초안 저장됨' : '캡션 초안 자동 생성 가능',
       savedHashtags ? '해시태그 저장됨' : '해시태그 자동 생성 가능'
     ];
+    var quickStartReadyCount = autoSetupSummary.filter(function (item, index) {
+      return index === 0 ? !!selectedType : (index === 1 ? !!persistedSelectedAssetItems.length : (index === 2 ? !!savedCaption : !!savedHashtags));
+    }).length;
     var brandHeroPills = [
       { label: '현재 에피소드', value: currentEpisodeTitle },
       { label: '선택 포맷', value: selectedOption ? selectedOption.title : '콘텐츠 유형 선택 필요' },
@@ -1027,8 +1032,10 @@
       '<div class="brand-studio-context-bar">' + brandContextSummary + '</div>' +
       '<div class="brand-studio-workspace">' +
       '<div class="brand-studio-main">' +
-      '<section class="brand-studio-panel brand-studio-quickstart-panel">' +
-      '<div class="brand-studio-panel-head"><h3>빠른 시작</h3><span>복잡한 선택 없이 기본 구성을 바로 채웁니다</span></div>' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="quickstart" ' + (isQuickstartOpen ? 'open' : '') + '>' +
+      '<summary><div><strong>빠른 시작</strong><span>복잡한 선택 없이 기본 구성을 바로 채웁니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(quickStartReadyCount + '/' + autoSetupSummary.length + '개 준비') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded brand-studio-quickstart-panel">' +
       '<div class="brand-studio-checklist">' +
       autoSetupSummary.map(function (item, index) {
         var ready = index === 0 ? !!selectedType : (index === 1 ? !!persistedSelectedAssetItems.length : (index === 2 ? !!savedCaption : !!savedHashtags));
@@ -1040,20 +1047,8 @@
       '<span class="brand-caption-help">콘텐츠 유형, 추천 자산, 캡션, 해시태그를 현재 브랜드 문맥으로 기본 설정합니다.</span>' +
       '</div>' +
       '</section>' +
-      (autoSuggestion
-        ? '<section class="brand-studio-panel brand-auto-suggestion-panel">' +
-          '<div class="brand-studio-panel-head"><h3>적용된 자동 제안</h3><span>Analytics에서 가져온 초안</span></div>' +
-          '<div class="brand-auto-suggestion-card">' +
-          '<strong>' + escapeHtml(autoSuggestion.title || '자동 제안') + '</strong>' +
-          '<p>' + escapeHtml(autoSuggestion.reason || '추천 근거 없음') + '</p>' +
-          '<div class="brand-auto-suggestion-meta">' +
-          '<span>채널: ' + escapeHtml(autoSuggestion.targetChannel || '-') + '</span>' +
-          '<span>추천 시간: ' + escapeHtml(autoSuggestion.recommendedTime || '-') + '</span>' +
-          '</div>' +
-          '</div>' +
-          '</section>'
-        : '') +
-      '' +
+      '</div>' +
+      '</details>' +
       '<details class="brand-studio-disclosure" data-disclosure-id="knowledge-snapshot" ' + (isKnowledgeOpen ? 'open' : '') + '>' +
       '<summary><div><strong>브랜드 허브 스냅샷</strong><span>지금 필요한 규칙만 짧게 확인</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(knowledge.brandRules.length ? (knowledge.brandRules.length + '개 규칙') : '간단 요약') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
@@ -1105,12 +1100,27 @@
       '</details>' +
       '</div>' +
       '<div class="brand-studio-side">' +
-      '<section class="brand-studio-panel brand-studio-composer-panel" id="brand-publish-composer">' +
-      '<div class="brand-studio-panel-head"><h3>발행 초안</h3><span>캡션과 해시태그를 한 곳에서 정리</span></div>' +
-      '<div class="brand-studio-context-bar brand-studio-context-bar-compact">' +
-      '<div class="brand-studio-context-item"><span>콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</strong></div>' +
-      '<div class="brand-studio-context-item"><span>다음 단계</span><strong>' + escapeHtml(summary.nextAction || '준비 중') + '</strong></div>' +
+      '<details class="brand-studio-disclosure brand-studio-disclosure-featured" data-disclosure-id="publish-composer" id="brand-publish-composer" ' + (isComposerOpen ? 'open' : '') + '>' +
+      '<summary><div><strong>발행 초안</strong><span>캡션과 해시태그를 한 곳에서 정리</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded brand-studio-composer-panel">' +
+      '<div class="brand-composer-summary-grid">' +
+      '<div><span class="brand-caption-meta-label">콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">다음 단계</span><strong>' + escapeHtml(summary.nextAction || '준비 중') + '</strong></div>' +
       '</div>' +
+      (autoSuggestion
+        ? '<div class="brand-composer-auto-suggestion">' +
+          '<span class="brand-caption-meta-label">적용된 자동 제안</span>' +
+          '<div class="brand-auto-suggestion-card">' +
+          '<strong>' + escapeHtml(autoSuggestion.title || '자동 제안') + '</strong>' +
+          '<p>' + escapeHtml(autoSuggestion.reason || '추천 근거 없음') + '</p>' +
+          '<div class="brand-auto-suggestion-meta">' +
+          '<span>채널: ' + escapeHtml(autoSuggestion.targetChannel || '-') + '</span>' +
+          '<span>추천 시간: ' + escapeHtml(autoSuggestion.recommendedTime || '-') + '</span>' +
+          '</div>' +
+          '</div>' +
+          '</div>'
+        : '') +
       '<div class="brand-caption-generator">' +
       '<div class="brand-caption-meta">' +
       '<div><span class="brand-caption-meta-label">참조 소스</span><strong>' + escapeHtml(selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : (sourceTexts.length ? ('브랜드 텍스트 소스 ' + sourceTexts.length + '개') : '아직 없음')) + '</strong></div>' +
@@ -1137,6 +1147,8 @@
       '</div>' +
       '<p class="brand-caption-help">채널 연결, 예약, 게시 결과는 아래 접힘 섹션에서 관리합니다. 기본 화면은 초안 작성에 집중합니다.</p>' +
       '</section>' +
+      '</div>' +
+      '</details>' +
       '<details class="brand-studio-disclosure" data-disclosure-id="channel-plan" ' + (isChannelPlanOpen ? 'open' : '') + '>' +
       '<summary><div><strong>채널 연결과 예약</strong><span>브랜드 공용 채널과 예약 게시 설정</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(channelConnections.length ? (channelConnections.length + '개 채널') : '미연결') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
@@ -1269,6 +1281,7 @@
             if (result && result.draft) renderNext(result.draft);
             setTimeout(function () {
               var composer = root.querySelector('#brand-publish-composer');
+              if (composer && !composer.open) composer.open = true;
               var captionBox = root.querySelector('#brand-caption-textarea');
               if (composer && composer.scrollIntoView) composer.scrollIntoView({ behavior: 'smooth', block: 'start' });
               if (captionBox) captionBox.focus();
@@ -1506,6 +1519,7 @@
           return;
         }
         var composerEl = root.querySelector('#brand-publish-composer');
+        if (composerEl && !composerEl.open) composerEl.open = true;
         if (composerEl && composerEl.scrollIntoView) composerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
         if (captionEl) captionEl.focus();
         return;
