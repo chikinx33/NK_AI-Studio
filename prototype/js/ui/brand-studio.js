@@ -739,7 +739,7 @@
       '<div class="brand-asset-selection-summary">' +
       '<div>' +
       '<span class="brand-studio-selection-label">IP 자산 요약</span>' +
-      '<strong>' + escapeHtml(String(assetItems.filter(function(i){return i.type===\"image\";}).length)) + ' 이미지 · ' + escapeHtml(String(assetItems.filter(function(i){return i.type===\"video\";}).length)) + ' 영상</strong>' +
+      '<strong>' + escapeHtml(String(assetItems.filter(function(i){return i.type==="image";}).length)) + ' 이미지 · ' + escapeHtml(String(assetItems.filter(function(i){return i.type==="video";}).length)) + ' 영상</strong>' +
       '<p>' + escapeHtml(selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : 'IP 폴더 기반 결과물만 표시') + '</p>' +
       '</div>' +
       '<div class="brand-studio-selection-actions">' +
