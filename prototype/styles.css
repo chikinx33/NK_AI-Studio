@@ -9304,3 +9304,69 @@ body {
     order: 0;
   }
 }
+
+/* Brand Studio SNS content type cards need an isolated layout so later shared card rules do not collapse them. */
+.brand-studio-page .brand-content-type-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.brand-studio-page .brand-content-type-card {
+  width: 100%;
+  min-width: 0;
+  min-height: 168px;
+  padding: 16px;
+  display: grid;
+  grid-column: span 3;
+  grid-auto-rows: min-content;
+  align-content: start;
+  justify-items: start;
+  gap: 10px;
+  overflow: hidden;
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.brand-studio-page .brand-content-type-card.is-active {
+  grid-column: 1 / -1;
+  min-height: 146px;
+}
+
+.brand-studio-page .brand-content-type-card > strong,
+.brand-studio-page .brand-content-type-card > p,
+.brand-studio-page .brand-content-type-card > .brand-content-type-state,
+.brand-studio-page .brand-content-type-card > .brand-content-type-output {
+  width: 100%;
+  writing-mode: horizontal-tb;
+  text-orientation: mixed;
+}
+
+@media (max-width: 1200px) {
+  .brand-studio-page .brand-content-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-studio-page .brand-content-type-card,
+  .brand-studio-page .brand-content-type-card:first-child {
+    grid-column: span 1;
+  }
+
+  .brand-studio-page .brand-content-type-card.is-active {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 720px) {
+  .brand-studio-page .brand-content-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-studio-page .brand-content-type-card,
+  .brand-studio-page .brand-content-type-card:first-child,
+  .brand-studio-page .brand-content-type-card.is-active {
+    grid-column: span 1;
+    min-height: 0;
+  }
+}

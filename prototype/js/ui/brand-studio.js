@@ -813,7 +813,10 @@
       });
     }
 
-    var contentTypeCards = options.map(function (item) {
+    var orderedContentTypeOptions = (selectedOption
+      ? [selectedOption].concat(options.filter(function (item) { return item.id !== selectedOption.id; }))
+      : options.slice());
+    var contentTypeCards = orderedContentTypeOptions.map(function (item) {
       var isActive = item.id === effectiveSelectedType;
       return (
         '<button type="button" class="brand-content-type-card ' + (isActive ? 'is-active' : '') + '" data-action="brand-select-content-type" data-content-type="' + escapeHtml(item.id) + '">' +
