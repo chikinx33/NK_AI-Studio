@@ -8906,6 +8906,26 @@ body {
   grid-column: 2;
 }
 
+.knowledge-hub-hero .studio-kpi-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.knowledge-hub-hero .studio-kpi-card {
+  min-height: 102px;
+  align-content: start;
+}
+
+.knowledge-hub-hero .studio-kpi-card:first-child {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.knowledge-hub-hero .studio-kpi-card:nth-child(2),
+.knowledge-hub-hero .studio-kpi-card:nth-child(3),
+.knowledge-hub-hero .studio-kpi-card:nth-child(4) {
+  grid-column: auto;
+}
+
 .brand-studio-workspace {
   grid-template-columns: minmax(420px, 0.94fr) minmax(0, 1.06fr);
   gap: 12px;
