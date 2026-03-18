@@ -8993,6 +8993,13 @@ body {
   background: color-mix(in srgb, var(--panel) 88%, rgba(255, 255, 255, 0.02) 12%);
 }
 
+.knowledge-hub-panel-embedded {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .analytics-view-tab,
 .brand-asset-filter {
   border-radius: 999px;

@@ -81,6 +81,51 @@
       };
   }
 
+  function getScrollContainer(node) {
+    var current = node && node.parentElement;
+    while (current) {
+      var style = window.getComputedStyle(current);
+      var overflowY = String(style && style.overflowY || '');
+      if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && current.scrollHeight > current.clientHeight) {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return document.scrollingElement || document.documentElement || document.body;
+  }
+
+  function scrollDisclosureIntoView(disclosure) {
+    if (!disclosure || !disclosure.open) return;
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        var margin = 20;
+        var scroller = getScrollContainer(disclosure);
+        var rect = disclosure.getBoundingClientRect();
+        if (!scroller || scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement) {
+          var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+          var delta = rect.bottom - (viewportHeight - margin);
+          if (delta > 0) window.scrollBy({ top: delta, behavior: 'smooth' });
+          return;
+        }
+        var scrollerRect = scroller.getBoundingClientRect();
+        var deltaInScroller = rect.bottom - (scrollerRect.bottom - margin);
+        if (deltaInScroller > 0) {
+          scroller.scrollTo({ top: scroller.scrollTop + deltaInScroller, behavior: 'smooth' });
+        }
+      });
+    });
+  }
+
+  function bindDisclosureScroll(root) {
+    var disclosures = root && root.querySelectorAll ? root.querySelectorAll('.knowledge-hub-disclosure') : [];
+    Array.prototype.forEach.call(disclosures, function (disclosure) {
+      disclosure.ontoggle = function () {
+        if (!disclosure.open) return;
+        scrollDisclosureIntoView(disclosure);
+      };
+    });
+  }
+
   function parseCharacterNoteEntries(value) {
     return String(value || '')
       .split(/\n+/)
@@ -810,6 +855,8 @@
         });
       });
     };
+
+    bindDisclosureScroll(root);
   }
 
   knowledgeHub.init = function () {
