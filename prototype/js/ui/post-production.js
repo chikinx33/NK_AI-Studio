@@ -2769,30 +2769,6 @@
     renderLayout(model);
     bindEvents();
     setCurrentTime(state.currentTime, true);
-    try {
-      var boxId = 'postprod-character-usage';
-      var box = document.getElementById(boxId);
-      if (!box) {
-        box = document.createElement('div');
-        box.id = boxId;
-        box.style.position = 'relative';
-        box.style.margin = '8px 0 0';
-        var rootHost = document.getElementById('postprod-root');
-        if (rootHost && rootHost.firstElementChild) {
-          rootHost.firstElementChild.insertAdjacentElement('afterbegin', box);
-        } else if (root) {
-          root.insertAdjacentElement('afterbegin', box);
-        }
-      }
-      var used = new Set();
-      (Array.isArray(project.scenes) ? project.scenes : []).forEach(function (s) {
-        (Array.isArray(s && s.resolvedCharacterIds) ? s.resolvedCharacterIds : []).forEach(function (id) { if (id) used.add(String(id)); });
-      });
-      var ids = Array.from(used.values());
-      box.innerHTML = ids.length
-        ? ('<div class="analytics-overview-card"><span>사용 캐릭터</span><strong>' + ids.join(', ') + '</strong></div>')
-        : ('<div class="analytics-overview-card"><span>사용 캐릭터</span><strong>없음</strong></div>');
-    } catch (_) { }
   };
 
   post.init = function () {
