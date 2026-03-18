@@ -2107,7 +2107,7 @@
     const existingSeriesRow = document.createElement('div');
     existingSeriesRow.className = 'form-row project-create-series-select-row hidden';
     existingSeriesRow.innerHTML = `
-      <label>프로젝트</label>
+      <label>에피소드</label>
       <select id="project-series-select"></select>
     `;
 
@@ -2194,9 +2194,12 @@
       return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
     };
 
-    const refreshSeriesOptions = () => {
+    const refreshSeriesOptions = (preferredSeriesId) => {
       if (!seriesSelect) return [];
       const list = getSeriesList();
+      const previousValue = String(
+        preferredSeriesId != null ? preferredSeriesId : (seriesSelect.value || '')
+      ).trim();
       seriesSelect.innerHTML = '';
       if (!list.length) {
         const opt = document.createElement('option');
@@ -2212,6 +2215,10 @@
         opt.textContent = `${s.title} (${s.count}개 에피소드)`;
         seriesSelect.appendChild(opt);
       });
+      const selectedId = list.some((s) => String(s.id) === previousValue)
+        ? previousValue
+        : String((list[0] && list[0].id) || '').trim();
+      seriesSelect.value = selectedId;
       seriesSelect.disabled = false;
       return list;
     };
@@ -2323,9 +2330,18 @@
         btnCreate.disabled = creating;
         // 신규 프로젝트 모드: 프로젝트 리스트 비활성, 하단 인풋 활성
         if (seriesSelect) seriesSelect.disabled = true;
-        if (projectTypeSelect) { projectTypeSelect.disabled = creating ? true : false; projectTypeSelect.value = projectTypeSelect.value || ''; }
-        if (brandSummaryInput) { brandSummaryInput.disabled = creating ? true : false; /* 값 유지(사용자가 입력) */ }
-        if (coreMessageInput) { coreMessageInput.disabled = creating ? true : false; /* 값 유지 */ }
+        if (projectTypeSelect) {
+          projectTypeSelect.disabled = creating ? true : false;
+          projectTypeSelect.value = '';
+        }
+        if (brandSummaryInput) {
+          brandSummaryInput.disabled = creating ? true : false;
+          brandSummaryInput.value = '';
+        }
+        if (coreMessageInput) {
+          coreMessageInput.disabled = creating ? true : false;
+          coreMessageInput.value = '';
+        }
       } else if (!list.length) {
         ensureLabel(baseRow, '에피소드');
         input.placeholder = '에피소드 이름';
@@ -2418,7 +2434,8 @@
       const projectType = projectTypeSelect ? String(projectTypeSelect.value || '').trim() : '';
       const brandSummary = brandSummaryInput ? String(brandSummaryInput.value || '').trim() : '';
       const coreMessage = coreMessageInput ? String(coreMessageInput.value || '').trim() : '';
-      const seriesList = refreshSeriesOptions();
+      const selectedSeriesId = seriesSelect ? String(seriesSelect.value || '').trim() : '';
+      const seriesList = getSeriesList();
       let payload = null;
       if (overlayPurpose === 'edit-series') {
         if (!editingSeriesId) {
@@ -2477,7 +2494,7 @@
           if (seriesInput) seriesInput.focus();
           return;
         }
-        const selectedId = seriesSelect ? String(seriesSelect.value || '').trim() : '';
+        const selectedId = selectedSeriesId;
         const selected = seriesList.find((s) => String(s.id) === selectedId) || null;
         if (!selected) {
           alert('에피소드를 추가할 프로젝트를 선택해 주세요.');

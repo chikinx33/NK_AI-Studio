@@ -4378,6 +4378,11 @@ a.btn-primary:active {
   border: 1px solid var(--border);
   background: var(--bg-2);
   color: var(--text);
+  scrollbar-color: rgba(134, 157, 189, 0.44) transparent;
+}
+
+#project-overlay .project-create-profile-line textarea::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 #project-overlay .project-create-mode {
