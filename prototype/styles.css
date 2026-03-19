@@ -2687,9 +2687,7 @@ textarea::-webkit-scrollbar-corner {
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
   gap: 10px;
   align-items: center;
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--border);
+  margin-top: 10px;
 }
 
 .draft-actions .btn-primary,
