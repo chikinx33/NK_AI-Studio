@@ -574,6 +574,8 @@
         ,'짧은 포맷 중심 확산 채널로 빠른 반응 테스트에 적합합니다.': 'Short-form focused channel for quick response testing.'
         ,'짧은 문장형 공지, 반응 체크, 링크 확산에 적합합니다.': 'Good for short announcements, response checks, and link distribution.'
         ,'@토큰 형식으로 저장되며 캐릭터 자산 목록과 Overview에 반영됩니다.': 'Saved as @tokens and reflected in the character asset list and Overview.'
+        ,'채널을 선택하고 예약 시각을 저장하면 현재 연결 에피소드를 기준으로 브랜드 운영 계획을 남깁니다.': 'Select channels and save a scheduled time to record the brand plan based on the connected episode.'
+        ,'@account 또는 채널명': '@account or channel name'
         ,'생성된 시나리오가 없습니다.': 'No generated scenario yet.'
         ,'왼쪽 패널에서 조건을 입력하고 \'시나리오 생성\'을 눌러주세요.': 'Enter conditions in the left panel and click "Generate scenario".'
         ,'장면이 없습니다': 'No scenes'
@@ -609,6 +611,14 @@
         {
             re: /^(.+)\s수정$/,
             fn: function (m) { return 'Edit ' + translateToEnglish(m[1]); }
+        },
+        {
+            re: /오전\s*([0-9]{1,2})\s*시/g,
+            fn: function (m) { return (m[1]) + ' AM'; }
+        },
+        {
+            re: /오후\s*([0-9]{1,2})\s*시/g,
+            fn: function (m) { return (m[1]) + ' PM'; }
         },
         {
             re: /^(.+)\s아이콘$/,
@@ -824,6 +834,28 @@
         { re: /스타일/g, to: 'Style' },
         { re: /추가 항목/g, to: 'Notes' },
         { re: /로딩 중\.\.\./g, to: 'Loading...' },
+        { re: /쇼츠/g, to: 'Shorts' },
+        { re: /영상 설명/g, to: 'Video description' },
+        { re: /썸네일/g, to: 'Thumbnail' },
+        { re: /피드/g, to: 'Feed' },
+        { re: /릴스/g, to: 'Reels' },
+        { re: /캡션/g, to: 'Caption' },
+        { re: /설명 문구/g, to: 'Description copy' },
+        { re: /업로드 문구/g, to: 'Upload copy' },
+        { re: /대표 이미지/g, to: 'Representative image' },
+        { re: /카피/g, to: 'Copy' },
+        { re: /해시태그/g, to: 'Hashtags' },
+        { re: /본문 초안/g, to: 'Body draft' },
+        { re: /요약 문구/g, to: 'Summary copy' },
+        { re: /태그/g, to: 'Tags' },
+        { re: /홍보/g, to: 'Promo' },
+        { re: /프로모션/g, to: 'Promotion' },
+        { re: /채널명/g, to: 'channel name' },
+        { re: /계정명/g, to: 'account name' },
+        { re: /또는/g, to: 'or' },
+        { re: /짧은 영상/g, to: 'Short video' },
+        { re: /짧은 문장형 게시물/g, to: 'short sentence-style posts' },
+        { re: /반응이 좋았음/g, to: 'performed well' },
         { re: /직장인/g, to: 'Office workers' },
         { re: /학생/g, to: 'Students' },
         { re: /학부모/g, to: 'Parents' },
