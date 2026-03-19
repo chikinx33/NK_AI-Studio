@@ -107,6 +107,11 @@
         '전체': 'All',
         '신규': 'New',
         '시리즈 이름 변경': 'Rename series',
+        '다크': 'Dark',
+        '라이트': 'Light',
+        '언어 전환': 'Language toggle',
+        '로그인 제목 수정': 'Edit login title',
+        '로그인 섹션 제목을 입력해 주세요.': 'Enter the login section title.',
         '시리즈 삭제': 'Delete series',
         '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.': 'Select a series to rename or delete it.',
         '제목없음': 'Untitled',
@@ -142,6 +147,10 @@
         '아이콘 이미지를 등록해 주세요.': 'Please upload an icon image.',
         '즐겨찾기 메뉴가 등록되었습니다.': 'Favorite menu has been added.',
         '새 탭이 차단되었습니다. 브라우저 팝업 차단을 해제해 주세요.': 'New tab was blocked. Please disable the popup blocker in your browser.',
+        '프로젝트 카테고리': 'Project category',
+        '브랜드 요약': 'Brand summary',
+        '기존 Project': 'Existing Project',
+        '우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.': 'Use the top-right theme button to apply the dark/light theme selected here.',
         '텍스트': 'Text',
         '이미지': 'Image',
         '영상': 'Video',
@@ -1060,6 +1069,17 @@
 
         common.applyRuntimeLocale(safeLang);
         common.updateThemeButton(NK.state.runtime.theme, safeLang);
+        try {
+            Array.prototype.forEach.call(document.querySelectorAll('input[required], textarea[required], select[required]'), function (el) {
+                el.addEventListener('invalid', function () {
+                    var msg = safeLang === 'en' ? 'Please fill out this field.' : '이 입력란을 작성하세요.';
+                    this.setCustomValidity(msg);
+                }, { capture: true });
+                el.addEventListener('input', function () {
+                    this.setCustomValidity('');
+                });
+            });
+        } catch (_) { }
     };
 
     common.translateText = function (text, lang) {
