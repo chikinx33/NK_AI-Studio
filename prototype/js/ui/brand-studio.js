@@ -940,7 +940,7 @@
     var hashtagValue = savedHashtags || buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge);
     var needsAutoSetup = !selectedType || !selectedAssetIds.length || !savedCaption || !savedHashtags;
     var autoSetupSummary = [
-      selectedType ? '콘텐츠 유형 저장됨' : ('콘텐츠 유형 자동 기본값: ' + (selectedOption ? selectedOption.title : '-')),
+      selectedType ? '콘텐츠 유형 저장됨' : ('콘텐츠 유형 자동 기본값: ' + (selectedOption ? NK.ui.common.translateText(selectedOption.title, NK.state.runtime.lang) : '-')),
       persistedSelectedAssetItems.length ? ('선택 자산 저장됨 ' + persistedSelectedAssetItems.length + '개') : (selectedAssetItems.length ? ('추천 자산 준비됨 ' + selectedAssetItems.length + '개') : '추천 자산 없음'),
       savedCaption ? '캡션 초안 저장됨' : '캡션 초안 자동 생성 가능',
       savedHashtags ? '해시태그 저장됨' : '해시태그 자동 생성 가능'
@@ -950,7 +950,7 @@
     }).length;
     var brandHeroPills = [
       { label: '현재 에피소드', value: currentEpisodeTitle },
-      { label: '선택 포맷', value: selectedOption ? selectedOption.title : '콘텐츠 유형 선택 필요' },
+      { label: '선택 포맷', value: selectedOption ? NK.ui.common.translateText(selectedOption.title, NK.state.runtime.lang) : '콘텐츠 유형 선택 필요' },
       { label: '자산 상태', value: selectedAssetItems.length ? ('선택 자산 ' + selectedAssetItems.length + '개') : '브랜드 자산 탐색 가능' },
       { label: '다음 단계', value: summary.nextAction || '준비 중' }
     ].map(function (item) {
@@ -1049,7 +1049,7 @@
       '</div>' +
       '</details>' +
       '<details class="brand-studio-disclosure" data-disclosure-id="content-type" ' + (isContentTypeOpen ? 'open' : '') + '>' +
-      '<summary><div><strong>SNS 콘텐츠 유형</strong><span>자동 기본값을 쓰거나 필요할 때만 변경합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</span></summary>' +
+      '<summary><div><strong>SNS 콘텐츠 유형</strong><span>자동 기본값을 쓰거나 필요할 때만 변경합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? NK.ui.common.translateText(selectedOption.title, NK.state.runtime.lang) : '미선택') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
       '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
@@ -1095,7 +1095,7 @@
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded brand-studio-composer-panel">' +
       '<div class="brand-composer-summary-grid">' +
-      '<div><span class="brand-caption-meta-label">콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</strong></div>' +
+      '<div><span class="brand-caption-meta-label">콘텐츠 유형</span><strong>' + escapeHtml(selectedOption ? NK.ui.common.translateText(selectedOption.title, NK.state.runtime.lang) : '미선택') + '</strong></div>' +
       '<div><span class="brand-caption-meta-label">다음 단계</span><strong>' + escapeHtml(summary.nextAction || '준비 중') + '</strong></div>' +
       '</div>' +
       (autoSuggestion
@@ -1189,7 +1189,7 @@
         return '<option value="' + escapeHtml(item.channelType) + '">' + escapeHtml(channelTitleMap[item.channelType] || item.channelType) + '</option>';
       }).join('') +
       '</select>' +
-      '<input id="brand-result-title" class="brand-publish-input" placeholder="게시 제목 또는 콘텐츠명" value="' + escapeHtml(selectedOption ? selectedOption.title : '') + '" />' +
+      '<input id="brand-result-title" class="brand-publish-input" placeholder="게시 제목 또는 콘텐츠명" value="' + escapeHtml(selectedOption ? NK.ui.common.translateText(selectedOption.title, NK.state.runtime.lang) : '') + '" />' +
       '<input id="brand-result-remote-id" class="brand-publish-input" placeholder="게시물 ID 또는 링크 식별자" />' +
       '<input id="brand-result-published-at" class="brand-publish-input" type="datetime-local" value="' + escapeHtml(publishPlan.scheduledAt || '') + '" />' +
       '<select id="brand-result-status" class="brand-publish-input">' +

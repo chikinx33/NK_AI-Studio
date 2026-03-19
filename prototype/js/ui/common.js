@@ -576,6 +576,8 @@
         ,'@토큰 형식으로 저장되며 캐릭터 자산 목록과 Overview에 반영됩니다.': 'Saved as @tokens and reflected in the character asset list and Overview.'
         ,'채널을 선택하고 예약 시각을 저장하면 현재 연결 에피소드를 기준으로 브랜드 운영 계획을 남깁니다.': 'Select channels and save a scheduled time to record the brand plan based on the connected episode.'
         ,'@account 또는 채널명': '@account or channel name'
+        ,'IP 자산 요약': 'IP asset summary'
+        ,'브랜드 전체 에피소드의 결과물 집계': 'Aggregated results across all episodes'
         ,'생성된 시나리오가 없습니다.': 'No generated scenario yet.'
         ,'왼쪽 패널에서 조건을 입력하고 \'시나리오 생성\'을 눌러주세요.': 'Enter conditions in the left panel and click "Generate scenario".'
         ,'장면이 없습니다': 'No scenes'
@@ -848,6 +850,8 @@
         { re: /본문 초안/g, to: 'Body draft' },
         { re: /요약 문구/g, to: 'Summary copy' },
         { re: /태그/g, to: 'Tags' },
+        { re: /짧은 글/g, to: 'Short text' },
+        { re: /링크/g, to: 'Link' },
         { re: /홍보/g, to: 'Promo' },
         { re: /프로모션/g, to: 'Promotion' },
         { re: /채널명/g, to: 'channel name' },
