@@ -2571,7 +2571,7 @@ textarea::-webkit-scrollbar-corner {
 .draft-info {
   min-width: 0;
   flex: 1 1 auto;
-  padding-right: 112px;
+  padding-right: 88px;
 }
 
 .draft-thumb {
@@ -2614,9 +2614,9 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .edit-btn {
-  width: 46px;
-  height: 46px;
-  border-radius: 12px;
+  width: 35px;
+  height: 35px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
   background:
     radial-gradient(circle at 24% 22%, rgba(255, 159, 63, 0.2), transparent 48%),
@@ -2664,7 +2664,7 @@ textarea::-webkit-scrollbar-corner {
 .edit-btn.top-right {
   position: absolute;
   top: 12px;
-  right: 64px;
+  right: 52px;
   z-index: 2;
 }
 
@@ -2741,12 +2741,12 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .trash-btn {
-  width: 46px;
-  height: 46px;
+  width: 35px;
+  height: 35px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
   background:
     radial-gradient(circle at 24% 22%, rgba(255, 159, 63, 0.2), transparent 48%),
