@@ -2455,11 +2455,15 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .series-create-btn {
-  height: 48px;
-  min-width: 92px;
-  padding: 0 22px;
-  border-radius: 999px;
-  font-size: 15px;
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  padding: 0;
+  border-radius: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
   font-weight: 700;
   box-shadow: 0 14px 28px rgba(255, 122, 0, 0.28);
 }
@@ -7849,10 +7853,6 @@ body.layout-fixed .lib-content {
 
   .series-filter-title {
     font-size: 18px;
-  }
-
-  .series-create-btn {
-    width: 100%;
   }
 
   .brand-studio-context-bar,
