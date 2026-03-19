@@ -2475,6 +2475,19 @@ textarea::-webkit-scrollbar-corner {
   color: #b8e0ff;
 }
 
+[data-theme="light"] .series-chip[data-series-id]:not([data-series-id="__all__"]) {
+  color: #1e3a8a;
+}
+
+[data-theme="light"] .series-chip[data-series-id]:not([data-series-id="__all__"]):hover,
+[data-theme="light"] .series-chip[data-series-id]:not([data-series-id="__all__"]):focus-visible {
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .series-chip[data-series-id]:not([data-series-id="__all__"]).active {
+  color: #0f2f74;
+}
+
 .series-manage-bar {
   grid-column: 1 / -1;
   display: flex;
