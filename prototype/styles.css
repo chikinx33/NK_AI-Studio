@@ -8858,9 +8858,10 @@ body {
 .knowledge-hub-page,
 .analytics-page,
 .content-library-page {
-  width: min(1560px, calc(100vw - 32px));
+  width: 100%;
+  max-width: none;
   gap: 12px;
-  padding: 12px 0 28px;
+  padding: 0 0 28px;
 }
 
 .brand-studio-hero,
@@ -9146,7 +9147,7 @@ body {
   .analytics-page,
   .content-library-page {
     width: 100%;
-    padding-top: 10px;
+    padding-top: 0;
   }
 
   .brand-studio-hero,
