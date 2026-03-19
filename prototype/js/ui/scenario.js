@@ -743,6 +743,10 @@
       if (currentPayload.seriesId && !payload.seriesId) payload.seriesId = currentPayload.seriesId;
       if (currentPayload.seriesTitle && !payload.seriesTitle) payload.seriesTitle = currentPayload.seriesTitle;
       if (currentPayload.episodeTitle && !payload.episodeTitle) payload.episodeTitle = currentPayload.episodeTitle;
+      if (currentPayload.parentProjectId && !payload.parentProjectId) payload.parentProjectId = currentPayload.parentProjectId;
+      if (currentPayload.parentProjectTitle && !payload.parentProjectTitle) payload.parentProjectTitle = currentPayload.parentProjectTitle;
+      if (currentPayload.sourceProjectId && !payload.sourceProjectId) payload.sourceProjectId = currentPayload.sourceProjectId;
+      if (currentPayload.sourceProjectTitle && !payload.sourceProjectTitle) payload.sourceProjectTitle = currentPayload.sourceProjectTitle;
     }
     if (NK.service?.project?.applyProjectCore) {
       Object.assign(payload, NK.service.project.applyProjectCore(payload, { payload: currentPayload }));

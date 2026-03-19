@@ -174,3 +174,70 @@ test('postprodState.applySaveSuccess updates payload/renderMeta via project.upda
   assert.equal(nextProject.renderMeta.status, 'idle');
   assert.equal(ctx.NK.state.runtime.currentProject.renderMeta.outputVideoUrl, 'https://example.com/out.webm');
 });
+
+test('project.create inherits scenario context from selected parent project episode', async () => {
+  const ctx = createContext([
+    {
+      id: 'parent1',
+      title: '모양새 친구들',
+      payload: {
+        topic: '모양새 친구들이 숲에서 모험을 떠난다',
+        seriesId: 'shapes',
+        seriesTitle: '모양새 친구들',
+        episodeTitle: '모양새 친구들',
+        purposeCategory: '스토리 · 서사',
+        purposeTags: ['에피소드'],
+        target: '아동',
+        needs: ['놀이'],
+        tones: ['유머'],
+        styles: ['애니메이션(2D)'],
+        duration: '60',
+        durationMode: 'preset',
+        aspectRatio: '16:9',
+        charactersEnabled: true,
+        characters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리 있고 호기심 많음' }
+        ],
+        knowledgeHub: {
+          brandVoice: '따뜻하고 명확하게 말한다.',
+          brandStory: '모양 친구들이 협력하며 문제를 푸는 이야기다.',
+          brandCharacter: '네모와 동그라미',
+          characters: [
+            { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리 있고 호기심 많음' }
+          ],
+          worldSetting: '형태들이 살아가는 숲 마을',
+          brandRules: ['어려운 표현을 줄인다.'],
+          bannedExpressions: ['폭력적 표현'],
+          referenceContents: ['밝은 유아 애니메이션'],
+          successCases: ['짧고 반복적인 후렴구가 반응이 좋음']
+        }
+      },
+      scenes: [{ id: 1, lines: '기존 씬' }]
+    }
+  ]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+  ctx.NK.api.projectInit = async () => ({ ok: true });
+  ctx.NK.api.projectSave = async () => ({ ok: true });
+
+  const project = ctx.NK.service.project;
+  const created = await project.create({
+    mode: 'episode',
+    parentProjectId: 'parent1',
+    seriesId: 'shapes',
+    seriesTitle: '모양새 친구들',
+    episodeTitle: '모양새 친구들 EP2'
+  });
+
+  assert.equal(created.title, '모양새 친구들 EP2');
+  assert.equal(created.seriesId, 'shapes');
+  assert.equal(created.payload.parentProjectId, 'parent1');
+  assert.equal(created.payload.parentProjectTitle, '모양새 친구들');
+  assert.equal(created.payload.topic, '모양새 친구들이 숲에서 모험을 떠난다');
+  assert.equal(JSON.stringify(created.payload.tones), JSON.stringify(['유머']));
+  assert.equal(JSON.stringify(created.payload.styles), JSON.stringify(['애니메이션(2D)']));
+  assert.equal(created.payload.charactersEnabled, true);
+  assert.equal(created.payload.characters[0].token, '@네모');
+  assert.equal(created.payload.knowledgeHub.brandVoice, '따뜻하고 명확하게 말한다.');
+  assert.equal(created.payload.knowledgeHub.worldSetting, '형태들이 살아가는 숲 마을');
+  assert.equal(JSON.stringify(created.scenes), JSON.stringify([]));
+});

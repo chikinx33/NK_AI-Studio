@@ -27,6 +27,49 @@
         'targetAudience'
     ];
     var PROJECT_CORE_LIST_FIELDS = [];
+    var EPISODE_TEMPLATE_FIELDS = [
+        'topic',
+        'purposeCategory',
+        'purposeTags',
+        'target',
+        'targetAudience',
+        'needs',
+        'tones',
+        'styles',
+        'tone',
+        'style',
+        'duration',
+        'durationMode',
+        'durationCustom',
+        'aspectRatio',
+        'narrationEnabled',
+        'dubbingEnabled',
+        'charactersEnabled',
+        'characters',
+        'characterHints',
+        'manualDirectives',
+        'extraNotes',
+        'banned',
+        'projectType',
+        'contentStyle',
+        'brandSummary',
+        'coreMessage',
+        'brandKeywords',
+        'connectedChannels',
+        'brandVoice',
+        'brandTone',
+        'brandStory',
+        'brandCharacter',
+        'brandRules',
+        'bannedExpressions',
+        'referenceContents',
+        'referenceContentEntries',
+        'successCases',
+        'worldSetting',
+        'knowledgeWorld',
+        'knowledgeCharacters',
+        'knowledgeHub'
+    ];
     var BRAND_SYNC_FIELDS = [
         'brandId',
         'brandTitle',
@@ -276,6 +319,23 @@
         }
     }
 
+    function cloneTemplateValue(value) {
+        if (Array.isArray(value) || (value && typeof value === 'object')) {
+            return cloneJson(value, value);
+        }
+        return value;
+    }
+
+    function extractEpisodeTemplate(source) {
+        var raw = source && typeof source === 'object' ? source : {};
+        var out = {};
+        EPISODE_TEMPLATE_FIELDS.forEach(function (key) {
+            if (!Object.prototype.hasOwnProperty.call(raw, key)) return;
+            out[key] = cloneTemplateValue(raw[key]);
+        });
+        return out;
+    }
+
     function extractBrandContext(source) {
         var raw = source && typeof source === 'object' ? source : {};
         var context = {};
@@ -396,11 +456,15 @@
         payload.brandId = brandMeta.brandId;
         payload.brandTitle = brandMeta.brandTitle;
         payload.brandRef = brandMeta.brandRef;
+        var parentProjectId = normalizeText(payload.parentProjectId || payload.sourceProjectId);
+        var parentProjectTitle = normalizeText(payload.parentProjectTitle || payload.sourceProjectTitle);
         return Object.assign({}, draft, {
             id: id,
             title: title,
             seriesId: seriesId,
             seriesTitle: seriesTitle,
+            parentProjectId: parentProjectId,
+            parentProjectTitle: parentProjectTitle,
             brandId: brandMeta.brandId,
             brandRef: brandMeta.brandRef,
             projectCore: normalizeProjectCore(payload),
@@ -608,6 +672,7 @@
         var seriesId = '';
         var seriesTitle = '';
         var episodeTitle = '';
+        var parentProjectId = '';
 
         if (typeof arg === 'string') {
             seriesTitle = String(arg || '').trim() || '새 프로젝트';
@@ -618,6 +683,7 @@
             seriesId = normalizeSeriesId(opts.seriesId);
             seriesTitle = String(opts.seriesTitle || '').trim();
             episodeTitle = String(opts.episodeTitle || '').trim();
+            parentProjectId = normalizeText(opts.parentProjectId || opts.sourceProjectId);
         }
 
         var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
@@ -625,14 +691,28 @@
         var requestedCore = normalizeProjectCore(arg || {});
         var requestedBrandContext = (arg && typeof arg === 'object') ? cloneJson(arg, {}) : {};
         var inheritedContext = Object.assign({}, requestedCore, extractBrandContext(arg || {}));
+        var inheritedPayload = {};
+        var parentDraft = null;
 
         if (mode === 'episode') {
+            if (parentProjectId) {
+                parentDraft = getDraftById(parentProjectId);
+                if (parentDraft) {
+                    seriesId = seriesId || parentDraft.seriesId;
+                    seriesTitle = seriesTitle || parentDraft.seriesTitle;
+                }
+            }
             var matched = seriesList.find(function (s) { return String(s.id) === String(seriesId); });
             if (!matched) throw new Error('series_not_found');
-            var matchedDraft = drafts.find(function (d) { return String(d.seriesId) === String(seriesId); }) || null;
+            var matchedDraft = parentDraft || drafts.find(function (d) { return String(d.seriesId) === String(seriesId); }) || null;
             seriesTitle = seriesTitle || matched.title;
             if (!episodeTitle) episodeTitle = seriesTitle + ' 새 에피소드';
+            parentDraft = matchedDraft || parentDraft;
+            if (matchedDraft && matchedDraft.id) {
+                parentProjectId = String(matchedDraft.id);
+            }
             inheritedContext = extractBrandContext((matchedDraft && matchedDraft.payload) || {});
+            inheritedPayload = extractEpisodeTemplate((matchedDraft && matchedDraft.payload) || {});
         } else {
             if (!seriesTitle) throw new Error('series_title_required');
             seriesId = seriesId || ('projects' + Date.now());
@@ -641,24 +721,32 @@
 
         var id = uniqueEpisodeId();
         var ratio = NK.store.getAspectRatio();
+        var parentProjectTitle = normalizeText(parentDraft && parentDraft.title || (parentProjectId && inheritedPayload.episodeTitle) || '');
+        var basePayload = Object.assign({}, inheritedPayload, requestedCore, {
+            topic: normalizeText(inheritedPayload.topic || (parentDraft && parentDraft.payload && parentDraft.payload.topic) || ''),
+            aspectRatio: normalizeText(inheritedPayload.aspectRatio || ratio) || ratio,
+            brandId: normalizeBrandId(inheritedContext.brandId || seriesId),
+            brandTitle: normalizeText(inheritedContext.brandTitle || seriesTitle) || seriesTitle,
+            brandRef: inheritedContext.brandRef || {
+                id: normalizeBrandId(inheritedContext.brandId || seriesId),
+                title: normalizeText(inheritedContext.brandTitle || seriesTitle) || seriesTitle
+            },
+            seriesId: seriesId,
+            seriesTitle: seriesTitle,
+            episodeTitle: episodeTitle,
+            parentProjectId: mode === 'episode' ? parentProjectId : '',
+            parentProjectTitle: mode === 'episode' ? parentProjectTitle : '',
+            sourceProjectId: mode === 'episode' ? parentProjectId : '',
+            sourceProjectTitle: mode === 'episode' ? parentProjectTitle : ''
+        });
         var newDraft = {
             id: id,
             title: episodeTitle,
             seriesId: seriesId,
             seriesTitle: seriesTitle,
-            payload: applyProjectCore({
-                topic: '',
-                aspectRatio: ratio,
-                brandId: normalizeBrandId(inheritedContext.brandId || seriesId),
-                brandTitle: normalizeText(inheritedContext.brandTitle || seriesTitle) || seriesTitle,
-                brandRef: inheritedContext.brandRef || {
-                    id: normalizeBrandId(inheritedContext.brandId || seriesId),
-                    title: normalizeText(inheritedContext.brandTitle || seriesTitle) || seriesTitle
-                },
-                seriesId: seriesId,
-                seriesTitle: seriesTitle,
-                episodeTitle: episodeTitle
-            }, { payload: inheritedContext }),
+            parentProjectId: mode === 'episode' ? parentProjectId : '',
+            parentProjectTitle: mode === 'episode' ? parentProjectTitle : '',
+            payload: applyProjectCore(basePayload, { payload: Object.assign({}, inheritedContext, inheritedPayload) }),
             scenes: []
         };
 
