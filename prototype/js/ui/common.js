@@ -556,6 +556,12 @@
         ,'브랜드 규칙이 아직 없습니다.': 'No brand rules yet.'
         ,'금지 표현 / 참조': 'Banned expressions / references'
         ,'자동 기본값을 쓰거나 필요할 때만 변경합니다': 'Use auto defaults and change only when needed'
+        ,'콘텐츠 유형 저장됨': 'Content type saved'
+        ,'추천 자산 없음': 'No recommended assets'
+        ,'캡션 초안 저장됨': 'Caption draft saved'
+        ,'해시태그 자동 생성 가능': 'Auto hashtag generation available'
+        ,'채널 연결, 예약, 게시 결과는 아래 접힘 섹션에서 관리합니다. 기본 화면은 초안 작성에 집중합니다.': 'Manage channel connections, scheduling, and publish results in the collapsed section below. The main screen focuses on drafting.'
+        ,'선택한 자산이 있으면 캡션과 해시태그 생성에 우선 반영합니다. 선택하지 않으면 브랜드 전체 텍스트 자산을 참고합니다.': 'If assets are selected, caption and hashtag generation prioritizes them; otherwise, it references brand‑wide text assets.'
         ,'AI가 계속 참고할 말투와 표현 원칙이 아직 없습니다.': 'No tone and expression guideline yet.'
         ,'왜 존재하는지, 어떤 세계를 다루는지 요약해 주세요.': 'Summarize why it exists and what world it covers.'
         ,'배경 문맥이 비어 있으면 결과물이 쉽게 흔들립니다.': 'Results can easily waver if background context is empty.'
@@ -584,6 +590,10 @@
         {
             re: /^(.+)\s삭제$/,
             fn: function (m) { return 'Delete ' + m[1]; }
+        },
+        {
+            re: /^(.+)\s수정$/,
+            fn: function (m) { return 'Edit ' + translateToEnglish(m[1]); }
         },
         {
             re: /^(.+)\s아이콘$/,
@@ -784,6 +794,7 @@
         { re: /타임라인 맞춤/g, to: 'Fit timeline' },
         { re: /글자색/g, to: 'Text color' },
         { re: /배경색/g, to: 'Background color' },
+        { re: /수정/g, to: 'Edit' },
         { re: /시나리오 생성/g, to: 'Generate scenario' },
         { re: /시나리오 작성/g, to: 'Write scenario' },
         { re: /초기화/g, to: 'Reset' },
