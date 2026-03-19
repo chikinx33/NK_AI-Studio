@@ -7946,6 +7946,19 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
+.brand-studio-hero,
+.knowledge-hub-hero,
+.analytics-hero {
+  border: 1px solid rgba(147, 197, 253, 0.28);
+  background:
+    radial-gradient(circle at top right, rgba(191, 219, 254, 0.22), transparent 28%),
+    radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.18), transparent 24%),
+    linear-gradient(150deg, #1d4ed8 0%, #2563eb 45%, #1e40af 100%);
+  box-shadow:
+    0 26px 60px rgba(20, 49, 124, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
 .studio-page-hero-main,
 .studio-page-hero-side {
   display: grid;
@@ -7969,6 +7982,12 @@ body {
   text-transform: uppercase;
 }
 
+.brand-studio-eyebrow,
+.knowledge-hub-eyebrow,
+.analytics-eyebrow {
+  color: rgba(219, 234, 254, 0.9);
+}
+
 .brand-studio-hero h2,
 .knowledge-hub-hero h2,
 .analytics-hero h2,
@@ -7981,6 +8000,12 @@ body {
   font-family: 'Space Grotesk', 'Pretendard', 'Inter', system-ui, sans-serif;
 }
 
+.brand-studio-hero h2,
+.knowledge-hub-hero h2,
+.analytics-hero h2 {
+  color: #f8fbff;
+}
+
 .brand-studio-description,
 .knowledge-hub-description,
 .analytics-description,
@@ -7990,6 +8015,12 @@ body {
   color: color-mix(in srgb, var(--muted) 84%, #ffffff 16%);
   font-size: 16px;
   line-height: 1.72;
+}
+
+.brand-studio-description,
+.knowledge-hub-description,
+.analytics-description {
+  color: rgba(226, 232, 240, 0.86);
 }
 
 .studio-hero-pill-row {
@@ -8022,6 +8053,26 @@ body {
   font-size: 13px;
   line-height: 1.4;
   color: var(--text);
+}
+
+.brand-studio-hero .studio-hero-pill,
+.knowledge-hub-hero .studio-hero-pill,
+.analytics-hero .studio-hero-pill {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.brand-studio-hero .studio-hero-pill em,
+.knowledge-hub-hero .studio-hero-pill em,
+.analytics-hero .studio-hero-pill em {
+  color: rgba(226, 232, 240, 0.78);
+}
+
+.brand-studio-hero .studio-hero-pill strong,
+.knowledge-hub-hero .studio-hero-pill strong,
+.analytics-hero .studio-hero-pill strong {
+  color: #f8fbff;
 }
 
 .studio-kpi-grid {
@@ -8081,6 +8132,32 @@ body {
   margin: 0;
   color: color-mix(in srgb, var(--muted) 82%, #ffffff 18%);
   line-height: 1.58;
+}
+
+.brand-studio-hero .studio-kpi-card,
+.knowledge-hub-hero .studio-kpi-card,
+.analytics-hero .studio-kpi-card {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(191, 219, 254, 0.08));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+
+.brand-studio-hero .studio-kpi-card span,
+.knowledge-hub-hero .studio-kpi-card span,
+.analytics-hero .studio-kpi-card span {
+  color: rgba(226, 232, 240, 0.76);
+}
+
+.brand-studio-hero .studio-kpi-card strong,
+.knowledge-hub-hero .studio-kpi-card strong,
+.analytics-hero .studio-kpi-card strong {
+  color: #ffffff;
+}
+
+.brand-studio-hero .studio-kpi-card p,
+.knowledge-hub-hero .studio-kpi-card p,
+.analytics-hero .studio-kpi-card p {
+  color: rgba(226, 232, 240, 0.82);
 }
 
 .brand-studio-hero-actions,
