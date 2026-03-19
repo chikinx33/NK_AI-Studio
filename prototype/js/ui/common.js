@@ -1,4 +1,4 @@
-﻿; (function () {
+; (function () {
     var NK = window.NK || (window.NK = {});
     var ui = NK.ui || (NK.ui = {});
     var common = ui.common || (ui.common = {});
@@ -483,6 +483,55 @@
         '게시 결과를 저장했습니다.': 'Publish result saved.',
         '게시 결과 저장 실패: ': 'Failed to save publish result: ',
         '게시 결과 삭제 실패: ': 'Failed to delete publish result: '
+        ,'먼저 프로젝트를 선택해 주세요.': 'Select a project first.'
+        ,'SNS 게시물': 'SNS post'
+        ,'쇼츠 홍보': 'Shorts promo'
+        ,'홍보 이미지': 'Promo image'
+        ,'블로그 글': 'Blog post'
+        ,'미분류': 'Uncategorized'
+        ,'기본값 채우기': 'Fill defaults'
+        ,'저장 후 Brand Studio': 'Save then open Brand Studio'
+        ,'IP 라이브러리': 'IP Library'
+        ,'라이브러리': 'Library'
+        ,'사용': 'Use'
+        ,'항목이 없습니다.': 'No items.'
+        ,'대표 이미지 누락': 'Missing cover image'
+        ,'활성': 'Active'
+        ,'비활성': 'Inactive'
+        ,'비활성화': 'Deactivate'
+        ,'활성화': 'Activate'
+        ,'브랜드 자산': 'Brand assets'
+        ,'추천 자산': 'Recommended assets'
+        ,'자산 요약': 'Asset summary'
+        ,'이미 저장된 상태입니다.': 'Already saved.'
+        ,'버튼 한 번으로 기본 구성을 적용할 수 있습니다.': 'Apply basic setup with one click.'
+        ,'자동 구성 적용': 'Apply auto setup'
+        ,'원클릭 초안 만들기': 'One-click draft'
+        ,'브랜드 자산 탐색 가능': 'Browse brand assets'
+        ,'콘텐츠 유형 자동 기본값: ': 'Content type auto default: '
+        ,'추천 자산 준비됨 ': 'Prepared recommended assets '
+        ,'IP 폴더 기반 결과물만 표시': 'Showing only IP-folder outputs'
+        ,'저장된 규칙': 'Saved rules'
+        ,'연결 자산': 'Connected assets'
+        ,'AI 기본 문맥': 'AI base context'
+        ,'톤&매너 설정됨': 'Tone & manner set'
+        ,'톤 정리 필요': 'Tone needs defining'
+        ,'브랜드 서사 입력됨': 'Brand story entered'
+        ,'스토리 보강 필요': 'Needs story improvement'
+        ,'배경 정의됨': 'Background defined'
+        ,'배경 정의 필요': 'Needs background definition'
+        ,'캐릭터 운영': 'Character operations'
+        ,'캐릭터 등록 필요': 'Need to register characters'
+        ,'활성 필터': 'Active filters'
+        ,'현재 보기': 'Current view'
+        ,'필터 없음': 'No filters'
+        ,'기본 상태': 'Default state'
+        ,'빠른 시작': 'Quick start'
+        ,'복잡한 선택 없이 기본 구성을 바로 채웁니다': 'Fill defaults instantly without complex choices'
+        ,'자산 커버리지': 'Asset coverage'
+        ,'운영 가드레일': 'Operating guardrail'
+        ,'완료': 'Done'
+        ,'자동': 'Auto'
     };
 
     var EN_PATTERNS = [
@@ -687,7 +736,7 @@
         { re: /영상 길이/g, to: 'Length' },
         { re: /톤/g, to: 'Tone' },
         { re: /스타일/g, to: 'Style' },
-        { re: /추가 항목/g, to: 'Ntes' },
+        { re: /추가 항목/g, to: 'Notes' },
         { re: /로딩 중\.\.\./g, to: 'Loading...' },
         { re: /직장인/g, to: 'Office workers' },
         { re: /학생/g, to: 'Students' },
