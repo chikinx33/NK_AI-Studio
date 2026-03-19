@@ -930,7 +930,6 @@
       }).join('')
       : '<div class="brand-publish-empty">아직 저장된 게시 결과가 없습니다.</div>';
     var isQuickstartOpen = readDisclosureOpen(root, 'quickstart', false);
-    var isKnowledgeOpen = readDisclosureOpen(root, 'knowledge-snapshot', false);
     var isAssetsOpen = readDisclosureOpen(root, 'asset-selection', false);
     var isContentTypeOpen = readDisclosureOpen(root, 'content-type', false);
     var isComposerOpen = readDisclosureOpen(root, 'publish-composer', false);
@@ -1012,20 +1011,6 @@
         '</article>'
       );
     }).join('');
-    var knowledgeCards = [
-      { label: '브랜드 보이스', value: compactSentence(knowledge.brandVoice || '아직 설정되지 않았습니다.', 72) },
-      { label: '운영 규칙', value: summarizeList(knowledge.brandRules, '규칙 없음', 54) },
-      { label: '금지 표현', value: summarizeList(knowledge.bannedExpressions, '금지 표현 없음', 48) },
-      { label: '참조/성공 패턴', value: summarizeList(knowledge.referenceContents.length ? knowledge.referenceContents : knowledge.successCases, '참조 데이터 없음', 54) }
-    ].map(function (item) {
-      return (
-        '<article class="brand-knowledge-card">' +
-        '<span>' + escapeHtml(item.label) + '</span>' +
-        '<strong>' + escapeHtml(item.value) + '</strong>' +
-        '</article>'
-      );
-    }).join('');
-
     root.innerHTML =
       '<section class="brand-studio-page">' +
       '<div class="brand-studio-hero">' +
@@ -1063,12 +1048,21 @@
       '</section>' +
       '</div>' +
       '</details>' +
-      '<details class="brand-studio-disclosure" data-disclosure-id="knowledge-snapshot" ' + (isKnowledgeOpen ? 'open' : '') + '>' +
-      '<summary><div><strong>브랜드 허브 스냅샷</strong><span>지금 필요한 규칙만 짧게 확인</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(knowledge.brandRules.length ? (knowledge.brandRules.length + '개 규칙') : '간단 요약') + '</span></summary>' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="content-type" ' + (isContentTypeOpen ? 'open' : '') + '>' +
+      '<summary><div><strong>SNS 콘텐츠 유형</strong><span>자동 기본값을 쓰거나 필요할 때만 변경합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</span></summary>' +
       '<div class="brand-studio-disclosure-body">' +
       '<section class="brand-studio-panel brand-studio-panel-embedded">' +
-      '<div class="brand-knowledge-grid">' + knowledgeCards + '</div>' +
-      '<p class="brand-caption-help">브랜드 보이스와 금지 표현은 캡션/해시태그 생성에 바로 반영됩니다. 상세 수정은 브랜드 허브에서 관리합니다.</p>' +
+      '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
+      '<div class="brand-studio-selection-summary">' +
+      '<div>' +
+      '<span class="brand-studio-selection-label">현재 선택</span>' +
+      '<strong>' + escapeHtml(selectedOption ? selectedOption.title : '아직 선택되지 않음') + '</strong>' +
+      '<p>' + escapeHtml(selectedOption ? selectedOption.outputs : '먼저 콘텐츠 유형을 선택하면 오른쪽 발행 초안 패널이 이 기준으로 이어집니다.') + '</p>' +
+      '</div>' +
+      '<div class="brand-studio-selection-actions">' +
+      '<button class="btn-primary compact" data-action="brand-select-next" ' + (selectedOption ? '' : 'disabled') + '>발행 초안으로 이동</button>' +
+      '</div>' +
+      '</div>' +
       '</section>' +
       '</div>' +
       '</details>' +
@@ -1091,24 +1085,6 @@
       '</div>' +
       '<div class="brand-asset-grid brand-asset-grid-scrollable">' + assetCards + '</div>' +
       '<p class="brand-caption-help">선택한 자산이 있으면 캡션과 해시태그 생성에 우선 반영합니다. 선택하지 않으면 브랜드 전체 텍스트 자산을 참고합니다.</p>' +
-      '</section>' +
-      '</div>' +
-      '</details>' +
-      '<details class="brand-studio-disclosure" data-disclosure-id="content-type" ' + (isContentTypeOpen ? 'open' : '') + '>' +
-      '<summary><div><strong>SNS 콘텐츠 유형</strong><span>자동 기본값을 쓰거나 필요할 때만 변경합니다</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(selectedOption ? selectedOption.title : '미선택') + '</span></summary>' +
-      '<div class="brand-studio-disclosure-body">' +
-      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
-      '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
-      '<div class="brand-studio-selection-summary">' +
-      '<div>' +
-      '<span class="brand-studio-selection-label">현재 선택</span>' +
-      '<strong>' + escapeHtml(selectedOption ? selectedOption.title : '아직 선택되지 않음') + '</strong>' +
-      '<p>' + escapeHtml(selectedOption ? selectedOption.outputs : '먼저 콘텐츠 유형을 선택하면 오른쪽 발행 초안 패널이 이 기준으로 이어집니다.') + '</p>' +
-      '</div>' +
-      '<div class="brand-studio-selection-actions">' +
-      '<button class="btn-primary compact" data-action="brand-select-next" ' + (selectedOption ? '' : 'disabled') + '>발행 초안으로 이동</button>' +
-      '</div>' +
-      '</div>' +
       '</section>' +
       '</div>' +
       '</details>' +
