@@ -263,7 +263,7 @@
               </div>
               <div class="draft-meta">
                 <div class="draft-meta-project">프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
-                <div>장르 : ${escapeHtml(genre || '-')}</div>
+                <div class="draft-meta-genre">장르 : ${escapeHtml(genre || '-')}</div>
                 <div>타겟 : ${escapeHtml(tgt || '-')}</div>
                 <div>길이 : ${escapeHtml(dur)}</div>
                 <div>비율 : ${escapeHtml(ar)}</div>

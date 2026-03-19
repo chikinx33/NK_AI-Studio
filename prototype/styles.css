@@ -2571,7 +2571,6 @@ textarea::-webkit-scrollbar-corner {
 .draft-info {
   min-width: 0;
   flex: 1 1 auto;
-  padding-right: 88px;
 }
 
 .draft-thumb {
@@ -2594,6 +2593,7 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
+  padding-right: 88px;
 }
 
 .draft-title.editing {
