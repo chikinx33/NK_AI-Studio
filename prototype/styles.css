@@ -9180,6 +9180,10 @@ body {
 .knowledge-hub-hero .studio-kpi-card:first-child {
   grid-column: auto;
   grid-row: auto;
+  padding: 12px;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(191, 219, 254, 0.08));
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
 }
 
 .brand-studio-hero .studio-kpi-card:nth-child(2),

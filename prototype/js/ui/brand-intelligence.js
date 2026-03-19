@@ -221,8 +221,7 @@
     var analyticsHeroStats = [
       {
         label: '누적 게시',
-        value: String(summary.totalPosts) + '개',
-        accent: true
+        value: String(summary.totalPosts) + '개'
       },
       {
         label: '총 조회수',
@@ -238,7 +237,7 @@
       }
     ].map(function (item) {
       return (
-        '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
+        '<article class="studio-kpi-card">' +
         '<span>' + escapeHtml(item.label) + '</span>' +
         '<strong>' + escapeHtml(item.value) + '</strong>' +
         '</article>'

@@ -285,7 +285,7 @@
             if (hasImage && hasVideo) completedScenes += 1;
         }
 
-        var nextAction = '포스트 프로덕션 이동';
+        var nextAction = '포스트 프로덕션';
         if (!scenes.length) nextAction = '시나리오 작성';
         else if (!images) nextAction = '이미지 생성';
         else if (!videos) nextAction = '영상 생성';

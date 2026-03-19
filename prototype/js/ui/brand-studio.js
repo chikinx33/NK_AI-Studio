@@ -960,8 +960,7 @@
     var brandHeroStats = [
       {
         label: '다음 액션',
-        value: summary.nextAction || '준비 중',
-        accent: true
+        value: summary.nextAction || '준비 중'
       },
       {
         label: '연결 채널',
@@ -977,7 +976,7 @@
       }
     ].map(function (item) {
       return (
-        '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
+        '<article class="studio-kpi-card">' +
         '<span>' + escapeHtml(item.label) + '</span>' +
         '<strong>' + escapeHtml(item.value) + '</strong>' +
         '</article>'

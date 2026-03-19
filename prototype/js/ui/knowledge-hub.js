@@ -477,8 +477,7 @@
     var knowledgeHeroStats = [
       {
         label: '브랜드 규칙',
-        value: rulesCount + '개',
-        accent: true
+        value: rulesCount + '개'
       },
       {
         label: '금지 표현',
@@ -494,7 +493,7 @@
       }
     ].map(function (item) {
       return (
-        '<article class="studio-kpi-card ' + (item.accent ? 'is-accent' : '') + '">' +
+        '<article class="studio-kpi-card">' +
         '<span>' + escapeHtml(item.label) + '</span>' +
         '<strong>' + escapeHtml(item.value) + '</strong>' +
         '</article>'
