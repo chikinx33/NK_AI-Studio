@@ -759,27 +759,14 @@
     return payload;
   };
 
-  const ensureDetectedPanel = () => {
-    const form = document.getElementById('scenario-form');
-    if (!form) return null;
-    let panel = document.getElementById('scenario-detected-characters');
-    if (panel) return panel;
-    const wrap = document.createElement('div');
-    wrap.className = 'form-group';
-    wrap.innerHTML = '<label>감지된 캐릭터</label><div id="scenario-detected-characters" class="scenario-knowledge-panel">아직 감지되지 않았습니다.</div>';
-    form.appendChild(wrap);
-    return wrap.querySelector('#scenario-detected-characters');
-  };
-
   const renderDetectedCharacters = (brandId, rawPrompt, payload = {}) => {
-    const box = ensureDetectedPanel();
-    if (!box) return;
-    if (!(NK.service && NK.service.characterRegistry)) { box.textContent = '서비스 준비 중'; return; }
+    if (!(NK.service && NK.service.characterRegistry)) {
+      return { ids: [], resolvedPrompt: String(rawPrompt || '') };
+    }
     const knowledge = readKnowledgeHub(payload);
     const resolved = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, rawPrompt || '', {});
     try { console.log('Character parse (scenario):', { triggers: resolved.triggers || [], missing: resolved.missing || [] }); } catch (_) {}
     const ids = (resolved.characters || []).map(c => c.id);
-    const tags = (resolved.characters || []).map(c => `<span class="chip">${escapeHtml(c.trigger)} · ${escapeHtml(c.name || '')}</span>`).join(' ');
     const res = NK.service.characterRegistry.buildResolvedPrompt({
       rawPrompt: String(rawPrompt || ''),
       characters: resolved.characters || [],
@@ -787,10 +774,6 @@
       bannedExpressions: knowledge.bannedExpressions || []
     });
     try { console.log('Resolved prompt (scenario):', { resolvedPrompt: res.resolvedPrompt }); } catch (_) {}
-    box.innerHTML =
-      (tags ? `<div class="chip-row">${tags}</div>` : '<p class="muted">아직 감지되지 않았습니다.</p>') +
-      `<details class="brand-studio-disclosure" style="margin-top:8px;"><summary><div><strong>확장 프롬프트 미리보기</strong><span>rawPrompt + 캐릭터 규칙</span></div></summary><pre style="white-space:pre-wrap;">${escapeHtml(res.resolvedPrompt || '')}</pre></details>` +
-      (resolved.missing && resolved.missing.length ? `<p class="muted tiny">미등록 trigger: ${resolved.missing.join(', ')}</p>` : '');
     return { ids, resolvedPrompt: res.resolvedPrompt || '' };
   };
 
@@ -1100,6 +1083,22 @@
   scenario.init = async function () {
     const form = document.getElementById('scenario-form');
     if (!form) return;
+    const knowledgeGroup = document.querySelector('.scenario-knowledge-group');
+    const knowledgeToggle = document.getElementById('scenario-knowledge-toggle');
+    const syncKnowledgeToggle = (collapsed) => {
+      if (knowledgeGroup) knowledgeGroup.classList.toggle('is-collapsed', !!collapsed);
+      if (knowledgeToggle) {
+        knowledgeToggle.textContent = collapsed ? '+' : '-';
+        knowledgeToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      }
+    };
+    syncKnowledgeToggle(false);
+    if (knowledgeToggle) {
+      knowledgeToggle.addEventListener('click', () => {
+        const collapsed = !(knowledgeGroup && knowledgeGroup.classList.contains('is-collapsed'));
+        syncKnowledgeToggle(collapsed);
+      });
+    }
 
     const pageLoading = document.getElementById('page-loading');
     const main = document.querySelector('.main');
@@ -1453,22 +1452,6 @@
         NK.core.setLoading(false);
       }
     };
-
-    const topicEl = document.querySelector('textarea[name="topic"]');
-    if (topicEl) {
-      topicEl.addEventListener('input', () => {
-        try {
-          const p = collectPayload();
-          const brandId = (NK.service && NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: p }) : (p.brandId || '');
-          renderDetectedCharacters(brandId, String(p.topic || ''), p);
-        } catch (_) { }
-      });
-      try {
-        const p0 = collectPayload();
-        const brandId0 = (NK.service && NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: p0 }) : (p0.brandId || '');
-        renderDetectedCharacters(brandId0, String(p0.topic || ''), p0);
-      } catch (_) { }
-    }
 
     // 저장 버튼
     const saveBtn = document.getElementById('save-draft');
