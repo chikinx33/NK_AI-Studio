@@ -532,6 +532,13 @@
         ,'운영 가드레일': 'Operating guardrail'
         ,'완료': 'Done'
         ,'자동': 'Auto'
+        ,'다음 액션': 'Next action'
+        ,'연결 채널': 'Connected channels'
+        ,'자산 상태': 'Asset status'
+        ,'현재 에피소드': 'Current episode'
+        ,'선택 포맷': 'Selected format'
+        ,'규칙 정리 필요': 'Needs rules defined'
+        ,'브랜드 톤': 'Brand tone'
     };
 
     var EN_PATTERNS = [
@@ -618,6 +625,18 @@
         {
             re: /^(\d+)회 사용$/,
             fn: function (m) { return 'Used ' + m[1] + ' times'; }
+        },
+        {
+            re: /^(\d+)건$/,
+            fn: function (m) { return m[1]; }
+        },
+        {
+            re: /^(\d+)\/(\d+)개 준비$/,
+            fn: function (m) { return m[1] + '/' + m[2] + ' ready'; }
+        },
+        {
+            re: /^(\d+)\s이미지\s·\s(\d+)\s영상$/,
+            fn: function (m) { return m[1] + ' images · ' + m[2] + ' videos'; }
         },
         {
             re: /^누적 게시 (\d+)개$/,
