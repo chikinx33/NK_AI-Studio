@@ -2107,7 +2107,7 @@
     const existingSeriesRow = document.createElement('div');
     existingSeriesRow.className = 'form-row project-create-series-select-row';
     existingSeriesRow.innerHTML = `
-      <label>기준 프로젝트</label>
+      <label>기존 프로젝트</label>
       <select id="project-series-select"></select>
     `;
 
@@ -2200,10 +2200,22 @@
     const loadingMessage = overlayCard ? overlayCard.querySelector('.project-create-loading p') : null;
 
     const getSeriesList = () => {
-      return NK.store.getDrafts()
-        .map((draft) => NK.service?.project?.normalizeDraft ? NK.service.project.normalizeDraft(draft) : draft)
-        .filter(Boolean)
-        .sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+      if (NK.service && NK.service.project && NK.service.project.listSeries) {
+        return NK.service.project.listSeries();
+      }
+      const drafts = NK.store.getDrafts();
+      const map = new Map();
+      drafts.forEach((d) => {
+        const did = String(d && d.id != null ? d.id : '').trim();
+        if (!did) return;
+        const sid = String(d?.payload?.seriesId || ('projects' + did)).trim();
+        const stitle = String(d?.payload?.seriesTitle || d?.seriesTitle || d?.title || sid).trim() || sid;
+        if (!map.has(sid)) map.set(sid, { id: sid, title: stitle, count: 0, latestEpisodeId: did });
+        const row = map.get(sid);
+        row.count += 1;
+        if (Number(did) > Number(row.latestEpisodeId || 0)) row.latestEpisodeId = did;
+      });
+      return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
     };
 
     const refreshSeriesOptions = (preferredSeriesId) => {
@@ -2224,11 +2236,7 @@
       list.forEach((s) => {
         const opt = document.createElement('option');
         opt.value = String(s.id);
-        const title = String(s.title || s.payload?.episodeTitle || '제목없음').trim() || '제목없음';
-        const projectTitle = String(s.seriesTitle || s.payload?.seriesTitle || '').trim();
-        opt.textContent = projectTitle && projectTitle !== title
-          ? `${title} · ${projectTitle}`
-          : title;
+        opt.textContent = String(s.title || '제목없음').trim() || '제목없음';
         seriesSelect.appendChild(opt);
       });
       const selectedId = list.some((s) => String(s.id) === previousValue)
@@ -2257,6 +2265,7 @@
         ? NK.service.brand.getBySeriesId(seriesId)
         : null;
       return {
+        parentProjectId: String(primary?.id || '').trim(),
         seriesId: String(seriesId || '').trim(),
         seriesTitle: String(primary?.seriesTitle || payload.seriesTitle || primary?.title || '').trim(),
         episodeTitle: String(primary?.title || payload.episodeTitle || '').trim(),
@@ -2266,21 +2275,25 @@
       };
     };
 
-    const resolveParentProjectProfile = (projectId) => {
-      const draft = NK.store.getDrafts()
-        .map((item) => NK.service?.project?.normalizeDraft ? NK.service.project.normalizeDraft(item) : item)
-        .filter(Boolean)
-        .find((item) => String(item.id) === String(projectId)) || null;
-      const payload = draft && draft.payload ? draft.payload : {};
+    const resolveParentProjectProfile = (seriesId) => {
+      const profile = resolveSeriesProfile(seriesId);
+      const parentProjectId = String(profile.parentProjectId || '').trim();
+      const draft = parentProjectId
+        ? (NK.store.getDrafts()
+          .map((item) => NK.service?.project?.normalizeDraft ? NK.service.project.normalizeDraft(item) : item)
+          .filter(Boolean)
+          .find((item) => String(item.id) === parentProjectId) || null)
+        : null;
+      const payload = draft?.payload || {};
       const matchedBrand = (NK.service && NK.service.brand)
         ? ((NK.service.brand.getById && payload.brandId && NK.service.brand.getById(payload.brandId))
-          || (NK.service.brand.getBySeriesId && NK.service.brand.getBySeriesId(draft?.seriesId)))
+          || (NK.service.brand.getBySeriesId && NK.service.brand.getBySeriesId(profile.seriesId)))
         : null;
       return {
-        projectId: String(draft?.id || '').trim(),
-        seriesId: String(draft?.seriesId || payload.seriesId || '').trim(),
-        seriesTitle: String(draft?.seriesTitle || payload.seriesTitle || '').trim(),
-        episodeTitle: String(draft?.title || payload.episodeTitle || '').trim(),
+        projectId: parentProjectId,
+        seriesId: String(profile.seriesId || '').trim(),
+        seriesTitle: String(profile.seriesTitle || '').trim(),
+        episodeTitle: String(draft?.title || payload.episodeTitle || profile.episodeTitle || '').trim(),
         projectType: String(payload.projectType || '').trim(),
         brandSummary: String(matchedBrand?.brandSummary || payload.brandSummary || '').trim(),
         coreMessage: String(matchedBrand?.coreMessage || payload.coreMessage || '').trim()
@@ -2550,12 +2563,13 @@
           if (seriesSelect) seriesSelect.focus();
           return;
         }
+        const profile = resolveParentProjectProfile(selected.id);
         payload = {
           mode: 'episode',
-          parentProjectId: selected.id,
-          seriesId: selected.seriesId,
-          seriesTitle: selected.seriesTitle,
-          episodeTitle: episodeTitleInput || (selected.seriesTitle + ' 새 에피소드')
+          parentProjectId: String(profile.projectId || selected.latestEpisodeId || '').trim(),
+          seriesId: selected.id,
+          seriesTitle: selected.title,
+          episodeTitle: episodeTitleInput || (selected.title + ' 새 에피소드')
         };
       }
       setCreatingState(true);
