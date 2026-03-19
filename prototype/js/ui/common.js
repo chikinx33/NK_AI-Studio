@@ -562,6 +562,16 @@
         ,'해시태그 자동 생성 가능': 'Auto hashtag generation available'
         ,'채널 연결, 예약, 게시 결과는 아래 접힘 섹션에서 관리합니다. 기본 화면은 초안 작성에 집중합니다.': 'Manage channel connections, scheduling, and publish results in the collapsed section below. The main screen focuses on drafting.'
         ,'선택한 자산이 있으면 캡션과 해시태그 생성에 우선 반영합니다. 선택하지 않으면 브랜드 전체 텍스트 자산을 참고합니다.': 'If assets are selected, caption and hashtag generation prioritizes them; otherwise, it references brand‑wide text assets.'
+        ,'캡션 초안 자동 생성 가능': 'Auto caption generation available'
+        ,'짧은 문구와 대표 이미지를 중심으로 운영하는 기본 포맷입니다.': 'Basic format centered on short copy and a representative image.'
+        ,'카드형 프로모션이나 SNS 썸네일 중심 운영에 적합합니다.': 'Suitable for card-style promotions or SNS thumbnails.'
+        ,'기존 영상/씬 자산을 짧은 홍보 포맷으로 다시 운영하는 흐름입니다.': 'Re-operates existing video/scene assets in a short promo format.'
+        ,'Project 메시지를 문서형 콘텐츠로 확장하는 운영 포맷입니다.': 'Expands the project message into document-style content.'
+        ,'롱폼, 쇼츠, 커뮤니티 운영까지 확장 가능한 기본 채널입니다.': 'Baseline channel expandable to long-form, shorts, and community.'
+        ,'이미지, 릴스, 카드형 프로모션 운영에 적합한 채널입니다.': 'Suitable for image, reels, and card-style promotions.'
+        ,'짧은 포맷 중심 확산 채널로 빠른 반응 테스트에 적합합니다.': 'Short-form focused channel for quick response testing.'
+        ,'짧은 문장형 공지, 반응 체크, 링크 확산에 적합합니다.': 'Good for short announcements, response checks, and link distribution.'
+        ,'@토큰 형식으로 저장되며 캐릭터 자산 목록과 Overview에 반영됩니다.': 'Saved as @tokens and reflected in the character asset list and Overview.'
         ,'AI가 계속 참고할 말투와 표현 원칙이 아직 없습니다.': 'No tone and expression guideline yet.'
         ,'왜 존재하는지, 어떤 세계를 다루는지 요약해 주세요.': 'Summarize why it exists and what world it covers.'
         ,'배경 문맥이 비어 있으면 결과물이 쉽게 흔들립니다.': 'Results can easily waver if background context is empty.'
@@ -1050,6 +1060,30 @@
         if (!document || !document.body) return;
         localizeSubtree(document.body, lang);
         ensureLocaleObserver(lang);
+    };
+
+    common.auditUntranslated = function () {
+        var nodes = [];
+        var push = function (text, el) {
+            var t = String(text || '').trim();
+            if (!t) return;
+            if (!hasHangul(t)) return;
+            nodes.push({ text: t, tag: el && el.tagName || '', id: el && el.id || '', cls: el && el.className || '' });
+        };
+        var walk = function (root) {
+            if (!root) return;
+            if (root.nodeType === 3) { push(root.nodeValue, root.parentElement); return; }
+            if (root.nodeType !== 1) return;
+            Array.prototype.forEach.call(root.childNodes || [], walk);
+            push(root.textContent, root);
+            ['placeholder','title','aria-label','value'].forEach(function (attr) {
+                var v = root.getAttribute && root.getAttribute(attr);
+                if (v) push(v, root);
+            });
+        };
+        walk(document.body);
+        try { console.table(nodes.slice(0, 300)); } catch (_) { }
+        return nodes;
     };
 
     common.applyI18n = function (lang) {
