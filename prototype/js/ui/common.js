@@ -546,6 +546,15 @@
         ,'브랜드 규칙이 아직 없습니다.': 'No brand rules yet.'
         ,'금지 표현 / 참조': 'Banned expressions / references'
         ,'자동 기본값을 쓰거나 필요할 때만 변경합니다': 'Use auto defaults and change only when needed'
+        ,'AI가 계속 참고할 말투와 표현 원칙이 아직 없습니다.': 'No tone and expression guideline yet.'
+        ,'왜 존재하는지, 어떤 세계를 다루는지 요약해 주세요.': 'Summarize why it exists and what world it covers.'
+        ,'배경 문맥이 비어 있으면 결과물이 쉽게 흔들립니다.': 'Results can easily waver if background context is empty.'
+        ,'캐릭터 자산': 'Character assets'
+        ,'브랜드 공용 캐릭터 레코드': 'Brand-wide character records'
+        ,'현재 브랜드 기준의 게시 결과를 집계합니다.': 'Aggregates publish results for the current brand.'
+        ,'필요하면 아래 필터에서 다른 에피소드나 시즌으로 좁힐 수 있습니다.': 'Use filters below to narrow by episode or season when needed.'
+        ,'분석을 시작하려면 게시 결과 입력이 필요합니다.': 'Enter publish results to start analysis.'
+        ,'조회수 기반으로 상위 채널과 시간대를 계산합니다.': 'Top channels and time slots are calculated based on views.'
     };
 
     var EN_PATTERNS = [
@@ -648,6 +657,10 @@
         {
             re: /^(\d+)\s*개\s*Scene에서\s*파생된\s*결과물$/,
             fn: function (m) { return 'Derived from ' + m[1] + ' scenes'; }
+        },
+        {
+            re: /^(\d+)\s*명$/,
+            fn: function (m) { return m[1] + ' characters'; }
         },
         {
             re: /^누적 게시 (\d+)개$/,
