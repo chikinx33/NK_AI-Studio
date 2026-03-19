@@ -543,6 +543,9 @@
         ,'브랜드 허브를 먼저 채우면 브랜드 운영 품질이 안정됩니다.': 'Fill Brand Hub first to stabilize brand operations quality.'
         ,'콘텐츠 유형, 추천 자산, 캡션, 해시태그를 현재 브랜드 문맥으로 기본 설정합니다.': 'Content type, recommended assets, caption, and hashtags are preset to the current brand context.'
         ,'자동 추천 자산을 기준으로 필요할 때만 수정합니다': 'Use auto‑recommended assets and adjust only when needed'
+        ,'브랜드 규칙이 아직 없습니다.': 'No brand rules yet.'
+        ,'금지 표현 / 참조': 'Banned expressions / references'
+        ,'자동 기본값을 쓰거나 필요할 때만 변경합니다': 'Use auto defaults and change only when needed'
     };
 
     var EN_PATTERNS = [
@@ -641,6 +644,10 @@
         {
             re: /^(\d+)\s이미지\s·\s(\d+)\s영상$/,
             fn: function (m) { return m[1] + ' images · ' + m[2] + ' videos'; }
+        },
+        {
+            re: /^(\d+)\s*개\s*Scene에서\s*파생된\s*결과물$/,
+            fn: function (m) { return 'Derived from ' + m[1] + ' scenes'; }
         },
         {
             re: /^누적 게시 (\d+)개$/,
