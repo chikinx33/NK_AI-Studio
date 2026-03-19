@@ -539,6 +539,10 @@
         ,'선택 포맷': 'Selected format'
         ,'규칙 정리 필요': 'Needs rules defined'
         ,'브랜드 톤': 'Brand tone'
+        ,'브랜드 문맥': 'Brand context'
+        ,'브랜드 허브를 먼저 채우면 브랜드 운영 품질이 안정됩니다.': 'Fill Brand Hub first to stabilize brand operations quality.'
+        ,'콘텐츠 유형, 추천 자산, 캡션, 해시태그를 현재 브랜드 문맥으로 기본 설정합니다.': 'Content type, recommended assets, caption, and hashtags are preset to the current brand context.'
+        ,'자동 추천 자산을 기준으로 필요할 때만 수정합니다': 'Use auto‑recommended assets and adjust only when needed'
     };
 
     var EN_PATTERNS = [
