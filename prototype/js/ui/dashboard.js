@@ -253,13 +253,13 @@
 
       return `
         <article class="draft-card ${isSelected ? 'is-selected' : ''}" data-draft-id="${escapeHtml(d.id)}">
+          <button class="edit-btn top-right" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>
           <button class="trash-btn top-right action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>
           <div class="draft-top">
             <div class="draft-thumb"></div>
-            <div>
+            <div class="draft-info">
               <div class="draft-title-row">
                 <h4 class="draft-title" data-id="${escapeHtml(d.id)}">${escapeHtml(d.title || '제목없음')}</h4>
-                <button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>
               </div>
               <div class="draft-meta">
                 <div class="draft-meta-project">프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
