@@ -103,6 +103,8 @@
         '복사됨': 'Copied',
         '복사 실패': 'Copy failed',
         '닫기': 'Close',
+        '옵션': 'Options',
+        '이름': 'Name',
         '확인': 'Confirm',
         '전체': 'All',
         '신규': 'New',
