@@ -565,6 +565,7 @@
         ,'필요하면 아래 필터에서 다른 에피소드나 시즌으로 좁힐 수 있습니다.': 'Use filters below to narrow by episode or season when needed.'
         ,'분석을 시작하려면 게시 결과 입력이 필요합니다.': 'Enter publish results to start analysis.'
         ,'조회수 기반으로 상위 채널과 시간대를 계산합니다.': 'Top channels and time slots are calculated based on views.'
+        ,'아직 저장된 참조 콘텐츠가 없습니다.': 'No saved reference content yet.'
     };
 
     var EN_PATTERNS = [
@@ -671,6 +672,11 @@
         {
             re: /^(\d+)\s*명$/,
             fn: function (m) { return m[1] + ' characters'; }
+        },
+        { re: /^한\s*줄에\s*하나씩\s*입력해\s*주세요\.$/, to: 'Enter one item per line.' },
+        {
+            re: /^예:\s*(.+)$/,
+            fn: function (m) { return 'Example: ' + translateToEnglish(m[1]); }
         },
         {
             re: /^누적 게시 (\d+)개$/,
