@@ -2455,15 +2455,16 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .series-create-btn {
-  width: 56px;
-  height: 56px;
-  min-width: 56px;
+  width: 72px;
+  height: 72px;
+  min-width: 72px;
   padding: 0;
-  border-radius: 18px;
+  border-radius: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  align-self: center;
+  font-size: 15px;
   font-weight: 700;
   box-shadow: 0 14px 28px rgba(255, 122, 0, 0.28);
 }
@@ -2608,8 +2609,8 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .edit-btn {
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
   background:
@@ -2617,8 +2618,10 @@ textarea::-webkit-scrollbar-corner {
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%), color-mix(in srgb, var(--bg-2) 92%, rgba(255, 255, 255, 0.02) 8%));
   color: var(--muted);
   cursor: pointer;
-  display: grid;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
   font-size: 0;
   box-shadow:
     0 12px 26px rgba(0, 0, 0, 0.18),
@@ -2628,10 +2631,13 @@ textarea::-webkit-scrollbar-corner {
 
 .edit-btn::before {
   content: '';
-  width: 18px;
-  height: 18px;
-  display: block;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M4.75 16.88 4 20l3.12-.75L17.8 8.57a1.77 1.77 0 0 0 0-2.5l-.87-.87a1.77 1.77 0 0 0-2.5 0L4.75 16.88Z' stroke='%23AEB7C7' stroke-width='1.45' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m13.5 6.12 4.38 4.38M4.75 16.88l2.87 2.87' stroke='%23AEB7C7' stroke-width='1.45' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  width: 17px;
+  height: 17px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M14.14 5.86a2 2 0 0 1 2.83 0l1.17 1.17a2 2 0 0 1 0 2.83l-8.8 8.8-3.66.83.83-3.66 8.8-8.8Z' stroke='%23AEB7C7' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m13 7 4 4' stroke='%23AEB7C7' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center;
@@ -2647,7 +2653,7 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .edit-btn:hover::before {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M4.75 16.88 4 20l3.12-.75L17.8 8.57a1.77 1.77 0 0 0 0-2.5l-.87-.87a1.77 1.77 0 0 0-2.5 0L4.75 16.88Z' stroke='%23F5F7FD' stroke-width='1.45' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m13.5 6.12 4.38 4.38M4.75 16.88l2.87 2.87' stroke='%23F5F7FD' stroke-width='1.45' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M14.14 5.86a2 2 0 0 1 2.83 0l1.17 1.17a2 2 0 0 1 0 2.83l-8.8 8.8-3.66.83.83-3.66 8.8-8.8Z' stroke='%23F5F7FD' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='m13 7 4 4' stroke='%23F5F7FD' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
 .draft-meta {
