@@ -91,9 +91,38 @@
     return String(NK.state?.runtime?.currentProject?.id || '').trim();
   };
 
+  const getPrimaryDraftForSeries = (seriesId, drafts) => {
+    const targetSeriesId = String(seriesId || '').trim();
+    if (!targetSeriesId) return null;
+    return (Array.isArray(drafts) ? drafts : [])
+      .filter((draft) => String(draft?.seriesId || '').trim() === targetSeriesId)
+      .sort((a, b) => Number(b?.id || 0) - Number(a?.id || 0))[0] || null;
+  };
+
+  const syncBrandContextFromDraft = (draft) => {
+    if (!draft || !NK.service?.brand) return;
+    const payload = draft.payload || {};
+    try {
+      let currentBrand = null;
+      if (payload.brandId && NK.service.brand.getById) {
+        currentBrand = NK.service.brand.getById(payload.brandId);
+      }
+      if (!currentBrand && draft.seriesId && NK.service.brand.getBySeriesId) {
+        currentBrand = NK.service.brand.getBySeriesId(draft.seriesId);
+      }
+      if (!currentBrand && NK.service.brand.upsertFromProject) {
+        currentBrand = NK.service.brand.upsertFromProject(draft);
+      }
+      if (currentBrand && NK.service.brand.setCurrent) {
+        NK.service.brand.setCurrent(currentBrand);
+      }
+    } catch (_) { }
+  };
+
   const selectProject = (draft) => {
     if (!draft) return;
     if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
+    syncBrandContextFromDraft(draft);
     if (NK.state?.broadcast) NK.state.broadcast('update-project', { project: draft });
   };
 
@@ -304,6 +333,10 @@
 
       if (action === 'series-filter') {
         currentSeriesFilter = String(btn.dataset.seriesId || '__all__');
+        if (currentSeriesFilter !== '__all__') {
+          const primaryDraft = getPrimaryDraftForSeries(currentSeriesFilter, drafts);
+          if (primaryDraft) selectProject(primaryDraft);
+        }
         dashboard.renderDrafts();
         return;
       }
