@@ -615,6 +615,10 @@
             fn: function (m) { return 'Edit ' + translateToEnglish(m[1]); }
         },
         {
+            re: /@토큰\s*형식으로\s*저장되며\s*캐릭터\s*자산\s*목록과\s*개요에\s*반영됩니다\./,
+            to: 'Saved as @tokens and reflected in the character asset list and Overview.'
+        },
+        {
             re: /오전\s*([0-9]{1,2})\s*시/g,
             fn: function (m) { return (m[1]) + ' AM'; }
         },
