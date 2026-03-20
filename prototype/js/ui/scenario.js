@@ -787,6 +787,11 @@
     return { ids, resolvedPrompt: res.resolvedPrompt || '' };
   };
 
+  const isAuthErrorMessage = (err) => {
+    const msg = String(err?.message || err || '').trim();
+    return /\b(401|403)\b|auth_required|invalid_session|session_expired/i.test(msg);
+  };
+
   const normalizeScenes = (scenes = []) => {
     const activeCharacters = getActiveCharactersForPayload(currentPayload || {});
     return (Array.isArray(scenes) ? scenes : []).map((s, i) => {
@@ -1427,8 +1432,18 @@
             if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
             NK.store.saveDrafts([draft]);
           }
+          let saveWarning = '';
           if (NK.api?.projectSave) {
-            await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title });
+            try {
+              await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title });
+            } catch (saveErr) {
+              if (isAuthErrorMessage(saveErr)) {
+                saveWarning = '로그인되지 않아 서버 저장은 건너뛰고 이 브라우저에만 저장했습니다.';
+                try { if (NK.auth?.logout) NK.auth.logout(); } catch (_) { }
+              } else {
+                throw saveErr;
+              }
+            }
           }
           if (NK.state) {
             if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
@@ -1438,6 +1453,7 @@
             const notices = [];
             if (res?.fallback) notices.push('일부 오류로 기본 시나리오를 사용했습니다.');
             if (res?.meta?.partial) notices.push(`긴 입력 중 일부 파트가 실패해 생성 가능한 씬만 반영했습니다. (${res.meta.failedChunks || 0}개 파트 실패)`);
+            if (saveWarning) notices.push(saveWarning);
             if (notices.length) {
               errEl.textContent = `안내: ${notices.join(' ')}`;
               errEl.classList.remove('hidden');
@@ -1446,9 +1462,9 @@
             }
           }
           if (res?.meta?.chunked) {
-            alert(`시나리오를 생성했습니다. 긴 입력을 ${res.meta.chunkCount}개 파트로 나누어 처리했습니다.`);
+            alert(`시나리오를 생성했습니다. 긴 입력을 ${res.meta.chunkCount}개 파트로 나누어 처리했습니다.${saveWarning ? (' ' + saveWarning) : ''}`);
           } else {
-            alert('시나리오를 생성했습니다.');
+            alert(`시나리오를 생성했습니다.${saveWarning ? (' ' + saveWarning) : ''}`);
           }
         }
       } catch (err) {
