@@ -913,6 +913,14 @@
     targetCard.classList.add('active-card');
   };
 
+  const clearActiveScenarioCards = () => {
+    const container = document.getElementById('scenario-cards');
+    if (!container) return;
+    container.querySelectorAll('.scenario-card.active-card').forEach(card => {
+      card.classList.remove('active-card');
+    });
+  };
+
   const setScenarioCardCollapsed = (card, collapsed) => {
     if (!card || card.classList.contains('scenario-card-common')) return;
     const sceneId = String(card.dataset.sceneId || '').trim();
@@ -1446,6 +1454,13 @@
           return;
         }
         setActiveScenarioCard(card);
+      });
+
+      document.addEventListener('click', (e) => {
+        const target = e.target;
+        if (!target || !(target instanceof HTMLElement)) return;
+        if (target.closest('.scenario-card')) return;
+        clearActiveScenarioCards();
       });
 
       cardsContainer.addEventListener('focusin', (e) => {
