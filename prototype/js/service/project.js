@@ -68,6 +68,7 @@
         'worldSetting',
         'knowledgeWorld',
         'knowledgeCharacters',
+        'knowledgeCharacterSheets',
         'knowledgeHub'
     ];
     var BRAND_SYNC_FIELDS = [
@@ -189,6 +190,79 @@
         });
     }
 
+    function normalizeCharacterSheetItems(value) {
+        var src = Array.isArray(value) ? value : [];
+        var items = src.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var imageDataUrl = normalizeText(raw.imageDataUrl || raw.imageUrl || raw.url || raw.src);
+            if (!imageDataUrl) return null;
+            return {
+                sheetId: normalizeText(raw.sheetId || raw.id) || ('sheet_' + String(index + 1).padStart(3, '0')),
+                label: normalizeText(raw.label || raw.title || raw.name) || ('시트 ' + (index + 1)),
+                imageDataUrl: imageDataUrl,
+                note: normalizeText(raw.note || raw.description || raw.memo),
+                isPrimary: raw.isPrimary === true,
+                createdAt: normalizeText(raw.createdAt) || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+        }).filter(Boolean);
+        var primaryFound = false;
+        items.forEach(function (item, index) {
+            if (item.isPrimary && !primaryFound) {
+                primaryFound = true;
+                return;
+            }
+            item.isPrimary = false;
+            if (!primaryFound && index === 0) {
+                item.isPrimary = true;
+                primaryFound = true;
+            }
+        });
+        return items;
+    }
+
+    function normalizeCharacterSheets(value, characters) {
+        var sourceCharacters = normalizeCharacterEntries(characters);
+        var source = Array.isArray(value) ? value : [];
+        var map = new Map();
+        source.forEach(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var tokenName = normalizeCharacterName(raw.token || raw.trigger || raw.displayName || raw.name);
+            if (!tokenName) return;
+            var token = '@' + tokenName;
+            var matched = sourceCharacters.find(function (row) {
+                return String(row.token || '').toLowerCase() === String(token).toLowerCase();
+            }) || null;
+            map.set(String(token).toLowerCase(), {
+                characterId: normalizeText(raw.characterId || raw.id) || normalizeText(matched && matched.characterId) || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: normalizeCharacterName(raw.displayName || raw.name || token) || normalizeCharacterName(matched && matched.displayName) || tokenName,
+                token: token,
+                items: normalizeCharacterSheetItems(raw.items)
+            });
+        });
+        sourceCharacters.forEach(function (item, index) {
+            var key = String(item.token || '').toLowerCase();
+            if (!key) return;
+            if (map.has(key)) {
+                var existing = map.get(key);
+                existing.characterId = existing.characterId || item.characterId || ('char_' + String(index + 1).padStart(3, '0'));
+                existing.displayName = existing.displayName || item.displayName;
+                existing.token = existing.token || item.token;
+                map.set(key, existing);
+                return;
+            }
+            map.set(key, {
+                characterId: item.characterId || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: item.displayName,
+                token: item.token,
+                items: []
+            });
+        });
+        return Array.from(map.values()).filter(function (item) {
+            return item.token;
+        });
+    }
+
     function normalizeNumber(value) {
         var n = Number(value);
         if (!isFinite(n) || n < 0) return 0;
@@ -258,6 +332,10 @@
             Array.isArray(nested.characters) ? nested.characters : (source && source.knowledgeCharacters),
             raw.brandCharacter
         );
+        var characterSheets = normalizeCharacterSheets(
+            Array.isArray(nested.characterSheets) ? nested.characterSheets : (source && (source.knowledgeCharacterSheets || source.characterSheets)),
+            knowledgeCharacters
+        );
         if (!referenceContents.length && referenceEntries.length) {
             referenceContents = referenceEntries.map(function (item) {
                 return [item.type, item.title, item.note].filter(Boolean).join(' ');
@@ -271,6 +349,7 @@
             brandRules: normalizeTextList(raw.brandRules),
             bannedExpressions: normalizeTextList(raw.bannedExpressions || legacyBanned),
             characters: knowledgeCharacters,
+            characterSheets: characterSheets,
             referenceContents: referenceContents,
             referenceItems: referenceEntries,
             successCases: normalizeTextList(raw.successCases)
@@ -376,6 +455,7 @@
             brandKeywords: normalizeTextList(src.brandKeywords),
             brandRules: normalizeTextList(src.brandRules),
             knowledgeCharacters: normalizeCharacterEntries(src.knowledgeCharacters, src.brandCharacter),
+            knowledgeCharacterSheets: normalizeCharacterSheets(src.knowledgeCharacterSheets || src.characterSheets, src.knowledgeCharacters || src.brandCharacter),
             connectedChannels: (Array.isArray(src.connectedChannels) ? src.connectedChannels : []).map(function (item) {
                 return normalizeText(item && item.channelType || item);
             }).filter(Boolean),
@@ -416,6 +496,8 @@
         var nextPayload = Object.assign({}, payload || {}, core);
         nextPayload.knowledgeHub = knowledge;
         nextPayload.knowledgeCharacters = cloneJson(knowledge.characters, []);
+        nextPayload.knowledgeCharacterSheets = cloneJson(knowledge.characterSheets, []);
+        nextPayload.characterSheets = cloneJson(knowledge.characterSheets, []);
         nextPayload.brandSummary = normalizeText(merged.brandSummary || inheritedBrand.brandSummary);
         nextPayload.coreMessage = normalizeText(merged.coreMessage || inheritedBrand.coreMessage);
         nextPayload.brandVoice = knowledge.brandVoice;

@@ -213,6 +213,109 @@
         });
     }
 
+    function normalizeCharacterSheetItems(value) {
+        var src = Array.isArray(value) ? value : [];
+        var items = src.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var imageDataUrl = normalizeText(raw.imageDataUrl || raw.imageUrl || raw.url || raw.src);
+            if (!imageDataUrl) return null;
+            return {
+                sheetId: normalizeText(raw.sheetId || raw.id) || ('sheet_' + String(index + 1).padStart(3, '0')),
+                label: normalizeText(raw.label || raw.title || raw.name) || ('시트 ' + (index + 1)),
+                imageDataUrl: imageDataUrl,
+                note: normalizeText(raw.note || raw.description || raw.memo),
+                isPrimary: raw.isPrimary === true,
+                createdAt: normalizeText(raw.createdAt) || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+        }).filter(Boolean);
+        var primaryFound = false;
+        items.forEach(function (item, index) {
+            if (item.isPrimary && !primaryFound) {
+                primaryFound = true;
+                return;
+            }
+            item.isPrimary = false;
+            if (!primaryFound && index === 0) {
+                item.isPrimary = true;
+                primaryFound = true;
+            }
+        });
+        return items;
+    }
+
+    function normalizeCharacterSheets(value, characters) {
+        var sourceCharacters = normalizeCharacterEntries(characters);
+        var source = Array.isArray(value) ? value : [];
+        var map = new Map();
+        source.forEach(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var token = normalizeTrigger(raw.token || raw.trigger || raw.displayName || raw.name);
+            if (!token) return;
+            var matched = sourceCharacters.find(function (row) {
+                return String(row.token || '').toLowerCase() === String(token).toLowerCase();
+            }) || null;
+            map.set(String(token).toLowerCase(), {
+                characterId: normalizeText(raw.characterId || raw.id) || normalizeText(matched && matched.characterId) || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: normalizeCharacterName(raw.displayName || raw.name || token) || normalizeCharacterName(matched && matched.displayName) || token.replace(/^@/, ''),
+                token: token,
+                items: normalizeCharacterSheetItems(raw.items)
+            });
+        });
+        sourceCharacters.forEach(function (item, index) {
+            var key = String(item.token || '').toLowerCase();
+            if (!key) return;
+            if (map.has(key)) {
+                var existing = map.get(key);
+                existing.characterId = existing.characterId || item.characterId || ('char_' + String(index + 1).padStart(3, '0'));
+                existing.displayName = existing.displayName || item.displayName;
+                existing.token = existing.token || item.token;
+                map.set(key, existing);
+                return;
+            }
+            map.set(key, {
+                characterId: item.characterId || ('char_' + String(index + 1).padStart(3, '0')),
+                displayName: item.displayName,
+                token: item.token,
+                items: []
+            });
+        });
+        return Array.from(map.values()).filter(function (item) {
+            return item.token;
+        });
+    }
+
+    function mergeCharacterSheets(currentValue, incomingValue, characters) {
+        var current = normalizeCharacterSheets(currentValue, characters);
+        var incoming = normalizeCharacterSheets(incomingValue, characters);
+        var map = new Map();
+        current.forEach(function (item) {
+            map.set(String(item.token || '').toLowerCase(), item);
+        });
+        incoming.forEach(function (item) {
+            var key = String(item.token || '').toLowerCase();
+            if (!map.has(key)) {
+                map.set(key, item);
+                return;
+            }
+            var existing = map.get(key);
+            var itemMap = new Map();
+            normalizeCharacterSheetItems(existing.items).forEach(function (sheet) {
+                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
+            });
+            normalizeCharacterSheetItems(item.items).forEach(function (sheet) {
+                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
+            });
+            map.set(key, {
+                characterId: existing.characterId || item.characterId,
+                displayName: existing.displayName || item.displayName,
+                token: existing.token || item.token,
+                items: normalizeCharacterSheetItems(Array.from(itemMap.values()))
+            });
+        });
+        return Array.from(map.values());
+    }
+
     function storageKeys() {
         var keys = NK.config && NK.config.KEYS ? NK.config.KEYS : {};
         return {
@@ -288,6 +391,7 @@
             brandStory: normalizeText(raw.brandStory),
             brandCharacter: normalizeText(raw.brandCharacter),
             knowledgeCharacters: normalizeCharacterEntries(raw.knowledgeCharacters, raw.brandCharacter),
+            characterSheets: normalizeCharacterSheets(raw.characterSheets || raw.knowledgeCharacterSheets, raw.knowledgeCharacters || raw.brandCharacter),
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
             bannedExpressions: normalizeTextList(raw.bannedExpressions),
@@ -451,6 +555,7 @@
             brandStory: pickText(current.brandStory, incoming.brandStory, preferIncoming),
             brandCharacter: pickText(current.brandCharacter, incoming.brandCharacter, preferIncoming),
             knowledgeCharacters: mergeCharacterEntries(current.knowledgeCharacters, incoming.knowledgeCharacters),
+            characterSheets: mergeCharacterSheets(current.characterSheets, incoming.characterSheets, mergeCharacterEntries(current.knowledgeCharacters, incoming.knowledgeCharacters)),
             worldSetting: pickText(current.worldSetting, incoming.worldSetting, preferIncoming),
             brandRules: mergeTextList(current.brandRules, incoming.brandRules),
             bannedExpressions: mergeTextList(current.bannedExpressions, incoming.bannedExpressions),
@@ -543,6 +648,7 @@
             brandStory: knowledge.brandStory || payload.brandStory,
             brandCharacter: knowledge.brandCharacter || payload.brandCharacter,
             knowledgeCharacters: knowledge.characters || payload.knowledgeCharacters,
+            characterSheets: knowledge.characterSheets || payload.knowledgeCharacterSheets || payload.characterSheets,
             worldSetting: knowledge.worldSetting || payload.worldSetting || payload.knowledgeWorld,
             brandRules: knowledge.brandRules || payload.brandRules,
             bannedExpressions: knowledge.bannedExpressions || payload.bannedExpressions,

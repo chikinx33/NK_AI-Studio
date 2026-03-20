@@ -250,6 +250,77 @@
     }).join('');
   }
 
+  function normalizeCharacterSheetItems(value) {
+    var src = Array.isArray(value) ? value : [];
+    var items = src.map(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : {};
+      var imageDataUrl = normalizeText(raw.imageDataUrl || raw.imageUrl || raw.url || raw.src);
+      if (!imageDataUrl) return null;
+      return {
+        sheetId: normalizeText(raw.sheetId || raw.id) || ('sheet_' + String(index + 1).padStart(3, '0')),
+        label: normalizeText(raw.label || raw.title || raw.name) || ('시트 ' + (index + 1)),
+        imageDataUrl: imageDataUrl,
+        note: normalizeText(raw.note || raw.description || raw.memo),
+        isPrimary: raw.isPrimary === true
+      };
+    }).filter(Boolean);
+    var primaryFound = false;
+    items.forEach(function (item, index) {
+      if (item.isPrimary && !primaryFound) {
+        primaryFound = true;
+        return;
+      }
+      item.isPrimary = false;
+      if (!primaryFound && index === 0) {
+        item.isPrimary = true;
+        primaryFound = true;
+      }
+    });
+    return items;
+  }
+
+  function normalizeCharacterSheets(value, characters) {
+    var sourceCharacters = normalizeCharacters(characters);
+    var source = Array.isArray(value) ? value : [];
+    var map = new Map();
+    source.forEach(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : {};
+      var displayName = normalizeCharacterName(raw.token || raw.trigger || raw.displayName || raw.name);
+      if (!displayName) return;
+      var token = '@' + displayName;
+      var matched = sourceCharacters.find(function (row) {
+        return String(row.token || '').toLowerCase() === String(token).toLowerCase();
+      }) || null;
+      map.set(String(token).toLowerCase(), {
+        characterId: normalizeText(raw.characterId || raw.id) || normalizeText(matched && matched.characterId) || ('char_' + String(index + 1).padStart(3, '0')),
+        displayName: normalizeCharacterName(raw.displayName || raw.name || token) || normalizeCharacterName(matched && matched.displayName) || displayName,
+        token: token,
+        items: normalizeCharacterSheetItems(raw.items)
+      });
+    });
+    sourceCharacters.forEach(function (item, index) {
+      var key = String(item.token || '').toLowerCase();
+      if (!key) return;
+      if (map.has(key)) {
+        var existing = map.get(key);
+        existing.characterId = existing.characterId || item.characterId || ('char_' + String(index + 1).padStart(3, '0'));
+        existing.displayName = existing.displayName || item.displayName;
+        existing.token = existing.token || item.token;
+        map.set(key, existing);
+        return;
+      }
+      map.set(key, {
+        characterId: item.characterId || ('char_' + String(index + 1).padStart(3, '0')),
+        displayName: item.displayName,
+        token: item.token,
+        items: []
+      });
+    });
+    return Array.from(map.values()).filter(function (item) {
+      return item.token;
+    });
+  }
+
   function episodeLabel(project) {
     return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
   }
@@ -261,6 +332,7 @@
         brandStory: String(project.brandStory || '').trim(),
         brandCharacter: String(project.brandCharacter || '').trim(),
         characters: normalizeCharacters(project.knowledgeCharacters, project.brandCharacter),
+        characterSheets: normalizeCharacterSheets(project.characterSheets || project.knowledgeCharacterSheets, project.knowledgeCharacters || project.brandCharacter),
         worldSetting: String(project.worldSetting || project.knowledgeWorld || '').trim(),
         brandRules: Array.isArray(project.brandRules) ? project.brandRules.slice() : [],
         bannedExpressions: Array.isArray(project.bannedExpressions) ? project.bannedExpressions.slice() : [],
@@ -277,6 +349,7 @@
       brandStory: '',
       brandCharacter: '',
       characters: [],
+      characterSheets: [],
       worldSetting: '',
       brandRules: [],
       bannedExpressions: [],
@@ -313,9 +386,10 @@
     return (knowledge.referenceItems || []).concat([nextItem]);
   }
 
-  function readKnowledgeDraft(root, referenceItems, characters, characterExtras) {
+  function readKnowledgeDraft(root, referenceItems, characters, characterExtras, characterSheets) {
     var items = Array.isArray(referenceItems) ? referenceItems.slice() : [];
     var normalizedCharacters = normalizeCharacters(characters);
+    var normalizedSheets = normalizeCharacterSheets(characterSheets, normalizedCharacters);
     var characterDescription = [serializeCharacterNotes(normalizedCharacters), String(characterExtras || '').trim()].filter(Boolean).join('\n');
     return {
       brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
@@ -323,6 +397,8 @@
       brandCharacter: characterDescription,
       characters: normalizedCharacters,
       knowledgeCharacters: normalizedCharacters,
+      characterSheets: normalizedSheets,
+      knowledgeCharacterSheets: normalizedSheets,
       worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
       brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
       bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
@@ -354,6 +430,7 @@
       '브랜드 말투와 어휘를 일관되게 유지한다.',
       '사용자가 바로 이해할 수 있는 문장으로 정리한다.'
     ];
+    next.characterSheets = normalizeCharacterSheets(next.characterSheets, next.characters);
     next.bannedExpressions = next.bannedExpressions && next.bannedExpressions.length ? next.bannedExpressions : [];
     next.successCases = next.successCases && next.successCases.length ? next.successCases : [];
     return next;
@@ -406,6 +483,7 @@
             brandStory: nextKnowledge.brandStory,
             brandCharacter: nextKnowledge.brandCharacter,
             knowledgeCharacters: nextKnowledge.characters,
+            characterSheets: nextKnowledge.characterSheets,
             worldSetting: nextKnowledge.worldSetting,
             brandRules: nextKnowledge.brandRules,
             bannedExpressions: nextKnowledge.bannedExpressions,
@@ -419,6 +497,8 @@
         tasks.push(NK.service.project.updatePayload(projectId, {
           knowledgeHub: nextKnowledge,
           knowledgeCharacters: nextKnowledge.characters,
+          knowledgeCharacterSheets: nextKnowledge.characterSheets,
+          characterSheets: nextKnowledge.characterSheets,
           brandVoice: nextKnowledge.brandVoice,
           brandStory: nextKnowledge.brandStory,
           brandCharacter: nextKnowledge.brandCharacter,
@@ -586,6 +666,7 @@
       '<p class="knowledge-character-help">@토큰 형식으로 저장되며 캐릭터 자산 목록과 개요에 반영됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '<div class="brand-publish-summary" style="margin-top:10px;">' +
       '<button class="btn-primary" data-action="knowledge-open-ip-library">IP 라이브러리</button>' +
+      '<button class="btn-secondary" data-action="knowledge-open-character-manager">캐릭터 관리</button>' +
       '</div>' +
       '</section>' +
       '</div>' +
@@ -625,10 +706,12 @@
     restoreFieldScrollState(root, preservedFieldScroll);
 
     var currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
+    var characterSheetDraft = normalizeCharacterSheets(knowledge.characterSheets, currentCharacters);
 
     function syncCharacterUi() {
       var chipBox = root.querySelector('#knowledge-character-chips');
       if (chipBox) chipBox.innerHTML = renderCharacterRows(currentCharacters);
+      characterSheetDraft = normalizeCharacterSheets(characterSheetDraft, currentCharacters);
     }
 
     function addCharacter(name) {
@@ -705,6 +788,221 @@
       modal.classList.remove('hidden');
     }
 
+    function ensureCharacterSheetDraft() {
+      characterSheetDraft = normalizeCharacterSheets(characterSheetDraft, currentCharacters);
+      return characterSheetDraft;
+    }
+
+    function updateCharacterSheetEntry(token, updater) {
+      var targetToken = String(token || '').trim().toLowerCase();
+      characterSheetDraft = ensureCharacterSheetDraft().map(function (entry) {
+        if (String(entry.token || '').toLowerCase() !== targetToken) return entry;
+        var nextEntry = typeof updater === 'function' ? updater(Object.assign({}, entry, {
+          items: normalizeCharacterSheetItems(entry.items)
+        })) : entry;
+        return Object.assign({}, nextEntry, {
+          items: normalizeCharacterSheetItems(nextEntry && nextEntry.items)
+        });
+      });
+      characterSheetDraft = normalizeCharacterSheets(characterSheetDraft, currentCharacters);
+    }
+
+    function readFileAsDataUrl(file) {
+      return new Promise(function (resolve, reject) {
+        try {
+          var reader = new FileReader();
+          reader.onload = function () { resolve(String(reader.result || '')); };
+          reader.onerror = function () { reject(reader.error || new Error('file_read_failed')); };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    function closeCharacterManagerModal() {
+      var modal = document.getElementById('character-manager-modal');
+      if (modal) modal.classList.add('hidden');
+    }
+
+    function renderCharacterManagerModal() {
+      var modal = document.getElementById('character-manager-modal');
+      var box = document.getElementById('character-manager-modal-content');
+      if (!modal || !box) return;
+      var sheetEntries = ensureCharacterSheetDraft();
+      var cardsHtml = sheetEntries.length
+        ? sheetEntries.map(function (entry) {
+          var personality = (currentCharacters.find(function (row) {
+            return String(row.token || '').toLowerCase() === String(entry.token || '').toLowerCase();
+          }) || {}).personality || '';
+          var itemsHtml = entry.items && entry.items.length
+            ? entry.items.map(function (sheet) {
+              return (
+                '<article class="character-sheet-item" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' +
+                '<img class="character-sheet-thumb" src="' + escapeHtml(sheet.imageDataUrl) + '" alt="' + escapeHtml(entry.token + ' 시트') + '" />' +
+                '<div class="character-sheet-fields">' +
+                '<input type="text" class="character-sheet-input" data-sheet-label data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" value="' + escapeHtml(sheet.label || '') + '" placeholder="시트 이름" />' +
+                '<textarea class="character-sheet-textarea" data-sheet-note data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" placeholder="활용 메모를 적어 주세요.">' + escapeHtml(sheet.note || '') + '</textarea>' +
+                '<div class="character-sheet-item-actions">' +
+                (sheet.isPrimary
+                  ? '<span class="character-sheet-primary-badge">대표 시트</span>'
+                  : '<button type="button" class="btn-secondary compact" data-action="character-sheet-set-primary" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">대표 지정</button>') +
+                '<button type="button" class="btn-secondary compact" data-action="character-sheet-delete" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">삭제</button>' +
+                '</div>' +
+                '</div>' +
+                '</article>'
+              );
+            }).join('')
+            : '<div class="character-sheet-empty">아직 등록된 시트가 없습니다. 캐릭터 기준 이미지를 업로드해 주세요.</div>';
+          return (
+            '<section class="character-manager-card" data-character-token="' + escapeHtml(entry.token) + '">' +
+            '<div class="character-manager-card-head">' +
+            '<div><strong>' + escapeHtml(entry.token) + '</strong><p>' + escapeHtml(personality || '성격 설명이 아직 없습니다.') + '</p></div>' +
+            '<div class="character-sheet-actions">' +
+            '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String((entry.items || []).length)) + '개</span>' +
+            '<label class="character-sheet-upload btn-secondary compact">' +
+            '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
+            '시트 업로드' +
+            '</label>' +
+            '</div>' +
+            '</div>' +
+            '<div class="character-sheet-grid">' + itemsHtml + '</div>' +
+            '</section>'
+          );
+        }).join('')
+        : '<div class="character-manager-empty">먼저 캐릭터 자산에 캐릭터를 등록하면 여기서 캐릭터별 시트 이미지를 관리할 수 있습니다.</div>';
+
+      box.innerHTML =
+        '<div class="character-manager-head">' +
+        '<div><h3>캐릭터 관리</h3><p>캐릭터별 기준 시트 이미지를 등록해 프로덕션 제작 시 일관된 캐릭터 리소스로 사용합니다.</p></div>' +
+        '<button type="button" class="btn-secondary" data-action="character-manager-close">닫기</button>' +
+        '</div>' +
+        '<div class="character-manager-grid">' + cardsHtml + '</div>' +
+        '<div class="character-manager-footer">' +
+        '<button type="button" class="btn-secondary" data-action="character-manager-close">취소</button>' +
+        '<button type="button" class="btn-primary" data-action="character-manager-save">저장</button>' +
+        '</div>';
+
+      box.onclick = function (evt) {
+        var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
+        if (!btn) return;
+        var action = String(btn.dataset.action || '').trim();
+        if (action === 'character-manager-close') {
+          closeCharacterManagerModal();
+          return;
+        }
+        if (action === 'character-sheet-set-primary') {
+          var primaryToken = btn.dataset.characterToken;
+          var primarySheetId = btn.dataset.sheetId;
+          updateCharacterSheetEntry(primaryToken, function (entry) {
+            entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
+              return Object.assign({}, sheet, { isPrimary: String(sheet.sheetId) === String(primarySheetId) });
+            });
+            return entry;
+          });
+          renderCharacterManagerModal();
+          return;
+        }
+        if (action === 'character-sheet-delete') {
+          var deleteToken = btn.dataset.characterToken;
+          var deleteSheetId = btn.dataset.sheetId;
+          updateCharacterSheetEntry(deleteToken, function (entry) {
+            entry.items = normalizeCharacterSheetItems(entry.items).filter(function (sheet) {
+              return String(sheet.sheetId) !== String(deleteSheetId);
+            });
+            return entry;
+          });
+          renderCharacterManagerModal();
+          return;
+        }
+        if (action === 'character-manager-save') {
+          btn.disabled = true;
+          syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft))
+            .then(function (result) {
+              closeCharacterManagerModal();
+              if (result && result.draft) renderNext(result.draft);
+            })
+            .catch(function (err) {
+              alert('캐릭터 자산 저장 실패: ' + (err && err.message ? err.message : err));
+            })
+            .finally(function () {
+              btn.disabled = false;
+            });
+        }
+      };
+
+      box.oninput = function (evt) {
+        var field = evt.target;
+        if (!field || !field.dataset) return;
+        var token = field.dataset.characterToken;
+        var sheetId = field.dataset.sheetId;
+        if (!token || !sheetId) return;
+        if (field.hasAttribute('data-sheet-label')) {
+          updateCharacterSheetEntry(token, function (entry) {
+            entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
+              if (String(sheet.sheetId) !== String(sheetId)) return sheet;
+              return Object.assign({}, sheet, { label: normalizeText(field.value || '') || sheet.label });
+            });
+            return entry;
+          });
+        }
+        if (field.hasAttribute('data-sheet-note')) {
+          updateCharacterSheetEntry(token, function (entry) {
+            entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
+              if (String(sheet.sheetId) !== String(sheetId)) return sheet;
+              return Object.assign({}, sheet, { note: normalizeText(field.value || '') });
+            });
+            return entry;
+          });
+        }
+      };
+
+      box.onchange = function (evt) {
+        var input = evt.target;
+        if (!input || !input.matches || !input.matches('input[type="file"][data-action="character-sheet-upload"]')) return;
+        var token = String(input.dataset.characterToken || '').trim();
+        var files = Array.prototype.slice.call(input.files || []);
+        if (!token || !files.length) return;
+        Promise.all(files.map(function (file, index) {
+          return readFileAsDataUrl(file).then(function (dataUrl) {
+            return {
+              sheetId: 'sheet_' + Date.now() + '_' + index,
+              label: normalizeText(String(file.name || '').replace(/\.[^.]+$/, '')) || ('시트 ' + (index + 1)),
+              imageDataUrl: dataUrl,
+              note: '',
+              isPrimary: false
+            };
+          });
+        }))
+          .then(function (items) {
+            updateCharacterSheetEntry(token, function (entry) {
+              var existingItems = normalizeCharacterSheetItems(entry.items);
+              entry.items = existingItems.concat(items.map(function (sheet, index) {
+                return Object.assign({}, sheet, {
+                  isPrimary: !existingItems.length && index === 0
+                });
+              }));
+              return entry;
+            });
+            renderCharacterManagerModal();
+          })
+          .catch(function (err) {
+            alert('시트 업로드 실패: ' + (err && err.message ? err.message : err));
+          })
+          .finally(function () {
+            input.value = '';
+          });
+      };
+
+      modal.onclick = function (evt) {
+        if (evt.target === modal) closeCharacterManagerModal();
+        var closeBtn = evt.target && evt.target.closest ? evt.target.closest('[data-close="character-manager-modal"]') : null;
+        if (closeBtn) closeCharacterManagerModal();
+      };
+
+      modal.classList.remove('hidden');
+    }
+
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
       var target = '';
@@ -712,6 +1010,10 @@
       var action = String(btn.dataset.action || '').trim();
       if (action === 'knowledge-open-library') target = buildStageUrl('library.html', projectId, brandId);
       else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
+      else if (action === 'knowledge-open-character-manager') {
+        renderCharacterManagerModal();
+        return;
+      }
       else if (action === 'knowledge-open-ip-library') {
         var pid = projectId;
         if (!pid) { alert('프로젝트가 선택되지 않았습니다.'); return; }
@@ -743,7 +1045,7 @@
       }
       else if (action === 'knowledge-apply-starter') {
         btn.disabled = true;
-        syncBrandAndProject(buildStarterKnowledge(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras), project, brandTitle, brandSummary))
+        syncBrandAndProject(buildStarterKnowledge(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft), project, brandTitle, brandSummary))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -757,7 +1059,7 @@
       }
       else if (action === 'knowledge-save-and-open-brand') {
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras))
+        syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
             var nextTarget = buildStageUrl('brand.html', projectId, brandId);
@@ -778,7 +1080,7 @@
       // 캐릭터 카드 제거에 따라 비활성화 토글 버튼도 제거됨
       else if (action === 'knowledge-save') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras);
+        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft);
         btn.disabled = true;
         syncBrandAndProject(nextKnowledge)
           .then(function (result) {
@@ -801,7 +1103,7 @@
           return;
         }
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, nextItems, currentCharacters, characterExtras))
+        syncBrandAndProject(readKnowledgeDraft(root, nextItems, currentCharacters, characterExtras, characterSheetDraft))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -820,7 +1122,7 @@
           return String(item.id || '') !== removeId;
         });
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, remaining, currentCharacters, characterExtras))
+        syncBrandAndProject(readKnowledgeDraft(root, remaining, currentCharacters, characterExtras, characterSheetDraft))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -838,6 +1140,9 @@
         currentCharacters = currentCharacters.filter(function (item) {
           return String(item.token || '').trim().toLowerCase() !== removeToken;
         });
+        characterSheetDraft = normalizeCharacterSheets(characterSheetDraft.filter(function (entry) {
+          return String(entry.token || '').trim().toLowerCase() !== removeToken;
+        }), currentCharacters);
         syncCharacterUi();
         return;
       }
