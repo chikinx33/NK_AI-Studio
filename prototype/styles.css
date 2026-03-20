@@ -2092,7 +2092,11 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-card.is-collapsed {
   min-height: 0;
-  padding-bottom: 12px;
+  padding-bottom: 8px;
+}
+
+.scenario-card.is-collapsed .card-top {
+  margin-bottom: 0;
 }
 
 .scenario-card .card-top {
