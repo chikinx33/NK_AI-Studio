@@ -1165,6 +1165,7 @@
 
         common.applyRuntimeLocale(safeLang);
         common.updateThemeButton(NK.state.runtime.theme, safeLang);
+        common.updateScreenButton(safeLang);
         try {
             Array.prototype.forEach.call(document.querySelectorAll('input[required], textarea[required], select[required]'), function (el) {
                 el.addEventListener('invalid', function () {
@@ -1215,6 +1216,60 @@
         btn.textContent = '';
         btn.setAttribute('aria-label', label);
         btn.setAttribute('title', label);
+    };
+
+    common.isFullscreenActive = function () {
+        return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+    };
+
+    common.updateScreenButton = function (lang) {
+        var safeLang = (lang === 'en') ? 'en' : 'ko';
+        var t = NK.core.translations[safeLang];
+        var btn = document.querySelector('[data-screen-toggle]');
+        if (!btn || !t) return;
+
+        var isFullscreen = common.isFullscreenActive();
+        var label = isFullscreen ? t.screen_to_window : t.screen_to_full;
+        btn.textContent = '';
+        btn.setAttribute('aria-label', label);
+        btn.setAttribute('title', label);
+        btn.setAttribute('aria-pressed', isFullscreen ? 'true' : 'false');
+        btn.classList.toggle('is-fullscreen', isFullscreen);
+    };
+
+    common.toggleScreenMode = async function () {
+        var root = document.documentElement;
+        if (!root) return;
+        try {
+            if (!common.isFullscreenActive()) {
+                if (root.requestFullscreen) {
+                    await root.requestFullscreen();
+                } else if (root.webkitRequestFullscreen) {
+                    root.webkitRequestFullscreen();
+                } else if (root.msRequestFullscreen) {
+                    root.msRequestFullscreen();
+                }
+            } else if (document.exitFullscreen) {
+                await document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+        } catch (_) { }
+        common.updateScreenButton((NK.state && NK.state.runtime && NK.state.runtime.lang) || 'ko');
+    };
+
+    common.bindScreenModeButton = function () {
+        if (typeof document === 'undefined') return;
+        if (document.__nkScreenModeBound) return;
+        var sync = function () {
+            common.updateScreenButton((NK.state && NK.state.runtime && NK.state.runtime.lang) || 'ko');
+        };
+        ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange'].forEach(function (eventName) {
+            document.addEventListener(eventName, sync);
+        });
+        document.__nkScreenModeBound = true;
     };
 
     common.setupSidebarActions = function () {

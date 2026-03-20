@@ -316,6 +316,8 @@
       persistPresets: true,
     });
     NK.ui.common.applyI18n(currentLang);
+    NK.ui.common.bindScreenModeButton();
+    NK.ui.common.updateScreenButton(currentLang);
     applyUserStudioTitleToSidebar();
     setupSyncMessageHandlers();
     setupStorageSyncHandlers();
@@ -2761,6 +2763,7 @@
   window.toggleLang = (scope = 'global') => {
     currentLang = currentLang === 'ko' ? 'en' : 'ko';
     NK.ui.common.applyI18n(currentLang);
+    NK.ui.common.updateScreenButton(currentLang);
     applyUserStudioTitleToSidebar();
     try { localStorage.setItem(LANG_KEY, currentLang); } catch (_) { }
     if (scope === 'global') {
@@ -2768,6 +2771,10 @@
       // iframe 로딩 타이밍을 대비해 한 번 더 전파
       setTimeout(() => broadcastLang(currentLang), 100);
     }
+  };
+
+  window.toggleScreenMode = () => {
+    NK.ui.common.toggleScreenMode();
   };
 
   document.addEventListener('DOMContentLoaded', init);

@@ -398,6 +398,8 @@
       scenario_reset: 'Reset',
       scenario_save: 'Save',
       lang_toggle: 'EN',
+      screen_to_full: 'Enter fullscreen',
+      screen_to_window: 'Exit fullscreen',
       theme_to_light: 'Light',
       theme_to_dark: 'Dark',
     },
@@ -528,6 +530,8 @@
       scenario_reset: '초기화',
       scenario_save: '저장하기',
       lang_toggle: 'KO',
+      screen_to_full: '전체 화면',
+      screen_to_window: '창 복귀',
       theme_to_light: '라이트',
       theme_to_dark: '다크',
     }
