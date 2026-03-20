@@ -499,3 +499,82 @@ test('validation fails abrupt location jumps and abstract visuals', () => {
   assert.ok(failedKeys.includes('visual_concreteness') || failedKeys.includes('setting_anchor'));
   assert.ok(failedKeys.includes('setting_continuity'));
 });
+
+test('overview combinations resolve into different scenario profiles and blueprints', () => {
+  const helpers = loadScenarioHelpers();
+
+  const cookingSpec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: '토마토 파스타 만들기',
+    target: '성인',
+    purposeCategory: '음식 · 요리',
+    purposeTags: '레시피, 홈쿡',
+    needs: '생활 정보',
+    tones: '친근',
+    styles: '실사',
+    duration: '15',
+    sceneCount: 4
+  });
+
+  const techSpec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'AI 일정 관리 앱 소개',
+    target: '직장인',
+    purposeCategory: '테크 · IT',
+    purposeTags: 'AI, 앱 소개',
+    needs: '실용 정보',
+    tones: '전문',
+    styles: '모션그래픽',
+    duration: '15',
+    sceneCount: 4
+  });
+
+  assert.equal(cookingSpec.profile.key, 'cooking');
+  assert.equal(techSpec.profile.key, 'tech');
+  assert.notEqual(cookingSpec.continuity.backgroundStyle, techSpec.continuity.backgroundStyle);
+  assert.deepEqual(Array.from(cookingSpec.sceneBlueprint, (row) => row.role), ['intro', 'prep', 'cook', 'plate']);
+  assert.deepEqual(Array.from(techSpec.sceneBlueprint, (row) => row.role), ['hook', 'problem', 'demo', 'benefit']);
+  assert.ok(cookingSpec.requiredOutputsKo.join(' ').includes('재료') || cookingSpec.validationRulesKo.join(' ').includes('절차'));
+  assert.ok(techSpec.requiredOutputsKo.join(' ').includes('문제') || techSpec.validationRulesKo.join(' ').includes('절차'));
+});
+
+test('alignment uses profile-specific locations and props for non-kids scenarios', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: '토마토 파스타 만들기',
+    target: '성인',
+    purposeCategory: '음식 · 요리',
+    purposeTags: '레시피, 홈쿡',
+    needs: '생활 정보',
+    tones: '친근',
+    styles: '실사',
+    duration: '15',
+    sceneCount: 4
+  });
+
+  const scenes = [
+    { id: 1, estSec: 4, narration: '', dialogue: [], visual: '' },
+    { id: 2, estSec: 4, narration: '', dialogue: [], visual: '' },
+    { id: 3, estSec: 4, narration: '', dialogue: [], visual: '' },
+    { id: 4, estSec: 3, narration: '', dialogue: [], visual: '' }
+  ];
+
+  const aligned = helpers.alignScenesToScenarioSpec(scenes, spec, {
+    lang: 'ko',
+    topic: '토마토 파스타 만들기',
+    purposeCategory: '음식 · 요리',
+    purposeTags: '레시피, 홈쿡',
+    narrationEnabled: true,
+    dubbingEnabled: false,
+    defaultSpeaker: '@narrator'
+  });
+
+  const joinedVisuals = aligned.map((scene) => scene.visual).join(' ');
+  const validation = helpers.validateScenarioAgainstSpec(aligned, spec);
+
+  assert.ok(aligned.some((scene) => /재료 준비대|도마와 싱크대 앞|화구 조리대|플레이팅 테이블/.test(scene.sceneLocation)));
+  assert.match(joinedVisuals, /주재료와 도마, 조리도구|조리도구|재료/);
+  assert.match(joinedVisuals, /조리대|싱크대|플레이팅/);
+  assert.equal(validation.passed, true);
+});

@@ -147,6 +147,387 @@ const RULE_LIBRARY = {
   },
 };
 
+const PURPOSE_CATEGORY_ARCHETYPE = {
+  "키즈 · 영유아": "kids",
+  "스토리 · 서사": "story",
+  "지식 · 교양": "informative",
+  "교육 · 학습": "learning",
+  "음식 · 요리": "cooking",
+  "여행 · 관광": "travel",
+  "라이프 · 일상": "lifestyle",
+  "리뷰 · 추천": "review",
+  "엔터테인먼트": "entertainment",
+  "게임": "game",
+  "음악 · 사운드": "music",
+  "스포츠 · 피트니스": "fitness",
+  "취미 · 크리에이티브": "creative",
+  "비즈니스 · 경제": "business",
+  "테크 · IT": "tech",
+  "힐링 · 감성": "healing",
+  "종교 · 신앙": "religion",
+  "사회 · 공감": "social",
+};
+
+const ARCHETYPE_LIBRARY = {
+  kids: {
+    key: "kids",
+    roles: ["hook", "teach", "practice", "repeat", "recap"],
+    placeKo: "밝은 놀이방 교실",
+    placeEn: "a bright playroom classroom",
+    backgroundKo: "벽에는 커다란 학습 포스터가 걸려 있고 바닥에는 색색의 놀이 매트와 안전한 도형 소품이 놓여 있다.",
+    backgroundEn: "Large learning posters hang on the wall and a colorful play mat with safe shape props sits on the floor.",
+    backgroundStyleKo: "부드러운 도형, 맑은 색감, 안전한 놀이 소품이 어우러진 밝고 직관적인 키즈 학습 세계.",
+    backgroundStyleEn: "A bright kid-friendly learning world with soft shapes, clear colors, and safe playful props.",
+    sublocationsKo: ["교실 입구", "알파벳 포스터 벽 앞", "학습 매트 중앙", "햇빛 드는 창가", "리듬 악기 코너"],
+    sublocationsEn: ["the room entrance", "the alphabet poster wall", "the learning mat center", "the sunny window side", "the rhythm corner"],
+    category: "classroom",
+    actorsKo: { group: "친구들이", guide: "안내 역할의 친구가", lead: "한 친구가", closer: "모두가" },
+    actorsEn: { group: "the friends", guide: "the guide friend", lead: "one friend", closer: "everyone" },
+    generationRulesKo: ["시청자가 바로 따라 할 수 있는 단순 행동과 짧은 발화를 유지한다."],
+    generationRulesEn: ["Keep simple actions and short speech that young viewers can copy immediately."],
+  },
+  story: {
+    key: "story",
+    roles: ["setup", "inciting", "turn", "payoff", "close"],
+    placeKo: "주인공의 여정이 이어지는 이야기 무대",
+    placeEn: "a story world where the protagonist keeps moving forward",
+    backgroundKo: "반복해서 보이는 길, 문, 상징 오브젝트가 서사의 방향을 잡아 준다.",
+    backgroundEn: "Recurring paths, doors, and symbolic objects keep the story direction clear.",
+    backgroundStyleKo: "인물의 감정과 사건 흐름이 읽히는 서사형 배경 세계.",
+    backgroundStyleEn: "A narrative world where emotions and story progression remain easy to read.",
+    sublocationsKo: ["도입 지점", "갈림길 앞", "전환이 일어나는 길목", "결정적 공간", "엔딩 포인트"],
+    sublocationsEn: ["the opening point", "the fork in the path", "the turning corner", "the decisive space", "the ending point"],
+    category: "generic",
+    actorsKo: { group: "주인공 일행이", guide: "주인공이", lead: "주인공이", closer: "주인공과 동행 인물이" },
+    actorsEn: { group: "the story group", guide: "the protagonist", lead: "the protagonist", closer: "the protagonist and companion" },
+    generationRulesKo: ["씬마다 인과가 이어져야 하며, 앞 장면의 선택이 다음 장면을 만든다는 느낌을 준다."],
+    generationRulesEn: ["Each beat should feel causal so the next scene clearly grows from the prior one."],
+  },
+  informative: {
+    key: "informative",
+    roles: ["hook", "explain", "example", "summary"],
+    placeKo: "정돈된 설명 스튜디오",
+    placeEn: "an organized explainer studio",
+    backgroundKo: "뒤쪽에는 깔끔한 보드와 정보 카드, 정리된 소품 선반이 보인다.",
+    backgroundEn: "A clean board, info cards, and organized prop shelves stay visible behind the presenter.",
+    backgroundStyleKo: "정보 전달이 잘 읽히는 절제된 스튜디오형 배경.",
+    backgroundStyleEn: "A restrained studio background designed for clear information delivery.",
+    sublocationsKo: ["오프닝 데스크", "메인 보드 앞", "구체 예시 테이블", "요약 포인트 벽"],
+    sublocationsEn: ["the opening desk", "the main board", "the example table", "the summary wall"],
+    category: "studio",
+    actorsKo: { group: "진행자와 시연 대상이", guide: "진행자가", lead: "진행자가", closer: "진행자가" },
+    actorsEn: { group: "the presenter and demo subject", guide: "the presenter", lead: "the presenter", closer: "the presenter" },
+    generationRulesKo: ["과장보다 이해를 우선하고, 장면마다 하나의 핵심 포인트만 밀어 준다."],
+    generationRulesEn: ["Prioritize comprehension over hype and push only one key point per beat."],
+  },
+  learning: {
+    key: "learning",
+    roles: ["hook", "teach", "practice", "example", "recap"],
+    placeKo: "단계별 학습이 가능한 튜토리얼 스튜디오",
+    placeEn: "a tutorial studio built for step-by-step learning",
+    backgroundKo: "보드, 학습 카드, 시연용 테이블이 순서대로 배치되어 있다.",
+    backgroundEn: "A board, learning cards, and a demo table are arranged in clear sequence.",
+    backgroundStyleKo: "단계와 반복이 선명하게 보이는 학습형 설명 공간.",
+    backgroundStyleEn: "A learning-oriented setup where steps and repetition are easy to follow.",
+    sublocationsKo: ["도입 보드 앞", "핵심 설명 구역", "따라 하기 자리", "예시 시연 테이블", "복습 포인트"],
+    sublocationsEn: ["the intro board", "the teaching zone", "the follow-along area", "the demo table", "the recap point"],
+    category: "studio",
+    actorsKo: { group: "학습 진행자와 참가자가", guide: "학습 진행자가", lead: "진행자가", closer: "진행자와 참가자가" },
+    actorsEn: { group: "the learning host and participants", guide: "the learning host", lead: "the host", closer: "the host and participants" },
+    generationRulesKo: ["도입-제시-따라 하기-복습 흐름이 보여야 한다."],
+    generationRulesEn: ["An intro-teach-follow-recap arc must stay visible."],
+  },
+  cooking: {
+    key: "cooking",
+    roles: ["intro", "prep", "cook", "plate", "taste"],
+    placeKo: "따뜻한 오픈 키친 스튜디오",
+    placeEn: "a warm open kitchen studio",
+    backgroundKo: "도마, 싱크대, 조리도구, 접시가 정돈된 조리대가 이어진다.",
+    backgroundEn: "A tidy counter with a cutting board, sink, cooking tools, and plates stays in view.",
+    backgroundStyleKo: "재료, 조리 과정, 완성 접시가 선명하게 보이는 생활형 키친 배경.",
+    backgroundStyleEn: "A kitchen world where ingredients, cooking steps, and plated results are easy to read.",
+    sublocationsKo: ["재료 준비대", "도마와 싱크대 앞", "화구 조리대", "플레이팅 테이블", "시식 자리"],
+    sublocationsEn: ["the ingredient counter", "the cutting board and sink", "the stove station", "the plating table", "the tasting spot"],
+    category: "home",
+    actorsKo: { group: "요리사가", guide: "요리사가", lead: "요리사가", closer: "요리사와 함께 먹는 인물이" },
+    actorsEn: { group: "the cook", guide: "the cook", lead: "the cook", closer: "the cook and taster" },
+    generationRulesKo: ["재료 준비, 조리, 완성 순서가 뒤엉키지 않게 보여 준다."],
+    generationRulesEn: ["Keep the ingredient-prep-cook-finish order unambiguous."],
+  },
+  travel: {
+    key: "travel",
+    roles: ["hook", "arrive", "explore", "highlight", "close"],
+    placeKo: "대표 명소를 잇는 여행 동선",
+    placeEn: "a travel route connecting key local spots",
+    backgroundKo: "이정표, 골목, 전망, 휴식 포인트가 한 지역 안에서 이어진다.",
+    backgroundEn: "Signposts, streets, viewpoints, and rest spots connect within one local area.",
+    backgroundStyleKo: "동선과 현장감이 읽히는 여행형 공간 연출.",
+    backgroundStyleEn: "A travel setup that makes route and on-site atmosphere easy to feel.",
+    sublocationsKo: ["입구 광장", "전망 포인트", "골목길 포인트", "체험 구역", "휴식 벤치"],
+    sublocationsEn: ["the entry plaza", "the viewpoint", "the alley point", "the activity zone", "the rest bench"],
+    category: "city",
+    actorsKo: { group: "진행자와 동행자가", guide: "진행자가", lead: "진행자가", closer: "진행자와 동행자가" },
+    actorsEn: { group: "the host and companion", guide: "the host", lead: "the host", closer: "the host and companion" },
+    generationRulesKo: ["장소의 이동 동선과 체험 포인트가 자연스럽게 연결되어야 한다."],
+    generationRulesEn: ["Keep route movement and experiential highlights naturally connected."],
+  },
+  lifestyle: {
+    key: "lifestyle",
+    roles: ["hook", "routine", "moment", "reflect", "close"],
+    placeKo: "생활 공간과 동네 동선이 이어지는 일상 무대",
+    placeEn: "a daily-life setting that links home space and neighborhood route",
+    backgroundKo: "집 안 코너와 동네 길이 같은 생활 리듬 안에서 연결된다.",
+    backgroundEn: "Home corners and neighborhood paths connect within one daily rhythm.",
+    backgroundStyleKo: "생활 습관과 감정이 자연스럽게 이어지는 일상형 공간.",
+    backgroundStyleEn: "A lifestyle world where habits and emotions connect naturally.",
+    sublocationsKo: ["현관 앞", "주방 테이블", "창가 자리", "근처 거리", "하루 마무리 코너"],
+    sublocationsEn: ["the entryway", "the kitchen table", "the window seat", "the nearby street", "the end-of-day corner"],
+    category: "home",
+    actorsKo: { group: "등장 인물이", guide: "등장 인물이", lead: "등장 인물이", closer: "등장 인물이" },
+    actorsEn: { group: "the subject", guide: "the subject", lead: "the subject", closer: "the subject" },
+    generationRulesKo: ["과장보다 일상의 결을 살리고, 장면 사이 리듬이 부드럽게 이어져야 한다."],
+    generationRulesEn: ["Preserve daily texture over exaggeration and keep transitions gentle."],
+  },
+  review: {
+    key: "review",
+    roles: ["hook", "firstlook", "check", "compare", "verdict"],
+    placeKo: "제품이 잘 보이는 리뷰 스튜디오",
+    placeEn: "a review studio built for product visibility",
+    backgroundKo: "언박싱 테이블, 디테일 촬영대, 비교 진열대가 한 세트로 이어진다.",
+    backgroundEn: "An unboxing table, detail stand, and comparison shelf connect as one review set.",
+    backgroundStyleKo: "대상 비교와 판단 근거가 선명한 리뷰형 스튜디오.",
+    backgroundStyleEn: "A review-focused studio where comparison and judgment cues stay explicit.",
+    sublocationsKo: ["언박싱 테이블", "디테일 클로즈업 존", "비교 진열대", "최종 평결 스탠드"],
+    sublocationsEn: ["the unboxing table", "the detail close-up zone", "the comparison shelf", "the verdict stand"],
+    category: "studio",
+    actorsKo: { group: "리뷰어가", guide: "리뷰어가", lead: "리뷰어가", closer: "리뷰어가" },
+    actorsEn: { group: "the reviewer", guide: "the reviewer", lead: "the reviewer", closer: "the reviewer" },
+    generationRulesKo: ["인상, 점검, 비교, 결론 순서가 드러나야 한다."],
+    generationRulesEn: ["A first-impression, check, comparison, and verdict sequence should be visible."],
+  },
+  entertainment: {
+    key: "entertainment",
+    roles: ["hook", "setup", "playbeat", "twist", "close"],
+    placeKo: "반응과 챌린지가 벌어지는 엔터테인먼트 세트",
+    placeEn: "an entertainment set built for reactions and challenge beats",
+    backgroundKo: "오프닝 스테이지, 미션 존, 리액션 구역이 한 세트 안에 이어진다.",
+    backgroundEn: "An opening stage, mission zone, and reaction area connect inside one set.",
+    backgroundStyleKo: "리액션과 템포 변화가 잘 읽히는 퍼포먼스형 세트.",
+    backgroundStyleEn: "A performance-oriented set where reactions and tempo shifts read clearly.",
+    sublocationsKo: ["오프닝 스테이지", "미션 존", "리액션 포인트", "피날레 구역"],
+    sublocationsEn: ["the opening stage", "the mission zone", "the reaction point", "the finale area"],
+    category: "stage",
+    actorsKo: { group: "출연자들이", guide: "진행자가", lead: "출연자가", closer: "출연자들이" },
+    actorsEn: { group: "the cast", guide: "the host", lead: "one cast member", closer: "the cast" },
+    generationRulesKo: ["템포 변화와 반응 포인트가 보여야 한다."],
+    generationRulesEn: ["Tempo changes and visible reaction beats are required."],
+  },
+  game: {
+    key: "game",
+    roles: ["hook", "mission", "playbeat", "highlight", "result"],
+    placeKo: "플레이와 전략이 교차하는 게이밍 아레나",
+    placeEn: "a gaming arena where play and strategy intersect",
+    backgroundKo: "대기 구역, 플레이 필드, 하이라이트 구간이 게임 흐름에 맞춰 이어진다.",
+    backgroundEn: "A prep zone, play field, and highlight lane connect along the game flow.",
+    backgroundStyleKo: "목표, 액션, 결과가 빠르게 읽히는 게임형 무대.",
+    backgroundStyleEn: "A game-oriented stage where goals, action, and results read quickly.",
+    sublocationsKo: ["대기 구역", "메인 플레이 필드", "아이템 포인트", "하이라이트 라인", "결승 포인트"],
+    sublocationsEn: ["the prep zone", "the main play field", "the item point", "the highlight lane", "the finish point"],
+    category: "stage",
+    actorsKo: { group: "플레이어들이", guide: "플레이어가", lead: "플레이어가", closer: "플레이어들이" },
+    actorsEn: { group: "the players", guide: "the player", lead: "the player", closer: "the players" },
+    generationRulesKo: ["목표 제시, 플레이, 결과가 씬 흐름에서 분명해야 한다."],
+    generationRulesEn: ["Goal, play, and result should be obvious across the beats."],
+  },
+  music: {
+    key: "music",
+    roles: ["hook", "build", "chorus", "variation", "outro"],
+    placeKo: "사운드와 리듬이 살아 있는 퍼포먼스 스테이지",
+    placeEn: "a performance stage alive with sound and rhythm",
+    backgroundKo: "메인 마이크, 리듬 존, 후렴 스폿이 조명 아래 이어진다.",
+    backgroundEn: "A lead mic, rhythm zone, and chorus spot connect under the stage lights.",
+    backgroundStyleKo: "박자, 후렴, 리듬 변화가 잘 드러나는 음악형 공간.",
+    backgroundStyleEn: "A music-oriented space where beat, hook, and rhythm changes stay clear.",
+    sublocationsKo: ["인트로 스폿", "리듬 존", "후렴 스테이지", "변주 코너", "엔딩 스폿"],
+    sublocationsEn: ["the intro spot", "the rhythm zone", "the chorus stage", "the variation corner", "the ending spot"],
+    category: "stage",
+    actorsKo: { group: "보컬과 연주자가", guide: "보컬이", lead: "보컬이", closer: "보컬과 연주자가" },
+    actorsEn: { group: "the vocalist and players", guide: "the vocalist", lead: "the vocalist", closer: "the vocalist and players" },
+    generationRulesKo: ["후렴 또는 반복 훅이 장면 구조에 드러나야 한다."],
+    generationRulesEn: ["A chorus or repeated hook should be visible in the scene structure."],
+  },
+  fitness: {
+    key: "fitness",
+    roles: ["hook", "warmup", "main", "main", "cooldown"],
+    placeKo: "몸의 움직임이 잘 보이는 피트니스 스튜디오",
+    placeEn: "a fitness studio where body motion reads clearly",
+    backgroundKo: "매트 존, 메인 동작 구역, 호흡 정리 라인이 선명하게 나뉘어 있다.",
+    backgroundEn: "The mat zone, main exercise area, and cooldown line are clearly separated.",
+    backgroundStyleKo: "동작 정확도와 리듬이 읽히는 운동형 공간.",
+    backgroundStyleEn: "A fitness-oriented space where movement accuracy and rhythm are easy to read.",
+    sublocationsKo: ["워밍업 매트 존", "메인 동작 구역", "호흡 정리 라인", "마무리 스트레치 코너"],
+    sublocationsEn: ["the warm-up mat zone", "the main exercise area", "the cooldown line", "the stretch corner"],
+    category: "stage",
+    actorsKo: { group: "코치와 참가자가", guide: "코치가", lead: "코치가", closer: "코치와 참가자가" },
+    actorsEn: { group: "the coach and participants", guide: "the coach", lead: "the coach", closer: "the coach and participants" },
+    generationRulesKo: ["준비 운동과 마무리 정리를 빠뜨리지 않는다."],
+    generationRulesEn: ["Do not skip warm-up and cooldown."],
+  },
+  creative: {
+    key: "creative",
+    roles: ["hook", "setup", "process", "detail", "reveal"],
+    placeKo: "손작업과 결과물이 돋보이는 크리에이티브 작업실",
+    placeEn: "a creative workshop where process and outcome both read clearly",
+    backgroundKo: "준비 책상, 작업 테이블, 디테일 코너, 전시 벽이 차례로 이어진다.",
+    backgroundEn: "A prep desk, work table, detail corner, and reveal wall connect in sequence.",
+    backgroundStyleKo: "과정과 완성 결과가 함께 살아나는 창작형 작업 공간.",
+    backgroundStyleEn: "A creative workspace where both process and finished results stay visible.",
+    sublocationsKo: ["준비 책상", "작업 테이블", "디테일 코너", "완성 전시 벽"],
+    sublocationsEn: ["the prep desk", "the work table", "the detail corner", "the reveal wall"],
+    category: "studio",
+    actorsKo: { group: "창작자가", guide: "창작자가", lead: "창작자가", closer: "창작자가" },
+    actorsEn: { group: "the creator", guide: "the creator", lead: "the creator", closer: "the creator" },
+    generationRulesKo: ["준비, 제작, 디테일, 결과 공개가 이어져야 한다."],
+    generationRulesEn: ["Prep, making, detail, and reveal should flow in order."],
+  },
+  business: {
+    key: "business",
+    roles: ["hook", "context", "point", "example", "takeaway"],
+    placeKo: "핵심 포인트를 정리하는 비즈니스 브리핑룸",
+    placeEn: "a business briefing room focused on clear takeaways",
+    backgroundKo: "차트 보드, 사례 테이블, 정리 포인트 패널이 안정적으로 이어진다.",
+    backgroundEn: "A chart board, case table, and takeaway panel stay connected in a stable layout.",
+    backgroundStyleKo: "맥락, 숫자, 결론이 정돈되어 보이는 비즈니스형 스튜디오.",
+    backgroundStyleEn: "A business-oriented studio where context, figures, and conclusions stay organized.",
+    sublocationsKo: ["브리핑 데스크", "차트 보드 앞", "사례 테이블", "정리 포인트 패널"],
+    sublocationsEn: ["the briefing desk", "the chart board", "the case table", "the takeaway panel"],
+    category: "studio",
+    actorsKo: { group: "진행자와 실무자가", guide: "진행자가", lead: "진행자가", closer: "진행자가" },
+    actorsEn: { group: "the host and practitioner", guide: "the host", lead: "the host", closer: "the host" },
+    generationRulesKo: ["맥락, 핵심 포인트, 적용 예시, 결론이 구조적으로 나뉘어야 한다."],
+    generationRulesEn: ["Context, point, application example, and takeaway should be structurally distinct."],
+  },
+  tech: {
+    key: "tech",
+    roles: ["hook", "problem", "demo", "benefit", "takeaway"],
+    placeKo: "기기와 화면이 선명한 테크 데모 랩",
+    placeEn: "a tech demo lab where devices and screens read clearly",
+    backgroundKo: "디바이스 테이블, 메인 디스플레이, 기능 시연 존이 한 흐름으로 연결된다.",
+    backgroundEn: "A device table, main display, and feature demo zone connect in one flow.",
+    backgroundStyleKo: "기능 설명과 실제 조작이 함께 보이는 테크형 데모 공간.",
+    backgroundStyleEn: "A tech demo environment where feature explanation and hands-on action stay visible together.",
+    sublocationsKo: ["디바이스 테이블", "메인 디스플레이 앞", "기능 시연 존", "결론 패널"],
+    sublocationsEn: ["the device table", "the main display", "the feature demo zone", "the takeaway panel"],
+    category: "studio",
+    actorsKo: { group: "진행자와 사용자가", guide: "진행자가", lead: "진행자가", closer: "진행자가" },
+    actorsEn: { group: "the host and user", guide: "the host", lead: "the host", closer: "the host" },
+    generationRulesKo: ["문제 제기, 시연, 효용, 정리가 순서대로 이어져야 한다."],
+    generationRulesEn: ["Problem, demo, benefit, and takeaway should follow in order."],
+  },
+  healing: {
+    key: "healing",
+    roles: ["settle", "immerse", "breathe", "reflect", "close"],
+    placeKo: "호흡과 감정이 가라앉는 조용한 힐링 공간",
+    placeEn: "a quiet healing space where breath and emotion settle",
+    backgroundKo: "잔잔한 빛, 느린 바람, 단순한 자연 요소가 계속 이어진다.",
+    backgroundEn: "Gentle light, slow air, and simple natural elements remain continuous.",
+    backgroundStyleKo: "정서 안정과 몰입을 돕는 잔잔한 힐링형 공간.",
+    backgroundStyleEn: "A calm healing space built for emotional rest and immersion.",
+    sublocationsKo: ["고요한 입구", "햇살 드는 자리", "바람 스치는 길", "마무리 전망 포인트"],
+    sublocationsEn: ["the quiet entrance", "the sunlit spot", "the breezy path", "the closing viewpoint"],
+    category: "forest",
+    actorsKo: { group: "안내자가", guide: "안내자가", lead: "안내자가", closer: "안내자가" },
+    actorsEn: { group: "the guide", guide: "the guide", lead: "the guide", closer: "the guide" },
+    generationRulesKo: ["속도보다 호흡과 정서 정리를 우선한다."],
+    generationRulesEn: ["Prioritize breath and emotional settling over pace."],
+  },
+  religion: {
+    key: "religion",
+    roles: ["hook", "scripture", "reflect", "prayer", "close"],
+    placeKo: "묵상과 기도가 이어지는 평온한 신앙 공간",
+    placeEn: "a peaceful faith space for reflection and prayer",
+    backgroundKo: "말씀 책상, 조용한 의자, 은은한 빛 포인트가 차분하게 이어진다.",
+    backgroundEn: "A scripture desk, quiet chair, and soft light point connect calmly.",
+    backgroundStyleKo: "묵상과 인도를 돕는 차분한 신앙형 공간.",
+    backgroundStyleEn: "A calm faith-oriented space that supports reflection and guidance.",
+    sublocationsKo: ["말씀 테이블", "묵상 의자 곁", "기도 자리", "마무리 빛 포인트"],
+    sublocationsEn: ["the scripture table", "the reflection chair", "the prayer spot", "the closing light point"],
+    category: "studio",
+    actorsKo: { group: "인도자와 참여자가", guide: "인도자가", lead: "인도자가", closer: "인도자가" },
+    actorsEn: { group: "the leader and participants", guide: "the leader", lead: "the leader", closer: "the leader" },
+    generationRulesKo: ["말씀, 묵상, 기도 흐름이 분명해야 한다."],
+    generationRulesEn: ["Scripture, reflection, and prayer should be structurally distinct."],
+  },
+  social: {
+    key: "social",
+    roles: ["hook", "context", "voice", "insight", "close"],
+    placeKo: "대화와 공감이 이어지는 인터뷰 공간",
+    placeEn: "an interview space built for dialogue and empathy",
+    backgroundKo: "대화 자리, 현장 컷 포인트, 정리 좌석이 같은 맥락 안에 이어진다.",
+    backgroundEn: "Conversation seats, field cut points, and summary seats connect inside the same context.",
+    backgroundStyleKo: "사람의 목소리와 맥락이 선명하게 남는 공감형 공간.",
+    backgroundStyleEn: "An empathy-driven space where voice and context remain clear.",
+    sublocationsKo: ["오프닝 자리", "맥락 설명 포인트", "이야기 테이블", "정리 좌석"],
+    sublocationsEn: ["the opening seat", "the context point", "the conversation table", "the summary seat"],
+    category: "studio",
+    actorsKo: { group: "진행자와 인터뷰이가", guide: "진행자가", lead: "인터뷰이가", closer: "진행자가" },
+    actorsEn: { group: "the host and interviewee", guide: "the host", lead: "the interviewee", closer: "the host" },
+    generationRulesKo: ["맥락 설명과 당사자의 목소리가 분리되어 보여야 한다."],
+    generationRulesEn: ["Context and first-person voice should remain separate."],
+  },
+  horror: {
+    key: "horror",
+    roles: ["setup", "sign", "dread", "reveal", "escape"],
+    placeKo: "긴장감이 감도는 폐건물",
+    placeEn: "an abandoned building charged with tension",
+    backgroundKo: "깜빡이는 조명, 먼지, 닫힌 문, 좁은 통로가 계속 시야에 남는다.",
+    backgroundEn: "Flickering lights, dust, closed doors, and tight corridors stay in view.",
+    backgroundStyleKo: "정적과 불안이 겹치는 폐쇄형 호러 공간.",
+    backgroundStyleEn: "A closed horror space layered with stillness and dread.",
+    sublocationsKo: ["삐걱이는 현관", "깜빡이는 복도", "먼지 쌓인 방", "막다른 계단 앞", "탈출 문 앞"],
+    sublocationsEn: ["the creaking entry", "the flickering corridor", "the dusty room", "the dead-end stairs", "the exit door"],
+    category: "building",
+    actorsKo: { group: "주인공 일행이", guide: "주인공이", lead: "주인공이", closer: "주인공 일행이" },
+    actorsEn: { group: "the group", guide: "the lead", lead: "the lead", closer: "the group" },
+    generationRulesKo: ["정보를 한 번에 다 풀지 말고 징후, 긴장, 드러남 순서로 전개한다."],
+    generationRulesEn: ["Do not reveal everything at once; unfold through sign, dread, then reveal."],
+  },
+  sf: {
+    key: "sf",
+    roles: ["mission", "discovery", "turn", "solution", "close"],
+    placeKo: "미래 탐사 기지",
+    placeEn: "a futuristic exploration base",
+    backgroundKo: "도킹 베이, 홀로그램 지도, 관측 창, 제어 콘솔이 같은 미래 시스템 안에 연결된다.",
+    backgroundEn: "A docking bay, hologram map, observation window, and control console connect inside one future system.",
+    backgroundStyleKo: "네온 광원, 반투명 인터페이스, 정교한 기계 구조가 보이는 SF 배경.",
+    backgroundStyleEn: "An SF background with neon light, translucent interfaces, and precise mechanical structure.",
+    sublocationsKo: ["도킹 베이", "홀로그램 지도 앞", "관측 창가", "제어 콘솔 앞", "출발 포인트"],
+    sublocationsEn: ["the docking bay", "the hologram map", "the observation window", "the control console", "the launch point"],
+    category: "space",
+    actorsKo: { group: "탐사대가", guide: "탐사대장이", lead: "탐사대원이", closer: "탐사대가" },
+    actorsEn: { group: "the exploration team", guide: "the commander", lead: "the crew member", closer: "the team" },
+    generationRulesKo: ["기술 장치, 미션 목표, 해결 단계가 함께 보이도록 구성한다."],
+    generationRulesEn: ["Keep devices, mission goals, and solution steps visible together."],
+  },
+  generic: {
+    key: "generic",
+    roles: ["hook", "develop", "reinforce", "close"],
+    placeKo: "하나의 일관된 메인 공간",
+    placeEn: "one consistent main space",
+    backgroundKo: "같은 배경 요소가 씬마다 이어서 보인다.",
+    backgroundEn: "The same background elements continue across scenes.",
+    backgroundStyleKo: "반복되는 시각 모티프와 안정적인 색감 규칙을 가진 일관된 세계.",
+    backgroundStyleEn: "One coherent world with repeating motifs and stable color logic.",
+    sublocationsKo: ["메인 전경", "중앙 공간", "옆 공간", "마지막 포인트 공간"],
+    sublocationsEn: ["the main foreground", "the center area", "the side area", "the final focal area"],
+    category: "generic",
+    actorsKo: { group: "등장 인물들이", guide: "등장 인물이", lead: "한 인물이", closer: "모두가" },
+    actorsEn: { group: "the cast", guide: "the subject", lead: "one subject", closer: "everyone" },
+    generationRulesKo: ["입력 개요에서 드러난 목적과 톤을 씬 구조 안에 직접 반영한다."],
+    generationRulesEn: ["Reflect the requested purpose and tone directly in the scene structure."],
+  },
+};
+
 const durationSceneAnchors = Object.keys(durationToScenes)
   .map((key) => ({
     duration: Number(key),
@@ -732,6 +1113,18 @@ function buildScenarioSpec(input = {}) {
     movement: signalSet.has("movement"),
     veryYoung: signalSet.has("very_young"),
   };
+  const profile = resolveOverviewProfile({
+    lang,
+    purposeCategory: category,
+    purposeTags: tags,
+    needs,
+    tones: toneValues,
+    target,
+    styleText: String(input.styleText || "").trim(),
+    styles: normalizeTextList(input.styles),
+    topicProfile,
+    signals,
+  });
 
   const requiredOutputsKo = [];
   const requiredOutputsEn = [];
@@ -776,6 +1169,7 @@ function buildScenarioSpec(input = {}) {
     knowledgeHub,
     topicProfile,
     signals,
+    profile,
     purposeCategory: category,
     purposeTags: tags,
   });
@@ -795,6 +1189,7 @@ function buildScenarioSpec(input = {}) {
     sceneCount: Math.max(1, Number(input.sceneCount) || 1),
     topicProfile,
     signals,
+    profile,
     continuity,
   });
 
@@ -811,11 +1206,12 @@ function buildScenarioSpec(input = {}) {
     characters,
     topicProfile,
     signals,
+    profile,
     rules,
-    requiredOutputsKo: uniqueStrings(requiredOutputsKo.concat(rules.flatMap((rule) => rule.generationRulesKo || []))),
-    requiredOutputsEn: uniqueStrings(requiredOutputsEn.concat(rules.flatMap((rule) => rule.generationRulesEn || []))),
-    validationRulesKo: uniqueStrings(rules.flatMap((rule) => rule.validationRulesKo || [])),
-    validationRulesEn: uniqueStrings(rules.flatMap((rule) => rule.validationRulesEn || [])),
+    requiredOutputsKo: uniqueStrings(requiredOutputsKo.concat(profile.generationRules || [], rules.flatMap((rule) => rule.generationRulesKo || []))),
+    requiredOutputsEn: uniqueStrings(requiredOutputsEn.concat(lang === "en" ? profile.generationRules || [] : [], rules.flatMap((rule) => rule.generationRulesEn || []))),
+    validationRulesKo: uniqueStrings((lang === "en" ? [] : (profile.validationRules || [])).concat(rules.flatMap((rule) => rule.validationRulesKo || []))),
+    validationRulesEn: uniqueStrings((lang === "en" ? (profile.validationRules || []) : []).concat(rules.flatMap((rule) => rule.validationRulesEn || []))),
     avoidOutputsKo,
     avoidOutputsEn,
     sceneBlueprint,
@@ -849,10 +1245,145 @@ function parseTopicProfile(topic = "", lang = "ko") {
   };
 }
 
-function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}, signals = {}, purposeCategory = "", purposeTags = [] } = {}) {
+function resolveOverviewProfile({ lang = "ko", purposeCategory = "", purposeTags = [], needs = [], tones = [], target = "", styleText = "", styles = [], topicProfile = {}, signals = {} } = {}) {
+  const category = String(purposeCategory || "").trim();
+  const tags = normalizeTextList(purposeTags);
+  const needValues = normalizeTextList(needs);
+  const toneValues = normalizeTextList(tones);
+  const styleValues = normalizeTextList(styles);
+  const joined = [category, tags.join(" "), needValues.join(" "), toneValues.join(" "), target, styleText, styleValues.join(" "), topicProfile.raw || ""]
+    .join(" ")
+    .toLowerCase();
+
+  let key = PURPOSE_CATEGORY_ARCHETYPE[category] || "generic";
+  if (/(공포|호러|괴담|스릴러|horror|haunt|haunted)/i.test(joined)) key = "horror";
+  else if (/(sf|sci[\s-]?fi|우주|행성|미래|사이버|로봇|외계|space|galaxy|future|cyber)/i.test(joined)) key = "sf";
+  else if (/(동요|율동|음악|사운드|bgm|asmr|cover|cover song|song|music)/i.test(joined)) key = "music";
+  else if (/(레시피|요리|홈쿡|먹방|맛집|kitchen|recipe|cook|cooking)/i.test(joined)) key = "cooking";
+  else if (/(여행|관광|명소|trip|travel|tour)/i.test(joined)) key = "travel";
+  else if (/(리뷰|추천|언박싱|compare|review|unbox)/i.test(joined)) key = "review";
+  else if (/(운동|피트니스|홈트|스트레칭|workout|fitness|stretch)/i.test(joined)) key = "fitness";
+  else if (/(게임|공략|플레이|gaming|gameplay|quest)/i.test(joined)) key = "game";
+  else if (/(브이로그|일상|루틴|vlog|routine|daily)/i.test(joined)) key = "lifestyle";
+  else if (/(ai|앱|기술|테크|it|device|tool|software|productivity)/i.test(joined) && key !== "sf") key = "tech";
+  else if (/(비즈니스|경제|브랜딩|마케팅|재테크|business|economy|marketing|finance)/i.test(joined)) key = "business";
+  else if (/(인터뷰|사회|공감|이슈|다큐|interview|social|documentary|issue)/i.test(joined)) key = "social";
+  else if (/(명상|힐링|위로|감성|healing|meditation|calm)/i.test(joined)) key = "healing";
+  else if (/(말씀|기도|간증|묵상|faith|prayer|scripture)/i.test(joined)) key = "religion";
+  else if (/(그림|공예|diy|디자인|글쓰기|사진|craft|creative|design)/i.test(joined)) key = "creative";
+  else if (/(공부법|자격증|튜토리얼|tutorial|lesson|learn|study)/i.test(joined) && key !== "kids") key = "learning";
+  else if (/(과학|수학|역사|상식|교양|science|history|knowledge)/i.test(joined) && !signals.song) key = "informative";
+
+  const base = ARCHETYPE_LIBRARY[key] || ARCHETYPE_LIBRARY.generic;
+  const profile = {
+    key,
+    label: category || key,
+    toneMode: toneValues[0] || "",
+    target,
+    tags,
+    needs: needValues,
+    styles: styleValues,
+    styleText: String(styleText || "").trim(),
+    roles: Array.isArray(base.roles) ? base.roles.slice() : ARCHETYPE_LIBRARY.generic.roles.slice(),
+    place: lang === "en" ? base.placeEn : base.placeKo,
+    background: lang === "en" ? base.backgroundEn : base.backgroundKo,
+    backgroundStyle: lang === "en" ? base.backgroundStyleEn : base.backgroundStyleKo,
+    sublocations: lang === "en" ? (base.sublocationsEn || []) : (base.sublocationsKo || []),
+    category: base.category || "generic",
+    actors: lang === "en" ? (base.actorsEn || ARCHETYPE_LIBRARY.generic.actorsEn) : (base.actorsKo || ARCHETYPE_LIBRARY.generic.actorsKo),
+    generationRules: lang === "en" ? (base.generationRulesEn || []) : (base.generationRulesKo || []),
+    validationRules: buildProfileValidationRules({ lang, key, target, needValues, toneValues }),
+  };
+
+  if (signals.song && !profile.roles.includes("chorus") && profile.key !== "kids") {
+    profile.roles = fitRoleSequence(["hook", "build", "chorus", "variation", "outro"], profile.roles.length || 4, "close");
+  }
+  if (signals.learning && ["entertainment", "story", "social"].includes(profile.key)) {
+    profile.roles = fitRoleSequence(["hook", "teach", "practice", "example", "recap"], profile.roles.length || 4, "recap");
+  }
+  if (signals.play && ["kids", "entertainment", "game", "fitness"].includes(profile.key)) {
+    profile.roles = fitRoleSequence(profile.roles.map((role, idx) => idx === 1 && role === "teach" ? "invite" : role), profile.roles.length || 4, "close");
+  }
+  if (/유머|코미디|패러디|챌린지|comedy|parody|challenge/i.test(joined) && !toneValues.includes("유머")) {
+    profile.generationRules = uniqueStrings(profile.generationRules.concat([
+      lang === "en" ? "Add a visible playful or comedic beat." : "장면 안에 가벼운 장난이나 코미디 비트를 한 번 이상 드러낸다."
+    ]));
+  }
+  if (/영유아|어린이|kid|toddler|preschool/i.test(String(target || "")) && profile.key !== "kids") {
+    profile.generationRules = uniqueStrings(profile.generationRules.concat([
+      lang === "en" ? "Keep language simple and reduce information density for young viewers." : "어린 시청자를 위해 어휘를 단순하게 하고 정보 밀도를 낮춘다."
+    ]));
+  }
+
+  return profile;
+}
+
+function fitRoleSequence(roles = [], count = 4, closingRole = "close") {
+  let list = (Array.isArray(roles) ? roles : []).filter(Boolean);
+  if (!list.length) list = ["hook", "develop", "reinforce", closingRole];
+  while (list.length < count) {
+    list.splice(Math.max(list.length - 1, 1), 0, list[Math.max(list.length - 2, 1)] || "develop");
+  }
+  return list.slice(0, count);
+}
+
+function buildProfileValidationRules({ lang = "ko", key = "generic", target = "", needValues = [], toneValues = [] } = {}) {
+  const rulesKo = [];
+  const rulesEn = [];
+  const add = (ko, en) => {
+    rulesKo.push(ko);
+    rulesEn.push(en);
+  };
+  if (["story", "horror", "sf"].includes(key)) add("각 씬은 앞 장면의 사건을 이어받아 전개되어야 한다.", "Each scene should clearly inherit momentum from the previous beat.");
+  if (["cooking", "learning", "fitness", "review", "tech", "business"].includes(key)) add("장면 순서가 절차나 판단 단계에 맞게 보여야 한다.", "Scene order should follow a visible procedure or decision flow.");
+  if (["travel", "lifestyle", "healing"].includes(key)) add("공간 이동과 감정 리듬이 자연스럽게 이어져야 한다.", "Location movement and emotional rhythm should connect naturally.");
+  if (/영유아|어린이|kid|toddler|preschool/i.test(String(target || ""))) add("어휘 난이도와 장면 밀도가 어린 시청자 수준에 맞아야 한다.", "Vocabulary and scene density must fit very young viewers.");
+  if (needValues.includes("실용 정보")) add("결론 또는 실질적인 요점이 분명해야 한다.", "A practical takeaway should remain explicit.");
+  if (toneValues.includes("유머")) add("유머는 대사나 상황에서 실제 비트로 확인되어야 한다.", "Humor should appear as a concrete beat in action or dialogue.");
+  return lang === "en" ? rulesEn : rulesKo;
+}
+
+function getProfileSignaturePattern(key = "generic") {
+  switch (key) {
+    case "cooking":
+      return /(재료|도마|조리|플레이팅|시식|ingredient|cook|plate|taste)/i;
+    case "travel":
+      return /(도착|전망|골목|동선|명소|arrive|viewpoint|route|landmark|explore)/i;
+    case "review":
+      return /(첫인상|비교|장단점|총평|추천|first look|compare|verdict|review)/i;
+    case "fitness":
+      return /(워밍업|동작|호흡|스트레칭|warm-?up|cooldown|stretch|movement)/i;
+    case "tech":
+      return /(문제|시연|기능|화면|효용|problem|demo|feature|screen|benefit)/i;
+    case "business":
+      return /(맥락|핵심 포인트|사례|결론|context|point|case|takeaway)/i;
+    case "creative":
+      return /(작업|제작|디테일|완성|process|detail|reveal|make)/i;
+    case "social":
+      return /(맥락|인터뷰|목소리|통찰|context|interview|voice|insight)/i;
+    case "religion":
+      return /(말씀|묵상|기도|scripture|reflection|prayer)/i;
+    case "healing":
+      return /(호흡|잔잔|천천히|breathe|calm|gentle|settle)/i;
+    case "music":
+      return /(후렴|리듬|박자|노래|chorus|rhythm|beat|sing)/i;
+    case "game":
+      return /(미션|플레이|아이템|결과|mission|play|item|result)/i;
+    case "horror":
+      return /(징후|불안|그림자|탈출|sign|dread|shadow|escape)/i;
+    case "sf":
+      return /(미션|홀로그램|콘솔|탐사|mission|hologram|console|exploration)/i;
+    case "story":
+      return /(상황|계기|전환|결과|setup|turn|payoff|story)/i;
+    default:
+      return null;
+  }
+}
+
+function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}, signals = {}, profile = {}, purposeCategory = "", purposeTags = [] } = {}) {
   const settingRaw = String(knowledgeHub.worldSetting || "").trim();
   const subject = topicProfile.subject || (lang === "en" ? "the topic" : "주제");
-  const defaultProp = buildSubjectPropCue({ lang, subject, signals });
+  const defaultProp = buildSubjectPropCue({ lang, subject, signals, profile });
   if (settingRaw) {
     const parsedSetting = parseWorldSetting(settingRaw, lang);
     return {
@@ -867,66 +1398,19 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
     };
   }
 
-  const normalizedTags = normalizeTextList(purposeTags).join(" ");
-  const kidLike = /키즈|영유아|동요|율동/.test(`${purposeCategory} ${normalizedTags}`) || signals.veryYoung || signals.song;
-  const informative = /지식|교양|교육|학습/.test(`${purposeCategory} ${normalizedTags}`) || signals.informative || signals.learning;
-  if (kidLike) {
-    const place = lang === "en" ? "a bright playroom classroom" : "밝은 놀이방 교실";
-    const background = lang === "en"
-      ? "Alphabet posters hang on the wall and a colorful learning mat covers the floor."
-      : "벽에는 커다란 알파벳 포스터가 걸려 있고 바닥에는 색색의 학습 매트가 깔려 있다.";
-    return {
-      source: "default_kids",
-      place,
-      background,
-      backgroundStyle: lang === "en"
-        ? "A bright playful nature-themed learning world with simple symbolic forms, clean colors, and soft friendly shapes."
-        : "단순하고 상징적인 형태, 맑은 색감, 부드러운 도형 소품이 어우러진 밝고 유쾌한 자연 테마 학습 세계.",
-      props: uniqueStrings([defaultProp, lang === "en" ? "small rhythm instruments" : "작은 리듬 악기"]),
-      sublocations: lang === "en"
-        ? ["the room entrance", "the alphabet poster wall", "the learning mat area", "the sunny window side"]
-        : ["교실 입구", "알파벳 포스터 벽 앞", "학습 매트 앞", "햇빛 드는 창가"],
-      category: "classroom",
-      anchorTerms: extractAnchorTerms(place, background, defaultProp),
-    };
-  }
-  if (informative) {
-    const place = lang === "en" ? "an organized explainer studio" : "정돈된 설명 스튜디오";
-    const background = lang === "en"
-      ? "A clean board and display wall stay in the background."
-      : "뒤쪽에는 깔끔한 보드와 단정한 디스플레이 벽이 계속 보인다.";
-    return {
-      source: "default_info",
-      place,
-      background,
-      backgroundStyle: lang === "en"
-        ? "A tidy explanatory studio with restrained colors, clear props, and a stable educational atmosphere."
-        : "절제된 색감, 명확한 소품, 안정적인 교육 분위기를 갖춘 정돈된 설명형 스튜디오.",
-      props: [defaultProp],
-      sublocations: lang === "en"
-        ? ["the presentation desk", "the main board", "the side display wall", "the front demo table"]
-        : ["설명 데스크 앞", "메인 보드 앞", "측면 디스플레이 벽 앞", "시연 테이블 앞"],
-      category: "studio",
-      anchorTerms: extractAnchorTerms(place, background, defaultProp),
-    };
-  }
-
-  const place = lang === "en" ? "one consistent main location" : "하나의 일관된 메인 공간";
-  const background = lang === "en"
-    ? "The same background elements remain visible from scene to scene."
-    : "같은 배경 요소가 씬마다 이어서 보인다.";
+  const baseProfile = ARCHETYPE_LIBRARY[profile.key] || ARCHETYPE_LIBRARY.generic;
+  const place = profile.place || (lang === "en" ? baseProfile.placeEn : baseProfile.placeKo);
+  const background = profile.background || (lang === "en" ? baseProfile.backgroundEn : baseProfile.backgroundKo);
   return {
-    source: "default_generic",
+    source: `default_${profile.key || "generic"}`,
     place,
     background,
-    backgroundStyle: lang === "en"
-      ? "One consistent world with repeatable visual motifs, stable color logic, and shared environmental design."
-      : "반복되는 시각 모티프, 안정적인 색감 규칙, 공유된 환경 디자인을 가진 하나의 일관된 세계.",
-    props: [defaultProp],
-    sublocations: lang === "en"
-      ? ["the main foreground", "the center area", "the side area", "the final focal point"]
-      : ["메인 전경", "중앙 공간", "옆 공간", "마지막 포인트 공간"],
-    category: detectSettingCategory(place),
+    backgroundStyle: profile.backgroundStyle || (lang === "en" ? baseProfile.backgroundStyleEn : baseProfile.backgroundStyleKo),
+    props: uniqueStrings([defaultProp, signals.song ? (lang === "en" ? "small rhythm instruments" : "작은 리듬 악기") : ""]),
+    sublocations: Array.isArray(profile.sublocations) && profile.sublocations.length
+      ? profile.sublocations
+      : (lang === "en" ? ["the main foreground", "the center area", "the side area", "the final focal point"] : ["메인 전경", "중앙 공간", "옆 공간", "마지막 포인트 공간"]),
+    category: profile.category || detectSettingCategory(place),
     anchorTerms: extractAnchorTerms(place, background, defaultProp),
   };
 }
@@ -964,8 +1448,40 @@ function parseWorldSetting(raw = "", lang = "ko") {
   };
 }
 
-function buildSubjectPropCue({ lang = "ko", subject = "", signals = {} } = {}) {
+function buildSubjectPropCue({ lang = "ko", subject = "", signals = {}, profile = {} } = {}) {
   const safeSubject = String(subject || "").trim() || (lang === "en" ? "topic" : "주제");
+  switch (profile.key) {
+    case "cooking":
+      return lang === "en" ? "the main ingredients, a cutting board, and cooking utensils" : "주재료와 도마, 조리도구";
+    case "travel":
+      return lang === "en" ? "a route map, a local sign, and a small travel prop" : "동선 지도와 현지 표지판, 작은 여행 소품";
+    case "review":
+      return lang === "en" ? "the review item, close-up props, and a comparison card" : "리뷰 대상과 클로즈업 소품, 비교 카드";
+    case "fitness":
+      return lang === "en" ? "exercise mats and simple training props" : "운동 매트와 간단한 트레이닝 소품";
+    case "tech":
+      return lang === "en" ? "the device, its screen, and a demo control prop" : "기기 본체와 화면, 시연용 조작 소품";
+    case "business":
+      return lang === "en" ? "a chart board, key figures, and a summary card" : "차트 보드와 핵심 수치, 요약 카드";
+    case "creative":
+      return lang === "en" ? "the making tools, work surface, and finished sample" : "제작 도구와 작업판, 완성 샘플";
+    case "music":
+      return lang === "en" ? "a microphone, rhythm props, and music cue cards" : "마이크와 리듬 소품, 음악 큐 카드";
+    case "game":
+      return lang === "en" ? "game props, item markers, and a score display" : "게임 소품과 아이템 마커, 점수 표시";
+    case "social":
+      return lang === "en" ? "conversation cards and a context board" : "대화 카드와 맥락 보드";
+    case "religion":
+      return lang === "en" ? "a scripture card and a small prayer light" : "말씀 카드와 작은 기도 조명";
+    case "healing":
+      return lang === "en" ? "gentle cue cards and calm sensory props" : "부드러운 안내 카드와 잔잔한 감각 소품";
+    case "horror":
+      return lang === "en" ? "a flickering flashlight and a key clue object" : "깜빡이는 손전등과 단서 오브젝트";
+    case "sf":
+      return lang === "en" ? "a hologram panel and mission device" : "홀로그램 패널과 미션 장치";
+    default:
+      break;
+  }
   if (signals.alphabet) {
     return lang === "en" ? "large ABC cards and alphabet blocks" : "커다란 ABC 카드와 알파벳 블록";
   }
@@ -992,8 +1508,10 @@ function detectSettingCategory(text = "") {
     { key: "sea", re: /바다|해변|파도|수중|sea|ocean|beach|underwater/ },
     { key: "forest", re: /숲|정글|나무|forest|jungle|woods/ },
     { key: "classroom", re: /교실|놀이방|유치원|칠판|classroom|playroom|kindergarten|board/ },
+    { key: "building", re: /복도|계단|지하실|폐건물|폐교|저택|corridor|stairs|basement|mansion|abandoned/ },
     { key: "home", re: /집|거실|부엌|침실|home|living room|kitchen|bedroom/ },
     { key: "studio", re: /스튜디오|세트|무대|studio|set|stage/ },
+    { key: "lab", re: /연구실|랩|콘솔|디스플레이|lab|console|display|device/ },
     { key: "city", re: /도시|거리|골목|city|street|downtown/ },
     { key: "farm", re: /농장|목장|farm|barn/ },
   ];
@@ -1019,29 +1537,20 @@ function uniqueStrings(list = []) {
   return Array.from(new Set((Array.isArray(list) ? list : []).map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
-function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signals, continuity = {} }) {
+function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signals, profile = {}, continuity = {} }) {
   const count = Math.max(1, Number(sceneCount) || 1);
-  let roles;
-  if (signals.learning && signals.song) {
-    roles = ["hook", "teach", "sing", "repeat", "recap"];
-  } else if (signals.learning) {
-    roles = ["hook", "teach", "practice", "repeat", "recap"];
-  } else if (signals.play) {
-    roles = ["hook", "invite", "play", "play", "close"];
-  } else if (signals.informative) {
-    roles = ["hook", "explain", "example", "summary"];
-  } else {
-    roles = ["hook", "develop", "reinforce", "close"];
+  let roles = fitRoleSequence(profile.roles || [], count, "close");
+  if (!roles.length) {
+    if (signals.learning && signals.song) roles = fitRoleSequence(["hook", "teach", "sing", "repeat", "recap"], count, "recap");
+    else if (signals.learning) roles = fitRoleSequence(["hook", "teach", "practice", "repeat", "recap"], count, "recap");
+    else if (signals.play) roles = fitRoleSequence(["hook", "invite", "play", "play", "close"], count, "close");
+    else if (signals.informative) roles = fitRoleSequence(["hook", "explain", "example", "summary"], count, "summary");
+    else roles = fitRoleSequence(["hook", "develop", "reinforce", "close"], count, "close");
   }
-
-  while (roles.length < count) {
-    roles.splice(Math.max(roles.length - 1, 1), 0, signals.learning ? "practice" : "develop");
-  }
-  roles = roles.slice(0, count);
-  return roles.map((role, idx) => createBlueprintItem({ lang, role, idx, total: count, topicProfile, signals, continuity }));
+  return roles.map((role, idx) => createBlueprintItem({ lang, role, idx, total: count, topicProfile, signals, continuity, profile }));
 }
 
-function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, signals, continuity = {} }) {
+function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, signals, continuity = {}, profile = {} }) {
   const subject = topicProfile.subject;
   const location = pickSceneSublocation(continuity, idx, lang);
   const roleMapKo = {
@@ -1059,6 +1568,55 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     develop: { title: "전개", goal: `${subject}를 확장`, must: "앞 장면보다 한 단계 더 나아간다" },
     reinforce: { title: "강화", goal: `${subject}를 다시 확인`, must: "핵심 메시지를 재확인한다" },
     close: { title: "마무리", goal: `${subject}를 기억하게 끝냄`, must: "끝맺음이 분명해야 한다" },
+    setup: { title: "상황 설정", goal: `${subject} 주변의 기본 상황을 세운다`, must: "등장 인물과 현재 상태를 분명히 보여 준다" },
+    inciting: { title: "계기 발생", goal: `${subject} 전개를 밀어붙이는 계기를 만든다`, must: "다음 장면으로 넘어갈 이유가 보여야 한다" },
+    turn: { title: "전환", goal: `${subject} 흐름을 한 단계 바꾼다`, must: "상황 변화나 선택이 드러나야 한다" },
+    payoff: { title: "회수", goal: `${subject}의 앞선 단서를 회수한다`, must: "앞 장면과 이어지는 결과가 보여야 한다" },
+    intro: { title: "도입 소개", goal: `${subject}를 시작하며 전체 흐름을 알린다`, must: "오늘 다룰 대상과 결과물을 짚는다" },
+    build: { title: "빌드업", goal: `${subject}의 리듬과 긴장을 끌어올린다`, must: "다음 반복이나 후렴으로 이어지는 준비가 보여야 한다" },
+    chorus: { title: "후렴", goal: `${subject}의 반복 훅을 전면에 둔다`, must: "반복해서 따라 부를 수 있는 구간이 보여야 한다" },
+    variation: { title: "변주", goal: `${subject}를 조금 다르게 다시 체험시킨다`, must: "기존 훅을 유지한 채 변화를 준다" },
+    outro: { title: "아웃트로", goal: `${subject}를 여운 있게 마무리한다`, must: "마지막 후렴이나 여운을 남긴다" },
+    prep: { title: "준비", goal: `${subject}를 위한 준비 단계를 보여 준다`, must: "재료나 도구, 기본 세팅을 분명히 보여 준다" },
+    cook: { title: "조리", goal: `${subject}의 핵심 과정을 진행한다`, must: "실제 핵심 동작이 보이도록 한다" },
+    plate: { title: "완성", goal: `${subject} 결과물을 보기 좋게 정리한다`, must: "완성 상태와 핵심 포인트를 분명히 보여 준다" },
+    taste: { title: "결과 확인", goal: `${subject}의 결과와 반응을 확인한다`, must: "최종 느낌이나 판단을 짧게 남긴다" },
+    arrive: { title: "도착", goal: `${subject} 현장에 들어서는 순간을 만든다`, must: "어디에 도착했는지 감각적으로 드러낸다" },
+    explore: { title: "탐색", goal: `${subject} 장소를 직접 둘러보게 한다`, must: "시선이 머물 포인트를 구체적으로 보여 준다" },
+    highlight: { title: "하이라이트", goal: `${subject}의 가장 강한 포인트를 전면에 둔다`, must: "이번 영상의 대표 장면이 분명해야 한다" },
+    routine: { title: "루틴", goal: `${subject}의 반복되는 생활 흐름을 보여 준다`, must: "생활 리듬이 읽히는 행동이 있어야 한다" },
+    moment: { title: "한순간 포착", goal: `${subject}의 감정이나 분위기를 잡아낸다`, must: "짧아도 기억에 남는 순간을 만든다" },
+    reflect: { title: "정리/성찰", goal: `${subject}를 돌아보며 정리한다`, must: "앞 장면을 짚는 정리감이 있어야 한다" },
+    firstlook: { title: "첫인상", goal: `${subject}의 첫 인상을 빠르게 전달한다`, must: "무엇이 가장 먼저 눈에 띄는지 말한다" },
+    check: { title: "점검", goal: `${subject}를 항목별로 확인한다`, must: "실제 확인 포인트가 드러나야 한다" },
+    compare: { title: "비교", goal: `${subject}를 다른 기준과 나란히 본다`, must: "비교 기준과 차이가 명확해야 한다" },
+    verdict: { title: "최종 판단", goal: `${subject}에 대한 결론을 내린다`, must: "추천/비추천 또는 총평이 분명해야 한다" },
+    mission: { title: "미션 제시", goal: `${subject}를 위한 목표를 세운다`, must: "이번 씬의 임무가 분명해야 한다" },
+    playbeat: { title: "플레이 비트", goal: `${subject}를 행동 중심으로 밀어붙인다`, must: "직접 행동하는 장면이 있어야 한다" },
+    result: { title: "결과 확인", goal: `${subject} 진행 결과를 짧게 회수한다`, must: "성공/실패나 성과가 보여야 한다" },
+    warmup: { title: "워밍업", goal: `${subject} 전 몸을 준비시킨다`, must: "가벼운 준비 동작이 있어야 한다" },
+    main: { title: "메인 동작", goal: `${subject}의 핵심 동작을 수행한다`, must: "주요 동작을 정확하게 보여 준다" },
+    cooldown: { title: "정리 동작", goal: `${subject}를 마무리하며 호흡을 정리한다`, must: "과열된 리듬을 안정적으로 낮춘다" },
+    process: { title: "과정 전개", goal: `${subject} 제작 과정을 진행한다`, must: "손동작이나 제작 단계가 보여야 한다" },
+    detail: { title: "디테일", goal: `${subject}의 핵심 디테일을 보여 준다`, must: "가까이서 봐야 하는 차이를 드러낸다" },
+    reveal: { title: "결과 공개", goal: `${subject}의 완성 결과를 드러낸다`, must: "완성 결과가 명확해야 한다" },
+    context: { title: "맥락 설명", goal: `${subject}의 배경이나 문제의식을 짚는다`, must: "왜 이 이야기가 중요한지 설명한다" },
+    point: { title: "핵심 포인트", goal: `${subject}의 가장 중요한 포인트를 세운다`, must: "하나의 중심 메시지를 분명히 남긴다" },
+    problem: { title: "문제 제기", goal: `${subject}가 해결할 문제를 밝힌다`, must: "불편함이나 한계를 먼저 짚는다" },
+    demo: { title: "실제 시연", goal: `${subject}를 직접 작동시켜 본다`, must: "조작과 결과가 함께 보여야 한다" },
+    benefit: { title: "효용 확인", goal: `${subject}가 주는 효용을 정리한다`, must: "사용자 이익이 분명해야 한다" },
+    takeaway: { title: "핵심 정리", goal: `${subject}의 결론을 간단히 남긴다`, must: "보고 나서 가져갈 요점이 있어야 한다" },
+    settle: { title: "가라앉기", goal: `${subject}로 시선을 천천히 가라앉힌다`, must: "리듬을 안정시키며 시작한다" },
+    immerse: { title: "몰입", goal: `${subject} 안으로 천천히 들어가게 만든다`, must: "지속적으로 머무를 감각이 있어야 한다" },
+    breathe: { title: "호흡", goal: `${subject}와 함께 호흡을 맞춘다`, must: "짧은 호흡이나 따라 할 리듬이 있어야 한다" },
+    scripture: { title: "말씀 제시", goal: `${subject}와 연결된 말씀을 놓는다`, must: "핵심 문구 또는 메시지를 분명히 제시한다" },
+    prayer: { title: "기도", goal: `${subject}를 기도로 마무리한다`, must: "짧아도 명확한 기도 흐름이 있어야 한다" },
+    voice: { title: "당사자 목소리", goal: `${subject}를 실제 목소리로 들려준다`, must: "직접 말하는 관점이 분명해야 한다" },
+    insight: { title: "통찰", goal: `${subject}에서 얻은 생각을 정리한다`, must: "맥락에서 나온 통찰을 분명히 남긴다" },
+    sign: { title: "징후", goal: `${subject} 주변의 이상 징후를 포착한다`, must: "불안의 첫 신호가 보여야 한다" },
+    dread: { title: "긴장 고조", goal: `${subject}의 불안을 한 단계 끌어올린다`, must: "소리, 시선, 움직임으로 긴장을 누적한다" },
+    solution: { title: "해결 시도", goal: `${subject} 문제를 푸는 단계를 보여 준다`, must: "장치나 선택을 통해 해결 실마리를 제시한다" },
+    escape: { title: "탈출/이탈", goal: `${subject}의 긴장을 벗어나려 한다`, must: "빠져나가려는 행동이 분명해야 한다" },
   };
   const roleMapEn = {
     hook: { title: "Hook", goal: `Open with immediate interest around ${subject}`, must: "Reveal the topic quickly" },
@@ -1075,6 +1633,55 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     develop: { title: "Develop", goal: `Develop ${subject}`, must: "Move one step forward from the prior scene" },
     reinforce: { title: "Reinforce", goal: `Reinforce ${subject}`, must: "Restate the core message" },
     close: { title: "Close", goal: `End with ${subject} remembered`, must: "Provide a clear closing beat" },
+    setup: { title: "Setup", goal: `Establish the situation around ${subject}`, must: "Make the current status clear" },
+    inciting: { title: "Inciting Beat", goal: `Trigger movement around ${subject}`, must: "Show a clear reason to move forward" },
+    turn: { title: "Turn", goal: `Shift the flow of ${subject}`, must: "Make the change or choice explicit" },
+    payoff: { title: "Payoff", goal: `Pay off an earlier setup around ${subject}`, must: "Show a concrete result" },
+    intro: { title: "Intro", goal: `Introduce ${subject} and its overall flow`, must: "State what will be made or covered" },
+    build: { title: "Build", goal: `Build rhythm around ${subject}`, must: "Lead into the next hook or repetition" },
+    chorus: { title: "Chorus", goal: `Put the repeatable hook of ${subject} front and center`, must: "The audience should be able to repeat it" },
+    variation: { title: "Variation", goal: `Revisit ${subject} with a twist`, must: "Keep the hook while changing the delivery" },
+    outro: { title: "Outro", goal: `Leave ${subject} with afterglow`, must: "End on a memorable final beat" },
+    prep: { title: "Prep", goal: `Prepare the stage for ${subject}`, must: "Show ingredients, tools, or setup clearly" },
+    cook: { title: "Cook", goal: `Perform the core process for ${subject}`, must: "Show the actual main action" },
+    plate: { title: "Plate", goal: `Present the result of ${subject}`, must: "Make the finished state obvious" },
+    taste: { title: "Taste", goal: `Confirm the result of ${subject}`, must: "Leave a short final reaction or judgment" },
+    arrive: { title: "Arrival", goal: `Arrive at the place of ${subject}`, must: "Make the destination feel tangible" },
+    explore: { title: "Explore", goal: `Explore the space of ${subject}`, must: "Show a concrete point of interest" },
+    highlight: { title: "Highlight", goal: `Put the strongest point of ${subject} in front`, must: "Make the representative beat unmistakable" },
+    routine: { title: "Routine", goal: `Show the repeated daily flow of ${subject}`, must: "Include a readable habit action" },
+    moment: { title: "Moment", goal: `Catch a memorable moment around ${subject}`, must: "Create a brief but distinct beat" },
+    reflect: { title: "Reflect", goal: `Reflect on ${subject}`, must: "Include a sense of looking back" },
+    firstlook: { title: "First Look", goal: `Deliver the first impression of ${subject}`, must: "State what stands out first" },
+    check: { title: "Check", goal: `Inspect ${subject}`, must: "Make the review checkpoints explicit" },
+    compare: { title: "Compare", goal: `Compare ${subject} against another baseline`, must: "Make the differences explicit" },
+    verdict: { title: "Verdict", goal: `Give a conclusion on ${subject}`, must: "Leave a clear verdict" },
+    mission: { title: "Mission", goal: `Set the mission around ${subject}`, must: "Make the objective explicit" },
+    playbeat: { title: "Play Beat", goal: `Push ${subject} through direct action`, must: "Include an active play moment" },
+    result: { title: "Result", goal: `Confirm the outcome of ${subject}`, must: "Show success, failure, or progress" },
+    warmup: { title: "Warm-up", goal: `Prepare the body for ${subject}`, must: "Include a gentle prep movement" },
+    main: { title: "Main Move", goal: `Perform the main move for ${subject}`, must: "Show the key movement clearly" },
+    cooldown: { title: "Cooldown", goal: `Wind down ${subject}`, must: "Lower the intensity in a controlled way" },
+    process: { title: "Process", goal: `Advance the making process of ${subject}`, must: "Show hands-on making steps" },
+    detail: { title: "Detail", goal: `Show the key detail of ${subject}`, must: "Reveal a close-up difference" },
+    reveal: { title: "Reveal", goal: `Reveal the finished result of ${subject}`, must: "Make the outcome unmistakable" },
+    context: { title: "Context", goal: `Explain the context behind ${subject}`, must: "State why this matters" },
+    point: { title: "Point", goal: `State the core point of ${subject}`, must: "Leave one clear message" },
+    problem: { title: "Problem", goal: `State the problem around ${subject}`, must: "Name the friction first" },
+    demo: { title: "Demo", goal: `Demonstrate ${subject} directly`, must: "Show operation and result together" },
+    benefit: { title: "Benefit", goal: `Explain the benefit of ${subject}`, must: "Make the user gain explicit" },
+    takeaway: { title: "Takeaway", goal: `Leave the key takeaway of ${subject}`, must: "End with a concise conclusion" },
+    settle: { title: "Settle", goal: `Let the audience settle into ${subject}`, must: "Lower the pace at the beginning" },
+    immerse: { title: "Immerse", goal: `Deepen immersion in ${subject}`, must: "Create a sustained sensory hold" },
+    breathe: { title: "Breathe", goal: `Sync breath with ${subject}`, must: "Include a visible breathing rhythm" },
+    scripture: { title: "Scripture", goal: `Present a scripture tied to ${subject}`, must: "State the key line clearly" },
+    prayer: { title: "Prayer", goal: `Close ${subject} in prayer`, must: "Leave a short clear prayer flow" },
+    voice: { title: "Voice", goal: `Let a first-person voice speak on ${subject}`, must: "Make the speaker perspective clear" },
+    insight: { title: "Insight", goal: `Extract insight from ${subject}`, must: "Leave an explicit insight" },
+    sign: { title: "Sign", goal: `Notice the first sign around ${subject}`, must: "Show the first signal of unease" },
+    dread: { title: "Dread", goal: `Raise dread around ${subject}`, must: "Accumulate tension through sound, gaze, or movement" },
+    solution: { title: "Solution", goal: `Attempt a solution for ${subject}`, must: "Present a solving step or device" },
+    escape: { title: "Escape", goal: `Try to escape the tension around ${subject}`, must: "Make the escape action explicit" },
   };
   const map = lang === "en" ? roleMapEn : roleMapKo;
   return Object.assign({ role, index: idx + 1, total, location }, map[role] || map.develop);
@@ -1087,6 +1694,7 @@ function formatScenarioSpecForPrompt(spec = {}) {
   if (lang === "en") {
     return [
       `Topic analysis: subject=${spec.topicProfile?.subject || spec.topic || "topic"}, keywords=${(spec.topicProfile?.keywords || []).join(", ") || "none"}`,
+      `Overview profile: archetype=${spec.profile?.key || "generic"}, audience=${spec.target || "none"}, purpose=${(spec.needs || []).join(", ") || "none"}, tones=${(spec.tones || []).join(", ") || "none"}`,
       `Active signals: ${activeSignals}`,
       `Shared background style: ${spec.continuity?.backgroundStyle || "none"}`,
       `Shared setting: place=${spec.continuity?.place || "none"} / background=${spec.continuity?.background || "none"} / props=${(spec.continuity?.props || []).join(", ") || "none"}`,
@@ -1096,6 +1704,7 @@ function formatScenarioSpecForPrompt(spec = {}) {
   }
   return [
     `주제 해석: 핵심 대상=${spec.topicProfile?.subject || spec.topic || "주제"}, 키워드=${(spec.topicProfile?.keywords || []).join(", ") || "없음"}`,
+    `개요 프로필: 구조=${spec.profile?.key || "generic"}, 타겟=${spec.target || "없음"}, 목적=${(spec.needs || []).join(", ") || "없음"}, 톤=${(spec.tones || []).join(", ") || "없음"}`,
     `활성 시그널: ${activeSignals}`,
     `공용 배경 스타일: ${spec.continuity?.backgroundStyle || "없음"}`,
     `공통 배경: 장소=${spec.continuity?.place || "없음"} / 배경=${spec.continuity?.background || "없음"} / 핵심 프롭=${(spec.continuity?.props || []).join(", ") || "없음"}`,
@@ -1249,6 +1858,7 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
       total: scenes.length,
       topicProfile: spec.topicProfile || { subject: spec.topic || "주제" },
       signals: spec.signals || {},
+      profile: spec.profile || {},
     });
     const hints = buildHintText(spec, blueprint, spec.lang || options.lang);
     const estSec = Math.max(Number(scene.estSec) || 0, 3);
@@ -1297,6 +1907,16 @@ function buildLocationBackdrop(location = "", lang = "ko") {
   if (/숲|forest|woods/.test(lower)) return lang === "en" ? "Simple trees, leafy shadows, and a winding trail fill the background." : "뒤쪽에는 단순한 나무들과 잎 그림자, 구불한 산책길이 이어진다.";
   if (/하늘|sky/.test(lower)) return lang === "en" ? "Cloud paths, floating platforms, and open sky fill the distance." : "멀리에는 구름길과 떠 있는 발판, 넓게 열린 하늘이 보인다.";
   if (/교실|놀이방|classroom|playroom/.test(lower)) return lang === "en" ? "A bright wall, learning posters, and neat floor props stay in view." : "밝은 벽면과 학습 포스터, 단정한 바닥 소품이 함께 보인다.";
+  if (/준비대|테이블|desk|table/.test(lower)) return lang === "en" ? "Neat tools, supporting props, and a clear work surface stay visible behind the subject." : "뒤쪽에는 정돈된 도구와 보조 소품, 분명한 작업면이 함께 보인다.";
+  if (/주방|싱크대|조리대|kitchen|counter|stove/.test(lower)) return lang === "en" ? "Utensils, ingredients, and a clean counter line stay visible behind the action." : "뒤쪽에는 조리도구와 재료, 정돈된 조리대 라인이 함께 보인다.";
+  if (/광장|골목|전망|거리|plaza|alley|viewpoint|street/.test(lower)) return lang === "en" ? "Signage, footpaths, and local details keep the place readable in the background." : "뒤쪽에는 표지판과 동선, 현장감 있는 지역 디테일이 이어진다.";
+  if (/무대|스테이지|stage|arena/.test(lower)) return lang === "en" ? "Stage lights, side props, and a clear performance lane stay in frame." : "무대 조명과 사이드 소품, 분명한 퍼포먼스 동선이 화면에 남아 있다.";
+  if (/존|코너|라인|구역|spot|zone|corner|lane/.test(lower)) return lang === "en" ? "Side props, floor markings, and shared environmental details keep the zone readable." : "사이드 소품과 바닥 표시, 공용 환경 디테일이 그 구역의 성격을 살린다.";
+  if (/디바이스|디스플레이|콘솔|랩|device|display|console|lab/.test(lower)) return lang === "en" ? "Screens, indicator lights, and tidy devices stay visible around the demo zone." : "주변에는 화면, 상태 표시등, 정리된 기기들이 함께 보인다.";
+  if (/현관|주방 테이블|창가|entryway|window seat|living/.test(lower)) return lang === "en" ? "Daily objects, soft light, and lived-in details stay in the background." : "생활 소품과 부드러운 빛, 익숙한 일상 디테일이 뒤쪽에 이어진다.";
+  if (/기도|말씀|묵상|prayer|scripture|reflection/.test(lower)) return lang === "en" ? "A quiet table, gentle light, and still surrounding objects keep the scene calm." : "고요한 테이블과 은은한 빛, 차분한 주변 소품이 장면을 감싼다.";
+  if (/복도|현관|계단|room|corridor|hall|stairs|door/.test(lower)) return lang === "en" ? "A narrow passage, closed doors, and uneasy shadows remain in the background." : "좁은 통로와 닫힌 문, 불안한 그림자가 뒤쪽에 남아 있다.";
+  if (/도킹|홀로그램|관측|control|hologram|docking|observation/.test(lower)) return lang === "en" ? "Panels, glowing interfaces, and structural rails anchor the futuristic background." : "패널과 빛나는 인터페이스, 구조 레일이 미래적인 배경을 만든다.";
   return lang === "en" ? "Shared world details stay visible in the background." : "공용 배경 디테일이 자연스럽게 이어진다.";
 }
 
@@ -1309,16 +1929,80 @@ function pickSceneSpeakers(spec = {}, blueprint = {}) {
   return { primary, secondary, hasCharacters: true };
 }
 
+function mapRoleToHintRole(role = "") {
+  const alias = {
+    setup: "hook",
+    inciting: "develop",
+    turn: "develop",
+    payoff: "recap",
+    intro: "hook",
+    build: "develop",
+    chorus: "sing",
+    variation: "repeat",
+    outro: "close",
+    prep: "teach",
+    cook: "develop",
+    plate: "example",
+    taste: "summary",
+    arrive: "hook",
+    explore: "develop",
+    highlight: "reinforce",
+    routine: "develop",
+    moment: "example",
+    reflect: "summary",
+    firstlook: "hook",
+    check: "example",
+    compare: "reinforce",
+    verdict: "summary",
+    mission: "hook",
+    playbeat: "play",
+    result: "summary",
+    warmup: "invite",
+    main: "practice",
+    cooldown: "close",
+    process: "develop",
+    detail: "example",
+    reveal: "recap",
+    context: "explain",
+    point: "reinforce",
+    problem: "hook",
+    demo: "example",
+    benefit: "reinforce",
+    takeaway: "summary",
+    settle: "hook",
+    immerse: "develop",
+    breathe: "practice",
+    scripture: "explain",
+    prayer: "close",
+    voice: "example",
+    insight: "summary",
+    sign: "hook",
+    dread: "develop",
+    solution: "reinforce",
+    escape: "close",
+  };
+  return alias[role] || role || "develop";
+}
+
+function getProfileActors(spec = {}, lang = "ko") {
+  const profileActors = spec.profile?.actors;
+  const fallback = lang === "en"
+    ? ARCHETYPE_LIBRARY.generic.actorsEn
+    : ARCHETYPE_LIBRARY.generic.actorsKo;
+  return profileActors || fallback;
+}
+
 function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
   const subject = spec.topicProfile?.subject || spec.topic || (lang === "en" ? "the topic" : "주제");
   const backgroundStyle = spec.continuity?.backgroundStyle || (lang === "en" ? "one consistent visual world" : "하나의 일관된 시각 세계");
-  const prop = (spec.continuity?.props || [buildSubjectPropCue({ lang, subject, signals: spec.signals || {} })])[0];
+  const prop = (spec.continuity?.props || [buildSubjectPropCue({ lang, subject, signals: spec.signals || {}, profile: spec.profile || {} })])[0];
   const sceneLocation = blueprint.location || pickSceneSublocation(spec.continuity || {}, Math.max((blueprint.index || 1) - 1, 0), lang);
   const locationBackdrop = buildLocationBackdrop(sceneLocation, lang);
   const speakers = pickSceneSpeakers(spec, blueprint);
+  const actors = getProfileActors(spec, lang);
   const primarySpeaker = speakers.primary;
   const secondarySpeaker = speakers.secondary;
-  const role = blueprint.role || "develop";
+  const role = mapRoleToHintRole(blueprint.role || "develop");
   if (lang === "en") {
     const hints = {
       hook: {
@@ -1451,7 +2135,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `안녕! 오늘은 ${subject}를 바로 시작해볼까?`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop} 앞에 둥글게 모여 ${subject}를 시작할 준비를 하며 손을 든다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop} 앞에 모여 ${subject}를 시작할 준비를 하며 시선을 모은다.`,
       dialogue: [`${primarySpeaker}: 준비됐지? ${subject} 시작!`],
     },
     teach: {
@@ -1459,7 +2143,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `${subject}를 하나씩 같이 배워보자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 한 친구가 ${prop}를 들어 올리고 ${subject}의 첫 부분을 손가락으로 또렷하게 가리킨다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.lead} ${prop}를 들어 올리고 ${subject}의 첫 부분이나 핵심 요소를 손가락으로 또렷하게 가리킨다.`,
       dialogue: [`${primarySpeaker}: ${subject}를 같이 따라 해볼까?`],
     },
     sing: {
@@ -1467,7 +2151,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `${subject}, 박자에 맞춰 함께 불러보자!`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 흔들며 ${subject}를 박자에 맞춰 함께 노래하고 발을 굴린다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 흔들며 ${subject}를 박자에 맞춰 반복하고 리듬을 탄다.`,
       dialogue: [`${primarySpeaker}: ${subject}, 한 번 더!`],
     },
     practice: {
@@ -1475,7 +2159,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `이번엔 보고 듣고 ${subject}를 따라 해보자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 하나씩 짚으며 ${subject}를 번갈아 따라 말한다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 하나씩 짚으며 ${subject}를 번갈아 따라 하거나 직접 수행한다.`,
       dialogue: [`${primarySpeaker}: 이번엔 우리 같이 ${subject}를 따라 해보자!`],
     },
     repeat: {
@@ -1488,8 +2172,8 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       location: sceneLocation,
       backgroundStyle,
       visual: spec.signals?.humor
-        ? `${sceneLocation}. ${locationBackdrop} 한 친구가 ${subject} 순서를 잠깐 헷갈려 ${prop}를 거꾸로 들었다가, 옆 친구들이 웃으며 올바른 쪽을 가리키자 바로 다시 고친다.`
-        : `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 가슴 높이로 들고 ${subject}를 더 또렷하게 한 번 더 반복한다.`,
+        ? `${sceneLocation}. ${locationBackdrop} ${actors.lead} ${subject} 순서나 동작을 잠깐 헷갈려 ${prop}를 잘못 다뤘다가, ${actors.closer} 웃으며 올바른 쪽을 가리키자 바로 다시 고친다.`
+        : `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 또렷하게 보여 주며 ${subject}를 한 번 더 반복한다.`,
       dialogue: spec.signals?.humor
         ? [`${primarySpeaker}: 어? 잠깐 헷갈렸네!`, `${secondarySpeaker}: 괜찮아, ${subject} 다시!`]
         : [`${primarySpeaker}: 좋아, ${subject} 한 번 더!`],
@@ -1499,7 +2183,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `잘했어! 마지막으로 ${subject}를 한 번만 더 확인하자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 모두가 ${prop}를 가운데로 모으고 ${subject}를 함께 가리키며 환하게 마무리한다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.closer} ${prop}를 가운데로 모으고 ${subject}의 핵심을 함께 확인하며 마무리한다.`,
       dialogue: [`${primarySpeaker}: 잘했어! ${subject} 기억났지?`],
     },
     invite: {
@@ -1507,7 +2191,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `우리와 함께 ${subject}를 해볼까?`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 안내 역할의 친구가 ${prop} 옆에서 손짓하며 ${subject}에 함께 참여하자고 부른다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop} 옆에서 손짓하며 ${subject}에 함께 참여하자고 부른다.`,
       dialogue: [`${primarySpeaker}: 같이 해볼까? ${subject}!`],
     },
     play: {
@@ -1515,7 +2199,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `${subject}를 놀이처럼 신나게 즐겨보자!`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop} 주변을 돌며 손뼉을 치고 몸을 움직여 ${subject}를 놀이처럼 체험한다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop} 주변을 돌며 손뼉을 치거나 몸을 움직여 ${subject}를 행동 중심으로 체험한다.`,
       dialogue: [`${primarySpeaker}: 몸으로도 같이 해보자!`],
     },
     explain: {
@@ -1523,7 +2207,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `${subject}의 핵심은 바로 이거야.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 진행자가 ${prop}를 옆에 두고 ${subject}의 핵심을 짧고 분명하게 설명한다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop}를 옆에 두고 ${subject}의 핵심을 짧고 분명하게 설명한다.`,
       dialogue: [`${primarySpeaker}: 핵심은 ${subject}야.`],
     },
     example: {
@@ -1531,7 +2215,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `이 예시를 보면 ${subject}가 더 쉬워져.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${prop}를 이용한 구체 예시가 화면 앞에서 시연되어 ${subject}가 더 쉽게 보인다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.lead} ${prop}를 이용한 구체 예시나 실제 시연을 보여 주어 ${subject}가 더 쉽게 이해된다.`,
       dialogue: [`${primarySpeaker}: 이렇게 보면 더 쉬워.`],
     },
     summary: {
@@ -1539,7 +2223,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `${subject}의 핵심만 짧게 기억하자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${prop} 옆에 핵심 단어만 남기고 ${subject}를 짧게 정리한다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop} 옆에 핵심만 남기고 ${subject}의 요점을 짧게 정리한다.`,
       dialogue: [`${primarySpeaker}: 핵심만 다시 기억하자!`],
     },
     develop: {
@@ -1547,7 +2231,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `이제 ${subject}를 다음 단계로 가보자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 다음 위치로 옮기며 ${subject}를 한 단계 더 전개한다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 다음 위치나 단계로 옮기며 ${subject}를 한 단계 더 전개한다.`,
       dialogue: [`${primarySpeaker}: 이제 다음으로 가보자!`],
     },
     reinforce: {
@@ -1555,7 +2239,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `맞아, 이게 ${subject}의 핵심이야.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${prop}를 카메라 가까이 들어 핵심인 ${subject}를 다시 또렷하게 보여 준다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop}를 카메라 가까이 들어 ${subject}의 핵심 포인트를 다시 또렷하게 보여 준다.`,
       dialogue: [`${primarySpeaker}: 맞아, 이게 핵심이야!`],
     },
     close: {
@@ -1563,7 +2247,7 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: `다음에도 ${subject}로 또 만나자!`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop} 옆에서 손을 흔들며 ${subject}를 선명하게 남기고 끝낸다.`,
+      visual: `${sceneLocation}. ${locationBackdrop} ${actors.closer} ${prop} 옆에서 손을 흔들며 ${subject}의 여운을 남기고 끝낸다.`,
       dialogue: [`${primarySpeaker}: 다음에도 ${subject}로 또 만나자!`],
     },
   };
@@ -1633,6 +2317,16 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
       message: spec.lang === "en"
         ? "Very young audience setups need short simple lines."
         : "영유아 대상이면 문장이 짧고 단순해야 한다.",
+    });
+  }
+  const profileSignature = getProfileSignaturePattern(spec.profile?.key || "generic");
+  if (profileSignature) {
+    results.push({
+      key: "profile_signature",
+      passed: profileSignature.test(joined),
+      message: spec.lang === "en"
+        ? "The scenario should contain visible beats that match the selected overview profile."
+        : "시나리오 안에 선택된 장르/목적 조합에 맞는 구조적 단서가 보여야 한다.",
     });
   }
   results.push({
@@ -1783,12 +2477,15 @@ function analyzeVisualContract(text = "", spec = {}) {
   const lower = clean.toLowerCase();
   const continuity = spec.continuity || {};
   const anchorTerms = Array.isArray(continuity.anchorTerms) ? continuity.anchorTerms : [];
-  const placeCue = anchorTerms.some((term) => term && clean.includes(term))
-    || /(교실|놀이방|유치원|스튜디오|무대|집|거실|숲|바다|우주|공원|마당|실내|실외|classroom|playroom|studio|stage|home|forest|sea|space|park|yard|indoors|outdoors)/i.test(lower);
-  const backgroundCue = /(벽|창|창밖|바닥|뒤쪽|배경|하늘|조명|포스터|매트|board|wall|window|floor|background|sky|lighting|poster|mat)/i.test(lower);
-  const actionCue = /(모이|들|가리키|흔들|춤|노래|외치|웃|넘어지|고치|짚|걷|뛰|손짓|tap|hold|point|wave|dance|sing|laugh|trip|fix|step|run|gesture|gather)/i.test(lower);
+  const firstSegment = clean.split(/[.!?。！？]/)[0].trim();
+  const locationPrefixCue = firstSegment && firstSegment.length <= 30 && firstSegment.length !== clean.length && !/(친구|인물|진행자|요리사|플레이어|안내자|the |presenter|friend|group|cook|player|guide)/i.test(firstSegment);
+  const placeCue = locationPrefixCue
+    || anchorTerms.some((term) => term && clean.includes(term))
+    || /(교실|놀이방|유치원|스튜디오|무대|집|거실|숲|바다|우주|공원|마당|실내|실외|준비대|테이블|데스크|코너|구역|존|라인|조리대|싱크대|플레이팅|콘솔|도킹|전망 포인트|classroom|playroom|studio|stage|home|forest|sea|space|park|yard|indoors|outdoors|table|desk|corner|zone|lane|counter|sink|plating|console|docking)/i.test(lower);
+  const backgroundCue = /(벽|창|창밖|바닥|뒤쪽|배경|하늘|조명|포스터|매트|보드|선반|표지판|그림자|레일|작업면|디테일|보인다|이어진다|펼쳐져|남아 있다|floor|background|sky|lighting|poster|mat|board|shelf|sign|shadow|rail|work surface|details|stay visible|remain)/i.test(lower);
+  const actionCue = /(모이|모여|준비|들|가리키|흔들|춤|노래|외치|웃|넘어지|고치|짚|걷|뛰|손짓|옮기|시연|담|올리|놓|정리|tap|hold|point|wave|dance|sing|laugh|trip|fix|step|run|gesture|gather|prepare|move|demonstrate|plate|place)/i.test(lower);
   const propCue = anchorTerms.some((term) => term && clean.includes(term))
-    || /(카드|블록|포스터|매트|북|탬버린|칠판|풍선|스티커|책상|소품|card|block|poster|mat|drum|tambourine|board|sticker|desk|prop)/i.test(lower);
+    || /(카드|블록|포스터|매트|북|탬버린|칠판|풍선|스티커|책상|소품|도구|재료|기기|지도|패널|콘솔|카드|조명|card|block|poster|mat|drum|tambourine|board|sticker|desk|prop|tool|ingredient|device|map|panel|console|light)/i.test(lower);
   return {
     placeCue,
     backgroundCue,
@@ -2552,6 +3249,7 @@ function fallbackScenesV2({
       total: count,
       topicProfile: scenarioSpec.topicProfile,
       signals: scenarioSpec.signals,
+      profile: scenarioSpec.profile || {},
     });
     const hints = buildHintText(scenarioSpec, blueprint, lang);
     const narration = narrationEnabled ? hints.narration : "";
