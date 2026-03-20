@@ -2824,9 +2824,13 @@
   };
 
   window.openOptionsStage = () => {
-    if (NK.navigation && typeof NK.navigation.loadStage === 'function') {
-      NK.navigation.loadStage('index.html');
-    }
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = 'index.html';
+        return;
+      }
+    } catch (_) { }
+    window.location.href = 'index.html';
   };
 
   document.addEventListener('DOMContentLoaded', init);
