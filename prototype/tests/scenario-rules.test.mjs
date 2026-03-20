@@ -11,7 +11,7 @@ function loadScenarioHelpers() {
     .replace('export function calculateSceneCountForDuration', 'function calculateSceneCountForDuration')
     .replace('export async function onRequestPost', 'async function onRequestPost')
     .replace('export async function onRequestOptions', 'async function onRequestOptions');
-  source += '\nmodule.exports = { calculateSceneCountForDuration, normalizeKnowledgeHubInput, buildUserPrompt, buildScenarioSpec, validateScenarioAgainstSpec, alignScenesToScenarioSpec };';
+  source += '\nmodule.exports = { calculateSceneCountForDuration, normalizeKnowledgeHubInput, buildUserPrompt, buildScenarioSpec, validateScenarioAgainstSpec, alignScenesToScenarioSpec, getSpeechCharLimit };';
   const context = vm.createContext({
     console,
     setTimeout,
@@ -137,5 +137,65 @@ test('alignment step repairs generic scenes toward overview-fit structure', () =
   assert.match(combined, /ABC/);
   assert.match(combined, /카메라 연출/);
   assert.match(combined, /다시|한 번 더/);
-  assert.match(combined, /헷갈|웃/);
+  assert.match(combined, /실수|다시/);
+});
+
+test('alignment keeps narration as spoken line and trims voice to scene duration', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    toneText: '',
+    tones: '유머',
+    styleText: '애니메이션(3D)',
+    styles: '애니메이션(3D)',
+    duration: '15',
+    sceneCount: 4
+  });
+
+  const scenes = [
+    {
+      id: 1,
+      title: 'Scene 1',
+      estSec: 3,
+      narration: '안녕! 오늘은 ABC를 배워볼 거야! 함께해봐!',
+      dialogue: [{ speaker: '@narrator', line: '안녕! 오늘은 ABC를 배워볼 거야! 함께해봐!' }],
+      visual: '친구들이 모인다.'
+    },
+    {
+      id: 2,
+      title: 'Scene 2',
+      estSec: 4,
+      narration: 'A는 사과야! B는 공룡! C는 고양이!',
+      dialogue: [{ speaker: '@narrator', line: 'A는 사과야! B는 공룡! C는 고양이!' }],
+      visual: 'ABC를 보여준다.'
+    }
+  ];
+
+  const aligned = helpers.alignScenesToScenarioSpec(scenes, spec, {
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    toneText: '',
+    tones: '유머',
+    styleText: '애니메이션(3D)',
+    styles: '애니메이션(3D)',
+    aspectRatio: '16:9',
+    sceneCount: 2,
+    duration: 7,
+    narrationEnabled: true,
+    dubbingEnabled: true,
+    defaultSpeaker: '@narrator'
+  });
+  const limitNarr = helpers.getSpeechCharLimit(3, 'ko', 'narration');
+  const limitDial = helpers.getSpeechCharLimit(3, 'ko', 'dialogue');
+
+  assert.doesNotMatch(aligned[0].narration, /호기심을 끌어낸다|한 단계씩 보여 주며 쉽게 따라 배우게 한다|리듬감 있게 반복하며 함께 부른다/);
+  assert.ok(aligned[0].narration.length <= limitNarr);
+  assert.ok(aligned[0].dialogue.every((row) => row.line.length <= limitDial));
 });

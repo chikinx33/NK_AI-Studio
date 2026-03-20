@@ -1050,17 +1050,20 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
       signals: spec.signals || {},
     });
     const hints = buildHintText(spec, blueprint, spec.lang || options.lang);
-    const narration = options.narrationEnabled ? mergeSentence(scene.narration, hints.narration) : scene.narration;
-    const dialogue = repairDialogue(scene.dialogue || [], hints.dialogue, {
+    const estSec = Math.max(Number(scene.estSec) || 0, 3);
+    const narration = options.narrationEnabled
+      ? fitNarrationToDuration(selectNarrationBase(scene.narration, hints.narration), estSec, options.lang)
+      : scene.narration;
+    const dialogue = trimDialogueToDuration(repairDialogue(scene.dialogue || [], hints.dialogue, {
       dubbingEnabled: options.dubbingEnabled,
       defaultSpeaker: options.defaultSpeaker || "@narrator",
       forceHumor: !!spec.signals?.humor && blueprint.role === "repeat",
-    });
+    }), estSec, options.lang);
     const visual = mergeVisual(scene.visual, hints.visual, Object.assign({}, cameraContext, { idx }));
     return shapeSceneByMode({
       id: scene.id != null ? scene.id : idx + 1,
       title: blueprint.title || scene.title || `Scene ${idx + 1}`,
-      estSec: scene.estSec,
+      estSec,
       narration,
       dialogue,
       visual,
@@ -1304,6 +1307,18 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
     });
   }
   results.push({
+    key: "duration_safe_voice",
+    passed: sceneList.every((scene) => {
+      const estSec = Math.max(Number(scene.estSec) || 0, 3);
+      const narrationOk = !scene.narration || String(scene.narration).length <= getSpeechCharLimit(estSec, spec.lang, "narration");
+      const dialogueOk = !Array.isArray(scene.dialogue) || scene.dialogue.every((row) => String(row.line || "").length <= getSpeechCharLimit(estSec, spec.lang, "dialogue"));
+      return narrationOk && dialogueOk;
+    }),
+    message: spec.lang === "en"
+      ? "Voice lines must fit the available scene duration."
+      : "나레이션과 대사는 각 씬의 길이 안에 들어가야 한다.",
+  });
+  results.push({
     key: "blueprint_alignment",
     passed: sceneList.length === (spec.sceneBlueprint || []).length,
     message: spec.lang === "en"
@@ -1347,10 +1362,61 @@ function mergeSentence(base = "", hint = "") {
   return `${cleanBase} ${cleanHint}`.replace(/\s{2,}/g, " ").trim();
 }
 
+function selectNarrationBase(base = "", hint = "") {
+  const cleanBase = String(base || "").trim();
+  const cleanHint = String(hint || "").trim();
+  if (!cleanBase || isPlaceholderText(cleanBase)) return cleanHint;
+  return cleanBase;
+}
+
 function mergeVisual(base = "", hint = "", context = {}) {
   const cleanBase = stripCameraDirection(base);
   const merged = mergeSentence(cleanBase, hint);
   return ensureCameraDirectionInVisual(merged, context);
+}
+
+function getSpeechCharLimit(estSec = 3, lang = "ko", mode = "narration") {
+  const sec = Math.max(Number(estSec) || 0, 3);
+  const perSec = lang === "en" ? 12 : 8;
+  const base = Math.max(Math.floor(sec * perSec), lang === "en" ? 18 : 12);
+  return mode === "dialogue" ? Math.max(base - (lang === "en" ? 6 : 4), 10) : base;
+}
+
+function trimTextToCharLimit(text = "", limit = 0) {
+  const clean = String(text || "").replace(/\s+/g, " ").trim();
+  if (!clean || !limit || clean.length <= limit) return clean;
+  const pieces = clean.split(/(?<=[.!?。！？])/).map((part) => part.trim()).filter(Boolean);
+  if (pieces.length > 1) {
+    let acc = "";
+    for (const piece of pieces) {
+      const candidate = acc ? `${acc} ${piece}` : piece;
+      if (candidate.length > limit) break;
+      acc = candidate;
+    }
+    if (acc) return acc.trim();
+  }
+  return clean.slice(0, Math.max(limit - 1, 1)).trim() + "...";
+}
+
+function fitNarrationToDuration(text = "", estSec = 3, lang = "ko") {
+  return trimTextToCharLimit(text, getSpeechCharLimit(estSec, lang, "narration"));
+}
+
+function trimDialogueToDuration(dialogue = [], estSec = 3, lang = "ko") {
+  const rows = normalizeDialogue(dialogue || []);
+  if (!rows.length) return rows;
+  const totalLimit = getSpeechCharLimit(estSec, lang, "dialogue");
+  const perLine = Math.max(Math.floor(totalLimit / rows.length), lang === "en" ? 8 : 6);
+  let remaining = totalLimit;
+  return rows.map((row, idx) => {
+    const localLimit = Math.max(idx === rows.length - 1 ? remaining : perLine, lang === "en" ? 8 : 6);
+    const line = trimTextToCharLimit(row.line, localLimit);
+    remaining = Math.max(remaining - line.length, 0);
+    return {
+      speaker: row.speaker,
+      line,
+    };
+  }).filter((row) => row.line);
 }
 
 function repairDialogue(dialogue = [], hintLines = [], options = {}) {
