@@ -241,6 +241,8 @@
   }
 
   function setPipelinePageLoading(show, message) {
+    const pipelineOverlay = document.getElementById('pipeline-loading');
+    if (show && pipelineOverlay) pipelineOverlay.classList.add('hidden');
     if (NK.core && NK.core.setLoading) {
       NK.core.setLoading(!!show, message || '로딩중...');
       return;
@@ -369,168 +371,171 @@
     }
     if (!state) {
       setPipelinePageLoading(true, '로딩중...');
-      var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
-      if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
-      try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
-
-      // 서버 데이터 로드 시도 + 레퍼런스 fallback
-      var serverData = null;
-      const loadReferenceFallback = async function () {
-        const candidates = [];
-        try { candidates.push('/reference/' + encodeURIComponent(projectId) + '/data.json'); } catch (_) { }
-        try {
-          const origin = (typeof window !== 'undefined' && window.location) ? window.location.origin : '';
-          if (origin) candidates.push(origin.replace(/\/+$/, '') + '/reference/' + encodeURIComponent(projectId) + '/data.json');
-        } catch (_) { }
-        try {
-          if (NK.config && NK.config.API_BASE) {
-            const b = (NK.config.API_BASE || '').replace(/\/+$/, '');
-            if (b) candidates.push(b + '/reference/' + encodeURIComponent(projectId) + '/data.json');
-          }
-        } catch (_) { }
-        for (var i = 0; i < candidates.length; i++) {
-          const url = candidates[i];
-          try {
-            const resp = await fetch(url);
-            if (!resp.ok) continue;
-            const txt = await resp.text();
-            const j = JSON.parse(txt);
-            if (j && (j.scenes || j.payload)) return j;
-          } catch (_) { }
-        }
-        return null;
-      };
-
-      // file:// 환경에서 API_BASE가 설정되어 있으면 원격에서 불러오고,
-      // 404 등으로 실패하면 로컬 드래프트를 찾아 원격에 즉시 저장(동기화) 후 사용
-      if (projectId && NK.api && NK.api.projectGet) {
-        const loadLocalDraftById = (pid) => {
-          try {
-            const drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
-            return drafts.find(d => String(d.id) === String(pid)) || null;
-          } catch (_) { return null; }
-        };
-        try {
-          var res = await NK.api.projectGet(projectId);
-          if (res) serverData = (res.data || res);
-        } catch (err) {
-          // 서버에 data.json이 없으면(404 포함) 로컬 드래프트를 업로드해 동기화
-          const localDraft = loadLocalDraftById(projectId);
-          if (localDraft && NK.api.projectSave) {
-            try {
-              await NK.api.projectSave(
-                projectId,
-                localDraft.payload || {},
-                localDraft.scenes || [],
-                {
-                  header: localDraft.header || '',
-                  aspectRatio: localDraft.payload?.aspectRatio,
-                  title: localDraft.title || ''
-                }
-              );
-              serverData = {
-                title: localDraft.title || '',
-                payload: localDraft.payload || {},
-                scenes: localDraft.scenes || [],
-                header: localDraft.header || '',
-                aspectRatio: localDraft.payload?.aspectRatio || ''
-              };
-            } catch (_) { /* 동기화 실패 시 아래 fallback 시도 */ }
-          }
-        }
-        if (!serverData || (!serverData.scenes && !serverData.payload)) {
-          try { serverData = await loadReferenceFallback(); } catch (_) { }
-        }
-      }
-
-      if (serverData) {
-        var serverRatio = normalizeAspectRatio(serverData.aspectRatio || serverData.payload?.aspectRatio || aspectRatio);
-        if (serverRatio && saveAspect) saveAspect(serverRatio);
-        aspectRatio = serverRatio || aspectRatio;
-        var payloadSrv = Object.assign({}, serverData.payload || {});
-        payloadSrv.aspectRatio = normalizeAspectRatio(payloadSrv.aspectRatio || aspectRatio);
-        var headerSrv = serverData.header || serverData.payload?.header || (loadHeader ? loadHeader() : '');
-        var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
-        var headerCleanSrv = cleanHeader(headerSrv2);
-        var sceneSrv = (serverData.scenes || []).map(function (s, idx) {
-          var imageRefSrv = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
-          var videoRefSrv = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
-          return {
-            id: (s.id != null ? s.id : (idx + 1)),
-            lines: s.lines || '',
-            shot: s.shot || s.visual || '',
-            narration: s.narration || '',
-            dialogue: s.dialogue || s.dialogues || [],
-            script: s.script || '',
-            estSec: s.estSec,
-            promptText: (s.promptText || ['Common', headerCleanSrv, 'Visual', (s.shot || '')].join('\n')),
-            imageDataUrl: imageRefSrv,
-            imgLoading: false,
-            imgError: '',
-            videoUrl: videoRefSrv,
-            videoStatus: s.videoStatus || '',
-            videoError: s.videoError || '',
-            videoJobId: s.videoJobId || '',
-            promptEdited: !!s.promptEdited,
-            editingPrompt: !!s.editingPrompt,
-            voiceUrl: s.voiceUrl || '',
-            voiceObjectName: s.voiceObjectName || '',
-            voiceStatus: s.voiceStatus || '',
-            voiceError: s.voiceError || '',
-            voiceVoiceId: s.voiceVoiceId || '',
-          };
-        });
-        state = { payload: payloadSrv, header: headerCleanSrv, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
-        ctx.setState(state);
-        await ui.refreshAssets();
-      } else if (stored) {
-        var savedRatio = normalizeAspectRatio(stored.aspectRatio || stored.payload?.aspectRatio || aspectRatio);
-        if (savedRatio && saveAspect) saveAspect(savedRatio);
-        aspectRatio = savedRatio || aspectRatio;
-        var payloadStored = Object.assign({}, stored.payload || {});
-        payloadStored.aspectRatio = normalizeAspectRatio(payloadStored.aspectRatio || aspectRatio);
-        var headerInitRaw = (stored.header || stored.payload?.header || (loadHeader ? loadHeader() : '') || '');
-        var headerInit2 = withAspectInHeader ? withAspectInHeader(headerInitRaw, aspectRatio) : headerInitRaw;
-        var headerCleanInit = cleanHeader(headerInit2);
-        var sceneListInit = (stored.scenes || []).map(function (s, idx) {
-          var imageRefStored = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
-          var videoRefStored = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
-          return {
-            id: (s.id != null ? s.id : (idx + 1)),
-            lines: s.lines || '',
-            shot: s.shot || s.visual || '',
-            narration: s.narration || '',
-            dialogue: s.dialogue || s.dialogues || [],
-            script: s.script || '',
-            estSec: s.estSec,
-            promptText: (s.promptText || ['Common', headerCleanInit, 'Visual', (s.shot || '')].join('\n')),
-            imageDataUrl: imageRefStored,
-            imgLoading: false,
-            imgError: '',
-            videoUrl: videoRefStored,
-            videoStatus: s.videoStatus || '',
-            videoError: s.videoError || '',
-            videoJobId: s.videoJobId || '',
-            promptEdited: !!s.promptEdited,
-            editingPrompt: !!s.editingPrompt,
-            voiceUrl: s.voiceUrl || '',
-            voiceObjectName: s.voiceObjectName || '',
-            voiceStatus: s.voiceStatus || '',
-            voiceError: s.voiceError || '',
-            voiceVoiceId: s.voiceVoiceId || '',
-          };
-        });
-        state = { payload: payloadStored, header: headerCleanInit, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
-        ctx.setState(state);
-        await ui.refreshAssets();
-      } else {
-        var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '', aspectRatio: aspectRatio };
-        var headerInit = withAspectInHeader ? withAspectInHeader('', aspectRatio) : '';
-        state = { payload: payload, header: headerInit, scenes: [], savedAt: '', aspectRatio: aspectRatio, isPlaceholder: true };
-        ctx.setState(state);
-      }
       setPipelineLoading(false);
-      setPipelinePageLoading(false);
+      try {
+        var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
+        if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
+        try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
+
+        // 서버 데이터 로드 시도 + 레퍼런스 fallback
+        var serverData = null;
+        const loadReferenceFallback = async function () {
+          const candidates = [];
+          try { candidates.push('/reference/' + encodeURIComponent(projectId) + '/data.json'); } catch (_) { }
+          try {
+            const origin = (typeof window !== 'undefined' && window.location) ? window.location.origin : '';
+            if (origin) candidates.push(origin.replace(/\/+$/, '') + '/reference/' + encodeURIComponent(projectId) + '/data.json');
+          } catch (_) { }
+          try {
+            if (NK.config && NK.config.API_BASE) {
+              const b = (NK.config.API_BASE || '').replace(/\/+$/, '');
+              if (b) candidates.push(b + '/reference/' + encodeURIComponent(projectId) + '/data.json');
+            }
+          } catch (_) { }
+          for (var i = 0; i < candidates.length; i++) {
+            const url = candidates[i];
+            try {
+              const resp = await fetch(url);
+              if (!resp.ok) continue;
+              const txt = await resp.text();
+              const j = JSON.parse(txt);
+              if (j && (j.scenes || j.payload)) return j;
+            } catch (_) { }
+          }
+          return null;
+        };
+
+        // file:// 환경에서 API_BASE가 설정되어 있으면 원격에서 불러오고,
+        // 404 등으로 실패하면 로컬 드래프트를 찾아 원격에 즉시 저장(동기화) 후 사용
+        if (projectId && NK.api && NK.api.projectGet) {
+          const loadLocalDraftById = (pid) => {
+            try {
+              const drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
+              return drafts.find(d => String(d.id) === String(pid)) || null;
+            } catch (_) { return null; }
+          };
+          try {
+            var res = await NK.api.projectGet(projectId);
+            if (res) serverData = (res.data || res);
+          } catch (err) {
+            const localDraft = loadLocalDraftById(projectId);
+            if (localDraft && NK.api.projectSave) {
+              try {
+                await NK.api.projectSave(
+                  projectId,
+                  localDraft.payload || {},
+                  localDraft.scenes || [],
+                  {
+                    header: localDraft.header || '',
+                    aspectRatio: localDraft.payload?.aspectRatio,
+                    title: localDraft.title || ''
+                  }
+                );
+                serverData = {
+                  title: localDraft.title || '',
+                  payload: localDraft.payload || {},
+                  scenes: localDraft.scenes || [],
+                  header: localDraft.header || '',
+                  aspectRatio: localDraft.payload?.aspectRatio || ''
+                };
+              } catch (_) { }
+            }
+          }
+          if (!serverData || (!serverData.scenes && !serverData.payload)) {
+            try { serverData = await loadReferenceFallback(); } catch (_) { }
+          }
+        }
+
+        if (serverData) {
+          var serverRatio = normalizeAspectRatio(serverData.aspectRatio || serverData.payload?.aspectRatio || aspectRatio);
+          if (serverRatio && saveAspect) saveAspect(serverRatio);
+          aspectRatio = serverRatio || aspectRatio;
+          var payloadSrv = Object.assign({}, serverData.payload || {});
+          payloadSrv.aspectRatio = normalizeAspectRatio(payloadSrv.aspectRatio || aspectRatio);
+          var headerSrv = serverData.header || serverData.payload?.header || (loadHeader ? loadHeader() : '');
+          var headerSrv2 = withAspectInHeader ? withAspectInHeader(headerSrv, aspectRatio) : headerSrv;
+          var headerCleanSrv = cleanHeader(headerSrv2);
+          var sceneSrv = (serverData.scenes || []).map(function (s, idx) {
+            var imageRefSrv = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
+            var videoRefSrv = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
+            return {
+              id: (s.id != null ? s.id : (idx + 1)),
+              lines: s.lines || '',
+              shot: s.shot || s.visual || '',
+              narration: s.narration || '',
+              dialogue: s.dialogue || s.dialogues || [],
+              script: s.script || '',
+              estSec: s.estSec,
+              promptText: (s.promptText || ['Common', headerCleanSrv, 'Visual', (s.shot || '')].join('\n')),
+              imageDataUrl: imageRefSrv,
+              imgLoading: false,
+              imgError: '',
+              videoUrl: videoRefSrv,
+              videoStatus: s.videoStatus || '',
+              videoError: s.videoError || '',
+              videoJobId: s.videoJobId || '',
+              promptEdited: !!s.promptEdited,
+              editingPrompt: !!s.editingPrompt,
+              voiceUrl: s.voiceUrl || '',
+              voiceObjectName: s.voiceObjectName || '',
+              voiceStatus: s.voiceStatus || '',
+              voiceError: s.voiceError || '',
+              voiceVoiceId: s.voiceVoiceId || '',
+            };
+          });
+          state = { payload: payloadSrv, header: headerCleanSrv, scenes: sceneSrv, savedAt: serverData.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: projectId };
+          ctx.setState(state);
+          await ui.refreshAssets();
+        } else if (stored) {
+          var savedRatio = normalizeAspectRatio(stored.aspectRatio || stored.payload?.aspectRatio || aspectRatio);
+          if (savedRatio && saveAspect) saveAspect(savedRatio);
+          aspectRatio = savedRatio || aspectRatio;
+          var payloadStored = Object.assign({}, stored.payload || {});
+          payloadStored.aspectRatio = normalizeAspectRatio(payloadStored.aspectRatio || aspectRatio);
+          var headerInitRaw = (stored.header || stored.payload?.header || (loadHeader ? loadHeader() : '') || '');
+          var headerInit2 = withAspectInHeader ? withAspectInHeader(headerInitRaw, aspectRatio) : headerInitRaw;
+          var headerCleanInit = cleanHeader(headerInit2);
+          var sceneListInit = (stored.scenes || []).map(function (s, idx) {
+            var imageRefStored = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
+            var videoRefStored = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
+            return {
+              id: (s.id != null ? s.id : (idx + 1)),
+              lines: s.lines || '',
+              shot: s.shot || s.visual || '',
+              narration: s.narration || '',
+              dialogue: s.dialogue || s.dialogues || [],
+              script: s.script || '',
+              estSec: s.estSec,
+              promptText: (s.promptText || ['Common', headerCleanInit, 'Visual', (s.shot || '')].join('\n')),
+              imageDataUrl: imageRefStored,
+              imgLoading: false,
+              imgError: '',
+              videoUrl: videoRefStored,
+              videoStatus: s.videoStatus || '',
+              videoError: s.videoError || '',
+              videoJobId: s.videoJobId || '',
+              promptEdited: !!s.promptEdited,
+              editingPrompt: !!s.editingPrompt,
+              voiceUrl: s.voiceUrl || '',
+              voiceObjectName: s.voiceObjectName || '',
+              voiceStatus: s.voiceStatus || '',
+              voiceError: s.voiceError || '',
+              voiceVoiceId: s.voiceVoiceId || '',
+            };
+          });
+          state = { payload: payloadStored, header: headerCleanInit, scenes: sceneListInit, savedAt: stored.savedAt, aspectRatio: aspectRatio, isPlaceholder: false, draftId: (stored.draftId || projectId || null) };
+          ctx.setState(state);
+          await ui.refreshAssets();
+        } else {
+          var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '', aspectRatio: aspectRatio };
+          var headerInit = withAspectInHeader ? withAspectInHeader('', aspectRatio) : '';
+          state = { payload: payload, header: headerInit, scenes: [], savedAt: '', aspectRatio: aspectRatio, isPlaceholder: true };
+          ctx.setState(state);
+        }
+      } finally {
+        setPipelineLoading(false);
+        setPipelinePageLoading(false);
+      }
     }
     var payload = state.payload;
     var scenes = state.scenes;
