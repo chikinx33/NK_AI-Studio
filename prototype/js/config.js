@@ -1,8 +1,8 @@
-; (function () {
+﻿; (function () {
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '1.980';
+    config.APP_VERSION = '1.981';
 
     // Storage Keys
     config.KEYS = {
