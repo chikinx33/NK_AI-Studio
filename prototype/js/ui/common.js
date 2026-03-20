@@ -4,6 +4,7 @@
     var common = ui.common || (ui.common = {});
 
     var ORIGINAL_PREFIX = 'data-nk-orig-';
+    var FULLSCREEN_RESTORE_KEY = 'nk_restore_fullscreen';
     var localeObserver = null;
     var localeApplying = false;
     var originalTextNodeMap = (typeof WeakMap === 'function') ? new WeakMap() : null;
@@ -1278,6 +1279,42 @@
             }
         } catch (_) { }
         common.updateScreenButton((NK.state && NK.state.runtime && NK.state.runtime.lang) || 'ko');
+    };
+
+    common.markFullscreenRestore = function () {
+        if (!common.isFullscreenActive()) return;
+        try {
+            sessionStorage.setItem(FULLSCREEN_RESTORE_KEY, '1');
+            localStorage.setItem(FULLSCREEN_RESTORE_KEY, '1');
+        } catch (_) { }
+    };
+
+    common.restoreFullscreenIfNeeded = async function () {
+        if (window.parent && window.parent !== window) return false;
+        var shouldRestore = false;
+        try {
+            shouldRestore = sessionStorage.getItem(FULLSCREEN_RESTORE_KEY) === '1'
+                || localStorage.getItem(FULLSCREEN_RESTORE_KEY) === '1';
+        } catch (_) { }
+        if (!shouldRestore) return false;
+        try {
+            sessionStorage.removeItem(FULLSCREEN_RESTORE_KEY);
+            localStorage.removeItem(FULLSCREEN_RESTORE_KEY);
+        } catch (_) { }
+        if (common.isFullscreenActive()) return true;
+        var root = document.documentElement;
+        if (!root) return false;
+        try {
+            if (root.requestFullscreen) {
+                await root.requestFullscreen();
+            } else if (root.webkitRequestFullscreen) {
+                root.webkitRequestFullscreen();
+            } else if (root.msRequestFullscreen) {
+                root.msRequestFullscreen();
+            }
+        } catch (_) { }
+        common.updateScreenButton((NK.state && NK.state.runtime && NK.state.runtime.lang) || 'ko');
+        return common.isFullscreenActive();
     };
 
     common.bindScreenModeButton = function () {

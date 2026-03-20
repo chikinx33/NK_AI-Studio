@@ -318,6 +318,9 @@
     NK.ui.common.applyI18n(currentLang);
     NK.ui.common.bindScreenModeButton();
     NK.ui.common.updateScreenButton(currentLang);
+    if (NK.ui.common.restoreFullscreenIfNeeded) {
+      await NK.ui.common.restoreFullscreenIfNeeded();
+    }
     applyUserStudioTitleToSidebar();
     setupSyncMessageHandlers();
     setupStorageSyncHandlers();
@@ -2049,6 +2052,9 @@
           return;
         }
         try {
+          if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
+            NK.ui.common.markFullscreenRestore();
+          }
           sessionStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
           localStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
           sessionStorage.removeItem(STAGE_TARGET_KEY);
