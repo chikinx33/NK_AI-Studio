@@ -1086,9 +1086,6 @@
     const commonInfoRow = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
     const commonBackgroundBlock = commonBackgroundStyle ? `
       <div class="scenario-card scenario-card-common" data-scene-id="common-background">
-        <div class="card-top">
-          <div><h5>Common Background</h5></div>
-        </div>
         <div class="scene-visual-grid">
           <div class="field-block">
             <p class="field-label muted small">${getUiLang() === 'en' ? 'Style' : '스타일'}</p>
