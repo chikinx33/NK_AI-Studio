@@ -1636,6 +1636,7 @@ textarea::-webkit-scrollbar-corner {
   background: var(--panel);
   color: #1e3a8a;
   font: inherit;
+  font-weight: 400;
   justify-self: stretch;
 }
 
