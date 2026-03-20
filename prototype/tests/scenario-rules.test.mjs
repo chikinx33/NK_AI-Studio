@@ -532,10 +532,12 @@ test('overview combinations resolve into different scenario profiles and bluepri
   assert.equal(cookingSpec.profile.key, 'cooking');
   assert.equal(techSpec.profile.key, 'tech');
   assert.notEqual(cookingSpec.continuity.backgroundStyle, techSpec.continuity.backgroundStyle);
-  assert.deepEqual(Array.from(cookingSpec.sceneBlueprint, (row) => row.role), ['intro', 'prep', 'cook', 'plate']);
-  assert.deepEqual(Array.from(techSpec.sceneBlueprint, (row) => row.role), ['hook', 'problem', 'demo', 'benefit']);
+  assert.deepEqual(Array.from(cookingSpec.sceneBlueprint, (row) => row.role), ['intro', 'prep', 'cook', 'taste']);
+  assert.deepEqual(Array.from(techSpec.sceneBlueprint, (row) => row.role), ['hook', 'problem', 'demo', 'takeaway']);
   assert.ok(cookingSpec.requiredOutputsKo.join(' ').includes('재료') || cookingSpec.validationRulesKo.join(' ').includes('절차'));
   assert.ok(techSpec.requiredOutputsKo.join(' ').includes('문제') || techSpec.validationRulesKo.join(' ').includes('절차'));
+  assert.ok(/마무리|판단|정리|결론|결과 확인/.test(cookingSpec.sceneBlueprint.at(-1)?.title || ''));
+  assert.ok(/정리|결론|takeaway/i.test(techSpec.sceneBlueprint.at(-1)?.title || ''));
 });
 
 test('alignment uses profile-specific locations and props for non-kids scenarios', () => {
@@ -577,4 +579,37 @@ test('alignment uses profile-specific locations and props for non-kids scenarios
   assert.match(joinedVisuals, /주재료와 도마, 조리도구|조리도구|재료/);
   assert.match(joinedVisuals, /조리대|싱크대|플레이팅/);
   assert.equal(validation.passed, true);
+  assert.ok(/결과 확인|마무리|정리/.test(aligned.at(-1)?.sceneIntent || aligned.at(-1)?.title || ''));
+});
+
+test('shortened blueprints still preserve a closing role in the last scene', () => {
+  const helpers = loadScenarioHelpers();
+
+  const horrorSpec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: '폐건물 탈출',
+    target: '청년',
+    purposeCategory: '스토리 · 서사',
+    purposeTags: '공포',
+    needs: '스토리',
+    tones: '진지',
+    styles: '시네마틱',
+    duration: '15',
+    sceneCount: 4
+  });
+  const musicSpec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: '우주 리듬 챈트',
+    target: '아동',
+    purposeCategory: '음악 · 사운드',
+    purposeTags: '동요',
+    needs: '놀이',
+    tones: '유머',
+    styles: '애니메이션(3D)',
+    duration: '15',
+    sceneCount: 4
+  });
+
+  assert.equal(horrorSpec.sceneBlueprint.at(-1)?.role, 'escape');
+  assert.equal(musicSpec.sceneBlueprint.at(-1)?.role, 'outro');
 });

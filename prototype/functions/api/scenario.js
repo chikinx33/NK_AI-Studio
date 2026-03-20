@@ -1319,12 +1319,31 @@ function resolveOverviewProfile({ lang = "ko", purposeCategory = "", purposeTags
 }
 
 function fitRoleSequence(roles = [], count = 4, closingRole = "close") {
+  const target = Math.max(1, Number(count) || 1);
   let list = (Array.isArray(roles) ? roles : []).filter(Boolean);
   if (!list.length) list = ["hook", "develop", "reinforce", closingRole];
-  while (list.length < count) {
+
+  const lastRole = list[list.length - 1] || closingRole;
+  while (list.length < target) {
     list.splice(Math.max(list.length - 1, 1), 0, list[Math.max(list.length - 2, 1)] || "develop");
   }
-  return list.slice(0, count);
+  if (list.length <= target) return list;
+  if (target === 1) return [lastRole];
+
+  const body = list.slice(0, -1);
+  const bodyTarget = Math.max(target - 1, 0);
+  if (body.length <= bodyTarget) return body.concat(lastRole).slice(0, target);
+
+  const compacted = [];
+  for (let i = 0; i < bodyTarget; i++) {
+    const sourceIndex = Math.floor((i * body.length) / bodyTarget);
+    compacted.push(body[sourceIndex] || body[body.length - 1] || "develop");
+  }
+  return compacted.concat(lastRole);
+}
+
+function isClosingRole(role = "") {
+  return /^(close|recap|summary|outro|verdict|takeaway|taste|cooldown|reveal|result|escape|prayer)$/i.test(String(role || "").trim());
 }
 
 function buildProfileValidationRules({ lang = "ko", key = "generic", target = "", needValues = [], toneValues = [] } = {}) {
@@ -2347,6 +2366,23 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
     message: spec.lang === "en"
       ? "Scene count should stay aligned with the blueprint."
       : "씬 개수가 블루프린트와 맞아야 한다.",
+  });
+  results.push({
+    key: "last_scene_closure",
+    passed: (() => {
+      const blueprint = Array.isArray(spec.sceneBlueprint) ? spec.sceneBlueprint : [];
+      const expectedLastRole = blueprint[blueprint.length - 1]?.role || "";
+      if (!expectedLastRole) return true;
+      if (!isClosingRole(expectedLastRole)) return true;
+      const lastScene = sceneList[sceneList.length - 1] || {};
+      const closingText = [lastScene.sceneIntent, lastScene.narration, lastScene.visual]
+        .filter(Boolean)
+        .join(" ");
+      return /(마무리|끝맺|정리|복습|여운|기억|총평|결론|마지막|탈출|기도|closing|recap|summary|outro|verdict|takeaway|ending|final)/i.test(closingText);
+    })(),
+    message: spec.lang === "en"
+      ? "The last scene should function as a genre-appropriate ending beat."
+      : "마지막 씬은 해당 장르와 목적에 맞는 엔딩 구조여야 한다.",
   });
   results.push({
     key: "scene_intent_separated",
