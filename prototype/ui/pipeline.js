@@ -369,7 +369,6 @@
     }
     if (!state) {
       setPipelinePageLoading(true, '로딩중...');
-      setPipelineLoading(true);
       var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
       if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
       try { sessionStorage.removeItem('nk_pipeline_keep'); } catch (_) { }
