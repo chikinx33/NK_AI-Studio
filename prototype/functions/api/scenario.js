@@ -848,15 +848,15 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
   const subject = topicProfile.subject || (lang === "en" ? "the topic" : "주제");
   const defaultProp = buildSubjectPropCue({ lang, subject, signals });
   if (settingRaw) {
+    const parsedSetting = parseWorldSetting(settingRaw, lang);
     return {
       source: "knowledge_hub",
-      place: settingRaw,
-      background: lang === "en"
-        ? "The same world-setting details remain visible in every scene."
-        : "같은 세계관의 배경 디테일이 모든 씬에 이어서 보인다.",
+      place: parsedSetting.place,
+      background: parsedSetting.background,
       props: [defaultProp],
-      category: detectSettingCategory(settingRaw),
-      anchorTerms: extractAnchorTerms(settingRaw, defaultProp),
+      sublocations: parsedSetting.sublocations,
+      category: detectSettingCategory(parsedSetting.place || settingRaw),
+      anchorTerms: extractAnchorTerms(parsedSetting.place, parsedSetting.background, ...(parsedSetting.sublocations || []), defaultProp),
     };
   }
 
@@ -873,6 +873,9 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
       place,
       background,
       props: uniqueStrings([defaultProp, lang === "en" ? "small rhythm instruments" : "작은 리듬 악기"]),
+      sublocations: lang === "en"
+        ? ["the room entrance", "the alphabet poster wall", "the learning mat area", "the sunny window side"]
+        : ["교실 입구", "알파벳 포스터 벽 앞", "학습 매트 앞", "햇빛 드는 창가"],
       category: "classroom",
       anchorTerms: extractAnchorTerms(place, background, defaultProp),
     };
@@ -887,6 +890,9 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
       place,
       background,
       props: [defaultProp],
+      sublocations: lang === "en"
+        ? ["the presentation desk", "the main board", "the side display wall", "the front demo table"]
+        : ["설명 데스크 앞", "메인 보드 앞", "측면 디스플레이 벽 앞", "시연 테이블 앞"],
       category: "studio",
       anchorTerms: extractAnchorTerms(place, background, defaultProp),
     };
@@ -901,8 +907,40 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
     place,
     background,
     props: [defaultProp],
+    sublocations: lang === "en"
+      ? ["the main foreground", "the center area", "the side area", "the final focal point"]
+      : ["메인 전경", "중앙 공간", "옆 공간", "마지막 포인트 공간"],
     category: detectSettingCategory(place),
     anchorTerms: extractAnchorTerms(place, background, defaultProp),
+  };
+}
+
+function parseWorldSetting(raw = "", lang = "ko") {
+  const lines = String(raw || "")
+    .split(/\r?\n+/)
+    .map((line) => line.replace(/^[\s\-*•]+/, "").trim())
+    .filter(Boolean);
+  const place = lines[0] || (lang === "en" ? "one consistent main location" : "하나의 일관된 메인 공간");
+  const zoneSource = lines.slice(1).join(", ");
+  let sublocations = zoneSource
+    .split(/[,:/]/)
+    .map((part) => part.replace(/\b(등|etc\.?)\b/gi, "").replace(/공간|장소|배경|world|setting/gi, "").trim())
+    .filter(Boolean)
+    .map((part) => part.replace(/\s{2,}/g, " ").trim())
+    .slice(0, 6);
+  if (!sublocations.length) {
+    sublocations = lang === "en"
+      ? ["the entrance side", "the center area", "the side area", "the final focal area"]
+      : ["입구 쪽", "중앙 공간", "옆 공간", "마지막 포인트 공간"];
+  }
+  const backgroundSource = lines[1] || lines[0] || "";
+  const background = lang === "en"
+    ? `${backgroundSource || "The same world details"} stay visible as shared background elements.`
+    : `${backgroundSource || "같은 세계관 디테일"}이 공통 배경 요소로 이어서 보인다.`;
+  return {
+    place,
+    background,
+    sublocations,
   };
 }
 
@@ -1213,36 +1251,43 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
   });
 }
 
+function pickSceneSublocation(continuity = {}, index = 0, lang = "ko") {
+  const list = Array.isArray(continuity.sublocations) ? continuity.sublocations.filter(Boolean) : [];
+  if (!list.length) return lang === "en" ? "the same focal area" : "같은 중심 공간";
+  return list[index % list.length];
+}
+
 function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
   const subject = spec.topicProfile?.subject || spec.topic || (lang === "en" ? "the topic" : "주제");
   const place = spec.continuity?.place || (lang === "en" ? "the same main location" : "같은 메인 공간");
   const background = spec.continuity?.background || (lang === "en" ? "The same background details remain visible." : "같은 배경 요소가 이어서 보인다.");
   const prop = (spec.continuity?.props || [buildSubjectPropCue({ lang, subject, signals: spec.signals || {} })])[0];
+  const sublocation = pickSceneSublocation(spec.continuity || {}, Math.max((blueprint.index || 1) - 1, 0), lang);
   const role = blueprint.role || "develop";
   if (lang === "en") {
     const hints = {
       hook: {
         intent: `Open ${subject} with immediate curiosity.`,
-        narration: `Let's start ${subject} in a way that immediately catches attention.`,
-        visual: `${place}. ${background} A smiling child group gathers in front of ${prop} and gets ready to start ${subject}.`,
+        narration: `Hi there! Let's start ${subject} right away together.`,
+        visual: `${place}, ${sublocation}. ${background} A smiling child group gathers in front of ${prop} and gets ready to start ${subject}.`,
         dialogue: [`@narrator: Ready? Let's begin ${subject}!`],
       },
       teach: {
         intent: `Show the first core learning point of ${subject}.`,
-        narration: `${subject} is introduced clearly so the audience can follow one step at a time.`,
-        visual: `${place}. ${background} One friend lifts ${prop} and points to the first part of ${subject} so everyone can see it clearly.`,
+        narration: `Let's learn ${subject} one step at a time.`,
+        visual: `${place}, ${sublocation}. ${background} One friend lifts ${prop} and points to the first part of ${subject} so everyone can see it clearly.`,
         dialogue: [`@narrator: Say it with me, ${subject}!`],
       },
       sing: {
         intent: `Turn ${subject} into a sing-along beat.`,
-        narration: `${subject} is repeated in a rhythmic sing-along pattern.`,
-        visual: `${place}. ${background} The group shakes ${prop} to the beat and sings ${subject} together with clear rhythm.`,
+        narration: `Now sing ${subject} with the beat together.`,
+        visual: `${place}, ${sublocation}. ${background} The group shakes ${prop} to the beat and sings ${subject} together with clear rhythm.`,
         dialogue: [`@narrator: ${subject}, one more time!`],
       },
       practice: {
         intent: `Help the audience copy ${subject} directly.`,
-        narration: `${subject} is practiced again so the audience can copy it easily.`,
-        visual: `${place}. ${background} The friends tap ${prop} one by one and repeat ${subject} so the audience can follow along.`,
+        narration: `Watch and repeat ${subject} with me.`,
+        visual: `${place}, ${sublocation}. ${background} The friends tap ${prop} one by one and repeat ${subject} so the audience can follow along.`,
         dialogue: [`@narrator: Follow along with ${subject}!`],
       },
       repeat: {
@@ -1250,67 +1295,67 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
           ? `Reinforce ${subject} with one cute mistake and quick recovery.`
           : `Repeat ${subject} once more for retention.`,
         narration: spec.signals?.humor
-          ? `${subject} is repeated once more with one cute mistake and a quick correction.`
-          : `${subject} is repeated once more to make it stick.`,
+          ? `Oops, that was almost wrong. Let's do ${subject} again together.`
+          : `One more time. Let's repeat ${subject} together.`,
         visual: spec.signals?.humor
-          ? `${place}. ${background} One friend briefly holds ${prop} in the wrong order during ${subject}, then laughs and fixes it right away while the others point to the correct one.`
-          : `${place}. ${background} The group repeats ${subject} once more while holding ${prop} up together for easy reinforcement.`,
+          ? `${place}, ${sublocation}. ${background} One friend briefly holds ${prop} in the wrong order during ${subject}, then laughs and fixes it right away while the others point to the correct one.`
+          : `${place}, ${sublocation}. ${background} The group repeats ${subject} once more while holding ${prop} up together for easy reinforcement.`,
         dialogue: spec.signals?.humor
           ? [`@narrator: Oops, one more time!`, `@narrator: That's it, ${subject}!`]
           : [`@narrator: Once again, ${subject}!`],
       },
       recap: {
         intent: `Close by recalling ${subject} together.`,
-        narration: `Everyone closes by recalling ${subject} together.`,
-        visual: `${place}. ${background} Everyone gathers around ${prop}, points at the final answer together, and wraps up ${subject} with a bright finish.`,
+        narration: `Great job. Let's check ${subject} one last time.`,
+        visual: `${place}, ${sublocation}. ${background} Everyone gathers around ${prop}, points at the final answer together, and wraps up ${subject} with a bright finish.`,
         dialogue: [`@narrator: Great job, ${subject}!`],
       },
       invite: {
         intent: `Invite the audience to join ${subject}.`,
-        narration: `The audience is invited to join ${subject} right away.`,
-        visual: `${place}. ${background} A guide character waves beside ${prop} and invites the audience to join ${subject} right away.`,
+        narration: `Come on in. Join ${subject} with us.`,
+        visual: `${place}, ${sublocation}. ${background} A guide character waves beside ${prop} and invites the audience to join ${subject} right away.`,
         dialogue: [`@narrator: Come join ${subject}!`],
       },
       play: {
         intent: `Make ${subject} feel like playful participation.`,
-        narration: `${subject} unfolds like a playful activity with visible participation.`,
-        visual: `${place}. ${background} The group moves around ${prop}, claps, and reacts together so ${subject} feels like a playful activity.`,
+        narration: `Let's enjoy ${subject} like a fun game together.`,
+        visual: `${place}, ${sublocation}. ${background} The group moves around ${prop}, claps, and reacts together so ${subject} feels like a playful activity.`,
         dialogue: [`@narrator: Let's play along with ${subject}!`],
       },
       explain: {
         intent: `Explain the key point of ${subject} clearly.`,
-        narration: `${subject} is explained clearly and directly.`,
-        visual: `${place}. ${background} A presenter stands by ${prop} and explains the main point of ${subject} with a clear gesture.`,
+        narration: `Here is the key point of ${subject}.`,
+        visual: `${place}, ${sublocation}. ${background} A presenter stands by ${prop} and explains the main point of ${subject} with a clear gesture.`,
         dialogue: [`@narrator: This is the key point of ${subject}.`],
       },
       example: {
         intent: `Support ${subject} with a concrete example.`,
-        narration: `${subject} is reinforced with a concrete example.`,
-        visual: `${place}. ${background} A concrete example is demonstrated using ${prop} so ${subject} becomes easier to understand.`,
+        narration: `This example makes ${subject} easy to understand.`,
+        visual: `${place}, ${sublocation}. ${background} A concrete example is demonstrated using ${prop} so ${subject} becomes easier to understand.`,
         dialogue: [`@narrator: This example makes ${subject} easier to see.`],
       },
       summary: {
         intent: `Summarize ${subject} in one compact beat.`,
-        narration: `${subject} is summarized in a short closing statement.`,
-        visual: `${place}. ${background} The final key words of ${subject} stay visible beside ${prop} in a compact closing image.`,
+        narration: `Let's remember the key part of ${subject}.`,
+        visual: `${place}, ${sublocation}. ${background} The final key words of ${subject} stay visible beside ${prop} in a compact closing image.`,
         dialogue: [`@narrator: Remember the key point of ${subject}.`],
       },
       develop: {
         intent: `Move ${subject} one step forward.`,
-        narration: `${subject} moves one step further.`,
-        visual: `${place}. ${background} The action advances around ${prop} so ${subject} clearly moves into the next beat.`,
+        narration: `Now let's take ${subject} one step further.`,
+        visual: `${place}, ${sublocation}. ${background} The action advances around ${prop} so ${subject} clearly moves into the next beat.`,
         dialogue: [`@narrator: Now let's take the next step.`],
       },
       reinforce: {
         intent: `Reinforce the core of ${subject}.`,
-        narration: `${subject} is reinforced once more.`,
-        visual: `${place}. ${background} The central part of ${subject} is shown again with ${prop} held close to the camera for emphasis.`,
+        narration: `Yes, this is the core of ${subject}.`,
+        visual: `${place}, ${sublocation}. ${background} The central part of ${subject} is shown again with ${prop} held close to the camera for emphasis.`,
         dialogue: [`@narrator: Yes, this is the core of ${subject}.`],
       },
       close: {
         intent: `End ${subject} with a clean memorable finish.`,
-        narration: `${subject} ends with a clean and memorable finish.`,
-        visual: `${place}. ${background} The group waves beside ${prop} and leaves ${subject} on a clear final image.`,
+        narration: `See you again next time with ${subject}.`,
+        visual: `${place}, ${sublocation}. ${background} The group waves beside ${prop} and leaves ${subject} on a clear final image.`,
         dialogue: [`@narrator: See you again with ${subject}!`],
       },
     };
@@ -1320,26 +1365,26 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
   const hints = {
     hook: {
       intent: `${subject}를 시작하자마자 관심을 끈다.`,
-      narration: `${subject}를 바로 시작하며 호기심을 끌어낸다.`,
-      visual: `${place}. ${background} 친구들이 ${prop} 앞에 둥글게 모여 ${subject}를 시작할 준비를 하며 손을 든다.`,
+      narration: `안녕! 오늘은 ${subject}를 바로 시작해볼까?`,
+      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop} 앞에 둥글게 모여 ${subject}를 시작할 준비를 하며 손을 든다.`,
       dialogue: [`@narrator: 준비됐지? ${subject} 시작!`],
     },
     teach: {
       intent: `${subject}의 첫 핵심을 또렷하게 보여 준다.`,
-      narration: `${subject}를 한 단계씩 보여 주며 쉽게 따라 배우게 한다.`,
-      visual: `${place}. ${background} 한 친구가 ${prop}를 들어 올리고 ${subject}의 첫 부분을 손가락으로 또렷하게 가리킨다.`,
+      narration: `${subject}를 하나씩 같이 배워보자.`,
+      visual: `${place}, ${sublocation}. ${background} 한 친구가 ${prop}를 들어 올리고 ${subject}의 첫 부분을 손가락으로 또렷하게 가리킨다.`,
       dialogue: [`@narrator: ${subject}를 같이 따라 해볼까?`],
     },
     sing: {
       intent: `${subject}를 리듬 있는 반복으로 전환한다.`,
-      narration: `${subject}를 리듬감 있게 반복하며 함께 부른다.`,
-      visual: `${place}. ${background} 친구들이 ${prop}를 흔들며 ${subject}를 박자에 맞춰 함께 노래하고 발을 굴린다.`,
+      narration: `${subject}, 박자에 맞춰 함께 불러보자!`,
+      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 흔들며 ${subject}를 박자에 맞춰 함께 노래하고 발을 굴린다.`,
       dialogue: [`@narrator: ${subject}, 한 번 더!`],
     },
     practice: {
       intent: `${subject}를 바로 따라 하게 만든다.`,
-      narration: `${subject}를 다시 따라 하며 더 쉽게 익힌다.`,
-      visual: `${place}. ${background} 친구들이 ${prop}를 하나씩 짚으며 ${subject}를 번갈아 따라 말한다.`,
+      narration: `이번엔 보고 듣고 ${subject}를 따라 해보자.`,
+      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 하나씩 짚으며 ${subject}를 번갈아 따라 말한다.`,
       dialogue: [`@narrator: 이번엔 우리 같이 ${subject}를 따라 해보자!`],
     },
     repeat: {
@@ -1347,67 +1392,67 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
         ? `${subject}를 귀여운 실수와 함께 다시 익힌다.`
         : `${subject}를 한 번 더 반복해 기억에 남긴다.`,
       narration: spec.signals?.humor
-        ? `${subject}를 반복하다가 잠깐 헷갈리지만 금방 웃으며 다시 맞춘다.`
-        : `${subject}를 한 번 더 반복하며 기억을 굳힌다.`,
+        ? `어? 잠깐 헷갈렸네. 괜찮아, ${subject} 다시 해보자!`
+        : `좋아, ${subject}를 한 번 더 해보자.`,
       visual: spec.signals?.humor
-        ? `${place}. ${background} 한 친구가 ${subject} 순서를 잠깐 헷갈려 ${prop}를 거꾸로 들었다가, 옆 친구들이 웃으며 올바른 쪽을 가리키자 바로 다시 고친다.`
-        : `${place}. ${background} 친구들이 ${prop}를 가슴 높이로 들고 ${subject}를 더 또렷하게 한 번 더 반복한다.`,
+        ? `${place}, ${sublocation}. ${background} 한 친구가 ${subject} 순서를 잠깐 헷갈려 ${prop}를 거꾸로 들었다가, 옆 친구들이 웃으며 올바른 쪽을 가리키자 바로 다시 고친다.`
+        : `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 가슴 높이로 들고 ${subject}를 더 또렷하게 한 번 더 반복한다.`,
       dialogue: spec.signals?.humor
         ? [`@narrator: 어? 잠깐 헷갈렸네!`, `@narrator: 괜찮아, ${subject} 다시!`]
         : [`@narrator: 좋아, ${subject} 한 번 더!`],
     },
     recap: {
       intent: `${subject}를 다 함께 확인하며 끝맺는다.`,
-      narration: `마지막으로 모두 함께 ${subject}를 다시 확인하며 마무리한다.`,
-      visual: `${place}. ${background} 모두가 ${prop}를 가운데로 모으고 ${subject}를 함께 가리키며 환하게 마무리한다.`,
+      narration: `잘했어! 마지막으로 ${subject}를 한 번만 더 확인하자.`,
+      visual: `${place}, ${sublocation}. ${background} 모두가 ${prop}를 가운데로 모으고 ${subject}를 함께 가리키며 환하게 마무리한다.`,
       dialogue: [`@narrator: 잘했어! ${subject} 기억났지?`],
     },
     invite: {
       intent: `${subject}에 함께 참여하도록 부른다.`,
-      narration: `${subject}를 같이 해 보자고 시청자를 초대한다.`,
-      visual: `${place}. ${background} 안내 역할의 친구가 ${prop} 옆에서 손짓하며 ${subject}에 함께 참여하자고 부른다.`,
+      narration: `우리와 함께 ${subject}를 해볼까?`,
+      visual: `${place}, ${sublocation}. ${background} 안내 역할의 친구가 ${prop} 옆에서 손짓하며 ${subject}에 함께 참여하자고 부른다.`,
       dialogue: [`@narrator: 같이 해볼까? ${subject}!`],
     },
     play: {
       intent: `${subject}를 놀이처럼 체험하게 만든다.`,
-      narration: `${subject}를 신나게 즐기며 참여하게 만든다.`,
-      visual: `${place}. ${background} 친구들이 ${prop} 주변을 돌며 손뼉을 치고 몸을 움직여 ${subject}를 놀이처럼 체험한다.`,
+      narration: `${subject}를 놀이처럼 신나게 즐겨보자!`,
+      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop} 주변을 돌며 손뼉을 치고 몸을 움직여 ${subject}를 놀이처럼 체험한다.`,
       dialogue: [`@narrator: 몸으로도 같이 해보자!`],
     },
     explain: {
       intent: `${subject}의 핵심을 짧게 설명한다.`,
-      narration: `${subject}의 핵심을 짧고 분명하게 설명한다.`,
-      visual: `${place}. ${background} 진행자가 ${prop}를 옆에 두고 ${subject}의 핵심을 짧고 분명하게 설명한다.`,
+      narration: `${subject}의 핵심은 바로 이거야.`,
+      visual: `${place}, ${sublocation}. ${background} 진행자가 ${prop}를 옆에 두고 ${subject}의 핵심을 짧고 분명하게 설명한다.`,
       dialogue: [`@narrator: 핵심은 ${subject}야.`],
     },
     example: {
       intent: `${subject}를 구체 예시로 보여 준다.`,
-      narration: `${subject}가 실제로 어떻게 보이는지 예시를 보여 준다.`,
-      visual: `${place}. ${background} ${prop}를 이용한 구체 예시가 화면 앞에서 시연되어 ${subject}가 더 쉽게 보인다.`,
+      narration: `이 예시를 보면 ${subject}가 더 쉬워져.`,
+      visual: `${place}, ${sublocation}. ${background} ${prop}를 이용한 구체 예시가 화면 앞에서 시연되어 ${subject}가 더 쉽게 보인다.`,
       dialogue: [`@narrator: 이렇게 보면 더 쉬워.`],
     },
     summary: {
       intent: `${subject}의 핵심만 압축해 정리한다.`,
-      narration: `${subject}의 핵심만 짧게 정리한다.`,
-      visual: `${place}. ${background} ${prop} 옆에 핵심 단어만 남기고 ${subject}를 짧게 정리한다.`,
+      narration: `${subject}의 핵심만 짧게 기억하자.`,
+      visual: `${place}, ${sublocation}. ${background} ${prop} 옆에 핵심 단어만 남기고 ${subject}를 짧게 정리한다.`,
       dialogue: [`@narrator: 핵심만 다시 기억하자!`],
     },
     develop: {
       intent: `${subject}를 다음 단계로 넘긴다.`,
-      narration: `${subject}를 한 단계 더 전개한다.`,
-      visual: `${place}. ${background} 친구들이 ${prop}를 다음 위치로 옮기며 ${subject}를 한 단계 더 전개한다.`,
+      narration: `이제 ${subject}를 다음 단계로 가보자.`,
+      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 다음 위치로 옮기며 ${subject}를 한 단계 더 전개한다.`,
       dialogue: [`@narrator: 이제 다음으로 가보자!`],
     },
     reinforce: {
       intent: `${subject}의 핵심을 다시 강조한다.`,
-      narration: `${subject}의 핵심을 다시 확인한다.`,
-      visual: `${place}. ${background} ${prop}를 카메라 가까이 들어 핵심인 ${subject}를 다시 또렷하게 보여 준다.`,
+      narration: `맞아, 이게 ${subject}의 핵심이야.`,
+      visual: `${place}, ${sublocation}. ${background} ${prop}를 카메라 가까이 들어 핵심인 ${subject}를 다시 또렷하게 보여 준다.`,
       dialogue: [`@narrator: 맞아, 이게 핵심이야!`],
     },
     close: {
       intent: `${subject}를 기억에 남게 마무리한다.`,
-      narration: `${subject}를 기억하기 좋게 마무리한다.`,
-      visual: `${place}. ${background} 친구들이 ${prop} 옆에서 손을 흔들며 ${subject}를 선명하게 남기고 끝낸다.`,
+      narration: `다음에도 ${subject}로 또 만나자!`,
+      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop} 옆에서 손을 흔들며 ${subject}를 선명하게 남기고 끝낸다.`,
       dialogue: [`@narrator: 다음에도 ${subject}로 또 만나자!`],
     },
   };
@@ -1569,7 +1614,7 @@ function stripCameraDirection(text = "") {
 }
 
 function isPlaceholderText(text = "") {
-  return /(전개\s*\d+|핵심 장면 설명|관련 대사\s*\d+|Scene\s*\d+\s*(?:visual|key visual direction|line))/i.test(String(text || "").trim());
+  return /(전개\s*\d+|핵심 장면 설명|관련 대사\s*\d+|Scene\s*\d+\s*(?:visual|key visual direction|line)|장면을 설명하는 나레이션이 이어진다|The narrator describes the scene clearly|내레이터가 장면을 설명한다|Speak a line that matches the scene)/i.test(String(text || "").trim());
 }
 
 function mergeSentence(base = "", hint = "") {
@@ -1710,10 +1755,10 @@ function repairDialogue(dialogue = [], hintLines = [], options = {}) {
   const first = normalized[0];
   const hintLine = lines[0] || "";
   const extracted = extractDialogueLine(hintLine);
-  if (extracted && !new RegExp(escapeRegExp(extracted), "i").test(first.line || "")) {
+  if (extracted && (isPlaceholderText(first.line) || !new RegExp(escapeRegExp(extracted), "i").test(first.line || ""))) {
     normalized[0] = {
       speaker: first.speaker || options.defaultSpeaker,
-      line: mergeSentence(first.line, extracted),
+      line: isPlaceholderText(first.line) ? extracted : mergeSentence(first.line, extracted),
     };
   }
   if (options.forceHumor && lines[1]) {
@@ -2199,16 +2244,10 @@ function enforceNoCharacterPolicy({
 
 function shapeSceneByMode(input) {
   const narrationRaw = String(input.narration || "").trim();
-  const narration = narrationRaw || (input.lang === "en" ? "The narrator describes the scene clearly." : "장면을 설명하는 나레이션이 이어진다.");
+  const narration = narrationRaw;
   const sceneIntent = String(input.sceneIntent || input.intent || "").trim() || (input.lang === "en" ? "Advance the next scene beat clearly." : "다음 씬 전개를 분명하게 만든다.");
   const defaultSpeaker = String(input.defaultSpeaker || "@narrator").trim() || "@narrator";
   let dialogue = normalizeDialogue(input.dialogue || []);
-  if (input.dubbingEnabled && dialogue.length === 0) {
-    dialogue = [{
-      speaker: defaultSpeaker,
-      line: narration || (input.lang === "en" ? "Speak a line that matches the scene." : "장면에 맞는 대사를 말한다."),
-    }];
-  }
   const visual = String(input.visual || "").trim();
   const out = {
     id: input.id,
@@ -2230,7 +2269,7 @@ function shapeSceneByMode(input) {
   out.script = voiceScript;
   if (input.narrationEnabled && narration) out.lines = narration;
   else if (input.dubbingEnabled && dialogue.length) out.lines = dialogue.map((d) => String(d.line || "").trim()).filter(Boolean).join(" ");
-  else out.lines = narration || visual;
+  else out.lines = narration || "";
   return out;
 }
 
