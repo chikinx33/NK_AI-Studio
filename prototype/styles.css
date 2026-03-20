@@ -2120,10 +2120,12 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-card.is-collapsed {
   min-height: 0;
+  padding-top: 8px;
   padding-bottom: 8px;
 }
 
 .scenario-card.is-collapsed .card-top {
+  min-height: 28px;
   margin-bottom: 0;
 }
 
@@ -2149,8 +2151,11 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .scenario-card.is-collapsed .scene-visual-grid {
+  flex: 0 0 0;
+  min-height: 0;
   max-height: 0;
   opacity: 0;
+  gap: 0;
   margin-top: 0;
   pointer-events: none;
 }
