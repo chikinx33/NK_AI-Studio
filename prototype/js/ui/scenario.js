@@ -1235,7 +1235,7 @@
         knowledgeToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       }
     };
-    syncKnowledgeToggle(false);
+    syncKnowledgeToggle(true);
     syncCharacterPanel(true);
     if (knowledgeToggle) {
       knowledgeToggle.addEventListener('click', () => {
