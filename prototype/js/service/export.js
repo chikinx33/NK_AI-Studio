@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
   var NK = window.NK || (window.NK = {});
   var service = NK.service || (NK.service = {});
   var exporter = service.exporter || (service.exporter = {});
@@ -59,6 +59,8 @@
 
   function sceneNarration(scene) {
     return firstFilled([
+      scene && scene.videoSpeechPrompt,
+      scene && scene.script,
       scene && scene.narration,
       scene && scene.subtitleText,
       scene && scene.caption,

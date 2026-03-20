@@ -1,4 +1,4 @@
-// prototype/functions/api/project/save.ts
+﻿// prototype/functions/api/project/save.ts
 // Save project payload/scenes to GCS reference folder as data.json
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
@@ -125,8 +125,18 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const normalizeScene = (s: any, idx: number) => {
       const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
-      const narration = typeof s?.narration === "string" ? s.narration : (typeof s?.lines === "string" ? s.lines : "");
       const dialogue = normalizeDialogue(s?.dialogue ?? s?.dialogues ?? []);
+      const rawLines = typeof s?.lines === "string" ? s.lines : "";
+      const subtitleText = typeof s?.subtitleText === "string"
+        ? s.subtitleText
+        : (typeof s?.caption === "string" ? s.caption : rawLines);
+      const narration = typeof s?.narration === "string"
+        ? s.narration
+        : (!dialogue.length && subtitleText === rawLines ? rawLines : "");
+      const videoSpeechPrompt = typeof s?.videoSpeechPrompt === "string"
+        ? s.videoSpeechPrompt
+        : (typeof s?.spokenPrompt === "string" ? s.spokenPrompt : "");
+      const script = typeof s?.script === "string" ? s.script : (typeof s?.voiceScript === "string" ? s.voiceScript : "");
       const visual = typeof s?.visual === "string" ? s.visual : (typeof s?.shot === "string" ? s.shot : "");
       const imageUrl =
         typeof s?.imageDataUrl === "string" ? s.imageDataUrl
@@ -155,9 +165,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return {
         id: Number(s?.id ?? idx + 1),
         title: typeof s?.title === "string" ? s.title : "",
-        lines: narration,
+        lines: subtitleText,
         narration,
         dialogue,
+        subtitleText,
+        videoSpeechPrompt,
+        script,
         shot: visual,
         visual,
         estSec: est > 0 ? Math.round(est) : undefined,

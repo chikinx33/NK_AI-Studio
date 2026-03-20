@@ -56,8 +56,11 @@
             return scenes.map((s, idx) => ({
                 id: s.id ?? idx + 1,
                 title: s.title ?? `Scene ${idx + 1}`,
-                lines: s.lines ?? s.narration ?? (typeof s === 'string' ? s : ''),
-                narration: s.narration ?? s.lines ?? '',
+                lines: s.lines ?? s.subtitleText ?? s.narration ?? (typeof s === 'string' ? s : ''),
+                subtitleText: s.subtitleText ?? s.lines ?? '',
+                narration: s.narration ?? '',
+                videoSpeechPrompt: s.videoSpeechPrompt ?? '',
+                script: s.script ?? '',
                 dialogue: Array.isArray(s.dialogue) ? s.dialogue : [],
                 estSec: s.estSec ?? NK.config.DEFAULTS.SCENE_EST,
                 shot: s.shot ?? s.visual ?? '',

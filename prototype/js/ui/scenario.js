@@ -1,4 +1,4 @@
-; (function () {
+﻿; (function () {
   const NK = window.NK || (window.NK = {});
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
@@ -794,22 +794,25 @@
 
   const normalizeScenes = (scenes = []) => {
     const activeCharacters = getActiveCharactersForPayload(currentPayload || {});
+    const flags = getScenarioFlags(currentPayload || {});
     return (Array.isArray(scenes) ? scenes : []).map((s, i) => {
       const est = parseEst(s.estSec || s.duration || s.len || s.length || 8);
-      const rawLine = String(s.lines || '').trim();
-      const cleanedLine = extractNarrationOnlyText(rawLine);
-      const rawNarration = s.narration || cleanedLine || s.story || s.text || s.script || s.content || '';
+      const rawSubtitle = String(s.subtitleText || s.caption || s.lines || '').trim();
+      const cleanedSubtitle = extractNarrationOnlyText(rawSubtitle);
+      const rawNarration = s.narration || s.story || s.text || s.content || (
+        (!Array.isArray(s.dialogue) || !s.dialogue.length) ? cleanedSubtitle : ''
+      ) || '';
       const dialogues = normalizeDialogue(s.dialogue || s.dialogues || [], activeCharacters);
-      const lines = String(cleanedLine || rawNarration || '').trim();
+      const subtitleText = String(cleanedSubtitle || '').trim();
       const shot =
         s.shot ||
         s.visual ||
         s.camera ||
         s.scene_visual ||
         s.image ||
-        (lines ? String(lines).split(/(?<=[.!?])\s+/)[0] || '' : '') ||
+        (rawNarration ? String(rawNarration).split(/(?<=[.!?])\s+/)[0] || '' : '') ||
         '';
-      const narration = applyCharacterTokenHints(String(rawNarration || lines || '').trim(), activeCharacters);
+      const narration = applyCharacterTokenHints(String(rawNarration || '').trim(), activeCharacters);
       const dialogue = dialogues.map((d) => ({
         speaker: applyCharacterTokenHints(d.speaker, activeCharacters),
         line: applyCharacterTokenHints(d.line, activeCharacters)
@@ -818,15 +821,22 @@
         .map((d) => `${d.speaker ? `${d.speaker}: ` : ''}${d.line || ''}`.trim())
         .filter(Boolean)
         .join('\n');
-      const legacyStory = lines || extractNarrationOnlyText(narration) || dialogueText;
-      const narrationText = extractNarrationOnlyText(narration || legacyStory);
+      const narrationText = extractNarrationOnlyText(narration || '');
+      const resolvedSubtitleText = subtitleText || (
+        flags.narrationEnabled && flags.dubbingEnabled
+          ? dialogue.map((d) => d.line || '').filter(Boolean).join(' ')
+          : (flags.narrationEnabled ? narrationText : dialogue.map((d) => d.line || '').filter(Boolean).join(' '))
+      );
       return {
         id: s.id != null ? s.id : (i + 1),
-        lines: legacyStory,
+        lines: resolvedSubtitleText,
         narrationText,
         dialogueText,
         narration,
         dialogue,
+        subtitleText: resolvedSubtitleText,
+        videoSpeechPrompt: String(s.videoSpeechPrompt || '').trim(),
+        script: String(s.script || '').trim(),
         shot: applyCharacterTokenHints(String(shot || '').trim(), activeCharacters),
         estSec: est,
         narrationEnabled: boolVal(s?.narrationEnabled, boolVal(currentPayload?.narrationEnabled, false)),
@@ -877,6 +887,23 @@
   };
 
   const collectScenesFromCards = () => {
+    const flags = getScenarioFlags(currentPayload || {});
+    const composeDialogueOnlyText = (dialogue = []) => (Array.isArray(dialogue) ? dialogue : [])
+      .map((d) => String(d?.line || '').trim())
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+    const composeDialoguePrompt = (dialogue = []) => (Array.isArray(dialogue) ? dialogue : [])
+      .map((d) => {
+        const speaker = String(d?.speaker || '').trim();
+        const line = String(d?.line || '').trim();
+        if (!line) return '';
+        if (!speaker || speaker === '@narrator') return `"${line}"`;
+        return `${speaker.replace(/^@+/, '')}가 말한다. "${line}"`;
+      })
+      .filter(Boolean)
+      .join(' ')
+      .trim();
     return Array.from(document.querySelectorAll('.scenario-card')).map((card) => {
       const id = Number(card.querySelector('.est-input')?.dataset.id);
       const estTxt = card.querySelector('.est-input')?.value || '';
@@ -886,11 +913,27 @@
       const normalizedDialogueText = uiDialogueText.replace(/\s*·\s*/g, '\n');
       const dialogue = normalizeDialogue(normalizedDialogueText, currentCharacters);
       const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
+      const cleanNarration = extractNarrationOnlyText(narrationText);
+      const dialogueOnly = composeDialogueOnlyText(dialogue);
+      const videoSpeechPrompt = flags.narrationEnabled && flags.dubbingEnabled
+        ? [cleanNarration ? `"${cleanNarration}"` : '', composeDialoguePrompt(dialogue)].filter(Boolean).join(' ').trim()
+        : (flags.narrationEnabled
+          ? cleanNarration
+          : composeDialoguePrompt(dialogue));
+      const subtitleText = flags.narrationEnabled && flags.dubbingEnabled
+        ? dialogueOnly
+        : (flags.narrationEnabled ? cleanNarration : dialogueOnly);
+      const script = flags.narrationEnabled && flags.dubbingEnabled
+        ? [cleanNarration, dialogueOnly].filter(Boolean).join('\n').trim()
+        : (flags.narrationEnabled ? cleanNarration : dialogueOnly);
       return {
         id,
         title: '',
-        lines: extractNarrationOnlyText(narrationText),
-        narration: extractNarrationOnlyText(narrationText),
+        lines: subtitleText,
+        subtitleText,
+        videoSpeechPrompt,
+        script,
+        narration: cleanNarration,
         dialogue,
         shot: visualText,
         visual: visualText,
@@ -906,11 +949,16 @@
       const narration = (s.narration !== undefined ? s.narration : prev.narration) || '';
       const dialogue = (s.dialogue !== undefined ? s.dialogue : prev.dialogue) || [];
       const visual = s.visual || s.shot || prev.visual || prev.shot || '';
-      const lines = s.lines || prev.lines || narration || '';
+      const subtitleText = (s.subtitleText !== undefined ? s.subtitleText : prev.subtitleText) || s.lines || prev.lines || '';
+      const videoSpeechPrompt = (s.videoSpeechPrompt !== undefined ? s.videoSpeechPrompt : prev.videoSpeechPrompt) || '';
+      const script = (s.script !== undefined ? s.script : prev.script) || '';
       return Object.assign({}, prev, s, {
-        lines,
+        lines: subtitleText,
         narration,
         dialogue,
+        subtitleText,
+        videoSpeechPrompt,
+        script,
         shot: visual,
         visual
       });

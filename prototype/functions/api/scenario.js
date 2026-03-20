@@ -1770,10 +1770,10 @@ function repairDialogue(dialogue = [], hintLines = [], options = {}) {
   const first = normalized[0];
   const hintLine = lines[0] || "";
   const extracted = extractDialogueLine(hintLine);
-  if (extracted && (isPlaceholderText(first.line) || !new RegExp(escapeRegExp(extracted), "i").test(first.line || ""))) {
+  if (extracted && (!String(first.line || "").trim() || isPlaceholderText(first.line))) {
     normalized[0] = {
       speaker: first.speaker || options.defaultSpeaker,
-      line: isPlaceholderText(first.line) ? extracted : mergeSentence(first.line, extracted),
+      line: extracted,
     };
   }
   if (options.forceHumor && lines[1]) {
@@ -2264,6 +2264,25 @@ function shapeSceneByMode(input) {
   const defaultSpeaker = String(input.defaultSpeaker || "@narrator").trim() || "@narrator";
   let dialogue = normalizeDialogue(input.dialogue || []);
   const visual = String(input.visual || "").trim();
+  const videoSpeechPrompt = composeVideoSpeechPrompt({
+    lang: input.lang || "ko",
+    narration,
+    dialogue,
+    narrationEnabled: !!input.narrationEnabled,
+    dubbingEnabled: !!input.dubbingEnabled,
+  });
+  const subtitleText = composeSubtitleText({
+    narration,
+    dialogue,
+    narrationEnabled: !!input.narrationEnabled,
+    dubbingEnabled: !!input.dubbingEnabled,
+  });
+  const voiceScript = composeVoiceScript({
+    narration,
+    dialogue,
+    narrationEnabled: !!input.narrationEnabled,
+    dubbingEnabled: !!input.dubbingEnabled,
+  });
   const out = {
     id: input.id,
     title: input.title,
@@ -2271,40 +2290,58 @@ function shapeSceneByMode(input) {
     sceneIntent,
     visual,
     shot: visual,
+    videoSpeechPrompt,
+    subtitleText,
   };
-  const voiceScript = composeVoiceScript({
-    lang: input.lang || "ko",
-    narration,
-    dialogue,
-    narrationEnabled: !!input.narrationEnabled,
-    dubbingEnabled: !!input.dubbingEnabled,
-  });
   if (input.narrationEnabled) out.narration = narration;
   if (input.dubbingEnabled) out.dialogue = dialogue;
   out.script = voiceScript;
-  if (input.narrationEnabled && narration) out.lines = narration;
-  else if (input.dubbingEnabled && dialogue.length) out.lines = dialogue.map((d) => String(d.line || "").trim()).filter(Boolean).join(" ");
-  else out.lines = narration || "";
+  out.lines = subtitleText;
   return out;
 }
 
-function composeVoiceScript({ lang = "ko", narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
+function composeDialogueOnlyText(dialogue = []) {
+  return normalizeDialogue(dialogue || []).map((d) => String(d.line || "").trim()).filter(Boolean).join(" ").trim();
+}
+
+function formatDialogueForVideoPrompt(dialogue = [], lang = "ko") {
+  return normalizeDialogue(dialogue || []).map((d) => {
+    const line = String(d.line || "").trim();
+    if (!line) return "";
+    const speaker = String(d.speaker || "").trim();
+    if (!speaker || speaker === "@narrator") return `"${line}"`;
+    const name = speaker.replace(/^@+/, "").trim();
+    if (!name) return `"${line}"`;
+    return lang === "en"
+      ? `${name} speaks. "${line}"`
+      : `${name}가 말한다. "${line}"`;
+  }).filter(Boolean).join(" ").trim();
+}
+
+function composeVideoSpeechPrompt({ lang = "ko", narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
+  const parts = [];
+  const safeNarration = String(narration || "").trim();
+  const dialoguePrompt = formatDialogueForVideoPrompt(dialogue, lang);
+  if (narrationEnabled && safeNarration) parts.push(`"${safeNarration}"`);
+  if (dubbingEnabled && dialoguePrompt) parts.push(dialoguePrompt);
+  return parts.join(" ").trim();
+}
+
+function composeSubtitleText({ narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
+  const safeNarration = String(narration || "").trim();
+  const dialogueOnly = composeDialogueOnlyText(dialogue);
+  if (narrationEnabled && dubbingEnabled) return dialogueOnly;
+  if (narrationEnabled) return safeNarration;
+  if (dubbingEnabled) return dialogueOnly;
+  return "";
+}
+
+function composeVoiceScript({ narration = "", dialogue = [], narrationEnabled = false, dubbingEnabled = false }) {
   const rows = [];
   const safeNarration = String(narration || "").trim();
-  const safeDialogue = normalizeDialogue(dialogue || []);
-  if (lang === "en") {
-    if (narrationEnabled && safeNarration) rows.push(`Narration "${safeNarration}"`);
-    if (dubbingEnabled && safeDialogue.length) {
-      rows.push("Dialogue");
-      safeDialogue.forEach((d) => rows.push(`${d.speaker || "@speaker"} "${d.line || "..."}"`));
-    }
-    return rows.join("\n").trim();
-  }
-  if (narrationEnabled && safeNarration) rows.push(`나레이션 "${safeNarration}"`);
-  if (dubbingEnabled && safeDialogue.length) {
-    rows.push("대사");
-    safeDialogue.forEach((d) => rows.push(`${d.speaker || "@narrator"} "${d.line || "..."}"`));
-  }
+  const dialogueOnly = composeDialogueOnlyText(dialogue);
+  if (narrationEnabled && safeNarration) rows.push(safeNarration);
+  if (dubbingEnabled && dialogueOnly) rows.push(dialogueOnly);
   return rows.join("\n").trim();
 }
 

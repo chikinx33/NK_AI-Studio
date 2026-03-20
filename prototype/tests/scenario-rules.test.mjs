@@ -307,6 +307,110 @@ test('character-enabled dialogue hints use actual character speakers instead of 
   assert.ok(!speakers.every((speaker) => speaker === '@narrator'));
 });
 
+test('delivery fields separate video speech and subtitles when narration and dialogue are both enabled', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    characters: [{ token: '@네모', displayName: '네모' }],
+    duration: '8',
+    sceneCount: 1
+  });
+
+  const aligned = helpers.alignScenesToScenarioSpec([{
+    id: 1,
+    estSec: 4,
+    narration: '모양새 친구들이 꿈동산에 모였어요.',
+    dialogue: [{ speaker: '@네모', line: '세모야, 날 따라해봐.' }],
+    visual: '밝은 놀이방 교실, 교실 입구. 친구들이 모인다.'
+  }], spec, {
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    narrationEnabled: true,
+    dubbingEnabled: true,
+    defaultSpeaker: '@네모'
+  });
+
+  assert.match(aligned[0].videoSpeechPrompt, /"모양새 친구들이 꿈동산에 모였어요\."/);
+  assert.match(aligned[0].videoSpeechPrompt, /네모가 말한다\.\s*"세모야, 날 따라해봐\."/);
+  assert.equal(aligned[0].subtitleText, '세모야, 날 따라해봐.');
+  assert.equal(aligned[0].script, '모양새 친구들이 꿈동산에 모였어요.\n세모야, 날 따라해봐.');
+  assert.equal(aligned[0].lines, aligned[0].subtitleText);
+});
+
+test('delivery fields use narration for both video speech and subtitles when only narration is enabled', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    duration: '4',
+    sceneCount: 1
+  });
+
+  const aligned = helpers.alignScenesToScenarioSpec([{
+    id: 1,
+    estSec: 4,
+    narration: '모양새 친구들이 꿈동산에 모였어요.',
+    visual: '밝은 놀이방 교실, 교실 입구. 친구들이 모인다.'
+  }], spec, {
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    narrationEnabled: true,
+    dubbingEnabled: false,
+    defaultSpeaker: '@narrator'
+  });
+
+  assert.equal(aligned[0].videoSpeechPrompt, '"모양새 친구들이 꿈동산에 모였어요."');
+  assert.equal(aligned[0].subtitleText, '모양새 친구들이 꿈동산에 모였어요.');
+  assert.equal(aligned[0].script, '모양새 친구들이 꿈동산에 모였어요.');
+});
+
+test('delivery fields use dialogue for both video speech and subtitles when only dialogue is enabled', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    characters: [{ token: '@네모', displayName: '네모' }],
+    duration: '4',
+    sceneCount: 1
+  });
+
+  const aligned = helpers.alignScenesToScenarioSpec([{
+    id: 1,
+    estSec: 4,
+    dialogue: [{ speaker: '@네모', line: '세모야, 날 따라해봐.' }],
+    visual: '밝은 놀이방 교실, 교실 입구. 친구들이 모인다.'
+  }], spec, {
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    narrationEnabled: false,
+    dubbingEnabled: true,
+    defaultSpeaker: '@네모'
+  });
+
+  assert.match(aligned[0].videoSpeechPrompt, /네모가 말한다\.\s*"세모야, 날 따라해봐\."/);
+  assert.equal(aligned[0].subtitleText, '세모야, 날 따라해봐.');
+  assert.equal(aligned[0].script, '세모야, 날 따라해봐.');
+});
+
 test('validation fails abrupt location jumps and abstract visuals', () => {
   const helpers = loadScenarioHelpers();
   const spec = helpers.buildScenarioSpec({
