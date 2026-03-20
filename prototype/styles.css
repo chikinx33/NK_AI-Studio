@@ -2126,7 +2126,20 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-card.is-collapsed .card-top {
   min-height: 28px;
+  margin-top: 0;
   margin-bottom: 0;
+  align-items: center;
+}
+
+.scenario-card.is-collapsed .card-title-row {
+  min-height: 28px;
+  align-items: center;
+}
+
+.scenario-card.is-collapsed h5,
+.scenario-card.is-collapsed .est-input,
+.scenario-card.is-collapsed .scenario-card-toggle {
+  align-self: center;
 }
 
 .scenario-card .card-top {
