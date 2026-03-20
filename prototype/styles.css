@@ -1846,7 +1846,8 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-cards {
   display: grid;
-  gap: 8px;
+  gap: 4px;
+  align-content: start;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
