@@ -36,6 +36,12 @@
 </head>
 
 <body class="layout-fixed">
+  <div id="page-loading" class="page-loading">
+    <div class="loading-box">
+      <div class="spinner"></div>
+      <p>로딩중...</p>
+    </div>
+  </div>
   <div class="grain"></div>
   <div class="app no-sidebar">
 
@@ -46,7 +52,7 @@
       </div>
     </div>
 
-    <main class="main blur-target">
+    <main class="main blur-target loading-blur">
       <div class="main-body">
         <section class="scenario-section" id="pipeline-section">
           <div style="margin-bottom:12px;" id="pipeline-meta">
@@ -72,6 +78,14 @@
   <div id="lib-modal" class="img-modal hidden">
     <div class="card lib-content"></div>
   </div>
+  <script>
+    window.addEventListener('load', function () {
+      var p = document.getElementById('page-loading');
+      if (p) p.classList.add('hidden');
+      var main = document.querySelector('.main');
+      if (main) main.classList.remove('loading-blur');
+    });
+  </script>
 </body>
 
 </html>

@@ -240,6 +240,17 @@
     });
   }
 
+  function setPipelinePageLoading(show, message) {
+    if (NK.core && NK.core.setLoading) {
+      NK.core.setLoading(!!show, message || '로딩중...');
+      return;
+    }
+    const overlay = document.getElementById('page-loading');
+    if (overlay) overlay.classList.toggle('hidden', !show);
+    const main = document.querySelector('.main');
+    if (main) main.classList.toggle('loading-blur', !!show);
+  }
+
   var getProjectTitle = function () {
     if (NK.service && NK.service.project && NK.service.project.getCurrentProjectTitle) {
       return NK.service.project.getCurrentProjectTitle({ search: window.location.search }) || '';
@@ -357,6 +368,7 @@
       ctx.setState(null);
     }
     if (!state) {
+      setPipelinePageLoading(true, '로딩중...');
       setPipelineLoading(true);
       var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
       if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
@@ -519,6 +531,7 @@
         ctx.setState(state);
       }
       setPipelineLoading(false);
+      setPipelinePageLoading(false);
     }
     var payload = state.payload;
     var scenes = state.scenes;
