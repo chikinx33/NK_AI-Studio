@@ -2113,9 +2113,9 @@ textarea::-webkit-scrollbar-corner {
   flex-direction: column;
   height: auto;
   min-height: 258px;
-  --scene-field-height: 38px;
-  --scene-shot-height: 84px;
-  --scene-dialogue-height: 38px;
+  --scene-field-height: 36px;
+  --scene-shot-height: 80px;
+  --scene-dialogue-height: 36px;
   cursor: pointer;
 }
 
@@ -2225,7 +2225,7 @@ textarea::-webkit-scrollbar-corner {
 .scenario-card .view-dialogue-lines {
   min-height: var(--scene-field-height);
   max-height: var(--scene-field-height);
-  padding: 7px 9px;
+  padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--layer-soft);
@@ -2236,7 +2236,8 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   align-items: center;
   white-space: pre-wrap;
-  line-height: 1.45;
+  font-size: 13px;
+  line-height: 1.35;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
