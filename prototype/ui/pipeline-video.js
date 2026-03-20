@@ -25,7 +25,7 @@
     return best;
   }
 
-  function buildSelections(payload, desiredAspectRatio) {
+  function buildSelections(payload) {
     var statePayload = payload || {};
     var audience = statePayload.target || '';
     return [
@@ -39,9 +39,7 @@
       ((Array.isArray(statePayload.styles) && statePayload.styles.length) || statePayload.style)
         ? 'Style: ' + ([]).concat(statePayload.styles || [], statePayload.style || '').filter(Boolean).join(', ')
         : '',
-      statePayload.needs && statePayload.needs.length ? 'Needs: ' + statePayload.needs.join(', ') : '',
-      desiredAspectRatio ? 'AspectRatio: ' + desiredAspectRatio : '',
-      statePayload.duration ? 'TargetDuration: ' + statePayload.duration + 's' : ''
+      statePayload.needs && statePayload.needs.length ? 'Needs: ' + statePayload.needs.join(', ') : ''
     ].filter(Boolean).join('\n');
   }
 
@@ -77,11 +75,10 @@
     st = opts.ensureStateAspectRatio(st, desiredAspectRatio);
     var header = st.header || '';
     var statePayload = st.payload || {};
-    var selections = buildSelections(statePayload, desiredAspectRatio);
+    var sharedContext = header || buildSelections(statePayload);
     var promptBase = [
       'Global',
-      header,
-      selections,
+      sharedContext,
       'Scene Visual',
       (scene.shot || ''),
       'Scene Duration',
@@ -90,7 +87,7 @@
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
     var rawPromptForLog = finalPrompt;
     try {
-      if (NK.service && NK.service.characterRegistry) {
+      if (NK.service && NK.service.characterRegistry && opts.toBool(statePayload.charactersEnabled, Array.isArray(statePayload.characters) && statePayload.characters.length)) {
         var payload0 = st.payload || {};
         var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload0 }) : (payload0.brandId || '');
         var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, rawPromptForLog, {});

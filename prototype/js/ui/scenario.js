@@ -621,6 +621,15 @@
   const hasPresetDuration = (value) => DURATION_OPTIONS.some(item => item.value === String(value || ''));
 
   const getCharacterEnabled = () => !!document.getElementById('character-enabled')?.checked;
+  const isCharacterGenerationDisabled = (payload = {}) => {
+    if (Object.prototype.hasOwnProperty.call(payload || {}, 'charactersEnabled')) {
+      return !boolVal(payload?.charactersEnabled, true);
+    }
+    return !(Array.isArray(payload?.characters) && payload.characters.length);
+  };
+  const getActiveCharactersForPayload = (payload = {}) => (
+    isCharacterGenerationDisabled(payload) ? [] : normalizeCharacters(currentCharacters)
+  );
 
   const syncCharacterUi = () => {
     const enabled = getCharacterEnabled();
@@ -752,14 +761,15 @@
       Object.assign(payload, NK.service.project.applyProjectCore(payload, { payload: currentPayload }));
     }
     const knowledge = readKnowledgeHub(payload);
-    payload.manualDirectives = extractManualDirectives(currentPayload, knowledge);
-    payload.extraNotes = payload.manualDirectives;
-    payload.banned = payload.manualDirectives;
+    payload.manualDirectives = extractManualDirectives(payload, knowledge);
     payload.knowledgeHub = Object.assign({}, knowledge);
     return payload;
   };
 
   const renderDetectedCharacters = (brandId, rawPrompt, payload = {}) => {
+    if (isCharacterGenerationDisabled(payload)) {
+      return { ids: [], resolvedPrompt: String(rawPrompt || '') };
+    }
     if (!(NK.service && NK.service.characterRegistry)) {
       return { ids: [], resolvedPrompt: String(rawPrompt || '') };
     }
@@ -778,12 +788,13 @@
   };
 
   const normalizeScenes = (scenes = []) => {
+    const activeCharacters = getActiveCharactersForPayload(currentPayload || {});
     return (Array.isArray(scenes) ? scenes : []).map((s, i) => {
       const est = parseEst(s.estSec || s.duration || s.len || s.length || 8);
       const rawLine = String(s.lines || '').trim();
       const cleanedLine = extractNarrationOnlyText(rawLine);
       const rawNarration = s.narration || cleanedLine || s.story || s.text || s.script || s.content || '';
-      const dialogues = normalizeDialogue(s.dialogue || s.dialogues || [], currentCharacters);
+      const dialogues = normalizeDialogue(s.dialogue || s.dialogues || [], activeCharacters);
       const lines = String(cleanedLine || rawNarration || '').trim();
       const shot =
         s.shot ||
@@ -793,10 +804,10 @@
         s.image ||
         (lines ? String(lines).split(/(?<=[.!?])\s+/)[0] || '' : '') ||
         '';
-      const narration = applyCharacterTokenHints(String(rawNarration || lines || '').trim(), currentCharacters);
+      const narration = applyCharacterTokenHints(String(rawNarration || lines || '').trim(), activeCharacters);
       const dialogue = dialogues.map((d) => ({
-        speaker: applyCharacterTokenHints(d.speaker, currentCharacters),
-        line: applyCharacterTokenHints(d.line, currentCharacters)
+        speaker: applyCharacterTokenHints(d.speaker, activeCharacters),
+        line: applyCharacterTokenHints(d.line, activeCharacters)
       }));
       const dialogueText = dialogue
         .map((d) => `${d.speaker ? `${d.speaker}: ` : ''}${d.line || ''}`.trim())
@@ -811,7 +822,7 @@
         dialogueText,
         narration,
         dialogue,
-        shot: applyCharacterTokenHints(String(shot || '').trim(), currentCharacters),
+        shot: applyCharacterTokenHints(String(shot || '').trim(), activeCharacters),
         estSec: est,
         narrationEnabled: boolVal(s?.narrationEnabled, boolVal(currentPayload?.narrationEnabled, false)),
         dubbingEnabled: boolVal(s?.dubbingEnabled, boolVal(currentPayload?.dubbingEnabled, false))

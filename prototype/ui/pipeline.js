@@ -871,6 +871,7 @@
         resolveEffectiveAspectRatio: resolveEffectiveAspectRatio,
         ensureStateAspectRatio: ensureStateAspectRatio,
         cleanHeader: cleanHeader,
+        toBool: toBool,
         enforceImageAspectRatio: enforceImageAspectRatio,
         updateSceneRow: updateSceneRow,
         retryImage: function (targetIdx, nextRetryCount) {

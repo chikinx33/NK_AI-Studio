@@ -32,7 +32,7 @@
     var finalPrompt = buildImagePrompt(scene, st.header || '', opts.cleanHeader || function (text) { return String(text || ''); });
     var rawP = finalPrompt;
     try {
-      if (NK.service && NK.service.characterRegistry) {
+      if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
         var payload = st.payload || {};
         var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload }) : (payload.brandId || '');
         var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, rawP, {});

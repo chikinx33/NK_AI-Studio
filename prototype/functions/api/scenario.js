@@ -21,6 +21,44 @@ const LONG_TOPIC_CHUNK_THRESHOLD = 2800;
 const TOPIC_CHUNK_SIZE = 2200;
 const MAX_COMPLETION_RETRIES = 3;
 const BASE_RETRY_DELAY_MS = 1500;
+const durationSceneAnchors = Object.keys(durationToScenes)
+  .map((key) => ({
+    duration: Number(key),
+    scenes: durationToScenes[key],
+  }))
+  .sort((a, b) => a.duration - b.duration);
+
+export function calculateSceneCountForDuration(rawDuration) {
+  const duration = Math.max(1, Math.round(Number(rawDuration) || 0));
+  if (!duration) return 7;
+  const direct = durationToScenes[String(duration)];
+  if (direct) return direct;
+  if (!durationSceneAnchors.length) return 7;
+
+  if (duration <= durationSceneAnchors[0].duration) {
+    const first = durationSceneAnchors[0];
+    return Math.max(1, Math.round(duration * (first.scenes / first.duration)));
+  }
+
+  for (let i = 0; i < durationSceneAnchors.length - 1; i++) {
+    const start = durationSceneAnchors[i];
+    const end = durationSceneAnchors[i + 1];
+    if (duration >= start.duration && duration <= end.duration) {
+      const ratio = (duration - start.duration) / Math.max(end.duration - start.duration, 1);
+      return Math.max(1, Math.round(start.scenes + ((end.scenes - start.scenes) * ratio)));
+    }
+  }
+
+  const last = durationSceneAnchors[durationSceneAnchors.length - 1];
+  return Math.max(1, Math.round(duration * (last.scenes / last.duration)));
+}
+
+function isCharacterGenerationDisabled(rawFlag, characters = []) {
+  if (rawFlag === null || rawFlag === undefined || rawFlag === "") {
+    return !(Array.isArray(characters) && characters.length);
+  }
+  return !toBool(rawFlag, true);
+}
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -52,12 +90,13 @@ export async function onRequestPost(context) {
     const manualDirectives = String(body.manualDirectives || body.extraNotes || body.banned || "").trim();
     const aspectRatio = String(body.aspectRatio || "").trim();
     const lang = body.language === "en" ? "en" : "ko";
-    const knowledgeHub = normalizeKnowledgeHubInput(body);
-
     const characters = normalizeCharacters(body.characters || []);
+    const characterGenerationDisabled = isCharacterGenerationDisabled(body.charactersEnabled, characters);
+    const knowledgeHub = normalizeKnowledgeHubInput(body, { characterGenerationDisabled });
+    const activeCharacters = characterGenerationDisabled ? [] : characters;
     const narrationEnabled = toBool(body.narrationEnabled, false);
     const dubbingEnabled = toBool(body.dubbingEnabled, false);
-    const sceneCount = durationToScenes[duration] || 7;
+    const sceneCount = calculateSceneCountForDuration(duration);
 
     let scenes;
     let generationMeta = {
@@ -84,9 +123,10 @@ export async function onRequestPost(context) {
         knowledgeHub,
         aspectRatio,
         duration,
+        characterGenerationDisabled,
         narrationEnabled,
         dubbingEnabled,
-        characters,
+        characters: activeCharacters,
         sceneCount,
       });
       scenes = generated.scenes;
@@ -99,7 +139,8 @@ export async function onRequestPost(context) {
         sceneCount,
         narrationEnabled,
         dubbingEnabled,
-        characters,
+        characters: activeCharacters,
+        characterGenerationDisabled,
         lang,
         purposeCategory,
         purposeTags,
@@ -137,7 +178,9 @@ function buildSystemPromptKo(sceneCount, duration) {
 총 scene 개수는 ${sceneCount}개로 만들고 총 길이는 ${duration}초 목표에 가깝게 분배한다.
 브랜드 톤&매너는 모든 영상에서 유지해야 하는 고정 화법이다.
 개요 톤은 이번 영상에서만 적용되는 가변 정서/말투 조절값이다.
-브랜드 톤&매너와 개요 톤이 함께 있으면 브랜드 톤&매너를 기본 화법으로 유지하고, 개요 톤은 이번 영상의 분위기와 감정 강도에만 반영한다.
+ 개요 톤은 narration, dialogue, 상황 전개의 분위기만 조절하고 시각 스타일 자체를 바꾸지 않는다.
+ 스타일은 visual의 룩, 질감, 조명, 색감에만 적용하고 줄거리나 대사 톤을 바꾸지 않는다.
+ 브랜드 톤&매너와 개요 톤이 함께 있으면 브랜드 톤&매너를 기본 화법으로 유지하고, 개요 톤은 이번 영상의 분위기와 감정 강도에만 반영한다.
 충돌 시 우선순위는 추가 지시사항, 브랜드 규칙, 금지 표현, 브랜드 톤&매너, 개요 톤 순서다.
 사용자 추가 지시사항과 브랜드 규칙, 금지 표현은 반드시 우선 적용한다.
 마크다운/설명 문장 없이 JSON만 출력한다.`;
@@ -150,17 +193,24 @@ Output format: {"scenes":[...]}.
 Each scene must include id, estSec and visual.
 Produce exactly ${sceneCount} scenes and distribute timing close to ${duration}s.
 Visual must include explicit camera direction: shot size, camera angle, camera movement, and framing/composition.
- Brand tone and manner is the fixed brand voice that must persist across every video.
- Overview tone is the variable tone for this specific video only.
- If both are present, keep the brand tone and manner as the base speaking style, and use the overview tone only to adjust this video's mood and emotional intensity.
- Resolve conflicts in this order: manual directives, brand rules, banned expressions, brand tone and manner, then overview tone.
- Treat user directives, brand rules, and banned expressions as mandatory constraints.
+  Brand tone and manner is the fixed brand voice that must persist across every video.
+  Overview tone is the variable tone for this specific video only.
+  Use overview tone only for narration, dialogue, and dramatic mood.
+  Use style only for visual look, texture, lighting, and color. Do not let style rewrite plot or spoken tone.
+  If both are present, keep the brand tone and manner as the base speaking style, and use the overview tone only to adjust this video's mood and emotional intensity.
+  Resolve conflicts in this order: manual directives, brand rules, banned expressions, brand tone and manner, then overview tone.
+  Treat user directives, brand rules, and banned expressions as mandatory constraints.
 No markdown, no extra explanation.`;
 }
 
 function buildUserPrompt(input) {
   const chunkGuide = input.chunkGuide ? `\n${input.chunkGuide}` : "";
   const modeInstruction = buildModePrompt(input);
+  const characterModeInstruction = input.characterGenerationDisabled
+    ? (input.lang === "en"
+      ? "Character mode: disabled. Do not create characters, people, mascots, named speakers, or dialogue participants. Build scenes around environment, objects, motion, and narrator-only speech when voice is required."
+      : "캐릭터 모드: 비활성화. 캐릭터, 사람, 마스코트, 이름 있는 화자, 대화 참여자를 새로 만들지 말고 환경, 사물, 움직임 중심으로 구성한다. 음성이 필요하면 내레이터만 사용한다.")
+    : "";
   if (input.lang === "en") {
     return `Topic: ${input.topic}
 Audience: ${input.target || "(not provided)"}
@@ -182,6 +232,7 @@ Reference contents: ${input.knowledgeHub.referenceContents.length ? input.knowle
 Past success cases: ${input.knowledgeHub.successCases.length ? input.knowledgeHub.successCases.join(", ") : "(none)"}
 Aspect ratio: ${input.aspectRatio || "(not provided)"}
 Duration target: ${input.duration}s
+${characterModeInstruction}
 Camera direction requirement: each visual must include shot size, camera angle, camera movement, and framing.
 ${chunkGuide}
 Formatting intent example:
@@ -211,6 +262,7 @@ ${modeInstruction}`;
 과거 성공 패턴: ${input.knowledgeHub.successCases.length ? input.knowledgeHub.successCases.join(", ") : "(없음)"}
 화면비: ${input.aspectRatio || "(미입력)"}
 목표 길이: ${input.duration}초
+${characterModeInstruction}
 ${chunkGuide}
 표현 예시:
 - Visual: "소년이 오래된 우물가에 다가간다."
@@ -259,6 +311,7 @@ async function generateScenarioScenes(input) {
       knowledgeHub: input.knowledgeHub,
       aspectRatio: input.aspectRatio,
       duration: String(chunkDuration),
+      characterGenerationDisabled: input.characterGenerationDisabled,
       narrationEnabled: input.narrationEnabled,
       dubbingEnabled: input.dubbingEnabled,
       characters: input.characters,
@@ -284,6 +337,7 @@ async function generateScenarioScenes(input) {
         aspectRatio: input.aspectRatio,
         sceneCount: chunkSceneCount,
         duration: chunkDuration,
+        characterGenerationDisabled: input.characterGenerationDisabled,
         narrationEnabled: input.narrationEnabled,
         dubbingEnabled: input.dubbingEnabled,
         characters: input.characters,
@@ -375,7 +429,7 @@ async function requestScenarioChunk(apiKey, sys, userPrompt) {
 
 function shapeScenesFromModel(rawScenes = [], options = {}) {
   const characters = Array.isArray(options.characters) ? options.characters : [];
-  const noCharacterMode = characters.length === 0;
+  const noCharacterMode = !!options.characterGenerationDisabled || characters.length === 0;
   const narratorSpeaker = "@narrator";
   const cameraContext = {
     lang: options.lang,
@@ -693,11 +747,11 @@ If traits are provided, keep each character's speaking style and behavior consis
     : "";
   const noCharacterRule = !characters.length
     ? (lang === "en"
-      ? `- Characterless mode: do not create named protagonists/supporting characters or @tokens.
-- Keep scene text focused on environment/action only.
+      ? `- Characterless mode: do not create characters, people, mascots, named protagonists/supporting characters, or @tokens.
+- Keep scene text focused on environment, objects, motion, and atmosphere only.
 - If dubbingEnabled=true with no characters, use narrator-only speaker "@narrator".`
-      : `- 캐릭터 미등록 모드: 임의 주연/조연 이름, @토큰을 생성하지 마세요.
-- 장면 설명은 환경/행동 중심으로 작성하세요.
+      : `- 캐릭터 미등록 모드: 캐릭터, 사람, 마스코트, 임의 주연/조연 이름, @토큰을 생성하지 마세요.
+- 장면 설명은 환경, 사물, 움직임, 분위기 중심으로 작성하세요.
 - 캐릭터 없이 dubbingEnabled=true 인 경우 화자는 "@narrator"만 사용하세요.`)
     : "";
 
@@ -751,17 +805,18 @@ function normalizeTextList(value) {
     .filter(Boolean);
 }
 
-function normalizeKnowledgeHubInput(body = {}) {
+function normalizeKnowledgeHubInput(body = {}, options = {}) {
   const hasNested = body.knowledgeHub && typeof body.knowledgeHub === "object";
   const nested = hasNested ? body.knowledgeHub : {};
   const source = Object.assign({}, body, nested);
   const legacyBanned = !hasNested && !String(source.manualDirectives || source.extraNotes || "").trim()
     ? source.banned
     : "";
+  const characterGenerationDisabled = !!options.characterGenerationDisabled;
   return {
     brandVoice: String(source.brandVoice || "").trim(),
     brandStory: String(source.brandStory || "").trim(),
-    brandCharacter: String(source.brandCharacter || "").trim(),
+    brandCharacter: characterGenerationDisabled ? "" : String(source.brandCharacter || "").trim(),
     worldSetting: String(source.worldSetting || source.knowledgeWorld || "").trim(),
     brandRules: normalizeTextList(source.brandRules),
     bannedExpressions: normalizeTextList(source.bannedExpressions || legacyBanned),
@@ -1018,18 +1073,19 @@ function rebalanceEstSec(scenes = [], target = 0) {
   return scenes.map((s, i) => Object.assign({}, s, { estSec: scaled[i] || minSec }));
 }
 
-function fallbackScenes({ topic, target, duration, sceneCount, narrationEnabled, dubbingEnabled, characters }) {
+function fallbackScenes({ topic, target, duration, sceneCount, narrationEnabled, dubbingEnabled, characters, characterGenerationDisabled = false }) {
   const count = Number(sceneCount) || 4;
   const per = Math.max(Math.floor((Number(duration) || 60) / count), 5);
   const t = topic || "주제 미정";
+  const subject = characterGenerationDisabled ? "장면" : t;
   const audience = target || "일반 시청자";
   const defaultSpeaker = characters[0]?.token || "@narrator";
   const scenes = [];
 
   for (let i = 0; i < count; i++) {
-    const narration = `${t} 전개 ${i + 1}. ${audience} 기준으로 이해하기 쉽게 설명한다.`;
+    const narration = `${subject} 전개 ${i + 1}. ${audience} 기준으로 이해하기 쉽게 설명한다.`;
     const visual = `Scene ${i + 1}의 핵심 장면 설명`;
-    const dialogue = [{ speaker: defaultSpeaker, line: `${t} 관련 대사 ${i + 1}` }];
+    const dialogue = [{ speaker: defaultSpeaker, line: `${subject} 관련 대사 ${i + 1}` }];
 
     scenes.push(shapeSceneByMode({
       id: i + 1,
@@ -1056,6 +1112,7 @@ function fallbackScenesV2({
   narrationEnabled,
   dubbingEnabled,
   characters,
+  characterGenerationDisabled = false,
   lang = "ko",
   purposeCategory = "",
   purposeTags = "",
@@ -1068,6 +1125,7 @@ function fallbackScenesV2({
   const count = Number(sceneCount) || 4;
   const per = Math.max(Math.floor((Number(duration) || 60) / count), 5);
   const t = String(topic || "Untitled").trim();
+  const subject = characterGenerationDisabled ? (lang === "en" ? "the scene" : "장면") : t;
   const audience = String(target || "General audience").trim();
   const defaultSpeaker = characters[0]?.token || "@narrator";
   const scenes = [];
@@ -1086,15 +1144,15 @@ function fallbackScenesV2({
 
   for (let i = 0; i < count; i++) {
     const narration = lang === "en"
-      ? `${t} progression ${i + 1}. Explain clearly for ${audience}.`
-      : `${t} 전개 ${i + 1}. ${audience} 기준으로 이해하기 쉽게 설명한다.`;
+      ? `${subject} progression ${i + 1}. Explain clearly for ${audience}.`
+      : `${subject} 전개 ${i + 1}. ${audience} 기준으로 이해하기 쉽게 설명한다.`;
     const visualSeed = lang === "en"
       ? `Scene ${i + 1} key visual direction`
       : `Scene ${i + 1}의 핵심 장면 설명`;
     const visual = ensureCameraDirectionInVisual(visualSeed, Object.assign({}, cameraContext, { idx: i }));
     const dialogue = [{
       speaker: defaultSpeaker,
-      line: lang === "en" ? `${t} line ${i + 1}` : `${t} 관련 대사 ${i + 1}`
+      line: lang === "en" ? `${subject} line ${i + 1}` : `${subject} 관련 대사 ${i + 1}`
     }];
 
     scenes.push(shapeSceneByMode({
@@ -1106,6 +1164,7 @@ function fallbackScenesV2({
       visual,
       narrationEnabled,
       dubbingEnabled,
+      characterGenerationDisabled,
       defaultSpeaker,
       lang,
     }));

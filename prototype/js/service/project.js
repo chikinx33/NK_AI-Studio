@@ -438,7 +438,6 @@
         if (!nextPayload.worldSetting && knowledge.worldSetting) nextPayload.worldSetting = knowledge.worldSetting;
         if (!nextPayload.knowledgeWorld && knowledge.worldSetting) nextPayload.knowledgeWorld = knowledge.worldSetting;
         if (!nextPayload.target && core.targetAudience) nextPayload.target = core.targetAudience;
-        if (!nextPayload.tone && core.brandTone) nextPayload.tone = core.brandTone;
         return nextPayload;
     }
 
@@ -1086,7 +1085,7 @@
             return await NK.api.promptHeader(payload);
         } catch (err) {
             console.warn('Header fetch fail', err);
-            return 'A cohesive visual world with consistent characters, lighting, and framing.';
+            return 'A cohesive visual world with consistent lighting, texture, and framing.';
         }
     };
 })();

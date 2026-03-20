@@ -241,3 +241,21 @@ test('project.create inherits scenario context from selected parent project epis
   assert.equal(created.payload.knowledgeHub.worldSetting, '형태들이 살아가는 숲 마을');
   assert.equal(JSON.stringify(created.scenes), JSON.stringify([]));
 });
+
+test('applyProjectCore keeps brand tone separate from overview tone', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const project = ctx.NK.service.project;
+  const normalized = project.applyProjectCore({
+    brandTone: '차분하고 따뜻함',
+    knowledgeHub: {
+      brandVoice: '명확하고 다정하게 말한다.',
+      brandRules: [],
+      bannedExpressions: []
+    }
+  }, { payload: {} });
+
+  assert.equal(normalized.brandTone, '차분하고 따뜻함');
+  assert.equal(normalized.tone || '', '');
+});

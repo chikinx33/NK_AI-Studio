@@ -2,6 +2,30 @@
     var NK = window.NK || (window.NK = {});
     var service = NK.service || (NK.service = {});
     var media = service.media || (service.media = {});
+    var durationMap = { '15': 4, '30': 7, '45': 10, '60': 12, '1800': 120, '3600': 240, '7200': 480 };
+    var durationAnchors = Object.keys(durationMap).map(function (key) {
+        return { duration: Number(key), scenes: durationMap[key] };
+    }).sort(function (a, b) { return a.duration - b.duration; });
+
+    function calculateSceneCount(rawDuration) {
+        var duration = Math.max(1, Math.round(Number(rawDuration) || 0));
+        if (!duration) return 7;
+        if (durationMap[String(duration)]) return durationMap[String(duration)];
+        if (!durationAnchors.length) return 7;
+        if (duration <= durationAnchors[0].duration) {
+            return Math.max(1, Math.round(duration * (durationAnchors[0].scenes / durationAnchors[0].duration)));
+        }
+        for (var i = 0; i < durationAnchors.length - 1; i++) {
+            var start = durationAnchors[i];
+            var end = durationAnchors[i + 1];
+            if (duration >= start.duration && duration <= end.duration) {
+                var ratio = (duration - start.duration) / Math.max(1, end.duration - start.duration);
+                return Math.max(1, Math.round(start.scenes + ((end.scenes - start.scenes) * ratio)));
+            }
+        }
+        var last = durationAnchors[durationAnchors.length - 1];
+        return Math.max(1, Math.round(duration * (last.scenes / last.duration)));
+    }
 
     /**
      * 시나리오 생성 요청 및 정규화
@@ -76,8 +100,7 @@
      * 모의 시나리오 생성 (API 실패 시 대비)
      */
     media.mockGenerate = function (payload) {
-        const durationMap = { '15': 4, '30': 7, '45': 10, '60': 12, '1800': 120, '3600': 240, '7200': 480 };
-        const count = durationMap[payload.duration] || 7;
+        const count = calculateSceneCount(payload.duration);
         const total = Number(payload.duration || 30);
         const est = Math.max(3, Math.round(total / count));
 
