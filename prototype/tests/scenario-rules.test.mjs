@@ -534,6 +534,8 @@ test('overview combinations resolve into different scenario profiles and bluepri
   assert.notEqual(cookingSpec.continuity.backgroundStyle, techSpec.continuity.backgroundStyle);
   assert.deepEqual(Array.from(cookingSpec.sceneBlueprint, (row) => row.role), ['intro', 'prep', 'cook', 'taste']);
   assert.deepEqual(Array.from(techSpec.sceneBlueprint, (row) => row.role), ['hook', 'problem', 'demo', 'takeaway']);
+  assert.deepEqual(Array.from(cookingSpec.sceneBlueprint, (row) => row.phaseKey), ['setup', 'rise', 'turn', 'close']);
+  assert.deepEqual(Array.from(techSpec.sceneBlueprint, (row) => row.phaseKey), ['setup', 'rise', 'turn', 'close']);
   assert.ok(cookingSpec.requiredOutputsKo.join(' ').includes('재료') || cookingSpec.validationRulesKo.join(' ').includes('절차'));
   assert.ok(techSpec.requiredOutputsKo.join(' ').includes('문제') || techSpec.validationRulesKo.join(' ').includes('절차'));
   assert.ok(/마무리|판단|정리|결론|결과 확인/.test(cookingSpec.sceneBlueprint.at(-1)?.title || ''));
@@ -612,4 +614,47 @@ test('shortened blueprints still preserve a closing role in the last scene', () 
 
   assert.equal(horrorSpec.sceneBlueprint.at(-1)?.role, 'escape');
   assert.equal(musicSpec.sceneBlueprint.at(-1)?.role, 'outro');
+});
+
+test('duration-scaled blueprints keep contiguous setup-rise-turn-close arcs from 15 seconds to 1 hour', () => {
+  const helpers = loadScenarioHelpers();
+
+  const shortSpec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: '숲속 모험',
+    target: '아동',
+    purposeCategory: '스토리 · 서사',
+    purposeTags: '판타지',
+    needs: '스토리',
+    tones: '친근',
+    styles: '애니메이션(3D)',
+    duration: '15',
+    sceneCount: 4
+  });
+  const longSpec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: '우주 식민지의 하루',
+    target: '청소년',
+    purposeCategory: '스토리 · 서사',
+    purposeTags: 'SF',
+    needs: '스토리',
+    tones: '진지',
+    styles: '시네마틱',
+    duration: '3600',
+    sceneCount: 240
+  });
+
+  const shortPhases = Array.from(shortSpec.sceneBlueprint, (row) => row.phaseKey);
+  const longPhases = Array.from(longSpec.sceneBlueprint, (row) => row.phaseKey);
+  const order = { setup: 0, rise: 1, turn: 2, close: 3 };
+
+  assert.deepEqual(shortPhases, ['setup', 'rise', 'turn', 'close']);
+  assert.equal(longPhases.length, 240);
+  assert.equal(longPhases[0], 'setup');
+  assert.equal(longPhases.at(-1), 'close');
+  assert.ok(longPhases.includes('rise'));
+  assert.ok(longPhases.includes('turn'));
+  for (let i = 1; i < longPhases.length; i++) {
+    assert.ok(order[longPhases[i]] >= order[longPhases[i - 1]]);
+  }
 });

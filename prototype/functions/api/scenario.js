@@ -1113,6 +1113,7 @@ function buildScenarioSpec(input = {}) {
     movement: signalSet.has("movement"),
     veryYoung: signalSet.has("very_young"),
   };
+  const sceneCount = Math.max(1, Number(input.sceneCount) || 1);
   const profile = resolveOverviewProfile({
     lang,
     purposeCategory: category,
@@ -1163,6 +1164,10 @@ function buildScenarioSpec(input = {}) {
     requiredOutputsKo.push(`핵심 학습 대상 "${topicProfile.subject}"를 직접 말하거나 보여주는 장면이 필요하다.`);
     requiredOutputsEn.push(`Explicitly show or say the learning target "${topicProfile.subject}".`);
   }
+  if (sceneCount >= 4) {
+    requiredOutputsKo.push("전체 씬 흐름은 기-승-전-결 또는 그에 준하는 도입-확장-전환-결말 구조를 따라야 한다.");
+    requiredOutputsEn.push("The full scene flow must follow a setup-rise-turn-close arc or an equivalent opening-development-turn-ending structure.");
+  }
 
   const continuity = buildContinuityPlan({
     lang,
@@ -1186,7 +1191,7 @@ function buildScenarioSpec(input = {}) {
 
   const sceneBlueprint = buildSceneBlueprint({
     lang,
-    sceneCount: Math.max(1, Number(input.sceneCount) || 1),
+    sceneCount,
     topicProfile,
     signals,
     profile,
@@ -1344,6 +1349,78 @@ function fitRoleSequence(roles = [], count = 4, closingRole = "close") {
 
 function isClosingRole(role = "") {
   return /^(close|recap|summary|outro|verdict|takeaway|taste|cooldown|reveal|result|escape|prayer)$/i.test(String(role || "").trim());
+}
+
+function buildNarrativeArcPlan(count = 4, lang = "ko") {
+  const total = Math.max(1, Number(count) || 1);
+  const phaseDefs = lang === "en"
+    ? [
+      { key: "setup", label: "Setup", goal: "Establish the world, premise, or baseline." },
+      { key: "rise", label: "Rise", goal: "Expand the main action, learning, or journey." },
+      { key: "turn", label: "Turn", goal: "Escalate, vary, or pivot the material toward resolution." },
+      { key: "close", label: "Close", goal: "Resolve, recap, or end with a clear payoff." },
+    ]
+    : [
+      { key: "setup", label: "기", goal: "세계관, 전제, 기본 상황을 세운다." },
+      { key: "rise", label: "승", goal: "핵심 전개, 학습, 체험을 본격적으로 확장한다." },
+      { key: "turn", label: "전", goal: "변주, 전환, 긴장 상승, 핵심 응용으로 흐름을 바꾼다." },
+      { key: "close", label: "결", goal: "회수, 복습, 결론, 엔딩으로 분명하게 마무리한다." },
+    ];
+
+  if (total === 1) return [phaseDefs[3]];
+  if (total === 2) return [phaseDefs[0], phaseDefs[3]];
+  if (total === 3) return [phaseDefs[0], phaseDefs[2], phaseDefs[3]];
+  if (total === 4) return phaseDefs.slice();
+
+  const ratios = [0.22, 0.33, 0.23, 0.22];
+  const counts = phaseDefs.map(() => 1);
+  let remaining = total - counts.reduce((sum, value) => sum + value, 0);
+  const weighted = ratios.map((ratio, index) => ({
+    index,
+    raw: ratio * remaining,
+    whole: Math.floor(ratio * remaining),
+    frac: (ratio * remaining) - Math.floor(ratio * remaining),
+  }));
+  weighted.forEach((row) => {
+    counts[row.index] += row.whole;
+    remaining -= row.whole;
+  });
+  weighted.sort((a, b) => b.frac - a.frac);
+  for (let i = 0; i < remaining; i++) counts[weighted[i % weighted.length].index] += 1;
+
+  const plan = [];
+  phaseDefs.forEach((phase, index) => {
+    for (let i = 0; i < counts[index]; i++) plan.push(Object.assign({}, phase));
+  });
+  return plan.slice(0, total);
+}
+
+function roleToNarrativePhase(role = "") {
+  const value = String(role || "").trim();
+  if (/^(hook|setup|intro|arrive|settle|mission|firstlook|scripture|context)$/i.test(value)) return "setup";
+  if (/^(teach|practice|invite|play|develop|build|prep|routine|explore|warmup|process|explain|voice|main|discovery|playbeat|problem)$/i.test(value)) return "rise";
+  if (/^(repeat|turn|example|highlight|variation|compare|benefit|detail|point|insight|breathe|sign|dread|solution|chorus|plate|reveal|reinforce|twist|cook|demo)$/i.test(value)) return "turn";
+  if (/^(recap|summary|close|outro|verdict|takeaway|taste|cooldown|result|escape|prayer|payoff|reflect)$/i.test(value)) return "close";
+  return "rise";
+}
+
+function buildRolePoolsForArc(baseRoles = [], closingRole = "close") {
+  const source = (Array.isArray(baseRoles) ? baseRoles : []).filter(Boolean);
+  const pools = {
+    setup: [],
+    rise: [],
+    turn: [],
+    close: [],
+  };
+  source.forEach((role) => {
+    const phase = roleToNarrativePhase(role);
+    pools[phase].push(role);
+  });
+  pools.setup = uniqueStrings(pools.setup.concat(source[0] || "hook", "hook")).filter((role) => !isClosingRole(role));
+  pools.rise = uniqueStrings(pools.rise.concat(source.find((role) => !isClosingRole(role)) || "develop", "develop"));
+  pools.turn = uniqueStrings(pools.turn.concat(source.filter((role) => !isClosingRole(role)).slice(-2), "reinforce"));
+  pools.close = uniqueStrings(pools.close.concat(source.filter((role) => isClosingRole(role)), closingRole || "close", "summary"));
+  return pools;
 }
 
 function buildProfileValidationRules({ lang = "ko", key = "generic", target = "", needValues = [], toneValues = [] } = {}) {
@@ -1566,10 +1643,31 @@ function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signal
     else if (signals.informative) roles = fitRoleSequence(["hook", "explain", "example", "summary"], count, "summary");
     else roles = fitRoleSequence(["hook", "develop", "reinforce", "close"], count, "close");
   }
-  return roles.map((role, idx) => createBlueprintItem({ lang, role, idx, total: count, topicProfile, signals, continuity, profile }));
+  const arcPlan = buildNarrativeArcPlan(count, lang);
+  const closingRole = roles[roles.length - 1] || "close";
+  const rolePools = buildRolePoolsForArc(roles, closingRole);
+  const phaseOffsets = { setup: 0, rise: 0, turn: 0, close: 0 };
+  const arcRoles = arcPlan.map((phase, idx) => {
+    if (idx === count - 1) return closingRole;
+    const pool = rolePools[phase.key] && rolePools[phase.key].length ? rolePools[phase.key] : rolePools.rise;
+    const offset = phaseOffsets[phase.key] || 0;
+    phaseOffsets[phase.key] = offset + 1;
+    return pool[offset % pool.length] || closingRole;
+  });
+  return arcRoles.map((role, idx) => createBlueprintItem({
+    lang,
+    role,
+    idx,
+    total: count,
+    topicProfile,
+    signals,
+    continuity,
+    profile,
+    phase: arcPlan[idx],
+  }));
 }
 
-function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, signals, continuity = {}, profile = {} }) {
+function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, signals, continuity = {}, profile = {}, phase = {} }) {
   const subject = topicProfile.subject;
   const location = pickSceneSublocation(continuity, idx, lang);
   const roleMapKo = {
@@ -1591,6 +1689,7 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     inciting: { title: "계기 발생", goal: `${subject} 전개를 밀어붙이는 계기를 만든다`, must: "다음 장면으로 넘어갈 이유가 보여야 한다" },
     turn: { title: "전환", goal: `${subject} 흐름을 한 단계 바꾼다`, must: "상황 변화나 선택이 드러나야 한다" },
     payoff: { title: "회수", goal: `${subject}의 앞선 단서를 회수한다`, must: "앞 장면과 이어지는 결과가 보여야 한다" },
+    discovery: { title: "발견", goal: `${subject}의 새로운 단서를 발견한다`, must: "다음 전개를 여는 발견 요소가 있어야 한다" },
     intro: { title: "도입 소개", goal: `${subject}를 시작하며 전체 흐름을 알린다`, must: "오늘 다룰 대상과 결과물을 짚는다" },
     build: { title: "빌드업", goal: `${subject}의 리듬과 긴장을 끌어올린다`, must: "다음 반복이나 후렴으로 이어지는 준비가 보여야 한다" },
     chorus: { title: "후렴", goal: `${subject}의 반복 훅을 전면에 둔다`, must: "반복해서 따라 부를 수 있는 구간이 보여야 한다" },
@@ -1610,6 +1709,7 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     check: { title: "점검", goal: `${subject}를 항목별로 확인한다`, must: "실제 확인 포인트가 드러나야 한다" },
     compare: { title: "비교", goal: `${subject}를 다른 기준과 나란히 본다`, must: "비교 기준과 차이가 명확해야 한다" },
     verdict: { title: "최종 판단", goal: `${subject}에 대한 결론을 내린다`, must: "추천/비추천 또는 총평이 분명해야 한다" },
+    twist: { title: "반전", goal: `${subject} 흐름에 뜻밖의 변화를 준다`, must: "리듬이나 상황을 바꾸는 반전이 있어야 한다" },
     mission: { title: "미션 제시", goal: `${subject}를 위한 목표를 세운다`, must: "이번 씬의 임무가 분명해야 한다" },
     playbeat: { title: "플레이 비트", goal: `${subject}를 행동 중심으로 밀어붙인다`, must: "직접 행동하는 장면이 있어야 한다" },
     result: { title: "결과 확인", goal: `${subject} 진행 결과를 짧게 회수한다`, must: "성공/실패나 성과가 보여야 한다" },
@@ -1656,6 +1756,7 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     inciting: { title: "Inciting Beat", goal: `Trigger movement around ${subject}`, must: "Show a clear reason to move forward" },
     turn: { title: "Turn", goal: `Shift the flow of ${subject}`, must: "Make the change or choice explicit" },
     payoff: { title: "Payoff", goal: `Pay off an earlier setup around ${subject}`, must: "Show a concrete result" },
+    discovery: { title: "Discovery", goal: `Discover a new clue around ${subject}`, must: "Introduce a finding that opens the next beat" },
     intro: { title: "Intro", goal: `Introduce ${subject} and its overall flow`, must: "State what will be made or covered" },
     build: { title: "Build", goal: `Build rhythm around ${subject}`, must: "Lead into the next hook or repetition" },
     chorus: { title: "Chorus", goal: `Put the repeatable hook of ${subject} front and center`, must: "The audience should be able to repeat it" },
@@ -1675,6 +1776,7 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     check: { title: "Check", goal: `Inspect ${subject}`, must: "Make the review checkpoints explicit" },
     compare: { title: "Compare", goal: `Compare ${subject} against another baseline`, must: "Make the differences explicit" },
     verdict: { title: "Verdict", goal: `Give a conclusion on ${subject}`, must: "Leave a clear verdict" },
+    twist: { title: "Twist", goal: `Add a surprising change around ${subject}`, must: "Shift rhythm or situation in a visible way" },
     mission: { title: "Mission", goal: `Set the mission around ${subject}`, must: "Make the objective explicit" },
     playbeat: { title: "Play Beat", goal: `Push ${subject} through direct action`, must: "Include an active play moment" },
     result: { title: "Result", goal: `Confirm the outcome of ${subject}`, must: "Show success, failure, or progress" },
@@ -1703,7 +1805,15 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     escape: { title: "Escape", goal: `Try to escape the tension around ${subject}`, must: "Make the escape action explicit" },
   };
   const map = lang === "en" ? roleMapEn : roleMapKo;
-  return Object.assign({ role, index: idx + 1, total, location }, map[role] || map.develop);
+  return Object.assign({
+    role,
+    index: idx + 1,
+    total,
+    location,
+    phaseKey: phase.key || roleToNarrativePhase(role),
+    phaseLabel: phase.label || (lang === "en" ? "Rise" : "승"),
+    phaseGoal: phase.goal || (lang === "en" ? "Advance the overall narrative arc." : "전체 전개 흐름을 다음 단계로 보낸다."),
+  }, map[role] || map.develop);
 }
 
 function formatScenarioSpecForPrompt(spec = {}) {
@@ -1715,6 +1825,7 @@ function formatScenarioSpecForPrompt(spec = {}) {
       `Topic analysis: subject=${spec.topicProfile?.subject || spec.topic || "topic"}, keywords=${(spec.topicProfile?.keywords || []).join(", ") || "none"}`,
       `Overview profile: archetype=${spec.profile?.key || "generic"}, audience=${spec.target || "none"}, purpose=${(spec.needs || []).join(", ") || "none"}, tones=${(spec.tones || []).join(", ") || "none"}`,
       `Active signals: ${activeSignals}`,
+      `Narrative arc: ${(spec.sceneBlueprint || []).map((item) => item.phaseLabel || item.phaseKey).join(" -> ") || "none"}`,
       `Shared background style: ${spec.continuity?.backgroundStyle || "none"}`,
       `Shared setting: place=${spec.continuity?.place || "none"} / background=${spec.continuity?.background || "none"} / props=${(spec.continuity?.props || []).join(", ") || "none"}`,
       `Required outcomes: ${(spec.requiredOutputsEn || []).join(" / ") || "none"}`,
@@ -1725,6 +1836,7 @@ function formatScenarioSpecForPrompt(spec = {}) {
     `주제 해석: 핵심 대상=${spec.topicProfile?.subject || spec.topic || "주제"}, 키워드=${(spec.topicProfile?.keywords || []).join(", ") || "없음"}`,
     `개요 프로필: 구조=${spec.profile?.key || "generic"}, 타겟=${spec.target || "없음"}, 목적=${(spec.needs || []).join(", ") || "없음"}, 톤=${(spec.tones || []).join(", ") || "없음"}`,
     `활성 시그널: ${activeSignals}`,
+    `서사 아크: ${(spec.sceneBlueprint || []).map((item) => item.phaseLabel || item.phaseKey).join(" -> ") || "없음"}`,
     `공용 배경 스타일: ${spec.continuity?.backgroundStyle || "없음"}`,
     `공통 배경: 장소=${spec.continuity?.place || "없음"} / 배경=${spec.continuity?.background || "없음"} / 핵심 프롭=${(spec.continuity?.props || []).join(", ") || "없음"}`,
     `반드시 나와야 할 결과: ${(spec.requiredOutputsKo || []).join(" / ") || "없음"}`,
@@ -1736,8 +1848,8 @@ function formatBlueprintForPrompt(spec = {}) {
   const items = Array.isArray(spec.sceneBlueprint) ? spec.sceneBlueprint : [];
   if (!items.length) return spec.lang === "en" ? "- No blueprint" : "- 블루프린트 없음";
   return items.map((item, idx) => {
-    if (spec.lang === "en") return `${idx + 1}. ${item.title}: goal=${item.goal}; must=${item.must}; location=${item.location || "same world"}; keep the same setting and separate sceneIntent from visual.`;
-    return `${idx + 1}. ${item.title}: 목표=${item.goal}; 필수=${item.must}; 장소=${item.location || "같은 세계"}; 같은 공간을 유지하고 sceneIntent와 visual을 분리.`;
+    if (spec.lang === "en") return `${idx + 1}. [${item.phaseLabel || item.phaseKey || "Rise"}] ${item.title}: phaseGoal=${item.phaseGoal || "Advance the overall arc"}; goal=${item.goal}; must=${item.must}; location=${item.location || "same world"}; keep the same setting and separate sceneIntent from visual.`;
+    return `${idx + 1}. [${item.phaseLabel || item.phaseKey || "승"}] ${item.title}: 막 목표=${item.phaseGoal || "전체 아크를 다음 단계로 보낸다"}; 목표=${item.goal}; 필수=${item.must}; 장소=${item.location || "같은 세계"}; 같은 공간을 유지하고 sceneIntent와 visual을 분리.`;
   }).join("\n");
 }
 
@@ -1833,6 +1945,9 @@ function shapeScenesFromModel(rawScenes = [], options = {}) {
       sceneIntent: applyCharacterTokenHints(String(sceneIntentRaw || "").trim(), characters),
       sceneLocation: String(sceneLocationRaw || "").trim(),
       backgroundStyle: String(backgroundStyleRaw || "").trim(),
+      sceneArcPhase: String(s.sceneArcPhase || s.phaseLabel || "").trim(),
+      sceneArcKey: String(s.sceneArcKey || s.phaseKey || "").trim(),
+      sceneArcGoal: String(s.sceneArcGoal || s.phaseGoal || "").trim(),
       narration: noCharacterSafe.narration,
       dialogue: noCharacterSafe.dialogue,
       visual: noCharacterSafe.visual,
@@ -1900,6 +2015,9 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
       sceneIntent,
       sceneLocation,
       backgroundStyle,
+      sceneArcPhase: blueprint.phaseLabel,
+      sceneArcKey: blueprint.phaseKey,
+      sceneArcGoal: blueprint.phaseGoal,
       narration,
       dialogue,
       visual,
@@ -1952,6 +2070,7 @@ function mapRoleToHintRole(role = "") {
   const alias = {
     setup: "hook",
     inciting: "develop",
+    discovery: "develop",
     turn: "develop",
     payoff: "recap",
     intro: "hook",
@@ -1973,6 +2092,7 @@ function mapRoleToHintRole(role = "") {
     check: "example",
     compare: "reinforce",
     verdict: "summary",
+    twist: "repeat",
     mission: "hook",
     playbeat: "play",
     result: "summary",
@@ -2366,6 +2486,25 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
     message: spec.lang === "en"
       ? "Scene count should stay aligned with the blueprint."
       : "씬 개수가 블루프린트와 맞아야 한다.",
+  });
+  results.push({
+    key: "arc_progression",
+    passed: (() => {
+      const phases = (spec.sceneBlueprint || []).map((item) => item.phaseKey).filter(Boolean);
+      if (!phases.length) return true;
+      const order = { setup: 0, rise: 1, turn: 2, close: 3 };
+      for (let i = 1; i < phases.length; i++) {
+        if ((order[phases[i]] ?? 0) < (order[phases[i - 1]] ?? 0)) return false;
+      }
+      if (phases.length >= 4) {
+        const uniquePhases = new Set(phases);
+        return uniquePhases.has("setup") && uniquePhases.has("rise") && uniquePhases.has("turn") && uniquePhases.has("close");
+      }
+      return phases[phases.length - 1] === "close";
+    })(),
+    message: spec.lang === "en"
+      ? "The overall scene order should follow a setup-rise-turn-close arc."
+      : "전체 씬 순서는 기-승-전-결 또는 그에 준하는 아크를 따라야 한다.",
   });
   results.push({
     key: "last_scene_closure",
@@ -3107,6 +3246,9 @@ function shapeSceneByMode(input) {
   const sceneIntent = String(input.sceneIntent || input.intent || "").trim() || (input.lang === "en" ? "Advance the next scene beat clearly." : "다음 씬 전개를 분명하게 만든다.");
   const sceneLocation = String(input.sceneLocation || input.location || "").trim();
   const backgroundStyle = String(input.backgroundStyle || "").trim();
+  const sceneArcPhase = String(input.sceneArcPhase || input.phaseLabel || "").trim();
+  const sceneArcKey = String(input.sceneArcKey || input.phaseKey || "").trim();
+  const sceneArcGoal = String(input.sceneArcGoal || input.phaseGoal || "").trim();
   const defaultSpeaker = String(input.defaultSpeaker || "@narrator").trim() || "@narrator";
   let dialogue = normalizeDialogue(input.dialogue || []);
   const visual = String(input.visual || "").trim();
@@ -3136,6 +3278,9 @@ function shapeSceneByMode(input) {
     sceneIntent,
     sceneLocation,
     backgroundStyle,
+    sceneArcPhase,
+    sceneArcKey,
+    sceneArcGoal,
     visual,
     shot: visual,
     videoSpeechPrompt,
@@ -3300,6 +3445,9 @@ function fallbackScenesV2({
       sceneIntent: hints.intent,
       sceneLocation: hints.location || blueprint.location || "",
       backgroundStyle: hints.backgroundStyle || scenarioSpec.continuity?.backgroundStyle || "",
+      sceneArcPhase: blueprint.phaseLabel,
+      sceneArcKey: blueprint.phaseKey,
+      sceneArcGoal: blueprint.phaseGoal,
       narration,
       dialogue,
       visual,
