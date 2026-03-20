@@ -1289,6 +1289,50 @@
         } catch (_) { }
     };
 
+    function clearFullscreenRestoreFlag() {
+        try {
+            sessionStorage.removeItem(FULLSCREEN_RESTORE_KEY);
+            localStorage.removeItem(FULLSCREEN_RESTORE_KEY);
+        } catch (_) { }
+    }
+
+    function queueFullscreenRestoreRetry() {
+        if (typeof document === 'undefined' || document.__nkFullscreenRestoreRetryBound) return;
+        var retry = async function () {
+            if (common.isFullscreenActive()) {
+                clearFullscreenRestoreFlag();
+                cleanup();
+                return;
+            }
+            var root = document.documentElement;
+            if (!root) return;
+            try {
+                if (root.requestFullscreen) {
+                    await root.requestFullscreen();
+                } else if (root.webkitRequestFullscreen) {
+                    root.webkitRequestFullscreen();
+                } else if (root.msRequestFullscreen) {
+                    root.msRequestFullscreen();
+                }
+            } catch (_) { }
+            if (common.isFullscreenActive()) {
+                clearFullscreenRestoreFlag();
+                common.updateScreenButton((NK.state && NK.state.runtime && NK.state.runtime.lang) || 'ko');
+                cleanup();
+            }
+        };
+        var cleanup = function () {
+            document.__nkFullscreenRestoreRetryBound = false;
+            ['pointerdown', 'keydown', 'touchstart', 'click'].forEach(function (eventName) {
+                document.removeEventListener(eventName, retry, true);
+            });
+        };
+        document.__nkFullscreenRestoreRetryBound = true;
+        ['pointerdown', 'keydown', 'touchstart', 'click'].forEach(function (eventName) {
+            document.addEventListener(eventName, retry, true);
+        });
+    }
+
     common.restoreFullscreenIfNeeded = async function () {
         if (window.parent && window.parent !== window) return false;
         var shouldRestore = false;
@@ -1297,11 +1341,10 @@
                 || localStorage.getItem(FULLSCREEN_RESTORE_KEY) === '1';
         } catch (_) { }
         if (!shouldRestore) return false;
-        try {
-            sessionStorage.removeItem(FULLSCREEN_RESTORE_KEY);
-            localStorage.removeItem(FULLSCREEN_RESTORE_KEY);
-        } catch (_) { }
-        if (common.isFullscreenActive()) return true;
+        if (common.isFullscreenActive()) {
+            clearFullscreenRestoreFlag();
+            return true;
+        }
         var root = document.documentElement;
         if (!root) return false;
         try {
@@ -1313,6 +1356,11 @@
                 root.msRequestFullscreen();
             }
         } catch (_) { }
+        if (!common.isFullscreenActive()) {
+            queueFullscreenRestoreRetry();
+        } else {
+            clearFullscreenRestoreFlag();
+        }
         common.updateScreenButton((NK.state && NK.state.runtime && NK.state.runtime.lang) || 'ko');
         return common.isFullscreenActive();
     };

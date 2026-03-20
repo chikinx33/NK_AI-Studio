@@ -2825,6 +2825,11 @@
 
   window.openOptionsStage = () => {
     try {
+      if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
+        NK.ui.common.markFullscreenRestore();
+      }
+    } catch (_) { }
+    try {
       if (window.top && window.top !== window) {
         window.top.location.href = 'index.html';
         return;
