@@ -759,6 +759,7 @@
       if (currentPayload.sourceProjectId && !payload.sourceProjectId) payload.sourceProjectId = currentPayload.sourceProjectId;
       if (currentPayload.sourceProjectTitle && !payload.sourceProjectTitle) payload.sourceProjectTitle = currentPayload.sourceProjectTitle;
     }
+    payload.backgroundStyle = getCommonBackgroundStyleFromCard() || String(currentPayload?.backgroundStyle || '').trim();
     if (NK.service?.project?.applyProjectCore) {
       Object.assign(payload, NK.service.project.applyProjectCore(payload, { payload: currentPayload }));
     }
@@ -881,6 +882,11 @@
     return lines.join('\n');
   };
 
+  const getCommonBackgroundStyleFromCard = () => {
+    const node = document.querySelector('.scenario-card-common .view-common-style-lines');
+    return String(node?.textContent || '').trim();
+  };
+
   const setActiveScenarioCard = (targetCard) => {
     const container = document.getElementById('scenario-cards');
     if (!container || !targetCard) return;
@@ -892,6 +898,7 @@
 
   const collectScenesFromCards = () => {
     const flags = getScenarioFlags(currentPayload || {});
+    const commonBackgroundStyle = getCommonBackgroundStyleFromCard() || String(currentPayload?.backgroundStyle || '').trim();
     const composeDialogueOnlyText = (dialogue = []) => (Array.isArray(dialogue) ? dialogue : [])
       .map((d) => String(d?.line || '').trim())
       .filter(Boolean)
@@ -937,7 +944,7 @@
         lines: subtitleText,
         subtitleText,
         sceneLocation: locationText,
-        backgroundStyle: String(currentPayload?.backgroundStyle || '').trim(),
+        backgroundStyle: commonBackgroundStyle,
         videoSpeechPrompt,
         script,
         narration: cleanNarration,
@@ -1038,8 +1045,8 @@
         </div>
         <div class="scene-visual-grid">
           <div class="field-block">
-            <p class="field-label muted small">${getUiLang() === 'en' ? 'Shared Background Style' : '공용 배경 스타일'}</p>
-            <p class="view-shot view-shot-lines">${escapeHtml(commonBackgroundStyle)}</p>
+            <p class="field-label muted small">${getUiLang() === 'en' ? 'Style' : '스타일'}</p>
+            <p class="view-lines view-common-style-lines" contenteditable="true">${escapeHtml(commonBackgroundStyle)}</p>
           </div>
         </div>
       </div>` : '';

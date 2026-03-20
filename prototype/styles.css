@@ -2084,6 +2084,11 @@ textarea::-webkit-scrollbar-corner {
   cursor: pointer;
 }
 
+.scenario-card.scenario-card-common {
+  min-height: 0;
+  cursor: default;
+}
+
 .scenario-card .card-top {
   flex: 0 0 auto;
   margin-top: -2px;
@@ -2101,12 +2106,21 @@ textarea::-webkit-scrollbar-corner {
   -ms-overflow-style: none;
 }
 
+.scenario-card.scenario-card-common .scene-visual-grid {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
 .scenario-card .field-block {
   min-height: 0;
   display: grid;
   grid-template-columns: 88px minmax(0, 1fr);
   align-items: center;
   gap: 4px;
+}
+
+.scenario-card.scenario-card-common .field-block {
+  align-items: start;
 }
 
 .scenario-card .field-label {
