@@ -61,6 +61,8 @@
                 narration: s.narration ?? '',
                 videoSpeechPrompt: s.videoSpeechPrompt ?? '',
                 script: s.script ?? '',
+                sceneLocation: s.sceneLocation ?? s.location ?? '',
+                backgroundStyle: s.backgroundStyle ?? '',
                 dialogue: Array.isArray(s.dialogue) ? s.dialogue : [],
                 estSec: s.estSec ?? NK.config.DEFAULTS.SCENE_EST,
                 shot: s.shot ?? s.visual ?? '',

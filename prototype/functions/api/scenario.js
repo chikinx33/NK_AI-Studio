@@ -305,7 +305,7 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
   return `너는 NK_Studio의 프리프로덕션 시나리오 작성 엔진이다.
 반드시 JSON만 반환한다.
 응답 형식: {"scenes":[...]}.
-각 scene에는 id, estSec, sceneIntent, visual은 항상 포함한다.
+각 scene에는 id, estSec, sceneIntent, sceneLocation, visual은 항상 포함한다.
 총 scene 개수는 ${sceneCount}개로 만들고 총 길이는 ${duration}초 목표에 가깝게 분배한다.
 개요 입력값은 참고 정보가 아니라 반드시 지켜야 하는 생성 계약이다.
 장르, 세부 장르, 시청 타겟, 시청 목적, 톤, 스타일, 브랜드 규칙이 모두 결과 구조에 직접 반영되어야 한다.
@@ -317,7 +317,7 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
 브랜드 톤&매너와 개요 톤이 함께 있으면 브랜드 톤&매너를 기본 화법으로 유지하고, 개요 톤은 이번 영상의 분위기와 감정 강도에만 반영한다.
 충돌 시 우선순위는 추가 지시사항, 브랜드 규칙, 금지 표현, 브랜드 톤&매너, 개요 톤 순서다.
 사용자 추가 지시사항과 브랜드 규칙, 금지 표현은 반드시 우선 적용한다.
-sceneIntent는 씬의 역할만 짧게 쓰고, visual에는 화면에 실제로 보일 내용만 쓴다.
+sceneIntent는 씬의 역할만 짧게 쓰고, sceneLocation은 그 씬이 펼쳐지는 구체 공간만 쓴다. visual에는 화면에 실제로 보일 내용만 쓴다.
 각 visual에는 반드시 1) 공간/장소 2) 배경 요소 3) 캐릭터/대상 행동 4) 프롭/오브젝트 5) 카메라 연출(샷 크기, 앵글, 무빙, 구도)을 함께 포함한다.
 각 visual에서 "장면", "분위기", "구성", "보여 주는 장면" 같은 추상 문장만 쓰는 것을 금지한다.
 명시적인 장소 전환이 없는 한 모든 씬은 같은 기본 배경/장소를 유지해야 한다.
@@ -334,7 +334,7 @@ function buildSystemPromptEn(sceneCount, duration, spec = {}) {
   return `You are NK_Studio's pre-production scenario engine.
 Return JSON only.
 Output format: {"scenes":[...]}.
-Each scene must include id, estSec, sceneIntent, and visual.
+Each scene must include id, estSec, sceneIntent, sceneLocation, and visual.
 Produce exactly ${sceneCount} scenes and distribute timing close to ${duration}s.
 The overview inputs are a binding generation contract, not optional references.
 Genre, subgenre, target audience, viewing purpose, tone, style, and brand rules must directly shape the scenario structure.
@@ -346,7 +346,7 @@ Use style only for visual look, texture, lighting, and color. Do not let style r
 If both are present, keep the brand tone and manner as the base speaking style, and use the overview tone only to adjust this video's mood and emotional intensity.
 Resolve conflicts in this order: manual directives, brand rules, banned expressions, brand tone and manner, then overview tone.
 Treat user directives, brand rules, and banned expressions as mandatory constraints.
-sceneIntent should state the scene purpose briefly, while visual should describe only what is concretely on screen.
+sceneIntent should state the scene purpose briefly, sceneLocation should name the concrete sub-space for that scene, and visual should describe only what is concretely on screen.
 Every visual must explicitly include 1) location/space 2) background details 3) subject action 4) props/objects 5) camera direction with shot size, angle, movement, and framing.
 Do not write abstract visuals such as "a scene that shows..." or "a playful mood."
 Keep the same base setting across scenes unless a location transition is explicitly shown.
@@ -396,6 +396,7 @@ ${blueprintText}
 ${chunkGuide}
 Formatting intent example:
 - SceneIntent: "This scene invites the audience into the ABC lesson."
+- SceneLocation: "the alphabet poster wall"
 - Visual: "A boy approaches an old well, medium shot, eye-level angle, slow dolly-in, centered framing."
 - Narration: "The boy sat by the well and looked down."
 - Dialogue: [{"speaker":"@boy","line":"It is deeper than I thought."}]
@@ -430,6 +431,7 @@ ${blueprintText}
 ${chunkGuide}
 표현 예시:
 - SceneIntent: "이 씬은 ABC 학습에 바로 참여하게 만든다."
+- SceneLocation: "알파벳 포스터 벽 앞"
 - Visual: "소년이 오래된 우물가에 다가간다."
 - Narration: "소년은 우물가에 앉아서 아래를 내려다보았다."
 - Dialogue: [{"speaker":"@소년","line":"생각보다 훨씬 깊네."}]
@@ -793,6 +795,7 @@ function buildScenarioSpec(input = {}) {
     sceneCount: Math.max(1, Number(input.sceneCount) || 1),
     topicProfile,
     signals,
+    continuity,
   });
 
   return {
@@ -856,6 +859,7 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
       source: "knowledge_hub",
       place: parsedSetting.place,
       background: parsedSetting.background,
+      backgroundStyle: parsedSetting.backgroundStyle,
       props: [defaultProp],
       sublocations: parsedSetting.sublocations,
       category: detectSettingCategory(parsedSetting.place || settingRaw),
@@ -875,6 +879,9 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
       source: "default_kids",
       place,
       background,
+      backgroundStyle: lang === "en"
+        ? "A bright playful nature-themed learning world with simple symbolic forms, clean colors, and soft friendly shapes."
+        : "단순하고 상징적인 형태, 맑은 색감, 부드러운 도형 소품이 어우러진 밝고 유쾌한 자연 테마 학습 세계.",
       props: uniqueStrings([defaultProp, lang === "en" ? "small rhythm instruments" : "작은 리듬 악기"]),
       sublocations: lang === "en"
         ? ["the room entrance", "the alphabet poster wall", "the learning mat area", "the sunny window side"]
@@ -892,6 +899,9 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
       source: "default_info",
       place,
       background,
+      backgroundStyle: lang === "en"
+        ? "A tidy explanatory studio with restrained colors, clear props, and a stable educational atmosphere."
+        : "절제된 색감, 명확한 소품, 안정적인 교육 분위기를 갖춘 정돈된 설명형 스튜디오.",
       props: [defaultProp],
       sublocations: lang === "en"
         ? ["the presentation desk", "the main board", "the side display wall", "the front demo table"]
@@ -909,6 +919,9 @@ function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}
     source: "default_generic",
     place,
     background,
+    backgroundStyle: lang === "en"
+      ? "One consistent world with repeatable visual motifs, stable color logic, and shared environmental design."
+      : "반복되는 시각 모티프, 안정적인 색감 규칙, 공유된 환경 디자인을 가진 하나의 일관된 세계.",
     props: [defaultProp],
     sublocations: lang === "en"
       ? ["the main foreground", "the center area", "the side area", "the final focal point"]
@@ -940,9 +953,13 @@ function parseWorldSetting(raw = "", lang = "ko") {
   const background = lang === "en"
     ? `${backgroundSource || "The same world details"} stay visible as shared background elements.`
     : `${backgroundSource || "같은 세계관 디테일"}이 공통 배경 요소로 이어서 보인다.`;
+  const backgroundStyle = lines.length > 1
+    ? [lines[0], lines[1]].join(". ")
+    : (lines[0] || (lang === "en" ? "One consistent visual world." : "하나의 일관된 시각 세계."));
   return {
     place,
     background,
+    backgroundStyle,
     sublocations,
   };
 }
@@ -1002,7 +1019,7 @@ function uniqueStrings(list = []) {
   return Array.from(new Set((Array.isArray(list) ? list : []).map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
-function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signals }) {
+function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signals, continuity = {} }) {
   const count = Math.max(1, Number(sceneCount) || 1);
   let roles;
   if (signals.learning && signals.song) {
@@ -1021,11 +1038,12 @@ function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signal
     roles.splice(Math.max(roles.length - 1, 1), 0, signals.learning ? "practice" : "develop");
   }
   roles = roles.slice(0, count);
-  return roles.map((role, idx) => createBlueprintItem({ lang, role, idx, total: count, topicProfile, signals }));
+  return roles.map((role, idx) => createBlueprintItem({ lang, role, idx, total: count, topicProfile, signals, continuity }));
 }
 
-function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, signals }) {
+function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, signals, continuity = {} }) {
   const subject = topicProfile.subject;
+  const location = pickSceneSublocation(continuity, idx, lang);
   const roleMapKo = {
     hook: { title: "흥미 유도", goal: `${subject}에 시선을 붙잡는 도입`, must: "가볍게 시작하고 바로 주제를 드러낸다" },
     teach: { title: "핵심 제시", goal: `${subject}를 한 단계씩 소개`, must: "무엇을 배울지 분명히 말한다" },
@@ -1059,7 +1077,7 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     close: { title: "Close", goal: `End with ${subject} remembered`, must: "Provide a clear closing beat" },
   };
   const map = lang === "en" ? roleMapEn : roleMapKo;
-  return Object.assign({ role, index: idx + 1, total }, map[role] || map.develop);
+  return Object.assign({ role, index: idx + 1, total, location }, map[role] || map.develop);
 }
 
 function formatScenarioSpecForPrompt(spec = {}) {
@@ -1070,6 +1088,7 @@ function formatScenarioSpecForPrompt(spec = {}) {
     return [
       `Topic analysis: subject=${spec.topicProfile?.subject || spec.topic || "topic"}, keywords=${(spec.topicProfile?.keywords || []).join(", ") || "none"}`,
       `Active signals: ${activeSignals}`,
+      `Shared background style: ${spec.continuity?.backgroundStyle || "none"}`,
       `Shared setting: place=${spec.continuity?.place || "none"} / background=${spec.continuity?.background || "none"} / props=${(spec.continuity?.props || []).join(", ") || "none"}`,
       `Required outcomes: ${(spec.requiredOutputsEn || []).join(" / ") || "none"}`,
       `Validation focus: ${(spec.validationRulesEn || []).join(" / ") || "none"}`,
@@ -1078,6 +1097,7 @@ function formatScenarioSpecForPrompt(spec = {}) {
   return [
     `주제 해석: 핵심 대상=${spec.topicProfile?.subject || spec.topic || "주제"}, 키워드=${(spec.topicProfile?.keywords || []).join(", ") || "없음"}`,
     `활성 시그널: ${activeSignals}`,
+    `공용 배경 스타일: ${spec.continuity?.backgroundStyle || "없음"}`,
     `공통 배경: 장소=${spec.continuity?.place || "없음"} / 배경=${spec.continuity?.background || "없음"} / 핵심 프롭=${(spec.continuity?.props || []).join(", ") || "없음"}`,
     `반드시 나와야 할 결과: ${(spec.requiredOutputsKo || []).join(" / ") || "없음"}`,
     `검사 포인트: ${(spec.validationRulesKo || []).join(" / ") || "없음"}`,
@@ -1088,8 +1108,8 @@ function formatBlueprintForPrompt(spec = {}) {
   const items = Array.isArray(spec.sceneBlueprint) ? spec.sceneBlueprint : [];
   if (!items.length) return spec.lang === "en" ? "- No blueprint" : "- 블루프린트 없음";
   return items.map((item, idx) => {
-    if (spec.lang === "en") return `${idx + 1}. ${item.title}: goal=${item.goal}; must=${item.must}; keep the same setting and separate sceneIntent from visual.`;
-    return `${idx + 1}. ${item.title}: 목표=${item.goal}; 필수=${item.must}; 같은 공간을 유지하고 sceneIntent와 visual을 분리.`;
+    if (spec.lang === "en") return `${idx + 1}. ${item.title}: goal=${item.goal}; must=${item.must}; location=${item.location || "same world"}; keep the same setting and separate sceneIntent from visual.`;
+    return `${idx + 1}. ${item.title}: 목표=${item.goal}; 필수=${item.must}; 장소=${item.location || "같은 세계"}; 같은 공간을 유지하고 sceneIntent와 visual을 분리.`;
   }).join("\n");
 }
 
@@ -1151,6 +1171,8 @@ function shapeScenesFromModel(rawScenes = [], options = {}) {
   return (Array.isArray(rawScenes) ? rawScenes : []).map((s, idx) => {
     const narrationRaw = s.narration || s.lines || s.story || s.text || s.script || s.content || "";
     const sceneIntentRaw = s.sceneIntent || s.intent || s.goal || s.purpose || "";
+    const sceneLocationRaw = s.sceneLocation || s.location || "";
+    const backgroundStyleRaw = s.backgroundStyle || s.sharedBackgroundStyle || "";
     const dialogueRaw = normalizeDialogue(s.dialogue || s.dialogues || []);
     const firstLine = String(narrationRaw || "").split(/(?<=[.!?])\s+/)[0] || narrationRaw || "";
     const visualRaw = s.visual || s.shot || s.scene_visual || s.camera || s.image || firstLine || `Scene ${idx + 1} visual`;
@@ -1181,6 +1203,8 @@ function shapeScenesFromModel(rawScenes = [], options = {}) {
       title: s.title || `Scene ${idx + 1}`,
       estSec,
       sceneIntent: applyCharacterTokenHints(String(sceneIntentRaw || "").trim(), characters),
+      sceneLocation: String(sceneLocationRaw || "").trim(),
+      backgroundStyle: String(backgroundStyleRaw || "").trim(),
       narration: noCharacterSafe.narration,
       dialogue: noCharacterSafe.dialogue,
       visual: noCharacterSafe.visual,
@@ -1229,6 +1253,8 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
     const hints = buildHintText(spec, blueprint, spec.lang || options.lang);
     const estSec = Math.max(Number(scene.estSec) || 0, 3);
     const sceneIntent = selectSceneIntentBase(scene.sceneIntent || scene.intent || scene.goal, hints.intent);
+    const sceneLocation = String(scene.sceneLocation || scene.location || hints.location || blueprint.location || "").trim();
+    const backgroundStyle = String(scene.backgroundStyle || hints.backgroundStyle || spec.continuity?.backgroundStyle || "").trim();
     const narration = options.narrationEnabled
       ? fitNarrationToDuration(selectNarrationBase(scene.narration, hints.narration), estSec, options.lang)
       : scene.narration;
@@ -1243,6 +1269,8 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
       title: blueprint.title || scene.title || `Scene ${idx + 1}`,
       estSec,
       sceneIntent,
+      sceneLocation,
+      backgroundStyle,
       narration,
       dialogue,
       visual,
@@ -1260,6 +1288,18 @@ function pickSceneSublocation(continuity = {}, index = 0, lang = "ko") {
   return list[index % list.length];
 }
 
+function buildLocationBackdrop(location = "", lang = "ko") {
+  const raw = String(location || "").trim();
+  if (!raw) return lang === "en" ? "Shared world details stay visible in the background." : "공용 배경 디테일이 자연스럽게 이어진다.";
+  const lower = raw.toLowerCase();
+  if (/마을|village/.test(lower)) return lang === "en" ? "Round houses, a signpost, and a soft path sit behind them." : "뒤쪽에는 둥근 집과 표지판, 부드러운 흙길이 보인다.";
+  if (/들판|field|meadow/.test(lower)) return lang === "en" ? "Wide grass, flower patches, and a low hill spread behind them." : "뒤쪽에는 넓은 풀밭과 꽃무리, 낮은 언덕이 펼쳐져 있다.";
+  if (/숲|forest|woods/.test(lower)) return lang === "en" ? "Simple trees, leafy shadows, and a winding trail fill the background." : "뒤쪽에는 단순한 나무들과 잎 그림자, 구불한 산책길이 이어진다.";
+  if (/하늘|sky/.test(lower)) return lang === "en" ? "Cloud paths, floating platforms, and open sky fill the distance." : "멀리에는 구름길과 떠 있는 발판, 넓게 열린 하늘이 보인다.";
+  if (/교실|놀이방|classroom|playroom/.test(lower)) return lang === "en" ? "A bright wall, learning posters, and neat floor props stay in view." : "밝은 벽면과 학습 포스터, 단정한 바닥 소품이 함께 보인다.";
+  return lang === "en" ? "Shared world details stay visible in the background." : "공용 배경 디테일이 자연스럽게 이어진다.";
+}
+
 function pickSceneSpeakers(spec = {}, blueprint = {}) {
   const list = Array.isArray(spec.characters) ? spec.characters.filter((row) => row && row.token) : [];
   if (!list.length) return { primary: "@narrator", secondary: "@narrator", hasCharacters: false };
@@ -1271,10 +1311,10 @@ function pickSceneSpeakers(spec = {}, blueprint = {}) {
 
 function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
   const subject = spec.topicProfile?.subject || spec.topic || (lang === "en" ? "the topic" : "주제");
-  const place = spec.continuity?.place || (lang === "en" ? "the same main location" : "같은 메인 공간");
-  const background = spec.continuity?.background || (lang === "en" ? "The same background details remain visible." : "같은 배경 요소가 이어서 보인다.");
+  const backgroundStyle = spec.continuity?.backgroundStyle || (lang === "en" ? "one consistent visual world" : "하나의 일관된 시각 세계");
   const prop = (spec.continuity?.props || [buildSubjectPropCue({ lang, subject, signals: spec.signals || {} })])[0];
-  const sublocation = pickSceneSublocation(spec.continuity || {}, Math.max((blueprint.index || 1) - 1, 0), lang);
+  const sceneLocation = blueprint.location || pickSceneSublocation(spec.continuity || {}, Math.max((blueprint.index || 1) - 1, 0), lang);
+  const locationBackdrop = buildLocationBackdrop(sceneLocation, lang);
   const speakers = pickSceneSpeakers(spec, blueprint);
   const primarySpeaker = speakers.primary;
   const secondarySpeaker = speakers.secondary;
@@ -1284,25 +1324,33 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       hook: {
         intent: `Open ${subject} with immediate curiosity.`,
         narration: `Hi there! Let's start ${subject} right away together.`,
-        visual: `${place}, ${sublocation}. ${background} A smiling child group gathers in front of ${prop} and gets ready to start ${subject}.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} A smiling child group gathers in front of ${prop} and gets ready to start ${subject}.`,
         dialogue: [`${primarySpeaker}: Ready? Let's begin ${subject}!`],
       },
       teach: {
         intent: `Show the first core learning point of ${subject}.`,
         narration: `Let's learn ${subject} one step at a time.`,
-        visual: `${place}, ${sublocation}. ${background} One friend lifts ${prop} and points to the first part of ${subject} so everyone can see it clearly.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} One friend lifts ${prop} and points to the first part of ${subject} so everyone can see it clearly.`,
         dialogue: [`${primarySpeaker}: Say it with me, ${subject}!`],
       },
       sing: {
         intent: `Turn ${subject} into a sing-along beat.`,
         narration: `Now sing ${subject} with the beat together.`,
-        visual: `${place}, ${sublocation}. ${background} The group shakes ${prop} to the beat and sings ${subject} together with clear rhythm.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} The group shakes ${prop} to the beat and sings ${subject} together with clear rhythm.`,
         dialogue: [`${primarySpeaker}: ${subject}, one more time!`],
       },
       practice: {
         intent: `Help the audience copy ${subject} directly.`,
         narration: `Watch and repeat ${subject} with me.`,
-        visual: `${place}, ${sublocation}. ${background} The friends tap ${prop} one by one and repeat ${subject} so the audience can follow along.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} The friends tap ${prop} one by one and repeat ${subject} so the audience can follow along.`,
         dialogue: [`${primarySpeaker}: Follow along with ${subject}!`],
       },
       repeat: {
@@ -1312,9 +1360,11 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
         narration: spec.signals?.humor
           ? `Oops, that was almost wrong. Let's do ${subject} again together.`
           : `One more time. Let's repeat ${subject} together.`,
+        location: sceneLocation,
+        backgroundStyle,
         visual: spec.signals?.humor
-          ? `${place}, ${sublocation}. ${background} One friend briefly holds ${prop} in the wrong order during ${subject}, then laughs and fixes it right away while the others point to the correct one.`
-          : `${place}, ${sublocation}. ${background} The group repeats ${subject} once more while holding ${prop} up together for easy reinforcement.`,
+          ? `${sceneLocation}. ${locationBackdrop} One friend briefly holds ${prop} in the wrong order during ${subject}, then laughs and fixes it right away while the others point to the correct one.`
+          : `${sceneLocation}. ${locationBackdrop} The group repeats ${subject} once more while holding ${prop} up together for easy reinforcement.`,
         dialogue: spec.signals?.humor
           ? [`${primarySpeaker}: Oops, one more time!`, `${secondarySpeaker}: That's it, ${subject}!`]
           : [`${primarySpeaker}: Once again, ${subject}!`],
@@ -1322,55 +1372,73 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       recap: {
         intent: `Close by recalling ${subject} together.`,
         narration: `Great job. Let's check ${subject} one last time.`,
-        visual: `${place}, ${sublocation}. ${background} Everyone gathers around ${prop}, points at the final answer together, and wraps up ${subject} with a bright finish.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} Everyone gathers around ${prop}, points at the final answer together, and wraps up ${subject} with a bright finish.`,
         dialogue: [`${primarySpeaker}: Great job, ${subject}!`],
       },
       invite: {
         intent: `Invite the audience to join ${subject}.`,
         narration: `Come on in. Join ${subject} with us.`,
-        visual: `${place}, ${sublocation}. ${background} A guide character waves beside ${prop} and invites the audience to join ${subject} right away.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} A guide character waves beside ${prop} and invites the audience to join ${subject} right away.`,
         dialogue: [`${primarySpeaker}: Come join ${subject}!`],
       },
       play: {
         intent: `Make ${subject} feel like playful participation.`,
         narration: `Let's enjoy ${subject} like a fun game together.`,
-        visual: `${place}, ${sublocation}. ${background} The group moves around ${prop}, claps, and reacts together so ${subject} feels like a playful activity.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} The group moves around ${prop}, claps, and reacts together so ${subject} feels like a playful activity.`,
         dialogue: [`${primarySpeaker}: Let's play along with ${subject}!`],
       },
       explain: {
         intent: `Explain the key point of ${subject} clearly.`,
         narration: `Here is the key point of ${subject}.`,
-        visual: `${place}, ${sublocation}. ${background} A presenter stands by ${prop} and explains the main point of ${subject} with a clear gesture.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} A presenter stands by ${prop} and explains the main point of ${subject} with a clear gesture.`,
         dialogue: [`${primarySpeaker}: This is the key point of ${subject}.`],
       },
       example: {
         intent: `Support ${subject} with a concrete example.`,
         narration: `This example makes ${subject} easy to understand.`,
-        visual: `${place}, ${sublocation}. ${background} A concrete example is demonstrated using ${prop} so ${subject} becomes easier to understand.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} A concrete example is demonstrated using ${prop} so ${subject} becomes easier to understand.`,
         dialogue: [`${primarySpeaker}: This example makes ${subject} easier to see.`],
       },
       summary: {
         intent: `Summarize ${subject} in one compact beat.`,
         narration: `Let's remember the key part of ${subject}.`,
-        visual: `${place}, ${sublocation}. ${background} The final key words of ${subject} stay visible beside ${prop} in a compact closing image.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} The final key words of ${subject} stay visible beside ${prop} in a compact closing image.`,
         dialogue: [`${primarySpeaker}: Remember the key point of ${subject}.`],
       },
       develop: {
         intent: `Move ${subject} one step forward.`,
         narration: `Now let's take ${subject} one step further.`,
-        visual: `${place}, ${sublocation}. ${background} The action advances around ${prop} so ${subject} clearly moves into the next beat.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} The action advances around ${prop} so ${subject} clearly moves into the next beat.`,
         dialogue: [`${primarySpeaker}: Now let's take the next step.`],
       },
       reinforce: {
         intent: `Reinforce the core of ${subject}.`,
         narration: `Yes, this is the core of ${subject}.`,
-        visual: `${place}, ${sublocation}. ${background} The central part of ${subject} is shown again with ${prop} held close to the camera for emphasis.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} The central part of ${subject} is shown again with ${prop} held close to the camera for emphasis.`,
         dialogue: [`${primarySpeaker}: Yes, this is the core of ${subject}.`],
       },
       close: {
         intent: `End ${subject} with a clean memorable finish.`,
         narration: `See you again next time with ${subject}.`,
-        visual: `${place}, ${sublocation}. ${background} The group waves beside ${prop} and leaves ${subject} on a clear final image.`,
+        location: sceneLocation,
+        backgroundStyle,
+        visual: `${sceneLocation}. ${locationBackdrop} The group waves beside ${prop} and leaves ${subject} on a clear final image.`,
         dialogue: [`${primarySpeaker}: See you again with ${subject}!`],
       },
     };
@@ -1381,25 +1449,33 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
     hook: {
       intent: `${subject}를 시작하자마자 관심을 끈다.`,
       narration: `안녕! 오늘은 ${subject}를 바로 시작해볼까?`,
-      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop} 앞에 둥글게 모여 ${subject}를 시작할 준비를 하며 손을 든다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop} 앞에 둥글게 모여 ${subject}를 시작할 준비를 하며 손을 든다.`,
       dialogue: [`${primarySpeaker}: 준비됐지? ${subject} 시작!`],
     },
     teach: {
       intent: `${subject}의 첫 핵심을 또렷하게 보여 준다.`,
       narration: `${subject}를 하나씩 같이 배워보자.`,
-      visual: `${place}, ${sublocation}. ${background} 한 친구가 ${prop}를 들어 올리고 ${subject}의 첫 부분을 손가락으로 또렷하게 가리킨다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 한 친구가 ${prop}를 들어 올리고 ${subject}의 첫 부분을 손가락으로 또렷하게 가리킨다.`,
       dialogue: [`${primarySpeaker}: ${subject}를 같이 따라 해볼까?`],
     },
     sing: {
       intent: `${subject}를 리듬 있는 반복으로 전환한다.`,
       narration: `${subject}, 박자에 맞춰 함께 불러보자!`,
-      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 흔들며 ${subject}를 박자에 맞춰 함께 노래하고 발을 굴린다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 흔들며 ${subject}를 박자에 맞춰 함께 노래하고 발을 굴린다.`,
       dialogue: [`${primarySpeaker}: ${subject}, 한 번 더!`],
     },
     practice: {
       intent: `${subject}를 바로 따라 하게 만든다.`,
       narration: `이번엔 보고 듣고 ${subject}를 따라 해보자.`,
-      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 하나씩 짚으며 ${subject}를 번갈아 따라 말한다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 하나씩 짚으며 ${subject}를 번갈아 따라 말한다.`,
       dialogue: [`${primarySpeaker}: 이번엔 우리 같이 ${subject}를 따라 해보자!`],
     },
     repeat: {
@@ -1409,9 +1485,11 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
       narration: spec.signals?.humor
         ? `어? 잠깐 헷갈렸네. 괜찮아, ${subject} 다시 해보자!`
         : `좋아, ${subject}를 한 번 더 해보자.`,
+      location: sceneLocation,
+      backgroundStyle,
       visual: spec.signals?.humor
-        ? `${place}, ${sublocation}. ${background} 한 친구가 ${subject} 순서를 잠깐 헷갈려 ${prop}를 거꾸로 들었다가, 옆 친구들이 웃으며 올바른 쪽을 가리키자 바로 다시 고친다.`
-        : `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 가슴 높이로 들고 ${subject}를 더 또렷하게 한 번 더 반복한다.`,
+        ? `${sceneLocation}. ${locationBackdrop} 한 친구가 ${subject} 순서를 잠깐 헷갈려 ${prop}를 거꾸로 들었다가, 옆 친구들이 웃으며 올바른 쪽을 가리키자 바로 다시 고친다.`
+        : `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 가슴 높이로 들고 ${subject}를 더 또렷하게 한 번 더 반복한다.`,
       dialogue: spec.signals?.humor
         ? [`${primarySpeaker}: 어? 잠깐 헷갈렸네!`, `${secondarySpeaker}: 괜찮아, ${subject} 다시!`]
         : [`${primarySpeaker}: 좋아, ${subject} 한 번 더!`],
@@ -1419,55 +1497,73 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
     recap: {
       intent: `${subject}를 다 함께 확인하며 끝맺는다.`,
       narration: `잘했어! 마지막으로 ${subject}를 한 번만 더 확인하자.`,
-      visual: `${place}, ${sublocation}. ${background} 모두가 ${prop}를 가운데로 모으고 ${subject}를 함께 가리키며 환하게 마무리한다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 모두가 ${prop}를 가운데로 모으고 ${subject}를 함께 가리키며 환하게 마무리한다.`,
       dialogue: [`${primarySpeaker}: 잘했어! ${subject} 기억났지?`],
     },
     invite: {
       intent: `${subject}에 함께 참여하도록 부른다.`,
       narration: `우리와 함께 ${subject}를 해볼까?`,
-      visual: `${place}, ${sublocation}. ${background} 안내 역할의 친구가 ${prop} 옆에서 손짓하며 ${subject}에 함께 참여하자고 부른다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 안내 역할의 친구가 ${prop} 옆에서 손짓하며 ${subject}에 함께 참여하자고 부른다.`,
       dialogue: [`${primarySpeaker}: 같이 해볼까? ${subject}!`],
     },
     play: {
       intent: `${subject}를 놀이처럼 체험하게 만든다.`,
       narration: `${subject}를 놀이처럼 신나게 즐겨보자!`,
-      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop} 주변을 돌며 손뼉을 치고 몸을 움직여 ${subject}를 놀이처럼 체험한다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop} 주변을 돌며 손뼉을 치고 몸을 움직여 ${subject}를 놀이처럼 체험한다.`,
       dialogue: [`${primarySpeaker}: 몸으로도 같이 해보자!`],
     },
     explain: {
       intent: `${subject}의 핵심을 짧게 설명한다.`,
       narration: `${subject}의 핵심은 바로 이거야.`,
-      visual: `${place}, ${sublocation}. ${background} 진행자가 ${prop}를 옆에 두고 ${subject}의 핵심을 짧고 분명하게 설명한다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 진행자가 ${prop}를 옆에 두고 ${subject}의 핵심을 짧고 분명하게 설명한다.`,
       dialogue: [`${primarySpeaker}: 핵심은 ${subject}야.`],
     },
     example: {
       intent: `${subject}를 구체 예시로 보여 준다.`,
       narration: `이 예시를 보면 ${subject}가 더 쉬워져.`,
-      visual: `${place}, ${sublocation}. ${background} ${prop}를 이용한 구체 예시가 화면 앞에서 시연되어 ${subject}가 더 쉽게 보인다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} ${prop}를 이용한 구체 예시가 화면 앞에서 시연되어 ${subject}가 더 쉽게 보인다.`,
       dialogue: [`${primarySpeaker}: 이렇게 보면 더 쉬워.`],
     },
     summary: {
       intent: `${subject}의 핵심만 압축해 정리한다.`,
       narration: `${subject}의 핵심만 짧게 기억하자.`,
-      visual: `${place}, ${sublocation}. ${background} ${prop} 옆에 핵심 단어만 남기고 ${subject}를 짧게 정리한다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} ${prop} 옆에 핵심 단어만 남기고 ${subject}를 짧게 정리한다.`,
       dialogue: [`${primarySpeaker}: 핵심만 다시 기억하자!`],
     },
     develop: {
       intent: `${subject}를 다음 단계로 넘긴다.`,
       narration: `이제 ${subject}를 다음 단계로 가보자.`,
-      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop}를 다음 위치로 옮기며 ${subject}를 한 단계 더 전개한다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop}를 다음 위치로 옮기며 ${subject}를 한 단계 더 전개한다.`,
       dialogue: [`${primarySpeaker}: 이제 다음으로 가보자!`],
     },
     reinforce: {
       intent: `${subject}의 핵심을 다시 강조한다.`,
       narration: `맞아, 이게 ${subject}의 핵심이야.`,
-      visual: `${place}, ${sublocation}. ${background} ${prop}를 카메라 가까이 들어 핵심인 ${subject}를 다시 또렷하게 보여 준다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} ${prop}를 카메라 가까이 들어 핵심인 ${subject}를 다시 또렷하게 보여 준다.`,
       dialogue: [`${primarySpeaker}: 맞아, 이게 핵심이야!`],
     },
     close: {
       intent: `${subject}를 기억에 남게 마무리한다.`,
       narration: `다음에도 ${subject}로 또 만나자!`,
-      visual: `${place}, ${sublocation}. ${background} 친구들이 ${prop} 옆에서 손을 흔들며 ${subject}를 선명하게 남기고 끝낸다.`,
+      location: sceneLocation,
+      backgroundStyle,
+      visual: `${sceneLocation}. ${locationBackdrop} 친구들이 ${prop} 옆에서 손을 흔들며 ${subject}를 선명하게 남기고 끝낸다.`,
       dialogue: [`${primarySpeaker}: 다음에도 ${subject}로 또 만나자!`],
     },
   };
@@ -1570,6 +1666,24 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
       : "각 씬에는 visual과 분리된 sceneIntent가 있어야 한다.",
   });
   results.push({
+    key: "scene_location_present",
+    passed: sceneList.every((scene) => String(scene.sceneLocation || "").trim()),
+    message: spec.lang === "en"
+      ? "Each scene needs its own concrete scene location."
+      : "각 씬에는 구체적인 씬 장소가 있어야 한다.",
+  });
+  results.push({
+    key: "scene_location_diversity",
+    passed: (() => {
+      const locations = sceneList.map((scene) => String(scene.sceneLocation || "").trim()).filter(Boolean);
+      if (locations.length <= 1) return true;
+      return new Set(locations).size > 1;
+    })(),
+    message: spec.lang === "en"
+      ? "Scene locations should vary across beats inside the shared world."
+      : "공용 세계 안에서도 씬 장소는 장면에 맞게 달라져야 한다.",
+  });
+  results.push({
     key: "visual_concreteness",
     passed: sceneList.every((scene) => analyzeVisualContract(scene.visual, spec).passed && !isAbstractVisualText(scene.visual)),
     message: spec.lang === "en"
@@ -1581,8 +1695,9 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
     passed: sceneList.every((scene) => {
       const anchorTerms = Array.isArray(spec.continuity?.anchorTerms) ? spec.continuity.anchorTerms : [];
       if (!anchorTerms.length) return true;
+      const location = String(scene.sceneLocation || "").trim();
       const visual = stripCameraDirection(scene.visual || "");
-      return anchorTerms.some((term) => term && visual.includes(term));
+      return anchorTerms.some((term) => term && (location.includes(term) || visual.includes(term)));
     }),
     message: spec.lang === "en"
       ? "All scenes should retain the shared setting anchor."
@@ -1592,7 +1707,7 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
     key: "setting_continuity",
     passed: (() => {
       const categories = sceneList
-        .map((scene) => detectSettingCategory(stripCameraDirection(scene.visual || "")))
+        .map((scene) => detectSettingCategory(String(scene.sceneLocation || "").trim() || stripCameraDirection(scene.visual || "")))
         .filter((category) => category && category !== "generic");
       if (!categories.length) return true;
       const expected = spec.continuity?.category && spec.continuity.category !== "generic"
@@ -1691,12 +1806,8 @@ function ensureContinuityAnchorInVisual(text = "", spec = {}, lang = "ko") {
   const clean = String(text || "").trim();
   if (!clean) return clean;
   const continuity = spec.continuity || {};
-  const place = String(continuity.place || "").trim();
-  const background = String(continuity.background || "").trim();
   const prop = String((continuity.props || [])[0] || "").trim();
   let out = clean;
-  if (place && !out.includes(place)) out = `${place}. ${out}`;
-  if (background && !out.includes(background) && !/(벽|창|창밖|바닥|뒤쪽|배경|board|wall|window|floor|background)/i.test(out)) out = `${out} ${background}`;
   if (prop && !out.includes(prop) && !/(카드|블록|포스터|매트|북|탬버린|소품|card|block|poster|mat|drum|tambourine|prop)/i.test(out)) {
     out = lang === "en" ? `${out} ${prop} stays in view.` : `${out} ${prop}가 화면 안에 함께 보인다.`;
   }
@@ -2071,15 +2182,15 @@ If traits are provided, keep each character's speaking style and behavior consis
   if (lang === "en") {
     return `Scenario mode ${mode} rules (must follow):
 A) narrationEnabled=true, dubbingEnabled=true:
-- scene fields: sceneIntent(string), narration(string), dialogue(array<{speaker,line}>), visual(string)
+- scene fields: sceneIntent(string), sceneLocation(string), narration(string), dialogue(array<{speaker,line}>), visual(string)
 B) narrationEnabled=true, dubbingEnabled=false:
-- scene fields: sceneIntent(string), narration(string), visual(string)
+- scene fields: sceneIntent(string), sceneLocation(string), narration(string), visual(string)
 C) narrationEnabled=false, dubbingEnabled=true:
-- scene fields: sceneIntent(string), dialogue(array<{speaker,line}>), visual(string)
+- scene fields: sceneIntent(string), sceneLocation(string), dialogue(array<{speaker,line}>), visual(string)
 D) narrationEnabled=false, dubbingEnabled=false:
-- scene fields: sceneIntent(string), lines(string), visual(string)
+- scene fields: sceneIntent(string), sceneLocation(string), lines(string), visual(string)
 - Every visual must include camera direction (shot size, camera angle, camera movement, framing).
-- sceneIntent should be a short internal purpose sentence, while visual should stay concrete and directly stageable.
+- sceneIntent should be a short internal purpose sentence, sceneLocation should name the concrete sub-space, and visual should stay concrete and directly stageable.
 - If narrationEnabled is true, narration must be a full spoken sentence (not empty).
 - If dubbingEnabled is true, dialogue must contain at least one line with speaker and line.
 - Keep narration/dialogue text ready for TTS usage.
@@ -2090,16 +2201,16 @@ ${taggingHint}`;
 
   return `시나리오 모드 ${mode} 규칙(반드시 준수):
 A) narrationEnabled=ON, dubbingEnabled=ON
-- sceneIntent(string), narration(string), dialogue(array<{speaker,line}>), visual(string)
+- sceneIntent(string), sceneLocation(string), narration(string), dialogue(array<{speaker,line}>), visual(string)
 B) narrationEnabled=ON, dubbingEnabled=OFF
-- sceneIntent(string), narration(string), visual(string)
+- sceneIntent(string), sceneLocation(string), narration(string), visual(string)
 C) narrationEnabled=OFF, dubbingEnabled=ON
-- sceneIntent(string), dialogue(array<{speaker,line}>), visual(string)
+- sceneIntent(string), sceneLocation(string), dialogue(array<{speaker,line}>), visual(string)
 D) narrationEnabled=OFF, dubbingEnabled=OFF
-- sceneIntent(string), lines(string), visual(string)
+- sceneIntent(string), sceneLocation(string), lines(string), visual(string)
 - narrationEnabled가 ON이면 narration은 비어있지 않은 완전한 문장으로 생성.
 - dubbingEnabled가 ON이면 dialogue는 최소 1개 이상의 {speaker,line}를 반드시 생성.
-- sceneIntent는 씬의 역할을 짧게 설명하고, visual은 실제 화면에 보일 공간/배경/행동/프롭을 구체적으로 적는다.
+- sceneIntent는 씬의 역할을 짧게 설명하고, sceneLocation은 씬의 구체 장소를 적고, visual은 실제 화면에 보일 공간/배경/행동/프롭을 구체적으로 적는다.
 - narration/dialogue 문구는 이후 TTS(음성 합성)에 바로 사용할 수 있는 문장으로 작성.
 ${charGuide}
 ${noCharacterRule}
@@ -2261,6 +2372,8 @@ function shapeSceneByMode(input) {
   const narrationRaw = String(input.narration || "").trim();
   const narration = narrationRaw;
   const sceneIntent = String(input.sceneIntent || input.intent || "").trim() || (input.lang === "en" ? "Advance the next scene beat clearly." : "다음 씬 전개를 분명하게 만든다.");
+  const sceneLocation = String(input.sceneLocation || input.location || "").trim();
+  const backgroundStyle = String(input.backgroundStyle || "").trim();
   const defaultSpeaker = String(input.defaultSpeaker || "@narrator").trim() || "@narrator";
   let dialogue = normalizeDialogue(input.dialogue || []);
   const visual = String(input.visual || "").trim();
@@ -2288,6 +2401,8 @@ function shapeSceneByMode(input) {
     title: input.title,
     estSec: input.estSec,
     sceneIntent,
+    sceneLocation,
+    backgroundStyle,
     visual,
     shot: visual,
     videoSpeechPrompt,
@@ -2449,6 +2564,8 @@ function fallbackScenesV2({
       title: blueprint.title || `Scene ${i + 1}`,
       estSec: per,
       sceneIntent: hints.intent,
+      sceneLocation: hints.location || blueprint.location || "",
+      backgroundStyle: hints.backgroundStyle || scenarioSpec.continuity?.backgroundStyle || "",
       narration,
       dialogue,
       visual,

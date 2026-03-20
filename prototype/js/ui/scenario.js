@@ -543,12 +543,14 @@
   const getSceneFieldLabels = () => {
     if (getUiLang() === 'en') {
       return {
+        location: 'Location',
         visual: 'Visualization',
         narration: 'Narration',
         dialogue: 'Dialogue'
       };
     }
     return {
+      location: '장소',
       visual: '시각화',
       narration: '나레이션',
       dialogue: '대사'
@@ -834,6 +836,8 @@
         dialogueText,
         narration,
         dialogue,
+        sceneLocation: String(s.sceneLocation || s.location || '').trim(),
+        backgroundStyle: String(s.backgroundStyle || s.sharedBackgroundStyle || '').trim(),
         subtitleText: resolvedSubtitleText,
         videoSpeechPrompt: String(s.videoSpeechPrompt || '').trim(),
         script: String(s.script || '').trim(),
@@ -904,12 +908,13 @@
       .filter(Boolean)
       .join(' ')
       .trim();
-    return Array.from(document.querySelectorAll('.scenario-card')).map((card) => {
+    return Array.from(document.querySelectorAll('.scenario-card:not(.scenario-card-common)')).map((card) => {
       const id = Number(card.querySelector('.est-input')?.dataset.id);
       const estTxt = card.querySelector('.est-input')?.value || '';
       const est = parseEst(estTxt);
       const narrationText = card.querySelector('.view-narration-lines')?.textContent?.trim() || '';
       const uiDialogueText = card.querySelector('.view-dialogue-lines')?.textContent?.trim() || '';
+      const locationText = card.querySelector('.view-location-lines')?.textContent?.trim() || '';
       const normalizedDialogueText = uiDialogueText.replace(/\s*·\s*/g, '\n');
       const dialogue = normalizeDialogue(normalizedDialogueText, currentCharacters);
       const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
@@ -931,6 +936,8 @@
         title: '',
         lines: subtitleText,
         subtitleText,
+        sceneLocation: locationText,
+        backgroundStyle: String(currentPayload?.backgroundStyle || '').trim(),
         videoSpeechPrompt,
         script,
         narration: cleanNarration,
@@ -949,6 +956,8 @@
       const narration = (s.narration !== undefined ? s.narration : prev.narration) || '';
       const dialogue = (s.dialogue !== undefined ? s.dialogue : prev.dialogue) || [];
       const visual = s.visual || s.shot || prev.visual || prev.shot || '';
+      const sceneLocation = (s.sceneLocation !== undefined ? s.sceneLocation : prev.sceneLocation) || '';
+      const backgroundStyle = (s.backgroundStyle !== undefined ? s.backgroundStyle : prev.backgroundStyle) || '';
       const subtitleText = (s.subtitleText !== undefined ? s.subtitleText : prev.subtitleText) || s.lines || prev.lines || '';
       const videoSpeechPrompt = (s.videoSpeechPrompt !== undefined ? s.videoSpeechPrompt : prev.videoSpeechPrompt) || '';
       const script = (s.script !== undefined ? s.script : prev.script) || '';
@@ -956,6 +965,8 @@
         lines: subtitleText,
         narration,
         dialogue,
+        sceneLocation,
+        backgroundStyle,
         subtitleText,
         videoSpeechPrompt,
         script,
@@ -1008,6 +1019,7 @@
     const sceneList = normalizeScenes(scenes);
     const labels = getSceneFieldLabels();
     const commonInfo = formatCommonInfo();
+    const commonBackgroundStyle = sceneList.map((scene) => String(scene.backgroundStyle || '').trim()).find(Boolean) || String(currentPayload?.backgroundStyle || '').trim();
     if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
@@ -1018,7 +1030,20 @@
         </div>`;
       return;
     }
-    const commonBlock = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
+    const commonInfoRow = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
+    const commonBackgroundBlock = commonBackgroundStyle ? `
+      <div class="scenario-card scenario-card-common" data-scene-id="common-background">
+        <div class="card-top">
+          <div><h5>Common Background</h5></div>
+        </div>
+        <div class="scene-visual-grid">
+          <div class="field-block">
+            <p class="field-label muted small">${getUiLang() === 'en' ? 'Shared Background Style' : '공용 배경 스타일'}</p>
+            <p class="view-shot view-shot-lines">${escapeHtml(commonBackgroundStyle)}</p>
+          </div>
+        </div>
+      </div>` : '';
+    const commonBlock = commonInfoRow + commonBackgroundBlock;
     container.innerHTML = commonBlock + sceneList.map(s => `
       <div class="scenario-card" data-scene-id="${s.id}">
         <div class="card-top">
@@ -1029,22 +1054,26 @@
         </div>
         <div class="scene-visual-grid">
           <div class="field-block">
+            <p class="field-label muted small">${labels.location}</p>
+            <p class="view-lines view-location-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.sceneLocation || '')}</p>
+          </div>
+          <div class="field-block">
             <p class="field-label muted small">${labels.visual}</p>
-            <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${s.shot || ''}</p>
+            <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.shot || '')}</p>
           </div>
           <div class="field-block">
             <p class="field-label muted small">${labels.narration}</p>
-            <p class="view-lines view-narration-lines" data-id="${s.id}" contenteditable="true">${s.narrationText || ''}</p>
+            <p class="view-lines view-narration-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.narrationText || '')}</p>
           </div>
           <div class="field-block">
             <p class="field-label muted small">${labels.dialogue}</p>
-            <p class="view-lines view-dialogue-lines" data-id="${s.id}" contenteditable="true">${String(s.dialogueText || dialogueToText(s.dialogue || []))
-              .replace(/\r?\n+/g, ' · ')}</p>
+            <p class="view-lines view-dialogue-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(String(s.dialogueText || dialogueToText(s.dialogue || []))
+              .replace(/\r?\n+/g, ' · '))}</p>
           </div>
         </div>
       </div>
     `).join('');
-    const firstCard = container.querySelector('.scenario-card');
+    const firstCard = container.querySelector('.scenario-card:not(.scenario-card-common)');
     if (firstCard) firstCard.classList.add('active-card');
   };
 

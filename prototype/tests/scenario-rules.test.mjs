@@ -88,6 +88,7 @@ test('scenario spec turns learning-play-humor overview into hard signals and blu
   assert.equal(spec.signals.simpleLanguage, true);
   assert.equal(spec.sceneBlueprint.length, 4);
   assert.equal(spec.continuity.place, '우주선 놀이 교실');
+  assert.ok(spec.sceneBlueprint.every((item) => item.location));
   assert.match(spec.requiredOutputsKo.join(' '), /학습 대상 제시/);
   assert.match(spec.requiredOutputsKo.join(' '), /참여 요소/);
   assert.match(spec.requiredOutputsKo.join(' '), /유머 비트/);
@@ -142,7 +143,9 @@ test('alignment step repairs generic scenes toward overview-fit structure', () =
   assert.match(combined, /다시|한 번 더/);
   assert.match(combined, /실수|다시/);
   assert.ok(aligned.every((scene) => scene.sceneIntent && scene.sceneIntent !== scene.visual));
-  assert.ok(aligned.every((scene) => /교실|놀이방|포스터|매트|카드|블록/.test(scene.visual)));
+  assert.ok(aligned.every((scene) => scene.sceneLocation));
+  assert.ok(new Set(aligned.map((scene) => scene.sceneLocation)).size > 1);
+  assert.ok(aligned.every((scene) => scene.backgroundStyle));
 });
 
 test('alignment keeps narration as spoken line and trims voice to scene duration', () => {
@@ -252,12 +255,54 @@ test('alignment replaces placeholder narration and spreads scenes across subloca
   const visuals = aligned.map((scene) => scene.visual);
   const narrationJoined = aligned.map((scene) => scene.narration).join(' ');
   const dialogueJoined = JSON.stringify(aligned.map((scene) => scene.dialogue));
+  const backgroundStyles = aligned.map((scene) => scene.backgroundStyle);
+  const locations = aligned.map((scene) => scene.sceneLocation);
 
   assert.doesNotMatch(narrationJoined, /장면을 설명하는 나레이션이 이어진다/);
   assert.doesNotMatch(dialogueJoined, /장면을 설명하는 나레이션이 이어진다/);
-  assert.ok(visuals.some((text) => /마을/.test(text)));
-  assert.ok(visuals.some((text) => /들판|숲|하늘/.test(text)));
+  assert.ok(locations.some((text) => /마을/.test(text)));
+  assert.ok(locations.some((text) => /들판|숲|하늘/.test(text)));
+  assert.ok(backgroundStyles.every((text) => /도형 생명체가 살아가는 밝은 자연 세계/.test(text)));
+  assert.ok(visuals.every((text) => !/도형 생명체가 살아가는 밝은 자연 세계, 들판/.test(text)));
   assert.ok(new Set(visuals).size > 1);
+});
+
+test('scene visuals keep location-specific action while shared background style stays separate', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    knowledgeHub: {
+      worldSetting: '도형 생명체가 살아가는 밝은 자연 세계\n마을, 들판, 숲, 하늘 등 단순하고 상징적인 공간'
+    },
+    duration: '15',
+    sceneCount: 4
+  });
+
+  const scenes = [
+    { id: 1, estSec: 4, narration: '', dialogue: [], visual: '' },
+    { id: 2, estSec: 4, narration: '', dialogue: [], visual: '' },
+    { id: 3, estSec: 4, narration: '', dialogue: [], visual: '' },
+    { id: 4, estSec: 3, narration: '', dialogue: [], visual: '' }
+  ];
+  const aligned = helpers.alignScenesToScenarioSpec(scenes, spec, {
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    narrationEnabled: true,
+    dubbingEnabled: true,
+    defaultSpeaker: '@narrator'
+  });
+
+  assert.ok(aligned.every((scene) => scene.backgroundStyle === aligned[0].backgroundStyle));
+  assert.ok(new Set(aligned.map((scene) => scene.sceneLocation)).size > 1);
+  assert.ok(aligned.every((scene) => scene.visual.includes(scene.sceneLocation)));
+  assert.ok(aligned.every((scene) => !scene.visual.includes(scene.backgroundStyle)));
 });
 
 test('character-enabled dialogue hints use actual character speakers instead of narrator', () => {

@@ -137,6 +137,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         ? s.videoSpeechPrompt
         : (typeof s?.spokenPrompt === "string" ? s.spokenPrompt : "");
       const script = typeof s?.script === "string" ? s.script : (typeof s?.voiceScript === "string" ? s.voiceScript : "");
+      const sceneLocation = typeof s?.sceneLocation === "string" ? s.sceneLocation : (typeof s?.location === "string" ? s.location : "");
+      const backgroundStyle = typeof s?.backgroundStyle === "string" ? s.backgroundStyle : "";
       const visual = typeof s?.visual === "string" ? s.visual : (typeof s?.shot === "string" ? s.shot : "");
       const imageUrl =
         typeof s?.imageDataUrl === "string" ? s.imageDataUrl
@@ -168,6 +170,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         lines: subtitleText,
         narration,
         dialogue,
+        sceneLocation,
+        backgroundStyle,
         subtitleText,
         videoSpeechPrompt,
         script,
