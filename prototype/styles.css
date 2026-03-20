@@ -1845,7 +1845,7 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-cards {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -2335,8 +2335,10 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .common-info-row {
-  margin-bottom: 8px;
-  padding: 6px 8px;
+  box-sizing: border-box;
+  min-height: 46px;
+  margin-bottom: 4px;
+  padding: 0 10px;
   border: 1px dashed var(--border);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
@@ -2349,8 +2351,8 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .common-info-play {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--panel);
@@ -2367,6 +2369,10 @@ textarea::-webkit-scrollbar-corner {
 .common-info-play:hover {
   border-color: var(--orange);
   color: var(--orange);
+}
+
+.common-info-row .tiny {
+  line-height: 1.3;
 }
 .scenario-card .view-lines::-webkit-scrollbar,
 .scenario-card .view-shot-lines::-webkit-scrollbar,
