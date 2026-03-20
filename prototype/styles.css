@@ -1480,29 +1480,49 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .scenario-form .scenario-character-group {
-  display: grid;
-  grid-template-columns: minmax(0, 100px) minmax(0, 1fr);
-  column-gap: 6px;
-  row-gap: 6px;
-  align-items: start;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   margin-bottom: 4px;
 }
 
+.scenario-character-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.scenario-character-panel {
+  display: grid;
+  gap: 6px;
+}
+
+.scenario-form .scenario-character-group.is-collapsed .scenario-character-panel {
+  display: none;
+}
+
+.scenario-character-head .scenario-check-label {
+  min-width: 0;
+  width: auto;
+  flex: 1 1 auto;
+}
+
+.scenario-character-head .scenario-circle-toggle {
+  flex: 0 0 auto;
+}
+
 .scenario-form .scenario-character-input-row {
-  grid-column: 2;
   min-width: 0;
   width: 100%;
 }
 
 .scenario-form .scenario-character-group .scenario-check-label {
-  min-width: 100px;
-  width: 100px;
   min-height: 38px;
   align-self: flex-start;
 }
 
 .scenario-form .scenario-character-group .character-chips {
-  grid-column: 1 / -1;
   display: grid;
   flex: none;
   width: 100%;
@@ -7340,19 +7360,13 @@ body.layout-fixed .lib-content {
 }
 
 @media (max-width: 980px) {
-  .scenario-form .scenario-character-group {
-    grid-template-columns: 1fr;
-  }
-
-  .scenario-form .scenario-character-group .scenario-check-label,
-  .scenario-form .scenario-character-input-row,
-  .scenario-form .scenario-character-group .character-chips {
-    grid-column: 1;
-    width: 100%;
+  .scenario-character-head {
+    align-items: flex-start;
   }
 
   .scenario-form .scenario-character-group .scenario-check-label {
     min-width: 0;
+    width: 100%;
   }
 }
 

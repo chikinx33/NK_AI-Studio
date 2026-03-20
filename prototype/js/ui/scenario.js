@@ -4,6 +4,7 @@
   const scenario = ui.scenario || (ui.scenario = {});
   let currentPayload = {};
   const collapsedSceneIds = new Set();
+  let characterPanelCollapsed = true;
   const DEFAULT_SCENARIO_FLAGS = {
     narrationEnabled: false,
     dubbingEnabled: false
@@ -647,6 +648,19 @@
     });
   };
 
+  const syncCharacterPanel = (collapsed) => {
+    const characterGroup = document.querySelector('.scenario-character-group');
+    const characterToggle = document.getElementById('scenario-character-toggle');
+    characterPanelCollapsed = !!collapsed;
+    if (characterGroup) characterGroup.classList.toggle('is-collapsed', characterPanelCollapsed);
+    if (characterToggle) {
+      characterToggle.textContent = characterPanelCollapsed ? '+' : '-';
+      characterToggle.setAttribute('aria-expanded', characterPanelCollapsed ? 'false' : 'true');
+      characterToggle.setAttribute('aria-label', characterPanelCollapsed ? '캐릭터 펼치기' : '캐릭터 접기');
+      characterToggle.setAttribute('title', characterPanelCollapsed ? '캐릭터 펼치기' : '캐릭터 접기');
+    }
+  };
+
   const renderOverviewSelects = (state = {}) => {
     const uiText = getScenarioUiText();
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
@@ -1197,6 +1211,7 @@
     setScenarioToggleButtons(flags);
     renderCharacterChips();
     syncCharacterUi();
+    syncCharacterPanel(true);
     syncDurationInputs(selectedDurationCustom ? 'custom' : 'preset');
     const characterInput = document.getElementById('character-input');
     if (characterInput) characterInput.value = '';
@@ -1212,6 +1227,7 @@
     const knowledgeGroup = document.querySelector('.scenario-knowledge-group');
     const knowledgeToggle = document.getElementById('scenario-knowledge-toggle');
     const knowledgeSummary = document.getElementById('scenario-knowledge-summary');
+    const characterToggle = document.getElementById('scenario-character-toggle');
     const syncKnowledgeToggle = (collapsed) => {
       if (knowledgeGroup) knowledgeGroup.classList.toggle('is-collapsed', !!collapsed);
       if (knowledgeToggle) {
@@ -1220,6 +1236,7 @@
       }
     };
     syncKnowledgeToggle(false);
+    syncCharacterPanel(true);
     if (knowledgeToggle) {
       knowledgeToggle.addEventListener('click', () => {
         const collapsed = !(knowledgeGroup && knowledgeGroup.classList.contains('is-collapsed'));
@@ -1233,6 +1250,11 @@
             }
           }, 120);
         }
+      });
+    }
+    if (characterToggle) {
+      characterToggle.addEventListener('click', () => {
+        syncCharacterPanel(!characterPanelCollapsed);
       });
     }
 
@@ -1308,6 +1330,7 @@
       setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
       renderCharacterChips();
       syncCharacterUi();
+      syncCharacterPanel(true);
       renderKnowledgeHint(currentPayload);
     }
 
@@ -1326,6 +1349,7 @@
       });
       renderCharacterChips();
       syncCharacterUi();
+      syncCharacterPanel(false);
       return true;
     };
 
@@ -1516,6 +1540,7 @@
         renderCharacterChips();
         syncDurationInputs();
         syncCharacterUi();
+        syncCharacterPanel(true);
         setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
         currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [], charactersEnabled: false });
         renderKnowledgeHint(currentPayload);
