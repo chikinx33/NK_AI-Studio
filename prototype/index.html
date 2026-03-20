@@ -122,7 +122,11 @@
                   </div>
                   <div class="fav-form-row">
                     <label for="favorite-icon">아이콘</label>
-                    <input type="file" id="favorite-icon" accept="image/*" required />
+                    <div class="favorite-file-picker">
+                      <button type="button" class="btn-secondary favorite-file-trigger" id="favorite-icon-trigger" data-i18n="파일 선택">파일 선택</button>
+                      <span class="favorite-file-name" id="favorite-icon-name">선택된 파일 없음</span>
+                      <input type="file" id="favorite-icon" class="favorite-file-input" accept="image/*" />
+                    </div>
                   </div>
                   <div class="favorite-form-actions">
                     <button type="submit" class="btn-primary">등록</button>
@@ -133,19 +137,19 @@
 
               <section class="user-widget theme-preset-widget is-collapsed hidden" id="theme-preset-widget">
                 <div class="user-widget-head">
-                  <h4>테마 선택</h4>
+                  <h4 data-i18n="테마 선택">테마 선택</h4>
                   <button type="button" class="theme-preset-toggle" id="theme-preset-toggle" aria-expanded="false" aria-label="테마 선택 펼치기"></button>
                 </div>
                 <div class="theme-preset-body">
                   <section class="theme-preset-group">
-                    <p class="theme-preset-label">다크</p>
+                    <p class="theme-preset-label" data-i18n="다크">다크</p>
                     <div class="theme-preset-options" id="theme-dark-options"></div>
                   </section>
                   <section class="theme-preset-group">
-                    <p class="theme-preset-label">라이트</p>
+                    <p class="theme-preset-label" data-i18n="라이트">라이트</p>
                     <div class="theme-preset-options" id="theme-light-options"></div>
                   </section>
-                  <p class="theme-preset-help">우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.</p>
+                  <p class="theme-preset-help" data-i18n="우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.">우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.</p>
                 </div>
               </section>
             </section>

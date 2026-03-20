@@ -673,6 +673,8 @@
     const favoriteCategorySelectInput = document.getElementById('favorite-category-select');
     const favoriteLinkInput = document.getElementById('favorite-link');
     const favoriteIconInput = document.getElementById('favorite-icon');
+    const favoriteIconTriggerBtn = document.getElementById('favorite-icon-trigger');
+    const favoriteIconNameEl = document.getElementById('favorite-icon-name');
     const themePresetWidget = document.getElementById('theme-preset-widget');
     const themePresetToggleBtn = document.getElementById('theme-preset-toggle');
     const themeDarkOptionsEl = document.getElementById('theme-dark-options');
@@ -1256,6 +1258,24 @@
       if (!favoriteForm) return;
       favoriteForm.reset();
       resizedIconDataUrl = '';
+      refreshFavoriteFileUi();
+    };
+
+    const translateUiText = (text) => {
+      if (!NK.ui || !NK.ui.common || typeof NK.ui.common.translateText !== 'function') return String(text || '');
+      return NK.ui.common.translateText(text, currentLang === 'en' ? 'en' : 'ko');
+    };
+
+    const refreshFavoriteFileUi = () => {
+      if (!favoriteIconNameEl) return;
+      const file = favoriteIconInput && favoriteIconInput.files && favoriteIconInput.files[0];
+      if (file) {
+        favoriteIconNameEl.removeAttribute('data-i18n');
+        favoriteIconNameEl.textContent = String(file.name || '').trim();
+      } else {
+        favoriteIconNameEl.setAttribute('data-i18n', '선택된 파일 없음');
+        favoriteIconNameEl.textContent = translateUiText('선택된 파일 없음');
+      }
     };
 
     const setFavoriteFormOpen = (open) => {
@@ -1308,7 +1328,7 @@
       themePresetWidget.classList.toggle('is-collapsed', themePresetCollapsed);
       if (themePresetToggleBtn) {
         themePresetToggleBtn.setAttribute('aria-expanded', themePresetCollapsed ? 'false' : 'true');
-        themePresetToggleBtn.setAttribute('aria-label', themePresetCollapsed ? '테마 선택 펼치기' : '테마 선택 접기');
+        themePresetToggleBtn.setAttribute('aria-label', translateUiText(themePresetCollapsed ? '테마 선택 펼치기' : '테마 선택 접기'));
       }
     };
 
@@ -1345,7 +1365,7 @@
           const active = preset.id === selectedVariant;
           btn.classList.toggle('is-selected', active);
           btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-          btn.setAttribute('aria-label', `${safeMode === 'dark' ? '다크' : '라이트'} 테마 ${idx + 1} 선택`);
+          btn.setAttribute('aria-label', `${translateUiText(safeMode === 'dark' ? '다크' : '라이트')} ${translateUiText('테마')} ${idx + 1} ${translateUiText('선택')}`);
           btn.title = preset.label;
           btn.addEventListener('click', async () => {
             if (!NK.auth.isAuthed()) return;
@@ -1787,6 +1807,7 @@
         renderFavoriteCategorySelect();
         renderFavorites(loggedIn);
         renderThemePresetOptions(loggedIn);
+        refreshFavoriteFileUi();
 
         if (loggedIn && user) {
           const seq = ++favoriteLoadSeq;
@@ -1807,6 +1828,7 @@
               renderFavoriteCategorySelect();
               renderFavorites(true);
               renderThemePresetOptions(true);
+              refreshFavoriteFileUi();
             })
             .catch(() => { });
         }
@@ -1883,17 +1905,26 @@
         setFavoriteFormCollapsed(true);
       });
 
+      if (favoriteIconTriggerBtn && favoriteIconInput) {
+        favoriteIconTriggerBtn.addEventListener('click', () => {
+          favoriteIconInput.click();
+        });
+      }
+
       favoriteIconInput.addEventListener('change', async (evt) => {
         const file = evt.target?.files && evt.target.files[0];
         if (!file) {
           resizedIconDataUrl = '';
+          refreshFavoriteFileUi();
           return;
         }
         try {
           resizedIconDataUrl = await resizeImageToSquare(file, 100);
+          refreshFavoriteFileUi();
         } catch (err) {
           resizedIconDataUrl = '';
           favoriteIconInput.value = '';
+          refreshFavoriteFileUi();
           alert(err?.message || '아이콘 등록에 실패했습니다.');
         }
       });
@@ -1961,6 +1992,8 @@
         }
       });
     }
+
+    refreshFavoriteFileUi();
 
     if (subscriptionWidget && subscriptionToggleBtn) {
       subscriptionToggleBtn.addEventListener('click', () => {
