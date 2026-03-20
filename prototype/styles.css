@@ -7046,11 +7046,27 @@ body.layout-fixed .lib-content {
 
 .brand-studio-disclosure,
 .knowledge-hub-disclosure {
+  position: relative;
   border: 1px solid var(--border);
   border-radius: 20px;
   background: var(--bg-2);
   overflow: hidden;
   min-width: 0;
+}
+
+.brand-studio-disclosure::before,
+.knowledge-hub-disclosure::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ff9f3a, #ff7a00);
+  box-shadow: 0 0 0 3px rgba(255, 122, 0, 0.12);
+  pointer-events: none;
+  z-index: 1;
 }
 
 .brand-studio-disclosure > summary,
@@ -7061,7 +7077,7 @@ body.layout-fixed .lib-content {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 14px 16px;
+  padding: 14px 16px 14px 34px;
 }
 
 .brand-studio-disclosure > summary::-webkit-details-marker,
