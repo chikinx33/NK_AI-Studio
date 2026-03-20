@@ -2106,19 +2106,27 @@ textarea::-webkit-scrollbar-corner {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 6px;
-  overflow-y: auto;
+  max-height: 320px;
+  overflow: hidden;
+  opacity: 1;
+  transition: max-height 0.24s ease, opacity 0.18s ease, margin-top 0.24s ease;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
 .scenario-card.is-collapsed .scene-visual-grid {
-  display: none;
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  pointer-events: none;
 }
 
 .scenario-card.scenario-card-common .scene-visual-grid {
   flex: 0 0 auto;
   overflow: visible;
+  max-height: none;
 }
 
 .scenario-card .field-block {
@@ -2138,9 +2146,13 @@ textarea::-webkit-scrollbar-corner {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  align-self: stretch;
+  align-self: center;
   line-height: 1.3;
   white-space: nowrap;
+}
+
+.scenario-card.scenario-card-common .field-label {
+  align-self: start;
 }
 
 .scenario-card .view-lines,
