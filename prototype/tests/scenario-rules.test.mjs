@@ -75,6 +75,7 @@ test('scenario spec turns learning-play-humor overview into hard signals and blu
     tones: '유머',
     styleText: '애니메이션(3D)',
     styles: '애니메이션(3D)',
+    knowledgeHub: { worldSetting: '우주선 놀이 교실' },
     duration: '15',
     sceneCount: 4
   });
@@ -86,9 +87,11 @@ test('scenario spec turns learning-play-humor overview into hard signals and blu
   assert.equal(spec.signals.humor, true);
   assert.equal(spec.signals.simpleLanguage, true);
   assert.equal(spec.sceneBlueprint.length, 4);
+  assert.equal(spec.continuity.place, '우주선 놀이 교실');
   assert.match(spec.requiredOutputsKo.join(' '), /학습 대상 제시/);
   assert.match(spec.requiredOutputsKo.join(' '), /참여 요소/);
   assert.match(spec.requiredOutputsKo.join(' '), /유머 비트/);
+  assert.match(spec.requiredOutputsKo.join(' '), /공간, 배경, 행동, 프롭/);
 });
 
 test('alignment step repairs generic scenes toward overview-fit structure', () => {
@@ -138,6 +141,8 @@ test('alignment step repairs generic scenes toward overview-fit structure', () =
   assert.match(combined, /카메라 연출/);
   assert.match(combined, /다시|한 번 더/);
   assert.match(combined, /실수|다시/);
+  assert.ok(aligned.every((scene) => scene.sceneIntent && scene.sceneIntent !== scene.visual));
+  assert.ok(aligned.every((scene) => /교실|놀이방|포스터|매트|카드|블록/.test(scene.visual)));
 });
 
 test('alignment keeps narration as spoken line and trims voice to scene duration', () => {
@@ -198,4 +203,49 @@ test('alignment keeps narration as spoken line and trims voice to scene duration
   assert.doesNotMatch(aligned[0].narration, /호기심을 끌어낸다|한 단계씩 보여 주며 쉽게 따라 배우게 한다|리듬감 있게 반복하며 함께 부른다/);
   assert.ok(aligned[0].narration.length <= limitNarr);
   assert.ok(aligned[0].dialogue.every((row) => row.line.length <= limitDial));
+  assert.ok(aligned.every((scene) => scene.sceneIntent && scene.sceneIntent !== scene.visual));
+});
+
+test('validation fails abrupt location jumps and abstract visuals', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    tones: '유머',
+    styleText: '애니메이션(3D)',
+    styles: '애니메이션(3D)',
+    knowledgeHub: { worldSetting: '우주선 놀이 교실' },
+    duration: '15',
+    sceneCount: 2
+  });
+
+  const broken = [
+    {
+      id: 1,
+      title: 'Scene 1',
+      estSec: 4,
+      sceneIntent: '도입',
+      narration: '시작해보자.',
+      visual: '우주가 보이는 장면. 카메라 연출: 미디엄 샷, 아이레벨 앵글, 느린 돌리 인, 안정적인 중앙 구도.'
+    },
+    {
+      id: 2,
+      title: 'Scene 2',
+      estSec: 4,
+      sceneIntent: '전개',
+      narration: '다음으로 간다.',
+      visual: '깊은 바다 속에서 친구들이 등장한다. 카메라 연출: 와이드 샷, 하이앵글, 부드러운 패닝, 전경과 배경이 보이는 레이어 구도.'
+    }
+  ];
+
+  const validation = helpers.validateScenarioAgainstSpec(broken, spec);
+  const failedKeys = validation.failed.map((row) => row.key);
+
+  assert.equal(validation.passed, false);
+  assert.ok(failedKeys.includes('visual_concreteness') || failedKeys.includes('setting_anchor'));
+  assert.ok(failedKeys.includes('setting_continuity'));
 });
