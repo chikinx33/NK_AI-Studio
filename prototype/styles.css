@@ -1405,6 +1405,7 @@ a.btn-primary:active {
 
 .scenario-form textarea {
   resize: vertical;
+  min-height: calc(1.45em * 5 + 16px);
   scrollbar-width: none; /* Firefox */
 }
 .scenario-form textarea::-webkit-scrollbar {
