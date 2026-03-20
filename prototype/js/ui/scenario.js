@@ -71,6 +71,33 @@
       stylePlaceholder: '스타일 선택',
       durationCustomPlaceholder: '직접 입력(초)',
       knowledgeEmpty: '브랜드 허브에 저장된 내용이 아직 없습니다.',
+      commonBackgroundLabel: '배경',
+      emptyScenarioTitle: '생성된 시나리오가 없습니다.',
+      emptyScenarioHelp: "왼쪽 패널에서 조건을 입력하고 '시나리오 생성'을 눌러주세요.",
+      commonPromptAria: '공통 프롬프트 보기',
+      sceneExpand: '씬 펼치기',
+      sceneCollapse: '씬 접기',
+      characterDelete: '캐릭터 삭제',
+      commonInfoLabels: {
+        topic: '주제',
+        genre: '장르',
+        audience: '타겟',
+        needs: '목적',
+        tone: '톤',
+        style: '스타일',
+        brandRules: '브랜드 허브 규칙',
+        blockedTerms: '금지어'
+      },
+      commonDetailLabels: {
+        title: '공통',
+        empty: '(공통 블록이 아직 생성되지 않았습니다)',
+        brandVoice: '브랜드 보이스',
+        brandStory: '브랜드 스토리',
+        brandCharacter: '브랜드 캐릭터',
+        worldSetting: '세계관',
+        brandRules: '브랜드 규칙',
+        bannedExpressions: '금지 표현'
+      },
       knowledgeLabels: {
         brandStory: '브랜드 스토리',
         worldSetting: '세계관/배경',
@@ -92,6 +119,33 @@
       stylePlaceholder: 'Select style',
       durationCustomPlaceholder: 'Enter seconds',
       knowledgeEmpty: 'No Brand Hub content has been saved yet.',
+      commonBackgroundLabel: 'Background',
+      emptyScenarioTitle: 'No scenario has been generated.',
+      emptyScenarioHelp: "Fill out the overview on the left and click 'Generate scenario'.",
+      commonPromptAria: 'View common prompt',
+      sceneExpand: 'Expand scene',
+      sceneCollapse: 'Collapse scene',
+      characterDelete: 'Delete character',
+      commonInfoLabels: {
+        topic: 'Topic',
+        genre: 'Genre',
+        audience: 'Audience',
+        needs: 'Needs',
+        tone: 'Tone',
+        style: 'Style',
+        brandRules: 'Brand Hub rules',
+        blockedTerms: 'Blocked terms'
+      },
+      commonDetailLabels: {
+        title: 'Common',
+        empty: '(Common block has not been generated yet)',
+        brandVoice: 'Brand voice',
+        brandStory: 'Brand story',
+        brandCharacter: 'Brand character',
+        worldSetting: 'World setting',
+        brandRules: 'Brand rules',
+        bannedExpressions: 'Banned expressions'
+      },
       knowledgeLabels: {
         brandStory: 'Brand story',
         worldSetting: 'World / setting',
@@ -870,32 +924,34 @@
   const formatCommonInfo = () => {
     const p = currentPayload || {};
     const knowledge = readKnowledgeHub(p);
+    const labels = getScenarioUiText().commonInfoLabels || {};
     const parts = [];
-    if (p.topic) parts.push(`Topic: ${p.topic}`);
-    if (p.purposeCategory) parts.push(`Genre: ${p.purposeCategory}${p.purposeTags?.length ? ` (${p.purposeTags.join(', ')})` : ''}`);
-    if (p.target) parts.push(`Audience: ${p.target}`);
-    if (p.needs?.length) parts.push(`Needs: ${p.needs.join(', ')}`);
+    if (p.topic) parts.push(`${labels.topic || 'Topic'}: ${p.topic}`);
+    if (p.purposeCategory) parts.push(`${labels.genre || 'Genre'}: ${p.purposeCategory}${p.purposeTags?.length ? ` (${p.purposeTags.join(', ')})` : ''}`);
+    if (p.target) parts.push(`${labels.audience || 'Audience'}: ${p.target}`);
+    if (p.needs?.length) parts.push(`${labels.needs || 'Needs'}: ${p.needs.join(', ')}`);
     const toneStr = Array.from(new Set([...(p.tones || []), p.tone || ''].filter(Boolean))).join(', ');
-    if (toneStr) parts.push(`Tone: ${toneStr}`);
+    if (toneStr) parts.push(`${labels.tone || 'Tone'}: ${toneStr}`);
     const styleStr = Array.from(new Set([...(p.styles || []), p.style || ''].filter(Boolean))).join(', ');
-    if (styleStr) parts.push(`Style: ${styleStr}`);
-    if (knowledge.brandRules.length) parts.push(`Brand Hub rules: ${knowledge.brandRules.length}개`);
-    if (knowledge.bannedExpressions.length) parts.push(`Blocked terms: ${knowledge.bannedExpressions.length}개`);
+    if (styleStr) parts.push(`${labels.style || 'Style'}: ${styleStr}`);
+    if (knowledge.brandRules.length) parts.push(`${labels.brandRules || 'Brand Hub rules'}: ${knowledge.brandRules.length}개`);
+    if (knowledge.bannedExpressions.length) parts.push(`${labels.blockedTerms || 'Blocked terms'}: ${knowledge.bannedExpressions.length}개`);
     return parts.join(' · ');
   };
 
   const buildCommonDetail = () => {
     const p = currentPayload || {};
     const knowledge = readKnowledgeHub(p);
+    const labels = getScenarioUiText().commonDetailLabels || {};
     const lines = [];
-    lines.push('Common');
-    lines.push(p.header || '(Common 블록이 아직 생성되지 않았습니다)');
-    if (knowledge.brandVoice) lines.push(`Brand voice: ${knowledge.brandVoice}`);
-    if (knowledge.brandStory) lines.push(`Brand story: ${knowledge.brandStory}`);
-    if (knowledge.brandCharacter) lines.push(`Brand character: ${knowledge.brandCharacter}`);
-    if (knowledge.worldSetting) lines.push(`World setting: ${knowledge.worldSetting}`);
-    if (knowledge.brandRules.length) lines.push(`Brand rules: ${knowledge.brandRules.join(', ')}`);
-    if (knowledge.bannedExpressions.length) lines.push(`Banned expressions: ${knowledge.bannedExpressions.join(', ')}`);
+    lines.push(labels.title || 'Common');
+    lines.push(p.header || (labels.empty || '(Common block has not been generated yet)'));
+    if (knowledge.brandVoice) lines.push(`${labels.brandVoice || 'Brand voice'}: ${knowledge.brandVoice}`);
+    if (knowledge.brandStory) lines.push(`${labels.brandStory || 'Brand story'}: ${knowledge.brandStory}`);
+    if (knowledge.brandCharacter) lines.push(`${labels.brandCharacter || 'Brand character'}: ${knowledge.brandCharacter}`);
+    if (knowledge.worldSetting) lines.push(`${labels.worldSetting || 'World setting'}: ${knowledge.worldSetting}`);
+    if (knowledge.brandRules.length) lines.push(`${labels.brandRules || 'Brand rules'}: ${knowledge.brandRules.join(', ')}`);
+    if (knowledge.bannedExpressions.length) lines.push(`${labels.bannedExpressions || 'Banned expressions'}: ${knowledge.bannedExpressions.join(', ')}`);
     return lines.join('\n');
   };
 
@@ -929,8 +985,8 @@
     if (toggleBtn) {
       toggleBtn.textContent = collapsed ? '+' : '-';
       toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      toggleBtn.setAttribute('aria-label', collapsed ? '씬 펼치기' : '씬 접기');
-      toggleBtn.setAttribute('title', collapsed ? '씬 펼치기' : '씬 접기');
+      toggleBtn.setAttribute('aria-label', collapsed ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse);
+      toggleBtn.setAttribute('title', collapsed ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse);
     }
     if (!sceneId) return;
     if (collapsed) collapsedSceneIds.add(sceneId);
@@ -1044,7 +1100,7 @@
       <label class="scenario-character-row" data-character-id="${c.characterId}">
         <span class="character-chip">
           <span class="chip-token">${escapeHtml(c.token)}</span>
-          <button type="button" class="chip-remove" data-remove-character="${c.characterId}" aria-label="캐릭터 삭제">×</button>
+          <button type="button" class="chip-remove" data-remove-character="${c.characterId}" aria-label="${escapeHtml(getScenarioUiText().characterDelete)}">×</button>
         </span>
         <input
           type="text"
@@ -1077,18 +1133,18 @@
       container.innerHTML = `
         <div class="empty-state center-empty">
           <div>
-            <p class="muted">생성된 시나리오가 없습니다.</p>
-            <p class="muted small">왼쪽 패널에서 조건을 입력하고 '시나리오 생성'을 눌러주세요.</p>
+            <p class="muted">${escapeHtml(getScenarioUiText().emptyScenarioTitle)}</p>
+            <p class="muted small">${escapeHtml(getScenarioUiText().emptyScenarioHelp)}</p>
           </div>
         </div>`;
       return;
     }
-    const commonInfoRow = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="공통 프롬프트 보기">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
+    const commonInfoRow = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
     const commonBackgroundBlock = commonBackgroundStyle ? `
       <div class="scenario-card scenario-card-common" data-scene-id="common-background">
         <div class="scene-visual-grid">
           <div class="field-block">
-            <p class="field-label muted small">${getUiLang() === 'en' ? 'Style' : '스타일'}</p>
+            <p class="field-label muted small">${escapeHtml(getScenarioUiText().commonBackgroundLabel)}</p>
             <p class="view-lines view-common-style-lines" contenteditable="true">${escapeHtml(commonBackgroundStyle)}</p>
           </div>
         </div>
@@ -1101,7 +1157,7 @@
             <h5>Scene ${s.id}</h5>
             <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
           </div>
-          <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${collapsedSceneIds.has(String(s.id)) ? '씬 펼치기' : '씬 접기'}" title="${collapsedSceneIds.has(String(s.id)) ? '씬 펼치기' : '씬 접기'}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
+          <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}" title="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
         </div>
         <div class="scene-visual-grid">
           <div class="field-block">
