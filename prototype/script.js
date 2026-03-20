@@ -2007,7 +2007,14 @@
 
     const aiVideoLink = document.querySelector('#login-icons .login-icon-link[href]');
     if (aiVideoLink) {
-      aiVideoLink.addEventListener('click', () => {
+      aiVideoLink.addEventListener('click', (e) => {
+        if (window.self !== window.top && window.parent && window.parent.NK && window.parent.NK.navigation && typeof window.parent.NK.navigation.loadStage === 'function') {
+          e.preventDefault();
+          try {
+            window.parent.NK.navigation.loadStage('dashboard.html');
+          } catch (_) { }
+          return;
+        }
         try {
           sessionStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
           localStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
@@ -2775,6 +2782,12 @@
 
   window.toggleScreenMode = () => {
     NK.ui.common.toggleScreenMode();
+  };
+
+  window.openOptionsStage = () => {
+    if (NK.navigation && typeof NK.navigation.loadStage === 'function') {
+      NK.navigation.loadStage('index.html');
+    }
   };
 
   document.addEventListener('DOMContentLoaded', init);

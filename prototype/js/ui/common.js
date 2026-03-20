@@ -1219,7 +1219,14 @@
     };
 
     common.isFullscreenActive = function () {
-        return !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+        var active = !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement);
+        if (active) return true;
+        try {
+            if (window.parent && window.parent !== window && window.parent.document) {
+                return !!(window.parent.document.fullscreenElement || window.parent.document.webkitFullscreenElement || window.parent.document.msFullscreenElement);
+            }
+        } catch (_) { }
+        return false;
     };
 
     common.updateScreenButton = function (lang) {
@@ -1238,6 +1245,13 @@
     };
 
     common.toggleScreenMode = async function () {
+        try {
+            if (window.parent && window.parent !== window && window.parent.NK && window.parent.NK.ui && window.parent.NK.ui.common && typeof window.parent.NK.ui.common.toggleScreenMode === 'function') {
+                await window.parent.NK.ui.common.toggleScreenMode();
+                common.updateScreenButton((NK.state && NK.state.runtime && NK.state.runtime.lang) || 'ko');
+                return;
+            }
+        } catch (_) { }
         var root = document.documentElement;
         if (!root) return;
         try {
@@ -1269,6 +1283,14 @@
         ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange'].forEach(function (eventName) {
             document.addEventListener(eventName, sync);
         });
+        try {
+            if (window.parent && window.parent !== window && window.parent.document && !document.__nkParentScreenModeBound) {
+                ['fullscreenchange', 'webkitfullscreenchange', 'msfullscreenchange'].forEach(function (eventName) {
+                    window.parent.document.addEventListener(eventName, sync);
+                });
+                document.__nkParentScreenModeBound = true;
+            }
+        } catch (_) { }
         document.__nkScreenModeBound = true;
     };
 

@@ -54,12 +54,6 @@
         if (pid && !hasQueryValue(url, ['projectId', 'pid'])) url += '&projectId=' + encodeURIComponent(pid);
         if (brandId && !hasQueryValue(url, ['brandId', 'bid'])) url += '&brandId=' + encodeURIComponent(brandId);
 
-        // 옵션 페이지는 별도 창으로 전체 이동 (iframe 사용 안 함)
-        if (!isIframe && st === 'options') {
-            window.location.href = targetName;
-            return;
-        }
-
         if (isIframe) {
             // 1. 아이프레임 스스로 이동
             window.location.assign(url);
@@ -74,7 +68,7 @@
             nav.setStage(st);
             try {
                 const pageUrl = new URL(window.location.href);
-                if (st && st !== 'options' && st !== 'dashboard') {
+                if (st && st !== 'dashboard') {
                     pageUrl.searchParams.set('stageHref', targetName);
                     if (pid) pageUrl.searchParams.set('projectId', String(pid));
                     else pageUrl.searchParams.delete('projectId');

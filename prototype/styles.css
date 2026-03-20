@@ -794,27 +794,6 @@ body[data-embed="1"] {
   margin: 0;
 }
 
-.floating-actions {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  display: flex;
-  gap: 12px;
-  z-index: 5;
-}
-
-.option-corner-title {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 5;
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: color-mix(in srgb, var(--text) 86%, transparent 14%);
-  user-select: none;
-}
-
 /* 임베드된(아이프레임 내부) 페이지의 메인 영역은 패딩 유지 */
 [data-embed="1"] .main {
   padding: 16px 24px 24px;
@@ -3852,12 +3831,15 @@ textarea::-webkit-scrollbar-corner {
   text-align: center;
   font-weight: 700;
   letter-spacing: 1px;
+  font-size: 38px;
+  line-height: 1.08;
+  margin-bottom: 8px;
 }
 
 .logo-box {
   display: flex;
   justify-content: center;
-  margin-bottom: 18px;
+  margin-bottom: 28px;
 }
 
 .logo-img {
@@ -3912,6 +3894,12 @@ textarea::-webkit-scrollbar-corner {
 .login-icons.blurred {
   filter: none;
   opacity: 0.45;
+}
+
+.option-card-toolbar {
+  justify-content: center;
+  margin-top: auto;
+  padding-top: 8px;
 }
 
 .favorite-card {
