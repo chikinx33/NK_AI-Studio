@@ -1309,12 +1309,16 @@ a.btn-primary:active {
 
 .scenario-form .scenario-ratio-group {
   flex: 1;
-  justify-content: flex-end;
-  flex-wrap: wrap;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: stretch;
+  flex-wrap: nowrap;
 }
 
 .scenario-form .scenario-ratio-group .ratio-btn {
-  min-width: 68px;
+  min-width: 0;
+  width: 100%;
 }
 
 .ratio-group .ratio-btn.active {
@@ -1694,9 +1698,33 @@ textarea::-webkit-scrollbar-corner {
   gap: 2px;
 }
 
+.scenario-knowledge-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .scenario-knowledge-item strong {
   font-size: 12px;
   line-height: 1.3;
+}
+
+.scenario-knowledge-item.is-collapsible .scenario-knowledge-item-body {
+  overflow: hidden;
+  max-height: 240px;
+  opacity: 1;
+  transition: max-height 0.22s ease, opacity 0.18s ease, margin-top 0.18s ease;
+}
+
+.scenario-knowledge-item.is-collapsed .scenario-knowledge-item-body {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.scenario-knowledge-item-toggle {
+  flex: 0 0 auto;
 }
 
 .scenario-knowledge-item span,

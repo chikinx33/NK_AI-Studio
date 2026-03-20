@@ -4,6 +4,7 @@
   const scenario = ui.scenario || (ui.scenario = {});
   let currentPayload = {};
   const collapsedSceneIds = new Set();
+  let knowledgeBrandStoryCollapsed = true;
   const DEFAULT_SCENARIO_FLAGS = {
     narrationEnabled: false,
     dubbingEnabled: false
@@ -512,9 +513,14 @@
       return;
     }
     box.innerHTML = summaryItems.map((item) => `
-      <div class="scenario-knowledge-item">
-        <strong>${escapeHtml(uiText.knowledgeLabels[item.key] || item.key)}</strong>
-        <span>${escapeHtml(normalizeKnowledgeDisplayValue(item.key, item.value))}</span>
+      <div class="scenario-knowledge-item${item.key === 'brandStory' ? ' is-collapsible' : ''}${item.key === 'brandStory' && knowledgeBrandStoryCollapsed ? ' is-collapsed' : ''}" data-knowledge-key="${escapeHtml(item.key)}">
+        <div class="scenario-knowledge-item-head">
+          <strong>${escapeHtml(uiText.knowledgeLabels[item.key] || item.key)}</strong>
+          ${item.key === 'brandStory'
+            ? `<button type="button" class="scenario-circle-toggle scenario-knowledge-item-toggle" data-knowledge-toggle="${escapeHtml(item.key)}" aria-expanded="${knowledgeBrandStoryCollapsed ? 'false' : 'true'}" aria-label="${knowledgeBrandStoryCollapsed ? '브랜드 스토리 펼치기' : '브랜드 스토리 접기'}">${knowledgeBrandStoryCollapsed ? '+' : '-'}</button>`
+            : ''}
+        </div>
+        <span class="scenario-knowledge-item-body">${escapeHtml(normalizeKnowledgeDisplayValue(item.key, item.value))}</span>
       </div>
     `).join('');
   };
@@ -1209,11 +1215,12 @@
     if (!form) return;
     const knowledgeGroup = document.querySelector('.scenario-knowledge-group');
     const knowledgeToggle = document.getElementById('scenario-knowledge-toggle');
+    const knowledgeSummary = document.getElementById('scenario-knowledge-summary');
     const syncKnowledgeToggle = (collapsed) => {
       if (knowledgeGroup) knowledgeGroup.classList.toggle('is-collapsed', !!collapsed);
       if (knowledgeToggle) {
-        knowledgeToggle.textContent = collapsed ? '+' : '-';
-        knowledgeToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+          knowledgeToggle.textContent = collapsed ? '+' : '-';
+          knowledgeToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
       }
     };
     syncKnowledgeToggle(false);
@@ -1221,6 +1228,25 @@
       knowledgeToggle.addEventListener('click', () => {
         const collapsed = !(knowledgeGroup && knowledgeGroup.classList.contains('is-collapsed'));
         syncKnowledgeToggle(collapsed);
+      });
+    }
+    if (knowledgeSummary) {
+      knowledgeSummary.addEventListener('click', (e) => {
+        const toggleBtn = e.target && e.target.closest ? e.target.closest('.scenario-knowledge-item-toggle') : null;
+        if (!toggleBtn) return;
+        e.preventDefault();
+        const key = String(toggleBtn.dataset.knowledgeToggle || '').trim();
+        if (key !== 'brandStory') return;
+        knowledgeBrandStoryCollapsed = !knowledgeBrandStoryCollapsed;
+        renderKnowledgeHint(currentPayload);
+        if (!knowledgeBrandStoryCollapsed) {
+          window.setTimeout(() => {
+            const storyItem = document.querySelector('.scenario-knowledge-item[data-knowledge-key="brandStory"]');
+            if (storyItem && typeof storyItem.scrollIntoView === 'function') {
+              storyItem.scrollIntoView({ behavior: 'smooth', block: 'end' });
+            }
+          }, 120);
+        }
       });
     }
 
