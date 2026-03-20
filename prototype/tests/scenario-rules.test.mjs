@@ -260,6 +260,53 @@ test('alignment replaces placeholder narration and spreads scenes across subloca
   assert.ok(new Set(visuals).size > 1);
 });
 
+test('character-enabled dialogue hints use actual character speakers instead of narrator', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    tones: '유머',
+    styleText: '애니메이션(3D)',
+    styles: '애니메이션(3D)',
+    characters: [
+      { token: '@네모', displayName: '네모' },
+      { token: '@세모', displayName: '세모' }
+    ],
+    duration: '15',
+    sceneCount: 2
+  });
+
+  const scenes = [
+    { id: 1, estSec: 4, narration: '', dialogue: [], visual: '' },
+    { id: 2, estSec: 4, narration: '', dialogue: [], visual: '' }
+  ];
+
+  const aligned = helpers.alignScenesToScenarioSpec(scenes, spec, {
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    toneText: '',
+    tones: '유머',
+    styleText: '애니메이션(3D)',
+    styles: '애니메이션(3D)',
+    aspectRatio: '16:9',
+    sceneCount: 2,
+    duration: 8,
+    narrationEnabled: true,
+    dubbingEnabled: true,
+    defaultSpeaker: '@네모'
+  });
+
+  const speakers = aligned.flatMap((scene) => (scene.dialogue || []).map((row) => row.speaker));
+  assert.ok(speakers.includes('@네모'));
+  assert.ok(!speakers.every((speaker) => speaker === '@narrator'));
+});
+
 test('validation fails abrupt location jumps and abstract visuals', () => {
   const helpers = loadScenarioHelpers();
   const spec = helpers.buildScenarioSpec({
