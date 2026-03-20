@@ -2079,14 +2079,20 @@ textarea::-webkit-scrollbar-corner {
   flex-direction: column;
   height: auto;
   min-height: 258px;
-  --scene-field-height: 58px;
-  --scene-dialogue-height: 44px;
+  --scene-field-height: 38px;
+  --scene-shot-height: 84px;
+  --scene-dialogue-height: 38px;
   cursor: pointer;
 }
 
 .scenario-card.scenario-card-common {
   min-height: 0;
   cursor: default;
+}
+
+.scenario-card.is-collapsed {
+  min-height: 0;
+  padding-bottom: 12px;
 }
 
 .scenario-card .card-top {
@@ -2104,6 +2110,10 @@ textarea::-webkit-scrollbar-corner {
   overflow-y: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+.scenario-card.is-collapsed .scene-visual-grid {
+  display: none;
 }
 
 .scenario-card.scenario-card-common .scene-visual-grid {
@@ -2146,6 +2156,8 @@ textarea::-webkit-scrollbar-corner {
   overflow-y: auto;
   overflow-x: hidden;
   margin: 0;
+  display: flex;
+  align-items: center;
   white-space: pre-wrap;
   line-height: 1.45;
   scrollbar-width: none;
@@ -2153,16 +2165,23 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .scenario-card .view-shot-lines {
-  min-height: var(--scene-field-height);
-  max-height: var(--scene-field-height);
+  min-height: var(--scene-shot-height);
+  max-height: var(--scene-shot-height);
 }
 
+.scenario-card .view-location-lines,
+.scenario-card .view-narration-lines,
 .scenario-card .view-dialogue-lines {
   min-height: var(--scene-dialogue-height);
   max-height: var(--scene-dialogue-height);
   white-space: nowrap;
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+.scenario-card .view-shot-lines {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .scenario-card .view-lines[contenteditable="true"],
@@ -2358,12 +2377,29 @@ textarea::-webkit-scrollbar-corner {
   gap: 8px;
 }
 
+.scenario-card .card-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .scenario-card h5 {
   margin: 0;
 }
 
 .scenario-card p {
   margin: 4px 0;
+}
+
+.scenario-card .est-input {
+  width: 52px;
+  padding: 4px 6px;
+}
+
+.scenario-card .scenario-card-toggle {
+  flex: 0 0 auto;
+  font-weight: 700;
 }
 
 .scenario-card .actions {

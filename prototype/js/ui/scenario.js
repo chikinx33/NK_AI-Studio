@@ -3,6 +3,7 @@
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
   let currentPayload = {};
+  const collapsedSceneIds = new Set();
   const DEFAULT_SCENARIO_FLAGS = {
     narrationEnabled: false,
     dubbingEnabled: false
@@ -896,6 +897,27 @@
     targetCard.classList.add('active-card');
   };
 
+  const setScenarioCardCollapsed = (card, collapsed) => {
+    if (!card || card.classList.contains('scenario-card-common')) return;
+    const sceneId = String(card.dataset.sceneId || '').trim();
+    card.classList.toggle('is-collapsed', !!collapsed);
+    const toggleBtn = card.querySelector('.scenario-card-toggle');
+    if (toggleBtn) {
+      toggleBtn.textContent = collapsed ? '+' : '-';
+      toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      toggleBtn.setAttribute('aria-label', collapsed ? '씬 펼치기' : '씬 접기');
+      toggleBtn.setAttribute('title', collapsed ? '씬 펼치기' : '씬 접기');
+    }
+    if (!sceneId) return;
+    if (collapsed) collapsedSceneIds.add(sceneId);
+    else collapsedSceneIds.delete(sceneId);
+  };
+
+  const toggleScenarioCardCollapsed = (card) => {
+    if (!card || card.classList.contains('scenario-card-common')) return;
+    setScenarioCardCollapsed(card, !card.classList.contains('is-collapsed'));
+  };
+
   const collectScenesFromCards = () => {
     const flags = getScenarioFlags(currentPayload || {});
     const commonBackgroundStyle = getCommonBackgroundStyleFromCard() || String(currentPayload?.backgroundStyle || '').trim();
@@ -1052,12 +1074,13 @@
       </div>` : '';
     const commonBlock = commonInfoRow + commonBackgroundBlock;
     container.innerHTML = commonBlock + sceneList.map(s => `
-      <div class="scenario-card" data-scene-id="${s.id}">
+      <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">
-          <div>
+          <div class="card-title-row">
             <h5>Scene ${s.id}</h5>
+            <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
           </div>
-          <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
+          <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${collapsedSceneIds.has(String(s.id)) ? '씬 펼치기' : '씬 접기'}" title="${collapsedSceneIds.has(String(s.id)) ? '씬 펼치기' : '씬 접기'}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
         </div>
         <div class="scene-visual-grid">
           <div class="field-block">
@@ -1080,6 +1103,7 @@
         </div>
       </div>
     `).join('');
+    container.querySelectorAll('.scenario-card.is-collapsed').forEach((card) => setScenarioCardCollapsed(card, true));
     const firstCard = container.querySelector('.scenario-card:not(.scenario-card-common)');
     if (firstCard) firstCard.classList.add('active-card');
   };
@@ -1378,6 +1402,13 @@
       cardsContainer.addEventListener('click', (e) => {
         const card = e.target && e.target.closest ? e.target.closest('.scenario-card') : null;
         if (!card) return;
+        const toggleBtn = e.target && e.target.closest ? e.target.closest('.scenario-card-toggle') : null;
+        if (toggleBtn) {
+          e.preventDefault();
+          e.stopPropagation();
+          toggleScenarioCardCollapsed(card);
+          return;
+        }
         setActiveScenarioCard(card);
       });
 
