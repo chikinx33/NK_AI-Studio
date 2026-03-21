@@ -148,6 +148,53 @@
     return text.slice(0, 179).trim() + '…';
   }
 
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function stripPromptTokens(text) {
+    return String(text || '').replace(/@([0-9A-Za-z가-힣_]{1,24})/g, '$1').replace(/\s{2,}/g, ' ').trim();
+  }
+
+  function replaceFirstCaseInsensitive(text, search, replacement) {
+    var source = String(text || '');
+    var needle = normalizeText(search);
+    if (!source || !needle) return source;
+    if (/[가-힣]/.test(needle)) {
+      var idx = source.indexOf(needle);
+      if (idx < 0) return source;
+      return source.slice(0, idx) + replacement + source.slice(idx + needle.length);
+    }
+    var re = new RegExp('(^|[^0-9A-Za-z_])(' + escapeRegExp(needle) + ')(?=$|[^0-9A-Za-z_])', 'i');
+    return source.replace(re, function (_, prefix) {
+      return String(prefix || '') + replacement;
+    });
+  }
+
+  function buildInlineReferencePrompt(prompt, referenceSubjects) {
+    var base = stripPromptTokens(prompt);
+    var subjects = Array.isArray(referenceSubjects) ? referenceSubjects : [];
+    if (!base || !subjects.length) return base;
+    var scenePrompt = base;
+    var lockedSubjects = [];
+    subjects.forEach(function (subject) {
+      var referenceLabel = (subject.displayName || 'character') + ' [' + subject.referenceId + ']';
+      var token = normalizeToken(subject.token || subject.displayName || '');
+      var plainName = normalizeText(subject.displayName || token.replace(/^@/, ''));
+      var updated = scenePrompt;
+      if (token) updated = replaceFirstCaseInsensitive(updated, token, referenceLabel);
+      if (updated === scenePrompt && plainName) updated = replaceFirstCaseInsensitive(updated, plainName, referenceLabel);
+      if (updated === scenePrompt) {
+        updated = scenePrompt + '\nInclude ' + referenceLabel + ' in this scene.';
+      }
+      scenePrompt = updated;
+      lockedSubjects.push(
+        'Render ' + referenceLabel + ' with the exact same face, silhouette, colors, costume, and proportions as the registered reference images.'
+      );
+    });
+    return [scenePrompt].concat(lockedSubjects).join('\n');
+  }
+
   function normalizeDialogueEntries(value) {
     if (Array.isArray(value)) {
       return value.map(function (item) {
@@ -225,6 +272,7 @@
     var referenceImages = [];
     var promptLines = [];
     var referenceMeta = [];
+    var referenceSubjects = [];
 
     activeCharacters.forEach(function (character, index) {
       if (referenceImages.length >= 4) return;
@@ -276,6 +324,14 @@
         return getCharacterSheetPosePromptLabel(sheet.pose);
       }).filter(Boolean).join(', ');
 
+      referenceSubjects.push({
+        referenceId: referenceId,
+        token: token,
+        displayName: displayName,
+        subjectDescription: subjectDescription,
+        poseSummary: poseSummary || 'character reference'
+      });
+
       promptLines.push(
         'Use ' + subjectDescription + ' [' + referenceId + '] as the design reference for ' + displayName + '. Reference views: ' + (poseSummary || 'character reference') + '. Preserve the same silhouette, colors, costume, and face.'
       );
@@ -289,7 +345,8 @@
       referenceImages: referenceImages.slice(0, 4),
       promptPrefix: 'Create an image that matches the scene description below.',
       promptSuffix: promptLines.join('\n'),
-      referenceMeta: referenceMeta
+      referenceMeta: referenceMeta,
+      referenceSubjects: referenceSubjects
     };
   }
 
@@ -346,6 +403,7 @@
         var refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
         referencePayload = buildReferenceBundle(payload, res.characters || []);
         if (referencePayload && referencePayload.referenceImages.length) {
+          finalPrompt = buildInlineReferencePrompt(finalPrompt, referencePayload.referenceSubjects || []);
           finalPrompt = [
             referencePayload.promptPrefix || '',
             finalPrompt,
@@ -422,4 +480,5 @@
   };
 
   image.buildCharacterResolutionPrompt = buildCharacterResolutionPrompt;
+  image.buildInlineReferencePrompt = buildInlineReferencePrompt;
 })();
