@@ -62,13 +62,35 @@
                 window.parent.postMessage({ type: 'stage-changed', stage: st }, '*');
             }
         } else {
+            if (st === 'options') {
+                try {
+                    sessionStorage.removeItem(STAGE_HREF_KEY);
+                    localStorage.removeItem(STAGE_HREF_KEY);
+                } catch (_) { }
+                if (NK.shell && typeof NK.shell.showOptions === 'function') {
+                    NK.shell.showOptions();
+                }
+                nav.setStage('options');
+                try {
+                    const pageUrl = new URL(window.location.href);
+                    pageUrl.searchParams.delete('stageHref');
+                    pageUrl.searchParams.delete('stage');
+                    pageUrl.searchParams.delete('projectId');
+                    pageUrl.searchParams.delete('brandId');
+                    window.history.replaceState({}, '', pageUrl.toString());
+                } catch (_) { }
+                return;
+            }
             // 부모 창에서 직접 호출된 경우 (사이드바 클릭 등)
+            if (NK.shell && typeof NK.shell.showStudio === 'function') {
+                NK.shell.showStudio();
+            }
             const iframe = nav.ensureStageView();
             if (iframe) iframe.src = url;
             nav.setStage(st);
             try {
                 const pageUrl = new URL(window.location.href);
-                if (st && st !== 'dashboard') {
+                if (st && st !== 'options') {
                     pageUrl.searchParams.set('stageHref', targetName);
                     if (pid) pageUrl.searchParams.set('projectId', String(pid));
                     else pageUrl.searchParams.delete('projectId');

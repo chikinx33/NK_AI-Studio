@@ -56,7 +56,7 @@ const server = http.createServer((req, res) => {
     const parsed = url.parse(req.url);
     let pathname = decodeURIComponent(parsed.pathname || '/');
     if (pathname === '/' || pathname === '/index.html') {
-      const file = safeJoin(ROOT, 'ai-video.html');
+      const file = safeJoin(ROOT, 'index.html');
       if (!file) throw new Error('bad_path');
       return sendFile(res, file);
     }

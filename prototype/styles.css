@@ -318,6 +318,10 @@ body::-webkit-scrollbar {
   grid-template-columns: 1fr;
 }
 
+.app.no-sidebar .sidebar {
+  display: none;
+}
+
 #stage-iframe {
   width: 100%;
   height: 100%;
