@@ -375,6 +375,9 @@
       document.documentElement.setAttribute('data-embed', '1');
     }
     const currentPath = window.location.pathname;
+    const normalizedPath = String(currentPath || '').replace(/\\/g, '/');
+    const pathSegments = normalizedPath.split('/');
+    const lastPathSegment = String(pathSegments[pathSegments.length - 1] || '').trim().toLowerCase();
     const stage = NK.navigation.normalizeStageName(currentPath);
     const isAiVideoShellPath = currentPath.toLowerCase().includes('ai-video.html');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
@@ -382,7 +385,8 @@
     const explicitStage = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
     const hasExplicitStageRequest = !!explicitStageHref || RESTORABLE_STAGES.includes(explicitStage);
     const isIndexShellPath = !isIframe && isShellPage && stage === 'options';
-    const isBareLandingEntry = isIndexShellPath && !hasExplicitStageRequest;
+    const isRootLandingPath = isIndexShellPath && !lastPathSegment;
+    const isBareLandingEntry = isRootLandingPath || (isIndexShellPath && !hasExplicitStageRequest);
     if (isBareLandingEntry) {
       try {
         clearForcedDashboardEntry();

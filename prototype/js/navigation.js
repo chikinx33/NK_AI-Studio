@@ -35,6 +35,32 @@
         });
     }
 
+    function buildStudioShellUrl(targetName, pid, brandId) {
+        var pageUrl = new URL('index.html', window.location.href);
+        pageUrl.searchParams.set('stageHref', targetName);
+        if (pid) pageUrl.searchParams.set('projectId', String(pid));
+        else pageUrl.searchParams.delete('projectId');
+        if (brandId) pageUrl.searchParams.set('brandId', String(brandId));
+        else pageUrl.searchParams.delete('brandId');
+        return pageUrl;
+    }
+
+    function buildLandingShellUrl() {
+        var current = new URL(window.location.href);
+        var path = String(current.pathname || '');
+        if (!path || path === '/') {
+            current.pathname = '/';
+        } else {
+            var normalized = path.replace(/\\/g, '/');
+            var parts = normalized.split('/');
+            parts[parts.length - 1] = '';
+            current.pathname = parts.join('/') || '/';
+        }
+        current.search = '';
+        current.hash = '';
+        return current;
+    }
+
     nav.loadStage = function (name) {
         let targetName = String(name || '').trim();
         if (!targetName) targetName = 'dashboard.html';
@@ -72,11 +98,7 @@
                 }
                 nav.setStage('options');
                 try {
-                    const pageUrl = new URL(window.location.href);
-                    pageUrl.searchParams.delete('stageHref');
-                    pageUrl.searchParams.delete('stage');
-                    pageUrl.searchParams.delete('projectId');
-                    pageUrl.searchParams.delete('brandId');
+                    const pageUrl = buildLandingShellUrl();
                     window.history.replaceState({}, '', pageUrl.toString());
                 } catch (_) { }
                 return;
@@ -89,18 +111,7 @@
             if (iframe) iframe.src = url;
             nav.setStage(st);
             try {
-                const pageUrl = new URL(window.location.href);
-                if (st && st !== 'options') {
-                    pageUrl.searchParams.set('stageHref', targetName);
-                    if (pid) pageUrl.searchParams.set('projectId', String(pid));
-                    else pageUrl.searchParams.delete('projectId');
-                    if (brandId) pageUrl.searchParams.set('brandId', String(brandId));
-                    else pageUrl.searchParams.delete('brandId');
-                } else {
-                    pageUrl.searchParams.delete('stageHref');
-                    pageUrl.searchParams.delete('projectId');
-                    pageUrl.searchParams.delete('brandId');
-                }
+                const pageUrl = buildStudioShellUrl(targetName, pid, brandId);
                 window.history.replaceState({}, '', pageUrl.toString());
             } catch (_) { }
         }
