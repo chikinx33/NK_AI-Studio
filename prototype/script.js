@@ -255,28 +255,13 @@
     return '';
   };
 
-  const hasForcedDashboardEntry = () => {
+  const resolveInitialStageTarget = (urlParams) => {
     try {
-      return sessionStorage.getItem(FORCE_DASHBOARD_ENTRY_KEY) === '1'
+      const forced = sessionStorage.getItem(FORCE_DASHBOARD_ENTRY_KEY) === '1'
         || localStorage.getItem(FORCE_DASHBOARD_ENTRY_KEY) === '1';
-    } catch (_) { }
-    return false;
-  };
-
-  const clearForcedDashboardEntry = () => {
-    try {
-      sessionStorage.removeItem(FORCE_DASHBOARD_ENTRY_KEY);
-      localStorage.removeItem(FORCE_DASHBOARD_ENTRY_KEY);
-    } catch (_) { }
-  };
-
-  const resolveInitialStageTarget = (urlParams, options = {}) => {
-    const allowStored = options.allowStored !== false;
-    const fallbackDashboard = options.fallbackDashboard !== false;
-    try {
-      const forced = hasForcedDashboardEntry();
       if (forced) {
-        clearForcedDashboardEntry();
+        sessionStorage.removeItem(FORCE_DASHBOARD_ENTRY_KEY);
+        localStorage.removeItem(FORCE_DASHBOARD_ENTRY_KEY);
         return 'dashboard.html';
       }
     } catch (_) { }
@@ -291,54 +276,28 @@
       if (RESTORABLE_STAGES.includes(fromQuery)) return STAGE_HTML_MAP[fromQuery];
     } catch (_) { }
 
-    if (allowStored) {
-      try {
-        const fromSessionHref = normalizeStageTarget(sessionStorage.getItem(STAGE_TARGET_KEY) || '');
-        if (fromSessionHref) return fromSessionHref;
-      } catch (_) { }
-
-      try {
-        const fromLocalHref = normalizeStageTarget(localStorage.getItem(STAGE_TARGET_KEY) || '');
-        if (fromLocalHref) return fromLocalHref;
-      } catch (_) { }
-
-      try {
-        const fromSession = NK.navigation.normalizeStageName(sessionStorage.getItem('nk_current_stage') || '');
-        if (RESTORABLE_STAGES.includes(fromSession)) return STAGE_HTML_MAP[fromSession];
-      } catch (_) { }
-
-      try {
-        const fromLocal = NK.navigation.normalizeStageName(localStorage.getItem('nk_current_stage') || '');
-        if (RESTORABLE_STAGES.includes(fromLocal)) return STAGE_HTML_MAP[fromLocal];
-      } catch (_) { }
-    }
-
-    return fallbackDashboard ? 'dashboard.html' : '';
-  };
-
-  const setShellMode = (mode) => {
-    const app = document.getElementById('shell-app') || document.querySelector('.app');
-    const sidebar = document.querySelector('.sidebar');
-    const optionsStage = document.getElementById('options-stage');
-    const content = document.querySelector('.content');
-    const safeMode = mode === 'studio' ? 'studio' : 'options';
-    if (!app || !sidebar || !optionsStage || !content) return safeMode;
-    const optionsMode = safeMode === 'options';
-    app.classList.toggle('no-sidebar', optionsMode);
-    sidebar.hidden = optionsMode;
-    optionsStage.classList.toggle('hidden', !optionsMode);
-    content.classList.toggle('hidden', optionsMode);
     try {
-      document.documentElement.setAttribute('data-shell-mode', safeMode);
-      document.body && document.body.setAttribute('data-shell-mode', safeMode);
+      const fromSessionHref = normalizeStageTarget(sessionStorage.getItem(STAGE_TARGET_KEY) || '');
+      if (fromSessionHref) return fromSessionHref;
     } catch (_) { }
-    return safeMode;
-  };
 
-  NK.shell = NK.shell || {};
-  NK.shell.setMode = setShellMode;
-  NK.shell.showOptions = () => setShellMode('options');
-  NK.shell.showStudio = () => setShellMode('studio');
+    try {
+      const fromLocalHref = normalizeStageTarget(localStorage.getItem(STAGE_TARGET_KEY) || '');
+      if (fromLocalHref) return fromLocalHref;
+    } catch (_) { }
+
+    try {
+      const fromSession = NK.navigation.normalizeStageName(sessionStorage.getItem('nk_current_stage') || '');
+      if (RESTORABLE_STAGES.includes(fromSession)) return STAGE_HTML_MAP[fromSession];
+    } catch (_) { }
+
+    try {
+      const fromLocal = NK.navigation.normalizeStageName(localStorage.getItem('nk_current_stage') || '');
+      if (RESTORABLE_STAGES.includes(fromLocal)) return STAGE_HTML_MAP[fromLocal];
+    } catch (_) { }
+
+    return 'dashboard.html';
+  };
 
   const init = async () => {
     // 1. 버전 및 네비게이션 초기화
@@ -375,81 +334,16 @@
       document.documentElement.setAttribute('data-embed', '1');
     }
     const currentPath = window.location.pathname;
-    const normalizedPath = String(currentPath || '').replace(/\\/g, '/');
-    const pathSegments = normalizedPath.split('/');
-    const lastPathSegment = String(pathSegments[pathSegments.length - 1] || '').trim().toLowerCase();
     const stage = NK.navigation.normalizeStageName(currentPath);
     const isAiVideoShellPath = currentPath.toLowerCase().includes('ai-video.html');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
-    const explicitStageHref = normalizeStageTarget(urlParams.get('stageHref') || '');
-    const explicitStage = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
-    const hasExplicitStageRequest = !!explicitStageHref || RESTORABLE_STAGES.includes(explicitStage);
-    const isIndexShellPath = !isIframe && isShellPage && stage === 'options';
-    const isRootLandingPath = isIndexShellPath && !lastPathSegment;
-    const shouldTreatAsLandingShell = isRootLandingPath || (isIndexShellPath && !hasExplicitStageRequest);
-    if (shouldTreatAsLandingShell) {
-      try {
-        clearForcedDashboardEntry();
-        sessionStorage.removeItem(STAGE_TARGET_KEY);
-        localStorage.removeItem(STAGE_TARGET_KEY);
-        sessionStorage.setItem('nk_current_stage', 'options');
-        localStorage.setItem('nk_current_stage', 'options');
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.delete('stageHref');
-        cleanUrl.searchParams.delete('stage');
-        cleanUrl.searchParams.delete('projectId');
-        cleanUrl.searchParams.delete('brandId');
-        cleanUrl.pathname = cleanUrl.pathname.replace(/index\.html$/i, '');
-        window.history.replaceState({}, '', cleanUrl.toString());
-      } catch (_) { }
-    }
-    const initialTarget = shouldTreatAsLandingShell ? '' : ((isAiVideoShellPath || isShellPage)
-      ? resolveInitialStageTarget(urlParams, {
-        allowStored: !shouldTreatAsLandingShell,
-        fallbackDashboard: !shouldTreatAsLandingShell
-      })
-      : '');
-    const initialStage = shouldTreatAsLandingShell ? 'options' : ((isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage);
+    const initialTarget = (isAiVideoShellPath || isShellPage) ? resolveInitialStageTarget(urlParams) : '';
+    const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
     const effectiveStage = initialStage || stage;
-
-    if (!isIframe && isAiVideoShellPath) {
-      try {
-        const redirectUrl = new URL('index.html', window.location.href);
-        const target = initialTarget || 'dashboard.html';
-        if (target) redirectUrl.searchParams.set('stageHref', target);
-        const projectId = urlParams.get('projectId') || '';
-        const brandId = urlParams.get('brandId') || '';
-        if (projectId) redirectUrl.searchParams.set('projectId', projectId);
-        if (brandId) redirectUrl.searchParams.set('brandId', brandId);
-        window.location.replace(redirectUrl.toString());
-      } catch (_) {
-        window.location.replace('index.html?stageHref=dashboard.html');
-      }
-      return;
-    }
-
-    if (!isIframe && !isShellPage && effectiveStage && effectiveStage !== 'options') {
-      try {
-        const redirectUrl = new URL('index.html', window.location.href);
-        redirectUrl.searchParams.set('stageHref', STAGE_HTML_MAP[effectiveStage] || 'dashboard.html');
-        const projectId = urlParams.get('projectId') || '';
-        const brandId = urlParams.get('brandId') || '';
-        if (projectId) redirectUrl.searchParams.set('projectId', projectId);
-        if (brandId) redirectUrl.searchParams.set('brandId', brandId);
-        window.location.replace(redirectUrl.toString());
-      } catch (_) {
-        window.location.replace('index.html?stageHref=dashboard.html');
-      }
-      return;
-    }
 
     // 2. 스테이지 상태 초기화 (네비게이션 파싱 후)
     if (effectiveStage) {
       NK.navigation.setStage(effectiveStage);
-    }
-
-    if (isShellPage) {
-      setShellMode(effectiveStage === 'options' ? 'options' : 'studio');
     }
 
     // 3. 부모 창 전용 로직 (사이드바, 메시지 수신) - 구독을 먼저 설정해야 초기 상태 반영됨
@@ -458,7 +352,7 @@
     }
 
     // 저장된 프로젝트 정보 복구 (대시보드가 아닐 때만 복구하여 처음부터 노출 방지)
-    const isDashboard = !effectiveStage || effectiveStage === 'dashboard' || effectiveStage === 'options';
+    const isDashboard = !effectiveStage || effectiveStage === 'dashboard';
     if (!isDashboard) {
       const resolvedProject = NK.service?.project?.resolveCurrent({ search: window.location.search }) || null;
       if (resolvedProject && NK.service?.project?.setCurrent) {
@@ -474,21 +368,6 @@
     // 아이프레임 내부라면 부모에게 알림
     if (isIframe && effectiveStage && window.parent) {
       window.parent.postMessage({ type: 'stage-changed', stage: effectiveStage }, '*');
-    }
-
-    if (isIframe) {
-      document.addEventListener('click', (evt) => {
-        const anchor = evt.target && evt.target.closest ? evt.target.closest('a[href]') : null;
-        if (!anchor) return;
-        const href = String(anchor.getAttribute('href') || '').trim();
-        if (!/^(?:\.\/)?index\.html(?:[?#].*)?$/.test(href)) return;
-        if (!(window.parent && window.parent.NK && window.parent.NK.navigation && typeof window.parent.NK.navigation.loadStage === 'function')) return;
-        evt.preventDefault();
-        evt.stopPropagation();
-        try {
-          window.parent.NK.navigation.loadStage('index.html');
-        } catch (_) { }
-      });
     }
 
     // 기본 대시보드 로드 (부모 창인 경우에만)
@@ -689,12 +568,35 @@
       if (NK.state.runtime.currentStage) updateSidebarHighlight(NK.state.runtime.currentStage);
     }
 
-    const handleStageAction = (action, currentProject) => {
+    // 사이드바 및 전역 링크 클릭 핸들러
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('.nav-item[href], [data-action]');
+      if (!link) return;
+
+      const href = link.getAttribute('href');
+      const currentProject = NK.state?.runtime?.currentProject;
       const persistCurrentProject = () => {
         const cp = NK.state?.runtime?.currentProject;
         if (!cp) return;
         NK.service?.project?.setCurrent?.(cp);
       };
+
+      // 대시보드/메인 클릭: 전체 페이지 전환을 막고 iframe으로만 로드
+      if (href && (href.includes('ai-video.html') || href.includes('dashboard.html'))) {
+        e.preventDefault();
+        e.stopPropagation();
+        NK.navigation.loadStage('dashboard.html');
+        return;
+      }
+
+      if (href && href.includes('.html')) {
+        e.preventDefault();
+        e.stopPropagation();
+        NK.navigation.loadStage(href);
+      }
+
+      // 사이드바 프로젝트 카드 버튼 처리
+      const action = link.dataset.action;
       if (action === 'sidebar-edit-scenario') {
         persistCurrentProject();
         const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';
@@ -724,46 +626,6 @@
         const url = currentProject?.id ? `media.html?projectId=${encodeURIComponent(currentProject.id)}` : 'media.html';
         NK.navigation.loadStage(url);
       }
-    };
-
-    document.querySelectorAll('.sidebar .nav-item[href]').forEach((link) => {
-      if (link.dataset.navBound === '1') return;
-      link.dataset.navBound = '1';
-      link.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const href = String(link.getAttribute('href') || '').trim();
-        if (!href) return;
-        if (href.includes('ai-video.html') || href.includes('dashboard.html')) {
-          NK.navigation.loadStage('dashboard.html');
-          return;
-        }
-        NK.navigation.loadStage(href);
-      });
-    });
-
-    const optionsBtn = document.querySelector('.sidebar [data-action="open-options"]');
-    if (optionsBtn && optionsBtn.dataset.navBound !== '1') {
-      optionsBtn.dataset.navBound = '1';
-      optionsBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        openOptionsStage();
-      });
-    }
-
-    // 동적 사이드바 카드 버튼 처리
-    document.addEventListener('click', (e) => {
-      const link = e.target.closest('[data-action]');
-      if (!link) return;
-      if (link.closest('.sidebar .nav')) return;
-
-      const currentProject = NK.state?.runtime?.currentProject;
-      const action = link.dataset.action;
-      if (!action || action === 'open-options') return;
-      e.preventDefault();
-      e.stopPropagation();
-      handleStageAction(action, currentProject);
     });
 
     // 아이프레임으로부터의 메시지 수신
@@ -2182,22 +2044,24 @@
     const aiVideoLink = document.querySelector('#login-icons .login-icon-link[href]');
     if (aiVideoLink) {
       aiVideoLink.addEventListener('click', (e) => {
-        e.preventDefault();
         if (window.self !== window.top && window.parent && window.parent.NK && window.parent.NK.navigation && typeof window.parent.NK.navigation.loadStage === 'function') {
+          e.preventDefault();
           try {
             window.parent.NK.navigation.loadStage('dashboard.html');
           } catch (_) { }
           return;
         }
         try {
+          if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
+            NK.ui.common.markFullscreenRestore();
+          }
+          sessionStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
+          localStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
           sessionStorage.removeItem(STAGE_TARGET_KEY);
           localStorage.removeItem(STAGE_TARGET_KEY);
           sessionStorage.removeItem('nk_current_stage');
           localStorage.removeItem('nk_current_stage');
         } catch (_) { }
-        if (NK.navigation && typeof NK.navigation.loadStage === 'function') {
-          NK.navigation.loadStage('dashboard.html');
-        }
       });
     }
 
@@ -2960,9 +2824,18 @@
   };
 
   window.openOptionsStage = () => {
-    if (NK.navigation && typeof NK.navigation.loadStage === 'function') {
-      NK.navigation.loadStage('index.html');
-    }
+    try {
+      if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
+        NK.ui.common.markFullscreenRestore();
+      }
+    } catch (_) { }
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = 'index.html';
+        return;
+      }
+    } catch (_) { }
+    window.location.href = 'index.html';
   };
 
   document.addEventListener('DOMContentLoaded', init);

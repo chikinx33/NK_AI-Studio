@@ -35,22 +35,6 @@
         });
     }
 
-    function buildLandingShellUrl() {
-        var current = new URL(window.location.href);
-        var path = String(current.pathname || '');
-        if (!path || path === '/') {
-            current.pathname = '/';
-        } else {
-            var normalized = path.replace(/\\/g, '/');
-            var parts = normalized.split('/');
-            parts[parts.length - 1] = '';
-            current.pathname = parts.join('/') || '/';
-        }
-        current.search = '';
-        current.hash = '';
-        return current;
-    }
-
     nav.loadStage = function (name) {
         let targetName = String(name || '').trim();
         if (!targetName) targetName = 'dashboard.html';
@@ -78,31 +62,13 @@
                 window.parent.postMessage({ type: 'stage-changed', stage: st }, '*');
             }
         } else {
-            if (st === 'options') {
-                try {
-                    sessionStorage.removeItem(STAGE_HREF_KEY);
-                    localStorage.removeItem(STAGE_HREF_KEY);
-                } catch (_) { }
-                if (NK.shell && typeof NK.shell.showOptions === 'function') {
-                    NK.shell.showOptions();
-                }
-                nav.setStage('options');
-                try {
-                    const pageUrl = buildLandingShellUrl();
-                    window.history.replaceState({}, '', pageUrl.toString());
-                } catch (_) { }
-                return;
-            }
             // 부모 창에서 직접 호출된 경우 (사이드바 클릭 등)
-            if (NK.shell && typeof NK.shell.showStudio === 'function') {
-                NK.shell.showStudio();
-            }
             const iframe = nav.ensureStageView();
             if (iframe) iframe.src = url;
             nav.setStage(st);
             try {
                 const pageUrl = new URL(window.location.href);
-                if (st && st !== 'options') {
+                if (st && st !== 'dashboard') {
                     pageUrl.searchParams.set('stageHref', targetName);
                     if (pid) pageUrl.searchParams.set('projectId', String(pid));
                     else pageUrl.searchParams.delete('projectId');

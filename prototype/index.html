@@ -19,7 +19,6 @@
   <script src="js/navigation.js" defer></script>
   <script src="js/service/media.js" defer></script>
   <script src="js/service/project.js" defer></script>
-  <script src="js/service/brand.js" defer></script>
   <script src="js/service/content-library.js" defer></script>
   <script src="js/ui/common.js" defer></script>
   <script src="js/ui/dashboard.js" defer></script>
@@ -30,193 +29,133 @@
 
 <body class="layout-fixed">
   <div class="grain"></div>
-  <div class="app no-sidebar" id="shell-app">
-    <aside class="sidebar" hidden>
-      <div class="brand">
-        <div class="brand-mark"></div>
-        <div class="brand-text">
-          <span class="title" data-i18n="brand_title">NK_Studio</span>
-          <span class="subtitle" data-i18n="brand_subtitle">자동화 영상 파이프라인</span>
+  <div class="app no-sidebar">
+    <main class="main">
+      <div class="main-body option-body">
+        <div class="login-icons" id="login-icons" aria-hidden="true">
+          <a href="ai-video.html" class="login-icon-link">
+            <img src="images/icon-ai-video.png" alt="영상 제작 메인으로 이동" />
+          </a>
+          <img src="images/icon-ai-image.png" alt="" class="is-disabled" aria-disabled="true" />
+          <img src="images/icon-ai-sound.png" alt="" class="is-disabled" aria-disabled="true" />
+          <img src="images/icon-ai-doc.png" alt="" class="is-disabled" aria-disabled="true" />
         </div>
-      </div>
-      <nav class="nav">
-        <a class="nav-item" href="dashboard.html">
-          <span data-i18n="nav_dashboard">대시보드</span>
-        </a>
-        <a class="nav-item" href="brand.html">
-          <span data-i18n="nav_brand">브랜드 스튜디오</span>
-        </a>
-        <a class="nav-item" href="knowledge.html">
-          <span data-i18n="nav_knowledge">브랜드 허브</span>
-        </a>
-        <a class="nav-item" href="analytics.html">
-          <span data-i18n="nav_analytics">성과 분석</span>
-        </a>
-        <a class="nav-item" href="library.html">
-          <span data-i18n="nav_library">콘텐츠 저장소</span>
-        </a>
-      </nav>
-      <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>
-      <div class="sidebar-footer">
-        <div class="sidebar-actions">
-          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('global')"></button>
-          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-          <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
-        </div>
-        <div class="sidebar-version">ver</div>
-      </div>
-    </aside>
 
-    <div id="project-overlay" class="auth-overlay hidden">
-      <div class="auth-card">
-        <p class="auth-title">프로젝트 생성</p>
-        <div class="form-row">
-          <label>이름</label>
-          <input id="project-name-input" placeholder="에피소드 이름" />
-        </div>
-        <div class="option-actions">
-          <button id="project-cancel" class="btn-secondary">취소</button>
-          <button id="project-create" class="btn-primary">생성</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="auth-overlay" class="auth-overlay hidden">
-      <div class="auth-card">
-        <p class="auth-title">로그인 하세요.</p>
-        <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
-      </div>
-    </div>
-
-    <main class="main blur-target">
-      <div class="main-body">
-        <section id="options-stage" class="option-body">
-          <div class="login-icons" id="login-icons" aria-hidden="true">
-            <a href="index.html?stageHref=dashboard.html" class="login-icon-link">
-              <img src="images/icon-ai-video.png" alt="영상 제작 메인으로 이동" />
-            </a>
-            <img src="images/icon-ai-image.png" alt="" class="is-disabled" aria-disabled="true" />
-            <img src="images/icon-ai-sound.png" alt="" class="is-disabled" aria-disabled="true" />
-            <img src="images/icon-ai-doc.png" alt="" class="is-disabled" aria-disabled="true" />
+        <div class="option-card-grid">
+          <div class="card option-card" id="login-card">
+            <h3 class="option-title" id="login-card-title">NK AI STUDIO</h3>
+            <div class="logo-box">
+              <img src="images/logo(500500).png" alt="logo" class="logo-img" id="login-card-logo" />
+              <input type="file" id="login-icon-file" class="login-brand-file-input" accept="image/*" />
+            </div>
+            <div class="form-row">
+              <label for="opt-id">ID</label>
+              <input type="text" id="opt-id" placeholder="아이디" />
+            </div>
+            <div class="form-row">
+              <label for="opt-pw">PASS</label>
+              <input type="password" id="opt-pw" placeholder="비밀번호" />
+            </div>
+            <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
+            <div class="option-actions">
+              <button class="btn-primary" id="opt-auth-btn">로그인</button>
+            </div>
+            <div class="sidebar-actions option-card-toolbar">
+              <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
+              <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang('local')" aria-label="언어 전환">KO</button>
+              <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('local')" aria-label="테마 전환"></button>
+            </div>
+            <div class="sidebar-version">ver</div>
           </div>
 
-          <div class="option-card-grid">
-            <div class="card option-card" id="login-card">
-              <h3 class="option-title" id="login-card-title">NK AI STUDIO</h3>
-              <div class="logo-box">
-                <img src="images/logo(500500).png" alt="logo" class="logo-img" id="login-card-logo" />
-                <input type="file" id="login-icon-file" class="login-brand-file-input" accept="image/*" />
-              </div>
-              <div class="form-row">
-                <label for="opt-id">ID</label>
-                <input type="text" id="opt-id" placeholder="아이디" />
-              </div>
-              <div class="form-row">
-                <label for="opt-pw">PASS</label>
-                <input type="password" id="opt-pw" placeholder="비밀번호" />
-              </div>
-              <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
-              <div class="option-actions">
-                <button class="btn-primary" id="opt-auth-btn">로그인</button>
-              </div>
-              <div class="sidebar-actions option-card-toolbar">
-                <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
-                <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang('local')" aria-label="언어 전환">KO</button>
-                <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('local')" aria-label="테마 전환"></button>
-              </div>
-              <div class="sidebar-version">ver</div>
-            </div>
+          <section class="card option-card favorite-card is-locked" id="favorite-card" aria-live="polite">
+            <div class="favorite-list empty" id="favorite-list" role="list"></div>
+            <div class="favorite-pagination hidden" id="favorite-pagination" aria-label="즐겨찾기 페이지 이동"></div>
+            <div class="favorite-transfer-box hidden" id="favorite-transfer-box" aria-label="다른 페이지로 이동" title="다른 페이지 빈 칸으로 이동"></div>
+          </section>
 
-            <section class="card option-card favorite-card is-locked" id="favorite-card" aria-live="polite">
-              <div class="favorite-list empty" id="favorite-list" role="list"></div>
-              <div class="favorite-pagination hidden" id="favorite-pagination" aria-label="즐겨찾기 페이지 이동"></div>
-              <div class="favorite-transfer-box hidden" id="favorite-transfer-box" aria-label="다른 페이지로 이동" title="다른 페이지 빈 칸으로 이동"></div>
-            </section>
+          <section class="card option-card user-dashboard-card is-locked" id="user-dashboard-card" aria-live="polite">
 
-            <section class="card option-card user-dashboard-card is-locked" id="user-dashboard-card" aria-live="polite">
+            <section class="user-dashboard-panel hidden" id="user-dashboard-panel">
+              <article class="user-widget subscription-widget is-collapsed" id="subscription-widget">
+                <div class="user-widget-head">
+                  <h4>구독 현황</h4>
+                  <button type="button" class="subscription-toggle" id="subscription-toggle" aria-expanded="false" aria-label="구독 현황 펼치기"></button>
+                </div>
+                <div class="subscription-body">
+                  <div class="subscription-grid">
+                    <div class="subscription-item">
+                      <span class="muted">플랜</span>
+                      <strong id="subscription-plan">Free</strong>
+                    </div>
+                    <div class="subscription-item">
+                      <span class="muted">상태</span>
+                      <strong id="subscription-status">미연결</strong>
+                    </div>
+                    <div class="subscription-item">
+                      <span class="muted">갱신일</span>
+                      <strong id="subscription-renew">-</strong>
+                    </div>
+                  </div>
+                  <p class="muted user-widget-help">결제 연동 전 단계라 현재는 UI만 표시됩니다.</p>
+                  <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
+                </div>
+              </article>
 
-              <section class="user-dashboard-panel hidden" id="user-dashboard-panel">
-                <article class="user-widget subscription-widget is-collapsed" id="subscription-widget">
-                  <div class="user-widget-head">
-                    <h4>구독 현황</h4>
-                    <button type="button" class="subscription-toggle" id="subscription-toggle" aria-expanded="false" aria-label="구독 현황 펼치기"></button>
+              <form class="user-widget favorite-widget favorite-form is-collapsed hidden" id="favorite-form">
+                <div class="user-widget-head">
+                  <h4>즐겨찾기 등록</h4>
+                  <button type="button" class="favorite-form-toggle" id="favorite-form-toggle" aria-expanded="false" aria-label="즐겨찾기 등록 펼치기"></button>
+                </div>
+                <div class="favorite-form-body">
+                  <div class="fav-form-row">
+                    <label for="favorite-title">메뉴 이름</label>
+                    <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
                   </div>
-                  <div class="subscription-body">
-                    <div class="subscription-grid">
-                      <div class="subscription-item">
-                        <span class="muted">플랜</span>
-                        <strong id="subscription-plan">Free</strong>
-                      </div>
-                      <div class="subscription-item">
-                        <span class="muted">상태</span>
-                        <strong id="subscription-status">미연결</strong>
-                      </div>
-                      <div class="subscription-item">
-                        <span class="muted">갱신일</span>
-                        <strong id="subscription-renew">-</strong>
-                      </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-category-select">카테고리</label>
+                    <select id="favorite-category-select"></select>
+                  </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-link">링크 주소</label>
+                    <input type="url" id="favorite-link" placeholder="https://example.com" required />
+                  </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-icon">아이콘</label>
+                    <div class="favorite-file-picker">
+                      <button type="button" class="btn-secondary favorite-file-trigger" id="favorite-icon-trigger" data-i18n="파일 선택">파일 선택</button>
+                      <span class="favorite-file-name" id="favorite-icon-name">선택된 파일 없음</span>
+                      <input type="file" id="favorite-icon" class="favorite-file-input" accept="image/*" />
                     </div>
-                    <p class="muted user-widget-help">결제 연동 전 단계라 현재는 UI만 표시됩니다.</p>
-                    <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
                   </div>
-                </article>
+                  <div class="favorite-form-actions">
+                    <button type="submit" class="btn-primary">등록</button>
+                    <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
+                  </div>
+                </div>
+              </form>
 
-                <form class="user-widget favorite-widget favorite-form is-collapsed hidden" id="favorite-form">
-                  <div class="user-widget-head">
-                    <h4>즐겨찾기 등록</h4>
-                    <button type="button" class="favorite-form-toggle" id="favorite-form-toggle" aria-expanded="false" aria-label="즐겨찾기 등록 펼치기"></button>
-                  </div>
-                  <div class="favorite-form-body">
-                    <div class="fav-form-row">
-                      <label for="favorite-title">메뉴 이름</label>
-                      <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
-                    </div>
-                    <div class="fav-form-row">
-                      <label for="favorite-category-select">카테고리</label>
-                      <select id="favorite-category-select"></select>
-                    </div>
-                    <div class="fav-form-row">
-                      <label for="favorite-link">링크 주소</label>
-                      <input type="url" id="favorite-link" placeholder="https://example.com" required />
-                    </div>
-                    <div class="fav-form-row">
-                      <label for="favorite-icon">아이콘</label>
-                      <div class="favorite-file-picker">
-                        <button type="button" class="btn-secondary favorite-file-trigger" id="favorite-icon-trigger" data-i18n="파일 선택">파일 선택</button>
-                        <span class="favorite-file-name" id="favorite-icon-name">선택된 파일 없음</span>
-                        <input type="file" id="favorite-icon" class="favorite-file-input" accept="image/*" />
-                      </div>
-                    </div>
-                    <div class="favorite-form-actions">
-                      <button type="submit" class="btn-primary">등록</button>
-                      <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
-                    </div>
-                  </div>
-                </form>
-
-                <section class="user-widget theme-preset-widget is-collapsed hidden" id="theme-preset-widget">
-                  <div class="user-widget-head">
-                    <h4 data-i18n="테마 선택">테마 선택</h4>
-                    <button type="button" class="theme-preset-toggle" id="theme-preset-toggle" aria-expanded="false" aria-label="테마 선택 펼치기"></button>
-                  </div>
-                  <div class="theme-preset-body">
-                    <section class="theme-preset-group">
-                      <p class="theme-preset-label" data-i18n="다크">다크</p>
-                      <div class="theme-preset-options" id="theme-dark-options"></div>
-                    </section>
-                    <section class="theme-preset-group">
-                      <p class="theme-preset-label" data-i18n="라이트">라이트</p>
-                      <div class="theme-preset-options" id="theme-light-options"></div>
-                    </section>
-                    <p class="theme-preset-help" data-i18n="우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.">우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.</p>
-                  </div>
-                </section>
+              <section class="user-widget theme-preset-widget is-collapsed hidden" id="theme-preset-widget">
+                <div class="user-widget-head">
+                  <h4 data-i18n="테마 선택">테마 선택</h4>
+                  <button type="button" class="theme-preset-toggle" id="theme-preset-toggle" aria-expanded="false" aria-label="테마 선택 펼치기"></button>
+                </div>
+                <div class="theme-preset-body">
+                  <section class="theme-preset-group">
+                    <p class="theme-preset-label" data-i18n="다크">다크</p>
+                    <div class="theme-preset-options" id="theme-dark-options"></div>
+                  </section>
+                  <section class="theme-preset-group">
+                    <p class="theme-preset-label" data-i18n="라이트">라이트</p>
+                    <div class="theme-preset-options" id="theme-light-options"></div>
+                  </section>
+                  <p class="theme-preset-help" data-i18n="우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.">우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.</p>
+                </div>
               </section>
             </section>
-          </div>
-        </section>
-        <section class="content hidden"></section>
+          </section>
+
+        </div>
       </div>
     </main>
   </div>
