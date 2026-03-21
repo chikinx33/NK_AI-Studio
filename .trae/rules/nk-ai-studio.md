@@ -4,6 +4,8 @@
 항상 한글로 대답하세요.
 모든 설명은 사용자 관점에서 알기 쉽게 설명해주세요.
 한글이 있는 파일은 UTF8 인코딩 유지하세요.
+- 실패, 한계, 포기 판단이 발생했을 때는 책임 주체를 정확히 적으세요. 사용자가 내 한계 때문에 타협하거나 포기한 상황을 사용자의 욕심, 선호, 선택처럼 표현하지 마세요.
+- 구현 실패나 품질 저하가 내 설계/구현 문제에서 비롯되었으면 그 책임을 명확히 인정하고, 사용자에게 책임이 전가되는 말투를 사용하지 마세요.
 # 개발 작업을 마친 후 사이드 바 하단의 버전 표시를 매 번 업데이트하세요. Auto-Generated Rules
 - **Version Control**: 코드 변경 직후 `prototype/js/config.js`의 `NK.config.APP_VERSION`을 즉시 증가시킨다. `script.js`에는 최상위 폴백이 있으나, 실제 버전 관리는 `config.js`에서 한다.
 - **Delivery Rule**: After coding work, commit and push the changes so the latest web-deployable state is available for browser testing. If commit/push cannot be completed, report the exact blocker immediately.
