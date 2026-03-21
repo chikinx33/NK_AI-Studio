@@ -339,6 +339,13 @@
   };
 
   const sanitizeText = (v) => String(v == null ? '' : v).replace(/[<>]/g, '').trim();
+  const firstFilledText = (...values) => {
+    for (const value of values) {
+      const text = String(value == null ? '' : value).trim();
+      if (text) return text;
+    }
+    return '';
+  };
   const escapeHtml = (v) => String(v == null ? '' : v)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -878,14 +885,14 @@
       ) || '';
       const dialogues = normalizeDialogue(s.dialogue || s.dialogues || [], activeCharacters);
       const subtitleText = String(cleanedSubtitle || '').trim();
-      const shot =
-        s.shot ||
-        s.visual ||
-        s.camera ||
-        s.scene_visual ||
-        s.image ||
-        (rawNarration ? String(rawNarration).split(/(?<=[.!?])\s+/)[0] || '' : '') ||
-        '';
+      const shot = firstFilledText(
+        s.shot,
+        s.visual,
+        s.camera,
+        s.scene_visual,
+        s.image,
+        rawNarration ? (String(rawNarration).split(/(?<=[.!?])\s+/)[0] || '') : ''
+      );
       const narration = applyCharacterTokenHints(String(rawNarration || '').trim(), activeCharacters);
       const dialogue = dialogues.map((d) => ({
         speaker: applyCharacterTokenHints(d.speaker, activeCharacters),
@@ -908,8 +915,8 @@
         dialogueText,
         narration,
         dialogue,
-        sceneLocation: String(s.sceneLocation || s.location || '').trim(),
-        backgroundStyle: String(s.backgroundStyle || s.sharedBackgroundStyle || '').trim(),
+        sceneLocation: firstFilledText(s.sceneLocation, s.location),
+        backgroundStyle: firstFilledText(s.backgroundStyle, s.sharedBackgroundStyle),
         subtitleText: resolvedSubtitleText,
         videoSpeechPrompt: String(s.videoSpeechPrompt || '').trim(),
         script: String(s.script || '').trim(),

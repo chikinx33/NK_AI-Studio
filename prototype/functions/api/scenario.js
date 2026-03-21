@@ -1872,6 +1872,14 @@ function normalizeTextList(value) {
     .filter(Boolean);
 }
 
+function firstFilledText(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
 function normalizeKnowledgeHubInput(body = {}, options = {}) {
   const hasNested = body.knowledgeHub && typeof body.knowledgeHub === "object";
   const nested = hasNested ? body.knowledgeHub : {};
@@ -1909,13 +1917,13 @@ function shapeScenesFromModel(rawScenes = [], options = {}) {
     sceneCount: options.sceneCount,
   };
   return (Array.isArray(rawScenes) ? rawScenes : []).map((s, idx) => {
-    const narrationRaw = s.narration || s.lines || s.story || s.text || s.script || s.content || "";
-    const sceneIntentRaw = s.sceneIntent || s.intent || s.goal || s.purpose || "";
-    const sceneLocationRaw = s.sceneLocation || s.location || "";
-    const backgroundStyleRaw = s.backgroundStyle || s.sharedBackgroundStyle || "";
+    const narrationRaw = firstFilledText(s.narration, s.lines, s.story, s.text, s.script, s.content);
+    const sceneIntentRaw = firstFilledText(s.sceneIntent, s.intent, s.goal, s.purpose);
+    const sceneLocationRaw = firstFilledText(s.sceneLocation, s.location);
+    const backgroundStyleRaw = firstFilledText(s.backgroundStyle, s.sharedBackgroundStyle);
     const dialogueRaw = normalizeDialogue(s.dialogue || s.dialogues || []);
     const firstLine = String(narrationRaw || "").split(/(?<=[.!?])\s+/)[0] || narrationRaw || "";
-    const visualRaw = s.visual || s.shot || s.scene_visual || s.camera || s.image || firstLine || `Scene ${idx + 1} visual`;
+    const visualRaw = firstFilledText(s.visual, s.shot, s.scene_visual, s.camera, s.image, firstLine, `Scene ${idx + 1} visual`);
     const fallbackPer = Math.max(Math.floor((Number(options.duration) || 60) / (Number(options.sceneCount) || 7)), 3);
     const estSec = Math.max(Math.floor(Number(s.estSec || s.duration || s.len || s.length || fallbackPer)), 3);
 
@@ -1943,8 +1951,8 @@ function shapeScenesFromModel(rawScenes = [], options = {}) {
       title: s.title || `Scene ${idx + 1}`,
       estSec,
       sceneIntent: applyCharacterTokenHints(String(sceneIntentRaw || "").trim(), characters),
-      sceneLocation: String(sceneLocationRaw || "").trim(),
-      backgroundStyle: String(backgroundStyleRaw || "").trim(),
+      sceneLocation: sceneLocationRaw,
+      backgroundStyle: backgroundStyleRaw,
       sceneArcPhase: String(s.sceneArcPhase || s.phaseLabel || "").trim(),
       sceneArcKey: String(s.sceneArcKey || s.phaseKey || "").trim(),
       sceneArcGoal: String(s.sceneArcGoal || s.phaseGoal || "").trim(),
@@ -1996,9 +2004,9 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
     });
     const hints = buildHintText(spec, blueprint, spec.lang || options.lang);
     const estSec = Math.max(Number(scene.estSec) || 0, 3);
-    const sceneIntent = selectSceneIntentBase(scene.sceneIntent || scene.intent || scene.goal, hints.intent);
-    const sceneLocation = String(scene.sceneLocation || scene.location || hints.location || blueprint.location || "").trim();
-    const backgroundStyle = String(scene.backgroundStyle || hints.backgroundStyle || spec.continuity?.backgroundStyle || "").trim();
+    const sceneIntent = selectSceneIntentBase(firstFilledText(scene.sceneIntent, scene.intent, scene.goal), hints.intent);
+    const sceneLocation = firstFilledText(scene.sceneLocation, scene.location, hints.location, blueprint.location);
+    const backgroundStyle = firstFilledText(scene.backgroundStyle, hints.backgroundStyle, spec.continuity?.backgroundStyle);
     const narration = options.narrationEnabled
       ? fitNarrationToDuration(selectNarrationBase(scene.narration, hints.narration), estSec, options.lang)
       : scene.narration;

@@ -148,6 +148,50 @@ test('alignment step repairs generic scenes toward overview-fit structure', () =
   assert.ok(aligned.every((scene) => scene.backgroundStyle));
 });
 
+test('alignment replaces blank sceneLocation with blueprint location instead of preserving whitespace', () => {
+  const helpers = loadScenarioHelpers();
+  const spec = helpers.buildScenarioSpec({
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    target: '영유아',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    needs: '놀이',
+    tones: '유머',
+    styleText: '애니메이션(3D)',
+    styles: '애니메이션(3D)',
+    duration: '15',
+    sceneCount: 4
+  });
+
+  const aligned = helpers.alignScenesToScenarioSpec([{
+    id: 1,
+    estSec: 4,
+    sceneLocation: '   ',
+    narration: '친구들이 모인다.',
+    dialogue: [{ speaker: '@narrator', line: '시작하자.' }],
+    visual: '친구들이 선다.'
+  }], spec, {
+    lang: 'ko',
+    topic: 'ABC 동요 배우기',
+    purposeCategory: '키즈 · 영유아',
+    purposeTags: '동요',
+    toneText: '',
+    tones: '유머',
+    styleText: '애니메이션(3D)',
+    styles: '애니메이션(3D)',
+    aspectRatio: '16:9',
+    sceneCount: 1,
+    duration: 4,
+    narrationEnabled: true,
+    dubbingEnabled: true,
+    defaultSpeaker: '@narrator'
+  });
+
+  assert.ok(aligned[0].sceneLocation);
+  assert.notEqual(aligned[0].sceneLocation.trim(), '');
+});
+
 test('alignment keeps narration as spoken line and trims voice to scene duration', () => {
   const helpers = loadScenarioHelpers();
   const spec = helpers.buildScenarioSpec({
