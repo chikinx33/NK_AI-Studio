@@ -372,10 +372,15 @@
     return j(text);
   };
 
-  api.libraryIP = async function (projectId) {
+  api.libraryIP = async function (projectId, options) {
     var uid = resolveUserId();
     var token = getAuthToken();
-    var url = withBase('/api/ip/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
+    var opts = options && typeof options === 'object' ? options : {};
+    var q = 'userId=' + encodeURIComponent(uid);
+    if (opts.brandId) q += '&brandId=' + encodeURIComponent(String(opts.brandId || ''));
+    else q += '&projectId=' + encodeURIComponent(String(projectId || ''));
+    if (token) q += '&nk_token=' + encodeURIComponent(token);
+    var url = withBase('/api/ip/library?' + q);
     var res = await fetch(url, { headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error(text || 'ip_library_error');

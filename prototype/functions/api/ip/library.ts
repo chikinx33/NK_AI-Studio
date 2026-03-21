@@ -1,4 +1,4 @@
-import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { buildAiVideoBrandPrefix, buildAiVideoProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>
@@ -19,8 +19,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin)
     const url = new URL(request.url)
     const projectId = (url.searchParams.get("projectId") || "").trim()
+    const brandId = (url.searchParams.get("brandId") || "").trim()
     const userId = auth.userId
-    if (!projectId) return send({ error: "projectId is required" }, 400, origin)
+    if (!projectId && !brandId) return send({ error: "projectId or brandId is required" }, 400, origin)
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined
@@ -30,8 +31,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput)
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin)
     const basePrefix = outParsed.object.replace(/\/$/, "")
-    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId)
-    const prefix = `${projectPrefix}/IP/`
+    const prefix = brandId
+      ? `${buildAiVideoBrandPrefix(basePrefix, userId, brandId)}/ip/`
+      : `${buildAiVideoProjectPrefix(basePrefix, userId, projectId)}/IP/`
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" })
     const userProject =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||

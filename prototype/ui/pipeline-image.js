@@ -457,6 +457,104 @@
     return null;
   }
 
+  function parseBrandIpToken(name) {
+    var raw = String(name || '').trim();
+    if (!raw) return '';
+    var marker = '/ip/';
+    var idx = raw.toLowerCase().indexOf(marker);
+    if (idx < 0) return '';
+    var rest = raw.slice(idx + marker.length).replace(/^\/+/, '');
+    var first = rest.split('/')[0] || '';
+    try {
+      first = decodeURIComponent(first);
+    } catch (_) {}
+    first = String(first || '').trim();
+    if (!first || first === '_' || /^item$/i.test(first)) return '';
+    return normalizeToken(first);
+  }
+
+  function buildIpLibraryFallback(listing, resolvedCharacters) {
+    var items = Array.isArray(listing && listing.items) ? listing.items : [];
+    var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters.slice(0, 4) : [];
+    if (!items.length || !sceneCharacters.length) return null;
+    var refsPerCharacter = sceneCharacters.length <= 1 ? 4 : (sceneCharacters.length === 2 ? 2 : 1);
+    var grouped = {};
+    var generic = [];
+    items.forEach(function (item) {
+      var token = parseBrandIpToken(item && item.name);
+      var imageUrl = String(item && (item.gsUrl || item.signedUrl || item.url) || '').trim();
+      if (!imageUrl) return;
+      var normalized = {
+        imageDataUrl: imageUrl,
+        name: String(item && item.name || '').trim()
+      };
+      if (!token) {
+        generic.push(normalized);
+        return;
+      }
+      var key = String(token).toLowerCase();
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(normalized);
+    });
+    var referenceImages = [];
+    var referenceMeta = [];
+    var referenceSubjects = [];
+    var promptLines = [];
+    sceneCharacters.forEach(function (character, index) {
+      if (referenceImages.length >= 4) return;
+      var token = normalizeToken(character && (character.trigger || character.token || character.name || character.displayName));
+      if (!token) return;
+      var key = String(token).toLowerCase();
+      var matched = Array.isArray(grouped[key]) ? grouped[key].slice() : [];
+      if (!matched.length && !index && generic.length) matched = generic.slice();
+      if (!matched.length) return;
+      var displayName = normalizeText(character && (character.name || character.displayName) || token.replace(/^@/, '')) || token.replace(/^@/, '');
+      var subjectDescription = compactDescription([
+        displayName,
+        character && character.description,
+        Array.isArray(character && character.fixedTraits) ? character.fixedTraits.join(', ') : '',
+        character && character.styleGuide
+      ]);
+      matched.slice(0, Math.min(refsPerCharacter, 4 - referenceImages.length)).forEach(function (file) {
+        referenceImages.push({
+          referenceId: index + 1,
+          referenceType: 'REFERENCE_TYPE_SUBJECT',
+          imageDataUrl: file.imageDataUrl,
+          subjectDescription: subjectDescription,
+          subjectType: 'SUBJECT_TYPE_DEFAULT'
+        });
+        referenceMeta.push({
+          referenceId: index + 1,
+          token: token,
+          displayName: displayName,
+          sheetId: file.name || '',
+          pose: 'other',
+          label: 'fallback',
+          isPrimary: false
+        });
+      });
+      if (!referenceImages.length) return;
+      referenceSubjects.push({
+        referenceId: index + 1,
+        token: token,
+        displayName: displayName,
+        subjectDescription: subjectDescription,
+        poseSummary: 'brand ip fallback'
+      });
+      promptLines.push(
+        'Use the uploaded brand IP reference images for ' + displayName + ' and preserve the same silhouette, colors, costume, and face.'
+      );
+    });
+    if (!referenceImages.length) return null;
+    return {
+      referenceImages: referenceImages.slice(0, 4),
+      promptPrefix: 'Create an image that matches the scene description below.',
+      promptSuffix: promptLines.join('\n'),
+      referenceMeta: referenceMeta,
+      referenceSubjects: referenceSubjects
+    };
+  }
+
   image.generateImageForIdx = async function (options) {
     var opts = options || {};
     var ctx = opts.ctx;
@@ -536,6 +634,15 @@
                 projectRecord: liveDraft,
                 hydratedBrand: remoteBrand
               });
+            }
+          } catch (_) {}
+        }
+        if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && brandId && NK.api && NK.api.libraryIP) {
+          try {
+            var brandIpListing = await NK.api.libraryIP('', { brandId: brandId });
+            var ipFallback = buildIpLibraryFallback(brandIpListing, res.characters || []);
+            if (ipFallback && ipFallback.referenceImages && ipFallback.referenceImages.length) {
+              referencePayload = ipFallback;
             }
           } catch (_) {}
         }
