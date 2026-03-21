@@ -384,10 +384,11 @@
     const explicitStageHref = normalizeStageTarget(urlParams.get('stageHref') || '');
     const explicitStage = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
     const hasExplicitStageRequest = !!explicitStageHref || RESTORABLE_STAGES.includes(explicitStage);
-    const isIndexShellPath = !isIframe && isShellPage && stage === 'options';
-    const isRootLandingPath = isIndexShellPath && !lastPathSegment;
-    const isBareLandingEntry = isRootLandingPath || (isIndexShellPath && !hasExplicitStageRequest);
-    if (isBareLandingEntry) {
+    const isOptionsShellPath = !isIframe && isShellPage && stage === 'options';
+    const isRootLandingPath = isOptionsShellPath && !lastPathSegment;
+    const isStudioShellBootstrap = (isAiVideoShellPath || isShellPage) && !isRootLandingPath;
+    const isBareLandingEntry = isRootLandingPath || (isOptionsShellPath && !hasExplicitStageRequest);
+    if (isRootLandingPath) {
       try {
         clearForcedDashboardEntry();
         sessionStorage.removeItem(STAGE_TARGET_KEY);
@@ -402,14 +403,14 @@
         window.history.replaceState({}, '', cleanUrl.toString());
       } catch (_) { }
     }
-    const forcedLandingStage = isBareLandingEntry ? 'options' : '';
-    const initialTarget = forcedLandingStage ? '' : ((isAiVideoShellPath || isShellPage)
+    const forcedLandingStage = isRootLandingPath ? 'options' : '';
+    const initialTarget = forcedLandingStage ? '' : (isStudioShellBootstrap
       ? resolveInitialStageTarget(urlParams, {
         allowStored: !isBareLandingEntry,
         fallbackDashboard: !isBareLandingEntry
       })
       : '');
-    const initialStage = forcedLandingStage || ((isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage);
+    const initialStage = forcedLandingStage || (isStudioShellBootstrap ? NK.navigation.normalizeStageName(initialTarget) : stage);
     const effectiveStage = forcedLandingStage || initialStage || stage;
 
     if (!isIframe && isAiVideoShellPath) {
@@ -453,7 +454,7 @@
     }
 
     // 3. 부모 창 전용 로직 (사이드바, 메시지 수신) - 구독을 먼저 설정해야 초기 상태 반영됨
-    if (!isIframe) {
+    if (!isIframe && !isRootLandingPath) {
       setupParentLogic();
     }
 
@@ -493,7 +494,7 @@
 
     // 기본 대시보드 로드 (부모 창인 경우에만)
     const isOptionsPage = effectiveStage === 'options';
-    const isMainPage = !isIframe && !isOptionsPage && (
+    const isMainPage = !isIframe && !isRootLandingPath && !isOptionsPage && (
       effectiveStage === 'dashboard' ||
       isAiVideoShellPath ||
       isShellPage
