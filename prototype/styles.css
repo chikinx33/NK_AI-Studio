@@ -7094,6 +7094,11 @@ body.layout-fixed .lib-content {
   z-index: 1;
 }
 
+.knowledge-hub-disclosure::before {
+  top: 4px;
+  left: 4px;
+}
+
 .brand-studio-disclosure > summary,
 .knowledge-hub-disclosure > summary {
   list-style: none;
