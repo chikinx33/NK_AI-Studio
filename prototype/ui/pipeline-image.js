@@ -555,6 +555,39 @@
     };
   }
 
+  function unwrapLookupError(error) {
+    var detail = error && error.detail;
+    if (!detail) return error && error.message ? error.message : null;
+    if (typeof detail === 'string') {
+      try {
+        return JSON.parse(detail);
+      } catch (_) {
+        return detail;
+      }
+    }
+    return detail;
+  }
+
+  function buildLookupDiagnostics(payload, options) {
+    var row = payload && typeof payload === 'object' ? payload : {};
+    var lookup = row.lookup && typeof row.lookup === 'object' ? row.lookup : row;
+    var fallback = options && typeof options === 'object' ? options : {};
+    return {
+      brandId: normalizeText(fallback.brandId || lookup.brandId || ''),
+      gcsPath: normalizeText(lookup.gcsPath || ''),
+      listedObjectCount: Math.max(0, Number(lookup.listedObjectCount || 0) || 0),
+      error: lookup.error == null ? null : lookup.error,
+      serviceAccountEmail: normalizeText(lookup.serviceAccountEmail || ''),
+      resultItemCount: Math.max(0, Number(lookup.resultItemCount || (Array.isArray(row.items) ? row.items.length : 0)) || 0)
+    };
+  }
+
+  function logBrandIpLookupDiagnostics(payload, options) {
+    try {
+      console.log('Character sheet GCS lookup (image):', buildLookupDiagnostics(payload, options));
+    } catch (_) {}
+  }
+
   image.generateImageForIdx = async function (options) {
     var opts = options || {};
     var ctx = opts.ctx;
@@ -640,11 +673,14 @@
         if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && brandId && NK.api && NK.api.libraryIP) {
           try {
             var brandIpListing = await NK.api.libraryIP('', { brandId: brandId });
+            logBrandIpLookupDiagnostics(brandIpListing, { brandId: brandId });
             var ipFallback = buildIpLibraryFallback(brandIpListing, res.characters || []);
             if (ipFallback && ipFallback.referenceImages && ipFallback.referenceImages.length) {
               referencePayload = ipFallback;
             }
-          } catch (_) {}
+          } catch (err) {
+            logBrandIpLookupDiagnostics(unwrapLookupError(err), { brandId: brandId });
+          }
         }
         try {
           console.log('Character references (image):', {

@@ -347,6 +347,14 @@ test('pipeline image generation falls back to brand ip library files when metada
     apiLibraryIP(projectId, options) {
       assert.equal(String(options && options.brandId || ''), 'shape-brand');
       return {
+        lookup: {
+          brandId: 'shape-brand',
+          gcsPath: 'gs://bucket/users/u/ai-video/brands/shape-brand/ip/',
+          listedObjectCount: 1,
+          resultItemCount: 1,
+          error: null,
+          serviceAccountEmail: 'svc@example.iam.gserviceaccount.com'
+        },
         items: [
           {
             name: 'users/u/ai-video/brands/shape-brand/ip/_/sheet_front.png',

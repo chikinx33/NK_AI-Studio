@@ -13,6 +13,7 @@ const send = (data: any, status = 200, origin?: string | null) =>
   new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) })
 
 export const onRequestGet: PagesFunction = async ({ request, env }) => {
+  let lookupContext: any = null
   try {
     const origin = request.headers.get("Origin")
     const auth = await authorizeRequest(request, env)
@@ -40,13 +41,32 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       (env.GOOGLE_PROJECT_ID as string | undefined) ||
       ""
     const listUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?prefix=${encodeURIComponent(prefix)}&maxResults=500${userProject ? `&userProject=${encodeURIComponent(userProject)}` : ""}`
+    lookupContext = {
+      brandId,
+      projectId,
+      gcsPath: `gs://${outParsed.bucket}/${prefix}`,
+      listApiUrl: listUrl,
+      serviceAccountEmail: clientEmail,
+      listedObjectCount: 0,
+      resultItemCount: 0,
+      error: null
+    }
     const res = await fetch(listUrl, { headers: { Authorization: `Bearer ${token}`, ...(userProject ? { "X-Goog-User-Project": userProject } : {}) } })
     const text = await res.text()
     if (!res.ok) {
-      return send({ error: "List objects failed", status: res.status, detail: safeJson(text) }, res.status, origin)
+      const detail = safeJson(text)
+      return send({
+        error: "List objects failed",
+        status: res.status,
+        detail,
+        lookup: Object.assign({}, lookupContext || {}, {
+          error: detail
+        })
+      }, res.status, origin)
     }
     const json = safeJson(text)
     const items = Array.isArray(json.items) ? json.items : []
+    if (lookupContext) lookupContext.listedObjectCount = items.length
     const result: Array<{ name: string; size: number; contentType: string; timeCreated: string; updated: string; signedUrl: string }> = []
     for (const it of items) {
       const name = String(it.name || "")
@@ -55,9 +75,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       result.push({ name, size: Number(it.size || 0), contentType: String(it.contentType || ""), timeCreated: String(it.timeCreated || ""), updated: String(it.updated || ""), signedUrl: signed })
     }
     result.sort((a, b) => (new Date(b.updated).getTime() - new Date(a.updated).getTime()))
-    return send({ items: result, prefix }, 200, origin)
+    if (lookupContext) lookupContext.resultItemCount = result.length
+    return send({ items: result, prefix, lookup: lookupContext }, 200, origin)
   } catch (e: any) {
-    return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"))
+    const detail = e?.stack || e?.message || "Unknown error"
+    return send({
+      error: e?.message || "Unknown error",
+      lookup: lookupContext ? Object.assign({}, lookupContext, { error: detail }) : null
+    }, 500, request.headers.get("Origin"))
   }
 }
 

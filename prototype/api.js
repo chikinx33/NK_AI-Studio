@@ -383,7 +383,13 @@
     var url = withBase('/api/ip/library?' + q);
     var res = await fetch(url, { headers: buildAuthHeaders() });
     var text = await res.text();
-    if (!res.ok) throw new Error(text || 'ip_library_error');
+    if (!res.ok) {
+      var data = j(text);
+      var err = new Error((data && (data.error || data.message)) || text || 'ip_library_error');
+      err.status = res.status;
+      err.detail = data && Object.keys(data).length ? data : text;
+      throw err;
+    }
     return j(text);
   };
 
