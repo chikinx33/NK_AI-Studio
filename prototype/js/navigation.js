@@ -36,7 +36,7 @@
     }
 
     function buildStudioShellUrl(targetName, pid, brandId) {
-        var pageUrl = new URL('index.html', window.location.href);
+        var pageUrl = new URL('ai-video.html', window.location.href);
         pageUrl.searchParams.set('stageHref', targetName);
         if (pid) pageUrl.searchParams.set('projectId', String(pid));
         else pageUrl.searchParams.delete('projectId');
@@ -93,13 +93,8 @@
                     sessionStorage.removeItem(STAGE_HREF_KEY);
                     localStorage.removeItem(STAGE_HREF_KEY);
                 } catch (_) { }
-                if (NK.shell && typeof NK.shell.showOptions === 'function') {
-                    NK.shell.showOptions();
-                }
-                nav.setStage('options');
                 try {
-                    const pageUrl = buildLandingShellUrl();
-                    window.history.replaceState({}, '', pageUrl.toString());
+                    window.location.assign(buildLandingShellUrl().toString());
                 } catch (_) { }
                 return;
             }

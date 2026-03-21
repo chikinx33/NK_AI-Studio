@@ -31,69 +31,11 @@
 <body class="layout-fixed">
   <div class="grain"></div>
   <div class="app no-sidebar" id="shell-app">
-    <aside class="sidebar" hidden>
-      <div class="brand">
-        <div class="brand-mark"></div>
-        <div class="brand-text">
-          <span class="title" data-i18n="brand_title">NK_Studio</span>
-          <span class="subtitle" data-i18n="brand_subtitle">자동화 영상 파이프라인</span>
-        </div>
-      </div>
-      <nav class="nav">
-        <a class="nav-item" href="dashboard.html">
-          <span data-i18n="nav_dashboard">대시보드</span>
-        </a>
-        <a class="nav-item" href="brand.html">
-          <span data-i18n="nav_brand">브랜드 스튜디오</span>
-        </a>
-        <a class="nav-item" href="knowledge.html">
-          <span data-i18n="nav_knowledge">브랜드 허브</span>
-        </a>
-        <a class="nav-item" href="analytics.html">
-          <span data-i18n="nav_analytics">성과 분석</span>
-        </a>
-        <a class="nav-item" href="library.html">
-          <span data-i18n="nav_library">콘텐츠 저장소</span>
-        </a>
-      </nav>
-      <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>
-      <div class="sidebar-footer">
-        <div class="sidebar-actions">
-          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('global')"></button>
-          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-          <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
-        </div>
-        <div class="sidebar-version">ver</div>
-      </div>
-    </aside>
-
-    <div id="project-overlay" class="auth-overlay hidden">
-      <div class="auth-card">
-        <p class="auth-title">프로젝트 생성</p>
-        <div class="form-row">
-          <label>이름</label>
-          <input id="project-name-input" placeholder="에피소드 이름" />
-        </div>
-        <div class="option-actions">
-          <button id="project-cancel" class="btn-secondary">취소</button>
-          <button id="project-create" class="btn-primary">생성</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="auth-overlay" class="auth-overlay hidden">
-      <div class="auth-card">
-        <p class="auth-title">로그인 하세요.</p>
-        <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
-      </div>
-    </div>
-
     <main class="main blur-target">
       <div class="main-body">
         <section id="options-stage" class="option-body">
           <div class="login-icons" id="login-icons" aria-hidden="true">
-            <a href="index.html?stageHref=dashboard.html" class="login-icon-link">
+            <a href="ai-video.html" class="login-icon-link">
               <img src="images/icon-ai-video.png" alt="영상 제작 메인으로 이동" />
             </a>
             <img src="images/icon-ai-image.png" alt="" class="is-disabled" aria-disabled="true" />
@@ -216,8 +158,6 @@
             </section>
           </div>
         </section>
-
-        <section class="content hidden"></section>
       </div>
     </main>
   </div>
