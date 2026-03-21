@@ -362,11 +362,27 @@ body[data-embed="1"] {
   overflow: hidden;
 }
 
-[data-page="index"] .main-body,
-[data-page="ai-video"] .main-body {
+[data-page="index"][data-shell-mode="options"] .main-body,
+[data-page="ai-video"][data-shell-mode="options"] .main-body,
+body[data-page="index"][data-shell-mode="options"] .main-body,
+body[data-page="ai-video"][data-shell-mode="options"] .main-body {
   height: auto;
   max-height: none;
   overflow: visible;
+}
+
+[data-shell-mode="studio"] .main-body,
+body[data-shell-mode="studio"] .main-body {
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+[data-shell-mode="studio"] .content,
+body[data-shell-mode="studio"] .content {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
 }
 
 .brand {

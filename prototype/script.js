@@ -375,16 +375,62 @@
       document.documentElement.setAttribute('data-embed', '1');
     }
     const currentPath = window.location.pathname;
+    const normalizedPath = String(currentPath || '').replace(/\\/g, '/');
+    const pathSegments = normalizedPath.split('/');
+    const lastPathSegment = String(pathSegments[pathSegments.length - 1] || '').trim().toLowerCase();
     const stage = NK.navigation.normalizeStageName(currentPath);
     const isAiVideoShellPath = currentPath.toLowerCase().includes('ai-video.html');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
-    const initialTarget = (isAiVideoShellPath || isShellPage) ? resolveInitialStageTarget(urlParams) : '';
-    const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
+    const explicitStageHref = normalizeStageTarget(urlParams.get('stageHref') || '');
+    const explicitStage = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
+    const hasExplicitStageRequest = !!explicitStageHref || RESTORABLE_STAGES.includes(explicitStage);
+    const isIndexShellPath = !isIframe && isShellPage && stage === 'options';
+    const isRootLandingPath = isIndexShellPath && !lastPathSegment;
+    const shouldTreatAsLandingShell = isRootLandingPath || (isIndexShellPath && !hasExplicitStageRequest);
+    if (shouldTreatAsLandingShell) {
+      try {
+        clearForcedDashboardEntry();
+        sessionStorage.removeItem(STAGE_TARGET_KEY);
+        localStorage.removeItem(STAGE_TARGET_KEY);
+        sessionStorage.setItem('nk_current_stage', 'options');
+        localStorage.setItem('nk_current_stage', 'options');
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('stageHref');
+        cleanUrl.searchParams.delete('stage');
+        cleanUrl.searchParams.delete('projectId');
+        cleanUrl.searchParams.delete('brandId');
+        cleanUrl.pathname = cleanUrl.pathname.replace(/index\.html$/i, '');
+        window.history.replaceState({}, '', cleanUrl.toString());
+      } catch (_) { }
+    }
+    const initialTarget = shouldTreatAsLandingShell ? '' : ((isAiVideoShellPath || isShellPage)
+      ? resolveInitialStageTarget(urlParams, {
+        allowStored: !shouldTreatAsLandingShell,
+        fallbackDashboard: !shouldTreatAsLandingShell
+      })
+      : '');
+    const initialStage = shouldTreatAsLandingShell ? 'options' : ((isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage);
     const effectiveStage = initialStage || stage;
+
+    if (!isIframe && isAiVideoShellPath) {
+      try {
+        const redirectUrl = new URL('index.html', window.location.href);
+        const target = initialTarget || 'dashboard.html';
+        if (target) redirectUrl.searchParams.set('stageHref', target);
+        const projectId = urlParams.get('projectId') || '';
+        const brandId = urlParams.get('brandId') || '';
+        if (projectId) redirectUrl.searchParams.set('projectId', projectId);
+        if (brandId) redirectUrl.searchParams.set('brandId', brandId);
+        window.location.replace(redirectUrl.toString());
+      } catch (_) {
+        window.location.replace('index.html?stageHref=dashboard.html');
+      }
+      return;
+    }
 
     if (!isIframe && !isShellPage && effectiveStage && effectiveStage !== 'options') {
       try {
-        const redirectUrl = new URL('ai-video.html', window.location.href);
+        const redirectUrl = new URL('index.html', window.location.href);
         redirectUrl.searchParams.set('stageHref', STAGE_HTML_MAP[effectiveStage] || 'dashboard.html');
         const projectId = urlParams.get('projectId') || '';
         const brandId = urlParams.get('brandId') || '';
@@ -392,7 +438,7 @@
         if (brandId) redirectUrl.searchParams.set('brandId', brandId);
         window.location.replace(redirectUrl.toString());
       } catch (_) {
-        window.location.replace('ai-video.html?stageHref=dashboard.html');
+        window.location.replace('index.html?stageHref=dashboard.html');
       }
       return;
     }
@@ -400,6 +446,10 @@
     // 2. 스테이지 상태 초기화 (네비게이션 파싱 후)
     if (effectiveStage) {
       NK.navigation.setStage(effectiveStage);
+    }
+
+    if (isShellPage) {
+      setShellMode(effectiveStage === 'options' ? 'options' : 'studio');
     }
 
     // 3. 부모 창 전용 로직 (사이드바, 메시지 수신) - 구독을 먼저 설정해야 초기 상태 반영됨
@@ -2128,7 +2178,9 @@
           sessionStorage.removeItem('nk_current_stage');
           localStorage.removeItem('nk_current_stage');
         } catch (_) { }
-        window.location.assign('ai-video.html');
+        if (NK.navigation && typeof NK.navigation.loadStage === 'function') {
+          NK.navigation.loadStage('dashboard.html');
+        }
       });
     }
 
@@ -2891,7 +2943,9 @@
   };
 
   window.openOptionsStage = () => {
-    window.location.assign('index.html');
+    if (NK.navigation && typeof NK.navigation.loadStage === 'function') {
+      NK.navigation.loadStage('index.html');
+    }
   };
 
   document.addEventListener('DOMContentLoaded', init);
