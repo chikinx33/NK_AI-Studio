@@ -402,14 +402,15 @@
         window.history.replaceState({}, '', cleanUrl.toString());
       } catch (_) { }
     }
-    const initialTarget = (isAiVideoShellPath || isShellPage)
+    const forcedLandingStage = isBareLandingEntry ? 'options' : '';
+    const initialTarget = forcedLandingStage ? '' : ((isAiVideoShellPath || isShellPage)
       ? resolveInitialStageTarget(urlParams, {
         allowStored: !isBareLandingEntry,
         fallbackDashboard: !isBareLandingEntry
       })
-      : '';
-    const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
-    const effectiveStage = initialStage || stage;
+      : '');
+    const initialStage = forcedLandingStage || ((isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage);
+    const effectiveStage = forcedLandingStage || initialStage || stage;
 
     if (!isIframe && isAiVideoShellPath) {
       try {
@@ -454,10 +455,6 @@
     // 3. 부모 창 전용 로직 (사이드바, 메시지 수신) - 구독을 먼저 설정해야 초기 상태 반영됨
     if (!isIframe) {
       setupParentLogic();
-    }
-
-    if (isBareLandingEntry && !isIframe && isShellPage && NK.navigation && typeof NK.navigation.loadStage === 'function') {
-      NK.navigation.loadStage('index.html');
     }
 
     // 저장된 프로젝트 정보 복구 (대시보드가 아닐 때만 복구하여 처음부터 노출 방지)
