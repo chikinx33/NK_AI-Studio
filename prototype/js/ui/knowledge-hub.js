@@ -360,6 +360,33 @@
     };
   }
 
+  function mergeKnowledge(primary, fallback) {
+    var base = primary || {};
+    var extra = fallback || {};
+    var brandCharacter = String(base.brandCharacter || extra.brandCharacter || '').trim();
+    var characters = normalizeCharacters(
+      (Array.isArray(base.characters) ? base.characters : []).concat(Array.isArray(extra.characters) ? extra.characters : []),
+      brandCharacter
+    );
+    var characterSheets = normalizeCharacterSheets(
+      (Array.isArray(base.characterSheets) ? base.characterSheets : []).concat(Array.isArray(extra.characterSheets) ? extra.characterSheets : []),
+      characters
+    );
+    return {
+      brandVoice: String(base.brandVoice || extra.brandVoice || '').trim(),
+      brandStory: String(base.brandStory || extra.brandStory || '').trim(),
+      brandCharacter: brandCharacter,
+      characters: characters,
+      characterSheets: characterSheets,
+      worldSetting: String(base.worldSetting || extra.worldSetting || '').trim(),
+      brandRules: (Array.isArray(base.brandRules) && base.brandRules.length ? base.brandRules : (Array.isArray(extra.brandRules) ? extra.brandRules : [])).slice(),
+      bannedExpressions: (Array.isArray(base.bannedExpressions) && base.bannedExpressions.length ? base.bannedExpressions : (Array.isArray(extra.bannedExpressions) ? extra.bannedExpressions : [])).slice(),
+      referenceContents: (Array.isArray(base.referenceContents) && base.referenceContents.length ? base.referenceContents : (Array.isArray(extra.referenceContents) ? extra.referenceContents : [])).slice(),
+      referenceItems: (Array.isArray(base.referenceItems) && base.referenceItems.length ? base.referenceItems : (Array.isArray(extra.referenceItems) ? extra.referenceItems : [])).slice(),
+      successCases: (Array.isArray(base.successCases) && base.successCases.length ? base.successCases : (Array.isArray(extra.successCases) ? extra.successCases : [])).slice()
+    };
+  }
+
   function referenceTypeLabel(type) {
     switch (String(type || '').trim()) {
       case 'video': return '영상';
@@ -456,7 +483,7 @@
     var projectId = String(project && project.id || '').trim();
     var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
     var payload = (project && project.payload) || {};
-    var knowledge = readKnowledge(brand || project);
+    var knowledge = mergeKnowledge(readKnowledge(project), brand ? readKnowledge(brand) : null);
     knowledge.characters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
     var characterUiText = getCharacterUiText();
     var characterExtras = extractCharacterNoteRemainder(knowledge.brandCharacter);
