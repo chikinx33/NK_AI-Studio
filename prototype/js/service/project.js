@@ -1022,7 +1022,11 @@
             if (NK.service && NK.service.brand && NK.service.brand.getBySeriesId && NK.service.brand.update) {
                 var matchedBrand = NK.service.brand.getBySeriesId(sid);
                 if (matchedBrand && matchedBrand.brandId) {
-                    NK.service.brand.update(matchedBrand.brandId, { brandTitle: title });
+                    if (NK.service.brand.persistShared) {
+                        NK.service.brand.persistShared(matchedBrand.brandId, { brandTitle: title }).catch(function () { });
+                    } else {
+                        NK.service.brand.update(matchedBrand.brandId, { brandTitle: title });
+                    }
                 }
             }
         } catch (err) {
@@ -1064,10 +1068,17 @@
             if (brandId && NK.service && NK.service.brand && NK.service.brand.getById && NK.service.brand.update) {
                 var matchedBrand = NK.service.brand.getById(brandId);
                 if (matchedBrand) {
-                    NK.service.brand.update(brandId, {
-                        brandSummary: normalizedPatch.brandSummary,
-                        coreMessage: normalizedPatch.coreMessage
-                    });
+                    if (NK.service.brand.persistShared) {
+                        NK.service.brand.persistShared(brandId, {
+                            brandSummary: normalizedPatch.brandSummary,
+                            coreMessage: normalizedPatch.coreMessage
+                        }).catch(function () { });
+                    } else {
+                        NK.service.brand.update(brandId, {
+                            brandSummary: normalizedPatch.brandSummary,
+                            coreMessage: normalizedPatch.coreMessage
+                        });
+                    }
                 }
             }
         } catch (err) {
@@ -1115,6 +1126,7 @@
         var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         var targets = drafts.filter(function (d) { return String(d.seriesId) === String(sid); });
         if (!targets.length) throw new Error('series_not_found');
+        var brandId = normalizeBrandId(targets[0] && targets[0].payload && targets[0].payload.brandId);
 
         var apiDeleted = 0;
         var apiFailed = 0;
@@ -1131,13 +1143,37 @@
 
         var filtered = drafts.filter(function (d) { return String(d.seriesId) !== String(sid); });
         project.replaceLocalDrafts(filtered, { limit: filtered.length });
+        var brandDeleted = 0;
+        var brandDeleteFailed = 0;
+        if (brandId) {
+            var remainingBrandProjects = filtered.filter(function (d) {
+                return normalizeBrandId(d && d.payload && d.payload.brandId) === brandId;
+            });
+            if (!remainingBrandProjects.length && NK.api && NK.api.brandDelete) {
+                try {
+                    var brandDeleteRes = await NK.api.brandDelete(brandId);
+                    if (brandDeleteRes && (brandDeleteRes.ok || brandDeleteRes.status === 404)) {
+                        brandDeleted = 1;
+                        if (NK.service && NK.service.brand && NK.service.brand.remove) {
+                            NK.service.brand.remove(brandId);
+                        }
+                    } else {
+                        brandDeleteFailed = 1;
+                    }
+                } catch (_) {
+                    brandDeleteFailed = 1;
+                }
+            }
+        }
 
         return {
             ok: true,
             seriesId: sid,
             deletedCount: targets.length,
             apiDeleted: apiDeleted,
-            apiFailed: apiFailed
+            apiFailed: apiFailed,
+            brandDeleted: brandDeleted,
+            brandDeleteFailed: brandDeleteFailed
         };
     };
 

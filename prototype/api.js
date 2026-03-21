@@ -382,6 +382,41 @@
     return j(text);
   };
 
+  api.brandGet = async function (brandId) {
+    var token = getAuthToken();
+    var url = withBase('/api/brand/get?brandId=' + encodeURIComponent(String(brandId || '')) + '&userId=' + encodeURIComponent(resolveUserId()) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
+    var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'brand_get_error')));
+    return j(text);
+  };
+
+  api.brandSave = async function (brandId, brandPayload) {
+    var res = await fetchWithTimeout(withBase('/api/brand/save'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({
+        brandId: String(brandId || ''),
+        userId: resolveUserId(),
+        brand: brandPayload || {}
+      })
+    }, 120000);
+    var text = await readTextWithTimeout(res, 120000);
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'brand_save_error')));
+    return j(text);
+  };
+
+  api.brandDelete = async function (brandId) {
+    var res = await fetch(withBase('/api/brand/delete'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ brandId: String(brandId || ''), userId: resolveUserId(), confirm: 'yes' })
+    });
+    var text = await res.text();
+    var data = j(text);
+    return { ok: res.ok, status: res.status, data: data, error: e(text) };
+  };
+
   api.projectDelete = async function (projectId, objectName) {
     var res = await fetch(withBase('/api/project/delete'), {
       method: 'POST',

@@ -37,6 +37,12 @@ export function buildAiVideoProjectPrefix(basePrefix: string, userId: string, pr
   return `${root}/projects${String(projectId || "").trim()}`;
 }
 
+export function buildAiVideoBrandPrefix(basePrefix: string, userId: string, brandId: string): string {
+  const root = buildAiVideoUserRoot(basePrefix, userId);
+  const safeBrandId = String(brandId || "").trim().replace(/[^a-zA-Z0-9._-]+/g, "_") || "brand";
+  return `${root}/brands/${safeBrandId}`;
+}
+
 export function buildUserDataRoot(basePrefix: string, userId: string): string {
   return `${buildUserRoot(basePrefix, userId)}/${USERDATA_FOLDER}`;
 }

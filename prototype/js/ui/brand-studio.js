@@ -793,22 +793,18 @@
     }
 
     function syncBrandAndProject(brandPatch, projectPatch) {
-      var tasks = [];
-      if (brandId && NK.service && NK.service.brand && NK.service.brand.update) {
-        tasks.push(Promise.resolve().then(function () {
-          return NK.service.brand.update(brandId, brandPatch || {});
-        }));
-      }
-      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-        tasks.push(NK.service.project.updatePayload(projectId, projectPatch || {}));
-      }
-      return Promise.all(tasks).then(function (results) {
-        var nextDraft = null;
-        for (var i = 0; i < results.length; i++) {
-          if (results[i] && results[i].draft) {
-            nextDraft = results[i].draft;
-            break;
+      return Promise.resolve().then(async function () {
+        if (brandId && NK.service && NK.service.brand) {
+          if (NK.service.brand.persistShared) {
+            await NK.service.brand.persistShared(brandId, brandPatch || {});
+          } else if (NK.service.brand.update) {
+            NK.service.brand.update(brandId, brandPatch || {});
           }
+        }
+        var nextDraft = null;
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          var projectResult = await NK.service.project.updatePayload(projectId, projectPatch || {});
+          if (projectResult && projectResult.draft) nextDraft = projectResult.draft;
         }
         return { draft: nextDraft || project };
       });
@@ -1715,6 +1711,15 @@
     bindDeferredHydrationFlush(root);
     try {
       renderProject(root, project, brand);
+      var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
+      if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+        NK.service.brand.hydrateFromServer(brandId, { force: true, ttlMs: 0 })
+          .then(function (nextBrand) {
+            if (!nextBrand || !root.isConnected) return;
+            renderProject(root, project, nextBrand);
+          })
+          .catch(function () {});
+      }
     } catch (err) {
       try { console.error('BrandStudio render error:', err); } catch (_) {}
       renderEmpty(root, 'Brand Studio 렌더링 중 오류가 발생했습니다.');

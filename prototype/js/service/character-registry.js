@@ -73,6 +73,26 @@
     if (service.brand && service.brand.resolveCurrent) return service.brand.resolveCurrent(options);
     return null;
   }
+  function deriveKnowledgeCharacters(brandLike) {
+    var rows = Array.isArray(brandLike && brandLike.knowledgeCharacters) ? brandLike.knowledgeCharacters : [];
+    return rows.map(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : {};
+      var trigger = normTrigger(raw.token || raw.trigger || raw.displayName || raw.name);
+      if (!trigger) return null;
+      return normalizeCharacter({
+        id: raw.characterId || raw.id || ('char_' + String(index + 1).padStart(3, '0')),
+        trigger: trigger,
+        name: raw.displayName || raw.name || trigger.replace(/^@/, ''),
+        aliases: raw.aliases || [],
+        description: raw.personality || raw.description || raw.profile || raw.note || '',
+        fixedTraits: raw.fixedTraits || [],
+        bannedTraits: raw.bannedTraits || [],
+        defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
+        styleGuide: raw.styleGuide || '',
+        isActive: raw.isActive !== false
+      }, index);
+    }).filter(Boolean);
+  }
   function ensureBrandId(brandId, options) {
     var id = normText(brandId);
     if (id) return id;
@@ -83,7 +103,9 @@
   registry.listCharactersByBrand = function (brandId, options) {
     var id = ensureBrandId(brandId, options);
     var b = brandById(id);
-    var list = Array.isArray(b && b.brandCharacters) ? b.brandCharacters : [];
+    var list = Array.isArray(b && b.brandCharacters) && b.brandCharacters.length
+      ? b.brandCharacters
+      : deriveKnowledgeCharacters(b);
     var normalized = [];
     for (var i = 0; i < list.length; i++) {
       var n = normalizeCharacter(list[i], i);

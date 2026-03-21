@@ -110,11 +110,15 @@
   function buildReferenceBundle(payload, resolvedCharacters) {
     var safePayload = payload && typeof payload === 'object' ? payload : {};
     var knowledgeHub = safePayload.knowledgeHub && typeof safePayload.knowledgeHub === 'object' ? safePayload.knowledgeHub : {};
+    var brandId = normalizeText(safePayload.brandId || safePayload.brandRef && safePayload.brandRef.id || '');
+    var brandRecord = brandId && NK.service && NK.service.brand && NK.service.brand.getById
+      ? NK.service.brand.getById(brandId)
+      : null;
     var knowledgeCharacters = normalizeKnowledgeCharacters(
-      safePayload.knowledgeCharacters || knowledgeHub.characters || []
+      safePayload.knowledgeCharacters || knowledgeHub.characters || brandRecord && brandRecord.knowledgeCharacters || []
     );
     var sheetEntries = normalizeCharacterSheets(
-      safePayload.knowledgeCharacterSheets || safePayload.characterSheets || knowledgeHub.characterSheets || [],
+      safePayload.knowledgeCharacterSheets || safePayload.characterSheets || knowledgeHub.characterSheets || brandRecord && brandRecord.characterSheets || [],
       knowledgeCharacters
     );
     var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters : [];
@@ -224,6 +228,11 @@
       if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
         var payload = st.payload || {};
         var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload }) : (payload.brandId || '');
+        if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+          try {
+            await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 });
+          } catch (_) {}
+        }
         var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, rawP, {});
         try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id }); } catch (_) {}
         var built = NK.service.characterRegistry.buildResolvedPrompt({

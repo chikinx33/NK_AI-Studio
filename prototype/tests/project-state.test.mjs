@@ -259,3 +259,50 @@ test('applyProjectCore keeps brand tone separate from overview tone', () => {
   assert.equal(normalized.brandTone, '차분하고 따뜻함');
   assert.equal(normalized.tone || '', '');
 });
+
+test('project.deleteSeries deletes shared brand storage when no projects remain for the brand', async () => {
+  const ctx = createContext([
+    {
+      id: 'a1',
+      title: '에피소드 A',
+      payload: { seriesId: 'shape-series', seriesTitle: '모양새 친구들', episodeTitle: '에피소드 A', brandId: 'shape-brand' },
+      scenes: []
+    },
+    {
+      id: 'a2',
+      title: '에피소드 B',
+      payload: { seriesId: 'shape-series', seriesTitle: '모양새 친구들', episodeTitle: '에피소드 B', brandId: 'shape-brand' },
+      scenes: []
+    },
+    {
+      id: 'c1',
+      title: '다른 프로젝트',
+      payload: { seriesId: 'forest-series', seriesTitle: '우울의 숲', episodeTitle: '다른 프로젝트', brandId: 'forest-brand' },
+      scenes: []
+    }
+  ]);
+  ctx.NK.api.projectDelete = async () => ({ ok: true, status: 200, data: {} });
+  let deletedBrandId = '';
+  let removedBrandId = '';
+  ctx.NK.api.brandDelete = async (brandId) => {
+    deletedBrandId = String(brandId || '');
+    return { ok: true, status: 200, data: {} };
+  };
+  ctx.NK.service.brand = {
+    remove(brandId) {
+      removedBrandId = String(brandId || '');
+      return true;
+    }
+  };
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const result = await ctx.NK.service.project.deleteSeries('shape-series');
+  const drafts = ctx.NK.store.dump();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.deletedCount, 2);
+  assert.equal(result.brandDeleted, 1);
+  assert.equal(deletedBrandId, 'shape-brand');
+  assert.equal(removedBrandId, 'shape-brand');
+  assert.deepEqual(drafts.map((row) => row.id), ['c1']);
+});

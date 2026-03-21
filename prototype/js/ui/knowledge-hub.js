@@ -280,6 +280,15 @@
     return items;
   }
 
+  function resolveSheetPreviewUrl(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^gs:\/\//i.test(raw) && NK.api && NK.api.mediaProxyUrl) {
+      return NK.api.mediaProxyUrl(raw);
+    }
+    return raw;
+  }
+
   function normalizeCharacterSheets(value, characters) {
     var sourceCharacters = normalizeCharacters(characters);
     var source = Array.isArray(value) ? value : [];
@@ -503,49 +512,54 @@
       renderProject(root, fallbackProject, nextBrand || brand);
     }
     function syncBrandAndProject(nextKnowledge) {
-      var tasks = [];
-      if (brandId && NK.service && NK.service.brand && NK.service.brand.update) {
-        tasks.push(Promise.resolve().then(function () {
-          return NK.service.brand.update(brandId, {
-            brandVoice: nextKnowledge.brandVoice,
-            brandStory: nextKnowledge.brandStory,
-            brandCharacter: nextKnowledge.brandCharacter,
-            knowledgeCharacters: nextKnowledge.characters,
-            characterSheets: nextKnowledge.characterSheets,
-            worldSetting: nextKnowledge.worldSetting,
-            brandRules: nextKnowledge.brandRules,
-            bannedExpressions: nextKnowledge.bannedExpressions,
-            referenceContents: nextKnowledge.referenceContents,
-            referenceContentEntries: nextKnowledge.referenceItems,
-            successCases: nextKnowledge.successCases
-          });
-        }));
-      }
-      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-        tasks.push(NK.service.project.updatePayload(projectId, {
-          knowledgeHub: nextKnowledge,
-          knowledgeCharacters: nextKnowledge.characters,
-          knowledgeCharacterSheets: nextKnowledge.characterSheets,
-          characterSheets: nextKnowledge.characterSheets,
+      return Promise.resolve().then(async function () {
+        var persistedBrand = brand;
+        var sharedPatch = {
           brandVoice: nextKnowledge.brandVoice,
           brandStory: nextKnowledge.brandStory,
           brandCharacter: nextKnowledge.brandCharacter,
+          knowledgeCharacters: nextKnowledge.characters,
+          characterSheets: nextKnowledge.characterSheets,
+          worldSetting: nextKnowledge.worldSetting,
           brandRules: nextKnowledge.brandRules,
           bannedExpressions: nextKnowledge.bannedExpressions,
           referenceContents: nextKnowledge.referenceContents,
           referenceContentEntries: nextKnowledge.referenceItems,
-          successCases: nextKnowledge.successCases,
-          worldSetting: nextKnowledge.worldSetting,
-          knowledgeWorld: nextKnowledge.worldSetting
-        }));
-      }
-      return Promise.all(tasks).then(function (results) {
-        var nextDraft = null;
-        for (var i = 0; i < results.length; i++) {
-          if (results[i] && results[i].draft) {
-            nextDraft = results[i].draft;
-            break;
+          successCases: nextKnowledge.successCases
+        };
+        if (brandId && NK.service && NK.service.brand) {
+          if (NK.service.brand.persistShared) {
+            persistedBrand = await NK.service.brand.persistShared(brandId, sharedPatch);
+          } else if (NK.service.brand.update) {
+            persistedBrand = NK.service.brand.update(brandId, sharedPatch);
           }
+        }
+
+        var persistedKnowledge = persistedBrand
+          ? mergeKnowledge(readKnowledge(persistedBrand), nextKnowledge)
+          : nextKnowledge;
+        persistedKnowledge.characters = normalizeCharacters(persistedKnowledge.characters, persistedKnowledge.brandCharacter);
+        persistedKnowledge.characterSheets = normalizeCharacterSheets(persistedKnowledge.characterSheets, persistedKnowledge.characters);
+
+        var nextDraft = null;
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          var projectResult = await NK.service.project.updatePayload(projectId, {
+            knowledgeHub: persistedKnowledge,
+            knowledgeCharacters: persistedKnowledge.characters,
+            knowledgeCharacterSheets: persistedKnowledge.characterSheets,
+            characterSheets: persistedKnowledge.characterSheets,
+            brandVoice: persistedKnowledge.brandVoice,
+            brandStory: persistedKnowledge.brandStory,
+            brandCharacter: persistedKnowledge.brandCharacter,
+            brandRules: persistedKnowledge.brandRules,
+            bannedExpressions: persistedKnowledge.bannedExpressions,
+            referenceContents: persistedKnowledge.referenceContents,
+            referenceContentEntries: persistedKnowledge.referenceItems,
+            successCases: persistedKnowledge.successCases,
+            worldSetting: persistedKnowledge.worldSetting,
+            knowledgeWorld: persistedKnowledge.worldSetting
+          });
+          if (projectResult && projectResult.draft) nextDraft = projectResult.draft;
         }
         return { draft: nextDraft || project };
       });
@@ -810,7 +824,7 @@
             ? entry.items.map(function (sheet) {
               return (
                 '<article class="character-sheet-item" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' +
-                '<img class="character-sheet-thumb" src="' + escapeHtml(sheet.imageDataUrl) + '" alt="' + escapeHtml(entry.token + ' 시트') + '" />' +
+                '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(entry.token + ' 시트') + '" />' +
                 '<div class="character-sheet-fields">' +
                 '<input type="text" class="character-sheet-input" data-sheet-label data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" value="' + escapeHtml(sheet.label || '') + '" placeholder="시트 이름" />' +
                 '<textarea class="character-sheet-textarea" data-sheet-note data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" placeholder="활용 메모를 적어 주세요.">' + escapeHtml(sheet.note || '') + '</textarea>' +
@@ -1127,7 +1141,11 @@
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString()
             });
-            NK.service.brand.update(brandId, { brandCharacters: nextList }).then(function(){ renderNext(project); }).catch(function(){});
+            Promise.resolve().then(function () {
+              return NK.service.brand.update(brandId, { brandCharacters: nextList });
+            }).then(function () {
+              renderNext(project);
+            }).catch(function () {});
           }
         }
       }
@@ -1165,5 +1183,14 @@
       return;
     }
     renderProject(root, project, brand);
+    var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
+    if (brandId && NK.service.brand.hydrateFromServer) {
+      NK.service.brand.hydrateFromServer(brandId, { force: true, ttlMs: 0 })
+        .then(function (nextBrand) {
+          if (!nextBrand || !root.isConnected) return;
+          renderProject(root, project, nextBrand);
+        })
+        .catch(function () {});
+    }
   };
 })();

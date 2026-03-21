@@ -310,7 +310,43 @@
             : brandOrId);
     };
 
-    // IP-wide assets (images/videos) aggregated from each project's IP folder
+    function toAssetUrl(raw) {
+        var value = String(raw || '').trim();
+        if (!value) return '';
+        if (/^gs:\/\//i.test(value) && NK.api && NK.api.mediaProxyUrl) {
+            return NK.api.mediaProxyUrl(value);
+        }
+        return value;
+    }
+
+    function flattenBrandCharacterSheets(brandLike) {
+        var sheets = Array.isArray(brandLike && brandLike.characterSheets) ? brandLike.characterSheets : [];
+        var out = [];
+        sheets.forEach(function (entry) {
+            var token = String(entry && entry.token || '').trim();
+            var items = Array.isArray(entry && entry.items) ? entry.items : [];
+            items.forEach(function (sheet) {
+                var source = firstFilled([
+                    sheet && sheet.imageDataUrl,
+                    sheet && sheet.imageUrl,
+                    sheet && sheet.url,
+                    sheet && sheet.src
+                ]);
+                if (!source) return;
+                out.push({
+                    id: 'ip:' + token + ':' + String(sheet && sheet.sheetId || source),
+                    projectId: '',
+                    type: 'image',
+                    title: firstFilled([sheet && sheet.label, token + ' 시트']),
+                    url: toAssetUrl(source),
+                    status: 'ready'
+                });
+            });
+        });
+        return out;
+    }
+
+    // IP-wide assets sourced from the shared brand character sheet store
     var _ipCache = {};
     library.getCachedIpAssets = function (brandId) {
         var id = String(brandId || '').trim();
@@ -321,33 +357,16 @@
             ? NK.service.brand.getById(brandOrId)
             : brandOrId;
         var brandId = String(brand && brand.brandId || '').trim();
-        if (!brandId || !NK.service || !NK.service.brand || !NK.service.brand.listProjects || !NK.api || !NK.api.libraryIP) {
+        if (!brandId || !NK.service || !NK.service.brand) {
             return [];
         }
-        var projects = NK.service.brand.listProjects(brand);
-        var all = [];
-        for (var i = 0; i < projects.length; i++) {
-            var pid = String(projects[i] && projects[i].id || '').trim();
-            if (!pid) continue;
+        if (NK.service.brand.hydrateFromServer) {
             try {
-                var resp = await NK.api.libraryIP(pid);
-                var items = Array.isArray(resp && resp.items) ? resp.items : [];
-                items.forEach(function (it) {
-                    var name = String(it.name || '').trim();
-                    var lower = name.toLowerCase();
-                    var type = /\.(mp4)$/.test(lower) ? 'video' : 'image';
-                    var url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(name) : (it.signedUrl || '');
-                    all.push({
-                        id: 'ip:' + pid + ':' + name,
-                        projectId: pid,
-                        type: type,
-                        title: fileBaseName(name),
-                        url: url,
-                        status: 'ready'
-                    });
-                });
+                brand = await NK.service.brand.hydrateFromServer(brandId, { force: true, ttlMs: 0 });
             } catch (_) { }
         }
+        var sourceBrand = brand || (NK.service.brand.getById ? NK.service.brand.getById(brandId) : null);
+        var all = flattenBrandCharacterSheets(sourceBrand);
         _ipCache[brandId] = { items: all, ts: Date.now() };
         return all;
     };

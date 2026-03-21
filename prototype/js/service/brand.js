@@ -3,6 +3,7 @@
     var service = NK.service || (NK.service = {});
     var brand = service.brand || (service.brand = {});
     var migrationState = { ensured: false, running: false };
+    var remoteFetchState = {};
 
     function normalizeText(value) {
         return String(value || '').replace(/[<>]/g, '').trim();
@@ -595,6 +596,31 @@
         }
     }
 
+    function upsertBrandLocal(item, options) {
+        var normalized = normalizeBrand(item || {});
+        var list = readBrands();
+        var idx = list.findIndex(function (row) { return row.brandId === normalized.brandId; });
+        if (idx >= 0) list[idx] = normalized;
+        else list.unshift(normalized);
+        writeBrands(list);
+        if (!(options && options.skipCurrent)) brand.setCurrent(normalized);
+        return normalized;
+    }
+
+    function removeBrandLocal(brandId) {
+        var targetId = normalizeText(brandId);
+        if (!targetId) return false;
+        var list = readBrands();
+        var next = list.filter(function (item) { return item.brandId !== targetId; });
+        writeBrands(next);
+        var current = readCurrentBrandSummary();
+        if (current && current.brandId === targetId) {
+            try { localStorage.removeItem(storageKeys().currentBrand); } catch (_) { }
+        }
+        delete remoteFetchState[targetId];
+        return next.length !== list.length;
+    }
+
     function readCurrentBrandSummary() {
         try {
             var raw = localStorage.getItem(storageKeys().currentBrand);
@@ -764,6 +790,52 @@
         writeBrands(list);
         brand.setCurrent(merged);
         return merged;
+    };
+    brand.remove = function (brandId) {
+        return removeBrandLocal(brandId);
+    };
+    brand.hydrateFromServer = async function (brandOrId, options) {
+        var target = resolveBrandLike(brandOrId);
+        var targetId = normalizeText(target && target.brandId || brandOrId);
+        if (!targetId || !NK.api || !NK.api.brandGet) return target || null;
+        var state = remoteFetchState[targetId] || (remoteFetchState[targetId] = { ts: 0, promise: null });
+        var ttlMs = Math.max(0, Number(options && options.ttlMs || 0)) || 5000;
+        var force = !!(options && options.force);
+        if (!force && state.promise) return state.promise;
+        if (!force && state.ts && (Date.now() - state.ts) < ttlMs) {
+            return brand.getById(targetId) || target || null;
+        }
+        state.promise = Promise.resolve()
+            .then(function () { return NK.api.brandGet(targetId); })
+            .then(function (resp) {
+                state.ts = Date.now();
+                state.promise = null;
+                var remote = resp && resp.data && resp.data.brand ? resp.data.brand : (resp && resp.brand ? resp.brand : null);
+                if (!remote) return brand.getById(targetId) || target || null;
+                var existing = brand.getById(targetId);
+                var merged = existing
+                    ? mergeBrandRecords(existing, remote, { preferIncoming: true })
+                    : normalizeBrand(remote);
+                return upsertBrandLocal(merged);
+            })
+            .catch(function () {
+                state.promise = null;
+                return brand.getById(targetId) || target || null;
+            });
+        return state.promise;
+    };
+    brand.persistShared = async function (brandId, patch) {
+        var targetId = normalizeText(brandId);
+        if (!targetId) throw new Error('brand_id_required');
+        ensureMigrated();
+        var existing = brand.getById(targetId);
+        var seed = normalizeBrand(Object.assign({}, existing || {}, patch || {}, { brandId: targetId, createdAt: existing && existing.createdAt }));
+        var merged = existing ? mergeBrandRecords(existing, seed, { preferIncoming: true }) : seed;
+        upsertBrandLocal(merged);
+        if (!NK.api || !NK.api.brandSave) return merged;
+        var resp = await NK.api.brandSave(targetId, merged);
+        var saved = resp && resp.brand ? normalizeBrand(resp.brand) : merged;
+        return upsertBrandLocal(saved);
     };
     brand.upsertFromProject = function (projectOrId) {
         var seed = buildBrandSeedFromProject(projectOrId);
