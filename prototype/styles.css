@@ -7581,7 +7581,7 @@ body.layout-fixed .lib-content {
 
 .character-manager-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -7598,16 +7598,57 @@ body.layout-fixed .lib-content {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: color-mix(in srgb, var(--bg-2) 92%, var(--panel) 8%);
-  padding: 14px;
-  display: grid;
-  gap: 12px;
+  overflow: hidden;
+}
+
+.character-manager-card.is-expanded {
+  background: color-mix(in srgb, var(--bg-2) 88%, var(--panel) 12%);
 }
 
 .character-manager-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  border: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bg-2) 96%, transparent 4%), color-mix(in srgb, var(--panel) 88%, transparent 12%));
+  color: inherit;
+  padding: 16px 18px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.character-manager-card-main {
+  min-width: 0;
+}
+
+.character-manager-card-side {
+  display: inline-flex;
+  align-items: center;
   gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.character-manager-card-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 62px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 90%, transparent 10%);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.character-manager-card-body {
+  display: grid;
+  gap: 12px;
+  padding: 0 18px 18px;
 }
 
 .character-manager-card-head strong {
@@ -7625,6 +7666,11 @@ body.layout-fixed .lib-content {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.character-sheet-toolbar {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .character-sheet-upload {
@@ -7710,9 +7756,18 @@ body.layout-fixed .lib-content {
 }
 
 @media (max-width: 980px) {
-  .character-manager-grid,
   .character-sheet-grid {
     grid-template-columns: 1fr;
+  }
+
+  .character-manager-card-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .character-manager-card-side {
+    width: 100%;
+    justify-content: space-between;
   }
 }
 

@@ -792,6 +792,7 @@
     var characterSheetDraft = normalizeCharacterSheets(knowledge.characterSheets, currentCharacters);
     var modalCharacterSheetDraft = null;
     var modalSaveInFlight = false;
+    var modalExpandedCharacterToken = '';
 
     function cloneCharacterSheetDraft(value) {
       try {
@@ -869,6 +870,7 @@
       if (modal) modal.classList.add('hidden');
       modalCharacterSheetDraft = null;
       modalSaveInFlight = false;
+      modalExpandedCharacterToken = '';
     }
 
     function renderCharacterManagerModal() {
@@ -880,6 +882,9 @@
       }
       var sheetEntries = normalizeCharacterSheets(modalCharacterSheetDraft, currentCharacters);
       modalCharacterSheetDraft = sheetEntries;
+      if (!modalExpandedCharacterToken && sheetEntries.length) {
+        modalExpandedCharacterToken = String(sheetEntries[0].token || '').trim().toLowerCase();
+      }
 
       function updateModalCharacterSheetEntry(token, updater) {
         var targetToken = String(token || '').trim().toLowerCase();
@@ -896,6 +901,8 @@
 
       var cardsHtml = sheetEntries.length
         ? sheetEntries.map(function (entry) {
+          var entryToken = String(entry.token || '').trim().toLowerCase();
+          var isExpanded = entryToken && entryToken === modalExpandedCharacterToken;
           var personality = (currentCharacters.find(function (row) {
             return String(row.token || '').toLowerCase() === String(entry.token || '').toLowerCase();
           }) || {}).personality || '';
@@ -918,18 +925,23 @@
             }).join('')
             : '';
           return (
-            '<section class="character-manager-card" data-character-token="' + escapeHtml(entry.token) + '">' +
-            '<div class="character-manager-card-head">' +
-            '<div><strong>' + escapeHtml(entry.token) + '</strong><p>' + escapeHtml(personality || '성격 설명이 아직 없습니다.') + '</p></div>' +
-            '<div class="character-sheet-actions">' +
+            '<section class="character-manager-card' + (isExpanded ? ' is-expanded' : '') + '" data-character-token="' + escapeHtml(entry.token) + '">' +
+            '<button type="button" class="character-manager-card-head" data-action="character-manager-toggle" data-character-token="' + escapeHtml(entry.token) + '" aria-expanded="' + escapeHtml(isExpanded ? 'true' : 'false') + '">' +
+            '<div class="character-manager-card-main"><strong>' + escapeHtml(entry.token) + '</strong><p>' + escapeHtml(personality || '성격 설명이 아직 없습니다.') + '</p></div>' +
+            '<div class="character-manager-card-side">' +
             '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String((entry.items || []).length)) + '개</span>' +
+            '<span class="character-manager-card-toggle">' + escapeHtml(isExpanded ? '접기' : '펼치기') + '</span>' +
+            '</div>' +
+            '</button>' +
+            '<div class="character-manager-card-body"' + (isExpanded ? '' : ' hidden') + '>' +
+            '<div class="character-sheet-toolbar">' +
             '<label class="character-sheet-upload btn-secondary compact">' +
             '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
             '시트 업로드' +
             '</label>' +
             '</div>' +
-            '</div>' +
             '<div class="character-sheet-grid">' + itemsHtml + '</div>' +
+            '</div>' +
             '</section>'
           );
         }).join('')
@@ -952,6 +964,13 @@
         if (action === 'character-manager-close') {
           if (modalSaveInFlight) return;
           closeCharacterManagerModal();
+          return;
+        }
+        if (action === 'character-manager-toggle') {
+          var toggleToken = String(btn.dataset.characterToken || '').trim().toLowerCase();
+          if (!toggleToken) return;
+          modalExpandedCharacterToken = modalExpandedCharacterToken === toggleToken ? '' : toggleToken;
+          renderCharacterManagerModal();
           return;
         }
         if (action === 'character-sheet-set-primary') {
