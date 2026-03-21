@@ -1740,13 +1740,24 @@
       });
     }
 
+    const getLoginStatusText = (loggedIn, user = '') => {
+      if (!loggedIn) return '';
+      const safeUser = String(user || '').trim();
+      if (currentLang === 'en') return safeUser ? `${safeUser} signed in` : 'Signed in';
+      return safeUser ? `${safeUser} 님 로그인됨` : '로그인됨';
+    };
+
+    const getAuthButtonText = (loggedIn) => {
+      return translateUiText(loggedIn ? '로그아웃' : '로그인');
+    };
+
     const setUI = (loggedIn, user = '') => {
       if (nameEl) {
-        nameEl.textContent = loggedIn ? `${user} 님 로그인됨` : '';
+        nameEl.textContent = getLoginStatusText(loggedIn, user);
         nameEl.classList.toggle('hidden', !loggedIn);
       }
       formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
-      btn.textContent = loggedIn ? '로그아웃' : '로그인';
+      btn.textContent = getAuthButtonText(loggedIn);
       btn.dataset.state = loggedIn ? 'logout' : 'login';
       if (icons) icons.classList.toggle('blurred', !loggedIn);
 
@@ -1838,6 +1849,12 @@
       }
 
       lastLoginState = !!loggedIn;
+    };
+
+    window.__nkRefreshLoginUi = () => {
+      try {
+        setUI(NK.auth.isAuthed(), NK.auth.getUser());
+      } catch (_) { }
     };
 
     const initialUser = NK.auth.getUser();
@@ -2082,15 +2099,17 @@
       }
 
       btn.disabled = true;
-      btn.textContent = '로그인 중...';
+      btn.textContent = translateUiText('로그인 중...');
       try {
         const ok = await NK.auth.login(idInput.value.trim(), pwInput.value.trim());
         if (ok) {
           setUI(true, NK.auth.getUser());
-          alert('로그인 성공');
+          alert(translateUiText('로그인 성공'));
         } else {
           const reason = (NK.auth && NK.auth.getLastError) ? NK.auth.getLastError() : '';
-          alert('로그인 실패: ' + (reason || '아이디 또는 비밀번호를 확인하세요.'));
+          const fallback = currentLang === 'en' ? 'Please check your ID or password.' : '아이디 또는 비밀번호를 확인하세요.';
+          const prefix = currentLang === 'en' ? 'Sign-in failed: ' : '로그인 실패: ';
+          alert(prefix + (reason || fallback));
         }
       } finally {
         btn.disabled = false;
@@ -2811,6 +2830,9 @@
     NK.ui.common.applyI18n(currentLang);
     NK.ui.common.updateScreenButton(currentLang);
     applyUserStudioTitleToSidebar();
+    try {
+      if (typeof window.__nkRefreshLoginUi === 'function') window.__nkRefreshLoginUi();
+    } catch (_) { }
     try { localStorage.setItem(LANG_KEY, currentLang); } catch (_) { }
     if (scope === 'global') {
       broadcastLang(currentLang);
