@@ -375,42 +375,12 @@
       document.documentElement.setAttribute('data-embed', '1');
     }
     const currentPath = window.location.pathname;
-    const normalizedPath = String(currentPath || '').replace(/\\/g, '/');
-    const pathSegments = normalizedPath.split('/');
-    const lastPathSegment = String(pathSegments[pathSegments.length - 1] || '').trim().toLowerCase();
     const stage = NK.navigation.normalizeStageName(currentPath);
     const isAiVideoShellPath = currentPath.toLowerCase().includes('ai-video.html');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
-    const explicitStageHref = normalizeStageTarget(urlParams.get('stageHref') || '');
-    const explicitStage = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
-    const hasExplicitStageRequest = !!explicitStageHref || RESTORABLE_STAGES.includes(explicitStage);
-    const isRootLandingPath = !isIframe && stage === 'options' && !isShellPage && !lastPathSegment;
-    const isStudioShellBootstrap = !isIframe && isAiVideoShellPath;
-    const isBareLandingEntry = isRootLandingPath || (!isIframe && stage === 'options' && !isShellPage && !hasExplicitStageRequest);
-    if (isRootLandingPath) {
-      try {
-        clearForcedDashboardEntry();
-        sessionStorage.removeItem(STAGE_TARGET_KEY);
-        localStorage.removeItem(STAGE_TARGET_KEY);
-        sessionStorage.setItem('nk_current_stage', 'options');
-        localStorage.setItem('nk_current_stage', 'options');
-        const cleanUrl = new URL(window.location.href);
-        cleanUrl.searchParams.delete('stageHref');
-        cleanUrl.searchParams.delete('stage');
-        cleanUrl.searchParams.delete('projectId');
-        cleanUrl.searchParams.delete('brandId');
-        window.history.replaceState({}, '', cleanUrl.toString());
-      } catch (_) { }
-    }
-    const forcedLandingStage = isRootLandingPath ? 'options' : '';
-    const initialTarget = forcedLandingStage ? '' : (isStudioShellBootstrap
-      ? resolveInitialStageTarget(urlParams, {
-        allowStored: !isBareLandingEntry,
-        fallbackDashboard: !isBareLandingEntry
-      })
-      : '');
-    const initialStage = forcedLandingStage || (isStudioShellBootstrap ? NK.navigation.normalizeStageName(initialTarget) : stage);
-    const effectiveStage = forcedLandingStage || initialStage || stage;
+    const initialTarget = (isAiVideoShellPath || isShellPage) ? resolveInitialStageTarget(urlParams) : '';
+    const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
+    const effectiveStage = initialStage || stage;
 
     if (!isIframe && !isShellPage && effectiveStage && effectiveStage !== 'options') {
       try {
@@ -432,12 +402,8 @@
       NK.navigation.setStage(effectiveStage);
     }
 
-    if (isStudioShellBootstrap) {
-      setShellMode(effectiveStage === 'options' ? 'options' : 'studio');
-    }
-
     // 3. 부모 창 전용 로직 (사이드바, 메시지 수신) - 구독을 먼저 설정해야 초기 상태 반영됨
-    if (!isIframe && isStudioShellBootstrap) {
+    if (!isIframe) {
       setupParentLogic();
     }
 
@@ -477,14 +443,14 @@
 
     // 기본 대시보드 로드 (부모 창인 경우에만)
     const isOptionsPage = effectiveStage === 'options';
-    const isMainPage = !isIframe && isStudioShellBootstrap && !isOptionsPage && (
+    const isMainPage = !isIframe && !isOptionsPage && (
       effectiveStage === 'dashboard' ||
       isAiVideoShellPath ||
-      isStudioShellBootstrap
+      isShellPage
     );
 
     if (isMainPage) {
-      const target = isStudioShellBootstrap
+      const target = (isAiVideoShellPath || isShellPage)
         ? (initialTarget || STAGE_HTML_MAP[effectiveStage] || 'dashboard.html')
         : (STAGE_HTML_MAP[effectiveStage] || 'dashboard.html');
       NK.navigation.loadStage(target);
