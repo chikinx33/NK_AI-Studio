@@ -290,6 +290,37 @@ test('project.getKnowledgeHub normalizes character sheet pose from legacy labels
   assert.equal(items[2].label, '측면');
 });
 
+test('project.getKnowledgeHub keeps top-level character sheets when nested knowledgeHub arrays are empty', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const project = ctx.NK.service.project;
+  const knowledge = project.getKnowledgeHub({
+    knowledgeHub: {
+      characters: [],
+      characterSheets: []
+    },
+    knowledgeCharacters: [
+      { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리 있음' }
+    ],
+    knowledgeCharacterSheets: [
+      {
+        token: '@네모',
+        items: [
+          { sheetId: 's1', pose: 'front', imageDataUrl: 'gs://bucket/front.png', isPrimary: true }
+        ]
+      }
+    ]
+  });
+
+  assert.equal(knowledge.characters.length, 1);
+  assert.equal(knowledge.characters[0].token, '@네모');
+  assert.equal(knowledge.characterSheets.length, 1);
+  assert.equal(knowledge.characterSheets[0].token, '@네모');
+  assert.equal(knowledge.characterSheets[0].items.length, 1);
+  assert.equal(knowledge.characterSheets[0].items[0].imageDataUrl, 'gs://bucket/front.png');
+});
+
 test('project.deleteSeries deletes shared brand storage when no projects remain for the brand', async () => {
   const ctx = createContext([
     {

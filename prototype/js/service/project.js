@@ -357,12 +357,18 @@
         var referenceEntries = normalizeReferenceEntries(raw.referenceItems || raw.referenceEntries || raw.referenceContentEntries);
         var referenceContents = normalizeTextList(raw.referenceContents);
         var legacyBanned = !hasNested && !normalizeText(raw.manualDirectives || raw.extraNotes) ? raw.banned : '';
+        var topLevelCharacters = Array.isArray(source && source.knowledgeCharacters) ? source.knowledgeCharacters : [];
+        var nestedCharacters = Array.isArray(nested.characters) ? nested.characters : [];
         var knowledgeCharacters = normalizeCharacterEntries(
-            Array.isArray(nested.characters) ? nested.characters : (source && source.knowledgeCharacters),
+            nestedCharacters.length ? nestedCharacters.concat(topLevelCharacters) : topLevelCharacters,
             raw.brandCharacter
         );
+        var topLevelSheets = []
+            .concat(Array.isArray(source && source.knowledgeCharacterSheets) ? source.knowledgeCharacterSheets : [])
+            .concat(Array.isArray(source && source.characterSheets) ? source.characterSheets : []);
+        var nestedSheets = Array.isArray(nested.characterSheets) ? nested.characterSheets : [];
         var characterSheets = normalizeCharacterSheets(
-            Array.isArray(nested.characterSheets) ? nested.characterSheets : (source && (source.knowledgeCharacterSheets || source.characterSheets)),
+            topLevelSheets.concat(nestedSheets.length ? nestedSheets : []),
             knowledgeCharacters
         );
         if (!referenceContents.length && referenceEntries.length) {
