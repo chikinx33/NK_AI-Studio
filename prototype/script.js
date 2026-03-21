@@ -382,9 +382,10 @@
     const explicitStage = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
     const hasExplicitStageRequest = !!explicitStageHref || RESTORABLE_STAGES.includes(explicitStage);
     const isIndexShellPath = !isIframe && isShellPage && stage === 'options';
-    const isBareLandingEntry = isIndexShellPath && !hasExplicitStageRequest && !hasForcedDashboardEntry();
+    const isBareLandingEntry = isIndexShellPath && !hasExplicitStageRequest;
     if (isBareLandingEntry) {
       try {
+        clearForcedDashboardEntry();
         sessionStorage.removeItem(STAGE_TARGET_KEY);
         localStorage.removeItem(STAGE_TARGET_KEY);
         sessionStorage.setItem('nk_current_stage', 'options');
