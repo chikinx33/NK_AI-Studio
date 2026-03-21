@@ -654,7 +654,6 @@
       '<p class="knowledge-character-help">@토큰 형식으로 저장되며 캐릭터 자산 목록과 개요에 반영됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '<div class="brand-publish-summary" style="margin-top:10px;">' +
       '<button class="btn-primary" data-action="knowledge-open-ip-library">IP 라이브러리</button>' +
-      '<button class="btn-secondary" data-action="knowledge-open-character-manager">캐릭터 관리</button>' +
       '</div>' +
       '</section>' +
       '</div>' +
@@ -731,62 +730,6 @@
       });
       syncCharacterUi();
       return true;
-    }
-
-    function openIpLibrary(items, onSelect) {
-      var modal = document.getElementById('lib-modal');
-      if (!modal) return;
-      var box = modal.querySelector('.lib-content');
-      var selected = null;
-      if (!box) return;
-      if (!items || !items.length) {
-        box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-primary" id="lib-use-btn" disabled>사용</button><button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-empty"><p class="muted">항목이 없습니다.</p></div>';
-        var closeBtn0 = box.querySelector('#lib-close'); if (closeBtn0) closeBtn0.onclick = function(){ modal.classList.add('hidden'); };
-        modal.classList.remove('hidden');
-        return;
-      }
-      var listHtml = items.map(function (it) {
-        var name = it.name || '';
-        var url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(name) : '';
-        return '<div class="lib-item" data-url="' + url + '" data-name="' + name + '" style="background:none;box-shadow:none;"><img class="lib-thumb" src="' + url + '" alt="" /></div>';
-      }).join('');
-      box.innerHTML = '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;"><span class="lib-title" style="font-weight:600;">라이브러리</span><div style="flex:1;"></div><button class="btn-primary" id="lib-use-btn" disabled>사용</button><button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button><button class="btn-secondary lib-close-btn" id="lib-close">닫기</button></div><div class="lib-grid">' + listHtml + '</div>';
-      var itemsEls = box.querySelectorAll('.lib-item');
-      itemsEls.forEach(function (el) {
-        el.onclick = function () {
-          var already = el.classList.contains('lib-selected');
-          itemsEls.forEach(function (x) { x.classList.remove('lib-selected', 'selected'); });
-          if (already) { selected = null; }
-          else { el.classList.add('lib-selected'); selected = { url: el.dataset.url, name: el.dataset.name }; }
-          updateActions();
-        };
-      });
-      var useBtn = box.querySelector('#lib-use-btn');
-      var delBtn = box.querySelector('#lib-delete-btn');
-      function updateActions() {
-        var active = !!(selected && selected.url);
-        if (useBtn) { useBtn.disabled = !active; useBtn.classList.toggle('disabled', !active); }
-        if (delBtn) { delBtn.disabled = !active; delBtn.classList.toggle('disabled', !active); }
-      }
-      if (useBtn) useBtn.onclick = function () {
-        if (!selected || !selected.url) { alert('이미지를 먼저 선택하세요.'); return; }
-        if (onSelect) onSelect(selected);
-        modal.classList.add('hidden');
-      };
-      if (delBtn) delBtn.onclick = async function () {
-        if (!selected || !selected.name) { alert('삭제할 이미지를 선택하세요.'); return; }
-        var pid = projectId;
-        try {
-          var res = await NK.api.projectDelete(pid, selected.name);
-          if (!res.ok || !res.data || Number(res.data.deletedCount || 0) < 1) throw new Error('delete_failed');
-          var left = items.filter(function (it) { return it.name !== selected.name; });
-          openIpLibrary(left, onSelect);
-        } catch (err) {
-          alert('삭제 실패: ' + (err && err.message ? err.message : err));
-        }
-      };
-      var closeBtn = box.querySelector('#lib-close'); if (closeBtn) closeBtn.onclick = function(){ modal.classList.add('hidden'); };
-      modal.classList.remove('hidden');
     }
 
     function ensureCharacterSheetDraft() {
@@ -871,11 +814,11 @@
             '</section>'
           );
         }).join('')
-        : '<div class="character-manager-empty">먼저 캐릭터 자산에 캐릭터를 등록하면 여기서 캐릭터별 시트 이미지를 관리할 수 있습니다.</div>';
+        : '<div class="character-manager-empty">먼저 캐릭터 자산에 캐릭터를 등록하면 여기서 캐릭터별 IP 시트를 관리할 수 있습니다.</div>';
 
       box.innerHTML =
         '<div class="character-manager-head">' +
-        '<div><h3>캐릭터 관리</h3><p>캐릭터별 기준 시트 이미지를 등록해 프로덕션 제작 시 일관된 캐릭터 리소스로 사용합니다.</p></div>' +
+        '<div><h3>IP 라이브러리</h3><p>캐릭터별 기준 시트 이미지를 등록해 어디서든 일관된 IP 리소스로 사용할 수 있도록 관리합니다.</p></div>' +
         '<button type="button" class="btn-secondary" data-action="character-manager-close">닫기</button>' +
         '</div>' +
         '<div class="character-manager-grid">' + cardsHtml + '</div>' +
@@ -924,7 +867,7 @@
               if (result && result.draft) renderNext(result.draft);
             })
             .catch(function (err) {
-              alert('캐릭터 자산 저장 실패: ' + (err && err.message ? err.message : err));
+              alert('IP 라이브러리 저장 실패: ' + (err && err.message ? err.message : err));
             })
             .finally(function () {
               btn.disabled = false;
@@ -1011,37 +954,8 @@
       var action = String(btn.dataset.action || '').trim();
       if (action === 'knowledge-open-library') target = buildStageUrl('library.html', projectId, brandId);
       else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
-      else if (action === 'knowledge-open-character-manager') {
-        renderCharacterManagerModal();
-        return;
-      }
       else if (action === 'knowledge-open-ip-library') {
-        var pid = projectId;
-        if (!pid) { alert('프로젝트가 선택되지 않았습니다.'); return; }
-        btn.disabled = true;
-        Promise.resolve().then(function(){ return NK.api.libraryIP(pid); })
-          .then(function (resp) {
-            var items = Array.isArray(resp && resp.items) ? resp.items : [];
-            if (!items.length && NK.api && NK.api.projectInit) {
-              return NK.api.projectInit(pid).then(function(){ return NK.api.libraryIP(pid); });
-            }
-            return resp;
-          })
-          .then(function (resp2) {
-            var items = Array.isArray(resp2 && resp2.items) ? resp2.items : [];
-            openIpLibrary(items, function (sel) {
-              var ref = { id: 'ref_' + Date.now(), type: 'image', title: sel.name.split('/').pop(), source: sel.name, note: '' };
-              var nextItems = (knowledge.referenceItems || []).concat([ref]);
-              var nextKnowledge = Object.assign({}, knowledge, { referenceItems: nextItems });
-              return syncBrandAndProject(nextKnowledge).then(function (result) {
-                if (result && result.draft) renderNext(result.draft);
-              });
-            });
-          })
-          .catch(function (err) {
-            alert('Content Library를 불러올 수 없습니다.');
-          })
-          .finally(function () { btn.disabled = false; });
+        renderCharacterManagerModal();
         return;
       }
       else if (action === 'knowledge-apply-starter') {
