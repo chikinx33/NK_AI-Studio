@@ -137,6 +137,16 @@ async function normalizeSheetItems(token: string, value: any, ctx: { bucket: str
         imageDataUrl,
         accessToken: ctx.accessToken,
       });
+    } else if (imageDataUrl.startsWith("gs://")) {
+      storedPath = await repairLegacySheetPath({
+        bucket: ctx.bucket,
+        brandPrefix: ctx.brandPrefix,
+        token,
+        sheetId,
+        label,
+        imageDataUrl,
+        accessToken: ctx.accessToken,
+      }).catch(() => imageDataUrl);
     }
     const isPrimary = raw.isPrimary === true || (!primarySeen && i === 0);
     if (isPrimary) primarySeen = true;
@@ -166,10 +176,13 @@ async function uploadDataUrlToGcs(args: {
   const parsed = parseDataUrl(args.imageDataUrl);
   if (!parsed) throw new Error("invalid_sheet_data_url");
   const ext = mimeToExtension(parsed.mimeType);
-  const safeToken = sanitizeSegment(args.token.replace(/^@+/, ""));
-  const safeLabel = sanitizeSegment(args.label || args.sheetId || "sheet");
-  const safeSheetId = sanitizeSegment(args.sheetId || "sheet");
-  const objectName = `${args.brandPrefix}/ip/${safeToken}/${safeSheetId}-${safeLabel}.${ext}`;
+  const objectName = buildSheetObjectName({
+    brandPrefix: args.brandPrefix,
+    token: args.token,
+    sheetId: args.sheetId,
+    label: args.label,
+    ext,
+  });
   const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(args.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
   const res = await fetch(uploadUrl, {
     method: "POST",
@@ -179,6 +192,60 @@ async function uploadDataUrlToGcs(args: {
   const text = await res.text();
   if (!res.ok) throw new Error(text || "sheet_upload_error");
   return `gs://${args.bucket}/${objectName}`;
+}
+
+function buildSheetObjectName(args: {
+  brandPrefix: string;
+  token: string;
+  sheetId: string;
+  label: string;
+  ext: string;
+}) {
+  const safeToken = sanitizeSegment(args.token.replace(/^@+/, "")) || "character";
+  const safeLabel = sanitizeSegment(args.label || args.sheetId || "sheet") || "sheet";
+  const safeSheetId = sanitizeSegment(args.sheetId || "sheet") || "sheet";
+  return `${args.brandPrefix}/ip/${safeToken}/${safeSheetId}-${safeLabel}.${args.ext}`;
+}
+
+async function repairLegacySheetPath(args: {
+  bucket: string;
+  brandPrefix: string;
+  token: string;
+  sheetId: string;
+  label: string;
+  imageDataUrl: string;
+  accessToken: string;
+}) {
+  const parsed = parseGcsUri(args.imageDataUrl);
+  if (!parsed || parsed.bucket !== args.bucket) return args.imageDataUrl;
+  const ext = extensionFromObjectName(parsed.object);
+  const desiredObject = buildSheetObjectName({
+    brandPrefix: args.brandPrefix,
+    token: args.token,
+    sheetId: args.sheetId,
+    label: args.label,
+    ext,
+  });
+  if (parsed.object === desiredObject) return args.imageDataUrl;
+  if (parsed.object.indexOf(`${args.brandPrefix}/ip/_/`) < 0) return args.imageDataUrl;
+  const downloadUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o/${encodeURIComponent(parsed.object)}?alt=media`;
+  const readRes = await fetch(downloadUrl, {
+    headers: { Authorization: `Bearer ${args.accessToken}` },
+  });
+  if (!readRes.ok) throw new Error("legacy_sheet_read_error");
+  const bytes = await readRes.arrayBuffer();
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(args.bucket)}/o?uploadType=media&name=${encodeURIComponent(desiredObject)}`;
+  const writeRes = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${args.accessToken}`,
+      "Content-Type": readRes.headers.get("content-type") || "image/png",
+    },
+    body: bytes,
+  });
+  const text = await writeRes.text();
+  if (!writeRes.ok) throw new Error(text || "legacy_sheet_repair_error");
+  return `gs://${args.bucket}/${desiredObject}`;
 }
 
 function normalizeText(value: any) {
@@ -193,7 +260,14 @@ function normalizeToken(value: any) {
 }
 
 function sanitizeSegment(value: string) {
-  return String(value || "").trim().replace(/^@+/, "").replace(/[^a-zA-Z0-9._-가-힣]+/g, "_") || "item";
+  return String(value || "")
+    .trim()
+    .normalize("NFKC")
+    .replace(/^@+/, "")
+    .replace(/[^0-9A-Za-z._\-\uAC00-\uD7A3]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_")
+    || "item";
 }
 
 function normalizeCharacterSheetPose(value: any) {
@@ -248,6 +322,14 @@ function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   const slash = rest.indexOf("/");
   if (slash === -1) return null;
   return { bucket: rest.slice(0, slash), object: rest.slice(slash + 1) };
+}
+
+function extensionFromObjectName(objectName: string) {
+  const raw = String(objectName || "").trim().toLowerCase();
+  if (/\.jpe?g$/i.test(raw)) return "jpg";
+  if (/\.webp$/i.test(raw)) return "webp";
+  if (/\.gif$/i.test(raw)) return "gif";
+  return "png";
 }
 
 async function getGoogleAccessToken(opts: { clientEmail: string; privateKeyPem: string; scope: string; }) {
