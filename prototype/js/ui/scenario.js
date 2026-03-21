@@ -855,7 +855,7 @@
       return { ids: [], resolvedPrompt: String(rawPrompt || '') };
     }
     const knowledge = readKnowledgeHub(payload);
-    const resolved = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, rawPrompt || '', {});
+    const resolved = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, rawPrompt || '', { payload, allowNameFallback: true });
     try { console.log('Character parse (scenario):', { triggers: resolved.triggers || [], missing: resolved.missing || [] }); } catch (_) {}
     const ids = (resolved.characters || []).map(c => c.id);
     const res = NK.service.characterRegistry.buildResolvedPrompt({

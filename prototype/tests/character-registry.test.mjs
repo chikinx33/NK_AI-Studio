@@ -64,3 +64,27 @@ test('characterRegistry can resolve by character name when allowNameFallback is 
   assert.equal(resolved.characters.length, 1);
   assert.equal(resolved.characters[0].trigger, '@세모');
 });
+
+test('characterRegistry falls back to project payload characters when brand cache is missing', () => {
+  const ctx = createContext();
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+
+  const registry = ctx.NK.service.characterRegistry;
+  const resolved = registry.resolveCharactersFromPrompt('missing-brand', '@네모가 포스터 앞에서 춤춘다.', {
+    allowNameFallback: true,
+    payload: {
+      knowledgeCharacters: [
+        {
+          characterId: 'char_002',
+          displayName: '네모',
+          token: '@네모',
+          personality: '의리가 강한 파란 네모'
+        }
+      ]
+    }
+  });
+
+  assert.equal(resolved.characters.length, 1);
+  assert.equal(resolved.characters[0].trigger, '@네모');
+  assert.equal(resolved.characters[0].description, '의리가 강한 파란 네모');
+});

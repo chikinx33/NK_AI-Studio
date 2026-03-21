@@ -419,7 +419,7 @@
           } catch (_) {}
         }
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
-        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true });
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
         try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt }); } catch (_) {}
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,

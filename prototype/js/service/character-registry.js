@@ -93,6 +93,31 @@
       }, index);
     }).filter(Boolean);
   }
+  function derivePayloadCharacters(options) {
+    var payload = options && options.payload && typeof options.payload === 'object' ? options.payload : {};
+    var knowledgeHub = payload.knowledgeHub && typeof payload.knowledgeHub === 'object' ? payload.knowledgeHub : {};
+    var sources = []
+      .concat(Array.isArray(payload.knowledgeCharacters) ? payload.knowledgeCharacters : [])
+      .concat(Array.isArray(knowledgeHub.characters) ? knowledgeHub.characters : [])
+      .concat(Array.isArray(payload.characters) ? payload.characters : []);
+    return sources.map(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : {};
+      var trigger = normTrigger(raw.token || raw.trigger || raw.displayName || raw.name);
+      if (!trigger) return null;
+      return normalizeCharacter({
+        id: raw.characterId || raw.id || ('char_' + String(index + 1).padStart(3, '0')),
+        trigger: trigger,
+        name: raw.displayName || raw.name || trigger.replace(/^@/, ''),
+        aliases: raw.aliases || [],
+        description: raw.personality || raw.description || raw.profile || raw.note || '',
+        fixedTraits: raw.fixedTraits || [],
+        bannedTraits: raw.bannedTraits || [],
+        defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
+        styleGuide: raw.styleGuide || '',
+        isActive: raw.isActive !== false
+      }, index);
+    }).filter(Boolean);
+  }
   function ensureBrandId(brandId, options) {
     var id = normText(brandId);
     if (id) return id;
@@ -111,6 +136,10 @@
       var n = normalizeCharacter(list[i], i);
       if (n) normalized.push(n);
     }
+    var payloadDerived = derivePayloadCharacters(options);
+    payloadDerived.forEach(function (item) {
+      if (item) normalized.push(item);
+    });
     var unique = uniq(normalized, function (it) { return it.trigger; });
     return unique;
   };
