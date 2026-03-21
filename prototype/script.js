@@ -456,6 +456,10 @@
       setupParentLogic();
     }
 
+    if (isBareLandingEntry && !isIframe && isShellPage && NK.navigation && typeof NK.navigation.loadStage === 'function') {
+      NK.navigation.loadStage('index.html');
+    }
+
     // 저장된 프로젝트 정보 복구 (대시보드가 아닐 때만 복구하여 처음부터 노출 방지)
     const isDashboard = !effectiveStage || effectiveStage === 'dashboard' || effectiveStage === 'options';
     if (!isDashboard) {
