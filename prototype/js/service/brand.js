@@ -214,17 +214,46 @@
         });
     }
 
+    function normalizeCharacterSheetPose(value) {
+        var raw = normalizeText(value).toLowerCase();
+        if (!raw) return 'other';
+        if (/^front$|^frontal$|정면|앞모습/.test(raw)) return 'front';
+        if (/front[_\s-]?quarter|three[_\s-]?quarter|threequarter|3\/?4|반측면/.test(raw)) return 'front_quarter';
+        if (/^side$|profile|측면|옆모습/.test(raw)) return 'side';
+        if (/back[_\s-]?quarter|rear[_\s-]?quarter|후반측면/.test(raw)) return 'back_quarter';
+        if (/^back$|^rear$|후면|뒷모습/.test(raw)) return 'back';
+        if (/기타|other|etc/.test(raw)) return 'other';
+        return 'other';
+    }
+
+    function inferCharacterSheetPose(raw) {
+        var row = raw && typeof raw === 'object' ? raw : {};
+        return normalizeCharacterSheetPose(row.pose || row.label || row.title || row.name || row.note || row.description || row.memo);
+    }
+
+    function getCharacterSheetPoseLabel(pose) {
+        switch (normalizeCharacterSheetPose(pose)) {
+            case 'front': return '정면';
+            case 'front_quarter': return '반측면';
+            case 'side': return '측면';
+            case 'back_quarter': return '후반측면';
+            case 'back': return '후면';
+            default: return '기타';
+        }
+    }
+
     function normalizeCharacterSheetItems(value) {
         var src = Array.isArray(value) ? value : [];
         var items = src.map(function (item, index) {
             var raw = item && typeof item === 'object' ? item : {};
             var imageDataUrl = normalizeText(raw.imageDataUrl || raw.imageUrl || raw.url || raw.src);
             if (!imageDataUrl) return null;
+            var pose = inferCharacterSheetPose(raw);
             return {
                 sheetId: normalizeText(raw.sheetId || raw.id) || ('sheet_' + String(index + 1).padStart(3, '0')),
-                label: normalizeText(raw.label || raw.title || raw.name) || ('시트 ' + (index + 1)),
+                pose: pose,
+                label: getCharacterSheetPoseLabel(pose),
                 imageDataUrl: imageDataUrl,
-                note: normalizeText(raw.note || raw.description || raw.memo),
                 isPrimary: raw.isPrimary === true,
                 createdAt: normalizeText(raw.createdAt) || new Date().toISOString(),
                 updatedAt: new Date().toISOString()

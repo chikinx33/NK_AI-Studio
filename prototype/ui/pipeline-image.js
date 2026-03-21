@@ -28,6 +28,45 @@
     }).filter(Boolean);
   }
 
+  function normalizeCharacterSheetPose(value) {
+    var raw = normalizeText(value).toLowerCase();
+    if (!raw) return 'other';
+    if (/^front$|^frontal$|정면|앞모습/.test(raw)) return 'front';
+    if (/front[_\s-]?quarter|three[_\s-]?quarter|threequarter|3\/?4|반측면/.test(raw)) return 'front_quarter';
+    if (/^side$|profile|측면|옆모습/.test(raw)) return 'side';
+    if (/back[_\s-]?quarter|rear[_\s-]?quarter|후반측면/.test(raw)) return 'back_quarter';
+    if (/^back$|^rear$|후면|뒷모습/.test(raw)) return 'back';
+    if (/기타|other|etc/.test(raw)) return 'other';
+    return 'other';
+  }
+
+  function inferCharacterSheetPose(raw) {
+    var row = raw && typeof raw === 'object' ? raw : {};
+    return normalizeCharacterSheetPose(row.pose || row.label || row.title || row.name || row.note || row.description || row.memo);
+  }
+
+  function getCharacterSheetPoseLabel(pose) {
+    switch (normalizeCharacterSheetPose(pose)) {
+      case 'front': return '정면';
+      case 'front_quarter': return '반측면';
+      case 'side': return '측면';
+      case 'back_quarter': return '후반측면';
+      case 'back': return '후면';
+      default: return '기타';
+    }
+  }
+
+  function getCharacterSheetPosePromptLabel(pose) {
+    switch (normalizeCharacterSheetPose(pose)) {
+      case 'front': return 'front view';
+      case 'front_quarter': return 'front three-quarter view';
+      case 'side': return 'side view';
+      case 'back_quarter': return 'back three-quarter view';
+      case 'back': return 'back view';
+      default: return 'other reference view';
+    }
+  }
+
   function normalizeCharacterSheets(value, characters) {
     var src = Array.isArray(value) ? value : [];
     var charRows = normalizeKnowledgeCharacters(characters);
@@ -43,10 +82,11 @@
         var row = sheet && typeof sheet === 'object' ? sheet : {};
         var imageDataUrl = normalizeText(row.imageDataUrl || row.imageUrl || row.url || row.src);
         if (!imageDataUrl) return null;
+        var pose = inferCharacterSheetPose(row);
         return {
           sheetId: normalizeText(row.sheetId || row.id) || ('sheet_' + String(sheetIndex + 1).padStart(3, '0')),
-          label: normalizeText(row.label || row.title || row.name),
-          note: normalizeText(row.note || row.description || row.memo),
+          pose: pose,
+          label: getCharacterSheetPoseLabel(pose),
           imageDataUrl: imageDataUrl,
           isPrimary: row.isPrimary === true
         };
@@ -72,13 +112,14 @@
   }
 
   function sheetPoseRank(item) {
-    var text = (normalizeText(item && item.label) + ' ' + normalizeText(item && item.note)).toLowerCase();
+    var pose = normalizeCharacterSheetPose(item && item.pose || item && item.label);
     if (item && item.isPrimary) return 0;
-    if (/정면|앞모습|front|frontal/.test(text)) return 1;
-    if (/측면|옆모습|side|profile/.test(text)) return 2;
-    if (/후면|뒷모습|rear|back/.test(text)) return 3;
-    if (/3\/4|quarter/.test(text)) return 4;
-    return 5;
+    if (pose === 'front') return 1;
+    if (pose === 'front_quarter') return 2;
+    if (pose === 'side') return 3;
+    if (pose === 'back_quarter') return 4;
+    if (pose === 'back') return 5;
+    return 6;
   }
 
   function pickReferenceSheets(items, limit) {
@@ -172,13 +213,18 @@
           token: token,
           displayName: displayName,
           sheetId: sheet.sheetId,
+          pose: sheet.pose || 'other',
           label: sheet.label || '',
           isPrimary: !!sheet.isPrimary
         });
       });
 
+      var poseSummary = selectedSheets.map(function (sheet) {
+        return getCharacterSheetPosePromptLabel(sheet.pose);
+      }).filter(Boolean).join(', ');
+
       promptLines.push(
-        'Use ' + subjectDescription + ' [' + referenceId + '] as the design reference for ' + displayName + '. Preserve the same silhouette, colors, costume, and face.'
+        'Use ' + subjectDescription + ' [' + referenceId + '] as the design reference for ' + displayName + '. Reference views: ' + (poseSummary || 'character reference') + '. Preserve the same silhouette, colors, costume, and face.'
       );
     });
 

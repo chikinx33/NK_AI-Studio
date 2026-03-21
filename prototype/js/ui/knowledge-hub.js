@@ -251,17 +251,59 @@
     }).join('');
   }
 
+  var CHARACTER_SHEET_POSE_OPTIONS = [
+    { value: 'front', label: '정면' },
+    { value: 'front_quarter', label: '반측면' },
+    { value: 'side', label: '측면' },
+    { value: 'back_quarter', label: '후반측면' },
+    { value: 'back', label: '후면' },
+    { value: 'other', label: '기타' }
+  ];
+
+  function normalizeCharacterSheetPose(value) {
+    var raw = normalizeText(value).toLowerCase();
+    if (!raw) return 'other';
+    if (/^front$|^frontal$|정면|앞모습/.test(raw)) return 'front';
+    if (/front[_\s-]?quarter|three[_\s-]?quarter|threequarter|3\/?4|반측면/.test(raw)) return 'front_quarter';
+    if (/^side$|profile|측면|옆모습/.test(raw)) return 'side';
+    if (/back[_\s-]?quarter|rear[_\s-]?quarter|후반측면/.test(raw)) return 'back_quarter';
+    if (/^back$|^rear$|후면|뒷모습/.test(raw)) return 'back';
+    if (/기타|other|etc/.test(raw)) return 'other';
+    return 'other';
+  }
+
+  function inferCharacterSheetPose(raw) {
+    var row = raw && typeof raw === 'object' ? raw : {};
+    return normalizeCharacterSheetPose(row.pose || row.label || row.title || row.name || row.note || row.description || row.memo);
+  }
+
+  function getCharacterSheetPoseLabel(pose) {
+    var normalized = normalizeCharacterSheetPose(pose);
+    for (var i = 0; i < CHARACTER_SHEET_POSE_OPTIONS.length; i++) {
+      if (CHARACTER_SHEET_POSE_OPTIONS[i].value === normalized) return CHARACTER_SHEET_POSE_OPTIONS[i].label;
+    }
+    return '기타';
+  }
+
+  function renderCharacterSheetPoseOptions(selectedPose) {
+    var target = normalizeCharacterSheetPose(selectedPose);
+    return CHARACTER_SHEET_POSE_OPTIONS.map(function (option) {
+      return '<option value="' + escapeHtml(option.value) + '"' + (option.value === target ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
+    }).join('');
+  }
+
   function normalizeCharacterSheetItems(value) {
     var src = Array.isArray(value) ? value : [];
     var items = src.map(function (item, index) {
       var raw = item && typeof item === 'object' ? item : {};
       var imageDataUrl = normalizeText(raw.imageDataUrl || raw.imageUrl || raw.url || raw.src);
       if (!imageDataUrl) return null;
+      var pose = inferCharacterSheetPose(raw);
       return {
         sheetId: normalizeText(raw.sheetId || raw.id) || ('sheet_' + String(index + 1).padStart(3, '0')),
-        label: normalizeText(raw.label || raw.title || raw.name) || ('시트 ' + (index + 1)),
+        pose: pose,
+        label: getCharacterSheetPoseLabel(pose),
         imageDataUrl: imageDataUrl,
-        note: normalizeText(raw.note || raw.description || raw.memo),
         isPrimary: raw.isPrimary === true
       };
     }).filter(Boolean);
@@ -826,8 +868,7 @@
                 '<article class="character-sheet-item" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' +
                 '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(entry.token + ' 시트') + '" />' +
                 '<div class="character-sheet-fields">' +
-                '<input type="text" class="character-sheet-input" data-sheet-label data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" value="' + escapeHtml(sheet.label || '') + '" placeholder="시트 이름" />' +
-                '<textarea class="character-sheet-textarea" data-sheet-note data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" placeholder="활용 메모를 적어 주세요.">' + escapeHtml(sheet.note || '') + '</textarea>' +
+                '<select class="character-sheet-input" data-sheet-pose data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' + renderCharacterSheetPoseOptions(sheet.pose) + '</select>' +
                 '<div class="character-sheet-item-actions">' +
                 (sheet.isPrimary
                   ? '<span class="character-sheet-primary-badge">대표 시트</span>'
@@ -922,20 +963,12 @@
         var token = field.dataset.characterToken;
         var sheetId = field.dataset.sheetId;
         if (!token || !sheetId) return;
-        if (field.hasAttribute('data-sheet-label')) {
+        if (field.hasAttribute('data-sheet-pose')) {
           updateCharacterSheetEntry(token, function (entry) {
             entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
               if (String(sheet.sheetId) !== String(sheetId)) return sheet;
-              return Object.assign({}, sheet, { label: normalizeText(field.value || '') || sheet.label });
-            });
-            return entry;
-          });
-        }
-        if (field.hasAttribute('data-sheet-note')) {
-          updateCharacterSheetEntry(token, function (entry) {
-            entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
-              if (String(sheet.sheetId) !== String(sheetId)) return sheet;
-              return Object.assign({}, sheet, { note: normalizeText(field.value || '') });
+              var pose = normalizeCharacterSheetPose(field.value || '');
+              return Object.assign({}, sheet, { pose: pose, label: getCharacterSheetPoseLabel(pose) });
             });
             return entry;
           });
@@ -944,17 +977,22 @@
 
       box.onchange = function (evt) {
         var input = evt.target;
+        if (input && input.dataset && input.hasAttribute && input.hasAttribute('data-sheet-pose')) {
+          box.oninput(evt);
+          return;
+        }
         if (!input || !input.matches || !input.matches('input[type="file"][data-action="character-sheet-upload"]')) return;
         var token = String(input.dataset.characterToken || '').trim();
         var files = Array.prototype.slice.call(input.files || []);
         if (!token || !files.length) return;
         Promise.all(files.map(function (file, index) {
           return readFileAsDataUrl(file).then(function (dataUrl) {
+            var pose = 'other';
             return {
               sheetId: 'sheet_' + Date.now() + '_' + index,
-              label: normalizeText(String(file.name || '').replace(/\.[^.]+$/, '')) || ('시트 ' + (index + 1)),
+              pose: pose,
+              label: getCharacterSheetPoseLabel(pose),
               imageDataUrl: dataUrl,
-              note: '',
               isPrimary: false
             };
           });

@@ -260,6 +260,36 @@ test('applyProjectCore keeps brand tone separate from overview tone', () => {
   assert.equal(normalized.tone || '', '');
 });
 
+test('project.getKnowledgeHub normalizes character sheet pose from legacy labels', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const project = ctx.NK.service.project;
+  const knowledge = project.getKnowledgeHub({
+    knowledgeCharacterSheets: [
+      {
+        token: '@네모',
+        items: [
+          { sheetId: 's1', label: '정면', imageDataUrl: 'gs://bucket/front.png' },
+          { sheetId: 's2', note: '후면', imageDataUrl: 'gs://bucket/back.png' },
+          { sheetId: 's3', pose: 'side', imageDataUrl: 'gs://bucket/side.png' }
+        ]
+      }
+    ],
+    knowledgeCharacters: [
+      { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리 있음' }
+    ]
+  });
+
+  const items = knowledge.characterSheets[0].items;
+  assert.equal(items[0].pose, 'front');
+  assert.equal(items[0].label, '정면');
+  assert.equal(items[1].pose, 'back');
+  assert.equal(items[1].label, '후면');
+  assert.equal(items[2].pose, 'side');
+  assert.equal(items[2].label, '측면');
+});
+
 test('project.deleteSeries deletes shared brand storage when no projects remain for the brand', async () => {
   const ctx = createContext([
     {

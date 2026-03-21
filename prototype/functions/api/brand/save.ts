@@ -17,9 +17,9 @@ const send = (data: any, status = 200, origin: string | null = null) =>
 
 type SheetItem = {
   sheetId: string;
+  pose: string;
   label: string;
   imageDataUrl: string;
-  note: string;
   isPrimary: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -124,8 +124,8 @@ async function normalizeSheetItems(token: string, value: any, ctx: { bucket: str
     const imageDataUrl = String(raw.imageDataUrl || raw.imageUrl || raw.url || raw.src || "").trim();
     if (!imageDataUrl) continue;
     const sheetId = normalizeText(raw.sheetId || raw.id) || `sheet_${String(i + 1).padStart(3, "0")}`;
-    const label = normalizeText(raw.label || raw.title || raw.name) || `시트 ${i + 1}`;
-    const note = normalizeText(raw.note || raw.description || raw.memo);
+    const pose = inferCharacterSheetPose(raw);
+    const label = getCharacterSheetPoseLabel(pose);
     let storedPath = imageDataUrl;
     if (imageDataUrl.startsWith("data:")) {
       storedPath = await uploadDataUrlToGcs({
@@ -142,9 +142,9 @@ async function normalizeSheetItems(token: string, value: any, ctx: { bucket: str
     if (isPrimary) primarySeen = true;
     out.push({
       sheetId,
+      pose,
       label,
       imageDataUrl: storedPath,
-      note,
       isPrimary,
       createdAt: normalizeText(raw.createdAt) || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -194,6 +194,34 @@ function normalizeToken(value: any) {
 
 function sanitizeSegment(value: string) {
   return String(value || "").trim().replace(/^@+/, "").replace(/[^a-zA-Z0-9._-가-힣]+/g, "_") || "item";
+}
+
+function normalizeCharacterSheetPose(value: any) {
+  const raw = normalizeText(value).toLowerCase();
+  if (!raw) return "other";
+  if (/^front$|^frontal$|정면|앞모습/.test(raw)) return "front";
+  if (/front[_\s-]?quarter|three[_\s-]?quarter|threequarter|3\/?4|반측면/.test(raw)) return "front_quarter";
+  if (/^side$|profile|측면|옆모습/.test(raw)) return "side";
+  if (/back[_\s-]?quarter|rear[_\s-]?quarter|후반측면/.test(raw)) return "back_quarter";
+  if (/^back$|^rear$|후면|뒷모습/.test(raw)) return "back";
+  if (/기타|other|etc/.test(raw)) return "other";
+  return "other";
+}
+
+function inferCharacterSheetPose(raw: any) {
+  const row = raw && typeof raw === "object" ? raw : {};
+  return normalizeCharacterSheetPose(row.pose || row.label || row.title || row.name || row.note || row.description || row.memo);
+}
+
+function getCharacterSheetPoseLabel(pose: string) {
+  switch (normalizeCharacterSheetPose(pose)) {
+    case "front": return "정면";
+    case "front_quarter": return "반측면";
+    case "side": return "측면";
+    case "back_quarter": return "후반측면";
+    case "back": return "후면";
+    default: return "기타";
+  }
 }
 
 function parseDataUrl(input: string): { mimeType: string; bytes: Uint8Array } | null {
