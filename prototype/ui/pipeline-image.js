@@ -148,6 +148,59 @@
     return text.slice(0, 179).trim() + '…';
   }
 
+  function normalizeDialogueEntries(value) {
+    if (Array.isArray(value)) {
+      return value.map(function (item) {
+        return {
+          speaker: normalizeText(item && item.speaker),
+          line: normalizeText(item && item.line)
+        };
+      }).filter(function (item) { return item.speaker || item.line; });
+    }
+    if (typeof value === 'string') {
+      return String(value || '').split('\n').map(function (line) {
+        var raw = normalizeText(line);
+        if (!raw) return null;
+        var idx = raw.indexOf(':');
+        if (idx > -1) {
+          return {
+            speaker: normalizeText(raw.slice(0, idx)),
+            line: normalizeText(raw.slice(idx + 1))
+          };
+        }
+        return { speaker: '', line: raw };
+      }).filter(Boolean);
+    }
+    return [];
+  }
+
+  function buildCharacterResolutionPrompt(scene, prompt) {
+    var row = scene && typeof scene === 'object' ? scene : {};
+    var parts = [];
+    var seen = new Set();
+    function push(value) {
+      var text = normalizeText(value);
+      if (!text) return;
+      var key = text.toLowerCase();
+      if (seen.has(key)) return;
+      seen.add(key);
+      parts.push(text);
+    }
+    push(prompt);
+    push(row.title);
+    push(row.shot || row.visual);
+    push(row.narrationText);
+    push(row.narration);
+    push(row.lines);
+    push(row.subtitleText);
+    push(row.dialogueText);
+    normalizeDialogueEntries(row.dialogue || row.dialogues).forEach(function (item) {
+      push((item.speaker ? (item.speaker + ': ') : '') + (item.line || ''));
+    });
+    push(row.script);
+    return parts.join('\n');
+  }
+
   function buildReferenceBundle(payload, resolvedCharacters) {
     var safePayload = payload && typeof payload === 'object' ? payload : {};
     var knowledgeHub = safePayload.knowledgeHub && typeof safePayload.knowledgeHub === 'object' ? safePayload.knowledgeHub : {};
@@ -279,8 +332,9 @@
             await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 });
           } catch (_) {}
         }
-        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, rawP, {});
-        try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id }); } catch (_) {}
+        var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true });
+        try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt }); } catch (_) {}
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,
           characters: res.characters || [],
@@ -300,6 +354,7 @@
         }
         st.scenes[opts.idx] = Object.assign({}, scene, {
           rawPrompt: rawP,
+          characterDetectionPrompt: characterResolutionPrompt,
           resolvedPrompt: finalPrompt,
           resolvedCharacterIds: built.resolvedCharacterIds || [],
           characterReferenceAssetIds: refs || [],
@@ -365,4 +420,6 @@
 
     if (ctx.persistPipeline) ctx.persistPipeline();
   };
+
+  image.buildCharacterResolutionPrompt = buildCharacterResolutionPrompt;
 })();

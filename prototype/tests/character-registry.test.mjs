@@ -53,3 +53,14 @@ test('characterRegistry falls back to knowledge characters when brandCharacters 
   assert.equal(rows[0].trigger, '@세모');
   assert.equal(rows[0].description, '씩씩하고 명랑함');
 });
+
+test('characterRegistry can resolve by character name when allowNameFallback is enabled', () => {
+  const ctx = createContext();
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+
+  const registry = ctx.NK.service.characterRegistry;
+  const resolved = registry.resolveCharactersFromPrompt('shape-brand', '세모가 환하게 웃는다.', { allowNameFallback: true });
+
+  assert.equal(resolved.characters.length, 1);
+  assert.equal(resolved.characters[0].trigger, '@세모');
+});

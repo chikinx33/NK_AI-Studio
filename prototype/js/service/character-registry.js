@@ -135,11 +135,49 @@
     return Array.from(out.values());
   };
 
+  function escapeRegExp(value) {
+    return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function normalizeAlias(value) {
+    return normText(value).replace(/^@+/, '').trim();
+  }
+
+  function hasLooseCharacterName(text, candidate) {
+    var haystack = String(text || '');
+    var needle = normalizeAlias(candidate);
+    if (!haystack || !needle) return false;
+    if (/[가-힣]/.test(needle)) {
+      return haystack.indexOf(needle) >= 0;
+    }
+    var re = new RegExp('(^|[^0-9A-Za-z_])' + escapeRegExp(needle) + '(?=$|[^0-9A-Za-z_])', 'i');
+    return re.test(haystack);
+  }
+
   registry.resolveCharactersFromPrompt = function (brandId, prompt, options) {
     var id = ensureBrandId(brandId, options);
-    var triggers = registry.parseCharacterTriggers(prompt);
-    if (!triggers.length) return { characters: [], missing: [], triggers: [] };
     var all = registry.listCharactersByBrand(id, options);
+    var triggers = registry.parseCharacterTriggers(prompt);
+    if (options && options.allowNameFallback) {
+      all.forEach(function (row) {
+        if (!row || !row.isActive) return;
+        var trigger = normTrigger(row.trigger);
+        if (!trigger) return;
+        var key = String(trigger).toLowerCase();
+        var alreadyIncluded = triggers.some(function (item) { return String(item || '').toLowerCase() === key; });
+        if (alreadyIncluded) return;
+        var aliases = []
+          .concat(normalizeAlias(row.name || ''))
+          .concat([normalizeAlias(trigger)])
+          .concat(Array.isArray(row.aliases) ? row.aliases.map(normalizeAlias) : [])
+          .filter(Boolean);
+        var matched = aliases.some(function (alias) {
+          return hasLooseCharacterName(prompt, alias);
+        });
+        if (matched) triggers.push(trigger);
+      });
+    }
+    if (!triggers.length) return { characters: [], missing: [], triggers: [] };
     var found = [];
     var missing = [];
     triggers.forEach(function (t) {
