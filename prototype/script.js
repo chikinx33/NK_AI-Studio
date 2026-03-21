@@ -378,11 +378,29 @@
     const stage = NK.navigation.normalizeStageName(currentPath);
     const isAiVideoShellPath = currentPath.toLowerCase().includes('ai-video.html');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
+    const explicitStageHref = normalizeStageTarget(urlParams.get('stageHref') || '');
+    const explicitStage = NK.navigation.normalizeStageName(urlParams.get('stage') || '');
+    const hasExplicitStageRequest = !!explicitStageHref || RESTORABLE_STAGES.includes(explicitStage);
     const isIndexShellPath = !isIframe && isShellPage && stage === 'options';
+    const isBareLandingEntry = isIndexShellPath && !hasExplicitStageRequest && !hasForcedDashboardEntry();
+    if (isBareLandingEntry) {
+      try {
+        sessionStorage.removeItem(STAGE_TARGET_KEY);
+        localStorage.removeItem(STAGE_TARGET_KEY);
+        sessionStorage.setItem('nk_current_stage', 'options');
+        localStorage.setItem('nk_current_stage', 'options');
+        const cleanUrl = new URL(window.location.href);
+        cleanUrl.searchParams.delete('stageHref');
+        cleanUrl.searchParams.delete('stage');
+        cleanUrl.searchParams.delete('projectId');
+        cleanUrl.searchParams.delete('brandId');
+        window.history.replaceState({}, '', cleanUrl.toString());
+      } catch (_) { }
+    }
     const initialTarget = (isAiVideoShellPath || isShellPage)
       ? resolveInitialStageTarget(urlParams, {
-        allowStored: !isIndexShellPath,
-        fallbackDashboard: !isIndexShellPath
+        allowStored: !isBareLandingEntry,
+        fallbackDashboard: !isBareLandingEntry
       })
       : '';
     const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
