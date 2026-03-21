@@ -616,7 +616,7 @@
         var payload = liveDraft && liveDraft.payload && typeof liveDraft.payload === 'object'
           ? liveDraft.payload
           : (st.payload || {});
-        var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload }) : (payload.brandId || '');
+        var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
         var hydratedBrand = null;
         if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
           try {
@@ -642,7 +642,7 @@
             var remoteDraft = extractRemoteProjectRecord(projectId, remoteProjectResp);
             if (remoteDraft && remoteDraft.payload) {
               payload = remoteDraft.payload;
-              brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload }) : (payload.brandId || brandId || '');
+              brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || brandId || '');
               if (!(res.characters || []).length) {
                 res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
                 built = NK.service.characterRegistry.buildResolvedPrompt({

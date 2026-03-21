@@ -68,7 +68,10 @@ function createContext(overrides = {}) {
           }
         },
         project: {
-          getBrandId({ payload }) {
+          getBrandId(input) {
+            const payload = input && input.payload && typeof input.payload === 'object'
+              ? input.payload
+              : input;
             return String(payload && payload.brandId || '');
           },
           getDraftById(projectId) {

@@ -321,6 +321,24 @@ test('project.getKnowledgeHub keeps top-level character sheets when nested knowl
   assert.equal(knowledge.characterSheets[0].items[0].imageDataUrl, 'gs://bucket/front.png');
 });
 
+test('project.getBrandId keeps persisted brandId when called with payload wrapper objects', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const project = ctx.NK.service.project;
+  const brandId = project.getBrandId({
+    payload: {
+      brandId: 'projects1771052244218',
+      brandRef: {
+        id: 'projects1771052244218',
+        title: '모양새 친구들'
+      }
+    }
+  });
+
+  assert.equal(brandId, 'projects1771052244218');
+});
+
 test('project.deleteSeries deletes shared brand storage when no projects remain for the brand', async () => {
   const ctx = createContext([
     {

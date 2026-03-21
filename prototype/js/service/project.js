@@ -901,8 +901,11 @@
     };
     project.getBrandRef = function (draftOrId) {
         var target = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
-        var src = (target && target.payload) || draftOrId || {};
-        return normalizeBrandRef(src, target || src);
+        var payloadWrapper = draftOrId && typeof draftOrId === 'object' && draftOrId.payload && typeof draftOrId.payload === 'object'
+            ? draftOrId.payload
+            : null;
+        var src = (target && target.payload) || payloadWrapper || draftOrId || {};
+        return normalizeBrandRef(src, target || draftOrId || src);
     };
     project.getBrandId = function (draftOrId) {
         var ref = project.getBrandRef(draftOrId);

@@ -146,7 +146,7 @@
     try {
       if (NK.service && NK.service.characterRegistry && opts.toBool(statePayload.charactersEnabled, Array.isArray(statePayload.characters) && statePayload.characters.length)) {
         var payload0 = st.payload || {};
-        var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload0 }) : (payload0.brandId || '');
+        var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload0) : (payload0.brandId || '');
         var characterResolutionPrompt0 = buildCharacterResolutionPrompt(scene, rawPromptForLog);
         var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, characterResolutionPrompt0, { allowNameFallback: true, payload: payload0 });
         try { console.log('Character parse (video):', { triggers: res0.triggers || [], missing: res0.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt0 }); } catch (_) {}

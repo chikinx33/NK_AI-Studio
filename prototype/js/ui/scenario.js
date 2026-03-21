@@ -1630,7 +1630,7 @@
       NK.core.setLoading(true, '생성중...');
       const payload = collectPayload();
       try {
-        const brandId = (NK.service && NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload }) : (payload.brandId || '');
+        const brandId = (NK.service && NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
         const topic = String(payload.topic || '').trim();
         const preview = renderDetectedCharacters(brandId, topic, payload) || { ids: [], resolvedPrompt: '' };
         payload.rawPrompt = topic;
