@@ -14,6 +14,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const aspectIncoming = (body?.aspectRatio ?? "16:9").toString().trim();
     const allowed = new Set(["16:9", "9:16", "1:1"]);
     const aspectFinal = allowed.has(aspectIncoming) ? aspectIncoming : "16:9";
+    const incomingReferenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages : [];
 
     if (!prompt) {
       return json({ error: "prompt is required" }, 400);
@@ -46,10 +47,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
+    const referenceImages = await normalizeReferenceImages({
+      items: incomingReferenceImages,
+      accessToken,
+    });
+
     // Vertex AI Imagen REST 호출
     // Google 공식 문서 REST 형식: https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_VERSION}:predict
-    // 모델 버전은 Imagen 문서의 지원 모델 중 하나를 사용 (예: imagen-3.0-generate-002)
-    const modelVersion = "imagen-3.0-generate-002";
+    // 참조 이미지가 있을 때는 Imagen 3 Customization(capability)을 사용한다.
+    const modelVersion = referenceImages.length
+      ? "imagen-3.0-capability-001"
+      : "imagen-3.0-generate-002";
 
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelVersion}:predict`;
 
@@ -60,12 +68,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        instances: [{ prompt: finalPrompt }],
+        instances: [buildImagenInstance(finalPrompt, referenceImages)],
         parameters: {
           sampleCount: 1,
           aspectRatio: aspectFinal,
-          personGeneration: "allow_all",
-          language: "ko"
         },
       }),
     });
@@ -129,6 +135,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       location,
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
+      referenceImageCount: referenceImages.length,
     });
   } catch (e: any) {
     return json({ error: e?.message ?? "Unknown error" }, 500);
@@ -148,6 +155,93 @@ function safeJson(text: string) {
   } catch {
     return text;
   }
+}
+
+function buildImagenInstance(prompt: string, referenceImages: NormalizedReferenceImage[]) {
+  const instance: Record<string, unknown> = { prompt };
+  if (referenceImages.length) {
+    instance.referenceImages = referenceImages.map((item) => ({
+      referenceId: item.referenceId,
+      referenceType: "REFERENCE_TYPE_SUBJECT",
+      referenceImage: {
+        bytesBase64Encoded: item.base64,
+        mimeType: item.mimeType || "image/png",
+      },
+      subjectImageConfig: {
+        subjectDescription: item.subjectDescription,
+        subjectType: item.subjectType,
+      },
+    }));
+  }
+  return instance;
+}
+
+type NormalizedReferenceImage = {
+  referenceId: number;
+  base64: string;
+  mimeType: string;
+  subjectDescription: string;
+  subjectType: string;
+};
+
+async function normalizeReferenceImages(args: {
+  items: any[];
+  accessToken: string;
+}): Promise<NormalizedReferenceImage[]> {
+  const items = Array.isArray(args.items) ? args.items.slice(0, 4) : [];
+  const out: NormalizedReferenceImage[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const raw = items[i] && typeof items[i] === "object" ? items[i] : {};
+    const imageDataUrl = String(raw.imageDataUrl || raw.imageUrl || raw.url || "").trim();
+    if (!imageDataUrl) continue;
+    const parsed = await resolveImageBytes(imageDataUrl, args.accessToken);
+    if (!parsed) continue;
+    const referenceId = Number(raw.referenceId || (i + 1)) || (i + 1);
+    const subjectDescription = String(raw.subjectDescription || `character ${referenceId}`).trim() || `character ${referenceId}`;
+    const subjectType = normalizeSubjectType(raw.subjectType);
+    out.push({
+      referenceId,
+      base64: parsed.base64,
+      mimeType: parsed.mimeType || "image/png",
+      subjectDescription,
+      subjectType,
+    });
+  }
+  return out;
+}
+
+async function resolveImageBytes(imageDataUrl: string, accessToken: string): Promise<{ base64: string; mimeType: string } | null> {
+  const parsed = parseDataUrl(imageDataUrl);
+  if (parsed) return parsed;
+  try {
+    const resolvedUrl = imageDataUrl.startsWith("gs://")
+      ? gcsToHttps(imageDataUrl)
+      : imageDataUrl;
+    if (!resolvedUrl) return null;
+    const headers: Record<string, string> = {};
+    if (imageDataUrl.startsWith("gs://") || resolvedUrl.includes("storage.googleapis.com")) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+    const res = await fetch(resolvedUrl, { headers });
+    if (!res.ok) {
+      throw new Error(`reference_image_fetch_failed (${res.status})`);
+    }
+    const buf = await res.arrayBuffer();
+    return {
+      base64: arrayBufferToBase64(buf),
+      mimeType: res.headers.get("content-type") || "image/png",
+    };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeSubjectType(value: unknown) {
+  const raw = String(value || "").trim().toUpperCase();
+  if (raw === "SUBJECT_TYPE_PERSON" || raw === "SUBJECT_TYPE_ANIMAL" || raw === "SUBJECT_TYPE_PRODUCT") {
+    return raw;
+  }
+  return "SUBJECT_TYPE_DEFAULT";
 }
 
 async function getGoogleAccessToken(opts: {
@@ -259,6 +353,21 @@ function base64ToUint8(b64: string) {
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
+}
+function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
+  if (!dataUrl || typeof dataUrl !== "string") return null;
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const mimeType = String(match[1] || "image/png").trim() || "image/png";
+  const base64 = String(match[2] || "").trim();
+  if (!base64) return null;
+  return { base64, mimeType };
+}
+function arrayBufferToBase64(buf: ArrayBuffer) {
+  const bytes = new Uint8Array(buf);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
 }
 async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {
   const now = new Date();

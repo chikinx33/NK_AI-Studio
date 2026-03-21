@@ -2,6 +2,194 @@
   var NK = window.NK || (window.NK = {});
   var image = NK.uiPipelineImage || (NK.uiPipelineImage = {});
 
+  function normalizeText(value) {
+    return String(value == null ? '' : value).replace(/[<>]/g, '').trim();
+  }
+
+  function normalizeToken(value) {
+    var raw = normalizeText(value).replace(/\s+/g, '');
+    if (!raw) return '';
+    if (raw.charAt(0) !== '@') raw = '@' + raw.replace(/^@+/, '');
+    return raw;
+  }
+
+  function normalizeKnowledgeCharacters(value) {
+    var src = Array.isArray(value) ? value : [];
+    return src.map(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : {};
+      var token = normalizeToken(raw.token || raw.trigger || raw.displayName || raw.name);
+      if (!token) return null;
+      return {
+        characterId: normalizeText(raw.characterId || raw.id) || ('char_' + String(index + 1).padStart(3, '0')),
+        displayName: normalizeText(raw.displayName || raw.name || token.replace(/^@/, '')) || token.replace(/^@/, ''),
+        token: token,
+        personality: normalizeText(raw.personality || raw.description || raw.profile || raw.note || '')
+      };
+    }).filter(Boolean);
+  }
+
+  function normalizeCharacterSheets(value, characters) {
+    var src = Array.isArray(value) ? value : [];
+    var charRows = normalizeKnowledgeCharacters(characters);
+    var map = new Map();
+    src.forEach(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : {};
+      var token = normalizeToken(raw.token || raw.trigger || raw.displayName || raw.name);
+      if (!token) return;
+      var match = charRows.find(function (row) {
+        return String(row.token || '').toLowerCase() === String(token).toLowerCase();
+      }) || null;
+      var items = (Array.isArray(raw.items) ? raw.items : []).map(function (sheet, sheetIndex) {
+        var row = sheet && typeof sheet === 'object' ? sheet : {};
+        var imageDataUrl = normalizeText(row.imageDataUrl || row.imageUrl || row.url || row.src);
+        if (!imageDataUrl) return null;
+        return {
+          sheetId: normalizeText(row.sheetId || row.id) || ('sheet_' + String(sheetIndex + 1).padStart(3, '0')),
+          label: normalizeText(row.label || row.title || row.name),
+          note: normalizeText(row.note || row.description || row.memo),
+          imageDataUrl: imageDataUrl,
+          isPrimary: row.isPrimary === true
+        };
+      }).filter(Boolean);
+      map.set(String(token).toLowerCase(), {
+        characterId: normalizeText(raw.characterId || raw.id) || normalizeText(match && match.characterId) || ('char_' + String(index + 1).padStart(3, '0')),
+        displayName: normalizeText(raw.displayName || raw.name || (match && match.displayName) || token.replace(/^@/, '')) || token.replace(/^@/, ''),
+        token: token,
+        items: items
+      });
+    });
+    charRows.forEach(function (row, index) {
+      var key = String(row.token || '').toLowerCase();
+      if (!key || map.has(key)) return;
+      map.set(key, {
+        characterId: row.characterId || ('char_' + String(index + 1).padStart(3, '0')),
+        displayName: row.displayName || row.token.replace(/^@/, ''),
+        token: row.token,
+        items: []
+      });
+    });
+    return Array.from(map.values());
+  }
+
+  function sheetPoseRank(item) {
+    var text = (normalizeText(item && item.label) + ' ' + normalizeText(item && item.note)).toLowerCase();
+    if (item && item.isPrimary) return 0;
+    if (/정면|앞모습|front|frontal/.test(text)) return 1;
+    if (/측면|옆모습|side|profile/.test(text)) return 2;
+    if (/후면|뒷모습|rear|back/.test(text)) return 3;
+    if (/3\/4|quarter/.test(text)) return 4;
+    return 5;
+  }
+
+  function pickReferenceSheets(items, limit) {
+    var max = Math.max(0, Number(limit) || 0);
+    if (!max) return [];
+    var unique = [];
+    var seen = new Set();
+    (Array.isArray(items) ? items : []).forEach(function (item) {
+      var key = String(item && (item.sheetId || item.imageDataUrl || item.label) || '').trim().toLowerCase();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      unique.push(item);
+    });
+    var sorted = unique.slice().sort(function (a, b) {
+      var rank = sheetPoseRank(a) - sheetPoseRank(b);
+      if (rank) return rank;
+      return String(a.label || '').localeCompare(String(b.label || ''));
+    });
+    return sorted.slice(0, max);
+  }
+
+  function compactDescription(parts) {
+    var text = parts.map(function (item) { return normalizeText(item); }).filter(Boolean).join(', ');
+    if (!text) return 'character';
+    if (text.length <= 180) return text;
+    return text.slice(0, 179).trim() + '…';
+  }
+
+  function buildReferenceBundle(payload, resolvedCharacters) {
+    var safePayload = payload && typeof payload === 'object' ? payload : {};
+    var knowledgeHub = safePayload.knowledgeHub && typeof safePayload.knowledgeHub === 'object' ? safePayload.knowledgeHub : {};
+    var knowledgeCharacters = normalizeKnowledgeCharacters(
+      safePayload.knowledgeCharacters || knowledgeHub.characters || []
+    );
+    var sheetEntries = normalizeCharacterSheets(
+      safePayload.knowledgeCharacterSheets || safePayload.characterSheets || knowledgeHub.characterSheets || [],
+      knowledgeCharacters
+    );
+    var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters : [];
+    if (!sheetEntries.length || !sceneCharacters.length) {
+      return { referenceImages: [], promptPrefix: '', promptSuffix: '', referenceMeta: [] };
+    }
+
+    var activeCharacters = sceneCharacters.slice(0, 4);
+    var refsPerCharacter = activeCharacters.length <= 1 ? 4 : (activeCharacters.length === 2 ? 2 : 1);
+    var referenceImages = [];
+    var promptLines = [];
+    var referenceMeta = [];
+
+    activeCharacters.forEach(function (character, index) {
+      if (referenceImages.length >= 4) return;
+      var token = normalizeToken(character && (character.trigger || character.token || character.name));
+      if (!token) return;
+      var key = String(token).toLowerCase();
+      var entry = sheetEntries.find(function (item) {
+        return String(item.token || '').toLowerCase() === key;
+      }) || null;
+      if (!entry || !entry.items || !entry.items.length) return;
+
+      var limit = Math.min(refsPerCharacter, 4 - referenceImages.length);
+      var selectedSheets = pickReferenceSheets(entry.items, limit);
+      if (!selectedSheets.length) return;
+
+      var characterMeta = knowledgeCharacters.find(function (item) {
+        return String(item.token || '').toLowerCase() === key;
+      }) || null;
+      var referenceId = index + 1;
+      var displayName = entry.displayName || normalizeText(character && character.name) || token.replace(/^@/, '');
+      var subjectDescription = compactDescription([
+        displayName,
+        characterMeta && characterMeta.personality,
+        character && character.description,
+        Array.isArray(character && character.fixedTraits) ? character.fixedTraits.join(', ') : '',
+        character && character.styleGuide
+      ]);
+
+      selectedSheets.forEach(function (sheet) {
+        referenceImages.push({
+          referenceId: referenceId,
+          referenceType: 'REFERENCE_TYPE_SUBJECT',
+          imageDataUrl: sheet.imageDataUrl,
+          subjectDescription: subjectDescription,
+          subjectType: 'SUBJECT_TYPE_DEFAULT'
+        });
+        referenceMeta.push({
+          referenceId: referenceId,
+          token: token,
+          displayName: displayName,
+          sheetId: sheet.sheetId,
+          label: sheet.label || '',
+          isPrimary: !!sheet.isPrimary
+        });
+      });
+
+      promptLines.push(
+        'Use ' + subjectDescription + ' [' + referenceId + '] as the design reference for ' + displayName + '. Preserve the same silhouette, colors, costume, and face.'
+      );
+    });
+
+    if (!referenceImages.length) {
+      return { referenceImages: [], promptPrefix: '', promptSuffix: '', referenceMeta: [] };
+    }
+
+    return {
+      referenceImages: referenceImages.slice(0, 4),
+      promptPrefix: 'Create an image that matches the scene description below.',
+      promptSuffix: promptLines.join('\n'),
+      referenceMeta: referenceMeta
+    };
+  }
+
   function buildImagePrompt(scene, header, cleanHeader) {
     var common = cleanHeader(header || '');
     var primaryVisual = String((scene && scene.shot) || '').trim();
@@ -31,6 +219,7 @@
 
     var finalPrompt = buildImagePrompt(scene, st.header || '', opts.cleanHeader || function (text) { return String(text || ''); });
     var rawP = finalPrompt;
+    var referencePayload = null;
     try {
       if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
         var payload = st.payload || {};
@@ -46,11 +235,20 @@
         try { console.log('Resolved prompt (image):', { sceneId: scene.id, resolvedPrompt: built.resolvedPrompt }); } catch (_) {}
         finalPrompt = built.resolvedPrompt || finalPrompt;
         var refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
+        referencePayload = buildReferenceBundle(payload, res.characters || []);
+        if (referencePayload && referencePayload.referenceImages.length) {
+          finalPrompt = [
+            referencePayload.promptPrefix || '',
+            finalPrompt,
+            referencePayload.promptSuffix || ''
+          ].filter(Boolean).join('\n');
+        }
         st.scenes[opts.idx] = Object.assign({}, scene, {
           rawPrompt: rawP,
           resolvedPrompt: finalPrompt,
           resolvedCharacterIds: built.resolvedCharacterIds || [],
-          characterReferenceAssetIds: refs || []
+          characterReferenceAssetIds: refs || [],
+          characterReferenceMeta: referencePayload && referencePayload.referenceMeta ? referencePayload.referenceMeta : []
         });
         ctx.setState(st);
         scene = st.scenes[opts.idx];
@@ -69,7 +267,12 @@
           ctx._cancelImage[String(scene.id)] = ctrl;
         }
       } catch (_) {}
-      var json = await NK.api.imagen({ prompt: finalPrompt, aspectRatio: aspectRatio, projectId: projectId }, { signal: ctrl ? ctrl.signal : undefined });
+      var json = await NK.api.imagen({
+        prompt: finalPrompt,
+        aspectRatio: aspectRatio,
+        projectId: projectId,
+        referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
+      }, { signal: ctrl ? ctrl.signal : undefined });
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;
