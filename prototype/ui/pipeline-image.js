@@ -153,7 +153,11 @@
   }
 
   function stripPromptTokens(text) {
-    return String(text || '').replace(/@([0-9A-Za-z가-힣_]{1,24})/g, '$1').replace(/\s{2,}/g, ' ').trim();
+    return String(text || '')
+      .replace(/@([0-9A-Za-z가-힣_]{1,24})/g, '$1')
+      .replace(/\[(\d+)\]/g, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   }
 
   function replaceFirstCaseInsensitive(text, search, replacement) {
@@ -178,7 +182,7 @@
     var scenePrompt = base;
     var lockedSubjects = [];
     subjects.forEach(function (subject) {
-      var referenceLabel = (subject.displayName || 'character') + ' [' + subject.referenceId + ']';
+      var referenceLabel = subject.displayName || 'character';
       var token = normalizeToken(subject.token || subject.displayName || '');
       var plainName = normalizeText(subject.displayName || token.replace(/^@/, ''));
       var updated = scenePrompt;
@@ -189,7 +193,7 @@
       }
       scenePrompt = updated;
       lockedSubjects.push(
-        'Render ' + referenceLabel + ' with the exact same face, silhouette, colors, costume, and proportions as the registered reference images.'
+        'Use the provided registered reference images for ' + referenceLabel + ' and keep the exact same face, silhouette, colors, costume, and proportions.'
       );
     });
     return [scenePrompt].concat(lockedSubjects).join('\n');
@@ -333,7 +337,7 @@
       });
 
       promptLines.push(
-        'Use ' + subjectDescription + ' [' + referenceId + '] as the design reference for ' + displayName + '. Reference views: ' + (poseSummary || 'character reference') + '. Preserve the same silhouette, colors, costume, and face.'
+        'Use the provided registered reference images for ' + displayName + '. Reference views: ' + (poseSummary || 'character reference') + '. Preserve the same silhouette, colors, costume, and face.'
       );
     });
 
@@ -422,7 +426,7 @@
         scene = st.scenes[opts.idx];
       }
     } catch (_) { }
-    console.log('Imagen prompt (scene ' + scene.id + '):', finalPrompt);
+    console.log('Image prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);
     opts.updateSceneRow(opts.idx, st.header || '', 'image');

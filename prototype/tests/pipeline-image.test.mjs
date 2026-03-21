@@ -115,8 +115,9 @@ test('pipeline image generation uses scene narration/dialogue context to attach 
   assert.equal(ctx.__imagenCalls[0].referenceImages.length, 2);
   assert.equal(ctx.__imagenCalls[0].referenceImages[0].imageDataUrl, 'gs://bucket/front.png');
   assert.equal(ctx.__imagenCalls[0].referenceImages[1].imageDataUrl, 'gs://bucket/front-quarter.png');
-  assert.match(String(ctx.__imagenCalls[0].prompt || ''), /네모 \[1\]/);
+  assert.match(String(ctx.__imagenCalls[0].prompt || ''), /Use the provided registered reference images for 네모/);
   assert.doesNotMatch(String(ctx.__imagenCalls[0].prompt || ''), /@네모/);
+  assert.doesNotMatch(String(ctx.__imagenCalls[0].prompt || ''), /\[1\]/);
   assert.deepEqual(Array.from(state.scenes[0].resolvedCharacterIds), ['char_001']);
   assert.match(String(state.scenes[0].characterDetectionPrompt || ''), /네모/);
 });

@@ -1,16 +1,18 @@
-﻿// prototype/functions/api/imagen.ts
+// prototype/functions/api/imagen.ts
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
+
 export const onRequestPost: PagesFunction = async ({ request, env }) => {
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) {
       return json({ error: auth.error }, auth.status);
     }
+
     const body = await request.json().catch(() => ({} as any));
-    const prompt = (body?.prompt ?? "").toString().trim();
+    const prompt = normalizePrompt((body?.prompt ?? "").toString().trim());
     const aspectIncoming = (body?.aspectRatio ?? "16:9").toString().trim();
     const allowed = new Set(["16:9", "9:16", "1:1"]);
     const aspectFinal = allowed.has(aspectIncoming) ? aspectIncoming : "16:9";
@@ -20,27 +22,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "prompt is required" }, 400);
     }
 
-    // 이미지 모델에 전달할 최종 프롬프트 (사용자 Visual 그대로)
-    const finalPrompt = prompt;
-    if (!finalPrompt) {
-      return json({ error: "prompt is required" }, 400);
-    }
-
-    // Cloudflare Pages > Variables and Secrets 에 등록한 값들
-    const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
+    const apiKey = String(env.GOOGLE_API_KEY || "").trim();
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
+    const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
+    const geminiImageSize = String(env.GEMINI_IMAGE_SIZE || "").trim() || "2K";
 
-    if (!projectId || !clientEmail || !privateKeyRaw) {
-      return json(
-        { error: "Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" },
-        500
-      );
+    if (!apiKey) {
+      return json({ error: "Missing GOOGLE_API_KEY" }, 500);
+    }
+    if (!clientEmail || !privateKeyRaw) {
+      return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
     }
 
-    const location = "us-central1";
-
-    // Google OAuth 토큰 발급 (Service Account JWT Bearer)
     const accessToken = await getGoogleAccessToken({
       clientEmail,
       privateKeyPem: privateKeyRaw,
@@ -51,47 +45,40 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       items: incomingReferenceImages,
       accessToken,
     });
+    const finalPrompt = buildGeminiImagePrompt(prompt, referenceImages);
 
-    // Vertex AI Imagen REST 호출
-    // Google 공식 문서 REST 형식: https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}/locations/${LOCATION}/publishers/google/models/${MODEL_VERSION}:predict
-    // 참조 이미지가 있을 때는 Imagen 3 Customization(capability)을 사용한다.
-    const modelVersion = referenceImages.length
-      ? "imagen-3.0-capability-001"
-      : "imagen-3.0-generate-002";
-
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelVersion}:predict`;
-
-    const vertexRes = await fetch(url, {
+    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
+    const geminiRes = await fetch(generateUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        "x-goog-api-key": apiKey,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        instances: [buildImagenInstance(finalPrompt, referenceImages)],
-        parameters: {
-          sampleCount: 1,
-          aspectRatio: aspectFinal,
-        },
+        contents: [
+          {
+            role: "user",
+            parts: buildGeminiParts(referenceImages, finalPrompt),
+          }
+        ],
+        generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
       }),
     });
 
-    const vertexText = await vertexRes.text();
-    if (!vertexRes.ok) {
+    const geminiText = await geminiRes.text();
+    if (!geminiRes.ok) {
       return json(
-        { error: "Vertex AI error", status: vertexRes.status, detail: safeJson(vertexText) },
+        { error: "Gemini API error", status: geminiRes.status, detail: safeJson(geminiText) },
         500
       );
     }
 
-    const vertexJson = JSON.parse(vertexText);
-    const pred = vertexJson?.predictions?.[0];
-    const bytesBase64Encoded =
-      pred?.bytesBase64Encoded ??
-      pred?.structValue?.fields?.bytesBase64Encoded?.stringValue; // 일부 응답 포맷 대비
+    const geminiJson = safeJson(geminiText) || {};
+    const imageOutput = extractGeminiImage(geminiJson);
+    const bytesBase64Encoded = imageOutput?.data || "";
 
     if (!bytesBase64Encoded) {
-      return json({ error: "No image bytes returned", raw: vertexJson }, 500);
+      return json({ error: "No image bytes returned", raw: geminiJson }, 500);
     }
 
     const projTagRaw = (body?.projectId ?? body?.projTag ?? "").toString().trim();
@@ -110,10 +97,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const bytes = base64ToUint8(bytesBase64Encoded);
       const upRes = await fetch(uploadUrl, {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": imageOutput?.mimeType || "image/png" },
         body: bytes
       });
-      const upTxt = await upRes.text();
       if (upRes.ok) {
         signedUrl = await signGcsUrl({
           bucket: outParsed.bucket,
@@ -126,13 +112,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         objectName = "";
       }
     }
+
     return json({
       bytesBase64Encoded,
-      dataUrl: `data:image/png;base64,${bytesBase64Encoded}`,
+      dataUrl: `data:${imageOutput?.mimeType || "image/png"};base64,${bytesBase64Encoded}`,
       signedUrl,
       objectName,
-      model: modelVersion,
-      location,
+      model: geminiModel,
+      provider: "gemini-api",
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
@@ -157,23 +144,57 @@ function safeJson(text: string) {
   }
 }
 
-function buildImagenInstance(prompt: string, referenceImages: NormalizedReferenceImage[]) {
-  const instance: Record<string, unknown> = { prompt };
-  if (referenceImages.length) {
-    instance.referenceImages = referenceImages.map((item) => ({
-      referenceId: item.referenceId,
-      referenceType: "REFERENCE_TYPE_SUBJECT",
-      referenceImage: {
-        bytesBase64Encoded: item.base64,
+function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: string) {
+  const parts: Array<Record<string, unknown>> = [];
+  referenceImages.forEach((item) => {
+    parts.push({
+      inlineData: {
         mimeType: item.mimeType || "image/png",
-      },
-      subjectImageConfig: {
-        subjectDescription: item.subjectDescription,
-        subjectType: item.subjectType,
-      },
-    }));
+        data: item.base64,
+      }
+    });
+  });
+  parts.push({ text: prompt });
+  return parts;
+}
+
+function buildGeminiGenerationConfig(model: string, aspectRatio: string, imageSize: string) {
+  const config: Record<string, unknown> = {
+    responseModalities: ["IMAGE"],
+    imageConfig: {
+      aspectRatio,
+    }
+  };
+  if (/gemini-3\./i.test(model) || /image-preview/i.test(model)) {
+    (config.imageConfig as Record<string, unknown>).imageSize = imageSize;
   }
-  return instance;
+  return config;
+}
+
+function normalizePrompt(prompt: string) {
+  return String(prompt || "")
+    .replace(/@([0-9A-Za-z가-힣_]{1,24})/g, "$1")
+    .replace(/\[(\d+)\]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function buildGeminiImagePrompt(prompt: string, referenceImages: NormalizedReferenceImage[]) {
+  const base = normalizePrompt(prompt);
+  if (!referenceImages.length) return base;
+  const grouped = new Map<number, NormalizedReferenceImage>();
+  referenceImages.forEach((item) => {
+    const key = Number(item.referenceId || 1) || 1;
+    if (!grouped.has(key)) grouped.set(key, item);
+  });
+  const consistencyLines = Array.from(grouped.values()).map((item) => {
+    const subject = String(item.subjectDescription || "registered character").trim() || "registered character";
+    return `Use the provided registered reference image set for ${subject} and keep the exact same character design, face, silhouette, colors, costume, and proportions.`;
+  });
+  return [
+    base,
+    "The uploaded reference images define the official registered character design.",
+  ].concat(consistencyLines).filter(Boolean).join("\n");
 }
 
 type NormalizedReferenceImage = {
@@ -183,6 +204,26 @@ type NormalizedReferenceImage = {
   subjectDescription: string;
   subjectType: string;
 };
+
+function extractGeminiImage(json: any): { data: string; mimeType: string } | null {
+  try {
+    const candidates = Array.isArray(json?.candidates) ? json.candidates : [];
+    for (const candidate of candidates) {
+      const parts = candidate?.content?.parts;
+      if (!Array.isArray(parts)) continue;
+      for (const part of parts) {
+        const inline = part?.inlineData || part?.inline_data;
+        if (inline?.data) {
+          return {
+            data: String(inline.data),
+            mimeType: String(inline.mimeType || inline.mime_type || "image/png"),
+          };
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
+}
 
 async function normalizeReferenceImages(args: {
   items: any[];
@@ -197,7 +238,7 @@ async function normalizeReferenceImages(args: {
     const parsed = await resolveImageBytes(imageDataUrl, args.accessToken);
     if (!parsed) continue;
     const referenceId = Number(raw.referenceId || (i + 1)) || (i + 1);
-    const subjectDescription = String(raw.subjectDescription || `character ${referenceId}`).trim() || `character ${referenceId}`;
+    const subjectDescription = String(raw.subjectDescription || `registered character ${referenceId}`).trim() || `registered character ${referenceId}`;
     const subjectType = normalizeSubjectType(raw.subjectType);
     out.push({
       referenceId,
@@ -246,12 +287,11 @@ function normalizeSubjectType(value: unknown) {
 
 async function getGoogleAccessToken(opts: {
   clientEmail: string;
-  privateKeyPem: string; // \n 포함 문자열 (Cloudflare Secret)
+  privateKeyPem: string;
   scope: string;
 }) {
   const now = Math.floor(Date.now() / 1000);
   const exp = now + 3600;
-
   const aud = "https://oauth2.googleapis.com/token";
 
   const header = { alg: "RS256", typ: "JWT" };
@@ -298,9 +338,7 @@ function base64url(input: string) {
 }
 
 async function signRS256(message: string, privateKeyPem: string) {
-  // Cloudflare Secret에 들어간 값은 \n 형태이므로 실제 줄바꿈으로 변환
   const pem = privateKeyPem.replace(/\\n/g, "\n").trim();
-
   const pkcs8Der = pemToArrayBuffer(pem);
   const key = await crypto.subtle.importKey(
     "pkcs8",
@@ -333,6 +371,7 @@ function pemToArrayBuffer(pem: string) {
   for (let i = 0; i < raw.length; i++) buf[i] = raw.charCodeAt(i);
   return buf.buffer;
 }
+
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri || !uri.startsWith("gs://")) return null;
   const rest = uri.slice(5);
@@ -342,18 +381,21 @@ function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   const object = rest.slice(slash + 1);
   return { bucket, object };
 }
+
 function gcsToHttps(uri: string) {
   if (!uri.startsWith("gs://")) return uri;
   const parsed = parseGcsUri(uri);
   if (!parsed) return uri;
   return `https://storage.googleapis.com/${parsed.bucket}/${parsed.object}`;
 }
+
 function base64ToUint8(b64: string) {
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
 }
+
 function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
   if (!dataUrl || typeof dataUrl !== "string") return null;
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
@@ -363,12 +405,14 @@ function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | n
   if (!base64) return null;
   return { base64, mimeType };
 }
+
 function arrayBufferToBase64(buf: ArrayBuffer) {
   const bytes = new Uint8Array(buf);
   let bin = "";
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   return btoa(bin);
 }
+
 async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: string; privateKeyPem: string; expiresInSec: number; }) {
   const now = new Date();
   const pad = (n: number) => `${n}`.padStart(2, "0");
@@ -394,10 +438,12 @@ async function signGcsUrl(opts: { bucket: string; object: string; clientEmail: s
   const finalQuery = `${canonicalQuery}&X-Goog-Signature=${signatureHex}`;
   return `https://${host}${canonicalUri}?${finalQuery}`;
 }
+
 async function sha256Hex(input: string) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
+
 function b64urlToHex(b64url: string) {
   const b64 = b64url.replace(/-/g, "+").replace(/_/g, "/");
   const bin = atob(b64);
