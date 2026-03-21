@@ -28,6 +28,18 @@
     }).filter(Boolean);
   }
 
+  function mergeKnowledgeCharacterSources(sources) {
+    var map = new Map();
+    (Array.isArray(sources) ? sources : []).forEach(function (source) {
+      normalizeKnowledgeCharacters(source).forEach(function (item) {
+        var key = String(item && item.token || '').toLowerCase();
+        if (!key) return;
+        map.set(key, item);
+      });
+    });
+    return Array.from(map.values());
+  }
+
   function normalizeCharacterSheetPose(value) {
     var raw = normalizeText(value).toLowerCase();
     if (!raw) return 'other';
@@ -109,6 +121,15 @@
       });
     });
     return Array.from(map.values());
+  }
+
+  function mergeCharacterSheetSources(sources, characters) {
+    var merged = [];
+    (Array.isArray(sources) ? sources : []).forEach(function (source) {
+      if (!Array.isArray(source) || !source.length) return;
+      merged = merged.concat(source);
+    });
+    return normalizeCharacterSheets(merged, characters);
   }
 
   function sheetPoseRank(item) {
@@ -259,13 +280,17 @@
     var brandRecord = brandId && NK.service && NK.service.brand && NK.service.brand.getById
       ? NK.service.brand.getById(brandId)
       : null;
-    var knowledgeCharacters = normalizeKnowledgeCharacters(
-      safePayload.knowledgeCharacters || knowledgeHub.characters || brandRecord && brandRecord.knowledgeCharacters || []
-    );
-    var sheetEntries = normalizeCharacterSheets(
-      safePayload.knowledgeCharacterSheets || safePayload.characterSheets || knowledgeHub.characterSheets || brandRecord && brandRecord.characterSheets || [],
-      knowledgeCharacters
-    );
+    var knowledgeCharacters = mergeKnowledgeCharacterSources([
+      brandRecord && brandRecord.knowledgeCharacters,
+      knowledgeHub.characters,
+      safePayload.knowledgeCharacters
+    ]);
+    var sheetEntries = mergeCharacterSheetSources([
+      brandRecord && brandRecord.characterSheets,
+      knowledgeHub.characterSheets,
+      safePayload.characterSheets,
+      safePayload.knowledgeCharacterSheets
+    ], knowledgeCharacters);
     var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters : [];
     if (!sheetEntries.length || !sceneCharacters.length) {
       return { referenceImages: [], promptPrefix: '', promptSuffix: '', referenceMeta: [] };
@@ -406,6 +431,13 @@
         finalPrompt = built.resolvedPrompt || finalPrompt;
         var refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
         referencePayload = buildReferenceBundle(payload, res.characters || []);
+        try {
+          console.log('Character references (image):', {
+            sceneId: scene.id,
+            resolvedCharacters: Array.isArray(res.characters) ? res.characters.map(function (item) { return item && (item.token || item.name || item.displayName); }) : [],
+            referenceCount: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.length : 0
+          });
+        } catch (_) {}
         if (referencePayload && referencePayload.referenceImages.length) {
           finalPrompt = buildInlineReferencePrompt(finalPrompt, referencePayload.referenceSubjects || []);
           finalPrompt = [

@@ -79,6 +79,8 @@ test('pipeline image generation uses scene narration/dialogue context to attach 
     payload: {
       brandId: 'shape-brand',
       charactersEnabled: true,
+      knowledgeCharacters: [],
+      knowledgeCharacterSheets: [],
       characters: [
         { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
       ]
