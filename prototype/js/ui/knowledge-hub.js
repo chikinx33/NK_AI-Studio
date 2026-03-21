@@ -108,11 +108,12 @@
           targetDelta = deltaBottom;
         }
         if (!targetDelta) return;
+        // Keep the auto-correction immediate so the next click still toggles the disclosure.
         if (scroller === document.body || scroller === document.documentElement || scroller === document.scrollingElement) {
-          window.scrollBy({ top: targetDelta, behavior: 'smooth' });
+          window.scrollBy(0, targetDelta);
           return;
         }
-        scroller.scrollTo({ top: scroller.scrollTop + targetDelta, behavior: 'smooth' });
+        scroller.scrollTop += targetDelta;
       });
     });
   }
