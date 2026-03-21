@@ -7728,6 +7728,16 @@ body.layout-fixed .lib-content {
   font: inherit;
 }
 
+.character-sheet-input option {
+  background: #0f172a;
+  color: #f5f7ff;
+}
+
+[data-theme="light"] .character-sheet-input option {
+  background: #ffffff;
+  color: #0b0f1c;
+}
+
 .character-sheet-textarea {
   min-height: 68px;
   resize: vertical;
