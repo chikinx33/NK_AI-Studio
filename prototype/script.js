@@ -689,35 +689,12 @@
       if (NK.state.runtime.currentStage) updateSidebarHighlight(NK.state.runtime.currentStage);
     }
 
-    // 사이드바 및 전역 링크 클릭 핸들러
-    document.addEventListener('click', (e) => {
-      const link = e.target.closest('.nav-item[href], [data-action]');
-      if (!link) return;
-
-      const href = link.getAttribute('href');
-      const currentProject = NK.state?.runtime?.currentProject;
+    const handleStageAction = (action, currentProject) => {
       const persistCurrentProject = () => {
         const cp = NK.state?.runtime?.currentProject;
         if (!cp) return;
         NK.service?.project?.setCurrent?.(cp);
       };
-
-      // 대시보드/메인 클릭: 전체 페이지 전환을 막고 iframe으로만 로드
-      if (href && (href.includes('ai-video.html') || href.includes('dashboard.html'))) {
-        e.preventDefault();
-        e.stopPropagation();
-        NK.navigation.loadStage('dashboard.html');
-        return;
-      }
-
-      if (href && href.includes('.html')) {
-        e.preventDefault();
-        e.stopPropagation();
-        NK.navigation.loadStage(href);
-      }
-
-      // 사이드바 프로젝트 카드 버튼 처리
-      const action = link.dataset.action;
       if (action === 'sidebar-edit-scenario') {
         persistCurrentProject();
         const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';
@@ -747,6 +724,46 @@
         const url = currentProject?.id ? `media.html?projectId=${encodeURIComponent(currentProject.id)}` : 'media.html';
         NK.navigation.loadStage(url);
       }
+    };
+
+    document.querySelectorAll('.sidebar .nav-item[href]').forEach((link) => {
+      if (link.dataset.navBound === '1') return;
+      link.dataset.navBound = '1';
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const href = String(link.getAttribute('href') || '').trim();
+        if (!href) return;
+        if (href.includes('ai-video.html') || href.includes('dashboard.html')) {
+          NK.navigation.loadStage('dashboard.html');
+          return;
+        }
+        NK.navigation.loadStage(href);
+      });
+    });
+
+    const optionsBtn = document.querySelector('.sidebar [data-action="open-options"]');
+    if (optionsBtn && optionsBtn.dataset.navBound !== '1') {
+      optionsBtn.dataset.navBound = '1';
+      optionsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openOptionsStage();
+      });
+    }
+
+    // 동적 사이드바 카드 버튼 처리
+    document.addEventListener('click', (e) => {
+      const link = e.target.closest('[data-action]');
+      if (!link) return;
+      if (link.closest('.sidebar .nav')) return;
+
+      const currentProject = NK.state?.runtime?.currentProject;
+      const action = link.dataset.action;
+      if (!action || action === 'open-options') return;
+      e.preventDefault();
+      e.stopPropagation();
+      handleStageAction(action, currentProject);
     });
 
     // 아이프레임으로부터의 메시지 수신
