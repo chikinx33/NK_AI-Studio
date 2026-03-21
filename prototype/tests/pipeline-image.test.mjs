@@ -8,6 +8,8 @@ function createContext(overrides = {}) {
   const imagenCalls = [];
   const draftById = overrides.draftById || null;
   const getKnowledgeHub = overrides.getKnowledgeHub || null;
+  const apiProjectGet = overrides.apiProjectGet || null;
+  const apiBrandGet = overrides.apiBrandGet || null;
   const brandById = overrides.brandById || function (brandId) {
     if (String(brandId) !== 'shape-brand') return null;
     return {
@@ -43,6 +45,14 @@ function createContext(overrides = {}) {
         async imagen(payload) {
           imagenCalls.push(JSON.parse(JSON.stringify(payload || {})));
           return { dataUrl: 'data:image/png;base64,AA==' };
+        },
+        async projectGet(projectId) {
+          if (typeof apiProjectGet === 'function') return apiProjectGet(projectId);
+          return { data: null };
+        },
+        async brandGet(brandId) {
+          if (typeof apiBrandGet === 'function') return apiBrandGet(brandId);
+          return { data: null };
         }
       },
       service: {
@@ -160,6 +170,92 @@ test('pipeline image generation prefers live draft character sheets when stage s
           }
         ]
       }
+    },
+    getKnowledgeHub(source) {
+      const payload = source && source.payload ? source.payload : source;
+      return {
+        characters: Array.isArray(payload && payload.knowledgeCharacters) ? payload.knowledgeCharacters : [],
+        characterSheets: Array.isArray(payload && payload.knowledgeCharacterSheets) ? payload.knowledgeCharacterSheets : []
+      };
+    }
+  });
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+
+  let state = {
+    draftId: 'project-1',
+    header: '밝은 2D 키즈 애니메이션',
+    payload: {
+      brandId: 'shape-brand',
+      charactersEnabled: true,
+      knowledgeCharacters: [],
+      knowledgeCharacterSheets: [],
+      knowledgeHub: { characters: [], characterSheets: [] }
+    },
+    scenes: [
+      {
+        id: 1,
+        shot: '@네모가 포스터 앞에 선다.',
+        narration: '',
+        dialogue: [],
+        estSec: 4
+      }
+    ]
+  };
+  const ctxObj = {
+    getState() { return state; },
+    setState(next) { state = next; }
+  };
+
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: ctxObj,
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+
+  assert.equal(ctx.__imagenCalls.length, 1);
+  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 1);
+  assert.equal(ctx.__imagenCalls[0].referenceImages[0].imageDataUrl, 'gs://bucket/front.png');
+});
+
+test('pipeline image generation falls back to remote project payload when local draft cache is stale', async () => {
+  const ctx = createContext({
+    brandById() {
+      return {
+        brandId: 'shape-brand',
+        knowledgeCharacters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+        ],
+        characterSheets: []
+      };
+    },
+    apiProjectGet(projectId) {
+      return {
+        data: {
+          projectId,
+          payload: {
+            brandId: 'shape-brand',
+            knowledgeCharacters: [
+              { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+            ],
+            knowledgeCharacterSheets: [
+              {
+                token: '@네모',
+                items: [
+                  { sheetId: 'sheet_front', pose: 'front', imageDataUrl: 'gs://bucket/front.png', isPrimary: true }
+                ]
+              }
+            ]
+          },
+          scenes: []
+        }
+      };
     },
     getKnowledgeHub(source) {
       const payload = source && source.payload ? source.payload : source;

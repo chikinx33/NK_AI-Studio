@@ -431,6 +431,32 @@
     return promptBlocks.join('\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
   }
 
+  function extractRemoteProjectRecord(projectId, resp) {
+    var data = resp && resp.data && typeof resp.data === 'object' ? resp.data : (resp && typeof resp === 'object' ? resp : null);
+    if (!data) return null;
+    if (data.payload && typeof data.payload === 'object') {
+      return {
+        id: String(projectId || data.projectId || data.id || '').trim(),
+        payload: data.payload,
+        scenes: Array.isArray(data.scenes) ? data.scenes : []
+      };
+    }
+    if (data.project && data.project.payload && typeof data.project.payload === 'object') {
+      return {
+        id: String(data.project.id || projectId || '').trim(),
+        payload: data.project.payload,
+        scenes: Array.isArray(data.project.scenes) ? data.project.scenes : []
+      };
+    }
+    return null;
+  }
+
+  function extractRemoteBrandRecord(resp) {
+    if (resp && resp.data && resp.data.brand && typeof resp.data.brand === 'object') return resp.data.brand;
+    if (resp && resp.brand && typeof resp.brand === 'object') return resp.brand;
+    return null;
+  }
+
   image.generateImageForIdx = async function (options) {
     var opts = options || {};
     var ctx = opts.ctx;
@@ -479,6 +505,40 @@
         finalPrompt = built.resolvedPrompt || finalPrompt;
         var refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
         referencePayload = buildReferenceBundle(payload, res.characters || [], { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
+        if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && projectId && NK.api && NK.api.projectGet) {
+          try {
+            var remoteProjectResp = await NK.api.projectGet(projectId);
+            var remoteDraft = extractRemoteProjectRecord(projectId, remoteProjectResp);
+            if (remoteDraft && remoteDraft.payload) {
+              payload = remoteDraft.payload;
+              brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload }) : (payload.brandId || brandId || '');
+              if (!(res.characters || []).length) {
+                res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
+                built = NK.service.characterRegistry.buildResolvedPrompt({
+                  rawPrompt: rawP,
+                  characters: res.characters || [],
+                  brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
+                  bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
+                });
+                finalPrompt = built.resolvedPrompt || finalPrompt;
+                refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
+              }
+              referencePayload = buildReferenceBundle(payload, res.characters || [], { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
+            }
+          } catch (_) {}
+        }
+        if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && brandId && NK.api && NK.api.brandGet) {
+          try {
+            var remoteBrandResp = await NK.api.brandGet(brandId);
+            var remoteBrand = extractRemoteBrandRecord(remoteBrandResp);
+            if (remoteBrand) {
+              referencePayload = buildReferenceBundle(payload, res.characters || [], {
+                projectRecord: liveDraft,
+                hydratedBrand: remoteBrand
+              });
+            }
+          } catch (_) {}
+        }
         try {
           console.log('Character references (image):', {
             sceneId: scene.id,
