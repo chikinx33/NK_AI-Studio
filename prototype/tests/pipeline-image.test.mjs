@@ -4,8 +4,33 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 
-function createContext() {
+function createContext(overrides = {}) {
   const imagenCalls = [];
+  const draftById = overrides.draftById || null;
+  const getKnowledgeHub = overrides.getKnowledgeHub || null;
+  const brandById = overrides.brandById || function (brandId) {
+    if (String(brandId) !== 'shape-brand') return null;
+    return {
+      brandId: 'shape-brand',
+      knowledgeCharacters: [
+        {
+          characterId: 'char_001',
+          displayName: '네모',
+          token: '@네모',
+          personality: '의리가 강한 파란 네모'
+        }
+      ],
+      characterSheets: [
+        {
+          token: '@네모',
+          items: [
+            { sheetId: 'sheet_front', pose: 'front', label: '정면', imageDataUrl: 'gs://bucket/front.png', isPrimary: true },
+            { sheetId: 'sheet_front_quarter', pose: 'front_quarter', label: '반측면', imageDataUrl: 'gs://bucket/front-quarter.png', isPrimary: false }
+          ]
+        }
+      ]
+    };
+  };
   const context = {
     console,
     setTimeout,
@@ -22,29 +47,7 @@ function createContext() {
       },
       service: {
         brand: {
-          getById(brandId) {
-            if (String(brandId) !== 'shape-brand') return null;
-            return {
-              brandId: 'shape-brand',
-              knowledgeCharacters: [
-                {
-                  characterId: 'char_001',
-                  displayName: '네모',
-                  token: '@네모',
-                  personality: '의리가 강한 파란 네모'
-                }
-              ],
-              characterSheets: [
-                {
-                  token: '@네모',
-                  items: [
-                    { sheetId: 'sheet_front', pose: 'front', label: '정면', imageDataUrl: 'gs://bucket/front.png', isPrimary: true },
-                    { sheetId: 'sheet_front_quarter', pose: 'front_quarter', label: '반측면', imageDataUrl: 'gs://bucket/front-quarter.png', isPrimary: false }
-                  ]
-                }
-              ]
-            };
-          },
+          getById: brandById,
           async hydrateFromServer() {
             return this.getById('shape-brand');
           }
@@ -52,6 +55,12 @@ function createContext() {
         project: {
           getBrandId({ payload }) {
             return String(payload && payload.brandId || '');
+          },
+          getDraftById(projectId) {
+            return draftById && String(projectId || '') === String(draftById.id || '') ? draftById : null;
+          },
+          getKnowledgeHub(source) {
+            return typeof getKnowledgeHub === 'function' ? getKnowledgeHub(source) : null;
           }
         }
       }
@@ -122,4 +131,85 @@ test('pipeline image generation uses scene narration/dialogue context to attach 
   assert.doesNotMatch(String(ctx.__imagenCalls[0].prompt || ''), /\[1\]/);
   assert.deepEqual(Array.from(state.scenes[0].resolvedCharacterIds), ['char_001']);
   assert.match(String(state.scenes[0].characterDetectionPrompt || ''), /네모/);
+});
+
+test('pipeline image generation prefers live draft character sheets when stage state payload is stale', async () => {
+  const ctx = createContext({
+    brandById() {
+      return {
+        brandId: 'shape-brand',
+        knowledgeCharacters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+        ],
+        characterSheets: []
+      };
+    },
+    draftById: {
+      id: 'project-1',
+      payload: {
+        brandId: 'shape-brand',
+        knowledgeCharacters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+        ],
+        knowledgeCharacterSheets: [
+          {
+            token: '@네모',
+            items: [
+              { sheetId: 'sheet_front', pose: 'front', imageDataUrl: 'gs://bucket/front.png', isPrimary: true }
+            ]
+          }
+        ]
+      }
+    },
+    getKnowledgeHub(source) {
+      const payload = source && source.payload ? source.payload : source;
+      return {
+        characters: Array.isArray(payload && payload.knowledgeCharacters) ? payload.knowledgeCharacters : [],
+        characterSheets: Array.isArray(payload && payload.knowledgeCharacterSheets) ? payload.knowledgeCharacterSheets : []
+      };
+    }
+  });
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+
+  let state = {
+    draftId: 'project-1',
+    header: '밝은 2D 키즈 애니메이션',
+    payload: {
+      brandId: 'shape-brand',
+      charactersEnabled: true,
+      knowledgeCharacters: [],
+      knowledgeCharacterSheets: [],
+      knowledgeHub: { characters: [], characterSheets: [] }
+    },
+    scenes: [
+      {
+        id: 1,
+        shot: '@네모가 포스터 앞에 선다.',
+        narration: '',
+        dialogue: [],
+        estSec: 4
+      }
+    ]
+  };
+  const ctxObj = {
+    getState() { return state; },
+    setState(next) { state = next; }
+  };
+
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: ctxObj,
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+
+  assert.equal(ctx.__imagenCalls.length, 1);
+  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 1);
+  assert.equal(ctx.__imagenCalls[0].referenceImages[0].imageDataUrl, 'gs://bucket/front.png');
 });

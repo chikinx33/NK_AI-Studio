@@ -273,15 +273,20 @@
     return parts.join('\n');
   }
 
-  function buildReferenceBundle(payload, resolvedCharacters) {
+  function buildReferenceBundle(payload, resolvedCharacters, options) {
+    var opts = options || {};
     var safePayload = payload && typeof payload === 'object' ? payload : {};
+    var projectRecord = opts.projectRecord && typeof opts.projectRecord === 'object' ? opts.projectRecord : null;
+    var hydratedBrand = opts.hydratedBrand && typeof opts.hydratedBrand === 'object' ? opts.hydratedBrand : null;
     var brandId = normalizeText(safePayload.brandId || safePayload.brandRef && safePayload.brandRef.id || '');
-    var brandRecord = brandId && NK.service && NK.service.brand && NK.service.brand.getById
+    var brandRecord = hydratedBrand || (brandId && NK.service && NK.service.brand && NK.service.brand.getById
       ? NK.service.brand.getById(brandId)
-      : null;
-    var projectKnowledge = (NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
-      ? NK.service.project.getKnowledgeHub(safePayload)
-      : null;
+      : null);
+    var projectKnowledge = (projectRecord && NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
+      ? NK.service.project.getKnowledgeHub(projectRecord)
+      : ((NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
+        ? NK.service.project.getKnowledgeHub(safePayload)
+        : null);
     var brandKnowledge = (brandRecord && NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
       ? NK.service.project.getKnowledgeHub(brandRecord)
       : null;
@@ -448,11 +453,17 @@
     var referencePayload = null;
     try {
       if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
-        var payload = st.payload || {};
+        var liveDraft = (NK.service && NK.service.project && NK.service.project.getDraftById)
+          ? NK.service.project.getDraftById(projectId)
+          : null;
+        var payload = liveDraft && liveDraft.payload && typeof liveDraft.payload === 'object'
+          ? liveDraft.payload
+          : (st.payload || {});
         var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId({ payload: payload }) : (payload.brandId || '');
+        var hydratedBrand = null;
         if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
           try {
-            await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 });
+            hydratedBrand = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 });
           } catch (_) {}
         }
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
@@ -467,7 +478,7 @@
         try { console.log('Resolved prompt (image):', { sceneId: scene.id, resolvedPrompt: built.resolvedPrompt }); } catch (_) {}
         finalPrompt = built.resolvedPrompt || finalPrompt;
         var refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
-        referencePayload = buildReferenceBundle(payload, res.characters || []);
+        referencePayload = buildReferenceBundle(payload, res.characters || [], { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
         try {
           console.log('Character references (image):', {
             sceneId: scene.id,
