@@ -728,7 +728,7 @@
       '</div>' +
       '</details>' +
       '<details class="knowledge-hub-disclosure">' +
-      '<summary><div><strong>캐릭터 자산</strong><span>브랜드 공용 캐릭터 레코드</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(String(characters.length) + '명') + '</span></summary>' +
+      '<summary><div><strong>캐릭터 자산</strong><span>브랜드 공용 캐릭터 레코드</span></div><span class="knowledge-hub-disclosure-meta" data-character-count>' + escapeHtml(String(knowledge.characters.length) + '명') + '</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
       '<div class="knowledge-hub-field knowledge-character-field"><span>캐릭터</span>' +
@@ -790,11 +790,28 @@
 
     var currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
     var characterSheetDraft = normalizeCharacterSheets(knowledge.characterSheets, currentCharacters);
+    var modalCharacterSheetDraft = null;
+    var modalSaveInFlight = false;
+
+    function cloneCharacterSheetDraft(value) {
+      try {
+        return normalizeCharacterSheets(JSON.parse(JSON.stringify(Array.isArray(value) ? value : [])), currentCharacters);
+      } catch (_) {
+        return normalizeCharacterSheets(value, currentCharacters);
+      }
+    }
+
+    function syncCharacterCountUi() {
+      var count = currentCharacters.length;
+      var countEl = root.querySelector('[data-character-count]');
+      if (countEl) countEl.textContent = String(count) + '명';
+    }
 
     function syncCharacterUi() {
       var chipBox = root.querySelector('#knowledge-character-chips');
       if (chipBox) chipBox.innerHTML = renderCharacterRows(currentCharacters);
       characterSheetDraft = normalizeCharacterSheets(characterSheetDraft, currentCharacters);
+      syncCharacterCountUi();
     }
 
     function addCharacter(name) {
@@ -850,13 +867,33 @@
     function closeCharacterManagerModal() {
       var modal = document.getElementById('character-manager-modal');
       if (modal) modal.classList.add('hidden');
+      modalCharacterSheetDraft = null;
+      modalSaveInFlight = false;
     }
 
     function renderCharacterManagerModal() {
       var modal = document.getElementById('character-manager-modal');
       var box = document.getElementById('character-manager-modal-content');
       if (!modal || !box) return;
-      var sheetEntries = ensureCharacterSheetDraft();
+      if (!modalCharacterSheetDraft) {
+        modalCharacterSheetDraft = cloneCharacterSheetDraft(ensureCharacterSheetDraft());
+      }
+      var sheetEntries = normalizeCharacterSheets(modalCharacterSheetDraft, currentCharacters);
+      modalCharacterSheetDraft = sheetEntries;
+
+      function updateModalCharacterSheetEntry(token, updater) {
+        var targetToken = String(token || '').trim().toLowerCase();
+        modalCharacterSheetDraft = normalizeCharacterSheets((Array.isArray(modalCharacterSheetDraft) ? modalCharacterSheetDraft : []).map(function (entry) {
+          if (String(entry.token || '').toLowerCase() !== targetToken) return entry;
+          var nextEntry = typeof updater === 'function' ? updater(Object.assign({}, entry, {
+            items: normalizeCharacterSheetItems(entry.items)
+          })) : entry;
+          return Object.assign({}, nextEntry, {
+            items: normalizeCharacterSheetItems(nextEntry && nextEntry.items)
+          });
+        }), currentCharacters);
+      }
+
       var cardsHtml = sheetEntries.length
         ? sheetEntries.map(function (entry) {
           var personality = (currentCharacters.find(function (row) {
@@ -879,7 +916,7 @@
                 '</article>'
               );
             }).join('')
-            : '<div class="character-sheet-empty">아직 등록된 시트가 없습니다. 캐릭터 기준 이미지를 업로드해 주세요.</div>';
+            : '';
           return (
             '<section class="character-manager-card" data-character-token="' + escapeHtml(entry.token) + '">' +
             '<div class="character-manager-card-head">' +
@@ -901,26 +938,26 @@
       box.innerHTML =
         '<div class="character-manager-head">' +
         '<div><h3>IP 라이브러리</h3><p>캐릭터별 기준 시트 이미지를 등록해 어디서든 일관된 IP 리소스로 사용할 수 있도록 관리합니다.</p></div>' +
-        '<button type="button" class="btn-secondary" data-action="character-manager-close">닫기</button>' +
+        '<div class="character-manager-head-actions">' +
+        '<button type="button" class="btn-primary" data-action="character-manager-save"' + (modalSaveInFlight ? ' disabled' : '') + '>저장</button>' +
+        '<button type="button" class="btn-secondary" data-action="character-manager-close"' + (modalSaveInFlight ? ' disabled' : '') + '>닫기</button>' +
         '</div>' +
-        '<div class="character-manager-grid">' + cardsHtml + '</div>' +
-        '<div class="character-manager-footer">' +
-        '<button type="button" class="btn-secondary" data-action="character-manager-close">취소</button>' +
-        '<button type="button" class="btn-primary" data-action="character-manager-save">저장</button>' +
-        '</div>';
+        '</div>' +
+        '<div class="character-manager-grid">' + cardsHtml + '</div>';
 
       box.onclick = function (evt) {
         var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
         if (!btn) return;
         var action = String(btn.dataset.action || '').trim();
         if (action === 'character-manager-close') {
+          if (modalSaveInFlight) return;
           closeCharacterManagerModal();
           return;
         }
         if (action === 'character-sheet-set-primary') {
           var primaryToken = btn.dataset.characterToken;
           var primarySheetId = btn.dataset.sheetId;
-          updateCharacterSheetEntry(primaryToken, function (entry) {
+          updateModalCharacterSheetEntry(primaryToken, function (entry) {
             entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
               return Object.assign({}, sheet, { isPrimary: String(sheet.sheetId) === String(primarySheetId) });
             });
@@ -932,7 +969,7 @@
         if (action === 'character-sheet-delete') {
           var deleteToken = btn.dataset.characterToken;
           var deleteSheetId = btn.dataset.sheetId;
-          updateCharacterSheetEntry(deleteToken, function (entry) {
+          updateModalCharacterSheetEntry(deleteToken, function (entry) {
             entry.items = normalizeCharacterSheetItems(entry.items).filter(function (sheet) {
               return String(sheet.sheetId) !== String(deleteSheetId);
             });
@@ -942,17 +979,24 @@
           return;
         }
         if (action === 'character-manager-save') {
-          btn.disabled = true;
-          syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft))
+          if (modalSaveInFlight) return;
+          modalSaveInFlight = true;
+          renderCharacterManagerModal();
+          syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft))
             .then(function (result) {
-              closeCharacterManagerModal();
-              if (result && result.draft) renderNext(result.draft);
+              characterSheetDraft = cloneCharacterSheetDraft(modalCharacterSheetDraft);
+              knowledge.characterSheets = cloneCharacterSheetDraft(characterSheetDraft);
+              if (result && result.draft) {
+                project = result.draft;
+                renderNext(result.draft);
+              }
             })
             .catch(function (err) {
               alert('IP 라이브러리 저장 실패: ' + (err && err.message ? err.message : err));
             })
             .finally(function () {
-              btn.disabled = false;
+              modalSaveInFlight = false;
+              renderCharacterManagerModal();
             });
         }
       };
@@ -964,7 +1008,7 @@
         var sheetId = field.dataset.sheetId;
         if (!token || !sheetId) return;
         if (field.hasAttribute('data-sheet-pose')) {
-          updateCharacterSheetEntry(token, function (entry) {
+          updateModalCharacterSheetEntry(token, function (entry) {
             entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
               if (String(sheet.sheetId) !== String(sheetId)) return sheet;
               var pose = normalizeCharacterSheetPose(field.value || '');
@@ -998,7 +1042,7 @@
           });
         }))
           .then(function (items) {
-            updateCharacterSheetEntry(token, function (entry) {
+            updateModalCharacterSheetEntry(token, function (entry) {
               var existingItems = normalizeCharacterSheetItems(entry.items);
               entry.items = existingItems.concat(items.map(function (sheet, index) {
                 return Object.assign({}, sheet, {
@@ -1018,6 +1062,7 @@
       };
 
       modal.onclick = function (evt) {
+        if (modalSaveInFlight) return;
         if (evt.target === modal) closeCharacterManagerModal();
         var closeBtn = evt.target && evt.target.closest ? evt.target.closest('[data-close="character-manager-modal"]') : null;
         if (closeBtn) closeCharacterManagerModal();
