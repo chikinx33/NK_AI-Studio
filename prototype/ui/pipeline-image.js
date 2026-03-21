@@ -275,24 +275,47 @@
 
   function buildReferenceBundle(payload, resolvedCharacters) {
     var safePayload = payload && typeof payload === 'object' ? payload : {};
-    var knowledgeHub = safePayload.knowledgeHub && typeof safePayload.knowledgeHub === 'object' ? safePayload.knowledgeHub : {};
     var brandId = normalizeText(safePayload.brandId || safePayload.brandRef && safePayload.brandRef.id || '');
     var brandRecord = brandId && NK.service && NK.service.brand && NK.service.brand.getById
       ? NK.service.brand.getById(brandId)
       : null;
+    var projectKnowledge = (NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
+      ? NK.service.project.getKnowledgeHub(safePayload)
+      : null;
+    var brandKnowledge = (brandRecord && NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
+      ? NK.service.project.getKnowledgeHub(brandRecord)
+      : null;
     var knowledgeCharacters = mergeKnowledgeCharacterSources([
+      brandKnowledge && brandKnowledge.characters,
       brandRecord && brandRecord.knowledgeCharacters,
-      knowledgeHub.characters,
-      safePayload.knowledgeCharacters
+      projectKnowledge && projectKnowledge.characters,
+      safePayload.knowledgeCharacters,
+      safePayload.characters
     ]);
     var sheetEntries = mergeCharacterSheetSources([
+      brandKnowledge && brandKnowledge.characterSheets,
       brandRecord && brandRecord.characterSheets,
-      knowledgeHub.characterSheets,
+      brandRecord && brandRecord.knowledgeCharacterSheets,
+      projectKnowledge && projectKnowledge.characterSheets,
       safePayload.characterSheets,
       safePayload.knowledgeCharacterSheets
     ], knowledgeCharacters);
     var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters : [];
     if (!sheetEntries.length || !sceneCharacters.length) {
+      try {
+        console.log('Character sheet lookup (image):', {
+          brandId: brandId,
+          sceneTokens: sceneCharacters.map(function (item) {
+            return normalizeToken(item && (item.trigger || item.token || item.name || item.displayName));
+          }).filter(Boolean),
+          knownSheetCounts: sheetEntries.map(function (item) {
+            return {
+              token: item && item.token,
+              items: Array.isArray(item && item.items) ? item.items.length : 0
+            };
+          })
+        });
+      } catch (_) {}
       return { referenceImages: [], promptPrefix: '', promptSuffix: '', referenceMeta: [] };
     }
 
@@ -367,6 +390,20 @@
     });
 
     if (!referenceImages.length) {
+      try {
+        console.log('Character sheet lookup (image):', {
+          brandId: brandId,
+          sceneTokens: sceneCharacters.map(function (item) {
+            return normalizeToken(item && (item.trigger || item.token || item.name || item.displayName));
+          }).filter(Boolean),
+          knownSheetCounts: sheetEntries.map(function (item) {
+            return {
+              token: item && item.token,
+              items: Array.isArray(item && item.items) ? item.items.length : 0
+            };
+          })
+        });
+      } catch (_) {}
       return { referenceImages: [], promptPrefix: '', promptSuffix: '', referenceMeta: [] };
     }
 
