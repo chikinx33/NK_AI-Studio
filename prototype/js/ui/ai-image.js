@@ -12,10 +12,13 @@
     aspectRatio: '1:1',
     sourceImage: null,
     projectLibraryItems: [],
+    brandLibraryItems: [],
     currentProject: null,
+    currentBrand: null,
     currentResultId: '',
     results: [],
-    libraryLoading: false
+    libraryLoading: false,
+    brandLibraryLoading: false
   };
 
   var TEXT = {
@@ -29,7 +32,9 @@
       heroDesc: '텍스트 생성과 참조 기반 변형을 하나의 작업실에서 처리합니다.',
       sessionLabel: '세션',
       projectLabel: '현재 프로젝트',
+      brandLabel: '현재 브랜드',
       noProject: '선택된 프로젝트 없음',
+      noBrand: '선택된 브랜드 없음',
       noProjectHelp: '프로젝트를 선택하면 저장소에서 소스를 불러오고 결과를 등록할 수 있습니다.',
       modeText: '텍스트를 이미지로',
       modeImage: '이미지를 이미지로',
@@ -37,11 +42,15 @@
       sourceEmpty: '이미지 to 이미지 모드에서는 소스 이미지를 선택해야 합니다.',
       sourceUpload: '이미지 업로드',
       sourceProject: '프로젝트 저장소 불러오기',
+      sourceBrand: '브랜드 IP 불러오기',
       sourceClear: '소스 비우기',
       sourceProjectEmpty: '현재 프로젝트 저장소에 이미지가 없습니다.',
       sourceProjectLoading: '프로젝트 저장소 불러오는 중...',
+      sourceBrandEmpty: '현재 브랜드 IP 라이브러리에 이미지가 없습니다.',
+      sourceBrandLoading: '브랜드 IP 라이브러리 불러오는 중...',
       sourceSelected: '선택된 소스',
       sourceLibraryTitle: '프로젝트 저장소 이미지',
+      sourceBrandTitle: '브랜드 IP 이미지',
       promptLabel: '프롬프트',
       promptPlaceholderText: '원하는 이미지의 장면, 스타일, 색감, 구도, 재질감을 설명해 주세요.',
       promptPlaceholderImage: '소스 이미지를 어떻게 바꾸거나 유지할지 설명해 주세요. 예: 같은 구도는 유지하고 수채화 질감으로 바꾸기',
@@ -65,6 +74,7 @@
       sourceRequired: '소스 이미지를 먼저 선택해 주세요.',
       generationFailed: '이미지 생성 실패: ',
       projectLoadFailed: '프로젝트 저장소 불러오기 실패: ',
+      brandLoadFailed: '브랜드 IP 불러오기 실패: ',
       projectSaveFailed: '프로젝트 저장소 등록 실패: ',
       downloadFailed: '다운로드 실패: ',
       fileChoose: '파일 선택',
@@ -74,7 +84,8 @@
       promptCounterSuffix: '/4000',
       backToLogin: '로그인 페이지로 이동',
       sourceKindUpload: '업로드',
-      sourceKindProject: '프로젝트 저장소'
+      sourceKindProject: '프로젝트 저장소',
+      sourceKindBrand: '브랜드 IP'
     },
     en: {
       pageTitle: 'NK_Studio · AI Image',
@@ -86,7 +97,9 @@
       heroDesc: 'Handle text generation and reference-based variation in one workspace.',
       sessionLabel: 'Session',
       projectLabel: 'Current project',
+      brandLabel: 'Current brand',
       noProject: 'No project selected',
+      noBrand: 'No brand selected',
       noProjectHelp: 'Select a project to load source images from its library and save results back.',
       modeText: 'Text to image',
       modeImage: 'Image to image',
@@ -94,11 +107,15 @@
       sourceEmpty: 'Image-to-image mode requires a source image.',
       sourceUpload: 'Upload image',
       sourceProject: 'Load from project library',
+      sourceBrand: 'Load from brand IP',
       sourceClear: 'Clear source',
       sourceProjectEmpty: 'No images found in the current project library.',
       sourceProjectLoading: 'Loading project library...',
+      sourceBrandEmpty: 'No images found in the current brand IP library.',
+      sourceBrandLoading: 'Loading brand IP library...',
       sourceSelected: 'Selected source',
       sourceLibraryTitle: 'Project library images',
+      sourceBrandTitle: 'Brand IP images',
       promptLabel: 'Prompt',
       promptPlaceholderText: 'Describe the scene, style, lighting, composition, and textures you want.',
       promptPlaceholderImage: 'Describe what to preserve or transform from the source image. Example: keep the same composition and convert it into watercolor.',
@@ -122,6 +139,7 @@
       sourceRequired: 'Select a source image first.',
       generationFailed: 'Image generation failed: ',
       projectLoadFailed: 'Failed to load project library: ',
+      brandLoadFailed: 'Failed to load brand IP library: ',
       projectSaveFailed: 'Failed to save to project library: ',
       downloadFailed: 'Download failed: ',
       fileChoose: 'Choose file',
@@ -131,7 +149,8 @@
       promptCounterSuffix: '/4000',
       backToLogin: 'Go to sign-in page',
       sourceKindUpload: 'Upload',
-      sourceKindProject: 'Project library'
+      sourceKindProject: 'Project library',
+      sourceKindBrand: 'Brand IP'
     }
   };
 
@@ -235,6 +254,16 @@
     }
   }
 
+  function readCurrentBrand() {
+    try {
+      return (NK.service && NK.service.brand && NK.service.brand.resolveCurrent)
+        ? NK.service.brand.resolveCurrent({ search: window.location.search })
+        : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   function currentResult() {
     var match = state.results.find(function (item) {
       return String(item && item.id || '') === String(state.currentResultId || '');
@@ -253,6 +282,23 @@
 
   function sourcePreviewUrl() {
     return state.sourceImage ? String(state.sourceImage.url || '').trim() : '';
+  }
+
+  function resolveLibraryItemUrl(item) {
+    var row = item && typeof item === 'object' ? item : {};
+    return String(
+      row.signedUrl
+      || ((NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(row.name) : '')
+      || ''
+    ).trim();
+  }
+
+  function isImageLibraryItem(item) {
+    var row = item && typeof item === 'object' ? item : {};
+    var name = String(row.name || '').trim().toLowerCase();
+    var type = String(row.contentType || '').trim().toLowerCase();
+    if (type.indexOf('image/') === 0) return true;
+    return /\.(png|jpg|jpeg|webp)$/i.test(name);
   }
 
   function updateDocumentCopy() {
@@ -305,9 +351,15 @@
     var root = document.getElementById('ai-image-root');
     if (!root) return;
     var project = state.currentProject;
+    var brand = state.currentBrand;
     var selectedResult = currentResult();
     var sourceUrl = sourcePreviewUrl();
-    var sourceKind = state.sourceImage ? (state.sourceImage.kind === 'project' ? t('sourceKindProject') : t('sourceKindUpload')) : '';
+    var sourceKind = '';
+    if (state.sourceImage) {
+      if (state.sourceImage.kind === 'project') sourceKind = t('sourceKindProject');
+      else if (state.sourceImage.kind === 'brand') sourceKind = t('sourceKindBrand');
+      else sourceKind = t('sourceKindUpload');
+    }
     var resultCards = state.results.map(function (item) {
       var active = String(item.id || '') === String(state.currentResultId || '');
       return '' +
@@ -322,9 +374,16 @@
     }).join('');
 
     var sourceLibrary = state.projectLibraryItems.map(function (item, index) {
-      var thumb = String(item.signedUrl || ((NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(item.name) : '') || '').trim();
+      var thumb = resolveLibraryItemUrl(item);
       return '' +
         '<button type="button" class="ai-image-source-card" data-action="select-project-source" data-index="' + index + '">' +
+        '<img src="' + escapeHtml(thumb) + '" alt="" class="ai-image-source-thumb" />' +
+        '</button>';
+    }).join('');
+    var brandSourceLibrary = state.brandLibraryItems.map(function (item, index) {
+      var thumb = resolveLibraryItemUrl(item);
+      return '' +
+        '<button type="button" class="ai-image-source-card" data-action="select-brand-source" data-index="' + index + '">' +
         '<img src="' + escapeHtml(thumb) + '" alt="" class="ai-image-source-thumb" />' +
         '</button>';
     }).join('');
@@ -339,6 +398,7 @@
       '<div class="ai-image-status-pills">' +
       '<span class="studio-hero-pill"><em>' + escapeHtml(t('sessionLabel')) + '</em><strong>' + escapeHtml(state.sessionId) + '</strong></span>' +
       '<span class="studio-hero-pill"><em>' + escapeHtml(t('projectLabel')) + '</em><strong>' + escapeHtml(project && project.title ? project.title : t('noProject')) + '</strong></span>' +
+      '<span class="studio-hero-pill"><em>' + escapeHtml(t('brandLabel')) + '</em><strong>' + escapeHtml(brand && brand.brandTitle ? brand.brandTitle : t('noBrand')) + '</strong></span>' +
       '</div>' +
       '</div>' +
       '<div class="ai-image-workspace">' +
@@ -358,6 +418,7 @@
       '<div class="ai-image-inline-actions">' +
       '<button type="button" class="btn-secondary compact" data-action="open-upload"' + (state.mode === 'image-to-image' ? '' : ' disabled') + '>' + escapeHtml(t('sourceUpload')) + '</button>' +
       '<button type="button" class="btn-secondary compact" data-action="load-project-library"' + ((state.mode === 'image-to-image' && project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('sourceProject')) + '</button>' +
+      '<button type="button" class="btn-secondary compact" data-action="load-brand-library"' + ((state.mode === 'image-to-image' && brand && brand.brandId) ? '' : ' disabled') + '>' + escapeHtml(t('sourceBrand')) + '</button>' +
       '<button type="button" class="btn-ghost compact" data-action="clear-source"' + (sourceUrl ? '' : ' disabled') + '>' + escapeHtml(t('sourceClear')) + '</button>' +
       '</div>' +
       '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
@@ -365,8 +426,14 @@
       ((state.mode === 'image-to-image' && state.projectLibraryItems.length)
         ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><div class="ai-image-source-grid">' + sourceLibrary + '</div></div>'
         : '') +
+      ((state.mode === 'image-to-image' && state.brandLibraryItems.length)
+        ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><div class="ai-image-source-grid">' + brandSourceLibrary + '</div></div>'
+        : '') +
       ((state.mode === 'image-to-image' && state.libraryLoading)
         ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>'
+        : '') +
+      ((state.mode === 'image-to-image' && state.brandLibraryLoading)
+        ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>'
         : '') +
       '</div>' +
       '<div class="ai-image-field">' +
@@ -498,7 +565,7 @@
     render();
     try {
       var res = await NK.api.library('image', state.currentProject.id);
-      state.projectLibraryItems = Array.isArray(res && res.items) ? res.items : [];
+      state.projectLibraryItems = (Array.isArray(res && res.items) ? res.items : []).filter(isImageLibraryItem);
       if (!state.projectLibraryItems.length) {
         alert(t('sourceProjectEmpty'));
       }
@@ -506,6 +573,24 @@
       alert(t('projectLoadFailed') + (err && err.message ? err.message : err));
     } finally {
       state.libraryLoading = false;
+      render();
+    }
+  }
+
+  async function loadBrandLibrary() {
+    if (!state.currentBrand || !state.currentBrand.brandId) return;
+    state.brandLibraryLoading = true;
+    render();
+    try {
+      var res = await NK.api.libraryIP('', { brandId: state.currentBrand.brandId });
+      state.brandLibraryItems = (Array.isArray(res && res.items) ? res.items : []).filter(isImageLibraryItem);
+      if (!state.brandLibraryItems.length) {
+        alert(t('sourceBrandEmpty'));
+      }
+    } catch (err) {
+      alert(t('brandLoadFailed') + (err && err.message ? err.message : err));
+    } finally {
+      state.brandLibraryLoading = false;
       render();
     }
   }
@@ -600,6 +685,7 @@
           state.mode = String(btn.getAttribute('data-mode') || 'text-to-image');
           if (state.mode === 'text-to-image') {
             state.projectLibraryItems = [];
+            state.brandLibraryItems = [];
           }
           render();
           return;
@@ -618,14 +704,30 @@
           loadProjectLibrary();
           return;
         }
+        if (action === 'load-brand-library') {
+          loadBrandLibrary();
+          return;
+        }
         if (action === 'select-project-source') {
           var idx = Number(btn.getAttribute('data-index') || -1);
           var item = idx >= 0 ? state.projectLibraryItems[idx] : null;
           if (!item) return;
           state.sourceImage = {
-            url: String(item.signedUrl || ((NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(item.name) : '') || '').trim(),
+            url: resolveLibraryItemUrl(item),
             name: String(item.name || '').trim(),
             kind: 'project'
+          };
+          render();
+          return;
+        }
+        if (action === 'select-brand-source') {
+          var brandIdx = Number(btn.getAttribute('data-index') || -1);
+          var brandItem = brandIdx >= 0 ? state.brandLibraryItems[brandIdx] : null;
+          if (!brandItem) return;
+          state.sourceImage = {
+            url: resolveLibraryItemUrl(brandItem),
+            name: String(brandItem.name || '').trim(),
+            kind: 'brand'
           };
           render();
           return;
@@ -700,6 +802,7 @@
     state.lang = readLang();
     state.sessionId = ensureSessionId();
     state.currentProject = readCurrentProject();
+    state.currentBrand = readCurrentBrand();
     loadHistory();
     try {
       NK.core.APP_VERSION = NK.config.APP_VERSION;
@@ -716,6 +819,13 @@
     updateAuthState();
     bindStaticEvents();
     render();
+    if (state.currentBrand && state.currentBrand.brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+      NK.service.brand.hydrateFromServer(state.currentBrand.brandId).then(function (brand) {
+        if (!brand || !brand.brandId) return;
+        state.currentBrand = brand;
+        render();
+      }).catch(function () { });
+    }
   }
 
   ui.init = init;
