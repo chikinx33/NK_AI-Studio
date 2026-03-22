@@ -7581,7 +7581,7 @@ body.layout-fixed .lib-content {
 
 .character-manager-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
@@ -7598,18 +7598,26 @@ body.layout-fixed .lib-content {
   border: 1px solid var(--border);
   border-radius: 18px;
   background: color-mix(in srgb, var(--bg-2) 92%, var(--panel) 8%);
-  padding: 14px 18px;
+  padding: 14px 14px;
 }
 
 .character-manager-card-row {
   display: grid;
-  grid-template-columns: minmax(88px, 120px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(96px, 112px) minmax(0, 1fr);
   align-items: center;
-  gap: 18px;
+  gap: 14px;
+}
+
+.character-manager-card-info {
+  min-height: 82px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 8px;
 }
 
 .character-manager-card-name {
-  min-height: 120px;
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -7622,16 +7630,8 @@ body.layout-fixed .lib-content {
 
 .character-sheet-slot-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 120px));
-  gap: 12px;
-}
-
-.character-manager-card-side {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  justify-content: flex-end;
-  flex-wrap: wrap;
+  grid-template-columns: repeat(4, minmax(0, 82px));
+  gap: 8px;
 }
 
 .character-sheet-upload {
@@ -7650,6 +7650,7 @@ body.layout-fixed .lib-content {
   font-size: 12px;
   color: var(--muted);
   white-space: nowrap;
+  line-height: 1.2;
 }
 
 .character-sheet-slot {
@@ -7658,8 +7659,8 @@ body.layout-fixed .lib-content {
   border-radius: 16px;
   background: color-mix(in srgb, var(--panel) 86%, transparent 14%);
   overflow: hidden;
-  width: 120px;
-  height: 120px;
+  width: 82px;
+  height: 82px;
 }
 
 .character-sheet-slot.is-empty {
@@ -7690,16 +7691,16 @@ body.layout-fixed .lib-content {
 
 .character-sheet-overlay-btn {
   position: absolute;
-  bottom: 8px;
-  width: 28px;
-  height: 28px;
+  bottom: 4px;
+  width: 22px;
+  height: 22px;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   display: inline-flex;
   align-items: center;
   justify-content: space-between;
   justify-content: center;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
   cursor: pointer;
   z-index: 1;
@@ -7709,7 +7710,7 @@ body.layout-fixed .lib-content {
 }
 
 .character-sheet-overlay-btn.is-primary {
-  left: 8px;
+  left: 4px;
 }
 
 .character-sheet-overlay-btn.is-primary.is-active {
@@ -7719,7 +7720,7 @@ body.layout-fixed .lib-content {
 }
 
 .character-sheet-overlay-btn.is-delete {
-  right: 8px;
+  right: 4px;
 }
 
 .character-sheet-overlay-btn:hover {
@@ -7754,15 +7755,20 @@ body.layout-fixed .lib-content {
   box-shadow: 0 28px 72px rgba(0, 0, 0, 0.42);
 }
 
+@media (max-width: 1040px) {
+  .character-manager-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 980px) {
   .character-manager-card-row {
     grid-template-columns: 1fr;
     align-items: flex-start;
   }
 
-  .character-manager-card-side {
+  .character-manager-card-info {
     width: 100%;
-    justify-content: space-between;
   }
 
   .character-manager-card-name {
@@ -7770,12 +7776,12 @@ body.layout-fixed .lib-content {
   }
 
   .character-sheet-slot-grid {
-    grid-template-columns: repeat(2, minmax(0, 120px));
+    grid-template-columns: repeat(2, minmax(0, 82px));
   }
 
   .character-sheet-slot {
-    width: 120px;
-    height: 120px;
+    width: 82px;
+    height: 82px;
   }
 }
 

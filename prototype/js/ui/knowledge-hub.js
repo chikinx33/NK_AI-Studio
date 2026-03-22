@@ -989,15 +989,15 @@
           return (
             '<section class="character-manager-card" data-character-token="' + escapeHtml(entry.token) + '">' +
             '<div class="character-manager-card-row">' +
+            '<div class="character-manager-card-info">' +
             '<div class="character-manager-card-name"><strong>' + escapeHtml(displayName) + '</strong></div>' +
-            '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
-            '<div class="character-manager-card-side">' +
             '<span class="character-sheet-count">' + escapeHtml(ipLibraryUiText.count) + ' ' + escapeHtml(String(sheetItems.length)) + '/4' + escapeHtml(ipLibraryUiText.countSuffix) + '</span>' +
             '<label class="character-sheet-upload btn-secondary compact">' +
             '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
             escapeHtml(ipLibraryUiText.upload) +
             '</label>' +
             '</div>' +
+            '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
             '</div>' +
             '</section>'
           );
