@@ -7412,15 +7412,18 @@ body.layout-fixed .lib-content {
 }
 
 .knowledge-character-input-row {
-  display: grid;
-  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  display: flex;
+  flex-wrap: nowrap;
   gap: 10px;
   align-items: stretch;
   width: 100%;
+  min-width: 0;
 }
 
 .knowledge-character-input {
-  width: 100%;
+  flex: 1 1 70%;
+  width: auto;
+  min-width: 0;
   min-height: 48px;
   padding: 0 16px;
   border-radius: 16px;
@@ -7431,8 +7434,9 @@ body.layout-fixed .lib-content {
 }
 
 .knowledge-ip-library-btn {
-  width: 100%;
-  min-width: 0;
+  flex: 0 1 30%;
+  width: auto;
+  min-width: 120px;
   min-height: 48px;
 }
 
@@ -7491,6 +7495,22 @@ body.layout-fixed .lib-content {
 [data-theme="light"] .knowledge-character-input {
   background: #ffffff;
   border-color: rgba(115, 147, 196, 0.3);
+}
+
+@media (max-width: 720px) {
+  .knowledge-character-input-row {
+    flex-direction: column;
+  }
+
+  .knowledge-character-input,
+  .knowledge-ip-library-btn {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .knowledge-ip-library-btn {
+    min-width: 0;
+  }
 }
 
 .knowledge-hub-field textarea {
