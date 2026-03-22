@@ -259,6 +259,7 @@
     { value: 'back', label: '후면' },
     { value: 'other', label: '기타' }
   ];
+  var MAX_CHARACTER_SHEETS_PER_CHARACTER = 4;
 
   function normalizeCharacterSheetPose(value) {
     var raw = normalizeText(value).toLowerCase();
@@ -319,7 +320,7 @@
         primaryFound = true;
       }
     });
-    return items;
+    return items.slice(0, MAX_CHARACTER_SHEETS_PER_CHARACTER);
   }
 
   function resolveSheetPreviewUrl(value) {
@@ -576,6 +577,7 @@
             persistedBrand = NK.service.brand.update(brandId, sharedPatch);
           }
         }
+        if (persistedBrand) brand = persistedBrand;
 
         var persistedKnowledge = mergeKnowledge(nextKnowledge, null);
         persistedKnowledge.characters = normalizeCharacters(persistedKnowledge.characters, persistedKnowledge.brandCharacter);
@@ -930,7 +932,6 @@
                 '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(displayName + ' 시트') + '" />' +
                 '</button>' +
                 '<div class="character-sheet-fields">' +
-                '<select class="character-sheet-input" data-sheet-pose data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' + renderCharacterSheetPoseOptions(sheet.pose) + '</select>' +
                 '<div class="character-sheet-item-actions">' +
                 (sheet.isPrimary
                   ? '<span class="character-sheet-primary-badge">대표 시트</span>'
@@ -947,7 +948,7 @@
             '<div class="character-manager-card-head">' +
             '<div class="character-manager-card-main"><strong>' + escapeHtml(displayName) + '</strong><p>' + escapeHtml(personality || '성격 설명이 아직 없습니다.') + '</p></div>' +
             '<div class="character-manager-card-side">' +
-            '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String((entry.items || []).length)) + '개</span>' +
+            '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String((entry.items || []).length)) + '/4개</span>' +
             '<label class="character-sheet-upload btn-secondary compact">' +
             '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
             '시트 업로드' +
@@ -1042,7 +1043,9 @@
               knowledge.characterSheets = cloneCharacterSheetDraft(characterSheetDraft);
               if (result && result.draft) {
                 project = result.draft;
-                renderNext(result.draft);
+                knowledge = mergeKnowledge(readKnowledge(result.draft), brand ? readKnowledge(brand) : null);
+                currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
+                syncCharacterUi();
               }
             })
             .catch(function (err) {
@@ -1055,35 +1058,27 @@
         }
       };
 
-      box.oninput = function (evt) {
-        var field = evt.target;
-        if (!field || !field.dataset) return;
-        var token = field.dataset.characterToken;
-        var sheetId = field.dataset.sheetId;
-        if (!token || !sheetId) return;
-        if (field.hasAttribute('data-sheet-pose')) {
-          updateModalCharacterSheetEntry(token, function (entry) {
-            entry.items = normalizeCharacterSheetItems(entry.items).map(function (sheet) {
-              if (String(sheet.sheetId) !== String(sheetId)) return sheet;
-              var pose = normalizeCharacterSheetPose(field.value || '');
-              return Object.assign({}, sheet, { pose: pose, label: getCharacterSheetPoseLabel(pose) });
-            });
-            return entry;
-          });
-        }
-      };
-
       box.onchange = function (evt) {
         var input = evt.target;
-        if (input && input.dataset && input.hasAttribute && input.hasAttribute('data-sheet-pose')) {
-          box.oninput(evt);
-          return;
-        }
         if (!input || !input.matches || !input.matches('input[type="file"][data-action="character-sheet-upload"]')) return;
         var token = String(input.dataset.characterToken || '').trim();
         var files = Array.prototype.slice.call(input.files || []);
         if (!token || !files.length) return;
-        Promise.all(files.map(function (file, index) {
+        var targetEntry = (sheetEntries || []).find(function (entry) {
+          return String(entry && entry.token || '').trim().toLowerCase() === token.toLowerCase();
+        }) || null;
+        var existingCount = Array.isArray(targetEntry && targetEntry.items) ? targetEntry.items.length : 0;
+        var remainingSlots = Math.max(0, MAX_CHARACTER_SHEETS_PER_CHARACTER - existingCount);
+        if (!remainingSlots) {
+          alert('시트는 캐릭터당 최대 4장까지 등록할 수 있습니다.');
+          input.value = '';
+          return;
+        }
+        var uploadFiles = files.slice(0, remainingSlots);
+        if (files.length > remainingSlots) {
+          alert('시트는 캐릭터당 최대 4장까지 등록할 수 있어 앞의 ' + String(remainingSlots) + '장만 추가합니다.');
+        }
+        Promise.all(uploadFiles.map(function (file, index) {
           return readFileAsDataUrl(file).then(function (dataUrl) {
             var pose = 'other';
             return {

@@ -421,7 +421,7 @@ test('pipeline image generation falls back to brand ip library files when metada
   assert.equal(ctx.__imagenCalls[0].referenceImages[0].imageDataUrl, 'https://example.com/front.png');
 });
 
-test('pipeline image generation forwards every registered character sheet image', async () => {
+test('pipeline image generation caps registered character sheet references at four images', async () => {
   const ctx = createContext({
     brandById() {
       return {
@@ -487,11 +487,11 @@ test('pipeline image generation forwards every registered character sheet image'
   });
 
   assert.equal(ctx.__imagenCalls.length, 1);
-  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 5);
-  assert.equal(ctx.__imagenCalls[0].referenceImages[4].imageDataUrl, 'gs://bucket/back.png');
+  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 4);
+  assert.equal(ctx.__imagenCalls[0].referenceImages[3].imageDataUrl, 'gs://bucket/back-quarter.png');
 });
 
-test('pipeline image generation forwards every fallback ip library image for the character', async () => {
+test('pipeline image generation caps fallback ip library references at four images', async () => {
   const ctx = createContext({
     brandById() {
       return {
@@ -582,6 +582,6 @@ test('pipeline image generation forwards every fallback ip library image for the
   });
 
   assert.equal(ctx.__imagenCalls.length, 1);
-  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 5);
-  assert.equal(ctx.__imagenCalls[0].referenceImages[4].imageDataUrl, 'https://example.com/back.png');
+  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 4);
+  assert.equal(ctx.__imagenCalls[0].referenceImages[3].imageDataUrl, 'https://example.com/back-quarter.png');
 });

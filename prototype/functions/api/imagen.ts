@@ -229,7 +229,7 @@ async function normalizeReferenceImages(args: {
   items: any[];
   accessToken: string;
 }): Promise<NormalizedReferenceImage[]> {
-  const items = Array.isArray(args.items) ? args.items : [];
+  const items = Array.isArray(args.items) ? args.items.slice(0, 4) : [];
   const out: NormalizedReferenceImage[] = [];
   for (let i = 0; i < items.length; i++) {
     const raw = items[i] && typeof items[i] === "object" ? items[i] : {};

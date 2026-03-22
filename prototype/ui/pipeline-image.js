@@ -1,6 +1,7 @@
 ;(function () {
   var NK = window.NK || (window.NK = {});
   var image = NK.uiPipelineImage || (NK.uiPipelineImage = {});
+  var MAX_REFERENCE_IMAGES = 4;
 
   function normalizeText(value) {
     return String(value == null ? '' : value).replace(/[<>]/g, '').trim();
@@ -157,7 +158,7 @@
     var sorted = unique.slice().sort(function (a, b) {
       var rank = sheetPoseRank(a) - sheetPoseRank(b);
       if (rank) return rank;
-      return String(a.label || '').localeCompare(String(b.label || ''));
+      return 0;
     });
     return sorted.slice(0, max);
   }
@@ -324,13 +325,15 @@
       return { referenceImages: [], promptPrefix: '', promptSuffix: '', referenceMeta: [] };
     }
 
-    var activeCharacters = sceneCharacters.slice();
+    var activeCharacters = sceneCharacters.slice(0, MAX_REFERENCE_IMAGES);
+    var refsPerCharacter = activeCharacters.length <= 1 ? MAX_REFERENCE_IMAGES : (activeCharacters.length === 2 ? 2 : 1);
     var referenceImages = [];
     var promptLines = [];
     var referenceMeta = [];
     var referenceSubjects = [];
 
     activeCharacters.forEach(function (character, index) {
+      if (referenceImages.length >= MAX_REFERENCE_IMAGES) return;
       var token = normalizeToken(character && (character.trigger || character.token || character.name));
       if (!token) return;
       var key = String(token).toLowerCase();
@@ -339,7 +342,8 @@
       }) || null;
       if (!entry || !entry.items || !entry.items.length) return;
 
-      var selectedSheets = pickReferenceSheets(entry.items, entry.items.length);
+      var limit = Math.min(refsPerCharacter, MAX_REFERENCE_IMAGES - referenceImages.length);
+      var selectedSheets = pickReferenceSheets(entry.items, limit);
       if (!selectedSheets.length) return;
 
       var characterMeta = knowledgeCharacters.find(function (item) {
@@ -374,20 +378,16 @@
         });
       });
 
-      var poseSummary = selectedSheets.map(function (sheet) {
-        return getCharacterSheetPosePromptLabel(sheet.pose);
-      }).filter(Boolean).join(', ');
-
       referenceSubjects.push({
         referenceId: referenceId,
         token: token,
         displayName: displayName,
         subjectDescription: subjectDescription,
-        poseSummary: poseSummary || 'character reference'
+        poseSummary: 'character reference'
       });
 
       promptLines.push(
-        'Use the provided registered reference images for ' + displayName + '. Reference views: ' + (poseSummary || 'character reference') + '. Preserve the same silhouette, colors, costume, and face.'
+        'Use the provided registered reference images for ' + displayName + '. Preserve the same silhouette, colors, costume, and face.'
       );
     });
 
@@ -410,7 +410,7 @@
     }
 
     return {
-      referenceImages: referenceImages,
+      referenceImages: referenceImages.slice(0, MAX_REFERENCE_IMAGES),
       promptPrefix: 'Create an image that matches the scene description below.',
       promptSuffix: promptLines.join('\n'),
       referenceMeta: referenceMeta,
@@ -472,8 +472,9 @@
 
   function buildIpLibraryFallback(listing, resolvedCharacters) {
     var items = Array.isArray(listing && listing.items) ? listing.items : [];
-    var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters.slice() : [];
+    var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters.slice(0, MAX_REFERENCE_IMAGES) : [];
     if (!items.length || !sceneCharacters.length) return null;
+    var refsPerCharacter = sceneCharacters.length <= 1 ? MAX_REFERENCE_IMAGES : (sceneCharacters.length === 2 ? 2 : 1);
     var grouped = {};
     var generic = [];
     items.forEach(function (item) {
@@ -497,6 +498,7 @@
     var referenceSubjects = [];
     var promptLines = [];
     sceneCharacters.forEach(function (character, index) {
+      if (referenceImages.length >= MAX_REFERENCE_IMAGES) return;
       var token = normalizeToken(character && (character.trigger || character.token || character.name || character.displayName));
       if (!token) return;
       var key = String(token).toLowerCase();
@@ -510,7 +512,7 @@
         Array.isArray(character && character.fixedTraits) ? character.fixedTraits.join(', ') : '',
         character && character.styleGuide
       ]);
-      matched.forEach(function (file) {
+      matched.slice(0, Math.min(refsPerCharacter, MAX_REFERENCE_IMAGES - referenceImages.length)).forEach(function (file) {
         referenceImages.push({
           referenceId: index + 1,
           referenceType: 'REFERENCE_TYPE_SUBJECT',
@@ -542,7 +544,7 @@
     });
     if (!referenceImages.length) return null;
     return {
-      referenceImages: referenceImages,
+      referenceImages: referenceImages.slice(0, MAX_REFERENCE_IMAGES),
       promptPrefix: 'Create an image that matches the scene description below.',
       promptSuffix: promptLines.join('\n'),
       referenceMeta: referenceMeta,
