@@ -736,6 +736,61 @@
     normalizeCharacters(list, { defaultActive: false }).filter((character) => character.isActive)
   );
 
+  const insertStoryCharacterToken = (currentValue, token, selectionStart, selectionEnd) => {
+    const text = String(currentValue || '');
+    const normalizedToken = String(token || '').trim();
+    const max = text.length;
+    const start = Math.max(0, Math.min(Number.isFinite(selectionStart) ? selectionStart : max, max));
+    const end = Math.max(start, Math.min(Number.isFinite(selectionEnd) ? selectionEnd : start, max));
+    if (!normalizedToken) return { value: text, caret: start };
+    const before = text.slice(0, start);
+    const after = text.slice(end);
+    const needsLeadingSpace = !!before && !/[\s([{'"“‘]$/.test(before);
+    const needsTrailingSpace = !!after && !/^[\s)\]}"'”’.,!?;:]/.test(after);
+    const inserted = `${needsLeadingSpace ? ' ' : ''}${normalizedToken}${needsTrailingSpace ? ' ' : ''}`;
+    return {
+      value: `${before}${inserted}${after}`,
+      caret: before.length + inserted.length
+    };
+  };
+
+  const cacheStorySelection = (textarea) => {
+    if (!textarea) return;
+    textarea.dataset.selectionStart = String(Number(textarea.selectionStart) || 0);
+    textarea.dataset.selectionEnd = String(Number(textarea.selectionEnd) || 0);
+  };
+
+  const readStorySelection = (textarea) => {
+    if (!textarea) return { start: 0, end: 0 };
+    const valueLength = String(textarea.value || '').length;
+    const active = document.activeElement === textarea;
+    const start = active
+      ? Number(textarea.selectionStart)
+      : Number(textarea.dataset.selectionStart);
+    const end = active
+      ? Number(textarea.selectionEnd)
+      : Number(textarea.dataset.selectionEnd);
+    const safeStart = Number.isFinite(start) ? start : valueLength;
+    const safeEnd = Number.isFinite(end) ? end : safeStart;
+    return {
+      start: Math.max(0, Math.min(safeStart, valueLength)),
+      end: Math.max(0, Math.min(safeEnd, valueLength))
+    };
+  };
+
+  const insertTokenIntoStoryField = (textarea, token) => {
+    if (!textarea) return;
+    const selection = readStorySelection(textarea);
+    const next = insertStoryCharacterToken(textarea.value, token, selection.start, selection.end);
+    textarea.value = next.value;
+    textarea.focus();
+    try {
+      textarea.setSelectionRange(next.caret, next.caret);
+    } catch (_) { }
+    cacheStorySelection(textarea);
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+
   const isCharacterGenerationDisabled = (payload = {}) => {
     if (Array.isArray(payload?.characters)) {
       return !normalizeCharacters(payload.characters, { defaultActive: true }).some((character) => character.isActive);
@@ -750,7 +805,31 @@
         : getSelectedCharacters(currentCharacters))
   );
 
-  const syncCharacterUi = () => {};
+  const renderStoryCharacterTokens = () => {
+    const field = document.getElementById('scenario-story-field');
+    const tokenBar = document.getElementById('scenario-story-token-bar');
+    if (!field || !tokenBar) return;
+    const activeCharacters = getSelectedCharacters(currentCharacters);
+    if (!activeCharacters.length) {
+      field.classList.remove('has-token-buttons');
+      tokenBar.hidden = true;
+      tokenBar.innerHTML = '';
+      return;
+    }
+    tokenBar.innerHTML = activeCharacters.map((character) => `
+      <button
+        type="button"
+        class="scenario-story-token-btn"
+        data-insert-story-character="${escapeHtml(character.token)}"
+        title="${escapeHtml(character.token)}">${escapeHtml(character.displayName)}</button>
+    `).join('');
+    tokenBar.hidden = false;
+    field.classList.add('has-token-buttons');
+  };
+
+  const syncCharacterUi = () => {
+    renderStoryCharacterTokens();
+  };
 
   const renderOverviewSelects = (state = {}) => {
     const uiText = getScenarioUiText();
@@ -1288,6 +1367,7 @@
       : (hasPresetDuration(durationValue) ? '' : durationValue);
     if (form.topic) form.topic.value = overviewFields.topic || draft.title || '';
     if (form.story) form.story.value = overviewFields.story || '';
+    if (form.story) cacheStorySelection(form.story);
     renderOverviewSelects({
       purposeCategory: defaultCat,
       purposeTag: selectedPurposeTag,
@@ -1315,6 +1395,13 @@
   scenario.init = async function () {
     const form = document.getElementById('scenario-form');
     if (!form) return;
+    const storyField = form.story || document.getElementById('scenario-story-input');
+    if (storyField) {
+      ['focus', 'click', 'keyup', 'select', 'input'].forEach((eventName) => {
+        storyField.addEventListener(eventName, () => cacheStorySelection(storyField));
+      });
+      cacheStorySelection(storyField);
+    }
     const knowledgeGroup = document.querySelector('.scenario-knowledge-group');
     const knowledgeToggle = document.getElementById('scenario-knowledge-toggle');
     const knowledgeSummary = document.getElementById('scenario-knowledge-summary');
@@ -1441,6 +1528,7 @@
         const nextStory = sanitizeText(result?.story || rawStory);
         if (nextStory) {
           storyField.value = nextStory;
+          cacheStorySelection(storyField);
           syncOverviewPayload();
         }
       } catch (err) {
@@ -1452,6 +1540,12 @@
 
     // 토글/버튼 클릭
     form.addEventListener('click', (e) => {
+      const storyTokenBtn = e.target.closest('[data-insert-story-character]');
+      if (storyTokenBtn) {
+        e.preventDefault();
+        insertTokenIntoStoryField(storyField, storyTokenBtn.dataset.insertStoryCharacter || '');
+        return;
+      }
       const aiBtn = e.target.closest('[data-action="scenario-structure-story"]');
       if (aiBtn) {
         e.preventDefault();
