@@ -921,42 +921,36 @@
       var cardsHtml = sheetEntries.length
         ? sheetEntries.map(function (entry) {
           var displayName = normalizeCharacterName(entry.displayName || entry.token) || String(entry.token || '').replace(/^@/, '');
-          var personality = (currentCharacters.find(function (row) {
-            return String(row.token || '').toLowerCase() === String(entry.token || '').toLowerCase();
-          }) || {}).personality || '';
-          var itemsHtml = entry.items && entry.items.length
-            ? entry.items.map(function (sheet) {
-              return (
-                '<article class="character-sheet-item" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' +
-                '<button type="button" class="character-sheet-thumb-button" data-action="character-sheet-preview" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 원본 이미지 보기') + '">' +
-                '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(displayName + ' 시트') + '" />' +
-                '</button>' +
-                '<div class="character-sheet-fields">' +
-                '<div class="character-sheet-item-actions">' +
-                (sheet.isPrimary
-                  ? '<span class="character-sheet-primary-badge">대표 시트</span>'
-                  : '<button type="button" class="btn-secondary compact" data-action="character-sheet-set-primary" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">대표 지정</button>') +
-                '<button type="button" class="btn-secondary compact" data-action="character-sheet-delete" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">삭제</button>' +
-                '</div>' +
-                '</div>' +
-                '</article>'
-              );
-            }).join('')
-            : '';
+          var sheetItems = normalizeCharacterSheetItems(entry.items);
+          var slotCards = [];
+          for (var slotIndex = 0; slotIndex < MAX_CHARACTER_SHEETS_PER_CHARACTER; slotIndex++) {
+            var sheet = sheetItems[slotIndex];
+            if (!sheet) {
+              slotCards.push('<div class="character-sheet-slot is-empty" aria-hidden="true"></div>');
+              continue;
+            }
+            slotCards.push(
+              '<article class="character-sheet-slot is-filled' + (sheet.isPrimary ? ' is-primary' : '') + '" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' +
+              '<button type="button" class="character-sheet-thumb-button" data-action="character-sheet-preview" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 원본 이미지 보기') + '">' +
+              '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(displayName + ' 시트') + '" />' +
+              '</button>' +
+              '<button type="button" class="character-sheet-overlay-btn is-primary' + (sheet.isPrimary ? ' is-active' : '') + '" data-action="character-sheet-set-primary" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 대표 시트 지정') + '">V</button>' +
+              '<button type="button" class="character-sheet-overlay-btn is-delete" data-action="character-sheet-delete" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 시트 삭제') + '">X</button>' +
+              '</article>'
+            );
+          }
           return (
             '<section class="character-manager-card" data-character-token="' + escapeHtml(entry.token) + '">' +
-            '<div class="character-manager-card-head">' +
-            '<div class="character-manager-card-main"><strong>' + escapeHtml(displayName) + '</strong><p>' + escapeHtml(personality || '성격 설명이 아직 없습니다.') + '</p></div>' +
+            '<div class="character-manager-card-row">' +
+            '<div class="character-manager-card-name"><strong>' + escapeHtml(displayName) + '</strong></div>' +
+            '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
             '<div class="character-manager-card-side">' +
-            '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String((entry.items || []).length)) + '/4개</span>' +
+            '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String(sheetItems.length)) + '/4개</span>' +
             '<label class="character-sheet-upload btn-secondary compact">' +
             '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
             '시트 업로드' +
             '</label>' +
             '</div>' +
-            '</div>' +
-            '<div class="character-manager-card-body">' +
-            '<div class="character-sheet-grid">' + itemsHtml + '</div>' +
             '</div>' +
             '</section>'
           );
