@@ -324,15 +324,13 @@
       return { referenceImages: [], promptPrefix: '', promptSuffix: '', referenceMeta: [] };
     }
 
-    var activeCharacters = sceneCharacters.slice(0, 4);
-    var refsPerCharacter = activeCharacters.length <= 1 ? 4 : (activeCharacters.length === 2 ? 2 : 1);
+    var activeCharacters = sceneCharacters.slice();
     var referenceImages = [];
     var promptLines = [];
     var referenceMeta = [];
     var referenceSubjects = [];
 
     activeCharacters.forEach(function (character, index) {
-      if (referenceImages.length >= 4) return;
       var token = normalizeToken(character && (character.trigger || character.token || character.name));
       if (!token) return;
       var key = String(token).toLowerCase();
@@ -341,8 +339,7 @@
       }) || null;
       if (!entry || !entry.items || !entry.items.length) return;
 
-      var limit = Math.min(refsPerCharacter, 4 - referenceImages.length);
-      var selectedSheets = pickReferenceSheets(entry.items, limit);
+      var selectedSheets = pickReferenceSheets(entry.items, entry.items.length);
       if (!selectedSheets.length) return;
 
       var characterMeta = knowledgeCharacters.find(function (item) {
@@ -413,7 +410,7 @@
     }
 
     return {
-      referenceImages: referenceImages.slice(0, 4),
+      referenceImages: referenceImages,
       promptPrefix: 'Create an image that matches the scene description below.',
       promptSuffix: promptLines.join('\n'),
       referenceMeta: referenceMeta,
@@ -475,9 +472,8 @@
 
   function buildIpLibraryFallback(listing, resolvedCharacters) {
     var items = Array.isArray(listing && listing.items) ? listing.items : [];
-    var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters.slice(0, 4) : [];
+    var sceneCharacters = Array.isArray(resolvedCharacters) ? resolvedCharacters.slice() : [];
     if (!items.length || !sceneCharacters.length) return null;
-    var refsPerCharacter = sceneCharacters.length <= 1 ? 4 : (sceneCharacters.length === 2 ? 2 : 1);
     var grouped = {};
     var generic = [];
     items.forEach(function (item) {
@@ -501,7 +497,6 @@
     var referenceSubjects = [];
     var promptLines = [];
     sceneCharacters.forEach(function (character, index) {
-      if (referenceImages.length >= 4) return;
       var token = normalizeToken(character && (character.trigger || character.token || character.name || character.displayName));
       if (!token) return;
       var key = String(token).toLowerCase();
@@ -515,7 +510,7 @@
         Array.isArray(character && character.fixedTraits) ? character.fixedTraits.join(', ') : '',
         character && character.styleGuide
       ]);
-      matched.slice(0, Math.min(refsPerCharacter, 4 - referenceImages.length)).forEach(function (file) {
+      matched.forEach(function (file) {
         referenceImages.push({
           referenceId: index + 1,
           referenceType: 'REFERENCE_TYPE_SUBJECT',
@@ -547,7 +542,7 @@
     });
     if (!referenceImages.length) return null;
     return {
-      referenceImages: referenceImages.slice(0, 4),
+      referenceImages: referenceImages,
       promptPrefix: 'Create an image that matches the scene description below.',
       promptSuffix: promptLines.join('\n'),
       referenceMeta: referenceMeta,

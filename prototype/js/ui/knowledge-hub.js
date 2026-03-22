@@ -792,7 +792,8 @@
     var characterSheetDraft = normalizeCharacterSheets(knowledge.characterSheets, currentCharacters);
     var modalCharacterSheetDraft = null;
     var modalSaveInFlight = false;
-    var modalExpandedCharacterToken = '';
+    var modalPreviewImageUrl = '';
+    var modalPreviewImageAlt = '';
 
     function cloneCharacterSheetDraft(value) {
       try {
@@ -870,7 +871,8 @@
       if (modal) modal.classList.add('hidden');
       modalCharacterSheetDraft = null;
       modalSaveInFlight = false;
-      modalExpandedCharacterToken = '';
+      modalPreviewImageUrl = '';
+      modalPreviewImageAlt = '';
     }
 
     function renderCharacterManagerModal() {
@@ -882,9 +884,6 @@
       }
       var sheetEntries = normalizeCharacterSheets(modalCharacterSheetDraft, currentCharacters);
       modalCharacterSheetDraft = sheetEntries;
-      if (!modalExpandedCharacterToken && sheetEntries.length) {
-        modalExpandedCharacterToken = String(sheetEntries[0].token || '').trim().toLowerCase();
-      }
 
       function updateModalCharacterSheetEntry(token, updater) {
         var targetToken = String(token || '').trim().toLowerCase();
@@ -899,10 +898,29 @@
         }), currentCharacters);
       }
 
+      function findModalCharacterSheetItem(token, sheetId) {
+        var targetToken = String(token || '').trim().toLowerCase();
+        var targetSheetId = String(sheetId || '').trim();
+        if (!targetToken || !targetSheetId) return null;
+        for (var i = 0; i < sheetEntries.length; i++) {
+          var entry = sheetEntries[i];
+          if (String(entry && entry.token || '').trim().toLowerCase() !== targetToken) continue;
+          var items = normalizeCharacterSheetItems(entry && entry.items);
+          for (var j = 0; j < items.length; j++) {
+            var sheet = items[j];
+            if (String(sheet && sheet.sheetId || '') !== targetSheetId) continue;
+            return {
+              entry: entry,
+              sheet: sheet
+            };
+          }
+        }
+        return null;
+      }
+
       var cardsHtml = sheetEntries.length
         ? sheetEntries.map(function (entry) {
-          var entryToken = String(entry.token || '').trim().toLowerCase();
-          var isExpanded = entryToken && entryToken === modalExpandedCharacterToken;
+          var displayName = normalizeCharacterName(entry.displayName || entry.token) || String(entry.token || '').replace(/^@/, '');
           var personality = (currentCharacters.find(function (row) {
             return String(row.token || '').toLowerCase() === String(entry.token || '').toLowerCase();
           }) || {}).personality || '';
@@ -910,7 +928,9 @@
             ? entry.items.map(function (sheet) {
               return (
                 '<article class="character-sheet-item" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' +
-                '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(entry.token + ' 시트') + '" />' +
+                '<button type="button" class="character-sheet-thumb-button" data-action="character-sheet-preview" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 원본 이미지 보기') + '">' +
+                '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(displayName + ' 시트') + '" />' +
+                '</button>' +
                 '<div class="character-sheet-fields">' +
                 '<select class="character-sheet-input" data-sheet-pose data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' + renderCharacterSheetPoseOptions(sheet.pose) + '</select>' +
                 '<div class="character-sheet-item-actions">' +
@@ -925,27 +945,34 @@
             }).join('')
             : '';
           return (
-            '<section class="character-manager-card' + (isExpanded ? ' is-expanded' : '') + '" data-character-token="' + escapeHtml(entry.token) + '">' +
-            '<button type="button" class="character-manager-card-head" data-action="character-manager-toggle" data-character-token="' + escapeHtml(entry.token) + '" aria-expanded="' + escapeHtml(isExpanded ? 'true' : 'false') + '">' +
-            '<div class="character-manager-card-main"><strong>' + escapeHtml(entry.token) + '</strong><p>' + escapeHtml(personality || '성격 설명이 아직 없습니다.') + '</p></div>' +
+            '<section class="character-manager-card" data-character-token="' + escapeHtml(entry.token) + '">' +
+            '<div class="character-manager-card-head">' +
+            '<div class="character-manager-card-main"><strong>' + escapeHtml(displayName) + '</strong><p>' + escapeHtml(personality || '성격 설명이 아직 없습니다.') + '</p></div>' +
             '<div class="character-manager-card-side">' +
             '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String((entry.items || []).length)) + '개</span>' +
-            '<span class="character-manager-card-toggle">' + escapeHtml(isExpanded ? '접기' : '펼치기') + '</span>' +
-            '</div>' +
-            '</button>' +
-            '<div class="character-manager-card-body"' + (isExpanded ? '' : ' hidden') + '>' +
-            '<div class="character-sheet-toolbar">' +
             '<label class="character-sheet-upload btn-secondary compact">' +
             '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
             '시트 업로드' +
             '</label>' +
             '</div>' +
+            '</div>' +
+            '<div class="character-manager-card-body">' +
             '<div class="character-sheet-grid">' + itemsHtml + '</div>' +
             '</div>' +
             '</section>'
           );
         }).join('')
         : '<div class="character-manager-empty">먼저 캐릭터 자산에 캐릭터를 등록하면 여기서 캐릭터별 IP 시트를 관리할 수 있습니다.</div>';
+
+      var previewHtml = modalPreviewImageUrl
+        ? (
+          '<div class="character-sheet-preview-overlay" data-action="character-sheet-preview-close">' +
+          '<div class="character-sheet-preview-surface">' +
+          '<img class="character-sheet-preview-image" src="' + escapeHtml(modalPreviewImageUrl) + '" alt="' + escapeHtml(modalPreviewImageAlt || '원본 이미지') + '" />' +
+          '</div>' +
+          '</div>'
+        )
+        : '';
 
       box.innerHTML =
         '<div class="character-manager-head">' +
@@ -955,7 +982,8 @@
         '<button type="button" class="btn-secondary" data-action="character-manager-close"' + (modalSaveInFlight ? ' disabled' : '') + '>닫기</button>' +
         '</div>' +
         '</div>' +
-        '<div class="character-manager-grid">' + cardsHtml + '</div>';
+        '<div class="character-manager-grid">' + cardsHtml + '</div>' +
+        previewHtml;
 
       box.onclick = function (evt) {
         var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
@@ -966,10 +994,19 @@
           closeCharacterManagerModal();
           return;
         }
-        if (action === 'character-manager-toggle') {
-          var toggleToken = String(btn.dataset.characterToken || '').trim().toLowerCase();
-          if (!toggleToken) return;
-          modalExpandedCharacterToken = modalExpandedCharacterToken === toggleToken ? '' : toggleToken;
+        if (action === 'character-sheet-preview-close') {
+          modalPreviewImageUrl = '';
+          modalPreviewImageAlt = '';
+          renderCharacterManagerModal();
+          return;
+        }
+        if (action === 'character-sheet-preview') {
+          var previewToken = btn.dataset.characterToken;
+          var previewSheetId = btn.dataset.sheetId;
+          var previewTarget = findModalCharacterSheetItem(previewToken, previewSheetId);
+          if (!previewTarget || !previewTarget.sheet) return;
+          modalPreviewImageUrl = resolveSheetPreviewUrl(previewTarget.sheet.imageDataUrl);
+          modalPreviewImageAlt = (normalizeCharacterName(previewTarget.entry && (previewTarget.entry.displayName || previewTarget.entry.token) || previewToken || '') || String(previewToken || '').replace(/^@/, '')) + ' 원본 이미지';
           renderCharacterManagerModal();
           return;
         }

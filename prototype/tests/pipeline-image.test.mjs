@@ -420,3 +420,168 @@ test('pipeline image generation falls back to brand ip library files when metada
   assert.equal(ctx.__imagenCalls[0].referenceImages.length, 1);
   assert.equal(ctx.__imagenCalls[0].referenceImages[0].imageDataUrl, 'https://example.com/front.png');
 });
+
+test('pipeline image generation forwards every registered character sheet image', async () => {
+  const ctx = createContext({
+    brandById() {
+      return {
+        brandId: 'shape-brand',
+        knowledgeCharacters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+        ],
+        characterSheets: [
+          {
+            token: '@네모',
+            items: [
+              { sheetId: 'sheet_front', pose: 'front', label: '정면', imageDataUrl: 'gs://bucket/front.png', isPrimary: true },
+              { sheetId: 'sheet_front_quarter', pose: 'front_quarter', label: '반측면', imageDataUrl: 'gs://bucket/front-quarter.png', isPrimary: false },
+              { sheetId: 'sheet_side', pose: 'side', label: '측면', imageDataUrl: 'gs://bucket/side.png', isPrimary: false },
+              { sheetId: 'sheet_back_quarter', pose: 'back_quarter', label: '후반측면', imageDataUrl: 'gs://bucket/back-quarter.png', isPrimary: false },
+              { sheetId: 'sheet_back', pose: 'back', label: '후면', imageDataUrl: 'gs://bucket/back.png', isPrimary: false }
+            ]
+          }
+        ]
+      };
+    }
+  });
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+
+  let state = {
+    draftId: 'project-1',
+    header: '밝은 2D 키즈 애니메이션',
+    payload: {
+      brandId: 'shape-brand',
+      charactersEnabled: true,
+      knowledgeCharacters: [],
+      knowledgeCharacterSheets: [],
+      characters: [
+        { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+      ]
+    },
+    scenes: [
+      {
+        id: 1,
+        shot: '@네모가 포스터 앞에 선다.',
+        narration: '',
+        dialogue: [],
+        estSec: 4
+      }
+    ]
+  };
+  const ctxObj = {
+    getState() { return state; },
+    setState(next) { state = next; }
+  };
+
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: ctxObj,
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+
+  assert.equal(ctx.__imagenCalls.length, 1);
+  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 5);
+  assert.equal(ctx.__imagenCalls[0].referenceImages[4].imageDataUrl, 'gs://bucket/back.png');
+});
+
+test('pipeline image generation forwards every fallback ip library image for the character', async () => {
+  const ctx = createContext({
+    brandById() {
+      return {
+        brandId: 'shape-brand',
+        knowledgeCharacters: [
+          { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+        ],
+        characterSheets: []
+      };
+    },
+    apiProjectGet() {
+      return { data: { payload: { brandId: 'shape-brand' }, scenes: [] } };
+    },
+    apiBrandGet() {
+      return {
+        ok: true,
+        data: {
+          brandId: 'shape-brand',
+          brand: {
+            brandId: 'shape-brand',
+            knowledgeCharacters: [
+              { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+            ],
+            characterSheets: []
+          }
+        }
+      };
+    },
+    apiLibraryIP() {
+      return {
+        items: [
+          { name: 'users/u/ai-video/brands/shape-brand/ip/@네모/sheet_front.png', signedUrl: 'https://example.com/front.png' },
+          { name: 'users/u/ai-video/brands/shape-brand/ip/@네모/sheet_front_quarter.png', signedUrl: 'https://example.com/front-quarter.png' },
+          { name: 'users/u/ai-video/brands/shape-brand/ip/@네모/sheet_side.png', signedUrl: 'https://example.com/side.png' },
+          { name: 'users/u/ai-video/brands/shape-brand/ip/@네모/sheet_back_quarter.png', signedUrl: 'https://example.com/back-quarter.png' },
+          { name: 'users/u/ai-video/brands/shape-brand/ip/@네모/sheet_back.png', signedUrl: 'https://example.com/back.png' }
+        ]
+      };
+    },
+    getKnowledgeHub(source) {
+      const payload = source && source.payload ? source.payload : source;
+      return {
+        characters: Array.isArray(payload && payload.knowledgeCharacters) ? payload.knowledgeCharacters : [],
+        characterSheets: Array.isArray(payload && payload.knowledgeCharacterSheets) ? payload.knowledgeCharacterSheets : []
+      };
+    }
+  });
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+
+  let state = {
+    draftId: 'project-1',
+    header: '밝은 2D 키즈 애니메이션',
+    payload: {
+      brandId: 'shape-brand',
+      charactersEnabled: true,
+      knowledgeCharacters: [
+        { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리가 강한 파란 네모' }
+      ],
+      knowledgeCharacterSheets: [],
+      knowledgeHub: { characters: [], characterSheets: [] }
+    },
+    scenes: [
+      {
+        id: 1,
+        shot: '@네모가 포스터 앞에 선다.',
+        narration: '',
+        dialogue: [],
+        estSec: 4
+      }
+    ]
+  };
+  const ctxObj = {
+    getState() { return state; },
+    setState(next) { state = next; }
+  };
+
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: ctxObj,
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+
+  assert.equal(ctx.__imagenCalls.length, 1);
+  assert.equal(ctx.__imagenCalls[0].referenceImages.length, 5);
+  assert.equal(ctx.__imagenCalls[0].referenceImages[4].imageDataUrl, 'https://example.com/back.png');
+});
