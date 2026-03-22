@@ -1152,6 +1152,7 @@
       }
       else if (action === 'knowledge-save-and-open-brand') {
         btn.disabled = true;
+        if (NK.core && NK.core.setLoading) NK.core.setLoading(true, '저장중...');
         syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
@@ -1166,6 +1167,7 @@
             alert('저장 후 이동 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
+            if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
             btn.disabled = false;
           });
         return;
@@ -1175,6 +1177,7 @@
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft);
         btn.disabled = true;
+        if (NK.core && NK.core.setLoading) NK.core.setLoading(true, '저장중...');
         syncBrandAndProject(nextKnowledge)
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
@@ -1184,6 +1187,7 @@
             alert('브랜드 허브 저장 실패: ' + (err && err.message ? err.message : err));
           })
           .finally(function () {
+            if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
             btn.disabled = false;
           });
         return;
