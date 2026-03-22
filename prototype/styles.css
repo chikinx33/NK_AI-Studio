@@ -7594,11 +7594,61 @@ body.layout-fixed .lib-content {
 }
 
 .character-manager-modal-content {
+  position: relative;
   max-height: min(82vh, 860px);
   overflow: auto;
   padding: 18px;
   display: grid;
   gap: 14px;
+}
+
+.character-manager-shell {
+  position: relative;
+}
+
+.character-manager-body.is-saving {
+  filter: blur(6px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.character-manager-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 12, 0.45);
+  backdrop-filter: blur(4px);
+  border-radius: 18px;
+  text-align: center;
+}
+
+.character-manager-loading .loading-box {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  text-align: center;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+
+.character-manager-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+.character-manager-loading p {
+  margin: 0;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .character-manager-head {

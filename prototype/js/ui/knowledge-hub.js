@@ -91,6 +91,7 @@
         countSuffix: '',
         upload: 'Upload Sheets',
         save: 'Save',
+        saveLoading: 'Saving...',
         close: 'Close',
         empty: 'Add characters to Character Assets first, then manage IP sheets for each character here.',
         preview: 'View original image',
@@ -112,6 +113,7 @@
         countSuffix: '개',
         upload: '시트 업로드',
         save: '저장',
+        saveLoading: '저장중...',
         close: '닫기',
         empty: '먼저 캐릭터 자산에 캐릭터를 등록하면 여기서 캐릭터별 IP 시트를 관리할 수 있습니다.',
         preview: '원본 이미지 보기',
@@ -973,8 +975,20 @@
           '</div>'
         )
         : '';
+      var loadingHtml = modalSaveInFlight
+        ? (
+          '<div class="character-manager-loading" aria-live="polite" aria-busy="true">' +
+          '<div class="loading-box">' +
+          '<div class="spinner" aria-hidden="true"></div>' +
+          '<p>' + escapeHtml(ipLibraryUiText.saveLoading) + '</p>' +
+          '</div>' +
+          '</div>'
+        )
+        : '';
 
       box.innerHTML =
+        '<div class="character-manager-shell' + (modalSaveInFlight ? ' is-saving' : '') + '">' +
+        '<div class="character-manager-body' + (modalSaveInFlight ? ' is-saving' : '') + '">' +
         '<div class="character-manager-head">' +
         '<div><h3>' + escapeHtml(ipLibraryUiText.title) + '</h3><p>' + escapeHtml(ipLibraryUiText.description) + '</p></div>' +
         '<div class="character-manager-head-actions">' +
@@ -983,6 +997,9 @@
         '</div>' +
         '</div>' +
         '<div class="character-manager-grid">' + cardsHtml + '</div>' +
+        '</div>' +
+        loadingHtml +
+        '</div>' +
         previewHtml;
 
       box.onclick = function (evt) {
