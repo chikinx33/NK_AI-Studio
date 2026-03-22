@@ -1500,23 +1500,21 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .scenario-form .scenario-story-token-btn {
-  min-height: 24px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--accent) 36%, var(--border) 64%);
-  background: color-mix(in srgb, var(--panel) 84%, rgba(255, 255, 255, 0.05) 16%);
-  color: var(--text);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 92%, var(--accent) 8%);
   font: inherit;
   font-size: 12px;
   font-weight: 600;
-  line-height: 1.1;
+  line-height: 1.2;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(4, 10, 24, 0.16);
+  box-shadow: none;
 }
 
 .scenario-form .scenario-story-token-btn:hover {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border) 42%);
-  background: color-mix(in srgb, var(--accent) 14%, var(--panel) 86%);
+  color: color-mix(in srgb, var(--accent) 78%, white 22%);
 }
 
 .scenario-form .scenario-story-token-btn:focus-visible {
@@ -1587,15 +1585,13 @@ textarea::-webkit-scrollbar-corner {
 }
 
 [data-theme="light"] .scenario-form .scenario-story-token-btn {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: color-mix(in srgb, #4b8dff 26%, var(--border) 74%);
+  background: transparent;
   color: #16305d;
-  box-shadow: 0 8px 16px rgba(75, 141, 255, 0.12);
+  box-shadow: none;
 }
 
 [data-theme="light"] .scenario-form .scenario-story-token-btn:hover {
-  background: color-mix(in srgb, #4b8dff 10%, white 90%);
-  border-color: color-mix(in srgb, #4b8dff 44%, var(--border) 56%);
+  color: #2c6fff;
 }
 
 .scenario-form .scenario-inline-controls select {
