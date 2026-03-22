@@ -9190,6 +9190,24 @@ body {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+.knowledge-hub-page .knowledge-hub-field textarea,
+.knowledge-hub-page .knowledge-reference-input,
+.knowledge-hub-page .knowledge-reference-textarea,
+.knowledge-hub-page .knowledge-character-input,
+.knowledge-hub-page .knowledge-character-personality {
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+}
+
+.knowledge-hub-page .knowledge-hub-field textarea:focus,
+.knowledge-hub-page .knowledge-reference-input:focus,
+.knowledge-hub-page .knowledge-reference-textarea:focus,
+.knowledge-hub-page .knowledge-character-input:focus,
+.knowledge-hub-page .knowledge-character-personality:focus {
+  outline: none;
+  border-color: color-mix(in srgb, #ff9a3d 34%, var(--border) 66%);
+  box-shadow: 0 0 0 2px rgba(255, 148, 46, 0.14);
+}
+
 .knowledge-hub-field textarea,
 .knowledge-reference-textarea,
 .brand-caption-textarea {
