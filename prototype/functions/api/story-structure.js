@@ -68,7 +68,7 @@ export async function onRequestPost(context) {
     const data = await completion.json();
     const text = data?.choices?.[0]?.message?.content || "{}";
     const parsed = JSON.parse(text);
-    const structured = sanitizeStory(parsed?.story);
+    const structured = restoreCharacterTokenHints(sanitizeStory(parsed?.story), input);
     if (!structured) throw new Error("No structured story generated");
 
     return json({
@@ -86,10 +86,17 @@ export async function onRequestPost(context) {
 
 function normalizeInput(body) {
   const knowledge = body?.knowledgeHub && typeof body.knowledgeHub === "object" ? body.knowledgeHub : {};
+  const characters = normalizeCharacters(
+    []
+      .concat(Array.isArray(body?.characters) ? body.characters : [])
+      .concat(Array.isArray(body?.knowledgeCharacters) ? body.knowledgeCharacters : [])
+      .concat(Array.isArray(knowledge?.characters) ? knowledge.characters : [])
+  );
+  const story = sanitizeStory(body?.story || body?.rawPrompt || body?.resolvedPrompt);
   return {
     language: String(body?.language || "ko").trim().toLowerCase() === "en" ? "en" : "ko",
     topic: sanitizeText(body?.topic),
-    story: sanitizeStory(body?.story || body?.rawPrompt || body?.resolvedPrompt),
+    story: story,
     target: sanitizeText(body?.target || body?.targetAudience),
     purposeCategory: sanitizeText(body?.purposeCategory),
     purposeTags: normalizeTextList(body?.purposeTags),
@@ -99,6 +106,8 @@ function normalizeInput(body) {
     worldSetting: sanitizeText(knowledge?.worldSetting || body?.worldSetting || body?.knowledgeWorld),
     brandRules: normalizeTextList(knowledge?.brandRules || body?.brandRules),
     bannedExpressions: normalizeTextList(knowledge?.bannedExpressions || body?.bannedExpressions),
+    characters: characters,
+    tokenHints: extractCharacterTokens(story),
   };
 }
 
@@ -112,7 +121,8 @@ function buildSystemPrompt(language) {
       "Clarify protagonist, goal, conflict, key turning beat, and ending direction when the source already implies them.",
       "Do not output scene numbers, markdown, bullet lists, or production instructions.",
       "Treat Topic as the episode title and Story as the real narrative source.",
-      "Respect brand rules and avoid banned expressions when present."
+      "Respect brand rules and avoid banned expressions when present.",
+      "If the source story contains character tokens like @Nemo, preserve those exact @tokens and never strip the @ prefix."
     ].join(" ");
   }
   return [
@@ -123,15 +133,20 @@ function buildSystemPrompt(language) {
     "원문에 이미 암시된 경우에만 주인공, 목표, 갈등, 전환점, 마무리 방향을 더 분명하게 정리한다.",
     "씬 번호, 마크다운, 불릿, 제작 지시문은 쓰지 않는다.",
     "주제는 에피소드 제목이고 실제 서사는 이야기 입력을 기준으로 정리한다.",
-    "브랜드 규칙과 금지 표현이 있으면 반드시 반영한다."
+    "브랜드 규칙과 금지 표현이 있으면 반드시 반영한다.",
+    "이야기 초안에 @네모 같은 캐릭터 토큰이 있으면 그 @토큰을 그대로 유지하고 @를 절대 지우지 마라."
   ].join(" ");
 }
 
 function buildUserPrompt(input) {
+  const registeredCharacters = formatCharacterRoster(input.characters);
+  const tokenHintText = input.tokenHints.length ? input.tokenHints.join(", ") : "(none)";
   if (input.language === "en") {
     return [
       `Topic: ${input.topic || "(none)"}`,
       `Story draft: ${input.story || "(none)"}`,
+      `Registered characters: ${registeredCharacters || "(none)"}`,
+      `Must preserve tokens exactly: ${tokenHintText}`,
       `Audience: ${input.target || "(none)"}`,
       `Genre: ${input.purposeCategory || "(none)"}`,
       `Genre tags: ${input.purposeTags.join(", ") || "(none)"}`,
@@ -146,6 +161,8 @@ function buildUserPrompt(input) {
   return [
     `주제: ${input.topic || "(없음)"}`,
     `이야기 초안: ${input.story || "(없음)"}`,
+    `등록 캐릭터: ${registeredCharacters || "(없음)"}`,
+    `반드시 유지할 캐릭터 토큰: ${input.tokenHints.length ? input.tokenHints.join(", ") : "(없음)"}`,
     `시청 타겟: ${input.target || "(없음)"}`,
     `장르: ${input.purposeCategory || "(없음)"}`,
     `장르 태그: ${input.purposeTags.join(", ") || "(없음)"}`,
@@ -186,4 +203,69 @@ function sanitizeText(value) {
 
 function sanitizeStory(value) {
   return sanitizeText(value).replace(/\s+/g, " ").trim();
+}
+
+function normalizeCharacters(list) {
+  const seen = new Set();
+  return (Array.isArray(list) ? list : [])
+    .map((item) => {
+      const raw = item && typeof item === "object" ? item : {};
+      const token = normalizeToken(raw.token || raw.trigger || raw.displayName || raw.name);
+      if (!token) return null;
+      const displayName = sanitizeText(raw.displayName || raw.name || token.replace(/^@/, ""));
+      return {
+        token,
+        displayName: displayName || token.replace(/^@/, "")
+      };
+    })
+    .filter(Boolean)
+    .filter((item) => {
+      const key = String(item.token || "").toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
+function normalizeToken(value) {
+  const rawText = sanitizeText(value).replace(/\s+/g, "");
+  if (!rawText) return "";
+  const raw = rawText.startsWith("@") ? rawText : ("@" + rawText.replace(/^@+/, ""));
+  return /^@[0-9A-Za-z가-힣_]{1,24}$/.test(raw) ? raw : "";
+}
+
+function extractCharacterTokens(value) {
+  const text = String(value || "");
+  const re = /(^|[^@0-9A-Za-z가-힣_])(@[0-9A-Za-z가-힣_]{1,24})/g;
+  const out = new Set();
+  let match;
+  while ((match = re.exec(text)) !== null) {
+    const token = normalizeToken(match[2] || "");
+    if (token) out.add(token);
+  }
+  return Array.from(out.values());
+}
+
+function formatCharacterRoster(list) {
+  return normalizeCharacters(list).map((item) => `${item.token}(${item.displayName})`).join(", ");
+}
+
+function restoreCharacterTokenHints(story, input) {
+  let output = sanitizeStory(story);
+  if (!output) return "";
+  const characters = normalizeCharacters(input && input.characters);
+  const tokenHints = Array.isArray(input && input.tokenHints) ? input.tokenHints : [];
+  tokenHints.forEach((token) => {
+    const normalizedToken = normalizeToken(token);
+    if (!normalizedToken || output.includes(normalizedToken)) return;
+    const matched = characters.find((item) => String(item.token).toLowerCase() === String(normalizedToken).toLowerCase());
+    const displayName = sanitizeText(matched && matched.displayName || normalizedToken.replace(/^@/, ""));
+    if (!displayName || output.indexOf(displayName) < 0) return;
+    output = output.replace(new RegExp(escapeRegExp(displayName), "g"), normalizedToken);
+  });
+  return output;
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
