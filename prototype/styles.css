@@ -1456,28 +1456,8 @@ textarea::-webkit-scrollbar-corner {
 .scenario-form .scenario-character-group {
   flex-direction: column;
   align-items: stretch;
-  gap: 6px;
+  gap: 8px;
   margin-bottom: 4px;
-}
-
-.scenario-character-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.scenario-character-panel {
-  display: grid;
-  gap: 6px;
-}
-
-.scenario-form .scenario-character-group.is-collapsed .scenario-character-panel {
-  display: none;
-}
-
-.scenario-character-head .scenario-circle-toggle {
-  flex: 0 0 auto;
 }
 
 .scenario-form .scenario-character-group .character-chips {
@@ -7384,12 +7364,6 @@ body.layout-fixed .lib-content {
 [data-theme="light"] .knowledge-character-input {
   background: #ffffff;
   border-color: rgba(115, 147, 196, 0.3);
-}
-
-@media (max-width: 980px) {
-  .scenario-character-head {
-    align-items: flex-start;
-  }
 }
 
 .knowledge-hub-field textarea {
