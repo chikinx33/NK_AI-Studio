@@ -11,7 +11,8 @@
     return jsonError('Invalid JSON body', 400);
   }
 
-  const topic = body.topic || 'Untitled story';
+  const topic = body.topic || 'Untitled episode';
+  const story = body.story || body.topic || 'Untitled story';
   const tone = [...(body.tones || []), body.tone || ''].filter(Boolean).join(', ');
   const style = [...(body.styles || []), body.style || ''].filter(Boolean).join(', ');
   const characterGenerationDisabled = isCharacterGenerationDisabled(body.charactersEnabled, body.characters);
@@ -45,6 +46,7 @@
 - Keep concise (≤220 words).`;
 
   const user = `Topic: ${topic}
+Story: ${story}
 Genre: ${purposeCategory}${purposeTags ? ' (' + purposeTags + ')' : ''}
 Audience: ${target || '미지정'}
 Needs: ${needs || '미지정'}

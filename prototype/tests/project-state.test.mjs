@@ -183,7 +183,8 @@ test('project.create inherits scenario context from selected parent project epis
       id: 'parent1',
       title: '모양새 친구들',
       payload: {
-        topic: '모양새 친구들이 숲에서 모험을 떠난다',
+        topic: '모양새 친구들 EP1',
+        story: '모양새 친구들이 숲에서 모험을 떠난다',
         seriesId: 'shapes',
         seriesTitle: '모양새 친구들',
         episodeTitle: '모양새 친구들',
@@ -234,7 +235,8 @@ test('project.create inherits scenario context from selected parent project epis
   assert.equal(created.seriesId, 'shapes');
   assert.equal(created.payload.parentProjectId, 'parent1');
   assert.equal(created.payload.parentProjectTitle, '모양새 친구들');
-  assert.equal(created.payload.topic, '모양새 친구들이 숲에서 모험을 떠난다');
+  assert.equal(created.payload.topic, '모양새 친구들 EP1');
+  assert.equal(created.payload.story, '모양새 친구들이 숲에서 모험을 떠난다');
   assert.equal(JSON.stringify(created.payload.tones), JSON.stringify(['유머']));
   assert.equal(JSON.stringify(created.payload.styles), JSON.stringify(['애니메이션(2D)']));
   assert.equal(created.payload.charactersEnabled, true);

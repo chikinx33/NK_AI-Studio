@@ -171,6 +171,28 @@
     return data;
   };
 
+  api.storyStructure = async function (payload) {
+    var res = await fetchWithTimeout(withBase('/api/story-structure'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }, 30000);
+    var text = await readTextWithTimeout(res, 30000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'story_structure_api_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    var data = j(text);
+    if (!data || !String(data.story || '').trim()) {
+      var invalidErr = new Error('story_structure_response_invalid');
+      invalidErr.detail = text;
+      throw invalidErr;
+    }
+    return data;
+  };
+
   api.generateHashtags = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/hashtags'), {
       method: 'POST',

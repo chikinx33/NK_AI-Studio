@@ -77,7 +77,8 @@
       sceneExpand: '씬 펼치기',
       sceneCollapse: '씬 접기',
       commonInfoLabels: {
-        topic: '이야기',
+        topic: '주제',
+        story: '이야기',
         genre: '장르',
         audience: '타겟',
         needs: '목적',
@@ -124,7 +125,8 @@
       sceneExpand: 'Expand scene',
       sceneCollapse: 'Collapse scene',
       commonInfoLabels: {
-        topic: 'Story',
+        topic: 'Topic',
+        story: 'Story',
         genre: 'Genre',
         audience: 'Audience',
         needs: 'Purpose',
@@ -308,6 +310,47 @@
   const getScenarioText = (key, fallback = '') => {
     const lang = getRuntimeLang();
     return NK.core?.translations?.[lang]?.[key] || fallback;
+  };
+
+  const looksLikeLegacyStoryText = (value = '') => {
+    const text = sanitizeText(value);
+    if (!text) return false;
+    if (text.length >= 48) return true;
+    return /[\n.!?。！？]/.test(text);
+  };
+
+  const resolveOverviewStoryFields = (payload = {}, draft = null) => {
+    const rawTopic = sanitizeText(payload?.topic || '');
+    const rawStory = sanitizeText(payload?.story || payload?.storyPrompt || '');
+    if (rawStory) {
+      return {
+        topic: rawTopic || sanitizeText(draft?.title || payload?.episodeTitle || ''),
+        story: rawStory
+      };
+    }
+    if (looksLikeLegacyStoryText(rawTopic)) {
+      return {
+        topic: sanitizeText(draft?.title || payload?.episodeTitle || ''),
+        story: rawTopic
+      };
+    }
+    return {
+      topic: rawTopic,
+      story: ''
+    };
+  };
+
+  const getScenarioNarrativeText = (payload = {}) => {
+    const story = sanitizeText(payload?.story || payload?.storyPrompt || '');
+    const topic = sanitizeText(payload?.topic || '');
+    return story || topic;
+  };
+
+  const getScenarioPromptSeed = (payload = {}) => {
+    const topic = sanitizeText(payload?.topic || '');
+    const story = getScenarioNarrativeText(payload);
+    if (topic && story && topic !== story) return `${topic}\n${story}`;
+    return story || topic;
   };
 
   // ---------- helpers ----------
@@ -773,6 +816,8 @@
     const fd = new FormData(form);
     const payload = {};
     fd.forEach((v, k) => { payload[k] = v; });
+    payload.topic = sanitizeText(payload.topic || '');
+    payload.story = sanitizeText(payload.story || '');
     const purposeTag = document.getElementById('purpose-tag-select')?.value || '';
     const need = document.getElementById('needs-select')?.value || '';
     const tone = document.getElementById('tone-select')?.value || '';
@@ -807,8 +852,9 @@
     payload.narrationEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active');
     payload.dubbingEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active');
     if (selectedCharacters.length) {
+      const promptSeed = getScenarioPromptSeed(payload);
       const matchedTokens = payload.characters
-        .filter(c => String(payload.topic || '').includes(c.displayName))
+        .filter(c => String(promptSeed || '').includes(c.displayName))
         .map(c => c.token);
       if (matchedTokens.length) payload.characterHints = matchedTokens;
     } else {
@@ -937,9 +983,12 @@
     const p = currentPayload || {};
     const knowledge = readKnowledgeHub(p);
     const labels = getScenarioUiText().commonDetailLabels || {};
+    const infoLabels = getScenarioUiText().commonInfoLabels || {};
     const lines = [];
     lines.push(labels.title || 'Common');
     lines.push(p.header || (labels.empty || '(Common block has not been generated yet)'));
+    if (p.topic) lines.push(`${infoLabels.topic || 'Topic'}: ${p.topic}`);
+    if (p.story) lines.push(`${infoLabels.story || 'Story'}: ${p.story}`);
     if (knowledge.brandVoice) lines.push(`${labels.brandVoice || 'Brand voice'}: ${knowledge.brandVoice}`);
     if (knowledge.brandStory) lines.push(`${labels.brandStory || 'Brand story'}: ${knowledge.brandStory}`);
     if (knowledge.brandCharacter) lines.push(`${labels.brandCharacter || 'Brand character'}: ${knowledge.brandCharacter}`);
@@ -1212,6 +1261,7 @@
     const form = document.getElementById('scenario-form');
     if (!form || !draft) return;
     const p = draft.payload || {};
+    const overviewFields = resolveOverviewStoryFields(p, draft);
     const rawHeader = draft.header || p.header || '';
     const header = sanitizeHeader(rawHeader);
     const flags = getScenarioFlags(p || {});
@@ -1219,7 +1269,7 @@
     const knowledgeCharacters = readKnowledgeHub(p || {}).characters || [];
     currentCharacters = mergeCharacterSources(explicitCharacters, knowledgeCharacters, p.brandCharacter || '');
     syncCharacterSeq(currentCharacters);
-    currentPayload = Object.assign({}, p || {}, flags, {
+    currentPayload = Object.assign({}, p || {}, overviewFields, flags, {
       characters: getSelectedCharacters(currentCharacters),
       charactersEnabled: getSelectedCharacters(currentCharacters).length > 0,
       header
@@ -1236,7 +1286,8 @@
     const selectedDurationCustom = p.durationMode === 'custom'
       ? String(p.durationCustom || durationValue || '')
       : (hasPresetDuration(durationValue) ? '' : durationValue);
-    if (form.topic) form.topic.value = p.topic || draft.title || '';
+    if (form.topic) form.topic.value = overviewFields.topic || draft.title || '';
+    if (form.story) form.story.value = overviewFields.story || '';
     renderOverviewSelects({
       purposeCategory: defaultCat,
       purposeTag: selectedPurposeTag,
@@ -1369,8 +1420,44 @@
       renderKnowledgeHint(currentPayload);
     };
 
+    const organizeStoryDraft = async (triggerBtn) => {
+      const storyField = form.story || document.getElementById('scenario-story-input');
+      if (!storyField) return;
+      const payload = collectPayload();
+      const rawStory = String(payload.story || '').trim();
+      if (!rawStory) {
+        alert(getScenarioText('scenario_story_required', '이야기를 먼저 입력해 주세요.'));
+        storyField.focus();
+        return;
+      }
+      if (!NK.api || !NK.api.storyStructure) {
+        storyField.value = rawStory.replace(/\s+/g, ' ').trim();
+        syncOverviewPayload();
+        return;
+      }
+      if (triggerBtn) triggerBtn.disabled = true;
+      try {
+        const result = await NK.api.storyStructure(Object.assign({}, payload, { language: getRuntimeLang() }));
+        const nextStory = sanitizeText(result?.story || rawStory);
+        if (nextStory) {
+          storyField.value = nextStory;
+          syncOverviewPayload();
+        }
+      } catch (err) {
+        alert(getScenarioText('scenario_story_structure_failed', '이야기 정리 실패') + ': ' + (err?.message || err));
+      } finally {
+        if (triggerBtn) triggerBtn.disabled = false;
+      }
+    };
+
     // 토글/버튼 클릭
     form.addEventListener('click', (e) => {
+      const aiBtn = e.target.closest('[data-action="scenario-structure-story"]');
+      if (aiBtn) {
+        e.preventDefault();
+        organizeStoryDraft(aiBtn);
+        return;
+      }
       const btn = e.target.closest('.ratio-btn, .scenario-flag-toggle');
       if (!btn) return;
       if (btn.classList.contains('ratio-btn')) {
@@ -1405,8 +1492,8 @@
       if (!target) return;
       if (target.id === 'duration-custom-input') {
         syncDurationInputs('custom');
-        syncOverviewPayload();
       }
+      if (target.id === 'duration-custom-input' || target.name === 'topic' || target.name === 'story') syncOverviewPayload();
     });
 
     form.addEventListener('click', (e) => {
@@ -1551,14 +1638,14 @@
       const payload = collectPayload();
       try {
         const brandId = (NK.service && NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
-        const topic = String(payload.topic || '').trim();
-        const preview = renderDetectedCharacters(brandId, topic, payload) || { ids: [], resolvedPrompt: '' };
-        payload.rawPrompt = topic;
-        payload.resolvedPrompt = preview.resolvedPrompt || topic;
+        const promptSeed = getScenarioPromptSeed(payload);
+        const preview = renderDetectedCharacters(brandId, promptSeed, payload) || { ids: [], resolvedPrompt: '' };
+        payload.rawPrompt = promptSeed;
+        payload.resolvedPrompt = preview.resolvedPrompt || promptSeed;
         payload.resolvedCharacterIds = preview.ids || [];
         payload.characterRegistryVersion = (NK.service && NK.service.characterRegistry && NK.service.characterRegistry.VERSION) ? NK.service.characterRegistry.VERSION : '0';
       } catch (_) { }
-      const topicLength = String(payload?.topic || '').length;
+      const topicLength = String(getScenarioNarrativeText(payload) || '').length;
       const isLongInput = topicLength >= 2800;
       setScenarioLoading(true, isLongInput ? '긴 입력을 파트별로 분석하는 중...' : '시나리오 생성 중...');
       try {
@@ -1569,6 +1656,7 @@
         if (res?.scenes) {
           const normalized = normalizeScenes(res.scenes);
           draft = draft || { id: Date.now(), title: payload.topic || '새 프로젝트' };
+          draft.title = payload.topic || draft.title || '새 프로젝트';
           draft.payload = payload;
           draft.scenes = normalized;
           draft.header = sanitizeHeader(res.header || headerText || draft.header || '');
@@ -1635,6 +1723,7 @@
         try {
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
           draft.payload = collectPayload();
+          draft.title = draft.payload.topic || draft.title || '새 프로젝트';
           draft.scenes = mergeSceneSnapshots(draft.scenes || [], collectScenesFromCards());
           if (NK.service?.project?.upsertLocalDraft) {
             draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;

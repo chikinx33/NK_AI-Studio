@@ -1440,6 +1440,27 @@ textarea::-webkit-scrollbar-corner {
   min-width: 0;
 }
 
+.scenario-form .scenario-story-controls {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.scenario-form .scenario-story-controls textarea {
+  flex: 1;
+}
+
+.scenario-form .scenario-story-ai-btn {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  align-self: flex-start;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .scenario-form .scenario-inline-controls select {
   flex: 1 1 52%;
 }

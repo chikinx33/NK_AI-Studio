@@ -1156,6 +1156,11 @@
             if (t[key]) el.setAttribute('placeholder', t[key]);
         });
 
+        document.querySelectorAll('[data-i18n-title]').forEach(function (el) {
+            var key = el.getAttribute('data-i18n-title');
+            if (t[key]) el.setAttribute('title', t[key]);
+        });
+
         try {
             document.documentElement.setAttribute('lang', safeLang);
         } catch (_) { }

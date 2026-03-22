@@ -62,6 +62,34 @@ test('character-disabled scenario prompt suppresses brand character context', ()
   assert.match(prompt, /대표 캐릭터\/주체: \(없음\)/);
 });
 
+test('scenario prompt separates episode topic title from story body', () => {
+  const helpers = loadScenarioHelpers();
+  const prompt = helpers.buildUserPrompt({
+    lang: 'ko',
+    topic: '네모와 세모의 첫 모험',
+    story: '네모와 세모가 숲에서 길을 잃었다가 서로 힘을 합쳐 집으로 돌아오는 이야기',
+    target: '아동',
+    purposeCategory: '스토리 · 서사',
+    purposeTags: '에피소드',
+    needs: '스토리',
+    toneText: '친근',
+    tones: '친근',
+    styleText: '애니메이션(2D)',
+    styles: '애니메이션(2D)',
+    manualDirectives: '',
+    knowledgeHub: helpers.normalizeKnowledgeHubInput({}, { characterGenerationDisabled: true }),
+    aspectRatio: '16:9',
+    duration: '30',
+    characterGenerationDisabled: true,
+    narrationEnabled: true,
+    dubbingEnabled: false,
+    characters: []
+  });
+
+  assert.match(prompt, /주제: 네모와 세모의 첫 모험/);
+  assert.match(prompt, /이야기: 네모와 세모가 숲에서 길을 잃었다가 서로 힘을 합쳐 집으로 돌아오는 이야기/);
+});
+
 test('scenario spec turns learning-play-humor overview into hard signals and blueprint', () => {
   const helpers = loadScenarioHelpers();
   const spec = helpers.buildScenarioSpec({

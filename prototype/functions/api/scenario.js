@@ -583,7 +583,8 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const topic = String(body.topic || "주제 없음").trim();
+    const episodeTitle = String(body.topic || body.episodeTitle || "").trim();
+    const topic = String(body.story || body.topic || "주제 없음").trim();
     const purposeCategory = String(body.purposeCategory || "").trim();
     const purposeTagsArr = Array.isArray(body.purposeTags) ? body.purposeTags.filter(Boolean).map(String) : [];
     const purposeTags = purposeTagsArr.join(", ");
@@ -620,6 +621,8 @@ export async function onRequestPost(context) {
         env,
         lang,
         topic,
+        episodeTitle,
+        story: topic,
         target,
         purposeCategory,
         purposeTags,
@@ -643,6 +646,8 @@ export async function onRequestPost(context) {
     } catch (err) {
       scenes = fallbackScenesV2({
         topic,
+        episodeTitle,
+        story: topic,
         target,
         duration,
         sceneCount,
@@ -739,6 +744,8 @@ No markdown, no extra explanation.`;
 }
 
 function buildUserPrompt(input) {
+  const episodeTitle = String(input.episodeTitle || input.topic || "").trim();
+  const storyText = String(input.story || input.topic || "").trim();
   const chunkGuide = input.chunkGuide ? `\n${input.chunkGuide}` : "";
   const modeInstruction = buildModePrompt(input);
   const specText = formatScenarioSpecForPrompt(input.spec);
@@ -749,7 +756,8 @@ function buildUserPrompt(input) {
       : "캐릭터 모드: 비활성화. 캐릭터, 사람, 마스코트, 이름 있는 화자, 대화 참여자를 새로 만들지 말고 환경, 사물, 움직임 중심으로 구성한다. 음성이 필요하면 내레이터만 사용한다.")
     : "";
   if (input.lang === "en") {
-    return `Topic: ${input.topic}
+    return `Topic: ${episodeTitle || "(not provided)"}
+Story: ${storyText || "(not provided)"}
 Audience: ${input.target || "(not provided)"}
 Purpose category: ${input.purposeCategory || "(not provided)"}
 Purpose tags: ${input.purposeTags || "(none)"}
@@ -784,7 +792,8 @@ Formatting intent example:
 ${modeInstruction}`;
   }
 
-  return `주제: ${input.topic}
+  return `주제: ${episodeTitle || "(미입력)"}
+이야기: ${storyText || "(없음)"}
 시청 타겟: ${input.target || "(미입력)"}
 장르: ${input.purposeCategory || "(미입력)"}
 장르 태그: ${input.purposeTags || "(없음)"}

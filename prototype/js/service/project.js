@@ -29,6 +29,7 @@
     var PROJECT_CORE_LIST_FIELDS = [];
     var EPISODE_TEMPLATE_FIELDS = [
         'topic',
+        'story',
         'purposeCategory',
         'purposeTags',
         'target',

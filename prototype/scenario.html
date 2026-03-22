@@ -56,8 +56,15 @@
             </div>
               <form class="card scenario-form" id="scenario-form">
                 <div class="form-group">
-                  <label data-i18n="scenario_topic">이야기</label>
-                  <textarea name="topic" rows="5" placeholder="예: 모양새 친구들" data-i18n-placeholder="scenario_topic_placeholder" required></textarea>
+                  <label data-i18n="scenario_topic">주제</label>
+                  <input type="text" name="topic" placeholder="예: 네모와 세모의 첫 모험" data-i18n-placeholder="scenario_topic_placeholder" required />
+                </div>
+                <div class="form-group">
+                  <label data-i18n="scenario_story">이야기</label>
+                  <div class="scenario-story-controls">
+                    <textarea name="story" id="scenario-story-input" rows="5" placeholder="원하는 이야기의 흐름, 사건, 감정선을 자유롭게 적어 주세요." data-i18n-placeholder="scenario_story_placeholder" required></textarea>
+                    <button type="button" class="btn-secondary icon-btn scenario-story-ai-btn" data-action="scenario-structure-story" data-i18n-title="scenario_story_ai_title">AI</button>
+                  </div>
                 </div>
               <div class="form-group">
                 <label data-i18n="scenario_genre">장르</label>
