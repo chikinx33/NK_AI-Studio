@@ -1406,8 +1406,8 @@ a.btn-primary:active {
 .scenario-form select:focus,
 .scenario-form textarea:focus {
   outline: none;
-  border-color: color-mix(in srgb, var(--accent) 18%, var(--border) 82%);
-  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.10);
+  border-color: color-mix(in srgb, #ff9a3d 34%, var(--border) 66%);
+  box-shadow: 0 0 0 2px rgba(255, 148, 46, 0.14);
 }
 
 .scenario-form select option {
@@ -1418,13 +1418,6 @@ a.btn-primary:active {
 [data-theme="light"] .scenario-form select option {
   background: #ffffff;
   color: #0f172a;
-}
-
-[data-theme="light"] .scenario-form input:focus,
-[data-theme="light"] .scenario-form select:focus,
-[data-theme="light"] .scenario-form textarea:focus {
-  border-color: color-mix(in srgb, #ffb36b 16%, var(--border) 84%);
-  box-shadow: 0 0 0 2px rgba(255, 164, 92, 0.10);
 }
 
 .scenario-form textarea {
@@ -2314,8 +2307,8 @@ textarea::-webkit-scrollbar-corner {
 .scenario-card .view-lines[contenteditable="true"]:focus,
 .scenario-card .view-shot-lines[contenteditable="true"]:focus,
 .scenario-card .view-dialogue-lines[contenteditable="true"]:focus {
-  border-color: rgba(255, 122, 0, 0.75);
-  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.16);
+  border-color: color-mix(in srgb, #ff9a3d 34%, var(--border) 66%);
+  box-shadow: 0 0 0 2px rgba(255, 148, 46, 0.14);
 }
 
 .scenario-card .dialogue-block {
