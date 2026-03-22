@@ -777,11 +777,11 @@
       '<summary><div><strong>캐릭터 자산</strong><span>브랜드 공용 캐릭터 레코드</span></div><span class="knowledge-hub-disclosure-meta" data-character-count>' + escapeHtml(String(knowledge.characters.length) + '명') + '</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
-      '<div class="brand-publish-summary" style="margin-bottom:10px;">' +
-      '<button class="btn-primary" data-action="knowledge-open-ip-library">' + escapeHtml(getIpLibraryUiText().openLibrary) + '</button>' +
-      '</div>' +
       '<div class="knowledge-hub-field knowledge-character-field"><span>캐릭터</span>' +
+      '<div class="knowledge-character-input-row">' +
       '<input id="knowledge-character-input" class="knowledge-character-input" placeholder="캐릭터 이름 입력 후 Enter (예: @네모 또는 네모)" />' +
+      '<button class="btn-primary knowledge-ip-library-btn" type="button" data-action="knowledge-open-ip-library">' + escapeHtml(getIpLibraryUiText().openLibrary) + '</button>' +
+      '</div>' +
       '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterRows(knowledge.characters) + '</div>' +
       '<p class="knowledge-character-help">@토큰 형식으로 저장되며 캐릭터 자산 목록과 개요에 반영됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '</section>' +

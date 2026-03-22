@@ -7411,6 +7411,14 @@ body.layout-fixed .lib-content {
   align-content: start;
 }
 
+.knowledge-character-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+  gap: 10px;
+  align-items: stretch;
+  width: 100%;
+}
+
 .knowledge-character-input {
   width: 100%;
   min-height: 48px;
@@ -7420,6 +7428,12 @@ body.layout-fixed .lib-content {
   background: var(--panel);
   color: var(--text);
   font: inherit;
+}
+
+.knowledge-ip-library-btn {
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
 }
 
 .knowledge-character-chips {
