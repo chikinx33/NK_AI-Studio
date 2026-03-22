@@ -942,6 +942,130 @@
         window.__nkDialogLocaleWrapped = true;
     }
 
+    function prefersReducedMotion() {
+        try {
+            return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function getDisclosureBody(details) {
+        if (!details || !details.children) return null;
+        for (var i = 0; i < details.children.length; i++) {
+            var child = details.children[i];
+            if (!child || !child.classList) continue;
+            if (child.classList.contains('brand-studio-disclosure-body') || child.classList.contains('knowledge-hub-disclosure-body')) {
+                return child;
+            }
+        }
+        return null;
+    }
+
+    function clearDisclosureMotion(details, body) {
+        if (details && details.__nkDisclosureTimer) {
+            window.clearTimeout(details.__nkDisclosureTimer);
+            details.__nkDisclosureTimer = 0;
+        }
+        if (body && body.style) {
+            body.style.height = '';
+            body.style.overflow = '';
+            body.style.transition = '';
+            body.style.willChange = '';
+        }
+        if (details && details.classList) {
+            details.classList.remove('is-disclosure-animating');
+        }
+        if (details) {
+            details.__nkDisclosureTargetOpen = null;
+        }
+    }
+
+    function finishDisclosureMotion(details, body, expand) {
+        if (!details) return;
+        details.open = !!expand;
+        clearDisclosureMotion(details, body);
+        if (expand) {
+            try {
+                details.dispatchEvent(new CustomEvent('nk-disclosure-opened', { bubbles: true }));
+            } catch (_) { }
+        }
+    }
+
+    function animateDisclosure(details, expand) {
+        if (!details) return;
+        var body = getDisclosureBody(details);
+        if (!body) {
+            details.open = !!expand;
+            return;
+        }
+        if (prefersReducedMotion()) {
+            finishDisclosureMotion(details, body, expand);
+            return;
+        }
+
+        clearDisclosureMotion(details, body);
+        details.__nkDisclosureTargetOpen = !!expand;
+        details.classList.add('is-disclosure-animating');
+
+        var duration = 220;
+        var easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+        if (expand) {
+            var startHeight = details.open ? body.getBoundingClientRect().height : 0;
+            details.open = true;
+            var endHeight = body.scrollHeight;
+            body.style.height = startHeight + 'px';
+            body.style.overflow = 'hidden';
+            body.style.willChange = 'height';
+            body.getBoundingClientRect();
+            body.style.transition = 'height ' + duration + 'ms ' + easing;
+            window.requestAnimationFrame(function () {
+                body.style.height = endHeight + 'px';
+            });
+            details.__nkDisclosureTimer = window.setTimeout(function () {
+                finishDisclosureMotion(details, body, true);
+            }, duration + 40);
+            return;
+        }
+
+        if (!details.open) {
+            finishDisclosureMotion(details, body, false);
+            return;
+        }
+        var currentHeight = body.getBoundingClientRect().height || body.scrollHeight;
+        body.style.height = currentHeight + 'px';
+        body.style.overflow = 'hidden';
+        body.style.willChange = 'height';
+        body.getBoundingClientRect();
+        body.style.transition = 'height ' + duration + 'ms ' + easing;
+        window.requestAnimationFrame(function () {
+            body.style.height = '0px';
+        });
+        details.__nkDisclosureTimer = window.setTimeout(function () {
+            finishDisclosureMotion(details, body, false);
+        }, duration + 40);
+    }
+
+    common.bindDisclosureMotion = function (root) {
+        if (!root || !root.querySelectorAll) return;
+        var disclosures = root.querySelectorAll('.brand-studio-disclosure, .knowledge-hub-disclosure');
+        Array.prototype.forEach.call(disclosures, function (details) {
+            if (!details || details.__nkDisclosureMotionBound) return;
+            var summary = details.querySelector('summary');
+            var body = getDisclosureBody(details);
+            if (!summary || !body) return;
+            details.__nkDisclosureMotionBound = true;
+            summary.addEventListener('click', function (evt) {
+                evt.preventDefault();
+                var currentTarget = typeof details.__nkDisclosureTargetOpen === 'boolean'
+                    ? details.__nkDisclosureTargetOpen
+                    : !!details.open;
+                animateDisclosure(details, !currentTarget);
+            });
+        });
+    };
+
     function translateToEnglish(text) {
         var raw = String(text || '');
         if (!raw) return raw;

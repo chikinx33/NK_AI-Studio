@@ -165,12 +165,18 @@
   }
 
   function bindDisclosureScroll(root) {
+    if (NK.ui && NK.ui.common && typeof NK.ui.common.bindDisclosureMotion === 'function') {
+      NK.ui.common.bindDisclosureMotion(root);
+    }
     var disclosures = root && root.querySelectorAll ? root.querySelectorAll('.knowledge-hub-disclosure') : [];
     Array.prototype.forEach.call(disclosures, function (disclosure) {
-      disclosure.ontoggle = function () {
-        if (!disclosure.open) return;
-        scrollDisclosureIntoView(disclosure);
-      };
+      disclosure.ontoggle = function () {};
+      if (!disclosure.__nkDisclosureOpenedBound) {
+        disclosure.__nkDisclosureOpenedBound = true;
+        disclosure.addEventListener('nk-disclosure-opened', function () {
+          scrollDisclosureIntoView(disclosure);
+        });
+      }
     });
   }
 

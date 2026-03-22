@@ -87,6 +87,9 @@
 
   function bindDisclosureState(root) {
     if (!root) return;
+    if (NK.ui && NK.ui.common && typeof NK.ui.common.bindDisclosureMotion === 'function') {
+      NK.ui.common.bindDisclosureMotion(root);
+    }
     var state = root.__brandStudioDisclosureState && typeof root.__brandStudioDisclosureState === 'object'
       ? root.__brandStudioDisclosureState
       : (root.__brandStudioDisclosureState = {});
@@ -97,9 +100,13 @@
       state[key] = disclosure.open;
       disclosure.ontoggle = function () {
         state[key] = disclosure.open;
-        if (!disclosure.open) return;
-        scrollDisclosureIntoView(disclosure);
       };
+      if (!disclosure.__nkDisclosureOpenedBound) {
+        disclosure.__nkDisclosureOpenedBound = true;
+        disclosure.addEventListener('nk-disclosure-opened', function () {
+          scrollDisclosureIntoView(disclosure);
+        });
+      }
     });
   }
 

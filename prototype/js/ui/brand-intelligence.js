@@ -447,6 +447,9 @@
       activePanelHtml +
       '</section>';
     applyCurrentLocale();
+    if (NK.ui && NK.ui.common && typeof NK.ui.common.bindDisclosureMotion === 'function') {
+      NK.ui.common.bindDisclosureMotion(root);
+    }
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
