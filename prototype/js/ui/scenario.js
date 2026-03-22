@@ -77,7 +77,9 @@
       commonPromptAria: '공통 프롬프트 보기',
       sceneExpand: '씬 펼치기',
       sceneCollapse: '씬 접기',
-      characterDelete: '캐릭터 삭제',
+      characterActive: '활성',
+      characterInactive: '비활성',
+      characterDescriptionEmpty: '설명이 없습니다.',
       commonInfoLabels: {
         topic: '주제',
         genre: '장르',
@@ -125,7 +127,9 @@
       commonPromptAria: 'View common prompt',
       sceneExpand: 'Expand scene',
       sceneCollapse: 'Collapse scene',
-      characterDelete: 'Delete character',
+      characterActive: 'Active',
+      characterInactive: 'Inactive',
+      characterDescriptionEmpty: 'No description provided.',
       commonInfoLabels: {
         topic: 'Topic',
         genre: 'Genre',
@@ -359,7 +363,10 @@
 
   const normalizeCharacterPersonality = (value) => sanitizeText(value).replace(/\s+/g, ' ').trim();
 
-  const normalizeCharacters = (list = []) => {
+  const normalizeCharacters = (list = [], options = {}) => {
+    const defaultActive = Object.prototype.hasOwnProperty.call(options, 'defaultActive')
+      ? !!options.defaultActive
+      : true;
     const seen = new Set();
     const out = [];
     (Array.isArray(list) ? list : []).forEach((c) => {
@@ -373,7 +380,8 @@
         characterId: sanitizeText(c?.characterId || c?.id) || makeCharacterId(),
         displayName,
         token,
-        personality: normalizeCharacterPersonality(c?.personality || c?.description || c?.profile || c?.note || '')
+        personality: normalizeCharacterPersonality(c?.personality || c?.description || c?.profile || c?.note || ''),
+        isActive: boolVal(c?.isActive, defaultActive)
       });
     });
     return out;
@@ -399,13 +407,13 @@
   };
 
   const normalizeKnowledgeCharacters = (list = [], fallbackText = '') => {
-    const normalized = normalizeCharacters(list);
+    const normalized = normalizeCharacters(list, { defaultActive: false });
     if (normalized.length) return normalized;
-    return normalizeCharacters(parseCharacterNoteEntries(fallbackText));
+    return normalizeCharacters(parseCharacterNoteEntries(fallbackText), { defaultActive: false });
   };
 
   const mergeCharacterSources = (explicitList = [], knowledgeList = [], fallbackText = '') => {
-    const explicit = normalizeCharacters(explicitList);
+    const explicit = normalizeCharacters(explicitList, { defaultActive: true });
     const knowledge = normalizeKnowledgeCharacters(knowledgeList, fallbackText);
     if (!explicit.length) return knowledge;
     const knowledgeMap = new Map(knowledge.map((item) => [String(item.token || '').toLowerCase(), item]));
@@ -414,7 +422,8 @@
       if (!matched) return item;
       return Object.assign({}, matched, item, {
         characterId: item.characterId || matched.characterId,
-        personality: normalizeCharacterPersonality(item.personality || matched.personality || '')
+        personality: normalizeCharacterPersonality(item.personality || matched.personality || ''),
+        isActive: boolVal(item.isActive, true)
       });
     });
     const explicitKeys = new Set(merged.map((item) => String(item.token || '').toLowerCase()));
@@ -687,27 +696,25 @@
 
   const hasPresetDuration = (value) => DURATION_OPTIONS.some(item => item.value === String(value || ''));
 
-  const getCharacterEnabled = () => !!document.getElementById('character-enabled')?.checked;
-  const isCharacterGenerationDisabled = (payload = {}) => {
-    if (Object.prototype.hasOwnProperty.call(payload || {}, 'charactersEnabled')) {
-      return !boolVal(payload?.charactersEnabled, true);
-    }
-    return !(Array.isArray(payload?.characters) && payload.characters.length);
-  };
-  const getActiveCharactersForPayload = (payload = {}) => (
-    isCharacterGenerationDisabled(payload) ? [] : normalizeCharacters(currentCharacters)
+  const getSelectedCharacters = (list = currentCharacters) => (
+    normalizeCharacters(list, { defaultActive: false }).filter((character) => character.isActive)
   );
 
-  const syncCharacterUi = () => {
-    const enabled = getCharacterEnabled();
-    const input = document.getElementById('character-input');
-    const chips = document.getElementById('character-chips');
-    if (input) input.disabled = !enabled;
-    if (chips) chips.classList.toggle('is-disabled', !enabled);
-    document.querySelectorAll('.scenario-character-personality').forEach((field) => {
-      field.disabled = !enabled;
-    });
+  const isCharacterGenerationDisabled = (payload = {}) => {
+    if (Array.isArray(payload?.characters)) {
+      return !normalizeCharacters(payload.characters, { defaultActive: true }).some((character) => character.isActive);
+    }
+    return !getSelectedCharacters(currentCharacters).length;
   };
+  const getActiveCharactersForPayload = (payload = {}) => (
+    isCharacterGenerationDisabled(payload)
+      ? []
+      : (Array.isArray(payload?.characters) && payload.characters.length
+        ? normalizeCharacters(payload.characters, { defaultActive: true }).filter((character) => character.isActive)
+        : getSelectedCharacters(currentCharacters))
+  );
+
+  const syncCharacterUi = () => {};
 
   const syncCharacterPanel = (collapsed) => {
     const characterGroup = document.querySelector('.scenario-character-group');
@@ -746,8 +753,7 @@
     tone: document.getElementById('tone-select')?.value || '',
     style: document.getElementById('style-select')?.value || '',
     durationPreset: document.getElementById('duration-select')?.value || '',
-    durationCustom: document.getElementById('duration-custom-input')?.value || '',
-    charactersEnabled: getCharacterEnabled()
+    durationCustom: document.getElementById('duration-custom-input')?.value || ''
   });
 
   const syncDurationInputs = (source = '') => {
@@ -807,11 +813,12 @@
     payload.durationCustom = hasCustomDuration ? payload.duration : '';
     payload.aspectRatio = document.querySelector('.ratio-btn.active')?.dataset.ratio || '16:9';
     if (form.target) payload.target = form.target.value;
-    payload.charactersEnabled = getCharacterEnabled();
-    const normalizedCharacters = normalizeCharacters(currentCharacters);
+    const normalizedCharacters = normalizeCharacters(currentCharacters, { defaultActive: false });
     currentCharacters = normalizedCharacters;
     syncCharacterSeq(currentCharacters);
-    payload.characters = (payload.charactersEnabled ? normalizedCharacters : []).map((c) => ({
+    const selectedCharacters = normalizedCharacters.filter((character) => character.isActive);
+    payload.charactersEnabled = selectedCharacters.length > 0;
+    payload.characters = selectedCharacters.map((c) => ({
       characterId: c.characterId,
       displayName: c.displayName,
       token: c.token,
@@ -819,7 +826,7 @@
     }));
     payload.narrationEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active');
     payload.dubbingEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active');
-    if (payload.charactersEnabled) {
+    if (selectedCharacters.length) {
       const matchedTokens = payload.characters
         .filter(c => String(payload.topic || '').includes(c.displayName))
         .map(c => c.token);
@@ -1094,28 +1101,27 @@
 
   const renderCharacterChips = () => {
     const box = document.getElementById('character-chips');
-    const list = normalizeCharacters(currentCharacters);
+    const list = normalizeCharacters(currentCharacters, { defaultActive: false });
+    const uiText = getScenarioUiText();
     currentCharacters = list;
     syncCharacterSeq(list);
     if (!list.length) {
       if (box) box.innerHTML = `<p class="scenario-character-empty">${escapeHtml(getScenarioText('scenario_character_empty', '등록된 캐릭터가 없습니다.'))}</p>`;
       return;
     }
-    const placeholder = escapeHtml(getScenarioText('scenario_character_trait_placeholder', '성격 입력(선택)'));
     if (box) {
       box.innerHTML = list.map((c) => `
-      <label class="scenario-character-row" data-character-id="${c.characterId}">
-        <span class="character-chip">
-          <span class="chip-token">${escapeHtml(c.token)}</span>
-          <button type="button" class="chip-remove" data-remove-character="${c.characterId}" aria-label="${escapeHtml(getScenarioUiText().characterDelete)}">×</button>
-        </span>
-        <input
-          type="text"
-          class="scenario-character-personality"
-          data-character-personality="${c.characterId}"
-          value="${escapeHtml(c.personality || '')}"
-          placeholder="${placeholder}" />
-      </label>
+      <div class="scenario-character-row" data-character-id="${c.characterId}">
+        <div class="scenario-character-meta">
+          <strong class="scenario-character-name">${escapeHtml(c.displayName)}</strong>
+          <p class="scenario-character-description">${escapeHtml(c.personality || uiText.characterDescriptionEmpty)}</p>
+        </div>
+        <button
+          type="button"
+          class="btn-secondary compact scenario-character-state${c.isActive ? ' is-active' : ''}"
+          data-toggle-character="${c.characterId}"
+          aria-pressed="${c.isActive ? 'true' : 'false'}">${escapeHtml(c.isActive ? uiText.characterActive : uiText.characterInactive)}</button>
+      </div>
     `).join('');
     }
   };
@@ -1236,11 +1242,15 @@
     const rawHeader = draft.header || p.header || '';
     const header = sanitizeHeader(rawHeader);
     const flags = getScenarioFlags(p || {});
-    const explicitCharacters = normalizeCharacters(p.characters || draft.characters || []);
+    const explicitCharacters = normalizeCharacters(p.characters || draft.characters || [], { defaultActive: true });
     const knowledgeCharacters = readKnowledgeHub(p || {}).characters || [];
     currentCharacters = mergeCharacterSources(explicitCharacters, knowledgeCharacters, p.brandCharacter || '');
     syncCharacterSeq(currentCharacters);
-    currentPayload = Object.assign({}, p || {}, flags, { characters: currentCharacters, header });
+    currentPayload = Object.assign({}, p || {}, flags, {
+      characters: getSelectedCharacters(currentCharacters),
+      charactersEnabled: getSelectedCharacters(currentCharacters).length > 0,
+      header
+    });
     const defaults = NK.config.DEFAULTS || {};
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
     const defaultCat = p.purposeCategory || categories[0] || '';
@@ -1253,11 +1263,6 @@
     const selectedDurationCustom = p.durationMode === 'custom'
       ? String(p.durationCustom || durationValue || '')
       : (hasPresetDuration(durationValue) ? '' : durationValue);
-    const hasExplicitCharacterToggle = Object.prototype.hasOwnProperty.call(p || {}, 'charactersEnabled');
-    const charactersEnabled = hasExplicitCharacterToggle
-      ? boolVal(p.charactersEnabled, false)
-      : currentCharacters.length > 0;
-
     if (form.topic) form.topic.value = p.topic || draft.title || '';
     renderOverviewSelects({
       purposeCategory: defaultCat,
@@ -1267,13 +1272,10 @@
       tone: selectedTone,
       style: selectedStyle,
       durationPreset: selectedDurationPreset || defaults.DURATION || '15',
-      durationCustom: selectedDurationCustom,
-      charactersEnabled
+      durationCustom: selectedDurationCustom
     });
     const customDurationInput = document.getElementById('duration-custom-input');
     if (customDurationInput) customDurationInput.value = selectedDurationCustom;
-    const characterEnabledInput = document.getElementById('character-enabled');
-    if (characterEnabledInput) characterEnabledInput.checked = charactersEnabled;
     // toggles
     setActiveButtons('.ratio-btn', p.aspectRatio || '16:9');
     setScenarioToggleButtons(flags);
@@ -1281,8 +1283,6 @@
     syncCharacterUi();
     syncCharacterPanel(true);
     syncDurationInputs(selectedDurationCustom ? 'custom' : 'preset');
-    const characterInput = document.getElementById('character-input');
-    if (characterInput) characterInput.value = '';
     renderKnowledgeHint(currentPayload);
 
     scenario.renderScenes(draft.scenes || []);
@@ -1392,47 +1392,12 @@
     loadDraft(draft);
     if (!draft) {
       currentCharacters = [];
-      const characterEnabledInput = document.getElementById('character-enabled');
-      if (characterEnabledInput) characterEnabledInput.checked = false;
       currentPayload = Object.assign({}, currentPayload || {}, DEFAULT_SCENARIO_FLAGS, { characters: [], charactersEnabled: false });
       setScenarioToggleButtons(DEFAULT_SCENARIO_FLAGS);
       renderCharacterChips();
       syncCharacterUi();
       syncCharacterPanel(true);
       renderKnowledgeHint(currentPayload);
-    }
-
-    const addCharacter = (name) => {
-      if (!getCharacterEnabled()) return false;
-      const displayName = normalizeCharacterName(name);
-      if (!displayName) return false;
-      const token = `@${displayName}`;
-      const exists = currentCharacters.some(c => String(c.token || '').toLowerCase() === token.toLowerCase());
-      if (exists) return false;
-      currentCharacters.push({
-        characterId: makeCharacterId(),
-        displayName,
-        token,
-        personality: ''
-      });
-      renderCharacterChips();
-      syncCharacterUi();
-      syncCharacterPanel(false);
-      return true;
-    };
-
-    const characterInput = document.getElementById('character-input');
-    if (characterInput) {
-      characterInput.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        const ok = addCharacter(characterInput.value || '');
-        if (ok) {
-          characterInput.value = '';
-          currentPayload = Object.assign({}, currentPayload || {}, collectPayload());
-          renderKnowledgeHint(currentPayload);
-        }
-      });
     }
 
     const syncOverviewPayload = () => {
@@ -1451,7 +1416,7 @@
         currentPayload = Object.assign({}, currentPayload || {}, {
           narrationEnabled: !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active'),
           dubbingEnabled: !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active'),
-          characters: currentCharacters
+          characters: getSelectedCharacters(currentCharacters)
         });
       }
       syncOverviewPayload();
@@ -1467,8 +1432,6 @@
         }));
       } else if (target.id === 'duration-select') {
         syncDurationInputs('preset');
-      } else if (target.id === 'character-enabled') {
-        syncCharacterUi();
       }
       syncOverviewPayload();
     });
@@ -1479,23 +1442,19 @@
       if (target.id === 'duration-custom-input') {
         syncDurationInputs('custom');
         syncOverviewPayload();
-      } else if (target.matches('[data-character-personality]')) {
-        const characterId = String(target.getAttribute('data-character-personality') || '').trim();
-        currentCharacters = normalizeCharacters(currentCharacters).map((character) => (
-          String(character.characterId) === characterId
-            ? Object.assign({}, character, { personality: normalizeCharacterPersonality(target.value || '') })
-            : character
-        ));
-        syncOverviewPayload();
       }
     });
 
     form.addEventListener('click', (e) => {
-      const removeBtn = e.target.closest('[data-remove-character]');
-      if (!removeBtn) return;
-      const removeId = removeBtn.dataset.removeCharacter;
-      if (!removeId) return;
-      currentCharacters = currentCharacters.filter(c => String(c.characterId) !== String(removeId));
+      const toggleBtn = e.target.closest('[data-toggle-character]');
+      if (!toggleBtn) return;
+      const toggleId = String(toggleBtn.dataset.toggleCharacter || '').trim();
+      if (!toggleId) return;
+      currentCharacters = normalizeCharacters(currentCharacters, { defaultActive: false }).map((character) => (
+        String(character.characterId) === toggleId
+          ? Object.assign({}, character, { isActive: !character.isActive })
+          : character
+      ));
       renderCharacterChips();
       syncCharacterUi();
       syncOverviewPayload();
@@ -1601,17 +1560,15 @@
 
     form.addEventListener('reset', () => {
       setTimeout(() => {
-        currentCharacters = [];
+        const knowledge = readKnowledgeHub(currentPayload || {});
+        currentCharacters = normalizeKnowledgeCharacters(knowledge.characters || [], knowledge.brandCharacter || '');
         renderOverviewSelects({
           purposeCategory: categories[0] || '',
           target: TARGET_OPTIONS[0]?.value || '',
-          durationPreset: NK.config.DEFAULTS?.DURATION || '15',
-          charactersEnabled: false
+          durationPreset: NK.config.DEFAULTS?.DURATION || '15'
         });
         const durationCustomInput = document.getElementById('duration-custom-input');
         if (durationCustomInput) durationCustomInput.value = '';
-        const characterEnabledInput = document.getElementById('character-enabled');
-        if (characterEnabledInput) characterEnabledInput.checked = false;
         renderCharacterChips();
         syncDurationInputs();
         syncCharacterUi();

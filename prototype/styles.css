@@ -1448,29 +1448,6 @@ textarea::-webkit-scrollbar-corner {
   flex: 1 1 48%;
 }
 
-.scenario-form .scenario-check-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  min-height: 44px;
-  align-self: flex-start;
-}
-
-.scenario-form .scenario-check-label input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  flex: 0 0 auto;
-  accent-color: #ff7a00;
-  margin: 0;
-}
-
-.scenario-form .scenario-check-label span {
-  color: inherit;
-  font: inherit;
-}
-
 .scenario-label-spacer {
   min-width: 100px;
   flex-shrink: 0;
@@ -1499,24 +1476,8 @@ textarea::-webkit-scrollbar-corner {
   display: none;
 }
 
-.scenario-character-head .scenario-check-label {
-  min-width: 0;
-  width: auto;
-  flex: 1 1 auto;
-}
-
 .scenario-character-head .scenario-circle-toggle {
   flex: 0 0 auto;
-}
-
-.scenario-form .scenario-character-input-row {
-  min-width: 0;
-  width: 100%;
-}
-
-.scenario-form .scenario-character-group .scenario-check-label {
-  min-height: 38px;
-  align-self: flex-start;
 }
 
 .scenario-form .scenario-character-group .character-chips {
@@ -1525,19 +1486,6 @@ textarea::-webkit-scrollbar-corner {
   width: 100%;
   min-width: 0;
   justify-content: stretch;
-}
-
-.scenario-form .scenario-character-group #character-input {
-  min-height: 38px;
-  padding-top: 6px;
-  padding-bottom: 6px;
-}
-
-.scenario-form #character-input:disabled,
-.scenario-form .scenario-character-personality:disabled,
-.scenario-form .character-chips.is-disabled {
-  opacity: 0.5;
-  pointer-events: none;
 }
 
 .inline {
@@ -1583,70 +1531,50 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-form .scenario-character-row {
   display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-  justify-items: start;
-  width: 100%;
-}
-
-.scenario-character-token,
-.character-chip {
-  display: inline-flex;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
   align-items: center;
-  gap: 6px;
-  min-height: 36px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--layer-soft);
-  color: var(--text);
-  font-size: 12px;
-  white-space: nowrap;
-  justify-self: start;
-}
-
-.character-chip .chip-remove {
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-}
-
-.character-chip .chip-remove:hover {
-  color: var(--text);
-  border-color: rgba(255, 122, 0, 0.55);
-}
-
-.scenario-character-personality,
-.knowledge-character-personality {
   width: 100%;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: #1e3a8a;
-  font: inherit;
-  font-weight: 400;
-  justify-self: stretch;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--border) 82%, rgba(255, 255, 255, 0.1) 18%);
+  background: color-mix(in srgb, var(--panel) 84%, rgba(255, 255, 255, 0.03) 16%);
 }
 
-.scenario-character-personality::placeholder,
-.knowledge-character-personality::placeholder {
+.scenario-character-meta {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.scenario-character-name {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text);
+}
+
+.scenario-character-description {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
   color: var(--muted);
+}
+
+.scenario-character-state {
+  min-width: 72px;
+  justify-content: center;
+}
+
+.scenario-character-state.is-active {
+  border-color: rgba(255, 140, 0, 0.6);
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.16), rgba(255, 140, 0, 0.08));
+  color: #ffd39a;
 }
 
 [data-theme="dark"] .knowledge-character-personality {
   color: #93c5fd;
 }
 
-[data-theme="light"] .scenario-character-personality,
 [data-theme="light"] .knowledge-character-personality {
   background: #ffffff;
   border-color: rgba(115, 147, 196, 0.3);
@@ -7461,11 +7389,6 @@ body.layout-fixed .lib-content {
 @media (max-width: 980px) {
   .scenario-character-head {
     align-items: flex-start;
-  }
-
-  .scenario-form .scenario-character-group .scenario-check-label {
-    min-width: 0;
-    width: 100%;
   }
 }
 
