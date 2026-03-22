@@ -1490,11 +1490,13 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .scenario-form .character-chips {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   min-height: 38px;
   padding: 0;
   width: 100%;
+  align-items: center;
 }
 
 .scenario-character-empty {
@@ -1509,46 +1511,9 @@ textarea::-webkit-scrollbar-corner {
   line-height: 1.4;
 }
 
-.scenario-form .scenario-character-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--border) 82%, rgba(255, 255, 255, 0.1) 18%);
-  background: color-mix(in srgb, var(--panel) 84%, rgba(255, 255, 255, 0.03) 16%);
-}
-
-.scenario-character-meta {
-  min-width: 0;
-  display: grid;
-  gap: 4px;
-}
-
-.scenario-character-name {
-  font-size: 14px;
-  line-height: 1.35;
-  color: var(--text);
-}
-
-.scenario-character-description {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--muted);
-}
-
-.scenario-character-state {
+.scenario-character-toggle {
   min-width: 72px;
   justify-content: center;
-}
-
-.scenario-character-state.is-active {
-  border-color: rgba(255, 140, 0, 0.6);
-  background: linear-gradient(135deg, rgba(255, 140, 0, 0.16), rgba(255, 140, 0, 0.08));
-  color: #ffd39a;
 }
 
 [data-theme="dark"] .knowledge-character-personality {

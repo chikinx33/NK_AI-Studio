@@ -76,9 +76,6 @@
       commonPromptAria: '공통 프롬프트 보기',
       sceneExpand: '씬 펼치기',
       sceneCollapse: '씬 접기',
-      characterActive: '활성',
-      characterInactive: '비활성',
-      characterDescriptionEmpty: '설명이 없습니다.',
       commonInfoLabels: {
         topic: '주제',
         genre: '장르',
@@ -126,9 +123,6 @@
       commonPromptAria: 'View common prompt',
       sceneExpand: 'Expand scene',
       sceneCollapse: 'Collapse scene',
-      characterActive: 'Active',
-      characterInactive: 'Inactive',
-      characterDescriptionEmpty: 'No description provided.',
       commonInfoLabels: {
         topic: 'Topic',
         genre: 'Genre',
@@ -1088,7 +1082,6 @@
   const renderCharacterChips = () => {
     const box = document.getElementById('character-chips');
     const list = normalizeCharacters(currentCharacters, { defaultActive: false });
-    const uiText = getScenarioUiText();
     currentCharacters = list;
     syncCharacterSeq(list);
     if (!list.length) {
@@ -1097,17 +1090,11 @@
     }
     if (box) {
       box.innerHTML = list.map((c) => `
-      <div class="scenario-character-row" data-character-id="${c.characterId}">
-        <div class="scenario-character-meta">
-          <strong class="scenario-character-name">${escapeHtml(c.displayName)}</strong>
-          <p class="scenario-character-description">${escapeHtml(c.personality || uiText.characterDescriptionEmpty)}</p>
-        </div>
-        <button
-          type="button"
-          class="btn-secondary compact scenario-character-state${c.isActive ? ' is-active' : ''}"
-          data-toggle-character="${c.characterId}"
-          aria-pressed="${c.isActive ? 'true' : 'false'}">${escapeHtml(c.isActive ? uiText.characterActive : uiText.characterInactive)}</button>
-      </div>
+      <button
+        type="button"
+        class="scenario-flag-toggle scenario-character-toggle${c.isActive ? ' active' : ''}"
+        data-toggle-character="${c.characterId}"
+        aria-pressed="${c.isActive ? 'true' : 'false'}">${escapeHtml(c.displayName)}</button>
     `).join('');
     }
   };
