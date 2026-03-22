@@ -2082,6 +2082,17 @@
       });
     }
 
+    const aiImageLink = document.querySelector('#login-icons .login-icon-link[href="ai-image.html"]');
+    if (aiImageLink) {
+      aiImageLink.addEventListener('click', () => {
+        try {
+          if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
+            NK.ui.common.markFullscreenRestore();
+          }
+        } catch (_) { }
+      });
+    }
+
     const handleEnter = (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();

@@ -1,4 +1,5 @@
 export const AI_VIDEO_SERVICE = "ai-video";
+export const AI_IMAGE_SERVICE = "ai-image";
 export const DEFAULT_OWNER_USER_ID = "owner";
 export const USERDATA_FOLDER = "userdata";
 
@@ -32,6 +33,10 @@ export function buildAiVideoUserRoot(basePrefix: string, userId: string): string
   return `${buildUserRoot(basePrefix, userId)}/${AI_VIDEO_SERVICE}`;
 }
 
+export function buildAiImageUserRoot(basePrefix: string, userId: string): string {
+  return `${buildUserRoot(basePrefix, userId)}/${AI_IMAGE_SERVICE}`;
+}
+
 export function buildAiVideoProjectPrefix(basePrefix: string, userId: string, projectId: string): string {
   const root = buildAiVideoUserRoot(basePrefix, userId);
   return `${root}/projects${String(projectId || "").trim()}`;
@@ -41,6 +46,12 @@ export function buildAiVideoBrandPrefix(basePrefix: string, userId: string, bran
   const root = buildAiVideoUserRoot(basePrefix, userId);
   const safeBrandId = String(brandId || "").trim().replace(/[^a-zA-Z0-9._-]+/g, "_") || "brand";
   return `${root}/brands/${safeBrandId}`;
+}
+
+export function buildAiImageSessionPrefix(basePrefix: string, userId: string, sessionId: string): string {
+  const root = buildAiImageUserRoot(basePrefix, userId);
+  const safeSessionId = String(sessionId || "").trim().replace(/[^a-zA-Z0-9._-]+/g, "_") || "session";
+  return `${root}/sessions/${safeSessionId}`;
 }
 
 export function buildUserDataRoot(basePrefix: string, userId: string): string {

@@ -1,5 +1,5 @@
 // prototype/functions/api/imagen.ts
-import { buildAiVideoProjectPrefix } from "./_shared/storage";
+import { buildAiImageSessionPrefix, buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -17,6 +17,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const allowed = new Set(["16:9", "9:16", "1:1"]);
     const aspectFinal = allowed.has(aspectIncoming) ? aspectIncoming : "16:9";
     const incomingReferenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages : [];
+    const storageService = normalizeStorageService(body?.storageService || body?.service);
+    const generationMode = normalizeGenerationMode(body?.generationMode || body?.mode, incomingReferenceImages.length > 0);
+    const sessionId = String(body?.sessionId || body?.session || "default").trim();
 
     if (!prompt) {
       return json({ error: "prompt is required" }, 400);
@@ -45,7 +48,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       items: incomingReferenceImages,
       accessToken,
     });
-    const finalPrompt = buildGeminiImagePrompt(prompt, referenceImages);
+    const finalPrompt = buildGeminiImagePrompt(prompt, referenceImages, generationMode);
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
     const geminiRes = await fetch(generateUrl, {
@@ -90,9 +93,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     let objectName = "";
     if (outParsed) {
       const basePrefix = outParsed.object.replace(/\/$/, "");
-      const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projTag);
       const stamp = Date.now();
-      objectName = `${projectPrefix}/image/${stamp}-${crypto.randomUUID()}.png`;
+      if (storageService === "ai-image") {
+        const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId || "default");
+        objectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}.png`;
+      } else {
+        const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projTag);
+        objectName = `${projectPrefix}/image/${stamp}-${crypto.randomUUID()}.png`;
+      }
       const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
       const bytes = base64ToUint8(bytesBase64Encoded);
       const upRes = await fetch(uploadUrl, {
@@ -123,6 +131,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
+      storageService,
+      generationMode,
+      sessionId: sessionId || "default",
     });
   } catch (e: any) {
     return json({ error: e?.message ?? "Unknown error" }, 500);
@@ -179,9 +190,17 @@ function normalizePrompt(prompt: string) {
     .trim();
 }
 
-function buildGeminiImagePrompt(prompt: string, referenceImages: NormalizedReferenceImage[]) {
+function buildGeminiImagePrompt(prompt: string, referenceImages: NormalizedReferenceImage[], generationMode: "text-to-image" | "image-to-image") {
   const base = normalizePrompt(prompt);
   if (!referenceImages.length) return base;
+  if (generationMode === "image-to-image") {
+    return [
+      base,
+      "Use the uploaded source image as the base reference.",
+      "Preserve the important structure, composition, and recognizable subject identity unless the prompt explicitly requests changes.",
+      "Apply only the requested edits or stylistic transformations."
+    ].filter(Boolean).join("\n");
+  }
   const grouped = new Map<number, NormalizedReferenceImage>();
   referenceImages.forEach((item) => {
     const key = Number(item.referenceId || 1) || 1;
@@ -195,6 +214,18 @@ function buildGeminiImagePrompt(prompt: string, referenceImages: NormalizedRefer
     base,
     "The uploaded reference images define the official registered character design.",
   ].concat(consistencyLines).filter(Boolean).join("\n");
+}
+
+function normalizeStorageService(value: unknown) {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "ai-image" ? "ai-image" : "ai-video";
+}
+
+function normalizeGenerationMode(value: unknown, hasReferences: boolean): "text-to-image" | "image-to-image" {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "image-to-image" || raw === "img2img") return "image-to-image";
+  if (raw === "text-to-image" || raw === "txt2img") return "text-to-image";
+  return hasReferences ? "image-to-image" : "text-to-image";
 }
 
 type NormalizedReferenceImage = {
