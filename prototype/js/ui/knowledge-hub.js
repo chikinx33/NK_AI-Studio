@@ -81,6 +81,52 @@
       };
   }
 
+  function getIpLibraryUiText() {
+    return getRuntimeLang() === 'en'
+      ? {
+        title: 'IP Library',
+        description: 'Register character base sheet images so they can be used as consistent IP resources anywhere.',
+        openLibrary: 'IP Library',
+        count: 'Sheets',
+        countSuffix: '',
+        upload: 'Upload Sheets',
+        save: 'Save',
+        close: 'Close',
+        empty: 'Add characters to Character Assets first, then manage IP sheets for each character here.',
+        preview: 'View original image',
+        previewAlt: 'Original image',
+        sheetAltSuffix: ' sheet',
+        setPrimary: 'Set as primary sheet',
+        deleteSheet: 'Delete sheet',
+        saveFail: 'Failed to save IP Library: ',
+        uploadFail: 'Failed to upload sheets: ',
+        uploadLimitReached: 'You can register up to 4 sheets per character.',
+        uploadLimitPartial: 'You can register up to 4 sheets per character, so only the first ',
+        uploadLimitPartialSuffix: ' image(s) will be added.'
+      }
+      : {
+        title: 'IP 라이브러리',
+        description: '캐릭터별 기준 시트 이미지를 등록해 어디서든 일관된 IP 리소스로 사용할 수 있도록 관리합니다.',
+        openLibrary: 'IP 라이브러리',
+        count: '등록 시트',
+        countSuffix: '개',
+        upload: '시트 업로드',
+        save: '저장',
+        close: '닫기',
+        empty: '먼저 캐릭터 자산에 캐릭터를 등록하면 여기서 캐릭터별 IP 시트를 관리할 수 있습니다.',
+        preview: '원본 이미지 보기',
+        previewAlt: '원본 이미지',
+        sheetAltSuffix: ' 시트',
+        setPrimary: '대표 시트 지정',
+        deleteSheet: '시트 삭제',
+        saveFail: 'IP 라이브러리 저장 실패: ',
+        uploadFail: '시트 업로드 실패: ',
+        uploadLimitReached: '시트는 캐릭터당 최대 4장까지 등록할 수 있습니다.',
+        uploadLimitPartial: '시트는 캐릭터당 최대 4장까지 등록할 수 있어 앞의 ',
+        uploadLimitPartialSuffix: '장만 추가합니다.'
+      };
+  }
+
   function getPageScrollContainer(node) {
     var current = node;
     while (current) {
@@ -736,7 +782,7 @@
       '<div id="knowledge-character-chips" class="knowledge-character-chips">' + renderCharacterRows(knowledge.characters) + '</div>' +
       '<p class="knowledge-character-help">@토큰 형식으로 저장되며 캐릭터 자산 목록과 개요에 반영됩니다. ' + escapeHtml(characterUiText.detailHelp) + '</p></div>' +
       '<div class="brand-publish-summary" style="margin-top:10px;">' +
-      '<button class="btn-primary" data-action="knowledge-open-ip-library">IP 라이브러리</button>' +
+      '<button class="btn-primary" data-action="knowledge-open-ip-library">' + escapeHtml(getIpLibraryUiText().openLibrary) + '</button>' +
       '</div>' +
       '</section>' +
       '</div>' +
@@ -879,6 +925,7 @@
       var modal = document.getElementById('character-manager-modal');
       var box = document.getElementById('character-manager-modal-content');
       if (!modal || !box) return;
+      var ipLibraryUiText = getIpLibraryUiText();
       if (!modalCharacterSheetDraft) {
         modalCharacterSheetDraft = cloneCharacterSheetDraft(ensureCharacterSheetDraft());
       }
@@ -931,11 +978,11 @@
             }
             slotCards.push(
               '<article class="character-sheet-slot is-filled' + (sheet.isPrimary ? ' is-primary' : '') + '" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '">' +
-              '<button type="button" class="character-sheet-thumb-button" data-action="character-sheet-preview" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 원본 이미지 보기') + '">' +
-              '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(displayName + ' 시트') + '" />' +
+              '<button type="button" class="character-sheet-thumb-button" data-action="character-sheet-preview" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' ' + ipLibraryUiText.preview) + '">' +
+              '<img class="character-sheet-thumb" src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(displayName + ipLibraryUiText.sheetAltSuffix) + '" />' +
               '</button>' +
-              '<button type="button" class="character-sheet-overlay-btn is-primary' + (sheet.isPrimary ? ' is-active' : '') + '" data-action="character-sheet-set-primary" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 대표 시트 지정') + '">V</button>' +
-              '<button type="button" class="character-sheet-overlay-btn is-delete" data-action="character-sheet-delete" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' 시트 삭제') + '">X</button>' +
+              '<button type="button" class="character-sheet-overlay-btn is-primary' + (sheet.isPrimary ? ' is-active' : '') + '" data-action="character-sheet-set-primary" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' ' + ipLibraryUiText.setPrimary) + '">V</button>' +
+              '<button type="button" class="character-sheet-overlay-btn is-delete" data-action="character-sheet-delete" data-character-token="' + escapeHtml(entry.token) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(displayName + ' ' + ipLibraryUiText.deleteSheet) + '">X</button>' +
               '</article>'
             );
           }
@@ -945,23 +992,23 @@
             '<div class="character-manager-card-name"><strong>' + escapeHtml(displayName) + '</strong></div>' +
             '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
             '<div class="character-manager-card-side">' +
-            '<span class="character-sheet-count">등록 시트 ' + escapeHtml(String(sheetItems.length)) + '/4개</span>' +
+            '<span class="character-sheet-count">' + escapeHtml(ipLibraryUiText.count) + ' ' + escapeHtml(String(sheetItems.length)) + '/4' + escapeHtml(ipLibraryUiText.countSuffix) + '</span>' +
             '<label class="character-sheet-upload btn-secondary compact">' +
             '<input type="file" accept="image/*" multiple data-action="character-sheet-upload" data-character-token="' + escapeHtml(entry.token) + '" />' +
-            '시트 업로드' +
+            escapeHtml(ipLibraryUiText.upload) +
             '</label>' +
             '</div>' +
             '</div>' +
             '</section>'
           );
         }).join('')
-        : '<div class="character-manager-empty">먼저 캐릭터 자산에 캐릭터를 등록하면 여기서 캐릭터별 IP 시트를 관리할 수 있습니다.</div>';
+        : '<div class="character-manager-empty">' + escapeHtml(ipLibraryUiText.empty) + '</div>';
 
       var previewHtml = modalPreviewImageUrl
         ? (
           '<div class="character-sheet-preview-overlay" data-action="character-sheet-preview-close">' +
           '<div class="character-sheet-preview-surface">' +
-          '<img class="character-sheet-preview-image" src="' + escapeHtml(modalPreviewImageUrl) + '" alt="' + escapeHtml(modalPreviewImageAlt || '원본 이미지') + '" />' +
+          '<img class="character-sheet-preview-image" src="' + escapeHtml(modalPreviewImageUrl) + '" alt="' + escapeHtml(modalPreviewImageAlt || ipLibraryUiText.previewAlt) + '" />' +
           '</div>' +
           '</div>'
         )
@@ -969,10 +1016,10 @@
 
       box.innerHTML =
         '<div class="character-manager-head">' +
-        '<div><h3>IP 라이브러리</h3><p>캐릭터별 기준 시트 이미지를 등록해 어디서든 일관된 IP 리소스로 사용할 수 있도록 관리합니다.</p></div>' +
+        '<div><h3>' + escapeHtml(ipLibraryUiText.title) + '</h3><p>' + escapeHtml(ipLibraryUiText.description) + '</p></div>' +
         '<div class="character-manager-head-actions">' +
-        '<button type="button" class="btn-primary" data-action="character-manager-save"' + (modalSaveInFlight ? ' disabled' : '') + '>저장</button>' +
-        '<button type="button" class="btn-secondary" data-action="character-manager-close"' + (modalSaveInFlight ? ' disabled' : '') + '>닫기</button>' +
+        '<button type="button" class="btn-primary" data-action="character-manager-save"' + (modalSaveInFlight ? ' disabled' : '') + '>' + escapeHtml(ipLibraryUiText.save) + '</button>' +
+        '<button type="button" class="btn-secondary" data-action="character-manager-close"' + (modalSaveInFlight ? ' disabled' : '') + '>' + escapeHtml(ipLibraryUiText.close) + '</button>' +
         '</div>' +
         '</div>' +
         '<div class="character-manager-grid">' + cardsHtml + '</div>' +
@@ -999,7 +1046,7 @@
           var previewTarget = findModalCharacterSheetItem(previewToken, previewSheetId);
           if (!previewTarget || !previewTarget.sheet) return;
           modalPreviewImageUrl = resolveSheetPreviewUrl(previewTarget.sheet.imageDataUrl);
-          modalPreviewImageAlt = (normalizeCharacterName(previewTarget.entry && (previewTarget.entry.displayName || previewTarget.entry.token) || previewToken || '') || String(previewToken || '').replace(/^@/, '')) + ' 원본 이미지';
+          modalPreviewImageAlt = (normalizeCharacterName(previewTarget.entry && (previewTarget.entry.displayName || previewTarget.entry.token) || previewToken || '') || String(previewToken || '').replace(/^@/, '')) + ' ' + ipLibraryUiText.previewAlt;
           renderCharacterManagerModal();
           return;
         }
@@ -1043,7 +1090,7 @@
               }
             })
             .catch(function (err) {
-              alert('IP 라이브러리 저장 실패: ' + (err && err.message ? err.message : err));
+              alert(ipLibraryUiText.saveFail + (err && err.message ? err.message : err));
             })
             .finally(function () {
               modalSaveInFlight = false;
@@ -1064,13 +1111,13 @@
         var existingCount = Array.isArray(targetEntry && targetEntry.items) ? targetEntry.items.length : 0;
         var remainingSlots = Math.max(0, MAX_CHARACTER_SHEETS_PER_CHARACTER - existingCount);
         if (!remainingSlots) {
-          alert('시트는 캐릭터당 최대 4장까지 등록할 수 있습니다.');
+          alert(ipLibraryUiText.uploadLimitReached);
           input.value = '';
           return;
         }
         var uploadFiles = files.slice(0, remainingSlots);
         if (files.length > remainingSlots) {
-          alert('시트는 캐릭터당 최대 4장까지 등록할 수 있어 앞의 ' + String(remainingSlots) + '장만 추가합니다.');
+          alert(ipLibraryUiText.uploadLimitPartial + String(remainingSlots) + ipLibraryUiText.uploadLimitPartialSuffix);
         }
         Promise.all(uploadFiles.map(function (file, index) {
           return readFileAsDataUrl(file).then(function (dataUrl) {
@@ -1097,7 +1144,7 @@
             renderCharacterManagerModal();
           })
           .catch(function (err) {
-            alert('시트 업로드 실패: ' + (err && err.message ? err.message : err));
+            alert(ipLibraryUiText.uploadFail + (err && err.message ? err.message : err));
           })
           .finally(function () {
             input.value = '';
