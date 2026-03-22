@@ -1025,9 +1025,6 @@
       '<div class="studio-hero-pill-row">' + brandHeroPills + '</div>' +
       '<div class="brand-studio-hero-actions">' +
       '<button class="btn-primary" data-action="brand-oneclick-draft">원클릭 초안 만들기</button>' +
-      '<button class="btn-secondary" data-action="brand-open-analytics">Analytics</button>' +
-      '<button class="btn-secondary" data-action="brand-open-knowledge">브랜드 허브</button>' +
-      '<button class="btn-secondary" data-action="brand-open-library">Content Library</button>' +
       '</div>' +
       '</div>' +
       '<div class="studio-page-hero-side"><div class="studio-kpi-grid">' + brandHeroStats + '</div></div>' +

@@ -412,8 +412,8 @@
       '<div class="studio-hero-pill-row">' + analyticsHeroPills + '</div>' +
       '<div class="analytics-hero-actions">' +
       '<button class="btn-secondary" data-action="analytics-open-brand">Brand Studio</button>' +
-      '<button class="btn-secondary" data-action="analytics-open-library">Content Library</button>' +
       '<button class="btn-secondary" data-action="analytics-open-knowledge">브랜드 허브</button>' +
+      '<button class="btn-secondary" data-action="analytics-open-library">Content Library</button>' +
       '</div>' +
       '</div>' +
       '<div class="studio-page-hero-side"><div class="studio-kpi-grid">' + analyticsHeroStats + '</div></div>' +

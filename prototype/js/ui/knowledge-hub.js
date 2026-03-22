@@ -755,10 +755,7 @@
       '<p class="knowledge-hub-description">' + escapeHtml(brandSummary || '브랜드 요약이 아직 없습니다. 브랜드 허브를 먼저 채우면 이후 생성 품질이 안정됩니다.') + '</p>' +
       '<div class="studio-hero-pill-row">' + knowledgeHeroPills + '</div>' +
       '<div class="knowledge-hub-hero-actions">' +
-      '<button class="btn-secondary" data-action="knowledge-open-library">Content Library</button>' +
-      '<button class="btn-secondary" data-action="knowledge-open-brand">Brand Studio</button>' +
       '<button class="btn-secondary" data-action="knowledge-apply-starter">기본값 채우기</button>' +
-      '<button class="btn-secondary" data-action="knowledge-save-and-open-brand">저장 후 Brand Studio</button>' +
       '<button class="btn-primary" data-action="knowledge-save">브랜드 허브 저장</button>' +
       '</div>' +
       '</div>' +
