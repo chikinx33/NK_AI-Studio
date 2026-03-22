@@ -1462,6 +1462,7 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-form .scenario-story-controls textarea {
   flex: 1;
+  min-height: calc(1.45em * 10 + 16px);
 }
 
 .scenario-form .scenario-story-ai-btn {
