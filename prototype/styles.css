@@ -9198,11 +9198,25 @@ body {
   transition: border-color 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
 }
 
+.brand-studio-page .brand-caption-textarea,
+.brand-studio-page .brand-channel-input,
+.brand-studio-page .brand-publish-input {
+  transition: border-color 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+}
+
 .knowledge-hub-page .knowledge-hub-field textarea:focus,
 .knowledge-hub-page .knowledge-reference-input:focus,
 .knowledge-hub-page .knowledge-reference-textarea:focus,
 .knowledge-hub-page .knowledge-character-input:focus,
 .knowledge-hub-page .knowledge-character-personality:focus {
+  outline: none;
+  border-color: color-mix(in srgb, #ff9a3d 34%, var(--border) 66%);
+  box-shadow: 0 0 0 2px rgba(255, 148, 46, 0.14);
+}
+
+.brand-studio-page .brand-caption-textarea:focus,
+.brand-studio-page .brand-channel-input:focus,
+.brand-studio-page .brand-publish-input:focus {
   outline: none;
   border-color: color-mix(in srgb, #ff9a3d 34%, var(--border) 66%);
   box-shadow: 0 0 0 2px rgba(255, 148, 46, 0.14);
