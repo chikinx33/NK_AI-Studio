@@ -359,7 +359,8 @@ body[data-embed="1"] {
 }
 
 [data-page="index"] .main-body,
-[data-page="ai-video"] .main-body {
+[data-page="ai-video"] .main-body,
+[data-page="ai-image"] .main-body {
   height: auto;
   max-height: none;
   overflow: visible;
