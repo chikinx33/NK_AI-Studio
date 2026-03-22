@@ -1371,6 +1371,18 @@ a.btn-primary:active {
   flex-shrink: 0;
 }
 
+.scenario-form .scenario-form-label-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+
+.scenario-form .scenario-form-label-row label {
+  min-width: 0;
+}
+
 [data-theme="light"] .scenario-form label {
   color: #0d172f;
 }
@@ -1443,8 +1455,8 @@ textarea::-webkit-scrollbar-corner {
 .scenario-form .scenario-story-controls {
   flex: 1;
   display: flex;
-  gap: 8px;
-  align-items: flex-start;
+  gap: 0;
+  align-items: stretch;
   min-width: 0;
 }
 
@@ -1453,12 +1465,61 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .scenario-form .scenario-story-ai-btn {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-  align-self: flex-start;
-  font-size: 13px;
-  font-weight: 700;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 7px;
+  flex: 0 0 22px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.scenario-form .scenario-story-ai-btn:hover {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.scenario-form .scenario-story-ai-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, white 28%);
+  outline-offset: 2px;
+}
+
+.scenario-form .scenario-story-ai-icon {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.scenario-form .scenario-story-ai-icon::before,
+.scenario-form .scenario-story-ai-icon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  background: linear-gradient(180deg, #8bd8ff 0%, #5da2ff 100%);
+  clip-path: polygon(50% 0%, 66% 34%, 100% 50%, 66% 66%, 50% 100%, 34% 66%, 0% 50%, 34% 34%);
+}
+
+.scenario-form .scenario-story-ai-icon::before {
+  width: 14px;
+  height: 14px;
+}
+
+.scenario-form .scenario-story-ai-icon::after {
+  width: 6px;
+  height: 6px;
+  right: -7px;
+  top: -7px;
+  inset: auto;
+  opacity: 0.95;
+}
+
+[data-theme="light"] .scenario-form .scenario-story-ai-btn:hover {
+  background: color-mix(in srgb, #4b8dff 10%, transparent);
+  border-color: color-mix(in srgb, #4b8dff 22%, transparent);
 }
 
 .scenario-form .scenario-inline-controls select {

@@ -1161,6 +1161,11 @@
             if (t[key]) el.setAttribute('title', t[key]);
         });
 
+        document.querySelectorAll('[data-i18n-aria-label]').forEach(function (el) {
+            var key = el.getAttribute('data-i18n-aria-label');
+            if (t[key]) el.setAttribute('aria-label', t[key]);
+        });
+
         try {
             document.documentElement.setAttribute('lang', safeLang);
         } catch (_) { }
