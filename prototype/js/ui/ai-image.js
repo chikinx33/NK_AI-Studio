@@ -566,7 +566,8 @@
       '</div>' +
       '</div>' +
       '<div class="ai-image-workspace">' +
-      '<section class="card ai-image-panel ai-image-panel-left scenario-form">' +
+      '<section class="card ai-image-panel ai-image-panel-left">' +
+      '<div class="scenario-form">' +
       '<div class="ai-image-mode-tabs">' +
       '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
       '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
@@ -625,6 +626,7 @@
       '<button type="button" class="btn-primary" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
       '</div>' +
       (!project || !project.id ? '<p class="muted small">' + escapeHtml(t('noProjectHelp')) + '</p>' : '') +
+      '</div>' +
       '</section>' +
       '<section class="card ai-image-panel ai-image-panel-right">' +
       '<div class="ai-image-preview-head">' +
