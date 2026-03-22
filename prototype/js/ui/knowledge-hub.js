@@ -877,6 +877,7 @@
     function closeCharacterManagerModal() {
       var modal = document.getElementById('character-manager-modal');
       if (modal) modal.classList.add('hidden');
+      if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
       modalCharacterSheetDraft = null;
       modalSaveInFlight = false;
       modalPreviewImageUrl = '';
@@ -975,20 +976,9 @@
           '</div>'
         )
         : '';
-      var loadingHtml = modalSaveInFlight
-        ? (
-          '<div class="character-manager-loading" aria-live="polite" aria-busy="true">' +
-          '<div class="loading-box">' +
-          '<div class="spinner" aria-hidden="true"></div>' +
-          '<p>' + escapeHtml(ipLibraryUiText.saveLoading) + '</p>' +
-          '</div>' +
-          '</div>'
-        )
-        : '';
-
       box.innerHTML =
-        '<div class="character-manager-shell' + (modalSaveInFlight ? ' is-saving' : '') + '">' +
-        '<div class="character-manager-body' + (modalSaveInFlight ? ' is-saving' : '') + '">' +
+        '<div class="character-manager-shell">' +
+        '<div class="character-manager-body">' +
         '<div class="character-manager-head">' +
         '<div><h3>' + escapeHtml(ipLibraryUiText.title) + '</h3><p>' + escapeHtml(ipLibraryUiText.description) + '</p></div>' +
         '<div class="character-manager-head-actions">' +
@@ -997,8 +987,6 @@
         '</div>' +
         '</div>' +
         '<div class="character-manager-grid">' + cardsHtml + '</div>' +
-        '</div>' +
-        loadingHtml +
         '</div>' +
         previewHtml;
 
@@ -1054,6 +1042,7 @@
         if (action === 'character-manager-save') {
           if (modalSaveInFlight) return;
           modalSaveInFlight = true;
+          if (NK.core && NK.core.setLoading) NK.core.setLoading(true, ipLibraryUiText.saveLoading);
           renderCharacterManagerModal();
           syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft))
             .then(function (result) {
@@ -1070,6 +1059,7 @@
               alert(ipLibraryUiText.saveFail + (err && err.message ? err.message : err));
             })
             .finally(function () {
+              if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
               modalSaveInFlight = false;
               renderCharacterManagerModal();
             });
