@@ -264,7 +264,7 @@ test('applyProjectCore keeps brand tone separate from overview tone', () => {
   assert.equal(normalized.tone || '', '');
 });
 
-test('project.getKnowledgeHub normalizes character sheet pose from legacy labels', () => {
+test('project.getKnowledgeHub accepts legacy character sheet labels without keeping angle metadata', () => {
   const ctx = createContext([]);
   loadScript(ctx, 'prototype/js/service/project.js');
 
@@ -286,12 +286,11 @@ test('project.getKnowledgeHub normalizes character sheet pose from legacy labels
   });
 
   const items = knowledge.characterSheets[0].items;
-  assert.equal(items[0].pose, 'front');
-  assert.equal(items[0].label, '정면');
-  assert.equal(items[1].pose, 'back');
-  assert.equal(items[1].label, '후면');
-  assert.equal(items[2].pose, 'side');
-  assert.equal(items[2].label, '측면');
+  assert.equal(items[0].imageDataUrl, 'gs://bucket/front.png');
+  assert.equal(items[1].imageDataUrl, 'gs://bucket/back.png');
+  assert.equal(items[2].imageDataUrl, 'gs://bucket/side.png');
+  assert.equal('pose' in items[0], false);
+  assert.equal('label' in items[0], false);
 });
 
 test('project.getKnowledgeHub keeps top-level character sheets when nested knowledgeHub arrays are empty', () => {
@@ -422,6 +421,9 @@ test('brand.persistShared replaces deleted knowledge characters instead of mergi
   assert.equal(saved.knowledgeCharacters[0].token, '@네모');
   assert.equal(saved.characterSheets.length, 1);
   assert.equal(saved.characterSheets[0].token, '@네모');
+  assert.equal(saved.characterSheets[0].items[0].imageDataUrl, 'gs://bucket/front.png');
+  assert.equal('pose' in saved.characterSheets[0].items[0], false);
+  assert.equal('label' in saved.characterSheets[0].items[0], false);
 });
 
 test('project.getBrandId keeps persisted brandId when called with payload wrapper objects', () => {

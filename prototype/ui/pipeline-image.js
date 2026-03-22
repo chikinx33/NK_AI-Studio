@@ -41,45 +41,6 @@
     return Array.from(map.values());
   }
 
-  function normalizeCharacterSheetPose(value) {
-    var raw = normalizeText(value).toLowerCase();
-    if (!raw) return 'other';
-    if (/^front$|^frontal$|정면|앞모습/.test(raw)) return 'front';
-    if (/front[_\s-]?quarter|three[_\s-]?quarter|threequarter|3\/?4|반측면/.test(raw)) return 'front_quarter';
-    if (/^side$|profile|측면|옆모습/.test(raw)) return 'side';
-    if (/back[_\s-]?quarter|rear[_\s-]?quarter|후반측면/.test(raw)) return 'back_quarter';
-    if (/^back$|^rear$|후면|뒷모습/.test(raw)) return 'back';
-    if (/기타|other|etc/.test(raw)) return 'other';
-    return 'other';
-  }
-
-  function inferCharacterSheetPose(raw) {
-    var row = raw && typeof raw === 'object' ? raw : {};
-    return normalizeCharacterSheetPose(row.pose || row.label || row.title || row.name || row.note || row.description || row.memo);
-  }
-
-  function getCharacterSheetPoseLabel(pose) {
-    switch (normalizeCharacterSheetPose(pose)) {
-      case 'front': return '정면';
-      case 'front_quarter': return '반측면';
-      case 'side': return '측면';
-      case 'back_quarter': return '후반측면';
-      case 'back': return '후면';
-      default: return '기타';
-    }
-  }
-
-  function getCharacterSheetPosePromptLabel(pose) {
-    switch (normalizeCharacterSheetPose(pose)) {
-      case 'front': return 'front view';
-      case 'front_quarter': return 'front three-quarter view';
-      case 'side': return 'side view';
-      case 'back_quarter': return 'back three-quarter view';
-      case 'back': return 'back view';
-      default: return 'other reference view';
-    }
-  }
-
   function normalizeCharacterSheets(value, characters) {
     var src = Array.isArray(value) ? value : [];
     var charRows = normalizeKnowledgeCharacters(characters);
@@ -95,11 +56,8 @@
         var row = sheet && typeof sheet === 'object' ? sheet : {};
         var imageDataUrl = normalizeText(row.imageDataUrl || row.imageUrl || row.url || row.src);
         if (!imageDataUrl) return null;
-        var pose = inferCharacterSheetPose(row);
         return {
           sheetId: normalizeText(row.sheetId || row.id) || ('sheet_' + String(sheetIndex + 1).padStart(3, '0')),
-          pose: pose,
-          label: getCharacterSheetPoseLabel(pose),
           imageDataUrl: imageDataUrl,
           isPrimary: row.isPrimary === true
         };
@@ -134,14 +92,8 @@
   }
 
   function sheetPoseRank(item) {
-    var pose = normalizeCharacterSheetPose(item && item.pose || item && item.label);
     if (item && item.isPrimary) return 0;
-    if (pose === 'front') return 1;
-    if (pose === 'front_quarter') return 2;
-    if (pose === 'side') return 3;
-    if (pose === 'back_quarter') return 4;
-    if (pose === 'back') return 5;
-    return 6;
+    return 1;
   }
 
   function pickReferenceSheets(items, limit) {
@@ -150,7 +102,7 @@
     var unique = [];
     var seen = new Set();
     (Array.isArray(items) ? items : []).forEach(function (item) {
-      var key = String(item && (item.sheetId || item.imageDataUrl || item.label) || '').trim().toLowerCase();
+      var key = String(item && (item.sheetId || item.imageDataUrl) || '').trim().toLowerCase();
       if (!key || seen.has(key)) return;
       seen.add(key);
       unique.push(item);
@@ -372,8 +324,6 @@
           token: token,
           displayName: displayName,
           sheetId: sheet.sheetId,
-          pose: sheet.pose || 'other',
-          label: sheet.label || '',
           isPrimary: !!sheet.isPrimary
         });
       });
@@ -525,8 +475,6 @@
           token: token,
           displayName: displayName,
           sheetId: file.name || '',
-          pose: 'other',
-          label: 'fallback',
           isPrimary: false
         });
       });

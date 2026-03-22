@@ -303,47 +303,7 @@
     }).join('');
   }
 
-  var CHARACTER_SHEET_POSE_OPTIONS = [
-    { value: 'front', label: '정면' },
-    { value: 'front_quarter', label: '반측면' },
-    { value: 'side', label: '측면' },
-    { value: 'back_quarter', label: '후반측면' },
-    { value: 'back', label: '후면' },
-    { value: 'other', label: '기타' }
-  ];
   var MAX_CHARACTER_SHEETS_PER_CHARACTER = 4;
-
-  function normalizeCharacterSheetPose(value) {
-    var raw = normalizeText(value).toLowerCase();
-    if (!raw) return 'other';
-    if (/^front$|^frontal$|정면|앞모습/.test(raw)) return 'front';
-    if (/front[_\s-]?quarter|three[_\s-]?quarter|threequarter|3\/?4|반측면/.test(raw)) return 'front_quarter';
-    if (/^side$|profile|측면|옆모습/.test(raw)) return 'side';
-    if (/back[_\s-]?quarter|rear[_\s-]?quarter|후반측면/.test(raw)) return 'back_quarter';
-    if (/^back$|^rear$|후면|뒷모습/.test(raw)) return 'back';
-    if (/기타|other|etc/.test(raw)) return 'other';
-    return 'other';
-  }
-
-  function inferCharacterSheetPose(raw) {
-    var row = raw && typeof raw === 'object' ? raw : {};
-    return normalizeCharacterSheetPose(row.pose || row.label || row.title || row.name || row.note || row.description || row.memo);
-  }
-
-  function getCharacterSheetPoseLabel(pose) {
-    var normalized = normalizeCharacterSheetPose(pose);
-    for (var i = 0; i < CHARACTER_SHEET_POSE_OPTIONS.length; i++) {
-      if (CHARACTER_SHEET_POSE_OPTIONS[i].value === normalized) return CHARACTER_SHEET_POSE_OPTIONS[i].label;
-    }
-    return '기타';
-  }
-
-  function renderCharacterSheetPoseOptions(selectedPose) {
-    var target = normalizeCharacterSheetPose(selectedPose);
-    return CHARACTER_SHEET_POSE_OPTIONS.map(function (option) {
-      return '<option value="' + escapeHtml(option.value) + '"' + (option.value === target ? ' selected' : '') + '>' + escapeHtml(option.label) + '</option>';
-    }).join('');
-  }
 
   function normalizeCharacterSheetItems(value) {
     var src = Array.isArray(value) ? value : [];
@@ -351,11 +311,8 @@
       var raw = item && typeof item === 'object' ? item : {};
       var imageDataUrl = normalizeText(raw.imageDataUrl || raw.imageUrl || raw.url || raw.src);
       if (!imageDataUrl) return null;
-      var pose = inferCharacterSheetPose(raw);
       return {
         sheetId: normalizeText(raw.sheetId || raw.id) || ('sheet_' + String(index + 1).padStart(3, '0')),
-        pose: pose,
-        label: getCharacterSheetPoseLabel(pose),
         imageDataUrl: imageDataUrl,
         isPrimary: raw.isPrimary === true
       };
@@ -1124,11 +1081,8 @@
         }
         Promise.all(uploadFiles.map(function (file, index) {
           return readFileAsDataUrl(file).then(function (dataUrl) {
-            var pose = 'other';
             return {
               sheetId: 'sheet_' + Date.now() + '_' + index,
-              pose: pose,
-              label: getCharacterSheetPoseLabel(pose),
               imageDataUrl: dataUrl,
               isPrimary: false
             };
