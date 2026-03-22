@@ -22,7 +22,8 @@
     brandLibraryLoading: false,
     contentLibraryLoading: false,
     historyLoading: false,
-    historyLoadError: ''
+    historyLoadError: '',
+    selectedFileName: ''
   };
 
   var TEXT = {
@@ -106,6 +107,7 @@
       sourceContentTitle: '콘텐츠 저장소 이미지',
       sourceContentLoading: '콘텐츠 저장소 불러오는 중...',
       sourceContentEmpty: '콘텐츠 저장소에 이미지가 없습니다.',
+      fileNone: '선택된 파일 없음',
       reusePrompt: '프롬프트에 복사',
       useAsSource: '소스로 사용',
       regenerateVariation: '변형 재생성'
@@ -190,6 +192,7 @@
       sourceContentTitle: 'Content Library Images',
       sourceContentLoading: 'Loading Content Library...',
       sourceContentEmpty: 'No images found in Content Library.',
+      fileNone: 'No file selected',
       reusePrompt: 'Copy to prompt',
       useAsSource: 'Use as source',
       regenerateVariation: 'Generate variation'
@@ -479,8 +482,8 @@
     }
     var langBtn = document.querySelector('[data-ai-image-lang-toggle]');
     if (langBtn) {
-      var next = state.lang === 'en' ? 'KO' : 'EN';
-      langBtn.textContent = next;
+      var current = state.lang === 'en' ? 'EN' : 'KO';
+      langBtn.textContent = current;
       langBtn.setAttribute('aria-label', state.lang === 'en' ? 'Switch to Korean' : 'Switch to English');
       langBtn.setAttribute('title', state.lang === 'en' ? 'Switch to Korean' : 'Switch to English');
     }
@@ -563,7 +566,7 @@
       '</div>' +
       '</div>' +
       '<div class="ai-image-workspace">' +
-      '<section class="card ai-image-panel ai-image-panel-left">' +
+      '<section class="card ai-image-panel ai-image-panel-left scenario-form">' +
       '<div class="ai-image-mode-tabs">' +
       '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
       '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
@@ -583,6 +586,7 @@
       '<button type="button" class="btn-secondary compact" data-action="load-content-library"' + (state.mode === 'image-to-image' ? '' : ' disabled') + '>' + escapeHtml(t('sourceContent')) + '</button>' +
       '<button type="button" class="btn-ghost compact" data-action="clear-source"' + (sourceUrl ? '' : ' disabled') + '>' + escapeHtml(t('sourceClear')) + '</button>' +
       '</div>' +
+      '<div class="small muted" style="margin-top:4px;">' + escapeHtml(t('fileChoose')) + ': ' + escapeHtml(state.selectedFileName || t('fileNone')) + '</div>' +
       '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
       '</div>' +
       ((state.mode === 'image-to-image' && state.projectLibraryItems.length)
@@ -611,11 +615,11 @@
       '</div>' +
       '<div class="ai-image-field">' +
       '<label for="ai-image-aspect">' + escapeHtml(t('aspectLabel')) + '</label>' +
-      '<select id="ai-image-aspect">' +
-      '<option value="1:1"' + (state.aspectRatio === '1:1' ? ' selected' : '') + '>1:1</option>' +
-      '<option value="16:9"' + (state.aspectRatio === '16:9' ? ' selected' : '') + '>16:9</option>' +
-      '<option value="9:16"' + (state.aspectRatio === '9:16' ? ' selected' : '') + '>9:16</option>' +
-      '</select>' +
+      '<div class="ratio-group">' +
+      '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
+      '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
+      '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
+      '</div>' +
       '</div>' +
       '<div class="ai-image-action-row">' +
       '<button type="button" class="btn-primary" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
@@ -676,12 +680,6 @@
         if (counter) counter.textContent = String(state.prompt.length) + t('promptCounterSuffix');
       };
     }
-    var aspectEl = document.getElementById('ai-image-aspect');
-    if (aspectEl) {
-      aspectEl.onchange = function () {
-        state.aspectRatio = String(aspectEl.value || '1:1');
-      };
-    }
     var fileInput = document.getElementById('ai-image-source-file');
     if (fileInput) {
       fileInput.onchange = function () {
@@ -694,6 +692,7 @@
             name: file.name || 'upload',
             kind: 'upload'
           };
+          state.selectedFileName = file.name || '';
           render();
         };
         reader.readAsDataURL(file);
@@ -1033,6 +1032,11 @@
         }
         if (action === 'select-result') {
           state.currentResultId = String(btn.getAttribute('data-id') || '');
+          render();
+          return;
+        }
+        if (action === 'set-aspect') {
+          state.aspectRatio = String(btn.getAttribute('data-ratio') || '16:9');
           render();
           return;
         }
