@@ -1453,21 +1453,6 @@ textarea::-webkit-scrollbar-corner {
   flex-shrink: 0;
 }
 
-.scenario-form .scenario-character-group {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.scenario-form .scenario-character-group .character-chips {
-  display: grid;
-  flex: none;
-  width: 100%;
-  min-width: 0;
-  justify-content: stretch;
-}
-
 .inline {
   display: flex;
   gap: 8px;
@@ -1495,7 +1480,8 @@ textarea::-webkit-scrollbar-corner {
   gap: 6px;
   min-height: 38px;
   padding: 0;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   align-items: center;
 }
 
@@ -1509,11 +1495,6 @@ textarea::-webkit-scrollbar-corner {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.scenario-character-toggle {
-  min-width: 72px;
-  justify-content: center;
 }
 
 [data-theme="dark"] .knowledge-character-personality {
