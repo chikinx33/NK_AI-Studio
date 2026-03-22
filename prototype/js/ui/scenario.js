@@ -77,7 +77,7 @@
       sceneExpand: '씬 펼치기',
       sceneCollapse: '씬 접기',
       commonInfoLabels: {
-        topic: '주제',
+        topic: '이야기',
         genre: '장르',
         audience: '타겟',
         needs: '목적',
@@ -124,10 +124,10 @@
       sceneExpand: 'Expand scene',
       sceneCollapse: 'Collapse scene',
       commonInfoLabels: {
-        topic: 'Topic',
+        topic: 'Story',
         genre: 'Genre',
         audience: 'Audience',
-        needs: 'Needs',
+        needs: 'Purpose',
         tone: 'Tone',
         style: 'Style',
         brandRules: 'Brand Hub rules',
