@@ -323,6 +323,61 @@ test('project.getKnowledgeHub keeps top-level character sheets when nested knowl
   assert.equal(knowledge.characterSheets[0].items[0].imageDataUrl, 'gs://bucket/front.png');
 });
 
+test('project.normalizeDraft restores legacy scene location from visual prefix', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const project = ctx.NK.service.project;
+  const normalized = project.normalizeDraft({
+    id: 'legacy-scene',
+    title: '기존 프로젝트',
+    payload: {
+      topic: '모양새 친구들',
+      seriesId: 'shape-series',
+      seriesTitle: '모양새 친구들',
+      episodeTitle: '기존 프로젝트'
+    },
+    scenes: [
+      {
+        id: 1,
+        narration: '친구들이 모인다.',
+        visual: '밝은 놀이방 교실, 교실 입구. 친구들이 모인다. 카메라 연출: 미디엄 샷.'
+      }
+    ]
+  });
+
+  assert.equal(normalized.scenes.length, 1);
+  assert.equal(normalized.scenes[0].sceneLocation, '교실 입구');
+  assert.equal(normalized.scenes[0].location, '교실 입구');
+});
+
+test('project.normalizeDraft uses payload scenes when top-level scenes are missing', () => {
+  const ctx = createContext([]);
+  loadScript(ctx, 'prototype/js/service/project.js');
+
+  const project = ctx.NK.service.project;
+  const normalized = project.normalizeDraft({
+    id: 'payload-scenes',
+    title: '페이로드 프로젝트',
+    payload: {
+      topic: '모양새 친구들',
+      seriesId: 'shape-series',
+      seriesTitle: '모양새 친구들',
+      episodeTitle: '페이로드 프로젝트',
+      scenes: [
+        {
+          id: 1,
+          location: '창가 자리',
+          visual: '창가 자리. 친구들이 창밖을 본다.'
+        }
+      ]
+    }
+  });
+
+  assert.equal(normalized.scenes.length, 1);
+  assert.equal(normalized.scenes[0].sceneLocation, '창가 자리');
+});
+
 test('brand.persistShared replaces deleted knowledge characters instead of merging them back', async () => {
   const ctx = createContext([]);
   ctx.NK.api.brandSave = async (_brandId, payload) => ({ brand: payload });

@@ -298,6 +298,78 @@
         return Math.floor(n);
     }
 
+    function stripCameraDirectionText(value) {
+        return String(value || '')
+            .replace(/(?:카메라\s*연출|camera\s*direction)\s*[:：][\s\S]*$/i, '')
+            .trim();
+    }
+
+    function inferSceneLocationFromVisual(value) {
+        var clean = normalizeText(stripCameraDirectionText(value)).replace(/\s+/g, ' ').trim();
+        if (!clean) return '';
+        var firstSegment = String(clean.split(/[.!?。！？\n]/)[0] || '').trim();
+        if (!firstSegment) return '';
+
+        var candidate = firstSegment;
+        if (candidate.indexOf(',') >= 0) {
+            var parts = candidate.split(',').map(function (item) { return normalizeText(item); }).filter(Boolean);
+            if (parts.length > 1) candidate = parts[parts.length - 1];
+        }
+
+        candidate = normalizeText(candidate).replace(/\s+/g, ' ').trim();
+        if (!candidate) return '';
+        if (/(보이는 장면|구성된 장면|scene showing|scene that|mood shot|분위기 컷)/i.test(candidate)) return '';
+
+        var placeCue = /(교실|놀이방|유치원|스튜디오|무대|집|거실|숲|바다|우주|공원|마당|실내|실외|준비대|테이블|데스크|코너|구역|존|라인|조리대|싱크대|플레이팅|콘솔|도킹|광장|골목|전망|창가|입구|벽 앞|매트|복도|창문|대기 구역|필드|클래스룸|classroom|playroom|studio|stage|home|living room|forest|sea|space|park|yard|indoors|outdoors|table|desk|corner|zone|lane|counter|sink|plating|console|docking|plaza|alley|viewpoint|window|entrance|hallway|field)/i.test(candidate);
+        var actorCue = /(친구|인물|진행자|요리사|플레이어|안내자|character|presenter|friend|group|cook|player|guide|everyone)/i.test(candidate);
+        if (!placeCue || actorCue) return '';
+        return candidate;
+    }
+
+    function pickSceneArray(draft, payload) {
+        var sources = [
+            draft && draft.scenes,
+            payload && payload.scenes,
+            payload && payload.generated && payload.generated.scenes,
+            draft && draft.generated && draft.generated.scenes
+        ];
+        for (var i = 0; i < sources.length; i += 1) {
+            if (Array.isArray(sources[i]) && sources[i].length) return sources[i];
+        }
+        for (var j = 0; j < sources.length; j += 1) {
+            if (Array.isArray(sources[j])) return sources[j];
+        }
+        return [];
+    }
+
+    function normalizeSceneEntries(value) {
+        var source = Array.isArray(value) ? value : [];
+        var defaultSceneEst = (NK && NK.config && NK.config.DEFAULTS && NK.config.DEFAULTS.SCENE_EST) || 8;
+        return source.map(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : {};
+            var narration = normalizeText(raw.narration || raw.story || raw.text || raw.content);
+            var subtitleText = normalizeText(raw.subtitleText || raw.caption || raw.lines || narration);
+            var visual = normalizeText(raw.visual || raw.shot || raw.scene_visual || raw.camera || raw.image);
+            var sceneLocation = normalizeText(raw.sceneLocation || raw.location || inferSceneLocationFromVisual(visual));
+            return Object.assign({}, raw, {
+                id: raw.id != null ? raw.id : (index + 1),
+                title: normalizeText(raw.title || ('Scene ' + (index + 1))),
+                lines: subtitleText,
+                subtitleText: subtitleText,
+                narration: narration,
+                videoSpeechPrompt: normalizeText(raw.videoSpeechPrompt || raw.spokenPrompt),
+                script: normalizeText(raw.script || raw.voiceScript),
+                sceneLocation: sceneLocation,
+                location: sceneLocation || normalizeText(raw.location),
+                backgroundStyle: normalizeText(raw.backgroundStyle || raw.sharedBackgroundStyle),
+                dialogue: Array.isArray(raw.dialogue) ? raw.dialogue : (Array.isArray(raw.dialogues) ? raw.dialogues : []),
+                estSec: raw.estSec != null ? raw.estSec : (raw.duration != null ? raw.duration : defaultSceneEst),
+                shot: visual || normalizeText(raw.shot),
+                visual: visual
+            });
+        });
+    }
+
     function normalizePublishResults(value) {
         var src = Array.isArray(value) ? value : [];
         return src.map(function (item, index) {
@@ -563,6 +635,7 @@
         var id = String(draft.id || '').trim();
         if (!id) return null;
         var payload = applyProjectCore(Object.assign({}, draft.payload || {}), draft);
+        var scenes = normalizeSceneEntries(pickSceneArray(draft, payload));
         var seriesId = normalizeSeriesId(payload.seriesId || draft.seriesId) || ('projects' + id);
         var seriesTitle = String(payload.seriesTitle || draft.seriesTitle || draft.title || seriesId).trim() || seriesId;
         payload.seriesId = seriesId;
@@ -585,6 +658,7 @@
             brandRef: brandMeta.brandRef,
             projectCore: normalizeProjectCore(payload),
             knowledgeHub: normalizeKnowledgeHub(payload),
+            scenes: scenes,
             payload: payload
         });
     }
