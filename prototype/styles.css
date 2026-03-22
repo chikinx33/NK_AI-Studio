@@ -365,6 +365,12 @@ body[data-embed="1"] {
   max-height: none;
   overflow: visible;
 }
+ [data-page="ai-image"] .main {
+  height: auto;
+  min-height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 
 .brand {
   display: flex;

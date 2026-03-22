@@ -114,7 +114,7 @@
     },
     en: {
       pageTitle: 'NK_Studio · AI Image',
-      brandSubtitle: 'AI image generation platform',
+      brandSubtitle: 'AI image generation',
       navAiVideo: 'AI Video',
       navAiImage: 'AI Image',
       navLibrary: 'Content Library',
