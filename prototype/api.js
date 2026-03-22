@@ -415,6 +415,24 @@
     return j(text);
   };
 
+  api.aiImageSessionLibrary = async function (sessionId) {
+    var uid = resolveUserId();
+    var token = getAuthToken();
+    var q = 'sessionId=' + encodeURIComponent(String(sessionId || '')) + '&userId=' + encodeURIComponent(uid);
+    if (token) q += '&nk_token=' + encodeURIComponent(token);
+    var url = withBase('/api/ai-image/library?' + q);
+    var res = await fetch(url, { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) {
+      var data = j(text);
+      var err = new Error((data && (data.error || data.message)) || text || 'ai_image_library_error');
+      err.status = res.status;
+      err.detail = data && Object.keys(data).length ? data : text;
+      throw err;
+    }
+    return j(text);
+  };
+
   api.brandGet = async function (brandId) {
     var token = getAuthToken();
     var url = withBase('/api/brand/get?brandId=' + encodeURIComponent(String(brandId || '')) + '&userId=' + encodeURIComponent(resolveUserId()) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));

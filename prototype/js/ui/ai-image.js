@@ -18,7 +18,9 @@
     currentResultId: '',
     results: [],
     libraryLoading: false,
-    brandLibraryLoading: false
+    brandLibraryLoading: false,
+    historyLoading: false,
+    historyLoadError: ''
   };
 
   var TEXT = {
@@ -90,6 +92,8 @@
       historyTitle: '생성 히스토리',
       resultSavedTag: '프로젝트 저장 완료',
       resultSavedBrandTag: '브랜드 IP 등록 완료',
+      historyLoading: '세션 결과 불러오는 중...',
+      historyLoadError: '세션 결과 동기화 실패',
       promptCounterSuffix: '/4000',
       backToLogin: '로그인 페이지로 이동',
       sourceKindUpload: '업로드',
@@ -164,6 +168,8 @@
       historyTitle: 'Generation history',
       resultSavedTag: 'Saved to project',
       resultSavedBrandTag: 'Saved to brand IP',
+      historyLoading: 'Loading session results...',
+      historyLoadError: 'Failed to sync session results',
       promptCounterSuffix: '/4000',
       backToLogin: 'Go to sign-in page',
       sourceKindUpload: 'Upload',
@@ -289,6 +295,14 @@
     return match || state.results[0] || null;
   }
 
+  function extractObjectTimestamp(objectName) {
+    var raw = String(objectName || '').trim();
+    var match = raw.match(/\/(\d{13})-[^/]+\.(?:png|jpg|jpeg|webp)$/i);
+    if (!match) return 0;
+    var stamp = Number(match[1] || 0);
+    return Number.isFinite(stamp) ? stamp : 0;
+  }
+
   function resolveResultUrl(result) {
     var row = result && typeof result === 'object' ? result : {};
     var objectName = String(row.objectName || '').trim();
@@ -296,6 +310,50 @@
       return NK.api.mediaProxyObjectUrl(objectName);
     }
     return String(row.url || '').trim();
+  }
+
+  function mergeServerResults(items) {
+    var incoming = Array.isArray(items) ? items : [];
+    var map = new Map();
+    state.results.forEach(function (item, index) {
+      var row = item && typeof item === 'object' ? cloneJson(item, {}) : {};
+      var key = String(row.objectName || row.id || ('local_' + index)).trim();
+      if (!key) return;
+      map.set(key, row);
+    });
+    incoming.forEach(function (item, index) {
+      var row = item && typeof item === 'object' ? item : {};
+      var objectName = String(row.name || row.objectName || '').trim();
+      if (!objectName) return;
+      var existing = map.get(objectName) || {};
+      var createdAt = String(
+        existing.createdAt
+        || row.updated
+        || row.timeCreated
+        || (extractObjectTimestamp(objectName) ? new Date(extractObjectTimestamp(objectName)).toISOString() : '')
+      ).trim();
+      map.set(objectName, Object.assign({}, existing, {
+        id: String(existing.id || ('res_' + objectName.replace(/[^a-z0-9]+/gi, '_') || index)),
+        objectName: objectName,
+        url: String(existing.url || row.signedUrl || '').trim(),
+        prompt: String(existing.prompt || '').trim(),
+        mode: String(existing.mode || 'text-to-image').trim(),
+        aspectRatio: String(existing.aspectRatio || '').trim(),
+        createdAt: createdAt || new Date().toISOString(),
+        sessionId: String(existing.sessionId || state.sessionId || '').trim(),
+        savedToProject: existing.savedToProject === true,
+        savedBrandTargets: Array.isArray(existing.savedBrandTargets) ? existing.savedBrandTargets.slice() : [],
+        selectedBrandCharacterToken: String(existing.selectedBrandCharacterToken || '').trim()
+      }));
+    });
+    state.results = Array.from(map.values()).sort(function (a, b) {
+      return new Date(String(b.createdAt || 0)).getTime() - new Date(String(a.createdAt || 0)).getTime();
+    }).slice(0, 30);
+    if (!state.currentResultId || !state.results.some(function (item) {
+      return String(item.id || '') === String(state.currentResultId || '');
+    })) {
+      state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+    }
   }
 
   function sourcePreviewUrl() {
@@ -561,6 +619,8 @@
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
       '<div class="ai-image-history">' +
       '<div class="ai-image-source-library-title">' + escapeHtml(t('historyTitle')) + '</div>' +
+      (state.historyLoading ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
+      ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
       (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>') +
       '</div>' +
       '</section>' +
@@ -773,6 +833,24 @@
       alert(t('brandLoadFailed') + (err && err.message ? err.message : err));
     } finally {
       state.brandLibraryLoading = false;
+      render();
+    }
+  }
+
+  async function hydrateSessionHistory() {
+    if (!state.sessionId || !NK.api || !NK.api.aiImageSessionLibrary) return;
+    state.historyLoading = true;
+    state.historyLoadError = '';
+    render();
+    try {
+      var res = await NK.api.aiImageSessionLibrary(state.sessionId);
+      mergeServerResults(Array.isArray(res && res.items) ? res.items : []);
+      persistHistory();
+    } catch (err) {
+      console.warn('AI image session history sync failed', err);
+      state.historyLoadError = '1';
+    } finally {
+      state.historyLoading = false;
       render();
     }
   }
@@ -1014,6 +1092,7 @@
     updateAuthState();
     bindStaticEvents();
     render();
+    hydrateSessionHistory();
     if (state.currentBrand && state.currentBrand.brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       NK.service.brand.hydrateFromServer(state.currentBrand.brandId).then(function (brand) {
         if (!brand || !brand.brandId) return;
