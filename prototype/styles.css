@@ -4165,6 +4165,38 @@ textarea::-webkit-scrollbar-corner {
   color: var(--muted);
 }
 
+.ai-image-brand-save-row {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-image-brand-select-wrap {
+  display: grid;
+  gap: 6px;
+}
+
+.ai-image-brand-select-wrap span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ai-image-brand-select-wrap select {
+  width: 100%;
+  min-height: 40px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--studio-input-bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.ai-image-brand-select-wrap select:focus {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border) 42%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent 82%);
+}
+
 .ai-image-empty-state {
   min-height: 420px;
   display: grid;

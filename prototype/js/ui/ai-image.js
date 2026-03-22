@@ -61,8 +61,15 @@
       resultsEmpty: '아직 생성된 이미지가 없습니다.',
       download: '다운로드',
       saveProject: '프로젝트 저장소에 등록',
+      saveBrand: '브랜드 IP 등록',
+      savedBrand: '브랜드 IP 등록 완료',
       savedProject: '프로젝트 저장소 등록 완료',
       saveDisabled: '프로젝트가 선택되지 않아 등록할 수 없습니다.',
+      saveBrandDisabled: '브랜드와 캐릭터가 선택되어야 등록할 수 있습니다.',
+      saveBrandNoCharacters: '현재 브랜드에 등록된 캐릭터가 없어 IP로 등록할 수 없습니다.',
+      saveBrandChooseCharacter: '등록할 캐릭터를 먼저 선택해 주세요.',
+      saveBrandSelectLabel: '브랜드 캐릭터',
+      saveBrandSelectPlaceholder: '캐릭터 선택',
       openVideo: 'AI Video로 이동',
       loginRequired: '로그인이 필요합니다.',
       loginAction: '로그인 하기',
@@ -76,11 +83,13 @@
       projectLoadFailed: '프로젝트 저장소 불러오기 실패: ',
       brandLoadFailed: '브랜드 IP 불러오기 실패: ',
       projectSaveFailed: '프로젝트 저장소 등록 실패: ',
+      brandSaveFailed: '브랜드 IP 등록 실패: ',
       downloadFailed: '다운로드 실패: ',
       fileChoose: '파일 선택',
       latestResult: '대표 미리보기',
       historyTitle: '생성 히스토리',
       resultSavedTag: '프로젝트 저장 완료',
+      resultSavedBrandTag: '브랜드 IP 등록 완료',
       promptCounterSuffix: '/4000',
       backToLogin: '로그인 페이지로 이동',
       sourceKindUpload: '업로드',
@@ -126,8 +135,15 @@
       resultsEmpty: 'No generated images yet.',
       download: 'Download',
       saveProject: 'Save to project library',
+      saveBrand: 'Save to brand IP',
+      savedBrand: 'Saved to brand IP',
       savedProject: 'Saved to project library',
       saveDisabled: 'A selected project is required to save this result.',
+      saveBrandDisabled: 'A selected brand and character are required to save this result.',
+      saveBrandNoCharacters: 'No registered characters are available in the current brand.',
+      saveBrandChooseCharacter: 'Choose a character before saving to brand IP.',
+      saveBrandSelectLabel: 'Brand character',
+      saveBrandSelectPlaceholder: 'Select a character',
       openVideo: 'Open AI Video',
       loginRequired: 'Sign-in is required.',
       loginAction: 'Sign in',
@@ -141,11 +157,13 @@
       projectLoadFailed: 'Failed to load project library: ',
       brandLoadFailed: 'Failed to load brand IP library: ',
       projectSaveFailed: 'Failed to save to project library: ',
+      brandSaveFailed: 'Failed to save to brand IP: ',
       downloadFailed: 'Download failed: ',
       fileChoose: 'Choose file',
       latestResult: 'Primary preview',
       historyTitle: 'Generation history',
       resultSavedTag: 'Saved to project',
+      resultSavedBrandTag: 'Saved to brand IP',
       promptCounterSuffix: '/4000',
       backToLogin: 'Go to sign-in page',
       sourceKindUpload: 'Upload',
@@ -293,6 +311,58 @@
     ).trim();
   }
 
+  function cloneJson(value, fallback) {
+    try {
+      return JSON.parse(JSON.stringify(value == null ? fallback : value));
+    } catch (_) {
+      return fallback;
+    }
+  }
+
+  function normalizeCharacterName(value) {
+    return String(value || '').replace(/^@+/, '').trim();
+  }
+
+  function normalizeCharacterToken(value) {
+    var name = normalizeCharacterName(value).replace(/\s+/g, '');
+    return name ? ('@' + name) : '';
+  }
+
+  function brandCharacterOptions() {
+    var brand = state.currentBrand && typeof state.currentBrand === 'object' ? state.currentBrand : {};
+    var options = [];
+    var seen = {};
+    var sheets = Array.isArray(brand.characterSheets) ? brand.characterSheets : [];
+    var knowledgeCharacters = Array.isArray(brand.knowledgeCharacters) ? brand.knowledgeCharacters : [];
+    sheets.forEach(function (entry, index) {
+      var token = normalizeCharacterToken(entry && (entry.token || entry.displayName || entry.name));
+      if (!token || seen[token]) return;
+      seen[token] = true;
+      options.push({
+        token: token,
+        label: normalizeCharacterName(entry && (entry.displayName || entry.name || token)) || ('Character ' + (index + 1))
+      });
+    });
+    knowledgeCharacters.forEach(function (entry, index) {
+      var token = normalizeCharacterToken(entry && (entry.token || entry.displayName || entry.name));
+      if (!token || seen[token]) return;
+      seen[token] = true;
+      options.push({
+        token: token,
+        label: normalizeCharacterName(entry && (entry.displayName || entry.name || token)) || ('Character ' + (index + 1))
+      });
+    });
+    return options;
+  }
+
+  function selectedBrandCharacterToken(result) {
+    var row = result && typeof result === 'object' ? result : {};
+    var saved = String(row.selectedBrandCharacterToken || '').trim();
+    if (saved) return saved;
+    var options = brandCharacterOptions();
+    return options[0] ? String(options[0].token || '').trim() : '';
+  }
+
   function isImageLibraryItem(item) {
     var row = item && typeof item === 'object' ? item : {};
     var name = String(row.name || '').trim().toLowerCase();
@@ -355,6 +425,8 @@
     var selectedResult = currentResult();
     var sourceUrl = sourcePreviewUrl();
     var sourceKind = '';
+    var brandCharacterList = brandCharacterOptions();
+    var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
     if (state.sourceImage) {
       if (state.sourceImage.kind === 'project') sourceKind = t('sourceKindProject');
       else if (state.sourceImage.kind === 'brand') sourceKind = t('sourceKindBrand');
@@ -369,6 +441,7 @@
         '<strong>' + escapeHtml(item.mode === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + '</strong>' +
         '<p>' + escapeHtml(item.prompt || '') + '</p>' +
         (item.savedToProject ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedTag')) + '</span>' : '') +
+        ((Array.isArray(item.savedBrandTargets) && item.savedBrandTargets.length) ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedBrandTag')) + '</span>' : '') +
         '</div>' +
         '</button>';
     }).join('');
@@ -468,9 +541,21 @@
           '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
           '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
           '</div>' +
+          '<div class="ai-image-brand-save-row">' +
+          '<label class="ai-image-brand-select-wrap">' +
+          '<span>' + escapeHtml(t('saveBrandSelectLabel')) + '</span>' +
+          '<select id="ai-image-brand-target">' +
+          '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
+          brandCharacterList.map(function (item) {
+            return '<option value="' + escapeHtml(item.token) + '"' + (String(item.token) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+          }).join('') +
+          '</select>' +
+          '</label>' +
+          '</div>' +
           '<div class="ai-image-inline-actions">' +
           '<button type="button" class="btn-secondary compact" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('download')) + '</button>' +
           '<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>' +
+          '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
           '</div>' +
           '</div>'
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
@@ -557,6 +642,103 @@
     if (!response.ok) throw new Error('result_fetch_failed');
     var blob = await response.blob();
     return new File([blob], toDownloadName(result), { type: blob.type || 'image/png' });
+  }
+
+  async function resultToDataUrl(result) {
+    var url = resolveResultUrl(result);
+    if (!url) throw new Error('result_url_missing');
+    if (url.indexOf('data:') === 0) return url;
+    var response = await fetch(url);
+    if (!response.ok) throw new Error('result_fetch_failed');
+    var blob = await response.blob();
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result || '')); };
+      reader.onerror = function () { reject(new Error('result_read_failed')); };
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function saveResultToBrand(resultId) {
+    if (!state.currentBrand || !state.currentBrand.brandId) {
+      alert(t('saveBrandDisabled'));
+      return;
+    }
+    var result = state.results.find(function (item) {
+      return String(item && item.id || '') === String(resultId || '');
+    });
+    if (!result) return;
+    var selectEl = document.getElementById('ai-image-brand-target');
+    var selectedToken = normalizeCharacterToken(selectEl && selectEl.value);
+    if (!selectedToken) {
+      var available = brandCharacterOptions();
+      if (!available.length) {
+        alert(t('saveBrandNoCharacters'));
+        return;
+      }
+      alert(t('saveBrandChooseCharacter'));
+      return;
+    }
+    setGlobalLoading(true, t('saveBrand'));
+    try {
+      var brandRecord = state.currentBrand;
+      if (NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+        brandRecord = await NK.service.brand.hydrateFromServer(state.currentBrand.brandId, { force: true, ttlMs: 0 }) || brandRecord;
+      }
+      var currentSheets = cloneJson((brandRecord && brandRecord.characterSheets) || [], []);
+      var currentCharacters = Array.isArray(brandRecord && brandRecord.knowledgeCharacters) ? brandRecord.knowledgeCharacters : [];
+      var matchedCharacter = currentCharacters.find(function (item) {
+        return String(normalizeCharacterToken(item && (item.token || item.displayName || item.name))) === String(selectedToken);
+      }) || null;
+      var displayName = normalizeCharacterName(matchedCharacter && (matchedCharacter.displayName || matchedCharacter.name || selectedToken)) || normalizeCharacterName(selectedToken);
+      var entry = currentSheets.find(function (item) {
+        return String(normalizeCharacterToken(item && (item.token || item.displayName || item.name))) === String(selectedToken);
+      });
+      if (!entry) {
+        entry = {
+          characterId: String(matchedCharacter && (matchedCharacter.characterId || matchedCharacter.id) || ('char_' + Date.now())).trim(),
+          displayName: displayName,
+          token: selectedToken,
+          items: []
+        };
+        currentSheets.push(entry);
+      }
+      entry.displayName = entry.displayName || displayName;
+      entry.token = entry.token || selectedToken;
+      entry.items = Array.isArray(entry.items) ? entry.items.slice() : [];
+      entry.items.unshift({
+        sheetId: 'sheet_' + Date.now(),
+        imageDataUrl: await resultToDataUrl(result),
+        isPrimary: entry.items.length ? false : true
+      });
+      entry.items = entry.items.slice(0, 4);
+      if (!entry.items.some(function (item) { return item && item.isPrimary; }) && entry.items[0]) {
+        entry.items[0].isPrimary = true;
+      }
+      var savedBrand = null;
+      if (NK.service && NK.service.brand && NK.service.brand.persistShared) {
+        savedBrand = await NK.service.brand.persistShared(state.currentBrand.brandId, {
+          characterSheets: currentSheets
+        });
+      } else if (NK.api && NK.api.brandSave) {
+        var nextBrandPayload = Object.assign({}, cloneJson(brandRecord || {}, {}), { characterSheets: currentSheets });
+        var response = await NK.api.brandSave(state.currentBrand.brandId, nextBrandPayload);
+        savedBrand = response && response.brand ? response.brand : nextBrandPayload;
+      } else {
+        throw new Error('brand_save_unavailable');
+      }
+      state.currentBrand = savedBrand || state.currentBrand;
+      result.savedBrandTargets = Array.isArray(result.savedBrandTargets) ? result.savedBrandTargets : [];
+      if (result.savedBrandTargets.indexOf(selectedToken) < 0) result.savedBrandTargets.push(selectedToken);
+      result.selectedBrandCharacterToken = selectedToken;
+      persistHistory();
+      render();
+      alert(t('savedBrand'));
+    } catch (err) {
+      alert(t('brandSaveFailed') + (err && err.message ? err.message : err));
+    } finally {
+      setGlobalLoading(false);
+    }
   }
 
   async function loadProjectLibrary() {
@@ -750,6 +932,10 @@
         }
         if (action === 'save-result-project') {
           saveResultToProject(btn.getAttribute('data-id') || '');
+          return;
+        }
+        if (action === 'save-result-brand') {
+          saveResultToBrand(btn.getAttribute('data-id') || '');
         }
       });
     }
@@ -789,6 +975,15 @@
         }
       });
     }
+
+    document.addEventListener('change', function (evt) {
+      var target = evt.target;
+      if (!target || target.id !== 'ai-image-brand-target') return;
+      var result = currentResult();
+      if (!result) return;
+      result.selectedBrandCharacterToken = normalizeCharacterToken(target.value);
+      persistHistory();
+    });
   }
 
   function updateAuthState() {
