@@ -858,12 +858,12 @@
         if (!targetId) throw new Error('brand_id_required');
         ensureMigrated();
         var existing = brand.getById(targetId);
-        var seed = normalizeBrand(Object.assign({}, existing || {}, patch || {}, { brandId: targetId, createdAt: existing && existing.createdAt }));
-        var merged = existing ? mergeBrandRecords(existing, seed, { preferIncoming: true }) : seed;
-        upsertBrandLocal(merged);
-        if (!NK.api || !NK.api.brandSave) return merged;
-        var resp = await NK.api.brandSave(targetId, merged);
-        var saved = resp && resp.brand ? normalizeBrand(resp.brand) : merged;
+        // Shared knowledge edits are authored from a single UI state, so arrays must replace, not union-merge.
+        var nextBrand = normalizeBrand(Object.assign({}, existing || {}, patch || {}, { brandId: targetId, createdAt: existing && existing.createdAt }));
+        upsertBrandLocal(nextBrand);
+        if (!NK.api || !NK.api.brandSave) return nextBrand;
+        var resp = await NK.api.brandSave(targetId, nextBrand);
+        var saved = resp && resp.brand ? normalizeBrand(resp.brand) : nextBrand;
         return upsertBrandLocal(saved);
     };
     brand.upsertFromProject = function (projectOrId) {

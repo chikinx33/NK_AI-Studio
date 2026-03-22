@@ -52,7 +52,9 @@ function createContext(initialDrafts) {
       config: {
         KEYS: {
           SELECTED_DRAFT: 'nk_selected_draft',
-          CURRENT_PROJECT: 'nk_current_project_summary'
+          CURRENT_PROJECT: 'nk_current_project_summary',
+          BRANDS: 'nk_brands_v1',
+          CURRENT_BRAND: 'nk_current_brand'
         }
       },
       store,
@@ -319,6 +321,50 @@ test('project.getKnowledgeHub keeps top-level character sheets when nested knowl
   assert.equal(knowledge.characterSheets[0].token, '@네모');
   assert.equal(knowledge.characterSheets[0].items.length, 1);
   assert.equal(knowledge.characterSheets[0].items[0].imageDataUrl, 'gs://bucket/front.png');
+});
+
+test('brand.persistShared replaces deleted knowledge characters instead of merging them back', async () => {
+  const ctx = createContext([]);
+  ctx.NK.api.brandSave = async (_brandId, payload) => ({ brand: payload });
+  loadScript(ctx, 'prototype/js/service/project.js');
+  loadScript(ctx, 'prototype/js/service/brand.js');
+
+  const brand = ctx.NK.service.brand;
+  brand.create({
+    brandId: 'shape-brand',
+    brandTitle: '모양새 친구들',
+    knowledgeCharacters: [
+      { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리 있음' },
+      { characterId: 'char_002', displayName: '동그라미', token: '@동그라미', personality: '밝음' }
+    ],
+    characterSheets: [
+      {
+        token: '@네모',
+        items: [{ sheetId: 's1', pose: 'front', imageDataUrl: 'gs://bucket/front.png', isPrimary: true }]
+      },
+      {
+        token: '@동그라미',
+        items: [{ sheetId: 's2', pose: 'front', imageDataUrl: 'gs://bucket/circle.png', isPrimary: true }]
+      }
+    ]
+  });
+
+  const saved = await brand.persistShared('shape-brand', {
+    knowledgeCharacters: [
+      { characterId: 'char_001', displayName: '네모', token: '@네모', personality: '의리 있음' }
+    ],
+    characterSheets: [
+      {
+        token: '@네모',
+        items: [{ sheetId: 's1', pose: 'front', imageDataUrl: 'gs://bucket/front.png', isPrimary: true }]
+      }
+    ]
+  });
+
+  assert.equal(saved.knowledgeCharacters.length, 1);
+  assert.equal(saved.knowledgeCharacters[0].token, '@네모');
+  assert.equal(saved.characterSheets.length, 1);
+  assert.equal(saved.characterSheets[0].token, '@네모');
 });
 
 test('project.getBrandId keeps persisted brandId when called with payload wrapper objects', () => {

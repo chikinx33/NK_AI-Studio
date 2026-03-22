@@ -577,9 +577,7 @@
           }
         }
 
-        var persistedKnowledge = persistedBrand
-          ? mergeKnowledge(readKnowledge(persistedBrand), nextKnowledge)
-          : nextKnowledge;
+        var persistedKnowledge = mergeKnowledge(nextKnowledge, null);
         persistedKnowledge.characters = normalizeCharacters(persistedKnowledge.characters, persistedKnowledge.brandCharacter);
         persistedKnowledge.characterSheets = normalizeCharacterSheets(persistedKnowledge.characterSheets, persistedKnowledge.characters);
 
