@@ -100,19 +100,6 @@
     return parts.join('\n');
   }
 
-  async function uploadInlineImage(projectId, imageUrl) {
-    var arr = imageUrl.split(',');
-    var mime = arr[0].match(/:(.*?);/)[1];
-    var bstr = atob(arr[1]);
-    var n = bstr.length;
-    var u8 = new Uint8Array(n);
-    while (n--) u8[n] = bstr.charCodeAt(n);
-    var blob = new Blob([u8], { type: mime });
-    var file = new File([blob], 'image.png', { type: mime });
-    var response = await NK.api.imageUpload(projectId, file);
-    return response.signedUrl || response.url || response.dataUrl || '';
-  }
-
   video.startVideoForIdx = async function (options) {
     var opts = options || {};
     var ctx = opts.ctx;
@@ -207,21 +194,6 @@
       }
     } catch (aspectErr) {
       console.warn('image aspect normalize skipped:', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
-    }
-
-    if (imageUrl.indexOf('data:') === 0) {
-      try {
-        console.log('Auto-uploading base64 image for video generation...');
-        var uploadedUrl = await uploadInlineImage(projectId, imageUrl);
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl;
-          st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], { imageDataUrl: imageUrl });
-          ctx.setState(st);
-          scene = st.scenes[opts.idx];
-        }
-      } catch (e) {
-        console.warn('Image auto-upload failed, falling back to base64', e);
-      }
     }
 
     st.scenes[opts.idx] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
