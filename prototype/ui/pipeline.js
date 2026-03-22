@@ -70,98 +70,194 @@
     if (!modal) return;
     const box = modal.querySelector('.lib-content');
     const kindLabel = kind === 'video' ? '영상' : '이미지';
-    let selected = null; // { url, name }
     if (!box) return;
-    if (!items || !items.length) {
-      box.innerHTML = '' +
-        '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;">' +
-        '<span class="lib-title" style="font-weight:600;">라이브러리</span>' +
-        '<div style="flex:1;"></div>' +
-        '<button class="btn-primary" id="lib-use-btn" disabled>사용</button>' +
-        '<button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button>' +
-        '<button class="btn-secondary lib-close-btn" id="lib-close">닫기</button>' +
-        '</div>' +
-        '<div class="lib-empty"><p class="muted">항목이 없습니다.</p></div>';
-      const closeBtn = box.querySelector('#lib-close');
-      if (closeBtn) closeBtn.onclick = () => closeModals();
-      modal.classList.remove('hidden');
-      return;
-    } else {
-      const list = items.map(function (it, i) {
-        const name = it.name || '';
+
+    let currentItems = Array.isArray(items) ? items.slice() : [];
+    let selectionMode = false;
+    let selectedNames = new Set();
+    let deleting = false;
+
+    function getSelectedItems() {
+      return currentItems.filter(function (it) {
+        return selectedNames.has(String(it && it.name || ''));
+      });
+    }
+
+    function syncActionState() {
+      const selectedItems = getSelectedItems();
+      const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null;
+      const useBtn = box.querySelector('#lib-use-btn');
+      const deleteBtn = box.querySelector('#lib-delete-btn');
+      const selectBtn = box.querySelector('#lib-select-btn');
+      const countEl = box.querySelector('#lib-selection-count');
+      const canUse = !selectionMode && !!(singleSelected && singleSelected.name);
+      const canDelete = !deleting && selectedItems.length > 0;
+
+      if (useBtn) {
+        useBtn.disabled = !canUse || deleting;
+        useBtn.classList.toggle('disabled', useBtn.disabled);
+      }
+      if (deleteBtn) {
+        deleteBtn.disabled = !canDelete;
+        deleteBtn.classList.toggle('disabled', !canDelete);
+        deleteBtn.textContent = deleting ? '삭제 중...' : '삭제';
+      }
+      if (selectBtn) {
+        selectBtn.classList.toggle('active', selectionMode);
+        selectBtn.setAttribute('aria-pressed', selectionMode ? 'true' : 'false');
+      }
+      if (countEl) {
+        countEl.textContent = selectedItems.length ? ('선택 ' + selectedItems.length + '개') : '';
+      }
+    }
+
+    function bindGridEvents() {
+      const itemEls = box.querySelectorAll('.lib-item');
+      itemEls.forEach(function (itemEl) {
+        itemEl.onclick = function () {
+          if (deleting) return;
+          const idx = Number(itemEl.dataset.idx || -1);
+          const target = (idx >= 0 && idx < currentItems.length) ? currentItems[idx] : null;
+          const name = String(target && target.name || '');
+          if (!name) return;
+          if (selectionMode) {
+            if (selectedNames.has(name)) selectedNames.delete(name);
+            else selectedNames.add(name);
+          } else {
+            const next = new Set();
+            if (!selectedNames.has(name) || selectedNames.size !== 1) next.add(name);
+            selectedNames = next;
+          }
+          renderGridState();
+          syncActionState();
+        };
+      });
+    }
+
+    function renderGridState() {
+      const itemEls = box.querySelectorAll('.lib-item');
+      itemEls.forEach(function (itemEl) {
+        const idx = Number(itemEl.dataset.idx || -1);
+        const target = (idx >= 0 && idx < currentItems.length) ? currentItems[idx] : null;
+        const active = !!(target && selectedNames.has(String(target.name || '')));
+        itemEl.classList.toggle('lib-selected', active);
+        itemEl.classList.toggle('selected', active);
+        itemEl.classList.toggle('lib-multi-select', selectionMode);
+      });
+    }
+
+    function render() {
+      const hasItems = currentItems.length > 0;
+      const list = currentItems.map(function (it, idx) {
+        const name = String(it && it.name || '');
         const url = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(name) : '';
-        const thumbUrl = url;
         const thumb = (kind === 'image')
-          ? '<img class="lib-thumb" src="' + thumbUrl + '" alt="" />'
-          : '<video class="lib-thumb" src="' + thumbUrl + '" muted playsinline preload="metadata"></video>';
+          ? '<img class="lib-thumb" src="' + url + '" alt="" />'
+          : '<video class="lib-thumb" src="' + url + '" muted playsinline preload="metadata"></video>';
         return (
-          '<div class="lib-item" data-url="' + url + '" data-name="' + name + '" style="background:none;box-shadow:none;">' +
+          '<div class="lib-item" data-idx="' + idx + '" style="background:none;box-shadow:none;">' +
           thumb +
           '</div>'
         );
       }).join('');
+
       box.innerHTML = '' +
-        '<div class="lib-header" style="display:flex;align-items:center;gap:8px; margin-bottom:12px;">' +
-        '<span class="lib-title" style="font-weight:600;">라이브러리</span>' +
-        '<div style="flex:1;"></div>' +
-        '<button class="btn-primary" id="lib-use-btn">사용</button>' +
-        '<button class="btn-ghost" id="lib-delete-btn">삭제</button>' +
+        '<div class="lib-header">' +
+        '<span class="lib-title">라이브러리</span>' +
+        '<span class="lib-selection-count muted" id="lib-selection-count"></span>' +
+        '<div class="lib-header-spacer"></div>' +
+        '<div class="lib-toolbar">' +
+        '<button class="btn-ghost" id="lib-select-btn"' + (hasItems ? '' : ' disabled') + '>선택</button>' +
+        '<button class="btn-primary" id="lib-use-btn"' + (hasItems ? '' : ' disabled') + '>사용</button>' +
+        '<button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button>' +
         '<button class="btn-secondary lib-close-btn" id="lib-close">닫기</button>' +
         '</div>' +
-        '<div class="lib-grid">' + list + '</div>';
-      const itemsEls = box.querySelectorAll('.lib-item');
-      itemsEls.forEach(function (item) {
-        item.onclick = function () {
-          const already = item.classList.contains('lib-selected');
-          itemsEls.forEach(el => el.classList.remove('lib-selected', 'selected'));
-          if (already) {
-            selected = null;
-          } else {
-            item.classList.add('lib-selected');
-            selected = { url: item.dataset.url, name: item.dataset.name };
-          }
-          updateLibActions();
-        };
-      });
-      const useBtn = box.querySelector('#lib-use-btn');
-      const delBtn = box.querySelector('#lib-delete-btn');
+        '</div>' +
+        (hasItems
+          ? '<div class="lib-grid">' + list + '</div>'
+          : '<div class="lib-empty"><p class="muted">항목이 없습니다.</p></div>');
 
-      function updateLibActions() {
-        const active = !!(selected && selected.url);
-        if (useBtn) {
-          useBtn.disabled = !active;
-          useBtn.classList.toggle('disabled', !active);
-        }
-        if (delBtn) {
-          delBtn.disabled = !active;
-          delBtn.classList.toggle('disabled', !active);
-        }
+      const closeBtn = box.querySelector('#lib-close');
+      const selectBtn = box.querySelector('#lib-select-btn');
+      const useBtn = box.querySelector('#lib-use-btn');
+      const deleteBtn = box.querySelector('#lib-delete-btn');
+
+      if (closeBtn) closeBtn.onclick = function () { closeModals(); };
+      if (selectBtn) {
+        selectBtn.onclick = function () {
+          if (!currentItems.length || deleting) return;
+          selectionMode = !selectionMode;
+          if (!selectionMode && selectedNames.size > 1) {
+            selectedNames = new Set();
+          }
+          renderGridState();
+          syncActionState();
+        };
+      }
+      if (useBtn) {
+        useBtn.onclick = function () {
+          const selectedItems = getSelectedItems();
+          const selected = selectedItems.length === 1 ? selectedItems[0] : null;
+          const url = selected && selected.name && NK.api && NK.api.mediaProxyObjectUrl
+            ? NK.api.mediaProxyObjectUrl(selected.name)
+            : '';
+          if (!selected || !url) {
+            alert(kindLabel + '를 먼저 선택하세요.');
+            return;
+          }
+          if (onSelect) onSelect(url);
+          closeModals();
+        };
+      }
+      if (deleteBtn) {
+        deleteBtn.onclick = async function () {
+          if (!projectId) { alert('프로젝트 ID를 찾을 수 없습니다.'); return; }
+          const selectedItems = getSelectedItems();
+          const names = selectedItems.map(function (it) { return String(it && it.name || ''); }).filter(Boolean);
+          if (!names.length) { alert('삭제할 ' + kindLabel + '를 선택하세요.'); return; }
+          const confirmMessage = names.length > 1
+            ? (kindLabel + ' ' + names.length + '개를 삭제하시겠습니까?')
+            : ('이 ' + kindLabel + '를 삭제하시겠습니까?');
+          if (!window.confirm(confirmMessage)) return;
+          deleting = true;
+          syncActionState();
+          try {
+            const res = await NK.api.projectDelete(projectId, names);
+            if (!res.ok || !res.data || Number(res.data.deletedCount || 0) < 1) {
+              throw new Error(res.error || (res.data && res.data.error) || 'delete_failed');
+            }
+            const results = Array.isArray(res.data && res.data.results) ? res.data.results : [];
+            const deletedSet = new Set(results
+              .filter(function (item) { return Number(item && item.status) === 204; })
+              .map(function (item) { return String(item && item.name || ''); })
+              .filter(Boolean));
+            if (!deletedSet.size) {
+              throw new Error(res.error || (res.data && res.data.error) || 'delete_failed');
+            }
+            currentItems = currentItems.filter(function (it) {
+              return !deletedSet.has(String(it && it.name || ''));
+            });
+            selectedNames = new Set();
+            if (!currentItems.length) selectionMode = false;
+            render();
+            if (deletedSet.size !== names.length) {
+              alert(kindLabel + ' 일부만 삭제되었습니다.');
+            }
+          } catch (err) {
+            alert(kindLabel + ' 삭제 실패: ' + (err && err.message ? err.message : err));
+          } finally {
+            deleting = false;
+            syncActionState();
+          }
+        };
       }
 
-      if (useBtn) useBtn.onclick = function () {
-        if (!selected || !selected.url) { alert(kindLabel + '를 먼저 선택하세요.'); return; }
-        if (onSelect) onSelect(selected.url);
-        closeModals();
-      };
-      if (delBtn) delBtn.onclick = async function () {
-        if (!projectId) { alert('프로젝트 ID를 찾을 수 없습니다.'); return; }
-        if (!selected || !selected.name) { alert('삭제할 ' + kindLabel + '를 선택하세요.'); return; }
-        try {
-          const res = await NK.api.projectDelete(projectId, selected.name);
-          if (!res.ok || !res.data || Number(res.data.deletedCount || 0) < 1) {
-            throw new Error(res.error || (res.data && res.data.error) || 'delete_failed');
-          }
-          // 삭제 성공: 리스트에서 제거하고 선택 초기화
-          const left = items.filter(it => it.name !== selected.name);
-          openLibraryModal(left, kind, onSelect, projectId);
-        } catch (err) {
-          alert(kindLabel + ' 삭제 실패: ' + (err && err.message ? err.message : err));
-        }
-      };
-      updateLibActions();
-      const closeBtn = box.querySelector('#lib-close');
-      if (closeBtn) closeBtn.onclick = () => closeModals();
+      bindGridEvents();
+      renderGridState();
+      syncActionState();
     }
+
+    render();
     modal.classList.remove('hidden');
   }
 

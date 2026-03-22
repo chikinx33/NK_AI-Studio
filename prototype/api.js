@@ -450,11 +450,21 @@
     return { ok: res.ok, status: res.status, data: data, error: e(text) };
   };
 
-  api.projectDelete = async function (projectId, objectName) {
+  api.projectDelete = async function (projectId, objectNameOrNames) {
+    var names = Array.isArray(objectNameOrNames)
+      ? objectNameOrNames.map(function (name) { return String(name || '').trim(); }).filter(Boolean)
+      : [];
+    var body = {
+      projectId: String(projectId || ''),
+      userId: resolveUserId(),
+      confirm: 'yes'
+    };
+    if (names.length) body.objectNames = names;
+    else body.objectName = String(objectNameOrNames || '');
     var res = await fetch(withBase('/api/project/delete'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ projectId: String(projectId || ''), userId: resolveUserId(), confirm: 'yes', objectName: String(objectName || '') })
+      body: JSON.stringify(body)
     });
     var text = await res.text();
     var data = j(text);

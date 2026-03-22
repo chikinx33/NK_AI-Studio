@@ -64,21 +64,33 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       "";
 
     const objectName = String((body.objectName || body.object || "")).trim();
-    if (objectName) {
+    const objectNames = Array.isArray(body.objectNames)
+      ? body.objectNames.map((value: any) => String(value || "").trim()).filter(Boolean)
+      : [];
+    if (objectName || objectNames.length) {
       const allowedPrefix = `${projectPrefix}/`;
-      if (!objectName.startsWith(allowedPrefix)) {
+      const deleteTargets = objectNames.length ? objectNames : [objectName];
+      if (deleteTargets.some((name) => !name.startsWith(allowedPrefix))) {
         return send({ error: "Invalid objectName for project" }, 400, origin);
       }
-      const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
-      const dres = await fetch(delUrl, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          ...(userProject ? { "X-Goog-User-Project": userProject } : {})
-        }
-      });
-      const status = dres.status;
-      return send({ deletedCount: status === 204 ? 1 : 0, results: [{ name: objectName, status }], single: true }, 200, origin);
+      const results: Array<{ name: string; status: number }> = [];
+      for (const name of deleteTargets) {
+        const delUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(name)}${userProject ? `?userProject=${encodeURIComponent(userProject)}` : ""}`;
+        const dres = await fetch(delUrl, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            ...(userProject ? { "X-Goog-User-Project": userProject } : {})
+          }
+        });
+        results.push({ name, status: dres.status });
+      }
+      return send({
+        deletedCount: results.filter((item) => item.status === 204).length,
+        results,
+        single: deleteTargets.length === 1,
+        requestedCount: deleteTargets.length,
+      }, 200, origin);
     }
 
     // List and delete objects with pagination
