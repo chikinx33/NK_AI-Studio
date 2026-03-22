@@ -111,6 +111,10 @@
   function renderProject(root, project, brand, state) {
     var summary = NK.service.contentLibrary.summarizeProject(brand || project);
     var items = NK.service.contentLibrary.listProjectContents(brand || project);
+    var extraItems = state && Array.isArray(state.extraItems) ? state.extraItems : [];
+    if (extraItems.length) {
+      items = items.concat(extraItems);
+    }
     var meta = projectMeta(project);
     var projectId = String(project.id || '').trim();
     var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
@@ -275,12 +279,12 @@
       else if (action === 'library-open-scenes') target = buildStageUrl('scenes.html', projectId, brandId);
       else if (action === 'library-open-media') target = buildStageUrl('media.html', projectId, brandId);
       else if (action === 'library-filter-type') {
-        renderProject(root, project, brand, { selectedType: String(btn.dataset.libraryType || '').trim() || 'all', expandedTypes: expandedTypes });
+        renderProject(root, project, brand, { selectedType: String(btn.dataset.libraryType || '').trim() || 'all', expandedTypes: expandedTypes, extraItems: extraItems });
         return;
       } else if (action === 'library-expand-type') {
         var nextExpanded = Object.assign({}, expandedTypes);
         nextExpanded[String(btn.dataset.libraryExpandType || '').trim()] = true;
-        renderProject(root, project, brand, { selectedType: selectedType, expandedTypes: nextExpanded });
+        renderProject(root, project, brand, { selectedType: selectedType, expandedTypes: nextExpanded, extraItems: extraItems });
         return;
       }
       if (!target) return;
@@ -309,5 +313,32 @@
       return;
     }
     renderProject(root, project, brand, {});
+    if (NK.api && NK.api.library && NK.api.mediaProxyObjectUrl) {
+      NK.api.library('image', project.id).then(function (res) {
+        var rows = Array.isArray(res && res.items) ? res.items : [];
+        var extras = rows.filter(function (item) {
+          var type = String(item && item.contentType || '').toLowerCase();
+          var name = String(item && item.name || '').toLowerCase();
+          return type.indexOf('image/') === 0 || /\.(png|jpg|jpeg|webp)$/i.test(name);
+        }).map(function (item, idx) {
+          var name = String(item && item.name || '').trim();
+          var parts = name.split('/');
+          var title = parts[parts.length - 1] || name;
+          var url = NK.api.mediaProxyObjectUrl(name) || String(item && item.signedUrl || '').trim();
+          return {
+            id: 'project-library-image:' + String(idx + 1),
+            projectId: String(project.id || ''),
+            type: 'image',
+            title: title || '라이브러리 이미지',
+            text: '',
+            url: url,
+            status: 'ready'
+          };
+        });
+        if (extras.length) {
+          renderProject(root, project, brand, { selectedType: 'image', extraItems: extras });
+        }
+      }).catch(function () { });
+    }
   };
 })();
