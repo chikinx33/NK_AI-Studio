@@ -585,6 +585,16 @@
       if (href && (href.includes('ai-image.html') || href.includes('ai-video.html'))) {
         e.preventDefault();
         e.stopPropagation();
+        if (href.includes('ai-video.html')) {
+          try {
+            sessionStorage.setItem('nk_force_dashboard_entry', '1');
+            localStorage.setItem('nk_force_dashboard_entry', '1');
+            sessionStorage.removeItem('nk_current_stage_href');
+            localStorage.removeItem('nk_current_stage_href');
+            sessionStorage.removeItem('nk_current_stage');
+            localStorage.removeItem('nk_current_stage');
+          } catch (_) { }
+        }
         try {
           window.top.location.href = href;
         } catch (_) {
