@@ -330,6 +330,24 @@
 
     const isIframe = window.self !== window.top;
     const urlParams = new URLSearchParams(window.location.search);
+    try {
+      const path = String(window.location.pathname || '').toLowerCase();
+      const isAiVideoShell = path.indexOf('ai-video.html') !== -1;
+      if (!isIframe && isAiVideoShell) {
+        const hasStageHref = urlParams.has('stageHref') || urlParams.has('projectId') || urlParams.has('brandId');
+        if (hasStageHref) {
+          sessionStorage.removeItem(STAGE_TARGET_KEY);
+          localStorage.removeItem(STAGE_TARGET_KEY);
+          sessionStorage.removeItem('nk_current_stage');
+          localStorage.removeItem('nk_current_stage');
+          const clean = new URL(window.location.href);
+          clean.searchParams.delete('stageHref');
+          clean.searchParams.delete('projectId');
+          clean.searchParams.delete('brandId');
+          window.history.replaceState({}, '', clean.toString());
+        }
+      }
+    } catch (_) { }
     if (urlParams.get('embed') === '1') {
       document.documentElement.setAttribute('data-embed', '1');
     }
