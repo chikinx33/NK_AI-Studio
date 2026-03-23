@@ -583,8 +583,6 @@
         '<div class="ai-image-inline-actions">' +
         '<button type="button" class="btn-secondary compact" data-action="open-upload">' + escapeHtml(t('sourceUpload')) + '</button>' +
         '<button type="button" class="btn-secondary compact" data-action="load-project-library"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('sourceProject')) + '</button>' +
-        '<button type="button" class="btn-secondary compact" data-action="load-brand-library"' + ((brand && brand.brandId) ? '' : ' disabled') + '>' + escapeHtml(t('sourceBrand')) + '</button>' +
-        '<button type="button" class="btn-secondary compact" data-action="load-content-library">' + escapeHtml(t('sourceContent')) + '</button>' +
         '<button type="button" class="btn-ghost compact" data-action="clear-source"' + (sourceUrl ? '' : ' disabled') + '>' + escapeHtml(t('sourceClear')) + '</button>' +
         '</div>' +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
@@ -962,6 +960,10 @@
             state.brandLibraryItems = [];
           }
           render();
+          if (state.mode === 'image-to-image') {
+            if (!state.brandLibraryItems.length && state.currentBrand && state.currentBrand.brandId) loadBrandLibrary();
+            if (!state.contentLibraryItems.length) loadContentLibrary();
+          }
           return;
         }
         if (action === 'open-upload') {
@@ -1177,6 +1179,10 @@
     bindStaticEvents();
     render();
     hydrateSessionHistory();
+    if (state.currentBrand && state.currentBrand.brandId) {
+      loadBrandLibrary();
+    }
+    loadContentLibrary();
     if (state.currentBrand && state.currentBrand.brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       NK.service.brand.hydrateFromServer(state.currentBrand.brandId).then(function (brand) {
         if (!brand || !brand.brandId) return;
