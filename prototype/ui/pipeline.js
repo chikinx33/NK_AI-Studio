@@ -738,7 +738,7 @@
       } catch (_) { }
     } else {
       pipelineScenes.classList.add('empty');
-      pipelineScenes.innerHTML = '<p class="muted">장면이 없습니다</p>';
+      pipelineScenes.innerHTML = '<div class="card video-stage-empty-card"><p class="muted">장면이 없습니다</p></div>';
     }
     var savePipelineBtn = document.getElementById('save-pipeline-btn');
     if (savePipelineBtn) {

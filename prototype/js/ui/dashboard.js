@@ -557,6 +557,13 @@
   dashboard.renderSidebarProjectCard = function (draft) {
     const container = document.getElementById('sidebar-project-card');
     if (!container) return;
+    const isBrandShell = String(window.location.pathname || '').toLowerCase().includes('brand-studio.html');
+    if (isBrandShell) {
+      container.innerHTML = '';
+      container.style.display = 'none';
+      setSidebarProjectLayout(false);
+      return;
+    }
 
     if (!draft) {
       container.innerHTML = '';
@@ -585,20 +592,19 @@
       `${labels.project} : ${normalized.seriesTitle || '-'}`,
       `${labels.genre} : ${genre || '-'}`,
       `${labels.target} : ${tgt || '-'}`,
-      `${labels.duration} : ${dur}`,
-      `${labels.aspect} : ${ar}`
+      `${labels.duration} : ${dur}`
     ].join('\n');
 
     container.innerHTML = `
       <div class="draft-top">
         <div class="draft-thumb"></div>
-        <h4 class="sidebar-card-title">${escapeHtml(normalized.title || '제목없음')}</h4>
       </div>
+      <h4 class="sidebar-card-title">${escapeHtml(normalized.title || '제목없음')}</h4>
       <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
       <div class="sidebar-card-actions">
-        <button class="btn-secondary" data-action="sidebar-edit-scenario">프리 프로덕션</button>
-        <button class="btn-secondary" data-action="sidebar-edit-scenes">프로덕션</button>
-        <button class="btn-secondary" data-action="sidebar-edit-media">포스트 프로덕션</button>
+        <button class="btn-secondary" data-action="sidebar-edit-scenario">Pre</button>
+        <button class="btn-secondary" data-action="sidebar-edit-scenes">Production</button>
+        <button class="btn-secondary" data-action="sidebar-edit-media">Post</button>
       </div>
     `;
     container.style.display = 'block';
