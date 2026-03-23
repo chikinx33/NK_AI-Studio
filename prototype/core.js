@@ -419,7 +419,7 @@
       brand_title: 'NK_Studio',
       brand_subtitle: '영상 제작 자동화',
       nav_dashboard: '대시보드',
-      nav_ai_image: '이미지 생성',
+      nav_ai_image: 'AI 이미지 생성',
       nav_library: '콘텐츠 저장소',
       nav_brand: '브랜드 스튜디오',
       nav_knowledge: '브랜드 허브',
