@@ -612,6 +612,26 @@
       try { abs = new URL(raw, window.location.href).href; } catch (_) { abs = raw; }
       const isAiVideo = /\/ai-video(\.html)?([?#]|$)/i.test(abs) || abs.indexOf('https://nk-ai-studio.pages.dev/ai-video') === 0;
       const isAiImage = /\/ai-image(\.html)?([?#]|$)/i.test(abs) || abs.indexOf('https://nk-ai-studio.pages.dev/ai-image') === 0;
+      const isSidebarNav = !!(a.closest && a.closest('.sidebar .nav'));
+      const isAiImageShell = /(^|[\\\/])ai-image(\.html)?([?#]|$)/i.test(window.location.pathname || '');
+      if (isAiImage && isSidebarNav && isAiImageShell) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        try {
+          const cp = NK.state?.runtime?.currentProject;
+          const pid = String(cp && cp.id || '').trim();
+          const bid = String(cp && (cp.brandId || cp.payload && cp.payload.brandId) || '').trim();
+          const params = [];
+          if (pid) params.push(`projectId=${encodeURIComponent(pid)}`);
+          if (bid) params.push(`brandId=${encodeURIComponent(bid)}`);
+          const target = `https://nk-ai-studio.pages.dev/ai-image-stage.html${params.length ? `?${params.join('&')}` : ''}`;
+          window.top.location.href = target;
+        } catch (_) {
+          window.location.href = 'ai-image-stage.html';
+        }
+        return;
+      }
       if (isAiVideo || isAiImage) {
         e.preventDefault();
         e.stopPropagation();
@@ -682,6 +702,16 @@
           } catch (_) { }
           const abs = 'https://nk-ai-studio.pages.dev/ai-video';
           try { window.top.location.href = abs; } catch (_) { window.location.href = abs; }
+          return;
+        }
+        if (window.location.pathname.toLowerCase().includes('ai-image')) {
+          persistCurrentProject();
+          const target = buildAiImageStageUrl();
+          if (NK.navigation && NK.navigation.loadStage) {
+            NK.navigation.loadStage(target);
+          } else {
+            window.location.href = target;
+          }
           return;
         }
         try { window.top.location.href = href; } catch (_) { window.location.href = href; }
