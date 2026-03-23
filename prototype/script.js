@@ -658,7 +658,11 @@
       if (href && href.includes('.html')) {
         e.preventDefault();
         e.stopPropagation();
-        NK.navigation.loadStage(href);
+        if (NK.navigation && NK.navigation.loadStage) {
+          NK.navigation.loadStage(href);
+        } else {
+          window.location.href = href;
+        }
       }
 
       // 사이드바 프로젝트 카드 버튼 처리
