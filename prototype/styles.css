@@ -379,11 +379,10 @@ body[data-embed="1"] {
   flex: 1 1 auto;
   min-height: 0;
 }
- [data-page="ai-image"] .main {
-  height: auto;
+[data-page="ai-image"] .main {
+  height: 100vh;
   min-height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .brand {
