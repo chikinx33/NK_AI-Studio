@@ -625,10 +625,15 @@
           const params = [];
           if (pid) params.push(`projectId=${encodeURIComponent(pid)}`);
           if (bid) params.push(`brandId=${encodeURIComponent(bid)}`);
-          const target = `https://nk-ai-studio.pages.dev/ai-image-stage.html${params.length ? `?${params.join('&')}` : ''}`;
-          window.top.location.href = target;
+          const target = `ai-image-stage.html${params.length ? `?${params.join('&')}` : ''}`;
+          if (NK.navigation && NK.navigation.loadStage) {
+            NK.navigation.loadStage(target);
+          } else {
+            window.location.href = `ai-image.html?stageHref=${encodeURIComponent(target)}`;
+          }
         } catch (_) {
-          window.location.href = 'ai-image-stage.html';
+          if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('ai-image-stage.html');
+          else window.location.href = 'ai-image.html?stageHref=ai-image-stage.html';
         }
         return;
       }
