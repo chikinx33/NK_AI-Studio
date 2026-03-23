@@ -617,18 +617,12 @@
       '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
       '<div class="ai-image-counter"><span id="ai-image-prompt-count">' + escapeHtml(String((state.prompt || '').length) + t('promptCounterSuffix')) + '</span></div>' +
       '</div>' +
-      '<div class="ai-image-field">' +
-      '<label for="ai-image-aspect">' + escapeHtml(t('aspectLabel')) + '</label>' +
-      '<div class="ratio-group">' +
+      '<div class="ai-image-ratio-row">' +
       '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
       '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
       '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
+      '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
       '</div>' +
-      '</div>' +
-      '<div class="ai-image-action-row">' +
-      '<button type="button" class="btn-primary" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
-      '</div>' +
-      (!project || !project.id ? '<p class="muted small">' + escapeHtml(t('noProjectHelp')) + '</p>' : '') +
       '</div>' +
       '</section>' +
       '<section class="card ai-image-panel ai-image-panel-right">' +
