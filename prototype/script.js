@@ -581,11 +581,15 @@
         NK.service?.project?.setCurrent?.(cp);
       };
 
-      // 대시보드/메인 클릭: 전체 페이지 전환을 막고 iframe으로만 로드
-      if (href && (href.includes('ai-video.html') || href.includes('dashboard.html'))) {
+      // 최상위 페이지로 이동해야 하는 항목은 iframe 로딩을 막고 전체 페이지로 전환
+      if (href && (href.includes('ai-image.html') || href.includes('ai-video.html'))) {
         e.preventDefault();
         e.stopPropagation();
-        NK.navigation.loadStage('dashboard.html');
+        try {
+          window.top.location.href = href;
+        } catch (_) {
+          window.location.href = href;
+        }
         return;
       }
 

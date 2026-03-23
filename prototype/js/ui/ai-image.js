@@ -798,9 +798,6 @@
     try {
       var res = await NK.api.library('image', state.currentProject.id);
       state.projectLibraryItems = (Array.isArray(res && res.items) ? res.items : []).filter(isImageLibraryItem);
-      if (!state.projectLibraryItems.length) {
-        alert(t('sourceProjectEmpty'));
-      }
     } catch (err) {
       alert(t('projectLoadFailed') + (err && err.message ? err.message : err));
     } finally {

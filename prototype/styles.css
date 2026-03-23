@@ -365,6 +365,20 @@ body[data-embed="1"] {
   max-height: none;
   overflow: visible;
 }
+[data-page="ai-image"] .main {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+[data-page="ai-image"] .main-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+[data-page="ai-image"] .content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
  [data-page="ai-image"] .main {
   height: auto;
   min-height: 100vh;
@@ -2141,7 +2155,7 @@ textarea::-webkit-scrollbar-corner {
   display: grid;
   grid-template-columns: 0.5fr 0.5fr;
   gap: 10px;
-  height: auto;
+  height: 100%;
   flex: 1 1 auto;
   min-height: 0;
   padding-bottom: 10px;
