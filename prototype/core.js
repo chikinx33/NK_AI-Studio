@@ -274,6 +274,8 @@
     en: {
       brand_title: 'NK_Studio',
       brand_subtitle: 'Video Auto Pipeline',
+      brand_manage_subtitle: 'Brand Management',
+      ai_image_studio_subtitle: 'AI Image Studio',
       nav_dashboard: 'Dashboard',
       nav_ai_image: 'AI Image',
       nav_library: 'Content Library',
@@ -418,6 +420,8 @@
     ko: {
       brand_title: 'NK_Studio',
       brand_subtitle: '영상 제작 자동화',
+      brand_manage_subtitle: '브랜드 관리',
+      ai_image_studio_subtitle: 'AI 이미지 생성 스튜디오',
       nav_dashboard: '대시보드',
       nav_ai_image: 'AI 이미지 생성',
       nav_library: '콘텐츠 저장소',

@@ -243,14 +243,18 @@
       if (n >= 60 && n % 60 === 0) return `${n / 60}m`;
       return `${n}s`;
     };
+    const runtimeLang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
+    const labels = runtimeLang === 'en'
+      ? { project: 'Project', genre: 'Genre', target: 'Target', duration: 'Duration', aspect: 'Aspect ratio' }
+      : { project: '프로젝트', genre: '장르', target: '타겟', duration: '길이', aspect: '비율' };
 
     const filterBar = `
       <div class="series-filter-bar">
         <div class="series-filter-main">
           <div class="series-filter-header">
             <div class="series-filter-title-block">
-              <p class="series-filter-eyebrow">Dashboard Categories</p>
-              <strong class="series-filter-title">프로젝트 카테고리</strong>
+              <p class="series-filter-eyebrow">Dashboard</p>
+              <strong class="series-filter-title">Dashboard</strong>
             </div>
           </div>
           <div class="series-filter-chip-row">
@@ -293,10 +297,10 @@
                 <h4 class="draft-title" data-id="${escapeHtml(d.id)}">${escapeHtml(d.title || '제목없음')}</h4>
               </div>
               <div class="draft-meta">
-                <div class="draft-meta-project">프로젝트 : ${escapeHtml(d.seriesTitle || '-')}</div>
-                <div class="draft-meta-genre">장르 : ${escapeHtml(genre || '-')}</div>
-                <div>타겟 : ${escapeHtml(tgt || '-')}</div>
-                <div>길이 : ${escapeHtml(dur)} · 비율 : ${escapeHtml(ar)}</div>
+                <div class="draft-meta-project">${labels.project} : ${escapeHtml(d.seriesTitle || '-')}</div>
+                <div class="draft-meta-genre">${labels.genre} : ${escapeHtml(genre || '-')}</div>
+                <div>${labels.target} : ${escapeHtml(tgt || '-')}</div>
+                <div>${labels.duration} : ${escapeHtml(dur)} · ${labels.aspect} : ${escapeHtml(ar)}</div>
               </div>
             </div>
           </div>
@@ -573,12 +577,16 @@
     const tags = Array.isArray(normalized.payload?.purposeTags) ? normalized.payload.purposeTags.join(', ') : '';
     const tgt = normalized.payload?.target || '';
     const genre = `${cat} ${tags}`.trim();
+    const runtimeLang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
+    const labels = runtimeLang === 'en'
+      ? { project: 'Project', genre: 'Genre', target: 'Target', duration: 'Duration', aspect: 'Aspect ratio' }
+      : { project: '프로젝트', genre: '장르', target: '타겟', duration: '길이', aspect: '비율' };
     const desc = [
-      `프로젝트 : ${normalized.seriesTitle || '-'}`,
-      `장르 : ${genre || '-'}`,
-      `타겟 : ${tgt || '-'}`,
-      `길이 : ${dur}`,
-      `비율 : ${ar}`
+      `${labels.project} : ${normalized.seriesTitle || '-'}`,
+      `${labels.genre} : ${genre || '-'}`,
+      `${labels.target} : ${tgt || '-'}`,
+      `${labels.duration} : ${dur}`,
+      `${labels.aspect} : ${ar}`
     ].join('\n');
 
     container.innerHTML = `
