@@ -353,9 +353,15 @@
     }
     const currentPath = window.location.pathname;
     const stage = NK.navigation.normalizeStageName(currentPath);
-    const isAiVideoShellPath = currentPath.toLowerCase().includes('ai-video.html');
+    const loweredPath = currentPath.toLowerCase();
+    const isAiVideoShellPath = loweredPath.includes('ai-video.html');
+    const isBrandShellPath = loweredPath.includes('brand-studio.html');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
-    const initialTarget = (isAiVideoShellPath || isShellPage) ? resolveInitialStageTarget(urlParams) : '';
+    const initialTargetRaw = (isAiVideoShellPath || isShellPage) ? resolveInitialStageTarget(urlParams) : '';
+    const brandStages = ['brand', 'knowledge', 'analytics', 'library'];
+    const initialTarget = isBrandShellPath
+      ? (brandStages.includes(NK.navigation.normalizeStageName(initialTargetRaw)) ? initialTargetRaw : 'brand.html')
+      : initialTargetRaw;
     const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
     const effectiveStage = initialStage || stage;
 
