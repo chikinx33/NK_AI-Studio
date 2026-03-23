@@ -247,6 +247,7 @@
     const labels = runtimeLang === 'en'
       ? { project: 'Project', genre: 'Genre', target: 'Target', duration: 'Duration', aspect: 'Aspect ratio' }
       : { project: '프로젝트', genre: '장르', target: '타겟', duration: '길이', aspect: '비율' };
+    const categoryTitle = runtimeLang === 'en' ? 'Category' : '카테고리';
 
     const filterBar = `
       <div class="series-filter-bar">
@@ -254,7 +255,7 @@
           <div class="series-filter-header">
             <div class="series-filter-title-block">
               <p class="series-filter-eyebrow">Dashboard</p>
-              <strong class="series-filter-title">Dashboard</strong>
+              <strong class="series-filter-title">${categoryTitle}</strong>
             </div>
           </div>
           <div class="series-filter-chip-row">
@@ -305,9 +306,9 @@
             </div>
           </div>
           <div class="draft-actions">
-            <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}">Pre</button>
-            <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}">Production</button>
-            <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}">Post</button>
+            <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre - production</button>
+            <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_production_fixed">Production</button>
+            <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post - production</button>
           </div>
         </article>
       `;

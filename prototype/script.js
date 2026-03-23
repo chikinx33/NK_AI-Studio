@@ -334,7 +334,7 @@
     const urlParams = new URLSearchParams(window.location.search);
     try {
       const path = String(window.location.pathname || '').toLowerCase();
-      const isAiVideoShell = path.indexOf('ai-video.html') !== -1;
+      const isAiVideoShell = /(^|\/)ai-video(\.html)?\/?$/i.test(path);
       if (!isIframe && isAiVideoShell) {
         const hasStageHref = urlParams.has('stageHref') || urlParams.has('projectId') || urlParams.has('brandId');
         if (hasStageHref) {
@@ -356,9 +356,9 @@
     const currentPath = window.location.pathname;
     const stage = NK.navigation.normalizeStageName(currentPath);
     const loweredPath = currentPath.toLowerCase();
-    const isAiVideoShellPath = loweredPath.includes('ai-video.html');
-    const isBrandShellPath = loweredPath.includes('brand-studio.html');
-    const isAiImageShellPath = loweredPath.includes('ai-image.html');
+    const isAiVideoShellPath = /(^|\/)ai-video(\.html)?\/?$/i.test(loweredPath);
+    const isBrandShellPath = /(^|\/)brand-studio(\.html)?\/?$/i.test(loweredPath);
+    const isAiImageShellPath = /(^|\/)ai-image(\.html)?\/?$/i.test(loweredPath);
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
     const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath;
     const hasExplicitShellTarget = urlParams.has('stageHref') || urlParams.has('stage');
