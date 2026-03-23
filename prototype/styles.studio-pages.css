@@ -1,0 +1,351 @@
+.brand-studio-page,
+.knowledge-hub-page,
+.analytics-page,
+.content-library-page {
+  width: 100%;
+  max-width: none;
+  gap: 12px;
+  padding: 0 0 28px;
+}
+
+.brand-studio-hero,
+.knowledge-hub-hero,
+.analytics-hero,
+.content-library-hero {
+  gap: 14px;
+  padding: 20px 22px;
+  border-radius: 24px;
+}
+
+.studio-page-hero-main,
+.studio-page-hero-side {
+  gap: 12px;
+}
+
+.brand-studio-hero h2,
+.knowledge-hub-hero h2,
+.analytics-hero h2,
+.content-library-hero h2 {
+  font-size: clamp(26px, 3vw, 34px);
+  max-width: 14ch;
+}
+
+.brand-studio-description,
+.knowledge-hub-description,
+.analytics-description,
+.content-library-description {
+  font-size: 14px;
+  line-height: 1.58;
+}
+
+.studio-hero-pill {
+  gap: 3px;
+  padding: 8px 11px;
+  border-radius: 14px;
+}
+
+.studio-hero-pill strong {
+  font-size: 12px;
+}
+
+.studio-kpi-grid {
+  gap: 10px;
+}
+
+.studio-kpi-card {
+  min-height: 108px;
+  padding: 14px;
+  gap: 8px;
+  border-radius: 18px;
+}
+
+.studio-kpi-card strong {
+  font-size: clamp(20px, 2vw, 26px);
+}
+
+.studio-kpi-card p {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.brand-studio-context-item,
+.knowledge-hub-context-item,
+.analytics-summary-card,
+.content-library-summary-card,
+.analytics-overview-card,
+.brand-knowledge-card,
+.brand-content-type-card,
+.brand-asset-card,
+.brand-asset-empty,
+.brand-caption-meta > div,
+.brand-hashtag-meta > div,
+.brand-channel-summary,
+.brand-channel-card,
+.brand-publish-summary,
+.brand-publish-channel-option,
+.brand-publish-result-card,
+.knowledge-reference-card,
+.knowledge-reference-empty,
+.knowledge-hub-pill,
+.analytics-channel-card,
+.analytics-type-card,
+.analytics-hashtag-card,
+.analytics-recommendation-card,
+.analytics-suggestion-card,
+.analytics-empty,
+.content-library-item,
+.content-library-empty-group {
+  padding: 13px;
+  border-radius: 18px;
+}
+
+.brand-studio-context-item,
+.knowledge-hub-context-item,
+.analytics-summary-card,
+.content-library-summary-card,
+.analytics-overview-card {
+  gap: 7px;
+}
+
+.brand-studio-context-item strong,
+.knowledge-hub-context-item strong,
+.analytics-summary-card strong,
+.content-library-summary-card strong,
+.analytics-overview-card strong {
+  font-size: 17px;
+}
+
+.brand-studio-context-item p,
+.knowledge-hub-context-item p,
+.analytics-summary-card p,
+.content-library-summary-card p,
+.analytics-overview-card p {
+  font-size: 13px;
+  line-height: 1.46;
+}
+
+.brand-studio-panel,
+.knowledge-hub-panel,
+.analytics-panel,
+.content-library-section {
+  padding: 14px;
+  gap: 12px;
+  border-radius: 20px;
+}
+
+.brand-studio-panel-head h3,
+.knowledge-hub-panel-head h3,
+.analytics-panel-head h3,
+.content-library-section-head h3 {
+  font-size: 18px;
+}
+
+.brand-studio-panel-head span,
+.knowledge-hub-panel-head span,
+.analytics-panel-head span,
+.content-library-section-head span,
+.content-library-section-head p {
+  font-size: 12px;
+}
+
+.content-library-grid,
+.brand-knowledge-grid,
+.brand-content-type-grid,
+.brand-asset-grid,
+.analytics-channel-grid,
+.analytics-type-grid,
+.analytics-hashtag-grid,
+.analytics-recommendation-grid,
+.analytics-suggestion-grid,
+.knowledge-reference-grid {
+  gap: 10px;
+}
+
+.content-library-item,
+.content-library-empty-group {
+  min-height: 136px;
+}
+
+.content-library-section:first-of-type .content-library-item:first-child,
+.content-library-section:nth-of-type(3) .content-library-item:first-child,
+.content-library-section:nth-of-type(4) .content-library-item:first-child {
+  min-height: 168px;
+}
+
+.content-library-item h4,
+.brand-asset-card strong,
+.brand-knowledge-card strong,
+.knowledge-reference-card strong,
+.analytics-recommendation-card h4,
+.analytics-suggestion-card h4 {
+  font-size: 16px;
+}
+
+.brand-content-type-card {
+  min-height: 148px;
+  gap: 8px;
+}
+
+.brand-caption-textarea,
+.knowledge-hub-field textarea,
+.knowledge-reference-textarea {
+  min-height: 112px;
+  padding: 12px 13px;
+  font-size: 14px;
+}
+
+.knowledge-character-input,
+.analytics-filter-select,
+.knowledge-reference-input,
+.brand-channel-input,
+.brand-publish-input {
+  min-height: 40px;
+  padding: 9px 13px;
+  border-radius: 10px;
+}
+
+.brand-studio-disclosure > summary,
+.knowledge-hub-disclosure > summary {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 86%, rgba(255, 255, 255, 0.06) 14%);
+  background: color-mix(in srgb, var(--panel) 88%, rgba(255, 255, 255, 0.02) 12%);
+}
+
+.brand-studio-panel-embedded,
+.analytics-panel-embedded,
+.knowledge-hub-panel-embedded {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brand-studio-selection-summary,
+.brand-asset-selection-summary,
+.analytics-filter-summary,
+.brand-channel-summary,
+.brand-publish-summary {
+  padding: 12px 0 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 86%, rgba(255, 255, 255, 0.06) 14%);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.brand-composer-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.brand-composer-summary-grid > div {
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, rgba(255, 255, 255, 0.08) 16%);
+  background: var(--studio-soft-bg);
+  display: grid;
+  gap: 6px;
+}
+
+.brand-composer-auto-suggestion {
+  display: grid;
+  gap: 8px;
+}
+
+.brand-studio-disclosure-featured {
+  position: relative;
+  border-color: color-mix(in srgb, rgba(255, 140, 0, 0.46) 68%, var(--border) 32%);
+  background:
+    radial-gradient(circle at top right, rgba(255, 156, 66, 0.14), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 92%, rgba(255, 122, 0, 0.05) 8%), color-mix(in srgb, var(--bg-2) 96%, rgba(255, 255, 255, 0.02) 4%));
+  box-shadow: 0 14px 32px rgba(255, 122, 0, 0.12);
+}
+
+.brand-studio-disclosure-featured > summary {
+  background:
+    radial-gradient(circle at top right, rgba(255, 156, 66, 0.12), transparent 48%),
+    color-mix(in srgb, var(--panel) 90%, rgba(255, 122, 0, 0.04) 10%);
+}
+
+.brand-studio-disclosure-featured .brand-studio-composer-panel {
+  border-left: 0;
+  box-shadow: none;
+}
+
+@media (max-width: 1200px) {
+  .studio-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .studio-kpi-card:first-child {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+
+  .studio-kpi-card:nth-child(2),
+  .studio-kpi-card:nth-child(3),
+  .studio-kpi-card:nth-child(4) {
+    grid-column: auto;
+  }
+
+  .brand-studio-side {
+    order: 0;
+  }
+
+  .brand-studio-page .brand-content-type-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-studio-page .brand-content-type-card,
+  .brand-studio-page .brand-content-type-card:first-child {
+    grid-column: span 1;
+  }
+
+  .brand-studio-page .brand-content-type-card.is-active {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 980px) {
+  .brand-studio-context-bar,
+  .knowledge-hub-context-bar,
+  .analytics-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .brand-composer-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-studio-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-studio-side {
+    position: static;
+    top: auto;
+    order: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .brand-studio-context-bar,
+  .knowledge-hub-context-bar,
+  .analytics-summary-grid,
+  .brand-studio-hero .studio-kpi-grid,
+  .knowledge-hub-hero .studio-kpi-grid,
+  .analytics-hero .studio-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-studio-page .brand-content-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .brand-studio-page .brand-content-type-card,
+  .brand-studio-page .brand-content-type-card:first-child,
+  .brand-studio-page .brand-content-type-card.is-active {
+    grid-column: span 1;
+    min-height: 0;
+  }
+}
