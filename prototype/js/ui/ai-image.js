@@ -24,7 +24,7 @@
     historyLoading: false,
     historyLoadError: '',
     selectedFileName: '',
-    sourceSectionCollapsed: { brand: true, content: true },
+    sourceSectionCollapsed: { brand: true, content: true, project: true },
     imageModalUrl: ''
   };
 
@@ -56,8 +56,9 @@
       sourceBrandEmpty: '현재 브랜드 IP 라이브러리에 이미지가 없습니다.',
       sourceBrandLoading: '브랜드 IP 라이브러리 불러오는 중...',
       sourceSelected: '선택된 소스',
-      sourceLibraryTitle: '프로젝트 저장소 이미지',
+      sourceLibraryTitle: '프로젝트 저장소',
       sourceBrandTitle: '브랜드 IP',
+      sourceContentTitle: '콘텐츠 저장소',
       promptLabel: '프롬프트',
       promptPlaceholderText: '원하는 이미지의 장면, 스타일, 색감, 구도, 재질감을 설명해 주세요.',
       promptPlaceholderImage: '소스 이미지를 어떻게 바꾸거나 유지할지 설명해 주세요. 예: 같은 구도는 유지하고 수채화 질감으로 바꾸기',
@@ -141,8 +142,9 @@
       sourceBrandEmpty: 'No images found in the current brand IP library.',
       sourceBrandLoading: 'Loading brand IP library...',
       sourceSelected: 'Selected source',
-      sourceLibraryTitle: 'Project library images',
+      sourceLibraryTitle: 'Project library',
       sourceBrandTitle: 'Brand IP',
+      sourceContentTitle: 'Content Library',
       promptLabel: 'Prompt',
       promptPlaceholderText: 'Describe the scene, style, lighting, composition, and textures you want.',
       promptPlaceholderImage: 'Describe what to preserve or transform from the source image. Example: keep the same composition and convert it into watercolor.',
@@ -583,18 +585,17 @@
           : '') +
         '<div class="ai-image-inline-actions">' +
         '<button type="button" class="btn-secondary compact" data-action="open-upload">' + escapeHtml(t('sourceUpload')) + '</button>' +
-        '<button type="button" class="btn-secondary compact" data-action="load-project-library"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('sourceProject')) + '</button>' +
         '</div>' +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
         '</div>' +
-        (state.projectLibraryItems.length
-          ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><div class="ai-image-source-grid">' + sourceLibrary + '</div></div>'
-          : '') +
         (state.brandLibraryItems.length
           ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact">' + brandSourceLibrary + '</div>') + '</div>'
           : '') +
         (state.contentLibraryItems.length
           ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : '<div class="ai-image-source-grid compact">' + contentSourceLibrary + '</div>') + '</div>'
+          : '') +
+        (state.projectLibraryItems.length
+          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="project" aria-label="프로젝트 저장소 ' + (state.sourceSectionCollapsed.project ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.project ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.project ? '' : '<div class="ai-image-source-grid compact">' + sourceLibrary + '</div>') + '</div>'
           : '') +
         (state.libraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
         (state.brandLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
@@ -964,6 +965,7 @@
           if (state.mode === 'image-to-image') {
             if (!state.brandLibraryItems.length && state.currentBrand && state.currentBrand.brandId) loadBrandLibrary();
             if (!state.contentLibraryItems.length) loadContentLibrary();
+            if (!state.projectLibraryItems.length && state.currentProject && state.currentProject.id) loadProjectLibrary();
           }
           return;
         }
