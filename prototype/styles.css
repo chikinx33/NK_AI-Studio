@@ -2115,6 +2115,9 @@ textarea::-webkit-scrollbar-corner {
   background: #ffffff;
   color: #24324e;
 }
+ .hidden {
+  display: none !important;
+}
  .ai-image-panel-left .ai-image-field > label {
   display: block;
   width: 100%;

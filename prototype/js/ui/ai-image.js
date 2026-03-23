@@ -586,7 +586,6 @@
         '<button type="button" class="btn-secondary compact" data-action="load-content-library">' + escapeHtml(t('sourceContent')) + '</button>' +
         '<button type="button" class="btn-ghost compact" data-action="clear-source"' + (sourceUrl ? '' : ' disabled') + '>' + escapeHtml(t('sourceClear')) + '</button>' +
         '</div>' +
-        '<div class="small muted" style="margin-top:4px;">' + escapeHtml(t('fileChoose')) + ': ' + escapeHtml(state.selectedFileName || t('fileNone')) + '</div>' +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
         '</div>' +
         (state.projectLibraryItems.length
