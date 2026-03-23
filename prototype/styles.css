@@ -4162,6 +4162,14 @@ textarea::-webkit-scrollbar-corner {
   gap: 10px;
 }
 
+.ai-image-field.source-field.is-disabled {
+  opacity: 0.45;
+}
+.ai-image-field.source-field.is-disabled .ai-image-source-box,
+.ai-image-field.source-field.is-disabled .ai-image-source-library {
+  pointer-events: none;
+}
+
 .ai-image-field > label {
   font-size: 13px;
   font-weight: 600;

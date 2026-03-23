@@ -32,8 +32,9 @@
     ko: {
       pageTitle: 'NK_Studio · AI 이미지',
       brandSubtitle: 'AI 이미지 생성 플랫폼',
+      navDashboard: '대시보드',
       navAiVideo: 'AI Video',
-      navAiImage: 'AI Image',
+      navAiImage: 'AI 이미지 생성',
       navLibrary: '콘텐츠 저장소',
       heroTitle: 'AI 이미지 생성',
       heroDesc: '',
@@ -118,6 +119,7 @@
     en: {
       pageTitle: 'NK_Studio · AI Image',
       brandSubtitle: 'AI image generation',
+      navDashboard: 'Dashboard',
       navAiVideo: 'AI Video',
       navAiImage: 'AI Image',
       navLibrary: 'Content Library',
@@ -462,6 +464,8 @@
     document.title = t('pageTitle');
     var subtitle = document.querySelector('[data-ai-image-subtitle]');
     if (subtitle) subtitle.textContent = t('brandSubtitle');
+    var dashboardLink = document.querySelector('[data-ai-image-nav="dashboard"]');
+    if (dashboardLink) dashboardLink.textContent = t('navDashboard');
     var videoLink = document.querySelector('[data-ai-image-nav="video"]');
     if (videoLink) videoLink.textContent = t('navAiVideo');
     var imageLink = document.querySelector('[data-ai-image-nav="image"]');
@@ -511,6 +515,7 @@
     var brand = state.currentBrand;
     var selectedResult = currentResult();
     var sourceUrl = sourcePreviewUrl();
+    var sourceDisabled = state.mode !== 'image-to-image';
     var sourceKind = '';
     var brandCharacterList = brandCharacterOptions();
     var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
@@ -575,17 +580,16 @@
       '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
       '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
       '</div>' +
-      (state.mode === 'image-to-image' ? (
-        '<div class="ai-image-field source-field">' +
+      '<div class="ai-image-field source-field' + (sourceDisabled ? ' is-disabled' : '') + '">' +
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
-        '<div class="ai-image-source-box">' +
+        '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + '">' +
         (sourceUrl
           ? '<div class="ai-image-source-preview"><button type="button" class="img-modal-trigger" data-action="toggle-source-modal"><img src="' + escapeHtml(sourceUrl) + '" alt="" /></button></div>'
           : '') +
         '<div class="ai-image-inline-actions">' +
-        '<button type="button" class="btn-secondary compact source-upload-fab" data-action="open-upload">+</button>' +
+        '<button type="button" class="btn-secondary compact source-upload-fab" data-action="open-upload"' + (sourceDisabled ? ' disabled' : '') + '>+</button>' +
         '</div>' +
-        '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
+        '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*"' + (sourceDisabled ? ' disabled' : '') + ' />' +
         '</div>' +
         (state.brandLibraryItems.length
           ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact collapsible-body">' + brandSourceLibrary + '</div>') + '</div>'
@@ -607,8 +611,7 @@
         (state.libraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
         (state.brandLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
         (state.contentLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceContentLoading')) + '</p>' : '') +
-        '</div>'
-      ) : '') +
+        '</div>' +
       '<div class="ai-image-field">' +
       '<label for="ai-image-prompt">' + escapeHtml(t('promptLabel')) + '</label>' +
       '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
@@ -949,6 +952,23 @@
         var btn = evt.target.closest('[data-action]');
         if (!btn) return;
         var action = btn.getAttribute('data-action') || '';
+        if (
+          state.mode !== 'image-to-image' &&
+          (
+            action === 'open-upload' ||
+            action === 'clear-source' ||
+            action === 'load-project-library' ||
+            action === 'load-brand-library' ||
+            action === 'load-content-library' ||
+            action === 'select-project-source' ||
+            action === 'select-brand-source' ||
+            action === 'select-content-source' ||
+            action === 'toggle-source-section' ||
+            action === 'toggle-source-modal'
+          )
+        ) {
+          return;
+        }
         if (action === 'set-mode') {
           state.mode = String(btn.getAttribute('data-mode') || 'text-to-image');
           if (state.mode === 'text-to-image') {
