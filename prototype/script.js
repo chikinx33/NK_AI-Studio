@@ -600,10 +600,12 @@
       };
 
       // 최상위 페이지로 이동해야 하는 항목은 iframe 로딩을 막고 전체 페이지로 전환
-      if (href && (href.includes('ai-image.html') || href.includes('ai-video.html'))) {
+      const isAiVideoLink = !!href && (/\/ai-video(\.html)?(\?|$)/i.test(href) || href.indexOf('https://nk-ai-studio.pages.dev/ai-video') === 0);
+      const isAiImageLink = !!href && (/\/ai-image(\.html)?(\?|$)/i.test(href) || href.indexOf('https://nk-ai-studio.pages.dev/ai-image') === 0);
+      if (isAiVideoLink || isAiImageLink) {
         e.preventDefault();
         e.stopPropagation();
-        if (href.includes('ai-video.html')) {
+        if (isAiVideoLink) {
           try {
             sessionStorage.setItem('nk_force_dashboard_entry', '1');
             localStorage.setItem('nk_force_dashboard_entry', '1');
@@ -612,12 +614,11 @@
             sessionStorage.removeItem('nk_current_stage');
             localStorage.removeItem('nk_current_stage');
           } catch (_) { }
+          const abs = 'https://nk-ai-studio.pages.dev/ai-video';
+          try { window.top.location.href = abs; } catch (_) { window.location.href = abs; }
+          return;
         }
-        try {
-          window.top.location.href = href;
-        } catch (_) {
-          window.location.href = href;
-        }
+        try { window.top.location.href = href; } catch (_) { window.location.href = href; }
         return;
       }
 
