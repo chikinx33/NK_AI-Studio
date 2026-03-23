@@ -2144,6 +2144,7 @@ textarea::-webkit-scrollbar-corner {
   height: auto;
   flex: 1 1 auto;
   min-height: 0;
+  padding-bottom: 10px;
 }
  .card.ai-image-panel {
   display: flex;
@@ -4138,10 +4139,7 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .ai-image-source-preview {
-  display: grid;
-  grid-template-columns: 108px 1fr;
-  gap: 14px;
-  align-items: center;
+  display: inline-block;
 }
 
 .ai-image-source-preview img {
@@ -4200,6 +4198,14 @@ textarea::-webkit-scrollbar-corner {
 .ai-image-source-grid.compact {
   grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
   gap: 6px;
+}
+
+.collapsible-body {
+  animation: slideDown 220ms ease both;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .ai-image-source-library.is-compact .ai-image-source-card {
@@ -4324,12 +4330,14 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .ai-image-brand-save-row {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
 .ai-image-brand-select-wrap {
-  display: grid;
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
@@ -4368,6 +4376,8 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  max-height: 420px;
+  overflow: auto;
 }
 
 .ai-image-history-list {

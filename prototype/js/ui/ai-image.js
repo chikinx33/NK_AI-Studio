@@ -48,8 +48,8 @@
       sourceTitle: '소스 이미지',
       sourceEmpty: '',
       sourceUpload: '이미지 업로드',
-      sourceProject: '프로젝트 저장소 불러오기',
-      sourceBrand: '브랜드 IP 불러오기',
+      sourceProject: '프로젝트 저장소',
+      sourceBrand: '브랜드 IP',
       sourceClear: '소스 비우기',
       sourceProjectEmpty: '현재 프로젝트 저장소에 이미지가 없습니다.',
       sourceProjectLoading: '프로젝트 저장소 불러오는 중...',
@@ -68,7 +68,7 @@
       resultsTitle: '결과',
       resultsEmpty: '아직 생성된 이미지가 없습니다.',
       download: '다운로드',
-      saveProject: '프로젝트 저장소에 등록',
+      saveProject: '프로젝트 저장소 등록',
       saveBrand: '브랜드 IP 등록',
       savedBrand: '브랜드 IP 등록 완료',
       savedProject: '프로젝트 저장소 등록 완료',
@@ -107,13 +107,13 @@
       sourceKindBrand: '브랜드 IP',
       sourceKindContent: '콘텐츠 저장소',
       sourceContent: '콘텐츠 저장소 불러오기',
-      sourceContentTitle: '콘텐츠 저장소 이미지',
+      sourceContentTitle: '콘텐츠 저장소',
       sourceContentLoading: '콘텐츠 저장소 불러오는 중...',
       sourceContentEmpty: '콘텐츠 저장소에 이미지가 없습니다.',
       fileNone: '선택된 파일 없음',
-      reusePrompt: '프롬프트에 복사',
-      useAsSource: '소스로 사용',
-      regenerateVariation: '변형 재생성'
+      reusePrompt: '프롬프트 복사',
+      useAsSource: '소스 사용',
+      regenerateVariation: '재생성'
     },
     en: {
       pageTitle: 'NK_Studio · AI Image',
@@ -588,17 +588,17 @@
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
         '</div>' +
         (state.brandLibraryItems.length
-          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact">' + brandSourceLibrary + '</div>') + '</div>'
+          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact collapsible-body">' + brandSourceLibrary + '</div>') + '</div>'
           : '') +
         (state.contentLibraryItems.length
-          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : '<div class="ai-image-source-grid compact">' + contentSourceLibrary + '</div>') + '</div>'
+          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : '<div class="ai-image-source-grid compact collapsible-body">' + contentSourceLibrary + '</div>') + '</div>'
           : '') +
         (function () {
           var projectBody = '';
           if (!state.sourceSectionCollapsed.project) {
             if (project && project.id) {
               projectBody = state.projectLibraryItems.length
-                ? '<div class="ai-image-source-grid compact">' + sourceLibrary + '</div>'
+                ? '<div class="ai-image-source-grid compact collapsible-body">' + sourceLibrary + '</div>'
                 : '<p class="muted small">' + escapeHtml(t('sourceProjectEmpty')) + '</p>';
             } else {
               projectBody = '';
@@ -648,12 +648,12 @@
           '</label>' +
           '</div>' +
           '<div class="ai-image-inline-actions">' +
-          '<button type="button" class="btn-secondary compact" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('download')) + '</button>' +
-          '<button type="button" class="btn-secondary compact" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('reusePrompt')) + '</button>' +
-          '<button type="button" class="btn-secondary compact" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('useAsSource')) + '</button>' +
           '<button type="button" class="btn-primary compact" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('regenerateVariation')) + '</button>' +
-          '<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>' +
           '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
+          '<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>' +
+          '<button type="button" class="btn-secondary compact" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('useAsSource')) + '</button>' +
+          '<button type="button" class="btn-secondary compact" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('reusePrompt')) + '</button>' +
+          '<button type="button" class="btn-secondary compact" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('download')) + '</button>' +
           '</div>' +
           '</div>'
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
@@ -1059,9 +1059,22 @@
         if (action === 'toggle-source-section') {
           var sec = String(btn.getAttribute('data-section') || '').trim();
           if (sec && state.sourceSectionCollapsed && Object.prototype.hasOwnProperty.call(state.sourceSectionCollapsed, sec)) {
-            state.sourceSectionCollapsed[sec] = !state.sourceSectionCollapsed[sec];
+            var nextOpen = !!state.sourceSectionCollapsed[sec];
+            state.sourceSectionCollapsed = { brand: true, content: true, project: true };
+            state.sourceSectionCollapsed[sec] = !nextOpen;
             render();
           }
+          return;
+        }
+        if (action === 'toggle-preview-modal') {
+          var imgUrl = String(btn.getAttribute('data-url') || '').trim();
+          if (state.imageModalUrl && (!imgUrl || state.imageModalUrl === imgUrl)) {
+            state.imageModalUrl = '';
+            render();
+            return;
+          }
+          state.imageModalUrl = imgUrl || (selectedResult ? resolveResultUrl(selectedResult) : '');
+          render();
           return;
         }
         if (action === 'set-aspect') {
