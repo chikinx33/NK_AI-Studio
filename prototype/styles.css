@@ -359,11 +359,17 @@ body[data-embed="1"] {
 }
 
 [data-page="index"] .main-body,
-[data-page="ai-video"] .main-body,
-[data-page="ai-image"] .main-body {
+[data-page="ai-video"] .main-body {
   height: auto;
   max-height: none;
   overflow: visible;
+}
+[data-page="ai-image"].layout-fixed .app {
+  height: 100vh;
+  min-height: 100vh;
+}
+[data-page="ai-image"] .app {
+  height: 100vh;
 }
 [data-page="ai-image"] .main {
   height: 100vh;
@@ -2158,6 +2164,8 @@ textarea::-webkit-scrollbar-corner {
   flex: 1 1 auto;
   min-height: 0;
   padding-bottom: 10px;
+  align-items: stretch;
+  align-content: stretch;
 }
  .card.ai-image-panel {
   display: flex;
@@ -2167,6 +2175,16 @@ textarea::-webkit-scrollbar-corner {
   min-height: 0;
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+ .ai-image-panel-left,
+ .ai-image-panel-right {
+  height: 100%;
+  min-height: 0;
+}
+ .ai-image-panel-left .scenario-form,
+ .ai-image-panel-right .ai-image-preview-layout {
+  flex: 1 1 auto;
+  min-height: 0;
 }
  .card.ai-image-panel::-webkit-scrollbar {
   width: 0;
