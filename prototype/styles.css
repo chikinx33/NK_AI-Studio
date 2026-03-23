@@ -385,6 +385,10 @@ body[data-embed="1"] {
   flex: 1 1 auto;
   min-height: 0;
 }
+[data-page="ai-image"] #ai-image-root {
+  height: 100%;
+  min-height: 0;
+}
 [data-page="ai-image"] .main {
   height: 100vh;
   min-height: 100vh;
@@ -4071,6 +4075,8 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  height: 100%;
+  min-height: 0;
 }
 
 .ai-image-header {
@@ -4104,6 +4110,11 @@ textarea::-webkit-scrollbar-corner {
   grid-template-columns: minmax(320px, 430px) minmax(420px, 1fr);
   gap: 18px;
   padding: 0 28px 0;
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+  align-content: stretch;
 }
 
 .ai-image-panel {
