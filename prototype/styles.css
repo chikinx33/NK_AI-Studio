@@ -412,6 +412,18 @@ body[data-embed="1"] {
   background-repeat: no-repeat;
 }
 
+body.page-shell-brand .brand-mark {
+  background-image: url('./images/icon-ai-branding.png');
+}
+
+body.page-shell-video .brand-mark {
+  background-image: url('./images/icon-ai-video.png');
+}
+
+body.page-shell-image .brand-mark {
+  background-image: url('./images/icon-ai-image.png');
+}
+
 .brand-text .title {
   display: block;
   font-weight: 700;
