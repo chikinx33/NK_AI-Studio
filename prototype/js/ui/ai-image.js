@@ -24,7 +24,8 @@
     historyLoading: false,
     historyLoadError: '',
     selectedFileName: '',
-    sourceSectionCollapsed: { brand: true, content: true }
+    sourceSectionCollapsed: { brand: true, content: true },
+    imageModalUrl: ''
   };
 
   var TEXT = {
@@ -45,7 +46,7 @@
       modeText: '텍스트를 이미지로',
       modeImage: '이미지를 이미지로',
       sourceTitle: '소스 이미지',
-      sourceEmpty: '이미지 to 이미지 모드에서는 소스 이미지를 선택해야 합니다.',
+      sourceEmpty: '',
       sourceUpload: '이미지 업로드',
       sourceProject: '프로젝트 저장소 불러오기',
       sourceBrand: '브랜드 IP 불러오기',
@@ -56,7 +57,7 @@
       sourceBrandLoading: '브랜드 IP 라이브러리 불러오는 중...',
       sourceSelected: '선택된 소스',
       sourceLibraryTitle: '프로젝트 저장소 이미지',
-      sourceBrandTitle: '브랜드 IP 이미지',
+      sourceBrandTitle: '브랜드 IP',
       promptLabel: '프롬프트',
       promptPlaceholderText: '원하는 이미지의 장면, 스타일, 색감, 구도, 재질감을 설명해 주세요.',
       promptPlaceholderImage: '소스 이미지를 어떻게 바꾸거나 유지할지 설명해 주세요. 예: 같은 구도는 유지하고 수채화 질감으로 바꾸기',
@@ -130,7 +131,7 @@
       modeText: 'Text to image',
       modeImage: 'Image to image',
       sourceTitle: 'Source image',
-      sourceEmpty: 'Image-to-image mode requires a source image.',
+      sourceEmpty: '',
       sourceUpload: 'Upload image',
       sourceProject: 'Load from project library',
       sourceBrand: 'Load from brand IP',
@@ -141,7 +142,7 @@
       sourceBrandLoading: 'Loading brand IP library...',
       sourceSelected: 'Selected source',
       sourceLibraryTitle: 'Project library images',
-      sourceBrandTitle: 'Brand IP images',
+      sourceBrandTitle: 'Brand IP',
       promptLabel: 'Prompt',
       promptPlaceholderText: 'Describe the scene, style, lighting, composition, and textures you want.',
       promptPlaceholderImage: 'Describe what to preserve or transform from the source image. Example: keep the same composition and convert it into watercolor.',
@@ -578,12 +579,11 @@
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
         '<div class="ai-image-source-box">' +
         (sourceUrl
-          ? '<div class="ai-image-source-preview"><img src="' + escapeHtml(sourceUrl) + '" alt="" /><div><strong>' + escapeHtml(t('sourceSelected')) + '</strong><p>' + escapeHtml(sourceKind) + '</p></div></div>'
-          : '<p class="muted">' + escapeHtml(t('sourceEmpty')) + '</p>') +
+          ? '<div class="ai-image-source-preview"><button type="button" class="img-modal-trigger" data-action="toggle-source-modal"><img src="' + escapeHtml(sourceUrl) + '" alt="" /></button></div>'
+          : '') +
         '<div class="ai-image-inline-actions">' +
         '<button type="button" class="btn-secondary compact" data-action="open-upload">' + escapeHtml(t('sourceUpload')) + '</button>' +
         '<button type="button" class="btn-secondary compact" data-action="load-project-library"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('sourceProject')) + '</button>' +
-        '<button type="button" class="btn-ghost compact" data-action="clear-source"' + (sourceUrl ? '' : ' disabled') + '>' + escapeHtml(t('sourceClear')) + '</button>' +
         '</div>' +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
         '</div>' +
@@ -594,7 +594,7 @@
           ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact">' + brandSourceLibrary + '</div>') + '</div>'
           : '') +
         (state.contentLibraryItems.length
-          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 이미지 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : '<div class="ai-image-source-grid compact">' + contentSourceLibrary + '</div>') + '</div>'
+          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : '<div class="ai-image-source-grid compact">' + contentSourceLibrary + '</div>') + '</div>'
           : '') +
         (state.libraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
         (state.brandLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
@@ -663,6 +663,7 @@
       '</div>' +
       '</section>' +
       '</div>' +
+      (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
       '</section>';
 
     var promptEl = document.getElementById('ai-image-prompt');
@@ -992,8 +993,14 @@
           var idx = Number(btn.getAttribute('data-index') || -1);
           var item = idx >= 0 ? state.projectLibraryItems[idx] : null;
           if (!item) return;
+          var nextUrl = resolveLibraryItemUrl(item);
+          if (state.sourceImage && String(state.sourceImage.url || '') === String(nextUrl || '')) {
+            state.sourceImage = null;
+            render();
+            return;
+          }
           state.sourceImage = {
-            url: resolveLibraryItemUrl(item),
+            url: nextUrl,
             name: String(item.name || '').trim(),
             kind: 'project'
           };
@@ -1004,8 +1011,14 @@
           var brandIdx = Number(btn.getAttribute('data-index') || -1);
           var brandItem = brandIdx >= 0 ? state.brandLibraryItems[brandIdx] : null;
           if (!brandItem) return;
+          var nextBrandUrl = resolveLibraryItemUrl(brandItem);
+          if (state.sourceImage && String(state.sourceImage.url || '') === String(nextBrandUrl || '')) {
+            state.sourceImage = null;
+            render();
+            return;
+          }
           state.sourceImage = {
-            url: resolveLibraryItemUrl(brandItem),
+            url: nextBrandUrl,
             name: String(brandItem.name || '').trim(),
             kind: 'brand'
           };
@@ -1016,8 +1029,14 @@
           var cIdx = Number(btn.getAttribute('data-index') || -1);
           var cItem = cIdx >= 0 ? state.contentLibraryItems[cIdx] : null;
           if (!cItem) return;
+          var nextContentUrl = resolveContentItemUrl(cItem);
+          if (state.sourceImage && String(state.sourceImage.url || '') === String(nextContentUrl || '')) {
+            state.sourceImage = null;
+            render();
+            return;
+          }
           state.sourceImage = {
-            url: resolveContentItemUrl(cItem),
+            url: nextContentUrl,
             name: String(cItem.title || '').trim(),
             kind: 'content'
           };
@@ -1044,6 +1063,18 @@
         if (action === 'set-aspect') {
           state.aspectRatio = String(btn.getAttribute('data-ratio') || '16:9');
           render();
+          return;
+        }
+        if (action === 'toggle-source-modal') {
+          if (state.imageModalUrl) {
+            state.imageModalUrl = '';
+            render();
+            return;
+          }
+          if (state.sourceImage && state.sourceImage.url) {
+            state.imageModalUrl = String(state.sourceImage.url || '');
+            render();
+          }
           return;
         }
         if (action === 'download-result') {
