@@ -602,9 +602,9 @@
       <h4 class="sidebar-card-title">${escapeHtml(normalized.title || '제목없음')}</h4>
       <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
       <div class="sidebar-card-actions">
-        <button class="btn-secondary" data-action="sidebar-edit-scenario">Pre</button>
-        <button class="btn-secondary" data-action="sidebar-edit-scenes">Production</button>
-        <button class="btn-secondary" data-action="sidebar-edit-media">Post</button>
+        <button class="btn-secondary" data-action="sidebar-edit-scenario" data-i18n="sidebar_preproduction_fixed">Pre - production</button>
+        <button class="btn-secondary" data-action="sidebar-edit-scenes" data-i18n="sidebar_production_fixed">Production</button>
+        <button class="btn-secondary" data-action="sidebar-edit-media" data-i18n="sidebar_postproduction_fixed">Post - production</button>
       </div>
     `;
     container.style.display = 'block';
