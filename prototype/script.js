@@ -586,7 +586,34 @@
       if (NK.state.runtime.currentStage) updateSidebarHighlight(NK.state.runtime.currentStage);
     }
 
-    // 사이드바 및 전역 링크 클릭 핸들러
+    // 사이드바 및 전역 링크 클릭 핸들러 (캡처 단계 우선 차단: ai-image/ai-video는 항상 최상위로 이동)
+    document.addEventListener('click', (e) => {
+      const a = e.target && e.target.closest && e.target.closest('a.nav-item[href]');
+      if (!a) return;
+      const raw = a.getAttribute('href') || '';
+      let abs = '';
+      try { abs = new URL(raw, window.location.href).href; } catch (_) { abs = raw; }
+      const isAiVideo = /\/ai-video(\.html)?([?#]|$)/i.test(abs) || abs.indexOf('https://nk-ai-studio.pages.dev/ai-video') === 0;
+      const isAiImage = /\/ai-image(\.html)?([?#]|$)/i.test(abs) || abs.indexOf('https://nk-ai-studio.pages.dev/ai-image') === 0;
+      if (isAiVideo || isAiImage) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        try {
+          sessionStorage.setItem('nk_force_dashboard_entry', '1');
+          localStorage.setItem('nk_force_dashboard_entry', '1');
+          sessionStorage.removeItem('nk_current_stage_href');
+          localStorage.removeItem('nk_current_stage_href');
+          sessionStorage.removeItem('nk_current_stage');
+          localStorage.removeItem('nk_current_stage');
+        } catch (_) { }
+        const target = isAiVideo ? 'https://nk-ai-studio.pages.dev/ai-video' : 'https://nk-ai-studio.pages.dev/ai-image';
+        try { window.top.location.href = target; } catch (_) { window.location.href = target; }
+        return;
+      }
+    }, true);
+
+    // 사이드바 및 전역 링크 클릭 핸들러 (버블 단계: 일반 스테이지 링크)
     document.addEventListener('click', (e) => {
       const link = e.target.closest('.nav-item[href], [data-action]');
       if (!link) return;
