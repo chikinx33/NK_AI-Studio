@@ -4371,6 +4371,10 @@ textarea::-webkit-scrollbar-corner {
   align-items: center;
   gap: 6px;
 }
+ .ai-image-brand-select-wrap span {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 .ai-image-brand-select-wrap span {
   font-size: 12px;
