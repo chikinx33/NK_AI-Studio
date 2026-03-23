@@ -642,6 +642,28 @@
         if (!cp) return;
         NK.service?.project?.setCurrent?.(cp);
       };
+      const buildAiImageStageUrl = () => {
+        const cp = NK.state?.runtime?.currentProject;
+        const pid = String(cp && cp.id || '').trim();
+        const bid = String(cp && (cp.brandId || cp.payload && cp.payload.brandId) || '').trim();
+        const params = [];
+        if (pid) params.push(`projectId=${encodeURIComponent(pid)}`);
+        if (bid) params.push(`brandId=${encodeURIComponent(bid)}`);
+        return `ai-image-stage.html${params.length ? `?${params.join('&')}` : ''}`;
+      };
+      const isAiImageStageLink = !!href && /(^|[\\\/])ai-image-stage\.html([?#]|$)/i.test(href);
+      if (isAiImageStageLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        persistCurrentProject();
+        const target = buildAiImageStageUrl();
+        if (NK.navigation && NK.navigation.loadStage) {
+          NK.navigation.loadStage(target);
+        } else {
+          window.location.href = target;
+        }
+        return;
+      }
 
       // 최상위 페이지로 이동해야 하는 항목은 iframe 로딩을 막고 전체 페이지로 전환
       const isAiVideoLink = !!href && (/\/ai-video(\.html)?(\?|$)/i.test(href) || href.indexOf('https://nk-ai-studio.pages.dev/ai-video') === 0);
