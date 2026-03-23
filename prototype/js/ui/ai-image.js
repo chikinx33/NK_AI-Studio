@@ -35,8 +35,8 @@
       navAiVideo: 'AI Video',
       navAiImage: 'AI Image',
       navLibrary: '콘텐츠 저장소',
-      heroTitle: 'AI 이미지 생성기',
-      heroDesc: '텍스트 생성과 참조 기반 변형을 하나의 작업실에서 처리합니다.',
+      heroTitle: 'AI 이미지 생성',
+      heroDesc: '',
       sessionLabel: '세션',
       projectLabel: '현재 프로젝트',
       brandLabel: '현재 브랜드',
@@ -561,7 +561,6 @@
       '<div class="ai-image-header">' +
       '<div>' +
       '<h1>' + escapeHtml(t('heroTitle')) + '</h1>' +
-      '<p>' + escapeHtml(t('heroDesc')) + '</p>' +
       '</div>' +
       '<div class="ai-image-status-pills">' +
       '<span class="studio-hero-pill"><em>' + escapeHtml(t('sessionLabel')) + '</em><strong>' + escapeHtml(state.sessionId) + '</strong></span>' +
@@ -584,7 +583,7 @@
           ? '<div class="ai-image-source-preview"><button type="button" class="img-modal-trigger" data-action="toggle-source-modal"><img src="' + escapeHtml(sourceUrl) + '" alt="" /></button></div>'
           : '') +
         '<div class="ai-image-inline-actions">' +
-        '<button type="button" class="btn-secondary compact" data-action="open-upload">' + escapeHtml(t('sourceUpload')) + '</button>' +
+        '<button type="button" class="btn-secondary compact source-upload-fab" data-action="open-upload">+</button>' +
         '</div>' +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
         '</div>' +
@@ -602,7 +601,7 @@
                 ? '<div class="ai-image-source-grid compact">' + sourceLibrary + '</div>'
                 : '<p class="muted small">' + escapeHtml(t('sourceProjectEmpty')) + '</p>';
             } else {
-              projectBody = '<p class="muted small">' + escapeHtml(t('noProject')) + '</p>';
+              projectBody = '';
             }
           }
           return '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="project" aria-label="프로젝트 저장소 ' + (state.sourceSectionCollapsed.project ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.project ? '+' : '−') + '</button></div>' + projectBody + '</div>';
@@ -628,10 +627,8 @@
       '<section class="card ai-image-panel ai-image-panel-right">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
-      '<div class="ai-image-inline-actions">' +
-      '<a class="btn-secondary compact" href="ai-video.html">' + escapeHtml(t('openVideo')) + '</a>' +
       '</div>' +
-      '</div>' +
+      '<div class="ai-image-preview-layout">' +
       (selectedResult
         ? '<div class="ai-image-preview-stage">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
@@ -665,6 +662,7 @@
       (state.historyLoading ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
       ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
       (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>') +
+      '</div>' +
       '</div>' +
       '</section>' +
       '</div>' +
