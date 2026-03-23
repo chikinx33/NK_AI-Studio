@@ -2115,6 +2115,16 @@ textarea::-webkit-scrollbar-corner {
   background: #ffffff;
   color: #24324e;
 }
+ .ai-image-panel-left .ai-image-field > label {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  text-align: center;
+  margin: 12px 0 8px;
+}
+ .ai-image-panel-left .ai-image-field.source-field > label {
+  margin-top: 16px;
+}
  .ai-image-shell {
   display: flex;
   flex-direction: column;

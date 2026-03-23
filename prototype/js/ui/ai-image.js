@@ -91,7 +91,7 @@
       brandSaveFailed: '브랜드 IP 등록 실패: ',
       downloadFailed: '다운로드 실패: ',
       fileChoose: '파일 선택',
-      latestResult: '대표 미리보기',
+      latestResult: '미리보기',
       historyTitle: '생성 히스토리',
       resultSavedTag: '프로젝트 저장 완료',
       resultSavedBrandTag: '브랜드 IP 등록 완료',
@@ -573,7 +573,7 @@
       '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
       '</div>' +
       (state.mode === 'image-to-image' ? (
-        '<div class="ai-image-field">' +
+        '<div class="ai-image-field source-field">' +
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
         '<div class="ai-image-source-box">' +
         (sourceUrl
@@ -624,7 +624,7 @@
       '</section>' +
       '<section class="card ai-image-panel ai-image-panel-right">' +
       '<div class="ai-image-preview-head">' +
-      '<div><h2>' + escapeHtml(t('latestResult')) + '</h2><p class="muted">' + escapeHtml(t('resultsTitle')) + '</p></div>' +
+      '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
       '<div class="ai-image-inline-actions">' +
       '<a class="btn-secondary compact" href="ai-video.html">' + escapeHtml(t('openVideo')) + '</a>' +
       '</div>' +
