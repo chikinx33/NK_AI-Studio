@@ -4103,7 +4103,7 @@ textarea::-webkit-scrollbar-corner {
   display: grid;
   grid-template-columns: minmax(320px, 430px) minmax(420px, 1fr);
   gap: 18px;
-  padding: 0 28px 28px;
+  padding: 0 28px 0;
 }
 
 .ai-image-panel {
