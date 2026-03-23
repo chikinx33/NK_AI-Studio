@@ -35,6 +35,7 @@
     dashboard: 'dashboard.html',
     scenario: 'scenario.html',
     scenes: 'scenes.html',
+    'ai-image-stage': 'ai-image-stage.html',
     library: 'library.html',
     brand: 'brand.html',
     knowledge: 'knowledge.html',
@@ -42,7 +43,7 @@
     media: 'media.html',
     publish: 'publish.html'
   };
-  const RESTORABLE_STAGES = ['scenario', 'scenes', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish'];
+  const RESTORABLE_STAGES = ['scenario', 'scenes', 'ai-image-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish'];
   const STAGE_TARGET_KEY = 'nk_current_stage_href';
   const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
   let syncMessageBound = false;
@@ -356,12 +357,21 @@
     const loweredPath = currentPath.toLowerCase();
     const isAiVideoShellPath = loweredPath.includes('ai-video.html');
     const isBrandShellPath = loweredPath.includes('brand-studio.html');
+    const isAiImageShellPath = loweredPath.includes('ai-image.html');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
-    const initialTargetRaw = (isAiVideoShellPath || isShellPage) ? resolveInitialStageTarget(urlParams) : '';
-    const brandStages = ['brand', 'knowledge', 'analytics', 'library'];
+    const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath;
+    const hasExplicitShellTarget = urlParams.has('stageHref') || urlParams.has('stage');
+    const initialTargetRaw = (isAiVideoShellPath || isShellPage)
+      ? (isKnownShellPath && !hasExplicitShellTarget ? 'dashboard.html' : resolveInitialStageTarget(urlParams))
+      : '';
+    const initialStageName = NK.navigation.normalizeStageName(initialTargetRaw);
+    const brandStages = ['dashboard', 'brand', 'knowledge', 'analytics', 'library'];
+    const imageStages = ['dashboard', 'ai-image-stage'];
     const initialTarget = isBrandShellPath
-      ? (brandStages.includes(NK.navigation.normalizeStageName(initialTargetRaw)) ? initialTargetRaw : 'brand.html')
-      : initialTargetRaw;
+      ? (brandStages.includes(initialStageName) ? initialTargetRaw : 'dashboard.html')
+      : (isAiImageShellPath
+        ? (imageStages.includes(initialStageName) ? initialTargetRaw : 'dashboard.html')
+        : initialTargetRaw);
     const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
     const effectiveStage = initialStage || stage;
 

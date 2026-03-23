@@ -1,4 +1,4 @@
-﻿; (function () {
+; (function () {
     var NK = window.NK || (window.NK = {});
     var nav = NK.navigation || (NK.navigation = {});
     var STAGE_HREF_KEY = 'nk_current_stage_href';
@@ -105,7 +105,7 @@
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
             const name = base.replace(/\.html?$/, '');
-            if (['scenario', 'scenes', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
+            if (['scenario', 'scenes', 'ai-image-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
                 return name === 'ai-video' ? 'dashboard' : name;
             }
             if (name === 'index' || name === '') return 'options';

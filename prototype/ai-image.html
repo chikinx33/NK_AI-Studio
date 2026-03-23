@@ -16,11 +16,15 @@
   <script src="api.js" defer></script>
   <script src="js/state.js" defer></script>
   <script src="js/auth.js" defer></script>
+  <script src="js/navigation.js" defer></script>
+  <script src="js/service/media.js" defer></script>
   <script src="js/service/project.js" defer></script>
   <script src="js/service/brand.js" defer></script>
   <script src="js/service/content-library.js" defer></script>
   <script src="js/ui/common.js" defer></script>
-  <script src="js/ui/ai-image.js" defer></script>
+  <script src="js/ui/dashboard.js" defer></script>
+  <script src="js/ui/scenario.js" defer></script>
+  <script src="js/ui/production.js" defer></script>
   <script src="script.js" defer></script>
 </head>
 
@@ -31,44 +35,56 @@
       <div class="brand">
         <div class="brand-mark"></div>
         <div class="brand-text">
-          <span class="title">NK_Studio</span>
-          <span class="subtitle" data-ai-image-subtitle>AI 이미지 생성 플랫폼</span>
+          <span class="title" data-i18n="brand_title">NK_Studio</span>
+          <span class="subtitle">AI 이미지 생성 스튜디오</span>
         </div>
       </div>
       <nav class="nav">
-        <a class="nav-item" href="brand-studio.html" data-ai-image-nav="dashboard">대시보드</a>
-        <a class="nav-item" href="ai-image.html" data-ai-image-nav="image">AI Image</a>
+        <a class="nav-item" href="dashboard.html">
+          <span data-i18n="nav_dashboard">대시보드</span>
+        </a>
+        <a class="nav-item" href="ai-image-stage.html">
+          <span data-i18n="nav_ai_image">AI 이미지 생성</span>
+        </a>
       </nav>
+      <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>
       <div class="sidebar-footer">
         <div class="sidebar-actions">
-          <button class="btn-ghost screen-toggle" data-screen-toggle aria-label="전체 화면" title="전체 화면"></button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle aria-label="테마 전환"></button>
-          <button class="btn-ghost lang-toggle" data-ai-image-lang-toggle aria-label="언어 전환">EN</button>
-          <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" onclick="openOptionsStage()">⚙️</button>
+          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
+          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('global')"></button>
+          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
+          <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
         </div>
         <div class="sidebar-version">ver</div>
       </div>
     </aside>
 
+    <div id="project-overlay" class="auth-overlay hidden">
+      <div class="auth-card">
+        <p class="auth-title">프로젝트 생성</p>
+        <div class="form-row">
+          <label>이름</label>
+          <input id="project-name-input" placeholder="에피소드 이름" />
+        </div>
+        <div class="option-actions">
+          <button id="project-cancel" class="btn-secondary">취소</button>
+          <button id="project-create" class="btn-primary">생성</button>
+        </div>
+      </div>
+    </div>
+
     <div id="auth-overlay" class="auth-overlay hidden">
       <div class="auth-card">
-        <p class="auth-title" data-ai-image-auth-title>로그인이 필요합니다.</p>
-        <a class="btn-primary no-underline" href="index.html" data-ai-image-auth-link>로그인 하기</a>
+        <p class="auth-title">로그인 하세요.</p>
+        <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
       </div>
     </div>
 
-    <main class="main">
+    <main class="main blur-target">
       <div class="main-body">
-        <section id="ai-image-root"></section>
+        <section class="content"></section>
       </div>
     </main>
-  </div>
-
-  <div id="page-loading" class="page-loading hidden" aria-live="polite" aria-busy="true">
-    <div class="loading-box">
-      <div class="spinner" aria-hidden="true"></div>
-      <p>로딩중...</p>
-    </div>
   </div>
 </body>
 
