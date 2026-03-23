@@ -572,43 +572,37 @@
       '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
       '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
       '</div>' +
-      '<div class="ai-image-field">' +
-      '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
-      '<div class="ai-image-source-box' + (state.mode !== 'image-to-image' ? ' is-disabled' : '') + '">' +
-      (state.mode === 'image-to-image'
-        ? (sourceUrl
+      (state.mode === 'image-to-image' ? (
+        '<div class="ai-image-field">' +
+        '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
+        '<div class="ai-image-source-box">' +
+        (sourceUrl
           ? '<div class="ai-image-source-preview"><img src="' + escapeHtml(sourceUrl) + '" alt="" /><div><strong>' + escapeHtml(t('sourceSelected')) + '</strong><p>' + escapeHtml(sourceKind) + '</p></div></div>'
-          : '<p class="muted">' + escapeHtml(t('sourceEmpty')) + '</p>')
-        : '<p class="muted">' + escapeHtml(t('useInProject')) + '</p>') +
-      '<div class="ai-image-inline-actions">' +
-      '<button type="button" class="btn-secondary compact" data-action="open-upload"' + (state.mode === 'image-to-image' ? '' : ' disabled') + '>' + escapeHtml(t('sourceUpload')) + '</button>' +
-      '<button type="button" class="btn-secondary compact" data-action="load-project-library"' + ((state.mode === 'image-to-image' && project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('sourceProject')) + '</button>' +
-      '<button type="button" class="btn-secondary compact" data-action="load-brand-library"' + ((state.mode === 'image-to-image' && brand && brand.brandId) ? '' : ' disabled') + '>' + escapeHtml(t('sourceBrand')) + '</button>' +
-      '<button type="button" class="btn-secondary compact" data-action="load-content-library"' + (state.mode === 'image-to-image' ? '' : ' disabled') + '>' + escapeHtml(t('sourceContent')) + '</button>' +
-      '<button type="button" class="btn-ghost compact" data-action="clear-source"' + (sourceUrl ? '' : ' disabled') + '>' + escapeHtml(t('sourceClear')) + '</button>' +
-      '</div>' +
-      '<div class="small muted" style="margin-top:4px;">' + escapeHtml(t('fileChoose')) + ': ' + escapeHtml(state.selectedFileName || t('fileNone')) + '</div>' +
-      '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
-      '</div>' +
-      ((state.mode === 'image-to-image' && state.projectLibraryItems.length)
-        ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><div class="ai-image-source-grid">' + sourceLibrary + '</div></div>'
-        : '') +
-      ((state.mode === 'image-to-image' && state.brandLibraryItems.length)
-        ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><div class="ai-image-source-grid">' + brandSourceLibrary + '</div></div>'
-        : '') +
-      ((state.mode === 'image-to-image' && state.contentLibraryItems.length)
-        ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><div class="ai-image-source-grid">' + contentSourceLibrary + '</div></div>'
-        : '') +
-      ((state.mode === 'image-to-image' && state.libraryLoading)
-        ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>'
-        : '') +
-      ((state.mode === 'image-to-image' && state.brandLibraryLoading)
-        ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>'
-        : '') +
-      ((state.mode === 'image-to-image' && state.contentLibraryLoading)
-        ? '<p class="muted small">' + escapeHtml(t('sourceContentLoading')) + '</p>'
-        : '') +
-      '</div>' +
+          : '<p class="muted">' + escapeHtml(t('sourceEmpty')) + '</p>') +
+        '<div class="ai-image-inline-actions">' +
+        '<button type="button" class="btn-secondary compact" data-action="open-upload">' + escapeHtml(t('sourceUpload')) + '</button>' +
+        '<button type="button" class="btn-secondary compact" data-action="load-project-library"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('sourceProject')) + '</button>' +
+        '<button type="button" class="btn-secondary compact" data-action="load-brand-library"' + ((brand && brand.brandId) ? '' : ' disabled') + '>' + escapeHtml(t('sourceBrand')) + '</button>' +
+        '<button type="button" class="btn-secondary compact" data-action="load-content-library">' + escapeHtml(t('sourceContent')) + '</button>' +
+        '<button type="button" class="btn-ghost compact" data-action="clear-source"' + (sourceUrl ? '' : ' disabled') + '>' + escapeHtml(t('sourceClear')) + '</button>' +
+        '</div>' +
+        '<div class="small muted" style="margin-top:4px;">' + escapeHtml(t('fileChoose')) + ': ' + escapeHtml(state.selectedFileName || t('fileNone')) + '</div>' +
+        '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" />' +
+        '</div>' +
+        (state.projectLibraryItems.length
+          ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><div class="ai-image-source-grid">' + sourceLibrary + '</div></div>'
+          : '') +
+        (state.brandLibraryItems.length
+          ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><div class="ai-image-source-grid">' + brandSourceLibrary + '</div></div>'
+          : '') +
+        (state.contentLibraryItems.length
+          ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><div class="ai-image-source-grid">' + contentSourceLibrary + '</div></div>'
+          : '') +
+        (state.libraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
+        (state.brandLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
+        (state.contentLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceContentLoading')) + '</p>' : '') +
+        '</div>'
+      ) : '') +
       '<div class="ai-image-field">' +
       '<label for="ai-image-prompt">' + escapeHtml(t('promptLabel')) + '</label>' +
       '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
