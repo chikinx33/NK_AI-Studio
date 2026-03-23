@@ -2123,7 +2123,7 @@ textarea::-webkit-scrollbar-corner {
   width: 100%;
   min-width: 0;
   text-align: center;
-  margin: 12px 0 8px;
+  margin: 10px 0 4px;
 }
  .ai-image-panel-left .ai-image-field.source-field > label {
   margin-top: 16px;
