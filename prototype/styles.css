@@ -756,6 +756,7 @@ body[data-embed="1"] {
   align-self: flex-start;
   width: 100%;
   display: -webkit-box;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -771,6 +772,7 @@ body[data-embed="1"] {
   text-align: left;
   width: 100%;
   display: -webkit-box;
+  line-clamp: 4;
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
@@ -4294,6 +4296,12 @@ textarea::-webkit-scrollbar-corner {
 .ai-image-ratio-row .btn-primary.wide-generate {
   width: 100%;
 }
+.ai-image-ratio-row .ratio-btn.active {
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  border-color: rgba(255, 122, 0, 0.72);
+  color: #0b0b0b;
+  box-shadow: 0 8px 18px rgba(255, 122, 0, 0.28);
+}
 
 .ai-image-source-box {
   position: relative;
@@ -4473,6 +4481,7 @@ textarea::-webkit-scrollbar-corner {
   font-size: 12px;
   line-height: 1.45;
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
