@@ -4169,6 +4169,13 @@ textarea::-webkit-scrollbar-corner {
   color: var(--muted);
 }
 
+.ai-image-source-library-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .ai-image-source-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
@@ -4188,6 +4195,32 @@ textarea::-webkit-scrollbar-corner {
   aspect-ratio: 1 / 1;
   object-fit: cover;
   display: block;
+}
+
+.ai-image-source-grid.compact {
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 6px;
+}
+
+.ai-image-source-library.is-compact .ai-image-source-card {
+  border-radius: 10px;
+}
+
+.circle-toggle {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text);
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
 }
 
 #ai-image-prompt,

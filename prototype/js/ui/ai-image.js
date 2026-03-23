@@ -23,7 +23,8 @@
     contentLibraryLoading: false,
     historyLoading: false,
     historyLoadError: '',
-    selectedFileName: ''
+    selectedFileName: '',
+    sourceSectionCollapsed: { brand: true, content: true }
   };
 
   var TEXT = {
@@ -592,10 +593,10 @@
           ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><div class="ai-image-source-grid">' + sourceLibrary + '</div></div>'
           : '') +
         (state.brandLibraryItems.length
-          ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><div class="ai-image-source-grid">' + brandSourceLibrary + '</div></div>'
+          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact">' + brandSourceLibrary + '</div>') + '</div>'
           : '') +
         (state.contentLibraryItems.length
-          ? '<div class="ai-image-source-library"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><div class="ai-image-source-grid">' + contentSourceLibrary + '</div></div>'
+          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 이미지 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : '<div class="ai-image-source-grid compact">' + contentSourceLibrary + '</div>') + '</div>'
           : '') +
         (state.libraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
         (state.brandLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
@@ -1028,6 +1029,14 @@
         if (action === 'select-result') {
           state.currentResultId = String(btn.getAttribute('data-id') || '');
           render();
+          return;
+        }
+        if (action === 'toggle-source-section') {
+          var sec = String(btn.getAttribute('data-section') || '').trim();
+          if (sec && state.sourceSectionCollapsed && Object.prototype.hasOwnProperty.call(state.sourceSectionCollapsed, sec)) {
+            state.sourceSectionCollapsed[sec] = !state.sourceSectionCollapsed[sec];
+            render();
+          }
           return;
         }
         if (action === 'set-aspect') {
