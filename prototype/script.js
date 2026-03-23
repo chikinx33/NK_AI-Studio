@@ -250,6 +250,7 @@
     if (!norm || norm === 'options') return '';
     if (norm === 'dashboard') return 'dashboard.html';
     if (STAGE_HTML_MAP[norm]) {
+      if (norm === 'ai-image-stage') return STAGE_HTML_MAP[norm];
       if (/\.html?(\?|$)/i.test(candidate) && !/ai-video\.html/i.test(candidate)) return candidate;
       return STAGE_HTML_MAP[norm];
     }

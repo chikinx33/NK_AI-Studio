@@ -41,6 +41,9 @@
 
         const isIframe = window.self !== window.top;
         const st = nav.normalizeStageName(targetName);
+        if (st === 'ai-image-stage' && /(^|[\\\/])ai-image(\.html?)?([?#]|$)/i.test(targetName)) {
+            targetName = 'ai-image-stage.html';
+        }
         if (st && st !== 'options') {
             try {
                 sessionStorage.setItem(STAGE_HREF_KEY, targetName);
@@ -105,6 +108,7 @@
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
             const name = base.replace(/\.html?$/, '');
+            if (name === 'ai-image') return 'ai-image-stage';
             if (['scenario', 'scenes', 'ai-image-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
                 return name === 'ai-video' ? 'dashboard' : name;
             }
