@@ -695,6 +695,14 @@
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
       '</section>';
 
+    // 보정: 이미지가 있을 때는 has-image 클래스 강제 부여(레이아웃 일관성)
+    try {
+      var boxEl = root.querySelector('.ai-image-source-box');
+      if (boxEl && sourceUrl && !boxEl.classList.contains('has-image')) {
+        boxEl.classList.add('has-image');
+      }
+    } catch (_) {}
+
     var promptEl = document.getElementById('ai-image-prompt');
     if (promptEl) {
       promptEl.value = state.prompt || '';

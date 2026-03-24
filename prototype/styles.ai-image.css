@@ -197,6 +197,10 @@ body.layout-fixed.page-shell-image .content {
   border-radius: 12px;
   border: none;
 }
+.ai-image-source-preview .img-modal-trigger {
+  display: block;
+  line-height: 0;
+}
 
 .ai-image-source-box.has-image {
   padding: 0;

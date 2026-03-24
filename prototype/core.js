@@ -21,6 +21,18 @@
             }
           } catch (_) {}
         });
+        // Also append ?v to local script src to bust JS cache on next load
+        Array.prototype.forEach.call(document.querySelectorAll('script[src]'), function (sc) {
+          try {
+            var src = sc.getAttribute('src') || '';
+            if (!src) return;
+            var isExternal = /^https?:\/\//i.test(src) && src.indexOf(location.origin) !== 0;
+            if (isExternal) return;
+            if (!/[?&]v=/.test(src)) {
+              sc.setAttribute('src', src + (src.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver));
+            }
+          } catch (_) {}
+        });
       }
       // One-time soft refresh with ?v to bust HTML cache and clear cross-shell stageHref
       if (ver && prev !== ver) {
