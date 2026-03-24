@@ -284,6 +284,7 @@
         <button class="btn-secondary compact danger ${selectedSeries ? '' : 'disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'}>시리즈 삭제</button>
       </div>` : '';
 
+    const showCreateButton = host !== 'video';
     const filterBar = `
       <div class="series-filter-bar">
         <div class="series-filter-main">
@@ -302,15 +303,15 @@
             `).join('')}
           </div>
         </div>
-        <button class="btn-primary series-create-btn" data-action="create-project">신규</button>
+        ${showCreateButton ? `<button class="btn-primary series-create-btn" data-action="create-project">신규</button>` : ``}
       </div>
       ${manageBarHtml}
     `;
 
     const selectedProjectId = getSelectedProjectId();
     const showStageButtons = host === 'video';
-    const showTitleEdit = host === 'video';
-    const showDelete = host === 'brand';
+    const showTitleEdit = (host === 'video' || host === 'brand');
+    const showDelete = (host === 'video' || host === 'brand');
 
     const list = filteredDrafts.map(d => {
       const ar = d.payload?.aspectRatio || '16:9';
@@ -390,44 +391,7 @@
         return;
       }
 
-      if (action === 'series-rename') {
-        if (!selectedSeries) return;
-        (async () => {
-          var next = null;
-          if (NK.ui && NK.ui.dialog && NK.ui.dialog.prompt) {
-            next = await NK.ui.dialog.prompt('시리즈 새 이름을 입력해 주세요.', {
-              title: '시리즈 이름 변경',
-              defaultValue: selectedSeries.title || '',
-              okText: '변경',
-              cancelText: '취소'
-            });
-          } else {
-            next = prompt('시리즈 새 이름을 입력해 주세요.', selectedSeries.title || '');
-          }
-          if (next === null) return;
-          const nextTitle = String(next || '').trim();
-          if (!nextTitle) {
-            alert('시리즈 이름을 입력해 주세요.');
-            return;
-          }
-          setDashLoading(true, '시리즈 이름 변경 중...');
-          try {
-            const result = await NK.service.project.renameSeries(selectedSeries.id, nextTitle);
-            dashboard.renderDrafts();
-            refreshSidebarCardFromState();
-            if (result.failed > 0) {
-              alert(`시리즈 이름은 변경되었습니다. 서버 동기화 일부 실패: ${result.failed}개`);
-            } else {
-              alert('시리즈 이름이 변경되었습니다.');
-            }
-          } catch (err) {
-            alert('시리즈 이름 변경 실패: ' + (err?.message || err));
-          } finally {
-            setDashLoading(false);
-          }
-        })();
-        return;
-      }
+      // series-rename 기능은 영상 대시보드에서 제거됨
 
       if (action === 'series-edit') {
         if (!selectedSeries) return;

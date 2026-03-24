@@ -263,12 +263,12 @@ body.layout-fixed .sidebar.has-project-selection .nav::-webkit-scrollbar {
 html.page-shell-brand .draft-card .draft-actions,
 body.page-shell-brand .draft-card .draft-actions { display: none !important; }
 html.page-shell-brand .draft-card .edit-btn,
-body.page-shell-brand .draft-card .edit-btn { display: none !important; }
+body.page-shell-brand .draft-card .edit-btn { display: inline-flex !important; }
 html.page-shell-brand .draft-card .trash-btn,
 body.page-shell-brand .draft-card .trash-btn { display: inline-flex !important; }
 
 html.page-shell-video .draft-card .trash-btn,
-body.page-shell-video .draft-card .trash-btn { display: none !important; }
+body.page-shell-video .draft-card .trash-btn { display: inline-flex !important; }
 html.page-shell-video .draft-card .edit-btn,
 body.page-shell-video .draft-card .edit-btn { display: inline-flex !important; }
 html.page-shell-video .draft-card .draft-actions,
