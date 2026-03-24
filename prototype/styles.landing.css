@@ -7,8 +7,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 26px;
-  padding: 28px 20px 40px;
+  gap: 18px;
+  padding: 16px 16px 14px;
 }
 
 .main .option-body {
@@ -35,7 +35,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 460px;
+  min-height: 420px;
 }
 
 .option-title {
@@ -162,17 +162,17 @@
 
 /* Height-adaptive reductions to prevent overflow on short screens */
 @media (max-height: 900px) {
-  .option-card { min-height: 440px; }
+  .option-card { min-height: 400px; }
   .logo-img { width: 168px; height: 168px; }
   .login-icons { --login-icon-slot: 112px; --login-icon-visual: 92px; }
 }
 @media (max-height: 800px) {
-  .option-card { min-height: 420px; }
+  .option-card { min-height: 380px; }
   .logo-img { width: 160px; height: 160px; }
   .login-icons { --login-icon-slot: 104px; --login-icon-visual: 88px; }
 }
 @media (max-height: 720px) {
-  .option-card { min-height: 400px; }
+  .option-card { min-height: 360px; }
   .logo-img { width: 148px; height: 148px; }
   .login-icons { --login-icon-slot: 96px; --login-icon-visual: 80px; }
   .landing-footer { font-size: 10px; padding: 6px 10px 10px; }
