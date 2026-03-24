@@ -347,7 +347,22 @@
     try {
       const path = String(window.location.pathname || '').toLowerCase();
       const isAiVideoShell = /(^|\/)ai-video(\.html)?\/?$/i.test(path);
+      const isAiImageShell = /(^|\/)ai-image(\.html)?\/?$/i.test(path);
       if (!isIframe && isAiVideoShell) {
+        const hasStageHref = urlParams.has('stageHref') || urlParams.has('projectId') || urlParams.has('brandId');
+        if (hasStageHref) {
+          sessionStorage.removeItem(STAGE_TARGET_KEY);
+          localStorage.removeItem(STAGE_TARGET_KEY);
+          sessionStorage.removeItem('nk_current_stage');
+          localStorage.removeItem('nk_current_stage');
+          const clean = new URL(window.location.href);
+          clean.searchParams.delete('stageHref');
+          clean.searchParams.delete('projectId');
+          clean.searchParams.delete('brandId');
+          window.history.replaceState({}, '', clean.toString());
+        }
+      }
+      if (!isIframe && isAiImageShell) {
         const hasStageHref = urlParams.has('stageHref') || urlParams.has('projectId') || urlParams.has('brandId');
         if (hasStageHref) {
           sessionStorage.removeItem(STAGE_TARGET_KEY);
