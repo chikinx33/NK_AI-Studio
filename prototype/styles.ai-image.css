@@ -103,7 +103,7 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-panel-left {
   overflow: hidden;
-  padding-right: 0;
+  padding-right: 12px;
 }
 
 .ai-image-panel-preview,
@@ -199,6 +199,7 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  margin-top: auto;
 }
 
 .ai-image-inline-actions .source-upload-fab {
@@ -214,6 +215,13 @@ body.layout-fixed.page-shell-image .content {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.ai-image-inline-actions .btn-primary,
+.ai-image-inline-actions .btn-secondary,
+.ai-image-ratio-row .btn-primary,
+.ai-image-ratio-row .btn-secondary {
+  min-height: 40px;
 }
 
 .ai-image-source-library {
@@ -318,7 +326,7 @@ body.layout-fixed.page-shell-image .content {
   grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 2fr);
   gap: 8px;
   align-items: stretch;
-  margin-top: 8px;
+  margin-top: auto;
 }
 
 .ai-image-ratio-row .ratio-btn,
@@ -346,6 +354,7 @@ body.layout-fixed.page-shell-image .content {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+  margin-bottom: 10px;
 }
 
 .ai-image-preview-head h2 {
@@ -376,8 +385,8 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-preview-image {
   width: 100%;
-  max-height: min(36vh, 320px);
-  min-height: min(160px, 26vh);
+  max-height: min(52vh, 460px);
+  min-height: min(220px, 34vh);
   object-fit: contain;
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.16);
@@ -456,7 +465,7 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-history-list {
   display: flex;
   flex-wrap: nowrap;
-  flex-direction: row;
+  flex-direction: column;
   gap: 8px;
   overflow: hidden;
   align-items: stretch;
@@ -468,7 +477,6 @@ body.layout-fixed.page-shell-image .content {
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
-  flex: 0 0 calc((100% - 16px) / 3);
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -477,9 +485,7 @@ body.layout-fixed.page-shell-image .content {
   min-width: 0;
 }
 
-.ai-image-history-list .ai-image-history-card:nth-child(n+4) {
-  display: none;
-}
+/* removed 3-per-row hiding for vertical list */
 
 .ai-image-history-card.active {
   border-color: rgba(249, 115, 22, 0.55);
