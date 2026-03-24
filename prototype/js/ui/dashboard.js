@@ -368,6 +368,7 @@
           return;
         }
         if (host === 'image') {
+          try { sessionStorage.setItem('nk_ai_image_selection_explicit', '1'); } catch (_) {}
           if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('ai-image-stage.html');
           return;
         }

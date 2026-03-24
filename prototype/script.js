@@ -699,6 +699,8 @@
         const cp = NK.state?.runtime?.currentProject;
         const pid = String(cp && cp.id || '').trim();
         const bid = String(cp && (cp.brandId || cp.payload && cp.payload.brandId) || '').trim();
+        const explicit = String(sessionStorage.getItem('nk_ai_image_selection_explicit') || '').trim() === '1';
+        if (!explicit || (!pid && !bid)) return 'ai-image-stage.html?detached=1';
         const params = [];
         if (pid) params.push(`projectId=${encodeURIComponent(pid)}`);
         if (bid) params.push(`brandId=${encodeURIComponent(bid)}`);
@@ -715,6 +717,7 @@
         } else {
           window.location.href = target;
         }
+        try { sessionStorage.removeItem('nk_ai_image_selection_explicit'); } catch (_) {}
         return;
       }
 

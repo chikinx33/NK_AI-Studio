@@ -82,8 +82,11 @@
         var pid = context.projectId || null;
         var brandId = context.brandId || null;
         let url = targetName + (targetName.indexOf('?') >= 0 ? '&' : '?') + 'embed=1';
-        if (pid && !hasQueryValue(url, ['projectId', 'pid'])) url += '&projectId=' + encodeURIComponent(pid);
-        if (brandId && !hasQueryValue(url, ['brandId', 'bid'])) url += '&brandId=' + encodeURIComponent(brandId);
+        var detached = hasQueryValue(url, ['detached']);
+        if (!detached) {
+            if (pid && !hasQueryValue(url, ['projectId', 'pid'])) url += '&projectId=' + encodeURIComponent(pid);
+            if (brandId && !hasQueryValue(url, ['brandId', 'bid'])) url += '&brandId=' + encodeURIComponent(brandId);
+        }
         try {
             var ver = (NK && NK.config && NK.config.APP_VERSION) ? String(NK.config.APP_VERSION) : '';
             if (ver && !hasQueryValue(url, ['v'])) url += '&v=' + encodeURIComponent(ver);
