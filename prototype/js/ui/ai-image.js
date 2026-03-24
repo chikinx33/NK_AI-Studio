@@ -305,6 +305,8 @@
 
   function readCurrentProject() {
     try {
+      var qp = new URLSearchParams(String(window.location.search || ''));
+      if (String(qp.get('detached') || '').trim() === '1') return null;
       return (NK.service && NK.service.project && NK.service.project.resolveCurrent)
         ? NK.service.project.resolveCurrent({ search: window.location.search })
         : null;
@@ -315,6 +317,8 @@
 
   function readCurrentBrand() {
     try {
+      var qp = new URLSearchParams(String(window.location.search || ''));
+      if (String(qp.get('detached') || '').trim() === '1') return null;
       return (NK.service && NK.service.brand && NK.service.brand.resolveCurrent)
         ? NK.service.brand.resolveCurrent({ search: window.location.search })
         : null;

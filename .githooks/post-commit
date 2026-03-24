@@ -1,0 +1,7 @@
+#!/bin/sh
+# Auto-push after every successful commit
+# 1) Run project tests; abort push if tests fail
+npm test || exit 1
+# 2) Push current HEAD to main
+git push origin HEAD:main
+exit 0

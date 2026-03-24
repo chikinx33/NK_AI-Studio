@@ -186,6 +186,8 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-preview {
   display: inline-block;
   position: relative;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .ai-image-source-preview img {
@@ -193,13 +195,13 @@ body.layout-fixed.page-shell-image .content {
   height: clamp(84px, 20vw, 108px);
   object-fit: cover;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: none;
 }
 
 .ai-image-source-box.has-image {
   padding: 0;
-  border-color: transparent;
-  background: transparent;
+  border: none !important;
+  background: transparent !important;
 }
 
 .source-remove-fab {
@@ -215,10 +217,10 @@ body.layout-fixed.page-shell-image .content {
   justify-content: center;
   font-weight: 800;
   line-height: 1;
-  color: var(--muted);
-  background: var(--layer-soft);
-  border: 1px solid var(--border);
-  z-index: 1;
+  color: #f5f7fd;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  z-index: 2;
 }
 .source-remove-fab:hover,
 .source-remove-fab:focus-visible {
