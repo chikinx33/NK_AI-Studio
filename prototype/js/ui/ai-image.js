@@ -607,13 +607,15 @@
         '</div>' +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*"' + (sourceDisabled ? ' disabled' : '') + ' />' +
         '</div>' +
-        (state.brandLibraryItems.length
+        ((!detached && state.brandLibraryItems.length)
           ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact collapsible-body">' + brandSourceLibrary + '</div>') + '</div>'
           : '') +
-        '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : (state.contentLibraryItems.length ? ('<div class="ai-image-source-grid compact collapsible-body">' + contentSourceLibrary + '</div>') : '<p class="muted small">' + escapeHtml(t('sourceContentEmpty')) + '</p>')) + '</div>' +
+        (!detached
+          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : (state.contentLibraryItems.length ? ('<div class="ai-image-source-grid compact collapsible-body">' + contentSourceLibrary + '</div>') : '<p class="muted small">' + escapeHtml(t('sourceContentEmpty')) + '</p>')) + '</div>'
+          : '') +
         (function () {
           var projectBody = '';
-          if (!state.sourceSectionCollapsed.project) {
+          if (!detached && !state.sourceSectionCollapsed.project) {
             if (project && project.id) {
               projectBody = state.projectLibraryItems.length
                 ? '<div class="ai-image-source-grid compact collapsible-body">' + sourceLibrary + '</div>'
@@ -622,11 +624,13 @@
               projectBody = '';
             }
           }
-          return '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="project" aria-label="프로젝트 저장소 ' + (state.sourceSectionCollapsed.project ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.project ? '+' : '−') + '</button></div>' + projectBody + '</div>';
+          return (!detached && (project && project.id))
+            ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="project" aria-label="프로젝트 저장소 ' + (state.sourceSectionCollapsed.project ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.project ? '+' : '−') + '</button></div>' + projectBody + '</div>'
+            : '';
         })() +
-        (state.libraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
-        (state.brandLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
-        (state.contentLibraryLoading ? '<p class="muted small">' + escapeHtml(t('sourceContentLoading')) + '</p>' : '') +
+        ((!detached && state.libraryLoading) ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
+        ((!detached && state.brandLibraryLoading) ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
+        ((!detached && state.contentLibraryLoading) ? '<p class="muted small">' + escapeHtml(t('sourceContentLoading')) + '</p>' : '') +
         '</div>' +
       '<div class="ai-image-field">' +
       '<label for="ai-image-prompt">' + escapeHtml(t('promptLabel')) + '</label>' +

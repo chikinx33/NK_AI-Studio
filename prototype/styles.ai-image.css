@@ -202,6 +202,7 @@ body.layout-fixed.page-shell-image .content {
   padding: 0;
   border: none !important;
   background: transparent !important;
+  box-shadow: none !important;
 }
 
 .source-remove-fab {
@@ -251,6 +252,9 @@ body.layout-fixed.page-shell-image .content {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+.ai-image-source-box.has-image .source-upload-fab {
+  display: none !important;
 }
 
 .ai-image-inline-actions .btn-primary,
