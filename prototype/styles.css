@@ -3448,6 +3448,10 @@ textarea::-webkit-scrollbar-corner {
   background: transparent;
 }
 
+html.page-shell-image #sidebar-project-card {
+  display: none !important;
+}
+
 .user-widget.theme-preset-widget {
   padding: 0;
   border: none;

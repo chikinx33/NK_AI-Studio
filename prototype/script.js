@@ -388,7 +388,8 @@
     const isAiImageShellPath = /(^|\/)ai-image(\.html)?\/?$/i.test(loweredPath);
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
     const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath;
-    const hasExplicitShellTarget = urlParams.has('stageHref') || urlParams.has('stage');
+    const stageParamRaw = urlParams.get('stage');
+    const hasExplicitShellTarget = urlParams.has('stageHref') || (urlParams.has('stage') && String(stageParamRaw || '').toLowerCase() !== 'dashboard');
     const defaultDashboardForShell = isBrandShellPath
       ? 'brand-dashboard.html'
       : (isAiImageShellPath ? 'image-dashboard.html' : 'dashboard.html');
