@@ -91,6 +91,15 @@
     return String(NK.state?.runtime?.currentProject?.id || '').trim();
   };
 
+  const getHostShell = () => {
+    const body = document.body || {};
+    const cls = String(body.className || '');
+    if (/\bpage-shell-brand\b/.test(cls)) return 'brand';
+    if (/\bpage-shell-video\b/.test(cls)) return 'video';
+    if (/\bpage-shell-image\b/.test(cls)) return 'image';
+    return 'unknown';
+  };
+
   const getPrimaryDraftForSeries = (seriesId, drafts) => {
     const targetSeriesId = String(seriesId || '').trim();
     if (!targetSeriesId) return null;
@@ -278,6 +287,11 @@
     `;
 
     const selectedProjectId = getSelectedProjectId();
+    const host = getHostShell();
+    const showStageButtons = host === 'video';
+    const showTitleEdit = host === 'video';
+    const showDelete = host === 'brand';
+
     const list = filteredDrafts.map(d => {
       const ar = d.payload?.aspectRatio || '16:9';
       const dur = fmtDuration(d.payload?.duration || 0);
@@ -289,8 +303,8 @@
 
       return `
         <article class="draft-card ${isSelected ? 'is-selected' : ''}" data-draft-id="${escapeHtml(d.id)}">
-          <button class="edit-btn top-right" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>
-          <button class="trash-btn top-right action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>
+          ${showTitleEdit ? `<button class="edit-btn top-right" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : ``}
+          ${showDelete ? `<button class="trash-btn top-right action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : ``}
           <div class="draft-top">
             <div class="draft-thumb"></div>
             <div class="draft-info">
@@ -305,11 +319,12 @@
               </div>
             </div>
           </div>
-          <div class="draft-actions">
-            <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre - production</button>
-            <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_production_fixed">Production</button>
-            <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post - production</button>
-          </div>
+          ${showStageButtons ? `
+            <div class="draft-actions">
+              <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre - production</button>
+              <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_production_fixed">Production</button>
+              <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post - production</button>
+            </div>` : ``}
         </article>
       `;
     }).join('');
@@ -327,6 +342,15 @@
         if (!draft) return;
         selectProject(draft);
         dashboard.renderDrafts();
+        const host = getHostShell();
+        if (host === 'brand') {
+          if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('brand.html');
+          return;
+        }
+        if (host === 'image') {
+          if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('ai-image-stage.html');
+          return;
+        }
         return;
       }
       if (!btn) return;
