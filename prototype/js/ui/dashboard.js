@@ -600,9 +600,10 @@
   dashboard.renderSidebarProjectCard = function (draft) {
     const container = document.getElementById('sidebar-project-card');
     if (!container) return;
+    const htmlCls = String(document.documentElement && document.documentElement.className || '').toLowerCase();
     const path = String(window.location.pathname || '').toLowerCase();
-    const isBrandShell = path.includes('brand-studio.html') || path.includes('brand-dashboard.html');
-    const isImageShell = path.includes('ai-image.html') || path.includes('image-dashboard.html');
+    const isBrandShell = /\bpage-shell-brand\b/.test(htmlCls) || /brand-studio|brand-dashboard/.test(path);
+    const isImageShell = /\bpage-shell-image\b/.test(htmlCls) || /ai-image|image-dashboard/.test(path);
     if (isBrandShell || isImageShell) {
       container.innerHTML = '';
       container.style.display = 'none';
