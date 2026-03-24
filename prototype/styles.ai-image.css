@@ -199,7 +199,7 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: auto;
+  margin-top: 8px;
 }
 
 .ai-image-inline-actions .source-upload-fab {
@@ -381,12 +381,14 @@ body.layout-fixed.page-shell-image .content {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+  height: 100%;
 }
 
 .ai-image-preview-image {
   width: 100%;
-  max-height: min(52vh, 460px);
-  min-height: min(220px, 34vh);
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: min(280px, 38vh);
   object-fit: contain;
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.16);
@@ -398,6 +400,7 @@ body.layout-fixed.page-shell-image .content {
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+  margin-top: auto;
 }
 
 .ai-image-preview-meta p {
@@ -410,6 +413,7 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-top: 8px;
 }
 
 .ai-image-brand-select-wrap {
