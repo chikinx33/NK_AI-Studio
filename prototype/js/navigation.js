@@ -1,7 +1,26 @@
 ; (function () {
     var NK = window.NK || (window.NK = {});
     var nav = NK.navigation || (NK.navigation = {});
-    var STAGE_HREF_KEY = 'nk_current_stage_href';
+    var STAGE_HREF_KEY_BASE = 'nk_current_stage_href';
+    function detectShell() {
+        try {
+            var cls = (document.documentElement && document.documentElement.className || '') + ' ' + (document.body && document.body.className || '');
+            cls = String(cls).toLowerCase();
+            if (/\bpage-shell-brand\b/.test(cls) || /brand-dashboard\.html|brand-studio\.html/i.test(location.pathname)) return 'brand';
+            if (/\bpage-shell-image\b/.test(cls) || /image-dashboard\.html|ai-image(\.html)?/i.test(location.pathname)) return 'image';
+            if (/\bpage-shell-video\b/.test(cls) || /video-dashboard\.html|ai-video(\.html)?/i.test(location.pathname)) return 'video';
+        } catch (_) { }
+        return 'video';
+    }
+    function getStageHrefKey() {
+        return STAGE_HREF_KEY_BASE + '_' + detectShell();
+    }
+    function shellDefaultDashboard() {
+        var sh = detectShell();
+        if (sh === 'brand') return 'brand-dashboard.html';
+        if (sh === 'image') return 'image-dashboard.html';
+        return 'dashboard.html';
+    }
 
     function readCurrentContext() {
         var projectId = '';
@@ -37,17 +56,22 @@
 
     nav.loadStage = function (name) {
         let targetName = String(name || '').trim();
-        if (!targetName) targetName = 'dashboard.html';
+        if (!targetName) targetName = shellDefaultDashboard();
 
         const isIframe = window.self !== window.top;
         const st = nav.normalizeStageName(targetName);
+        // shell-specific dashboard mapping
+        if (st === 'dashboard' || /(^|[\\\/])(brand-dashboard|image-dashboard|video-dashboard|dashboard)\.html([?#]|$)/i.test(targetName)) {
+            targetName = shellDefaultDashboard();
+        }
         if (st === 'ai-image-stage' && /(^|[\\\/])ai-image(\.html?)?([?#]|$)/i.test(targetName)) {
             targetName = 'ai-image-stage.html';
         }
         if (st && st !== 'options') {
             try {
-                sessionStorage.setItem(STAGE_HREF_KEY, targetName);
-                localStorage.setItem(STAGE_HREF_KEY, targetName);
+                var hrefKey = getStageHrefKey();
+                sessionStorage.setItem(hrefKey, targetName);
+                localStorage.setItem(hrefKey, targetName);
             } catch (_) { }
         }
         var context = readCurrentContext();
@@ -93,8 +117,10 @@
             sessionStorage.setItem('nk_current_stage', stage);
             localStorage.setItem('nk_current_stage', stage);
             if (stage === 'dashboard') {
-                sessionStorage.setItem(STAGE_HREF_KEY, 'dashboard.html');
-                localStorage.setItem(STAGE_HREF_KEY, 'dashboard.html');
+                var hrefKey = getStageHrefKey();
+                var defDash = shellDefaultDashboard();
+                sessionStorage.setItem(hrefKey, defDash);
+                localStorage.setItem(hrefKey, defDash);
             }
         } catch (_) { }
         // 전역 상태 업데이트 (구독자들에게 알림)
@@ -108,6 +134,7 @@
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
             const name = base.replace(/\.html?$/, '');
+            if (name === 'brand-dashboard' || name === 'image-dashboard' || name === 'video-dashboard') return 'dashboard';
             if (name === 'ai-image') return 'ai-image-stage';
             if (['scenario', 'scenes', 'ai-image-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
                 return name === 'ai-video' ? 'dashboard' : name;

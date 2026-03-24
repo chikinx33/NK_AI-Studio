@@ -278,6 +278,18 @@
       if (RESTORABLE_STAGES.includes(fromQuery)) return STAGE_HTML_MAP[fromQuery];
     } catch (_) { }
 
+    // shell-scoped href 우선
+    try {
+      const sh = (function () {
+        const p = String(window.location.pathname || '').toLowerCase();
+        if (/brand-studio|brand-dashboard/.test(p)) return 'brand';
+        if (/ai-image|image-dashboard/.test(p)) return 'image';
+        return 'video';
+      })();
+      const scopedKey = STAGE_TARGET_KEY + '_' + sh;
+      const scoped = normalizeStageTarget(sessionStorage.getItem(scopedKey) || localStorage.getItem(scopedKey) || '');
+      if (scoped) return scoped;
+    } catch (_) { }
     try {
       const fromSessionHref = normalizeStageTarget(sessionStorage.getItem(STAGE_TARGET_KEY) || '');
       if (fromSessionHref) return fromSessionHref;
