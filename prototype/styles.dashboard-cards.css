@@ -259,6 +259,19 @@ body.layout-fixed .sidebar.has-project-selection .nav::-webkit-scrollbar {
   box-shadow: 0 14px 28px rgba(255, 140, 0, 0.16);
 }
 
+/* Shell-specific visibility rules for dashboard card actions */
+body.page-shell-brand .draft-card .draft-actions { display: none !important; }
+body.page-shell-brand .draft-card .edit-btn { display: none !important; }
+body.page-shell-brand .draft-card .trash-btn { display: inline-flex !important; }
+
+body.page-shell-video .draft-card .trash-btn { display: none !important; }
+body.page-shell-video .draft-card .edit-btn { display: inline-flex !important; }
+body.page-shell-video .draft-card .draft-actions { display: block !important; }
+
+body.page-shell-image .draft-card .draft-actions,
+body.page-shell-image .draft-card .edit-btn,
+body.page-shell-image .draft-card .trash-btn { display: none !important; }
+
 .series-chip[data-series-id]:not([data-series-id="__all__"]).active {
   color: #b8e0ff;
 }
