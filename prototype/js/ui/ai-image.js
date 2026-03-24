@@ -1259,6 +1259,18 @@
         render();
       }).catch(function () { });
     }
+    if (!window.__aiImageLangBound) {
+      window.__aiImageLangBound = true;
+      window.addEventListener('nk:lang-changed', function (e) {
+        var next = (e && e.detail && e.detail.lang) === 'en' ? 'en' : 'ko';
+        if (state.lang !== next) {
+          state.lang = next;
+          updateDocumentCopy();
+          updateThemeAndLangButtons();
+          render();
+        }
+      });
+    }
   }
 
   async function registerImageToProject(projectId, result) {

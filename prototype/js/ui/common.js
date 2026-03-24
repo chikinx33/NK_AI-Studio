@@ -1320,6 +1320,17 @@
                 });
             });
         } catch (_) { }
+        try {
+            var ev = new CustomEvent('nk:lang-changed', { detail: { lang: safeLang } });
+            window.dispatchEvent(ev);
+        } catch (_) {
+            try {
+                var e = document.createEvent('Event');
+                e.initEvent('nk:lang-changed', true, true);
+                e.detail = { lang: safeLang };
+                window.dispatchEvent(e);
+            } catch (__){ }
+        }
     };
 
     common.translateText = function (text, lang) {
