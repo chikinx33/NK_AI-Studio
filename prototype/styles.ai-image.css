@@ -200,6 +200,11 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-preview .img-modal-trigger {
   display: block;
   line-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  outline: 0;
 }
 
 .ai-image-source-box.has-image {
