@@ -625,7 +625,7 @@
       '</div>' +
       '</div>' +
       '</section>' +
-      '<section class="card ai-image-panel ai-image-panel-right">' +
+      '<section class="card ai-image-panel ai-image-panel-preview">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
       '</div>' +
@@ -658,12 +658,16 @@
           '</div>' +
           '</div>'
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
+      '</div>' +
+      '</section>' +
+      '<section class="card ai-image-panel ai-image-panel-history">' +
+      '<div class="ai-image-preview-head">' +
+      '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +
+      '</div>' +
       '<div class="ai-image-history">' +
-      '<div class="ai-image-source-library-title">' + escapeHtml(t('historyTitle')) + '</div>' +
       (state.historyLoading ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
       ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
       (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>') +
-      '</div>' +
       '</div>' +
       '</section>' +
       '</div>' +
