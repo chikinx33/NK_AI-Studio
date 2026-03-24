@@ -226,6 +226,12 @@ body.layout-fixed.page-shell-image .content {
   min-height: 40px;
 }
 
+.ai-image-inline-actions .icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .ai-image-inline-actions-left {
   display: inline-flex;
   align-items: center;
