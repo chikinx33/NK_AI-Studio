@@ -68,6 +68,8 @@
       generating: '생성 중...',
       resultsTitle: '결과',
       resultsEmpty: '아직 생성된 이미지가 없습니다.',
+      deleteConfirm: '이 이미지를 영구 삭제하시겠습니까?',
+      deleteLabel: '삭제',
       download: '다운로드',
       saveProject: '에피소드 저장',
       saveBrand: '브랜드 IP 등록',
@@ -156,6 +158,8 @@
       generating: 'Generating...',
       resultsTitle: 'Results',
       resultsEmpty: 'No generated images yet.',
+      deleteConfirm: 'Permanently delete this image?',
+      deleteLabel: 'Delete',
       download: 'Download',
       saveProject: 'Save to episode',
       saveBrand: 'Save to brand IP',
@@ -531,6 +535,7 @@
       var active = String(item.id || '') === String(state.currentResultId || '');
       return '' +
         '<button type="button" class="ai-image-history-card' + (active ? ' active' : '') + '" data-action="select-result" data-id="' + escapeHtml(item.id) + '">' +
+        '<button type="button" class="ai-image-history-delete" data-action="delete-result" data-id="' + escapeHtml(item.id) + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
         '<img src="' + escapeHtml(resolveResultUrl(item)) + '" alt="" class="ai-image-history-thumb" />' +
         '<div class="ai-image-history-meta">' +
         '<strong>' + escapeHtml(item.mode === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + '</strong>' +
@@ -1120,6 +1125,31 @@
             return String(item && item.id || '') === String(btn.getAttribute('data-id') || '');
           });
           downloadResult(result);
+          return;
+        }
+        if (action === 'delete-result') {
+          var deleteId = String(btn.getAttribute('data-id') || '');
+          if (!deleteId) return;
+          try {
+            var ok = window.confirm(t('deleteConfirm'));
+            if (!ok) return;
+          } catch (_) {
+            // fall through if confirm not available
+          }
+          var idx = state.results.findIndex(function (r) { return String(r.id || '') === deleteId; });
+          if (idx >= 0) {
+            var toDelete = state.results[idx];
+            var objectName = String(toDelete && toDelete.objectName || '').trim();
+            if (toDelete && toDelete.savedToProject && objectName && project && project.id && NK.api && NK.api.projectDelete) {
+              NK.api.projectDelete(project.id, objectName).catch(function () { });
+            }
+            state.results.splice(idx, 1);
+            if (String(state.currentResultId || '') === deleteId) {
+              state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+            }
+            persistHistory();
+            render();
+          }
           return;
         }
         if (action === 'save-result-project') {
