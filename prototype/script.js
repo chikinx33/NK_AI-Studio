@@ -2903,12 +2903,14 @@
   };
 
   const updateSidebarHighlight = (stage) => {
-    // 1. 일반 네비게이션 아이템
+    // 1. 일반 네비게이션 아이템 - 정확 매칭 (부분문자열 매칭 제거)
     document.querySelectorAll('.nav-item').forEach(item => {
       const href = item.getAttribute('href') || '';
-      const normHref = href.replace(/.*\//, '').replace(/\.html?$/, '') || 'index';
-      const isDash = stage === 'dashboard' && (normHref === 'dashboard' || normHref === 'index');
-      const isMatch = href.includes(stage) || isDash;
+      const file = href.replace(/.*\//, '').split('?')[0].replace(/\.html?$/, '') || 'index';
+      let targetStage = file;
+      if (file === 'brand-dashboard' || file === 'image-dashboard' || file === 'video-dashboard') targetStage = 'dashboard';
+      if (file === 'ai-video') targetStage = 'dashboard';
+      const isMatch = (stage === targetStage) || (stage === 'dashboard' && (targetStage === 'index' || targetStage === 'dashboard'));
       if (isMatch) item.classList.add('active');
       else item.classList.remove('active');
     });
