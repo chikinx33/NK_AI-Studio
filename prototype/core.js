@@ -3,6 +3,40 @@
   var core = NK.core || (NK.core = {});
 
   core.applyVersionAndNav = function () {
+    try {
+      var ver = (NK.core && NK.core.APP_VERSION) || (NK.config && NK.config.APP_VERSION) || '';
+      var prev = '';
+      try { prev = localStorage.getItem('nk_app_version') || ''; } catch (_) { prev = ''; }
+      // Append ?v to local stylesheets to avoid stale CSS without user hard refresh
+      if (ver) {
+        Array.prototype.forEach.call(document.querySelectorAll('link[rel="stylesheet"][href]'), function (ln) {
+          try {
+            var href = ln.getAttribute('href') || '';
+            if (!href) return;
+            // only same-origin or relative assets
+            var isExternal = /^https?:\/\//i.test(href) && href.indexOf(location.origin) !== 0;
+            if (isExternal) return;
+            if (!/[?&]v=/.test(href)) {
+              ln.setAttribute('href', href + (href.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver));
+            }
+          } catch (_) {}
+        });
+      }
+      // One-time soft refresh with ?v to bust HTML cache and clear cross-shell stageHref
+      if (ver && prev !== ver) {
+        try {
+          localStorage.setItem('nk_app_version', ver);
+          var keys = ['nk_current_stage_href', 'nk_current_stage_href_brand', 'nk_current_stage_href_image', 'nk_current_stage_href_video'];
+          keys.forEach(function(k){ try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch(_){ } });
+          var url = new URL(window.location.href);
+          if (url.searchParams.get('v') !== ver) {
+            url.searchParams.set('v', ver);
+            window.location.replace(url.toString());
+            return;
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
     document.querySelectorAll('.sidebar-version').forEach(function (el) {
       el.textContent = 'ver ' + (core.APP_VERSION || '');
     });
