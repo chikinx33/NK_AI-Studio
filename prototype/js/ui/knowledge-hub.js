@@ -1025,6 +1025,21 @@
             return entry;
           });
           renderCharacterManagerModal();
+          try {
+            var nextDraft = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft);
+            syncBrandAndProject(nextDraft)
+              .then(function (result) {
+                characterSheetDraft = cloneCharacterSheetDraft(modalCharacterSheetDraft);
+                knowledge.characterSheets = cloneCharacterSheetDraft(characterSheetDraft);
+                if (result && result.draft) {
+                  project = result.draft;
+                  knowledge = mergeKnowledge(readKnowledge(result.draft), brand ? readKnowledge(brand) : null);
+                  currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
+                }
+                renderCharacterManagerModal();
+              })
+              .catch(function () { });
+          } catch (_) { }
           return;
         }
         if (action === 'character-sheet-delete') {

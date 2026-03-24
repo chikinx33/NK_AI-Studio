@@ -69,7 +69,7 @@
       resultsTitle: '결과',
       resultsEmpty: '아직 생성된 이미지가 없습니다.',
       download: '다운로드',
-      saveProject: '프로젝트 저장소 등록',
+      saveProject: '에피소드 저장',
       saveBrand: '브랜드 IP 등록',
       savedBrand: '브랜드 IP 등록 완료',
       savedProject: '프로젝트 저장소 등록 완료',
@@ -97,7 +97,7 @@
       fileChoose: '파일 선택',
       latestResult: '미리보기',
       historyTitle: '생성 히스토리',
-      resultSavedTag: '프로젝트 저장 완료',
+      resultSavedTag: '에피소드 저장 완료',
       resultSavedBrandTag: '브랜드 IP 등록 완료',
       historyLoading: '세션 결과 불러오는 중...',
       historyLoadError: '세션 결과 동기화 실패',
@@ -157,7 +157,7 @@
       resultsTitle: 'Results',
       resultsEmpty: 'No generated images yet.',
       download: 'Download',
-      saveProject: 'Save to project library',
+      saveProject: 'Save to episode',
       saveBrand: 'Save to brand IP',
       savedBrand: 'Saved to brand IP',
       savedProject: 'Saved to project library',
@@ -185,7 +185,7 @@
       fileChoose: 'Choose file',
       latestResult: 'Primary preview',
       historyTitle: 'Generation history',
-      resultSavedTag: 'Saved to project',
+      resultSavedTag: 'Saved to episode',
       resultSavedBrandTag: 'Saved to brand IP',
       promptPanelTitle: 'Prompt',
       historyLoading: 'Loading session results...',
@@ -536,7 +536,6 @@
         '<strong>' + escapeHtml(item.mode === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + '</strong>' +
         '<p>' + escapeHtml(item.prompt || '') + '</p>' +
         (item.savedToProject ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedTag')) + '</span>' : '') +
-        ((Array.isArray(item.savedBrandTargets) && item.savedBrandTargets.length) ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedBrandTag')) + '</span>' : '') +
         '</div>' +
         '</button>';
     }).join('');
