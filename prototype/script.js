@@ -368,13 +368,10 @@
     const initialTargetRaw = (isAiVideoShellPath || isShellPage)
       ? (isKnownShellPath && !hasExplicitShellTarget ? defaultDashboardForShell : resolveInitialStageTarget(urlParams))
       : '';
-    const initialStageName = NK.navigation.normalizeStageName(initialTargetRaw);
-    const brandStages = ['dashboard', 'brand', 'knowledge', 'analytics', 'library'];
-    const imageStages = ['dashboard', 'ai-image-stage'];
     const initialTarget = isBrandShellPath
-      ? (brandStages.includes(initialStageName) ? initialTargetRaw : 'dashboard.html')
+      ? (initialTargetRaw || 'brand-dashboard.html')
       : (isAiImageShellPath
-        ? (imageStages.includes(initialStageName) ? initialTargetRaw : 'dashboard.html')
+        ? (initialTargetRaw || 'image-dashboard.html')
         : initialTargetRaw);
     const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
     const effectiveStage = initialStage || stage;
