@@ -54,6 +54,10 @@
         });
     }
 
+    var __lastResolvedUrl = '';
+    var __pendingUrl = '';
+    var __lastAt = 0;
+
     nav.loadStage = function (name) {
         let targetName = String(name || '').trim();
         if (!targetName) targetName = shellDefaultDashboard();
@@ -80,6 +84,16 @@
         let url = targetName + (targetName.indexOf('?') >= 0 ? '&' : '?') + 'embed=1';
         if (pid && !hasQueryValue(url, ['projectId', 'pid'])) url += '&projectId=' + encodeURIComponent(pid);
         if (brandId && !hasQueryValue(url, ['brandId', 'bid'])) url += '&brandId=' + encodeURIComponent(brandId);
+        try {
+            var ver = (NK && NK.config && NK.config.APP_VERSION) ? String(NK.config.APP_VERSION) : '';
+            if (ver && !hasQueryValue(url, ['v'])) url += '&v=' + encodeURIComponent(ver);
+        } catch (_) {}
+
+        var now = Date.now();
+        if (url === __lastResolvedUrl || url === __pendingUrl) return;
+        if (now - __lastAt < 80 && st === 'dashboard') return;
+        __pendingUrl = url;
+        __lastAt = now;
 
         if (isIframe) {
             // 1. 아이프레임 스스로 이동
@@ -91,7 +105,20 @@
         } else {
             // 부모 창에서 직접 호출된 경우 (사이드바 클릭 등)
             const iframe = nav.ensureStageView();
-            if (iframe) iframe.src = url;
+            if (iframe) {
+                try {
+                    iframe.style.transition = 'opacity 160ms ease';
+                    iframe.style.opacity = '0.01';
+                } catch (_) {}
+                var onLoad = function () {
+                    try { iframe.style.opacity = '1'; } catch (_) {}
+                    __lastResolvedUrl = url;
+                    __pendingUrl = '';
+                    iframe.removeEventListener('load', onLoad);
+                };
+                iframe.addEventListener('load', onLoad);
+                iframe.src = url;
+            }
             nav.setStage(st);
             try {
                 const pageUrl = new URL(window.location.href);
