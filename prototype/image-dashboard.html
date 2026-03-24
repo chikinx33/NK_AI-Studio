@@ -1,16 +1,14 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="dark" class="layout-fixed">
-
+<html lang="ko" data-theme="dark" class="layout-fixed page-shell-image">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NK_Studio · AI 이미지</title>
+  <title>NK_Studio · 이미지 대시보드</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="styles.dashboard-cards.css" />
-  <link rel="stylesheet" href="styles.ai-image.css" />
   <script src="core.js" defer></script>
   <script src="js/config.js" defer></script>
   <script src="js/utils.js" defer></script>
@@ -29,43 +27,13 @@
   <script src="js/ui/production.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-
-<body class="layout-fixed page-shell-image">
+<body class="layout-fixed">
   <div class="grain"></div>
-  <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark"></div>
-        <div class="brand-text">
-          <span class="title" data-i18n="brand_title">NK_Studio</span>
-          <span class="subtitle" data-i18n="ai_image_studio_subtitle">AI 이미지 생성 스튜디오</span>
-        </div>
-      </div>
-      <nav class="nav">
-        <a class="nav-item" href="image-dashboard.html">
-          <span data-i18n="nav_dashboard">대시보드</span>
-        </a>
-        <a class="nav-item" href="ai-image-stage.html">
-          <span data-i18n="nav_ai_image_generation">AI 이미지 생성</span>
-        </a>
-      </nav>
-      <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>
-      <div class="sidebar-footer">
-        <div class="sidebar-actions">
-          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('global')"></button>
-          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-          <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
-        </div>
-        <div class="sidebar-version">ver</div>
-      </div>
-    </aside>
-
+  <div class="app no-sidebar">
     <div id="project-overlay" class="auth-overlay hidden">
       <div class="auth-card">
         <p class="auth-title">프로젝트 생성</p>
         <div class="form-row">
-          <label>이름</label>
           <input id="project-name-input" placeholder="에피소드 이름" />
         </div>
         <div class="option-actions">
@@ -74,20 +42,25 @@
         </div>
       </div>
     </div>
-
     <div id="auth-overlay" class="auth-overlay hidden">
       <div class="auth-card">
         <p class="auth-title">로그인 하세요.</p>
         <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
       </div>
     </div>
-
-    <main class="main blur-target">
+    <main class="main">
       <div class="main-body">
-        <section class="content"></section>
+        <section class="content">
+          <div class="projects">
+            <div id="dashboard-drafts" class="draft-card-grid"></div>
+            <div id="dashboard-loading" class="loading-overlay hidden">
+              <div class="spinner"></div>
+              <p>프로젝트 불러오는 중...</p>
+            </div>
+          </div>
+        </section>
       </div>
     </main>
   </div>
 </body>
-
 </html>
