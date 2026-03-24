@@ -41,6 +41,7 @@
       sessionLabel: '세션',
       projectLabel: '현재 에피소드',
       brandLabel: '현재 브랜드',
+      noneLabel: '없음',
       noProject: '에피소드 없음',
       noBrand: '선택된 브랜드 없음',
       noProjectHelp: '프로젝트를 선택하면 저장소에서 소스를 불러오고 결과를 등록할 수 있습니다.',
@@ -131,6 +132,7 @@
       sessionLabel: 'Session',
       projectLabel: 'Current episode',
       brandLabel: 'Current brand',
+      noneLabel: 'None',
       noProject: 'No episode selected',
       noBrand: 'No brand selected',
       noProjectHelp: 'Select a project to load source images from its library and save results back.',
@@ -519,6 +521,7 @@
     if (!root) return;
     var project = state.currentProject;
     var brand = state.currentBrand;
+    var detached = !(project && project.id);
     var selectedResult = currentResult();
     var sourceUrl = sourcePreviewUrl();
     var sourceDisabled = state.mode !== 'image-to-image';
@@ -574,9 +577,9 @@
       '<h1>' + escapeHtml(t('heroTitle')) + '</h1>' +
       '</div>' +
       '<div class="ai-image-status-pills">' +
-      '<span class="studio-hero-pill"><em>' + escapeHtml(t('sessionLabel')) + '</em><strong>' + escapeHtml(state.sessionId) + '</strong></span>' +
-      '<span class="studio-hero-pill"><em>' + escapeHtml(t('projectLabel')) + '</em><strong>' + escapeHtml(project && project.title ? project.title : t('noProject')) + '</strong></span>' +
-      '<span class="studio-hero-pill"><em>' + escapeHtml(t('brandLabel')) + '</em><strong>' + escapeHtml(brand && brand.brandTitle ? brand.brandTitle : t('noBrand')) + '</strong></span>' +
+      '<span class="studio-hero-pill"><em>' + escapeHtml(t('sessionLabel')) + '</em><strong>' + escapeHtml(detached ? t('noneLabel') : state.sessionId) + '</strong></span>' +
+      '<span class="studio-hero-pill"><em>' + escapeHtml(t('projectLabel')) + '</em><strong>' + escapeHtml(detached ? t('noneLabel') : (project && project.title ? project.title : t('noProject'))) + '</strong></span>' +
+      '<span class="studio-hero-pill"><em>' + escapeHtml(t('brandLabel')) + '</em><strong>' + escapeHtml(detached ? t('noneLabel') : (brand && brand.brandTitle ? brand.brandTitle : t('noBrand'))) + '</strong></span>' +
       '</div>' +
       '</div>' +
       '<div class="ai-image-workspace">' +
@@ -649,12 +652,12 @@
           '<div class="ai-image-inline-actions">' +
           '<div class="ai-image-inline-actions-left">' +
           '<button type="button" class="btn-primary compact" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
-          '<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>' +
+          (detached ? '' : ('<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>')) +
           '<button type="button" class="btn-secondary compact" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('useAsSource')) + '</button>' +
           '<button type="button" class="btn-secondary compact" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
           '<button type="button" class="btn-secondary compact" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
           '</div>' +
-          '<div class="ai-image-brand-actions">' +
+          (detached ? '' : '<div class="ai-image-brand-actions">' +
           '<label class="ai-image-brand-select-wrap" aria-label="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
           '<select id="ai-image-brand-target" title="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
           '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
@@ -664,7 +667,7 @@
           '</select>' +
           '</label>' +
           '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
-          '</div>' +
+          '</div>') +
           '</div>' +
           '</div>'
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
