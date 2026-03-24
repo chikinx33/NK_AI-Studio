@@ -504,6 +504,8 @@ body.layout-fixed.page-shell-image .content {
   gap: 8px;
   align-items: center;
   position: relative;
+  cursor: pointer;
+  box-sizing: border-box;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -528,6 +530,8 @@ body.layout-fixed.page-shell-image .content {
   color: var(--muted);
   background: var(--layer-soft);
   border: 1px solid var(--border);
+  z-index: 2;
+  pointer-events: auto;
 }
 .ai-image-history-delete:hover,
 .ai-image-history-delete:focus-visible {

@@ -534,7 +534,7 @@
     var resultCards = state.results.map(function (item) {
       var active = String(item.id || '') === String(state.currentResultId || '');
       return '' +
-        '<button type="button" class="ai-image-history-card' + (active ? ' active' : '') + '" data-action="select-result" data-id="' + escapeHtml(item.id) + '">' +
+        '<div class="ai-image-history-card' + (active ? ' active' : '') + '" role="button" tabindex="0" data-action="select-result" data-id="' + escapeHtml(item.id) + '">' +
         '<button type="button" class="ai-image-history-delete" data-action="delete-result" data-id="' + escapeHtml(item.id) + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
         '<img src="' + escapeHtml(resolveResultUrl(item)) + '" alt="" class="ai-image-history-thumb" />' +
         '<div class="ai-image-history-meta">' +
@@ -542,7 +542,7 @@
         '<p>' + escapeHtml(item.prompt || '') + '</p>' +
         (item.savedToProject ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedTag')) + '</span>' : '') +
         '</div>' +
-        '</button>';
+        '</div>';
     }).join('');
 
     var sourceLibrary = state.projectLibraryItems.map(function (item, index) {
