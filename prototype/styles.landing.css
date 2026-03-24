@@ -12,7 +12,7 @@
 }
 
 .main .option-body {
-  min-height: 100vh;
+  min-height: calc(100vh - 56px);
 }
 
 .option-card-grid {
@@ -35,7 +35,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-height: 640px;
+  min-height: 520px;
 }
 
 .option-title {
@@ -55,8 +55,8 @@
 }
 
 .logo-img {
-  width: 300px;
-  height: 300px;
+  width: 220px;
+  height: 220px;
   border-radius: 24px;
   object-fit: cover;
 }
@@ -112,6 +112,32 @@
   justify-content: center;
   margin-top: auto;
   padding-top: 8px;
+}
+
+.landing-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.landing-footer .footer-links {
+  display: inline-flex;
+  gap: 10px;
+  opacity: 0.92;
+}
+
+.landing-footer .footer-links a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.landing-footer .footer-links a:hover {
+  text-decoration: underline;
 }
 
 @media (max-width: 1280px) {

@@ -97,7 +97,24 @@
     if (/\bpage-shell-brand\b/.test(cls)) return 'brand';
     if (/\bpage-shell-video\b/.test(cls)) return 'video';
     if (/\bpage-shell-image\b/.test(cls)) return 'image';
-    return 'unknown';
+    try {
+      const url = String(window.location && window.location.href || '').toLowerCase();
+      if (/brand-studio\.html|brand\.html|knowledge\.html|analytics\.html/.test(url)) return 'brand';
+      if (/ai-video\.html/.test(url)) return 'video';
+      if (/ai-image\.html|ai-image-stage\.html/.test(url)) return 'image';
+    } catch (_) { }
+    try {
+      const ref = String(document.referrer || '').toLowerCase();
+      if (/brand-studio\.html|brand\.html|knowledge\.html|analytics\.html/.test(ref)) return 'brand';
+      if (/ai-video\.html/.test(ref)) return 'video';
+      if (/ai-image\.html|ai-image-stage\.html/.test(ref)) return 'image';
+    } catch (_) { }
+    try {
+      const qp = new URLSearchParams(String(window.location.search || ''));
+      const h = String(qp.get('host') || '').toLowerCase();
+      if (h === 'brand' || h === 'video' || h === 'image') return h;
+    } catch (_) { }
+    return 'video';
   };
 
   const getPrimaryDraftForSeries = (seriesId, drafts) => {
