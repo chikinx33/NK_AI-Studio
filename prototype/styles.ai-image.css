@@ -418,8 +418,8 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-history-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   overflow: hidden;
   align-items: stretch;
@@ -431,6 +431,7 @@ body.layout-fixed.page-shell-image .content {
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 8px;
   align-items: center;
+  flex: 0 0 calc((100% - 16px) / 3);
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
