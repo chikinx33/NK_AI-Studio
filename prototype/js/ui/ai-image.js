@@ -112,6 +112,7 @@
       sourceContentLoading: '콘텐츠 저장소 불러오는 중...',
       sourceContentEmpty: '콘텐츠 저장소에 이미지가 없습니다.',
       fileNone: '선택된 파일 없음',
+      promptPanelTitle: '프롬프트',
       reusePrompt: '프롬프트 복사',
       useAsSource: '소스 사용',
       regenerateVariation: '재생성'
@@ -186,6 +187,7 @@
       historyTitle: 'Generation history',
       resultSavedTag: 'Saved to project',
       resultSavedBrandTag: 'Saved to brand IP',
+      promptPanelTitle: 'Prompt',
       historyLoading: 'Loading session results...',
       historyLoadError: 'Failed to sync session results',
       promptCounterSuffix: '/4000',
@@ -575,6 +577,9 @@
       '</div>' +
       '<div class="ai-image-workspace">' +
       '<section class="card ai-image-panel ai-image-panel-left">' +
+      '<div class="ai-image-preview-head">' +
+      '<div><h2>' + escapeHtml(t('promptPanelTitle')) + '</h2></div>' +
+      '</div>' +
       '<div class="scenario-form">' +
       '<div class="ai-image-mode-tabs">' +
       '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +

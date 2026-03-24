@@ -63,6 +63,11 @@ body.layout-fixed.page-shell-image .content {
   overflow: hidden;
 }
 
+.ai-image-shell .ai-image-workspace {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 5fr) minmax(0, 2fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
 .ai-image-panel {
   padding: 12px;
   border-radius: 14px;
@@ -70,6 +75,14 @@ body.layout-fixed.page-shell-image .content {
   min-height: 0;
   overflow: hidden;
   height: 100%;
+}
+
+.card.ai-image-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .ai-image-panel-left,
@@ -89,6 +102,17 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-panel-preview,
 .ai-image-panel-history {
   overflow: hidden;
+}
+
+.ai-image-panel-left { grid-column: 1 / 2; grid-row: 1; }
+.ai-image-panel-preview { grid-column: 2 / 3; grid-row: 1; }
+.ai-image-panel-history { grid-column: 3 / 4; grid-row: 1; }
+
+.ai-image-panel-left .scenario-form,
+.ai-image-panel-preview .ai-image-preview-layout,
+.ai-image-panel-history .ai-image-history {
+  height: 100%;
+  min-height: 0;
 }
 
 .ai-image-mode-tabs {
