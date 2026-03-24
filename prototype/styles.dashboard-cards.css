@@ -260,16 +260,25 @@ body.layout-fixed .sidebar.has-project-selection .nav::-webkit-scrollbar {
 }
 
 /* Shell-specific visibility rules for dashboard card actions */
+html.page-shell-brand .draft-card .draft-actions,
 body.page-shell-brand .draft-card .draft-actions { display: none !important; }
+html.page-shell-brand .draft-card .edit-btn,
 body.page-shell-brand .draft-card .edit-btn { display: none !important; }
+html.page-shell-brand .draft-card .trash-btn,
 body.page-shell-brand .draft-card .trash-btn { display: inline-flex !important; }
 
+html.page-shell-video .draft-card .trash-btn,
 body.page-shell-video .draft-card .trash-btn { display: none !important; }
+html.page-shell-video .draft-card .edit-btn,
 body.page-shell-video .draft-card .edit-btn { display: inline-flex !important; }
+html.page-shell-video .draft-card .draft-actions,
 body.page-shell-video .draft-card .draft-actions { display: block !important; }
 
+html.page-shell-image .draft-card .draft-actions,
 body.page-shell-image .draft-card .draft-actions,
+html.page-shell-image .draft-card .edit-btn,
 body.page-shell-image .draft-card .edit-btn,
+html.page-shell-image .draft-card .trash-btn,
 body.page-shell-image .draft-card .trash-btn { display: none !important; }
 
 .series-chip[data-series-id]:not([data-series-id="__all__"]).active {
