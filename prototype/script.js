@@ -362,8 +362,11 @@
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
     const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath;
     const hasExplicitShellTarget = urlParams.has('stageHref') || urlParams.has('stage');
+    const defaultDashboardForShell = isBrandShellPath
+      ? 'brand-dashboard.html'
+      : (isAiImageShellPath ? 'image-dashboard.html' : 'dashboard.html');
     const initialTargetRaw = (isAiVideoShellPath || isShellPage)
-      ? (isKnownShellPath && !hasExplicitShellTarget ? 'dashboard.html' : resolveInitialStageTarget(urlParams))
+      ? (isKnownShellPath && !hasExplicitShellTarget ? defaultDashboardForShell : resolveInitialStageTarget(urlParams))
       : '';
     const initialStageName = NK.navigation.normalizeStageName(initialTargetRaw);
     const brandStages = ['dashboard', 'brand', 'knowledge', 'analytics', 'library'];
@@ -415,8 +418,8 @@
 
     if (isMainPage) {
       const target = (isAiVideoShellPath || isShellPage)
-        ? (initialTarget || STAGE_HTML_MAP[effectiveStage] || 'dashboard.html')
-        : (STAGE_HTML_MAP[effectiveStage] || 'dashboard.html');
+        ? (initialTarget || STAGE_HTML_MAP[effectiveStage] || defaultDashboardForShell)
+        : (STAGE_HTML_MAP[effectiveStage] || defaultDashboardForShell);
       NK.navigation.loadStage(target);
     }
 
