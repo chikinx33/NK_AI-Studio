@@ -591,9 +591,9 @@
       '</div>' +
       '<div class="ai-image-field source-field' + (sourceDisabled ? ' is-disabled' : '') + '">' +
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
-        '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + '">' +
+        '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + (sourceUrl ? ' has-image' : '') + '">' +
         (sourceUrl
-          ? '<div class="ai-image-source-preview"><button type="button" class="img-modal-trigger" data-action="toggle-source-modal"><img src="' + escapeHtml(sourceUrl) + '" alt="" /></button></div>'
+          ? '<div class="ai-image-source-preview"><button type="button" class="img-modal-trigger" data-action="toggle-source-modal"><img src="' + escapeHtml(sourceUrl) + '" alt="" /></button><button type="button" class="source-remove-fab" data-action="clear-source" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button></div>'
           : '') +
         '<div class="ai-image-inline-actions">' +
         '<button type="button" class="btn-secondary compact source-upload-fab" data-action="open-upload"' + (sourceDisabled ? ' disabled' : '') + '>+</button>' +

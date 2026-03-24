@@ -176,7 +176,7 @@ body.layout-fixed.page-shell-image .content {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
 }
 
 .ai-image-source-box.is-disabled {
@@ -185,6 +185,7 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-source-preview {
   display: inline-block;
+  position: relative;
 }
 
 .ai-image-source-preview img {
@@ -193,6 +194,37 @@ body.layout-fixed.page-shell-image .content {
   object-fit: cover;
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ai-image-source-box.has-image {
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.source-remove-fab {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--layer-soft);
+  border: 1px solid var(--border);
+  z-index: 1;
+}
+.source-remove-fab:hover,
+.source-remove-fab:focus-visible {
+  color: #ffb4b4;
+  border-color: color-mix(in srgb, #ff6b6b 58%, var(--border) 42%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ff6b6b 24%, transparent 76%);
 }
 
 .ai-image-inline-actions {
