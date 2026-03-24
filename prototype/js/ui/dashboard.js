@@ -280,11 +280,10 @@
       <div class="series-manage-bar">
         <span class="series-manage-label">${selectedSeries ? `선택된 시리즈: ${escapeHtml(selectedSeries.title)}` : '시리즈를 선택하면 이름 변경/삭제를 할 수 있습니다.'}</span>
         <button class="btn-secondary compact ${selectedSeries ? '' : 'disabled'}" data-action="series-edit" ${selectedSeries ? '' : 'disabled'}>프로젝트 수정</button>
-        <button class="btn-secondary compact ${selectedSeries ? '' : 'disabled'}" data-action="series-rename" ${selectedSeries ? '' : 'disabled'}>시리즈 이름 변경</button>
         <button class="btn-secondary compact danger ${selectedSeries ? '' : 'disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'}>시리즈 삭제</button>
       </div>` : '';
 
-    const showCreateButton = host !== 'video';
+    const showCreateButton = host === 'brand';
     const filterBar = `
       <div class="series-filter-bar">
         <div class="series-filter-main">
