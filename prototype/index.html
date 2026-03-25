@@ -54,14 +54,14 @@
               <img src="images/logo(500500).png" alt="logo" class="logo-img" id="login-card-logo" />
               <input type="file" id="login-icon-file" class="login-brand-file-input" accept="image/*" />
             </div>
-            <form id="opt-login-form" onsubmit="return false;" autocomplete="off" novalidate>
+            <form id="opt-login-form" onsubmit="return false;" autocomplete="on" novalidate>
               <div class="form-row">
                 <label for="opt-id">ID</label>
-                <input type="text" id="opt-id" placeholder="아이디" />
+                <input type="text" id="opt-id" placeholder="아이디" autocomplete="username" />
               </div>
               <div class="form-row">
                 <label for="opt-pw">PASS</label>
-                <input type="password" id="opt-pw" placeholder="비밀번호" />
+                <input type="password" id="opt-pw" placeholder="비밀번호" autocomplete="current-password" />
               </div>
               <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
               <div class="option-actions">

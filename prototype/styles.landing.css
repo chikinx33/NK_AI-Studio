@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 18px;
-  padding: 16px 16px 14px;
+  padding: 16px 16px 64px;
   min-height: calc(100vh - 64px);
 }
 
@@ -126,9 +126,15 @@
   gap: 6px;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px 12px;
+  padding: 8px 12px 10px;
   color: var(--muted);
   font-size: 11px;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  pointer-events: auto;
 }
 
 .landing-footer .footer-links {
