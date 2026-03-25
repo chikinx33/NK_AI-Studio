@@ -881,7 +881,7 @@
     const DEFAULT_LOGIN_CARD_TITLE = String(loginCardTitleEl?.textContent || '').trim() || 'NK AI STUDIO';
     const DEFAULT_LOGIN_CARD_ICON = String(loginCardLogoEl?.getAttribute('src') || 'images/logo(500500).png').trim() || 'images/logo(500500).png';
     const FAVORITE_CATEGORY_COUNT = 8;
-    const FAVORITE_CATEGORIES_PER_PAGE = 4;
+    const FAVORITE_CATEGORIES_PER_PAGE = 3;
     const FAVORITE_PAGE_COUNT = Math.max(1, Math.ceil(FAVORITE_CATEGORY_COUNT / FAVORITE_CATEGORIES_PER_PAGE));
     const FAVORITE_GRID_COLUMNS = 6;
     const FAVORITE_GRID_ROWS = 2;
@@ -2072,7 +2072,6 @@
           const changed = moveFavoriteItemToSlot(droppedId, targetSlot);
           favoriteDragId = '';
           if (!changed) return;
-          favoritePageIndex = targetPageIndex;
           suppressFavoriteOpenUntil = Date.now() + 320;
           renderFavorites(true);
           const user = NK.auth.getUser();
