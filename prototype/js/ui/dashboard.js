@@ -168,6 +168,9 @@
       }, true);
     }
 
+    try {
+      if (getHostShell() === 'image') sessionStorage.removeItem('nk_ai_image_selection_explicit');
+    } catch (_) {}
     let drafts = NK.store.getDrafts();
     const mergeFromServer = async () => {
       if (!NK.api || !NK.api.projectList) return;
