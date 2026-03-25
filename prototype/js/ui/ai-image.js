@@ -725,11 +725,72 @@
             kind: 'upload'
           };
           state.selectedFileName = file.name || '';
-          render();
+          updateSourceUI();
         };
         reader.readAsDataURL(file);
       };
     }
+  }
+
+  // Partial DOM update for source area to avoid reloading all images
+  function updateSourceUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var sourceField = root.querySelector('.ai-image-field.source-field');
+      var boxEl = root.querySelector('.ai-image-source-box');
+      var tabs = root.querySelectorAll('.ai-image-mode-tabs .btn-secondary');
+      var sourceUrl = sourcePreviewUrl();
+      var sourceDisabled = state.mode !== 'image-to-image';
+      // tabs active state
+      Array.prototype.forEach.call(tabs || [], function(btn){
+        var m = String(btn.getAttribute('data-mode') || '');
+        if (m && m === state.mode) btn.classList.add('active'); else btn.classList.remove('active');
+      });
+      // field disabled state
+      if (sourceField) {
+        sourceField.classList.toggle('is-disabled', sourceDisabled);
+      }
+      if (boxEl) {
+        boxEl.classList.toggle('is-disabled', sourceDisabled);
+        boxEl.classList.toggle('has-image', !!sourceUrl);
+        // preview area
+        var preview = boxEl.querySelector('.ai-image-source-preview');
+        if (sourceUrl) {
+          if (!preview) {
+            preview = document.createElement('div');
+            preview.className = 'ai-image-source-preview';
+            boxEl.insertBefore(preview, boxEl.firstChild);
+          }
+          // build inner controls
+          preview.innerHTML = '';
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'img-modal-trigger';
+          btn.setAttribute('data-action', 'toggle-source-modal');
+          var img = document.createElement('img');
+          img.src = String(sourceUrl);
+          img.alt = '';
+          btn.appendChild(img);
+          var del = document.createElement('button');
+          del.type = 'button';
+          del.className = 'source-remove-fab';
+          del.setAttribute('data-action', 'clear-source');
+          del.setAttribute('aria-label', '삭제');
+          del.setAttribute('title', '삭제');
+          del.textContent = '×';
+          preview.appendChild(btn);
+          preview.appendChild(del);
+        } else {
+          if (preview) preview.parentNode && preview.parentNode.removeChild(preview);
+        }
+        // upload button disabled state (표시는 CSS로 항상 노출)
+        var plus = boxEl.querySelector('.source-upload-fab');
+        if (plus) {
+          if (sourceDisabled) plus.setAttribute('disabled', ''); else plus.removeAttribute('disabled');
+        }
+      }
+    } catch (_) {}
   }
 
   function toDownloadName(result) {
@@ -1023,7 +1084,7 @@
         }
         if (action === 'clear-source') {
           state.sourceImage = null;
-          render();
+          updateSourceUI();
           return;
         }
         if (action === 'load-project-library') {
@@ -1045,7 +1106,7 @@
           var nextUrl = resolveLibraryItemUrl(item);
           if (state.sourceImage && String(state.sourceImage.url || '') === String(nextUrl || '')) {
             state.sourceImage = null;
-            render();
+            updateSourceUI();
             return;
           }
           state.sourceImage = {
@@ -1053,7 +1114,7 @@
             name: String(item.name || '').trim(),
             kind: 'project'
           };
-          render();
+          updateSourceUI();
           return;
         }
         if (action === 'select-brand-source') {
@@ -1063,7 +1124,7 @@
           var nextBrandUrl = resolveLibraryItemUrl(brandItem);
           if (state.sourceImage && String(state.sourceImage.url || '') === String(nextBrandUrl || '')) {
             state.sourceImage = null;
-            render();
+            updateSourceUI();
             return;
           }
           state.sourceImage = {
@@ -1071,7 +1132,7 @@
             name: String(brandItem.name || '').trim(),
             kind: 'brand'
           };
-          render();
+          updateSourceUI();
           return;
         }
         if (action === 'select-content-source') {
@@ -1081,7 +1142,7 @@
           var nextContentUrl = resolveContentItemUrl(cItem);
           if (state.sourceImage && String(state.sourceImage.url || '') === String(nextContentUrl || '')) {
             state.sourceImage = null;
-            render();
+            updateSourceUI();
             return;
           }
           state.sourceImage = {
@@ -1089,7 +1150,7 @@
             name: String(cItem.title || '').trim(),
             kind: 'content'
           };
-          render();
+          updateSourceUI();
           return;
         }
         if (action === 'generate-image') {
@@ -1219,7 +1280,7 @@
               name: String(r2.objectName || r2.id || 'result'),
               kind: 'upload'
             };
-            render();
+            updateSourceUI();
           }
           return;
         }

@@ -650,15 +650,20 @@
           const cp = NK.state?.runtime?.currentProject;
           const pid = String(cp && cp.id || '').trim();
           const bid = String(cp && (cp.brandId || cp.payload && cp.payload.brandId) || '').trim();
-          const params = [];
-          if (pid) params.push(`projectId=${encodeURIComponent(pid)}`);
-          if (bid) params.push(`brandId=${encodeURIComponent(bid)}`);
-          const target = `ai-image-stage.html${params.length ? `?${params.join('&')}` : ''}`;
+          const explicit = String(sessionStorage.getItem('nk_ai_image_selection_explicit') || '').trim() === '1';
+          let target = 'ai-image-stage.html?detached=1';
+          if (explicit && (pid || bid)) {
+            const params = [];
+            if (pid) params.push(`projectId=${encodeURIComponent(pid)}`);
+            if (bid) params.push(`brandId=${encodeURIComponent(bid)}`);
+            target = `ai-image-stage.html${params.length ? `?${params.join('&')}` : ''}`;
+          }
           if (NK.navigation && NK.navigation.loadStage) {
             NK.navigation.loadStage(target);
           } else {
             window.location.href = `ai-image.html?stageHref=${encodeURIComponent(target)}`;
           }
+          try { sessionStorage.removeItem('nk_ai_image_selection_explicit'); } catch (_) {}
         } catch (_) {
           if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('ai-image-stage.html');
           else window.location.href = 'ai-image.html?stageHref=ai-image-stage.html';
