@@ -1,13 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <style>
-      .bg{fill:#000}
-      .st{fill:none;stroke:#fff;stroke-width:6;stroke-linecap:round;stroke-linejoin:round}
-    </style>
-  </defs>
-  <rect class="bg" x="0" y="0" width="64" height="64" rx="12" ry="12"/>
-  <!-- N -->
-  <path class="st" d="M12 48 V16 L36 48 V16"/>
-  <!-- K -->
-  <path class="st" d="M44 16 V48 M44 32 L56 16 M44 32 L58 48"/>
+  <rect x="0" y="0" width="64" height="64" rx="12" ry="12" fill="#000"/>
+  <path d="M12 48V16L36 48V16 M36 32L56 16 M36 32L58 48"
+        fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
