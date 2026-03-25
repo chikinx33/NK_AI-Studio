@@ -125,6 +125,7 @@
   opacity: 0.9;
   user-select: none;
   pointer-events: none;
+  order: -1;
 }
 
 .option-card-toolbar {
