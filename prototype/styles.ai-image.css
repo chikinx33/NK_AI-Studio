@@ -178,6 +178,10 @@ body.layout-fixed.page-shell-image .content {
   border-radius: 14px;
   background: transparent;
 }
+/* Ensure preview does not stretch to full width in flex column */
+.ai-image-source-box .ai-image-source-preview {
+  align-self: flex-start;
+}
 
 .ai-image-source-box.is-disabled {
   opacity: 0.6;
@@ -232,6 +236,8 @@ body.layout-fixed.page-shell-image .content {
   border: 1px solid rgba(255, 255, 255, 0.25);
   z-index: 2;
 }
+.ai-image-source-box .source-remove-fab { position: absolute; }
+.ai-image-source-preview .source-remove-fab { position: absolute; }
 .source-remove-fab:hover,
 .source-remove-fab:focus-visible {
   color: #ffb4b4;
@@ -262,9 +268,8 @@ body.layout-fixed.page-shell-image .content {
   align-items: center;
   justify-content: center;
 }
-.ai-image-source-box.has-image .source-upload-fab {
-  display: none !important;
-}
+/* Keep upload(+) visible even when an image is registered */
+.ai-image-source-box.has-image .source-upload-fab { display: inline-flex !important; }
 
 .ai-image-inline-actions .btn-primary,
 .ai-image-inline-actions .btn-secondary,

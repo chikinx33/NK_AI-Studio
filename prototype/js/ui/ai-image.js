@@ -1113,13 +1113,24 @@
         }
         if (action === 'toggle-preview-modal') {
           var imgUrl = String(btn.getAttribute('data-url') || '').trim();
-          if (state.imageModalUrl && (!imgUrl || state.imageModalUrl === imgUrl)) {
+          var existing = document.querySelector('.img-modal');
+          if (existing) {
+            existing.parentNode && existing.parentNode.removeChild(existing);
             state.imageModalUrl = '';
-            render();
             return;
           }
-          state.imageModalUrl = imgUrl || (selectedResult ? resolveResultUrl(selectedResult) : '');
-          render();
+          var urlToShow = imgUrl || (selectedResult ? resolveResultUrl(selectedResult) : '');
+          if (urlToShow) {
+            var modal = document.createElement('div');
+            modal.className = 'img-modal';
+            modal.setAttribute('data-action', 'toggle-preview-modal');
+            var img = document.createElement('img');
+            img.src = urlToShow;
+            img.alt = '';
+            modal.appendChild(img);
+            root.appendChild(modal);
+            state.imageModalUrl = urlToShow;
+          }
           return;
         }
         if (action === 'set-aspect') {
@@ -1128,14 +1139,22 @@
           return;
         }
         if (action === 'toggle-source-modal') {
-          if (state.imageModalUrl) {
+          var overlay = document.querySelector('.img-modal');
+          if (overlay) {
+            overlay.parentNode && overlay.parentNode.removeChild(overlay);
             state.imageModalUrl = '';
-            render();
             return;
           }
           if (state.sourceImage && state.sourceImage.url) {
+            var el = document.createElement('div');
+            el.className = 'img-modal';
+            el.setAttribute('data-action', 'toggle-source-modal');
+            var img = document.createElement('img');
+            img.src = String(state.sourceImage.url || '');
+            img.alt = '';
+            el.appendChild(img);
+            root.appendChild(el);
             state.imageModalUrl = String(state.sourceImage.url || '');
-            render();
           }
           return;
         }
