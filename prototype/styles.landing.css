@@ -118,6 +118,11 @@
   opacity: 0.45;
 }
 
+.login-icons.blurred a {
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 .login-icon-label {
   font-size: 11px;
   line-height: 1.2;

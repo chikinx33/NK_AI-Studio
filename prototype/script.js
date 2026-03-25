@@ -1936,6 +1936,17 @@
       btn.textContent = getAuthButtonText(loggedIn);
       btn.dataset.state = loggedIn ? 'logout' : 'login';
       if (icons) icons.classList.toggle('blurred', !loggedIn);
+      if (icons && !icons.__nk_guard_bound) {
+        icons.__nk_guard_bound = true;
+        icons.addEventListener('click', (e) => {
+          if (!icons.classList.contains('blurred')) return;
+          const a = e.target && e.target.closest && e.target.closest('a[href]');
+          if (!a) return;
+          e.preventDefault();
+          e.stopPropagation();
+          try { alert(currentLang === 'en' ? 'Please sign in first.' : '로그인 후 이용 가능합니다.'); } catch (_) {}
+        }, true);
+      }
 
       if (loggedIn && user) {
         const brand = readLoginBrandLocal(user);
