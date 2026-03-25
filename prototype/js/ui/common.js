@@ -1154,7 +1154,7 @@
 
         // data-i18n 계열은 applyI18n()이 정식으로 처리하므로
         // 런타임 후처리(localizeSubtree)에서 다시 덮어쓰지 않는다.
-        if (el.hasAttribute('data-i18n') || el.hasAttribute('data-i18n-placeholder') || el.hasAttribute('data-lang-toggle')) {
+        if (el.hasAttribute('data-i18n') || el.hasAttribute('data-i18n-placeholder') || el.hasAttribute('data-lang-toggle') || el.hasAttribute('data-i18n-skip') || el.hasAttribute('data-no-i18n')) {
             return;
         }
 

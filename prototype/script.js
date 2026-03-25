@@ -1932,6 +1932,7 @@
         nameEl.classList.toggle('hidden', !loggedIn);
       }
       formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
+      btn.setAttribute('data-i18n-skip', '1');
       btn.textContent = getAuthButtonText(loggedIn);
       btn.dataset.state = loggedIn ? 'logout' : 'login';
       if (icons) icons.classList.toggle('blurred', !loggedIn);

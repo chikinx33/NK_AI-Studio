@@ -223,6 +223,11 @@
       if (!current) return;
       queue.shift();
       refs.root.classList.remove('is-open');
+      try {
+        var active = document.activeElement;
+        if (active && refs.root && refs.root.contains(active) && active.blur) active.blur();
+        if (document && document.body && document.body.focus) document.body.focus({ preventScroll: true });
+      } catch (_) {}
       refs.root.setAttribute('aria-hidden', 'true');
 
       var mode = current.mode || 'alert';

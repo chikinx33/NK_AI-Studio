@@ -54,18 +54,20 @@
               <img src="images/logo(500500).png" alt="logo" class="logo-img" id="login-card-logo" />
               <input type="file" id="login-icon-file" class="login-brand-file-input" accept="image/*" />
             </div>
-            <div class="form-row">
-              <label for="opt-id">ID</label>
-              <input type="text" id="opt-id" placeholder="아이디" />
-            </div>
-            <div class="form-row">
-              <label for="opt-pw">PASS</label>
-              <input type="password" id="opt-pw" placeholder="비밀번호" />
-            </div>
-            <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
-            <div class="option-actions">
-              <button class="btn-primary" id="opt-auth-btn">로그인</button>
-            </div>
+            <form id="opt-login-form" onsubmit="return false;" autocomplete="off" novalidate>
+              <div class="form-row">
+                <label for="opt-id">ID</label>
+                <input type="text" id="opt-id" placeholder="아이디" />
+              </div>
+              <div class="form-row">
+                <label for="opt-pw">PASS</label>
+                <input type="password" id="opt-pw" placeholder="비밀번호" />
+              </div>
+              <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
+              <div class="option-actions">
+                <button class="btn-primary" id="opt-auth-btn" data-i18n-skip="1">로그인</button>
+              </div>
+            </form>
             <div class="sidebar-actions option-card-toolbar">
               <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
               <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang('local')" aria-label="언어 전환">KO</button>
@@ -178,4 +180,3 @@
 </body>
 
 </html>
-
