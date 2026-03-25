@@ -1922,7 +1922,8 @@
     };
 
     const getAuthButtonText = (loggedIn) => {
-      return translateUiText(loggedIn ? '로그아웃' : '로그인');
+      if (currentLang === 'en') return loggedIn ? 'Sign out' : 'Sign in';
+      return loggedIn ? '로그아웃' : '로그인';
     };
 
     const setUI = (loggedIn, user = '') => {

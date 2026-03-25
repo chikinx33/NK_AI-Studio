@@ -2,7 +2,6 @@
 수정/개선/보완 작업 진행 후 문제 발생 원인도 알려줘.
 문제 개선 시 살을 덧붙이는 방법은 지양하고 항상 근본적인 원인 해결.
 항상 한글로 존댓말 사용.
-사용자 관점에서 알기 쉽게 설명.
 한글이 있는 파일은 UTF8 인코딩 유지.
 
 ## 작업 후 즉시 푸시 실행 절차(Assistant 실행 체크리스트)
@@ -10,10 +9,20 @@
 - 이 규칙은 **권고가 아닌 강제 규칙**이며, 코드/CSS/HTML/문서 중 하나라도 수정되면 반드시 적용한다.
 - "요청이 없었다", "간단한 수정이다", "다음 턴에 하겠다"를 사유로 생략할 수 없다.
 - 생략이 필요한 유일한 예외는 사용자가 명시적으로 "커밋/푸시 하지 말라"고 지시한 경우뿐이다.
-- 순서:
-  1) 가능한 경우 린트/타입체크/테스트 실행(프로젝트에 정의되어 있을 때)
-  2) `prototype/js/config.js`의 `NK.config.APP_VERSION` 증가
-  3) `git add -A`
-  4) 한국어 요약 메시지로 `git commit` (예: "Brand Studio 캐릭터 자산화 시스템 추가 및 파이프라인 연동")
-  5) 기본 원격/브랜치로 `git push` (origin/main)
+- 순서(항상 동일하게 수행):
+  1) 테스트 실행: `npm test`(정의되어 있을 때. 실패 시 커밋 중단)
+  2) 버전 증가: `prototype/js/config.js`의 `NK.config.APP_VERSION` 증가(패치 레벨 +1)
+  3) 스테이징: `git add -A`
+  4) 커밋: 한국어 요약 메시지로 `git commit`
+  5) 푸시: `git push origin main`
   6) 실패 시 즉시 오류를 보고하고 재시도 또는 우회 방안 제시
+
+### 자동화(훅) 규정
+- 로컬 훅 경로: `.githooks` (PowerShell `scripts/setup-hooks.ps1`로 설정)
+- `pre-commit`
+  - `npm test`를 실행해 실패 시 커밋 차단
+  - `prototype/js/config.js` 버전이 변경되지 않았다면 자동으로 패치 버전을 +1 하고 스테이징
+- `post-commit`
+  - 커밋 성공 시 테스트를 한 번 더 확인 후 `origin/main`으로 자동 푸시
+- `pre-push`
+  - 푸시 직전 `node --test prototype/tests/*.test.mjs`로 테스트 실패 시 푸시 차단

@@ -1,0 +1,5 @@
+#!/bin/sh
+# Ensure tests pass and version is bumped before commit
+npm test || exit 1
+node scripts/precommit-bump.js || exit 1
+exit 0
