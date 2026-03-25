@@ -6,9 +6,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 18px;
   padding: 16px 16px 14px;
+  min-height: calc(100vh - 64px);
 }
 
 .main .option-body {
@@ -79,10 +80,15 @@
   gap: 22px;
   --login-icon-slot: 120px;
   --login-icon-visual: 96px;
-  margin: 0;
+  margin: 8px 0 0 0;
   transform: translateY(10px);
   opacity: 1;
   transition: opacity 0.25s ease;
+}
+
+.option-card-grid {
+  margin-top: auto;
+  margin-bottom: auto;
 }
 
 .login-icons img {
