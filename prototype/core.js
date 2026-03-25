@@ -33,6 +33,27 @@
             }
           } catch (_) {}
         });
+        // Append ?v to icons and ensure a default favicon exists
+        try {
+          var head = document.head || document.getElementsByTagName('head')[0];
+          var iconLinks = document.querySelectorAll('link[rel~="icon"][href], link[rel="mask-icon"][href], link[rel="apple-touch-icon"][href]');
+          Array.prototype.forEach.call(iconLinks, function (ln) {
+            var href = ln.getAttribute('href') || '';
+            if (!href) return;
+            var isExternal = /^https?:\/\//i.test(href) && href.indexOf(location.origin) !== 0;
+            if (isExternal) return;
+            if (!/[?&]v=/.test(href)) {
+              ln.setAttribute('href', href + (href.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver));
+            }
+          });
+          if (!document.querySelector('link[rel~="icon"]')) {
+            var ic = document.createElement('link');
+            ic.setAttribute('rel', 'icon');
+            ic.setAttribute('type', 'image/svg+xml');
+            ic.setAttribute('href', 'favicon.svg' + (ver ? ('?v=' + encodeURIComponent(ver)) : ''));
+            head && head.appendChild(ic);
+          }
+        } catch (_) {}
       }
       // One-time soft refresh with ?v to bust HTML cache and clear cross-shell stageHref
       if (ver && prev !== ver) {
