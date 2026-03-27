@@ -700,38 +700,36 @@
           '<button type="button" class="img-modal-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
-          '</div>'
+          '<div class="ai-image-preview-foot">' +
+            '<div class="ai-image-inline-actions">' +
+              '<div class="ai-image-inline-actions-left">' +
+                '<button type="button" class="btn-primary compact" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
+                (detached ? '' : ('<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>')) +
+                '<button type="button" class="btn-secondary compact" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('useAsSource')) + '</button>' +
+                '<button type="button" class="btn-secondary compact" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
+                '<button type="button" class="btn-secondary compact" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
+              '</div>' +
+              (detached ? '' : '<div class="ai-image-brand-actions">' +
+              '<label class="ai-image-brand-select-wrap" aria-label="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
+              '<select id="ai-image-brand-target" title="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
+              '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
+              brandCharacterList.map(function (item) {
+                return '<option value="' + escapeHtml(item.token) + '"' + (String(item.token) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+              }).join('') +
+              '</select>' +
+              '</label>' +
+              '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
+              '</div>') +
+            '</div>' +
+            '<div class="ai-image-preview-meta">' +
+              '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
+              '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
       '</div>' +
       '</section>' +
-      (selectedResult
-        ? '<section class="card ai-image-panel ai-image-panel-meta">' +
-          '<div class="ai-image-preview-meta">' +
-          '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
-          '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
-          '</div>' +
-          '<div class="ai-image-inline-actions">' +
-          '<div class="ai-image-inline-actions-left">' +
-          '<button type="button" class="btn-primary compact" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
-          (detached ? '' : ('<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>')) +
-          '<button type="button" class="btn-secondary compact" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '">' + escapeHtml(t('useAsSource')) + '</button>' +
-          '<button type="button" class="btn-secondary compact" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
-          '<button type="button" class="btn-secondary compact" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
-          '</div>' +
-          (detached ? '' : '<div class="ai-image-brand-actions">' +
-          '<label class="ai-image-brand-select-wrap" aria-label="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
-          '<select id="ai-image-brand-target" title="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
-          '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
-          brandCharacterList.map(function (item) {
-            return '<option value="' + escapeHtml(item.token) + '"' + (String(item.token) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
-          }).join('') +
-          '</select>' +
-          '</label>' +
-          '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
-          '</div>') +
-          '</div>' +
-        '</section>'
-        : '') +
       '<section class="card ai-image-panel ai-image-panel-history">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +
