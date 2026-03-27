@@ -2,6 +2,12 @@
   var NK = window.NK || (window.NK = {});
   var core = NK.core || (NK.core = {});
 
+  try {
+    window.addEventListener('load', function () {
+      try { document.documentElement.classList.remove('preload-veiled'); } catch (_) { }
+    });
+  } catch (_) { }
+
   core.applyVersionAndNav = function () {
     try {
       var ver = (NK.core && NK.core.APP_VERSION) || (NK.config && NK.config.APP_VERSION) || '';
