@@ -463,16 +463,15 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-panel-preview .ai-image-preview-stage > .img-modal-trigger {
   appearance: none;
   -webkit-appearance: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid !important;
+  place-items: center;
   align-self: stretch;
   justify-self: stretch;
   box-sizing: border-box;
-  width: 100%;
+  width: 100% !important;
+  min-width: 100% !important;
   max-width: none;
   flex: 1 1 auto;
-  min-width: 0;
   min-height: min(280px, 38vh);
   margin: 0;
   padding: 0;
@@ -502,6 +501,8 @@ body.layout-fixed.page-shell-image .content {
   min-height: 0;
   display: block;
   object-fit: contain;
+  object-position: center center !important;
+  margin: 0 auto;
   border-radius: 0;
   background: transparent;
   border: none;
