@@ -3375,18 +3375,19 @@ textarea::-webkit-scrollbar-corner {
   min-height: 0;
 }
 .ai-image-preview-stage {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
 }
 .ai-image-preview-stage .img-modal-trigger {
-  flex: 1 1 auto;
+  grid-row: 1;
   min-height: 0;
+  height: 100%;
   width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
 }
 .ai-image-preview-image {
   max-width: 100%;
@@ -3398,10 +3399,8 @@ textarea::-webkit-scrollbar-corner {
   background: transparent;
   box-shadow: none;
 }
-.ai-image-preview-meta,
-.ai-image-inline-actions {
-  flex: 0 0 auto;
-}
+.ai-image-preview-meta { grid-row: 2; }
+.ai-image-inline-actions { grid-row: 3; }
 
 .ai-image-size-field .ai-image-size-label {
   display: block;
