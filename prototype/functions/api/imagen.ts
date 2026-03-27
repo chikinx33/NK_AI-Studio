@@ -51,24 +51,37 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const finalPrompt = buildGeminiImagePrompt(prompt, referenceImages, generationMode);
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
-    const geminiRes = await fetch(generateUrl, {
-      method: "POST",
-      headers: {
-        "x-goog-api-key": apiKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: "user",
-            parts: buildGeminiParts(referenceImages, finalPrompt),
-          }
-        ],
-        generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
-      }),
-    });
+    const requestPayload = {
+      contents: [
+        {
+          role: "user",
+          parts: buildGeminiParts(referenceImages, finalPrompt),
+        }
+      ],
+      generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
+    };
+    let geminiRes: Response | null = null;
+    let geminiText = "";
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        geminiRes = await fetch(generateUrl, {
+          method: "POST",
+          headers: {
+            "x-goog-api-key": apiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(requestPayload),
+        });
+        geminiText = await geminiRes.text();
+        if (geminiRes.ok || (geminiRes.status >= 400 && geminiRes.status < 500)) break;
+      } catch (_) {
+      }
+      await sleep(400 * Math.pow(2, attempt));
+    }
 
-    const geminiText = await geminiRes.text();
+    if (!geminiRes) {
+      return json({ error: "Gemini API error", status: 500, detail: "network_error", hint: "네트워크 오류로 Gemini 호출에 실패했습니다. 잠시 후 다시 시도하세요." }, 500);
+    }
     if (!geminiRes.ok) {
       const detail = safeJson(geminiText);
       const mapped = explainGeminiError(geminiRes.status, detail, { model: geminiModel });
@@ -152,6 +165,10 @@ function safeJson(text: string) {
   } catch {
     return text;
   }
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: string) {
