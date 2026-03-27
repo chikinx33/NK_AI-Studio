@@ -559,17 +559,17 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions {
   display: grid;
   grid-template-rows: auto auto;
-  align-content: end;
+  align-content: start;
   gap: 10px;
   margin-top: 0;
-  padding-top: 6px;
-  padding-bottom: 10px;
+  padding-top: 0;
+  padding-bottom: 0;
   min-width: 0;
   width: auto !important;
   min-width: 0 !important;
   max-width: none !important;
   justify-self: start !important;
-  align-self: stretch !important;
+  align-self: center !important;
   box-sizing: border-box;
 }
 
