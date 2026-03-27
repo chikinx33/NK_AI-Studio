@@ -500,7 +500,7 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-panel-preview .ai-image-preview-foot {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(160px, 220px);
+  grid-template-columns: minmax(274px, 6fr) minmax(0, 4fr);
   gap: 12px;
   flex: 0 0 auto;
   min-width: 0;
