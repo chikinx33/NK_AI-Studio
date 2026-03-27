@@ -3348,6 +3348,23 @@ textarea::-webkit-scrollbar-corner {
   position: relative;
 }
 
+.img-modal-trigger {
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  line-height: 0;
+  display: inline-block;
+  box-shadow: none;
+}
+.img-modal-trigger:focus {
+  outline: none;
+  box-shadow: none;
+}
+.img-modal-trigger img {
+  display: block;
+}
+
 .common-modal-box .close-modal {
   position: absolute;
   top: 10px;
