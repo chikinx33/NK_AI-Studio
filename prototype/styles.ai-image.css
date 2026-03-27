@@ -504,6 +504,7 @@ body.layout-fixed.page-shell-image .content {
   gap: 10px;
   flex: 0 0 auto;
   min-width: 0;
+  min-height: 122px;
   align-items: stretch;
   overflow: hidden;
 }
@@ -559,17 +560,17 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions {
   display: grid;
   grid-template-rows: auto auto;
-  align-content: start;
+  align-content: end;
   gap: 10px;
   margin-top: 0;
   padding-top: 0;
-  padding-bottom: 0;
+  padding-bottom: 10px;
   min-width: 0;
   width: auto !important;
   min-width: 0 !important;
   max-width: none !important;
   justify-self: start !important;
-  align-self: center !important;
+  align-self: stretch !important;
   box-sizing: border-box;
 }
 
