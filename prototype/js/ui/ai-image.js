@@ -700,6 +700,12 @@
           '<button type="button" class="img-modal-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
+          '</div>'
+        : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
+      '</div>' +
+      '</section>' +
+      (selectedResult
+        ? '<section class="card ai-image-panel ai-image-panel-meta">' +
           '<div class="ai-image-preview-meta">' +
           '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
           '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
@@ -724,10 +730,8 @@
           '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
           '</div>') +
           '</div>' +
-          '</div>'
-        : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
-      '</div>' +
-      '</section>' +
+        '</section>'
+        : '') +
       '<section class="card ai-image-panel ai-image-panel-history">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +

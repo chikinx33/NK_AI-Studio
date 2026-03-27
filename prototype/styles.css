@@ -3379,7 +3379,7 @@ textarea::-webkit-scrollbar-corner {
 }
 .ai-image-preview-stage {
   display: grid;
-  grid-template-rows: 70% 30%;
+  grid-template-rows: 1fr;
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
@@ -3412,14 +3412,12 @@ textarea::-webkit-scrollbar-corner {
   --ai-preview-actions-h: 56px;
 }
 .ai-image-preview-meta {
-  grid-row: 2;
-  align-self: start;
   line-height: var(--ai-preview-lh);
   padding: 6px 0 0 0;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  max-height: calc(100% - var(--ai-preview-actions-h));
+  max-height: none;
   overflow: hidden;
 }
 .ai-image-preview-meta p {
@@ -3437,8 +3435,6 @@ textarea::-webkit-scrollbar-corner {
   overflow: hidden;
 }
 .ai-image-inline-actions {
-  grid-row: 2;
-  align-self: end;
   height: var(--ai-preview-actions-h);
   display: flex;
   align-items: center;
