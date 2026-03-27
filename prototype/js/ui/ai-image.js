@@ -1032,7 +1032,21 @@
       persistHistory();
       render();
     } catch (err) {
-      alert(t('generationFailed') + (err && err.message ? err.message : err));
+      var msg = (err && err.message) ? String(err.message) : String(err);
+      var hint = '';
+      try {
+        var raw = String(err && err.detail || '').trim();
+        var parsed = raw ? JSON.parse(raw) : null;
+        var d = parsed && parsed.detail ? parsed.detail : parsed;
+        var code = (parsed && (parsed.code || parsed.status)) || '';
+        var status = (err && err.status) || (parsed && parsed.status) || '';
+        var serverHint = parsed && parsed.hint ? parsed.hint : '';
+        var serverMsg = (d && d.error && d.error.message) || (parsed && parsed.message) || '';
+        if (serverMsg && !/Gemini API error/i.test(msg)) msg = serverMsg;
+        if (status) hint = String(serverHint || '') + (serverHint ? ' ' : '') + '(status: ' + status + ')';
+        else if (serverHint) hint = serverHint;
+      } catch (_) {}
+      alert(t('generationFailed') + msg + (hint ? ('\n힌트: ' + hint) : ''));
     } finally {
       setGlobalLoading(false);
     }

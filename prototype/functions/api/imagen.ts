@@ -70,10 +70,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const geminiText = await geminiRes.text();
     if (!geminiRes.ok) {
-      return json(
-        { error: "Gemini API error", status: geminiRes.status, detail: safeJson(geminiText) },
-        500
-      );
+      const detail = safeJson(geminiText);
+      const mapped = explainGeminiError(geminiRes.status, detail, { model: geminiModel });
+      return json(Object.assign({ error: "Gemini API error", status: geminiRes.status, detail }, mapped), 500);
     }
 
     const geminiJson = safeJson(geminiText) || {};
@@ -214,6 +213,31 @@ function buildGeminiImagePrompt(prompt: string, referenceImages: NormalizedRefer
     base,
     "The uploaded reference images define the official registered character design.",
   ].concat(consistencyLines).filter(Boolean).join("\n");
+}
+
+function explainGeminiError(status: number, detail: any, ctx?: { model?: string }) {
+  try {
+    const d = detail && typeof detail === "object" ? detail : {};
+    const message = String(d?.error?.message || d?.message || "").trim();
+    const code = String(d?.error?.status || d?.error?.code || "").trim();
+    let hint = "";
+    if (status === 404 || /model/i.test(message)) {
+      hint = "모델 이름 또는 엔드포인트를 확인하세요. 환경변수 GEMINI_IMAGE_MODEL=" + (ctx?.model || "") + "이 유효한지 점검하세요.";
+    } else if (status === 401) {
+      hint = "API 키가 유효하지 않거나 권한이 없습니다. GOOGLE_API_KEY를 확인하세요.";
+    } else if (status === 403) {
+      hint = "권한 또는 쿼터 제한입니다. 프로젝트 접근 권한/결제/할당량을 확인하세요.";
+    } else if (status === 429) {
+      hint = "요청 한도를 초과했습니다. 잠시 후 다시 시도하거나 쿼터를 늘리세요.";
+    } else if (status === 400) {
+      hint = "요청 형식이 잘못되었을 수 있습니다. 프롬프트/참조 이미지/파라미터를 점검하세요.";
+    } else if (status >= 500) {
+      hint = "Gemini 서버 일시 오류입니다. 잠시 후 다시 시도하세요.";
+    }
+    return { code, hint, message };
+  } catch {
+    return {};
+  }
 }
 
 function normalizeStorageService(value: unknown) {
