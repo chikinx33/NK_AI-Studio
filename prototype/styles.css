@@ -3457,12 +3457,15 @@ textarea::-webkit-scrollbar-corner {
 }
 .ai-image-panel.ai-image-panel-meta .ai-image-inline-actions {
   grid-column: 1;
+  display: block;
+  height: auto;
+  align-content: start;
+}
+.ai-image-panel.ai-image-panel-meta .ai-image-inline-actions-left {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: 44px;
   gap: 10px;
-  height: auto;
-  align-content: start;
 }
 .ai-image-panel.ai-image-panel-meta .ai-image-inline-actions .btn-primary,
 .ai-image-panel.ai-image-panel-meta .ai-image-inline-actions .btn-secondary {
@@ -3483,6 +3486,12 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
+}
+
+/* 우선순위 충돌 방지를 위한 워크스페이스 규칙 재정의(파일 후반 배치) */
+.ai-image-workspace {
+  grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.2fr) minmax(320px, 0.9fr);
+  grid-template-rows: 7fr 3fr;
 }
 
 .ai-image-size-field .ai-image-size-label {
