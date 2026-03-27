@@ -3408,6 +3408,11 @@ textarea::-webkit-scrollbar-corner {
 .ai-image-preview-meta {
   line-height: 1.4;
   padding-top: 6px;
+  display: flex;
+  flex-direction: column;
+  height: calc(4 * 1lh);
+  height: calc(4 * 1.4em);
+  overflow: hidden;
 }
 .ai-image-preview-meta p {
   margin: 4px 0 0 0;
