@@ -3367,6 +3367,10 @@ textarea::-webkit-scrollbar-corner {
 
 .card.ai-image-panel.ai-image-panel-preview {
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: calc(100vh - 220px);
 }
 .ai-image-panel-preview .ai-image-preview-layout {
   display: flex;
@@ -3388,6 +3392,7 @@ textarea::-webkit-scrollbar-corner {
   width: 100%;
   display: grid;
   place-items: center;
+  overflow: hidden;
 }
 .ai-image-preview-image {
   max-width: 100%;
