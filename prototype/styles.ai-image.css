@@ -441,40 +441,53 @@ body.layout-fixed.page-shell-image .content {
   font-size: 13px;
 }
 
-.ai-image-preview-layout {
+.card.ai-image-panel.ai-image-panel-preview {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-image-preview-layout {
+  display: grid !important;
   grid-template-columns: 1fr;
   gap: 10px;
   align-items: start;
   min-height: 0;
   height: 100%;
+  overflow: hidden !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-stage {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 10px;
   min-height: 0;
-  height: auto;
-  overflow: visible;
+  height: 100%;
+  overflow: hidden;
   align-items: stretch;
-  --ai-preview-media-max-height: min(52vh, 560px);
 }
 
-.ai-image-panel-preview .ai-image-preview-stage > .img-modal-trigger {
+.ai-image-panel-preview .ai-image-preview-media {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
+}
+
+.ai-image-panel-preview .ai-image-preview-trigger {
   appearance: none;
   -webkit-appearance: none;
   display: grid !important;
   place-items: center;
-  align-self: center;
-  justify-self: center;
+  align-self: stretch;
+  justify-self: stretch;
   box-sizing: border-box;
-  width: min(100%, calc(var(--ai-preview-media-max-height) * var(--ai-preview-media-width, 1) / var(--ai-preview-media-height, 1))) !important;
-  min-width: 0 !important;
-  max-width: 100%;
-  flex: 0 0 auto;
-  aspect-ratio: var(--ai-preview-media-ratio, 1 / 1);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
   min-height: 0;
+  max-width: 100%;
   margin: 0;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -492,6 +505,7 @@ body.layout-fixed.page-shell-image .content {
   flex: 0 0 auto;
   min-width: 0;
   align-items: stretch;
+  overflow: hidden;
 }
 
 .ai-image-panel-preview .ai-image-preview-image {
@@ -516,6 +530,7 @@ body.layout-fixed.page-shell-image .content {
   justify-content: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
   margin-top: 0;
   padding-left: 14px;
   border-left: 1px solid rgba(255, 255, 255, 0.08);
@@ -525,6 +540,19 @@ body.layout-fixed.page-shell-image .content {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.ai-image-panel-preview .ai-image-preview-meta p:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ai-image-panel-preview .ai-image-preview-meta p:last-child {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions {
@@ -744,7 +772,7 @@ body.layout-fixed.page-shell-image .content {
 [data-theme="light"] .ai-image-source-box,
 [data-theme="light"] .ai-image-source-card,
 [data-theme="light"] .ai-image-history-card,
-[data-theme="light"] .ai-image-preview-stage > .img-modal-trigger {
+[data-theme="light"] .ai-image-panel-preview .ai-image-preview-trigger {
   background: rgba(255, 255, 255, 0.78);
 }
 
@@ -773,8 +801,8 @@ body.layout-fixed.page-shell-image .content {
     padding: 12px;
   }
 
-  .ai-image-panel-preview .ai-image-preview-stage > .img-modal-trigger {
-    width: min(100%, calc(min(36vh, 360px) * var(--ai-preview-media-width, 1) / var(--ai-preview-media-height, 1))) !important;
+  .ai-image-panel-preview .ai-image-preview-trigger {
+    width: 100%;
   }
 
   .ai-image-panel-preview .ai-image-preview-foot {
