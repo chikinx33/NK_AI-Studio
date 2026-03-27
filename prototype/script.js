@@ -822,6 +822,14 @@
       try { broadcastTheme(currentTheme, currentThemeVariant); } catch (_) { }
       try { broadcastLang(currentLang); } catch (_) { }
     }, 50);
+    try {
+      const isEmbed = document.documentElement.getAttribute('data-embed') === '1';
+      if (isEmbed && window.parent) {
+        setTimeout(() => {
+          try { window.parent.postMessage({ type: 'stage-ready' }, '*'); } catch (_) { }
+        }, 120);
+      }
+    } catch (_) { }
   });
 
   const setupLoginPage = () => {

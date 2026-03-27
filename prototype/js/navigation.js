@@ -114,9 +114,15 @@
                     iframe.style.opacity = '0.01';
                 } catch (_) {}
                 var onLoad = function () {
-                    try { iframe.style.opacity = '1'; } catch (_) {}
                     __lastResolvedUrl = url;
                     __pendingUrl = '';
+                    try {
+                        if (iframe.__nkReadyTimer) clearTimeout(iframe.__nkReadyTimer);
+                        iframe.__nkReadyTimer = setTimeout(function () {
+                            try { iframe.style.opacity = '1'; } catch (_) {}
+                            try { iframe.__nkReadyTimer = 0; } catch (_) {}
+                        }, 1200);
+                    } catch (_) {}
                     iframe.removeEventListener('load', onLoad);
                 };
                 iframe.addEventListener('load', onLoad);
@@ -226,4 +232,22 @@
           }
           return iframe;
         };
+        if (!window.__nkStageReadyBound) {
+            window.__nkStageReadyBound = true;
+            window.addEventListener('message', function (evt) {
+                try {
+                    var data = evt && evt.data || {};
+                    if (!data || data.type !== 'stage-ready') return;
+                    var iframe = document.getElementById('stage-iframe');
+                    if (!iframe) return;
+                    try { iframe.style.opacity = '1'; } catch (_) {}
+                    try {
+                        if (iframe.__nkReadyTimer) {
+                            clearTimeout(iframe.__nkReadyTimer);
+                            iframe.__nkReadyTimer = 0;
+                        }
+                    } catch (_) {}
+                } catch (_) { }
+            });
+        }
     })();
