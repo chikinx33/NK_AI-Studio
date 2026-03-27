@@ -455,9 +455,10 @@ body.layout-fixed.page-shell-image .content {
   flex-direction: column;
   gap: 10px;
   min-height: 0;
-  height: 100%;
-  overflow: hidden;
+  height: auto;
+  overflow: visible;
   align-items: stretch;
+  --ai-preview-media-max-height: min(52vh, 560px);
 }
 
 .ai-image-panel-preview .ai-image-preview-stage > .img-modal-trigger {
@@ -465,15 +466,15 @@ body.layout-fixed.page-shell-image .content {
   -webkit-appearance: none;
   display: grid !important;
   place-items: center;
-  align-self: stretch;
-  justify-self: stretch;
+  align-self: center;
+  justify-self: center;
   box-sizing: border-box;
-  width: 100% !important;
-  min-width: 100% !important;
-  max-width: none;
-  flex: 1 1 auto;
-  aspect-ratio: auto;
-  min-height: min(240px, 30vh);
+  width: min(100%, calc(var(--ai-preview-media-max-height) * var(--ai-preview-media-width, 1) / var(--ai-preview-media-height, 1))) !important;
+  min-width: 0 !important;
+  max-width: 100%;
+  flex: 0 0 auto;
+  aspect-ratio: var(--ai-preview-media-ratio, 1 / 1);
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -494,7 +495,7 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-preview .ai-image-preview-image {
-  width: auto;
+  width: 100%;
   height: 100%;
   max-width: 100%;
   max-height: 100%;
@@ -773,7 +774,7 @@ body.layout-fixed.page-shell-image .content {
   }
 
   .ai-image-panel-preview .ai-image-preview-stage > .img-modal-trigger {
-    min-height: min(170px, 28vh);
+    width: min(100%, calc(min(36vh, 360px) * var(--ai-preview-media-width, 1) / var(--ai-preview-media-height, 1))) !important;
   }
 
   .ai-image-panel-preview .ai-image-preview-foot {
