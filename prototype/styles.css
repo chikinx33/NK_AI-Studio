@@ -3384,7 +3384,7 @@ textarea::-webkit-scrollbar-corner {
 }
 .ai-image-preview-stage {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: 75% 25%;
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
