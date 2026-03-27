@@ -559,7 +559,7 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions {
   display: grid;
   grid-template-rows: auto auto;
-  align-content: start;
+  align-content: end;
   gap: 10px;
   margin-top: 0;
   min-width: 0;
