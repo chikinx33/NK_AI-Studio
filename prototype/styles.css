@@ -3440,6 +3440,21 @@ textarea::-webkit-scrollbar-corner {
   align-items: center;
 }
 
+/* 레이아웃 위치 및 높이 비율 고정 */
+.ai-image-panel-preview { 
+  grid-column: 2; 
+  height: 70%; 
+  min-height: 0; 
+}
+.ai-image-panel-meta { 
+  grid-column: 2; 
+  height: 30%; 
+  min-height: 0; 
+}
+.ai-image-panel-history {
+  grid-column: 3;
+}
+
 .ai-image-size-field .ai-image-size-label {
   display: block;
   text-align: center;
