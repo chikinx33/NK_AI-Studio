@@ -652,7 +652,9 @@
       '<div class="ai-image-preview-layout">' +
       (selectedResult
         ? '<div class="ai-image-preview-stage">' +
+          '<button type="button" class="img-modal-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
+          '</button>' +
           '<div class="ai-image-preview-meta">' +
           '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
           '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
