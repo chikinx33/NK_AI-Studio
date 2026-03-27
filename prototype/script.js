@@ -2158,9 +2158,20 @@
           return;
         }
         if (!resizedIconDataUrl) {
-          alert('아이콘 이미지를 등록해 주세요.');
-          favoriteIconInput && favoriteIconInput.focus();
-          return;
+          try {
+            if (NK.api && typeof NK.api.bookmarkIcon === 'function') {
+              const resp = await NK.api.bookmarkIcon(normalizeUrl(rawUrl));
+              const icon = resp && resp.iconDataUrl ? String(resp.iconDataUrl || '').trim() : '';
+              if (icon && /^data:image\//i.test(icon)) {
+                resizedIconDataUrl = icon;
+              }
+            }
+          } catch (_) { }
+          if (!resizedIconDataUrl) {
+            alert('아이콘을 자동으로 찾지 못했습니다. 아이콘 이미지를 등록해 주세요.');
+            favoriteIconInput && favoriteIconInput.focus();
+            return;
+          }
         }
 
         let normalized = '';

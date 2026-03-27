@@ -587,6 +587,16 @@
     return j(text);
   };
 
+  api.bookmarkIcon = async function (pageUrl) {
+    var token = getAuthToken();
+    var q = '/api/bookmark/icon?url=' + encodeURIComponent(String(pageUrl || ''));
+    if (token) q += '&nk_token=' + encodeURIComponent(token);
+    var res = await fetch(withBase(q), { method: 'GET', headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'bookmark_icon_error')));
+    return j(text);
+  };
+
   api.userdataSubscriptionGet = async function () {
     var url = withBase('/api/userdata/subscription/get?userId=' + encodeURIComponent(resolveUserId()));
     var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
