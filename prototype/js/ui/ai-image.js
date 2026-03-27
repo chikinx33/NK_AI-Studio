@@ -1081,11 +1081,19 @@
         }
         if (action === 'set-mode') {
           state.mode = String(btn.getAttribute('data-mode') || 'text-to-image');
-          if (state.mode === 'text-to-image') {
-            state.projectLibraryItems = [];
-            state.brandLibraryItems = [];
-          }
-          render();
+          updateSourceUI();
+          try {
+            var tabsNow = root.querySelectorAll('.ai-image-mode-tabs .btn-secondary');
+            Array.prototype.forEach.call(tabsNow || [], function(tb){
+              var m = String(tb.getAttribute('data-mode') || '');
+              if (m && m === state.mode) tb.classList.add('active'); else tb.classList.remove('active');
+            });
+            var promptEl = document.getElementById('ai-image-prompt');
+            if (promptEl) {
+              var ph = state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText');
+              promptEl.setAttribute('placeholder', ph);
+            }
+          } catch (_) {}
           if (state.mode === 'image-to-image') {
             if (!state.brandLibraryItems.length && state.currentBrand && state.currentBrand.brandId) loadBrandLibrary();
             if (!state.contentLibraryItems.length) loadContentLibrary();
