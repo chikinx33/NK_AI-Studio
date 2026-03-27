@@ -471,9 +471,9 @@ body.layout-fixed.page-shell-image .content {
   width: 100% !important;
   min-width: 100% !important;
   max-width: none;
-  flex: 0 0 auto;
-  aspect-ratio: var(--ai-preview-media-ratio, 1 / 1);
-  min-height: 0;
+  flex: 1 1 auto;
+  aspect-ratio: auto;
+  min-height: min(240px, 30vh);
   margin: 0;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -494,7 +494,7 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-preview .ai-image-preview-image {
-  width: 100%;
+  width: auto;
   height: 100%;
   max-width: 100%;
   max-height: 100%;
@@ -773,7 +773,7 @@ body.layout-fixed.page-shell-image .content {
   }
 
   .ai-image-panel-preview .ai-image-preview-stage > .img-modal-trigger {
-    min-height: 0;
+    min-height: min(170px, 28vh);
   }
 
   .ai-image-panel-preview .ai-image-preview-foot {
