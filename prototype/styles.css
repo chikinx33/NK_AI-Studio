@@ -3411,6 +3411,12 @@ textarea::-webkit-scrollbar-corner {
   justify-content: center;
 }
 
+/* 해상도 셀렉트는 버튼 호버 떠오르는 효과 제거 */
+#ai-image-size.btn-secondary:hover,
+#ai-image-size.btn-secondary:focus {
+  transform: none;
+}
+
 .common-modal-box .close-modal {
   position: absolute;
   top: 10px;
