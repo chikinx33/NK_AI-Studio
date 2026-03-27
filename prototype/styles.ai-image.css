@@ -470,7 +470,7 @@ body.layout-fixed.page-shell-image .content {
   min-width: 0;
   min-height: min(280px, 38vh);
   margin: 0;
-  padding: 12px;
+  padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.16);
@@ -480,11 +480,12 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-preview-foot {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr);
   gap: 10px;
   flex: 0 0 auto;
   min-width: 0;
+  align-items: stretch;
 }
 
 .ai-image-preview-image {
@@ -504,15 +505,55 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-preview-meta {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
   min-width: 0;
-  margin-top: auto;
+  margin-top: 0;
+  padding-left: 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .ai-image-preview-meta p {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.ai-image-preview-foot .ai-image-inline-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 0;
+}
+
+.ai-image-preview-foot .ai-image-inline-actions-left {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  min-width: 0;
+}
+
+.ai-image-preview-foot .ai-image-inline-actions .btn-primary,
+.ai-image-preview-foot .ai-image-inline-actions .btn-secondary {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  justify-content: center;
+}
+
+.ai-image-preview-foot .ai-image-inline-actions-left .btn-primary,
+.ai-image-preview-foot .ai-image-inline-actions-left .btn-secondary {
+  flex: 1 1 0;
+}
+
+.ai-image-preview-foot .ai-image-brand-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-left: 0;
 }
 
 .ai-image-brand-save-row {
@@ -707,5 +748,25 @@ body.layout-fixed.page-shell-image .content {
 
   .ai-image-preview-stage > .img-modal-trigger {
     min-height: min(170px, 28vh);
+  }
+
+  .ai-image-preview-foot {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-image-preview-foot .ai-image-inline-actions-left {
+    flex-wrap: wrap;
+  }
+
+  .ai-image-preview-foot .ai-image-inline-actions-left .btn-primary,
+  .ai-image-preview-foot .ai-image-inline-actions-left .btn-secondary {
+    flex-basis: calc(50% - 5px);
+  }
+
+  .ai-image-preview-meta {
+    padding-left: 0;
+    padding-top: 10px;
+    border-left: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
   }
 }
