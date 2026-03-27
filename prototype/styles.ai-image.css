@@ -541,11 +541,15 @@ body.layout-fixed.page-shell-image .content {
   grid-auto-rows: 44px;
   gap: 10px;
   min-width: 0;
+  width: 100%;
+  justify-items: stretch;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-primary,
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-secondary {
+  display: flex;
   min-width: 0;
+  width: 100%;
   min-height: 44px;
   height: 44px;
   padding: 0 10px;
@@ -572,8 +576,10 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-action-icon .icon {
+  display: block;
   width: 18px;
   height: 18px;
+  margin: 0 auto;
 }
 
 .ai-image-brand-save-row {
