@@ -3407,6 +3407,10 @@ textarea::-webkit-scrollbar-corner {
   background: transparent;
   box-shadow: none;
 }
+/* 미리보기 카드 내에서는 현재 높이의 80%로 축소(세로 기준) */
+.ai-image-panel-preview .ai-image-preview-image {
+  max-height: 80%;
+}
 .ai-image-preview-meta { }
 .ai-image-inline-actions { }
 
