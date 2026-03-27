@@ -562,6 +562,7 @@ body.layout-fixed.page-shell-image .content {
   align-content: end;
   gap: 10px;
   margin-top: 0;
+  padding-top: 6px;
   padding-bottom: 10px;
   min-width: 0;
   width: auto !important;
