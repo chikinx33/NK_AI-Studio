@@ -26,7 +26,8 @@
     historyLoadError: '',
     selectedFileName: '',
     sourceSectionCollapsed: { brand: true, content: true, project: true },
-    imageModalUrl: ''
+    imageModalUrl: '',
+    deletedObjectNames: []
   };
 
   var TEXT = {
@@ -360,9 +361,33 @@
     return String(row.url || '').trim();
   }
 
+  function getDeletedStorageKey() {
+    return STORAGE_HISTORY_PREFIX + String(state.sessionId || 'default') + '_deleted';
+  }
+  function loadDeletedSet() {
+    try {
+      var raw = localStorage.getItem(getDeletedStorageKey()) || '[]';
+      var arr = JSON.parse(raw);
+      if (Array.isArray(arr)) state.deletedObjectNames = arr.filter(function (s) { return typeof s === 'string' && s.trim(); });
+    } catch (_) { state.deletedObjectNames = []; }
+  }
+  function persistDeletedSet() {
+    try { localStorage.setItem(getDeletedStorageKey(), JSON.stringify(state.deletedObjectNames || [])); } catch (_) {}
+  }
+  function addDeletedTombstone(objectName) {
+    var name = String(objectName || '').trim();
+    if (!name) return;
+    if (!Array.isArray(state.deletedObjectNames)) state.deletedObjectNames = [];
+    if (state.deletedObjectNames.indexOf(name) < 0) {
+      state.deletedObjectNames.push(name);
+      persistDeletedSet();
+    }
+  }
+
   function mergeServerResults(items) {
     var incoming = Array.isArray(items) ? items : [];
     var map = new Map();
+    var deleted = new Set(Array.isArray(state.deletedObjectNames) ? state.deletedObjectNames : []);
     state.results.forEach(function (item, index) {
       var row = item && typeof item === 'object' ? cloneJson(item, {}) : {};
       var key = String(row.objectName || row.id || ('local_' + index)).trim();
@@ -373,6 +398,7 @@
       var row = item && typeof item === 'object' ? item : {};
       var objectName = String(row.name || row.objectName || '').trim();
       if (!objectName) return;
+      if (deleted.has(objectName)) return;
       var existing = map.get(objectName) || {};
       var createdAt = String(
         existing.createdAt
@@ -970,6 +996,7 @@
 
   async function hydrateSessionHistory() {
     if (!state.sessionId || !NK.api || !NK.api.aiImageSessionLibrary) return;
+    loadDeletedSet();
     state.historyLoading = true;
     state.historyLoadError = '';
     render();
@@ -1291,6 +1318,7 @@
             if (toDelete && toDelete.savedToProject && objectName && project && project.id && NK.api && NK.api.projectDelete) {
               NK.api.projectDelete(project.id, objectName).catch(function () { });
             }
+            if (objectName) addDeletedTombstone(objectName);
             state.results.splice(idx, 1);
             if (String(state.currentResultId || '') === deleteId) {
               state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
