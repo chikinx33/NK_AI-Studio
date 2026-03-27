@@ -3365,6 +3365,44 @@ textarea::-webkit-scrollbar-corner {
   display: block;
 }
 
+.card.ai-image-panel.ai-image-panel-preview {
+  overflow: hidden;
+}
+.ai-image-panel-preview .ai-image-preview-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.ai-image-preview-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.ai-image-preview-stage .img-modal-trigger {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-image-preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.ai-image-preview-meta,
+.ai-image-inline-actions {
+  flex: 0 0 auto;
+}
+
 .common-modal-box .close-modal {
   position: absolute;
   top: 10px;
