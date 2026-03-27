@@ -562,38 +562,44 @@ body.layout-fixed.page-shell-image .content {
   gap: 10px;
   margin-top: 0;
   min-width: 0;
-  width: 100%;
-  justify-self: stretch;
-  align-self: stretch;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  justify-self: stretch !important;
+  align-self: stretch !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   grid-auto-rows: 44px;
   gap: 10px;
   min-width: 0;
-  width: 100%;
-  max-width: none;
-  justify-items: stretch;
-  justify-self: stretch;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: none !important;
+  justify-items: stretch !important;
+  justify-self: stretch !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-primary,
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-secondary {
-  display: flex;
+  display: flex !important;
   min-width: 0;
-  width: 100%;
+  width: 100% !important;
+  max-width: none !important;
   min-height: 44px;
   height: 44px;
   padding: 0 10px;
-  justify-content: center;
-  align-items: center;
+  justify-content: center !important;
+  align-items: center !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-primary,
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-secondary {
-  width: 100%;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-brand-actions {
