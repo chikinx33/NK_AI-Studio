@@ -1377,10 +1377,6 @@
     bindStaticEvents();
     render();
     hydrateSessionHistory();
-    if (state.currentBrand && state.currentBrand.brandId) {
-      loadBrandLibrary();
-    }
-    loadContentLibrary();
     if (state.currentBrand && state.currentBrand.brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       NK.service.brand.hydrateFromServer(state.currentBrand.brandId).then(function (brand) {
         if (!brand || !brand.brandId) return;
