@@ -124,8 +124,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         signedUrl = await signGcsUrl({
           bucket: outParsed.bucket,
           object: objectName,
-          clientEmail,
-          privateKeyPem: privateKeyRaw,
+          clientEmail: String(clientEmail || ""),
+          privateKeyPem: String(privateKeyRaw || ""),
           expiresInSec: 3600,
         }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
       } else {
