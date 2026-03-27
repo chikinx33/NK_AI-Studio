@@ -3470,14 +3470,19 @@ textarea::-webkit-scrollbar-corner {
   justify-content: center;
 }
 .ai-image-panel.ai-image-panel-meta .ai-image-brand-actions {
-  grid-column: 1 / -1;
+  grid-column: 1;
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
+  align-items: center;
 }
 .ai-image-panel.ai-image-panel-meta .ai-image-preview-meta {
   grid-column: 2;
   max-height: none;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
 }
 
 .ai-image-size-field .ai-image-size-label {
