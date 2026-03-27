@@ -471,8 +471,9 @@ body.layout-fixed.page-shell-image .content {
   width: 100% !important;
   min-width: 100% !important;
   max-width: none;
-  flex: 1 1 auto;
-  min-height: min(280px, 38vh);
+  flex: 0 0 auto;
+  aspect-ratio: var(--ai-preview-media-ratio, 1 / 1);
+  min-height: 0;
   margin: 0;
   padding: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -766,7 +767,7 @@ body.layout-fixed.page-shell-image .content {
   }
 
   .ai-image-panel-preview .ai-image-preview-stage > .img-modal-trigger {
-    min-height: min(170px, 28vh);
+    min-height: 0;
   }
 
   .ai-image-panel-preview .ai-image-preview-foot {

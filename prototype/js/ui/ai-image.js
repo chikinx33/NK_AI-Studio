@@ -361,6 +361,14 @@
     return String(row.url || '').trim();
   }
 
+  function previewAspectRatioCss(result) {
+    var raw = String(result && result.aspectRatio || state.aspectRatio || '').trim();
+    if (/^\d+(?:\.\d+)?\s*:\s*\d+(?:\.\d+)?$/.test(raw)) {
+      return raw.replace(':', ' / ');
+    }
+    return '1 / 1';
+  }
+
   function getDeletedStorageKey() {
     return STORAGE_HISTORY_PREFIX + String(state.sessionId || 'default') + '_deleted';
   }
@@ -696,7 +704,7 @@
       '</div>' +
       '<div class="ai-image-preview-layout">' +
       (selectedResult
-        ? '<div class="ai-image-preview-stage">' +
+        ? '<div class="ai-image-preview-stage" style="--ai-preview-media-ratio:' + escapeHtml(previewAspectRatioCss(selectedResult)) + ';">' +
           '<button type="button" class="img-modal-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
