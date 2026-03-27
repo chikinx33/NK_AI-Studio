@@ -3370,7 +3370,6 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: calc(100vh - 220px);
 }
 .ai-image-panel-preview .ai-image-preview-layout {
   display: flex;
@@ -3380,7 +3379,7 @@ textarea::-webkit-scrollbar-corner {
 }
 .ai-image-preview-stage {
   display: grid;
-  grid-template-rows: 1fr auto auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
@@ -3392,7 +3391,6 @@ textarea::-webkit-scrollbar-corner {
   width: 100%;
   display: grid;
   place-items: center;
-  overflow: hidden;
 }
 .ai-image-preview-image {
   max-width: 100%;
