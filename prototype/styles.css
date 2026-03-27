@@ -328,6 +328,19 @@ body::-webkit-scrollbar {
   display: block;
 }
 
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+  z-index: 2;
+}
+.stage-overlay.is-active {
+  opacity: 1;
+}
+
 .sidebar {
   background: var(--bg-2);
   border-right: 1px solid var(--border);

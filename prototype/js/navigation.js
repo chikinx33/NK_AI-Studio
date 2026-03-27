@@ -120,12 +120,20 @@
                         if (iframe.__nkReadyTimer) clearTimeout(iframe.__nkReadyTimer);
                         iframe.__nkReadyTimer = setTimeout(function () {
                             try { iframe.style.opacity = '1'; } catch (_) {}
+                            try {
+                                var ov = document.getElementById('stage-overlay');
+                                if (ov) ov.classList.remove('is-active');
+                            } catch (_) {}
                             try { iframe.__nkReadyTimer = 0; } catch (_) {}
                         }, 1200);
                     } catch (_) {}
                     iframe.removeEventListener('load', onLoad);
                 };
                 iframe.addEventListener('load', onLoad);
+                try {
+                    var ov = document.getElementById('stage-overlay');
+                    if (ov) ov.classList.add('is-active');
+                } catch (_) {}
                 iframe.src = url;
             }
             nav.setStage(st);
@@ -229,6 +237,15 @@
                 } catch (_) { }
             });
             content.appendChild(iframe);
+            try {
+                var ov1 = document.getElementById('stage-overlay');
+                if (!ov1) {
+                    ov1 = document.createElement('div');
+                    ov1.id = 'stage-overlay';
+                    ov1.className = 'stage-overlay';
+                    content.appendChild(ov1);
+                }
+            } catch (_) {}
           }
           return iframe;
         };
@@ -246,6 +263,8 @@
                             clearTimeout(iframe.__nkReadyTimer);
                             iframe.__nkReadyTimer = 0;
                         }
+                        var ov = document.getElementById('stage-overlay');
+                        if (ov) ov.classList.remove('is-active');
                     } catch (_) {}
                 } catch (_) { }
             });
