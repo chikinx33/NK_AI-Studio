@@ -10,6 +10,7 @@
     mode: 'text-to-image',
     prompt: '',
     aspectRatio: '1:1',
+    imageSize: '2K',
     sourceImage: null,
     projectLibraryItems: [],
     brandLibraryItems: [],
@@ -65,6 +66,10 @@
       promptPlaceholderText: '원하는 이미지의 장면, 스타일, 색감, 구도, 재질감을 설명해 주세요.',
       promptPlaceholderImage: '소스 이미지를 어떻게 바꾸거나 유지할지 설명해 주세요. 예: 같은 구도는 유지하고 수채화 질감으로 바꾸기',
       aspectLabel: '비율',
+      sizeLabel: '해상도',
+      sizeFast: '빠름(512)',
+      sizeStd: '표준(1K)',
+      sizeHigh: '고품질(2K)',
       generate: '생성',
       generating: '생성 중...',
       resultsTitle: '결과',
@@ -156,6 +161,10 @@
       promptPlaceholderText: 'Describe the scene, style, lighting, composition, and textures you want.',
       promptPlaceholderImage: 'Describe what to preserve or transform from the source image. Example: keep the same composition and convert it into watercolor.',
       aspectLabel: 'Aspect ratio',
+      sizeLabel: 'Image size',
+      sizeFast: 'Fast (512)',
+      sizeStd: 'Standard (1K)',
+      sizeHigh: 'High (2K)',
       generate: 'Generate',
       generating: 'Generating...',
       resultsTitle: 'Results',
@@ -641,6 +650,12 @@
       '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
       '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
       '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
+      '<label style="margin-left:8px;margin-right:6px;">' + escapeHtml(t('sizeLabel')) + '</label>' +
+      '<select id="ai-image-size" class="btn-secondary" style="min-width:120px;">' +
+      '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
+      '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
+      '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
+      '</select>' +
       '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
       '</div>' +
       '</div>' +
@@ -713,6 +728,10 @@
         var counter = document.getElementById('ai-image-prompt-count');
         if (counter) counter.textContent = String(state.prompt.length) + t('promptCounterSuffix');
       };
+    }
+    var sizeEl = document.getElementById('ai-image-size');
+    if (sizeEl) {
+      sizeEl.value = state.imageSize || '2K';
     }
     var fileInput = document.getElementById('ai-image-source-file');
     if (fileInput) {
@@ -1003,6 +1022,7 @@
       storageService: 'ai-image',
       sessionId: state.sessionId,
       generationMode: state.mode,
+      imageSize: state.imageSize,
       referenceImages: state.mode === 'image-to-image' && state.sourceImage
         ? [{
           referenceId: 1,
@@ -1020,6 +1040,7 @@
         id: 'res_' + Date.now(),
         url: String(response && (response.signedUrl || response.dataUrl) || '').trim(),
         objectName: String(response && response.objectName || '').trim(),
+        imageSize: String(response && response.imageSizeApplied || state.imageSize || '').trim(),
         prompt: prompt,
         mode: state.mode,
         aspectRatio: state.aspectRatio,
@@ -1364,11 +1385,19 @@
 
     document.addEventListener('change', function (evt) {
       var target = evt.target;
-      if (!target || target.id !== 'ai-image-brand-target') return;
-      var result = currentResult();
-      if (!result) return;
-      result.selectedBrandCharacterToken = normalizeCharacterToken(target.value);
-      persistHistory();
+      if (!target) return;
+      if (target.id === 'ai-image-brand-target') {
+        var result = currentResult();
+        if (!result) return;
+        result.selectedBrandCharacterToken = normalizeCharacterToken(target.value);
+        persistHistory();
+        return;
+      }
+      if (target.id === 'ai-image-size') {
+        var val = String(target.value || '').toUpperCase();
+        if (val === '512' || val === '1K' || val === '2K') state.imageSize = val;
+        return;
+      }
     });
   }
 

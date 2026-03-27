@@ -29,7 +29,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
-    const geminiImageSize = String(env.GEMINI_IMAGE_SIZE || "").trim() || "2K";
+    const incomingSize = String(body?.imageSize || body?.quality || body?.resolution || "").trim().toUpperCase();
+    const sizeAllowed = new Set(["512", "1K", "2K"]);
+    const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "2K";
+    const geminiImageSize = sizeAllowed.has(incomingSize) ? incomingSize : sizeDefault;
 
     if (!apiKey) {
       return json({ error: "Missing GOOGLE_API_KEY" }, 500);
@@ -139,6 +142,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       signedUrl,
       objectName,
       model: geminiModel,
+      imageSizeApplied: geminiImageSize,
       provider: "gemini-api",
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
