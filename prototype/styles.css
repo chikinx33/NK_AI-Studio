@@ -3403,6 +3403,15 @@ textarea::-webkit-scrollbar-corner {
   flex: 0 0 auto;
 }
 
+.ai-image-size-field .ai-image-size-label {
+  display: block;
+  text-align: center;
+}
+.ai-image-size-field .ai-image-size-row {
+  display: flex;
+  justify-content: center;
+}
+
 .common-modal-box .close-modal {
   position: absolute;
   top: 10px;
