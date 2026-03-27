@@ -98,7 +98,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const projTagRaw = (body?.projectId ?? body?.projTag ?? "").toString().trim();
     const projTag = projTagRaw || "default";
-    const userId = auth.userId;
+    const userId = String((auth as any)?.userId || "owner").trim() || "owner";
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
     let signedUrl = "";
