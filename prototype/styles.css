@@ -3405,6 +3405,25 @@ textarea::-webkit-scrollbar-corner {
 .ai-image-preview-meta { grid-row: 2; }
 .ai-image-inline-actions { grid-row: 3; }
 
+.ai-image-preview-meta {
+  line-height: 1.4;
+  padding-top: 6px;
+}
+.ai-image-preview-meta p {
+  margin: 4px 0 0 0;
+}
+.ai-image-preview-meta p:first-child {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-image-preview-meta p:last-child {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .ai-image-size-field .ai-image-size-label {
   display: block;
   text-align: center;
