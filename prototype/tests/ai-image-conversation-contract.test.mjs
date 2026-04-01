@@ -93,3 +93,12 @@ test('ai-image prompt counter is rendered beside the prompt label', () => {
   assert.match(source, /id="ai-image-prompt-count" class="ai-image-label-count"/);
   assert.doesNotMatch(source, /class="ai-image-counter"><span id="ai-image-prompt-count"/);
 });
+
+test('ai-image source counter and upload button are rendered in the source title row', () => {
+  const source = readAiImageSource();
+  assert.match(source, /class="ai-image-label-row ai-image-source-label-row"/);
+  assert.match(source, /class="ai-image-source-label-actions"/);
+  assert.match(source, /<span class="ai-image-source-limit">/);
+  assert.match(source, /class="btn-secondary compact source-upload-fab"/);
+  assert.doesNotMatch(source, /ai-image-source-box-head/);
+});

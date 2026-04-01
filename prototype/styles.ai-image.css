@@ -232,6 +232,17 @@ body.layout-fixed.page-shell-image .content {
   color: var(--muted);
 }
 
+.ai-image-source-label-row {
+  align-items: center;
+}
+
+.ai-image-source-label-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .ai-image-source-box {
   position: relative;
   display: flex;
@@ -248,14 +259,6 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-source-box.is-disabled {
   opacity: 0.6;
-}
-
-.ai-image-source-box-head {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 20px;
-  padding-right: 34px;
 }
 
 .ai-image-source-limit {
@@ -441,9 +444,6 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .source-upload-fab {
-  position: absolute;
-  top: 8px;
-  right: 8px;
   width: 30px;
   height: 30px;
   min-width: 30px;

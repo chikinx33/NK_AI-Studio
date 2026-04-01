@@ -816,11 +816,15 @@
     var contentSourceLibrary = buildContentSourceLibraryMarkup();
     return '' +
       '<div class="ai-image-field source-field' + (sourceDisabled ? ' is-disabled' : '') + '">' +
+        '<div class="ai-image-label-row ai-image-source-label-row">' +
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
-        '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + (getSourceImages().length ? ' has-image' : '') + '">' +
-        '<div class="ai-image-source-box-head"><span class="ai-image-source-limit">' + escapeHtml(String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES)) + '</span></div>' +
-        buildSelectedSourceMarkup() +
+        '<div class="ai-image-source-label-actions">' +
+        '<span class="ai-image-source-limit">' + escapeHtml(String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES)) + '</span>' +
         '<button type="button" class="btn-secondary compact source-upload-fab" data-action="open-upload"' + (sourceDisabled ? ' disabled' : '') + '>+</button>' +
+        '</div>' +
+        '</div>' +
+        '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + (getSourceImages().length ? ' has-image' : '') + '">' +
+        buildSelectedSourceMarkup() +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" multiple' + (sourceDisabled ? ' disabled' : '') + ' />' +
         '</div>' +
         ((!detached && state.brandLibraryItems.length)
@@ -1407,7 +1411,7 @@
       sourceBox.classList.toggle('is-disabled', sourceDisabled);
       sourceBox.classList.toggle('has-image', !!getSourceImages().length);
 
-      var limitEl = sourceBox.querySelector('.ai-image-source-limit');
+      var limitEl = sourceField.querySelector('.ai-image-source-limit');
       if (limitEl) limitEl.textContent = String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES);
 
       var uploadBtn = sourceBox.querySelector('.source-upload-fab');
