@@ -27,7 +27,6 @@
     historyLoadError: '',
     selectedFileName: '',
     sourceSectionCollapsed: { brand: true, content: true, project: true },
-    settingsSectionCollapsed: { size: false, flow: false },
     imageModalUrl: '',
     deletedObjectNames: []
   };
@@ -54,12 +53,8 @@
       generationStyleLabel: '생성 흐름',
       generationStyleSingle: '단일',
       generationStyleConversation: '대화형',
-      generationStyleSingleHint: '현재 프롬프트와 소스만 사용',
-      generationStyleConversationHint: '최근 생성 결과의 흐름을 이어서 사용',
       generationStyleSingleShort: '단일',
       generationStyleConversationShort: '대화형',
-      conversationContextEmpty: '이전 턴 맥락 없이 현재 입력만으로 생성합니다.',
-      conversationContextReady: '최근 {count}개 턴의 프롬프트와 결과 이미지를 이어서 반영합니다.',
       sourceTitle: '소스 이미지',
       sourceEmpty: '',
       sourceUpload: '이미지 업로드',
@@ -158,12 +153,8 @@
       generationStyleLabel: 'Generation flow',
       generationStyleSingle: 'Single',
       generationStyleConversation: 'Conversational',
-      generationStyleSingleHint: 'Use only the current prompt and source',
-      generationStyleConversationHint: 'Carry recent prompts and image results forward',
       generationStyleSingleShort: 'Single',
       generationStyleConversationShort: 'Conversational',
-      conversationContextEmpty: 'Generate only from the current input without prior turns.',
-      conversationContextReady: 'Carry over prompts and generated images from the last {count} turns.',
       sourceTitle: 'Source image',
       sourceEmpty: '',
       sourceUpload: 'Upload image',
@@ -255,14 +246,6 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-  }
-
-  function fillTemplate(template, values) {
-    var text = String(template || '');
-    var map = values && typeof values === 'object' ? values : {};
-    return text.replace(/\{([a-zA-Z0-9_]+)\}/g, function (_, key) {
-      return Object.prototype.hasOwnProperty.call(map, key) ? String(map[key]) : '';
-    });
   }
 
   function formatDate(value) {
@@ -632,7 +615,6 @@
     var detached = !(project && project.id);
     var selectedResult = currentResult();
     var selectedGenerationStyle = selectedResult ? normalizeGenerationStyle(selectedResult.generationStyle || 'single') : normalizeGenerationStyle(state.generationStyle);
-    var conversationHistory = buildConversationHistory(3);
     var sourceUrl = sourcePreviewUrl();
     var sourceDisabled = state.mode !== 'image-to-image';
     var sourceKind = '';
@@ -745,40 +727,23 @@
       '</div>' +
       '<div class="ai-image-settings-grid">' +
         '<div class="ai-image-setting-card is-compact">' +
-          '<div class="ai-image-source-library-title-row">' +
-            '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
-            '<button type="button" class="circle-toggle" data-action="toggle-settings-section" data-section="size" aria-label="' + escapeHtml(t('sizeLabel')) + ' ' + (state.settingsSectionCollapsed.size ? '펼치기' : '접기') + '">' + (state.settingsSectionCollapsed.size ? '+' : '−') + '</button>' +
+          '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
+          '<div class="ai-image-size-row">' +
+            '<select id="ai-image-size" class="btn-secondary ai-image-select">' +
+              '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
+              '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
+              '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
+            '</select>' +
           '</div>' +
-          (state.settingsSectionCollapsed.size ? '' : (
-            '<div class="ai-image-setting-body collapsible-body">' +
-              '<div class="ai-image-size-row">' +
-                '<select id="ai-image-size" class="btn-secondary ai-image-select">' +
-                  '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
-                  '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
-                  '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
-                '</select>' +
-              '</div>' +
-            '</div>'
-          )) +
         '</div>' +
         '<div class="ai-image-setting-card is-compact">' +
-          '<div class="ai-image-source-library-title-row">' +
-            '<div class="ai-image-source-library-title">' + escapeHtml(t('generationStyleLabel')) + '</div>' +
-            '<button type="button" class="circle-toggle" data-action="toggle-settings-section" data-section="flow" aria-label="' + escapeHtml(t('generationStyleLabel')) + ' ' + (state.settingsSectionCollapsed.flow ? '펼치기' : '접기') + '">' + (state.settingsSectionCollapsed.flow ? '+' : '−') + '</button>' +
+          '<div class="ai-image-source-library-title">' + escapeHtml(t('generationStyleLabel')) + '</div>' +
+          '<div class="ai-image-size-row">' +
+            '<select id="ai-image-generation-style" class="btn-secondary ai-image-select">' +
+              '<option value="single"' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleSingle')) + '</option>' +
+              '<option value="conversation"' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleConversation')) + '</option>' +
+            '</select>' +
           '</div>' +
-          (state.settingsSectionCollapsed.flow ? '' : (
-            '<div class="ai-image-setting-body collapsible-body">' +
-              '<div class="ai-image-generation-style-tabs">' +
-                '<button type="button" class="btn-secondary' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' active' : '') + '" data-action="set-generation-style" data-style="single">' + escapeHtml(t('generationStyleSingle')) + '</button>' +
-                '<button type="button" class="btn-secondary' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' active' : '') + '" data-action="set-generation-style" data-style="conversation">' + escapeHtml(t('generationStyleConversation')) + '</button>' +
-              '</div>' +
-              '<p class="muted small ai-image-setting-help">' + escapeHtml(
-                normalizeGenerationStyle(state.generationStyle) === 'conversation'
-                  ? fillTemplate(t('conversationContextReady'), { count: conversationHistory.length || 0 })
-                  : t('conversationContextEmpty')
-              ) + '</p>' +
-            '</div>'
-          )) +
         '</div>' +
       '</div>' +
       '<div class="ai-image-ratio-row">' +
@@ -1261,11 +1226,6 @@
           }
           return;
         }
-        if (action === 'set-generation-style') {
-          state.generationStyle = normalizeGenerationStyle(btn.getAttribute('data-style') || 'single');
-          render();
-          return;
-        }
         if (action === 'open-upload') {
           var input = document.getElementById('ai-image-source-file');
           if (input) input.click();
@@ -1357,14 +1317,6 @@
             var nextOpen = !!state.sourceSectionCollapsed[sec];
             state.sourceSectionCollapsed = { brand: true, content: true, project: true };
             state.sourceSectionCollapsed[sec] = !nextOpen;
-            render();
-          }
-          return;
-        }
-        if (action === 'toggle-settings-section') {
-          var settingsSec = String(btn.getAttribute('data-section') || '').trim();
-          if (settingsSec && state.settingsSectionCollapsed && Object.prototype.hasOwnProperty.call(state.settingsSectionCollapsed, settingsSec)) {
-            state.settingsSectionCollapsed[settingsSec] = !state.settingsSectionCollapsed[settingsSec];
             render();
           }
           return;
@@ -1549,6 +1501,10 @@
       if (target.id === 'ai-image-size') {
         var val = String(target.value || '').toUpperCase();
         if (val === '512' || val === '1K' || val === '2K') state.imageSize = val;
+        return;
+      }
+      if (target.id === 'ai-image-generation-style') {
+        state.generationStyle = normalizeGenerationStyle(target.value || 'single');
         return;
       }
     });

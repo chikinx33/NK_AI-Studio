@@ -163,17 +163,6 @@ body.layout-fixed.page-shell-image .content {
   background: rgba(255, 255, 255, 0.03);
 }
 
-.ai-image-setting-card .ai-image-source-library-title-row {
-  margin: 0;
-}
-
-.ai-image-setting-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-width: 0;
-}
-
 .ai-image-size-row {
   display: flex;
 }
@@ -181,21 +170,6 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-select {
   width: 100%;
   min-width: 0;
-}
-
-.ai-image-generation-style-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.ai-image-generation-style-tabs .btn-secondary.active {
-  border-color: rgba(249, 115, 22, 0.55);
-  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.22) inset;
-}
-
-.ai-image-setting-help {
-  margin: 0;
 }
 
 .ai-image-field {
