@@ -445,6 +445,21 @@
     ].join('::');
   }
 
+  function sourceSelectionSignature() {
+    return [
+      state.lang,
+      getSourceImages().map(function (item) {
+        var row = item && typeof item === 'object' ? item : {};
+        return [
+          String(row.id || ''),
+          String(row.url || ''),
+          String(row.name || ''),
+          String(row.kind || '')
+        ].join('~');
+      }).join('||')
+    ].join('::');
+  }
+
   function normalizeGenerationStyle(value) {
     var raw = String(value || '').trim().toLowerCase();
     return raw === 'conversation' ? 'conversation' : 'single';
@@ -712,9 +727,9 @@
   function buildSelectedSourceMarkup() {
     var items = getSourceImages();
     if (!items.length) {
-      return '<div class="ai-image-source-empty"><span>' + escapeHtml('0 / ' + String(MAX_SOURCE_IMAGES) + ' · ' + t('sourceLimitLabel')) + '</span></div>';
+      return '<div class="ai-image-source-empty" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '"><span>' + escapeHtml('0 / ' + String(MAX_SOURCE_IMAGES) + ' · ' + t('sourceLimitLabel')) + '</span></div>';
     }
-    return '<div class="ai-image-source-selection">' + items.map(function (item, index) {
+    return '<div class="ai-image-source-selection" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '">' + items.map(function (item, index) {
       var canMovePrev = index > 0;
       var canMoveNext = index < items.length - 1;
       return '' +
@@ -1242,6 +1257,36 @@
     }
   }
 
+  function updateModeUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var sourceDisabled = state.mode !== 'image-to-image';
+      var tabs = root.querySelectorAll('.ai-image-mode-tabs .btn-secondary');
+      Array.prototype.forEach.call(tabs || [], function (btn) {
+        var m = String(btn.getAttribute('data-mode') || '');
+        if (m && m === state.mode) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+      var promptEl = document.getElementById('ai-image-prompt');
+      if (promptEl) {
+        promptEl.setAttribute('placeholder', sourceDisabled ? t('promptPlaceholderText') : t('promptPlaceholderImage'));
+      }
+      var sourceField = root.querySelector('.ai-image-field.source-field');
+      if (sourceField) {
+        sourceField.classList.toggle('is-disabled', sourceDisabled);
+      }
+      var sourceBox = root.querySelector('.ai-image-source-box');
+      if (sourceBox) {
+        sourceBox.classList.toggle('is-disabled', sourceDisabled);
+      }
+      var fileInput = document.getElementById('ai-image-source-file');
+      if (fileInput) fileInput.disabled = !!sourceDisabled;
+      var uploadBtn = root.querySelector('.source-upload-fab');
+      if (uploadBtn) uploadBtn.disabled = !!sourceDisabled;
+    } catch (_) { }
+  }
+
   function updateSourceFieldUI() {
     try {
       var root = document.getElementById('ai-image-root');
@@ -1251,7 +1296,15 @@
       var sourceDisabled = state.mode !== 'image-to-image';
       var sourceField = root.querySelector('.ai-image-field.source-field');
       if (!sourceField) return;
+      var existingSelectionNode = sourceField.querySelector('.ai-image-source-selection, .ai-image-source-empty');
+      var existingSelectionSignature = existingSelectionNode ? String(existingSelectionNode.getAttribute('data-selection-signature') || '') : '';
       sourceField.outerHTML = buildSourceFieldMarkup(detached, project, sourceDisabled);
+      var nextSourceField = root.querySelector('.ai-image-field.source-field');
+      var nextSelectionNode = nextSourceField ? nextSourceField.querySelector('.ai-image-source-selection, .ai-image-source-empty') : null;
+      var nextSelectionSignature = nextSelectionNode ? String(nextSelectionNode.getAttribute('data-selection-signature') || '') : '';
+      if (existingSelectionNode && nextSelectionNode && existingSelectionSignature && existingSelectionSignature === nextSelectionSignature) {
+        nextSelectionNode.parentNode.replaceChild(existingSelectionNode, nextSelectionNode);
+      }
       bindSourceFileInput();
     } catch (_) {}
   }
@@ -1576,7 +1629,7 @@
         }
         if (action === 'set-mode') {
           state.mode = String(btn.getAttribute('data-mode') || 'text-to-image');
-          updateSourceUI();
+          updateModeUI();
           try {
             var tabsNow = root.querySelectorAll('.ai-image-mode-tabs .btn-secondary');
             Array.prototype.forEach.call(tabsNow || [], function(tb){
