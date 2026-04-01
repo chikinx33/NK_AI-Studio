@@ -54,6 +54,33 @@
     var weight = (options && Number(options.weight)) || 1.3;
     return '(camera: ' + tokens.join(', ') + ':' + String(weight) + ')';
   }
+  function mapPresetToPrompt(preset) {
+    var p = String(preset || '').toLowerCase();
+    if (p === 'front') return 'front view, eye-level';
+    if (p === 'left45') return '3/4 left view';
+    if (p === 'right45') return '3/4 right view';
+    if (p === 'topdown') return 'top-down view';
+    if (p === 'lowangle') return 'low angle';
+    if (p === 'closeup') return 'close-up portrait';
+    if (p === 'medium') return 'medium shot';
+    return '';
+  }
+  function buildCameraPrompt(cameraControls, options) {
+    var c = cameraControls && typeof cameraControls === 'object' ? cameraControls : {};
+    var p = String(c.preset || 'auto').toLowerCase();
+    if (p === 'auto') return '';
+    if (p && p !== 'custom') {
+      var base = mapPresetToPrompt(p);
+      if (base) {
+        var w = (options && Number(options.weight)) || 1.3;
+        return '(camera: cinematic ' + base + ':' + String(w) + ')';
+      }
+    }
+    return mapCameraToPrompt(c, options);
+  }
   utils.mapCameraToPrompt = mapCameraToPrompt;
+  utils.mapPresetToPrompt = mapPresetToPrompt;
+  utils.buildCameraPrompt = buildCameraPrompt;
   if (typeof window.mapCameraToPrompt !== 'function') window.mapCameraToPrompt = mapCameraToPrompt;
+  if (typeof window.buildCameraPrompt !== 'function') window.buildCameraPrompt = buildCameraPrompt;
 })(); 

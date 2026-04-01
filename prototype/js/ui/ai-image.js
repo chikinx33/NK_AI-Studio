@@ -154,7 +154,9 @@
       cameraPresetRight45: '우 45°',
       cameraPresetTopDown: '탑뷰',
       cameraPresetLowAngle: '로우앵글',
-      cameraPresetCloseUp: '클로즈업',
+      cameraPresetCloseUp: 'Close-up',
+      cameraPresetMedium: 'Medium Shot',
+      cameraPresetCustom: 'Custom',
       cameraPan: 'Pan',
       cameraTilt: 'Tilt',
       cameraDistance: 'Distance',
@@ -287,6 +289,8 @@
       cameraPresetTopDown: 'Top-down',
       cameraPresetLowAngle: 'Low angle',
       cameraPresetCloseUp: 'Close-up',
+      cameraPresetMedium: 'Medium Shot',
+      cameraPresetCustom: 'Custom',
       cameraPan: 'Pan',
       cameraTilt: 'Tilt',
       cameraDistance: 'Distance',
@@ -336,7 +340,7 @@
   function normalizeCameraControls(raw) {
     var base = raw && typeof raw === 'object' ? raw : {};
     var preset = String(base.preset || 'auto').trim().toLowerCase();
-    if (!/^(auto|front|left45|right45|topdown|lowangle|closeup)$/.test(preset)) preset = 'auto';
+    if (!/^(auto|front|left45|right45|topdown|lowangle|closeup|medium|custom)$/.test(preset)) preset = 'auto';
     var normalized = {
       enabled: !!base.enabled,
       preset: preset,
@@ -381,7 +385,9 @@
       right45: 'cameraPresetRight45',
       topdown: 'cameraPresetTopDown',
       lowangle: 'cameraPresetLowAngle',
-      closeup: 'cameraPresetCloseUp'
+      closeup: 'cameraPresetCloseUp',
+      medium: 'cameraPresetMedium',
+      custom: 'cameraPresetCustom'
     };
     return t(keyMap[String(preset || 'auto')] || 'cameraPresetAuto');
   }
@@ -406,31 +412,22 @@
     var next = createDefaultCameraControls();
     next.preset = preset;
     next.enabled = preset !== 'auto';
-    if (preset === 'front') {
-      next.pan = 0;
-      next.tilt = 0;
-      next.distance = 50;
-    } else if (preset === 'left45') {
-      next.pan = -35;
-      next.tilt = 0;
-      next.distance = 56;
-    } else if (preset === 'right45') {
-      next.pan = 35;
-      next.tilt = 0;
-      next.distance = 56;
-    } else if (preset === 'topdown') {
-      next.pan = 0;
-      next.tilt = -48;
-      next.distance = 82;
-    } else if (preset === 'lowangle') {
-      next.pan = 0;
-      next.tilt = 24;
-      next.distance = 48;
-    } else if (preset === 'closeup') {
-      next.pan = 0;
-      next.tilt = 8;
-      next.distance = 18;
-    }
+    try {
+      var presets = (window.NK && NK.constants && NK.constants.CAMERA_PRESETS) ? NK.constants.CAMERA_PRESETS : null;
+      if (presets && presets[preset]) {
+        next.pan = Number(presets[preset].pan || 0);
+        next.tilt = Number(presets[preset].tilt || 0);
+        next.distance = Number(presets[preset].distance || 50);
+        return next;
+      }
+    } catch (_) {}
+    if (preset === 'front') { next.pan = 0; next.tilt = 0; next.distance = 50; }
+    else if (preset === 'left45') { next.pan = -35; next.tilt = 0; next.distance = 56; }
+    else if (preset === 'right45') { next.pan = 35; next.tilt = 0; next.distance = 56; }
+    else if (preset === 'topdown') { next.pan = 0; next.tilt = -48; next.distance = 82; }
+    else if (preset === 'lowangle') { next.pan = 0; next.tilt = 24; next.distance = 48; }
+    else if (preset === 'closeup') { next.pan = 0; next.tilt = 8; next.distance = 18; }
+    else if (preset === 'medium') { next.pan = 0; next.tilt = 0; next.distance = 50; }
     return next;
   }
 
@@ -503,8 +500,12 @@
 
   function buildPromptWithCameraControls(basePrompt, raw) {
     var prompt = String(basePrompt || '').trim();
-    var mapper = (window.NK && NK.utils && typeof NK.utils.mapCameraToPrompt === 'function') ? NK.utils.mapCameraToPrompt : (typeof window.mapCameraToPrompt === 'function' ? window.mapCameraToPrompt : null);
-    var cameraText = mapper ? mapper(raw) : '';
+    var build = (window.NK && NK.utils && typeof NK.utils.buildCameraPrompt === 'function') ? NK.utils.buildCameraPrompt : (typeof window.buildCameraPrompt === 'function' ? window.buildCameraPrompt : null);
+    var cameraText = build ? build(raw) : '';
+    if (!cameraText) {
+      var fallback = (window.NK && NK.utils && typeof NK.utils.mapCameraToPrompt === 'function') ? NK.utils.mapCameraToPrompt : (typeof window.mapCameraToPrompt === 'function' ? window.mapCameraToPrompt : null);
+      cameraText = fallback ? fallback(raw) : '';
+    }
     if (!cameraText) return prompt;
     return prompt ? (prompt + ', ' + cameraText) : cameraText;
   }
@@ -1106,7 +1107,7 @@
     var promptPreview = buildCameraPromptInlinePreview(Object.assign({}, controls, {
       enabled: !isNeutralCameraControls(controls)
     }));
-    var presetOptions = ['auto', 'front', 'left45', 'right45', 'topdown', 'lowangle', 'closeup'].map(function (preset) {
+    var presetOptions = ['auto', 'front', 'left45', 'right45', 'topdown', 'lowangle', 'closeup', 'medium'].map(function (preset) {
       return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
     }).join('');
     return '' +
@@ -1906,6 +1907,7 @@
     current.pan = clampNumber(panEl && panEl.value, -90, 90, current.pan);
     current.tilt = clampNumber(tiltEl && tiltEl.value, -60, 60, current.tilt);
     current.distance = clampNumber(distEl && distEl.value, 0, 100, current.distance);
+    current.preset = 'custom';
     current.enabled = !isNeutralCameraControls(current);
     state.cameraControls = current;
     var result = currentResult();
