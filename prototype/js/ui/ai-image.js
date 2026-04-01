@@ -137,7 +137,11 @@
       promptPanelTitle: '프롬프트',
       reusePrompt: '프롬프트 복사',
       useAsSource: '소스 사용',
-      regenerateVariation: '재생성'
+      regenerateVariation: '재생성',
+      analyzePrompt: '이미지 분석',
+      analyzing: '분석중',
+      analyzeFailed: '이미지 분석 실패: ',
+      viewOriginal: '원본 보기'
     },
     en: {
       pageTitle: 'NK_Studio · AI Image',
@@ -242,7 +246,11 @@
       sourceMoveNext: 'Move later',
       reusePrompt: 'Copy to prompt',
       useAsSource: 'Use as source',
-      regenerateVariation: 'Generate variation'
+      regenerateVariation: 'Generate variation',
+      analyzePrompt: 'Analyze image',
+      analyzing: 'Analyzing',
+      analyzeFailed: 'Image analysis failed: ',
+      viewOriginal: 'View original'
     }
   };
 
@@ -775,7 +783,8 @@
             '<div class="ai-image-source-selection-trigger">' +
               '<img src="' + escapeHtml(String(item.url || '')) + '" alt="" />' +
             '</div>' +
-            '<button type="button" class="btn-secondary compact ai-image-source-remove" data-action="remove-source" data-index="' + index + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+            '<button type="button" class="ai-image-source-remove" data-action="remove-source" data-index="' + index + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+            '<button type="button" class="ai-image-source-view" data-action="toggle-source-modal" data-url="' + escapeHtml(String(item.url || '')) + '" aria-label="' + escapeHtml(t('viewOriginal')) + '" title="' + escapeHtml(t('viewOriginal')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"></circle><path d="M20 20l-4.2-4.2"></path></svg></button>' +
           '</div>' +
         '</div>';
     }).join('') + '</div>';
@@ -909,7 +918,7 @@
               '</div>') +
               '</div>' +
               '<div class="ai-image-preview-meta">' +
-                '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
+                '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
                 '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
               '</div>' +
           '</div>' +
@@ -1103,6 +1112,11 @@
     if (headings[2]) headings[2].textContent = t('historyTitle');
 
     if (selectedResult) {
+      var analyzeBtn = root.querySelector('[data-action="analyze-result-prompt"]');
+      if (analyzeBtn) {
+        analyzeBtn.setAttribute('aria-label', t('analyzePrompt'));
+        analyzeBtn.setAttribute('title', t('analyzePrompt'));
+      }
       var regenerateBtn = root.querySelector('[data-action="regenerate-variation"]');
       if (regenerateBtn) {
         regenerateBtn.setAttribute('aria-label', t('regenerateVariation'));
@@ -1134,7 +1148,7 @@
         brandTargetEl.setAttribute('title', t('saveBrandSelectLabel'));
         if (brandTargetEl.options.length) brandTargetEl.options[0].text = t('saveBrandSelectPlaceholder');
       }
-      var previewMetaLabel = root.querySelector('.ai-image-preview-meta p strong');
+      var previewMetaLabel = root.querySelector('.ai-image-preview-created strong');
       if (previewMetaLabel) previewMetaLabel.textContent = t('createdAt') + ':';
     } else {
       var previewEmpty = root.querySelector('.ai-image-panel-preview .ai-image-empty-state p');
@@ -1173,6 +1187,10 @@
     }
     var overlay = document.getElementById('page-loading');
     var main = document.querySelector('.main');
+    var overlayText = overlay ? overlay.querySelector('p') : null;
+    if (overlayText) {
+      overlayText.textContent = show ? (message || '로딩중...') : '로딩중...';
+    }
     if (overlay) overlay.classList.toggle('hidden', !show);
     if (main) main.classList.toggle('loading-blur', !!show);
   }
@@ -1391,7 +1409,8 @@
             card.innerHTML = '' +
               '<div class="ai-image-source-selection-media">' +
                 '<div class="ai-image-source-selection-trigger"><img alt="" /></div>' +
-                '<button type="button" class="btn-secondary compact ai-image-source-remove" data-action="remove-source" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+                '<button type="button" class="ai-image-source-remove" data-action="remove-source" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+                '<button type="button" class="ai-image-source-view" data-action="toggle-source-modal" aria-label="' + escapeHtml(t('viewOriginal')) + '" title="' + escapeHtml(t('viewOriginal')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"></circle><path d="M20 20l-4.2-4.2"></path></svg></button>' +
               '</div>';
           }
           var imageEl = card.querySelector('.ai-image-source-selection-trigger img');
@@ -1403,6 +1422,12 @@
             removeBtn.setAttribute('data-index', String(index));
             removeBtn.setAttribute('aria-label', t('deleteLabel'));
             removeBtn.setAttribute('title', t('deleteLabel'));
+          }
+          var viewBtn = card.querySelector('.ai-image-source-view');
+          if (viewBtn) {
+            viewBtn.setAttribute('data-url', String(item.url || ''));
+            viewBtn.setAttribute('aria-label', t('viewOriginal'));
+            viewBtn.setAttribute('title', t('viewOriginal'));
           }
           nextSelection.appendChild(card);
         });
@@ -1532,6 +1557,37 @@
       }, 100);
     } catch (err) {
       alert(t('downloadFailed') + (err && err.message ? err.message : err));
+    }
+  }
+
+  async function analyzeResultPrompt(resultId) {
+    var target = state.results.find(function (item) {
+      return String(item && item.id || '') === String(resultId || '');
+    });
+    if (!target) return;
+    setGlobalLoading(true, t('analyzing'));
+    try {
+      if (!NK.api || typeof NK.api.imagenDescribe !== 'function') {
+        throw new Error('imagen_describe_api_missing');
+      }
+      var response = await NK.api.imagenDescribe({
+        imageUrl: resolveResultUrl(target),
+        lang: state.lang
+      });
+      var nextPrompt = String(response && response.prompt || '').trim();
+      if (!nextPrompt) {
+        throw new Error('empty_analysis_prompt');
+      }
+      state.prompt = nextPrompt;
+      updatePromptFieldUI();
+      var promptInput = document.getElementById('ai-image-prompt');
+      if (promptInput && typeof promptInput.focus === 'function') {
+        try { promptInput.focus({ preventScroll: true }); } catch (_) { promptInput.focus(); }
+      }
+    } catch (err) {
+      alert(t('analyzeFailed') + (err && err.message ? err.message : err));
+    } finally {
+      setGlobalLoading(false);
     }
   }
 
@@ -1961,6 +2017,10 @@
             return String(item && item.id || '') === String(btn.getAttribute('data-id') || '');
           });
           downloadResult(result);
+          return;
+        }
+        if (action === 'analyze-result-prompt') {
+          analyzeResultPrompt(btn.getAttribute('data-id') || '');
           return;
         }
         if (action === 'delete-result') {

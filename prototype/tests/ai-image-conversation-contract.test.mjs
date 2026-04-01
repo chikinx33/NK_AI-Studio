@@ -35,7 +35,17 @@ test('ai-image ui supports capped multi-source image-to-image references with pr
   assert.match(source, /orderedSourceImages\(\)\.map/);
   assert.match(source, /data-action="select-source-primary"/);
   assert.match(source, /data-action="remove-source"/);
+  assert.match(source, /data-action="toggle-source-modal"/);
   assert.match(source, /<div class="ai-image-source-empty" data-selection-signature="/);
+});
+
+test('ai-image preview exposes prompt analysis action and localized analyzing copy', () => {
+  const source = readAiImageSource();
+  assert.match(source, /analyzePrompt/);
+  assert.match(source, /analyzing/);
+  assert.match(source, /data-action="analyze-result-prompt"/);
+  assert.match(source, /class="ai-image-analysis-icon"/);
+  assert.match(source, /NK\.api\.imagenDescribe/);
 });
 
 test('ai-image runtime avoids full rerender loops after initial mount', () => {

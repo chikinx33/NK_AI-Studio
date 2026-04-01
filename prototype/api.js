@@ -234,6 +234,25 @@
     return j(text);
   };
 
+  api.imagenDescribe = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
+    var res = await fetch(withBase('/api/imagen-describe'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    });
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'imagen_describe_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
   api.videoStart = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
