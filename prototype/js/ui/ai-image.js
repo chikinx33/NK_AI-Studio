@@ -409,6 +409,42 @@
     ].join('::');
   }
 
+  function promptPanelSignature(detached, project) {
+    return [
+      state.lang,
+      detached ? '1' : '0',
+      String(project && project.id || ''),
+      String(state.currentBrand && state.currentBrand.brandId || ''),
+      String(state.mode || ''),
+      String(state.prompt || ''),
+      String(state.imageSize || ''),
+      String(state.aspectRatio || ''),
+      String(normalizeGenerationStyle(state.generationStyle) || ''),
+      state.libraryLoading ? '1' : '0',
+      state.brandLibraryLoading ? '1' : '0',
+      state.contentLibraryLoading ? '1' : '0',
+      JSON.stringify(state.sourceSectionCollapsed || {}),
+      getSourceImages().map(function (item) {
+        var row = item && typeof item === 'object' ? item : {};
+        return [
+          String(row.id || ''),
+          String(row.url || ''),
+          String(row.name || ''),
+          String(row.kind || '')
+        ].join('~');
+      }).join('||'),
+      state.projectLibraryItems.map(function (item) {
+        return String(resolveLibraryItemUrl(item) || '');
+      }).join('|'),
+      state.brandLibraryItems.map(function (item) {
+        return String(resolveLibraryItemUrl(item) || '');
+      }).join('|'),
+      state.contentLibraryItems.map(function (item) {
+        return String(resolveContentItemUrl(item) || '');
+      }).join('|')
+    ].join('::');
+  }
+
   function normalizeGenerationStyle(value) {
     var raw = String(value || '').trim().toLowerCase();
     return raw === 'conversation' ? 'conversation' : 'single';
@@ -683,9 +719,12 @@
       var canMoveNext = index < items.length - 1;
       return '' +
         '<div class="ai-image-source-selection-card' + (index === 0 ? ' is-primary' : '') + '">' +
-          '<button type="button" class="img-modal-trigger ai-image-source-selection-trigger" data-action="toggle-source-modal" data-url="' + escapeHtml(String(item.url || '')) + '">' +
-            '<img src="' + escapeHtml(String(item.url || '')) + '" alt="" />' +
-          '</button>' +
+          '<div class="ai-image-source-selection-media">' +
+            '<button type="button" class="img-modal-trigger ai-image-source-selection-trigger" data-action="toggle-source-modal" data-url="' + escapeHtml(String(item.url || '')) + '">' +
+              '<img src="' + escapeHtml(String(item.url || '')) + '" alt="" />' +
+            '</button>' +
+            '<button type="button" class="btn-secondary compact ai-image-source-remove" data-action="remove-source" data-index="' + index + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+          '</div>' +
           '<div class="ai-image-source-selection-meta">' +
             '<span class="ai-image-source-selection-order">' + escapeHtml(String(index + 1)) + '</span>' +
             (index === 0 ? '<span class="ai-image-source-selection-primary">' + escapeHtml(t('sourcePrimary')) + '</span>' : '') +
@@ -694,7 +733,6 @@
           '<div class="ai-image-source-selection-actions">' +
             '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="move-source-prev" data-index="' + index + '" aria-label="' + escapeHtml(t('sourceMovePrev')) + '" title="' + escapeHtml(t('sourceMovePrev')) + '"' + (canMovePrev ? '' : ' disabled') + '>←</button>' +
             '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="move-source-next" data-index="' + index + '" aria-label="' + escapeHtml(t('sourceMoveNext')) + '" title="' + escapeHtml(t('sourceMoveNext')) + '"' + (canMoveNext ? '' : ' disabled') + '>→</button>' +
-            '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="remove-source" data-index="' + index + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
           '</div>' +
         '</div>';
     }).join('') + '</div>';
@@ -1053,10 +1091,13 @@
     var sourceDisabled = state.mode !== 'image-to-image';
     var brandCharacterList = brandCharacterOptions();
     var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
+    var nextPromptSignature = promptPanelSignature(detached, project);
     var nextPreviewSignature = previewPanelSignature(selectedResult, detached);
     var nextHistorySignature = historyPanelSignature();
+    var existingPromptPanel = root.querySelector('.ai-image-panel-left');
     var existingPreviewPanel = root.querySelector('.ai-image-panel-preview');
     var existingHistoryPanel = root.querySelector('.ai-image-panel-history');
+    var preservePromptPanel = !!(existingPromptPanel && existingPromptPanel.getAttribute('data-render-signature') === nextPromptSignature);
     var preservePreviewPanel = !!(existingPreviewPanel && existingPreviewPanel.getAttribute('data-render-signature') === nextPreviewSignature);
     var preserveHistoryPanel = !!(existingHistoryPanel && existingHistoryPanel.getAttribute('data-render-signature') === nextHistorySignature);
     var resultCards = state.results.map(function (item) {
@@ -1086,7 +1127,7 @@
       '</div>' +
       '</div>' +
       '<div class="ai-image-workspace">' +
-      buildPromptPanelMarkup(detached, project, sourceDisabled) +
+      buildPromptPanelMarkup(detached, project, sourceDisabled).replace('<section class="card ai-image-panel ai-image-panel-left">', '<section class="card ai-image-panel ai-image-panel-left" data-render-signature="' + escapeHtml(nextPromptSignature) + '">') +
       '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(nextPreviewSignature) + '">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
@@ -1143,6 +1184,12 @@
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
       '</section>';
 
+    if (preservePromptPanel) {
+      var nextPromptPanel = root.querySelector('.ai-image-panel-left');
+      if (nextPromptPanel && nextPromptPanel.parentNode) {
+        nextPromptPanel.parentNode.replaceChild(existingPromptPanel, nextPromptPanel);
+      }
+    }
     if (preservePreviewPanel) {
       var nextPreviewPanel = root.querySelector('.ai-image-panel-preview');
       if (nextPreviewPanel && nextPreviewPanel.parentNode) {

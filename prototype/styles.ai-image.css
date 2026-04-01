@@ -207,8 +207,8 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 178px;
-  height: 178px;
+  min-height: 228px;
+  height: 228px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -236,7 +236,7 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-empty {
   display: flex;
   align-items: center;
-  min-height: 122px;
+  min-height: 170px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -252,11 +252,11 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-source-selection-card {
-  flex: 0 0 116px;
+  flex: 0 0 144px;
   display: grid;
-  grid-template-rows: 116px auto auto;
+  grid-template-rows: 144px auto auto;
   gap: 6px;
-  min-width: 116px;
+  min-width: 144px;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -268,10 +268,16 @@ body.layout-fixed.page-shell-image .content {
   box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.16);
 }
 
+.ai-image-source-selection-media {
+  position: relative;
+  width: 100%;
+  height: 144px;
+}
+
 .ai-image-source-selection-trigger {
   display: block;
   width: 100%;
-  height: 116px;
+  height: 144px;
   padding: 0;
   border: 0;
   border-radius: 10px;
@@ -324,7 +330,7 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-source-selection-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
 }
 
@@ -332,6 +338,25 @@ body.layout-fixed.page-shell-image .content {
   min-height: 28px !important;
   padding: 0;
   border-radius: 8px;
+}
+
+.ai-image-source-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  line-height: 1;
+  z-index: 2;
+  background: rgba(10, 17, 34, 0.88);
+  border-color: rgba(255, 255, 255, 0.18);
 }
 
 .ai-image-source-preview {
