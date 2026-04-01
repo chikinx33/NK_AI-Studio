@@ -2300,7 +2300,8 @@
     }
   }
 
-  async function generateImageCameraApply() {
+  async function generateImageCameraApply(attempt) {
+    var tryCount = Number(attempt || 0) || 0;
     var appliedCameraControls = normalizeCameraControls(state.cameraControls);
     var cameraOnly = (window.NK && NK.utils && typeof NK.utils.buildCameraPrompt === 'function')
       ? NK.utils.buildCameraPrompt(appliedCameraControls)
@@ -2315,6 +2316,11 @@
     if (effectiveMode === 'image-to-image' && !getSourceImages().length) {
       effectiveMode = 'text-to-image';
     }
+    var chosenSize = String(state.imageSize || '2K').toUpperCase();
+    if (tryCount > 0) {
+      if (chosenSize === '2K') chosenSize = '1K';
+      else if (chosenSize === '1K') chosenSize = '512';
+    }
     var payload = {
       prompt: cameraOnly,
       aspectRatio: state.aspectRatio,
@@ -2322,7 +2328,7 @@
       sessionId: state.sessionId,
       generationMode: effectiveMode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
-      imageSize: state.imageSize,
+      imageSize: chosenSize,
       referenceImages: (effectiveMode === 'image-to-image' && getSourceImages().length)
         ? orderedSourceImages().map(function (item, index) {
           return {
@@ -2361,6 +2367,13 @@
       persistHistory();
       updateResultSelectionUI();
     } catch (err) {
+      var s = (err && err.status) || 0;
+      if (s >= 500 && tryCount < 1) {
+        try {
+          await generateImageCameraApply(tryCount + 1);
+          return;
+        } catch (_) { }
+      }
       var msg = (err && err.message) ? String(err.message) : String(err);
       var hint = '';
       try {
