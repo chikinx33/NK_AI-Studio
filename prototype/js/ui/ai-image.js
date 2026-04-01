@@ -849,6 +849,24 @@
     if (counter) counter.textContent = String((state.prompt || '').length) + t('promptCounterSuffix');
   }
 
+  function updatePromptFieldUI() {
+    var promptEl = document.getElementById('ai-image-prompt');
+    if (promptEl) {
+      promptEl.value = state.prompt || '';
+      promptEl.setAttribute('placeholder', state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText'));
+    }
+    updatePromptCounterText();
+  }
+
+  function updateAspectButtonsUI() {
+    var buttons = document.querySelectorAll('.ai-image-ratio-row [data-action="set-aspect"]');
+    Array.prototype.forEach.call(buttons || [], function (btn) {
+      var ratio = String(btn.getAttribute('data-ratio') || '');
+      if (ratio === String(state.aspectRatio || '')) btn.classList.add('active');
+      else btn.classList.remove('active');
+    });
+  }
+
   function hydratePromptControls() {
     var promptEl = document.getElementById('ai-image-prompt');
     if (promptEl) {
@@ -1570,7 +1588,7 @@
         }
         if (action === 'set-aspect') {
           state.aspectRatio = String(btn.getAttribute('data-ratio') || '16:9');
-          render();
+          updateAspectButtonsUI();
           return;
         }
         if (action === 'toggle-source-modal') {
@@ -1641,7 +1659,7 @@
           });
           if (r1 && r1.prompt) {
             state.prompt = String(r1.prompt || '');
-            render();
+            updatePromptFieldUI();
           }
           return;
         }
