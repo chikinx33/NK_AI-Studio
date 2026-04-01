@@ -614,7 +614,6 @@
     var brand = state.currentBrand;
     var detached = !(project && project.id);
     var selectedResult = currentResult();
-    var selectedGenerationStyle = selectedResult ? normalizeGenerationStyle(selectedResult.generationStyle || 'single') : normalizeGenerationStyle(state.generationStyle);
     var sourceUrl = sourcePreviewUrl();
     var sourceDisabled = state.mode !== 'image-to-image';
     var sourceKind = '';
@@ -723,32 +722,34 @@
       '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
       '<div class="ai-image-counter"><span id="ai-image-prompt-count">' + escapeHtml(String((state.prompt || '').length) + t('promptCounterSuffix')) + '</span></div>' +
       '</div>' +
-      '<div class="ai-image-settings-grid">' +
-        '<div class="ai-image-setting-card is-compact">' +
-          '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
-          '<div class="ai-image-size-row">' +
-            '<select id="ai-image-size" class="btn-secondary ai-image-select">' +
-              '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
-              '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
-              '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
-            '</select>' +
+      '<div class="ai-image-controls-stack">' +
+        '<div class="ai-image-settings-grid">' +
+          '<div class="ai-image-setting-card is-compact">' +
+            '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
+            '<div class="ai-image-size-row">' +
+              '<select id="ai-image-size" class="btn-secondary ai-image-select">' +
+                '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
+                '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
+                '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ai-image-setting-card is-compact">' +
+            '<div class="ai-image-source-library-title">' + escapeHtml(t('generationStyleLabel')) + '</div>' +
+            '<div class="ai-image-size-row">' +
+              '<select id="ai-image-generation-style" class="btn-secondary ai-image-select">' +
+                '<option value="single"' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleSingle')) + '</option>' +
+                '<option value="conversation"' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleConversation')) + '</option>' +
+              '</select>' +
+            '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="ai-image-setting-card is-compact">' +
-          '<div class="ai-image-source-library-title">' + escapeHtml(t('generationStyleLabel')) + '</div>' +
-          '<div class="ai-image-size-row">' +
-            '<select id="ai-image-generation-style" class="btn-secondary ai-image-select">' +
-              '<option value="single"' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleSingle')) + '</option>' +
-              '<option value="conversation"' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleConversation')) + '</option>' +
-            '</select>' +
-          '</div>' +
+        '<div class="ai-image-ratio-row">' +
+        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
+        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
+        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
+        '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
         '</div>' +
-      '</div>' +
-      '<div class="ai-image-ratio-row">' +
-      '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
-      '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
-      '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
-      '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
       '</div>' +
       '</div>' +
       '</section>' +
@@ -784,10 +785,9 @@
               '</label>' +
               '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
               '</div>') +
-            '</div>' +
+              '</div>' +
               '<div class="ai-image-preview-meta">' +
                 '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
-                '<p><strong>' + escapeHtml(t('generationStyleLabel')) + ':</strong> ' + escapeHtml(generationStyleShortLabel(selectedGenerationStyle)) + '</p>' +
                 '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
               '</div>' +
           '</div>' +
