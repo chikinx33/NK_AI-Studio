@@ -8,6 +8,9 @@
 [data-theme] {
   --accent: var(--orange);
   --shadow-1: var(--shadow);
+  --scrollbar-track: rgba(134, 157, 189, 0.14);
+  --scrollbar-thumb: rgba(134, 157, 189, 0.44);
+  --scrollbar-thumb-hover: rgba(160, 181, 210, 0.62);
   --studio-hero-bg: linear-gradient(
     145deg,
     color-mix(in srgb, var(--panel) 94%, var(--bg) 6%),
@@ -28,6 +31,33 @@
 }
 [data-theme="light"] {
   color-scheme: light;
+}
+
+[data-theme] * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+[data-theme] *::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-theme] *::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+[data-theme] *::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--scrollbar-thumb), color-mix(in srgb, var(--scrollbar-thumb) 84%, #5c6f8d 16%));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+[data-theme] *::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, var(--scrollbar-thumb-hover), color-mix(in srgb, var(--scrollbar-thumb-hover) 84%, #7086a6 16%));
+  background-clip: padding-box;
 }
 
 [data-theme="dark"] {
@@ -2181,18 +2211,20 @@ textarea::-webkit-scrollbar-corner {
   width: 8px;
 }
 .voice-select::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--scrollbar-track);
   border-radius: 8px;
 }
 .voice-select::-webkit-scrollbar-thumb {
-  background: rgba(123, 215, 255, 0.35);
+  background: linear-gradient(180deg, var(--scrollbar-thumb), color-mix(in srgb, var(--scrollbar-thumb) 84%, #5c6f8d 16%));
   border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 [data-theme="light"] .voice-select::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--scrollbar-track);
 }
 [data-theme="light"] .voice-select::-webkit-scrollbar-thumb {
-  background: rgba(28, 40, 66, 0.45);
+  background: linear-gradient(180deg, var(--scrollbar-thumb), color-mix(in srgb, var(--scrollbar-thumb) 84%, #5c6f8d 16%));
 }
 
 
@@ -4621,11 +4653,11 @@ html.page-shell-image #sidebar-project-card {
   border: 1px solid var(--border);
   background: var(--bg-2);
   color: var(--text);
-  scrollbar-color: rgba(134, 157, 189, 0.44) transparent;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 #project-overlay .project-create-profile-line textarea::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-track);
 }
 
 #project-overlay .project-create-mode {
@@ -5369,27 +5401,29 @@ html.page-shell-image #sidebar-project-card {
   flex: 1;
   min-height: 0;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 213, 0, 0.45) rgba(255, 255, 255, 0.08);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .postprod-timeline-scroll::-webkit-scrollbar {
-  height: 12px;
-  width: 12px;
+  height: 8px;
+  width: 8px;
 }
 
 .postprod-timeline-scroll::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--scrollbar-track);
   border-radius: 999px;
 }
 
 .postprod-timeline-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(135deg, rgba(255, 213, 0, 0.86), rgba(255, 122, 0, 0.86));
+  background: linear-gradient(180deg, var(--scrollbar-thumb), color-mix(in srgb, var(--scrollbar-thumb) 84%, #5c6f8d 16%));
   border-radius: 999px;
-  border: 2px solid rgba(8, 14, 30, 0.5);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .postprod-timeline-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(135deg, #ffd500, #ff7a00);
+  background: linear-gradient(180deg, var(--scrollbar-thumb-hover), color-mix(in srgb, var(--scrollbar-thumb-hover) 84%, #7086a6 16%));
+  background-clip: padding-box;
 }
 
 .postprod-ruler-row,
@@ -5552,15 +5586,15 @@ html.page-shell-image #sidebar-project-card {
 [data-theme="light"] .postprod-timeline-scroll {
   background: rgba(255, 255, 255, 0.86);
   border-color: #cdd9ef;
-  scrollbar-color: rgba(255, 122, 0, 0.62) rgba(13, 23, 47, 0.12);
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 [data-theme="light"] .postprod-timeline-scroll::-webkit-scrollbar-track {
-  background: rgba(13, 23, 47, 0.12);
+  background: var(--scrollbar-track);
 }
 
 [data-theme="light"] .postprod-timeline-scroll::-webkit-scrollbar-thumb {
-  border-color: rgba(255, 255, 255, 0.8);
+  border-color: transparent;
 }
 
 [data-theme="light"] .postprod-track-label {
@@ -6361,7 +6395,7 @@ body.layout-fixed .lib-content {
 .brand-caption-textarea,
 .brand-publish-note {
   scrollbar-width: thin;
-  scrollbar-color: rgba(134, 157, 189, 0.44) transparent;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
 .brand-asset-grid-scrollable::-webkit-scrollbar,
@@ -6384,7 +6418,7 @@ body.layout-fixed .lib-content {
 .knowledge-reference-textarea::-webkit-scrollbar-track,
 .brand-caption-textarea::-webkit-scrollbar-track,
 .brand-publish-note::-webkit-scrollbar-track {
-  background: transparent;
+  background: var(--scrollbar-track);
 }
 
 .brand-asset-grid-scrollable::-webkit-scrollbar-thumb,
@@ -6396,7 +6430,7 @@ body.layout-fixed .lib-content {
 .brand-caption-textarea::-webkit-scrollbar-thumb,
 .brand-publish-note::-webkit-scrollbar-thumb {
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(148, 171, 203, 0.7), rgba(92, 118, 154, 0.78));
+  background: linear-gradient(180deg, var(--scrollbar-thumb), color-mix(in srgb, var(--scrollbar-thumb) 84%, #5c6f8d 16%));
   border: 2px solid transparent;
   background-clip: padding-box;
 }
@@ -6409,7 +6443,7 @@ body.layout-fixed .lib-content {
 .knowledge-reference-textarea::-webkit-scrollbar-thumb:hover,
 .brand-caption-textarea::-webkit-scrollbar-thumb:hover,
 .brand-publish-note::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, rgba(180, 199, 226, 0.82), rgba(112, 136, 170, 0.88));
+  background: linear-gradient(180deg, var(--scrollbar-thumb-hover), color-mix(in srgb, var(--scrollbar-thumb-hover) 84%, #7086a6 16%));
   background-clip: padding-box;
 }
 
