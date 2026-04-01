@@ -394,6 +394,8 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-source-box.has-image {
+  min-height: 0;
+  height: auto;
   padding: 12px;
   border: 1px solid var(--border) !important;
   background: transparent !important;
