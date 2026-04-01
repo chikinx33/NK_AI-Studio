@@ -912,7 +912,7 @@
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
               '</div>' +
-              (detached ? '' : '<div class="ai-image-brand-actions">' +
+              (detached ? '' : '<div class="ai-image-inline-actions-bottom"><div class="ai-image-brand-actions">' +
               '<label class="ai-image-brand-select-wrap" aria-label="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
               '<select id="ai-image-brand-target" title="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
               '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
@@ -921,9 +921,9 @@
               }).join('') +
               '</select>' +
               '</label>' +
-              '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-action-save" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveProject')) + '" title="' + escapeHtml(t('saveProject')) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + projectSaveIconSvg() + '</button>' +
               '<button type="button" class="btn-secondary compact ai-image-action-icon ai-image-action-save" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveBrand')) + '" title="' + escapeHtml(t('saveBrand')) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + brandSaveIconSvg() + '</button>' +
-              '</div>') +
+              '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-action-save" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveProject')) + '" title="' + escapeHtml(t('saveProject')) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + projectSaveIconSvg() + '</button>' +
+              '</div></div>') +
               '</div>' +
               '<div class="ai-image-preview-meta">' +
                 '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
@@ -956,7 +956,7 @@
       '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +
       '</div>' +
       '<div class="ai-image-history">' +
-      (state.historyLoading ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
+      ((state.historyLoading && !state.results.length) ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
       ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
       (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>') +
       '</div>' +
@@ -1745,10 +1745,11 @@
       persistHistory();
     } catch (err) {
       console.warn('AI image session history sync failed', err);
-      state.historyLoadError = '1';
+      state.historyLoadError = (err && err.status === 404) ? '' : '1';
     } finally {
       state.historyLoading = false;
-      updateResultSelectionUI();
+      updatePreviewPanelUI();
+      updateHistoryPanelUI();
     }
   }
 

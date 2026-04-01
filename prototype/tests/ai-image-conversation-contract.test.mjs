@@ -53,9 +53,11 @@ test('ai-image preview keeps project and brand save controls as icon actions in 
   assert.match(source, /function projectSaveIconSvg/);
   assert.match(source, /function brandSaveIconSvg/);
   assert.match(source, /class="ai-image-brand-actions"/);
+  assert.match(source, /class="ai-image-inline-actions-bottom"/);
   assert.match(source, /data-action="save-result-project"/);
   assert.match(source, /data-action="save-result-brand"/);
   assert.match(source, /class="btn-primary compact ai-image-action-icon ai-image-action-save"/);
+  assert.match(source, /data-action="save-result-brand"[\s\S]*data-action="save-result-project"/);
 });
 
 test('ai-image runtime avoids full rerender loops after initial mount', () => {

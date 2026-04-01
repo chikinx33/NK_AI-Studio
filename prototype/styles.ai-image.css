@@ -808,53 +808,59 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions {
-  display: flex;
-  flex-wrap: nowrap;
-  align-items: end;
-  justify-content: space-between;
+  --ai-preview-action-size: 44px;
+  --ai-preview-action-gap: 10px;
+  --ai-preview-action-row-width: calc((var(--ai-preview-action-size) * 4) + (var(--ai-preview-action-gap) * 3));
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto auto;
+  justify-items: start;
+  align-content: end;
   gap: 10px;
   margin-top: 0;
   padding-top: 0;
   padding-bottom: 0;
   min-width: 0;
-  width: 100% !important;
+  width: auto !important;
   min-width: 0 !important;
-  max-width: 100% !important;
-  justify-self: stretch !important;
+  max-width: none !important;
+  justify-self: start !important;
   align-self: end !important;
   box-sizing: border-box;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left {
-  display: inline-flex !important;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  min-width: 0;
-  width: auto !important;
-  min-width: 0 !important;
-  max-width: none !important;
-  align-self: end !important;
+  display: grid !important;
+  grid-template-columns: repeat(4, var(--ai-preview-action-size));
+  grid-auto-rows: var(--ai-preview-action-size);
+  gap: var(--ai-preview-action-gap);
+  width: var(--ai-preview-action-row-width) !important;
+  min-width: var(--ai-preview-action-row-width) !important;
+  max-width: var(--ai-preview-action-row-width) !important;
+  justify-items: stretch !important;
+  justify-self: start !important;
 }
 
-.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-primary,
-.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-secondary {
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-primary,
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-secondary,
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-bottom .btn-primary,
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-bottom .btn-secondary {
   display: flex !important;
-  min-width: 0;
-  width: 44px !important;
-  max-width: 44px !important;
-  min-height: 44px;
-  height: 44px;
+  width: var(--ai-preview-action-size) !important;
+  min-width: var(--ai-preview-action-size) !important;
+  max-width: var(--ai-preview-action-size) !important;
+  min-height: var(--ai-preview-action-size);
+  height: var(--ai-preview-action-size);
   padding: 0;
   justify-content: center !important;
   align-items: center !important;
 }
 
-.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-primary,
-.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-secondary {
-  width: 44px !important;
-  min-width: 44px !important;
-  max-width: 44px !important;
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-bottom {
+  width: var(--ai-preview-action-row-width);
+  min-width: var(--ai-preview-action-row-width);
+  max-width: var(--ai-preview-action-row-width);
+  justify-self: start;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-primary:hover,
@@ -865,13 +871,14 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-brand-actions {
-  display: inline-flex;
-  flex-wrap: nowrap;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--ai-preview-action-size) var(--ai-preview-action-size);
+  gap: var(--ai-preview-action-gap);
   align-items: center;
-  justify-content: flex-end;
-  margin-left: auto;
+  justify-content: stretch;
+  margin-left: 0;
   min-width: 0;
+  width: 100%;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-action-icon {
@@ -904,7 +911,7 @@ body.layout-fixed.page-shell-image .content {
   align-items: center;
   gap: 6px;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
 }
 
 .ai-image-brand-select-wrap span {
@@ -915,7 +922,7 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-brand-select-wrap select {
-  width: min(180px, 32vw);
+  width: 100%;
   min-height: 38px;
   padding: 8px 10px;
   border-radius: 10px;
