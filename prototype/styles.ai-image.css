@@ -250,7 +250,7 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-field:not(.source-field) {
-  margin-top: 8px;
+  margin-top: 18px;
 }
 
 .ai-image-source-box {
@@ -258,8 +258,8 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 164px;
-  height: 164px;
+  min-height: 136px;
+  height: 136px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
