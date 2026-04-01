@@ -44,5 +44,8 @@ test('ai-image runtime avoids full rerender loops after initial mount', () => {
   assert.match(source, /function updateHeaderUI/);
   assert.match(source, /function updatePreviewPanelUI/);
   assert.match(source, /function updateHistoryPanelUI/);
+  assert.match(source, /function updateSourceSelectionUI/);
+  assert.match(source, /function updateHistorySelectionUI/);
   assert.match(source, /updateSourceFieldUI\(\);/);
+  assert.match(source, /updateSourceSelectionUI\(\);/);
 });

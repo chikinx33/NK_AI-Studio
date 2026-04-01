@@ -770,7 +770,7 @@
     return '<div class="ai-image-source-selection" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '">' + items.map(function (item, index) {
       var isPrimary = String(item && item.id || '') === String(ensureSelectedSourceId());
       return '' +
-        '<div class="ai-image-source-selection-card' + (isPrimary ? ' is-primary' : '') + '" role="button" tabindex="0" data-action="select-source-primary" data-index="' + index + '">' +
+        '<div class="ai-image-source-selection-card' + (isPrimary ? ' is-primary' : '') + '" role="button" tabindex="0" data-source-id="' + escapeHtml(String(item && item.id || '')) + '" data-action="select-source-primary" data-index="' + index + '">' +
           '<div class="ai-image-source-selection-media">' +
             '<div class="ai-image-source-selection-trigger">' +
               '<img src="' + escapeHtml(String(item.url || '')) + '" alt="" />' +
@@ -1325,6 +1325,99 @@
     } catch (_) {}
   }
 
+  function updateSourceLibrarySelectionClasses(root) {
+    try {
+      var scope = root || document.getElementById('ai-image-root');
+      if (!scope) return;
+      var libraryCards = scope.querySelectorAll('.ai-image-source-card');
+      Array.prototype.forEach.call(libraryCards || [], function (card) {
+        var img = card.querySelector('img');
+        var thumbUrl = img ? String(img.getAttribute('src') || '').trim() : '';
+        card.classList.toggle('active', hasSelectedSourceUrl(thumbUrl));
+      });
+    } catch (_) {}
+  }
+
+  function updateSourceSelectionUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var sourceField = root.querySelector('.ai-image-field.source-field');
+      var sourceBox = sourceField ? sourceField.querySelector('.ai-image-source-box') : null;
+      if (!sourceField || !sourceBox) return;
+
+      var sourceDisabled = state.mode !== 'image-to-image';
+      sourceField.classList.toggle('is-disabled', sourceDisabled);
+      sourceBox.classList.toggle('is-disabled', sourceDisabled);
+      sourceBox.classList.toggle('has-image', !!getSourceImages().length);
+
+      var limitEl = sourceBox.querySelector('.ai-image-source-limit');
+      if (limitEl) limitEl.textContent = String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES);
+
+      var uploadBtn = sourceBox.querySelector('.source-upload-fab');
+      if (uploadBtn) uploadBtn.disabled = !!sourceDisabled;
+      var fileInput = document.getElementById('ai-image-source-file');
+      if (fileInput) fileInput.disabled = !!sourceDisabled;
+
+      var existingSelection = sourceBox.querySelector('.ai-image-source-selection, .ai-image-source-empty');
+      var existingCardMap = new Map();
+      Array.prototype.forEach.call(sourceBox.querySelectorAll('.ai-image-source-selection-card[data-source-id]') || [], function (card) {
+        existingCardMap.set(String(card.getAttribute('data-source-id') || ''), card);
+      });
+
+      var items = getSourceImages();
+      var nextSelection;
+      if (!items.length) {
+        nextSelection = document.createElement('div');
+        nextSelection.className = 'ai-image-source-empty';
+        nextSelection.setAttribute('data-selection-signature', sourceSelectionSignature());
+        var span = document.createElement('span');
+        span.textContent = '0/' + String(MAX_SOURCE_IMAGES);
+        nextSelection.appendChild(span);
+      } else {
+        nextSelection = document.createElement('div');
+        nextSelection.className = 'ai-image-source-selection';
+        nextSelection.setAttribute('data-selection-signature', sourceSelectionSignature());
+        var selectedId = String(ensureSelectedSourceId() || '');
+        items.forEach(function (item, index) {
+          var sourceId = String(item && item.id || '');
+          var existingCard = existingCardMap.get(sourceId) || null;
+          var card = existingCard || document.createElement('div');
+          card.className = 'ai-image-source-selection-card';
+          card.setAttribute('role', 'button');
+          card.setAttribute('tabindex', '0');
+          card.setAttribute('data-source-id', sourceId);
+          card.setAttribute('data-action', 'select-source-primary');
+          card.setAttribute('data-index', String(index));
+          card.classList.toggle('is-primary', sourceId === selectedId);
+          if (!existingCard) {
+            card.innerHTML = '' +
+              '<div class="ai-image-source-selection-media">' +
+                '<div class="ai-image-source-selection-trigger"><img alt="" /></div>' +
+                '<button type="button" class="btn-secondary compact ai-image-source-remove" data-action="remove-source" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+              '</div>';
+          }
+          var imageEl = card.querySelector('.ai-image-source-selection-trigger img');
+          if (imageEl && String(imageEl.getAttribute('src') || '') !== String(item.url || '')) {
+            imageEl.setAttribute('src', String(item.url || ''));
+          }
+          var removeBtn = card.querySelector('.ai-image-source-remove');
+          if (removeBtn) {
+            removeBtn.setAttribute('data-index', String(index));
+            removeBtn.setAttribute('aria-label', t('deleteLabel'));
+            removeBtn.setAttribute('title', t('deleteLabel'));
+          }
+          nextSelection.appendChild(card);
+        });
+      }
+
+      if (existingSelection && existingSelection.parentNode) {
+        existingSelection.parentNode.replaceChild(nextSelection, existingSelection);
+      }
+      updateSourceLibrarySelectionClasses(root);
+    } catch (_) {}
+  }
+
   function updateHeaderUI() {
     try {
       var root = document.getElementById('ai-image-root');
@@ -1397,14 +1490,26 @@
       if (promptEl) {
         promptEl.setAttribute('placeholder', state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText'));
       }
-      updateSourceFieldUI();
+      updateSourceSelectionUI();
+    } catch (_) {}
+  }
+
+  function updateHistorySelectionUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var cards = root.querySelectorAll('.ai-image-history-card[data-id]');
+      Array.prototype.forEach.call(cards || [], function (card) {
+        var isActive = String(card.getAttribute('data-id') || '') === String(state.currentResultId || '');
+        card.classList.toggle('active', isActive);
+      });
     } catch (_) {}
   }
 
   function updateResultSelectionUI() {
     try {
       updatePreviewPanelUI();
-      updateHistoryPanelUI();
+      updateHistorySelectionUI();
     } catch (_) { }
   }
 
