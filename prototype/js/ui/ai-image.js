@@ -1150,6 +1150,9 @@
                 '<div class="ai-image-camera-inline-meta-item">' +
                   '<p id="ai-image-camera-prompt-preview" class="ai-image-camera-prompt-preview is-inline">' + escapeHtml(promptPreview) + '</p>' +
                 '</div>' +
+                '<div class="ai-image-camera-actions">' +
+                  '<button type="button" class="btn-primary ai-image-camera-apply" data-action="apply-camera-generate"' + (controls.enabled ? '' : ' disabled') + '>' + escapeHtml(t('cameraApply')) + '</button>' +
+                '</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -2295,6 +2298,87 @@
     }
   }
 
+  async function generateImageCameraApply() {
+    var appliedCameraControls = normalizeCameraControls(state.cameraControls);
+    var cameraOnly = (window.NK && NK.utils && typeof NK.utils.buildCameraPrompt === 'function')
+      ? NK.utils.buildCameraPrompt(appliedCameraControls)
+      : (typeof window.buildCameraPrompt === 'function' ? window.buildCameraPrompt(appliedCameraControls) : '');
+    if (!cameraOnly) {
+      var fallback = (window.NK && NK.utils && typeof NK.utils.mapCameraToPrompt === 'function')
+        ? NK.utils.mapCameraToPrompt(appliedCameraControls)
+        : (typeof window.mapCameraToPrompt === 'function' ? window.mapCameraToPrompt(appliedCameraControls) : '');
+      cameraOnly = fallback || '(camera: cinematic medium shot:1.2)';
+    }
+    var effectiveMode = state.mode;
+    if (effectiveMode === 'image-to-image' && !getSourceImages().length) {
+      effectiveMode = 'text-to-image';
+    }
+    var payload = {
+      prompt: cameraOnly,
+      aspectRatio: state.aspectRatio,
+      storageService: 'ai-image',
+      sessionId: state.sessionId,
+      generationMode: effectiveMode,
+      generationStyle: normalizeGenerationStyle(state.generationStyle),
+      imageSize: state.imageSize,
+      referenceImages: (effectiveMode === 'image-to-image' && getSourceImages().length)
+        ? orderedSourceImages().map(function (item, index) {
+          return {
+            referenceId: index + 1,
+            imageDataUrl: item.url,
+            subjectDescription: sourceKindLabel(item.kind) + ' reference ' + String(index + 1),
+            subjectType: 'SUBJECT_TYPE_DEFAULT'
+          };
+        })
+        : [],
+      conversationHistory: buildConversationHistory(3)
+    };
+    setGlobalLoading(true, t('generating'));
+    try {
+      var response = await NK.api.imagen(payload);
+      var result = {
+        id: 'res_' + Date.now(),
+        url: String(response && (response.signedUrl || response.dataUrl) || '').trim(),
+        objectName: String(response && response.objectName || '').trim(),
+        imageSize: String(response && response.imageSizeApplied || state.imageSize || '').trim(),
+        prompt: '',
+        resolvedPrompt: cameraOnly,
+        mode: effectiveMode,
+        generationStyle: normalizeGenerationStyle(state.generationStyle),
+        cameraControls: appliedCameraControls,
+        conversationTurnCount: Number(response && response.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
+        aspectRatio: state.aspectRatio,
+        createdAt: new Date().toISOString(),
+        savedToProject: false,
+        sessionId: state.sessionId
+      };
+      if (!result.url) throw new Error('image_result_missing');
+      state.results.unshift(result);
+      state.results = state.results.slice(0, 30);
+      state.currentResultId = result.id;
+      persistHistory();
+      updateResultSelectionUI();
+    } catch (err) {
+      var msg = (err && err.message) ? String(err.message) : String(err);
+      var hint = '';
+      try {
+        var raw = String(err && err.detail || '').trim();
+        var parsed = raw ? JSON.parse(raw) : null;
+        var d = parsed && parsed.detail ? parsed.detail : parsed;
+        var code = (parsed && (parsed.code || parsed.status)) || '';
+        var status = (err && err.status) || (parsed && parsed.status) || '';
+        var serverHint = parsed && parsed.hint ? parsed.hint : '';
+        var serverMsg = (d && d.error && d.error.message) || (parsed && parsed.message) || '';
+        if (serverMsg && !/Gemini API error/i.test(msg)) msg = serverMsg;
+        if (status) hint = String(serverHint || '') + (serverHint ? ' ' : '') + '(status: ' + status + ')';
+        else if (serverHint) hint = serverHint;
+      } catch (_) {}
+      alert(t('generationFailed') + msg + (hint ? ('\n힌트: ' + hint) : ''));
+    } finally {
+      setGlobalLoading(false);
+    }
+  }
+
   function bindStaticEvents() {
     var root = document.getElementById('ai-image-root');
     if (root && !root.dataset.bound) {
@@ -2461,6 +2545,10 @@
           var resultForPreset = currentResult();
           if (resultForPreset) resultForPreset.cameraControls = normalizeCameraControls(state.cameraControls);
           persistInlineCameraControls({ refreshHistoryPanel: true });
+          return;
+        }
+        if (action === 'apply-camera-generate') {
+          generateImageCameraApply();
           return;
         }
         if (action === 'set-aspect') {
