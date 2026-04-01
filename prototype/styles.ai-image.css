@@ -247,6 +247,21 @@ body.layout-fixed.page-shell-image .content {
   box-shadow: none !important;
 }
 
+.source-upload-fab {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 999px;
+  font-weight: 700;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .source-remove-fab {
   position: absolute;
   top: 6px;
@@ -280,23 +295,6 @@ body.layout-fixed.page-shell-image .content {
   flex-wrap: nowrap;
   justify-content: space-between;
   align-items: center;
-  margin-top: auto;
-  min-height: 0;
-}
-
-.ai-image-inline-actions .source-upload-fab {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  border-radius: 999px;
-  font-weight: 700;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 /* Keep upload(+) visible even when an image is registered */
 .ai-image-source-box.has-image .source-upload-fab { display: inline-flex !important; }
@@ -729,7 +727,7 @@ body.layout-fixed.page-shell-image .content {
   gap: 8px;
   min-height: 0;
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
   padding-right: 0;
 }
 
@@ -738,9 +736,13 @@ body.layout-fixed.page-shell-image .content {
   flex-wrap: nowrap;
   flex-direction: column;
   gap: 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
   height: 100%;
+  padding-right: 4px;
 }
 
 .ai-image-history-card {
