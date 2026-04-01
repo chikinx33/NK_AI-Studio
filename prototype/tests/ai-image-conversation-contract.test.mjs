@@ -35,6 +35,7 @@ test('ai-image ui supports capped multi-source image-to-image references with pr
   assert.match(source, /orderedSourceImages\(\)\.map/);
   assert.match(source, /data-action="select-source-primary"/);
   assert.match(source, /data-action="remove-source"/);
+  assert.match(source, /<div class="ai-image-source-empty" data-selection-signature="/);
 });
 
 test('ai-image runtime avoids full rerender loops after initial mount', () => {

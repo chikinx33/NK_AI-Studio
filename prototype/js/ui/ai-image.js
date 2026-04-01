@@ -765,7 +765,7 @@
   function buildSelectedSourceMarkup() {
     var items = getSourceImages();
     if (!items.length) {
-      return '<div class="ai-image-source-empty" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '"><span>' + escapeHtml('0/' + String(MAX_SOURCE_IMAGES)) + '</span></div>';
+      return '<div class="ai-image-source-empty" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '"></div>';
     }
     return '<div class="ai-image-source-selection" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '">' + items.map(function (item, index) {
       var isPrimary = String(item && item.id || '') === String(ensureSelectedSourceId());
@@ -1371,9 +1371,6 @@
         nextSelection = document.createElement('div');
         nextSelection.className = 'ai-image-source-empty';
         nextSelection.setAttribute('data-selection-signature', sourceSelectionSignature());
-        var span = document.createElement('span');
-        span.textContent = '0/' + String(MAX_SOURCE_IMAGES);
-        nextSelection.appendChild(span);
       } else {
         nextSelection = document.createElement('div');
         nextSelection.className = 'ai-image-source-selection';
