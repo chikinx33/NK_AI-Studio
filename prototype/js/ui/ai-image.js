@@ -1580,6 +1580,8 @@
       var savedChip = cardEl.querySelector('.ai-image-saved-chip');
       if (savedChip) savedChip.textContent = t('resultSavedTag');
     });
+    updatePreviewPanelUI();
+    updateHistoryPanelUI();
   }
 
   function setGlobalLoading(show, message) {
