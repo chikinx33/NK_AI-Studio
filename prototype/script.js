@@ -46,8 +46,84 @@
   const RESTORABLE_STAGES = ['scenario', 'scenes', 'ai-image-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish'];
   const STAGE_TARGET_KEY = 'nk_current_stage_href';
   const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
+  const LOGIN_RETURN_PARAM = 'returnTo';
   let syncMessageBound = false;
   let storageSyncBound = false;
+
+  const isIndexPagePath = (pathname) => {
+    const raw = String(typeof pathname === 'string' ? pathname : (window.location.pathname || '')).trim().toLowerCase();
+    return /(^|\/)(index\.html?)?$/.test(raw);
+  };
+
+  const toSameOriginAppHref = (rawUrl) => {
+    const value = String(rawUrl || '').trim();
+    if (!value) return '';
+    try {
+      const url = new URL(value, window.location.href);
+      if (url.origin !== window.location.origin) return '';
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch (_) {
+      return '';
+    }
+  };
+
+  const readRequestedLoginReturnTarget = (urlParams) => {
+    try {
+      const safe = toSameOriginAppHref(urlParams && typeof urlParams.get === 'function'
+        ? urlParams.get(LOGIN_RETURN_PARAM)
+        : '');
+      if (!safe || isIndexPagePath(safe)) return '';
+      return safe;
+    } catch (_) {
+      return '';
+    }
+  };
+
+  const buildLoginReturnTarget = () => {
+    try {
+      if (window.self !== window.top) {
+        const topHref = toSameOriginAppHref(window.top.location.href);
+        if (topHref) return topHref;
+      }
+    } catch (_) { }
+    const currentHref = toSameOriginAppHref(window.location.href);
+    if (!currentHref || isIndexPagePath(currentHref)) return '';
+    return currentHref;
+  };
+
+  const buildLoginPageHref = () => {
+    try {
+      const loginUrl = new URL('index.html', window.location.href);
+      const returnTarget = buildLoginReturnTarget();
+      if (returnTarget) loginUrl.searchParams.set(LOGIN_RETURN_PARAM, returnTarget);
+      return loginUrl.toString();
+    } catch (_) {
+      return 'index.html';
+    }
+  };
+
+  const syncAuthOverlayLoginLinks = () => {
+    document.querySelectorAll('#auth-overlay a[href], [data-ai-image-auth-link]').forEach((link) => {
+      if (!(link instanceof HTMLAnchorElement)) return;
+      link.setAttribute('href', buildLoginPageHref());
+      if (window.self !== window.top) link.setAttribute('target', '_top');
+      else link.removeAttribute('target');
+    });
+  };
+
+  const breakoutEmbeddedLoginPage = (urlParams) => {
+    if (window.self === window.top) return false;
+    if (!isIndexPagePath()) return false;
+    try {
+      const loginUrl = new URL(window.location.href);
+      const returnTarget = readRequestedLoginReturnTarget(urlParams);
+      if (returnTarget) loginUrl.searchParams.set(LOGIN_RETURN_PARAM, returnTarget);
+      window.top.location.replace(loginUrl.toString());
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
 
   const sanitizeThemeMode = (theme) => (String(theme || '').trim().toLowerCase() === 'light' ? 'light' : 'dark');
 
@@ -344,6 +420,8 @@
 
     const isIframe = window.self !== window.top;
     const urlParams = new URLSearchParams(window.location.search);
+    syncAuthOverlayLoginLinks();
+    if (breakoutEmbeddedLoginPage(urlParams)) return;
     try {
       const path = String(window.location.pathname || '').toLowerCase();
       const isAiVideoShell = /(^|\/)ai-video(\.html)?\/?$/i.test(path);
@@ -2320,6 +2398,15 @@
         const ok = await NK.auth.login(idInput.value.trim(), pwInput.value.trim());
         if (ok) {
           setUI(true, NK.auth.getUser());
+          const requestedReturnTarget = readRequestedLoginReturnTarget(new URLSearchParams(window.location.search));
+          if (requestedReturnTarget) {
+            try {
+              window.top.location.replace(requestedReturnTarget);
+            } catch (_) {
+              window.location.replace(requestedReturnTarget);
+            }
+            return;
+          }
           alert(translateUiText('로그인 성공'));
         } else {
           const reason = (NK.auth && NK.auth.getLastError) ? NK.auth.getLastError() : '';
