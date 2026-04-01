@@ -570,6 +570,56 @@
         '</div>';
   }
 
+  function buildPromptPanelMarkup(detached, project, sourceDisabled, sourceUrl) {
+    return '' +
+      '<section class="card ai-image-panel ai-image-panel-left">' +
+      '<div class="ai-image-preview-head">' +
+      '<div><h2>' + escapeHtml(t('promptPanelTitle')) + '</h2></div>' +
+      '</div>' +
+      '<div class="scenario-form">' +
+      '<div class="ai-image-mode-tabs">' +
+      '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
+      '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
+      '</div>' +
+      buildSourceFieldMarkup(detached, project, sourceDisabled, sourceUrl) +
+      '<div class="ai-image-field">' +
+      '<label for="ai-image-prompt">' + escapeHtml(t('promptLabel')) + '</label>' +
+      '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
+      '<div class="ai-image-counter"><span id="ai-image-prompt-count">' + escapeHtml(String((state.prompt || '').length) + t('promptCounterSuffix')) + '</span></div>' +
+      '</div>' +
+      '<div class="ai-image-controls-stack">' +
+        '<div class="ai-image-settings-grid">' +
+          '<div class="ai-image-setting-card is-compact">' +
+            '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
+            '<div class="ai-image-size-row">' +
+              '<select id="ai-image-size" class="btn-secondary ai-image-select">' +
+                '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
+                '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
+                '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ai-image-setting-card is-compact">' +
+            '<div class="ai-image-source-library-title">' + escapeHtml(t('generationStyleLabel')) + '</div>' +
+            '<div class="ai-image-size-row">' +
+              '<select id="ai-image-generation-style" class="btn-secondary ai-image-select">' +
+                '<option value="single"' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleSingle')) + '</option>' +
+                '<option value="conversation"' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleConversation')) + '</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="ai-image-ratio-row">' +
+        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
+        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
+        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
+        '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
+        '</div>' +
+      '</div>' +
+      '</div>' +
+      '</section>';
+  }
+
   function cloneJson(value, fallback) {
     try {
       return JSON.parse(JSON.stringify(value == null ? fallback : value));
@@ -672,6 +722,22 @@
     if (counter) counter.textContent = String((state.prompt || '').length) + t('promptCounterSuffix');
   }
 
+  function hydratePromptControls() {
+    var promptEl = document.getElementById('ai-image-prompt');
+    if (promptEl) {
+      promptEl.value = state.prompt || '';
+      promptEl.oninput = function () {
+        state.prompt = String(promptEl.value || '');
+        updatePromptCounterText();
+      };
+    }
+    var sizeEl = document.getElementById('ai-image-size');
+    if (sizeEl) {
+      sizeEl.value = state.imageSize || '2K';
+    }
+    bindSourceFileInput();
+  }
+
   function updateLocalizedUiPreservingResults() {
     var root = document.getElementById('ai-image-root');
     if (!root) return;
@@ -703,44 +769,15 @@
       if (strong2) strong2.textContent = detached ? t('noneLabel') : (brand && brand.brandTitle ? brand.brandTitle : t('noBrand'));
     }
 
+    var leftPanel = root.querySelector('.ai-image-panel-left');
+    if (leftPanel) {
+      leftPanel.outerHTML = buildPromptPanelMarkup(detached, project, state.mode !== 'image-to-image', sourcePreviewUrl());
+      hydratePromptControls();
+    }
+
     var headings = root.querySelectorAll('.ai-image-preview-head h2');
-    if (headings[0]) headings[0].textContent = t('promptPanelTitle');
     if (headings[1]) headings[1].textContent = t('latestResult');
     if (headings[2]) headings[2].textContent = t('historyTitle');
-
-    var modeTextBtn = root.querySelector('.ai-image-mode-tabs [data-mode="text-to-image"]');
-    var modeImageBtn = root.querySelector('.ai-image-mode-tabs [data-mode="image-to-image"]');
-    if (modeTextBtn) modeTextBtn.textContent = t('modeText');
-    if (modeImageBtn) modeImageBtn.textContent = t('modeImage');
-
-    updateSourceFieldUI();
-
-    var promptLabel = root.querySelector('label[for="ai-image-prompt"]');
-    if (promptLabel) promptLabel.textContent = t('promptLabel');
-    var promptEl = document.getElementById('ai-image-prompt');
-    if (promptEl) {
-      promptEl.setAttribute('placeholder', state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText'));
-    }
-    updatePromptCounterText();
-
-    var settingTitles = root.querySelectorAll('.ai-image-settings-grid .ai-image-source-library-title');
-    if (settingTitles[0]) settingTitles[0].textContent = t('sizeLabel');
-    if (settingTitles[1]) settingTitles[1].textContent = t('generationStyleLabel');
-
-    var sizeEl = document.getElementById('ai-image-size');
-    if (sizeEl && sizeEl.options.length >= 3) {
-      sizeEl.options[0].text = t('sizeFast');
-      sizeEl.options[1].text = t('sizeStd');
-      sizeEl.options[2].text = t('sizeHigh');
-    }
-    var flowEl = document.getElementById('ai-image-generation-style');
-    if (flowEl && flowEl.options.length >= 2) {
-      flowEl.options[0].text = t('generationStyleSingle');
-      flowEl.options[1].text = t('generationStyleConversation');
-    }
-
-    var generateBtn = root.querySelector('.ai-image-ratio-row [data-action="generate-image"]');
-    if (generateBtn) generateBtn.textContent = t('generate');
 
     if (selectedResult) {
       var regenerateBtn = root.querySelector('[data-action="regenerate-variation"]');
@@ -820,6 +857,7 @@
   function render() {
     var root = document.getElementById('ai-image-root');
     if (!root) return;
+    root.setAttribute('data-no-i18n', 'true');
     var project = state.currentProject;
     var brand = state.currentBrand;
     var detached = !(project && project.id);
@@ -850,7 +888,7 @@
     }).join('');
 
     root.innerHTML = '' +
-      '<section class="ai-image-shell">' +
+      '<section class="ai-image-shell" data-no-i18n="true">' +
       '<div class="ai-image-header">' +
       '<div>' +
       '<h1>' + escapeHtml(t('heroTitle')) + '</h1>' +
@@ -862,52 +900,7 @@
       '</div>' +
       '</div>' +
       '<div class="ai-image-workspace">' +
-      '<section class="card ai-image-panel ai-image-panel-left">' +
-      '<div class="ai-image-preview-head">' +
-      '<div><h2>' + escapeHtml(t('promptPanelTitle')) + '</h2></div>' +
-      '</div>' +
-      '<div class="scenario-form">' +
-      '<div class="ai-image-mode-tabs">' +
-      '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
-      '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
-      '</div>' +
-      buildSourceFieldMarkup(detached, project, sourceDisabled, sourceUrl) +
-      '<div class="ai-image-field">' +
-      '<label for="ai-image-prompt">' + escapeHtml(t('promptLabel')) + '</label>' +
-      '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
-      '<div class="ai-image-counter"><span id="ai-image-prompt-count">' + escapeHtml(String((state.prompt || '').length) + t('promptCounterSuffix')) + '</span></div>' +
-      '</div>' +
-      '<div class="ai-image-controls-stack">' +
-        '<div class="ai-image-settings-grid">' +
-          '<div class="ai-image-setting-card is-compact">' +
-            '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
-            '<div class="ai-image-size-row">' +
-              '<select id="ai-image-size" class="btn-secondary ai-image-select">' +
-                '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
-                '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
-                '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
-              '</select>' +
-            '</div>' +
-          '</div>' +
-          '<div class="ai-image-setting-card is-compact">' +
-            '<div class="ai-image-source-library-title">' + escapeHtml(t('generationStyleLabel')) + '</div>' +
-            '<div class="ai-image-size-row">' +
-              '<select id="ai-image-generation-style" class="btn-secondary ai-image-select">' +
-                '<option value="single"' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleSingle')) + '</option>' +
-                '<option value="conversation"' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' selected' : '') + '>' + escapeHtml(t('generationStyleConversation')) + '</option>' +
-              '</select>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="ai-image-ratio-row">' +
-        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
-        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
-        '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '9:16' ? ' active' : '') + '" data-action="set-aspect" data-ratio="9:16">9:16</button>' +
-        '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
-        '</div>' +
-      '</div>' +
-      '</div>' +
-      '</section>' +
+      buildPromptPanelMarkup(detached, project, sourceDisabled, sourceUrl) +
       '<section class="card ai-image-panel ai-image-panel-preview">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
@@ -972,20 +965,7 @@
       }
     } catch (_) {}
 
-    var promptEl = document.getElementById('ai-image-prompt');
-    if (promptEl) {
-      promptEl.value = state.prompt || '';
-      promptEl.oninput = function () {
-        state.prompt = String(promptEl.value || '');
-        var counter = document.getElementById('ai-image-prompt-count');
-        if (counter) counter.textContent = String(state.prompt.length) + t('promptCounterSuffix');
-      };
-    }
-    var sizeEl = document.getElementById('ai-image-size');
-    if (sizeEl) {
-      sizeEl.value = state.imageSize || '2K';
-    }
-    bindSourceFileInput();
+    hydratePromptControls();
   }
 
   function bindSourceFileInput() {

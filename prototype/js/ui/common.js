@@ -1147,6 +1147,15 @@
         });
     }
 
+    function hasI18nSkipAncestor(el) {
+        if (!el || !el.closest) return false;
+        try {
+            return !!el.closest('[data-no-i18n], [data-i18n-skip]');
+        } catch (_) {
+            return false;
+        }
+    }
+
     function localizeElement(el, lang) {
         if (!el || el.nodeType !== 1) return;
         var tag = String(el.tagName || '').toUpperCase();
@@ -1154,7 +1163,7 @@
 
         // data-i18n 계열은 applyI18n()이 정식으로 처리하므로
         // 런타임 후처리(localizeSubtree)에서 다시 덮어쓰지 않는다.
-        if (el.hasAttribute('data-i18n') || el.hasAttribute('data-i18n-placeholder') || el.hasAttribute('data-lang-toggle') || el.hasAttribute('data-i18n-skip') || el.hasAttribute('data-no-i18n')) {
+        if (el.hasAttribute('data-i18n') || el.hasAttribute('data-i18n-placeholder') || el.hasAttribute('data-lang-toggle') || el.hasAttribute('data-i18n-skip') || el.hasAttribute('data-no-i18n') || hasI18nSkipAncestor(el.parentElement)) {
             return;
         }
 
