@@ -244,18 +244,23 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-selection {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-rows: 108px;
   gap: 8px;
+  align-content: start;
+  justify-content: start;
+  flex: 0 0 auto;
   min-height: 0;
   overflow: hidden;
-  padding-bottom: 2px;
+  padding-bottom: 0;
 }
 
 .ai-image-source-selection-card {
   display: grid;
-  grid-template-rows: 96px;
+  grid-template-rows: 100%;
   gap: 0;
   min-width: 0;
-  padding: 6px;
+  height: 108px;
+  padding: 4px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
@@ -273,13 +278,13 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-selection-media {
   position: relative;
   width: 100%;
-  height: 96px;
+  height: 100%;
 }
 
 .ai-image-source-selection-trigger {
   display: block;
   width: 100%;
-  height: 96px;
+  height: 100%;
   padding: 0;
   border: 0;
   border-radius: 10px;
@@ -331,9 +336,9 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-source-selection-card .ai-image-source-view {
   position: absolute;
-  left: 50%;
+  right: 4px;
   bottom: 4px;
-  transform: translateX(-50%);
+  transform: none;
   width: 24px;
   height: 24px;
   min-width: 24px;
@@ -803,33 +808,32 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions {
-  display: grid;
-  grid-template-rows: auto auto;
-  align-content: end;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: end;
+  justify-content: space-between;
   gap: 10px;
   margin-top: 0;
   padding-top: 0;
   padding-bottom: 0;
   min-width: 0;
-  width: auto !important;
+  width: 100% !important;
   min-width: 0 !important;
-  max-width: none !important;
-  justify-self: start !important;
+  max-width: 100% !important;
+  justify-self: stretch !important;
   align-self: end !important;
   box-sizing: border-box;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left {
-  display: grid !important;
-  grid-template-columns: repeat(2, minmax(64px, 1fr)) !important;
-  grid-auto-rows: 44px;
+  display: inline-flex !important;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
   min-width: 0;
-  width: 100% !important;
-  min-width: 100% !important;
+  width: auto !important;
+  min-width: 0 !important;
   max-width: none !important;
-  justify-items: stretch !important;
-  justify-self: stretch !important;
   align-self: end !important;
 }
 
@@ -837,20 +841,20 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-secondary {
   display: flex !important;
   min-width: 0;
-  width: 100% !important;
-  max-width: none !important;
+  width: 44px !important;
+  max-width: 44px !important;
   min-height: 44px;
   height: 44px;
-  padding: 0 10px;
+  padding: 0;
   justify-content: center !important;
   align-items: center !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-primary,
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-secondary {
-  width: 100% !important;
-  min-width: 0 !important;
-  max-width: none !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-primary:hover,
@@ -861,11 +865,13 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-brand-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: inline-flex;
+  flex-wrap: nowrap;
   gap: 8px;
   align-items: center;
-  margin-left: 0;
+  justify-content: flex-end;
+  margin-left: auto;
+  min-width: 0;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-action-icon {
@@ -881,6 +887,11 @@ body.layout-fixed.page-shell-image .content {
   margin: 0 auto;
 }
 
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-action-save .icon {
+  width: 17px;
+  height: 17px;
+}
+
 .ai-image-brand-save-row {
   display: flex;
   align-items: center;
@@ -893,6 +904,7 @@ body.layout-fixed.page-shell-image .content {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  flex: 0 1 auto;
 }
 
 .ai-image-brand-select-wrap span {
@@ -903,7 +915,7 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-brand-select-wrap select {
-  width: 100%;
+  width: min(180px, 32vw);
   min-height: 38px;
   padding: 8px 10px;
   border-radius: 10px;

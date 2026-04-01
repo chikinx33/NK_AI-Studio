@@ -48,6 +48,16 @@ test('ai-image preview exposes prompt analysis action and localized analyzing co
   assert.match(source, /NK\.api\.imagenDescribe/);
 });
 
+test('ai-image preview keeps project and brand save controls as icon actions in one control row', () => {
+  const source = readAiImageSource();
+  assert.match(source, /function projectSaveIconSvg/);
+  assert.match(source, /function brandSaveIconSvg/);
+  assert.match(source, /class="ai-image-brand-actions"/);
+  assert.match(source, /data-action="save-result-project"/);
+  assert.match(source, /data-action="save-result-brand"/);
+  assert.match(source, /class="btn-primary compact ai-image-action-icon ai-image-action-save"/);
+});
+
 test('ai-image runtime avoids full rerender loops after initial mount', () => {
   const source = readAiImageSource();
   const renderCallCount = (source.match(/\brender\(\);/g) || []).length;

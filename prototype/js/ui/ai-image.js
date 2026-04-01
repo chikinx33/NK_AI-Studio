@@ -790,6 +790,14 @@
     }).join('') + '</div>';
   }
 
+  function projectSaveIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h11l3 3V19a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 19V6a1.5 1.5 0 0 1 1-1.5Z"></path><path d="M8 4.5v5h7v-5"></path><path d="M8 15.5h8"></path></svg>';
+  }
+
+  function brandSaveIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg>';
+  }
+
   function buildSourceFieldMarkup(detached, project, sourceDisabled) {
     var sourceLibrary = buildProjectSourceLibraryMarkup();
     var brandSourceLibrary = buildBrandSourceLibraryMarkup();
@@ -897,10 +905,9 @@
           '</button>' +
           '</div>' +
           '<div class="ai-image-preview-foot">' +
-            '<div class="ai-image-inline-actions">' +
+              '<div class="ai-image-inline-actions">' +
               '<div class="ai-image-inline-actions-left">' +
                 '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
-                (detached ? '' : ('<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>')) +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
@@ -914,7 +921,8 @@
               }).join('') +
               '</select>' +
               '</label>' +
-              '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
+              '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-action-save" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveProject')) + '" title="' + escapeHtml(t('saveProject')) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + projectSaveIconSvg() + '</button>' +
+              '<button type="button" class="btn-secondary compact ai-image-action-icon ai-image-action-save" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveBrand')) + '" title="' + escapeHtml(t('saveBrand')) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + brandSaveIconSvg() + '</button>' +
               '</div>') +
               '</div>' +
               '<div class="ai-image-preview-meta">' +
@@ -1138,9 +1146,17 @@
         downloadBtn.setAttribute('title', t('download'));
       }
       var saveProjectBtn = root.querySelector('[data-action="save-result-project"]');
-      if (saveProjectBtn) saveProjectBtn.textContent = t('saveProject');
+      if (saveProjectBtn) {
+        saveProjectBtn.setAttribute('aria-label', t('saveProject'));
+        saveProjectBtn.setAttribute('title', t('saveProject'));
+        saveProjectBtn.innerHTML = projectSaveIconSvg();
+      }
       var saveBrandBtn = root.querySelector('[data-action="save-result-brand"]');
-      if (saveBrandBtn) saveBrandBtn.textContent = t('saveBrand');
+      if (saveBrandBtn) {
+        saveBrandBtn.setAttribute('aria-label', t('saveBrand'));
+        saveBrandBtn.setAttribute('title', t('saveBrand'));
+        saveBrandBtn.innerHTML = brandSaveIconSvg();
+      }
       var brandTargetWrap = root.querySelector('.ai-image-brand-select-wrap');
       if (brandTargetWrap) brandTargetWrap.setAttribute('aria-label', t('saveBrandSelectLabel'));
       var brandTargetEl = document.getElementById('ai-image-brand-target');
