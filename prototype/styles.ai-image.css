@@ -200,10 +200,12 @@ body.layout-fixed.page-shell-image .content {
   flex-direction: column;
   gap: 10px;
   min-height: 136px;
+  height: 136px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: transparent;
+  overflow: hidden;
 }
 /* Ensure preview does not stretch to full width in flex column */
 .ai-image-source-box .ai-image-source-preview {
@@ -239,8 +241,8 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-source-box.has-image {
-  padding: 0;
-  border: none !important;
+  padding: 12px;
+  border: 1px solid var(--border) !important;
   background: transparent !important;
   box-shadow: none !important;
 }
@@ -278,7 +280,8 @@ body.layout-fixed.page-shell-image .content {
   flex-wrap: nowrap;
   justify-content: space-between;
   align-items: center;
-  margin-top: 8px;
+  margin-top: auto;
+  min-height: 0;
 }
 
 .ai-image-inline-actions .source-upload-fab {
