@@ -207,8 +207,8 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 136px;
-  height: 136px;
+  min-height: 178px;
+  height: 178px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -236,7 +236,7 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-empty {
   display: flex;
   align-items: center;
-  min-height: 84px;
+  min-height: 122px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -252,11 +252,11 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-source-selection-card {
-  flex: 0 0 92px;
+  flex: 0 0 116px;
   display: grid;
-  grid-template-rows: 92px auto auto;
+  grid-template-rows: 116px auto auto;
   gap: 6px;
-  min-width: 92px;
+  min-width: 116px;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -271,7 +271,7 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-selection-trigger {
   display: block;
   width: 100%;
-  height: 92px;
+  height: 116px;
   padding: 0;
   border: 0;
   border-radius: 10px;
