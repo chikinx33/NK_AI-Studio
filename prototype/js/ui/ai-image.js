@@ -727,7 +727,7 @@
   function buildSelectedSourceMarkup() {
     var items = getSourceImages();
     if (!items.length) {
-      return '<div class="ai-image-source-empty" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '"><span>' + escapeHtml('0 / ' + String(MAX_SOURCE_IMAGES) + ' · ' + t('sourceLimitLabel')) + '</span></div>';
+      return '<div class="ai-image-source-empty" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '"><span>' + escapeHtml('0/' + String(MAX_SOURCE_IMAGES)) + '</span></div>';
     }
     return '<div class="ai-image-source-selection" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '">' + items.map(function (item, index) {
       var canMovePrev = index > 0;
@@ -739,11 +739,6 @@
               '<img src="' + escapeHtml(String(item.url || '')) + '" alt="" />' +
             '</button>' +
             '<button type="button" class="btn-secondary compact ai-image-source-remove" data-action="remove-source" data-index="' + index + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
-          '</div>' +
-          '<div class="ai-image-source-selection-meta">' +
-            '<span class="ai-image-source-selection-order">' + escapeHtml(String(index + 1)) + '</span>' +
-            (index === 0 ? '<span class="ai-image-source-selection-primary">' + escapeHtml(t('sourcePrimary')) + '</span>' : '') +
-            '<span class="ai-image-source-selection-kind">' + escapeHtml(sourceKindLabel(item.kind)) + '</span>' +
           '</div>' +
           '<div class="ai-image-source-selection-actions">' +
             '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="move-source-prev" data-index="' + index + '" aria-label="' + escapeHtml(t('sourceMovePrev')) + '" title="' + escapeHtml(t('sourceMovePrev')) + '"' + (canMovePrev ? '' : ' disabled') + '>←</button>' +
@@ -761,7 +756,7 @@
       '<div class="ai-image-field source-field' + (sourceDisabled ? ' is-disabled' : '') + '">' +
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
         '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + (getSourceImages().length ? ' has-image' : '') + '">' +
-        '<div class="ai-image-source-box-head"><span class="ai-image-source-limit">' + escapeHtml(String(getSourceImages().length) + ' / ' + String(MAX_SOURCE_IMAGES) + ' · ' + t('sourceLimitLabel')) + '</span></div>' +
+        '<div class="ai-image-source-box-head"><span class="ai-image-source-limit">' + escapeHtml(String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES)) + '</span></div>' +
         buildSelectedSourceMarkup() +
         '<button type="button" class="btn-secondary compact source-upload-fab" data-action="open-upload"' + (sourceDisabled ? ' disabled' : '') + '>+</button>' +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" multiple' + (sourceDisabled ? ' disabled' : '') + ' />' +
