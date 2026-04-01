@@ -1125,16 +1125,22 @@
               '</div>' +
               '<div class="ai-image-camera-inline-sliders">' +
               '<div class="ai-image-camera-section is-inline">' +
-                '<label class="ai-image-camera-slider-row" for="ai-image-camera-pan"><span>' + escapeHtml(t('cameraPan')) + '</span><strong id="ai-image-camera-pan-value">' + escapeHtml(String(controls.pan)) + '</strong></label>' +
-                '<input id="ai-image-camera-pan" type="range" min="-90" max="90" step="1" value="' + escapeHtml(String(controls.pan)) + '" />' +
+                '<div class="ai-image-camera-slider-inline">' +
+                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-pan"><span>' + escapeHtml(t('cameraPan')) + '</span><strong id="ai-image-camera-pan-value">' + escapeHtml(String(controls.pan)) + '</strong></label>' +
+                  '<input id="ai-image-camera-pan" type="range" min="-90" max="90" step="1" value="' + escapeHtml(String(controls.pan)) + '" />' +
+                '</div>' +
               '</div>' +
               '<div class="ai-image-camera-section is-inline">' +
-                '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span><strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong></label>' +
-                '<input id="ai-image-camera-tilt" type="range" min="-60" max="60" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
+                '<div class="ai-image-camera-slider-inline">' +
+                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span><strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong></label>' +
+                  '<input id="ai-image-camera-tilt" type="range" min="-60" max="60" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
+                '</div>' +
               '</div>' +
               '<div class="ai-image-camera-section is-inline">' +
-                '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span><strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong></label>' +
-                '<input id="ai-image-camera-distance" type="range" min="0" max="100" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
+                '<div class="ai-image-camera-slider-inline">' +
+                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span><strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong></label>' +
+                  '<input id="ai-image-camera-distance" type="range" min="0" max="100" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
+                '</div>' +
               '</div>' +
               '</div>' +
               '<div class="ai-image-camera-inline-meta">' +

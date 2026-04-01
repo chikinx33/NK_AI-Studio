@@ -1118,16 +1118,59 @@ body.layout-fixed.page-shell-image .content {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 6px;
   font-size: 11px;
+  flex: 0 0 82px;
+  min-width: 82px;
 }
 
 .ai-image-camera-slider-row strong {
   font-variant-numeric: tabular-nums;
 }
 
+.ai-image-camera-slider-inline {
+  display: grid;
+  grid-template-columns: minmax(82px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
 .ai-image-camera-section input[type="range"] {
   width: 100%;
+  accent-color: #4f8cff;
+}
+
+.ai-image-camera-section input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79, 140, 255, 0.92), rgba(96, 195, 255, 0.92));
+}
+
+.ai-image-camera-section input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -5px;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  background: #2f6fff;
+  box-shadow: 0 3px 10px rgba(47, 111, 255, 0.35);
+}
+
+.ai-image-camera-section input[type="range"]::-moz-range-track {
+  height: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(79, 140, 255, 0.92), rgba(96, 195, 255, 0.92));
+}
+
+.ai-image-camera-section input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.92);
+  border-radius: 999px;
+  background: #2f6fff;
+  box-shadow: 0 3px 10px rgba(47, 111, 255, 0.35);
 }
 
 .ai-image-camera-summary-text,
@@ -1272,33 +1315,29 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-history .ai-image-camera-preview-card {
-  padding: 8px 10px;
+  padding: 10px;
 }
 
 .ai-image-panel-history .ai-image-camera-orbit.is-inline {
-  width: 72px;
-  margin-top: 6px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  margin-top: 0;
+  border-radius: 22px;
 }
 
 .ai-image-panel-history .ai-image-camera-subject-core {
-  width: 34px;
-  height: 34px;
+  width: 64px;
+  height: 64px;
 }
 
 .ai-image-panel-history .ai-image-camera-device {
-  width: 34px;
-  height: 34px;
+  width: 52px;
+  height: 52px;
 }
 
 .ai-image-panel-history .ai-image-camera-device .icon {
-  width: 14px;
-  height: 14px;
-}
-
-.ai-image-panel-history .ai-image-camera-summary-text {
-  margin-top: 6px;
-  font-size: 10px;
-  line-height: 1.35;
+  width: 18px;
+  height: 18px;
 }
 
 .ai-image-panel-history .ai-image-camera-controls {
@@ -1327,8 +1366,9 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-history .ai-image-camera-slider-row {
-  margin-bottom: 4px;
   font-size: 10px;
+  flex-basis: 78px;
+  min-width: 78px;
 }
 
 .ai-image-panel-history .ai-image-camera-inline-meta-item {
@@ -1525,6 +1565,16 @@ body.layout-fixed.page-shell-image .content {
 
   .ai-image-camera-preset-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ai-image-camera-slider-inline {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .ai-image-camera-slider-row {
+    min-width: 0;
+    flex-basis: auto;
   }
 
   .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left {
