@@ -992,7 +992,7 @@ a.btn-ghost {
 .btn-primary:hover,
 .btn-secondary:hover,
 .btn-ghost:hover {
-  transform: translateY(-1px);
+  transform: none;
 }
 
 #confirm-scenes {
@@ -3544,10 +3544,38 @@ textarea::-webkit-scrollbar-corner {
   justify-content: center;
 }
 
-/* 해상도 셀렉트는 버튼 호버 떠오르는 효과 제거 */
-#ai-image-size.btn-secondary:hover,
-#ai-image-size.btn-secondary:focus {
-  transform: none;
+/* 버튼형 컨트롤은 호버/포커스 시 위로 뜨는 모션을 전면 차단 */
+:is(
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"],
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .theme-toggle,
+  .screen-toggle,
+  .lang-toggle,
+  .icon-btn,
+  .scenario-story-token-btn,
+  .scenario-story-ai-btn,
+  .scenario-circle-toggle,
+  .favorite-form-toggle,
+  .subscription-toggle,
+  .theme-preset-toggle,
+  .theme-preset-btn,
+  .edit-btn,
+  .inline-trash,
+  .trash-btn,
+  .action-trash,
+  .favorite-delete-btn,
+  .favorite-link-btn,
+  .knowledge-character-remove,
+  .character-sheet-overlay-btn,
+  .source-remove-fab,
+  .ai-image-history-delete
+):is(:hover, :focus, :focus-visible) {
+  transform: none !important;
 }
 
 .common-modal-box .close-modal {
@@ -8314,7 +8342,7 @@ body {
 .btn-primary:hover,
 .btn-secondary:hover,
 .btn-ghost:hover {
-  transform: translateY(-2px);
+  transform: none;
 }
 
 .btn-secondary.compact,
