@@ -252,13 +252,17 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-source-selection-card {
   display: grid;
-  grid-template-rows: 96px auto;
-  gap: 6px;
+  grid-template-rows: 96px;
+  gap: 0;
   min-width: 0;
   padding: 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.03);
+  appearance: none;
+  -webkit-appearance: none;
+  text-align: left;
+  cursor: pointer;
 }
 
 .ai-image-source-selection-card.is-primary {
@@ -289,18 +293,6 @@ body.layout-fixed.page-shell-image .content {
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-.ai-image-source-selection-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-}
-
-.ai-image-source-action {
-  min-height: 28px !important;
-  padding: 0;
-  border-radius: 8px;
 }
 
 .ai-image-source-remove {

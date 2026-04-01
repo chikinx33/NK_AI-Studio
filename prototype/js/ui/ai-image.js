@@ -14,6 +14,7 @@
     aspectRatio: '1:1',
     imageSize: '2K',
     sourceImages: [],
+    selectedSourceId: '',
     projectLibraryItems: [],
     brandLibraryItems: [],
     contentLibraryItems: [],
@@ -375,6 +376,7 @@
   function historyPanelSignature() {
     return [
       state.lang,
+      String(state.currentResultId || ''),
       state.historyLoading ? '1' : '0',
       state.historyLoadError ? '1' : '0',
       state.results.map(function (item) {
@@ -448,6 +450,7 @@
   function sourceSelectionSignature() {
     return [
       state.lang,
+      String(state.selectedSourceId || ''),
       getSourceImages().map(function (item) {
         var row = item && typeof item === 'object' ? item : {};
         return [
@@ -591,9 +594,47 @@
     return Array.isArray(state.sourceImages) ? state.sourceImages : [];
   }
 
+  function ensureSelectedSourceId() {
+    var items = getSourceImages();
+    var selectedId = String(state.selectedSourceId || '').trim();
+    if (selectedId && items.some(function (item) { return String(item && item.id || '') === selectedId; })) {
+      return selectedId;
+    }
+    state.selectedSourceId = items[0] ? String(items[0].id || '').trim() : '';
+    return String(state.selectedSourceId || '');
+  }
+
   function primarySourceImage() {
     var items = getSourceImages();
-    return items.length ? items[0] : null;
+    if (!items.length) {
+      state.selectedSourceId = '';
+      return null;
+    }
+    var selectedId = ensureSelectedSourceId();
+    return items.find(function (item) {
+      return String(item && item.id || '') === selectedId;
+    }) || items[0] || null;
+  }
+
+  function orderedSourceImages() {
+    var items = getSourceImages().slice();
+    var primary = primarySourceImage();
+    if (!primary) return items;
+    return items.sort(function (a, b) {
+      var aPrimary = String(a && a.id || '') === String(primary.id || '');
+      var bPrimary = String(b && b.id || '') === String(primary.id || '');
+      if (aPrimary === bPrimary) return 0;
+      return aPrimary ? -1 : 1;
+    });
+  }
+
+  function setPrimarySourceByIndex(index) {
+    var items = getSourceImages();
+    if (index < 0 || index >= items.length) return false;
+    var nextId = String(items[index] && items[index].id || '').trim();
+    if (!nextId || String(state.selectedSourceId || '') === nextId) return false;
+    state.selectedSourceId = nextId;
+    return true;
   }
 
   function sourcePreviewUrl() {
@@ -630,20 +671,14 @@
   function removeSourceImageAt(index) {
     var items = getSourceImages().slice();
     if (index < 0 || index >= items.length) return false;
+    var removedId = String(items[index] && items[index].id || '').trim();
     items.splice(index, 1);
     state.sourceImages = items;
-    return true;
-  }
-
-  function moveSourceImage(index, direction) {
-    var items = getSourceImages().slice();
-    var nextIndex = index + direction;
-    if (index < 0 || index >= items.length) return false;
-    if (nextIndex < 0 || nextIndex >= items.length) return false;
-    var moved = items[index];
-    items[index] = items[nextIndex];
-    items[nextIndex] = moved;
-    state.sourceImages = items;
+    if (removedId && String(state.selectedSourceId || '') === removedId) {
+      state.selectedSourceId = items[0] ? String(items[0].id || '').trim() : '';
+    } else {
+      ensureSelectedSourceId();
+    }
     return true;
   }
 
@@ -663,7 +698,10 @@
       items.push(normalized);
       changed = true;
     });
-    if (changed) state.sourceImages = items;
+    if (changed) {
+      state.sourceImages = items;
+      ensureSelectedSourceId();
+    }
     return { changed: changed, hitLimit: hitLimit };
   }
 
@@ -730,19 +768,14 @@
       return '<div class="ai-image-source-empty" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '"><span>' + escapeHtml('0/' + String(MAX_SOURCE_IMAGES)) + '</span></div>';
     }
     return '<div class="ai-image-source-selection" data-selection-signature="' + escapeHtml(sourceSelectionSignature()) + '">' + items.map(function (item, index) {
-      var canMovePrev = index > 0;
-      var canMoveNext = index < items.length - 1;
+      var isPrimary = String(item && item.id || '') === String(ensureSelectedSourceId());
       return '' +
-        '<div class="ai-image-source-selection-card' + (index === 0 ? ' is-primary' : '') + '">' +
+        '<div class="ai-image-source-selection-card' + (isPrimary ? ' is-primary' : '') + '" role="button" tabindex="0" data-action="select-source-primary" data-index="' + index + '">' +
           '<div class="ai-image-source-selection-media">' +
-            '<button type="button" class="img-modal-trigger ai-image-source-selection-trigger" data-action="toggle-source-modal" data-url="' + escapeHtml(String(item.url || '')) + '">' +
+            '<div class="ai-image-source-selection-trigger">' +
               '<img src="' + escapeHtml(String(item.url || '')) + '" alt="" />' +
-            '</button>' +
+            '</div>' +
             '<button type="button" class="btn-secondary compact ai-image-source-remove" data-action="remove-source" data-index="' + index + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
-          '</div>' +
-          '<div class="ai-image-source-selection-actions">' +
-            '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="move-source-prev" data-index="' + index + '" aria-label="' + escapeHtml(t('sourceMovePrev')) + '" title="' + escapeHtml(t('sourceMovePrev')) + '"' + (canMovePrev ? '' : ' disabled') + '>←</button>' +
-            '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="move-source-next" data-index="' + index + '" aria-label="' + escapeHtml(t('sourceMoveNext')) + '" title="' + escapeHtml(t('sourceMoveNext')) + '"' + (canMoveNext ? '' : ' disabled') + '>→</button>' +
           '</div>' +
         '</div>';
     }).join('') + '</div>';
@@ -834,6 +867,81 @@
         '<button type="button" class="btn-primary wide-generate" data-action="generate-image">' + escapeHtml(t('generate')) + '</button>' +
         '</div>' +
       '</div>' +
+      '</div>' +
+      '</section>';
+  }
+
+  function buildPreviewPanelMarkup(detached, project, brand, selectedResult) {
+    var brandCharacterList = brandCharacterOptions();
+    var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
+    return '' +
+      '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(previewPanelSignature(selectedResult, detached)) + '">' +
+      '<div class="ai-image-preview-head">' +
+      '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
+      '</div>' +
+      '<div class="ai-image-preview-layout">' +
+      (selectedResult
+        ? '<div class="ai-image-preview-stage">' +
+          '<div class="ai-image-preview-media">' +
+          '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
+          '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
+          '</button>' +
+          '</div>' +
+          '<div class="ai-image-preview-foot">' +
+            '<div class="ai-image-inline-actions">' +
+              '<div class="ai-image-inline-actions-left">' +
+                '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
+                (detached ? '' : ('<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>')) +
+                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
+                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
+                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
+              '</div>' +
+              (detached ? '' : '<div class="ai-image-brand-actions">' +
+              '<label class="ai-image-brand-select-wrap" aria-label="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
+              '<select id="ai-image-brand-target" title="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
+              '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
+              brandCharacterList.map(function (item) {
+                return '<option value="' + escapeHtml(item.token) + '"' + (String(item.token) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+              }).join('') +
+              '</select>' +
+              '</label>' +
+              '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
+              '</div>') +
+              '</div>' +
+              '<div class="ai-image-preview-meta">' +
+                '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
+                '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
+              '</div>' +
+          '</div>' +
+        '</div>'
+        : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
+      '</div>' +
+      '</section>';
+  }
+
+  function buildHistoryPanelMarkup() {
+    var resultCards = state.results.map(function (item) {
+      var active = String(item.id || '') === String(state.currentResultId || '');
+      return '' +
+        '<div class="ai-image-history-card' + (active ? ' active' : '') + '" role="button" tabindex="0" data-action="select-result" data-id="' + escapeHtml(item.id) + '">' +
+        '<button type="button" class="ai-image-history-delete" data-action="delete-result" data-id="' + escapeHtml(item.id) + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+        '<img src="' + escapeHtml(resolveResultUrl(item)) + '" alt="" class="ai-image-history-thumb" />' +
+        '<div class="ai-image-history-meta">' +
+        '<strong>' + escapeHtml((item.mode === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + ' · ' + generationStyleShortLabel(item.generationStyle || 'single')) + '</strong>' +
+        '<p>' + escapeHtml(item.prompt || '') + '</p>' +
+        (item.savedToProject ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedTag')) + '</span>' : '') +
+        '</div>' +
+        '</div>';
+    }).join('');
+    return '' +
+      '<section class="card ai-image-panel ai-image-panel-history" data-render-signature="' + escapeHtml(historyPanelSignature()) + '">' +
+      '<div class="ai-image-preview-head">' +
+      '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +
+      '</div>' +
+      '<div class="ai-image-history">' +
+      (state.historyLoading ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
+      ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
+      (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>') +
       '</div>' +
       '</section>';
   }
@@ -1099,8 +1207,6 @@
     var detached = !(project && project.id);
     var selectedResult = currentResult();
     var sourceDisabled = state.mode !== 'image-to-image';
-    var brandCharacterList = brandCharacterOptions();
-    var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
     var nextPromptSignature = promptPanelSignature(detached, project);
     var nextPreviewSignature = previewPanelSignature(selectedResult, detached);
     var nextHistorySignature = historyPanelSignature();
@@ -1110,20 +1216,6 @@
     var preservePromptPanel = !!(existingPromptPanel && existingPromptPanel.getAttribute('data-render-signature') === nextPromptSignature);
     var preservePreviewPanel = !!(existingPreviewPanel && existingPreviewPanel.getAttribute('data-render-signature') === nextPreviewSignature);
     var preserveHistoryPanel = !!(existingHistoryPanel && existingHistoryPanel.getAttribute('data-render-signature') === nextHistorySignature);
-    var resultCards = state.results.map(function (item) {
-      var active = String(item.id || '') === String(state.currentResultId || '');
-      return '' +
-        '<div class="ai-image-history-card' + (active ? ' active' : '') + '" role="button" tabindex="0" data-action="select-result" data-id="' + escapeHtml(item.id) + '">' +
-        '<button type="button" class="ai-image-history-delete" data-action="delete-result" data-id="' + escapeHtml(item.id) + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
-        '<img src="' + escapeHtml(resolveResultUrl(item)) + '" alt="" class="ai-image-history-thumb" />' +
-        '<div class="ai-image-history-meta">' +
-        '<strong>' + escapeHtml((item.mode === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + ' · ' + generationStyleShortLabel(item.generationStyle || 'single')) + '</strong>' +
-        '<p>' + escapeHtml(item.prompt || '') + '</p>' +
-        (item.savedToProject ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedTag')) + '</span>' : '') +
-        '</div>' +
-        '</div>';
-    }).join('');
-
     root.innerHTML = '' +
       '<section class="ai-image-shell" data-no-i18n="true">' +
       '<div class="ai-image-header">' +
@@ -1138,58 +1230,8 @@
       '</div>' +
       '<div class="ai-image-workspace">' +
       buildPromptPanelMarkup(detached, project, sourceDisabled).replace('<section class="card ai-image-panel ai-image-panel-left">', '<section class="card ai-image-panel ai-image-panel-left" data-render-signature="' + escapeHtml(nextPromptSignature) + '">') +
-      '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(nextPreviewSignature) + '">' +
-      '<div class="ai-image-preview-head">' +
-      '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
-      '</div>' +
-      '<div class="ai-image-preview-layout">' +
-      (selectedResult
-        ? '<div class="ai-image-preview-stage">' +
-          '<div class="ai-image-preview-media">' +
-          '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
-          '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
-          '</button>' +
-          '</div>' +
-          '<div class="ai-image-preview-foot">' +
-            '<div class="ai-image-inline-actions">' +
-              '<div class="ai-image-inline-actions-left">' +
-                '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
-                (detached ? '' : ('<button type="button" class="btn-primary compact" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + escapeHtml(t('saveProject')) + '</button>')) +
-                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
-                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
-                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
-              '</div>' +
-              (detached ? '' : '<div class="ai-image-brand-actions">' +
-              '<label class="ai-image-brand-select-wrap" aria-label="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
-              '<select id="ai-image-brand-target" title="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
-              '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
-              brandCharacterList.map(function (item) {
-                return '<option value="' + escapeHtml(item.token) + '"' + (String(item.token) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
-              }).join('') +
-              '</select>' +
-              '</label>' +
-              '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
-              '</div>') +
-              '</div>' +
-              '<div class="ai-image-preview-meta">' +
-                '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
-                '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
-              '</div>' +
-          '</div>' +
-        '</div>'
-        : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
-      '</div>' +
-      '</section>' +
-      '<section class="card ai-image-panel ai-image-panel-history" data-render-signature="' + escapeHtml(nextHistorySignature) + '">' +
-      '<div class="ai-image-preview-head">' +
-      '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +
-      '</div>' +
-      '<div class="ai-image-history">' +
-      (state.historyLoading ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
-      ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
-      (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>') +
-      '</div>' +
-      '</section>' +
+      buildPreviewPanelMarkup(detached, project, brand, selectedResult) +
+      buildHistoryPanelMarkup() +
       '</div>' +
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
       '</section>';
@@ -1321,6 +1363,25 @@
       }
       updateSourceFieldUI();
     } catch (_) {}
+  }
+
+  function updateResultSelectionUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var project = state.currentProject;
+      var brand = state.currentBrand;
+      var detached = !(project && project.id);
+      var selectedResult = currentResult();
+      var previewPanel = root.querySelector('.ai-image-panel-preview');
+      var historyPanel = root.querySelector('.ai-image-panel-history');
+      if (previewPanel) {
+        previewPanel.outerHTML = buildPreviewPanelMarkup(detached, project, brand, selectedResult);
+      }
+      if (historyPanel) {
+        historyPanel.outerHTML = buildHistoryPanelMarkup();
+      }
+    } catch (_) { }
   }
 
   function toDownloadName(result) {
@@ -1535,7 +1596,7 @@
       generationStyle: normalizeGenerationStyle(state.generationStyle),
       imageSize: state.imageSize,
       referenceImages: state.mode === 'image-to-image' && getSourceImages().length
-        ? getSourceImages().map(function (item, index) {
+        ? orderedSourceImages().map(function (item, index) {
           return {
             referenceId: index + 1,
             imageDataUrl: item.url,
@@ -1608,8 +1669,7 @@
           (
             action === 'open-upload' ||
             action === 'remove-source' ||
-            action === 'move-source-prev' ||
-            action === 'move-source-next' ||
+            action === 'select-source-primary' ||
             action === 'load-project-library' ||
             action === 'load-brand-library' ||
             action === 'load-content-library' ||
@@ -1655,15 +1715,9 @@
           updateSourceUI();
           return;
         }
-        if (action === 'move-source-prev') {
-          var prevIndex = Number(btn.getAttribute('data-index') || -1);
-          moveSourceImage(prevIndex, -1);
-          updateSourceUI();
-          return;
-        }
-        if (action === 'move-source-next') {
-          var nextIndex = Number(btn.getAttribute('data-index') || -1);
-          moveSourceImage(nextIndex, 1);
+        if (action === 'select-source-primary') {
+          var sourceIndex = Number(btn.getAttribute('data-index') || -1);
+          setPrimarySourceByIndex(sourceIndex);
           updateSourceUI();
           return;
         }
@@ -1712,7 +1766,7 @@
         }
         if (action === 'select-result') {
           state.currentResultId = String(btn.getAttribute('data-id') || '');
-          render();
+          updateResultSelectionUI();
           return;
         }
         if (action === 'toggle-source-section') {
