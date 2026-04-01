@@ -218,13 +218,13 @@
   api.imagen = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
-    var res = await fetch(withBase('/api/imagen'), {
+    var res = await fetchWithTimeout(withBase('/api/imagen'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
       signal: opts && opts.signal
-    });
-    var text = await res.text();
+    }, 120000);
+    var text = await readTextWithTimeout(res, 120000);
     if (!res.ok) {
       var err = new Error(e(text) || 'imagen_error');
       err.status = res.status;
