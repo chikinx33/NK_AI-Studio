@@ -1090,28 +1090,7 @@
     var detached = !(project && project.id);
     var selectedResult = currentResult();
 
-    var headerTitle = root.querySelector('.ai-image-header h1');
-    if (headerTitle) headerTitle.textContent = t('heroTitle');
-
-    var heroPills = root.querySelectorAll('.studio-hero-pill');
-    if (heroPills[0]) {
-      var em0 = heroPills[0].querySelector('em');
-      var strong0 = heroPills[0].querySelector('strong');
-      if (em0) em0.textContent = t('sessionLabel');
-      if (strong0) strong0.textContent = detached ? t('noneLabel') : state.sessionId;
-    }
-    if (heroPills[1]) {
-      var em1 = heroPills[1].querySelector('em');
-      var strong1 = heroPills[1].querySelector('strong');
-      if (em1) em1.textContent = t('projectLabel');
-      if (strong1) strong1.textContent = detached ? t('noneLabel') : (project && project.title ? project.title : t('noProject'));
-    }
-    if (heroPills[2]) {
-      var em2 = heroPills[2].querySelector('em');
-      var strong2 = heroPills[2].querySelector('strong');
-      if (em2) em2.textContent = t('brandLabel');
-      if (strong2) strong2.textContent = detached ? t('noneLabel') : (brand && brand.brandTitle ? brand.brandTitle : t('noBrand'));
-    }
+    updateHeaderUI();
 
     var leftPanel = root.querySelector('.ai-image-panel-left');
     if (leftPanel) {
@@ -1346,6 +1325,63 @@
     } catch (_) {}
   }
 
+  function updateHeaderUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var project = state.currentProject;
+      var brand = state.currentBrand;
+      var detached = !(project && project.id);
+      var headerTitle = root.querySelector('.ai-image-header h1');
+      if (headerTitle) headerTitle.textContent = t('heroTitle');
+      var heroPills = root.querySelectorAll('.studio-hero-pill');
+      if (heroPills[0]) {
+        var em0 = heroPills[0].querySelector('em');
+        var strong0 = heroPills[0].querySelector('strong');
+        if (em0) em0.textContent = t('sessionLabel');
+        if (strong0) strong0.textContent = detached ? t('noneLabel') : state.sessionId;
+      }
+      if (heroPills[1]) {
+        var em1 = heroPills[1].querySelector('em');
+        var strong1 = heroPills[1].querySelector('strong');
+        if (em1) em1.textContent = t('projectLabel');
+        if (strong1) strong1.textContent = detached ? t('noneLabel') : (project && project.title ? project.title : t('noProject'));
+      }
+      if (heroPills[2]) {
+        var em2 = heroPills[2].querySelector('em');
+        var strong2 = heroPills[2].querySelector('strong');
+        if (em2) em2.textContent = t('brandLabel');
+        if (strong2) strong2.textContent = detached ? t('noneLabel') : (brand && brand.brandTitle ? brand.brandTitle : t('noBrand'));
+      }
+    } catch (_) {}
+  }
+
+  function updatePreviewPanelUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var project = state.currentProject;
+      var brand = state.currentBrand;
+      var detached = !(project && project.id);
+      var selectedResult = currentResult();
+      var previewPanel = root.querySelector('.ai-image-panel-preview');
+      if (previewPanel) {
+        previewPanel.outerHTML = buildPreviewPanelMarkup(detached, project, brand, selectedResult);
+      }
+    } catch (_) {}
+  }
+
+  function updateHistoryPanelUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var historyPanel = root.querySelector('.ai-image-panel-history');
+      if (historyPanel) {
+        historyPanel.outerHTML = buildHistoryPanelMarkup();
+      }
+    } catch (_) {}
+  }
+
   // Partial DOM update for source area to avoid reloading all images
   function updateSourceUI() {
     try {
@@ -1367,20 +1403,8 @@
 
   function updateResultSelectionUI() {
     try {
-      var root = document.getElementById('ai-image-root');
-      if (!root) return;
-      var project = state.currentProject;
-      var brand = state.currentBrand;
-      var detached = !(project && project.id);
-      var selectedResult = currentResult();
-      var previewPanel = root.querySelector('.ai-image-panel-preview');
-      var historyPanel = root.querySelector('.ai-image-panel-history');
-      if (previewPanel) {
-        previewPanel.outerHTML = buildPreviewPanelMarkup(detached, project, brand, selectedResult);
-      }
-      if (historyPanel) {
-        historyPanel.outerHTML = buildHistoryPanelMarkup();
-      }
+      updatePreviewPanelUI();
+      updateHistoryPanelUI();
     } catch (_) { }
   }
 
@@ -1470,7 +1494,8 @@
       if (result.savedBrandTargets.indexOf(selectedToken) < 0) result.savedBrandTargets.push(selectedToken);
       result.selectedBrandCharacterToken = selectedToken;
       persistHistory();
-      render();
+      updateHeaderUI();
+      updatePreviewPanelUI();
       alert(t('savedBrand'));
     } catch (err) {
       alert(t('brandSaveFailed') + (err && err.message ? err.message : err));
@@ -1539,7 +1564,7 @@
     loadDeletedSet();
     state.historyLoading = true;
     state.historyLoadError = '';
-    render();
+    updateHistoryPanelUI();
     try {
       var res = await NK.api.aiImageSessionLibrary(state.sessionId);
       mergeServerResults(Array.isArray(res && res.items) ? res.items : []);
@@ -1549,7 +1574,7 @@
       state.historyLoadError = '1';
     } finally {
       state.historyLoading = false;
-      render();
+      updateResultSelectionUI();
     }
   }
 
@@ -1567,7 +1592,7 @@
       await registerImageToProject(state.currentProject.id, result);
       result.savedToProject = true;
       persistHistory();
-      render();
+      updateHistoryPanelUI();
       alert(t('savedProject'));
     } catch (err) {
       alert(t('projectSaveFailed') + (err && err.message ? err.message : err));
@@ -1630,7 +1655,7 @@
       state.results = state.results.slice(0, 30);
       state.currentResultId = result.id;
       persistHistory();
-      render();
+      updateResultSelectionUI();
     } catch (err) {
       var msg = (err && err.message) ? String(err.message) : String(err);
       var hint = '';
@@ -1775,7 +1800,7 @@
             var nextOpen = !!state.sourceSectionCollapsed[sec];
             state.sourceSectionCollapsed = { brand: true, content: true, project: true };
             state.sourceSectionCollapsed[sec] = !nextOpen;
-            render();
+            updateSourceFieldUI();
           }
           return;
         }
@@ -1858,7 +1883,7 @@
               state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
             }
             persistHistory();
-            render();
+            updateResultSelectionUI();
           }
           return;
         }
@@ -2008,7 +2033,9 @@
       NK.service.brand.hydrateFromServer(state.currentBrand.brandId).then(function (brand) {
         if (!brand || !brand.brandId) return;
         state.currentBrand = brand;
-        render();
+        updateHeaderUI();
+        updatePreviewPanelUI();
+        updateSourceFieldUI();
       }).catch(function () { });
     }
     if (!window.__aiImageLangBound) {

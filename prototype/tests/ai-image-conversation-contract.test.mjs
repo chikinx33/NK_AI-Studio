@@ -36,3 +36,13 @@ test('ai-image ui supports capped multi-source image-to-image references with pr
   assert.match(source, /data-action="select-source-primary"/);
   assert.match(source, /data-action="remove-source"/);
 });
+
+test('ai-image runtime avoids full rerender loops after initial mount', () => {
+  const source = readAiImageSource();
+  const renderCallCount = (source.match(/\brender\(\);/g) || []).length;
+  assert.equal(renderCallCount, 1);
+  assert.match(source, /function updateHeaderUI/);
+  assert.match(source, /function updatePreviewPanelUI/);
+  assert.match(source, /function updateHistoryPanelUI/);
+  assert.match(source, /updateSourceFieldUI\(\);/);
+});
