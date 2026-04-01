@@ -790,6 +790,18 @@
     }).join('') + '</div>';
   }
 
+  function localizeSourceSelectionNode(selectionNode) {
+    if (!selectionNode) return;
+    Array.prototype.forEach.call(selectionNode.querySelectorAll('.ai-image-source-remove') || [], function (btn) {
+      btn.setAttribute('aria-label', t('deleteLabel'));
+      btn.setAttribute('title', t('deleteLabel'));
+    });
+    Array.prototype.forEach.call(selectionNode.querySelectorAll('.ai-image-source-view') || [], function (btn) {
+      btn.setAttribute('aria-label', t('viewOriginal'));
+      btn.setAttribute('title', t('viewOriginal'));
+    });
+  }
+
   function projectSaveIconSvg() {
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4.5h11l3 3V19a1.5 1.5 0 0 1-1.5 1.5h-12A1.5 1.5 0 0 1 4 19V6a1.5 1.5 0 0 1 1-1.5Z"></path><path d="M8 4.5v5h7v-5"></path><path d="M8 15.5h8"></path></svg>';
   }
@@ -1106,6 +1118,8 @@
     var brand = state.currentBrand;
     var detached = !(project && project.id);
     var selectedResult = currentResult();
+    var existingSourceSelection = root.querySelector('.ai-image-source-selection, .ai-image-source-empty');
+    var existingSourceSelectionSignature = existingSourceSelection ? String(existingSourceSelection.getAttribute('data-selection-signature') || '') : '';
 
     updateHeaderUI();
 
@@ -1113,6 +1127,12 @@
     if (leftPanel) {
       leftPanel.outerHTML = buildPromptPanelMarkup(detached, project, state.mode !== 'image-to-image');
       hydratePromptControls();
+      var nextSourceSelection = root.querySelector('.ai-image-source-selection, .ai-image-source-empty');
+      var nextSourceSelectionSignature = nextSourceSelection ? String(nextSourceSelection.getAttribute('data-selection-signature') || '') : '';
+      if (existingSourceSelection && nextSourceSelection && existingSourceSelectionSignature && existingSourceSelectionSignature === nextSourceSelectionSignature) {
+        nextSourceSelection.parentNode.replaceChild(existingSourceSelection, nextSourceSelection);
+        localizeSourceSelectionNode(existingSourceSelection);
+      }
     }
 
     var headings = root.querySelectorAll('.ai-image-preview-head h2');

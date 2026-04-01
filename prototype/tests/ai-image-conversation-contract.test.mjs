@@ -77,3 +77,12 @@ test('ai-image runtime avoids full rerender loops after initial mount', () => {
   assert.match(source, /updateSourceFieldUI\(\);/);
   assert.match(source, /updateSourceSelectionUI\(\);/);
 });
+
+test('ai-image language toggle preserves source selection dom while relocalizing controls', () => {
+  const source = readAiImageSource();
+  assert.match(source, /function localizeSourceSelectionNode/);
+  assert.match(source, /var existingSourceSelection = root\.querySelector\('\.ai-image-source-selection, \.ai-image-source-empty'\);/);
+  assert.match(source, /existingSourceSelectionSignature === nextSourceSelectionSignature/);
+  assert.match(source, /nextSourceSelection\.parentNode\.replaceChild\(existingSourceSelection, nextSourceSelection\);/);
+  assert.match(source, /localizeSourceSelectionNode\(existingSourceSelection\);/);
+});
