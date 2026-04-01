@@ -148,7 +148,8 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-settings-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
   gap: 10px;
 }
 
