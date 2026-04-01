@@ -366,6 +366,49 @@
     return match || state.results[0] || null;
   }
 
+  function brandCharacterSignature() {
+    return brandCharacterOptions().map(function (item) {
+      return String(item && item.token || '') + ':' + String(item && item.label || '');
+    }).join('|');
+  }
+
+  function historyPanelSignature() {
+    return [
+      state.lang,
+      state.historyLoading ? '1' : '0',
+      state.historyLoadError ? '1' : '0',
+      state.results.map(function (item) {
+        var row = item && typeof item === 'object' ? item : {};
+        return [
+          String(row.id || ''),
+          String(resolveResultUrl(row) || ''),
+          String(row.prompt || ''),
+          String(row.mode || ''),
+          String(row.generationStyle || ''),
+          row.savedToProject ? '1' : '0'
+        ].join('~');
+      }).join('||')
+    ].join('::');
+  }
+
+  function previewPanelSignature(selectedResult, detached) {
+    var row = selectedResult && typeof selectedResult === 'object' ? selectedResult : {};
+    return [
+      state.lang,
+      detached ? '1' : '0',
+      String(state.currentProject && state.currentProject.id || ''),
+      String(state.currentBrand && state.currentBrand.brandId || ''),
+      brandCharacterSignature(),
+      selectedBrandCharacterToken(selectedResult),
+      String(row.id || ''),
+      String(resolveResultUrl(row) || ''),
+      String(row.prompt || ''),
+      String(row.mode || ''),
+      String(row.generationStyle || ''),
+      row.savedToProject ? '1' : '0'
+    ].join('::');
+  }
+
   function normalizeGenerationStyle(value) {
     var raw = String(value || '').trim().toLowerCase();
     return raw === 'conversation' ? 'conversation' : 'single';
@@ -1010,6 +1053,12 @@
     var sourceDisabled = state.mode !== 'image-to-image';
     var brandCharacterList = brandCharacterOptions();
     var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
+    var nextPreviewSignature = previewPanelSignature(selectedResult, detached);
+    var nextHistorySignature = historyPanelSignature();
+    var existingPreviewPanel = root.querySelector('.ai-image-panel-preview');
+    var existingHistoryPanel = root.querySelector('.ai-image-panel-history');
+    var preservePreviewPanel = !!(existingPreviewPanel && existingPreviewPanel.getAttribute('data-render-signature') === nextPreviewSignature);
+    var preserveHistoryPanel = !!(existingHistoryPanel && existingHistoryPanel.getAttribute('data-render-signature') === nextHistorySignature);
     var resultCards = state.results.map(function (item) {
       var active = String(item.id || '') === String(state.currentResultId || '');
       return '' +
@@ -1038,7 +1087,7 @@
       '</div>' +
       '<div class="ai-image-workspace">' +
       buildPromptPanelMarkup(detached, project, sourceDisabled) +
-      '<section class="card ai-image-panel ai-image-panel-preview">' +
+      '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(nextPreviewSignature) + '">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
       '</div>' +
@@ -1080,7 +1129,7 @@
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
       '</div>' +
       '</section>' +
-      '<section class="card ai-image-panel ai-image-panel-history">' +
+      '<section class="card ai-image-panel ai-image-panel-history" data-render-signature="' + escapeHtml(nextHistorySignature) + '">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +
       '</div>' +
@@ -1093,6 +1142,19 @@
       '</div>' +
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
       '</section>';
+
+    if (preservePreviewPanel) {
+      var nextPreviewPanel = root.querySelector('.ai-image-panel-preview');
+      if (nextPreviewPanel && nextPreviewPanel.parentNode) {
+        nextPreviewPanel.parentNode.replaceChild(existingPreviewPanel, nextPreviewPanel);
+      }
+    }
+    if (preserveHistoryPanel) {
+      var nextHistoryPanel = root.querySelector('.ai-image-panel-history');
+      if (nextHistoryPanel && nextHistoryPanel.parentNode) {
+        nextHistoryPanel.parentNode.replaceChild(existingHistoryPanel, nextHistoryPanel);
+      }
+    }
 
     hydratePromptControls();
   }
@@ -1441,6 +1503,10 @@
       root.addEventListener('click', function (evt) {
         var btn = evt.target.closest('[data-action]');
         if (!btn) return;
+        try {
+          evt.preventDefault();
+          evt.stopPropagation();
+        } catch (_) { }
         var action = btn.getAttribute('data-action') || '';
         if (
           state.mode !== 'image-to-image' &&
@@ -1587,7 +1653,9 @@
           return;
         }
         if (action === 'set-aspect') {
-          state.aspectRatio = String(btn.getAttribute('data-ratio') || '16:9');
+          var nextAspectRatio = String(btn.getAttribute('data-ratio') || '16:9');
+          if (String(state.aspectRatio || '') === nextAspectRatio) return;
+          state.aspectRatio = nextAspectRatio;
           updateAspectButtonsUI();
           return;
         }
@@ -1660,6 +1728,10 @@
           if (r1 && r1.prompt) {
             state.prompt = String(r1.prompt || '');
             updatePromptFieldUI();
+            var promptInput = document.getElementById('ai-image-prompt');
+            if (promptInput && typeof promptInput.focus === 'function') {
+              try { promptInput.focus({ preventScroll: true }); } catch (_) { promptInput.focus(); }
+            }
           }
           return;
         }
