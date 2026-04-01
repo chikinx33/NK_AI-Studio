@@ -503,8 +503,10 @@
 
   function buildPromptWithCameraControls(basePrompt, raw) {
     var prompt = String(basePrompt || '').trim();
-    var cameraBlock = buildCameraPromptBlock(raw);
-    return cameraBlock ? [prompt, cameraBlock].filter(Boolean).join('\n\n') : prompt;
+    var mapper = (window.NK && NK.utils && typeof NK.utils.mapCameraToPrompt === 'function') ? NK.utils.mapCameraToPrompt : (typeof window.mapCameraToPrompt === 'function' ? window.mapCameraToPrompt : null);
+    var cameraText = mapper ? mapper(raw) : '';
+    if (!cameraText) return prompt;
+    return prompt ? (prompt + ', ' + cameraText) : cameraText;
   }
 
   function formatDate(value) {
