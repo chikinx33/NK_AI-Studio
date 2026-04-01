@@ -146,15 +146,41 @@ body.layout-fixed.page-shell-image .content {
   box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.22) inset;
 }
 
-.ai-image-generation-style {
+.ai-image-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-image-setting-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.ai-image-generation-style > label {
-  font-size: 12px;
-  font-weight: 600;
+.ai-image-setting-card .ai-image-source-library-title-row {
+  margin: 0;
+}
+
+.ai-image-setting-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ai-image-size-row {
+  display: flex;
+}
+
+.ai-image-select {
+  width: 100%;
+  min-width: 0;
 }
 
 .ai-image-generation-style-tabs {
@@ -168,7 +194,7 @@ body.layout-fixed.page-shell-image .content {
   box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.22) inset;
 }
 
-.ai-image-generation-style .small {
+.ai-image-setting-help {
   margin: 0;
 }
 
@@ -867,6 +893,10 @@ body.layout-fixed.page-shell-image .content {
   }
 
   .ai-image-panel-preview .ai-image-preview-foot {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-image-settings-grid {
     grid-template-columns: 1fr;
   }
 
