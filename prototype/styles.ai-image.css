@@ -617,7 +617,7 @@ body.layout-fixed.page-shell-image .content {
   min-width: 0 !important;
   max-width: none !important;
   justify-self: start !important;
-  align-self: stretch !important;
+  align-self: end !important;
   box-sizing: border-box;
 }
 
@@ -632,6 +632,7 @@ body.layout-fixed.page-shell-image .content {
   max-width: none !important;
   justify-items: stretch !important;
   justify-self: stretch !important;
+  align-self: end !important;
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions .btn-primary,
