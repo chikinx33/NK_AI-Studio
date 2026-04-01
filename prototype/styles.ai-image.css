@@ -127,6 +127,19 @@ body.layout-fixed.page-shell-image .content {
   overflow: auto;
 }
 
+.ai-image-panel-left .scenario-form,
+.ai-image-panel-left .scenario-form textarea {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.ai-image-panel-left .scenario-form::-webkit-scrollbar,
+.ai-image-panel-left .scenario-form textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
 .ai-image-mode-tabs {
   display: flex;
   gap: 8px;
@@ -207,8 +220,8 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   flex-direction: column;
   gap: 10px;
-  min-height: 228px;
-  height: 228px;
+  min-height: 164px;
+  height: 164px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -236,7 +249,8 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-source-empty {
   display: flex;
   align-items: center;
-  min-height: 170px;
+  flex: 1 1 auto;
+  min-height: 0;
   color: var(--muted);
   font-size: 12px;
 }
@@ -339,12 +353,21 @@ body.layout-fixed.page-shell-image .content {
   right: 4px;
   bottom: 4px;
   transform: none;
-  width: 24px;
-  height: 24px;
-  min-width: 24px;
-  min-height: 24px;
-  max-width: 24px;
-  max-height: 24px;
+  inline-size: 22px;
+  block-size: 22px;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  min-height: 22px;
+  max-width: 22px;
+  max-height: 22px;
+  min-inline-size: 22px;
+  min-block-size: 22px;
+  max-inline-size: 22px;
+  max-block-size: 22px;
+  flex: 0 0 22px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
   padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.16);
@@ -358,8 +381,8 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-source-selection-card .ai-image-source-view .icon {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
   display: block;
 }
 
@@ -394,8 +417,6 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-source-box.has-image {
-  min-height: 0;
-  height: auto;
   padding: 12px;
   border: 1px solid var(--border) !important;
   background: transparent !important;
