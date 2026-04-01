@@ -48,14 +48,19 @@ test('ai-image preview exposes prompt analysis action and localized analyzing co
   assert.match(source, /NK\.api\.imagenDescribe/);
 });
 
-test('ai-image sidebar exposes inline camera-angle controls with dedicated prompt injection', () => {
+test('ai-image preview toggles the history panel into camera-angle controls with dedicated prompt injection', () => {
   const source = readAiImageSource();
+  assert.match(source, /historyPanelMode: 'history'/);
   assert.match(source, /cameraControls: createDefaultCameraControls\(\)/);
   assert.match(source, /function buildCameraControlCardMarkup/);
   assert.match(source, /class="ai-image-camera-card/);
   assert.match(source, /function buildCameraPromptBlock/);
   assert.match(source, /function buildCameraPromptInlinePreview/);
   assert.match(source, /cameraModalTitle/);
+  assert.match(source, /class="ai-image-camera-fab/);
+  assert.match(source, /data-action="toggle-camera-panel"/);
+  assert.match(source, /data-action="show-history-panel"/);
+  assert.match(source, /ai-image-history-camera/);
   assert.match(source, /data-action="set-camera-preset"/);
   assert.match(source, /data-action="reset-camera-controls"/);
   assert.match(source, /id="ai-image-camera-pan"/);

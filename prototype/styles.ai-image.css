@@ -735,6 +735,39 @@ body.layout-fixed.page-shell-image .content {
   overflow: hidden;
 }
 
+.ai-image-camera-fab {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 183, 77, 0.28);
+  background: rgba(8, 12, 18, 0.84);
+  color: #ffd889;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.ai-image-camera-fab.is-active {
+  border-color: rgba(255, 183, 77, 0.52);
+  background: linear-gradient(135deg, rgba(255, 183, 77, 0.24), rgba(255, 122, 0, 0.18));
+  color: #fff1c9;
+}
+
+.ai-image-camera-fab .icon {
+  width: 18px;
+  height: 18px;
+}
+
 .ai-image-panel-preview .ai-image-preview-foot {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -1022,6 +1055,17 @@ body.layout-fixed.page-shell-image .content {
   gap: 12px;
 }
 
+.ai-image-camera-card-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.ai-image-camera-card-head > div:first-child {
+  min-width: 0;
+}
+
 .ai-image-camera-card-head h3 {
   margin: 0;
   font-size: 15px;
@@ -1252,6 +1296,121 @@ body.layout-fixed.page-shell-image .content {
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.03);
   padding: 10px 12px;
+}
+
+.ai-image-history.ai-image-history-camera {
+  overflow: hidden;
+}
+
+.ai-image-panel-history .ai-image-camera-card {
+  flex: 1 1 auto;
+  min-height: 0;
+  gap: 10px;
+  padding: 10px;
+}
+
+.ai-image-panel-history .ai-image-camera-card-head {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ai-image-panel-history .ai-image-camera-card-head h3 {
+  font-size: 14px;
+}
+
+.ai-image-panel-history .ai-image-camera-card-head p {
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.ai-image-panel-history .ai-image-camera-card-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+}
+
+.ai-image-panel-history .ai-image-camera-reset {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.ai-image-panel-history .ai-image-camera-card-body {
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.ai-image-panel-history .ai-image-camera-preview-card {
+  padding: 8px 10px;
+}
+
+.ai-image-panel-history .ai-image-camera-orbit.is-inline {
+  width: 72px;
+  margin-top: 6px;
+}
+
+.ai-image-panel-history .ai-image-camera-subject-core {
+  width: 34px;
+  height: 34px;
+}
+
+.ai-image-panel-history .ai-image-camera-device {
+  width: 34px;
+  height: 34px;
+}
+
+.ai-image-panel-history .ai-image-camera-device .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.ai-image-panel-history .ai-image-camera-summary-text {
+  margin-top: 6px;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.ai-image-panel-history .ai-image-camera-controls {
+  gap: 6px;
+}
+
+.ai-image-panel-history .ai-image-camera-section.is-inline {
+  padding: 8px 10px;
+}
+
+.ai-image-panel-history .ai-image-camera-preset-grid.is-inline {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.ai-image-panel-history .ai-image-camera-preset {
+  min-height: 30px;
+  padding: 5px 6px;
+  font-size: 10px;
+}
+
+.ai-image-panel-history .ai-image-camera-inline-sliders,
+.ai-image-panel-history .ai-image-camera-inline-meta {
+  gap: 6px;
+}
+
+.ai-image-panel-history .ai-image-camera-slider-row {
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+
+.ai-image-panel-history .ai-image-camera-inline-meta-item {
+  padding: 8px 10px;
+}
+
+.ai-image-panel-history .ai-image-camera-prompt-preview.is-inline {
+  -webkit-line-clamp: 2;
+  font-size: 10px;
+  line-height: 1.35;
+  padding: 7px 8px;
 }
 
 .ai-image-empty-state {

@@ -30,6 +30,7 @@
     selectedFileName: '',
     sourceSectionCollapsed: { brand: true, content: true, project: true },
     imageModalUrl: '',
+    historyPanelMode: 'history',
     cameraControls: createDefaultCameraControls(),
     deletedObjectNames: []
   };
@@ -351,6 +352,10 @@
     return normalizeCameraControls(raw);
   }
 
+  function normalizeHistoryPanelMode(value) {
+    return String(value || '').trim().toLowerCase() === 'camera' ? 'camera' : 'history';
+  }
+
   function isNeutralCameraControls(raw) {
     var controls = raw && typeof raw === 'object' ? raw : createDefaultCameraControls();
     return String(controls.preset || 'auto') === 'auto'
@@ -570,12 +575,14 @@
         return row;
       }) : [];
       state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+      state.historyPanelMode = 'history';
       state.cameraControls = state.results[0] && state.results[0].cameraControls
         ? normalizeCameraControls(state.results[0].cameraControls)
         : createDefaultCameraControls();
     } catch (_) {
       state.results = [];
       state.currentResultId = '';
+      state.historyPanelMode = 'history';
       state.cameraControls = createDefaultCameraControls();
     }
   }
@@ -626,9 +633,11 @@
   function historyPanelSignature() {
     return [
       state.lang,
+      normalizeHistoryPanelMode(state.historyPanelMode),
       String(state.currentResultId || ''),
       state.historyLoading ? '1' : '0',
       state.historyLoadError ? '1' : '0',
+      cameraControlSignature(state.cameraControls),
       state.results.map(function (item) {
         var row = item && typeof item === 'object' ? item : {};
         return [
@@ -658,6 +667,7 @@
       String(row.prompt || ''),
       String(row.mode || ''),
       String(row.generationStyle || ''),
+      normalizeHistoryPanelMode(state.historyPanelMode),
       cameraControlSignature(row.cameraControls),
       row.savedToProject ? '1' : '0'
     ].join('::');
@@ -1084,7 +1094,12 @@
     ].join(' ');
   }
 
-  function buildCameraControlCardMarkup() {
+  function buildCameraControlCardMarkup(options) {
+    var opts = options && typeof options === 'object' ? options : {};
+    var modeClass = opts.mode === 'history' ? ' is-history-mode' : '';
+    var historyAction = opts.showHistoryButton
+      ? '<button type="button" class="btn-secondary compact ai-image-camera-reset" data-action="show-history-panel">' + escapeHtml(t('historyTitle')) + '</button>'
+      : '';
     var controls = normalizeCameraControls(state.cameraControls);
     var previewX = 50 + Math.round((controls.pan / 90) * 34);
     var previewY = 50 + Math.round((controls.tilt / 60) * 26);
@@ -1096,13 +1111,16 @@
       return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
     }).join('');
     return '' +
-        '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + '">' +
+        '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-head">' +
             '<div>' +
               '<h3>' + escapeHtml(t('cameraModalTitle')) + '</h3>' +
               '<p>' + escapeHtml(t('cameraModalDesc')) + '</p>' +
             '</div>' +
-            '<button type="button" class="btn-secondary compact ai-image-camera-reset" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>' +
+            '<div class="ai-image-camera-card-actions">' +
+              '<button type="button" class="btn-secondary compact ai-image-camera-reset" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>' +
+              historyAction +
+            '</div>' +
           '</div>' +
           '<div class="ai-image-camera-card-body">' +
             '<div class="ai-image-camera-preview-card is-inline">' +
@@ -1231,7 +1249,6 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        buildCameraControlCardMarkup() +
         '<div class="ai-image-ratio-row">' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
@@ -1249,6 +1266,7 @@
     var selectedCameraControls = selectedResult && selectedResult.cameraControls
       ? normalizeCameraControls(selectedResult.cameraControls)
       : normalizeCameraControls(state.cameraControls);
+    var cameraPanelActive = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera';
     return '' +
       '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(previewPanelSignature(selectedResult, detached)) + '">' +
       '<div class="ai-image-preview-head">' +
@@ -1261,6 +1279,7 @@
           '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
+          '<button type="button" class="ai-image-camera-fab' + (cameraPanelActive ? ' is-active' : '') + '" data-action="toggle-camera-panel" aria-label="' + escapeHtml(t('cameraButton')) + '" title="' + escapeHtml(t('cameraButton')) + '">' + cameraFabIconSvg() + '</button>' +
           '</div>' +
           '<div class="ai-image-preview-foot">' +
               '<div class="ai-image-inline-actions' + (detached ? ' is-compact-grid' : '') + '">' +
@@ -1296,6 +1315,7 @@
   }
 
   function buildHistoryPanelMarkup() {
+    var cameraPanelActive = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera';
     var resultCards = state.results.map(function (item) {
       var active = String(item.id || '') === String(state.currentResultId || '');
       return '' +
@@ -1312,12 +1332,14 @@
     return '' +
       '<section class="card ai-image-panel ai-image-panel-history" data-render-signature="' + escapeHtml(historyPanelSignature()) + '">' +
       '<div class="ai-image-preview-head">' +
-      '<div><h2>' + escapeHtml(t('historyTitle')) + '</h2></div>' +
+      '<div><h2>' + escapeHtml(cameraPanelActive ? t('cameraModalTitle') : t('historyTitle')) + '</h2></div>' +
       '</div>' +
-      '<div class="ai-image-history">' +
-      ((state.historyLoading && !state.results.length) ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
-      ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
-      (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>') +
+      '<div class="ai-image-history' + (cameraPanelActive ? ' ai-image-history-camera' : '') + '">' +
+      (cameraPanelActive
+        ? buildCameraControlCardMarkup({ mode: 'history', showHistoryButton: true })
+        : (((state.historyLoading && !state.results.length) ? '<p class="muted small">' + escapeHtml(t('historyLoading')) + '</p>' : '') +
+          ((!state.historyLoading && state.historyLoadError) ? '<p class="muted small">' + escapeHtml(t('historyLoadError')) + '</p>' : '') +
+          (resultCards ? '<div class="ai-image-history-list">' + resultCards + '</div>' : '<p class="muted small">' + escapeHtml(t('resultsEmpty')) + '</p>'))) +
       '</div>' +
       '</section>';
   }
@@ -1484,7 +1506,7 @@
 
     var headings = root.querySelectorAll('.ai-image-preview-head h2');
     if (headings[1]) headings[1].textContent = t('latestResult');
-    if (headings[2]) headings[2].textContent = t('historyTitle');
+    if (headings[2]) headings[2].textContent = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera' ? t('cameraModalTitle') : t('historyTitle');
 
     if (selectedResult) {
       var analyzeBtn = root.querySelector('[data-action="analyze-result-prompt"]');
@@ -1919,9 +1941,11 @@
     }
   }
 
-  function persistInlineCameraControls() {
+  function persistInlineCameraControls(options) {
+    var opts = options && typeof options === 'object' ? options : {};
     persistHistory();
     updatePreviewPanelUI();
+    if (opts.refreshHistoryPanel) updateHistoryPanelUI();
   }
 
   function updateHistoryPanelUI() {
@@ -2398,6 +2422,19 @@
             : createDefaultCameraControls();
           updateResultSelectionUI();
           updatePromptPanelUI();
+          updateHistoryPanelUI();
+          return;
+        }
+        if (action === 'toggle-camera-panel') {
+          state.historyPanelMode = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera' ? 'history' : 'camera';
+          updatePreviewPanelUI();
+          updateHistoryPanelUI();
+          return;
+        }
+        if (action === 'show-history-panel') {
+          state.historyPanelMode = 'history';
+          updatePreviewPanelUI();
+          updateHistoryPanelUI();
           return;
         }
         if (action === 'toggle-source-section') {
@@ -2436,16 +2473,14 @@
           applyCameraPreset(btn.getAttribute('data-preset') || 'auto');
           var resultForPreset = currentResult();
           if (resultForPreset) resultForPreset.cameraControls = normalizeCameraControls(state.cameraControls);
-          persistInlineCameraControls();
-          updatePromptPanelUI();
+          persistInlineCameraControls({ refreshHistoryPanel: true });
           return;
         }
         if (action === 'reset-camera-controls') {
           state.cameraControls = createDefaultCameraControls();
           var resultForReset = currentResult();
           if (resultForReset) resultForReset.cameraControls = createDefaultCameraControls();
-          persistInlineCameraControls();
-          updatePromptPanelUI();
+          persistInlineCameraControls({ refreshHistoryPanel: true });
           return;
         }
         if (action === 'set-aspect') {
@@ -2508,6 +2543,7 @@
             if (String(state.currentResultId || '') === deleteId) {
               state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
             }
+            if (!state.results.length) state.historyPanelMode = 'history';
             var nextCurrent = currentResult();
             state.cameraControls = nextCurrent && nextCurrent.cameraControls
               ? normalizeCameraControls(nextCurrent.cameraControls)
@@ -2515,6 +2551,7 @@
             persistHistory();
             updateResultSelectionUI();
             updatePromptPanelUI();
+            updateHistoryPanelUI();
           }
           return;
         }
@@ -2535,6 +2572,7 @@
             state.cameraControls = normalizeCameraControls(r1.cameraControls);
             updatePromptFieldUI();
             updatePromptPanelUI();
+            updateHistoryPanelUI();
             var promptInput = document.getElementById('ai-image-prompt');
             if (promptInput && typeof promptInput.focus === 'function') {
               try { promptInput.focus({ preventScroll: true }); } catch (_) { promptInput.focus(); }
@@ -2555,6 +2593,7 @@
             }
             updateSourceUI();
             updatePromptPanelUI();
+            updateHistoryPanelUI();
           }
           return;
         }
@@ -2572,6 +2611,7 @@
               return;
             }
             updatePromptPanelUI();
+            updateHistoryPanelUI();
             generateImage();
           }
           return;
