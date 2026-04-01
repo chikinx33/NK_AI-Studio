@@ -1291,6 +1291,14 @@ body.layout-fixed.page-shell-image .content {
   gap: 8px;
 }
 
+.ai-image-camera-actions {
+  display: grid;
+}
+
+.ai-image-camera-actions .ai-image-camera-apply {
+  width: 100%;
+}
+
 .ai-image-camera-inline-meta-item {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
