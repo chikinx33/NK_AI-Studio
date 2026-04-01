@@ -50,7 +50,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const referenceImages = await normalizeReferenceImages({
       items: incomingReferenceImages,
       accessToken,
+      requestUrl: request.url,
+      authHeader: String(request.headers.get("Authorization") || "").trim(),
     });
+    if (generationMode === "image-to-image" && incomingReferenceImages.length > 0 && !referenceImages.length) {
+      return json({
+        error: "소스 이미지를 서버에서 읽지 못했습니다. 만료된 URL이거나 인증되지 않은 프록시 URL일 수 있습니다.",
+        code: "source_image_reference_unavailable",
+        requestedReferenceImageCount: incomingReferenceImages.length,
+        referenceImageCount: 0,
+      }, 400);
+    }
     const finalPrompt = buildGeminiImagePrompt(prompt, referenceImages, generationMode);
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
@@ -176,7 +186,7 @@ function sleep(ms: number) {
 }
 
 function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: string) {
-  const parts: Array<Record<string, unknown>> = [];
+  const parts: Array<Record<string, unknown>> = [{ text: prompt }];
   referenceImages.forEach((item) => {
     parts.push({
       inlineData: {
@@ -185,7 +195,6 @@ function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: s
       }
     });
   });
-  parts.push({ text: prompt });
   return parts;
 }
 
@@ -304,6 +313,8 @@ function extractGeminiImage(json: any): { data: string; mimeType: string } | nul
 async function normalizeReferenceImages(args: {
   items: any[];
   accessToken: string;
+  requestUrl: string;
+  authHeader: string;
 }): Promise<NormalizedReferenceImage[]> {
   const items = Array.isArray(args.items) ? args.items.slice(0, 4) : [];
   const out: NormalizedReferenceImage[] = [];
@@ -311,7 +322,7 @@ async function normalizeReferenceImages(args: {
     const raw = items[i] && typeof items[i] === "object" ? items[i] : {};
     const imageDataUrl = String(raw.imageDataUrl || raw.imageUrl || raw.url || "").trim();
     if (!imageDataUrl) continue;
-    const parsed = await resolveImageBytes(imageDataUrl, args.accessToken);
+    const parsed = await resolveImageBytes(imageDataUrl, args.accessToken, args.requestUrl, args.authHeader);
     if (!parsed) continue;
     const referenceId = Number(raw.referenceId || (i + 1)) || (i + 1);
     const subjectDescription = String(raw.subjectDescription || `registered character ${referenceId}`).trim() || `registered character ${referenceId}`;
@@ -327,18 +338,37 @@ async function normalizeReferenceImages(args: {
   return out;
 }
 
-async function resolveImageBytes(imageDataUrl: string, accessToken: string): Promise<{ base64: string; mimeType: string } | null> {
+async function resolveImageBytes(
+  imageDataUrl: string,
+  accessToken: string,
+  requestUrl: string,
+  authHeader: string
+): Promise<{ base64: string; mimeType: string } | null> {
   const parsed = parseDataUrl(imageDataUrl);
   if (parsed) return parsed;
   try {
-    const resolvedUrl = imageDataUrl.startsWith("gs://")
+    let resolvedUrl = imageDataUrl.startsWith("gs://")
       ? gcsToHttps(imageDataUrl)
       : imageDataUrl;
     if (!resolvedUrl) return null;
+    if (/^\/(?!\/)/.test(resolvedUrl)) {
+      resolvedUrl = new URL(resolvedUrl, requestUrl).toString();
+    }
     const headers: Record<string, string> = {};
     if (imageDataUrl.startsWith("gs://") || resolvedUrl.includes("storage.googleapis.com")) {
       headers.Authorization = `Bearer ${accessToken}`;
     }
+    try {
+      const requestOrigin = new URL(requestUrl).origin;
+      const targetUrl = new URL(resolvedUrl);
+      if (
+        authHeader &&
+        targetUrl.origin === requestOrigin &&
+        targetUrl.pathname === "/api/media/proxy"
+      ) {
+        headers.Authorization = authHeader;
+      }
+    } catch (_) {}
     const res = await fetch(resolvedUrl, { headers });
     if (!res.ok) {
       throw new Error(`reference_image_fetch_failed (${res.status})`);
