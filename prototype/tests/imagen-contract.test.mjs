@@ -38,3 +38,10 @@ test('imagen source builds multi-turn conversational contents from prior prompts
   assert.match(source, /normalizeConversationHistory/);
   assert.match(source, /conversationTurnCount/);
 });
+
+test('imagen source strengthens image-to-image prompts for multi-reference editing', () => {
+  const source = readImagenSource();
+  assert.match(source, /Use the uploaded source image set as a coordinated multi-reference pack\./);
+  assert.match(source, /Reference image 1 .* primary anchor for composition, structure, and subject identity\./);
+  assert.match(source, /supporting reference for style, details, materials, and consistency\./);
+});

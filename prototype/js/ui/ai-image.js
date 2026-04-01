@@ -4,6 +4,7 @@
 
   var STORAGE_SESSION_KEY = 'nk_ai_image_session_id';
   var STORAGE_HISTORY_PREFIX = 'nk_ai_image_history_';
+  var MAX_SOURCE_IMAGES = 4;
   var state = {
     lang: 'ko',
     sessionId: '',
@@ -12,7 +13,7 @@
     prompt: '',
     aspectRatio: '1:1',
     imageSize: '2K',
-    sourceImage: null,
+    sourceImages: [],
     projectLibraryItems: [],
     brandLibraryItems: [],
     contentLibraryItems: [],
@@ -127,6 +128,11 @@
       sourceContentLoading: '콘텐츠 저장소 불러오는 중...',
       sourceContentEmpty: '콘텐츠 저장소에 이미지가 없습니다.',
       fileNone: '선택된 파일 없음',
+      sourceLimitLabel: '최대 4장',
+      sourceLimitReached: '소스 이미지는 최대 4장까지 등록할 수 있습니다.',
+      sourcePrimary: '기준',
+      sourceMovePrev: '앞으로 이동',
+      sourceMoveNext: '뒤로 이동',
       promptPanelTitle: '프롬프트',
       reusePrompt: '프롬프트 복사',
       useAsSource: '소스 사용',
@@ -228,6 +234,11 @@
       sourceContentLoading: 'Loading Content Library...',
       sourceContentEmpty: 'No images found in Content Library.',
       fileNone: 'No file selected',
+      sourceLimitLabel: 'Up to 4 images',
+      sourceLimitReached: 'You can register up to 4 source images.',
+      sourcePrimary: 'Primary',
+      sourceMovePrev: 'Move earlier',
+      sourceMoveNext: 'Move later',
       reusePrompt: 'Copy to prompt',
       useAsSource: 'Use as source',
       regenerateVariation: 'Generate variation'
@@ -482,8 +493,98 @@
     }
   }
 
+  function getSourceImages() {
+    return Array.isArray(state.sourceImages) ? state.sourceImages : [];
+  }
+
+  function primarySourceImage() {
+    var items = getSourceImages();
+    return items.length ? items[0] : null;
+  }
+
   function sourcePreviewUrl() {
-    return state.sourceImage ? String(state.sourceImage.url || '').trim() : '';
+    var primary = primarySourceImage();
+    return primary ? String(primary.url || '').trim() : '';
+  }
+
+  function sourceKindLabel(kind) {
+    if (kind === 'project') return t('sourceKindProject');
+    if (kind === 'brand') return t('sourceKindBrand');
+    if (kind === 'content') return t('sourceKindContent');
+    return t('sourceKindUpload');
+  }
+
+  function makeSourceImage(url, name, kind) {
+    var trimmedUrl = String(url || '').trim();
+    if (!trimmedUrl) return null;
+    return {
+      id: 'src_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      url: trimmedUrl,
+      name: String(name || '').trim() || 'source',
+      kind: String(kind || 'upload').trim() || 'upload'
+    };
+  }
+
+  function hasSelectedSourceUrl(url) {
+    var trimmed = String(url || '').trim();
+    if (!trimmed) return false;
+    return getSourceImages().some(function (item) {
+      return String(item && item.url || '').trim() === trimmed;
+    });
+  }
+
+  function removeSourceImageAt(index) {
+    var items = getSourceImages().slice();
+    if (index < 0 || index >= items.length) return false;
+    items.splice(index, 1);
+    state.sourceImages = items;
+    return true;
+  }
+
+  function moveSourceImage(index, direction) {
+    var items = getSourceImages().slice();
+    var nextIndex = index + direction;
+    if (index < 0 || index >= items.length) return false;
+    if (nextIndex < 0 || nextIndex >= items.length) return false;
+    var moved = items[index];
+    items[index] = items[nextIndex];
+    items[nextIndex] = moved;
+    state.sourceImages = items;
+    return true;
+  }
+
+  function appendSourceImages(entries) {
+    var items = getSourceImages().slice();
+    var incoming = Array.isArray(entries) ? entries : [];
+    var changed = false;
+    var hitLimit = false;
+    incoming.forEach(function (entry) {
+      var normalized = entry && entry.url ? entry : makeSourceImage(entry && entry.url, entry && entry.name, entry && entry.kind);
+      if (!normalized || !normalized.url) return;
+      if (items.some(function (item) { return String(item && item.url || '') === String(normalized.url || ''); })) return;
+      if (items.length >= MAX_SOURCE_IMAGES) {
+        hitLimit = true;
+        return;
+      }
+      items.push(normalized);
+      changed = true;
+    });
+    if (changed) state.sourceImages = items;
+    return { changed: changed, hitLimit: hitLimit };
+  }
+
+  function toggleSourceImage(url, name, kind) {
+    var trimmedUrl = String(url || '').trim();
+    if (!trimmedUrl) return false;
+    var existingIndex = getSourceImages().findIndex(function (item) {
+      return String(item && item.url || '').trim() === trimmedUrl;
+    });
+    if (existingIndex >= 0) {
+      return removeSourceImageAt(existingIndex);
+    }
+    var result = appendSourceImages([makeSourceImage(trimmedUrl, name, kind)]);
+    if (result.hitLimit) alert(t('sourceLimitReached'));
+    return result.changed;
   }
 
   function resolveLibraryItemUrl(item) {
@@ -503,7 +604,7 @@
     return state.projectLibraryItems.map(function (item, index) {
       var thumb = resolveLibraryItemUrl(item);
       return '' +
-        '<button type="button" class="ai-image-source-card" data-action="select-project-source" data-index="' + index + '">' +
+        '<button type="button" class="ai-image-source-card' + (hasSelectedSourceUrl(thumb) ? ' active' : '') + '" data-action="select-project-source" data-index="' + index + '">' +
         '<img src="' + escapeHtml(thumb) + '" alt="" class="ai-image-source-thumb" />' +
         '</button>';
     }).join('');
@@ -513,7 +614,7 @@
     return state.brandLibraryItems.map(function (item, index) {
       var thumb = resolveLibraryItemUrl(item);
       return '' +
-        '<button type="button" class="ai-image-source-card" data-action="select-brand-source" data-index="' + index + '">' +
+        '<button type="button" class="ai-image-source-card' + (hasSelectedSourceUrl(thumb) ? ' active' : '') + '" data-action="select-brand-source" data-index="' + index + '">' +
         '<img src="' + escapeHtml(thumb) + '" alt="" class="ai-image-source-thumb" />' +
         '</button>';
     }).join('');
@@ -523,25 +624,51 @@
     return state.contentLibraryItems.map(function (item, index) {
       var thumb = resolveContentItemUrl(item);
       return '' +
-        '<button type="button" class="ai-image-source-card" data-action="select-content-source" data-index="' + index + '">' +
+        '<button type="button" class="ai-image-source-card' + (hasSelectedSourceUrl(thumb) ? ' active' : '') + '" data-action="select-content-source" data-index="' + index + '">' +
         '<img src="' + escapeHtml(thumb) + '" alt="" class="ai-image-source-thumb" />' +
         '</button>';
     }).join('');
   }
 
-  function buildSourceFieldMarkup(detached, project, sourceDisabled, sourceUrl) {
+  function buildSelectedSourceMarkup() {
+    var items = getSourceImages();
+    if (!items.length) {
+      return '<div class="ai-image-source-empty"><span>' + escapeHtml('0 / ' + String(MAX_SOURCE_IMAGES) + ' · ' + t('sourceLimitLabel')) + '</span></div>';
+    }
+    return '<div class="ai-image-source-selection">' + items.map(function (item, index) {
+      var canMovePrev = index > 0;
+      var canMoveNext = index < items.length - 1;
+      return '' +
+        '<div class="ai-image-source-selection-card' + (index === 0 ? ' is-primary' : '') + '">' +
+          '<button type="button" class="img-modal-trigger ai-image-source-selection-trigger" data-action="toggle-source-modal" data-url="' + escapeHtml(String(item.url || '')) + '">' +
+            '<img src="' + escapeHtml(String(item.url || '')) + '" alt="" />' +
+          '</button>' +
+          '<div class="ai-image-source-selection-meta">' +
+            '<span class="ai-image-source-selection-order">' + escapeHtml(String(index + 1)) + '</span>' +
+            (index === 0 ? '<span class="ai-image-source-selection-primary">' + escapeHtml(t('sourcePrimary')) + '</span>' : '') +
+            '<span class="ai-image-source-selection-kind">' + escapeHtml(sourceKindLabel(item.kind)) + '</span>' +
+          '</div>' +
+          '<div class="ai-image-source-selection-actions">' +
+            '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="move-source-prev" data-index="' + index + '" aria-label="' + escapeHtml(t('sourceMovePrev')) + '" title="' + escapeHtml(t('sourceMovePrev')) + '"' + (canMovePrev ? '' : ' disabled') + '>←</button>' +
+            '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="move-source-next" data-index="' + index + '" aria-label="' + escapeHtml(t('sourceMoveNext')) + '" title="' + escapeHtml(t('sourceMoveNext')) + '"' + (canMoveNext ? '' : ' disabled') + '>→</button>' +
+            '<button type="button" class="btn-secondary compact ai-image-source-action" data-action="remove-source" data-index="' + index + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+          '</div>' +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
+  function buildSourceFieldMarkup(detached, project, sourceDisabled) {
     var sourceLibrary = buildProjectSourceLibraryMarkup();
     var brandSourceLibrary = buildBrandSourceLibraryMarkup();
     var contentSourceLibrary = buildContentSourceLibraryMarkup();
     return '' +
       '<div class="ai-image-field source-field' + (sourceDisabled ? ' is-disabled' : '') + '">' +
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
-        '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + (sourceUrl ? ' has-image' : '') + '">' +
-        (sourceUrl
-          ? '<div class="ai-image-source-preview"><button type="button" class="img-modal-trigger" data-action="toggle-source-modal"><img src="' + escapeHtml(sourceUrl) + '" alt="" /></button><button type="button" class="source-remove-fab" data-action="clear-source" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button></div>'
-          : '') +
+        '<div class="ai-image-source-box' + (sourceDisabled ? ' is-disabled' : '') + (getSourceImages().length ? ' has-image' : '') + '">' +
+        '<div class="ai-image-source-box-head"><span class="ai-image-source-limit">' + escapeHtml(String(getSourceImages().length) + ' / ' + String(MAX_SOURCE_IMAGES) + ' · ' + t('sourceLimitLabel')) + '</span></div>' +
+        buildSelectedSourceMarkup() +
         '<button type="button" class="btn-secondary compact source-upload-fab" data-action="open-upload"' + (sourceDisabled ? ' disabled' : '') + '>+</button>' +
-        '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*"' + (sourceDisabled ? ' disabled' : '') + ' />' +
+        '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" multiple' + (sourceDisabled ? ' disabled' : '') + ' />' +
         '</div>' +
         ((!detached && state.brandLibraryItems.length)
           ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact collapsible-body">' + brandSourceLibrary + '</div>') + '</div>'
@@ -570,7 +697,7 @@
         '</div>';
   }
 
-  function buildPromptPanelMarkup(detached, project, sourceDisabled, sourceUrl) {
+  function buildPromptPanelMarkup(detached, project, sourceDisabled) {
     return '' +
       '<section class="card ai-image-panel ai-image-panel-left">' +
       '<div class="ai-image-preview-head">' +
@@ -581,7 +708,7 @@
       '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
       '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
       '</div>' +
-      buildSourceFieldMarkup(detached, project, sourceDisabled, sourceUrl) +
+      buildSourceFieldMarkup(detached, project, sourceDisabled) +
       '<div class="ai-image-field">' +
       '<label for="ai-image-prompt">' + escapeHtml(t('promptLabel')) + '</label>' +
       '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
@@ -771,7 +898,7 @@
 
     var leftPanel = root.querySelector('.ai-image-panel-left');
     if (leftPanel) {
-      leftPanel.outerHTML = buildPromptPanelMarkup(detached, project, state.mode !== 'image-to-image', sourcePreviewUrl());
+      leftPanel.outerHTML = buildPromptPanelMarkup(detached, project, state.mode !== 'image-to-image');
       hydratePromptControls();
     }
 
@@ -862,17 +989,9 @@
     var brand = state.currentBrand;
     var detached = !(project && project.id);
     var selectedResult = currentResult();
-    var sourceUrl = sourcePreviewUrl();
     var sourceDisabled = state.mode !== 'image-to-image';
-    var sourceKind = '';
     var brandCharacterList = brandCharacterOptions();
     var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
-    if (state.sourceImage) {
-      if (state.sourceImage.kind === 'project') sourceKind = t('sourceKindProject');
-      else if (state.sourceImage.kind === 'brand') sourceKind = t('sourceKindBrand');
-        else if (state.sourceImage.kind === 'content') sourceKind = t('sourceKindContent');
-      else sourceKind = t('sourceKindUpload');
-    }
     var resultCards = state.results.map(function (item) {
       var active = String(item.id || '') === String(state.currentResultId || '');
       return '' +
@@ -900,7 +1019,7 @@
       '</div>' +
       '</div>' +
       '<div class="ai-image-workspace">' +
-      buildPromptPanelMarkup(detached, project, sourceDisabled, sourceUrl) +
+      buildPromptPanelMarkup(detached, project, sourceDisabled) +
       '<section class="card ai-image-panel ai-image-panel-preview">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
@@ -957,14 +1076,6 @@
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
       '</section>';
 
-    // 보정: 이미지가 있을 때는 has-image 클래스 강제 부여(레이아웃 일관성)
-    try {
-      var boxEl = root.querySelector('.ai-image-source-box');
-      if (boxEl && sourceUrl && !boxEl.classList.contains('has-image')) {
-        boxEl.classList.add('has-image');
-      }
-    } catch (_) {}
-
     hydratePromptControls();
   }
 
@@ -972,19 +1083,34 @@
     var fileInput = document.getElementById('ai-image-source-file');
     if (fileInput) {
       fileInput.onchange = function () {
-        var file = fileInput.files && fileInput.files[0];
-        if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function () {
-          state.sourceImage = {
-            url: String(reader.result || ''),
-            name: file.name || 'upload',
-            kind: 'upload'
-          };
-          state.selectedFileName = file.name || '';
+        var files = Array.prototype.slice.call(fileInput.files || []);
+        if (!files.length) return;
+        var availableSlots = Math.max(0, MAX_SOURCE_IMAGES - getSourceImages().length);
+        if (!availableSlots) {
+          fileInput.value = '';
+          alert(t('sourceLimitReached'));
+          return;
+        }
+        var pickedFiles = files.slice(0, availableSlots);
+        if (files.length > pickedFiles.length) {
+          alert(t('sourceLimitReached'));
+        }
+        Promise.all(pickedFiles.map(function (file) {
+          return new Promise(function (resolve) {
+            var reader = new FileReader();
+            reader.onload = function () {
+              resolve(makeSourceImage(String(reader.result || ''), file.name || 'upload', 'upload'));
+            };
+            reader.onerror = function () { resolve(null); };
+            reader.readAsDataURL(file);
+          });
+        })).then(function (entries) {
+          var result = appendSourceImages(entries.filter(Boolean));
+          if (result.hitLimit) alert(t('sourceLimitReached'));
+          state.selectedFileName = pickedFiles.map(function (file) { return file.name || 'upload'; }).join(', ');
           updateSourceUI();
-        };
-        reader.readAsDataURL(file);
+        });
+        fileInput.value = '';
       };
     }
   }
@@ -995,11 +1121,10 @@
       if (!root) return;
       var project = state.currentProject;
       var detached = !(project && project.id);
-      var sourceUrl = sourcePreviewUrl();
       var sourceDisabled = state.mode !== 'image-to-image';
       var sourceField = root.querySelector('.ai-image-field.source-field');
       if (!sourceField) return;
-      sourceField.outerHTML = buildSourceFieldMarkup(detached, project, sourceDisabled, sourceUrl);
+      sourceField.outerHTML = buildSourceFieldMarkup(detached, project, sourceDisabled);
       bindSourceFileInput();
     } catch (_) {}
   }
@@ -1009,59 +1134,17 @@
     try {
       var root = document.getElementById('ai-image-root');
       if (!root) return;
-      var sourceField = root.querySelector('.ai-image-field.source-field');
-      var boxEl = root.querySelector('.ai-image-source-box');
       var tabs = root.querySelectorAll('.ai-image-mode-tabs .btn-secondary');
-      var sourceUrl = sourcePreviewUrl();
-      var sourceDisabled = state.mode !== 'image-to-image';
-      // tabs active state
-      Array.prototype.forEach.call(tabs || [], function(btn){
+      Array.prototype.forEach.call(tabs || [], function (btn) {
         var m = String(btn.getAttribute('data-mode') || '');
-        if (m && m === state.mode) btn.classList.add('active'); else btn.classList.remove('active');
+        if (m && m === state.mode) btn.classList.add('active');
+        else btn.classList.remove('active');
       });
-      // field disabled state
-      if (sourceField) {
-        sourceField.classList.toggle('is-disabled', sourceDisabled);
+      var promptEl = document.getElementById('ai-image-prompt');
+      if (promptEl) {
+        promptEl.setAttribute('placeholder', state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText'));
       }
-      if (boxEl) {
-        boxEl.classList.toggle('is-disabled', sourceDisabled);
-        boxEl.classList.toggle('has-image', !!sourceUrl);
-        // preview area
-        var preview = boxEl.querySelector('.ai-image-source-preview');
-        if (sourceUrl) {
-          if (!preview) {
-            preview = document.createElement('div');
-            preview.className = 'ai-image-source-preview';
-            boxEl.insertBefore(preview, boxEl.firstChild);
-          }
-          // build inner controls
-          preview.innerHTML = '';
-          var btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'img-modal-trigger';
-          btn.setAttribute('data-action', 'toggle-source-modal');
-          var img = document.createElement('img');
-          img.src = String(sourceUrl);
-          img.alt = '';
-          btn.appendChild(img);
-          var del = document.createElement('button');
-          del.type = 'button';
-          del.className = 'source-remove-fab';
-          del.setAttribute('data-action', 'clear-source');
-          del.setAttribute('aria-label', '삭제');
-          del.setAttribute('title', '삭제');
-          del.textContent = '×';
-          preview.appendChild(btn);
-          preview.appendChild(del);
-        } else {
-          if (preview) preview.parentNode && preview.parentNode.removeChild(preview);
-        }
-        // upload button disabled state (표시는 CSS로 항상 노출)
-        var plus = boxEl.querySelector('.source-upload-fab');
-        if (plus) {
-          if (sourceDisabled) plus.setAttribute('disabled', ''); else plus.removeAttribute('disabled');
-        }
-      }
+      updateSourceFieldUI();
     } catch (_) {}
   }
 
@@ -1263,7 +1346,7 @@
       alert(t('promptRequired'));
       return;
     }
-    if (state.mode === 'image-to-image' && !state.sourceImage) {
+    if (state.mode === 'image-to-image' && !getSourceImages().length) {
       alert(t('sourceRequired'));
       return;
     }
@@ -1276,13 +1359,15 @@
       generationMode: state.mode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
       imageSize: state.imageSize,
-      referenceImages: state.mode === 'image-to-image' && state.sourceImage
-        ? [{
-          referenceId: 1,
-          imageDataUrl: state.sourceImage.url,
-          subjectDescription: 'source image',
-          subjectType: 'SUBJECT_TYPE_DEFAULT'
-        }]
+      referenceImages: state.mode === 'image-to-image' && getSourceImages().length
+        ? getSourceImages().map(function (item, index) {
+          return {
+            referenceId: index + 1,
+            imageDataUrl: item.url,
+            subjectDescription: sourceKindLabel(item.kind) + ' reference ' + String(index + 1),
+            subjectType: 'SUBJECT_TYPE_DEFAULT'
+          };
+        })
         : [],
       conversationHistory: buildConversationHistory(3)
     };
@@ -1343,7 +1428,9 @@
           state.mode !== 'image-to-image' &&
           (
             action === 'open-upload' ||
-            action === 'clear-source' ||
+            action === 'remove-source' ||
+            action === 'move-source-prev' ||
+            action === 'move-source-next' ||
             action === 'load-project-library' ||
             action === 'load-brand-library' ||
             action === 'load-content-library' ||
@@ -1383,8 +1470,21 @@
           if (input) input.click();
           return;
         }
-        if (action === 'clear-source') {
-          state.sourceImage = null;
+        if (action === 'remove-source') {
+          var removeIndex = Number(btn.getAttribute('data-index') || -1);
+          removeSourceImageAt(removeIndex);
+          updateSourceUI();
+          return;
+        }
+        if (action === 'move-source-prev') {
+          var prevIndex = Number(btn.getAttribute('data-index') || -1);
+          moveSourceImage(prevIndex, -1);
+          updateSourceUI();
+          return;
+        }
+        if (action === 'move-source-next') {
+          var nextIndex = Number(btn.getAttribute('data-index') || -1);
+          moveSourceImage(nextIndex, 1);
           updateSourceUI();
           return;
         }
@@ -1405,16 +1505,7 @@
           var item = idx >= 0 ? state.projectLibraryItems[idx] : null;
           if (!item) return;
           var nextUrl = resolveLibraryItemUrl(item);
-          if (state.sourceImage && String(state.sourceImage.url || '') === String(nextUrl || '')) {
-            state.sourceImage = null;
-            updateSourceUI();
-            return;
-          }
-          state.sourceImage = {
-            url: nextUrl,
-            name: String(item.name || '').trim(),
-            kind: 'project'
-          };
+          toggleSourceImage(nextUrl, String(item.name || '').trim(), 'project');
           updateSourceUI();
           return;
         }
@@ -1423,16 +1514,7 @@
           var brandItem = brandIdx >= 0 ? state.brandLibraryItems[brandIdx] : null;
           if (!brandItem) return;
           var nextBrandUrl = resolveLibraryItemUrl(brandItem);
-          if (state.sourceImage && String(state.sourceImage.url || '') === String(nextBrandUrl || '')) {
-            state.sourceImage = null;
-            updateSourceUI();
-            return;
-          }
-          state.sourceImage = {
-            url: nextBrandUrl,
-            name: String(brandItem.name || '').trim(),
-            kind: 'brand'
-          };
+          toggleSourceImage(nextBrandUrl, String(brandItem.name || '').trim(), 'brand');
           updateSourceUI();
           return;
         }
@@ -1441,16 +1523,7 @@
           var cItem = cIdx >= 0 ? state.contentLibraryItems[cIdx] : null;
           if (!cItem) return;
           var nextContentUrl = resolveContentItemUrl(cItem);
-          if (state.sourceImage && String(state.sourceImage.url || '') === String(nextContentUrl || '')) {
-            state.sourceImage = null;
-            updateSourceUI();
-            return;
-          }
-          state.sourceImage = {
-            url: nextContentUrl,
-            name: String(cItem.title || '').trim(),
-            kind: 'content'
-          };
+          toggleSourceImage(nextContentUrl, String(cItem.title || '').trim(), 'content');
           updateSourceUI();
           return;
         }
@@ -1507,16 +1580,17 @@
             state.imageModalUrl = '';
             return;
           }
-          if (state.sourceImage && state.sourceImage.url) {
+          var sourceModalUrl = String(btn.getAttribute('data-url') || sourcePreviewUrl()).trim();
+          if (sourceModalUrl) {
             var el = document.createElement('div');
             el.className = 'img-modal';
             el.setAttribute('data-action', 'toggle-source-modal');
             var img = document.createElement('img');
-            img.src = String(state.sourceImage.url || '');
+            img.src = sourceModalUrl;
             img.alt = '';
             el.appendChild(img);
             root.appendChild(el);
-            state.imageModalUrl = String(state.sourceImage.url || '');
+            state.imageModalUrl = sourceModalUrl;
           }
           return;
         }
@@ -1577,11 +1651,10 @@
           });
           if (r2) {
             state.mode = 'image-to-image';
-            state.sourceImage = {
-              url: resolveResultUrl(r2),
-              name: String(r2.objectName || r2.id || 'result'),
-              kind: 'upload'
-            };
+            var addResult = appendSourceImages([makeSourceImage(resolveResultUrl(r2), String(r2.objectName || r2.id || 'result'), 'upload')]);
+            if (addResult.hitLimit) {
+              alert(t('sourceLimitReached'));
+            }
             updateSourceUI();
           }
           return;
@@ -1592,11 +1665,12 @@
           });
           if (r3) {
             state.mode = 'image-to-image';
-            state.sourceImage = {
-              url: resolveResultUrl(r3),
-              name: String(r3.objectName || r3.id || 'result'),
-              kind: 'upload'
-            };
+            var ensureResult = appendSourceImages([makeSourceImage(resolveResultUrl(r3), String(r3.objectName || r3.id || 'result'), 'upload')]);
+            if (ensureResult.hitLimit) {
+              alert(t('sourceLimitReached'));
+              updateSourceUI();
+              return;
+            }
             generateImage();
           }
           return;

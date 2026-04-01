@@ -278,11 +278,29 @@ function buildGeminiImagePrompt(
     return [base].concat(conversationLines).filter(Boolean).join("\n");
   }
   if (generationMode === "image-to-image") {
+    const referenceGuideLines = referenceImages.map((item, index) => {
+      const label = String(item.subjectDescription || `reference image ${index + 1}`).trim() || `reference image ${index + 1}`;
+      if (index === 0) {
+        return `Reference image 1 (${label}) is the primary anchor for composition, structure, and subject identity.`;
+      }
+      return `Reference image ${index + 1} (${label}) is a supporting reference for style, details, materials, and consistency.`;
+    });
     return [
       base,
       ...conversationLines,
-      "Use the uploaded source image as the base reference.",
-      "Preserve the important structure, composition, and recognizable subject identity unless the prompt explicitly requests changes.",
+      referenceImages.length > 1
+        ? "Use the uploaded source image set as a coordinated multi-reference pack."
+        : "Use the uploaded source image as the base reference.",
+      referenceImages.length > 1
+        ? "Follow the prompt first, then reference image 1, then the remaining reference images."
+        : "Preserve the important structure, composition, and recognizable subject identity unless the prompt explicitly requests changes.",
+      referenceImages.length > 1
+        ? "Treat reference image 1 as the primary composition and structure anchor. Use the remaining reference images to reinforce styling, design details, materials, lighting cues, and subject consistency only when they do not conflict with the prompt."
+        : "",
+      ...referenceGuideLines,
+      referenceImages.length > 1
+        ? "If the references show the same subject from different angles or crops, merge them into one consistent result."
+        : "",
       "Apply only the requested edits or stylistic transformations."
     ].filter(Boolean).join("\n");
   }

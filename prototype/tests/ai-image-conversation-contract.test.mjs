@@ -24,3 +24,14 @@ test('ai-image ui sends conversation history only through the dedicated generati
   assert.match(source, /generationStyle: normalizeGenerationStyle\(state\.generationStyle\)/);
   assert.match(source, /conversationHistory: buildConversationHistory\(3\)/);
 });
+
+test('ai-image ui supports capped multi-source image-to-image references with ordering controls', () => {
+  const source = readAiImageSource();
+  assert.match(source, /var MAX_SOURCE_IMAGES = 4;/);
+  assert.match(source, /sourceImages: \[\]/);
+  assert.match(source, /id="ai-image-source-file" class="hidden" accept="image\/\*" multiple/);
+  assert.match(source, /referenceImages: state\.mode === 'image-to-image' && getSourceImages\(\)\.length/);
+  assert.match(source, /data-action="move-source-prev"/);
+  assert.match(source, /data-action="move-source-next"/);
+  assert.match(source, /data-action="remove-source"/);
+});
