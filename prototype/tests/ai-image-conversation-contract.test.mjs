@@ -60,6 +60,11 @@ test('ai-image preview keeps project and brand save controls as icon actions in 
   assert.match(source, /data-action="save-result-brand"[\s\S]*data-action="save-result-project"/);
 });
 
+test('ai-image preview uses compact 2x2 action grid when detached project controls are absent', () => {
+  const source = readAiImageSource();
+  assert.match(source, /ai-image-inline-actions' \+ \(detached \? ' is-compact-grid' : ''\)/);
+});
+
 test('ai-image runtime avoids full rerender loops after initial mount', () => {
   const source = readAiImageSource();
   const renderCallCount = (source.match(/\brender\(\);/g) || []).length;

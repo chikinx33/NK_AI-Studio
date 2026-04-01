@@ -841,6 +841,13 @@ body.layout-fixed.page-shell-image .content {
   justify-self: start !important;
 }
 
+.ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions.is-compact-grid .ai-image-inline-actions-left {
+  grid-template-columns: repeat(2, var(--ai-preview-action-size));
+  width: calc((var(--ai-preview-action-size) * 2) + var(--ai-preview-action-gap)) !important;
+  min-width: calc((var(--ai-preview-action-size) * 2) + var(--ai-preview-action-gap)) !important;
+  max-width: calc((var(--ai-preview-action-size) * 2) + var(--ai-preview-action-gap)) !important;
+}
+
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-primary,
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-left .btn-secondary,
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions-bottom .btn-primary,
