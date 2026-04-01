@@ -31,8 +31,6 @@
     sourceSectionCollapsed: { brand: true, content: true, project: true },
     imageModalUrl: '',
     cameraControls: createDefaultCameraControls(),
-    cameraModalOpen: false,
-    cameraModalDraft: createDefaultCameraControls(),
     deletedObjectNames: []
   };
 
@@ -431,9 +429,8 @@
     return next;
   }
 
-  function applyCameraPresetToDraft(preset) {
-    var next = cameraPresetDefaults(String(preset || 'auto'));
-    state.cameraModalDraft = cloneCameraControls(next);
+  function applyCameraPreset(preset) {
+    state.cameraControls = cloneCameraControls(cameraPresetDefaults(String(preset || 'auto')));
   }
 
   function activeCameraControls() {
@@ -1067,72 +1064,86 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5A2.5 2.5 0 0 1 7 7h2.2l1.3-1.7h2.9L14.8 7H17a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 18H7a2.5 2.5 0 0 1-2.5-2.5v-6Z"></path><circle cx="12" cy="12.5" r="3.3"></circle><path d="M7.5 9.5h.01"></path></svg>';
   }
 
-  function buildCameraModalMarkup() {
-    if (!state.cameraModalOpen) return '';
-    var controls = normalizeCameraControls(state.cameraModalDraft);
+  function buildCameraPromptInlinePreview(raw) {
+    var controls = normalizeCameraControls(raw);
+    if (!controls.enabled || isNeutralCameraControls(controls)) return t('cameraSummaryOff');
+    if (state.lang === 'en') {
+      return [
+        'Use',
+        cameraPresetLabel(controls.preset) + ',',
+        controls.pan ? ('pan ' + (controls.pan > 0 ? 'right ' : 'left ') + Math.abs(controls.pan) + 'deg,') : 'centered pan,',
+        controls.tilt ? ('tilt ' + (controls.tilt > 0 ? 'up ' : 'down ') + Math.abs(controls.tilt) + 'deg,') : 'eye-level tilt,',
+        distanceLabel(controls.distance) + '.'
+      ].join(' ');
+    }
+    return [
+      cameraPresetLabel(controls.preset) + ',',
+      controls.pan ? ('pan ' + (controls.pan > 0 ? '우 ' : '좌 ') + Math.abs(controls.pan) + '도,') : 'pan 중앙,',
+      controls.tilt ? ('tilt ' + (controls.tilt > 0 ? '위 ' : '아래 ') + Math.abs(controls.tilt) + '도,') : 'tilt 아이레벨,',
+      distanceLabel(controls.distance)
+    ].join(' ');
+  }
+
+  function buildCameraControlCardMarkup() {
+    var controls = normalizeCameraControls(state.cameraControls);
     var previewX = 50 + Math.round((controls.pan / 90) * 34);
     var previewY = 50 + Math.round((controls.tilt / 60) * 26);
     var orbitScale = 0.92 + ((100 - controls.distance) / 100) * 0.24;
-    var promptPreview = buildCameraPromptBlock(Object.assign({}, controls, {
+    var promptPreview = buildCameraPromptInlinePreview(Object.assign({}, controls, {
       enabled: !isNeutralCameraControls(controls)
     }));
     var presetOptions = ['auto', 'front', 'left45', 'right45', 'topdown', 'lowangle', 'closeup'].map(function (preset) {
       return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
     }).join('');
     return '' +
-      '<div class="ai-image-camera-modal-backdrop" data-action="close-camera-modal">' +
-        '<div class="ai-image-camera-modal" role="dialog" aria-modal="true" aria-label="' + escapeHtml(t('cameraModalTitle')) + '">' +
-          '<div class="ai-image-camera-modal-head">' +
+        '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + '">' +
+          '<div class="ai-image-camera-card-head">' +
             '<div>' +
               '<h3>' + escapeHtml(t('cameraModalTitle')) + '</h3>' +
               '<p>' + escapeHtml(t('cameraModalDesc')) + '</p>' +
             '</div>' +
-            '<button type="button" class="btn-secondary compact ai-image-camera-close" data-action="close-camera-modal" aria-label="' + escapeHtml(t('cameraClose')) + '" title="' + escapeHtml(t('cameraClose')) + '">×</button>' +
+            '<button type="button" class="btn-secondary compact ai-image-camera-reset" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>' +
           '</div>' +
-          '<div class="ai-image-camera-modal-body">' +
-            '<div class="ai-image-camera-preview-card">' +
+          '<div class="ai-image-camera-card-body">' +
+            '<div class="ai-image-camera-preview-card is-inline">' +
               '<div class="ai-image-camera-preview-label">' + escapeHtml(t('cameraPreviewLabel')) + '</div>' +
-              '<div class="ai-image-camera-orbit" style="--camera-x:' + escapeHtml(String(previewX)) + '%;--camera-y:' + escapeHtml(String(previewY)) + '%;--orbit-scale:' + escapeHtml(String(orbitScale)) + ';">' +
+              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(previewX)) + '%;--camera-y:' + escapeHtml(String(previewY)) + '%;--orbit-scale:' + escapeHtml(String(orbitScale)) + ';">' +
                 '<div class="ai-image-camera-orbit-ring is-horizontal"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-vertical"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-depth"></div>' +
                 '<div class="ai-image-camera-subject-core"></div>' +
                 '<div class="ai-image-camera-device">' + cameraFabIconSvg() + '</div>' +
               '</div>' +
+              '<p id="ai-image-camera-summary" class="ai-image-camera-summary-text">' + escapeHtml(cameraSummary(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }))) + '</p>' +
             '</div>' +
-            '<div class="ai-image-camera-controls">' +
-              '<div class="ai-image-camera-section">' +
+            '<div class="ai-image-camera-controls is-inline">' +
+              '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-section-title">' + escapeHtml(t('cameraPresetLabel')) + '</div>' +
-                '<div class="ai-image-camera-preset-grid">' + presetOptions + '</div>' +
+                '<div class="ai-image-camera-preset-grid is-inline">' + presetOptions + '</div>' +
               '</div>' +
-              '<div class="ai-image-camera-section">' +
+              '<div class="ai-image-camera-inline-sliders">' +
+              '<div class="ai-image-camera-section is-inline">' +
                 '<label class="ai-image-camera-slider-row" for="ai-image-camera-pan"><span>' + escapeHtml(t('cameraPan')) + '</span><strong id="ai-image-camera-pan-value">' + escapeHtml(String(controls.pan)) + '</strong></label>' +
                 '<input id="ai-image-camera-pan" type="range" min="-90" max="90" step="1" value="' + escapeHtml(String(controls.pan)) + '" />' +
               '</div>' +
-              '<div class="ai-image-camera-section">' +
+              '<div class="ai-image-camera-section is-inline">' +
                 '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span><strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong></label>' +
                 '<input id="ai-image-camera-tilt" type="range" min="-60" max="60" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
               '</div>' +
-              '<div class="ai-image-camera-section">' +
+              '<div class="ai-image-camera-section is-inline">' +
                 '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span><strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong></label>' +
                 '<input id="ai-image-camera-distance" type="range" min="0" max="100" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
               '</div>' +
-              '<div class="ai-image-camera-section">' +
-                '<div class="ai-image-camera-section-title">' + escapeHtml(t('cameraSummaryLabel')) + '</div>' +
-                '<p id="ai-image-camera-summary" class="ai-image-camera-summary-text">' + escapeHtml(cameraSummary(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }))) + '</p>' +
               '</div>' +
-              '<div class="ai-image-camera-section">' +
-                '<div class="ai-image-camera-section-title">' + escapeHtml(t('cameraPromptPreviewLabel')) + '</div>' +
-                '<pre id="ai-image-camera-prompt-preview" class="ai-image-camera-prompt-preview">' + escapeHtml(promptPreview) + '</pre>' +
+              '<div class="ai-image-camera-inline-meta">' +
+                '<div class="ai-image-camera-inline-meta-item">' +
+                  '<div class="ai-image-camera-section-title">' + escapeHtml(t('cameraPromptPreviewLabel')) + '</div>' +
+                  '<p id="ai-image-camera-prompt-preview" class="ai-image-camera-prompt-preview is-inline">' + escapeHtml(promptPreview) + '</p>' +
+                '</div>' +
               '</div>' +
             '</div>' +
           '</div>' +
-          '<div class="ai-image-camera-modal-foot">' +
-            '<button type="button" class="btn-secondary" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>' +
-            '<button type="button" class="btn-primary" data-action="apply-camera-controls">' + escapeHtml(t('cameraApply')) + '</button>' +
-          '</div>' +
-        '</div>' +
-      '</div>';
+        '</div>';
   }
 
   function buildSourceFieldMarkup(detached, project, sourceDisabled) {
@@ -1180,7 +1191,6 @@
   }
 
   function buildPromptPanelMarkup(detached, project, sourceDisabled) {
-    var cameraSummaryText = cameraSummary(state.cameraControls);
     return '' +
       '<section class="card ai-image-panel ai-image-panel-left">' +
       '<div class="ai-image-preview-head">' +
@@ -1221,10 +1231,7 @@
             '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="ai-image-camera-quick-summary' + ((state.cameraControls && state.cameraControls.enabled) ? ' is-active' : '') + '">' +
-          '<div class="ai-image-camera-quick-summary-label">' + escapeHtml(t('cameraButton')) + '</div>' +
-          '<p>' + escapeHtml(cameraSummaryText) + '</p>' +
-        '</div>' +
+        buildCameraControlCardMarkup() +
         '<div class="ai-image-ratio-row">' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
@@ -1242,7 +1249,6 @@
     var selectedCameraControls = selectedResult && selectedResult.cameraControls
       ? normalizeCameraControls(selectedResult.cameraControls)
       : normalizeCameraControls(state.cameraControls);
-    var cameraEnabled = !!(selectedCameraControls.enabled && !isNeutralCameraControls(selectedCameraControls));
     return '' +
       '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(previewPanelSignature(selectedResult, detached)) + '">' +
       '<div class="ai-image-preview-head">' +
@@ -1255,7 +1261,6 @@
           '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
-          '<button type="button" class="ai-image-camera-fab' + (cameraEnabled ? ' is-active' : '') + '" data-action="open-camera-modal" aria-label="' + escapeHtml(t('cameraButton')) + '" title="' + escapeHtml(t('cameraButton')) + '">' + cameraFabIconSvg() + '</button>' +
           '</div>' +
           '<div class="ai-image-preview-foot">' +
               '<div class="ai-image-inline-actions' + (detached ? ' is-compact-grid' : '') + '">' +
@@ -1507,11 +1512,6 @@
         downloadBtn.setAttribute('aria-label', t('download'));
         downloadBtn.setAttribute('title', t('download'));
       }
-      var cameraBtn = root.querySelector('[data-action="open-camera-modal"]');
-      if (cameraBtn) {
-        cameraBtn.setAttribute('aria-label', t('cameraButton'));
-        cameraBtn.setAttribute('title', t('cameraButton'));
-      }
       var saveProjectBtn = root.querySelector('[data-action="save-result-project"]');
       if (saveProjectBtn) {
         saveProjectBtn.setAttribute('aria-label', t('saveProject'));
@@ -1563,7 +1563,6 @@
       var savedChip = cardEl.querySelector('.ai-image-saved-chip');
       if (savedChip) savedChip.textContent = t('resultSavedTag');
     });
-    if (state.cameraModalOpen) renderCameraModalUi();
   }
 
   function setGlobalLoading(show, message) {
@@ -1617,7 +1616,6 @@
       buildHistoryPanelMarkup() +
       '</div>' +
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
-      buildCameraModalMarkup() +
       '</section>';
 
     if (preservePromptPanel) {
@@ -1887,50 +1885,22 @@
     } catch (_) {}
   }
 
-  function renderCameraModalUi() {
-    var root = document.getElementById('ai-image-root');
-    if (!root) return;
-    var shell = root.querySelector('.ai-image-shell');
-    if (!shell) return;
-    var existing = shell.querySelector('.ai-image-camera-modal-backdrop');
-    if (!state.cameraModalOpen) {
-      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
-      return;
-    }
-    var markup = buildCameraModalMarkup();
-    if (!existing) {
-      shell.insertAdjacentHTML('beforeend', markup);
-      return;
-    }
-    existing.outerHTML = markup;
-  }
-
-  function openCameraModal() {
-    state.cameraModalDraft = cloneCameraControls(activeCameraControls());
-    state.cameraModalOpen = true;
-    renderCameraModalUi();
-  }
-
-  function closeCameraModal() {
-    state.cameraModalOpen = false;
-    renderCameraModalUi();
-  }
-
-  function updateCameraModalDraftFromInputs() {
+  function updateInlineCameraControlsFromInputs() {
     var panEl = document.getElementById('ai-image-camera-pan');
     var tiltEl = document.getElementById('ai-image-camera-tilt');
     var distEl = document.getElementById('ai-image-camera-distance');
-    var current = normalizeCameraControls(state.cameraModalDraft);
+    var current = normalizeCameraControls(state.cameraControls);
     current.pan = clampNumber(panEl && panEl.value, -90, 90, current.pan);
     current.tilt = clampNumber(tiltEl && tiltEl.value, -60, 60, current.tilt);
     current.distance = clampNumber(distEl && distEl.value, 0, 100, current.distance);
     current.enabled = !isNeutralCameraControls(current);
-    state.cameraModalDraft = current;
+    state.cameraControls = current;
+    var result = currentResult();
+    if (result) result.cameraControls = normalizeCameraControls(current);
   }
 
-  function syncCameraModalLiveUi() {
-    if (!state.cameraModalOpen) return;
-    var controls = normalizeCameraControls(state.cameraModalDraft);
+  function syncInlineCameraUi() {
+    var controls = normalizeCameraControls(state.cameraControls);
     var summaryTarget = document.getElementById('ai-image-camera-summary');
     var promptPreview = document.getElementById('ai-image-camera-prompt-preview');
     var panValue = document.getElementById('ai-image-camera-pan-value');
@@ -1941,7 +1911,7 @@
     if (tiltValue) tiltValue.textContent = String(controls.tilt);
     if (distValue) distValue.textContent = String(controls.distance);
     if (summaryTarget) summaryTarget.textContent = cameraSummary(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
-    if (promptPreview) promptPreview.textContent = buildCameraPromptBlock(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
+    if (promptPreview) promptPreview.textContent = buildCameraPromptInlinePreview(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
     if (orbit) {
       orbit.style.setProperty('--camera-x', String(50 + Math.round((controls.pan / 90) * 34)) + '%');
       orbit.style.setProperty('--camera-y', String(50 + Math.round((controls.tilt / 60) * 26)) + '%');
@@ -1949,17 +1919,9 @@
     }
   }
 
-  function applyCameraControlsToState() {
-    var finalControls = normalizeCameraControls(Object.assign({}, state.cameraModalDraft, {
-      enabled: !isNeutralCameraControls(state.cameraModalDraft)
-    }));
-    state.cameraControls = finalControls;
-    var result = currentResult();
-    if (result) result.cameraControls = finalControls;
+  function persistInlineCameraControls() {
     persistHistory();
-    updatePromptPanelUI();
     updatePreviewPanelUI();
-    closeCameraModal();
   }
 
   function updateHistoryPanelUI() {
@@ -2321,9 +2283,6 @@
     if (root && !root.dataset.bound) {
       root.dataset.bound = '1';
       root.addEventListener('click', function (evt) {
-        if (evt.target && evt.target.closest && evt.target.closest('.ai-image-camera-modal') && !evt.target.closest('[data-action]')) {
-          return;
-        }
         var btn = evt.target.closest('[data-action]');
         if (!btn) return;
         try {
@@ -2434,8 +2393,9 @@
         if (action === 'select-result') {
           state.currentResultId = String(btn.getAttribute('data-id') || '');
           var selected = currentResult();
-          if (selected && selected.cameraControls) state.cameraControls = normalizeCameraControls(selected.cameraControls);
-          closeCameraModal();
+          state.cameraControls = selected && selected.cameraControls
+            ? normalizeCameraControls(selected.cameraControls)
+            : createDefaultCameraControls();
           updateResultSelectionUI();
           updatePromptPanelUI();
           return;
@@ -2472,27 +2432,20 @@
           }
           return;
         }
-        if (action === 'open-camera-modal') {
-          openCameraModal();
-          return;
-        }
-        if (action === 'close-camera-modal') {
-          closeCameraModal();
-          return;
-        }
         if (action === 'set-camera-preset') {
-          applyCameraPresetToDraft(btn.getAttribute('data-preset') || 'auto');
-          renderCameraModalUi();
+          applyCameraPreset(btn.getAttribute('data-preset') || 'auto');
+          var resultForPreset = currentResult();
+          if (resultForPreset) resultForPreset.cameraControls = normalizeCameraControls(state.cameraControls);
+          persistInlineCameraControls();
+          updatePromptPanelUI();
           return;
         }
         if (action === 'reset-camera-controls') {
-          state.cameraModalDraft = createDefaultCameraControls();
-          renderCameraModalUi();
-          return;
-        }
-        if (action === 'apply-camera-controls') {
-          updateCameraModalDraftFromInputs();
-          applyCameraControlsToState();
+          state.cameraControls = createDefaultCameraControls();
+          var resultForReset = currentResult();
+          if (resultForReset) resultForReset.cameraControls = createDefaultCameraControls();
+          persistInlineCameraControls();
+          updatePromptPanelUI();
           return;
         }
         if (action === 'set-aspect') {
@@ -2691,14 +2644,9 @@
         target.id === 'ai-image-camera-tilt' ||
         target.id === 'ai-image-camera-distance'
       ) {
-        updateCameraModalDraftFromInputs();
-        syncCameraModalLiveUi();
-      }
-    });
-
-    document.addEventListener('keydown', function (evt) {
-      if (evt && evt.key === 'Escape' && state.cameraModalOpen) {
-        closeCameraModal();
+        updateInlineCameraControlsFromInputs();
+        syncInlineCameraUi();
+        persistInlineCameraControls();
       }
     });
   }
