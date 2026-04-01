@@ -216,18 +216,23 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-label-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
 }
 
 .ai-image-label-row > label {
+  grid-column: 2;
+  justify-self: center;
+  text-align: center;
   font-size: 12px;
   font-weight: 600;
 }
 
 .ai-image-label-count {
+  grid-column: 3;
+  justify-self: end;
   font-size: 11px;
   color: var(--muted);
 }
@@ -237,10 +242,15 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-source-label-actions {
+  grid-column: 3;
+  justify-self: end;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
+}
+
+.ai-image-field:not(.source-field) {
+  margin-top: 8px;
 }
 
 .ai-image-source-box {
