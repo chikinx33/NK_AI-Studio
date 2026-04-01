@@ -17,8 +17,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const allowed = new Set(["16:9", "9:16", "1:1"]);
     const aspectFinal = allowed.has(aspectIncoming) ? aspectIncoming : "16:9";
     const incomingReferenceImages = Array.isArray(body?.referenceImages) ? body.referenceImages : [];
+    const incomingConversationHistory = Array.isArray(body?.conversationHistory) ? body.conversationHistory : [];
     const storageService = normalizeStorageService(body?.storageService || body?.service);
     const generationMode = normalizeGenerationMode(body?.generationMode || body?.mode, incomingReferenceImages.length > 0);
+    const generationStyle = normalizeGenerationStyle(body?.generationStyle || body?.conversationMode);
     const sessionId = String(body?.sessionId || body?.session || "default").trim();
 
     if (!prompt) {
@@ -53,6 +55,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       requestUrl: request.url,
       authHeader: String(request.headers.get("Authorization") || "").trim(),
     });
+    const conversationHistory = await normalizeConversationHistory({
+      items: incomingConversationHistory,
+      accessToken,
+      requestUrl: request.url,
+      authHeader: String(request.headers.get("Authorization") || "").trim(),
+    });
     if (generationMode === "image-to-image" && incomingReferenceImages.length > 0 && !referenceImages.length) {
       return json({
         error: "소스 이미지를 서버에서 읽지 못했습니다. 만료된 URL이거나 인증되지 않은 프록시 URL일 수 있습니다.",
@@ -61,16 +69,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         referenceImageCount: 0,
       }, 400);
     }
-    const finalPrompt = buildGeminiImagePrompt(prompt, referenceImages, generationMode);
+    const finalPrompt = buildGeminiImagePrompt(
+      prompt,
+      referenceImages,
+      generationMode,
+      generationStyle,
+      conversationHistory.length
+    );
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
     const requestPayload = {
-      contents: [
-        {
-          role: "user",
-          parts: buildGeminiParts(referenceImages, finalPrompt),
-        }
-      ],
+      contents: buildGeminiContents(conversationHistory, referenceImages, finalPrompt),
       generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
     };
     let geminiRes: Response | null = null;
@@ -157,8 +166,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
+      conversationTurnCount: conversationHistory.length,
       storageService,
       generationMode,
+      generationStyle,
       sessionId: sessionId || "default",
     });
   } catch (e: any) {
@@ -198,6 +209,36 @@ function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: s
   return parts;
 }
 
+function buildGeminiContents(
+  conversationHistory: ConversationHistoryTurn[],
+  referenceImages: NormalizedReferenceImage[],
+  prompt: string
+) {
+  const contents: Array<Record<string, unknown>> = [];
+  conversationHistory.forEach((turn) => {
+    contents.push({
+      role: "user",
+      parts: [{
+        text: buildConversationPrompt(turn),
+      }],
+    });
+    contents.push({
+      role: "model",
+      parts: [{
+        inlineData: {
+          mimeType: turn.imageMimeType || "image/png",
+          data: turn.imageBase64,
+        }
+      }],
+    });
+  });
+  contents.push({
+    role: "user",
+    parts: buildGeminiParts(referenceImages, prompt),
+  });
+  return contents;
+}
+
 function buildGeminiGenerationConfig(model: string, aspectRatio: string, imageSize: string) {
   const config: Record<string, unknown> = {
     responseModalities: ["IMAGE"],
@@ -219,12 +260,27 @@ function normalizePrompt(prompt: string) {
     .trim();
 }
 
-function buildGeminiImagePrompt(prompt: string, referenceImages: NormalizedReferenceImage[], generationMode: "text-to-image" | "image-to-image") {
+function buildGeminiImagePrompt(
+  prompt: string,
+  referenceImages: NormalizedReferenceImage[],
+  generationMode: "text-to-image" | "image-to-image",
+  generationStyle: "single" | "conversation",
+  conversationTurnCount: number
+) {
   const base = normalizePrompt(prompt);
-  if (!referenceImages.length) return base;
+  const conversationLines = generationStyle === "conversation" && conversationTurnCount > 0
+    ? [
+      "Build on the established visual continuity from the previous conversation turns.",
+      "Preserve the existing subject identity, styling, and composition language unless this prompt explicitly changes them."
+    ]
+    : [];
+  if (!referenceImages.length) {
+    return [base].concat(conversationLines).filter(Boolean).join("\n");
+  }
   if (generationMode === "image-to-image") {
     return [
       base,
+      ...conversationLines,
       "Use the uploaded source image as the base reference.",
       "Preserve the important structure, composition, and recognizable subject identity unless the prompt explicitly requests changes.",
       "Apply only the requested edits or stylistic transformations."
@@ -241,6 +297,7 @@ function buildGeminiImagePrompt(prompt: string, referenceImages: NormalizedRefer
   });
   return [
     base,
+    ...conversationLines,
     "The uploaded reference images define the official registered character design.",
   ].concat(consistencyLines).filter(Boolean).join("\n");
 }
@@ -282,12 +339,24 @@ function normalizeGenerationMode(value: unknown, hasReferences: boolean): "text-
   return hasReferences ? "image-to-image" : "text-to-image";
 }
 
+function normalizeGenerationStyle(value: unknown): "single" | "conversation" {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "conversation" ? "conversation" : "single";
+}
+
 type NormalizedReferenceImage = {
   referenceId: number;
   base64: string;
   mimeType: string;
   subjectDescription: string;
   subjectType: string;
+};
+
+type ConversationHistoryTurn = {
+  prompt: string;
+  imageBase64: string;
+  imageMimeType: string;
+  mode: string;
 };
 
 function extractGeminiImage(json: any): { data: string; mimeType: string } | null {
@@ -336,6 +405,42 @@ async function normalizeReferenceImages(args: {
     });
   }
   return out;
+}
+
+async function normalizeConversationHistory(args: {
+  items: any[];
+  accessToken: string;
+  requestUrl: string;
+  authHeader: string;
+}): Promise<ConversationHistoryTurn[]> {
+  const items = Array.isArray(args.items) ? args.items.slice(-3) : [];
+  const out: ConversationHistoryTurn[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const raw = items[i] && typeof items[i] === "object" ? items[i] : {};
+    const prompt = normalizePrompt(String(raw.prompt || "").trim());
+    const imageDataUrl = String(raw.imageDataUrl || raw.imageUrl || raw.url || "").trim();
+    if (!prompt || !imageDataUrl) continue;
+    const parsed = await resolveImageBytes(imageDataUrl, args.accessToken, args.requestUrl, args.authHeader);
+    if (!parsed) continue;
+    out.push({
+      prompt,
+      imageBase64: parsed.base64,
+      imageMimeType: parsed.mimeType || "image/png",
+      mode: String(raw.mode || "text-to-image").trim(),
+    });
+  }
+  return out;
+}
+
+function buildConversationPrompt(turn: ConversationHistoryTurn) {
+  const lines = [
+    "Previous approved image generation turn.",
+    turn.mode === "image-to-image"
+      ? "This turn was an image-to-image edit."
+      : "This turn was a text-to-image generation.",
+    turn.prompt
+  ];
+  return lines.filter(Boolean).join("\n");
 }
 
 async function resolveImageBytes(

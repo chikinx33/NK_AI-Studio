@@ -30,3 +30,11 @@ test('gemini request sends the edit instruction text part before inline referenc
   const source = readImagenSource();
   assert.match(source, /const parts: Array<Record<string, unknown>> = \[\{ text: prompt \}\];/);
 });
+
+test('imagen source builds multi-turn conversational contents from prior prompts and generated images', () => {
+  const source = readImagenSource();
+  assert.match(source, /function buildGeminiContents/);
+  assert.match(source, /role: "model"/);
+  assert.match(source, /normalizeConversationHistory/);
+  assert.match(source, /conversationTurnCount/);
+});

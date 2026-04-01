@@ -8,6 +8,7 @@
     lang: 'ko',
     sessionId: '',
     mode: 'text-to-image',
+    generationStyle: 'single',
     prompt: '',
     aspectRatio: '1:1',
     imageSize: '2K',
@@ -49,6 +50,15 @@
       noProjectHelp: '프로젝트를 선택하면 저장소에서 소스를 불러오고 결과를 등록할 수 있습니다.',
       modeText: '텍스트를 이미지로',
       modeImage: '이미지를 이미지로',
+      generationStyleLabel: '생성 흐름',
+      generationStyleSingle: '단일',
+      generationStyleConversation: '대화형',
+      generationStyleSingleHint: '현재 프롬프트와 소스만 사용',
+      generationStyleConversationHint: '최근 생성 결과의 흐름을 이어서 사용',
+      generationStyleSingleShort: '단일',
+      generationStyleConversationShort: '대화형',
+      conversationContextEmpty: '이전 턴 맥락 없이 현재 입력만으로 생성합니다.',
+      conversationContextReady: '최근 {count}개 턴의 프롬프트와 결과 이미지를 이어서 반영합니다.',
       sourceTitle: '소스 이미지',
       sourceEmpty: '',
       sourceUpload: '이미지 업로드',
@@ -144,6 +154,15 @@
       noProjectHelp: 'Select a project to load source images from its library and save results back.',
       modeText: 'Text to image',
       modeImage: 'Image to image',
+      generationStyleLabel: 'Generation flow',
+      generationStyleSingle: 'Single',
+      generationStyleConversation: 'Conversational',
+      generationStyleSingleHint: 'Use only the current prompt and source',
+      generationStyleConversationHint: 'Carry recent prompts and image results forward',
+      generationStyleSingleShort: 'Single',
+      generationStyleConversationShort: 'Conversational',
+      conversationContextEmpty: 'Generate only from the current input without prior turns.',
+      conversationContextReady: 'Carry over prompts and generated images from the last {count} turns.',
       sourceTitle: 'Source image',
       sourceEmpty: '',
       sourceUpload: 'Upload image',
@@ -235,6 +254,14 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function fillTemplate(template, values) {
+    var text = String(template || '');
+    var map = values && typeof values === 'object' ? values : {};
+    return text.replace(/\{([a-zA-Z0-9_]+)\}/g, function (_, key) {
+      return Object.prototype.hasOwnProperty.call(map, key) ? String(map[key]) : '';
+    });
   }
 
   function formatDate(value) {
@@ -344,6 +371,45 @@
     return match || state.results[0] || null;
   }
 
+  function normalizeGenerationStyle(value) {
+    var raw = String(value || '').trim().toLowerCase();
+    return raw === 'conversation' ? 'conversation' : 'single';
+  }
+
+  function generationStyleShortLabel(value) {
+    return normalizeGenerationStyle(value) === 'conversation'
+      ? t('generationStyleConversationShort')
+      : t('generationStyleSingleShort');
+  }
+
+  function buildConversationHistory(limit) {
+    if (normalizeGenerationStyle(state.generationStyle) !== 'conversation') return [];
+    var maxTurns = Math.max(0, Number(limit) || 3);
+    if (!maxTurns) return [];
+    var selectedId = String(state.currentResultId || '').trim();
+    var ordered = state.results.slice().sort(function (a, b) {
+      return new Date(String(a && a.createdAt || 0)).getTime() - new Date(String(b && b.createdAt || 0)).getTime();
+    });
+    if (selectedId) {
+      var cutIndex = ordered.findIndex(function (item) {
+        return String(item && item.id || '') === selectedId;
+      });
+      if (cutIndex >= 0) ordered = ordered.slice(0, cutIndex + 1);
+    }
+    return ordered.filter(function (item) {
+      return !!(item && item.prompt && resolveResultUrl(item));
+    }).slice(-maxTurns).map(function (item) {
+      return {
+        resultId: String(item.id || '').trim(),
+        prompt: String(item.prompt || '').trim(),
+        imageDataUrl: resolveResultUrl(item),
+        mode: String(item.mode || 'text-to-image').trim(),
+        generationStyle: normalizeGenerationStyle(item.generationStyle || 'single'),
+        createdAt: String(item.createdAt || '').trim()
+      };
+    });
+  }
+
   function extractObjectTimestamp(objectName) {
     var raw = String(objectName || '').trim();
     var match = raw.match(/\/(\d{13})-[^/]+\.(?:png|jpg|jpeg|webp)$/i);
@@ -412,6 +478,8 @@
         url: String(existing.url || row.signedUrl || '').trim(),
         prompt: String(existing.prompt || '').trim(),
         mode: String(existing.mode || 'text-to-image').trim(),
+        generationStyle: normalizeGenerationStyle(existing.generationStyle || 'single'),
+        conversationTurnCount: Number(existing.conversationTurnCount || 0) || 0,
         aspectRatio: String(existing.aspectRatio || '').trim(),
         createdAt: createdAt || new Date().toISOString(),
         sessionId: String(existing.sessionId || state.sessionId || '').trim(),
@@ -562,6 +630,8 @@
     var brand = state.currentBrand;
     var detached = !(project && project.id);
     var selectedResult = currentResult();
+    var selectedGenerationStyle = selectedResult ? normalizeGenerationStyle(selectedResult.generationStyle || 'single') : normalizeGenerationStyle(state.generationStyle);
+    var conversationHistory = buildConversationHistory(3);
     var sourceUrl = sourcePreviewUrl();
     var sourceDisabled = state.mode !== 'image-to-image';
     var sourceKind = '';
@@ -580,7 +650,7 @@
         '<button type="button" class="ai-image-history-delete" data-action="delete-result" data-id="' + escapeHtml(item.id) + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
         '<img src="' + escapeHtml(resolveResultUrl(item)) + '" alt="" class="ai-image-history-thumb" />' +
         '<div class="ai-image-history-meta">' +
-        '<strong>' + escapeHtml(item.mode === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + '</strong>' +
+        '<strong>' + escapeHtml((item.mode === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + ' · ' + generationStyleShortLabel(item.generationStyle || 'single')) + '</strong>' +
         '<p>' + escapeHtml(item.prompt || '') + '</p>' +
         (item.savedToProject ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedTag')) + '</span>' : '') +
         '</div>' +
@@ -630,6 +700,18 @@
       '<div class="ai-image-mode-tabs">' +
       '<button type="button" class="btn-secondary' + (state.mode === 'text-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="text-to-image">' + escapeHtml(t('modeText')) + '</button>' +
       '<button type="button" class="btn-secondary' + (state.mode === 'image-to-image' ? ' active' : '') + '" data-action="set-mode" data-mode="image-to-image">' + escapeHtml(t('modeImage')) + '</button>' +
+      '</div>' +
+      '<div class="ai-image-generation-style">' +
+        '<label>' + escapeHtml(t('generationStyleLabel')) + '</label>' +
+        '<div class="ai-image-generation-style-tabs">' +
+          '<button type="button" class="btn-secondary' + (normalizeGenerationStyle(state.generationStyle) === 'single' ? ' active' : '') + '" data-action="set-generation-style" data-style="single">' + escapeHtml(t('generationStyleSingle')) + '</button>' +
+          '<button type="button" class="btn-secondary' + (normalizeGenerationStyle(state.generationStyle) === 'conversation' ? ' active' : '') + '" data-action="set-generation-style" data-style="conversation">' + escapeHtml(t('generationStyleConversation')) + '</button>' +
+        '</div>' +
+        '<p class="muted small">' + escapeHtml(
+          normalizeGenerationStyle(state.generationStyle) === 'conversation'
+            ? fillTemplate(t('conversationContextReady'), { count: conversationHistory.length || 0 })
+            : t('conversationContextEmpty')
+        ) + '</p>' +
       '</div>' +
       '<div class="ai-image-field source-field' + (sourceDisabled ? ' is-disabled' : '') + '">' +
         '<label>' + escapeHtml(t('sourceTitle')) + '</label>' +
@@ -723,10 +805,11 @@
               '<button type="button" class="btn-secondary compact" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + escapeHtml(t('saveBrand')) + '</button>' +
               '</div>') +
             '</div>' +
-            '<div class="ai-image-preview-meta">' +
-              '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
-              '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
-            '</div>' +
+              '<div class="ai-image-preview-meta">' +
+                '<p><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
+                '<p><strong>' + escapeHtml(t('generationStyleLabel')) + ':</strong> ' + escapeHtml(generationStyleShortLabel(selectedGenerationStyle)) + '</p>' +
+                '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
+              '</div>' +
           '</div>' +
         '</div>'
         : '<div class="ai-image-empty-state"><p>' + escapeHtml(t('resultsEmpty')) + '</p></div>') +
@@ -1057,6 +1140,7 @@
       storageService: 'ai-image',
       sessionId: state.sessionId,
       generationMode: state.mode,
+      generationStyle: normalizeGenerationStyle(state.generationStyle),
       imageSize: state.imageSize,
       referenceImages: state.mode === 'image-to-image' && state.sourceImage
         ? [{
@@ -1065,7 +1149,8 @@
           subjectDescription: 'source image',
           subjectType: 'SUBJECT_TYPE_DEFAULT'
         }]
-        : []
+        : [],
+      conversationHistory: buildConversationHistory(3)
     };
 
     setGlobalLoading(true, t('generating'));
@@ -1078,6 +1163,8 @@
         imageSize: String(response && response.imageSizeApplied || state.imageSize || '').trim(),
         prompt: prompt,
         mode: state.mode,
+        generationStyle: normalizeGenerationStyle(state.generationStyle),
+        conversationTurnCount: Number(response && response.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
         aspectRatio: state.aspectRatio,
         createdAt: new Date().toISOString(),
         savedToProject: false,
@@ -1155,6 +1242,11 @@
             if (!state.contentLibraryItems.length) loadContentLibrary();
             if (!state.projectLibraryItems.length && state.currentProject && state.currentProject.id) loadProjectLibrary();
           }
+          return;
+        }
+        if (action === 'set-generation-style') {
+          state.generationStyle = normalizeGenerationStyle(btn.getAttribute('data-style') || 'single');
+          render();
           return;
         }
         if (action === 'open-upload') {

@@ -146,6 +146,32 @@ body.layout-fixed.page-shell-image .content {
   box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.22) inset;
 }
 
+.ai-image-generation-style {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-image-generation-style > label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-image-generation-style-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.ai-image-generation-style-tabs .btn-secondary.active {
+  border-color: rgba(249, 115, 22, 0.55);
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.22) inset;
+}
+
+.ai-image-generation-style .small {
+  margin: 0;
+}
+
 .ai-image-field {
   display: flex;
   flex-direction: column;
