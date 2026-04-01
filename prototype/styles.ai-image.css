@@ -295,21 +295,27 @@ body.layout-fixed.page-shell-image .content {
   display: block;
 }
 
-.ai-image-source-remove {
+.ai-image-source-selection-card .ai-image-source-remove.btn-secondary.compact {
   position: absolute;
   top: 6px;
   right: 6px;
+  inline-size: 26px;
+  block-size: 26px;
   width: 26px;
   height: 26px;
-  min-height: 26px;
-  min-width: 26px;
-  max-width: 26px;
-  max-height: 26px;
+  min-height: 26px !important;
+  min-width: 26px !important;
+  max-width: 26px !important;
+  max-height: 26px !important;
+  min-inline-size: 26px;
+  min-block-size: 26px;
+  max-inline-size: 26px;
+  max-block-size: 26px;
   flex: 0 0 26px;
   aspect-ratio: 1 / 1;
   box-sizing: border-box;
-  padding: 0;
-  border-radius: 50% !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
   display: inline-flex;
   align-items: center;
   justify-content: center;
