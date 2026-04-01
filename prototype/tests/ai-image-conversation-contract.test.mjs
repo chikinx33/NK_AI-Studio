@@ -86,3 +86,10 @@ test('ai-image language toggle preserves source selection dom while relocalizing
   assert.match(source, /nextSourceSelection\.parentNode\.replaceChild\(existingSourceSelection, nextSourceSelection\);/);
   assert.match(source, /localizeSourceSelectionNode\(existingSourceSelection\);/);
 });
+
+test('ai-image prompt counter is rendered beside the prompt label', () => {
+  const source = readAiImageSource();
+  assert.match(source, /class="ai-image-label-row"/);
+  assert.match(source, /id="ai-image-prompt-count" class="ai-image-label-count"/);
+  assert.doesNotMatch(source, /class="ai-image-counter"><span id="ai-image-prompt-count"/);
+});

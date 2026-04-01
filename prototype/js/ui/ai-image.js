@@ -863,9 +863,11 @@
       '</div>' +
       buildSourceFieldMarkup(detached, project, sourceDisabled) +
       '<div class="ai-image-field">' +
+      '<div class="ai-image-label-row">' +
       '<label for="ai-image-prompt">' + escapeHtml(t('promptLabel')) + '</label>' +
+      '<span id="ai-image-prompt-count" class="ai-image-label-count">(' + escapeHtml(String((state.prompt || '').length) + t('promptCounterSuffix')) + ')</span>' +
+      '</div>' +
       '<textarea id="ai-image-prompt" rows="8" maxlength="4000" placeholder="' + escapeHtml(state.mode === 'image-to-image' ? t('promptPlaceholderImage') : t('promptPlaceholderText')) + '"></textarea>' +
-      '<div class="ai-image-counter"><span id="ai-image-prompt-count">' + escapeHtml(String((state.prompt || '').length) + t('promptCounterSuffix')) + '</span></div>' +
       '</div>' +
       '<div class="ai-image-controls-stack">' +
         '<div class="ai-image-settings-grid">' +

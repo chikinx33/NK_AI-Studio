@@ -215,6 +215,23 @@ body.layout-fixed.page-shell-image .content {
   font-weight: 600;
 }
 
+.ai-image-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ai-image-label-row > label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ai-image-label-count {
+  font-size: 11px;
+  color: var(--muted);
+}
+
 .ai-image-source-box {
   position: relative;
   display: flex;
