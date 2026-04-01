@@ -59,10 +59,8 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /cameraModalTitle/);
   assert.match(source, /class="ai-image-camera-fab/);
   assert.match(source, /data-action="toggle-camera-panel"/);
-  assert.match(source, /data-action="show-history-panel"/);
   assert.match(source, /ai-image-history-camera/);
   assert.match(source, /data-action="set-camera-preset"/);
-  assert.match(source, /data-action="reset-camera-controls"/);
   assert.match(source, /id="ai-image-camera-pan"/);
   assert.match(source, /id="ai-image-camera-tilt"/);
   assert.match(source, /id="ai-image-camera-distance"/);
