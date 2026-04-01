@@ -48,6 +48,20 @@ test('ai-image preview exposes prompt analysis action and localized analyzing co
   assert.match(source, /NK\.api\.imagenDescribe/);
 });
 
+test('ai-image preview exposes camera-angle popup controls with dedicated prompt injection', () => {
+  const source = readAiImageSource();
+  assert.match(source, /cameraModalOpen: false/);
+  assert.match(source, /cameraControls: createDefaultCameraControls\(\)/);
+  assert.match(source, /data-action="open-camera-modal"/);
+  assert.match(source, /function buildCameraPromptBlock/);
+  assert.match(source, /function buildPromptWithCameraControls/);
+  assert.match(source, /cameraModalTitle/);
+  assert.match(source, /data-action="apply-camera-controls"/);
+  assert.match(source, /id="ai-image-camera-pan"/);
+  assert.match(source, /id="ai-image-camera-tilt"/);
+  assert.match(source, /id="ai-image-camera-distance"/);
+});
+
 test('ai-image preview keeps project and brand save controls as icon actions in one control row', () => {
   const source = readAiImageSource();
   assert.match(source, /function projectSaveIconSvg/);

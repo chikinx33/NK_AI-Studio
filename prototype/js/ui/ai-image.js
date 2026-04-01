@@ -30,6 +30,9 @@
     selectedFileName: '',
     sourceSectionCollapsed: { brand: true, content: true, project: true },
     imageModalUrl: '',
+    cameraControls: createDefaultCameraControls(),
+    cameraModalOpen: false,
+    cameraModalDraft: createDefaultCameraControls(),
     deletedObjectNames: []
   };
 
@@ -141,7 +144,30 @@
       analyzePrompt: '이미지 분석',
       analyzing: '분석중',
       analyzeFailed: '이미지 분석 실패: ',
-      viewOriginal: '원본 보기'
+      viewOriginal: '원본 보기',
+      cameraButton: '카메라 앵글',
+      cameraModalTitle: '카메라 앵글 조정',
+      cameraModalDesc: '프리셋과 슬라이더를 조합해 다음 생성에 반영할 시점을 정해 주세요.',
+      cameraPresetLabel: '앵글 프리셋',
+      cameraPresetAuto: '자동',
+      cameraPresetFront: '정면',
+      cameraPresetLeft45: '좌 45°',
+      cameraPresetRight45: '우 45°',
+      cameraPresetTopDown: '탑뷰',
+      cameraPresetLowAngle: '로우앵글',
+      cameraPresetCloseUp: '클로즈업',
+      cameraPan: 'Pan',
+      cameraTilt: 'Tilt',
+      cameraDistance: 'Distance',
+      cameraPreviewLabel: '앵글 미리보기',
+      cameraSummaryLabel: '적용 요약',
+      cameraPromptPreviewLabel: '프롬프트 반영 문장',
+      cameraApply: '적용',
+      cameraReset: '초기화',
+      cameraClose: '닫기',
+      cameraActiveTag: '앵글 적용됨',
+      cameraSummaryOff: '카메라 앵글 제어가 꺼져 있습니다.',
+      cameraMetaLabel: '카메라'
     },
     en: {
       pageTitle: 'NK_Studio · AI Image',
@@ -250,7 +276,30 @@
       analyzePrompt: 'Analyze image',
       analyzing: 'Analyzing',
       analyzeFailed: 'Image analysis failed: ',
-      viewOriginal: 'View original'
+      viewOriginal: 'View original',
+      cameraButton: 'Camera angle',
+      cameraModalTitle: 'Adjust camera angle',
+      cameraModalDesc: 'Combine presets and sliders to control the next generation angle.',
+      cameraPresetLabel: 'Angle preset',
+      cameraPresetAuto: 'Auto',
+      cameraPresetFront: 'Front',
+      cameraPresetLeft45: 'Left 45°',
+      cameraPresetRight45: 'Right 45°',
+      cameraPresetTopDown: 'Top-down',
+      cameraPresetLowAngle: 'Low angle',
+      cameraPresetCloseUp: 'Close-up',
+      cameraPan: 'Pan',
+      cameraTilt: 'Tilt',
+      cameraDistance: 'Distance',
+      cameraPreviewLabel: 'Angle preview',
+      cameraSummaryLabel: 'Applied summary',
+      cameraPromptPreviewLabel: 'Prompt injection',
+      cameraApply: 'Apply',
+      cameraReset: 'Reset',
+      cameraClose: 'Close',
+      cameraActiveTag: 'Angle enabled',
+      cameraSummaryOff: 'Camera angle control is currently off.',
+      cameraMetaLabel: 'Camera'
     }
   };
 
@@ -266,6 +315,194 @@
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
+  }
+
+  function createDefaultCameraControls() {
+    return {
+      enabled: false,
+      preset: 'auto',
+      pan: 0,
+      tilt: 0,
+      distance: 50
+    };
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    var num = Number(value);
+    if (!Number.isFinite(num)) num = Number(fallback);
+    if (!Number.isFinite(num)) num = min;
+    return Math.min(max, Math.max(min, num));
+  }
+
+  function normalizeCameraControls(raw) {
+    var base = raw && typeof raw === 'object' ? raw : {};
+    var preset = String(base.preset || 'auto').trim().toLowerCase();
+    if (!/^(auto|front|left45|right45|topdown|lowangle|closeup)$/.test(preset)) preset = 'auto';
+    var normalized = {
+      enabled: !!base.enabled,
+      preset: preset,
+      pan: clampNumber(base.pan, -90, 90, 0),
+      tilt: clampNumber(base.tilt, -60, 60, 0),
+      distance: clampNumber(base.distance, 0, 100, 50)
+    };
+    normalized.enabled = normalized.enabled && !isNeutralCameraControls(normalized);
+    return normalized;
+  }
+
+  function cloneCameraControls(raw) {
+    return normalizeCameraControls(raw);
+  }
+
+  function isNeutralCameraControls(raw) {
+    var controls = raw && typeof raw === 'object' ? raw : createDefaultCameraControls();
+    return String(controls.preset || 'auto') === 'auto'
+      && Number(controls.pan || 0) === 0
+      && Number(controls.tilt || 0) === 0
+      && Number(controls.distance || 50) === 50;
+  }
+
+  function distanceBucket(distance) {
+    var value = clampNumber(distance, 0, 100, 50);
+    if (value <= 20) return 'extreme-close-up';
+    if (value <= 40) return 'close-up';
+    if (value <= 60) return 'medium-shot';
+    if (value <= 80) return 'full-shot';
+    return 'wide-shot';
+  }
+
+  function cameraPresetLabel(preset) {
+    var keyMap = {
+      auto: 'cameraPresetAuto',
+      front: 'cameraPresetFront',
+      left45: 'cameraPresetLeft45',
+      right45: 'cameraPresetRight45',
+      topdown: 'cameraPresetTopDown',
+      lowangle: 'cameraPresetLowAngle',
+      closeup: 'cameraPresetCloseUp'
+    };
+    return t(keyMap[String(preset || 'auto')] || 'cameraPresetAuto');
+  }
+
+  function distanceLabel(distance) {
+    var bucket = distanceBucket(distance);
+    if (state.lang === 'en') {
+      if (bucket === 'extreme-close-up') return 'extreme close-up';
+      if (bucket === 'close-up') return 'close-up';
+      if (bucket === 'medium-shot') return 'medium shot';
+      if (bucket === 'full-shot') return 'full shot';
+      return 'wide shot';
+    }
+    if (bucket === 'extreme-close-up') return '익스트림 클로즈업';
+    if (bucket === 'close-up') return '클로즈업';
+    if (bucket === 'medium-shot') return '미디엄 샷';
+    if (bucket === 'full-shot') return '풀샷';
+    return '와이드 샷';
+  }
+
+  function cameraPresetDefaults(preset) {
+    var next = createDefaultCameraControls();
+    next.preset = preset;
+    next.enabled = preset !== 'auto';
+    if (preset === 'front') {
+      next.pan = 0;
+      next.tilt = 0;
+      next.distance = 50;
+    } else if (preset === 'left45') {
+      next.pan = -35;
+      next.tilt = 0;
+      next.distance = 56;
+    } else if (preset === 'right45') {
+      next.pan = 35;
+      next.tilt = 0;
+      next.distance = 56;
+    } else if (preset === 'topdown') {
+      next.pan = 0;
+      next.tilt = -48;
+      next.distance = 82;
+    } else if (preset === 'lowangle') {
+      next.pan = 0;
+      next.tilt = 24;
+      next.distance = 48;
+    } else if (preset === 'closeup') {
+      next.pan = 0;
+      next.tilt = 8;
+      next.distance = 18;
+    }
+    return next;
+  }
+
+  function applyCameraPresetToDraft(preset) {
+    var next = cameraPresetDefaults(String(preset || 'auto'));
+    state.cameraModalDraft = cloneCameraControls(next);
+  }
+
+  function activeCameraControls() {
+    var result = currentResult();
+    if (result && result.cameraControls) return normalizeCameraControls(result.cameraControls);
+    return normalizeCameraControls(state.cameraControls);
+  }
+
+  function cameraControlSignature(raw) {
+    var controls = normalizeCameraControls(raw);
+    return [
+      controls.enabled ? '1' : '0',
+      controls.preset,
+      controls.pan,
+      controls.tilt,
+      controls.distance
+    ].join(':');
+  }
+
+  function cameraSummary(raw) {
+    var controls = normalizeCameraControls(raw);
+    if (!controls.enabled || isNeutralCameraControls(controls)) return t('cameraSummaryOff');
+    var bits = [cameraPresetLabel(controls.preset)];
+    if (controls.pan) {
+      bits.push(state.lang === 'en'
+        ? ('pan ' + (controls.pan > 0 ? 'right ' : 'left ') + Math.abs(controls.pan) + 'deg')
+        : ('pan ' + (controls.pan > 0 ? '우 ' : '좌 ') + Math.abs(controls.pan) + '도'));
+    }
+    if (controls.tilt) {
+      bits.push(state.lang === 'en'
+        ? ('tilt ' + (controls.tilt > 0 ? 'up ' : 'down ') + Math.abs(controls.tilt) + 'deg')
+        : ('tilt ' + (controls.tilt > 0 ? '올려 ' : '내려 ') + Math.abs(controls.tilt) + '도'));
+    }
+    bits.push(distanceLabel(controls.distance));
+    return bits.join(state.lang === 'en' ? ' · ' : ' · ');
+  }
+
+  function buildCameraPromptBlock(raw) {
+    var controls = normalizeCameraControls(raw);
+    if (!controls.enabled || isNeutralCameraControls(controls)) return '';
+    var shotLabel = distanceLabel(controls.distance);
+    if (state.lang === 'en') {
+      var panLineEn = controls.pan ? ('Pan ' + (controls.pan > 0 ? 'right' : 'left') + ' by ' + Math.abs(controls.pan) + ' degrees.') : 'Keep pan centered.';
+      var tiltLineEn = controls.tilt ? ('Tilt ' + (controls.tilt > 0 ? 'up' : 'down') + ' by ' + Math.abs(controls.tilt) + ' degrees.') : 'Keep tilt at eye level.';
+      return [
+        'Camera direction:',
+        '- Preset: ' + cameraPresetLabel(controls.preset),
+        '- ' + panLineEn,
+        '- ' + tiltLineEn,
+        '- Distance: ' + shotLabel + '.',
+        '- Keep the subject clearly readable while preserving the requested scene and style.'
+      ].join('\n');
+    }
+    var panLineKo = controls.pan ? ('Pan을 ' + (controls.pan > 0 ? '오른쪽' : '왼쪽') + '으로 ' + Math.abs(controls.pan) + '도 이동.') : 'Pan은 중앙 유지.';
+    var tiltLineKo = controls.tilt ? ('Tilt를 ' + (controls.tilt > 0 ? '위로' : '아래로') + ' ' + Math.abs(controls.tilt) + '도 조정.') : 'Tilt는 아이레벨 유지.';
+    return [
+      '카메라 연출:',
+      '- 프리셋: ' + cameraPresetLabel(controls.preset),
+      '- ' + panLineKo,
+      '- ' + tiltLineKo,
+      '- 거리감: ' + shotLabel,
+      '- 피사체는 또렷하게 보이게 유지하고 요청한 장면과 스타일을 우선 반영.'
+    ].join('\n');
+  }
+
+  function buildPromptWithCameraControls(basePrompt, raw) {
+    var prompt = String(basePrompt || '').trim();
+    var cameraBlock = buildCameraPromptBlock(raw);
+    return cameraBlock ? [prompt, cameraBlock].filter(Boolean).join('\n\n') : prompt;
   }
 
   function formatDate(value) {
@@ -330,11 +567,19 @@
     try {
       var raw = localStorage.getItem(getHistoryStorageKey()) || '[]';
       var parsed = JSON.parse(raw);
-      state.results = Array.isArray(parsed) ? parsed : [];
+      state.results = Array.isArray(parsed) ? parsed.map(function (item) {
+        var row = item && typeof item === 'object' ? item : {};
+        if (row.cameraControls) row.cameraControls = normalizeCameraControls(row.cameraControls);
+        return row;
+      }) : [];
       state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+      state.cameraControls = state.results[0] && state.results[0].cameraControls
+        ? normalizeCameraControls(state.results[0].cameraControls)
+        : createDefaultCameraControls();
     } catch (_) {
       state.results = [];
       state.currentResultId = '';
+      state.cameraControls = createDefaultCameraControls();
     }
   }
 
@@ -395,6 +640,7 @@
           String(row.prompt || ''),
           String(row.mode || ''),
           String(row.generationStyle || ''),
+          cameraControlSignature(row.cameraControls),
           row.savedToProject ? '1' : '0'
         ].join('~');
       }).join('||')
@@ -415,6 +661,7 @@
       String(row.prompt || ''),
       String(row.mode || ''),
       String(row.generationStyle || ''),
+      cameraControlSignature(row.cameraControls),
       row.savedToProject ? '1' : '0'
     ].join('::');
   }
@@ -430,6 +677,7 @@
       String(state.imageSize || ''),
       String(state.aspectRatio || ''),
       String(normalizeGenerationStyle(state.generationStyle) || ''),
+      cameraControlSignature(state.cameraControls),
       state.libraryLoading ? '1' : '0',
       state.brandLibraryLoading ? '1' : '0',
       state.contentLibraryLoading ? '1' : '0',
@@ -583,6 +831,7 @@
         aspectRatio: String(existing.aspectRatio || '').trim(),
         createdAt: createdAt || new Date().toISOString(),
         sessionId: String(existing.sessionId || state.sessionId || '').trim(),
+        cameraControls: existing.cameraControls ? normalizeCameraControls(existing.cameraControls) : undefined,
         savedToProject: existing.savedToProject === true,
         savedBrandTargets: Array.isArray(existing.savedBrandTargets) ? existing.savedBrandTargets.slice() : [],
         selectedBrandCharacterToken: String(existing.selectedBrandCharacterToken || '').trim()
@@ -595,6 +844,10 @@
       return String(item.id || '') === String(state.currentResultId || '');
     })) {
       state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+    }
+    var selectedResult = currentResult();
+    if (selectedResult && selectedResult.cameraControls) {
+      state.cameraControls = normalizeCameraControls(selectedResult.cameraControls);
     }
   }
 
@@ -810,6 +1063,78 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.2 4.2L19 7"></path></svg>';
   }
 
+  function cameraFabIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5A2.5 2.5 0 0 1 7 7h2.2l1.3-1.7h2.9L14.8 7H17a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 18H7a2.5 2.5 0 0 1-2.5-2.5v-6Z"></path><circle cx="12" cy="12.5" r="3.3"></circle><path d="M7.5 9.5h.01"></path></svg>';
+  }
+
+  function buildCameraModalMarkup() {
+    if (!state.cameraModalOpen) return '';
+    var controls = normalizeCameraControls(state.cameraModalDraft);
+    var previewX = 50 + Math.round((controls.pan / 90) * 34);
+    var previewY = 50 + Math.round((controls.tilt / 60) * 26);
+    var orbitScale = 0.92 + ((100 - controls.distance) / 100) * 0.24;
+    var promptPreview = buildCameraPromptBlock(Object.assign({}, controls, {
+      enabled: !isNeutralCameraControls(controls)
+    }));
+    var presetOptions = ['auto', 'front', 'left45', 'right45', 'topdown', 'lowangle', 'closeup'].map(function (preset) {
+      return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
+    }).join('');
+    return '' +
+      '<div class="ai-image-camera-modal-backdrop" data-action="close-camera-modal">' +
+        '<div class="ai-image-camera-modal" role="dialog" aria-modal="true" aria-label="' + escapeHtml(t('cameraModalTitle')) + '">' +
+          '<div class="ai-image-camera-modal-head">' +
+            '<div>' +
+              '<h3>' + escapeHtml(t('cameraModalTitle')) + '</h3>' +
+              '<p>' + escapeHtml(t('cameraModalDesc')) + '</p>' +
+            '</div>' +
+            '<button type="button" class="btn-secondary compact ai-image-camera-close" data-action="close-camera-modal" aria-label="' + escapeHtml(t('cameraClose')) + '" title="' + escapeHtml(t('cameraClose')) + '">×</button>' +
+          '</div>' +
+          '<div class="ai-image-camera-modal-body">' +
+            '<div class="ai-image-camera-preview-card">' +
+              '<div class="ai-image-camera-preview-label">' + escapeHtml(t('cameraPreviewLabel')) + '</div>' +
+              '<div class="ai-image-camera-orbit" style="--camera-x:' + escapeHtml(String(previewX)) + '%;--camera-y:' + escapeHtml(String(previewY)) + '%;--orbit-scale:' + escapeHtml(String(orbitScale)) + ';">' +
+                '<div class="ai-image-camera-orbit-ring is-horizontal"></div>' +
+                '<div class="ai-image-camera-orbit-ring is-vertical"></div>' +
+                '<div class="ai-image-camera-orbit-ring is-depth"></div>' +
+                '<div class="ai-image-camera-subject-core"></div>' +
+                '<div class="ai-image-camera-device">' + cameraFabIconSvg() + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="ai-image-camera-controls">' +
+              '<div class="ai-image-camera-section">' +
+                '<div class="ai-image-camera-section-title">' + escapeHtml(t('cameraPresetLabel')) + '</div>' +
+                '<div class="ai-image-camera-preset-grid">' + presetOptions + '</div>' +
+              '</div>' +
+              '<div class="ai-image-camera-section">' +
+                '<label class="ai-image-camera-slider-row" for="ai-image-camera-pan"><span>' + escapeHtml(t('cameraPan')) + '</span><strong id="ai-image-camera-pan-value">' + escapeHtml(String(controls.pan)) + '</strong></label>' +
+                '<input id="ai-image-camera-pan" type="range" min="-90" max="90" step="1" value="' + escapeHtml(String(controls.pan)) + '" />' +
+              '</div>' +
+              '<div class="ai-image-camera-section">' +
+                '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span><strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong></label>' +
+                '<input id="ai-image-camera-tilt" type="range" min="-60" max="60" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
+              '</div>' +
+              '<div class="ai-image-camera-section">' +
+                '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span><strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong></label>' +
+                '<input id="ai-image-camera-distance" type="range" min="0" max="100" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
+              '</div>' +
+              '<div class="ai-image-camera-section">' +
+                '<div class="ai-image-camera-section-title">' + escapeHtml(t('cameraSummaryLabel')) + '</div>' +
+                '<p id="ai-image-camera-summary" class="ai-image-camera-summary-text">' + escapeHtml(cameraSummary(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }))) + '</p>' +
+              '</div>' +
+              '<div class="ai-image-camera-section">' +
+                '<div class="ai-image-camera-section-title">' + escapeHtml(t('cameraPromptPreviewLabel')) + '</div>' +
+                '<pre id="ai-image-camera-prompt-preview" class="ai-image-camera-prompt-preview">' + escapeHtml(promptPreview) + '</pre>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ai-image-camera-modal-foot">' +
+            '<button type="button" class="btn-secondary" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>' +
+            '<button type="button" class="btn-primary" data-action="apply-camera-controls">' + escapeHtml(t('cameraApply')) + '</button>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
   function buildSourceFieldMarkup(detached, project, sourceDisabled) {
     var sourceLibrary = buildProjectSourceLibraryMarkup();
     var brandSourceLibrary = buildBrandSourceLibraryMarkup();
@@ -855,6 +1180,7 @@
   }
 
   function buildPromptPanelMarkup(detached, project, sourceDisabled) {
+    var cameraSummaryText = cameraSummary(state.cameraControls);
     return '' +
       '<section class="card ai-image-panel ai-image-panel-left">' +
       '<div class="ai-image-preview-head">' +
@@ -895,6 +1221,10 @@
             '</div>' +
           '</div>' +
         '</div>' +
+        '<div class="ai-image-camera-quick-summary' + ((state.cameraControls && state.cameraControls.enabled) ? ' is-active' : '') + '">' +
+          '<div class="ai-image-camera-quick-summary-label">' + escapeHtml(t('cameraButton')) + '</div>' +
+          '<p>' + escapeHtml(cameraSummaryText) + '</p>' +
+        '</div>' +
         '<div class="ai-image-ratio-row">' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '1:1' ? ' active' : '') + '" data-action="set-aspect" data-ratio="1:1">1:1</button>' +
         '<button type="button" class="btn-secondary ratio-btn' + (state.aspectRatio === '16:9' ? ' active' : '') + '" data-action="set-aspect" data-ratio="16:9">16:9</button>' +
@@ -909,6 +1239,10 @@
   function buildPreviewPanelMarkup(detached, project, brand, selectedResult) {
     var brandCharacterList = brandCharacterOptions();
     var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
+    var selectedCameraControls = selectedResult && selectedResult.cameraControls
+      ? normalizeCameraControls(selectedResult.cameraControls)
+      : normalizeCameraControls(state.cameraControls);
+    var cameraEnabled = !!(selectedCameraControls.enabled && !isNeutralCameraControls(selectedCameraControls));
     return '' +
       '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(previewPanelSignature(selectedResult, detached)) + '">' +
       '<div class="ai-image-preview-head">' +
@@ -921,6 +1255,7 @@
           '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
           '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
+          '<button type="button" class="ai-image-camera-fab' + (cameraEnabled ? ' is-active' : '') + '" data-action="open-camera-modal" aria-label="' + escapeHtml(t('cameraButton')) + '" title="' + escapeHtml(t('cameraButton')) + '">' + cameraFabIconSvg() + '</button>' +
           '</div>' +
           '<div class="ai-image-preview-foot">' +
               '<div class="ai-image-inline-actions' + (detached ? ' is-compact-grid' : '') + '">' +
@@ -945,7 +1280,8 @@
               '</div>' +
               '<div class="ai-image-preview-meta">' +
                 '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
-                '<p>' + escapeHtml(selectedResult.prompt || '') + '</p>' +
+                '<p class="ai-image-preview-prompt">' + escapeHtml(selectedResult.prompt || '') + '</p>' +
+                '<p class="ai-image-camera-meta"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> ' + escapeHtml(cameraSummary(selectedCameraControls)) + '</p>' +
               '</div>' +
           '</div>' +
         '</div>'
@@ -1171,6 +1507,11 @@
         downloadBtn.setAttribute('aria-label', t('download'));
         downloadBtn.setAttribute('title', t('download'));
       }
+      var cameraBtn = root.querySelector('[data-action="open-camera-modal"]');
+      if (cameraBtn) {
+        cameraBtn.setAttribute('aria-label', t('cameraButton'));
+        cameraBtn.setAttribute('title', t('cameraButton'));
+      }
       var saveProjectBtn = root.querySelector('[data-action="save-result-project"]');
       if (saveProjectBtn) {
         saveProjectBtn.setAttribute('aria-label', t('saveProject'));
@@ -1192,6 +1533,8 @@
       }
       var previewMetaLabel = root.querySelector('.ai-image-preview-created strong');
       if (previewMetaLabel) previewMetaLabel.textContent = t('createdAt') + ':';
+      var cameraMetaLabel = root.querySelector('.ai-image-camera-meta strong');
+      if (cameraMetaLabel) cameraMetaLabel.textContent = t('cameraMetaLabel') + ':';
     } else {
       var previewEmpty = root.querySelector('.ai-image-panel-preview .ai-image-empty-state p');
       if (previewEmpty) previewEmpty.textContent = t('resultsEmpty');
@@ -1220,6 +1563,7 @@
       var savedChip = cardEl.querySelector('.ai-image-saved-chip');
       if (savedChip) savedChip.textContent = t('resultSavedTag');
     });
+    if (state.cameraModalOpen) renderCameraModalUi();
   }
 
   function setGlobalLoading(show, message) {
@@ -1273,6 +1617,7 @@
       buildHistoryPanelMarkup() +
       '</div>' +
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
+      buildCameraModalMarkup() +
       '</section>';
 
     if (preservePromptPanel) {
@@ -1513,6 +1858,20 @@
     } catch (_) {}
   }
 
+  function updatePromptPanelUI() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var project = state.currentProject;
+      var detached = !(project && project.id);
+      var promptPanel = root.querySelector('.ai-image-panel-left');
+      if (promptPanel) {
+        promptPanel.outerHTML = buildPromptPanelMarkup(detached, project, state.mode !== 'image-to-image');
+        hydratePromptControls();
+      }
+    } catch (_) {}
+  }
+
   function updatePreviewPanelUI() {
     try {
       var root = document.getElementById('ai-image-root');
@@ -1526,6 +1885,81 @@
         previewPanel.outerHTML = buildPreviewPanelMarkup(detached, project, brand, selectedResult);
       }
     } catch (_) {}
+  }
+
+  function renderCameraModalUi() {
+    var root = document.getElementById('ai-image-root');
+    if (!root) return;
+    var shell = root.querySelector('.ai-image-shell');
+    if (!shell) return;
+    var existing = shell.querySelector('.ai-image-camera-modal-backdrop');
+    if (!state.cameraModalOpen) {
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+      return;
+    }
+    var markup = buildCameraModalMarkup();
+    if (!existing) {
+      shell.insertAdjacentHTML('beforeend', markup);
+      return;
+    }
+    existing.outerHTML = markup;
+  }
+
+  function openCameraModal() {
+    state.cameraModalDraft = cloneCameraControls(activeCameraControls());
+    state.cameraModalOpen = true;
+    renderCameraModalUi();
+  }
+
+  function closeCameraModal() {
+    state.cameraModalOpen = false;
+    renderCameraModalUi();
+  }
+
+  function updateCameraModalDraftFromInputs() {
+    var panEl = document.getElementById('ai-image-camera-pan');
+    var tiltEl = document.getElementById('ai-image-camera-tilt');
+    var distEl = document.getElementById('ai-image-camera-distance');
+    var current = normalizeCameraControls(state.cameraModalDraft);
+    current.pan = clampNumber(panEl && panEl.value, -90, 90, current.pan);
+    current.tilt = clampNumber(tiltEl && tiltEl.value, -60, 60, current.tilt);
+    current.distance = clampNumber(distEl && distEl.value, 0, 100, current.distance);
+    current.enabled = !isNeutralCameraControls(current);
+    state.cameraModalDraft = current;
+  }
+
+  function syncCameraModalLiveUi() {
+    if (!state.cameraModalOpen) return;
+    var controls = normalizeCameraControls(state.cameraModalDraft);
+    var summaryTarget = document.getElementById('ai-image-camera-summary');
+    var promptPreview = document.getElementById('ai-image-camera-prompt-preview');
+    var panValue = document.getElementById('ai-image-camera-pan-value');
+    var tiltValue = document.getElementById('ai-image-camera-tilt-value');
+    var distValue = document.getElementById('ai-image-camera-distance-value');
+    var orbit = document.querySelector('.ai-image-camera-orbit');
+    if (panValue) panValue.textContent = String(controls.pan);
+    if (tiltValue) tiltValue.textContent = String(controls.tilt);
+    if (distValue) distValue.textContent = String(controls.distance);
+    if (summaryTarget) summaryTarget.textContent = cameraSummary(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
+    if (promptPreview) promptPreview.textContent = buildCameraPromptBlock(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
+    if (orbit) {
+      orbit.style.setProperty('--camera-x', String(50 + Math.round((controls.pan / 90) * 34)) + '%');
+      orbit.style.setProperty('--camera-y', String(50 + Math.round((controls.tilt / 60) * 26)) + '%');
+      orbit.style.setProperty('--orbit-scale', String(0.92 + ((100 - controls.distance) / 100) * 0.24));
+    }
+  }
+
+  function applyCameraControlsToState() {
+    var finalControls = normalizeCameraControls(Object.assign({}, state.cameraModalDraft, {
+      enabled: !isNeutralCameraControls(state.cameraModalDraft)
+    }));
+    state.cameraControls = finalControls;
+    var result = currentResult();
+    if (result) result.cameraControls = finalControls;
+    persistHistory();
+    updatePromptPanelUI();
+    updatePreviewPanelUI();
+    closeCameraModal();
   }
 
   function updateHistoryPanelUI() {
@@ -1804,6 +2238,8 @@
 
   async function generateImage() {
     var prompt = String(state.prompt || '').trim();
+    var appliedCameraControls = normalizeCameraControls(state.cameraControls);
+    var finalPrompt = buildPromptWithCameraControls(prompt, appliedCameraControls);
     if (!prompt) {
       alert(t('promptRequired'));
       return;
@@ -1814,7 +2250,7 @@
     }
 
     var payload = {
-      prompt: prompt,
+      prompt: finalPrompt,
       aspectRatio: state.aspectRatio,
       storageService: 'ai-image',
       sessionId: state.sessionId,
@@ -1843,8 +2279,10 @@
         objectName: String(response && response.objectName || '').trim(),
         imageSize: String(response && response.imageSizeApplied || state.imageSize || '').trim(),
         prompt: prompt,
+        resolvedPrompt: finalPrompt,
         mode: state.mode,
         generationStyle: normalizeGenerationStyle(state.generationStyle),
+        cameraControls: appliedCameraControls,
         conversationTurnCount: Number(response && response.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
         aspectRatio: state.aspectRatio,
         createdAt: new Date().toISOString(),
@@ -1883,6 +2321,9 @@
     if (root && !root.dataset.bound) {
       root.dataset.bound = '1';
       root.addEventListener('click', function (evt) {
+        if (evt.target && evt.target.closest && evt.target.closest('.ai-image-camera-modal') && !evt.target.closest('[data-action]')) {
+          return;
+        }
         var btn = evt.target.closest('[data-action]');
         if (!btn) return;
         try {
@@ -1992,7 +2433,11 @@
         }
         if (action === 'select-result') {
           state.currentResultId = String(btn.getAttribute('data-id') || '');
+          var selected = currentResult();
+          if (selected && selected.cameraControls) state.cameraControls = normalizeCameraControls(selected.cameraControls);
+          closeCameraModal();
           updateResultSelectionUI();
+          updatePromptPanelUI();
           return;
         }
         if (action === 'toggle-source-section') {
@@ -2025,6 +2470,29 @@
             root.appendChild(modal);
             state.imageModalUrl = urlToShow;
           }
+          return;
+        }
+        if (action === 'open-camera-modal') {
+          openCameraModal();
+          return;
+        }
+        if (action === 'close-camera-modal') {
+          closeCameraModal();
+          return;
+        }
+        if (action === 'set-camera-preset') {
+          applyCameraPresetToDraft(btn.getAttribute('data-preset') || 'auto');
+          renderCameraModalUi();
+          return;
+        }
+        if (action === 'reset-camera-controls') {
+          state.cameraModalDraft = createDefaultCameraControls();
+          renderCameraModalUi();
+          return;
+        }
+        if (action === 'apply-camera-controls') {
+          updateCameraModalDraftFromInputs();
+          applyCameraControlsToState();
           return;
         }
         if (action === 'set-aspect') {
@@ -2087,8 +2555,13 @@
             if (String(state.currentResultId || '') === deleteId) {
               state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
             }
+            var nextCurrent = currentResult();
+            state.cameraControls = nextCurrent && nextCurrent.cameraControls
+              ? normalizeCameraControls(nextCurrent.cameraControls)
+              : createDefaultCameraControls();
             persistHistory();
             updateResultSelectionUI();
+            updatePromptPanelUI();
           }
           return;
         }
@@ -2106,7 +2579,9 @@
           });
           if (r1 && r1.prompt) {
             state.prompt = String(r1.prompt || '');
+            state.cameraControls = normalizeCameraControls(r1.cameraControls);
             updatePromptFieldUI();
+            updatePromptPanelUI();
             var promptInput = document.getElementById('ai-image-prompt');
             if (promptInput && typeof promptInput.focus === 'function') {
               try { promptInput.focus({ preventScroll: true }); } catch (_) { promptInput.focus(); }
@@ -2120,11 +2595,13 @@
           });
           if (r2) {
             state.mode = 'image-to-image';
+            state.cameraControls = normalizeCameraControls(r2.cameraControls);
             var addResult = appendSourceImages([makeSourceImage(resolveResultUrl(r2), String(r2.objectName || r2.id || 'result'), 'upload')]);
             if (addResult.hitLimit) {
               alert(t('sourceLimitReached'));
             }
             updateSourceUI();
+            updatePromptPanelUI();
           }
           return;
         }
@@ -2134,12 +2611,14 @@
           });
           if (r3) {
             state.mode = 'image-to-image';
+            state.cameraControls = normalizeCameraControls(r3.cameraControls);
             var ensureResult = appendSourceImages([makeSourceImage(resolveResultUrl(r3), String(r3.objectName || r3.id || 'result'), 'upload')]);
             if (ensureResult.hitLimit) {
               alert(t('sourceLimitReached'));
               updateSourceUI();
               return;
             }
+            updatePromptPanelUI();
             generateImage();
           }
           return;
@@ -2201,6 +2680,25 @@
       if (target.id === 'ai-image-generation-style') {
         state.generationStyle = normalizeGenerationStyle(target.value || 'single');
         return;
+      }
+    });
+
+    document.addEventListener('input', function (evt) {
+      var target = evt.target;
+      if (!target) return;
+      if (
+        target.id === 'ai-image-camera-pan' ||
+        target.id === 'ai-image-camera-tilt' ||
+        target.id === 'ai-image-camera-distance'
+      ) {
+        updateCameraModalDraftFromInputs();
+        syncCameraModalLiveUi();
+      }
+    });
+
+    document.addEventListener('keydown', function (evt) {
+      if (evt && evt.key === 'Escape' && state.cameraModalOpen) {
+        closeCameraModal();
       }
     });
   }
