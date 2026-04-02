@@ -2916,15 +2916,13 @@
             state.previewTargetType = 'none';
           }
           updateSourceUI();
-          updatePreviewPanelUI();
           return;
         }
         if (action === 'select-source-primary') {
           var sourceIndex = Number(btn.getAttribute('data-index') || -1);
           setPrimarySourceByIndex(sourceIndex);
-          if (sourceIndex >= 0) state.previewTargetType = 'source';
+          // 미리보기 이미지는 유지
           updateSourceUI();
-          updatePreviewPanelUI();
           return;
         }
         if (action === 'load-project-library') {
@@ -2946,7 +2944,6 @@
           var nextUrl = resolveLibraryItemUrl(item);
           toggleSourceImage(nextUrl, String(item.name || '').trim(), 'project');
           updateSourceUI();
-          updatePreviewPanelUI();
           return;
         }
         if (action === 'select-brand-source') {
@@ -2956,7 +2953,6 @@
           var nextBrandUrl = resolveLibraryItemUrl(brandItem);
           toggleSourceImage(nextBrandUrl, String(brandItem.name || '').trim(), 'brand');
           updateSourceUI();
-          updatePreviewPanelUI();
           return;
         }
         if (action === 'select-content-source') {
@@ -2966,7 +2962,6 @@
           var nextContentUrl = resolveContentItemUrl(cItem);
           toggleSourceImage(nextContentUrl, String(cItem.title || '').trim(), 'content');
           updateSourceUI();
-          updatePreviewPanelUI();
           return;
         }
         if (action === 'generate-image') {
