@@ -2911,7 +2911,6 @@
             : createDefaultCameraControls();
           updateResultSelectionUI();
           updatePromptPanelUI();
-          updateHistoryPanelUI();
           return;
         }
         if (action === 'toggle-camera-panel') {
