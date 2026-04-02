@@ -458,17 +458,20 @@
     var equatorRadiusY = sphereRadius * CAMERA_ORBIT_EQUATOR_Y_RATIO;
     var axisRadius = sphereRadius * 0.83;
     var panRad = wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) * Math.PI / 180;
+    var previewPanRad = panRad + (Math.PI / 2);
     var distanceRatio = clampNumber((controls.distance - CAMERA_DISTANCE_MIN) / (CAMERA_DISTANCE_MAX - CAMERA_DISTANCE_MIN), 0, 1, 0.5);
     var positiveTiltRatio = clampNumber(controls.tilt / CAMERA_TILT_MAX, 0, 1, 0);
     var negativeTiltRatio = clampNumber(Math.abs(Math.min(controls.tilt, 0)) / Math.abs(CAMERA_TILT_MIN), 0, 1, 0);
     var orbitRadiusX = distanceRatio <= 0.5
       ? lerpNumber(equatorRadiusX * 0.74, equatorRadiusX, distanceRatio / 0.5)
       : lerpNumber(equatorRadiusX, equatorRadiusX * 1.08, (distanceRatio - 0.5) / 0.5);
-    var orbitDepthY = lerpNumber(10, 18, distanceRatio);
+    var orbitRadiusY = distanceRatio <= 0.5
+      ? lerpNumber(equatorRadiusY * 0.74, equatorRadiusY, distanceRatio / 0.5)
+      : lerpNumber(equatorRadiusY, equatorRadiusY * 1.08, (distanceRatio - 0.5) / 0.5);
     var horizontalCompression = clampNumber(1 - (positiveTiltRatio * 0.82) + (negativeTiltRatio * 0.08), 0.18, 1.08, 1);
     var depthScale = clampNumber(1 - (positiveTiltRatio * 0.72), 0.22, 1, 1);
-    var orbitX = centerX + (Math.cos(panRad) * orbitRadiusX * horizontalCompression);
-    var orbitY = centerY + (Math.sin(panRad) * orbitDepthY * depthScale);
+    var orbitX = centerX + (Math.cos(previewPanRad) * orbitRadiusX * horizontalCompression);
+    var orbitY = centerY + (Math.sin(previewPanRad) * orbitRadiusY * depthScale);
     var tiltOffset = lerpNumber(0, -108, positiveTiltRatio) + lerpNumber(0, 82, negativeTiltRatio);
     var cameraX = roundPreviewNumber(clampNumber(orbitX, 72, 328, centerX));
     var cameraY = roundPreviewNumber(clampNumber(orbitY + tiltOffset, 54, 286, centerY));
