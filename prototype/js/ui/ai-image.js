@@ -2355,6 +2355,7 @@
       state.results = state.results.slice(0, 30);
       state.currentResultId = result.id;
       state.previewTargetType = 'result';
+      state.cameraControls = createDefaultCameraControls();
       persistHistory();
       updateResultSelectionUI();
     } catch (err) {

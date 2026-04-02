@@ -83,6 +83,7 @@ test('ai-image preview can switch between source and history targets and camera 
   assert.match(source, /var previewTarget = currentPreviewTarget\(\);/);
   assert.match(source, /referenceImages: previewReferenceImages/);
   assert.match(source, /conversationHistory: previewTarget && previewTarget\.type === 'result' \? buildConversationHistory\(3\) : \[\]/);
+  assert.match(source, /state\.previewTargetType = 'result';\s*state\.cameraControls = createDefaultCameraControls\(\);/);
 });
 
 test('ai-image preview keeps project and brand save controls as icon actions in one control row', () => {
