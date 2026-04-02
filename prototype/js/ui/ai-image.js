@@ -2789,6 +2789,7 @@
           evt.stopPropagation();
         } catch (_) { }
         var action = btn.getAttribute('data-action') || '';
+        var project = state.currentProject;
         if (
           state.mode !== 'image-to-image' &&
           (
