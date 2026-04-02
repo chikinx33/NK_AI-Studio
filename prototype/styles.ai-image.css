@@ -1369,7 +1369,7 @@ body.layout-fixed.page-shell-image .content {
   width: var(--camera-line-length, 0%);
   height: 1.5px;
   transform-origin: left center;
-  transform: rotate(var(--camera-rotation, 0deg));
+  transform: translateY(-50%) rotate(var(--camera-rotation, 0deg));
   background: linear-gradient(90deg, rgba(255, 214, 120, 0.62), rgba(255, 214, 120, 0.08));
   box-shadow: 0 0 10px rgba(255, 183, 77, 0.16);
   pointer-events: none;

@@ -423,11 +423,13 @@
     var depthLift = distanceRatio * 7;
     var x = lerpNumber(50, targetX, orbitStrength);
     var y = lerpNumber(50, targetY, orbitStrength);
-    var lineAngle = Math.atan2(y - 50, x - 50) * 180 / Math.PI;
-    var lineLength = Math.sqrt(Math.pow(x - 50, 2) + Math.pow(y - 50, 2));
+    var finalX = roundPreviewNumber(clampNumber(x, 12, 88, 50));
+    var finalY = roundPreviewNumber(clampNumber(y - depthLift, 10, 90, 50));
+    var lineAngle = Math.atan2(finalY - 50, finalX - 50) * 180 / Math.PI;
+    var lineLength = Math.sqrt(Math.pow(finalX - 50, 2) + Math.pow(finalY - 50, 2));
     return {
-      x: roundPreviewNumber(clampNumber(x, 12, 88, 50)),
-      y: roundPreviewNumber(clampNumber(y - depthLift, 10, 90, 50)),
+      x: finalX,
+      y: finalY,
       scale: roundPreviewNumber(0.92 + ((100 - controls.distance) / 100) * 0.24),
       rotation: roundPreviewNumber(lineAngle),
       lineLength: roundPreviewNumber(Math.max(0, lineLength))
