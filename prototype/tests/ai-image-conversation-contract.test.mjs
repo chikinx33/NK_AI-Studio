@@ -88,7 +88,7 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /cameraPresetLowerRight45/);
   assert.match(source, /cameraPresetHighAngle/);
   assert.match(source, /cameraPresetWide/);
-  assert.match(source, /\['front', 'rear', 'left45', 'right45', 'upperLeft45', 'upperRight45', 'lowerLeft45', 'lowerRight45', 'highangle', 'lowangle', 'closeup', 'wide'\]/);
+  assert.match(source, /\['front', 'rear', 'highangle', 'left45', 'right45', 'lowangle', 'upperLeft45', 'upperRight45', 'closeup', 'lowerLeft45', 'lowerRight45', 'wide'\]/);
   assert.doesNotMatch(source, /data-action="reset-camera-controls"[\s\S]*ai-image-camera-preset-grid/);
   assert.doesNotMatch(source, /id="ai-image-camera-prompt-preview"/);
   assert.doesNotMatch(source, /cameraPresetAuto/);

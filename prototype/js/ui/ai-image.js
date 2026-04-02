@@ -298,10 +298,10 @@
       cameraPresetRear: 'Rear',
       cameraPresetLeft45: 'Left 45°',
       cameraPresetRight45: 'Right 45°',
-      cameraPresetUpperLeft45: 'Upper-left 45°',
-      cameraPresetUpperRight45: 'Upper-right 45°',
-      cameraPresetLowerLeft45: 'Lower-left 45°',
-      cameraPresetLowerRight45: 'Lower-right 45°',
+      cameraPresetUpperLeft45: 'Upper.L 45°',
+      cameraPresetUpperRight45: 'Upper.R 45°',
+      cameraPresetLowerLeft45: 'Lower.L 45°',
+      cameraPresetLowerRight45: 'Lower.R 45°',
       cameraPresetHighAngle: 'High angle',
       cameraPresetLowAngle: 'Low angle',
       cameraPresetCloseUp: 'Close-up',
@@ -1399,7 +1399,7 @@
     var controls = normalizeCameraControls(state.cameraControls);
     var targetMode = normalizeCameraTargetMode(state.cameraTargetMode);
     var orbitPreview = computeCameraOrbitPreview(controls);
-    var presetOptions = ['front', 'rear', 'left45', 'right45', 'upperLeft45', 'upperRight45', 'lowerLeft45', 'lowerRight45', 'highangle', 'lowangle', 'closeup', 'wide'].map(function (preset) {
+    var presetOptions = ['front', 'rear', 'highangle', 'left45', 'right45', 'lowangle', 'upperLeft45', 'upperRight45', 'closeup', 'lowerLeft45', 'lowerRight45', 'wide'].map(function (preset) {
       var presetKey = String(preset || '').toLowerCase();
       var isFrontDefault = presetKey === 'front' && isNeutralCameraControls(controls);
       var isActive = controls.preset === presetKey || isFrontDefault;
@@ -1424,20 +1424,23 @@
               '<div class="ai-image-camera-inline-sliders">' +
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
-                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-pan"><span>' + escapeHtml(t('cameraPan')) + '</span><strong id="ai-image-camera-pan-value">' + escapeHtml(String(controls.pan)) + '</strong></label>' +
+                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-pan"><span>' + escapeHtml(t('cameraPan')) + '</span></label>' +
                   '<input id="ai-image-camera-pan" type="range" min="0" max="359" step="1" value="' + escapeHtml(String(controls.pan)) + '" />' +
+                  '<strong id="ai-image-camera-pan-value">' + escapeHtml(String(controls.pan)) + '</strong>' +
                 '</div>' +
               '</div>' +
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
-                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span><strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong></label>' +
+                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span></label>' +
                   '<input id="ai-image-camera-tilt" type="range" min="-30" max="60" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
+                  '<strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong>' +
                 '</div>' +
               '</div>' +
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
-                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span><strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong></label>' +
+                  '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span></label>' +
                   '<input id="ai-image-camera-distance" type="range" min="0" max="2" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
+                  '<strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong>' +
                 '</div>' +
               '</div>' +
               '</div>' +
