@@ -3037,7 +3037,20 @@
             if (toDelete && toDelete.savedToProject && objectName && project && project.id && NK.api && NK.api.projectDelete) {
               NK.api.projectDelete(project.id, objectName).catch(function () { });
             }
-            if (objectName) addDeletedTombstone(objectName);
+            if (objectName) {
+              addDeletedTombstone(objectName);
+              try {
+                if (NK.api && typeof NK.api.aiImageSessionDelete === 'function') {
+                  NK.api.aiImageSessionDelete(state.sessionId, { confirm: 'yes', objectName: objectName }).catch(function () { });
+                } else {
+                  fetch('/api/ai-image/session-delete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId: state.sessionId, confirm: 'yes', objectName: objectName })
+                  }).catch(function () { });
+                }
+              } catch (_) {}
+            }
             else {
               try {
                 var targetUrl = resolveResultUrl(toDelete);
@@ -3046,7 +3059,20 @@
                     var items = Array.isArray(res && res.items) ? res.items : [];
                     var match = items.find(function (it) { return String(it && it.signedUrl || '').trim() === String(targetUrl || '').trim(); });
                     var name = String(match && (match.name || match.objectName) || '').trim();
-                    if (name) addDeletedTombstone(name);
+                    if (name) {
+                      addDeletedTombstone(name);
+                      try {
+                        if (NK.api && typeof NK.api.aiImageSessionDelete === 'function') {
+                          NK.api.aiImageSessionDelete(state.sessionId, { confirm: 'yes', objectName: name }).catch(function () { });
+                        } else {
+                          fetch('/api/ai-image/session-delete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ sessionId: state.sessionId, confirm: 'yes', objectName: name })
+                          }).catch(function () { });
+                        }
+                      } catch (_) {}
+                    }
                   }).catch(function () { });
                 }
               } catch (_) {}
@@ -3080,6 +3106,17 @@
             // fall through if confirm not available
           }
           clearAllHistoryResults(project);
+          try {
+            if (NK.api && typeof NK.api.aiImageSessionDelete === 'function') {
+              NK.api.aiImageSessionDelete(state.sessionId, { confirm: 'yes', all: true }).catch(function () { });
+            } else {
+              fetch('/api/ai-image/session-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId: state.sessionId, confirm: 'yes', all: true })
+              }).catch(function () { });
+            }
+          } catch (_) {}
           return;
         }
         if (action === 'save-result-project') {
