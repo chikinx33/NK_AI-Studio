@@ -328,13 +328,22 @@
       .replace(/'/g, '&#39;');
   }
 
+  var CAMERA_FRONT_PAN = 270;
+  var CAMERA_PAN_MIN = 0;
+  var CAMERA_PAN_MAX = 359;
+  var CAMERA_TILT_MIN = -45;
+  var CAMERA_TILT_MAX = 45;
+  var CAMERA_DISTANCE_MIN = 1;
+  var CAMERA_DISTANCE_MAX = 5;
+
   function createDefaultCameraControls() {
     return {
+      orbitPan: true,
       enabled: false,
       preset: 'custom',
-      pan: 0,
+      pan: CAMERA_FRONT_PAN,
       tilt: 0,
-      distance: 50
+      distance: 3
     };
   }
 
@@ -345,16 +354,52 @@
     return Math.min(max, Math.max(min, num));
   }
 
+  function wrapPanDegrees(value, fallback) {
+    var num = Number(value);
+    if (!Number.isFinite(num)) num = Number(fallback);
+    if (!Number.isFinite(num)) num = CAMERA_FRONT_PAN;
+    var wrapped = num % 360;
+    if (wrapped < 0) wrapped += 360;
+    return Math.round(wrapped);
+  }
+
+  function legacyDistanceToStage(distance) {
+    var value = clampNumber(distance, 0, 100, 50);
+    if (value <= 20) return 1;
+    if (value <= 40) return 2;
+    if (value <= 60) return 3;
+    if (value <= 80) return 4;
+    return 5;
+  }
+
+  function cameraRelativePanDegrees(raw) {
+    var controls = raw && typeof raw === 'object' ? raw : createDefaultCameraControls();
+    var delta = wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) - CAMERA_FRONT_PAN;
+    if (delta > 180) delta -= 360;
+    if (delta <= -180) delta += 360;
+    return Math.round(delta);
+  }
+
   function normalizeCameraControls(raw) {
     var base = raw && typeof raw === 'object' ? raw : {};
     var preset = String(base.preset || 'custom').trim().toLowerCase();
     if (!/^(front|left45|right45|topdown|lowangle|closeup|medium|custom)$/.test(preset)) preset = 'custom';
+    var panValue = Number(base.pan);
+    var tiltValue = Number(base.tilt);
+    var distanceValue = Number(base.distance);
+    var orbitPan = base.orbitPan === true
+      || (panValue >= CAMERA_PAN_MIN && panValue <= CAMERA_PAN_MAX && distanceValue >= CAMERA_DISTANCE_MIN && distanceValue <= CAMERA_DISTANCE_MAX);
     var normalized = {
+      orbitPan: true,
       enabled: !!base.enabled,
       preset: preset,
-      pan: clampNumber(base.pan, -90, 90, 0),
-      tilt: clampNumber(base.tilt, -60, 60, 0),
-      distance: clampNumber(base.distance, 0, 100, 50)
+      pan: orbitPan
+        ? wrapPanDegrees(panValue, CAMERA_FRONT_PAN)
+        : wrapPanDegrees(CAMERA_FRONT_PAN + clampNumber(panValue, -180, 180, 0), CAMERA_FRONT_PAN),
+      tilt: clampNumber(tiltValue, CAMERA_TILT_MIN, CAMERA_TILT_MAX, 0),
+      distance: orbitPan
+        ? clampNumber(distanceValue, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX, 3)
+        : legacyDistanceToStage(distanceValue)
     };
     normalized.enabled = normalized.enabled && !isNeutralCameraControls(normalized);
     return normalized;
@@ -375,17 +420,17 @@
   function isNeutralCameraControls(raw) {
     var controls = raw && typeof raw === 'object' ? raw : createDefaultCameraControls();
     return !controls.enabled
-      && Number(controls.pan || 0) === 0
+      && wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) === CAMERA_FRONT_PAN
       && Number(controls.tilt || 0) === 0
-      && Number(controls.distance || 50) === 50;
+      && Number(controls.distance || 3) === 3;
   }
 
   function distanceBucket(distance) {
-    var value = clampNumber(distance, 0, 100, 50);
-    if (value <= 20) return 'extreme-close-up';
-    if (value <= 40) return 'close-up';
-    if (value <= 60) return 'medium-shot';
-    if (value <= 80) return 'full-shot';
+    var value = clampNumber(distance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX, 3);
+    if (value <= 1) return 'close-up';
+    if (value <= 2) return 'medium-close-up';
+    if (value <= 3) return 'medium-shot';
+    if (value <= 4) return 'full-shot';
     return 'wide-shot';
   }
 
@@ -400,37 +445,28 @@
 
   function computeCameraOrbitPreview(raw) {
     var controls = normalizeCameraControls(raw);
-    var panRatio = clampNumber(controls.pan / 90, -1, 1, 0);
-    var tiltRatio = clampNumber(controls.tilt / 60, -1, 1, 0);
-    var distanceRatio = clampNumber((50 - controls.distance) / 50, -1, 1, 0);
-    var panAbs = Math.abs(panRatio);
-    var tiltAbs = Math.abs(tiltRatio);
-    var blendBase = panAbs + tiltAbs;
-    var tiltBlend = blendBase ? (tiltAbs / blendBase) : 0.5;
-    var yaw = panRatio * (Math.PI / 2);
-    var pitch = tiltRatio * (Math.PI / 2);
-    var horizontalTarget = {
-      x: 50 + (Math.sin(yaw) * 32),
-      y: 50 + ((1 - Math.cos(yaw)) * 11)
-    };
-    var verticalTarget = {
-      x: 50 + (Math.sin(pitch) * 8),
-      y: 50 - (Math.sin(pitch) * 30)
-    };
-    var targetX = lerpNumber(horizontalTarget.x, verticalTarget.x, tiltBlend);
-    var targetY = lerpNumber(horizontalTarget.y, verticalTarget.y, tiltBlend);
-    var orbitStrength = Math.min(1, Math.sqrt((panRatio * panRatio) + (tiltRatio * tiltRatio)));
-    var depthLift = distanceRatio * 7;
-    var x = lerpNumber(50, targetX, orbitStrength);
-    var y = lerpNumber(50, targetY, orbitStrength);
-    var finalX = roundPreviewNumber(clampNumber(x, 12, 88, 50));
-    var finalY = roundPreviewNumber(clampNumber(y - depthLift, 10, 90, 50));
-    var lineAngle = Math.atan2(finalY - 50, finalX - 50) * 180 / Math.PI;
-    var lineLength = Math.sqrt(Math.pow(finalX - 50, 2) + Math.pow(finalY - 50, 2));
+    var panRad = wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) * Math.PI / 180;
+    var tiltRad = clampNumber(controls.tilt, CAMERA_TILT_MIN, CAMERA_TILT_MAX, 0) * Math.PI / 180;
+    var distanceRatio = clampNumber((controls.distance - CAMERA_DISTANCE_MIN) / (CAMERA_DISTANCE_MAX - CAMERA_DISTANCE_MIN), 0, 1, 0.5);
+    var radiusX = lerpNumber(26, 38, distanceRatio);
+    var radiusY = lerpNumber(18, 29, distanceRatio);
+    var orbitLift = Math.sin(tiltRad) * 20;
+    var x = 50 + (Math.sin(panRad) * radiusX * Math.cos(tiltRad * 0.35));
+    var y = 50 + (Math.cos(panRad) * radiusY) - orbitLift;
+    var finalX = roundPreviewNumber(clampNumber(x, 10, 90, 50));
+    var finalY = roundPreviewNumber(clampNumber(y, 10, 90, 50));
+    var focusPull = lerpNumber(0.34, 0.46, distanceRatio);
+    var focusX = roundPreviewNumber(50 + ((finalX - 50) * focusPull));
+    var focusY = roundPreviewNumber(50 + ((finalY - 50) * focusPull));
+    var lineAngle = Math.atan2(finalY - focusY, finalX - focusX) * 180 / Math.PI;
+    var lineLength = Math.sqrt(Math.pow(finalX - focusX, 2) + Math.pow(finalY - focusY, 2));
     return {
       x: finalX,
       y: finalY,
-      scale: roundPreviewNumber(0.92 + ((100 - controls.distance) / 100) * 0.24),
+      focusX: focusX,
+      focusY: focusY,
+      scale: roundPreviewNumber(lerpNumber(1.06, 0.9, distanceRatio)),
+      deviceScale: roundPreviewNumber(lerpNumber(1.1, 0.92, distanceRatio)),
       rotation: roundPreviewNumber(lineAngle),
       lineLength: roundPreviewNumber(Math.max(0, lineLength))
     };
@@ -453,14 +489,14 @@
   function distanceLabel(distance) {
     var bucket = distanceBucket(distance);
     if (state.lang === 'en') {
-      if (bucket === 'extreme-close-up') return 'extreme close-up';
       if (bucket === 'close-up') return 'close-up';
+      if (bucket === 'medium-close-up') return 'medium close-up';
       if (bucket === 'medium-shot') return 'medium shot';
       if (bucket === 'full-shot') return 'full shot';
       return 'wide shot';
     }
-    if (bucket === 'extreme-close-up') return '익스트림 클로즈업';
     if (bucket === 'close-up') return '클로즈업';
+    if (bucket === 'medium-close-up') return '미디엄 클로즈업';
     if (bucket === 'medium-shot') return '미디엄 샷';
     if (bucket === 'full-shot') return '풀샷';
     return '와이드 샷';
@@ -473,19 +509,19 @@
     try {
       var presets = (window.NK && NK.constants && NK.constants.CAMERA_PRESETS) ? NK.constants.CAMERA_PRESETS : null;
       if (presets && presets[preset]) {
-        next.pan = Number(presets[preset].pan || 0);
+        next.pan = Number(presets[preset].pan || CAMERA_FRONT_PAN);
         next.tilt = Number(presets[preset].tilt || 0);
-        next.distance = Number(presets[preset].distance || 50);
+        next.distance = Number(presets[preset].distance || 3);
         return next;
       }
     } catch (_) {}
-    if (preset === 'front') { next.pan = 0; next.tilt = 0; next.distance = 50; }
-    else if (preset === 'left45') { next.pan = -35; next.tilt = 0; next.distance = 56; }
-    else if (preset === 'right45') { next.pan = 35; next.tilt = 0; next.distance = 56; }
-    else if (preset === 'topdown') { next.pan = 0; next.tilt = -48; next.distance = 82; }
-    else if (preset === 'lowangle') { next.pan = 0; next.tilt = 24; next.distance = 48; }
-    else if (preset === 'closeup') { next.pan = 0; next.tilt = 8; next.distance = 18; }
-    else if (preset === 'medium') { next.pan = 0; next.tilt = 0; next.distance = 50; }
+    if (preset === 'front') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 3; }
+    else if (preset === 'left45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN - 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 3; }
+    else if (preset === 'right45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN + 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 3; }
+    else if (preset === 'topdown') { next.pan = CAMERA_FRONT_PAN; next.tilt = -32; next.distance = 4; }
+    else if (preset === 'lowangle') { next.pan = CAMERA_FRONT_PAN; next.tilt = 18; next.distance = 3; }
+    else if (preset === 'closeup') { next.pan = CAMERA_FRONT_PAN; next.tilt = 4; next.distance = 1; }
+    else if (preset === 'medium') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 3; }
     return next;
   }
 
@@ -507,6 +543,7 @@
   function cameraControlSignature(raw) {
     var controls = normalizeCameraControls(raw);
     return [
+      controls.orbitPan ? '1' : '0',
       controls.enabled ? '1' : '0',
       controls.preset,
       controls.pan,
@@ -529,44 +566,43 @@
       return bits.join(state.lang === 'en' ? ' · ' : ' · ');
     }
     bits.push(cameraPresetLabel(controls.preset));
-    if (controls.pan) {
-      bits.push(state.lang === 'en'
-        ? ('pan ' + (controls.pan > 0 ? 'right ' : 'left ') + Math.abs(controls.pan) + 'deg')
-        : ('pan ' + (controls.pan > 0 ? '우 ' : '좌 ') + Math.abs(controls.pan) + '도'));
-    }
-    if (controls.tilt) {
-      bits.push(state.lang === 'en'
-        ? ('tilt ' + (controls.tilt > 0 ? 'up ' : 'down ') + Math.abs(controls.tilt) + 'deg')
-        : ('tilt ' + (controls.tilt > 0 ? '올려 ' : '내려 ') + Math.abs(controls.tilt) + '도'));
-    }
-    bits.push(distanceLabel(controls.distance));
+    bits.push(state.lang === 'en'
+      ? ('pan ' + controls.pan + 'deg')
+      : ('pan ' + controls.pan + '도'));
+    bits.push(state.lang === 'en'
+      ? ('tilt ' + controls.tilt + 'deg')
+      : ('tilt ' + controls.tilt + '도'));
+    bits.push(state.lang === 'en'
+      ? ('distance ' + controls.distance)
+      : ('거리 ' + controls.distance + '단계'));
     return bits.join(state.lang === 'en' ? ' · ' : ' · ');
   }
 
   function buildCameraPromptBlock(raw) {
     var controls = normalizeCameraControls(raw);
     if (!controls.enabled || isNeutralCameraControls(controls)) return '';
+    var relativePan = cameraRelativePanDegrees(controls);
     var shotLabel = distanceLabel(controls.distance);
     if (state.lang === 'en') {
-      var panLineEn = controls.pan ? ('Pan ' + (controls.pan > 0 ? 'right' : 'left') + ' by ' + Math.abs(controls.pan) + ' degrees.') : 'Keep pan centered.';
+      var panLineEn = relativePan ? ('Orbit the camera ' + (relativePan > 0 ? 'right' : 'left') + ' by ' + Math.abs(relativePan) + ' degrees around the subject.') : 'Keep the camera at the front-facing orbit position.';
       var tiltLineEn = controls.tilt ? ('Tilt ' + (controls.tilt > 0 ? 'up' : 'down') + ' by ' + Math.abs(controls.tilt) + ' degrees.') : 'Keep tilt at eye level.';
       return [
         'Camera direction:',
         '- Preset: ' + cameraPresetLabel(controls.preset),
         '- ' + panLineEn,
         '- ' + tiltLineEn,
-        '- Distance: ' + shotLabel + '.',
+        '- Distance stage: ' + controls.distance + ' (' + shotLabel + ').',
         '- Keep the subject clearly readable while preserving the requested scene and style.'
       ].join('\n');
     }
-    var panLineKo = controls.pan ? ('Pan을 ' + (controls.pan > 0 ? '오른쪽' : '왼쪽') + '으로 ' + Math.abs(controls.pan) + '도 이동.') : 'Pan은 중앙 유지.';
+    var panLineKo = relativePan ? ('카메라를 피사체 기준 ' + (relativePan > 0 ? '오른쪽' : '왼쪽') + '으로 ' + Math.abs(relativePan) + '도 공전.') : '카메라는 정면 공전 위치 유지.';
     var tiltLineKo = controls.tilt ? ('Tilt를 ' + (controls.tilt > 0 ? '위로' : '아래로') + ' ' + Math.abs(controls.tilt) + '도 조정.') : 'Tilt는 아이레벨 유지.';
     return [
       '카메라 연출:',
       '- 프리셋: ' + cameraPresetLabel(controls.preset),
       '- ' + panLineKo,
       '- ' + tiltLineKo,
-      '- 거리감: ' + shotLabel,
+      '- 거리 단계: ' + controls.distance + ' (' + shotLabel + ')',
       '- 피사체는 또렷하게 보이게 유지하고 요청한 장면과 스타일을 우선 반영.'
     ].join('\n');
   }
@@ -1238,23 +1274,7 @@
     var controls = normalizeCameraControls(raw);
     var modeLabel = cameraTargetModeLabel(state.cameraTargetMode);
     if (!controls.enabled || isNeutralCameraControls(controls)) return modeLabel + ' · ' + t('cameraSummaryOff');
-    if (state.lang === 'en') {
-      return [
-        modeLabel + ',',
-        'Use',
-        cameraPresetLabel(controls.preset) + ',',
-        controls.pan ? ('pan ' + (controls.pan > 0 ? 'right ' : 'left ') + Math.abs(controls.pan) + 'deg,') : 'centered pan,',
-        controls.tilt ? ('tilt ' + (controls.tilt > 0 ? 'up ' : 'down ') + Math.abs(controls.tilt) + 'deg,') : 'eye-level tilt,',
-        distanceLabel(controls.distance) + '.'
-      ].join(' ');
-    }
-    return [
-      modeLabel + ',',
-      cameraPresetLabel(controls.preset) + ',',
-      controls.pan ? ('pan ' + (controls.pan > 0 ? '우 ' : '좌 ') + Math.abs(controls.pan) + '도,') : 'pan 중앙,',
-      controls.tilt ? ('tilt ' + (controls.tilt > 0 ? '위 ' : '아래 ') + Math.abs(controls.tilt) + '도,') : 'tilt 아이레벨,',
-      distanceLabel(controls.distance)
-    ].join(' ');
+    return cameraSummary(controls, state.cameraTargetMode);
   }
 
   function buildCameraApplyPrompt(cameraPrompt, previewTarget, targetMode) {
@@ -1297,13 +1317,15 @@
         '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-body">' +
             '<div class="ai-image-camera-preview-card is-inline">' +
-              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(orbitPreview.x)) + '%;--camera-y:' + escapeHtml(String(orbitPreview.y)) + '%;--orbit-scale:' + escapeHtml(String(orbitPreview.scale)) + ';--camera-rotation:' + escapeHtml(String(orbitPreview.rotation)) + 'deg;--camera-line-length:' + escapeHtml(String(orbitPreview.lineLength)) + '%;">' +
+              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(orbitPreview.x)) + '%;--camera-y:' + escapeHtml(String(orbitPreview.y)) + '%;--focus-x:' + escapeHtml(String(orbitPreview.focusX)) + '%;--focus-y:' + escapeHtml(String(orbitPreview.focusY)) + '%;--orbit-scale:' + escapeHtml(String(orbitPreview.scale)) + ';--camera-scale:' + escapeHtml(String(orbitPreview.deviceScale)) + ';--camera-rotation:' + escapeHtml(String(orbitPreview.rotation)) + 'deg;--camera-line-length:' + escapeHtml(String(orbitPreview.lineLength)) + '%;">' +
                 '<div class="ai-image-camera-orbit-ring is-horizontal"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-vertical"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-depth"></div>' +
+                '<div class="ai-image-camera-orbit-ring is-equator"></div>' +
                 '<div class="ai-image-camera-link"></div>' +
-                '<div class="ai-image-camera-subject-core"></div>' +
-                '<div class="ai-image-camera-device"><span class="ai-image-camera-pointer"></span></div>' +
+                '<div class="ai-image-camera-focus-dot"></div>' +
+                '<div class="ai-image-camera-subject-core">' + cameraSubjectTargetIconSvg() + '</div>' +
+                '<div class="ai-image-camera-device"><span class="ai-image-camera-device-icon">' + cameraFabIconSvg() + '</span></div>' +
                 '<div class="ai-image-camera-target-toggle" role="tablist" aria-label="' + escapeHtml(t('cameraButton')) + '">' +
                   '<button type="button" class="ai-image-camera-target-btn is-scene' + (targetMode === 'scene' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="scene" aria-label="' + escapeHtml(t('cameraTargetSceneLabel')) + '" title="' + escapeHtml(t('cameraTargetSceneLabel')) + '">' + cameraSceneTargetIconSvg() + '</button>' +
                   '<button type="button" class="ai-image-camera-target-btn is-subject' + (targetMode === 'subject' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="subject" aria-label="' + escapeHtml(t('cameraTargetSubjectLabel')) + '" title="' + escapeHtml(t('cameraTargetSubjectLabel')) + '">' + cameraSubjectTargetIconSvg() + '</button>' +
@@ -1318,19 +1340,19 @@
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
                   '<label class="ai-image-camera-slider-row" for="ai-image-camera-pan"><span>' + escapeHtml(t('cameraPan')) + '</span><strong id="ai-image-camera-pan-value">' + escapeHtml(String(controls.pan)) + '</strong></label>' +
-                  '<input id="ai-image-camera-pan" type="range" min="-90" max="90" step="1" value="' + escapeHtml(String(controls.pan)) + '" />' +
+                  '<input id="ai-image-camera-pan" type="range" min="0" max="359" step="1" value="' + escapeHtml(String(controls.pan)) + '" />' +
                 '</div>' +
               '</div>' +
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
                   '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span><strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong></label>' +
-                  '<input id="ai-image-camera-tilt" type="range" min="-60" max="60" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
+                  '<input id="ai-image-camera-tilt" type="range" min="-45" max="45" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
                 '</div>' +
               '</div>' +
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
                   '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span><strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong></label>' +
-                  '<input id="ai-image-camera-distance" type="range" min="0" max="100" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
+                  '<input id="ai-image-camera-distance" type="range" min="1" max="5" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
                 '</div>' +
               '</div>' +
               '</div>' +
@@ -2118,9 +2140,9 @@
     var tiltEl = document.getElementById('ai-image-camera-tilt');
     var distEl = document.getElementById('ai-image-camera-distance');
     var current = normalizeCameraControls(state.cameraControls);
-    current.pan = clampNumber(panEl && panEl.value, -90, 90, current.pan);
-    current.tilt = clampNumber(tiltEl && tiltEl.value, -60, 60, current.tilt);
-    current.distance = clampNumber(distEl && distEl.value, 0, 100, current.distance);
+    current.pan = wrapPanDegrees(panEl && panEl.value, current.pan);
+    current.tilt = clampNumber(tiltEl && tiltEl.value, CAMERA_TILT_MIN, CAMERA_TILT_MAX, current.tilt);
+    current.distance = clampNumber(distEl && distEl.value, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX, current.distance);
     current.preset = 'custom';
     current.enabled = !isNeutralCameraControls(current);
     state.cameraControls = current;
@@ -2141,7 +2163,10 @@
     if (orbit) {
       orbit.style.setProperty('--camera-x', String(orbitPreview.x) + '%');
       orbit.style.setProperty('--camera-y', String(orbitPreview.y) + '%');
+      orbit.style.setProperty('--focus-x', String(orbitPreview.focusX) + '%');
+      orbit.style.setProperty('--focus-y', String(orbitPreview.focusY) + '%');
       orbit.style.setProperty('--orbit-scale', String(orbitPreview.scale));
+      orbit.style.setProperty('--camera-scale', String(orbitPreview.deviceScale));
       orbit.style.setProperty('--camera-rotation', String(orbitPreview.rotation) + 'deg');
       orbit.style.setProperty('--camera-line-length', String(orbitPreview.lineLength) + '%');
     }

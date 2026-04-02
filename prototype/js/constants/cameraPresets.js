@@ -2,13 +2,13 @@
   var NK = window.NK || (window.NK = {});
   var constants = NK.constants || (NK.constants = {});
   var CAMERA_PRESETS = {
-    front: { pan: 0, tilt: 0, distance: 50 },
-    left45: { pan: -35, tilt: 0, distance: 55 },
-    right45: { pan: 35, tilt: 0, distance: 55 },
-    topdown: { pan: 0, tilt: -45, distance: 80 },
-    lowangle: { pan: 0, tilt: 20, distance: 50 },
-    closeup: { pan: 0, tilt: 5, distance: 20 },
-    medium: { pan: 0, tilt: 0, distance: 50 }
+    front: { orbitPan: true, pan: 270, tilt: 0, distance: 3 },
+    left45: { orbitPan: true, pan: 225, tilt: 0, distance: 3 },
+    right45: { orbitPan: true, pan: 315, tilt: 0, distance: 3 },
+    topdown: { orbitPan: true, pan: 270, tilt: -32, distance: 4 },
+    lowangle: { orbitPan: true, pan: 270, tilt: 18, distance: 3 },
+    closeup: { orbitPan: true, pan: 270, tilt: 4, distance: 1 },
+    medium: { orbitPan: true, pan: 270, tilt: 0, distance: 3 }
   };
   constants.CAMERA_PRESETS = CAMERA_PRESETS;
 })(); 

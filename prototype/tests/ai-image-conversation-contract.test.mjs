@@ -65,8 +65,12 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /computeCameraOrbitPreview/);
   assert.match(source, /--camera-rotation:/);
   assert.match(source, /--camera-line-length:/);
+  assert.match(source, /--focus-x:/);
+  assert.match(source, /--focus-y:/);
   assert.match(source, /class="ai-image-camera-link"/);
-  assert.match(source, /class="ai-image-camera-pointer"/);
+  assert.match(source, /class="ai-image-camera-focus-dot"/);
+  assert.match(source, /class="ai-image-camera-device-icon"/);
+  assert.match(source, /class="ai-image-camera-subject-core"/);
   assert.match(source, /class="ai-image-camera-target-btn is-scene/);
   assert.match(source, /class="ai-image-camera-target-btn is-subject/);
   assert.match(source, /function buildCameraPromptBlock/);
@@ -83,9 +87,9 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /cameraReset/);
   assert.doesNotMatch(source, /id="ai-image-camera-prompt-preview"/);
   assert.doesNotMatch(source, /cameraPresetAuto/);
-  assert.match(source, /id="ai-image-camera-pan"/);
-  assert.match(source, /id="ai-image-camera-tilt"/);
-  assert.match(source, /id="ai-image-camera-distance"/);
+  assert.match(source, /id="ai-image-camera-pan" type="range" min="0" max="359"/);
+  assert.match(source, /id="ai-image-camera-tilt" type="range" min="-45" max="45"/);
+  assert.match(source, /id="ai-image-camera-distance" type="range" min="1" max="5"/);
 });
 
 test('ai-image preview can switch between source and history targets and camera apply follows the preview target', () => {
