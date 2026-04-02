@@ -1540,7 +1540,6 @@
               '<select id="ai-image-size" class="btn-secondary ai-image-select">' +
                 '<option value="512"' + (state.imageSize === '512' ? ' selected' : '') + '>' + escapeHtml(t('sizeFast')) + '</option>' +
                 '<option value="1K"' + (state.imageSize === '1K' ? ' selected' : '') + '>' + escapeHtml(t('sizeStd')) + '</option>' +
-                '<option value="2K"' + (state.imageSize === '2K' ? ' selected' : '') + '>' + escapeHtml(t('sizeHigh')) + '</option>' +
               '</select>' +
             '</div>' +
           '</div>' +
@@ -1599,7 +1598,7 @@
               '<div class="ai-image-inline-actions-left">' +
                 '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
-                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="reuse-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="10" height="12" rx="2"></rect><rect x="4" y="4" width="10" height="12" rx="2"></rect></svg></button>' +
+                '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="upscale-result-2k" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="업스케일 2K" title="업스케일 2K"><span class="ai-image-upscale-badge">2K</span></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
               '</div>' +
               (detached ? '' : '<div class="ai-image-inline-actions-bottom"><div class="ai-image-brand-actions">' +
@@ -1620,7 +1619,7 @@
                 (selectedResult
                   ? '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><span class="ai-image-meta-item"><strong>' + escapeHtml(t('createdAt')) + ':</strong> <span>' + escapeHtml(formatDate(selectedResult.createdAt)) + '</span></span><span class="ai-image-meta-sep" aria-hidden="true"></span><span class="ai-image-meta-item ai-image-meta-item-camera"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> <span>' + escapeHtml(cameraSummary(selectedCameraControls, preview && preview.cameraTargetMode)) + '</span></span></p>'
                   : '<p class="ai-image-preview-created"><strong>' + escapeHtml(t('sourceTitle')) + ':</strong> ' + escapeHtml(sourceMeta || t('sourceKindUpload')) + '</p>') +
-                '<p class="ai-image-preview-prompt">' + escapeHtml(selectedResult ? (selectedResult.prompt || '') : (preview.name || '')) + '</p>' +
+                '<p class="ai-image-preview-prompt"><button type="button" class="btn-secondary compact ai-image-prompt-copy-btn" data-action="copy-result-prompt" data-id="' + escapeHtml(selectedResult ? selectedResult.id : '') + '" aria-label="' + escapeHtml(t('reusePrompt')) + '" title="' + escapeHtml(t('reusePrompt')) + '">⎘</button> ' + escapeHtml(selectedResult ? (selectedResult.prompt || '') : (preview.name || '')) + '</p>' +
               '</div>' +
           '</div>' +
         '</div>'
@@ -1844,11 +1843,11 @@
           sourceBtn.setAttribute('aria-label', t('useAsSource'));
           sourceBtn.setAttribute('title', t('useAsSource'));
         }
-        var reuseBtn = root.querySelector('[data-action="reuse-prompt"]');
-        if (reuseBtn) {
-          reuseBtn.setAttribute('aria-label', t('reusePrompt'));
-          reuseBtn.setAttribute('title', t('reusePrompt'));
-        }
+            var upscaleBtn = root.querySelector('[data-action="upscale-result-2k"]');
+            if (upscaleBtn) {
+              upscaleBtn.setAttribute('aria-label', '업스케일 2K');
+              upscaleBtn.setAttribute('title', '업스케일 2K');
+            }
         var downloadBtn = root.querySelector('[data-action="download-result"]');
         if (downloadBtn) {
           downloadBtn.setAttribute('aria-label', t('download'));
@@ -3086,6 +3085,20 @@
           downloadResult(result);
           return;
         }
+        if (action === 'copy-result-prompt') {
+          var cp = state.results.find(function (item) {
+            return String(item && item.id || '') === String(btn.getAttribute('data-id') || '');
+          });
+          var textToCopy = cp && (cp.prompt || cp.resolvedPrompt || '');
+          if (textToCopy) {
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(String(textToCopy)).catch(function () { });
+              }
+            } catch (_) { }
+          }
+          return;
+        }
         if (action === 'analyze-result-prompt') {
           analyzeResultPrompt(btn.getAttribute('data-id') || '');
           return;
@@ -3256,6 +3269,65 @@
             updatePromptPanelUI();
             updatePreviewPanelUI();
             generateImage();
+          }
+          return;
+        }
+        if (action === 'upscale-result-2k') {
+          var ru = state.results.find(function (item) {
+            return String(item && item.id || '') === String(btn.getAttribute('data-id') || '');
+          });
+          if (ru) {
+            try {
+              var payloadUpscale = {
+                prompt: String(ru.prompt || 'Upscale to 2K while preserving original content.'),
+                aspectRatio: ru.aspectRatio || state.aspectRatio,
+                storageService: 'ai-image',
+                sessionId: state.sessionId,
+                generationMode: 'image-to-image',
+                generationStyle: normalizeGenerationStyle('single'),
+                imageSize: '2K',
+                referenceImages: [{
+                  referenceId: 1,
+                  imageDataUrl: resolveResultUrl(ru),
+                  subjectDescription: 'upscale source',
+                  subjectType: 'SUBJECT_TYPE_DEFAULT'
+                }],
+                conversationHistory: []
+              };
+              setGlobalLoading(true, t('generating'));
+              NK.api.imagen(payloadUpscale).then(function (responseUpscale) {
+                var resultU = {
+                  id: 'res_' + Date.now(),
+                  url: String(responseUpscale && (responseUpscale.signedUrl || responseUpscale.dataUrl) || '').trim(),
+                  objectName: String(responseUpscale && responseUpscale.objectName || '').trim(),
+                  imageSize: String(responseUpscale && responseUpscale.imageSizeApplied || '2K').trim(),
+                  prompt: String(payloadUpscale.prompt || ''),
+                  resolvedPrompt: String(payloadUpscale.prompt || ''),
+                  mode: 'image-to-image',
+                  generationStyle: 'single',
+                  cameraControls: normalizeCameraControls(ru.cameraControls),
+                  conversationTurnCount: Number(responseUpscale && responseUpscale.conversationTurnCount || 0) || 0,
+                  aspectRatio: payloadUpscale.aspectRatio,
+                  createdAt: new Date().toISOString(),
+                  savedToProject: false,
+                  sessionId: state.sessionId
+                };
+                if (!resultU.url) throw new Error('image_result_missing');
+                state.results.unshift(resultU);
+                state.results = state.results.slice(0, 30);
+                state.currentResultId = resultU.id;
+                state.previewTargetType = 'result';
+                persistHistory();
+                appendHistoryCardIfPossible(resultU);
+                updateResultSelectionUI();
+              }).catch(function (err) {
+                alert(t('generationFailed') + (err && err.message ? String(err.message) : String(err)));
+              }).finally(function () {
+                setGlobalLoading(false);
+              });
+            } catch (e) {
+              alert(t('generationFailed') + (e && e.message ? String(e.message) : String(e)));
+            }
           }
           return;
         }
