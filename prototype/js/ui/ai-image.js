@@ -440,34 +440,103 @@
     return Math.round(Number(value || 0) * 10) / 10;
   }
 
+  function formatOrbitSvgNumber(value) {
+    var num = roundPreviewNumber(value);
+    return String(num);
+  }
+
   function computeCameraOrbitPreview(raw) {
     var controls = normalizeCameraControls(raw);
-    var renderPanRad = wrapPanDegrees(controls.pan + 90, CAMERA_FRONT_PAN) * Math.PI / 180;
-    var tiltRad = clampNumber(controls.tilt, CAMERA_TILT_MIN, CAMERA_TILT_MAX, 0) * Math.PI / 180;
+    var viewBoxWidth = 400;
+    var viewBoxHeight = 340;
+    var centerX = 200;
+    var centerY = 170;
+    var sphereRadius = 132;
+    var axisRadius = sphereRadius * 0.83;
+    var panRad = wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) * Math.PI / 180;
     var distanceRatio = clampNumber((controls.distance - CAMERA_DISTANCE_MIN) / (CAMERA_DISTANCE_MAX - CAMERA_DISTANCE_MIN), 0, 1, 0.5);
-    var radiusX = lerpNumber(24, 38, distanceRatio);
-    var radiusY = lerpNumber(15, 31, distanceRatio);
-    var orbitLift = Math.sin(tiltRad) * 24;
-    var horizontalCompression = Math.cos(tiltRad * 1.1);
-    var x = 50 + (Math.sin(renderPanRad) * radiusX * horizontalCompression);
-    var y = 50 + (Math.cos(renderPanRad) * radiusY) - orbitLift;
-    var finalX = roundPreviewNumber(clampNumber(x, 10, 90, 50));
-    var finalY = roundPreviewNumber(clampNumber(y, 10, 90, 50));
-    var focusPull = lerpNumber(0.3, 0.42, distanceRatio);
-    var focusX = roundPreviewNumber(50 + ((finalX - 50) * focusPull));
-    var focusY = roundPreviewNumber(50 + ((finalY - 50) * focusPull));
-    var lineAngle = Math.atan2(finalY - focusY, finalX - focusX) * 180 / Math.PI;
-    var lineLength = Math.sqrt(Math.pow(finalX - focusX, 2) + Math.pow(finalY - focusY, 2));
+    var positiveTiltRatio = clampNumber(controls.tilt / CAMERA_TILT_MAX, 0, 1, 0);
+    var negativeTiltRatio = clampNumber(Math.abs(Math.min(controls.tilt, 0)) / Math.abs(CAMERA_TILT_MIN), 0, 1, 0);
+    var orbitRadiusX = lerpNumber(52, 70, distanceRatio);
+    var orbitRadiusY = lerpNumber(82, 108, distanceRatio);
+    var horizontalCompression = clampNumber(1 - (positiveTiltRatio * 0.82) + (negativeTiltRatio * 0.08), 0.18, 1.08, 1);
+    var verticalOrbitScale = lerpNumber(1, 0.68, positiveTiltRatio);
+    var orbitX = centerX + (Math.cos(panRad) * orbitRadiusX * horizontalCompression);
+    var orbitY = centerY + (Math.sin(panRad) * orbitRadiusY * verticalOrbitScale);
+    var tiltOffset = lerpNumber(0, -108, positiveTiltRatio) + lerpNumber(0, 82, negativeTiltRatio);
+    var cameraX = roundPreviewNumber(clampNumber(orbitX, 72, 328, centerX));
+    var cameraY = roundPreviewNumber(clampNumber(orbitY + tiltOffset, 54, 286, centerY));
+    var focusPull = lerpNumber(0.48, 0.44, distanceRatio);
+    var focusX = roundPreviewNumber(centerX + ((cameraX - centerX) * focusPull));
+    var focusY = roundPreviewNumber(centerY + ((cameraY - centerY) * focusPull));
     return {
-      x: finalX,
-      y: finalY,
+      x: cameraX,
+      y: cameraY,
       focusX: focusX,
       focusY: focusY,
-      scale: roundPreviewNumber(lerpNumber(1.08, 0.92, distanceRatio)),
-      deviceScale: roundPreviewNumber(lerpNumber(1.14, 0.96, distanceRatio)),
-      rotation: roundPreviewNumber(lineAngle),
-      lineLength: roundPreviewNumber(Math.max(0, lineLength))
+      viewBoxWidth: viewBoxWidth,
+      viewBoxHeight: viewBoxHeight,
+      centerX: centerX,
+      centerY: centerY,
+      sphereRadius: sphereRadius,
+      axisRadius: roundPreviewNumber(axisRadius),
+      distanceRatio: distanceRatio,
+      cameraRadius: roundPreviewNumber(lerpNumber(15, 18, distanceRatio))
     };
+  }
+
+  function buildCameraOrbitSvgMarkup(preview) {
+    var data = preview && typeof preview === 'object' ? preview : computeCameraOrbitPreview(createDefaultCameraControls());
+    var cx = Number(data.centerX || 200);
+    var cy = Number(data.centerY || 170);
+    var sphereRadius = Number(data.sphereRadius || 132);
+    var axisRadius = Number(data.axisRadius || (sphereRadius * 0.83));
+    var cameraX = Number(data.x || cx);
+    var cameraY = Number(data.y || cy);
+    var focusX = Number(data.focusX || cx);
+    var focusY = Number(data.focusY || cy);
+    var cameraRadius = Number(data.cameraRadius || 16);
+    var meridians = [-72, -36, 0, 36, 72].map(function (deg) {
+      return '<ellipse class="ai-image-camera-orbit-meridian" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy) + '" rx="' + formatOrbitSvgNumber(sphereRadius * 0.33) + '" ry="' + formatOrbitSvgNumber(sphereRadius) + '" transform="rotate(' + String(deg) + ' ' + formatOrbitSvgNumber(cx) + ' ' + formatOrbitSvgNumber(cy) + ')" />';
+    }).join('');
+    var latitudes = [-64, -32, 32, 64].map(function (deg) {
+      var rad = deg * Math.PI / 180;
+      var rx = Math.cos(rad) * sphereRadius * 0.96;
+      var ry = Math.max(5, 12 + (Math.cos(rad) * 15));
+      var y = cy + (Math.sin(rad) * sphereRadius * 0.54);
+      return '<ellipse class="ai-image-camera-orbit-latitude" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(y) + '" rx="' + formatOrbitSvgNumber(rx) + '" ry="' + formatOrbitSvgNumber(ry) + '" />';
+    }).join('');
+    return '' +
+      '<svg viewBox="0 0 400 340" class="ai-image-camera-orbit-svg" aria-hidden="true">' +
+        '<defs>' +
+          '<radialGradient id="aiImageSphereGlow" cx="50%" cy="45%" r="50%">' +
+            '<stop offset="0%" stop-color="rgba(255,255,255,0.03)"></stop>' +
+            '<stop offset="100%" stop-color="rgba(255,255,255,0)"></stop>' +
+          '</radialGradient>' +
+        '</defs>' +
+        '<circle class="ai-image-camera-orbit-glow" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy) + '" r="' + formatOrbitSvgNumber(sphereRadius) + '" fill="url(#aiImageSphereGlow)"></circle>' +
+        meridians +
+        latitudes +
+        '<ellipse class="ai-image-camera-orbit-equator" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy) + '" rx="' + formatOrbitSvgNumber(sphereRadius * 0.92) + '" ry="' + formatOrbitSvgNumber(sphereRadius * 0.27) + '"></ellipse>' +
+        '<line class="ai-image-camera-orbit-axis" x1="' + formatOrbitSvgNumber(cx) + '" y1="' + formatOrbitSvgNumber(cy - axisRadius) + '" x2="' + formatOrbitSvgNumber(cx) + '" y2="' + formatOrbitSvgNumber(cy + axisRadius) + '"></line>' +
+        '<circle class="ai-image-camera-orbit-pole is-top" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy - axisRadius) + '" r="3"></circle>' +
+        '<circle class="ai-image-camera-orbit-pole is-bottom" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy + axisRadius) + '" r="2.5"></circle>' +
+        '<g class="ai-image-camera-orbit-subject" transform="translate(' + formatOrbitSvgNumber(cx - 14) + ' ' + formatOrbitSvgNumber(cy - 14) + ')">' +
+          '<rect width="28" height="28" rx="5"></rect>' +
+          '<path d="M6 18 L11 13 L16 16.5 L19 14 L22 18"></path>' +
+          '<circle cx="18" cy="10" r="2.5"></circle>' +
+        '</g>' +
+        '<line class="ai-image-camera-orbit-ray" x1="' + formatOrbitSvgNumber(cx) + '" y1="' + formatOrbitSvgNumber(cy) + '" x2="' + formatOrbitSvgNumber(cameraX) + '" y2="' + formatOrbitSvgNumber(cameraY) + '"></line>' +
+        '<circle class="ai-image-camera-orbit-focus" cx="' + formatOrbitSvgNumber(focusX) + '" cy="' + formatOrbitSvgNumber(focusY) + '" r="5"></circle>' +
+        '<g class="ai-image-camera-orbit-camera" transform="translate(' + formatOrbitSvgNumber(cameraX) + ' ' + formatOrbitSvgNumber(cameraY) + ')">' +
+          '<circle class="ai-image-camera-orbit-camera-ring" r="' + formatOrbitSvgNumber(cameraRadius) + '"></circle>' +
+          '<g class="ai-image-camera-orbit-camera-glyph" transform="translate(-8 -6)">' +
+            '<rect width="12" height="9" x="1" y="1.5" rx="2"></rect>' +
+            '<circle cx="7" cy="6" r="2.5"></circle>' +
+            '<rect width="4" height="2" x="12" y="3.5" rx="0.5"></rect>' +
+          '</g>' +
+        '</g>' +
+      '</svg>';
   }
 
   function cameraPresetLabel(preset) {
@@ -1311,15 +1380,8 @@
         '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-body">' +
             '<div class="ai-image-camera-preview-card is-inline">' +
-              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(orbitPreview.x)) + '%;--camera-y:' + escapeHtml(String(orbitPreview.y)) + '%;--focus-x:' + escapeHtml(String(orbitPreview.focusX)) + '%;--focus-y:' + escapeHtml(String(orbitPreview.focusY)) + '%;--orbit-scale:' + escapeHtml(String(orbitPreview.scale)) + ';--camera-scale:' + escapeHtml(String(orbitPreview.deviceScale)) + ';--camera-rotation:' + escapeHtml(String(orbitPreview.rotation)) + 'deg;--camera-line-length:' + escapeHtml(String(orbitPreview.lineLength)) + '%;">' +
-                '<div class="ai-image-camera-orbit-ring is-horizontal"></div>' +
-                '<div class="ai-image-camera-orbit-ring is-vertical"></div>' +
-                '<div class="ai-image-camera-orbit-ring is-depth"></div>' +
-                '<div class="ai-image-camera-orbit-ring is-equator"></div>' +
-                '<div class="ai-image-camera-link"></div>' +
-                '<div class="ai-image-camera-focus-dot"></div>' +
-                '<div class="ai-image-camera-subject-core">' + cameraSubjectTargetIconSvg() + '</div>' +
-                '<div class="ai-image-camera-device"><span class="ai-image-camera-device-icon">' + cameraFabIconSvg() + '</span></div>' +
+              '<div class="ai-image-camera-orbit is-inline">' +
+                buildCameraOrbitSvgMarkup(orbitPreview) +
                 '<div class="ai-image-camera-target-toggle" role="tablist" aria-label="' + escapeHtml(t('cameraButton')) + '">' +
                   '<button type="button" class="ai-image-camera-target-btn is-scene' + (targetMode === 'scene' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="scene" aria-label="' + escapeHtml(t('cameraTargetSceneLabel')) + '" title="' + escapeHtml(t('cameraTargetSceneLabel')) + '">' + cameraSceneTargetIconSvg() + '</button>' +
                   '<button type="button" class="ai-image-camera-target-btn is-subject' + (targetMode === 'subject' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="subject" aria-label="' + escapeHtml(t('cameraTargetSubjectLabel')) + '" title="' + escapeHtml(t('cameraTargetSubjectLabel')) + '">' + cameraSubjectTargetIconSvg() + '</button>' +
@@ -2155,14 +2217,8 @@
     if (tiltValue) tiltValue.textContent = String(controls.tilt);
     if (distValue) distValue.textContent = String(controls.distance);
     if (orbit) {
-      orbit.style.setProperty('--camera-x', String(orbitPreview.x) + '%');
-      orbit.style.setProperty('--camera-y', String(orbitPreview.y) + '%');
-      orbit.style.setProperty('--focus-x', String(orbitPreview.focusX) + '%');
-      orbit.style.setProperty('--focus-y', String(orbitPreview.focusY) + '%');
-      orbit.style.setProperty('--orbit-scale', String(orbitPreview.scale));
-      orbit.style.setProperty('--camera-scale', String(orbitPreview.deviceScale));
-      orbit.style.setProperty('--camera-rotation', String(orbitPreview.rotation) + 'deg');
-      orbit.style.setProperty('--camera-line-length', String(orbitPreview.lineLength) + '%');
+      var toggle = orbit.querySelector('.ai-image-camera-target-toggle');
+      orbit.innerHTML = buildCameraOrbitSvgMarkup(orbitPreview) + (toggle ? toggle.outerHTML : '');
     }
   }
 

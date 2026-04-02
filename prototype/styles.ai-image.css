@@ -1332,113 +1332,95 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-camera-orbit::before {
-  content: "";
-  position: absolute;
-  inset: 11%;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transform: scale(var(--orbit-scale, 1));
+  display: none;
 }
 
-.ai-image-camera-orbit-ring {
-  position: absolute;
-  inset: 14%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 50%;
+.ai-image-camera-orbit-svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
-.ai-image-camera-orbit-ring.is-horizontal {
-  transform: rotateX(70deg);
+.ai-image-camera-orbit-glow {
+  opacity: 0.94;
 }
 
-.ai-image-camera-orbit-ring.is-vertical {
-  inset: 8% 24%;
+.ai-image-camera-orbit-meridian,
+.ai-image-camera-orbit-latitude {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.1);
+  stroke-width: 0.6;
 }
 
-.ai-image-camera-orbit-ring.is-depth {
-  inset: 22% 8%;
+.ai-image-camera-orbit-equator {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.34);
+  stroke-width: 1.5;
 }
 
-.ai-image-camera-orbit-ring.is-equator {
-  inset: 34% 9%;
-  border-color: rgba(255, 255, 255, 0.22);
+.ai-image-camera-orbit-axis {
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 0.8;
+  stroke-dasharray: 3 3;
 }
 
-.ai-image-camera-subject-core {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 28px;
-  height: 28px;
-  transform: translate(-50%, -50%);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.54);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+.ai-image-camera-orbit-pole.is-top {
+  fill: rgba(255, 255, 255, 0.2);
 }
 
-.ai-image-camera-subject-core .icon {
-  width: 14px;
-  height: 14px;
+.ai-image-camera-orbit-pole.is-bottom {
+  fill: rgba(255, 255, 255, 0.12);
 }
 
-.ai-image-camera-focus-dot {
-  position: absolute;
-  left: var(--focus-x, 50%);
-  top: var(--focus-y, 50%);
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-  background: #8e46ff;
-  box-shadow: 0 0 10px rgba(142, 70, 255, 0.6);
+.ai-image-camera-orbit-subject rect {
+  fill: rgba(255, 255, 255, 0.06);
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 1;
 }
 
-.ai-image-camera-link {
-  position: absolute;
-  left: var(--focus-x, 50%);
-  top: var(--focus-y, 50%);
-  width: var(--camera-line-length, 0%);
-  height: 1.5px;
-  transform-origin: left center;
-  transform: translateY(-50%) rotate(var(--camera-rotation, 0deg));
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.06));
-  pointer-events: none;
+.ai-image-camera-orbit-subject path {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.ai-image-camera-device {
-  position: absolute;
-  left: var(--camera-x, 50%);
-  top: var(--camera-y, 50%);
-  width: 0;
-  height: 0;
-  pointer-events: none;
+.ai-image-camera-orbit-subject circle {
+  fill: rgba(255, 255, 255, 0.2);
 }
 
-.ai-image-camera-device-icon {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  border: 1.5px solid rgba(255, 255, 255, 0.78);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.92);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28);
-  transform: translate(-50%, -50%) scale(var(--camera-scale, 1));
+.ai-image-camera-orbit-ray {
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
 }
 
-.ai-image-camera-device-icon .icon {
-  width: 16px;
-  height: 16px;
+.ai-image-camera-orbit-focus {
+  fill: rgba(168, 85, 247, 0.9);
+  stroke: rgba(168, 85, 247, 0.3);
+  stroke-width: 4;
+}
+
+.ai-image-camera-orbit-camera {
+  cursor: default;
+}
+
+.ai-image-camera-orbit-camera-ring {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 2;
+}
+
+.ai-image-camera-orbit-camera-glyph rect,
+.ai-image-camera-orbit-camera-glyph circle {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.96);
+  stroke-width: 1.1;
+}
+
+.ai-image-camera-orbit-camera-glyph circle {
+  fill: none;
 }
 
 .ai-image-camera-inline-sliders {
@@ -1486,23 +1468,8 @@ body.layout-fixed.page-shell-image .content {
   border-radius: 22px;
 }
 
-.ai-image-panel-history .ai-image-camera-subject-core {
-  width: 28px;
-  height: 28px;
-}
-
-.ai-image-panel-history .ai-image-camera-device {
-  width: 0;
-  height: 0;
-}
-
-.ai-image-panel-history .ai-image-camera-link {
-  height: 2px;
-}
-
-.ai-image-panel-history .ai-image-camera-device-icon {
-  width: 36px;
-  height: 36px;
+.ai-image-panel-history .ai-image-camera-orbit-svg {
+  max-height: 320px;
 }
 
 .ai-image-panel-history .ai-image-camera-controls {
