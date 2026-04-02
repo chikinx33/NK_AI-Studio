@@ -1631,7 +1631,7 @@
 
   function buildHistoryPanelMarkup() {
     var cameraPanelActive = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera';
-    var historyHeadAction = (!cameraPanelActive && state.results.length)
+    var historyHeadAction = state.results.length
       ? '<button type="button" class="ai-image-history-clear" data-action="delete-all-results" aria-label="' + escapeHtml(t('deleteAllLabel')) + '" title="' + escapeHtml(t('deleteAllLabel')) + '">' + trashIconGlyph() + '</button>'
       : '';
     var resultCards = state.results.map(function (item) {
