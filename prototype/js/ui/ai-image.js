@@ -1370,15 +1370,7 @@
   function buildCameraApplyPrompt(cameraPrompt, previewTarget, targetMode) {
     var mode = normalizeCameraTargetMode(targetMode);
     var base = String(cameraPrompt || '').trim();
-    var sourceContext = [];
-    if (previewTarget && previewTarget.type === 'result' && previewTarget.result) {
-      var resultPrompt = String(previewTarget.result.prompt || '').trim();
-      if (resultPrompt) sourceContext.push('Keep the original scene concept, subjects, and style from this reference image. Original concept: ' + resultPrompt);
-      else sourceContext.push('Keep the original scene concept, subjects, and style from this reference image.');
-    } else if (previewTarget && previewTarget.url) {
-      sourceContext.push('Keep the original scene concept, subjects, and style from this reference image.');
-    }
-    var modeLines = mode === 'subject'
+    var modeLead = mode === 'subject'
       ? [
         'Rotate only the main foreground subject relative to the camera.',
         'Keep the background, environment, horizon, and broad composition as stable as possible.',
@@ -1388,9 +1380,32 @@
         'Reconstruct the entire frame from a new camera viewpoint.',
         'Rotate the whole scene perspective together, including the background, environment, depth, horizon, and subject placement.',
         'Do not keep the background fixed while rotating only a foreground subject.',
+        'Update lighting direction and cast shadows to match the new viewpoint.',
         'Preserve the same scene concept and key subjects, but allow perspective and composition to shift to match the new camera angle.'
       ];
-    return [base].concat(sourceContext, modeLines).filter(Boolean).join('\n');
+    var relationLines = mode === 'subject'
+      ? [
+        'Show the subject\'s opposite side relative to the previously visible side (e.g., right side visible) without changing the background perspective.'
+      ]
+      : [
+        'Move the camera to the opposite-side vantage relative to the previously visible side.',
+        'If the subject\'s left side was visible, now render the right side from the camera viewpoint and flip foreground/background ordering accordingly.'
+      ];
+    var sourceContext = [];
+    if (previewTarget && previewTarget.type === 'result' && previewTarget.result) {
+      var resultPrompt = String(previewTarget.result.prompt || '').trim();
+      if (resultPrompt) sourceContext.push('Keep the original scene concept, subjects, and style from this reference image. Original concept: ' + resultPrompt);
+      else sourceContext.push('Keep the original scene concept, subjects, and style from this reference image.');
+    } else if (previewTarget && previewTarget.url) {
+      sourceContext.push('Keep the original scene concept, subjects, and style from this reference image.');
+    }
+    return []
+      .concat(modeLead)
+      .concat(base ? [base] : [])
+      .concat(relationLines)
+      .concat(sourceContext)
+      .filter(Boolean)
+      .join('\n');
   }
 
   function buildCameraControlCardMarkup(options) {
@@ -2663,7 +2678,7 @@
     }
     var cameraPrompt = buildCameraApplyPrompt(cameraOnly, previewTarget, appliedCameraTargetMode);
     var previewReferenceImages = [];
-    if (previewTarget && previewTarget.url) {
+    if (previewTarget && previewTarget.url && appliedCameraTargetMode === 'subject') {
       previewReferenceImages = [{
         referenceId: 1,
         imageDataUrl: previewTarget.url,
