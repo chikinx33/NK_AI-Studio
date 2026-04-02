@@ -458,11 +458,11 @@
     var positiveTiltRatio = clampNumber(controls.tilt / CAMERA_TILT_MAX, 0, 1, 0);
     var negativeTiltRatio = clampNumber(Math.abs(Math.min(controls.tilt, 0)) / Math.abs(CAMERA_TILT_MIN), 0, 1, 0);
     var orbitRadiusX = lerpNumber(52, 70, distanceRatio);
-    var orbitRadiusY = lerpNumber(82, 108, distanceRatio);
+    var orbitDepthY = lerpNumber(10, 18, distanceRatio);
     var horizontalCompression = clampNumber(1 - (positiveTiltRatio * 0.82) + (negativeTiltRatio * 0.08), 0.18, 1.08, 1);
-    var verticalOrbitScale = lerpNumber(1, 0.68, positiveTiltRatio);
+    var depthScale = clampNumber(1 - (positiveTiltRatio * 0.72), 0.22, 1, 1);
     var orbitX = centerX + (Math.cos(panRad) * orbitRadiusX * horizontalCompression);
-    var orbitY = centerY + (Math.sin(panRad) * orbitRadiusY * verticalOrbitScale);
+    var orbitY = centerY + (Math.sin(panRad) * orbitDepthY * depthScale);
     var tiltOffset = lerpNumber(0, -108, positiveTiltRatio) + lerpNumber(0, 82, negativeTiltRatio);
     var cameraX = roundPreviewNumber(clampNumber(orbitX, 72, 328, centerX));
     var cameraY = roundPreviewNumber(clampNumber(orbitY + tiltOffset, 54, 286, centerY));
