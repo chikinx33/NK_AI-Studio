@@ -1356,6 +1356,10 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3"></circle><path d="M6.5 19c1.1-3 3.2-4.5 5.5-4.5s4.4 1.5 5.5 4.5"></path></svg>';
   }
 
+  function upscaleIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 16l8-8"></path><path d="M12 8h4v4"></path></svg>';
+  }
+
   function trashIconGlyph() {
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.75h6l.6 1.5H19a.75.75 0 0 1 0 1.5h-.66l-.8 10.05A2.25 2.25 0 0 1 15.29 20H8.71a2.25 2.25 0 0 1-2.24-2.2l-.81-10.05H5a.75.75 0 0 1 0-1.5h3.4L9 4.75Z"></path><path d="M10 10v5.25M14 10v5.25"></path></svg>';
   }
@@ -1598,7 +1602,7 @@
               '<div class="ai-image-inline-actions-left">' +
                 '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
-                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="업스케일 2K" title="업스케일 2K"><span class="ai-image-upscale-badge">2K</span></button>' +
+                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="업스케일 2K" title="업스케일 2K">' + upscaleIconSvg() + '</button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
               '</div>' +
               (detached ? '' : '<div class="ai-image-inline-actions-bottom"><div class="ai-image-brand-actions">' +
