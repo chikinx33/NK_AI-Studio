@@ -3045,7 +3045,7 @@
                 } else {
                   fetch('/api/ai-image/session-delete', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: Object.assign({ 'Content-Type': 'application/json' }, buildAuthHeaders()),
                     body: JSON.stringify({ sessionId: state.sessionId, confirm: 'yes', objectName: objectName })
                   }).catch(function () { });
                 }
@@ -3067,7 +3067,7 @@
                         } else {
                           fetch('/api/ai-image/session-delete', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
+                            headers: Object.assign({ 'Content-Type': 'application/json' }, buildAuthHeaders()),
                             body: JSON.stringify({ sessionId: state.sessionId, confirm: 'yes', objectName: name })
                           }).catch(function () { });
                         }
@@ -3112,7 +3112,7 @@
             } else {
               fetch('/api/ai-image/session-delete', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: Object.assign({ 'Content-Type': 'application/json' }, buildAuthHeaders()),
                 body: JSON.stringify({ sessionId: state.sessionId, confirm: 'yes', all: true })
               }).catch(function () { });
             }
@@ -3272,6 +3272,16 @@
     var overlay = document.getElementById('auth-overlay');
     var authed = NK.auth && NK.auth.isAuthed && NK.auth.isAuthed();
     if (overlay) overlay.classList.toggle('hidden', !!authed);
+  }
+
+  function buildAuthHeaders() {
+    try {
+      var key = (NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token';
+      var token = String(localStorage.getItem(key) || '').trim();
+      return token ? { Authorization: 'Bearer ' + token } : {};
+    } catch (_) {
+      return {};
+    }
   }
 
   function init() {
