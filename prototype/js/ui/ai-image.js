@@ -423,12 +423,14 @@
     var depthLift = distanceRatio * 7;
     var x = lerpNumber(50, targetX, orbitStrength);
     var y = lerpNumber(50, targetY, orbitStrength);
-    var rotation = (Math.atan2(50 - y, 50 - x) * 180 / Math.PI) + 90;
+    var lineAngle = Math.atan2(y - 50, x - 50) * 180 / Math.PI;
+    var lineLength = Math.sqrt(Math.pow(x - 50, 2) + Math.pow(y - 50, 2));
     return {
       x: roundPreviewNumber(clampNumber(x, 12, 88, 50)),
       y: roundPreviewNumber(clampNumber(y - depthLift, 10, 90, 50)),
       scale: roundPreviewNumber(0.92 + ((100 - controls.distance) / 100) * 0.24),
-      rotation: roundPreviewNumber(rotation)
+      rotation: roundPreviewNumber(lineAngle),
+      lineLength: roundPreviewNumber(Math.max(0, lineLength))
     };
   }
 
@@ -1218,10 +1220,6 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5A2.5 2.5 0 0 1 7 7h2.2l1.3-1.7h2.9L14.8 7H17a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 18H7a2.5 2.5 0 0 1-2.5-2.5v-6Z"></path><circle cx="12" cy="12.5" r="3.3"></circle><path d="M7.5 9.5h.01"></path></svg>';
   }
 
-  function cameraProjectorIconSvg() {
-    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.75"></circle><circle cx="14" cy="8.5" r="2.75"></circle><path d="M4.75 13.25h12.5a1.75 1.75 0 0 0 1.75-1.75v-6a1.75 1.75 0 0 0-1.75-1.75H4.75A1.75 1.75 0 0 0 3 5.5v6a1.75 1.75 0 0 0 1.75 1.75Z"></path><path d="M17.25 7.5 21 5.5v8l-3.75-2"></path><path d="M8.25 13.25v5.25"></path><path d="M13.75 13.25v5.25"></path><path d="M6.25 18.5h9.5"></path></svg>';
-  }
-
   function cameraSceneTargetIconSvg() {
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"></path><path d="M4 18l5.2-7.2L13 16l2.7-3.8L20 18"></path><path d="M14 6.5l1.2-1.2L17 7.1l3.1-3.1"></path></svg>';
   }
@@ -1297,12 +1295,13 @@
         '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-body">' +
             '<div class="ai-image-camera-preview-card is-inline">' +
-              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(orbitPreview.x)) + '%;--camera-y:' + escapeHtml(String(orbitPreview.y)) + '%;--orbit-scale:' + escapeHtml(String(orbitPreview.scale)) + ';--camera-rotation:' + escapeHtml(String(orbitPreview.rotation)) + 'deg;">' +
+              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(orbitPreview.x)) + '%;--camera-y:' + escapeHtml(String(orbitPreview.y)) + '%;--orbit-scale:' + escapeHtml(String(orbitPreview.scale)) + ';--camera-rotation:' + escapeHtml(String(orbitPreview.rotation)) + 'deg;--camera-line-length:' + escapeHtml(String(orbitPreview.lineLength)) + '%;">' +
                 '<div class="ai-image-camera-orbit-ring is-horizontal"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-vertical"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-depth"></div>' +
+                '<div class="ai-image-camera-link"></div>' +
                 '<div class="ai-image-camera-subject-core"></div>' +
-                '<div class="ai-image-camera-device">' + cameraProjectorIconSvg() + '</div>' +
+                '<div class="ai-image-camera-device"><span class="ai-image-camera-pointer"></span></div>' +
                 '<div class="ai-image-camera-target-toggle" role="tablist" aria-label="' + escapeHtml(t('cameraButton')) + '">' +
                   '<button type="button" class="ai-image-camera-target-btn is-scene' + (targetMode === 'scene' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="scene" aria-label="' + escapeHtml(t('cameraTargetSceneLabel')) + '" title="' + escapeHtml(t('cameraTargetSceneLabel')) + '">' + cameraSceneTargetIconSvg() + '</button>' +
                   '<button type="button" class="ai-image-camera-target-btn is-subject' + (targetMode === 'subject' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="subject" aria-label="' + escapeHtml(t('cameraTargetSubjectLabel')) + '" title="' + escapeHtml(t('cameraTargetSubjectLabel')) + '">' + cameraSubjectTargetIconSvg() + '</button>' +
@@ -2142,6 +2141,7 @@
       orbit.style.setProperty('--camera-y', String(orbitPreview.y) + '%');
       orbit.style.setProperty('--orbit-scale', String(orbitPreview.scale));
       orbit.style.setProperty('--camera-rotation', String(orbitPreview.rotation) + 'deg');
+      orbit.style.setProperty('--camera-line-length', String(orbitPreview.lineLength) + '%');
     }
   }
 
