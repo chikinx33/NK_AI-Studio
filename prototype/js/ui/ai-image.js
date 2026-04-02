@@ -148,7 +148,6 @@
       cameraModalTitle: '카메라 앵글 조정',
       cameraModalDesc: '프리셋과 슬라이더를 조합해 다음 생성에 반영할 시점을 정해 주세요.',
       cameraPresetLabel: '앵글 프리셋',
-      cameraPresetAuto: '자동',
       cameraPresetFront: '정면',
       cameraPresetLeft45: '좌 45°',
       cameraPresetRight45: '우 45°',
@@ -161,11 +160,9 @@
       cameraTilt: 'Tilt',
       cameraDistance: 'Distance',
       cameraPreviewLabel: '앵글 미리보기',
-      cameraSummaryLabel: '적용 요약',
       cameraPromptPreviewLabel: '프롬프트 반영 문장',
       cameraApply: '적용',
       cameraReset: '초기화',
-      cameraClose: '닫기',
       cameraActiveTag: '앵글 적용됨',
       cameraSummaryOff: '카메라 앵글 제어가 꺼져 있습니다.',
       cameraMetaLabel: '카메라'
@@ -282,7 +279,6 @@
       cameraModalTitle: 'Adjust camera angle',
       cameraModalDesc: 'Combine presets and sliders to control the next generation angle.',
       cameraPresetLabel: 'Angle preset',
-      cameraPresetAuto: 'Auto',
       cameraPresetFront: 'Front',
       cameraPresetLeft45: 'Left 45°',
       cameraPresetRight45: 'Right 45°',
@@ -295,11 +291,9 @@
       cameraTilt: 'Tilt',
       cameraDistance: 'Distance',
       cameraPreviewLabel: 'Angle preview',
-      cameraSummaryLabel: 'Applied summary',
       cameraPromptPreviewLabel: 'Prompt injection',
       cameraApply: 'Apply',
       cameraReset: 'Reset',
-      cameraClose: 'Close',
       cameraActiveTag: 'Angle enabled',
       cameraSummaryOff: 'Camera angle control is currently off.',
       cameraMetaLabel: 'Camera'
@@ -323,7 +317,7 @@
   function createDefaultCameraControls() {
     return {
       enabled: false,
-      preset: 'auto',
+      preset: 'custom',
       pan: 0,
       tilt: 0,
       distance: 50
@@ -339,8 +333,8 @@
 
   function normalizeCameraControls(raw) {
     var base = raw && typeof raw === 'object' ? raw : {};
-    var preset = String(base.preset || 'auto').trim().toLowerCase();
-    if (!/^(auto|front|left45|right45|topdown|lowangle|closeup|medium|custom)$/.test(preset)) preset = 'auto';
+    var preset = String(base.preset || 'custom').trim().toLowerCase();
+    if (!/^(front|left45|right45|topdown|lowangle|closeup|medium|custom)$/.test(preset)) preset = 'custom';
     var normalized = {
       enabled: !!base.enabled,
       preset: preset,
@@ -362,7 +356,7 @@
 
   function isNeutralCameraControls(raw) {
     var controls = raw && typeof raw === 'object' ? raw : createDefaultCameraControls();
-    return String(controls.preset || 'auto') === 'auto'
+    return !controls.enabled
       && Number(controls.pan || 0) === 0
       && Number(controls.tilt || 0) === 0
       && Number(controls.distance || 50) === 50;
@@ -379,7 +373,6 @@
 
   function cameraPresetLabel(preset) {
     var keyMap = {
-      auto: 'cameraPresetAuto',
       front: 'cameraPresetFront',
       left45: 'cameraPresetLeft45',
       right45: 'cameraPresetRight45',
@@ -389,7 +382,7 @@
       medium: 'cameraPresetMedium',
       custom: 'cameraPresetCustom'
     };
-    return t(keyMap[String(preset || 'auto')] || 'cameraPresetAuto');
+    return t(keyMap[String(preset || 'custom')] || 'cameraPresetCustom');
   }
 
   function distanceLabel(distance) {
@@ -411,7 +404,7 @@
   function cameraPresetDefaults(preset) {
     var next = createDefaultCameraControls();
     next.preset = preset;
-    next.enabled = preset !== 'auto';
+    next.enabled = true;
     try {
       var presets = (window.NK && NK.constants && NK.constants.CAMERA_PRESETS) ? NK.constants.CAMERA_PRESETS : null;
       if (presets && presets[preset]) {
@@ -432,7 +425,11 @@
   }
 
   function applyCameraPreset(preset) {
-    state.cameraControls = cloneCameraControls(cameraPresetDefaults(String(preset || 'auto')));
+    state.cameraControls = cloneCameraControls(cameraPresetDefaults(String(preset || 'custom')));
+  }
+
+  function resetCameraControls() {
+    state.cameraControls = createDefaultCameraControls();
   }
 
   function activeCameraControls() {
@@ -1107,9 +1104,10 @@
     var promptPreview = buildCameraPromptInlinePreview(Object.assign({}, controls, {
       enabled: !isNeutralCameraControls(controls)
     }));
-    var presetOptions = ['auto', 'front', 'left45', 'right45', 'topdown', 'lowangle', 'closeup', 'medium'].map(function (preset) {
+    var presetOptions = ['front', 'left45', 'right45', 'topdown', 'lowangle', 'closeup', 'medium'].map(function (preset) {
       return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
     }).join('');
+    var resetButton = '<button type="button" class="ai-image-camera-preset' + (!controls.enabled && isNeutralCameraControls(controls) ? ' active' : '') + '" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>';
     return '' +
         '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-body">' +
@@ -1124,7 +1122,7 @@
             '</div>' +
             '<div class="ai-image-camera-controls is-inline">' +
               '<div class="ai-image-camera-section is-inline">' +
-                '<div class="ai-image-camera-preset-grid is-inline">' + presetOptions + '</div>' +
+                '<div class="ai-image-camera-preset-grid is-inline">' + resetButton + presetOptions + '</div>' +
               '</div>' +
               '<div class="ai-image-camera-inline-sliders">' +
               '<div class="ai-image-camera-section is-inline">' +
@@ -1921,7 +1919,6 @@
 
   function syncInlineCameraUi() {
     var controls = normalizeCameraControls(state.cameraControls);
-    var summaryTarget = document.getElementById('ai-image-camera-summary');
     var promptPreview = document.getElementById('ai-image-camera-prompt-preview');
     var panValue = document.getElementById('ai-image-camera-pan-value');
     var tiltValue = document.getElementById('ai-image-camera-tilt-value');
@@ -1930,7 +1927,6 @@
     if (panValue) panValue.textContent = String(controls.pan);
     if (tiltValue) tiltValue.textContent = String(controls.tilt);
     if (distValue) distValue.textContent = String(controls.distance);
-    if (summaryTarget) summaryTarget.textContent = cameraSummary(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
     if (promptPreview) promptPreview.textContent = buildCameraPromptInlinePreview(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
     if (orbit) {
       orbit.style.setProperty('--camera-x', String(50 + Math.round((controls.pan / 90) * 34)) + '%');
@@ -2562,9 +2558,16 @@
           return;
         }
         if (action === 'set-camera-preset') {
-          applyCameraPreset(btn.getAttribute('data-preset') || 'auto');
+          applyCameraPreset(btn.getAttribute('data-preset') || 'custom');
           var resultForPreset = currentResult();
           if (resultForPreset) resultForPreset.cameraControls = normalizeCameraControls(state.cameraControls);
+          persistInlineCameraControls({ refreshHistoryPanel: true });
+          return;
+        }
+        if (action === 'reset-camera-controls') {
+          resetCameraControls();
+          var resultForReset = currentResult();
+          if (resultForReset) resultForReset.cameraControls = normalizeCameraControls(state.cameraControls);
           persistInlineCameraControls({ refreshHistoryPanel: true });
           return;
         }

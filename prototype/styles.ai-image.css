@@ -1173,15 +1173,8 @@ body.layout-fixed.page-shell-image .content {
   box-shadow: 0 3px 10px rgba(47, 111, 255, 0.35);
 }
 
-.ai-image-camera-summary-text,
 .ai-image-camera-prompt-preview {
   margin: 8px 0 0;
-}
-
-.ai-image-camera-summary-text {
-  color: var(--text);
-  font-size: 11px;
-  line-height: 1.45;
 }
 
 .ai-image-camera-prompt-preview {

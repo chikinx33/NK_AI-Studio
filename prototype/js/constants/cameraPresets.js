@@ -2,7 +2,6 @@
   var NK = window.NK || (window.NK = {});
   var constants = NK.constants || (NK.constants = {});
   var CAMERA_PRESETS = {
-    auto: { pan: 0, tilt: 0, distance: 50 },
     front: { pan: 0, tilt: 0, distance: 50 },
     left45: { pan: -35, tilt: 0, distance: 55 },
     right45: { pan: 35, tilt: 0, distance: 55 },

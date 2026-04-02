@@ -3,11 +3,11 @@
   var utils = NK.utils || (NK.utils = {});
   function clamp(n, min, max) { var x = Number(n); if (!Number.isFinite(x)) x = 0; if (x < min) return min; if (x > max) return max; return x; }
   function isNeutral(c) {
-    var p = String(c && c.preset || 'auto');
+    var enabled = !!(c && c.enabled);
     var pan = Number(c && c.pan || 0);
     var tilt = Number(c && c.tilt || 0);
     var dist = Number(c && c.distance || 50);
-    return p === 'auto' && pan === 0 && tilt === 0 && dist === 50;
+    return !enabled && pan === 0 && tilt === 0 && dist === 50;
   }
   function shotFromDistance(distance) {
     var v = clamp(distance, 0, 100);
@@ -34,7 +34,7 @@
     return 'dramatic low angle';
   }
   function applyPresetOverride(preset, shot, view, angle) {
-    var p = String(preset || 'auto').toLowerCase();
+    var p = String(preset || 'custom').toLowerCase();
     if (p === 'front') { view = 'front view'; angle = 'eye-level'; }
     else if (p === 'left45') { view = '3/4 left view'; }
     else if (p === 'right45') { view = '3/4 right view'; }
@@ -45,7 +45,7 @@
   }
   function mapCameraToPrompt(cameraControls, options) {
     var c = cameraControls && typeof cameraControls === 'object' ? cameraControls : {};
-    if (isNeutral(c)) return '';
+    if (!c.enabled || isNeutral(c)) return '';
     var shot = shotFromDistance(c.distance);
     var view = viewFromPan(c.pan);
     var angle = angleFromTilt(c.tilt);
@@ -67,8 +67,8 @@
   }
   function buildCameraPrompt(cameraControls, options) {
     var c = cameraControls && typeof cameraControls === 'object' ? cameraControls : {};
-    var p = String(c.preset || 'auto').toLowerCase();
-    if (p === 'auto') return '';
+    var p = String(c.preset || 'custom').toLowerCase();
+    if (!c.enabled || isNeutral(c)) return '';
     if (p && p !== 'custom') {
       var base = mapPresetToPrompt(p);
       if (base) {
