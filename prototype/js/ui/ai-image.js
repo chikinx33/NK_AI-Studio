@@ -30,7 +30,7 @@
     selectedFileName: '',
     sourceSectionCollapsed: { brand: true, content: true, project: true },
     imageModalUrl: '',
-    previewTargetType: 'result',
+    previewTargetType: 'none',
     historyPanelMode: 'history',
     cameraControls: createDefaultCameraControls(),
     deletedObjectNames: []
@@ -575,14 +575,14 @@
         if (row.cameraControls) row.cameraControls = normalizeCameraControls(row.cameraControls);
         return row;
       }) : [];
-      state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+      state.currentResultId = '';
+      state.previewTargetType = 'none';
       state.historyPanelMode = 'history';
-      state.cameraControls = state.results[0] && state.results[0].cameraControls
-        ? normalizeCameraControls(state.results[0].cameraControls)
-        : createDefaultCameraControls();
+      state.cameraControls = createDefaultCameraControls();
     } catch (_) {
       state.results = [];
       state.currentResultId = '';
+      state.previewTargetType = 'none';
       state.historyPanelMode = 'history';
       state.cameraControls = createDefaultCameraControls();
     }
@@ -622,11 +622,11 @@
     var match = state.results.find(function (item) {
       return String(item && item.id || '') === String(state.currentResultId || '');
     });
-    return match || state.results[0] || null;
+    return match || null;
   }
 
   function currentPreviewTarget() {
-    var previewType = String(state.previewTargetType || 'result').trim().toLowerCase();
+    var previewType = String(state.previewTargetType || 'none').trim().toLowerCase();
     var selectedSource = primarySourceImage();
     var selectedResult = currentResult();
     if (previewType === 'source' && selectedSource) {
@@ -651,30 +651,6 @@
           ? normalizeCameraControls(selectedResult.cameraControls)
           : normalizeCameraControls(state.cameraControls),
         result: selectedResult
-      };
-    }
-    if (selectedResult) {
-      return {
-        type: 'result',
-        id: String(selectedResult.id || ''),
-        url: resolveResultUrl(selectedResult),
-        name: String(selectedResult.objectName || selectedResult.id || '').trim(),
-        sourceKind: '',
-        cameraControls: selectedResult && selectedResult.cameraControls
-          ? normalizeCameraControls(selectedResult.cameraControls)
-          : normalizeCameraControls(state.cameraControls),
-        result: selectedResult
-      };
-    }
-    if (selectedSource) {
-      return {
-        type: 'source',
-        id: String(selectedSource.id || ''),
-        url: String(selectedSource.url || '').trim(),
-        name: String(selectedSource.name || '').trim(),
-        sourceKind: String(selectedSource.kind || 'upload').trim(),
-        cameraControls: normalizeCameraControls(state.cameraControls),
-        source: selectedSource
       };
     }
     return null;
@@ -920,11 +896,14 @@
     if (!state.currentResultId || !state.results.some(function (item) {
       return String(item.id || '') === String(state.currentResultId || '');
     })) {
-      state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+      state.currentResultId = '';
+      if (String(state.previewTargetType || '') === 'result') state.previewTargetType = 'none';
     }
     var selectedResult = currentResult();
     if (selectedResult && selectedResult.cameraControls) {
       state.cameraControls = normalizeCameraControls(selectedResult.cameraControls);
+    } else if (String(state.previewTargetType || '') !== 'source') {
+      state.cameraControls = createDefaultCameraControls();
     }
   }
 
@@ -1054,7 +1033,7 @@
     if (existingIndex >= 0) {
       var removed = removeSourceImageAt(existingIndex);
       if (removed && !getSourceImages().length && String(state.previewTargetType || '') === 'source') {
-        state.previewTargetType = 'result';
+        state.previewTargetType = 'none';
       }
       return removed;
     }
@@ -2557,8 +2536,8 @@
         if (action === 'remove-source') {
           var removeIndex = Number(btn.getAttribute('data-index') || -1);
           removeSourceImageAt(removeIndex);
-          if (!getSourceImages().length && String(state.previewTargetType || '') === 'source') {
-            state.previewTargetType = 'result';
+            if (!getSourceImages().length && String(state.previewTargetType || '') === 'source') {
+            state.previewTargetType = 'none';
           }
           updateSourceUI();
           updatePreviewPanelUI();
@@ -2744,7 +2723,8 @@
             if (objectName) addDeletedTombstone(objectName);
             state.results.splice(idx, 1);
             if (String(state.currentResultId || '') === deleteId) {
-              state.currentResultId = state.results[0] ? String(state.results[0].id || '') : '';
+              state.currentResultId = '';
+              if (String(state.previewTargetType || '') === 'result') state.previewTargetType = 'none';
             }
             if (!state.results.length) state.historyPanelMode = 'history';
             var nextCurrent = currentResult();

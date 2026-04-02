@@ -51,7 +51,8 @@ test('ai-image preview exposes prompt analysis action and localized analyzing co
 test('ai-image preview toggles the history panel into camera-angle controls with dedicated prompt injection', () => {
   const source = readAiImageSource();
   assert.match(source, /historyPanelMode: 'history'/);
-  assert.match(source, /previewTargetType: 'result'/);
+  assert.match(source, /previewTargetType: 'none'/);
+  assert.match(source, /state\.currentResultId = '';/);
   assert.match(source, /cameraControls: createDefaultCameraControls\(\)/);
   assert.match(source, /function buildCameraControlCardMarkup/);
   assert.match(source, /class="ai-image-camera-card/);
@@ -77,6 +78,7 @@ test('ai-image preview can switch between source and history targets and camera 
   assert.match(source, /type: 'result'/);
   assert.match(source, /state\.previewTargetType = 'source'/);
   assert.match(source, /state\.previewTargetType = 'result'/);
+  assert.match(source, /state\.previewTargetType = 'none'/);
   assert.match(source, /updatePreviewPanelUI\(\);/);
   assert.match(source, /var previewTarget = currentPreviewTarget\(\);/);
   assert.match(source, /referenceImages: previewReferenceImages/);
