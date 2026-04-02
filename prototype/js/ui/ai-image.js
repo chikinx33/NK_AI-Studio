@@ -1292,9 +1292,6 @@
               '</div>' +
               '</div>' +
               '<div class="ai-image-camera-inline-meta">' +
-                '<div class="ai-image-camera-inline-meta-item">' +
-                  '<p id="ai-image-camera-prompt-preview" class="ai-image-camera-prompt-preview is-inline">' + escapeHtml(promptPreview) + '</p>' +
-                '</div>' +
                 '<div class="ai-image-camera-actions">' +
                   '<button type="button" class="btn-primary ai-image-camera-apply" data-action="apply-camera-generate"' + (controls.enabled ? '' : ' disabled') + '>' + escapeHtml(t('cameraApply')) + '</button>' +
                 '</div>' +
@@ -1453,10 +1450,9 @@
               : '') +
               '<div class="ai-image-preview-meta">' +
                 (selectedResult
-                  ? '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>'
+                  ? '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><span class="ai-image-meta-item"><strong>' + escapeHtml(t('createdAt')) + ':</strong> <span>' + escapeHtml(formatDate(selectedResult.createdAt)) + '</span></span><span class="ai-image-meta-sep" aria-hidden="true"></span><span class="ai-image-meta-item ai-image-meta-item-camera"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> <span>' + escapeHtml(cameraSummary(selectedCameraControls, preview && preview.cameraTargetMode)) + '</span></span></p>'
                   : '<p class="ai-image-preview-created"><strong>' + escapeHtml(t('sourceTitle')) + ':</strong> ' + escapeHtml(sourceMeta || t('sourceKindUpload')) + '</p>') +
                 '<p class="ai-image-preview-prompt">' + escapeHtml(selectedResult ? (selectedResult.prompt || '') : (preview.name || '')) + '</p>' +
-                '<p class="ai-image-camera-meta"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> ' + escapeHtml(cameraSummary(selectedCameraControls, preview && preview.cameraTargetMode)) + '</p>' +
               '</div>' +
           '</div>' +
         '</div>'

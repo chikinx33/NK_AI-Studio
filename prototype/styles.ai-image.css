@@ -835,6 +835,25 @@ body.layout-fixed.page-shell-image .content {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ai-image-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ai-image-meta-item-camera {
+  color: color-mix(in srgb, var(--text) 74%, var(--muted) 26%);
+}
+
+.ai-image-meta-sep {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  flex: 0 0 auto;
 }
 
 .ai-image-analysis-btn {
@@ -895,10 +914,6 @@ body.layout-fixed.page-shell-image .content {
   -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.ai-image-panel-preview .ai-image-camera-meta {
-  color: color-mix(in srgb, var(--text) 70%, var(--muted) 30%);
 }
 
 .ai-image-panel-preview .ai-image-preview-foot .ai-image-inline-actions {
@@ -1337,7 +1352,7 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-camera-inline-meta {
   display: grid;
-  gap: 8px;
+  gap: 0;
 }
 
 .ai-image-camera-actions {
@@ -1346,13 +1361,6 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-camera-actions .ai-image-camera-apply {
   width: 100%;
-}
-
-.ai-image-camera-inline-meta-item {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 10px 12px;
 }
 
 .ai-image-history.ai-image-history-camera {

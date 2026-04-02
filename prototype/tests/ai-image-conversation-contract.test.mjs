@@ -45,6 +45,8 @@ test('ai-image preview exposes prompt analysis action and localized analyzing co
   assert.match(source, /analyzing/);
   assert.match(source, /data-action="analyze-result-prompt"/);
   assert.match(source, /class="ai-image-analysis-icon"/);
+  assert.match(source, /class="ai-image-meta-sep"/);
+  assert.match(source, /class="ai-image-meta-item ai-image-meta-item-camera"/);
   assert.match(source, /NK\.api\.imagenDescribe/);
 });
 
@@ -72,6 +74,7 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /data-action="reset-camera-controls"/);
   assert.match(source, /data-action="set-camera-preset"/);
   assert.match(source, /cameraReset/);
+  assert.doesNotMatch(source, /id="ai-image-camera-prompt-preview"/);
   assert.doesNotMatch(source, /cameraPresetAuto/);
   assert.match(source, /id="ai-image-camera-pan"/);
   assert.match(source, /id="ai-image-camera-tilt"/);
