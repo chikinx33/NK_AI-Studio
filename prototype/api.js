@@ -508,6 +508,29 @@
     return { ok: res.ok, status: res.status, data: data, error: e(text) };
   };
 
+  api.aiImageSessionDelete = async function (sessionId, options) {
+    var opts = options && typeof options === 'object' ? options : {};
+    var body = {
+      sessionId: String(sessionId || ''),
+      userId: resolveUserId(),
+      confirm: 'yes'
+    };
+    var names = Array.isArray(opts.objectNames)
+      ? opts.objectNames.map(function (name) { return String(name || '').trim(); }).filter(Boolean)
+      : [];
+    if (opts.all) body.all = 'true';
+    if (opts.objectName) body.objectName = String(opts.objectName || '');
+    if (names.length) body.objectNames = names;
+    var res = await fetch(withBase('/api/ai-image/session-delete'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body)
+    });
+    var text = await res.text();
+    var data = j(text);
+    return { ok: res.ok, status: res.status, data: data, error: e(text) };
+  };
+
   api.projectInit = async function (projectId) {
     var res = await fetch(withBase('/api/project/init'), {
       method: 'POST',
