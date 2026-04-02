@@ -335,6 +335,8 @@
   var CAMERA_TILT_MAX = 60;
   var CAMERA_DISTANCE_MIN = 0;
   var CAMERA_DISTANCE_MAX = 2;
+  var CAMERA_ORBIT_EQUATOR_X_RATIO = 0.92;
+  var CAMERA_ORBIT_EQUATOR_Y_RATIO = 0.27;
 
   function createDefaultCameraControls() {
     return {
@@ -452,12 +454,16 @@
     var centerX = 200;
     var centerY = 170;
     var sphereRadius = 132;
+    var equatorRadiusX = sphereRadius * CAMERA_ORBIT_EQUATOR_X_RATIO;
+    var equatorRadiusY = sphereRadius * CAMERA_ORBIT_EQUATOR_Y_RATIO;
     var axisRadius = sphereRadius * 0.83;
     var panRad = wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) * Math.PI / 180;
     var distanceRatio = clampNumber((controls.distance - CAMERA_DISTANCE_MIN) / (CAMERA_DISTANCE_MAX - CAMERA_DISTANCE_MIN), 0, 1, 0.5);
     var positiveTiltRatio = clampNumber(controls.tilt / CAMERA_TILT_MAX, 0, 1, 0);
     var negativeTiltRatio = clampNumber(Math.abs(Math.min(controls.tilt, 0)) / Math.abs(CAMERA_TILT_MIN), 0, 1, 0);
-    var orbitRadiusX = lerpNumber(52, 70, distanceRatio);
+    var orbitRadiusX = distanceRatio <= 0.5
+      ? lerpNumber(equatorRadiusX * 0.74, equatorRadiusX, distanceRatio / 0.5)
+      : lerpNumber(equatorRadiusX, equatorRadiusX * 1.08, (distanceRatio - 0.5) / 0.5);
     var orbitDepthY = lerpNumber(10, 18, distanceRatio);
     var horizontalCompression = clampNumber(1 - (positiveTiltRatio * 0.82) + (negativeTiltRatio * 0.08), 0.18, 1.08, 1);
     var depthScale = clampNumber(1 - (positiveTiltRatio * 0.72), 0.22, 1, 1);
@@ -479,6 +485,8 @@
       centerX: centerX,
       centerY: centerY,
       sphereRadius: sphereRadius,
+      equatorRadiusX: roundPreviewNumber(equatorRadiusX),
+      equatorRadiusY: roundPreviewNumber(equatorRadiusY),
       axisRadius: roundPreviewNumber(axisRadius),
       distanceRatio: distanceRatio,
       cameraRadius: roundPreviewNumber(lerpNumber(15, 18, distanceRatio))
@@ -490,6 +498,8 @@
     var cx = Number(data.centerX || 200);
     var cy = Number(data.centerY || 170);
     var sphereRadius = Number(data.sphereRadius || 132);
+    var equatorRadiusX = Number(data.equatorRadiusX || (sphereRadius * CAMERA_ORBIT_EQUATOR_X_RATIO));
+    var equatorRadiusY = Number(data.equatorRadiusY || (sphereRadius * CAMERA_ORBIT_EQUATOR_Y_RATIO));
     var axisRadius = Number(data.axisRadius || (sphereRadius * 0.83));
     var cameraX = Number(data.x || cx);
     var cameraY = Number(data.y || cy);
@@ -517,7 +527,7 @@
         '<circle class="ai-image-camera-orbit-glow" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy) + '" r="' + formatOrbitSvgNumber(sphereRadius) + '" fill="url(#aiImageSphereGlow)"></circle>' +
         meridians +
         latitudes +
-        '<ellipse class="ai-image-camera-orbit-equator" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy) + '" rx="' + formatOrbitSvgNumber(sphereRadius * 0.92) + '" ry="' + formatOrbitSvgNumber(sphereRadius * 0.27) + '"></ellipse>' +
+        '<ellipse class="ai-image-camera-orbit-equator" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy) + '" rx="' + formatOrbitSvgNumber(equatorRadiusX) + '" ry="' + formatOrbitSvgNumber(equatorRadiusY) + '"></ellipse>' +
         '<line class="ai-image-camera-orbit-axis" x1="' + formatOrbitSvgNumber(cx) + '" y1="' + formatOrbitSvgNumber(cy - axisRadius) + '" x2="' + formatOrbitSvgNumber(cx) + '" y2="' + formatOrbitSvgNumber(cy + axisRadius) + '"></line>' +
         '<circle class="ai-image-camera-orbit-pole is-top" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy - axisRadius) + '" r="3"></circle>' +
         '<circle class="ai-image-camera-orbit-pole is-bottom" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy + axisRadius) + '" r="2.5"></circle>' +
