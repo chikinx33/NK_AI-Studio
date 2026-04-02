@@ -88,7 +88,9 @@
       resultsTitle: '결과',
       resultsEmpty: '아직 생성된 이미지가 없습니다.',
       deleteConfirm: '이 이미지를 영구 삭제하시겠습니까?',
+      deleteAllConfirm: '생성 히스토리의 모든 이미지를 영구 삭제하시겠습니까?',
       deleteLabel: '삭제',
+      deleteAllLabel: '전체 삭제',
       download: '다운로드',
       saveProject: '에피소드 저장',
       saveBrand: '브랜드 IP 등록',
@@ -223,7 +225,9 @@
       resultsTitle: 'Results',
       resultsEmpty: 'No generated images yet.',
       deleteConfirm: 'Permanently delete this image?',
+      deleteAllConfirm: 'Permanently delete every image in the generation history?',
       deleteLabel: 'Delete',
+      deleteAllLabel: 'Delete all',
       download: 'Download',
       saveProject: 'Save to episode',
       saveBrand: 'Save to brand IP',
@@ -1179,6 +1183,10 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3"></circle><path d="M6.5 19c1.1-3 3.2-4.5 5.5-4.5s4.4 1.5 5.5 4.5"></path></svg>';
   }
 
+  function trashIconGlyph() {
+    return '&#128465;';
+  }
+
   function buildCameraPromptInlinePreview(raw) {
     var controls = normalizeCameraControls(raw);
     var modeLabel = cameraTargetModeLabel(state.cameraTargetMode);
@@ -1459,6 +1467,9 @@
 
   function buildHistoryPanelMarkup() {
     var cameraPanelActive = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera';
+    var historyHeadAction = (!cameraPanelActive && state.results.length)
+      ? '<button type="button" class="trash-btn ai-image-history-clear" data-action="delete-all-results" aria-label="' + escapeHtml(t('deleteAllLabel')) + '" title="' + escapeHtml(t('deleteAllLabel')) + '">' + trashIconGlyph() + '</button>'
+      : '';
     var resultCards = state.results.map(function (item) {
       var active = String(item.id || '') === String(state.currentResultId || '');
       return '' +
@@ -1476,6 +1487,7 @@
       '<section class="card ai-image-panel ai-image-panel-history" data-render-signature="' + escapeHtml(historyPanelSignature()) + '">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(cameraPanelActive ? t('cameraModalTitle') : t('historyTitle')) + '</h2></div>' +
+      historyHeadAction +
       '</div>' +
       '<div class="ai-image-history' + (cameraPanelActive ? ' ai-image-history-camera' : '') + '">' +
       (cameraPanelActive
@@ -1733,6 +1745,11 @@
       var savedChip = cardEl.querySelector('.ai-image-saved-chip');
       if (savedChip) savedChip.textContent = t('resultSavedTag');
     });
+    var historyClearBtn = root.querySelector('.ai-image-history-clear');
+    if (historyClearBtn) {
+      historyClearBtn.setAttribute('aria-label', t('deleteAllLabel'));
+      historyClearBtn.setAttribute('title', t('deleteAllLabel'));
+    }
     updatePreviewPanelUI();
     updateHistoryPanelUI();
   }
@@ -2112,6 +2129,30 @@
         if (nextList) nextList.scrollTop = prevScroll;
       }
     } catch (_) {}
+  }
+
+  function clearAllHistoryResults(project) {
+    var items = Array.isArray(state.results) ? state.results.slice() : [];
+    if (!items.length) return false;
+    items.forEach(function (item) {
+      var row = item && typeof item === 'object' ? item : {};
+      var objectName = String(row.objectName || '').trim();
+      if (row.savedToProject && objectName && project && project.id && NK.api && NK.api.projectDelete) {
+        NK.api.projectDelete(project.id, objectName).catch(function () { });
+      }
+      if (objectName) addDeletedTombstone(objectName);
+    });
+    state.results = [];
+    state.currentResultId = '';
+    state.previewTargetType = 'none';
+    state.historyPanelMode = 'history';
+    state.cameraTargetMode = 'scene';
+    state.cameraControls = createDefaultCameraControls();
+    persistHistory();
+    updateResultSelectionUI();
+    updatePromptPanelUI();
+    updateHistoryPanelUI();
+    return true;
   }
 
   // Partial DOM update for source area to avoid reloading all images
@@ -2842,6 +2883,17 @@
             updatePromptPanelUI();
             updateHistoryPanelUI();
           }
+          return;
+        }
+        if (action === 'delete-all-results') {
+          if (!state.results.length) return;
+          try {
+            var okAll = window.confirm(t('deleteAllConfirm'));
+            if (!okAll) return;
+          } catch (_) {
+            // fall through if confirm not available
+          }
+          clearAllHistoryResults(project);
           return;
         }
         if (action === 'save-result-project') {

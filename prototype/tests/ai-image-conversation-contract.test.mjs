@@ -68,6 +68,7 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /class="ai-image-camera-fab/);
   assert.match(source, /data-action="toggle-camera-panel"/);
   assert.match(source, /ai-image-history-camera/);
+  assert.match(source, /data-action="delete-all-results"/);
   assert.match(source, /data-action="reset-camera-controls"/);
   assert.match(source, /data-action="set-camera-preset"/);
   assert.match(source, /cameraReset/);
@@ -93,6 +94,8 @@ test('ai-image preview can switch between source and history targets and camera 
   assert.match(source, /buildCameraApplyPrompt\(cameraOnly, previewTarget, appliedCameraTargetMode\)/);
   assert.match(source, /conversationHistory: previewTarget && previewTarget\.type === 'result' \? buildConversationHistory\(3\) : \[\]/);
   assert.match(source, /state\.previewTargetType = 'result';\s*state\.cameraTargetMode = 'scene';\s*state\.cameraControls = createDefaultCameraControls\(\);/);
+  assert.match(source, /function clearAllHistoryResults\(project\)/);
+  assert.match(source, /window\.confirm\(t\('deleteAllConfirm'\)\)/);
 });
 
 test('ai-image preview keeps project and brand save controls as icon actions in one control row', () => {

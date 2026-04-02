@@ -672,6 +672,12 @@ body.layout-fixed.page-shell-image .content {
   font-size: 20px;
 }
 
+.ai-image-history-clear {
+  flex: 0 0 auto;
+  width: 35px;
+  height: 35px;
+}
+
 .ai-image-preview-head p {
   margin: 6px 0 0;
   font-size: 13px;
