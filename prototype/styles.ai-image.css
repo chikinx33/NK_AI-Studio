@@ -1067,13 +1067,16 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-camera-target-toggle {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 10px;
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  pointer-events: none;
 }
 
 .ai-image-camera-target-btn {
+  position: absolute;
+  bottom: 0;
   width: 36px;
   height: 36px;
   border-radius: 12px;
@@ -1084,7 +1087,16 @@ body.layout-fixed.page-shell-image .content {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  pointer-events: auto;
   transition: border-color 160ms ease, background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.ai-image-camera-target-btn.is-scene {
+  left: 0;
+}
+
+.ai-image-camera-target-btn.is-subject {
+  right: 0;
 }
 
 .ai-image-camera-target-btn:hover {

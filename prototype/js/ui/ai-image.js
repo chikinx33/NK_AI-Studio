@@ -1243,11 +1243,6 @@
       return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
     }).join('');
     var resetButton = '<button type="button" class="ai-image-camera-preset' + (!controls.enabled && isNeutralCameraControls(controls) ? ' active' : '') + '" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>';
-    var targetButtons = '' +
-      '<div class="ai-image-camera-target-toggle" role="tablist" aria-label="' + escapeHtml(t('cameraButton')) + '">' +
-        '<button type="button" class="ai-image-camera-target-btn' + (targetMode === 'scene' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="scene" aria-label="' + escapeHtml(t('cameraTargetSceneLabel')) + '" title="' + escapeHtml(t('cameraTargetSceneLabel')) + '">' + cameraSceneTargetIconSvg() + '</button>' +
-        '<button type="button" class="ai-image-camera-target-btn' + (targetMode === 'subject' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="subject" aria-label="' + escapeHtml(t('cameraTargetSubjectLabel')) + '" title="' + escapeHtml(t('cameraTargetSubjectLabel')) + '">' + cameraSubjectTargetIconSvg() + '</button>' +
-      '</div>';
     return '' +
         '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-body">' +
@@ -1258,8 +1253,11 @@
                 '<div class="ai-image-camera-orbit-ring is-depth"></div>' +
                 '<div class="ai-image-camera-subject-core"></div>' +
                 '<div class="ai-image-camera-device">' + cameraFabIconSvg() + '</div>' +
+                '<div class="ai-image-camera-target-toggle" role="tablist" aria-label="' + escapeHtml(t('cameraButton')) + '">' +
+                  '<button type="button" class="ai-image-camera-target-btn is-scene' + (targetMode === 'scene' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="scene" aria-label="' + escapeHtml(t('cameraTargetSceneLabel')) + '" title="' + escapeHtml(t('cameraTargetSceneLabel')) + '">' + cameraSceneTargetIconSvg() + '</button>' +
+                  '<button type="button" class="ai-image-camera-target-btn is-subject' + (targetMode === 'subject' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="subject" aria-label="' + escapeHtml(t('cameraTargetSubjectLabel')) + '" title="' + escapeHtml(t('cameraTargetSubjectLabel')) + '">' + cameraSubjectTargetIconSvg() + '</button>' +
+                '</div>' +
               '</div>' +
-              targetButtons +
             '</div>' +
             '<div class="ai-image-camera-controls is-inline">' +
               '<div class="ai-image-camera-section is-inline">' +

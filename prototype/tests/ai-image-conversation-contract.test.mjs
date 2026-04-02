@@ -60,6 +60,8 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /data-action="set-camera-target-mode"/);
   assert.match(source, /cameraSceneTargetIconSvg/);
   assert.match(source, /cameraSubjectTargetIconSvg/);
+  assert.match(source, /class="ai-image-camera-target-btn is-scene/);
+  assert.match(source, /class="ai-image-camera-target-btn is-subject/);
   assert.match(source, /function buildCameraPromptBlock/);
   assert.match(source, /function buildCameraPromptInlinePreview/);
   assert.match(source, /cameraModalTitle/);
