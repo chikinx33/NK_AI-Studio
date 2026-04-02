@@ -12,7 +12,7 @@
     generationStyle: 'single',
     prompt: '',
     aspectRatio: '1:1',
-    imageSize: '2K',
+    imageSize: '1K',
     sourceImages: [],
     selectedSourceId: '',
     projectLibraryItems: [],
@@ -1794,7 +1794,7 @@
     }
     var sizeEl = document.getElementById('ai-image-size');
     if (sizeEl) {
-      sizeEl.value = state.imageSize || '2K';
+      sizeEl.value = state.imageSize || '1K';
     }
     bindSourceFileInput();
   }
@@ -2293,6 +2293,43 @@
     } catch (_) {}
   }
 
+  function buildHistoryCardMarkup(item) {
+    var active = String(item && item.id || '') === String(state.currentResultId || '');
+    return '' +
+      '<div class="ai-image-history-card' + (active ? ' active' : '') + '" role="button" tabindex="0" data-action="select-result" data-id="' + escapeHtml(String(item && item.id || '')) + '">' +
+      '<button type="button" class="ai-image-history-delete" data-action="delete-result" data-id="' + escapeHtml(String(item && item.id || '')) + '" aria-label="' + escapeHtml(t('deleteLabel')) + '" title="' + escapeHtml(t('deleteLabel')) + '">×</button>' +
+      '<img src="' + escapeHtml(resolveResultUrl(item)) + '" alt="" class="ai-image-history-thumb" />' +
+      '<div class="ai-image-history-meta">' +
+      '<strong>' + escapeHtml(((item && item.mode) === 'image-to-image' ? t('modeImageShort') : t('modeTextShort')) + ' · ' + generationStyleShortLabel((item && item.generationStyle) || 'single')) + '</strong>' +
+      '<p>' + escapeHtml((item && item.prompt) || '') + '</p>' +
+      ((item && item.savedToProject) ? '<span class="ai-image-saved-chip">' + escapeHtml(t('resultSavedTag')) + '</span>' : '') +
+      '</div>' +
+      '</div>';
+  }
+
+  function appendHistoryCardIfPossible(item) {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var panel = root.querySelector('.ai-image-panel-history');
+      if (!panel) {
+        updateHistoryPanelUI();
+        return;
+      }
+      var list = panel.querySelector('.ai-image-history-list');
+      if (!list) {
+        updateHistoryPanelUI();
+        return;
+      }
+      var container = document.createElement('div');
+      container.innerHTML = buildHistoryCardMarkup(item);
+      var card = container.firstChild;
+      if (card) {
+        list.insertBefore(card, list.firstChild || null);
+      }
+    } catch (_) {}
+  }
+
   function clearAllHistoryResults(project) {
     var items = Array.isArray(state.results) ? state.results.slice() : [];
     if (!items.length) return false;
@@ -2604,6 +2641,7 @@
       return;
     }
 
+    var chosenSize = String(state.imageSize || '1K').toUpperCase();
     var payload = {
       prompt: finalPrompt,
       aspectRatio: state.aspectRatio,
@@ -2611,7 +2649,7 @@
       sessionId: state.sessionId,
       generationMode: state.mode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
-      imageSize: state.imageSize,
+      imageSize: chosenSize,
       referenceImages: state.mode === 'image-to-image' && getSourceImages().length
         ? orderedSourceImages().map(function (item, index) {
           return {
@@ -2651,8 +2689,44 @@
       state.previewTargetType = 'result';
       state.cameraControls = createDefaultCameraControls();
       persistHistory();
+      appendHistoryCardIfPossible(result);
       updateResultSelectionUI();
     } catch (err) {
+      var s = (err && err.status) || 0;
+      if (s >= 500) {
+        try {
+          if (chosenSize === '2K') chosenSize = '1K';
+          else if (chosenSize === '1K') chosenSize = '512';
+          payload.imageSize = chosenSize;
+          var response2 = await NK.api.imagen(payload);
+          var result2 = {
+            id: 'res_' + Date.now(),
+            url: String(response2 && (response2.signedUrl || response2.dataUrl) || '').trim(),
+            objectName: String(response2 && response2.objectName || '').trim(),
+            imageSize: String(response2 && response2.imageSizeApplied || chosenSize || '').trim(),
+            prompt: prompt,
+            resolvedPrompt: finalPrompt,
+            mode: state.mode,
+            generationStyle: normalizeGenerationStyle(state.generationStyle),
+            cameraControls: appliedCameraControls,
+            conversationTurnCount: Number(response2 && response2.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
+            aspectRatio: state.aspectRatio,
+            createdAt: new Date().toISOString(),
+            savedToProject: false,
+            sessionId: state.sessionId
+          };
+          if (!result2.url) throw new Error('image_result_missing');
+          state.results.unshift(result2);
+          state.results = state.results.slice(0, 30);
+          state.currentResultId = result2.id;
+          state.previewTargetType = 'result';
+          state.cameraControls = createDefaultCameraControls();
+          persistHistory();
+          appendHistoryCardIfPossible(result2);
+          updateResultSelectionUI();
+          return;
+        } catch (_) {}
+      }
       var msg = (err && err.message) ? String(err.message) : String(err);
       var hint = '';
       try {
@@ -2703,7 +2777,7 @@
     if (effectiveMode === 'image-to-image' && !previewReferenceImages.length) {
       effectiveMode = 'text-to-image';
     }
-    var chosenSize = String(state.imageSize || '2K').toUpperCase();
+    var chosenSize = String(state.imageSize || '1K').toUpperCase();
     if (tryCount > 0) {
       if (chosenSize === '2K') chosenSize = '1K';
       else if (chosenSize === '1K') chosenSize = '512';

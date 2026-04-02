@@ -34,7 +34,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
     const incomingSize = String(body?.imageSize || body?.quality || body?.resolution || "").trim().toUpperCase();
     const sizeAllowed = new Set(["512", "1K", "2K"]);
-    const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "2K";
+    const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "1K";
     const geminiImageSize = sizeAllowed.has(incomingSize) ? incomingSize : sizeDefault;
 
     if (!apiKey) {
