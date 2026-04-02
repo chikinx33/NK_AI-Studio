@@ -51,6 +51,7 @@ test('ai-image preview exposes prompt analysis action and localized analyzing co
 test('ai-image preview toggles the history panel into camera-angle controls with dedicated prompt injection', () => {
   const source = readAiImageSource();
   assert.match(source, /historyPanelMode: 'history'/);
+  assert.match(source, /previewTargetType: 'result'/);
   assert.match(source, /cameraControls: createDefaultCameraControls\(\)/);
   assert.match(source, /function buildCameraControlCardMarkup/);
   assert.match(source, /class="ai-image-camera-card/);
@@ -67,6 +68,19 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /id="ai-image-camera-pan"/);
   assert.match(source, /id="ai-image-camera-tilt"/);
   assert.match(source, /id="ai-image-camera-distance"/);
+});
+
+test('ai-image preview can switch between source and history targets and camera apply follows the preview target', () => {
+  const source = readAiImageSource();
+  assert.match(source, /function currentPreviewTarget\(/);
+  assert.match(source, /type: 'source'/);
+  assert.match(source, /type: 'result'/);
+  assert.match(source, /state\.previewTargetType = 'source'/);
+  assert.match(source, /state\.previewTargetType = 'result'/);
+  assert.match(source, /updatePreviewPanelUI\(\);/);
+  assert.match(source, /var previewTarget = currentPreviewTarget\(\);/);
+  assert.match(source, /referenceImages: previewReferenceImages/);
+  assert.match(source, /conversationHistory: previewTarget && previewTarget\.type === 'result' \? buildConversationHistory\(3\) : \[\]/);
 });
 
 test('ai-image preview keeps project and brand save controls as icon actions in one control row', () => {

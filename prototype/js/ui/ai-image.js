@@ -30,6 +30,7 @@
     selectedFileName: '',
     sourceSectionCollapsed: { brand: true, content: true, project: true },
     imageModalUrl: '',
+    previewTargetType: 'result',
     historyPanelMode: 'history',
     cameraControls: createDefaultCameraControls(),
     deletedObjectNames: []
@@ -624,6 +625,71 @@
     return match || state.results[0] || null;
   }
 
+  function currentPreviewTarget() {
+    var previewType = String(state.previewTargetType || 'result').trim().toLowerCase();
+    var selectedSource = primarySourceImage();
+    var selectedResult = currentResult();
+    if (previewType === 'source' && selectedSource) {
+      return {
+        type: 'source',
+        id: String(selectedSource.id || ''),
+        url: String(selectedSource.url || '').trim(),
+        name: String(selectedSource.name || '').trim(),
+        sourceKind: String(selectedSource.kind || 'upload').trim(),
+        cameraControls: normalizeCameraControls(state.cameraControls),
+        source: selectedSource
+      };
+    }
+    if (previewType === 'result' && selectedResult) {
+      return {
+        type: 'result',
+        id: String(selectedResult.id || ''),
+        url: resolveResultUrl(selectedResult),
+        name: String(selectedResult.objectName || selectedResult.id || '').trim(),
+        sourceKind: '',
+        cameraControls: selectedResult && selectedResult.cameraControls
+          ? normalizeCameraControls(selectedResult.cameraControls)
+          : normalizeCameraControls(state.cameraControls),
+        result: selectedResult
+      };
+    }
+    if (selectedResult) {
+      return {
+        type: 'result',
+        id: String(selectedResult.id || ''),
+        url: resolveResultUrl(selectedResult),
+        name: String(selectedResult.objectName || selectedResult.id || '').trim(),
+        sourceKind: '',
+        cameraControls: selectedResult && selectedResult.cameraControls
+          ? normalizeCameraControls(selectedResult.cameraControls)
+          : normalizeCameraControls(state.cameraControls),
+        result: selectedResult
+      };
+    }
+    if (selectedSource) {
+      return {
+        type: 'source',
+        id: String(selectedSource.id || ''),
+        url: String(selectedSource.url || '').trim(),
+        name: String(selectedSource.name || '').trim(),
+        sourceKind: String(selectedSource.kind || 'upload').trim(),
+        cameraControls: normalizeCameraControls(state.cameraControls),
+        source: selectedSource
+      };
+    }
+    return null;
+  }
+
+  function currentPreviewResult() {
+    var preview = currentPreviewTarget();
+    return preview && preview.type === 'result' ? preview.result : null;
+  }
+
+  function currentPreviewUrl() {
+    var preview = currentPreviewTarget();
+    return preview ? String(preview.url || '').trim() : '';
+  }
+
   function brandCharacterSignature() {
     return brandCharacterOptions().map(function (item) {
       return String(item && item.token || '') + ':' + String(item && item.label || '');
@@ -653,22 +719,26 @@
     ].join('::');
   }
 
-  function previewPanelSignature(selectedResult, detached) {
-    var row = selectedResult && typeof selectedResult === 'object' ? selectedResult : {};
+  function previewPanelSignature(selectedPreview, detached) {
+    var preview = selectedPreview && typeof selectedPreview === 'object' ? selectedPreview : {};
+    var row = preview.result && typeof preview.result === 'object' ? preview.result : {};
     return [
       state.lang,
       detached ? '1' : '0',
       String(state.currentProject && state.currentProject.id || ''),
       String(state.currentBrand && state.currentBrand.brandId || ''),
       brandCharacterSignature(),
-      selectedBrandCharacterToken(selectedResult),
-      String(row.id || ''),
-      String(resolveResultUrl(row) || ''),
+      preview.type === 'result' ? selectedBrandCharacterToken(row) : '',
+      String(preview.type || ''),
+      String(preview.id || ''),
+      String(preview.url || ''),
+      String(preview.name || ''),
+      String(preview.sourceKind || ''),
       String(row.prompt || ''),
       String(row.mode || ''),
       String(row.generationStyle || ''),
       normalizeHistoryPanelMode(state.historyPanelMode),
-      cameraControlSignature(row.cameraControls),
+      cameraControlSignature(preview.cameraControls),
       row.savedToProject ? '1' : '0'
     ].join('::');
   }
@@ -955,6 +1025,7 @@
     var incoming = Array.isArray(entries) ? entries : [];
     var changed = false;
     var hitLimit = false;
+    var addedIds = [];
     incoming.forEach(function (entry) {
       var normalized = entry && entry.url ? entry : makeSourceImage(entry && entry.url, entry && entry.name, entry && entry.kind);
       if (!normalized || !normalized.url) return;
@@ -964,13 +1035,14 @@
         return;
       }
       items.push(normalized);
+      addedIds.push(String(normalized.id || ''));
       changed = true;
     });
     if (changed) {
       state.sourceImages = items;
       ensureSelectedSourceId();
     }
-    return { changed: changed, hitLimit: hitLimit };
+    return { changed: changed, hitLimit: hitLimit, addedIds: addedIds };
   }
 
   function toggleSourceImage(url, name, kind) {
@@ -980,9 +1052,17 @@
       return String(item && item.url || '').trim() === trimmedUrl;
     });
     if (existingIndex >= 0) {
-      return removeSourceImageAt(existingIndex);
+      var removed = removeSourceImageAt(existingIndex);
+      if (removed && !getSourceImages().length && String(state.previewTargetType || '') === 'source') {
+        state.previewTargetType = 'result';
+      }
+      return removed;
     }
     var result = appendSourceImages([makeSourceImage(trimmedUrl, name, kind)]);
+    if (result.changed && result.addedIds && result.addedIds[0]) {
+      state.selectedSourceId = String(result.addedIds[0] || '');
+      state.previewTargetType = 'source';
+    }
     if (result.hitLimit) alert(t('sourceLimitReached'));
     return result.changed;
   }
@@ -1253,28 +1333,36 @@
       '</section>';
   }
 
-  function buildPreviewPanelMarkup(detached, project, brand, selectedResult) {
+  function buildPreviewPanelMarkup(detached, project, brand, selectedPreview) {
+    var preview = selectedPreview && typeof selectedPreview === 'object' ? selectedPreview : null;
+    var selectedResult = preview && preview.type === 'result' ? preview.result : null;
     var brandCharacterList = brandCharacterOptions();
     var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
-    var selectedCameraControls = selectedResult && selectedResult.cameraControls
-      ? normalizeCameraControls(selectedResult.cameraControls)
+    var selectedCameraControls = preview && preview.cameraControls
+      ? normalizeCameraControls(preview.cameraControls)
       : normalizeCameraControls(state.cameraControls);
     var cameraPanelActive = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera';
+    var previewUrl = preview ? String(preview.url || '').trim() : '';
+    var sourceMeta = preview && preview.type === 'source'
+      ? (sourceKindLabel(preview.sourceKind) + (preview.name ? (' · ' + preview.name) : ''))
+      : '';
     return '' +
-      '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(previewPanelSignature(selectedResult, detached)) + '">' +
+      '<section class="card ai-image-panel ai-image-panel-preview" data-render-signature="' + escapeHtml(previewPanelSignature(preview, detached)) + '">' +
       '<div class="ai-image-preview-head">' +
       '<div><h2>' + escapeHtml(t('latestResult')) + '</h2></div>' +
       '</div>' +
       '<div class="ai-image-preview-layout">' +
-      (selectedResult
+      (preview
         ? '<div class="ai-image-preview-stage">' +
           '<div class="ai-image-preview-media">' +
-          '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(resolveResultUrl(selectedResult)) + '">' +
-          '<img src="' + escapeHtml(resolveResultUrl(selectedResult)) + '" alt="" class="ai-image-preview-image" />' +
+          '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(previewUrl) + '">' +
+          '<img src="' + escapeHtml(previewUrl) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
           '<button type="button" class="ai-image-camera-fab' + (cameraPanelActive ? ' is-active' : '') + '" data-action="toggle-camera-panel" aria-label="' + escapeHtml(t('cameraButton')) + '" title="' + escapeHtml(t('cameraButton')) + '">' + cameraFabIconSvg() + '</button>' +
           '</div>' +
           '<div class="ai-image-preview-foot">' +
+              (selectedResult
+              ? 
               '<div class="ai-image-inline-actions' + (detached ? ' is-compact-grid' : '') + '">' +
               '<div class="ai-image-inline-actions-left">' +
                 '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
@@ -1294,10 +1382,13 @@
               '<button type="button" class="btn-secondary compact ai-image-action-icon ai-image-action-save" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveBrand')) + '" title="' + escapeHtml(t('saveBrand')) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + brandSaveIconSvg() + '</button>' +
               '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-action-save" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveProject')) + '" title="' + escapeHtml(t('saveProject')) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + projectSaveIconSvg() + '</button>' +
               '</div></div>') +
-              '</div>' +
+              '</div>'
+              : '') +
               '<div class="ai-image-preview-meta">' +
-                '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>' +
-                '<p class="ai-image-preview-prompt">' + escapeHtml(selectedResult.prompt || '') + '</p>' +
+                (selectedResult
+                  ? '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>'
+                  : '<p class="ai-image-preview-created"><strong>' + escapeHtml(t('sourceTitle')) + ':</strong> ' + escapeHtml(sourceMeta || t('sourceKindUpload')) + '</p>') +
+                '<p class="ai-image-preview-prompt">' + escapeHtml(selectedResult ? (selectedResult.prompt || '') : (preview.name || '')) + '</p>' +
                 '<p class="ai-image-camera-meta"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> ' + escapeHtml(cameraSummary(selectedCameraControls)) + '</p>' +
               '</div>' +
           '</div>' +
@@ -1479,7 +1570,7 @@
     var project = state.currentProject;
     var brand = state.currentBrand;
     var detached = !(project && project.id);
-    var selectedResult = currentResult();
+    var selectedPreview = currentPreviewTarget();
     var existingSourceSelection = root.querySelector('.ai-image-source-selection, .ai-image-source-empty');
     var existingSourceSelectionSignature = existingSourceSelection ? String(existingSourceSelection.getAttribute('data-selection-signature') || '') : '';
 
@@ -1501,53 +1592,58 @@
     if (headings[1]) headings[1].textContent = t('latestResult');
     if (headings[2]) headings[2].textContent = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera' ? t('cameraModalTitle') : t('historyTitle');
 
-    if (selectedResult) {
-      var analyzeBtn = root.querySelector('[data-action="analyze-result-prompt"]');
-      if (analyzeBtn) {
-        analyzeBtn.setAttribute('aria-label', t('analyzePrompt'));
-        analyzeBtn.setAttribute('title', t('analyzePrompt'));
+    if (selectedPreview) {
+      if (selectedPreview.type === 'result') {
+        var analyzeBtn = root.querySelector('[data-action="analyze-result-prompt"]');
+        if (analyzeBtn) {
+          analyzeBtn.setAttribute('aria-label', t('analyzePrompt'));
+          analyzeBtn.setAttribute('title', t('analyzePrompt'));
+        }
+        var regenerateBtn = root.querySelector('[data-action="regenerate-variation"]');
+        if (regenerateBtn) {
+          regenerateBtn.setAttribute('aria-label', t('regenerateVariation'));
+          regenerateBtn.setAttribute('title', t('regenerateVariation'));
+        }
+        var sourceBtn = root.querySelector('[data-action="use-result-as-source"]');
+        if (sourceBtn) {
+          sourceBtn.setAttribute('aria-label', t('useAsSource'));
+          sourceBtn.setAttribute('title', t('useAsSource'));
+        }
+        var reuseBtn = root.querySelector('[data-action="reuse-prompt"]');
+        if (reuseBtn) {
+          reuseBtn.setAttribute('aria-label', t('reusePrompt'));
+          reuseBtn.setAttribute('title', t('reusePrompt'));
+        }
+        var downloadBtn = root.querySelector('[data-action="download-result"]');
+        if (downloadBtn) {
+          downloadBtn.setAttribute('aria-label', t('download'));
+          downloadBtn.setAttribute('title', t('download'));
+        }
+        var saveProjectBtn = root.querySelector('[data-action="save-result-project"]');
+        if (saveProjectBtn) {
+          saveProjectBtn.setAttribute('aria-label', t('saveProject'));
+          saveProjectBtn.setAttribute('title', t('saveProject'));
+          saveProjectBtn.innerHTML = projectSaveIconSvg();
+        }
+        var saveBrandBtn = root.querySelector('[data-action="save-result-brand"]');
+        if (saveBrandBtn) {
+          saveBrandBtn.setAttribute('aria-label', t('saveBrand'));
+          saveBrandBtn.setAttribute('title', t('saveBrand'));
+          saveBrandBtn.innerHTML = brandSaveIconSvg();
+        }
+        var brandTargetWrap = root.querySelector('.ai-image-brand-select-wrap');
+        if (brandTargetWrap) brandTargetWrap.setAttribute('aria-label', t('saveBrandSelectLabel'));
+        var brandTargetEl = document.getElementById('ai-image-brand-target');
+        if (brandTargetEl) {
+          brandTargetEl.setAttribute('title', t('saveBrandSelectLabel'));
+          if (brandTargetEl.options.length) brandTargetEl.options[0].text = t('saveBrandSelectPlaceholder');
+        }
+        var previewMetaLabel = root.querySelector('.ai-image-preview-created strong');
+        if (previewMetaLabel) previewMetaLabel.textContent = t('createdAt') + ':';
+      } else {
+        var sourcePreviewMetaLabel = root.querySelector('.ai-image-preview-created strong');
+        if (sourcePreviewMetaLabel) sourcePreviewMetaLabel.textContent = t('sourceTitle') + ':';
       }
-      var regenerateBtn = root.querySelector('[data-action="regenerate-variation"]');
-      if (regenerateBtn) {
-        regenerateBtn.setAttribute('aria-label', t('regenerateVariation'));
-        regenerateBtn.setAttribute('title', t('regenerateVariation'));
-      }
-      var sourceBtn = root.querySelector('[data-action="use-result-as-source"]');
-      if (sourceBtn) {
-        sourceBtn.setAttribute('aria-label', t('useAsSource'));
-        sourceBtn.setAttribute('title', t('useAsSource'));
-      }
-      var reuseBtn = root.querySelector('[data-action="reuse-prompt"]');
-      if (reuseBtn) {
-        reuseBtn.setAttribute('aria-label', t('reusePrompt'));
-        reuseBtn.setAttribute('title', t('reusePrompt'));
-      }
-      var downloadBtn = root.querySelector('[data-action="download-result"]');
-      if (downloadBtn) {
-        downloadBtn.setAttribute('aria-label', t('download'));
-        downloadBtn.setAttribute('title', t('download'));
-      }
-      var saveProjectBtn = root.querySelector('[data-action="save-result-project"]');
-      if (saveProjectBtn) {
-        saveProjectBtn.setAttribute('aria-label', t('saveProject'));
-        saveProjectBtn.setAttribute('title', t('saveProject'));
-        saveProjectBtn.innerHTML = projectSaveIconSvg();
-      }
-      var saveBrandBtn = root.querySelector('[data-action="save-result-brand"]');
-      if (saveBrandBtn) {
-        saveBrandBtn.setAttribute('aria-label', t('saveBrand'));
-        saveBrandBtn.setAttribute('title', t('saveBrand'));
-        saveBrandBtn.innerHTML = brandSaveIconSvg();
-      }
-      var brandTargetWrap = root.querySelector('.ai-image-brand-select-wrap');
-      if (brandTargetWrap) brandTargetWrap.setAttribute('aria-label', t('saveBrandSelectLabel'));
-      var brandTargetEl = document.getElementById('ai-image-brand-target');
-      if (brandTargetEl) {
-        brandTargetEl.setAttribute('title', t('saveBrandSelectLabel'));
-        if (brandTargetEl.options.length) brandTargetEl.options[0].text = t('saveBrandSelectPlaceholder');
-      }
-      var previewMetaLabel = root.querySelector('.ai-image-preview-created strong');
-      if (previewMetaLabel) previewMetaLabel.textContent = t('createdAt') + ':';
       var cameraMetaLabel = root.querySelector('.ai-image-camera-meta strong');
       if (cameraMetaLabel) cameraMetaLabel.textContent = t('cameraMetaLabel') + ':';
     } else {
@@ -1604,10 +1700,10 @@
     var project = state.currentProject;
     var brand = state.currentBrand;
     var detached = !(project && project.id);
-    var selectedResult = currentResult();
+    var selectedPreview = currentPreviewTarget();
     var sourceDisabled = state.mode !== 'image-to-image';
     var nextPromptSignature = promptPanelSignature(detached, project);
-    var nextPreviewSignature = previewPanelSignature(selectedResult, detached);
+    var nextPreviewSignature = previewPanelSignature(selectedPreview, detached);
     var nextHistorySignature = historyPanelSignature();
     var existingPromptPanel = root.querySelector('.ai-image-panel-left');
     var existingPreviewPanel = root.querySelector('.ai-image-panel-preview');
@@ -1629,7 +1725,7 @@
       '</div>' +
       '<div class="ai-image-workspace">' +
       buildPromptPanelMarkup(detached, project, sourceDisabled).replace('<section class="card ai-image-panel ai-image-panel-left">', '<section class="card ai-image-panel ai-image-panel-left" data-render-signature="' + escapeHtml(nextPromptSignature) + '">') +
-      buildPreviewPanelMarkup(detached, project, brand, selectedResult) +
+      buildPreviewPanelMarkup(detached, project, brand, selectedPreview) +
       buildHistoryPanelMarkup() +
       '</div>' +
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
@@ -1894,10 +1990,10 @@
       var project = state.currentProject;
       var brand = state.currentBrand;
       var detached = !(project && project.id);
-      var selectedResult = currentResult();
+      var selectedPreview = currentPreviewTarget();
       var previewPanel = root.querySelector('.ai-image-panel-preview');
       if (previewPanel) {
-        previewPanel.outerHTML = buildPreviewPanelMarkup(detached, project, brand, selectedResult);
+        previewPanel.outerHTML = buildPreviewPanelMarkup(detached, project, brand, selectedPreview);
       }
     } catch (_) {}
   }
@@ -1913,8 +2009,8 @@
     current.preset = 'custom';
     current.enabled = !isNeutralCameraControls(current);
     state.cameraControls = current;
-    var result = currentResult();
-    if (result) result.cameraControls = normalizeCameraControls(current);
+    var previewResult = currentPreviewResult();
+    if (previewResult) previewResult.cameraControls = normalizeCameraControls(current);
   }
 
   function syncInlineCameraUi() {
@@ -2279,6 +2375,7 @@
       state.results.unshift(result);
       state.results = state.results.slice(0, 30);
       state.currentResultId = result.id;
+      state.previewTargetType = 'result';
       persistHistory();
       updateResultSelectionUI();
     } catch (err) {
@@ -2305,6 +2402,7 @@
   async function generateImageCameraApply(attempt) {
     var tryCount = Number(attempt || 0) || 0;
     var appliedCameraControls = normalizeCameraControls(state.cameraControls);
+    var previewTarget = currentPreviewTarget();
     var cameraOnly = (window.NK && NK.utils && typeof NK.utils.buildCameraPrompt === 'function')
       ? NK.utils.buildCameraPrompt(appliedCameraControls)
       : (typeof window.buildCameraPrompt === 'function' ? window.buildCameraPrompt(appliedCameraControls) : '');
@@ -2314,8 +2412,19 @@
         : (typeof window.mapCameraToPrompt === 'function' ? window.mapCameraToPrompt(appliedCameraControls) : '');
       cameraOnly = fallback || '(camera: cinematic medium shot:1.2)';
     }
-    var effectiveMode = state.mode;
-    if (effectiveMode === 'image-to-image' && !getSourceImages().length) {
+    var previewReferenceImages = [];
+    if (previewTarget && previewTarget.url) {
+      previewReferenceImages = [{
+        referenceId: 1,
+        imageDataUrl: previewTarget.url,
+        subjectDescription: previewTarget.type === 'source'
+          ? (sourceKindLabel(previewTarget.sourceKind) + ' preview reference')
+          : 'preview result reference',
+        subjectType: 'SUBJECT_TYPE_DEFAULT'
+      }];
+    }
+    var effectiveMode = previewReferenceImages.length ? 'image-to-image' : state.mode;
+    if (effectiveMode === 'image-to-image' && !previewReferenceImages.length) {
       effectiveMode = 'text-to-image';
     }
     var chosenSize = String(state.imageSize || '2K').toUpperCase();
@@ -2331,17 +2440,8 @@
       generationMode: effectiveMode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
       imageSize: chosenSize,
-      referenceImages: (effectiveMode === 'image-to-image' && getSourceImages().length)
-        ? orderedSourceImages().map(function (item, index) {
-          return {
-            referenceId: index + 1,
-            imageDataUrl: item.url,
-            subjectDescription: sourceKindLabel(item.kind) + ' reference ' + String(index + 1),
-            subjectType: 'SUBJECT_TYPE_DEFAULT'
-          };
-        })
-        : [],
-      conversationHistory: buildConversationHistory(3)
+      referenceImages: previewReferenceImages,
+      conversationHistory: previewTarget && previewTarget.type === 'result' ? buildConversationHistory(3) : []
     };
     setGlobalLoading(true, t('generating'));
     try {
@@ -2366,6 +2466,7 @@
       state.results.unshift(result);
       state.results = state.results.slice(0, 30);
       state.currentResultId = result.id;
+      state.previewTargetType = 'result';
       persistHistory();
       updateResultSelectionUI();
     } catch (err) {
@@ -2456,13 +2557,19 @@
         if (action === 'remove-source') {
           var removeIndex = Number(btn.getAttribute('data-index') || -1);
           removeSourceImageAt(removeIndex);
+          if (!getSourceImages().length && String(state.previewTargetType || '') === 'source') {
+            state.previewTargetType = 'result';
+          }
           updateSourceUI();
+          updatePreviewPanelUI();
           return;
         }
         if (action === 'select-source-primary') {
           var sourceIndex = Number(btn.getAttribute('data-index') || -1);
           setPrimarySourceByIndex(sourceIndex);
+          if (sourceIndex >= 0) state.previewTargetType = 'source';
           updateSourceUI();
+          updatePreviewPanelUI();
           return;
         }
         if (action === 'load-project-library') {
@@ -2484,6 +2591,7 @@
           var nextUrl = resolveLibraryItemUrl(item);
           toggleSourceImage(nextUrl, String(item.name || '').trim(), 'project');
           updateSourceUI();
+          updatePreviewPanelUI();
           return;
         }
         if (action === 'select-brand-source') {
@@ -2493,6 +2601,7 @@
           var nextBrandUrl = resolveLibraryItemUrl(brandItem);
           toggleSourceImage(nextBrandUrl, String(brandItem.name || '').trim(), 'brand');
           updateSourceUI();
+          updatePreviewPanelUI();
           return;
         }
         if (action === 'select-content-source') {
@@ -2502,6 +2611,7 @@
           var nextContentUrl = resolveContentItemUrl(cItem);
           toggleSourceImage(nextContentUrl, String(cItem.title || '').trim(), 'content');
           updateSourceUI();
+          updatePreviewPanelUI();
           return;
         }
         if (action === 'generate-image') {
@@ -2510,6 +2620,7 @@
         }
         if (action === 'select-result') {
           state.currentResultId = String(btn.getAttribute('data-id') || '');
+          state.previewTargetType = 'result';
           var selected = currentResult();
           state.cameraControls = selected && selected.cameraControls
             ? normalizeCameraControls(selected.cameraControls)
@@ -2543,7 +2654,7 @@
             state.imageModalUrl = '';
             return;
           }
-          var urlToShow = imgUrl || (selectedResult ? resolveResultUrl(selectedResult) : '');
+          var urlToShow = imgUrl || currentPreviewUrl();
           if (urlToShow) {
             var modal = document.createElement('div');
             modal.className = 'img-modal';
@@ -2559,14 +2670,14 @@
         }
         if (action === 'set-camera-preset') {
           applyCameraPreset(btn.getAttribute('data-preset') || 'custom');
-          var resultForPreset = currentResult();
+          var resultForPreset = currentPreviewResult();
           if (resultForPreset) resultForPreset.cameraControls = normalizeCameraControls(state.cameraControls);
           persistInlineCameraControls({ refreshHistoryPanel: true });
           return;
         }
         if (action === 'reset-camera-controls') {
           resetCameraControls();
-          var resultForReset = currentResult();
+          var resultForReset = currentPreviewResult();
           if (resultForReset) resultForReset.cameraControls = normalizeCameraControls(state.cameraControls);
           persistInlineCameraControls({ refreshHistoryPanel: true });
           return;
@@ -2589,7 +2700,7 @@
             state.imageModalUrl = '';
             return;
           }
-          var sourceModalUrl = String(btn.getAttribute('data-url') || sourcePreviewUrl()).trim();
+          var sourceModalUrl = String(btn.getAttribute('data-url') || currentPreviewUrl() || sourcePreviewUrl()).trim();
           if (sourceModalUrl) {
             var el = document.createElement('div');
             el.className = 'img-modal';
@@ -2683,8 +2794,13 @@
             if (addResult.hitLimit) {
               alert(t('sourceLimitReached'));
             }
+            if (addResult.addedIds && addResult.addedIds[0]) {
+              state.selectedSourceId = String(addResult.addedIds[0] || '');
+              state.previewTargetType = 'source';
+            }
             updateSourceUI();
             updatePromptPanelUI();
+            updatePreviewPanelUI();
             updateHistoryPanelUI();
           }
           return;
@@ -2702,7 +2818,12 @@
               updateSourceUI();
               return;
             }
+            if (ensureResult.addedIds && ensureResult.addedIds[0]) {
+              state.selectedSourceId = String(ensureResult.addedIds[0] || '');
+              state.previewTargetType = 'source';
+            }
             updatePromptPanelUI();
+            updatePreviewPanelUI();
             updateHistoryPanelUI();
             generateImage();
           }
