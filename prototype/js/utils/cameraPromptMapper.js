@@ -1,7 +1,7 @@
 ;(function () {
   var NK = window.NK || (window.NK = {});
   var utils = NK.utils || (NK.utils = {});
-  var CAMERA_FRONT_PAN = 270;
+  var CAMERA_FRONT_PAN = 0;
   function clamp(n, min, max) { var x = Number(n); if (!Number.isFinite(x)) x = 0; if (x < min) return min; if (x > max) return max; return x; }
   function wrapPan(n, fallback) {
     var x = Number(n);
@@ -20,40 +20,36 @@
   function legacyDistanceToStage(distance) {
     var raw = Number(distance);
     var v = Number.isFinite(raw) ? clamp(raw, 0, 100) : 50;
-    if (v <= 20) return 1;
-    if (v <= 40) return 2;
-    if (v <= 60) return 3;
-    if (v <= 80) return 4;
-    return 5;
+    if (v <= 33) return 0;
+    if (v <= 66) return 1;
+    return 2;
   }
   function normalizeControls(cameraControls) {
     var c = cameraControls && typeof cameraControls === 'object' ? cameraControls : {};
     var panValue = Number(c.pan);
     var distanceValue = Number(c.distance);
-    var orbitPan = c.orbitPan === true || (panValue >= 0 && panValue <= 359 && distanceValue >= 1 && distanceValue <= 5);
+    var orbitPan = c.orbitPan === true || (panValue >= 0 && panValue <= 359 && distanceValue >= 0 && distanceValue <= 2);
     return {
       orbitPan: true,
       enabled: !!c.enabled,
       preset: String(c.preset || 'custom').toLowerCase(),
       pan: orbitPan ? wrapPan(panValue, CAMERA_FRONT_PAN) : wrapPan(CAMERA_FRONT_PAN + clamp(panValue, -180, 180), CAMERA_FRONT_PAN),
-      tilt: clamp(c.tilt, -45, 45),
-      distance: orbitPan ? clamp(distanceValue, 1, 5) : legacyDistanceToStage(distanceValue)
+      tilt: clamp(c.tilt, -30, 60),
+      distance: orbitPan ? clamp(distanceValue, 0, 2) : legacyDistanceToStage(distanceValue)
     };
   }
   function isNeutral(c) {
     var n = normalizeControls(c);
     var enabled = !!n.enabled;
-    var pan = Number(n.pan || CAMERA_FRONT_PAN);
+    var pan = Number.isFinite(Number(n.pan)) ? Number(n.pan) : CAMERA_FRONT_PAN;
     var tilt = Number(n.tilt || 0);
-    var dist = Number(n.distance || 3);
-    return !enabled && pan === CAMERA_FRONT_PAN && tilt === 0 && dist === 3;
+    var dist = Number.isFinite(Number(n.distance)) ? Number(n.distance) : 1;
+    return !enabled && pan === CAMERA_FRONT_PAN && tilt === 0 && dist === 1;
   }
   function shotFromDistance(distance) {
-    var v = clamp(distance, 1, 5);
-    if (v <= 1) return 'close-up portrait';
-    if (v <= 2) return 'medium close-up';
-    if (v <= 3) return 'medium shot';
-    if (v <= 4) return 'full body shot';
+    var v = clamp(distance, 0, 2);
+    if (v <= 0) return 'close-up portrait';
+    if (v <= 1) return 'medium shot';
     return 'wide shot';
   }
   function viewFromPan(pan) {
@@ -67,11 +63,11 @@
     return 'rear 3/4 right view';
   }
   function angleFromTilt(tilt) {
-    var v = clamp(tilt, -45, 45);
-    if (v < -25) return 'top-down view';
+    var v = clamp(tilt, -30, 60);
+    if (v < -18) return 'top-down view';
     if (v < -10) return 'high angle';
     if (v <= 10) return 'eye-level';
-    if (v <= 25) return 'low angle';
+    if (v <= 30) return 'low angle';
     return 'dramatic low angle';
   }
   function applyPresetOverride(preset, shot, view, angle) {

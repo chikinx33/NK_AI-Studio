@@ -88,8 +88,8 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.doesNotMatch(source, /id="ai-image-camera-prompt-preview"/);
   assert.doesNotMatch(source, /cameraPresetAuto/);
   assert.match(source, /id="ai-image-camera-pan" type="range" min="0" max="359"/);
-  assert.match(source, /id="ai-image-camera-tilt" type="range" min="-45" max="45"/);
-  assert.match(source, /id="ai-image-camera-distance" type="range" min="1" max="5"/);
+  assert.match(source, /id="ai-image-camera-tilt" type="range" min="-30" max="60"/);
+  assert.match(source, /id="ai-image-camera-distance" type="range" min="0" max="2"/);
 });
 
 test('ai-image preview can switch between source and history targets and camera apply follows the preview target', () => {

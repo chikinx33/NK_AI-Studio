@@ -328,13 +328,13 @@
       .replace(/'/g, '&#39;');
   }
 
-  var CAMERA_FRONT_PAN = 270;
+  var CAMERA_FRONT_PAN = 0;
   var CAMERA_PAN_MIN = 0;
   var CAMERA_PAN_MAX = 359;
-  var CAMERA_TILT_MIN = -45;
-  var CAMERA_TILT_MAX = 45;
-  var CAMERA_DISTANCE_MIN = 1;
-  var CAMERA_DISTANCE_MAX = 5;
+  var CAMERA_TILT_MIN = -30;
+  var CAMERA_TILT_MAX = 60;
+  var CAMERA_DISTANCE_MIN = 0;
+  var CAMERA_DISTANCE_MAX = 2;
 
   function createDefaultCameraControls() {
     return {
@@ -343,7 +343,7 @@
       preset: 'custom',
       pan: CAMERA_FRONT_PAN,
       tilt: 0,
-      distance: 3
+      distance: 1
     };
   }
 
@@ -365,11 +365,9 @@
 
   function legacyDistanceToStage(distance) {
     var value = clampNumber(distance, 0, 100, 50);
-    if (value <= 20) return 1;
-    if (value <= 40) return 2;
-    if (value <= 60) return 3;
-    if (value <= 80) return 4;
-    return 5;
+    if (value <= 33) return 0;
+    if (value <= 66) return 1;
+    return 2;
   }
 
   function cameraRelativePanDegrees(raw) {
@@ -398,7 +396,7 @@
         : wrapPanDegrees(CAMERA_FRONT_PAN + clampNumber(panValue, -180, 180, 0), CAMERA_FRONT_PAN),
       tilt: clampNumber(tiltValue, CAMERA_TILT_MIN, CAMERA_TILT_MAX, 0),
       distance: orbitPan
-        ? clampNumber(distanceValue, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX, 3)
+        ? clampNumber(distanceValue, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX, 1)
         : legacyDistanceToStage(distanceValue)
     };
     normalized.enabled = normalized.enabled && !isNeutralCameraControls(normalized);
@@ -419,18 +417,17 @@
 
   function isNeutralCameraControls(raw) {
     var controls = raw && typeof raw === 'object' ? raw : createDefaultCameraControls();
+    var distanceValue = Number(controls.distance);
     return !controls.enabled
       && wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) === CAMERA_FRONT_PAN
       && Number(controls.tilt || 0) === 0
-      && Number(controls.distance || 3) === 3;
+      && (Number.isFinite(distanceValue) ? distanceValue : 1) === 1;
   }
 
   function distanceBucket(distance) {
-    var value = clampNumber(distance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX, 3);
-    if (value <= 1) return 'close-up';
-    if (value <= 2) return 'medium-close-up';
-    if (value <= 3) return 'medium-shot';
-    if (value <= 4) return 'full-shot';
+    var value = clampNumber(distance, CAMERA_DISTANCE_MIN, CAMERA_DISTANCE_MAX, 1);
+    if (value <= 0) return 'close-up';
+    if (value <= 1) return 'medium-shot';
     return 'wide-shot';
   }
 
@@ -445,17 +442,18 @@
 
   function computeCameraOrbitPreview(raw) {
     var controls = normalizeCameraControls(raw);
-    var panRad = wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) * Math.PI / 180;
+    var renderPanRad = wrapPanDegrees(controls.pan + 90, CAMERA_FRONT_PAN) * Math.PI / 180;
     var tiltRad = clampNumber(controls.tilt, CAMERA_TILT_MIN, CAMERA_TILT_MAX, 0) * Math.PI / 180;
     var distanceRatio = clampNumber((controls.distance - CAMERA_DISTANCE_MIN) / (CAMERA_DISTANCE_MAX - CAMERA_DISTANCE_MIN), 0, 1, 0.5);
-    var radiusX = lerpNumber(26, 38, distanceRatio);
-    var radiusY = lerpNumber(18, 29, distanceRatio);
-    var orbitLift = Math.sin(tiltRad) * 20;
-    var x = 50 + (Math.sin(panRad) * radiusX * Math.cos(tiltRad * 0.35));
-    var y = 50 + (Math.cos(panRad) * radiusY) - orbitLift;
+    var radiusX = lerpNumber(24, 38, distanceRatio);
+    var radiusY = lerpNumber(15, 31, distanceRatio);
+    var orbitLift = Math.sin(tiltRad) * 24;
+    var horizontalCompression = Math.cos(tiltRad * 1.1);
+    var x = 50 + (Math.sin(renderPanRad) * radiusX * horizontalCompression);
+    var y = 50 + (Math.cos(renderPanRad) * radiusY) - orbitLift;
     var finalX = roundPreviewNumber(clampNumber(x, 10, 90, 50));
     var finalY = roundPreviewNumber(clampNumber(y, 10, 90, 50));
-    var focusPull = lerpNumber(0.34, 0.46, distanceRatio);
+    var focusPull = lerpNumber(0.3, 0.42, distanceRatio);
     var focusX = roundPreviewNumber(50 + ((finalX - 50) * focusPull));
     var focusY = roundPreviewNumber(50 + ((finalY - 50) * focusPull));
     var lineAngle = Math.atan2(finalY - focusY, finalX - focusX) * 180 / Math.PI;
@@ -465,8 +463,8 @@
       y: finalY,
       focusX: focusX,
       focusY: focusY,
-      scale: roundPreviewNumber(lerpNumber(1.06, 0.9, distanceRatio)),
-      deviceScale: roundPreviewNumber(lerpNumber(1.1, 0.92, distanceRatio)),
+      scale: roundPreviewNumber(lerpNumber(1.08, 0.92, distanceRatio)),
+      deviceScale: roundPreviewNumber(lerpNumber(1.14, 0.96, distanceRatio)),
       rotation: roundPreviewNumber(lineAngle),
       lineLength: roundPreviewNumber(Math.max(0, lineLength))
     };
@@ -490,15 +488,11 @@
     var bucket = distanceBucket(distance);
     if (state.lang === 'en') {
       if (bucket === 'close-up') return 'close-up';
-      if (bucket === 'medium-close-up') return 'medium close-up';
       if (bucket === 'medium-shot') return 'medium shot';
-      if (bucket === 'full-shot') return 'full shot';
       return 'wide shot';
     }
     if (bucket === 'close-up') return '클로즈업';
-    if (bucket === 'medium-close-up') return '미디엄 클로즈업';
     if (bucket === 'medium-shot') return '미디엄 샷';
-    if (bucket === 'full-shot') return '풀샷';
     return '와이드 샷';
   }
 
@@ -511,17 +505,17 @@
       if (presets && presets[preset]) {
         next.pan = Number(presets[preset].pan || CAMERA_FRONT_PAN);
         next.tilt = Number(presets[preset].tilt || 0);
-        next.distance = Number(presets[preset].distance || 3);
+        next.distance = Number.isFinite(Number(presets[preset].distance)) ? Number(presets[preset].distance) : 1;
         return next;
       }
     } catch (_) {}
-    if (preset === 'front') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 3; }
-    else if (preset === 'left45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN - 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 3; }
-    else if (preset === 'right45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN + 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 3; }
-    else if (preset === 'topdown') { next.pan = CAMERA_FRONT_PAN; next.tilt = -32; next.distance = 4; }
-    else if (preset === 'lowangle') { next.pan = CAMERA_FRONT_PAN; next.tilt = 18; next.distance = 3; }
-    else if (preset === 'closeup') { next.pan = CAMERA_FRONT_PAN; next.tilt = 4; next.distance = 1; }
-    else if (preset === 'medium') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 3; }
+    if (preset === 'front') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 1; }
+    else if (preset === 'left45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN - 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 1; }
+    else if (preset === 'right45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN + 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 1; }
+    else if (preset === 'topdown') { next.pan = CAMERA_FRONT_PAN; next.tilt = -30; next.distance = 2; }
+    else if (preset === 'lowangle') { next.pan = CAMERA_FRONT_PAN; next.tilt = 36; next.distance = 1; }
+    else if (preset === 'closeup') { next.pan = CAMERA_FRONT_PAN; next.tilt = 6; next.distance = 0; }
+    else if (preset === 'medium') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 1; }
     return next;
   }
 
@@ -1346,13 +1340,13 @@
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
                   '<label class="ai-image-camera-slider-row" for="ai-image-camera-tilt"><span>' + escapeHtml(t('cameraTilt')) + '</span><strong id="ai-image-camera-tilt-value">' + escapeHtml(String(controls.tilt)) + '</strong></label>' +
-                  '<input id="ai-image-camera-tilt" type="range" min="-45" max="45" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
+                  '<input id="ai-image-camera-tilt" type="range" min="-30" max="60" step="1" value="' + escapeHtml(String(controls.tilt)) + '" />' +
                 '</div>' +
               '</div>' +
               '<div class="ai-image-camera-section is-inline">' +
                 '<div class="ai-image-camera-slider-inline">' +
                   '<label class="ai-image-camera-slider-row" for="ai-image-camera-distance"><span>' + escapeHtml(t('cameraDistance')) + '</span><strong id="ai-image-camera-distance-value">' + escapeHtml(String(controls.distance)) + '</strong></label>' +
-                  '<input id="ai-image-camera-distance" type="range" min="1" max="5" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
+                  '<input id="ai-image-camera-distance" type="range" min="0" max="2" step="1" value="' + escapeHtml(String(controls.distance)) + '" />' +
                 '</div>' +
               '</div>' +
               '</div>' +
