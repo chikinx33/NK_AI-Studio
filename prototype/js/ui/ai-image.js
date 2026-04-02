@@ -458,7 +458,7 @@
     var equatorRadiusY = sphereRadius * CAMERA_ORBIT_EQUATOR_Y_RATIO;
     var axisRadius = sphereRadius * 0.83;
     var panRad = wrapPanDegrees(controls.pan, CAMERA_FRONT_PAN) * Math.PI / 180;
-    var previewPanRad = panRad + (Math.PI / 2);
+    var previewPanRad = (Math.PI / 2) - panRad;
     var distanceRatio = clampNumber((controls.distance - CAMERA_DISTANCE_MIN) / (CAMERA_DISTANCE_MAX - CAMERA_DISTANCE_MIN), 0, 1, 0.5);
     var positiveTiltRatio = clampNumber(controls.tilt / CAMERA_TILT_MAX, 0, 1, 0);
     var negativeTiltRatio = clampNumber(Math.abs(Math.min(controls.tilt, 0)) / Math.abs(CAMERA_TILT_MIN), 0, 1, 0);
