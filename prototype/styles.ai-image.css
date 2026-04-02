@@ -674,8 +674,47 @@ body.layout-fixed.page-shell-image .content {
 
 .ai-image-history-clear {
   flex: 0 0 auto;
-  width: 35px;
-  height: 35px;
+  width: 46px;
+  height: 46px;
+  min-height: 46px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  background:
+    radial-gradient(circle at 24% 22%, rgba(255, 159, 63, 0.2), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 82%, rgba(255, 255, 255, 0.03) 18%), color-mix(in srgb, var(--bg-2) 92%, rgba(255, 255, 255, 0.02) 8%));
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #aeb7c7;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, color 160ms ease;
+}
+
+.ai-image-history-clear .icon {
+  width: 20px;
+  height: 20px;
+}
+
+.ai-image-history-clear:hover,
+.ai-image-history-clear:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(255, 140, 0, 0.4);
+  box-shadow:
+    0 16px 30px rgba(255, 122, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  color: #f5f7fd;
+}
+
+[data-theme="light"] .ai-image-history-clear:hover,
+[data-theme="light"] .ai-image-history-clear:focus-visible {
+  border-color: color-mix(in srgb, var(--border) 78%, rgba(255, 255, 255, 0.12) 22%);
+  box-shadow:
+    0 12px 26px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: #51617f;
 }
 
 .ai-image-preview-head p {
@@ -1329,20 +1368,35 @@ body.layout-fixed.page-shell-image .content {
   top: var(--camera-y, 50%);
   width: 42px;
   height: 42px;
-  transform: translate(-50%, -50%);
-  border-radius: 999px;
+  transform: translate(-50%, -50%) rotate(var(--camera-rotation, 0deg));
+  transform-origin: center;
+  border-radius: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(255, 183, 77, 0.48);
-  background: rgba(8, 12, 18, 0.92);
+  background:
+    linear-gradient(180deg, rgba(16, 21, 32, 0.96), rgba(8, 12, 18, 0.94));
   color: #ffd889;
   box-shadow: 0 14px 32px rgba(0, 0, 0, 0.34);
 }
 
+.ai-image-camera-device::after {
+  content: "";
+  position: absolute;
+  right: -14px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(255, 214, 120, 0.42), rgba(255, 214, 120, 0));
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 .ai-image-camera-device .icon {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 .ai-image-camera-inline-sliders {
@@ -1398,11 +1452,12 @@ body.layout-fixed.page-shell-image .content {
 .ai-image-panel-history .ai-image-camera-device {
   width: 52px;
   height: 52px;
+  border-radius: 18px;
 }
 
 .ai-image-panel-history .ai-image-camera-device .icon {
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
 }
 
 .ai-image-panel-history .ai-image-camera-controls {

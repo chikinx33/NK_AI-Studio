@@ -389,6 +389,49 @@
     return 'wide-shot';
   }
 
+  function lerpNumber(start, end, amount) {
+    var t = clampNumber(amount, 0, 1, 0);
+    return start + ((end - start) * t);
+  }
+
+  function roundPreviewNumber(value) {
+    return Math.round(Number(value || 0) * 10) / 10;
+  }
+
+  function computeCameraOrbitPreview(raw) {
+    var controls = normalizeCameraControls(raw);
+    var panRatio = clampNumber(controls.pan / 90, -1, 1, 0);
+    var tiltRatio = clampNumber(controls.tilt / 60, -1, 1, 0);
+    var distanceRatio = clampNumber((50 - controls.distance) / 50, -1, 1, 0);
+    var panAbs = Math.abs(panRatio);
+    var tiltAbs = Math.abs(tiltRatio);
+    var blendBase = panAbs + tiltAbs;
+    var tiltBlend = blendBase ? (tiltAbs / blendBase) : 0.5;
+    var yaw = panRatio * (Math.PI / 2);
+    var pitch = tiltRatio * (Math.PI / 2);
+    var horizontalTarget = {
+      x: 50 + (Math.sin(yaw) * 32),
+      y: 50 + ((1 - Math.cos(yaw)) * 11)
+    };
+    var verticalTarget = {
+      x: 50 + (Math.sin(pitch) * 8),
+      y: 50 - (Math.sin(pitch) * 30)
+    };
+    var targetX = lerpNumber(horizontalTarget.x, verticalTarget.x, tiltBlend);
+    var targetY = lerpNumber(horizontalTarget.y, verticalTarget.y, tiltBlend);
+    var orbitStrength = Math.min(1, Math.sqrt((panRatio * panRatio) + (tiltRatio * tiltRatio)));
+    var depthLift = distanceRatio * 7;
+    var x = lerpNumber(50, targetX, orbitStrength);
+    var y = lerpNumber(50, targetY, orbitStrength);
+    var rotation = (Math.atan2(50 - y, 50 - x) * 180 / Math.PI) + 90;
+    return {
+      x: roundPreviewNumber(clampNumber(x, 12, 88, 50)),
+      y: roundPreviewNumber(clampNumber(y - depthLift, 10, 90, 50)),
+      scale: roundPreviewNumber(0.92 + ((100 - controls.distance) / 100) * 0.24),
+      rotation: roundPreviewNumber(rotation)
+    };
+  }
+
   function cameraPresetLabel(preset) {
     var keyMap = {
       front: 'cameraPresetFront',
@@ -1175,6 +1218,10 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5A2.5 2.5 0 0 1 7 7h2.2l1.3-1.7h2.9L14.8 7H17a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 18H7a2.5 2.5 0 0 1-2.5-2.5v-6Z"></path><circle cx="12" cy="12.5" r="3.3"></circle><path d="M7.5 9.5h.01"></path></svg>';
   }
 
+  function cameraProjectorIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8.5" r="2.75"></circle><circle cx="14" cy="8.5" r="2.75"></circle><path d="M4.75 13.25h12.5a1.75 1.75 0 0 0 1.75-1.75v-6a1.75 1.75 0 0 0-1.75-1.75H4.75A1.75 1.75 0 0 0 3 5.5v6a1.75 1.75 0 0 0 1.75 1.75Z"></path><path d="M17.25 7.5 21 5.5v8l-3.75-2"></path><path d="M8.25 13.25v5.25"></path><path d="M13.75 13.25v5.25"></path><path d="M6.25 18.5h9.5"></path></svg>';
+  }
+
   function cameraSceneTargetIconSvg() {
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"></path><path d="M4 18l5.2-7.2L13 16l2.7-3.8L20 18"></path><path d="M14 6.5l1.2-1.2L17 7.1l3.1-3.1"></path></svg>';
   }
@@ -1184,7 +1231,7 @@
   }
 
   function trashIconGlyph() {
-    return '&#128465;';
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.75h6l.6 1.5H19a.75.75 0 0 1 0 1.5h-.66l-.8 10.05A2.25 2.25 0 0 1 15.29 20H8.71a2.25 2.25 0 0 1-2.24-2.2l-.81-10.05H5a.75.75 0 0 1 0-1.5h3.4L9 4.75Z"></path><path d="M10 10v5.25M14 10v5.25"></path></svg>';
   }
 
   function buildCameraPromptInlinePreview(raw) {
@@ -1241,12 +1288,7 @@
     var modeClass = opts.mode === 'history' ? ' is-history-mode' : '';
     var controls = normalizeCameraControls(state.cameraControls);
     var targetMode = normalizeCameraTargetMode(state.cameraTargetMode);
-    var previewX = 50 + Math.round((controls.pan / 90) * 34);
-    var previewY = 50 + Math.round((controls.tilt / 60) * 26);
-    var orbitScale = 0.92 + ((100 - controls.distance) / 100) * 0.24;
-    var promptPreview = buildCameraPromptInlinePreview(Object.assign({}, controls, {
-      enabled: !isNeutralCameraControls(controls)
-    }));
+    var orbitPreview = computeCameraOrbitPreview(controls);
     var presetOptions = ['front', 'left45', 'right45', 'topdown', 'lowangle', 'closeup', 'medium'].map(function (preset) {
       return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
     }).join('');
@@ -1255,12 +1297,12 @@
         '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-body">' +
             '<div class="ai-image-camera-preview-card is-inline">' +
-              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(previewX)) + '%;--camera-y:' + escapeHtml(String(previewY)) + '%;--orbit-scale:' + escapeHtml(String(orbitScale)) + ';">' +
+              '<div class="ai-image-camera-orbit is-inline" style="--camera-x:' + escapeHtml(String(orbitPreview.x)) + '%;--camera-y:' + escapeHtml(String(orbitPreview.y)) + '%;--orbit-scale:' + escapeHtml(String(orbitPreview.scale)) + ';--camera-rotation:' + escapeHtml(String(orbitPreview.rotation)) + 'deg;">' +
                 '<div class="ai-image-camera-orbit-ring is-horizontal"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-vertical"></div>' +
                 '<div class="ai-image-camera-orbit-ring is-depth"></div>' +
                 '<div class="ai-image-camera-subject-core"></div>' +
-                '<div class="ai-image-camera-device">' + cameraFabIconSvg() + '</div>' +
+                '<div class="ai-image-camera-device">' + cameraProjectorIconSvg() + '</div>' +
                 '<div class="ai-image-camera-target-toggle" role="tablist" aria-label="' + escapeHtml(t('cameraButton')) + '">' +
                   '<button type="button" class="ai-image-camera-target-btn is-scene' + (targetMode === 'scene' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="scene" aria-label="' + escapeHtml(t('cameraTargetSceneLabel')) + '" title="' + escapeHtml(t('cameraTargetSceneLabel')) + '">' + cameraSceneTargetIconSvg() + '</button>' +
                   '<button type="button" class="ai-image-camera-target-btn is-subject' + (targetMode === 'subject' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="subject" aria-label="' + escapeHtml(t('cameraTargetSubjectLabel')) + '" title="' + escapeHtml(t('cameraTargetSubjectLabel')) + '">' + cameraSubjectTargetIconSvg() + '</button>' +
@@ -1464,7 +1506,7 @@
   function buildHistoryPanelMarkup() {
     var cameraPanelActive = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera';
     var historyHeadAction = (!cameraPanelActive && state.results.length)
-      ? '<button type="button" class="trash-btn ai-image-history-clear" data-action="delete-all-results" aria-label="' + escapeHtml(t('deleteAllLabel')) + '" title="' + escapeHtml(t('deleteAllLabel')) + '">' + trashIconGlyph() + '</button>'
+      ? '<button type="button" class="ai-image-history-clear" data-action="delete-all-results" aria-label="' + escapeHtml(t('deleteAllLabel')) + '" title="' + escapeHtml(t('deleteAllLabel')) + '">' + trashIconGlyph() + '</button>'
       : '';
     var resultCards = state.results.map(function (item) {
       var active = String(item.id || '') === String(state.currentResultId || '');
@@ -2087,19 +2129,19 @@
 
   function syncInlineCameraUi() {
     var controls = normalizeCameraControls(state.cameraControls);
-    var promptPreview = document.getElementById('ai-image-camera-prompt-preview');
     var panValue = document.getElementById('ai-image-camera-pan-value');
     var tiltValue = document.getElementById('ai-image-camera-tilt-value');
     var distValue = document.getElementById('ai-image-camera-distance-value');
     var orbit = document.querySelector('.ai-image-camera-orbit');
+    var orbitPreview = computeCameraOrbitPreview(controls);
     if (panValue) panValue.textContent = String(controls.pan);
     if (tiltValue) tiltValue.textContent = String(controls.tilt);
     if (distValue) distValue.textContent = String(controls.distance);
-    if (promptPreview) promptPreview.textContent = buildCameraPromptInlinePreview(Object.assign({}, controls, { enabled: !isNeutralCameraControls(controls) }));
     if (orbit) {
-      orbit.style.setProperty('--camera-x', String(50 + Math.round((controls.pan / 90) * 34)) + '%');
-      orbit.style.setProperty('--camera-y', String(50 + Math.round((controls.tilt / 60) * 26)) + '%');
-      orbit.style.setProperty('--orbit-scale', String(0.92 + ((100 - controls.distance) / 100) * 0.24));
+      orbit.style.setProperty('--camera-x', String(orbitPreview.x) + '%');
+      orbit.style.setProperty('--camera-y', String(orbitPreview.y) + '%');
+      orbit.style.setProperty('--orbit-scale', String(orbitPreview.scale));
+      orbit.style.setProperty('--camera-rotation', String(orbitPreview.rotation) + 'deg');
     }
   }
 

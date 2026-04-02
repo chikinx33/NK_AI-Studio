@@ -62,6 +62,9 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /data-action="set-camera-target-mode"/);
   assert.match(source, /cameraSceneTargetIconSvg/);
   assert.match(source, /cameraSubjectTargetIconSvg/);
+  assert.match(source, /cameraProjectorIconSvg/);
+  assert.match(source, /computeCameraOrbitPreview/);
+  assert.match(source, /--camera-rotation:/);
   assert.match(source, /class="ai-image-camera-target-btn is-scene/);
   assert.match(source, /class="ai-image-camera-target-btn is-subject/);
   assert.match(source, /function buildCameraPromptBlock/);
@@ -71,6 +74,8 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /data-action="toggle-camera-panel"/);
   assert.match(source, /ai-image-history-camera/);
   assert.match(source, /data-action="delete-all-results"/);
+  assert.match(source, /class="ai-image-history-clear"/);
+  assert.doesNotMatch(source, /class="trash-btn ai-image-history-clear"/);
   assert.match(source, /data-action="reset-camera-controls"/);
   assert.match(source, /data-action="set-camera-preset"/);
   assert.match(source, /cameraReset/);
