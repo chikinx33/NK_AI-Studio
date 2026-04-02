@@ -21,6 +21,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const storageService = normalizeStorageService(body?.storageService || body?.service);
     const generationMode = normalizeGenerationMode(body?.generationMode || body?.mode, incomingReferenceImages.length > 0);
     const generationStyle = normalizeGenerationStyle(body?.generationStyle || body?.conversationMode);
+    const cameraTargetMode = normalizeCameraTargetMode(body?.cameraTargetMode || body?.cameraTarget || body?.cameraScope);
     const sessionId = String(body?.sessionId || body?.session || "default").trim();
 
     if (!prompt) {
@@ -74,7 +75,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       referenceImages,
       generationMode,
       generationStyle,
-      conversationHistory.length
+      conversationHistory.length,
+      cameraTargetMode
     );
 
     const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
@@ -265,7 +267,8 @@ function buildGeminiImagePrompt(
   referenceImages: NormalizedReferenceImage[],
   generationMode: "text-to-image" | "image-to-image",
   generationStyle: "single" | "conversation",
-  conversationTurnCount: number
+  conversationTurnCount: number,
+  cameraTargetMode: "scene" | "subject"
 ) {
   const base = normalizePrompt(prompt);
   const conversationLines = generationStyle === "conversation" && conversationTurnCount > 0
@@ -278,6 +281,18 @@ function buildGeminiImagePrompt(
     return [base].concat(conversationLines).filter(Boolean).join("\n");
   }
   if (generationMode === "image-to-image") {
+    const targetLines = cameraTargetMode === "subject"
+      ? [
+        "Keep the background, environment, horizon, and broad composition as stable as possible.",
+        "Rotate or re-pose only the main foreground subject relative to the camera.",
+        "Do not reinterpret the whole frame from a new scene-wide viewpoint."
+      ]
+      : [
+        "Reconstruct the entire frame from a new camera viewpoint.",
+        "Rotate the whole scene perspective together, including the background, environment, depth, horizon, and subject placement.",
+        "Do not keep the background fixed while rotating only a foreground subject.",
+        "Preserve the same scene concept and key subjects, but allow perspective and composition to shift to match the new camera angle."
+      ];
     const referenceGuideLines = referenceImages.map((item, index) => {
       const label = String(item.subjectDescription || `reference image ${index + 1}`).trim() || `reference image ${index + 1}`;
       if (index === 0) {
@@ -291,6 +306,7 @@ function buildGeminiImagePrompt(
       referenceImages.length > 1
         ? "Use the uploaded source image set as a coordinated multi-reference pack."
         : "Use the uploaded source image as the base reference.",
+      ...targetLines,
       referenceImages.length > 1
         ? "Follow the prompt first, then reference image 1, then the remaining reference images."
         : "Preserve the important structure, composition, and recognizable subject identity unless the prompt explicitly requests changes.",
@@ -360,6 +376,11 @@ function normalizeGenerationMode(value: unknown, hasReferences: boolean): "text-
 function normalizeGenerationStyle(value: unknown): "single" | "conversation" {
   const raw = String(value || "").trim().toLowerCase();
   return raw === "conversation" ? "conversation" : "single";
+}
+
+function normalizeCameraTargetMode(value: unknown): "scene" | "subject" {
+  const raw = String(value || "").trim().toLowerCase();
+  return raw === "subject" ? "subject" : "scene";
 }
 
 type NormalizedReferenceImage = {

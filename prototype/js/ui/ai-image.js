@@ -32,6 +32,7 @@
     imageModalUrl: '',
     previewTargetType: 'none',
     historyPanelMode: 'history',
+    cameraTargetMode: 'scene',
     cameraControls: createDefaultCameraControls(),
     deletedObjectNames: []
   };
@@ -162,6 +163,10 @@
       cameraDistance: 'Distance',
       cameraPreviewLabel: '앵글 미리보기',
       cameraPromptPreviewLabel: '프롬프트 반영 문장',
+      cameraTargetScene: '전체',
+      cameraTargetSubject: '피사체',
+      cameraTargetSceneLabel: '화면 전체 회전',
+      cameraTargetSubjectLabel: '피사체만 회전',
       cameraApply: '적용',
       cameraReset: '초기화',
       cameraActiveTag: '앵글 적용됨',
@@ -293,6 +298,10 @@
       cameraDistance: 'Distance',
       cameraPreviewLabel: 'Angle preview',
       cameraPromptPreviewLabel: 'Prompt injection',
+      cameraTargetScene: 'Whole scene',
+      cameraTargetSubject: 'Subject',
+      cameraTargetSceneLabel: 'Rotate the whole scene',
+      cameraTargetSubjectLabel: 'Rotate the subject only',
       cameraApply: 'Apply',
       cameraReset: 'Reset',
       cameraActiveTag: 'Angle enabled',
@@ -353,6 +362,10 @@
 
   function normalizeHistoryPanelMode(value) {
     return String(value || '').trim().toLowerCase() === 'camera' ? 'camera' : 'history';
+  }
+
+  function normalizeCameraTargetMode(value) {
+    return String(value || '').trim().toLowerCase() === 'subject' ? 'subject' : 'scene';
   }
 
   function isNeutralCameraControls(raw) {
@@ -431,6 +444,7 @@
 
   function resetCameraControls() {
     state.cameraControls = createDefaultCameraControls();
+    state.cameraTargetMode = 'scene';
   }
 
   function activeCameraControls() {
@@ -450,10 +464,20 @@
     ].join(':');
   }
 
-  function cameraSummary(raw) {
+  function cameraTargetModeLabel(mode) {
+    return normalizeCameraTargetMode(mode) === 'subject'
+      ? t('cameraTargetSubject')
+      : t('cameraTargetScene');
+  }
+
+  function cameraSummary(raw, targetMode) {
     var controls = normalizeCameraControls(raw);
-    if (!controls.enabled || isNeutralCameraControls(controls)) return t('cameraSummaryOff');
-    var bits = [cameraPresetLabel(controls.preset)];
+    var bits = [cameraTargetModeLabel(targetMode)];
+    if (!controls.enabled || isNeutralCameraControls(controls)) {
+      bits.push(t('cameraSummaryOff'));
+      return bits.join(state.lang === 'en' ? ' · ' : ' · ');
+    }
+    bits.push(cameraPresetLabel(controls.preset));
     if (controls.pan) {
       bits.push(state.lang === 'en'
         ? ('pan ' + (controls.pan > 0 ? 'right ' : 'left ') + Math.abs(controls.pan) + 'deg')
@@ -573,17 +597,20 @@
       state.results = Array.isArray(parsed) ? parsed.map(function (item) {
         var row = item && typeof item === 'object' ? item : {};
         if (row.cameraControls) row.cameraControls = normalizeCameraControls(row.cameraControls);
+        row.cameraTargetMode = normalizeCameraTargetMode(row.cameraTargetMode);
         return row;
       }) : [];
       state.currentResultId = '';
       state.previewTargetType = 'none';
       state.historyPanelMode = 'history';
+      state.cameraTargetMode = 'scene';
       state.cameraControls = createDefaultCameraControls();
     } catch (_) {
       state.results = [];
       state.currentResultId = '';
       state.previewTargetType = 'none';
       state.historyPanelMode = 'history';
+      state.cameraTargetMode = 'scene';
       state.cameraControls = createDefaultCameraControls();
     }
   }
@@ -636,6 +663,7 @@
         url: String(selectedSource.url || '').trim(),
         name: String(selectedSource.name || '').trim(),
         sourceKind: String(selectedSource.kind || 'upload').trim(),
+        cameraTargetMode: normalizeCameraTargetMode(state.cameraTargetMode),
         cameraControls: normalizeCameraControls(state.cameraControls),
         source: selectedSource
       };
@@ -647,6 +675,9 @@
         url: resolveResultUrl(selectedResult),
         name: String(selectedResult.objectName || selectedResult.id || '').trim(),
         sourceKind: '',
+        cameraTargetMode: normalizeCameraTargetMode(selectedResult && selectedResult.cameraTargetMode
+          ? selectedResult.cameraTargetMode
+          : state.cameraTargetMode),
         cameraControls: selectedResult && selectedResult.cameraControls
           ? normalizeCameraControls(selectedResult.cameraControls)
           : normalizeCameraControls(state.cameraControls),
@@ -679,6 +710,7 @@
       String(state.currentResultId || ''),
       state.historyLoading ? '1' : '0',
       state.historyLoadError ? '1' : '0',
+      normalizeCameraTargetMode(state.cameraTargetMode),
       cameraControlSignature(state.cameraControls),
       state.results.map(function (item) {
         var row = item && typeof item === 'object' ? item : {};
@@ -688,6 +720,7 @@
           String(row.prompt || ''),
           String(row.mode || ''),
           String(row.generationStyle || ''),
+          normalizeCameraTargetMode(row.cameraTargetMode),
           cameraControlSignature(row.cameraControls),
           row.savedToProject ? '1' : '0'
         ].join('~');
@@ -710,6 +743,7 @@
       String(preview.url || ''),
       String(preview.name || ''),
       String(preview.sourceKind || ''),
+      normalizeCameraTargetMode(preview.cameraTargetMode),
       String(row.prompt || ''),
       String(row.mode || ''),
       String(row.generationStyle || ''),
@@ -730,6 +764,7 @@
       String(state.imageSize || ''),
       String(state.aspectRatio || ''),
       String(normalizeGenerationStyle(state.generationStyle) || ''),
+      normalizeCameraTargetMode(state.cameraTargetMode),
       cameraControlSignature(state.cameraControls),
       state.libraryLoading ? '1' : '0',
       state.brandLibraryLoading ? '1' : '0',
@@ -884,6 +919,7 @@
         aspectRatio: String(existing.aspectRatio || '').trim(),
         createdAt: createdAt || new Date().toISOString(),
         sessionId: String(existing.sessionId || state.sessionId || '').trim(),
+        cameraTargetMode: normalizeCameraTargetMode(existing.cameraTargetMode),
         cameraControls: existing.cameraControls ? normalizeCameraControls(existing.cameraControls) : undefined,
         savedToProject: existing.savedToProject === true,
         savedBrandTargets: Array.isArray(existing.savedBrandTargets) ? existing.savedBrandTargets.slice() : [],
@@ -902,7 +938,9 @@
     var selectedResult = currentResult();
     if (selectedResult && selectedResult.cameraControls) {
       state.cameraControls = normalizeCameraControls(selectedResult.cameraControls);
+      state.cameraTargetMode = normalizeCameraTargetMode(selectedResult.cameraTargetMode);
     } else if (String(state.previewTargetType || '') !== 'source') {
+      state.cameraTargetMode = 'scene';
       state.cameraControls = createDefaultCameraControls();
     }
   }
@@ -1133,11 +1171,21 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5A2.5 2.5 0 0 1 7 7h2.2l1.3-1.7h2.9L14.8 7H17a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 18H7a2.5 2.5 0 0 1-2.5-2.5v-6Z"></path><circle cx="12" cy="12.5" r="3.3"></circle><path d="M7.5 9.5h.01"></path></svg>';
   }
 
+  function cameraSceneTargetIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"></path><path d="M4 18l5.2-7.2L13 16l2.7-3.8L20 18"></path><path d="M14 6.5l1.2-1.2L17 7.1l3.1-3.1"></path></svg>';
+  }
+
+  function cameraSubjectTargetIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7.5" r="3"></circle><path d="M6.5 19c1.1-3 3.2-4.5 5.5-4.5s4.4 1.5 5.5 4.5"></path></svg>';
+  }
+
   function buildCameraPromptInlinePreview(raw) {
     var controls = normalizeCameraControls(raw);
-    if (!controls.enabled || isNeutralCameraControls(controls)) return t('cameraSummaryOff');
+    var modeLabel = cameraTargetModeLabel(state.cameraTargetMode);
+    if (!controls.enabled || isNeutralCameraControls(controls)) return modeLabel + ' · ' + t('cameraSummaryOff');
     if (state.lang === 'en') {
       return [
+        modeLabel + ',',
         'Use',
         cameraPresetLabel(controls.preset) + ',',
         controls.pan ? ('pan ' + (controls.pan > 0 ? 'right ' : 'left ') + Math.abs(controls.pan) + 'deg,') : 'centered pan,',
@@ -1146,6 +1194,7 @@
       ].join(' ');
     }
     return [
+      modeLabel + ',',
       cameraPresetLabel(controls.preset) + ',',
       controls.pan ? ('pan ' + (controls.pan > 0 ? '우 ' : '좌 ') + Math.abs(controls.pan) + '도,') : 'pan 중앙,',
       controls.tilt ? ('tilt ' + (controls.tilt > 0 ? '위 ' : '아래 ') + Math.abs(controls.tilt) + '도,') : 'tilt 아이레벨,',
@@ -1153,10 +1202,37 @@
     ].join(' ');
   }
 
+  function buildCameraApplyPrompt(cameraPrompt, previewTarget, targetMode) {
+    var mode = normalizeCameraTargetMode(targetMode);
+    var base = String(cameraPrompt || '').trim();
+    var sourceContext = [];
+    if (previewTarget && previewTarget.type === 'result' && previewTarget.result) {
+      var resultPrompt = String(previewTarget.result.prompt || '').trim();
+      if (resultPrompt) sourceContext.push('Keep the original scene concept, subjects, and style from this reference image. Original concept: ' + resultPrompt);
+      else sourceContext.push('Keep the original scene concept, subjects, and style from this reference image.');
+    } else if (previewTarget && previewTarget.url) {
+      sourceContext.push('Keep the original scene concept, subjects, and style from this reference image.');
+    }
+    var modeLines = mode === 'subject'
+      ? [
+        'Rotate only the main foreground subject relative to the camera.',
+        'Keep the background, environment, horizon, and broad composition as stable as possible.',
+        'Do not rotate the whole scene viewpoint or rebuild the entire background perspective.'
+      ]
+      : [
+        'Reconstruct the entire frame from a new camera viewpoint.',
+        'Rotate the whole scene perspective together, including the background, environment, depth, horizon, and subject placement.',
+        'Do not keep the background fixed while rotating only a foreground subject.',
+        'Preserve the same scene concept and key subjects, but allow perspective and composition to shift to match the new camera angle.'
+      ];
+    return [base].concat(sourceContext, modeLines).filter(Boolean).join('\n');
+  }
+
   function buildCameraControlCardMarkup(options) {
     var opts = options && typeof options === 'object' ? options : {};
     var modeClass = opts.mode === 'history' ? ' is-history-mode' : '';
     var controls = normalizeCameraControls(state.cameraControls);
+    var targetMode = normalizeCameraTargetMode(state.cameraTargetMode);
     var previewX = 50 + Math.round((controls.pan / 90) * 34);
     var previewY = 50 + Math.round((controls.tilt / 60) * 26);
     var orbitScale = 0.92 + ((100 - controls.distance) / 100) * 0.24;
@@ -1167,6 +1243,11 @@
       return '<button type="button" class="ai-image-camera-preset' + (controls.preset === preset ? ' active' : '') + '" data-action="set-camera-preset" data-preset="' + preset + '">' + escapeHtml(cameraPresetLabel(preset)) + '</button>';
     }).join('');
     var resetButton = '<button type="button" class="ai-image-camera-preset' + (!controls.enabled && isNeutralCameraControls(controls) ? ' active' : '') + '" data-action="reset-camera-controls">' + escapeHtml(t('cameraReset')) + '</button>';
+    var targetButtons = '' +
+      '<div class="ai-image-camera-target-toggle" role="tablist" aria-label="' + escapeHtml(t('cameraButton')) + '">' +
+        '<button type="button" class="ai-image-camera-target-btn' + (targetMode === 'scene' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="scene" aria-label="' + escapeHtml(t('cameraTargetSceneLabel')) + '" title="' + escapeHtml(t('cameraTargetSceneLabel')) + '">' + cameraSceneTargetIconSvg() + '</button>' +
+        '<button type="button" class="ai-image-camera-target-btn' + (targetMode === 'subject' ? ' active' : '') + '" data-action="set-camera-target-mode" data-mode="subject" aria-label="' + escapeHtml(t('cameraTargetSubjectLabel')) + '" title="' + escapeHtml(t('cameraTargetSubjectLabel')) + '">' + cameraSubjectTargetIconSvg() + '</button>' +
+      '</div>';
     return '' +
         '<div class="ai-image-camera-card' + (controls.enabled ? ' is-active' : '') + modeClass + '">' +
           '<div class="ai-image-camera-card-body">' +
@@ -1178,6 +1259,7 @@
                 '<div class="ai-image-camera-subject-core"></div>' +
                 '<div class="ai-image-camera-device">' + cameraFabIconSvg() + '</div>' +
               '</div>' +
+              targetButtons +
             '</div>' +
             '<div class="ai-image-camera-controls is-inline">' +
               '<div class="ai-image-camera-section is-inline">' +
@@ -1368,7 +1450,7 @@
                   ? '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><span class="ai-image-analysis-icon" aria-hidden="true"></span></button><strong>' + escapeHtml(t('createdAt')) + ':</strong> ' + escapeHtml(formatDate(selectedResult.createdAt)) + '</p>'
                   : '<p class="ai-image-preview-created"><strong>' + escapeHtml(t('sourceTitle')) + ':</strong> ' + escapeHtml(sourceMeta || t('sourceKindUpload')) + '</p>') +
                 '<p class="ai-image-preview-prompt">' + escapeHtml(selectedResult ? (selectedResult.prompt || '') : (preview.name || '')) + '</p>' +
-                '<p class="ai-image-camera-meta"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> ' + escapeHtml(cameraSummary(selectedCameraControls)) + '</p>' +
+                '<p class="ai-image-camera-meta"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> ' + escapeHtml(cameraSummary(selectedCameraControls, preview && preview.cameraTargetMode)) + '</p>' +
               '</div>' +
           '</div>' +
         '</div>'
@@ -2382,6 +2464,7 @@
   async function generateImageCameraApply(attempt) {
     var tryCount = Number(attempt || 0) || 0;
     var appliedCameraControls = normalizeCameraControls(state.cameraControls);
+    var appliedCameraTargetMode = normalizeCameraTargetMode(state.cameraTargetMode);
     var previewTarget = currentPreviewTarget();
     var cameraOnly = (window.NK && NK.utils && typeof NK.utils.buildCameraPrompt === 'function')
       ? NK.utils.buildCameraPrompt(appliedCameraControls)
@@ -2392,6 +2475,7 @@
         : (typeof window.mapCameraToPrompt === 'function' ? window.mapCameraToPrompt(appliedCameraControls) : '');
       cameraOnly = fallback || '(camera: cinematic medium shot:1.2)';
     }
+    var cameraPrompt = buildCameraApplyPrompt(cameraOnly, previewTarget, appliedCameraTargetMode);
     var previewReferenceImages = [];
     if (previewTarget && previewTarget.url) {
       previewReferenceImages = [{
@@ -2413,12 +2497,13 @@
       else if (chosenSize === '1K') chosenSize = '512';
     }
     var payload = {
-      prompt: cameraOnly,
+      prompt: cameraPrompt,
       aspectRatio: state.aspectRatio,
       storageService: 'ai-image',
       sessionId: state.sessionId,
       generationMode: effectiveMode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
+      cameraTargetMode: appliedCameraTargetMode,
       imageSize: chosenSize,
       referenceImages: previewReferenceImages,
       conversationHistory: previewTarget && previewTarget.type === 'result' ? buildConversationHistory(3) : []
@@ -2432,9 +2517,10 @@
         objectName: String(response && response.objectName || '').trim(),
         imageSize: String(response && response.imageSizeApplied || state.imageSize || '').trim(),
         prompt: '',
-        resolvedPrompt: cameraOnly,
+        resolvedPrompt: cameraPrompt,
         mode: effectiveMode,
         generationStyle: normalizeGenerationStyle(state.generationStyle),
+        cameraTargetMode: appliedCameraTargetMode,
         cameraControls: appliedCameraControls,
         conversationTurnCount: Number(response && response.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
         aspectRatio: state.aspectRatio,
@@ -2447,6 +2533,8 @@
       state.results = state.results.slice(0, 30);
       state.currentResultId = result.id;
       state.previewTargetType = 'result';
+      state.cameraTargetMode = 'scene';
+      state.cameraControls = createDefaultCameraControls();
       persistHistory();
       updateResultSelectionUI();
     } catch (err) {
@@ -2602,6 +2690,9 @@
           state.currentResultId = String(btn.getAttribute('data-id') || '');
           state.previewTargetType = 'result';
           var selected = currentResult();
+          state.cameraTargetMode = selected && selected.cameraTargetMode
+            ? normalizeCameraTargetMode(selected.cameraTargetMode)
+            : 'scene';
           state.cameraControls = selected && selected.cameraControls
             ? normalizeCameraControls(selected.cameraControls)
             : createDefaultCameraControls();
@@ -2651,14 +2742,27 @@
         if (action === 'set-camera-preset') {
           applyCameraPreset(btn.getAttribute('data-preset') || 'custom');
           var resultForPreset = currentPreviewResult();
-          if (resultForPreset) resultForPreset.cameraControls = normalizeCameraControls(state.cameraControls);
+          if (resultForPreset) {
+            resultForPreset.cameraControls = normalizeCameraControls(state.cameraControls);
+            resultForPreset.cameraTargetMode = normalizeCameraTargetMode(state.cameraTargetMode);
+          }
+          persistInlineCameraControls({ refreshHistoryPanel: true });
+          return;
+        }
+        if (action === 'set-camera-target-mode') {
+          state.cameraTargetMode = normalizeCameraTargetMode(btn.getAttribute('data-mode') || 'scene');
+          var resultForTarget = currentPreviewResult();
+          if (resultForTarget) resultForTarget.cameraTargetMode = normalizeCameraTargetMode(state.cameraTargetMode);
           persistInlineCameraControls({ refreshHistoryPanel: true });
           return;
         }
         if (action === 'reset-camera-controls') {
           resetCameraControls();
           var resultForReset = currentPreviewResult();
-          if (resultForReset) resultForReset.cameraControls = normalizeCameraControls(state.cameraControls);
+          if (resultForReset) {
+            resultForReset.cameraControls = normalizeCameraControls(state.cameraControls);
+            resultForReset.cameraTargetMode = normalizeCameraTargetMode(state.cameraTargetMode);
+          }
           persistInlineCameraControls({ refreshHistoryPanel: true });
           return;
         }
@@ -2729,6 +2833,9 @@
             }
             if (!state.results.length) state.historyPanelMode = 'history';
             var nextCurrent = currentResult();
+            state.cameraTargetMode = nextCurrent && nextCurrent.cameraTargetMode
+              ? normalizeCameraTargetMode(nextCurrent.cameraTargetMode)
+              : 'scene';
             state.cameraControls = nextCurrent && nextCurrent.cameraControls
               ? normalizeCameraControls(nextCurrent.cameraControls)
               : createDefaultCameraControls();
@@ -2753,6 +2860,7 @@
           });
           if (r1 && r1.prompt) {
             state.prompt = String(r1.prompt || '');
+            state.cameraTargetMode = normalizeCameraTargetMode(r1.cameraTargetMode);
             state.cameraControls = normalizeCameraControls(r1.cameraControls);
             updatePromptFieldUI();
             updatePromptPanelUI();
@@ -2770,6 +2878,7 @@
           });
           if (r2) {
             state.mode = 'image-to-image';
+            state.cameraTargetMode = normalizeCameraTargetMode(r2.cameraTargetMode);
             state.cameraControls = normalizeCameraControls(r2.cameraControls);
             var addResult = appendSourceImages([makeSourceImage(resolveResultUrl(r2), String(r2.objectName || r2.id || 'result'), 'upload')]);
             if (addResult.hitLimit) {
@@ -2792,6 +2901,7 @@
           });
           if (r3) {
             state.mode = 'image-to-image';
+            state.cameraTargetMode = normalizeCameraTargetMode(r3.cameraTargetMode);
             state.cameraControls = normalizeCameraControls(r3.cameraControls);
             var ensureResult = appendSourceImages([makeSourceImage(resolveResultUrl(r3), String(r3.objectName || r3.id || 'result'), 'upload')]);
             if (ensureResult.hitLimit) {

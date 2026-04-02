@@ -52,10 +52,14 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   const source = readAiImageSource();
   assert.match(source, /historyPanelMode: 'history'/);
   assert.match(source, /previewTargetType: 'none'/);
+  assert.match(source, /cameraTargetMode: 'scene'/);
   assert.match(source, /state\.currentResultId = '';/);
   assert.match(source, /cameraControls: createDefaultCameraControls\(\)/);
   assert.match(source, /function buildCameraControlCardMarkup/);
   assert.match(source, /class="ai-image-camera-card/);
+  assert.match(source, /data-action="set-camera-target-mode"/);
+  assert.match(source, /cameraSceneTargetIconSvg/);
+  assert.match(source, /cameraSubjectTargetIconSvg/);
   assert.match(source, /function buildCameraPromptBlock/);
   assert.match(source, /function buildCameraPromptInlinePreview/);
   assert.match(source, /cameraModalTitle/);
@@ -76,14 +80,17 @@ test('ai-image preview can switch between source and history targets and camera 
   assert.match(source, /function currentPreviewTarget\(/);
   assert.match(source, /type: 'source'/);
   assert.match(source, /type: 'result'/);
+  assert.match(source, /cameraTargetMode: normalizeCameraTargetMode\(state\.cameraTargetMode\)/);
   assert.match(source, /state\.previewTargetType = 'source'/);
   assert.match(source, /state\.previewTargetType = 'result'/);
   assert.match(source, /state\.previewTargetType = 'none'/);
   assert.match(source, /updatePreviewPanelUI\(\);/);
   assert.match(source, /var previewTarget = currentPreviewTarget\(\);/);
   assert.match(source, /referenceImages: previewReferenceImages/);
+  assert.match(source, /cameraTargetMode: appliedCameraTargetMode/);
+  assert.match(source, /buildCameraApplyPrompt\(cameraOnly, previewTarget, appliedCameraTargetMode\)/);
   assert.match(source, /conversationHistory: previewTarget && previewTarget\.type === 'result' \? buildConversationHistory\(3\) : \[\]/);
-  assert.match(source, /state\.previewTargetType = 'result';\s*state\.cameraControls = createDefaultCameraControls\(\);/);
+  assert.match(source, /state\.previewTargetType = 'result';\s*state\.cameraTargetMode = 'scene';\s*state\.cameraControls = createDefaultCameraControls\(\);/);
 });
 
 test('ai-image preview keeps project and brand save controls as icon actions in one control row', () => {
