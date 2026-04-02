@@ -144,6 +144,7 @@
       reusePrompt: '프롬프트 복사',
       useAsSource: '소스 사용',
       regenerateVariation: '재생성',
+      upscale2k: '업스케일 2K',
       analyzePrompt: '이미지 분석',
       analyzing: '분석중',
       analyzeFailed: '이미지 분석 실패: ',
@@ -286,6 +287,7 @@
       reusePrompt: 'Copy to prompt',
       useAsSource: 'Use as source',
       regenerateVariation: 'Generate variation',
+      upscale2k: 'Upscale (2K)',
       analyzePrompt: 'Analyze image',
       analyzing: 'Analyzing',
       analyzeFailed: 'Image analysis failed: ',
@@ -1602,7 +1604,7 @@
               '<div class="ai-image-inline-actions-left">' +
                 '<button type="button" class="btn-primary compact ai-image-action-icon" data-action="regenerate-variation" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('regenerateVariation')) + '" title="' + escapeHtml(t('regenerateVariation')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4v6h6"></path><path d="M20 20v-6h-6"></path><path d="M4 10a8 8 0 0 1 14-5"></path><path d="M20 14a8 8 0 0 1-14 5"></path></svg></button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="use-result-as-source" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('useAsSource')) + '" title="' + escapeHtml(t('useAsSource')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9"></path><path d="M8 13l4-4 4 4"></path><path d="M5 5h14"></path></svg></button>' +
-                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="업스케일 2K" title="업스케일 2K">' + upscaleIconSvg() + '</button>' +
+                '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-upscale-btn" data-action="upscale-result-2k" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('upscale2k')) + '" title="' + escapeHtml(t('upscale2k')) + '">' + upscaleIconSvg() + '</button>' +
                 '<button type="button" class="btn-secondary compact ai-image-action-icon" data-action="download-result" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('download')) + '" title="' + escapeHtml(t('download')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"></path><path d="M8 11l4 4 4-4"></path><path d="M5 19h14"></path></svg></button>' +
               '</div>' +
               (detached ? '' : '<div class="ai-image-inline-actions-bottom"><div class="ai-image-brand-actions">' +
@@ -1849,8 +1851,8 @@
         }
             var upscaleBtn = root.querySelector('[data-action="upscale-result-2k"]');
             if (upscaleBtn) {
-              upscaleBtn.setAttribute('aria-label', '업스케일 2K');
-              upscaleBtn.setAttribute('title', '업스케일 2K');
+              upscaleBtn.setAttribute('aria-label', t('upscale2k'));
+              upscaleBtn.setAttribute('title', t('upscale2k'));
             }
         var downloadBtn = root.querySelector('[data-action="download-result"]');
         if (downloadBtn) {
@@ -3100,6 +3102,15 @@
                 navigator.clipboard.writeText(String(textToCopy)).catch(function () { });
               }
             } catch (_) { }
+            state.prompt = String(textToCopy || '');
+            updatePromptFieldUI();
+            updatePromptPanelUI();
+            try {
+              var promptInput2 = document.getElementById('ai-image-prompt');
+              if (promptInput2 && typeof promptInput2.focus === 'function') {
+                try { promptInput2.focus({ preventScroll: true }); } catch (_) { promptInput2.focus(); }
+              }
+            } catch (_) {}
           }
           return;
         }
