@@ -594,8 +594,8 @@
     if (preset === 'front') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 1; }
     else if (preset === 'left45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN - 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 1; }
     else if (preset === 'right45') { next.pan = wrapPanDegrees(CAMERA_FRONT_PAN + 45, CAMERA_FRONT_PAN); next.tilt = 0; next.distance = 1; }
-    else if (preset === 'topdown') { next.pan = CAMERA_FRONT_PAN; next.tilt = -30; next.distance = 2; }
-    else if (preset === 'lowangle') { next.pan = CAMERA_FRONT_PAN; next.tilt = 36; next.distance = 1; }
+    else if (preset === 'topdown') { next.pan = CAMERA_FRONT_PAN; next.tilt = 60; next.distance = 2; }
+    else if (preset === 'lowangle') { next.pan = CAMERA_FRONT_PAN; next.tilt = -24; next.distance = 1; }
     else if (preset === 'closeup') { next.pan = CAMERA_FRONT_PAN; next.tilt = 6; next.distance = 0; }
     else if (preset === 'medium') { next.pan = CAMERA_FRONT_PAN; next.tilt = 0; next.distance = 1; }
     return next;

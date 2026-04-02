@@ -64,10 +64,10 @@
   }
   function angleFromTilt(tilt) {
     var v = clamp(tilt, -30, 60);
-    if (v < -18) return 'top-down view';
-    if (v < -10) return 'high angle';
-    if (v <= 10) return 'eye-level';
-    if (v <= 30) return 'low angle';
+    if (v >= 36) return 'top-down view';
+    if (v >= 12) return 'high angle';
+    if (v > -10) return 'eye-level';
+    if (v > -22) return 'low angle';
     return 'dramatic low angle';
   }
   function applyPresetOverride(preset, shot, view, angle) {
