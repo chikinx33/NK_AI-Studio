@@ -1631,7 +1631,7 @@
 
   function buildHistoryPanelMarkup() {
     var cameraPanelActive = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera';
-    var historyHeadAction = state.results.length
+    var historyHeadAction = (!cameraPanelActive && state.results.length)
       ? '<button type="button" class="ai-image-history-clear" data-action="delete-all-results" aria-label="' + escapeHtml(t('deleteAllLabel')) + '" title="' + escapeHtml(t('deleteAllLabel')) + '">' + trashIconGlyph() + '</button>'
       : '';
     var resultCards = state.results.map(function (item) {
@@ -2304,6 +2304,17 @@
       }
       if (objectName) addDeletedTombstone(objectName);
     });
+    try {
+      if (NK.api && typeof NK.api.aiImageSessionLibrary === 'function' && state.sessionId) {
+        NK.api.aiImageSessionLibrary(state.sessionId).then(function (res) {
+          var items = Array.isArray(res && res.items) ? res.items : [];
+          items.forEach(function (it) {
+            var name = String((it && (it.name || it.objectName)) || '').trim();
+            if (name) addDeletedTombstone(name);
+          });
+        }).catch(function () { });
+      }
+    } catch (_) {}
     state.results = [];
     state.currentResultId = '';
     state.previewTargetType = 'none';
@@ -3027,6 +3038,19 @@
               NK.api.projectDelete(project.id, objectName).catch(function () { });
             }
             if (objectName) addDeletedTombstone(objectName);
+            else {
+              try {
+                var targetUrl = resolveResultUrl(toDelete);
+                if (NK.api && typeof NK.api.aiImageSessionLibrary === 'function' && state.sessionId && targetUrl) {
+                  NK.api.aiImageSessionLibrary(state.sessionId).then(function (res) {
+                    var items = Array.isArray(res && res.items) ? res.items : [];
+                    var match = items.find(function (it) { return String(it && it.signedUrl || '').trim() === String(targetUrl || '').trim(); });
+                    var name = String(match && (match.name || match.objectName) || '').trim();
+                    if (name) addDeletedTombstone(name);
+                  }).catch(function () { });
+                }
+              } catch (_) {}
+            }
             state.results.splice(idx, 1);
             if (String(state.currentResultId || '') === deleteId) {
               state.currentResultId = '';
