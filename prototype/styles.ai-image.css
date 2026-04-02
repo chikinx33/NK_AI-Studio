@@ -515,6 +515,17 @@ body.layout-fixed.page-shell-image .content {
   display: block;
 }
 
+.ai-image-upscale-btn {
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  border-color: rgba(255, 122, 0, 0.72);
+  color: #0b0b0b;
+  box-shadow: 0 8px 18px rgba(255, 122, 0, 0.28);
+}
+.ai-image-upscale-badge {
+  font-weight: 800;
+  letter-spacing: 0.4px;
+}
+
 .ai-image-inline-actions-left {
   display: inline-flex;
   align-items: center;
@@ -909,6 +920,11 @@ body.layout-fixed.page-shell-image .content {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+}
+.ai-image-analysis-btn .icon {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .ai-image-analysis-icon {
