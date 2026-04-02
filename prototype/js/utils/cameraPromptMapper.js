@@ -73,11 +73,17 @@
   function applyPresetOverride(preset, shot, view, angle) {
     var p = String(preset || 'custom').toLowerCase();
     if (p === 'front') { view = 'front view'; angle = 'eye-level'; }
+    else if (p === 'rear') { view = 'rear view'; angle = 'eye-level'; }
     else if (p === 'left45') { view = '3/4 left view'; }
     else if (p === 'right45') { view = '3/4 right view'; }
-    else if (p === 'topdown') { angle = 'top-down view'; }
+    else if (p === 'upperleft45') { view = '3/4 left view'; angle = 'high angle'; }
+    else if (p === 'upperright45') { view = '3/4 right view'; angle = 'high angle'; }
+    else if (p === 'lowerleft45') { view = '3/4 left view'; angle = 'low angle'; }
+    else if (p === 'lowerright45') { view = '3/4 right view'; angle = 'low angle'; }
+    else if (p === 'highangle') { angle = 'high angle'; }
     else if (p === 'lowangle') { angle = 'low angle'; }
     else if (p === 'closeup') { shot = 'close-up portrait'; }
+    else if (p === 'wide') { shot = 'wide shot'; }
     return { shot: shot, view: view, angle: angle };
   }
   function mapCameraToPrompt(cameraControls, options) {
@@ -94,12 +100,17 @@
   function mapPresetToPrompt(preset) {
     var p = String(preset || '').toLowerCase();
     if (p === 'front') return 'front view, eye-level';
+    if (p === 'rear') return 'rear view, eye-level';
     if (p === 'left45') return '3/4 left view';
     if (p === 'right45') return '3/4 right view';
-    if (p === 'topdown') return 'top-down view';
+    if (p === 'upperleft45') return '3/4 left view, high angle';
+    if (p === 'upperright45') return '3/4 right view, high angle';
+    if (p === 'lowerleft45') return '3/4 left view, low angle';
+    if (p === 'lowerright45') return '3/4 right view, low angle';
+    if (p === 'highangle') return 'front view, high angle';
     if (p === 'lowangle') return 'low angle';
     if (p === 'closeup') return 'close-up portrait';
-    if (p === 'medium') return 'medium shot';
+    if (p === 'wide') return 'wide shot';
     return '';
   }
   function buildCameraPrompt(cameraControls, options) {

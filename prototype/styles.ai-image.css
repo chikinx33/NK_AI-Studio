@@ -1481,13 +1481,13 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-history .ai-image-camera-preset-grid.is-inline {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 5px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
   margin-top: 6px;
 }
 
 .ai-image-panel-history .ai-image-camera-preset {
-  min-height: 30px;
+  min-height: 32px;
   padding: 5px 6px;
   font-size: 10px;
 }
