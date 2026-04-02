@@ -1379,26 +1379,26 @@ body.layout-fixed.page-shell-image .content {
   position: absolute;
   left: var(--camera-x, 50%);
   top: var(--camera-y, 50%);
-  width: 28px;
-  height: 28px;
-  transform: translate(-50%, -50%) rotate(var(--camera-rotation, 0deg));
-  transform-origin: center;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  width: 0;
+  height: 0;
   pointer-events: none;
 }
 
 .ai-image-camera-pointer {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 28px;
+  height: 28px;
   display: block;
-  clip-path: polygon(0 50%, 100% 18%, 100% 82%);
+  clip-path: polygon(0 18%, 100% 50%, 0 82%);
   background: linear-gradient(135deg, #ffe39f, #f7b84e 58%, #c97312 100%);
   border: 1px solid rgba(255, 183, 77, 0.52);
   box-shadow:
     0 10px 22px rgba(0, 0, 0, 0.3),
     0 0 14px rgba(255, 183, 77, 0.22);
+  transform: translateY(-50%) rotate(var(--camera-rotation, 0deg));
+  transform-origin: 100% 50%;
 }
 
 .ai-image-camera-inline-sliders {
@@ -1452,12 +1452,17 @@ body.layout-fixed.page-shell-image .content {
 }
 
 .ai-image-panel-history .ai-image-camera-device {
-  width: 34px;
-  height: 34px;
+  width: 0;
+  height: 0;
 }
 
 .ai-image-panel-history .ai-image-camera-link {
   height: 2px;
+}
+
+.ai-image-panel-history .ai-image-camera-pointer {
+  width: 34px;
+  height: 34px;
 }
 
 .ai-image-panel-history .ai-image-camera-controls {
