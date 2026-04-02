@@ -1951,8 +1951,14 @@
       var root = document.getElementById('ai-image-root');
       if (!root) return;
       var historyPanel = root.querySelector('.ai-image-panel-history');
+      var prevScroll = 0;
       if (historyPanel) {
+        var list = historyPanel.querySelector('.ai-image-history-list');
+        if (list) prevScroll = Number(list.scrollTop || 0) || 0;
         historyPanel.outerHTML = buildHistoryPanelMarkup();
+        var nextPanel = root.querySelector('.ai-image-panel-history');
+        var nextList = nextPanel && nextPanel.querySelector('.ai-image-history-list');
+        if (nextList) nextList.scrollTop = prevScroll;
       }
     } catch (_) {}
   }
