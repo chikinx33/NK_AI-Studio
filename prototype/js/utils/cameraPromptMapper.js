@@ -40,11 +40,10 @@
   }
   function isNeutral(c) {
     var n = normalizeControls(c);
-    var enabled = !!n.enabled;
     var pan = Number.isFinite(Number(n.pan)) ? Number(n.pan) : CAMERA_FRONT_PAN;
     var tilt = Number(n.tilt || 0);
     var dist = Number.isFinite(Number(n.distance)) ? Number(n.distance) : 1;
-    return !enabled && pan === CAMERA_FRONT_PAN && tilt === 0 && dist === 1;
+    return pan === CAMERA_FRONT_PAN && tilt === 0 && dist === 1;
   }
   function shotFromDistance(distance) {
     var v = clamp(distance, 0, 2);
@@ -54,13 +53,15 @@
   }
   function viewFromPan(pan) {
     var v = relativePan(pan);
+    if (v <= -170) return 'rear view';
     if (v <= -150) return 'rear 3/4 left view';
     if (v <= -80) return 'left side view';
     if (v <= -20) return '3/4 left view';
     if (v < 20) return 'front view';
     if (v < 80) return '3/4 right view';
     if (v < 150) return 'right side view';
-    return 'rear 3/4 right view';
+    if (v < 170) return 'rear 3/4 right view';
+    return 'rear view';
   }
   function angleFromTilt(tilt) {
     var v = clamp(tilt, -30, 60);
@@ -108,7 +109,7 @@
     if (p === 'lowerleft45') return '3/4 left view, low angle';
     if (p === 'lowerright45') return '3/4 right view, low angle';
     if (p === 'highangle') return 'front view, high angle';
-    if (p === 'lowangle') return 'low angle';
+    if (p === 'lowangle') return 'front view, low angle';
     if (p === 'closeup') return 'close-up portrait';
     if (p === 'wide') return 'wide shot';
     return '';
