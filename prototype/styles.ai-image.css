@@ -1372,22 +1372,16 @@ body.layout-fixed.page-shell-image .content {
   fill: rgba(255, 255, 255, 0.12);
 }
 
-.ai-image-camera-orbit-subject rect {
-  fill: rgba(255, 255, 255, 0.06);
-  stroke: rgba(255, 255, 255, 0.15);
-  stroke-width: 1;
+.ai-image-camera-orbit-subject-glow {
+  fill: rgba(255, 193, 77, 0.16);
+  filter: blur(6px);
 }
 
-.ai-image-camera-orbit-subject path {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.25);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.ai-image-camera-orbit-subject circle {
-  fill: rgba(255, 255, 255, 0.2);
+.ai-image-camera-orbit-subject-core {
+  fill: rgba(255, 196, 92, 0.96);
+  stroke: rgba(255, 214, 122, 0.85);
+  stroke-width: 1.8;
+  filter: drop-shadow(0 0 10px rgba(255, 193, 77, 0.65));
 }
 
 .ai-image-camera-orbit-ray {
@@ -1410,17 +1404,7 @@ body.layout-fixed.page-shell-image .content {
   fill: rgba(255, 255, 255, 0.12);
   stroke: rgba(255, 255, 255, 0.7);
   stroke-width: 2;
-}
-
-.ai-image-camera-orbit-camera-glyph rect,
-.ai-image-camera-orbit-camera-glyph circle {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.96);
-  stroke-width: 1.1;
-}
-
-.ai-image-camera-orbit-camera-glyph circle {
-  fill: none;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.15));
 }
 
 .ai-image-camera-inline-sliders {

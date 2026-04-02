@@ -544,20 +544,14 @@
         '<line class="ai-image-camera-orbit-axis" x1="' + formatOrbitSvgNumber(cx) + '" y1="' + formatOrbitSvgNumber(cy - axisRadius) + '" x2="' + formatOrbitSvgNumber(cx) + '" y2="' + formatOrbitSvgNumber(cy + axisRadius) + '"></line>' +
         '<circle class="ai-image-camera-orbit-pole is-top" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy - axisRadius) + '" r="3"></circle>' +
         '<circle class="ai-image-camera-orbit-pole is-bottom" cx="' + formatOrbitSvgNumber(cx) + '" cy="' + formatOrbitSvgNumber(cy + axisRadius) + '" r="2.5"></circle>' +
-        '<g class="ai-image-camera-orbit-subject" transform="translate(' + formatOrbitSvgNumber(cx - 14) + ' ' + formatOrbitSvgNumber(cy - 14) + ')">' +
-          '<rect width="28" height="28" rx="5"></rect>' +
-          '<path d="M6 18 L11 13 L16 16.5 L19 14 L22 18"></path>' +
-          '<circle cx="18" cy="10" r="2.5"></circle>' +
+        '<g class="ai-image-camera-orbit-subject" transform="translate(' + formatOrbitSvgNumber(cx) + ' ' + formatOrbitSvgNumber(cy) + ')">' +
+          '<circle class="ai-image-camera-orbit-subject-glow" r="22"></circle>' +
+          '<circle class="ai-image-camera-orbit-subject-core" r="8.5"></circle>' +
         '</g>' +
         '<line class="ai-image-camera-orbit-ray" x1="' + formatOrbitSvgNumber(cx) + '" y1="' + formatOrbitSvgNumber(cy) + '" x2="' + formatOrbitSvgNumber(cameraX) + '" y2="' + formatOrbitSvgNumber(cameraY) + '"></line>' +
         '<circle class="ai-image-camera-orbit-focus" cx="' + formatOrbitSvgNumber(focusX) + '" cy="' + formatOrbitSvgNumber(focusY) + '" r="5"></circle>' +
         '<g class="ai-image-camera-orbit-camera" transform="translate(' + formatOrbitSvgNumber(cameraX) + ' ' + formatOrbitSvgNumber(cameraY) + ')">' +
           '<circle class="ai-image-camera-orbit-camera-ring" r="' + formatOrbitSvgNumber(cameraRadius) + '"></circle>' +
-          '<g class="ai-image-camera-orbit-camera-glyph" transform="translate(-8 -6)">' +
-            '<rect width="12" height="9" x="1" y="1.5" rx="2"></rect>' +
-            '<circle cx="7" cy="6" r="2.5"></circle>' +
-            '<rect width="4" height="2" x="12" y="3.5" rx="0.5"></rect>' +
-          '</g>' +
         '</g>' +
       '</svg>';
   }
