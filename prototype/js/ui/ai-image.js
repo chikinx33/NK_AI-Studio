@@ -3211,7 +3211,6 @@
             state.cameraControls = normalizeCameraControls(r1.cameraControls);
             updatePromptFieldUI();
             updatePromptPanelUI();
-            updateHistoryPanelUI();
             var promptInput = document.getElementById('ai-image-prompt');
             if (promptInput && typeof promptInput.focus === 'function') {
               try { promptInput.focus({ preventScroll: true }); } catch (_) { promptInput.focus(); }
@@ -3233,12 +3232,11 @@
             }
             if (addResult.addedIds && addResult.addedIds[0]) {
               state.selectedSourceId = String(addResult.addedIds[0] || '');
-              state.previewTargetType = 'source';
+              // 유지: 미리보기는 결과 카드 상태를 유지해 액션 버튼과 메타를 보존
             }
             updateSourceUI();
             updatePromptPanelUI();
             updatePreviewPanelUI();
-            updateHistoryPanelUI();
           }
           return;
         }
@@ -3258,11 +3256,10 @@
             }
             if (ensureResult.addedIds && ensureResult.addedIds[0]) {
               state.selectedSourceId = String(ensureResult.addedIds[0] || '');
-              state.previewTargetType = 'source';
+              // 유지: 미리보기는 결과 카드 상태를 유지
             }
             updatePromptPanelUI();
             updatePreviewPanelUI();
-            updateHistoryPanelUI();
             generateImage();
           }
           return;
