@@ -1,4 +1,4 @@
-﻿; (function () {
+; (function () {
   const NK = window.NK || (window.NK = {});
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
@@ -1271,6 +1271,7 @@
       return;
     }
     const commonInfoRow = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
+    const commonCopyBtn = commonInfo ? `<button class="common-info-copy" id="common-copy-btn" title="복사" aria-label="시나리오 복사" style="float:right">⧉</button>` : '';
     const commonBackgroundBlock = commonBackgroundStyle ? `
       <div class="scenario-card scenario-card-common" data-scene-id="common-background">
         <div class="scene-visual-grid">
@@ -1280,7 +1281,7 @@
           </div>
         </div>
       </div>` : '';
-    const commonBlock = commonInfoRow + commonBackgroundBlock;
+    const commonBlock = commonInfoRow + commonCopyBtn + commonBackgroundBlock;
     container.innerHTML = commonBlock + sceneList.map(s => `
       <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">
@@ -1886,6 +1887,54 @@
       const modal = document.getElementById('common-modal');
       if (modal && !modal.classList.contains('hidden') && target === modal) {
         modal.classList.add('hidden');
+      }
+    });
+    document.addEventListener('click', async (e) => {
+      const target = e.target;
+      if (target && target.id === 'common-copy-btn') {
+        try {
+          const info = formatCommonInfo();
+          const headerText = buildCommonDetail();
+          const latest = collectScenesFromCards();
+          const mergedScenes = mergeSceneSnapshots(draft?.scenes || [], latest);
+          const makeBlock = (s) => {
+            const lines = [];
+            lines.push(`Scene ${s.id} · ${fmtEst(s.estSec)}`);
+            if (s.sceneLocation || s.location) lines.push(`장소: ${s.sceneLocation || s.location || ''}`.trim());
+            if (s.shot || s.visual) lines.push(`시각화: ${s.shot || s.visual || ''}`.trim());
+            if (s.narrationText || s.narration) lines.push(`나레이션: ${s.narrationText || s.narration || ''}`.trim());
+            const dlg = s.dialogueText || dialogueToText(s.dialogue || []);
+            if (dlg) lines.push(`대사:\n${dlg}`);
+            return lines.filter(Boolean).join('\n');
+          };
+          const sceneBlocks = (mergedScenes.length ? mergedScenes : (draft?.scenes || [])).map(makeBlock).join('\n\n');
+          const commonStyle = getCommonBackgroundStyleFromCard() || String(currentPayload?.backgroundStyle || '').trim();
+          const parts = [];
+          if (info) parts.push(`▶ ${info}`);
+          if (headerText) parts.push(headerText);
+          if (commonStyle) parts.push(`배경\n${commonStyle}`);
+          if (sceneBlocks) parts.push(sceneBlocks);
+          const text = parts.filter(Boolean).join('\n\n');
+          let ok = false;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text);
+            ok = true;
+          }
+          if (!ok) {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.top = '-1000px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand('copy'); ok = true; } catch (_) {}
+            document.body.removeChild(ta);
+          }
+          alert(ok ? '시나리오를 복사했습니다.' : '복사에 실패했습니다.');
+        } catch (err) {
+          alert('복사 실패: ' + (err?.message || err));
+        }
       }
     });
   };
