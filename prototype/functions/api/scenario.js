@@ -1204,23 +1204,31 @@ async function requestScenarioChunk(apiKey, sys, userPrompt) {
     temperature: 0.35,
   };
   const responseText = await retryAsync(async () => {
-    const completion = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify(payload),
-    });
-    const text = await completion.text();
-    if (!completion.ok) {
-      if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
-        throw new Error("CREDIT_EXHAUSTED");
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout (Cloudflare limit is 30s)
+
+    try {
+      const completion = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const text = await completion.text();
+      if (!completion.ok) {
+        if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
+          throw new Error("CREDIT_EXHAUSTED");
+        }
+        throw new Error(`Anthropic error: ${completion.status} ${text}`);
       }
-      throw new Error(`Anthropic error: ${completion.status} ${text}`);
+      return text;
+    } finally {
+      clearTimeout(timeoutId);
     }
-    return text;
   }, MAX_COMPLETION_RETRIES, BASE_RETRY_DELAY_MS);
 
   const data = JSON.parse(responseText || "{}");

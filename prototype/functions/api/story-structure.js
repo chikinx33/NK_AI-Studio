@@ -37,26 +37,35 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const completion = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-        temperature: 0.6,
-        system: buildSystemPrompt(input.language),
-        messages: [
-          {
-            role: "user",
-            content: buildUserPrompt(input),
-          },
-        ],
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout (Cloudflare limit is 30s)
+
+    let completion;
+    try {
+      completion = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1024,
+          temperature: 0.6,
+          system: buildSystemPrompt(input.language),
+          messages: [
+            {
+              role: "user",
+              content: buildUserPrompt(input),
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     if (!completion.ok) {
       const text = await completion.text();
