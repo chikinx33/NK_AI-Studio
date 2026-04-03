@@ -1429,7 +1429,7 @@ function resolveOverviewProfile({ lang = "ko", purposeCategory = "", purposeTags
   else if (/(ai|앱|기술|테크|it|device|tool|software|productivity)/i.test(joined) && key !== "sf") key = "tech";
   else if (/(비즈니스|경제|브랜딩|마케팅|재테크|business|economy|marketing|finance)/i.test(joined)) key = "business";
   else if (/(인터뷰|사회|공감|이슈|다큐|interview|social|documentary|issue)/i.test(joined)) key = "social";
-  else if (/(명상|힐링|위로|감성|healing|meditation|calm)/i.test(joined)) key = "healing";
+  else if (/(명상|힐링|위로|감성|healing|meditation|calm)/i.test(joined) && key !== "kids") key = "healing";
   else if (/(말씀|기도|간증|묵상|faith|prayer|scripture)/i.test(joined)) key = "religion";
   else if (/(그림|공예|diy|디자인|글쓰기|사진|craft|creative|design)/i.test(joined)) key = "creative";
   else if (/(공부법|자격증|튜토리얼|tutorial|lesson|learn|study)/i.test(joined) && key !== "kids") key = "learning";
