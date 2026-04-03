@@ -1390,9 +1390,6 @@ a.btn-primary:active {
   column-gap: 6px;
   row-gap: 6px;
 }
-  min-width: 100px;
-  flex-shrink: 0;
-}
 
 .scenario-form .scenario-form-label-row label {
   min-width: 0;
@@ -3519,8 +3516,6 @@ textarea::-webkit-scrollbar-corner {
   object-fit: contain;
   object-position: center center;
 }
-.ai-image-preview-meta { }
-.ai-image-inline-actions { }
 
 :root {
   --ai-preview-lh: 1.4;
@@ -3547,6 +3542,7 @@ textarea::-webkit-scrollbar-corner {
 }
 .ai-image-preview-meta p:last-child {
   display: -webkit-box;
+  line-clamp: 3;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
