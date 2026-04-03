@@ -115,7 +115,7 @@ test('story structure prompt carries duration, young audience, humor, and style 
   assert.match(prompt, /15초 안팎으로 보고 한 가지 핵심 상황만 유지한다/);
   assert.match(prompt, /아주 짧고 쉬운 문장/);
   assert.match(prompt, /구체적 실수, 착각, 반전, 과장 반응/);
-  assert.match(prompt, /3D 애니메이션이면 재질감이나 색감 같은 짧은 세계 힌트/);
+  assert.match(prompt, /스타일과 세계관은 이야기 흐름을 바꾸지 않는다/);
   assert.match(prompt, /추상적 표현은 구체적 행동 비트로 채운 압축형 이야기 뼈대/);
 });
 
@@ -144,7 +144,6 @@ test('story structure fallback compresses abstract young-kids comedy into shorte
     ]
   }));
 
-  assert.match(story, /말랑한 3D 도형 세계에서/);
   assert.match(story, /헛짚고 멈칫한다|착각해 멈칫하고/);
   assert.doesNotMatch(story, /유머러스한 상황에 처하|우정을 더욱 깊게 다지|즐거움을 느낀다/);
 });

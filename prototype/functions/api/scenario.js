@@ -1255,7 +1255,7 @@ function buildScenarioSpec(input = {}) {
   const target = String(input.target || "").trim();
   const knowledgeHub = input.knowledgeHub && typeof input.knowledgeHub === "object" ? input.knowledgeHub : {};
   const characters = Array.isArray(input.characters) ? input.characters : [];
-  const topicProfile = parseTopicProfile(input.topic, lang);
+  const topicProfile = parseTopicProfile(input.episodeTitle || input.topic, lang);
   const rules = [
     ...collectRulesFromLibrary("purposeCategory", [category]),
     ...collectRulesFromLibrary("purposeTag", tags),
@@ -1314,8 +1314,8 @@ function buildScenarioSpec(input = {}) {
     requiredOutputsEn.push("Show teaching, follow-along or repetition, and a final recap.");
   }
   const storyText = String(input.story || "").trim();
-  const topicText = String(input.topic || input.episodeTitle || "").trim();
-  const hasNarrativeStory = storyText.length > 50 && storyText !== topicText;
+  const episodeTitleText = String(input.episodeTitle || "").trim();
+  const hasNarrativeStory = storyText.length > 50 && (!episodeTitleText || storyText !== episodeTitleText);
 
   if (signals.play) {
     if (hasNarrativeStory) {

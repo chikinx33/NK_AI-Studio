@@ -428,15 +428,9 @@ function describeToneRule(input) {
 
 function describeStyleRule(input) {
   const style = [input?.styles || [], input?.worldSetting || ""].flat().join(" ").toLowerCase();
-  if (/(3d|애니메이션|animation)/i.test(style)) {
-    return {
-      ko: "3D 애니메이션이면 재질감이나 색감 같은 짧은 세계 힌트만 한 번 넣는다. 예: 말랑한 도형, 파스텔 숲.",
-      en: "For 3D animation, add one brief world hint such as tactile texture or color mood. Example: soft shape characters, pastel forest."
-    };
-  }
   return {
-    ko: "스타일은 한 줄짜리 시각 힌트 수준으로만 반영한다. 줄거리를 미술 설명으로 바꾸지 않는다.",
-    en: "Use style only as a one-line visual hint. Do not turn the story into art direction prose."
+    ko: "스타일과 세계관은 이야기 흐름을 바꾸지 않는다. 배경 묘사가 필요하다면 첫 문장에 한 단어 수준으로만 자연스럽게 녹인다. 별도 문장으로 삽입하지 않는다.",
+    en: "Style and world setting do not override the story. If a background detail is needed, weave a single word or short phrase into the first sentence only. Do not insert it as a standalone sentence."
   };
 }
 
@@ -544,17 +538,6 @@ function resolveFallbackActor(input) {
   return input?.language === "en" ? "The characters" : "주인공";
 }
 
-function appendStyleHint(beats, input) {
-  const next = Array.isArray(beats) ? beats.slice() : [];
-  if (!next.length) return next;
-  const styleText = [normalizeTextList(input?.styles).join(" "), sanitizeText(input?.worldSetting)]
-    .join(" ")
-    .trim();
-  if (!styleText) return next;
-  if (/(3d|애니메이션|animation)/i.test(styleText) && !/(말랑|파스텔|비비드|soft|pastel|bright)/i.test(next[0])) {
-    next[0] = input?.language === "en"
-      ? `In a soft, colorful 3D world, ${next[0].charAt(0).toLowerCase() + next[0].slice(1)}`
-      : `말랑한 3D 도형 세계에서, ${next[0]}`;
-  }
-  return next;
+function appendStyleHint(beats, _input) {
+  return Array.isArray(beats) ? beats.slice() : [];
 }
