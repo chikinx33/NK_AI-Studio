@@ -644,6 +644,7 @@ export async function onRequestPost(context) {
       scenes = generated.scenes;
       generationMeta = generated.meta;
     } catch (err) {
+      if (isCreditExhaustedError(err)) throw err;
       scenes = fallbackScenesV2({
         topic,
         episodeTitle,
@@ -681,6 +682,9 @@ export async function onRequestPost(context) {
       headers: corsHeaders(origin),
     });
   } catch (err) {
+    if (isCreditExhaustedError(err)) {
+      return jsonError("CREDIT_EXHAUSTED", 402, origin);
+    }
     return jsonError(err?.message || "unexpected_error", 500, origin);
   }
 }
@@ -968,7 +972,7 @@ ${modeInstruction}`;
 }
 
 async function generateScenarioScenes(input) {
-  if (!input?.env?.OPENAI_API_KEY) throw new Error("OPENAI_API_KEY missing");
+  if (!input?.env?.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
 
   const fullTopic = String(input.topic || "").trim();
   const rawChunks = fullTopic.length > LONG_TOPIC_CHUNK_THRESHOLD
@@ -1040,7 +1044,7 @@ async function generateScenarioScenes(input) {
 
     try {
       const firstPass = await requestAndShapeScenarioChunk({
-        apiKey: input.env.OPENAI_API_KEY,
+        apiKey: input.env.ANTHROPIC_API_KEY,
         sys,
         userPrompt: basePrompt,
         spec,
@@ -1057,7 +1061,7 @@ async function generateScenarioScenes(input) {
         refinedChunks += 1;
         const revisedPrompt = `${basePrompt}\n${buildValidationFeedback(firstPass.validation, input.lang)}`;
         const secondPass = await requestAndShapeScenarioChunk({
-          apiKey: input.env.OPENAI_API_KEY,
+          apiKey: input.env.ANTHROPIC_API_KEY,
           sys,
           userPrompt: revisedPrompt,
           spec,
@@ -1191,36 +1195,40 @@ async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, opt
 
 async function requestScenarioChunk(apiKey, sys, userPrompt) {
   const payload = {
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
+    model: "claude-sonnet-4-6",
+    max_tokens: 4096,
+    system: sys,
     messages: [
-      { role: "system", content: sys },
       { role: "user", content: userPrompt },
     ],
     temperature: 0.35,
   };
   const responseText = await retryAsync(async () => {
-    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
+    const completion = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify(payload),
     });
     const text = await completion.text();
     if (!completion.ok) {
-      throw new Error(`OpenAI error: ${completion.status} ${text}`);
+      if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
+        throw new Error("CREDIT_EXHAUSTED");
+      }
+      throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
     return text;
   }, MAX_COMPLETION_RETRIES, BASE_RETRY_DELAY_MS);
 
   const data = JSON.parse(responseText || "{}");
-  const content = data.choices?.[0]?.message?.content;
+  const content = data.content?.[0]?.text;
   const parsed = JSON.parse(cleanJsonResponse(content || "{}"));
   const scenes = parsed.scenes || parsed;
   if (!Array.isArray(scenes) || scenes.length === 0) {
-    throw new Error("Invalid scenes format from OpenAI");
+    throw new Error("Invalid scenes format from Anthropic");
   }
   return scenes;
 }
@@ -3191,6 +3199,11 @@ async function retryAsync(task, maxRetries = 3, baseDelayMs = 1000) {
 function isRetryableError(err) {
   const text = String(err?.message || err || "").toLowerCase();
   return /\b429\b/.test(text) || /\b500\b|\b502\b|\b503\b|\b504\b/.test(text) || /timeout|temporar|rate limit|overloaded/.test(text);
+}
+
+function isCreditExhaustedError(err) {
+  const text = String(err?.message || err || "");
+  return /CREDIT_EXHAUSTED/.test(text) || /\b402\b/.test(text) || /billing_error|credit_balance|insufficient.{0,10}credit/i.test(text);
 }
 
 function wait(ms) {

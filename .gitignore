@@ -2,3 +2,6 @@ sample/
 .claude/settings.local.json
 .claude/
 .claude/worktrees/
+.env
+.env.local
+.env.*.local

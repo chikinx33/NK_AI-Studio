@@ -159,6 +159,10 @@
       var err = new Error(e(text) || 'api_error');
       err.status = res.status;
       err.detail = text;
+      if (res.status === 402 || /CREDIT_EXHAUSTED/.test(text)) {
+        err.message = 'CREDIT_EXHAUSTED';
+        err.creditExhausted = true;
+      }
       throw err;
     }
     var data = j(text);
