@@ -1036,28 +1036,7 @@ async function generateScenarioScenes(input) {
         }),
       });
 
-      let best = firstPass;
-      if (!firstPass.validation.passed) {
-        refinedChunks += 1;
-        const revisedPrompt = `${basePrompt}\n${buildValidationFeedback(firstPass.validation, input.lang)}`;
-        const secondPass = await requestAndShapeScenarioChunk({
-          apiKey: input.env.ANTHROPIC_API_KEY,
-          sys,
-          userPrompt: revisedPrompt,
-          spec,
-          options: Object.assign({}, input, {
-            topic: chunkText,
-            sceneCount: chunkSceneCount,
-            duration: chunkDuration,
-            defaultSpeaker: input.characters[0]?.token || "@narrator",
-          }),
-        });
-        if (secondPass.validation.score >= firstPass.validation.score) {
-          best = secondPass;
-        }
-      }
-
-      merged.push(...rebalanceEstSec(best.scenes, chunkDuration));
+      merged.push(...rebalanceEstSec(firstPass.scenes, chunkDuration));
     } catch (err) {
       failedChunks.push({
         index: i + 1,
@@ -1152,7 +1131,7 @@ async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, opt
 async function requestScenarioChunk(apiKey, sys, userPrompt) {
   const payload = {
     model: "claude-sonnet-4-6",
-    max_tokens: 2500,
+    max_tokens: 1500,
     system: sys,
     messages: [
       { role: "user", content: userPrompt },
@@ -1161,7 +1140,7 @@ async function requestScenarioChunk(apiKey, sys, userPrompt) {
   };
   const responseText = await retryAsync(async () => {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout (Cloudflare limit is 30s)
+    const timeoutId = setTimeout(() => controller.abort(), 29000); // 29s timeout (Cloudflare limit is 30s)
 
     try {
       const completion = await fetch("https://api.anthropic.com/v1/messages", {
