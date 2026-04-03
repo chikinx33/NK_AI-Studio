@@ -935,6 +935,13 @@ ${genreGuide ? `${genreGuide}\n` : ""}Formatting intent example:
 ${modeInstruction}`;
   }
 
+  const referenceSection = input.knowledgeHub.referenceContents.length
+    ? `\n참조 콘텐츠: ${input.knowledgeHub.referenceContents.join(", ")}`
+    : "";
+  const successSection = input.knowledgeHub.successCases.length
+    ? `\n과거 성공 패턴: ${input.knowledgeHub.successCases.join(", ")}`
+    : "";
+
   return `주제: ${episodeTitle || "(미입력)"}
 이야기: ${storyText || "(없음)"}
 시청 타겟: ${input.target || "(미입력)"}
@@ -951,9 +958,7 @@ ${modeInstruction}`;
 대표 캐릭터/주체: ${input.knowledgeHub.brandCharacter || "(없음)"}
 세계관/배경: ${input.knowledgeHub.worldSetting || "(없음)"}
 브랜드 규칙: ${input.knowledgeHub.brandRules.length ? input.knowledgeHub.brandRules.join(", ") : "(없음)"}
-금지 표현: ${input.knowledgeHub.bannedExpressions.length ? input.knowledgeHub.bannedExpressions.join(", ") : "(없음)"}
-참조 콘텐츠: ${input.knowledgeHub.referenceContents.length ? input.knowledgeHub.referenceContents.join(", ") : "(없음)"}
-과거 성공 패턴: ${input.knowledgeHub.successCases.length ? input.knowledgeHub.successCases.join(", ") : "(없음)"}
+금지 표현: ${input.knowledgeHub.bannedExpressions.length ? input.knowledgeHub.bannedExpressions.join(", ") : "(없음)"}${referenceSection}${successSection}
 화면비: ${input.aspectRatio || "(미입력)"}
 목표 길이: ${input.duration}초
 ${characterModeInstruction}
@@ -962,13 +967,7 @@ ${specText}
 씬 블루프린트:
 ${blueprintText}
 ${chunkGuide}
-${genreGuide ? `${genreGuide}\n` : ""}표현 예시:
-- SceneIntent: "관객이 화면 한가운데 놓인 카드에 시선을 고정한다."
-- SceneLocation: "알파벳 포스터 벽 앞"
-- Visual: "알파벳 포스터 벽 앞, 진행자와 카드가 함께 들어오는 미디엄 와이드 프레임. 진행자는 왼쪽에 서 있고 오른쪽에는 알파벳 카드가 줄지어 걸려 있다. 진행자가 A 카드를 들어 올리고 다른 손으로 그 글자를 가리킨다. 카메라: 미디엄 샷, 아이레벨 앵글, 느린 돌리 인, 중앙 구도."
-- Narration: "소년은 우물가에 앉아서 아래를 내려다보았다."
-- Dialogue: [{"speaker":"@소년","line":"생각보다 훨씬 깊네."}]
-${modeInstruction}`;
+${genreGuide ? `${genreGuide}\n` : ""}${modeInstruction}`;
 }
 
 async function generateScenarioScenes(input) {
