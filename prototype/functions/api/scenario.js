@@ -722,6 +722,11 @@ ${avoid}
 □ estSec 길이에 맞는 내용 밀도인가? (3초 씬에 행동 3개 금지)
 □ 이 씬을 빼면 전체 흐름에 구멍이 생기는가? 안 생기면 삭제한다.
 
+[허브 데이터 적용 규칙]
+- 브랜드 규칙·금지 표현·브랜드 톤&매너는 모든 씬에 강제 적용한다.
+- IP 세계관은 이 IP가 속한 배경 지식이다. 에피소드의 실제 장소·배경이 아니다.
+- 에피소드 이야기(Story)가 씬의 장소·배경·소품을 결정한다. 이야기에 "들판"이 나오면 씬은 들판이다. 세계관 설명을 장소로 삽입하지 않는다.
+
 [JSON 출력 규칙 - 반드시 준수]
 - 반드시 유효한 JSON만 출력한다. JSON 형식이 깨지면 절대 안 된다.
 - 마크다운(\`\`\`, \*\*), 설명, 주석, 백틱을 절대 포함하지 않는다.
@@ -890,7 +895,7 @@ Manual directives: ${input.manualDirectives || "(none)"}
 Brand tone & manner: ${input.knowledgeHub.brandVoice || "(none)"}
 Brand story: ${input.knowledgeHub.brandStory || "(none)"}
 Brand character: ${input.knowledgeHub.brandCharacter || "(none)"}
-World setting: ${input.knowledgeHub.worldSetting || "(none)"}
+IP world setting (background lore only, not the episode location): ${input.knowledgeHub.worldSetting || "(none)"}
 Brand rules: ${input.knowledgeHub.brandRules.length ? input.knowledgeHub.brandRules.join(", ") : "(none)"}
 Banned expressions: ${input.knowledgeHub.bannedExpressions.length ? input.knowledgeHub.bannedExpressions.join(", ") : "(none)"}
 Reference contents: ${input.knowledgeHub.referenceContents.length ? input.knowledgeHub.referenceContents.join(", ") : "(none)"}
@@ -933,7 +938,7 @@ ${modeInstruction}`;
 브랜드 톤&매너(고정 화법): ${input.knowledgeHub.brandVoice || "(없음)"}
 브랜드 스토리: ${input.knowledgeHub.brandStory || "(없음)"}
 대표 캐릭터/주체: ${input.knowledgeHub.brandCharacter || "(없음)"}
-세계관/배경: ${input.knowledgeHub.worldSetting || "(없음)"}
+IP 세계관(참고 배경 지식, 에피소드 장소 아님): ${input.knowledgeHub.worldSetting || "(없음)"}
 브랜드 규칙: ${input.knowledgeHub.brandRules.length ? input.knowledgeHub.brandRules.join(", ") : "(없음)"}
 금지 표현: ${input.knowledgeHub.bannedExpressions.length ? input.knowledgeHub.bannedExpressions.join(", ") : "(없음)"}${referenceSection}${successSection}
 화면비: ${input.aspectRatio || "(미입력)"}
@@ -1287,12 +1292,21 @@ function buildScenarioSpec(input = {}) {
     profile,
     purposeCategory: category,
     purposeTags: tags,
+    hasNarrativeStory,
   });
   requiredOutputsKo.push("각 visual은 추상적인 장면 설명 대신 실제로 연출 가능한 공간, 배경, 행동, 프롭을 모두 포함해야 한다.");
-  requiredOutputsKo.push(`모든 씬은 같은 기본 공간인 "${continuity.place}"에서 이어지며, 장소를 바꿀 때만 명시적으로 전환을 드러낸다.`);
+  if (hasNarrativeStory) {
+    requiredOutputsKo.push("씬 배경과 장소는 이야기가 결정한다. 이야기에 명시된 장소를 그대로 사용하고, 명시되지 않은 경우에만 이전 씬과 자연스럽게 이어지는 공간을 유지한다.");
+  } else {
+    requiredOutputsKo.push(`모든 씬은 같은 기본 공간인 "${continuity.place}"에서 이어지며, 장소를 바꿀 때만 명시적으로 전환을 드러낸다.`);
+  }
   requiredOutputsKo.push("sceneIntent는 씬을 본 관객의 구체적 반응으로 쓰고, visual에는 실제 화면에 보일 내용을 3~5문장으로 구체적으로 쓴다.");
   requiredOutputsEn.push("Each visual must be directly stageable and include space, background, action, and props instead of abstract scene labels.");
-  requiredOutputsEn.push(`Keep every scene in the same base setting "${continuity.place}" unless an explicit location transition is shown.`);
+  if (hasNarrativeStory) {
+    requiredOutputsEn.push("Scene locations are determined by the story. Use locations exactly as written in the story; otherwise keep continuity with the prior scene.");
+  } else {
+    requiredOutputsEn.push(`Keep every scene in the same base setting "${continuity.place}" unless an explicit location transition is shown.`);
+  }
   requiredOutputsEn.push("sceneIntent should describe a concrete audience reaction, while visual should describe the actual shot content in 3 to 5 sentences.");
   avoidOutputsKo.push("시각화에 '장면', '분위기', '구성' 같은 추상 문장만 적는 결과");
   avoidOutputsKo.push("씬 사이 기본 장소가 뜬금없이 바뀌는 결과");
@@ -1587,11 +1601,14 @@ function getProfileSignaturePattern(key = "generic") {
   }
 }
 
-function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}, signals = {}, profile = {}, purposeCategory = "", purposeTags = [] } = {}) {
+function buildContinuityPlan({ lang = "ko", knowledgeHub = {}, topicProfile = {}, signals = {}, profile = {}, purposeCategory = "", purposeTags = [], hasNarrativeStory = false } = {}) {
   const settingRaw = String(knowledgeHub.worldSetting || "").trim();
   const subject = topicProfile.subject || (lang === "en" ? "the topic" : "주제");
   const defaultProp = buildSubjectPropCue({ lang, subject, signals, profile });
-  if (settingRaw) {
+  // worldSetting은 IP 배경 지식(참고)이다.
+  // 에피소드 이야기가 있으면(hasNarrativeStory) 이야기가 실제 씬 배경을 결정하므로
+  // worldSetting을 장소·배경으로 강제 변환하지 않는다.
+  if (settingRaw && !hasNarrativeStory) {
     const parsedSetting = parseWorldSetting(settingRaw, lang);
     return {
       source: "knowledge_hub",
