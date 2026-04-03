@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "NK Studio Preview Server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
+      "port": 14000
+    },
+    {
+      "name": "Test Runner",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["--test", "prototype/tests/*.test.mjs"],
+      "port": 0
+    }
+  ]
+}
