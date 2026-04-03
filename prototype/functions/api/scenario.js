@@ -19,7 +19,7 @@ const durationToScenes = {
 
 const LONG_TOPIC_CHUNK_THRESHOLD = 2800;
 const TOPIC_CHUNK_SIZE = 2200;
-const MAX_COMPLETION_RETRIES = 3;
+const MAX_COMPLETION_RETRIES = 1;
 const BASE_RETRY_DELAY_MS = 1500;
 
 const RULE_LIBRARY = {
@@ -645,36 +645,7 @@ export async function onRequestPost(context) {
       generationMeta = generated.meta;
     } catch (err) {
       if (isCreditExhaustedError(err)) throw err;
-      scenes = fallbackScenesV2({
-        topic,
-        episodeTitle,
-        story: topic,
-        target,
-        duration,
-        sceneCount,
-        narrationEnabled,
-        dubbingEnabled,
-        characters: activeCharacters,
-        characterGenerationDisabled,
-        lang,
-        purposeCategory,
-        purposeTags,
-        toneText,
-        tones,
-        styleText,
-        styles,
-        aspectRatio,
-        knowledgeHub,
-      });
-      return new Response(JSON.stringify({
-        scenes,
-        fallback: true,
-        error: err?.message || "fallback_used",
-        meta: generationMeta,
-      }), {
-        status: 200,
-        headers: corsHeaders(origin),
-      });
+      return jsonError(err?.message || "scenario_generation_failed", 500, origin);
     }
 
     return new Response(JSON.stringify({ scenes, meta: generationMeta }), {
@@ -1086,33 +1057,7 @@ async function generateScenarioScenes(input) {
         }
       }
 
-      let finalScenes = best.scenes;
-      if (!best.validation.passed && best.validation.score < 0.5) {
-        validationFallbackChunks += 1;
-        finalScenes = fallbackScenesV2({
-          topic: chunkText,
-          episodeTitle: input.episodeTitle || "",
-          story: String(input.story || ""),
-          target: input.target,
-          duration: String(chunkDuration),
-          sceneCount: chunkSceneCount,
-          narrationEnabled: input.narrationEnabled,
-          dubbingEnabled: input.dubbingEnabled,
-          characters: input.characters,
-          characterGenerationDisabled: input.characterGenerationDisabled,
-          lang: input.lang,
-          purposeCategory: input.purposeCategory,
-          purposeTags: input.purposeTags,
-          toneText: input.toneText,
-          tones: input.tones,
-          styleText: input.styleText,
-          styles: input.styles,
-          aspectRatio: input.aspectRatio,
-          knowledgeHub: input.knowledgeHub,
-          spec,
-        });
-      }
-      merged.push(...rebalanceEstSec(finalScenes, chunkDuration));
+      merged.push(...rebalanceEstSec(best.scenes, chunkDuration));
     } catch (err) {
       failedChunks.push({
         index: i + 1,
