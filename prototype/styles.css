@@ -2556,17 +2556,19 @@ textarea::-webkit-scrollbar-corner {
 }
 
 .common-info-play {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
+  width: 28px;
+  height: 28px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  border: 1px solid var(--pill-border);
+  background: transparent;
+  color: var(--muted);
   font-size: 14px;
   cursor: pointer;
   line-height: 1;
   padding: 0;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 [data-theme="light"] .common-info-play {
   background: #f0f4ff;
