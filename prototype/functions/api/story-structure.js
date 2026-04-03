@@ -100,6 +100,8 @@ function normalizeInput(body) {
     language: String(body?.language || "ko").trim().toLowerCase() === "en" ? "en" : "ko",
     topic: sanitizeText(body?.topic),
     story: story,
+    duration: sanitizeDuration(body?.duration || body?.durationCustom || body?.durationPreset),
+    durationSeconds: normalizeDurationSeconds(body?.duration || body?.durationCustom || body?.durationPreset),
     target: sanitizeText(body?.target || body?.targetAudience),
     purposeCategory: sanitizeText(body?.purposeCategory),
     purposeTags: normalizeTextList(body?.purposeTags),
@@ -118,11 +120,16 @@ function normalizeInput(body) {
 function buildSystemPrompt(language) {
   if (language === "en") {
     return [
-      "You organize a user's rough episode story into a clearer brief for scenario generation.",
+      "You reorganize a rough story draft into a short-form story skeleton that the next scenario generator can split into scenes immediately.",
       'Return JSON only: {"story":"..."}',
-      "Keep the user's intent, events, and tone. Do not invent a different plot.",
-      "Rewrite into one compact, coherent paragraph or 3-5 short sentences.",
-      "Clarify protagonist, goal, conflict, key turning beat, and ending direction when the source already implies them.",
+      "Keep the user's intent, events, duration, audience, tone, and cast. Do not invent a different plot.",
+      "Write 2-5 short sentences or one short paragraph. Each sentence should map to one simple beat for later scene generation.",
+      "Write only visible actions, reactions, and immediate outcomes. Do not summarize with abstract planning language.",
+      "Short video logic is mandatory. Around 15 seconds means one core situation, minimal location changes, and about 3-4 action beats.",
+      "If the audience is infants, toddlers, or young kids, use very simple wording and concrete action-response phrasing only.",
+      "If the tone includes humor/comedy, include at least one specific funny mishap, mistake, reversal, or visual gag instead of saying it is humorous.",
+      "If style or world-setting information exists, include only one light visual-world hint that helps consistency. Do not turn it into full scene direction.",
+      "Forbidden abstract examples: deepens friendship, feels the joy of solving together, becomes emotional, enters a humorous situation, meaningful journey.",
       "Do not output scene numbers, markdown, bullet lists, or production instructions.",
       "Treat Topic as the episode title and Story as the real narrative source.",
       "Respect brand rules and avoid banned expressions when present.",
@@ -132,11 +139,16 @@ function buildSystemPrompt(language) {
     ].join(" ");
   }
   return [
-    "너는 사용자가 대충 적은 에피소드 이야기를 시나리오 생성용으로 더 또렷하게 정리하는 보조 AI다.",
+    "너는 사용자가 적은 초안을 다음 단계의 시나리오 생성기가 바로 씬으로 쪼갤 수 있는 짧은 영상용 이야기 뼈대로 재정리하는 보조 AI다.",
     '반드시 JSON만 반환한다. 형식: {"story":"..."}',
-    "사용자의 의도, 사건, 감정선을 유지하고 전혀 다른 줄거리를 새로 만들지 마라.",
-    "출력은 하나의 매끄러운 단락 또는 3~5개의 짧은 문장으로 정리한다.",
-    "원문에 이미 암시된 경우에만 주인공, 목표, 갈등, 전환점, 마무리 방향을 더 분명하게 정리한다.",
+    "사용자의 의도, 사건, 길이, 타겟, 톤, 등장 캐릭터 범위를 유지하고 전혀 다른 줄거리를 새로 만들지 마라.",
+    "출력은 2~5개의 짧은 문장 또는 하나의 짧은 단락으로 쓴다. 각 문장은 이후 시나리오의 한 비트로 바로 나눌 수 있어야 한다.",
+    "추상적인 기획서 문장 대신 눈에 보이는 행동, 즉각적인 반응, 바로 이어지는 결과로 쓴다.",
+    "짧은 영상 길이를 반드시 반영한다. 15초 안팎이면 한 가지 핵심 상황만 다루고, 장소 이동을 최소화하며, 3~4개의 행동 비트 정도만 허용한다.",
+    "시청 타겟이 영유아/어린이면 짧고 쉬운 말만 쓰고, 추상 감정 설명 대신 행동과 반응만 쓴다.",
+    "톤이 유머/코미디면 실제 코믹 상황 1개 이상을 구체적으로 쓴다. '유머러스한 상황에 처한다'처럼 설명으로 넘기지 마라.",
+    "스타일이나 세계관 정보가 있으면 비주얼 일관성에 도움이 되는 짧은 힌트만 1회 넣고, 장면 연출 지시문처럼 길게 쓰지 마라.",
+    "금지 예시: 우정을 더욱 깊게 다진다, 문제를 함께 해결하는 즐거움을 느낀다, 감동을 준다, 유머러스한 상황에 처한다, 의미 있는 여정.",
     "씬 번호, 마크다운, 불릿, 제작 지시문은 쓰지 않는다.",
     "주제는 에피소드 제목이고 실제 서사는 이야기 입력을 기준으로 정리한다.",
     "브랜드 규칙과 금지 표현이 있으면 반드시 반영한다.",
@@ -150,52 +162,63 @@ function buildUserPrompt(input) {
   const registeredCharacters = formatCharacterRoster(input.characters);
   const excludedCharacters = formatCharacterRoster(input.excludedCharacters);
   const tokenHintText = input.tokenHints.length ? input.tokenHints.join(", ") : "(none)";
+  const durationRule = describeDurationRule(input);
+  const audienceRule = describeAudienceRule(input);
+  const toneRule = describeToneRule(input);
+  const styleRule = describeStyleRule(input);
   if (input.language === "en") {
     return [
       `Topic: ${input.topic || "(none)"}`,
       `Story draft: ${input.story || "(none)"}`,
+      `Target duration: ${input.duration || "(none)"}s`,
+      `Duration compression rule: ${durationRule.en}`,
       `Registered characters: ${registeredCharacters || "(none)"}`,
       `Excluded characters: ${excludedCharacters || "(none)"}`,
       `Must preserve tokens exactly: ${tokenHintText}`,
       `Audience: ${input.target || "(none)"}`,
+      `Audience writing rule: ${audienceRule.en}`,
       `Genre: ${input.purposeCategory || "(none)"}`,
       `Genre tags: ${input.purposeTags.join(", ") || "(none)"}`,
       `Purpose: ${input.needs.join(", ") || "(none)"}`,
       `Tone: ${input.tones.join(", ") || "(none)"}`,
+      `Tone execution rule: ${toneRule.en}`,
       `Style: ${input.styles.join(", ") || "(none)"}`,
+      `Style/world hint rule: ${styleRule.en}`,
       `World setting: ${input.worldSetting || "(none)"}`,
       `Brand rules: ${input.brandRules.join(", ") || "(none)"}`,
       `Banned expressions: ${input.bannedExpressions.join(", ") || "(none)"}`,
+      "Output goal: a compressed action-first story skeleton that can be split into scenes without inventing a new plot."
     ].join("\n");
   }
   return [
     `주제: ${input.topic || "(없음)"}`,
     `이야기 초안: ${input.story || "(없음)"}`,
+    `목표 길이: ${input.duration || "(없음)"}초`,
+    `길이 압축 규칙: ${durationRule.ko}`,
     `등록 캐릭터: ${registeredCharacters || "(없음)"}`,
     `등장 금지 캐릭터: ${excludedCharacters || "(없음)"}`,
     `반드시 유지할 캐릭터 토큰: ${input.tokenHints.length ? input.tokenHints.join(", ") : "(없음)"}`,
     `시청 타겟: ${input.target || "(없음)"}`,
+    `타겟 서술 규칙: ${audienceRule.ko}`,
     `장르: ${input.purposeCategory || "(없음)"}`,
     `장르 태그: ${input.purposeTags.join(", ") || "(없음)"}`,
     `시청 목적: ${input.needs.join(", ") || "(없음)"}`,
     `톤: ${input.tones.join(", ") || "(없음)"}`,
+    `톤 실행 규칙: ${toneRule.ko}`,
     `스타일: ${input.styles.join(", ") || "(없음)"}`,
+    `스타일/세계관 힌트 규칙: ${styleRule.ko}`,
     `세계관/배경: ${input.worldSetting || "(없음)"}`,
     `브랜드 규칙: ${input.brandRules.join(", ") || "(없음)"}`,
     `금지 표현: ${input.bannedExpressions.join(", ") || "(없음)"}`,
+    "출력 목표: 다음 시나리오 생성 버튼이 새 줄거리를 상상하지 않아도 되도록, 행동 순서가 보이는 압축형 이야기 뼈대를 만든다."
   ].join("\n");
 }
 
 function buildFallbackStory(input) {
   const story = enforceCharacterScope(input.story, input);
   if (!story) return "";
-  if (/[.!?。！？]/.test(story)) return story;
-  const chunks = story
-    .split(/\n+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-  if (chunks.length > 1) return chunks.join(" ");
-  return story.replace(/\s+/g, " ").trim();
+  const beats = buildFallbackBeats(story, input);
+  return finalizeFallbackStory(beats);
 }
 
 function normalizeTextList(value) {
@@ -214,6 +237,19 @@ function sanitizeText(value) {
 
 function sanitizeStory(value) {
   return sanitizeText(value).replace(/\s+/g, " ").trim();
+}
+
+function sanitizeDuration(value) {
+  const text = String(value == null ? "" : value).trim();
+  if (!text) return "";
+  const match = text.match(/\d+/);
+  return match ? String(Math.max(1, Math.round(Number(match[0]) || 0))) : sanitizeText(text);
+}
+
+function normalizeDurationSeconds(value) {
+  const normalized = sanitizeDuration(value);
+  const sec = Number(normalized);
+  return Number.isFinite(sec) && sec > 0 ? sec : 0;
 }
 
 function normalizeCharacters(list) {
@@ -301,4 +337,192 @@ function enforceCharacterScope(story, input) {
 
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function describeDurationRule(input) {
+  const sec = Number(input?.durationSeconds || 0);
+  if (sec && sec <= 15) {
+    return {
+      ko: "15초 안팎으로 보고 한 가지 핵심 상황만 유지한다. 장소 이동은 최소화하고 3~4개의 짧은 행동 비트만 남긴다.",
+      en: "Treat it as roughly a 15-second video. Keep one core situation, minimize location changes, and limit it to about 3-4 short beats."
+    };
+  }
+  if (sec && sec <= 30) {
+    return {
+      ko: "30초 안팎으로 보고 핵심 상황 1개와 짧은 확장 1개만 허용한다. 장소는 1~2곳 안에서 정리한다.",
+      en: "Treat it as roughly a 30-second video. Keep one core situation plus one short expansion, usually within 1-2 locations."
+    };
+  }
+  if (sec && sec <= 45) {
+    return {
+      ko: "45초 안팎으로 보고 설정, 진행, 짧은 전환, 마무리까지 허용한다. 그래도 불필요한 우회 전개는 줄인다.",
+      en: "Treat it as roughly a 45-second video. Allow setup, development, a short turn, and closure, while still avoiding unnecessary detours."
+    };
+  }
+  return {
+    ko: "목표 길이에 맞춰 사건 수를 압축한다. 짧을수록 설명보다 행동 비트를 우선한다.",
+    en: "Compress the number of events to fit the target duration. The shorter the video, the more you should favor action beats over explanation."
+  };
+}
+
+function describeAudienceRule(input) {
+  const target = String(input?.target || "").toLowerCase();
+  if (/(영유아|유아|어린이|키즈|kid|kids|child|children|toddler|infant|preschool)/i.test(target)) {
+    return {
+      ko: "아주 짧고 쉬운 문장으로 쓴다. 복잡한 감정 해설 대신 누가 무엇을 하고 바로 어떻게 반응하는지만 쓴다.",
+      en: "Use very short, simple sentences. Do not explain abstract feelings; state only who does what and the immediate reaction."
+    };
+  }
+  return {
+    ko: "설명보다 행동 중심으로 쓰되, 필요한 맥락만 짧게 남긴다.",
+    en: "Stay action-first and keep only the context needed to understand the flow."
+  };
+}
+
+function describeToneRule(input) {
+  const tone = [input?.tones || [], input?.needs || []].flat().join(" ").toLowerCase();
+  if (/(유머|코미디|코믹|개그|humor|humour|comedy|comic|funny)/i.test(tone)) {
+    return {
+      ko: "실제로 웃길 수 있는 구체적 실수, 착각, 반전, 과장 반응 중 하나를 이야기 안에 넣는다.",
+      en: "Include a specific funny mistake, misunderstanding, reversal, or exaggerated reaction inside the story."
+    };
+  }
+  return {
+    ko: "선택된 톤이 실제 사건과 반응으로 드러나게 쓴다. 톤 이름만 설명하지 않는다.",
+    en: "Make the selected tone visible through events and reactions. Do not merely label the tone."
+  };
+}
+
+function describeStyleRule(input) {
+  const style = [input?.styles || [], input?.worldSetting || ""].flat().join(" ").toLowerCase();
+  if (/(3d|애니메이션|animation)/i.test(style)) {
+    return {
+      ko: "3D 애니메이션이면 재질감이나 색감 같은 짧은 세계 힌트만 한 번 넣는다. 예: 말랑한 도형, 파스텔 숲.",
+      en: "For 3D animation, add one brief world hint such as tactile texture or color mood. Example: soft shape characters, pastel forest."
+    };
+  }
+  return {
+    ko: "스타일은 한 줄짜리 시각 힌트 수준으로만 반영한다. 줄거리를 미술 설명으로 바꾸지 않는다.",
+    en: "Use style only as a one-line visual hint. Do not turn the story into art direction prose."
+  };
+}
+
+function buildFallbackBeats(story, input) {
+  const text = sanitizeStory(story);
+  const rawPieces = text
+    .split(/(?<=[.!?。！？])\s+|\s*(?:그리고|그러다|그때|이후|then|after that|suddenly|but)\s+/i)
+    .map((item) => simplifyAbstractPhrase(item))
+    .map((item) => item.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+  const limit = determineBeatLimit(input?.durationSeconds || 0);
+  let beats = rawPieces.slice(0, limit);
+
+  if (!beats.length) {
+    beats = [text];
+  }
+
+  if (Number(input?.durationSeconds || 0) <= 15 && beats.length > 1) {
+    beats = compressMultiLocationBeats(beats);
+  }
+
+  if (isYoungAudience(input) && beats.length) {
+    beats = beats.map((item) => simplifyForYoungAudience(item));
+  }
+
+  if (hasHumorTone(input) && !hasConcreteComedicBeat(beats.join(" "))) {
+    beats = appendHumorBeat(beats, input);
+  }
+
+  beats = appendStyleHint(beats, input);
+  return beats.slice(0, limit).map((item) => sanitizeStory(item)).filter(Boolean);
+}
+
+function finalizeFallbackStory(beats) {
+  const list = Array.isArray(beats) ? beats.filter(Boolean) : [];
+  if (!list.length) return "";
+  return list.join(" ");
+}
+
+function determineBeatLimit(durationSeconds) {
+  const sec = Number(durationSeconds || 0);
+  if (sec && sec <= 15) return 4;
+  if (sec && sec <= 30) return 5;
+  if (sec && sec <= 45) return 6;
+  return 5;
+}
+
+function simplifyAbstractPhrase(text) {
+  return String(text || "")
+    .replace(/우정을\s+(더욱\s+)?깊게\s+다지(?:며|고)/g, "서로 손을 맞잡고")
+    .replace(/문제를\s+함께\s+해결하는\s+즐거움을\s+느낀(?:다|다\.)/g, "함께 방법을 찾아 웃는다")
+    .replace(/유머러스한\s+상황에\s+처하(?:고|게\s+되고|게\s+된다|게\s+됐다|게\s+된다)/g, "발을 헛짚고 멈칫한다")
+    .replace(/감동(을|적인)?\s*(준다|느낀다)?/g, "")
+    .replace(/의미\s+있는\s+여정/g, "짧은 모험")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function compressMultiLocationBeats(beats) {
+  return beats.map((item, index) => {
+    if (index > 0) return item;
+    return item.replace(/([가-힣A-Za-z0-9]+,\s*){2,}[가-힣A-Za-z0-9]+\s*(을|를)\s*(돌아다니며|오가며|찾아다니며)/g, "주변을 급히 살피며");
+  });
+}
+
+function isYoungAudience(input) {
+  return /(영유아|유아|어린이|키즈|kid|kids|child|children|toddler|infant|preschool)/i.test(String(input?.target || ""));
+}
+
+function simplifyForYoungAudience(text) {
+  return String(text || "")
+    .replace(/서로\s+도와\s+문제를\s+해결한다/g, "같이 해본다")
+    .replace(/함께\s+방법을\s+찾아\s+웃는다/g, "같이 보고 웃는다")
+    .replace(/즐거움을\s+느낀다/g, "좋아한다")
+    .replace(/더욱\s+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasHumorTone(input) {
+  return /(유머|코미디|코믹|개그|humor|humour|comedy|comic|funny)/i.test(
+    [input?.tones || [], input?.needs || [], input?.story || ""].flat().join(" ")
+  );
+}
+
+function hasConcreteComedicBeat(text) {
+  return /(놀라|미끄러|쿵|넘어지|헛짚|착각|실수|웃음|킥킥|빙글|덜컥|펑|surpris|slip|trip|oops|mistake|bump|laugh|giggle)/i.test(String(text || ""));
+}
+
+function appendHumorBeat(beats, input) {
+  const next = Array.isArray(beats) ? beats.slice() : [];
+  const actor = resolveFallbackActor(input);
+  if (input?.language === "en") {
+    next.push(`${actor} makes a small mistake, freezes for a beat, and then laughs with the others.`);
+  } else {
+    next.push(`${actor} 잠깐 착각해 멈칫하고, 곧 서로를 보며 웃는다.`);
+  }
+  return next;
+}
+
+function resolveFallbackActor(input) {
+  const selected = normalizeCharacters(input?.characters);
+  if (selected.length === 1) return selected[0].token;
+  if (selected.length === 2) return `${selected[0].token}와 ${selected[1].token}`;
+  if (selected.length > 2) return `${selected[0].token}와 친구들`;
+  return input?.language === "en" ? "The characters" : "주인공";
+}
+
+function appendStyleHint(beats, input) {
+  const next = Array.isArray(beats) ? beats.slice() : [];
+  if (!next.length) return next;
+  const styleText = [normalizeTextList(input?.styles).join(" "), sanitizeText(input?.worldSetting)]
+    .join(" ")
+    .trim();
+  if (!styleText) return next;
+  if (/(3d|애니메이션|animation)/i.test(styleText) && !/(말랑|파스텔|비비드|soft|pastel|bright)/i.test(next[0])) {
+    next[0] = input?.language === "en"
+      ? `${next[0]} The world feels soft and colorful like a simple 3D animation.`
+      : `${next[0]} 말랑한 3D 장난감 같은 색감이 함께 느껴진다.`;
+  }
+  return next;
 }
