@@ -1003,6 +1003,8 @@ async function generateScenarioScenes(input) {
     const spec = buildScenarioSpec({
       lang: input.lang,
       topic: chunkText,
+      episodeTitle: input.episodeTitle || "",
+      story: String(input.story || ""),
       target: input.target,
       purposeCategory: input.purposeCategory,
       purposeTags: input.purposeTags,
@@ -1022,6 +1024,8 @@ async function generateScenarioScenes(input) {
     const basePrompt = buildUserPrompt({
       lang: input.lang,
       topic: chunkText,
+      episodeTitle: input.episodeTitle || "",
+      story: String(input.story || ""),
       target: input.target,
       purposeCategory: input.purposeCategory,
       purposeTags: input.purposeTags,
@@ -1087,6 +1091,8 @@ async function generateScenarioScenes(input) {
         validationFallbackChunks += 1;
         finalScenes = fallbackScenesV2({
           topic: chunkText,
+          episodeTitle: input.episodeTitle || "",
+          story: String(input.story || ""),
           target: input.target,
           duration: String(chunkDuration),
           sceneCount: chunkSceneCount,
@@ -3818,6 +3824,8 @@ function fallbackScenes({ topic, target, duration, sceneCount, narrationEnabled,
 
 function fallbackScenesV2({
   topic,
+  episodeTitle = "",
+  story = "",
   target,
   duration,
   sceneCount,
@@ -3842,6 +3850,8 @@ function fallbackScenesV2({
   const scenarioSpec = spec || buildScenarioSpec({
     lang,
     topic: t,
+    episodeTitle: episodeTitle || "",
+    story: story || t,
     target,
     purposeCategory,
     purposeTags,
