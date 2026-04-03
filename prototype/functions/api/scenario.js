@@ -1131,7 +1131,7 @@ async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, opt
 async function requestScenarioChunk(apiKey, sys, userPrompt) {
   const payload = {
     model: "claude-sonnet-4-6",
-    max_tokens: 1500,
+    max_tokens: 2000,
     system: sys,
     messages: [
       { role: "user", content: userPrompt },
@@ -2083,16 +2083,9 @@ function shapeScenesFromModel(rawScenes = [], options = {}) {
   });
 }
 
-function fitScenesToRequestedCount(scenes = [], requestedCount = 1, fallbackInput = {}) {
+function fitScenesToRequestedCount(scenes = [], requestedCount = 1) {
   const limit = Math.max(1, Number(requestedCount) || 1);
-  const baseScenes = (Array.isArray(scenes) ? scenes : []).slice(0, limit);
-  if (baseScenes.length >= limit) return baseScenes;
-
-  const fallbackScenes = fallbackScenesV2(fallbackInput).slice(0, limit);
-  if (!baseScenes.length) return fallbackScenes;
-
-  const fillers = fallbackScenes.slice(baseScenes.length);
-  return baseScenes.concat(fillers).slice(0, limit);
+  return (Array.isArray(scenes) ? scenes : []).slice(0, limit);
 }
 
 function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
@@ -2131,7 +2124,10 @@ function alignScenesToScenarioSpec(scenes = [], spec = {}, options = {}) {
       defaultSpeaker: options.defaultSpeaker || "@narrator",
       forceHumor: !!spec.signals?.humor && blueprint.role === "repeat",
     }), estSec, options.lang);
-    const visual = mergeVisual(scene.visual, hints.visual, Object.assign({}, cameraContext, { idx, spec }));
+    const aiVisual = String(scene.visual || "").trim();
+    const visual = aiVisual.length > 30
+      ? ensureCameraDirectionInVisual(aiVisual, Object.assign({}, cameraContext, { idx, spec }))
+      : mergeVisual(aiVisual, hints.visual, Object.assign({}, cameraContext, { idx, spec }));
     return shapeSceneByMode({
       id: scene.id != null ? scene.id : idx + 1,
       title: blueprint.title || scene.title || `Scene ${idx + 1}`,
