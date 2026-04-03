@@ -1313,9 +1313,20 @@ function buildScenarioSpec(input = {}) {
     requiredOutputsKo.push("학습 대상 제시, 따라 하기 또는 반복, 마지막 정리/복습이 드러나야 한다.");
     requiredOutputsEn.push("Show teaching, follow-along or repetition, and a final recap.");
   }
+  const storyText = String(input.story || "").trim();
+  const topicText = String(input.topic || input.episodeTitle || "").trim();
+  const hasNarrativeStory = storyText.length > 50 && storyText !== topicText;
+
   if (signals.play) {
-    requiredOutputsKo.push("시청자가 함께 말하거나 움직일 수 있는 참여 요소가 포함되어야 한다.");
-    requiredOutputsEn.push("Include at least one audience participation moment through speech or movement.");
+    if (hasNarrativeStory) {
+      requiredOutputsKo.push("이야기에 제시된 사건·행동을 씬 순서대로 시각화한다. 캐릭터들의 대사와 행동은 이야기에 나온 것을 따른다.");
+      requiredOutputsEn.push("Visualize the events and actions in the story scene by scene. Character dialogue and actions must follow the story as written.");
+      avoidOutputsKo.push("카메라를 향한 직접 초대, '같이 해볼까?' 등 시청자 참여 요청, 이야기와 무관한 튜토리얼·참여 포맷");
+      avoidOutputsEn.push("Direct camera address, audience participation prompts, tutorial formats unrelated to the story");
+    } else {
+      requiredOutputsKo.push("시청자가 함께 말하거나 움직일 수 있는 참여 요소가 포함되어야 한다.");
+      requiredOutputsEn.push("Include at least one audience participation moment through speech or movement.");
+    }
   }
   if (signals.song) {
     requiredOutputsKo.push("리듬감 있는 반복 구절이나 후렴 느낌의 문장을 포함해야 한다.");
@@ -1365,6 +1376,7 @@ function buildScenarioSpec(input = {}) {
     signals,
     profile,
     continuity,
+    hasNarrativeStory,
   });
 
   return {
@@ -1802,15 +1814,20 @@ function uniqueStrings(list = []) {
   return Array.from(new Set((Array.isArray(list) ? list : []).map((item) => String(item || "").trim()).filter(Boolean)));
 }
 
-function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signals, profile = {}, continuity = {} }) {
+function buildSceneBlueprint({ lang = "ko", sceneCount = 4, topicProfile, signals, profile = {}, continuity = {}, hasNarrativeStory = false }) {
   const count = Math.max(1, Number(sceneCount) || 1);
-  let roles = fitRoleSequence(profile.roles || [], count, "close");
-  if (!roles.length) {
-    if (signals.learning && signals.song) roles = fitRoleSequence(["hook", "teach", "sing", "repeat", "recap"], count, "recap");
-    else if (signals.learning) roles = fitRoleSequence(["hook", "teach", "practice", "repeat", "recap"], count, "recap");
-    else if (signals.play) roles = fitRoleSequence(["hook", "invite", "play", "play", "close"], count, "close");
-    else if (signals.informative) roles = fitRoleSequence(["hook", "explain", "example", "summary"], count, "summary");
-    else roles = fitRoleSequence(["hook", "develop", "reinforce", "close"], count, "close");
+  let roles;
+  if (hasNarrativeStory) {
+    roles = fitRoleSequence(["setup", "inciting", "turn", "payoff", "close"], count, "close");
+  } else {
+    roles = fitRoleSequence(profile.roles || [], count, "close");
+    if (!roles.length) {
+      if (signals.learning && signals.song) roles = fitRoleSequence(["hook", "teach", "sing", "repeat", "recap"], count, "recap");
+      else if (signals.learning) roles = fitRoleSequence(["hook", "teach", "practice", "repeat", "recap"], count, "recap");
+      else if (signals.play) roles = fitRoleSequence(["hook", "invite", "play", "play", "close"], count, "close");
+      else if (signals.informative) roles = fitRoleSequence(["hook", "explain", "example", "summary"], count, "summary");
+      else roles = fitRoleSequence(["hook", "develop", "reinforce", "close"], count, "close");
+    }
   }
   const arcPlan = buildNarrativeArcPlan(count, lang);
   const closingRole = roles[roles.length - 1] || "close";
