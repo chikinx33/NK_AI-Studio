@@ -1196,7 +1196,7 @@ async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, opt
 async function requestScenarioChunk(apiKey, sys, userPrompt) {
   const payload = {
     model: "claude-sonnet-4-6",
-    max_tokens: 2048,
+    max_tokens: 3500,
     system: sys,
     messages: [
       { role: "user", content: userPrompt },
