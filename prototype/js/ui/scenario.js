@@ -848,6 +848,16 @@
     }
   };
 
+  const updateStoryToggleButtonUi = (view) => {
+    const aiBtn = document.querySelector('[data-action="scenario-structure-story"]');
+    if (!aiBtn) return;
+    const isUser = String(view || '').trim() === 'user';
+    const nextLabel = isUser ? 'AI 글 보기' : '원본 보기';
+    aiBtn.setAttribute('aria-label', nextLabel);
+    aiBtn.setAttribute('title', nextLabel);
+    aiBtn.classList.toggle('is-toggle', true);
+  };
+
   const renderOverviewSelects = (state = {}) => {
     const uiText = getScenarioUiText();
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
@@ -1528,6 +1538,27 @@
     const organizeStoryDraft = async (triggerBtn) => {
       const storyField = form.story || document.getElementById('scenario-story-input');
       if (!storyField) return;
+      const hasAi = String(storyField.dataset.aiStory || '').trim().length > 0;
+      if (hasAi) {
+        const currentView = String(storyField.dataset.view || 'ai');
+        if (currentView === 'ai') {
+          const original = String(storyField.dataset.userStory || '');
+          storyField.value = original;
+          storyField.dataset.view = 'user';
+          cacheStorySelection(storyField);
+          syncOverviewPayload();
+          updateStoryToggleButtonUi('user');
+          return;
+        } else {
+          const aiVersion = String(storyField.dataset.aiStory || '');
+          storyField.value = aiVersion;
+          storyField.dataset.view = 'ai';
+          cacheStorySelection(storyField);
+          syncOverviewPayload();
+          updateStoryToggleButtonUi('ai');
+          return;
+        }
+      }
       const payload = collectPayload();
       const rawStory = String(payload.story || '').trim();
       if (!rawStory) {
@@ -1545,9 +1576,13 @@
         const result = await NK.api.storyStructure(Object.assign({}, payload, { language: getRuntimeLang() }));
         const nextStory = sanitizeText(result?.story || rawStory);
         if (nextStory) {
+          storyField.dataset.userStory = rawStory;
+          storyField.dataset.aiStory = nextStory;
+          storyField.dataset.view = 'ai';
           storyField.value = nextStory;
           cacheStorySelection(storyField);
           syncOverviewPayload();
+          updateStoryToggleButtonUi('ai');
         }
       } catch (err) {
         alert(getScenarioText('scenario_story_structure_failed', '이야기 정리 실패') + ': ' + (err?.message || err));
@@ -1604,6 +1639,12 @@
       if (!target) return;
       if (target.id === 'duration-custom-input') {
         syncDurationInputs('custom');
+      }
+      if (target.name === 'story') {
+        const storyField = target;
+        const view = String(storyField.dataset.view || '').trim();
+        if (view === 'user') storyField.dataset.userStory = String(storyField.value || '');
+        else if (view === 'ai') storyField.dataset.aiStory = String(storyField.value || '');
       }
       if (target.id === 'duration-custom-input' || target.name === 'topic' || target.name === 'story') syncOverviewPayload();
     });
