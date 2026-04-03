@@ -1382,9 +1382,13 @@ a.btn-primary:active {
 
 .scenario-form .scenario-form-label-row {
   display: grid;
-  grid-template-columns: max-content max-content;
+  grid-template-columns: auto auto;
+  grid-template-areas:
+    "label label"
+    "ai toggle";
   align-items: center;
-  gap: 6px;
+  column-gap: 6px;
+  row-gap: 6px;
 }
   min-width: 100px;
   flex-shrink: 0;
@@ -1392,7 +1396,17 @@ a.btn-primary:active {
 
 .scenario-form .scenario-form-label-row label {
   min-width: 0;
-  grid-column: 1 / -1;
+  grid-area: label;
+}
+
+.scenario-form .scenario-form-label-row .scenario-story-ai-btn {
+  grid-area: ai;
+  justify-self: start;
+}
+
+.scenario-form .scenario-form-label-row .scenario-story-toggle-btn {
+  grid-area: toggle;
+  justify-self: start;
 }
 
 [data-theme="light"] .scenario-form label {
