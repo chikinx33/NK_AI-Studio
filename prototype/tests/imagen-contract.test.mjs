@@ -41,7 +41,8 @@ test('imagen source builds multi-turn conversational contents from prior prompts
 
 test('imagen source strengthens image-to-image prompts for multi-reference editing', () => {
   const source = readImagenSource();
-  assert.match(source, /const cameraTargetMode = normalizeCameraTargetMode/);
+  assert.match(source, /normalizeCameraTargetMode/);
+  assert.match(source, /(cameraTargetModeIncoming|const\s+cameraTargetMode\s*=)/);
   assert.match(source, /Reconstruct the entire frame from a new camera viewpoint\./);
   assert.match(source, /Rotate the whole scene perspective together, including the background, environment, depth, horizon, and subject placement\./);
   assert.match(source, /Rotate or re-pose only the main foreground subject relative to the camera\./);

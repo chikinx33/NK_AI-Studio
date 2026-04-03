@@ -21,7 +21,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const storageService = normalizeStorageService(body?.storageService || body?.service);
     const generationMode = normalizeGenerationMode(body?.generationMode || body?.mode, incomingReferenceImages.length > 0);
     const generationStyle = normalizeGenerationStyle(body?.generationStyle || body?.conversationMode);
-    const cameraTargetMode = normalizeCameraTargetMode(body?.cameraTargetMode || body?.cameraTarget || body?.cameraScope);
+    const cameraTargetModeIncoming = String(body?.cameraTargetMode || body?.cameraTarget || body?.cameraScope || "").trim();
+    const cameraTargetModeNorm = normalizeCameraTargetMode(cameraTargetModeIncoming);
+    const cameraTargetMode = (generationMode === "image-to-image" && !cameraTargetModeIncoming)
+      ? "subject"
+      : cameraTargetModeNorm;
     const sessionId = String(body?.sessionId || body?.session || "default").trim();
 
     if (!prompt) {

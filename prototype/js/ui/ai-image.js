@@ -2655,6 +2655,7 @@
       generationMode: state.mode,
       generationStyle: normalizeGenerationStyle(state.generationStyle),
       imageSize: chosenSize,
+      cameraTargetMode: (state.mode === 'image-to-image') ? 'subject' : undefined,
       referenceImages: state.mode === 'image-to-image' && getSourceImages().length
         ? orderedSourceImages().map(function (item, index) {
           return {
