@@ -11,7 +11,7 @@ function loadScenarioHelpers() {
     .replace('export function calculateSceneCountForDuration', 'function calculateSceneCountForDuration')
     .replace('export async function onRequestPost', 'async function onRequestPost')
     .replace('export async function onRequestOptions', 'async function onRequestOptions');
-  source += '\nmodule.exports = { calculateSceneCountForDuration, normalizeKnowledgeHubInput, buildUserPrompt, buildScenarioSpec, validateScenarioAgainstSpec, alignScenesToScenarioSpec, getSpeechCharLimit };';
+  source += '\nmodule.exports = { calculateSceneCountForDuration, normalizeKnowledgeHubInput, buildUserPrompt, buildSystemPromptKo, buildScenarioSpec, validateScenarioAgainstSpec, alignScenesToScenarioSpec, getSpeechCharLimit };';
   const context = vm.createContext({
     console,
     setTimeout,
@@ -88,6 +88,62 @@ test('scenario prompt separates episode topic title from story body', () => {
 
   assert.match(prompt, /주제: 네모와 세모의 첫 모험/);
   assert.match(prompt, /이야기: 네모와 세모가 숲에서 길을 잃었다가 서로 힘을 합쳐 집으로 돌아오는 이야기/);
+});
+
+test('system prompt includes audience-reaction and visual craft rules', () => {
+  const helpers = loadScenarioHelpers();
+  const prompt = helpers.buildSystemPromptKo(4, 15, {
+    requiredOutputsKo: ['테스트 규칙을 따른다.'],
+    avoidOutputsKo: ['범용 장면을 피한다.']
+  });
+
+  assert.match(prompt, /\[씬 작성 핵심 원칙\]/);
+  assert.match(prompt, /각 씬은 반드시 관객 반응 목표 1개/);
+  assert.match(prompt, /sceneIntent는 이 씬을 본 관객이 느끼거나 행동하는 구체적 반응/);
+  assert.match(prompt, /visual 작성법:/);
+  assert.match(prompt, /\[생성 후 자체 검증 - 모든 씬에 적용\]/);
+});
+
+test('user prompt adds genre-specific scene progression guide for advertising', () => {
+  const helpers = loadScenarioHelpers();
+  const prompt = helpers.buildUserPrompt({
+    lang: 'ko',
+    topic: '신형 텀블러 런칭',
+    target: '성인',
+    purposeCategory: '광고',
+    purposeTags: '제품 광고, 디지털 캠페인',
+    needs: '행동 유도',
+    toneText: '세련',
+    tones: '세련',
+    styleText: '실사',
+    styles: '실사',
+    manualDirectives: '',
+    knowledgeHub: helpers.normalizeKnowledgeHubInput({}, { characterGenerationDisabled: true }),
+    aspectRatio: '9:16',
+    duration: '15',
+    characterGenerationDisabled: true,
+    narrationEnabled: true,
+    dubbingEnabled: false,
+    characters: [],
+    spec: helpers.buildScenarioSpec({
+      lang: 'ko',
+      topic: '신형 텀블러 런칭',
+      target: '성인',
+      purposeCategory: '광고',
+      purposeTags: '제품 광고',
+      needs: '행동 유도',
+      toneText: '세련',
+      tones: '세련',
+      styleText: '실사',
+      styles: '실사',
+      duration: '15',
+      sceneCount: 4
+    })
+  });
+
+  assert.match(prompt, /\[장르별 씬 전개 규칙\]/);
+  assert.match(prompt, /Hook\(1-2초\)/);
+  assert.match(prompt, /마지막 씬에 명확한 행동 유도 1개만/);
 });
 
 test('scenario spec turns learning-play-humor overview into hard signals and blueprint', () => {
@@ -171,6 +227,7 @@ test('alignment step repairs generic scenes toward overview-fit structure', () =
   assert.match(combined, /다시|한 번 더/);
   assert.match(combined, /실수|다시/);
   assert.ok(aligned.every((scene) => scene.sceneIntent && scene.sceneIntent !== scene.visual));
+  assert.ok(aligned.every((scene) => /관객이|시청자가/.test(scene.sceneIntent)));
   assert.ok(aligned.every((scene) => scene.sceneLocation));
   assert.ok(new Set(aligned.map((scene) => scene.sceneLocation)).size > 1);
   assert.ok(aligned.every((scene) => scene.backgroundStyle));
@@ -568,6 +625,7 @@ test('validation fails abrupt location jumps and abstract visuals', () => {
   const failedKeys = validation.failed.map((row) => row.key);
 
   assert.equal(validation.passed, false);
+  assert.ok(failedKeys.includes('scene_intent_reaction'));
   assert.ok(failedKeys.includes('visual_concreteness') || failedKeys.includes('setting_anchor'));
   assert.ok(failedKeys.includes('setting_continuity'));
 });

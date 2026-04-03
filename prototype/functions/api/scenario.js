@@ -689,6 +689,25 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
   const required = (spec.requiredOutputsKo || []).map((item) => `- ${item}`).join("\n") || "- 개요의 핵심 의도를 직접 드러낸다.";
   const avoid = (spec.avoidOutputsKo || []).map((item) => `- ${item}`).join("\n") || "- 개요와 무관한 범용 장면 나열";
   return `너는 NK_Studio의 프리프로덕션 시나리오 작성 엔진이다.
+[씬 작성 핵심 원칙]
+1. 모든 씬은 보여주기로만 구성한다. 설명하지 않는다.
+- 금지: "슬픈 분위기의 공간"
+- 허용: "빈 식탁 위에 식은 커피 한 잔, 김이 사라진 상태"
+2. 각 씬은 반드시 관객 반응 목표 1개를 가진다.
+- 금지: "제품을 소개한다", "정보를 전달한다"
+- 허용: "관객이 '저게 뭐지?' 하고 시선을 멈춘다"
+- 허용: "관객이 '나도 저런 적 있는데' 하고 공감한다"
+3. visual에는 카메라에 실제로 찍히는 것만 쓴다.
+- 반드시 포함: 구체적 장소, 프레임 안에 보이는 사물, 인물의 물리적 행동, 카메라 앵글/움직임
+- 절대 금지 표현: "~한 느낌", "~적인 분위기", "아름다운", "감동적인", "화려한", "따뜻한 톤", "세련된", "역동적인", "인상적인", "드라마틱한", "감성적인", "몽환적인"
+4. 씬 간 연결 규칙:
+- 각 씬의 visual 첫 문장은 이전 씬의 마지막 상태와 연결되어야 한다.
+- Scene 2의 시작은 Scene 1의 끝에서 자연스럽게 이어지는 화면이어야 한다.
+- 점프컷이 필요하면 시간/장소 전환을 명시적으로 드러낸다. 예: "3시간 후, 같은 장소", "컷 전환: 실내→야외"
+5. estSec과 내용 밀도를 맞춘다.
+- 2~3초 씬: 행동 1개 또는 반응 1개만
+- 4~5초 씬: 행동 1개 + 환경 디테일 1개
+- 6~7초 씬: 짧은 동작 시퀀스 또는 대화 1마디 + 반응
 반드시 JSON만 반환한다.
 응답 형식: {"scenes":[...]}.
 각 scene에는 id, estSec, sceneIntent, sceneLocation, visual은 항상 포함한다.
@@ -703,14 +722,30 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
 브랜드 톤&매너와 개요 톤이 함께 있으면 브랜드 톤&매너를 기본 화법으로 유지하고, 개요 톤은 이번 영상의 분위기와 감정 강도에만 반영한다.
 충돌 시 우선순위는 추가 지시사항, 브랜드 규칙, 금지 표현, 브랜드 톤&매너, 개요 톤 순서다.
 사용자 추가 지시사항과 브랜드 규칙, 금지 표현은 반드시 우선 적용한다.
-sceneIntent는 씬의 역할만 짧게 쓰고, sceneLocation은 그 씬이 펼쳐지는 구체 공간만 쓴다. visual에는 화면에 실제로 보일 내용만 쓴다.
-각 visual에는 반드시 1) 공간/장소 2) 배경 요소 3) 캐릭터/대상 행동 4) 프롭/오브젝트 5) 카메라 연출(샷 크기, 앵글, 무빙, 구도)을 함께 포함한다.
-각 visual에서 "장면", "분위기", "구성", "보여 주는 장면" 같은 추상 문장만 쓰는 것을 금지한다.
+sceneIntent는 이 씬을 본 관객이 느끼거나 행동하는 구체적 반응으로 쓴다.
+- 금지: "제품의 장점을 보여준다", "감정을 전달한다", "브랜드를 인지시킨다"
+- 허용: "관객이 화면 속 물체에 시선을 고정한다", "관객이 '어떻게 되는 거지?' 하고 다음 장면을 기대한다", "관객이 주인공의 손떨림을 보고 긴장감을 느낀다"
+visual 작성법:
+- 한 문단, 3~5문장으로 쓴다.
+- 문장 1: 장소와 프레임 범위
+- 문장 2: 프레임 안에 보이는 사물/인물 배치
+- 문장 3: 이 씬에서 일어나는 물리적 행동
+- 문장 4: 카메라
+- 문장 5(선택): 조명/시간대
+- 검증: 이 visual을 읽고 촬영감독이 바로 카메라를 세팅할 수 있어야 한다. 불가능하면 다시 쓴다.
 명시적인 장소 전환이 없는 한 모든 씬은 같은 기본 배경/장소를 유지해야 한다.
 다음 결과 조건을 반드시 만족한다:
 ${required}
 다음 실패 패턴을 피한다:
 ${avoid}
+[생성 후 자체 검증 - 모든 씬에 적용]
+아래 항목 중 하나라도 실패하면 해당 씬을 다시 작성한다.
+□ visual을 읽고 촬영감독이 즉시 카메라를 세팅할 수 있는가?
+□ sceneIntent가 관객의 구체적 반응으로 작성되었는가?
+□ 금지 표현(~한 느낌, ~적인 분위기, 아름다운, 감동적인 등)이 없는가?
+□ 이전 씬과 시각적으로 연결되는가? (첫 씬 제외)
+□ estSec 길이에 맞는 내용 밀도인가? (3초 씬에 행동 3개 금지)
+□ 이 씬을 빼면 전체 흐름에 구멍이 생기는가? 안 생기면 삭제한다.
 마크다운/설명 문장 없이 JSON만 출력한다.`;
 }
 
@@ -718,6 +753,25 @@ function buildSystemPromptEn(sceneCount, duration, spec = {}) {
   const required = (spec.requiredOutputsEn || []).map((item) => `- ${item}`).join("\n") || "- Make the overview intent explicit in the scene structure.";
   const avoid = (spec.avoidOutputsEn || []).map((item) => `- ${item}`).join("\n") || "- Generic scenes that only loosely mention the topic";
   return `You are NK_Studio's pre-production scenario engine.
+[Core Scene Writing Principles]
+1. Build every scene through visible evidence only. Do not explain.
+- Forbidden: "a sad atmosphere"
+- Allowed: "a cold cup of coffee sits on an empty table, no steam left"
+2. Every scene must have exactly one audience reaction goal.
+- Forbidden: "introduce the product", "deliver information"
+- Allowed: "the viewer stops and thinks 'what is that?'"
+- Allowed: "the viewer thinks 'that happened to me too'"
+3. Write only what the camera can literally capture in visual.
+- Must include: concrete place, visible objects, physical action, camera angle/movement
+- Forbidden phrases: "feels like", "atmospheric", "beautiful", "touching", "flashy", "warm tone", "stylish", "dynamic", "impressive", "dramatic", "emotional", "dreamlike"
+4. Scene linkage rules:
+- The first sentence of each visual should connect to the ending state of the previous scene.
+- Scene 2 should begin from where Scene 1 visually ends.
+- If a jump cut is needed, mark the time/place change explicitly. Example: "3 hours later, same place", "Cut transition: indoors to outdoors"
+5. Match estSec to content density.
+- 2-3 seconds: one action or one reaction only
+- 4-5 seconds: one action plus one environmental detail
+- 6-7 seconds: a short motion sequence or one spoken line plus a reaction
 Return JSON only.
 Output format: {"scenes":[...]}.
 Each scene must include id, estSec, sceneIntent, sceneLocation, and visual.
@@ -732,15 +786,99 @@ Use style only for visual look, texture, lighting, and color. Do not let style r
 If both are present, keep the brand tone and manner as the base speaking style, and use the overview tone only to adjust this video's mood and emotional intensity.
 Resolve conflicts in this order: manual directives, brand rules, banned expressions, brand tone and manner, then overview tone.
 Treat user directives, brand rules, and banned expressions as mandatory constraints.
-sceneIntent should state the scene purpose briefly, sceneLocation should name the concrete sub-space for that scene, and visual should describe only what is concretely on screen.
-Every visual must explicitly include 1) location/space 2) background details 3) subject action 4) props/objects 5) camera direction with shot size, angle, movement, and framing.
-Do not write abstract visuals such as "a scene that shows..." or "a playful mood."
+sceneIntent must describe the concrete audience reaction this scene should trigger.
+- Forbidden: "show the product's strengths", "deliver emotion", "build brand awareness"
+- Allowed: "the viewer locks onto the object on screen", "the viewer expects the next scene", "the viewer feels tension from the trembling hand"
+visual writing method:
+- Write one paragraph with 3 to 5 sentences.
+- Sentence 1: place and framing range
+- Sentence 2: visible placement of people/objects
+- Sentence 3: physical action happening in the scene
+- Sentence 4: camera direction
+- Sentence 5 optional: lighting or time of day
+- Test: a cinematographer should be able to set the camera immediately after reading it.
 Keep the same base setting across scenes unless a location transition is explicitly shown.
 The output must satisfy:
 ${required}
 Avoid these failure patterns:
 ${avoid}
+[Self-Check After Generation - Apply To Every Scene]
+Rewrite the scene if any check fails.
+□ Can a cinematographer set the camera immediately from the visual?
+□ Is sceneIntent written as a concrete audience reaction?
+□ Are forbidden phrases absent?
+□ Does it visually connect to the previous scene? (except scene 1)
+□ Does content density fit estSec?
+□ If this scene is removed, does the full flow break? If not, remove it.
 No markdown, no extra explanation.`;
+}
+
+function buildGenreProgressionGuide(input = {}) {
+  const joined = [
+    input.purposeCategory,
+    input.purposeTags,
+    input.needs,
+    input.topic,
+    input.story,
+  ].filter(Boolean).join(" ");
+  const isKo = (input.lang || "ko") !== "en";
+  const matches = {
+    ad: /광고|(^|[^a-z])ad([^a-z]|$)|advert/i.test(joined),
+    news: /뉴스|news/i.test(joined),
+    documentary: /다큐|다큐멘터리|documentary|docu/i.test(joined),
+    drama: /드라마|영화|극영화|시네마|drama|film|movie/i.test(joined),
+  };
+  if (!Object.values(matches).some(Boolean)) return "";
+
+  const blocks = [isKo ? "[장르별 씬 전개 규칙]" : "[Genre-Specific Scene Progression Rules]"];
+  if (matches.ad) {
+    blocks.push(isKo
+      ? `장르가 "광고"인 경우:
+- 전체 5단계: Hook(1-2초) -> 문제제시(2-3초) -> 해결등장(2-3초) -> 증거/체험(3-5초) -> CTA(2-3초)
+- 첫 씬은 반드시 시각적 충격 또는 의외성으로 시작
+- 마지막 씬에 명확한 행동 유도 1개만`
+      : `If the genre is "advertising":
+- Use 5 stages overall: Hook (1-2s) -> Problem (2-3s) -> Solution appears (2-3s) -> Proof/experience (3-5s) -> CTA (2-3s)
+- The first scene must begin with visual surprise or unexpected contrast
+- The last scene should contain only one clear call to action`);
+  }
+  if (matches.news) {
+    blocks.push(isKo
+      ? `장르가 "뉴스"인 경우:
+- 전체 5단계: 핵심팩트(3-5초) -> 배경설명(5-7초) -> 현장(5-7초) -> 전문가/반응(5-7초) -> 정리(3-5초)
+- 감정 표현 최소화, 사실과 수치 중심
+- 모든 씬에 정보 1개씩 배치`
+      : `If the genre is "news":
+- Use 5 stages overall: Key fact (3-5s) -> Background (5-7s) -> On-site view (5-7s) -> Expert/reaction (5-7s) -> Wrap-up (3-5s)
+- Minimize emotion and prioritize facts and numbers
+- Place one information unit in every scene`);
+  }
+  if (matches.documentary) {
+    blocks.push(isKo
+      ? `장르가 "다큐멘터리"인 경우:
+- 전체 5단계: 관찰(3-5초) -> 맥락(5-7초) -> 깊이(7-10초) -> 전환점(5-7초) -> 여운(3-5초)
+- 관찰 -> 이해 -> 감정 순서 유지
+- 현실 소재 기반, 연출 티가 나지 않게`
+      : `If the genre is "documentary":
+- Use 5 stages overall: Observation (3-5s) -> Context (5-7s) -> Depth (7-10s) -> Turning point (5-7s) -> Aftertaste (3-5s)
+- Keep the order observation -> understanding -> emotion
+- Stay grounded in real-world material without obvious staging`);
+  }
+  if (matches.drama) {
+    blocks.push(isKo
+      ? `장르가 "드라마/영화"인 경우:
+- 전체 5단계: 일상(3-5초) -> 사건(3-5초) -> 갈등심화(5-7초) -> 선택(3-5초) -> 변화(3-5초)
+- 캐릭터의 구체적 행동으로 감정 표현
+- 대사는 최소화, 행동과 시선으로 이야기 전달`
+      : `If the genre is "drama/film":
+- Use 5 stages overall: Everyday state (3-5s) -> Incident (3-5s) -> Conflict deepens (5-7s) -> Choice (3-5s) -> Change (3-5s)
+- Show emotion through concrete character action
+- Minimize dialogue and let action and gaze carry the story`);
+  }
+  blocks.push(isKo
+    ? "위 단계는 가이드이며, 목표 길이에 맞춰 씬 수와 각 단계 배분을 조절한다."
+    : "These stages are guides. Adjust scene count and beat allocation to the target duration.");
+  return blocks.join("\n");
 }
 
 function buildUserPrompt(input) {
@@ -750,6 +888,7 @@ function buildUserPrompt(input) {
   const modeInstruction = buildModePrompt(input);
   const specText = formatScenarioSpecForPrompt(input.spec);
   const blueprintText = formatBlueprintForPrompt(input.spec);
+  const genreGuide = buildGenreProgressionGuide(input);
   const characterModeInstruction = input.characterGenerationDisabled
     ? (input.lang === "en"
       ? "Character mode: disabled. Do not create characters, people, mascots, named speakers, or dialogue participants. Build scenes around environment, objects, motion, and narrator-only speech when voice is required."
@@ -783,10 +922,10 @@ ${specText}
 Scene blueprint:
 ${blueprintText}
 ${chunkGuide}
-Formatting intent example:
-- SceneIntent: "This scene invites the audience into the ABC lesson."
+${genreGuide ? `${genreGuide}\n` : ""}Formatting intent example:
+- SceneIntent: "The viewer stops and focuses on the object at the center of the frame."
 - SceneLocation: "the alphabet poster wall"
-- Visual: "A boy approaches an old well, medium shot, eye-level angle, slow dolly-in, centered framing."
+- Visual: "The alphabet poster wall, a medium-wide frame holding the presenter and the cards together. The presenter stands on the left and the letter cards line up on the right. The presenter lifts the A card and points to it with the other hand. Camera: medium shot, eye-level angle, slow dolly-in, centered framing."
 - Narration: "The boy sat by the well and looked down."
 - Dialogue: [{"speaker":"@boy","line":"It is deeper than I thought."}]
 ${modeInstruction}`;
@@ -819,10 +958,10 @@ ${specText}
 씬 블루프린트:
 ${blueprintText}
 ${chunkGuide}
-표현 예시:
-- SceneIntent: "이 씬은 ABC 학습에 바로 참여하게 만든다."
+${genreGuide ? `${genreGuide}\n` : ""}표현 예시:
+- SceneIntent: "관객이 화면 한가운데 놓인 카드에 시선을 고정한다."
 - SceneLocation: "알파벳 포스터 벽 앞"
-- Visual: "소년이 오래된 우물가에 다가간다."
+- Visual: "알파벳 포스터 벽 앞, 진행자와 카드가 함께 들어오는 미디엄 와이드 프레임. 진행자는 왼쪽에 서 있고 오른쪽에는 알파벳 카드가 줄지어 걸려 있다. 진행자가 A 카드를 들어 올리고 다른 손으로 그 글자를 가리킨다. 카메라: 미디엄 샷, 아이레벨 앵글, 느린 돌리 인, 중앙 구도."
 - Narration: "소년은 우물가에 앉아서 아래를 내려다보았다."
 - Dialogue: [{"speaker":"@소년","line":"생각보다 훨씬 깊네."}]
 ${modeInstruction}`;
@@ -1189,10 +1328,10 @@ function buildScenarioSpec(input = {}) {
   });
   requiredOutputsKo.push("각 visual은 추상적인 장면 설명 대신 실제로 연출 가능한 공간, 배경, 행동, 프롭을 모두 포함해야 한다.");
   requiredOutputsKo.push(`모든 씬은 같은 기본 공간인 "${continuity.place}"에서 이어지며, 장소를 바꿀 때만 명시적으로 전환을 드러낸다.`);
-  requiredOutputsKo.push("sceneIntent는 씬의 역할만 짧게 설명하고, visual에는 실제 화면에 보일 내용을 구체적으로 쓴다.");
+  requiredOutputsKo.push("sceneIntent는 씬을 본 관객의 구체적 반응으로 쓰고, visual에는 실제 화면에 보일 내용을 3~5문장으로 구체적으로 쓴다.");
   requiredOutputsEn.push("Each visual must be directly stageable and include space, background, action, and props instead of abstract scene labels.");
   requiredOutputsEn.push(`Keep every scene in the same base setting "${continuity.place}" unless an explicit location transition is shown.`);
-  requiredOutputsEn.push("sceneIntent should describe the scene purpose briefly, while visual should describe the actual shot content.");
+  requiredOutputsEn.push("sceneIntent should describe a concrete audience reaction, while visual should describe the actual shot content in 3 to 5 sentences.");
   avoidOutputsKo.push("시각화에 '장면', '분위기', '구성' 같은 추상 문장만 적는 결과");
   avoidOutputsKo.push("씬 사이 기본 장소가 뜬금없이 바뀌는 결과");
   avoidOutputsEn.push("Visuals that stay abstract with words like scene, mood, or composition only");
@@ -2148,6 +2287,121 @@ function getProfileActors(spec = {}, lang = "ko") {
   return profileActors || fallback;
 }
 
+function ensureSentence(text = "", lang = "ko") {
+  const clean = String(text || "").trim();
+  if (!clean) return "";
+  return /[.!?。！？]$/.test(clean) ? clean : `${clean}${lang === "en" ? "." : "."}`;
+}
+
+function buildLightingCue(sceneLocation = "", lang = "ko") {
+  const lower = String(sceneLocation || "").toLowerCase();
+  if (/교실|놀이방|스튜디오|무대|classroom|playroom|studio|stage/.test(lower)) {
+    return lang === "en"
+      ? "Soft daylight and even overhead light keep the set readable."
+      : "부드러운 낮빛과 고른 실내 조명이 소품 윤곽을 또렷하게 남긴다.";
+  }
+  if (/숲|들판|하늘|광장|골목|전망|forest|field|sky|plaza|alley|viewpoint|street/.test(lower)) {
+    return lang === "en"
+      ? "Natural light outlines the ground and the object edges clearly."
+      : "자연광이 바닥 결과 사물 가장자리를 또렷하게 드러낸다.";
+  }
+  if (/주방|싱크대|조리대|집|거실|kitchen|sink|counter|home|living/.test(lower)) {
+    return lang === "en"
+      ? "Warm practical light stays on the work surface and hands."
+      : "생활 조명이 작업면과 손동작 위에 고르게 걸린다.";
+  }
+  return lang === "en"
+    ? "The available light keeps the main subject and props readable."
+    : "현재 조명이 인물과 소품의 윤곽을 분명하게 남긴다.";
+}
+
+function buildStructuredVisual({
+  lang = "ko",
+  sceneLocation = "",
+  placement = "",
+  action = "",
+  backdrop = "",
+  cameraContext = {},
+  lighting = "",
+}) {
+  const locationSentence = lang === "en"
+    ? `${sceneLocation || "the same location"}, a medium-wide frame that holds the subject and main props together`
+    : `${sceneLocation || "같은 중심 공간"}, 인물과 주요 소품이 함께 들어오는 미디엄 와이드 프레임`;
+  const placementSentence = placement || (lang === "en"
+    ? "The main subject stays near the center and the supporting props remain visible around it"
+    : "주요 인물은 화면 중심 가까이에 서 있고 보조 소품이 주변에 남아 있다");
+  const actionSentence = action || (lang === "en"
+    ? "One clear physical action happens in the frame"
+    : "프레임 안에서 하나의 분명한 물리적 행동이 일어난다");
+  const cameraSentence = lang === "en"
+    ? `Camera direction: ${buildCameraDirectionSnippet(Object.assign({}, cameraContext, { lang }))}`
+    : `카메라 연출: ${buildCameraDirectionSnippet(Object.assign({}, cameraContext, { lang }))}`;
+  const lightingSentence = lighting || buildLightingCue(sceneLocation, lang);
+  return [
+    ensureSentence(locationSentence, lang),
+    ensureSentence(placementSentence, lang),
+    ensureSentence(actionSentence, lang),
+    ensureSentence(cameraSentence, lang),
+    ensureSentence(backdrop || lightingSentence, lang),
+  ].filter(Boolean).join(" ");
+}
+
+function isAudienceReactionIntent(text = "") {
+  const clean = String(text || "").trim();
+  if (!clean) return false;
+  return /(관객이|시청자가|보는 사람이|viewer|audience)/i.test(clean);
+}
+
+function containsForbiddenVisualPhrase(text = "") {
+  const clean = stripCameraDirection(text);
+  if (!clean) return false;
+  return /느낌|분위기|아름다운|감동적인|화려한|따뜻한 톤|세련된|역동적인|인상적인|드라마틱한|감성적인|몽환적인|feels like|atmospheric|beautiful|touching|flashy|warm tone|stylish|dynamic|impressive|dramatic|emotional|dreamlike/i.test(clean);
+}
+
+function buildAudienceReactionIntent({ role = "", subject = "", lang = "ko", humor = false }) {
+  const roleKey = String(role || "").trim();
+  if (lang === "en") {
+    const intents = {
+      hook: `The viewer stops and wonders what will happen with ${subject}.`,
+      teach: `The viewer locks onto the first key point of ${subject}.`,
+      sing: `The viewer wants to repeat ${subject} with the rhythm.`,
+      practice: `The viewer wants to copy ${subject} right away.`,
+      repeat: humor
+        ? `The viewer laughs at the brief mistake and refocuses on ${subject}.`
+        : `The viewer remembers ${subject} after one more repetition.`,
+      recap: `The viewer feels the closing recap beat while checking ${subject} one last time.`,
+      invite: `The viewer feels pulled into joining ${subject}.`,
+      play: `The viewer wants to move along with ${subject} like a game.`,
+      explain: `The viewer understands the key point of ${subject} in one glance.`,
+      example: `The viewer understands ${subject} through a concrete example.`,
+      summary: `The viewer keeps only the essential summary point of ${subject} in memory.`,
+      develop: `The viewer expects the next beat of ${subject}.`,
+      reinforce: `The viewer does not miss the core point of ${subject}.`,
+      close: `The viewer leaves with the final closing image of ${subject} still in mind.`,
+    };
+    return intents[roleKey] || `The viewer expects the next clear beat of ${subject}.`;
+  }
+  const intents = {
+    hook: `관객이 "${subject}는 어떻게 시작되지?" 하고 화면에 시선을 멈춘다.`,
+    teach: `관객이 ${subject}의 첫 핵심을 한눈에 붙잡는다.`,
+    sing: `관객이 리듬을 듣고 ${subject}를 바로 따라 하고 싶어진다.`,
+    practice: `관객이 지금 바로 ${subject}를 따라 해보고 싶어진다.`,
+    repeat: humor
+      ? `관객이 잠깐의 실수를 보고 웃다가 ${subject}에 다시 집중한다.`
+      : `관객이 한 번 더 반복된 ${subject}를 기억에 남긴다.`,
+    recap: `관객이 ${subject}를 함께 확인하며 마무리 감각을 얻는다.`,
+    invite: `관객이 화면 안으로 불려 들어온 듯 ${subject}에 참여하고 싶어진다.`,
+    play: `관객이 ${subject}를 놀이처럼 따라 움직이고 싶어진다.`,
+    explain: `관객이 ${subject}의 핵심을 한 번에 이해한다.`,
+    example: `관객이 구체 예시를 보고 ${subject}를 자기 일처럼 이해한다.`,
+    summary: `관객이 ${subject}의 핵심만 정리된 상태로 또렷하게 기억한다.`,
+    develop: `관객이 다음 장면에서 ${subject}가 어떻게 이어질지 기대한다.`,
+    reinforce: `관객이 ${subject}의 핵심 포인트를 놓치지 않는다.`,
+    close: `관객이 ${subject}의 마지막 마무리 이미지를 기억한 채 장면을 떠난다.`,
+  };
+  return intents[roleKey] || `관객이 ${subject}의 다음 전개를 기대한다.`;
+}
+
 function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
   const subject = spec.topicProfile?.subject || spec.topic || (lang === "en" ? "the topic" : "주제");
   const backgroundStyle = spec.continuity?.backgroundStyle || (lang === "en" ? "one consistent visual world" : "하나의 일관된 시각 세계");
@@ -2159,126 +2413,181 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
   const primarySpeaker = speakers.primary;
   const secondarySpeaker = speakers.secondary;
   const role = mapRoleToHintRole(blueprint.role || "develop");
+  const visualFor = (placement, action) => buildStructuredVisual({
+    lang,
+    sceneLocation,
+    placement,
+    action,
+    backdrop: locationBackdrop,
+    cameraContext: {
+      lang,
+      idx: Math.max((blueprint.index || 1) - 1, 0),
+      spec,
+    },
+  });
   if (lang === "en") {
     const hints = {
       hook: {
-        intent: `Open ${subject} with immediate curiosity.`,
+        intent: buildAudienceReactionIntent({ role: "hook", subject, lang }),
         narration: `Hi there! Let's start ${subject} right away together.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} A smiling child group gathers in front of ${prop} and gets ready to start ${subject}.`,
+        visual: visualFor(
+          `A smiling child group stands around ${prop} and keeps the center of the frame open for the first move`,
+          `The group leans in toward ${prop} and pauses right before starting ${subject}`
+        ),
         dialogue: [`${primarySpeaker}: Ready? Let's begin ${subject}!`],
       },
       teach: {
-        intent: `Show the first core learning point of ${subject}.`,
+        intent: buildAudienceReactionIntent({ role: "teach", subject, lang }),
         narration: `Let's learn ${subject} one step at a time.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} One friend lifts ${prop} and points to the first part of ${subject} so everyone can see it clearly.`,
+        visual: visualFor(
+          `One friend stands beside ${prop} while the rest of the group stays behind in a loose row`,
+          `The lead friend lifts ${prop} and points to the first visible part of ${subject}`
+        ),
         dialogue: [`${primarySpeaker}: Say it with me, ${subject}!`],
       },
       sing: {
-        intent: `Turn ${subject} into a sing-along beat.`,
+        intent: buildAudienceReactionIntent({ role: "sing", subject, lang }),
         narration: `Now sing ${subject} with the beat together.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} The group shakes ${prop} to the beat and sings ${subject} together with clear rhythm.`,
+        visual: visualFor(
+          `The group forms a shallow arc around ${prop} so every face and the prop stay visible`,
+          `They shake ${prop} in rhythm and repeat ${subject} together on the beat`
+        ),
         dialogue: [`${primarySpeaker}: ${subject}, one more time!`],
       },
       practice: {
-        intent: `Help the audience copy ${subject} directly.`,
+        intent: buildAudienceReactionIntent({ role: "practice", subject, lang }),
         narration: `Watch and repeat ${subject} with me.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} The friends tap ${prop} one by one and repeat ${subject} so the audience can follow along.`,
+        visual: visualFor(
+          `The friends line up beside ${prop} one after another while the guide keeps one hand ready at the edge of frame`,
+          `They tap ${prop} one by one and repeat ${subject} in the same order`
+        ),
         dialogue: [`${primarySpeaker}: Follow along with ${subject}!`],
       },
       repeat: {
-        intent: spec.signals?.humor
-          ? `Reinforce ${subject} with one cute mistake and quick recovery.`
-          : `Repeat ${subject} once more for retention.`,
+        intent: buildAudienceReactionIntent({ role: "repeat", subject, lang, humor: !!spec.signals?.humor }),
         narration: spec.signals?.humor
           ? `Oops, that was almost wrong. Let's do ${subject} again together.`
           : `One more time. Let's repeat ${subject} together.`,
         location: sceneLocation,
         backgroundStyle,
         visual: spec.signals?.humor
-          ? `${sceneLocation}. ${locationBackdrop} One friend briefly holds ${prop} in the wrong order during ${subject}, then laughs and fixes it right away while the others point to the correct one.`
-          : `${sceneLocation}. ${locationBackdrop} The group repeats ${subject} once more while holding ${prop} up together for easy reinforcement.`,
+          ? visualFor(
+            `One friend holds ${prop} slightly off center while the others stay packed close enough to react in frame`,
+            `The lead friend fumbles the order once, then fixes ${prop} immediately as the others point to the correct part`
+          )
+          : visualFor(
+            `The group stands close together with ${prop} raised between them at chest height`,
+            `They repeat ${subject} once more while holding ${prop} still for emphasis`
+          ),
         dialogue: spec.signals?.humor
           ? [`${primarySpeaker}: Oops, one more time!`, `${secondarySpeaker}: That's it, ${subject}!`]
           : [`${primarySpeaker}: Once again, ${subject}!`],
       },
       recap: {
-        intent: `Close by recalling ${subject} together.`,
+        intent: buildAudienceReactionIntent({ role: "recap", subject, lang }),
         narration: `Great job. Let's check ${subject} one last time.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} Everyone gathers around ${prop}, points at the final answer together, and wraps up ${subject} with a bright finish.`,
+        visual: visualFor(
+          `Everyone gathers tightly around ${prop} so the final answer and every hand remain in frame`,
+          `They point to the last key part of ${subject} together and hold the pose for a beat`
+        ),
         dialogue: [`${primarySpeaker}: Great job, ${subject}!`],
       },
       invite: {
-        intent: `Invite the audience to join ${subject}.`,
+        intent: buildAudienceReactionIntent({ role: "invite", subject, lang }),
         narration: `Come on in. Join ${subject} with us.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} A guide character waves beside ${prop} and invites the audience to join ${subject} right away.`,
+        visual: visualFor(
+          `A guide character stands beside ${prop} with one arm already lifted toward the lens`,
+          `The guide waves toward the camera and opens a space next to ${prop} for ${subject}`
+        ),
         dialogue: [`${primarySpeaker}: Come join ${subject}!`],
       },
       play: {
-        intent: `Make ${subject} feel like playful participation.`,
+        intent: buildAudienceReactionIntent({ role: "play", subject, lang }),
         narration: `Let's enjoy ${subject} like a fun game together.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} The group moves around ${prop}, claps, and reacts together so ${subject} feels like a playful activity.`,
+        visual: visualFor(
+          `The group circles ${prop} in a loose ring so hands and feet stay visible together`,
+          `They clap once and step around ${prop} as ${subject} turns into a game beat`
+        ),
         dialogue: [`${primarySpeaker}: Let's play along with ${subject}!`],
       },
       explain: {
-        intent: `Explain the key point of ${subject} clearly.`,
+        intent: buildAudienceReactionIntent({ role: "explain", subject, lang }),
         narration: `Here is the key point of ${subject}.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} A presenter stands by ${prop} and explains the main point of ${subject} with a clear gesture.`,
+        visual: visualFor(
+          `A presenter stands on one side of ${prop} while the key reference surface stays open on the other side`,
+          `The presenter taps the main point of ${subject} with one clear pointing gesture`
+        ),
         dialogue: [`${primarySpeaker}: This is the key point of ${subject}.`],
       },
       example: {
-        intent: `Support ${subject} with a concrete example.`,
+        intent: buildAudienceReactionIntent({ role: "example", subject, lang }),
         narration: `This example makes ${subject} easy to understand.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} A concrete example is demonstrated using ${prop} so ${subject} becomes easier to understand.`,
+        visual: visualFor(
+          `The presenter places ${prop} in the foreground while the comparison area stays visible behind it`,
+          `A concrete example with ${prop} is demonstrated so ${subject} becomes immediately readable`
+        ),
         dialogue: [`${primarySpeaker}: This example makes ${subject} easier to see.`],
       },
       summary: {
-        intent: `Summarize ${subject} in one compact beat.`,
+        intent: buildAudienceReactionIntent({ role: "summary", subject, lang }),
         narration: `Let's remember the key part of ${subject}.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} The final key words of ${subject} stay visible beside ${prop} in a compact closing image.`,
+        visual: visualFor(
+          `The key words of ${subject} stay fixed beside ${prop} while the presenter holds still next to them`,
+          `The presenter draws one short line under the final point and then stops`
+        ),
         dialogue: [`${primarySpeaker}: Remember the key point of ${subject}.`],
       },
       develop: {
-        intent: `Move ${subject} one step forward.`,
+        intent: buildAudienceReactionIntent({ role: "develop", subject, lang }),
         narration: `Now let's take ${subject} one step further.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} The action advances around ${prop} so ${subject} clearly moves into the next beat.`,
+        visual: visualFor(
+          `The group keeps ${prop} near the center while the next position opens up at one side of the frame`,
+          `They slide ${prop} into the next marked spot so ${subject} clearly moves forward`
+        ),
         dialogue: [`${primarySpeaker}: Now let's take the next step.`],
       },
       reinforce: {
-        intent: `Reinforce the core of ${subject}.`,
+        intent: buildAudienceReactionIntent({ role: "reinforce", subject, lang }),
         narration: `Yes, this is the core of ${subject}.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} The central part of ${subject} is shown again with ${prop} held close to the camera for emphasis.`,
+        visual: visualFor(
+          `The guide holds ${prop} near the lens while the rest of the set stays softly visible behind`,
+          `The guide brings the core part of ${subject} close to camera and holds it there for emphasis`
+        ),
         dialogue: [`${primarySpeaker}: Yes, this is the core of ${subject}.`],
       },
       close: {
-        intent: `End ${subject} with a clean memorable finish.`,
+        intent: buildAudienceReactionIntent({ role: "close", subject, lang }),
         narration: `See you again next time with ${subject}.`,
         location: sceneLocation,
         backgroundStyle,
-        visual: `${sceneLocation}. ${locationBackdrop} The group waves beside ${prop} and leaves ${subject} on a clear final image.`,
+        visual: visualFor(
+          `The group stands beside ${prop} in a clean line with enough empty space to hold the last image`,
+          `They wave once toward the camera and leave ${subject} visible in the frame`
+        ),
         dialogue: [`${primarySpeaker}: See you again with ${subject}!`],
       },
     };
@@ -2287,123 +2596,166 @@ function buildHintText(spec = {}, blueprint = {}, lang = "ko") {
 
   const hints = {
     hook: {
-      intent: `${subject}를 시작하자마자 관심을 끈다.`,
+      intent: buildAudienceReactionIntent({ role: "hook", subject, lang }),
       narration: `안녕! 오늘은 ${subject}를 바로 시작해볼까?`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop} 앞에 모여 ${subject}를 시작할 준비를 하며 시선을 모은다.`,
+      visual: visualFor(
+        `${actors.group} ${prop} 앞에 모여 서 있고 프레임 중심이 비어 있어 첫 동작이 바로 보인다`,
+        `${actors.group} ${prop} 쪽으로 몸을 기울이며 ${subject}를 시작하기 직전의 멈춤을 만든다`
+      ),
       dialogue: [`${primarySpeaker}: 준비됐지? ${subject} 시작!`],
     },
     teach: {
-      intent: `${subject}의 첫 핵심을 또렷하게 보여 준다.`,
+      intent: buildAudienceReactionIntent({ role: "teach", subject, lang }),
       narration: `${subject}를 하나씩 같이 배워보자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.lead} ${prop}를 들어 올리고 ${subject}의 첫 부분이나 핵심 요소를 손가락으로 또렷하게 가리킨다.`,
+      visual: visualFor(
+        `${actors.lead} ${prop} 옆에 서 있고 나머지 인물은 뒤쪽에 반원으로 남아 있다`,
+        `${actors.lead} ${prop}를 들어 올리고 ${subject}의 첫 핵심을 다른 손으로 가리킨다`
+      ),
       dialogue: [`${primarySpeaker}: ${subject}를 같이 따라 해볼까?`],
     },
     sing: {
-      intent: `${subject}를 리듬 있는 반복으로 전환한다.`,
+      intent: buildAudienceReactionIntent({ role: "sing", subject, lang }),
       narration: `${subject}, 박자에 맞춰 함께 불러보자!`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 흔들며 ${subject}를 박자에 맞춰 반복하고 리듬을 탄다.`,
+      visual: visualFor(
+        `${actors.group} ${prop}를 가운데 두고 얕은 곡선으로 서 있어 얼굴과 소품이 함께 보인다`,
+        `${actors.group} ${prop}를 흔들며 ${subject}를 같은 박자로 반복한다`
+      ),
       dialogue: [`${primarySpeaker}: ${subject}, 한 번 더!`],
     },
     practice: {
-      intent: `${subject}를 바로 따라 하게 만든다.`,
+      intent: buildAudienceReactionIntent({ role: "practice", subject, lang }),
       narration: `이번엔 보고 듣고 ${subject}를 따라 해보자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 하나씩 짚으며 ${subject}를 번갈아 따라 하거나 직접 수행한다.`,
+      visual: visualFor(
+        `${actors.group} ${prop} 옆에 한 줄로 서 있고 안내 손동작이 프레임 가장자리에서 기다린다`,
+        `${actors.group} ${prop}를 하나씩 짚으며 ${subject}를 같은 순서로 따라 한다`
+      ),
       dialogue: [`${primarySpeaker}: 이번엔 우리 같이 ${subject}를 따라 해보자!`],
     },
     repeat: {
-      intent: spec.signals?.humor
-        ? `${subject}를 귀여운 실수와 함께 다시 익힌다.`
-        : `${subject}를 한 번 더 반복해 기억에 남긴다.`,
+      intent: buildAudienceReactionIntent({ role: "repeat", subject, lang, humor: !!spec.signals?.humor }),
       narration: spec.signals?.humor
         ? `어? 잠깐 헷갈렸네. 괜찮아, ${subject} 다시 해보자!`
         : `좋아, ${subject}를 한 번 더 해보자.`,
       location: sceneLocation,
       backgroundStyle,
       visual: spec.signals?.humor
-        ? `${sceneLocation}. ${locationBackdrop} ${actors.lead} ${subject} 순서나 동작을 잠깐 헷갈려 ${prop}를 잘못 다뤘다가, ${actors.closer} 웃으며 올바른 쪽을 가리키자 바로 다시 고친다.`
-        : `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 또렷하게 보여 주며 ${subject}를 한 번 더 반복한다.`,
+        ? visualFor(
+          `${actors.lead} ${prop}를 살짝 비뚤게 들고 있고 ${actors.closer}는 바로 옆에서 반응할 준비를 한다`,
+          `${actors.lead} ${subject} 순서를 잠깐 헷갈렸다가 ${actors.closer}가 올바른 쪽을 가리키자 바로 다시 고친다`
+        )
+        : visualFor(
+          `${actors.group} ${prop}를 가슴 높이로 함께 들고 있어 중심 정보가 한눈에 보인다`,
+          `${actors.group} ${subject}를 한 번 더 같은 순서로 반복한다`
+        ),
       dialogue: spec.signals?.humor
         ? [`${primarySpeaker}: 어? 잠깐 헷갈렸네!`, `${secondarySpeaker}: 괜찮아, ${subject} 다시!`]
         : [`${primarySpeaker}: 좋아, ${subject} 한 번 더!`],
     },
     recap: {
-      intent: `${subject}를 다 함께 확인하며 끝맺는다.`,
+      intent: buildAudienceReactionIntent({ role: "recap", subject, lang }),
       narration: `잘했어! 마지막으로 ${subject}를 한 번만 더 확인하자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.closer} ${prop}를 가운데로 모으고 ${subject}의 핵심을 함께 확인하며 마무리한다.`,
+      visual: visualFor(
+        `${actors.closer} ${prop} 주위로 가까이 모여 손과 표정이 함께 프레임에 남는다`,
+        `${actors.closer} ${subject}의 마지막 핵심을 함께 가리킨 채 한 박자 멈춘다`
+      ),
       dialogue: [`${primarySpeaker}: 잘했어! ${subject} 기억났지?`],
     },
     invite: {
-      intent: `${subject}에 함께 참여하도록 부른다.`,
+      intent: buildAudienceReactionIntent({ role: "invite", subject, lang }),
       narration: `우리와 함께 ${subject}를 해볼까?`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop} 옆에서 손짓하며 ${subject}에 함께 참여하자고 부른다.`,
+      visual: visualFor(
+        `${actors.guide} ${prop} 옆에 서서 한 손을 카메라 쪽으로 내민다`,
+        `${actors.guide} 렌즈를 향해 손짓하며 ${subject}에 함께 들어오라고 부른다`
+      ),
       dialogue: [`${primarySpeaker}: 같이 해볼까? ${subject}!`],
     },
     play: {
-      intent: `${subject}를 놀이처럼 체험하게 만든다.`,
+      intent: buildAudienceReactionIntent({ role: "play", subject, lang }),
       narration: `${subject}를 놀이처럼 신나게 즐겨보자!`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop} 주변을 돌며 손뼉을 치거나 몸을 움직여 ${subject}를 행동 중심으로 체험한다.`,
+      visual: visualFor(
+        `${actors.group} ${prop} 둘레로 느슨한 원을 만들고 손과 발이 모두 보이게 선다`,
+        `${actors.group} 한 번 손뼉을 치고 ${prop} 주위를 돌며 ${subject}를 몸으로 체험한다`
+      ),
       dialogue: [`${primarySpeaker}: 몸으로도 같이 해보자!`],
     },
     explain: {
-      intent: `${subject}의 핵심을 짧게 설명한다.`,
+      intent: buildAudienceReactionIntent({ role: "explain", subject, lang }),
       narration: `${subject}의 핵심은 바로 이거야.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop}를 옆에 두고 ${subject}의 핵심을 짧고 분명하게 설명한다.`,
+      visual: visualFor(
+        `${actors.guide} ${prop} 한쪽에 서 있고 반대편에는 핵심 정보 면이 비어 있다`,
+        `${actors.guide} ${subject}의 핵심 지점을 한 번 또렷하게 짚는다`
+      ),
       dialogue: [`${primarySpeaker}: 핵심은 ${subject}야.`],
     },
     example: {
-      intent: `${subject}를 구체 예시로 보여 준다.`,
+      intent: buildAudienceReactionIntent({ role: "example", subject, lang }),
       narration: `이 예시를 보면 ${subject}가 더 쉬워져.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.lead} ${prop}를 이용한 구체 예시나 실제 시연을 보여 주어 ${subject}가 더 쉽게 이해된다.`,
+      visual: visualFor(
+        `${actors.lead} ${prop}를 전경 쪽에 놓고 뒤쪽에는 비교 대상이 함께 남아 있다`,
+        `${actors.lead} ${prop}를 이용한 구체 예시를 한 번 시연해 ${subject}를 바로 읽히게 만든다`
+      ),
       dialogue: [`${primarySpeaker}: 이렇게 보면 더 쉬워.`],
     },
     summary: {
-      intent: `${subject}의 핵심만 압축해 정리한다.`,
+      intent: buildAudienceReactionIntent({ role: "summary", subject, lang }),
       narration: `${subject}의 핵심만 짧게 기억하자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop} 옆에 핵심만 남기고 ${subject}의 요점을 짧게 정리한다.`,
+      visual: visualFor(
+        `${actors.guide} ${prop} 옆에 멈춰 서 있고 핵심 단어만 보이는 공간을 남긴다`,
+        `${actors.guide} ${subject}의 마지막 요점 아래에 짧은 표시선을 긋고 멈춘다`
+      ),
       dialogue: [`${primarySpeaker}: 핵심만 다시 기억하자!`],
     },
     develop: {
-      intent: `${subject}를 다음 단계로 넘긴다.`,
+      intent: buildAudienceReactionIntent({ role: "develop", subject, lang }),
       narration: `이제 ${subject}를 다음 단계로 가보자.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.group} ${prop}를 다음 위치나 단계로 옮기며 ${subject}를 한 단계 더 전개한다.`,
+      visual: visualFor(
+        `${actors.group} ${prop}를 가운데에 두고 다음 위치로 열리는 공간을 한쪽에 남겨 둔다`,
+        `${actors.group} ${prop}를 다음 표시 지점으로 옮기며 ${subject}를 한 단계 더 전개한다`
+      ),
       dialogue: [`${primarySpeaker}: 이제 다음으로 가보자!`],
     },
     reinforce: {
-      intent: `${subject}의 핵심을 다시 강조한다.`,
+      intent: buildAudienceReactionIntent({ role: "reinforce", subject, lang }),
       narration: `맞아, 이게 ${subject}의 핵심이야.`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.guide} ${prop}를 카메라 가까이 들어 ${subject}의 핵심 포인트를 다시 또렷하게 보여 준다.`,
+      visual: visualFor(
+        `${actors.guide} ${prop}를 렌즈 가까이에 들고 뒤쪽 세트는 흐리지 않을 만큼만 남긴다`,
+        `${actors.guide} ${subject}의 핵심 포인트를 카메라 가까이에서 다시 보여 준다`
+      ),
       dialogue: [`${primarySpeaker}: 맞아, 이게 핵심이야!`],
     },
     close: {
-      intent: `${subject}를 기억에 남게 마무리한다.`,
+      intent: buildAudienceReactionIntent({ role: "close", subject, lang }),
       narration: `다음에도 ${subject}로 또 만나자!`,
       location: sceneLocation,
       backgroundStyle,
-      visual: `${sceneLocation}. ${locationBackdrop} ${actors.closer} ${prop} 옆에서 손을 흔들며 ${subject}의 여운을 남기고 끝낸다.`,
+      visual: visualFor(
+        `${actors.closer} ${prop} 옆에 가지런히 서 있고 마지막 이미지를 담을 빈 공간이 화면 한쪽에 남아 있다`,
+        `${actors.closer} 카메라를 향해 한 번 손을 흔들고 ${subject}가 보이는 상태로 멈춘다`
+      ),
       dialogue: [`${primarySpeaker}: 다음에도 ${subject}로 또 만나자!`],
     },
   };
@@ -2552,6 +2904,13 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
       : "각 씬에는 visual과 분리된 sceneIntent가 있어야 한다.",
   });
   results.push({
+    key: "scene_intent_reaction",
+    passed: sceneList.every((scene) => isAudienceReactionIntent(scene.sceneIntent)),
+    message: spec.lang === "en"
+      ? "Each sceneIntent must be written as a concrete audience reaction."
+      : "각 sceneIntent는 관객의 구체적 반응으로 작성되어야 한다.",
+  });
+  results.push({
     key: "scene_location_present",
     passed: sceneList.every((scene) => String(scene.sceneLocation || "").trim()),
     message: spec.lang === "en"
@@ -2575,6 +2934,13 @@ function validateScenarioAgainstSpec(scenes = [], spec = {}) {
     message: spec.lang === "en"
       ? "Each visual must concretely include location, background, action, and props."
       : "각 visual에는 공간, 배경, 행동, 프롭이 구체적으로 들어가야 한다.",
+  });
+  results.push({
+    key: "visual_forbidden_language",
+    passed: sceneList.every((scene) => !containsForbiddenVisualPhrase(scene.visual)),
+    message: spec.lang === "en"
+      ? "Visuals must not use forbidden abstract adjectives or mood labels."
+      : "visual에는 금지된 추상 형용사나 분위기 표현이 들어가면 안 된다.",
   });
   results.push({
     key: "setting_anchor",
@@ -2653,6 +3019,7 @@ function selectSceneIntentBase(base = "", hint = "") {
   const cleanBase = String(base || "").trim();
   const cleanHint = String(hint || "").trim();
   if (!cleanBase || isPlaceholderText(cleanBase)) return cleanHint;
+  if (!isAudienceReactionIntent(cleanBase) && cleanHint) return cleanHint;
   if (cleanBase.length > 90) return cleanHint || cleanBase;
   return cleanBase;
 }
@@ -2661,7 +3028,8 @@ function isAbstractVisualText(text = "") {
   const clean = stripCameraDirection(text);
   if (!clean) return true;
   if (isPlaceholderText(clean)) return true;
-  return /(보여 주는 장면|드러나는 장면|구성된 장면|시작하는 장면|마무리하는 장면|분위기|추상|scene that|scene showing|mood|composition)/i.test(clean);
+  return /(보여 주는 장면|드러나는 장면|구성된 장면|시작하는 장면|마무리하는 장면|분위기|추상|scene that|scene showing|mood|composition)/i.test(clean)
+    || containsForbiddenVisualPhrase(clean);
 }
 
 function analyzeVisualContract(text = "", spec = {}) {
@@ -2688,7 +3056,7 @@ function analyzeVisualContract(text = "", spec = {}) {
 }
 
 function hasExplicitLocationTransition(text = "") {
-  return /(장소를 바꿔|다른 장소|이동해|장면 전환|scene transition|move to|new location|cut to)/i.test(String(text || ""));
+  return /(장소를 바꿔|다른 장소|이동해|장면 전환|컷 전환|시간 후|같은 장소|scene transition|move to|new location|cut to|hours later|same place)/i.test(String(text || ""));
 }
 
 function ensureContinuityAnchorInVisual(text = "", spec = {}, lang = "ko") {
@@ -3079,7 +3447,17 @@ C) narrationEnabled=false, dubbingEnabled=true:
 D) narrationEnabled=false, dubbingEnabled=false:
 - scene fields: sceneIntent(string), sceneLocation(string), lines(string), visual(string)
 - Every visual must include camera direction (shot size, camera angle, camera movement, framing).
-- sceneIntent should be a short internal purpose sentence, sceneLocation should name the concrete sub-space, and visual should stay concrete and directly stageable.
+- sceneIntent: the concrete audience reaction this scene should trigger.
+  - Forbidden: "show the product's strengths", "deliver emotion", "build brand awareness"
+  - Allowed: "the viewer locks onto the object on screen", "the viewer expects the next scene", "the viewer feels tension from the trembling hand"
+- visual writing method:
+  - Write one paragraph with 3 to 5 sentences.
+  - Sentence 1: place and framing range
+  - Sentence 2: visible placement of people/objects
+  - Sentence 3: physical action happening in the scene
+  - Sentence 4: camera direction
+  - Sentence 5 optional: lighting or time of day
+  - Test: a cinematographer should be able to set the camera immediately after reading it.
 - If narrationEnabled is true, narration must be a full spoken sentence (not empty).
 - If dubbingEnabled is true, dialogue must contain at least one line with speaker and line.
 - Keep narration/dialogue text ready for TTS usage.
@@ -3099,7 +3477,17 @@ D) narrationEnabled=OFF, dubbingEnabled=OFF
 - sceneIntent(string), sceneLocation(string), lines(string), visual(string)
 - narrationEnabled가 ON이면 narration은 비어있지 않은 완전한 문장으로 생성.
 - dubbingEnabled가 ON이면 dialogue는 최소 1개 이상의 {speaker,line}를 반드시 생성.
-- sceneIntent는 씬의 역할을 짧게 설명하고, sceneLocation은 씬의 구체 장소를 적고, visual은 실제 화면에 보일 공간/배경/행동/프롭을 구체적으로 적는다.
+- sceneIntent: 이 씬을 본 관객이 느끼거나 행동하는 구체적 반응.
+  - 금지: "제품의 장점을 보여준다", "감정을 전달한다", "브랜드를 인지시킨다"
+  - 허용: "관객이 화면 속 물체에 시선을 고정한다", "관객이 '어떻게 되는 거지?' 하고 다음 장면을 기대한다", "관객이 주인공의 손떨림을 보고 긴장감을 느낀다"
+- visual 작성법:
+  - 한 문단, 3~5문장으로 쓴다.
+  - 문장 1: 장소와 프레임 범위
+  - 문장 2: 프레임 안에 보이는 사물/인물 배치
+  - 문장 3: 이 씬에서 일어나는 물리적 행동
+  - 문장 4: 카메라
+  - 문장 5(선택): 조명/시간대
+  - 검증: 이 visual을 읽고 촬영감독이 바로 카메라를 세팅할 수 있어야 한다.
 - narration/dialogue 문구는 이후 TTS(음성 합성)에 바로 사용할 수 있는 문장으로 작성.
 ${charGuide}
 ${noCharacterRule}
