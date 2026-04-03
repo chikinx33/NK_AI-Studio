@@ -14,8 +14,8 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   const origin = request.headers.get("Origin");
 
-  if (!env.OPENAI_API_KEY) {
-    return json({ error: "OPENAI_API_KEY missing" }, 500, origin);
+  if (!env.ANTHROPIC_API_KEY) {
+    return json({ error: "ANTHROPIC_API_KEY missing" }, 500, origin);
   }
 
   let body;
@@ -29,21 +29,19 @@ export async function onRequestPost(context) {
   const fallback = buildFallbackHashtags(input);
 
   try {
-    const completion = await fetch("https://api.openai.com/v1/chat/completions", {
+    const completion = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`,
+        "x-api-key": env.ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        response_format: { type: "json_object" },
+        model: "claude-sonnet-4-6",
+        max_tokens: 512,
         temperature: 0.2,
+        system: buildSystemPrompt(input.language),
         messages: [
-          {
-            role: "system",
-            content: buildSystemPrompt(input.language),
-          },
           {
             role: "user",
             content: buildUserPrompt(input),
@@ -54,11 +52,11 @@ export async function onRequestPost(context) {
 
     if (!completion.ok) {
       const text = await completion.text();
-      throw new Error(`OpenAI error: ${completion.status} ${text}`);
+      throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
 
     const data = await completion.json();
-    const text = data?.choices?.[0]?.message?.content || "{}";
+    const text = data?.content?.[0]?.text || "{}";
     const parsed = JSON.parse(text);
     const normalized = normalizeHashtagList(parsed?.hashtags, input.bannedExpressions);
     const hashtags = mergeHashtagLists(normalized, fallback).slice(0, 8);

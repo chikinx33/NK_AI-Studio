@@ -1,7 +1,7 @@
 ﻿export async function onRequestPost(context) {
   const { request, env } = context;
-  if (!env.OPENAI_API_KEY) {
-    return jsonError('OPENAI_API_KEY not set', 500);
+  if (!env.ANTHROPIC_API_KEY) {
+    return jsonError('ANTHROPIC_API_KEY not set', 500);
   }
 
   let body;
@@ -65,17 +65,18 @@ Character mode: ${characterMode}
 Language: Korean`;
 
   try {
-    const completion = await fetch('https://api.openai.com/v1/chat/completions', {
+    const completion = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.OPENAI_API_KEY}`
+        'x-api-key': env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        response_format: { type: 'json_object' },
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1024,
+        system: sys,
         messages: [
-          { role: 'system', content: sys },
           { role: 'user', content: user }
         ],
         temperature: 0.05
@@ -84,11 +85,11 @@ Language: Korean`;
 
     if (!completion.ok) {
       const text = await completion.text();
-      throw new Error(`OpenAI error: ${completion.status} ${text}`);
+      throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
 
     const data = await completion.json();
-    const text = data.choices?.[0]?.message?.content;
+    const text = data.content?.[0]?.text;
     const parsed = JSON.parse(text || '{}');
     if (!parsed.header) throw new Error('Missing header');
     return new Response(JSON.stringify({ header: parsed.header }), {
@@ -96,7 +97,7 @@ Language: Korean`;
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err) {
-    return jsonError(err.message || 'OpenAI request failed', 500);
+    return jsonError(err.message || 'Anthropic request failed', 500);
   }
 }
 
