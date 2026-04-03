@@ -1381,15 +1381,18 @@ a.btn-primary:active {
 }
 
 .scenario-form .scenario-form-label-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content max-content;
   align-items: center;
   gap: 6px;
+}
   min-width: 100px;
   flex-shrink: 0;
 }
 
 .scenario-form .scenario-form-label-row label {
   min-width: 0;
+  grid-column: 1 / -1;
 }
 
 [data-theme="light"] .scenario-form label {
