@@ -77,7 +77,7 @@ export async function onRequestPost(context) {
 
     const data = await completion.json();
     const text = data?.content?.[0]?.text || "{}";
-    const parsed = JSON.parse(text);
+    const parsed = JSON.parse(cleanJsonResponse(text));
     const structured = restoreCharacterTokenHints(sanitizeStory(parsed?.story), input);
     if (!structured) throw new Error("No structured story generated");
 
@@ -131,7 +131,7 @@ function buildSystemPrompt(language) {
   if (language === "en") {
     return [
       "You reorganize a rough story draft into a short-form story skeleton that the next scenario generator can split into scenes immediately.",
-      'Return JSON only: {"story":"..."}',
+      '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"..."}. Never use markdown (```json, ```), explanations, comments, or backticks.',
       "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific action and immediate reaction. Do not copy original sentences verbatim.",
       "Write 2-5 short sentences or one short paragraph. Each sentence should map to one simple beat for later scene generation.",
       "Write only visible actions, reactions, and immediate outcomes. Do not summarize with abstract planning language.",
@@ -150,7 +150,7 @@ function buildSystemPrompt(language) {
   }
   return [
     "너는 사용자가 적은 초안을 다음 단계의 시나리오 생성기가 바로 씬으로 쪼갤 수 있는 짧은 영상용 이야기 뼈대로 재정리하는 보조 AI다.",
-    '반드시 JSON만 반환한다. 형식: {"story":"..."}',
+    '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"..."}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
     "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 원문 문장을 그대로 복사하지 마라.",
     "출력은 2~5개의 짧은 문장 또는 하나의 짧은 단락으로 쓴다. 각 문장은 이후 시나리오의 한 비트로 바로 나눌 수 있어야 한다.",
     "추상적인 기획서 문장 대신 눈에 보이는 행동, 즉각적인 반응, 바로 이어지는 결과로 쓴다.",
@@ -347,6 +347,29 @@ function enforceCharacterScope(story, input) {
 
 function escapeRegExp(value) {
   return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function cleanJsonResponse(text) {
+  let cleaned = String(text || "").trim();
+  if (!cleaned) return "{}";
+  if (cleaned.startsWith("```json")) cleaned = cleaned.slice(7);
+  else if (cleaned.startsWith("```")) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith("```")) cleaned = cleaned.slice(0, -3);
+  cleaned = cleaned.trim();
+  const firstBrace = cleaned.indexOf("{");
+  if (firstBrace === -1) return "{}";
+  cleaned = cleaned.slice(firstBrace);
+  let depth = 0, inString = false, escapeNext = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (escapeNext) { escapeNext = false; continue; }
+    if (c === "\\") { escapeNext = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === "{") depth++;
+    if (c === "}") { depth--; if (depth === 0) return cleaned.slice(0, i + 1); }
+  }
+  return cleaned;
 }
 
 function describeDurationRule(input) {
