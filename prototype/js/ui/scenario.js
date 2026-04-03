@@ -87,6 +87,8 @@
         brandRules: '브랜드 허브 규칙',
         blockedTerms: '금지어'
       },
+      copyTitle: '복사',
+      copyScenarioAria: '시나리오 복사',
       commonDetailLabels: {
         title: '공통',
         empty: '(공통 블록이 아직 생성되지 않았습니다)',
@@ -97,6 +99,12 @@
         brandRules: '브랜드 규칙',
         bannedExpressions: '금지 표현'
       },
+      scenario_copy_success: '시나리오를 복사했습니다.',
+      scenario_copy_fail: '복사에 실패했습니다.',
+      scenario_copy_error_prefix: '복사 실패: ',
+      scenario_story_toggle_title: '원본/AI 전환',
+      scenario_story_toggle_view_ai: 'AI 글 보기',
+      scenario_story_toggle_view_user: '원본 보기',
       knowledgeLabels: {
         brandStory: '브랜드 스토리',
         worldSetting: '세계관/배경',
@@ -135,6 +143,8 @@
         brandRules: 'Brand Hub rules',
         blockedTerms: 'Blocked terms'
       },
+      copyTitle: 'Copy',
+      copyScenarioAria: 'Copy scenario',
       commonDetailLabels: {
         title: 'Common',
         empty: '(Common block has not been generated yet)',
@@ -145,6 +155,12 @@
         brandRules: 'Brand rules',
         bannedExpressions: 'Banned expressions'
       },
+      scenario_copy_success: 'Scenario copied.',
+      scenario_copy_fail: 'Copy failed.',
+      scenario_copy_error_prefix: 'Copy failed: ',
+      scenario_story_toggle_title: 'Toggle original/AI text',
+      scenario_story_toggle_view_ai: 'View AI text',
+      scenario_story_toggle_view_user: 'View original',
       knowledgeLabels: {
         brandStory: 'Brand story',
         worldSetting: 'World / setting',
@@ -852,7 +868,8 @@
     const toggleBtn = document.querySelector('[data-action="scenario-toggle-story-view"]');
     if (!toggleBtn) return;
     const isUser = String(view || '').trim() === 'user';
-    const nextLabel = isUser ? 'AI 글 보기' : '원본 보기';
+    const t = getScenarioUiText();
+    const nextLabel = isUser ? (t.scenario_story_toggle_view_ai || 'AI 글 보기') : (t.scenario_story_toggle_view_user || '원본 보기');
     toggleBtn.setAttribute('aria-label', nextLabel);
     toggleBtn.setAttribute('title', nextLabel);
   };
@@ -1279,8 +1296,10 @@
         </div>`;
       return;
     }
+    const tCopyTitle = (getScenarioUiText().copyTitle || '복사');
+    const tCopyAria = (getScenarioUiText().copyScenarioAria || '시나리오 복사');
     const commonInfoRow = commonInfo
-      ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play common-info-copy" id="common-copy-btn" title="복사" aria-label="시나리오 복사">⧉</button><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>`
+      ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play common-info-copy" id="common-copy-btn" data-i18n-title="copyTitle" data-i18n-aria-label="copyScenarioAria" title="${escapeHtml(tCopyTitle)}" aria-label="${escapeHtml(tCopyAria)}">⧉</button><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>`
       : '';
     const commonBackgroundBlock = commonBackgroundStyle ? `
       <div class="scenario-card scenario-card-common" data-scene-id="common-background">
@@ -1984,9 +2003,11 @@
             try { document.execCommand('copy'); ok = true; } catch (_) {}
             document.body.removeChild(ta);
           }
-          alert(ok ? '시나리오를 복사했습니다.' : '복사에 실패했습니다.');
+          const t = getScenarioUiText();
+          alert(ok ? (t.scenario_copy_success || '시나리오를 복사했습니다.') : (t.scenario_copy_fail || '복사에 실패했습니다.'));
         } catch (err) {
-          alert('복사 실패: ' + (err?.message || err));
+          const t = getScenarioUiText();
+          alert((t.scenario_copy_error_prefix || '복사 실패: ') + (err?.message || err));
         }
       }
     });
