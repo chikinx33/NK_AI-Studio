@@ -1382,7 +1382,7 @@ a.btn-primary:active {
 
 .scenario-form .scenario-form-label-row {
   display: grid;
-  grid-template-columns: auto auto;
+  grid-template-columns: max-content max-content;
   grid-template-areas:
     "label label"
     "ai toggle";
@@ -1662,6 +1662,14 @@ textarea::-webkit-scrollbar-corner {
   width: 16px;
   height: 16px;
   display: block;
+}
+
+.scenario-form .scenario-form-label-row {
+  justify-content: start;
+}
+
+.scenario-form .scenario-story-ai-icon::after {
+  display: none;
 }
 
 [data-theme="light"] .scenario-form .scenario-story-token-bar {

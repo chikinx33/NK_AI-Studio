@@ -1442,6 +1442,13 @@
   scenario.init = async function () {
     const form = document.getElementById('scenario-form');
     if (!form) return;
+    const tInit = getScenarioUiText();
+    const aiBtnInit = document.querySelector('.scenario-story-ai-btn');
+    if (aiBtnInit) {
+      const titleText = tInit.scenario_story_ai_title || '이야기를 AI로 정리';
+      aiBtnInit.setAttribute('title', titleText);
+      aiBtnInit.setAttribute('aria-label', titleText);
+    }
     const storyField = form.story || document.getElementById('scenario-story-input');
     if (storyField) {
       ['focus', 'click', 'keyup', 'select', 'input'].forEach((eventName) => {
