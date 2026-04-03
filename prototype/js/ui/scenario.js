@@ -1279,8 +1279,9 @@
         </div>`;
       return;
     }
-    const commonInfoRow = commonInfo ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>` : '';
-    const commonCopyBtn = commonInfo ? `<button class="common-info-copy" id="common-copy-btn" title="복사" aria-label="시나리오 복사" style="float:right">⧉</button>` : '';
+    const commonInfoRow = commonInfo
+      ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play common-info-copy" id="common-copy-btn" title="복사" aria-label="시나리오 복사">⧉</button><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>`
+      : '';
     const commonBackgroundBlock = commonBackgroundStyle ? `
       <div class="scenario-card scenario-card-common" data-scene-id="common-background">
         <div class="scene-visual-grid">
@@ -1290,7 +1291,7 @@
           </div>
         </div>
       </div>` : '';
-    const commonBlock = commonInfoRow + commonCopyBtn + commonBackgroundBlock;
+    const commonBlock = commonInfoRow + commonBackgroundBlock;
     container.innerHTML = commonBlock + sceneList.map(s => `
       <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">

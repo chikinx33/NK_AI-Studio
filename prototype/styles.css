@@ -1576,11 +1576,12 @@ textarea::-webkit-scrollbar-corner {
 
 .scenario-form .scenario-story-ai-btn,
 .scenario-form .scenario-story-toggle-btn {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  border-radius: 999px;
-  flex: 0 0 28px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  flex: 0 0 32px;
   padding: 0;
   border: 1px solid var(--pill-border);
   background: transparent;
@@ -1588,6 +1589,7 @@ textarea::-webkit-scrollbar-corner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .scenario-form .scenario-story-ai-btn:hover,
