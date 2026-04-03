@@ -849,13 +849,12 @@
   };
 
   const updateStoryToggleButtonUi = (view) => {
-    const aiBtn = document.querySelector('[data-action="scenario-structure-story"]');
-    if (!aiBtn) return;
+    const toggleBtn = document.querySelector('[data-action="scenario-toggle-story-view"]');
+    if (!toggleBtn) return;
     const isUser = String(view || '').trim() === 'user';
     const nextLabel = isUser ? 'AI 글 보기' : '원본 보기';
-    aiBtn.setAttribute('aria-label', nextLabel);
-    aiBtn.setAttribute('title', nextLabel);
-    aiBtn.classList.toggle('is-toggle', true);
+    toggleBtn.setAttribute('aria-label', nextLabel);
+    toggleBtn.setAttribute('title', nextLabel);
   };
 
   const renderOverviewSelects = (state = {}) => {
@@ -1538,27 +1537,6 @@
     const organizeStoryDraft = async (triggerBtn) => {
       const storyField = form.story || document.getElementById('scenario-story-input');
       if (!storyField) return;
-      const hasAi = String(storyField.dataset.aiStory || '').trim().length > 0;
-      if (hasAi) {
-        const currentView = String(storyField.dataset.view || 'ai');
-        if (currentView === 'ai') {
-          const original = String(storyField.dataset.userStory || '');
-          storyField.value = original;
-          storyField.dataset.view = 'user';
-          cacheStorySelection(storyField);
-          syncOverviewPayload();
-          updateStoryToggleButtonUi('user');
-          return;
-        } else {
-          const aiVersion = String(storyField.dataset.aiStory || '');
-          storyField.value = aiVersion;
-          storyField.dataset.view = 'ai';
-          cacheStorySelection(storyField);
-          syncOverviewPayload();
-          updateStoryToggleButtonUi('ai');
-          return;
-        }
-      }
       const payload = collectPayload();
       const rawStory = String(payload.story || '').trim();
       if (!rawStory) {
@@ -1591,6 +1569,33 @@
       }
     };
 
+    const toggleStoryView = () => {
+      const storyField = form.story || document.getElementById('scenario-story-input');
+      if (!storyField) return;
+      const aiText = String(storyField.dataset.aiStory || '').trim();
+      const userText = String(storyField.dataset.userStory || '').trim() || String(storyField.value || '').trim();
+      if (!aiText) {
+        alert(getScenarioText('scenario_story_ai_unavailable', 'AI로 정리한 내용이 없습니다.'));
+        return;
+      }
+      const currentView = String(storyField.dataset.view || 'ai');
+      if (currentView === 'ai') {
+        storyField.value = userText;
+        storyField.dataset.view = 'user';
+        storyField.dataset.userStory = userText;
+        cacheStorySelection(storyField);
+        syncOverviewPayload();
+        updateStoryToggleButtonUi('user');
+      } else {
+        storyField.value = aiText;
+        storyField.dataset.view = 'ai';
+        storyField.dataset.aiStory = aiText;
+        cacheStorySelection(storyField);
+        syncOverviewPayload();
+        updateStoryToggleButtonUi('ai');
+      }
+    };
+
     // 토글/버튼 클릭
     form.addEventListener('click', (e) => {
       const storyTokenBtn = e.target.closest('[data-insert-story-character]');
@@ -1603,6 +1608,12 @@
       if (aiBtn) {
         e.preventDefault();
         organizeStoryDraft(aiBtn);
+        return;
+      }
+      const toggleBtn = e.target.closest('[data-action="scenario-toggle-story-view"]');
+      if (toggleBtn) {
+        e.preventDefault();
+        toggleStoryView();
         return;
       }
       const btn = e.target.closest('.ratio-btn, .scenario-flag-toggle');

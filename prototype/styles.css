@@ -1574,24 +1574,30 @@ textarea::-webkit-scrollbar-corner {
   outline-offset: 2px;
 }
 
-.scenario-form .scenario-story-ai-btn {
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
-  border-radius: 7px;
-  flex: 0 0 22px;
+.scenario-form .scenario-story-ai-btn,
+.scenario-form .scenario-story-toggle-btn {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 999px;
+  flex: 0 0 28px;
   padding: 0;
-  border-color: transparent;
+  border: 1px solid var(--pill-border);
   background: transparent;
   box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.scenario-form .scenario-story-ai-btn:hover {
+.scenario-form .scenario-story-ai-btn:hover,
+.scenario-form .scenario-story-toggle-btn:hover {
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
-.scenario-form .scenario-story-ai-btn:focus-visible {
+.scenario-form .scenario-story-ai-btn:focus-visible,
+.scenario-form .scenario-story-toggle-btn:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 72%, white 28%);
   outline-offset: 2px;
 }
@@ -1627,9 +1633,16 @@ textarea::-webkit-scrollbar-corner {
   opacity: 0.95;
 }
 
-[data-theme="light"] .scenario-form .scenario-story-ai-btn:hover {
+[data-theme="light"] .scenario-form .scenario-story-ai-btn:hover,
+[data-theme="light"] .scenario-form .scenario-story-toggle-btn:hover {
   background: color-mix(in srgb, #4b8dff 10%, transparent);
   border-color: color-mix(in srgb, #4b8dff 22%, transparent);
+}
+
+.scenario-form .scenario-story-toggle-btn .icon {
+  width: 16px;
+  height: 16px;
+  display: block;
 }
 
 [data-theme="light"] .scenario-form .scenario-story-token-bar {
