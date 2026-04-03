@@ -86,12 +86,15 @@ export async function onRequestPost(context) {
 
 function normalizeInput(body) {
   const knowledge = body?.knowledgeHub && typeof body.knowledgeHub === "object" ? body.knowledgeHub : {};
-  const characters = normalizeCharacters(
+  const selectedCharacters = normalizeCharacters(Array.isArray(body?.characters) ? body.characters : []);
+  const knownCharacters = normalizeCharacters(
     []
       .concat(Array.isArray(body?.characters) ? body.characters : [])
       .concat(Array.isArray(body?.knowledgeCharacters) ? body.knowledgeCharacters : [])
       .concat(Array.isArray(knowledge?.characters) ? knowledge.characters : [])
   );
+  const selectedKeys = new Set(selectedCharacters.map((item) => String(item.token || "").toLowerCase()));
+  const excludedCharacters = knownCharacters.filter((item) => !selectedKeys.has(String(item.token || "").toLowerCase()));
   const story = sanitizeStory(body?.story || body?.rawPrompt || body?.resolvedPrompt);
   return {
     language: String(body?.language || "ko").trim().toLowerCase() === "en" ? "en" : "ko",
@@ -106,7 +109,8 @@ function normalizeInput(body) {
     worldSetting: sanitizeText(knowledge?.worldSetting || body?.worldSetting || body?.knowledgeWorld),
     brandRules: normalizeTextList(knowledge?.brandRules || body?.brandRules),
     bannedExpressions: normalizeTextList(knowledge?.bannedExpressions || body?.bannedExpressions),
-    characters: characters,
+    characters: selectedCharacters,
+    excludedCharacters: excludedCharacters,
     tokenHints: extractCharacterTokens(story),
   };
 }
@@ -122,7 +126,9 @@ function buildSystemPrompt(language) {
       "Do not output scene numbers, markdown, bullet lists, or production instructions.",
       "Treat Topic as the episode title and Story as the real narrative source.",
       "Respect brand rules and avoid banned expressions when present.",
-      "If the source story contains character tokens like @Nemo, preserve those exact @tokens and never strip the @ prefix."
+      "If the source story contains character tokens like @Nemo, preserve those exact @tokens and never strip the @ prefix.",
+      "If registered characters are provided, use only those characters as the cast and do not introduce any unselected or new characters.",
+      "If no registered characters are provided, do not include named characters, protagonists, dialogue participants, or @tokens."
     ].join(" ");
   }
   return [
@@ -134,18 +140,22 @@ function buildSystemPrompt(language) {
     "씬 번호, 마크다운, 불릿, 제작 지시문은 쓰지 않는다.",
     "주제는 에피소드 제목이고 실제 서사는 이야기 입력을 기준으로 정리한다.",
     "브랜드 규칙과 금지 표현이 있으면 반드시 반영한다.",
-    "이야기 초안에 @네모 같은 캐릭터 토큰이 있으면 그 @토큰을 그대로 유지하고 @를 절대 지우지 마라."
+    "이야기 초안에 @네모 같은 캐릭터 토큰이 있으면 그 @토큰을 그대로 유지하고 @를 절대 지우지 마라.",
+    "등록 캐릭터가 있으면 그 캐릭터만 이야기의 등장 인물로 사용하고, 선택되지 않은 캐릭터나 새 캐릭터를 추가하지 마라.",
+    "등록 캐릭터가 없으면 이름 있는 캐릭터, 주인공, 대화 참여자, @토큰을 만들지 마라."
   ].join(" ");
 }
 
 function buildUserPrompt(input) {
   const registeredCharacters = formatCharacterRoster(input.characters);
+  const excludedCharacters = formatCharacterRoster(input.excludedCharacters);
   const tokenHintText = input.tokenHints.length ? input.tokenHints.join(", ") : "(none)";
   if (input.language === "en") {
     return [
       `Topic: ${input.topic || "(none)"}`,
       `Story draft: ${input.story || "(none)"}`,
       `Registered characters: ${registeredCharacters || "(none)"}`,
+      `Excluded characters: ${excludedCharacters || "(none)"}`,
       `Must preserve tokens exactly: ${tokenHintText}`,
       `Audience: ${input.target || "(none)"}`,
       `Genre: ${input.purposeCategory || "(none)"}`,
@@ -162,6 +172,7 @@ function buildUserPrompt(input) {
     `주제: ${input.topic || "(없음)"}`,
     `이야기 초안: ${input.story || "(없음)"}`,
     `등록 캐릭터: ${registeredCharacters || "(없음)"}`,
+    `등장 금지 캐릭터: ${excludedCharacters || "(없음)"}`,
     `반드시 유지할 캐릭터 토큰: ${input.tokenHints.length ? input.tokenHints.join(", ") : "(없음)"}`,
     `시청 타겟: ${input.target || "(없음)"}`,
     `장르: ${input.purposeCategory || "(없음)"}`,
@@ -176,7 +187,7 @@ function buildUserPrompt(input) {
 }
 
 function buildFallbackStory(input) {
-  const story = sanitizeStory(input.story);
+  const story = enforceCharacterScope(input.story, input);
   if (!story) return "";
   if (/[.!?。！？]/.test(story)) return story;
   const chunks = story
@@ -251,7 +262,7 @@ function formatCharacterRoster(list) {
 }
 
 function restoreCharacterTokenHints(story, input) {
-  let output = sanitizeStory(story);
+  let output = enforceCharacterScope(story, input);
   if (!output) return "";
   const characters = normalizeCharacters(input && input.characters);
   const tokenHints = Array.isArray(input && input.tokenHints) ? input.tokenHints : [];
@@ -264,6 +275,28 @@ function restoreCharacterTokenHints(story, input) {
     output = output.replace(new RegExp(escapeRegExp(displayName), "g"), normalizedToken);
   });
   return output;
+}
+
+function enforceCharacterScope(story, input) {
+  let output = sanitizeStory(story);
+  const selected = normalizeCharacters(input && input.characters);
+  const excluded = normalizeCharacters(input && input.excludedCharacters);
+  const blocked = selected.length ? excluded : selected.concat(excluded);
+  blocked.forEach((item) => {
+    const token = normalizeToken(item?.token || "");
+    const displayName = sanitizeText(item?.displayName || "");
+    if (token) output = output.replace(new RegExp(escapeRegExp(token), "gi"), " ");
+    if (displayName) output = output.replace(new RegExp(escapeRegExp(displayName), "g"), " ");
+  });
+  if (!selected.length) {
+    output = output.replace(/@[0-9A-Za-z가-힣_]{1,24}/g, " ");
+  }
+  return sanitizeStory(
+    output
+      .replace(/\s+([,.;:!?])/g, "$1")
+      .replace(/[ ]{2,}/g, " ")
+      .replace(/\(\s*\)/g, " ")
+  );
 }
 
 function escapeRegExp(value) {

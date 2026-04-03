@@ -831,6 +831,23 @@
     renderStoryCharacterTokens();
   };
 
+  const setStoryStructureLoading = (loading) => {
+    const storyFieldWrap = document.getElementById('scenario-story-field');
+    const storyField = document.getElementById('scenario-story-input');
+    const loadingEl = document.getElementById('scenario-story-loading');
+    const aiBtn = document.querySelector('[data-action="scenario-structure-story"]');
+    if (storyFieldWrap) storyFieldWrap.classList.toggle('is-loading', !!loading);
+    if (loadingEl) loadingEl.hidden = !loading;
+    if (storyField) {
+      storyField.readOnly = !!loading;
+      storyField.setAttribute('aria-busy', loading ? 'true' : 'false');
+    }
+    if (aiBtn) {
+      aiBtn.disabled = !!loading;
+      aiBtn.setAttribute('aria-busy', loading ? 'true' : 'false');
+    }
+  };
+
   const renderOverviewSelects = (state = {}) => {
     const uiText = getScenarioUiText();
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
@@ -1522,7 +1539,7 @@
         syncOverviewPayload();
         return;
       }
-      if (triggerBtn) triggerBtn.disabled = true;
+      setStoryStructureLoading(true);
       try {
         const result = await NK.api.storyStructure(Object.assign({}, payload, { language: getRuntimeLang() }));
         const nextStory = sanitizeText(result?.story || rawStory);
@@ -1534,7 +1551,7 @@
       } catch (err) {
         alert(getScenarioText('scenario_story_structure_failed', '이야기 정리 실패') + ': ' + (err?.message || err));
       } finally {
-        if (triggerBtn) triggerBtn.disabled = false;
+        setStoryStructureLoading(false);
       }
     };
 
