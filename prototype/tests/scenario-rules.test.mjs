@@ -102,6 +102,8 @@ test('system prompt includes audience-reaction and visual craft rules', () => {
   assert.match(prompt, /sceneIntent는 이 씬을 본 관객이 느끼거나 행동하는 구체적 반응/);
   assert.match(prompt, /visual 작성법:/);
   assert.match(prompt, /\[생성 후 자체 검증 - 모든 씬에 적용\]/);
+  assert.match(prompt, /\[JSON 출력 규칙/);
+  assert.match(prompt, /마크다운.*설명.*주석.*백틱을 절대 포함하지 않는다/);
 });
 
 test('user prompt adds genre-specific scene progression guide for advertising', () => {
