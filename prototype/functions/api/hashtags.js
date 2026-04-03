@@ -52,6 +52,9 @@ export async function onRequestPost(context) {
 
     if (!completion.ok) {
       const text = await completion.text();
+      if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
+        throw new Error("CREDIT_EXHAUSTED");
+      }
       throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
 
@@ -71,6 +74,9 @@ export async function onRequestPost(context) {
       fallback: !normalized.length,
     }, 200, origin);
   } catch (err) {
+    if (/CREDIT_EXHAUSTED/.test(err?.message)) {
+      return json({ error: "CREDIT_EXHAUSTED" }, 402, origin);
+    }
     if (!fallback.length) {
       return json({ error: err?.message || "hashtag_generation_failed" }, 500, origin);
     }

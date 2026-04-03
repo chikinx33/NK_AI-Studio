@@ -60,6 +60,9 @@ export async function onRequestPost(context) {
 
     if (!completion.ok) {
       const text = await completion.text();
+      if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
+        return json({ story: fallbackStory, fallback: true, error: "CREDIT_EXHAUSTED" }, 402, origin);
+      }
       throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
 

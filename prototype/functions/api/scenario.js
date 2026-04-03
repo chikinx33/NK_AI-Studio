@@ -644,6 +644,7 @@ export async function onRequestPost(context) {
       scenes = generated.scenes;
       generationMeta = generated.meta;
     } catch (err) {
+      if (isCreditExhaustedError(err)) throw err;
       scenes = fallbackScenesV2({
         topic,
         episodeTitle,
@@ -681,6 +682,9 @@ export async function onRequestPost(context) {
       headers: corsHeaders(origin),
     });
   } catch (err) {
+    if (isCreditExhaustedError(err)) {
+      return jsonError("CREDIT_EXHAUSTED", 402, origin);
+    }
     return jsonError(err?.message || "unexpected_error", 500, origin);
   }
 }
@@ -1211,6 +1215,9 @@ async function requestScenarioChunk(apiKey, sys, userPrompt) {
     });
     const text = await completion.text();
     if (!completion.ok) {
+      if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
+        throw new Error("CREDIT_EXHAUSTED");
+      }
       throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
     return text;
@@ -3192,6 +3199,11 @@ async function retryAsync(task, maxRetries = 3, baseDelayMs = 1000) {
 function isRetryableError(err) {
   const text = String(err?.message || err || "").toLowerCase();
   return /\b429\b/.test(text) || /\b500\b|\b502\b|\b503\b|\b504\b/.test(text) || /timeout|temporar|rate limit|overloaded/.test(text);
+}
+
+function isCreditExhaustedError(err) {
+  const text = String(err?.message || err || "");
+  return /CREDIT_EXHAUSTED/.test(text) || /\b402\b/.test(text) || /billing_error|credit_balance|insufficient.{0,10}credit/i.test(text);
 }
 
 function wait(ms) {

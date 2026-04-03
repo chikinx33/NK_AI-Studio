@@ -85,6 +85,9 @@ Language: Korean`;
 
     if (!completion.ok) {
       const text = await completion.text();
+      if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
+        throw new Error("CREDIT_EXHAUSTED");
+      }
       throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
 
@@ -97,6 +100,7 @@ Language: Korean`;
       headers: { 'Content-Type': 'application/json' }
     });
   } catch (err) {
+    if (/CREDIT_EXHAUSTED/.test(err?.message)) return jsonError('CREDIT_EXHAUSTED', 402);
     return jsonError(err.message || 'Anthropic request failed', 500);
   }
 }

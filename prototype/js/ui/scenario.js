@@ -1887,7 +1887,14 @@
           }
         }
       } catch (err) {
-        if (errEl) {
+        const isCreditErr = err?.creditExhausted || /CREDIT_EXHAUSTED/.test(err?.message || '');
+        if (isCreditErr) {
+          if (errEl) {
+            errEl.innerHTML = '크레딧이 소진되었습니다. <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;">Anthropic 콘솔</a>에서 충전 후 다시 시도해 주세요.';
+            errEl.classList.remove('hidden');
+          }
+          alert('크레딧이 소진되었습니다.\n\nconsole.anthropic.com/settings/billing 에서 충전 후 다시 시도해 주세요.');
+        } else if (errEl) {
           errEl.textContent = '시나리오 생성 실패: ' + (err?.message || err);
           errEl.classList.remove('hidden');
         } else {
