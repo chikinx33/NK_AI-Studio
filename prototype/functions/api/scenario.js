@@ -1195,12 +1195,12 @@ async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, opt
 async function requestScenarioChunk(apiKey, sys, userPrompt) {
   const payload = {
     model: "claude-sonnet-4-6",
-    max_tokens: 3500,
+    max_tokens: 2500,
     system: sys,
     messages: [
       { role: "user", content: userPrompt },
     ],
-    temperature: 0.35,
+    temperature: 0.5,
   };
   const responseText = await retryAsync(async () => {
     const controller = new AbortController();

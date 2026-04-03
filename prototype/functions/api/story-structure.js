@@ -51,8 +51,8 @@ export async function onRequestPost(context) {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 768,
-          temperature: 0.4,
+          max_tokens: 600,
+          temperature: 0.5,
           system: buildSystemPrompt(input.language),
           messages: [
             {
