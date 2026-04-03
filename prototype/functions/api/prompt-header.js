@@ -26,7 +26,6 @@
   const characterMode = characterGenerationDisabled ? 'No character appearance. Use environment/object-focused direction only.' : 'Character usage allowed if needed.';
 
   const sys = `You compose a global "Common Prompt" in Korean for the video project.
-- Output JSON only: {"header":"..."} where header is a multi-section Korean block.
 - Sections and order (all required):
   Project Context
   Narrative & Tone Rules
@@ -43,7 +42,12 @@
 - If they conflict, prioritize manual directives, brand rules, banned expressions, brand tone & manner, then overview tone.
 - Keep tone guidance in "Narrative & Tone Rules". Keep visual guidance in "Visual Style Rules".
 - Mandatory Directives must copy manual directives, brand rules, and banned expressions without paraphrasing or loosening.
-- Keep concise (≤220 words).`;
+- Keep concise (≤220 words).
+[JSON OUTPUT RULES - STRICTLY REQUIRED]
+- Output ONLY valid JSON. First character MUST be { and last character MUST be }.
+- Exact format: {"header":"..."}
+- NEVER wrap in markdown. No backticks, no \`\`\`json, no \`\`\`, no explanation text before or after JSON.
+- Any character outside the JSON object is forbidden.`;
 
   const user = `Topic: ${topic}
 Story: ${story}
@@ -93,7 +97,7 @@ Language: Korean`;
 
     const data = await completion.json();
     const text = data.content?.[0]?.text;
-    const parsed = JSON.parse(text || '{}');
+    const parsed = JSON.parse(cleanJsonResponse(text || '{}'));
     if (!parsed.header) throw new Error('Missing header');
     return new Response(JSON.stringify({ header: parsed.header }), {
       status: 200,
@@ -160,4 +164,27 @@ function toBool(value, fallback) {
     if (['false', '0', 'no', 'off'].includes(v)) return false;
   }
   return !!fallback;
+}
+
+function cleanJsonResponse(text) {
+  let cleaned = String(text || '').trim();
+  if (!cleaned) return '{}';
+  if (cleaned.startsWith('```json')) cleaned = cleaned.slice(7);
+  else if (cleaned.startsWith('```')) cleaned = cleaned.slice(3);
+  if (cleaned.endsWith('```')) cleaned = cleaned.slice(0, -3);
+  cleaned = cleaned.trim();
+  const firstBrace = cleaned.indexOf('{');
+  if (firstBrace === -1) return '{}';
+  cleaned = cleaned.slice(firstBrace);
+  let depth = 0, inString = false, escapeNext = false;
+  for (let i = 0; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (escapeNext) { escapeNext = false; continue; }
+    if (c === '\\') { escapeNext = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === '{') depth++;
+    if (c === '}') { depth--; if (depth === 0) return cleaned.slice(0, i + 1); }
+  }
+  return cleaned;
 }
