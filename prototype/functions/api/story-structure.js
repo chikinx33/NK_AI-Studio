@@ -47,7 +47,7 @@ export async function onRequestPost(context) {
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 1024,
-        temperature: 0.3,
+        temperature: 0.6,
         system: buildSystemPrompt(input.language),
         messages: [
           {
@@ -123,13 +123,13 @@ function buildSystemPrompt(language) {
     return [
       "You reorganize a rough story draft into a short-form story skeleton that the next scenario generator can split into scenes immediately.",
       'Return JSON only: {"story":"..."}',
-      "Keep the user's intent, events, duration, audience, tone, and cast. Do not invent a different plot.",
+      "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific action and immediate reaction. Do not copy original sentences verbatim.",
       "Write 2-5 short sentences or one short paragraph. Each sentence should map to one simple beat for later scene generation.",
       "Write only visible actions, reactions, and immediate outcomes. Do not summarize with abstract planning language.",
       "Short video logic is mandatory. Around 15 seconds means one core situation, minimal location changes, and about 3-4 action beats.",
       "If the audience is infants, toddlers, or young kids, use very simple wording and concrete action-response phrasing only.",
       "If the tone includes humor/comedy, include at least one specific funny mishap, mistake, reversal, or visual gag instead of saying it is humorous.",
-      "If style or world-setting information exists, include only one light visual-world hint that helps consistency. Do not turn it into full scene direction.",
+      "If style or world-setting information exists, weave a brief visual hint naturally into the first sentence only. Do not insert it as a standalone sentence in the middle of the story.",
       "Forbidden abstract examples: deepens friendship, feels the joy of solving together, becomes emotional, enters a humorous situation, meaningful journey.",
       "Do not output scene numbers, markdown, bullet lists, or production instructions.",
       "Treat Topic as the episode title and Story as the real narrative source.",
@@ -142,13 +142,13 @@ function buildSystemPrompt(language) {
   return [
     "너는 사용자가 적은 초안을 다음 단계의 시나리오 생성기가 바로 씬으로 쪼갤 수 있는 짧은 영상용 이야기 뼈대로 재정리하는 보조 AI다.",
     '반드시 JSON만 반환한다. 형식: {"story":"..."}',
-    "사용자의 의도, 사건, 길이, 타겟, 톤, 등장 캐릭터 범위를 유지하고 전혀 다른 줄거리를 새로 만들지 마라.",
+    "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 원문 문장을 그대로 복사하지 마라.",
     "출력은 2~5개의 짧은 문장 또는 하나의 짧은 단락으로 쓴다. 각 문장은 이후 시나리오의 한 비트로 바로 나눌 수 있어야 한다.",
     "추상적인 기획서 문장 대신 눈에 보이는 행동, 즉각적인 반응, 바로 이어지는 결과로 쓴다.",
     "짧은 영상 길이를 반드시 반영한다. 15초 안팎이면 한 가지 핵심 상황만 다루고, 장소 이동을 최소화하며, 3~4개의 행동 비트 정도만 허용한다.",
     "시청 타겟이 영유아/어린이면 짧고 쉬운 말만 쓰고, 추상 감정 설명 대신 행동과 반응만 쓴다.",
     "톤이 유머/코미디면 실제 코믹 상황 1개 이상을 구체적으로 쓴다. '유머러스한 상황에 처한다'처럼 설명으로 넘기지 마라.",
-    "스타일이나 세계관 정보가 있으면 비주얼 일관성에 도움이 되는 짧은 힌트만 1회 넣고, 장면 연출 지시문처럼 길게 쓰지 마라.",
+    "스타일이나 세계관 힌트가 필요하면 첫 번째 문장에만 자연스럽게 녹여 넣는다. 이야기 흐름 중간에 별도 문장으로 삽입하지 마라.",
     "금지 예시: 우정을 더욱 깊게 다진다, 문제를 함께 해결하는 즐거움을 느낀다, 감동을 준다, 유머러스한 상황에 처한다, 의미 있는 여정.",
     "씬 번호, 마크다운, 불릿, 제작 지시문은 쓰지 않는다.",
     "주제는 에피소드 제목이고 실제 서사는 이야기 입력을 기준으로 정리한다.",
@@ -188,7 +188,7 @@ function buildUserPrompt(input) {
       `World setting: ${input.worldSetting || "(none)"}`,
       `Brand rules: ${input.brandRules.join(", ") || "(none)"}`,
       `Banned expressions: ${input.bannedExpressions.join(", ") || "(none)"}`,
-      "Output goal: a compressed action-first story skeleton that can be split into scenes without inventing a new plot."
+      "Output goal: a compressed, action-first story skeleton that preserves the user's intent and direction, with all abstract phrases replaced by concrete action beats. Do not copy original sentences verbatim."
     ].join("\n");
   }
   return [
@@ -211,7 +211,7 @@ function buildUserPrompt(input) {
     `세계관/배경: ${input.worldSetting || "(없음)"}`,
     `브랜드 규칙: ${input.brandRules.join(", ") || "(없음)"}`,
     `금지 표현: ${input.bannedExpressions.join(", ") || "(없음)"}`,
-    "출력 목표: 다음 시나리오 생성 버튼이 새 줄거리를 상상하지 않아도 되도록, 행동 순서가 보이는 압축형 이야기 뼈대를 만든다."
+    "출력 목표: 사용자의 의도와 방향을 유지하면서, 추상적 표현은 구체적 행동 비트로 채운 압축형 이야기 뼈대를 만든다. 원문 문장 복사 금지."
   ].join("\n");
 }
 
@@ -508,8 +508,7 @@ function appendHumorBeat(beats, input) {
 function resolveFallbackActor(input) {
   const selected = normalizeCharacters(input?.characters);
   if (selected.length === 1) return selected[0].token;
-  if (selected.length === 2) return `${selected[0].token}와 ${selected[1].token}`;
-  if (selected.length > 2) return `${selected[0].token}와 친구들`;
+  if (selected.length >= 2) return `${selected[0].token}와 ${selected[1].token}`;
   return input?.language === "en" ? "The characters" : "주인공";
 }
 
@@ -522,8 +521,8 @@ function appendStyleHint(beats, input) {
   if (!styleText) return next;
   if (/(3d|애니메이션|animation)/i.test(styleText) && !/(말랑|파스텔|비비드|soft|pastel|bright)/i.test(next[0])) {
     next[0] = input?.language === "en"
-      ? `${next[0]} The world feels soft and colorful like a simple 3D animation.`
-      : `${next[0]} 말랑한 3D 장난감 같은 색감이 함께 느껴진다.`;
+      ? `In a soft, colorful 3D world, ${next[0].charAt(0).toLowerCase() + next[0].slice(1)}`
+      : `말랑한 3D 도형 세계에서, ${next[0]}`;
   }
   return next;
 }
