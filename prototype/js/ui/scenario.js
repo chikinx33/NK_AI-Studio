@@ -89,6 +89,7 @@
       },
       copyTitle: '복사',
       copyScenarioAria: '시나리오 복사',
+      scenario_story_ai_title: '이야기를 AI로 정리',
       commonDetailLabels: {
         title: '공통',
         empty: '(공통 블록이 아직 생성되지 않았습니다)',
@@ -145,6 +146,7 @@
       },
       copyTitle: 'Copy',
       copyScenarioAria: 'Copy scenario',
+      scenario_story_ai_title: 'Refine story with AI',
       commonDetailLabels: {
         title: 'Common',
         empty: '(Common block has not been generated yet)',

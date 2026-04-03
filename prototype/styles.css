@@ -1406,6 +1406,14 @@ a.btn-primary:active {
   justify-self: start;
 }
 
+.scenario-form .scenario-story-controls {
+  flex: 1 1 auto;
+  display: flex;
+}
+.scenario-form .scenario-story-field {
+  flex: 1 1 auto;
+}
+
 [data-theme="light"] .scenario-form label {
   color: #0d172f;
 }
