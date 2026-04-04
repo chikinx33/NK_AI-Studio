@@ -1946,7 +1946,46 @@
     setTimeout(finishLoading, 350); // 약간의 딜레이로 로딩/블러가 눈에 띄게 표시되도록
     window.addEventListener('load', finishLoading);
 
-    // 공통 프롬프트 모달 (레거시 — 비활성)
+    // 시나리오 복사 버튼
+    const scenarioCopyBtn = document.getElementById('scenario-copy-btn');
+    if (scenarioCopyBtn) {
+      scenarioCopyBtn.addEventListener('click', async () => {
+        try {
+          const latest = collectScenesFromCards();
+          const mergedScenes = mergeSceneSnapshots(draft?.scenes || [], latest);
+          const scenes = mergedScenes.length ? mergedScenes : (draft?.scenes || []);
+          if (!scenes.length) { alert('복사할 시나리오가 없습니다.'); return; }
+          const makeBlock = (s) => {
+            const lines = [];
+            lines.push(`Scene ${s.id} · ${fmtEst(s.estSec)}`);
+            if (s.sceneLocation || s.location) lines.push(`장소: ${s.sceneLocation || s.location}`);
+            if (s.shot || s.visual) lines.push(`시각화: ${s.shot || s.visual}`);
+            if (s.narrationText || s.narration) lines.push(`나레이션: ${s.narrationText || s.narration}`);
+            const dlg = s.dialogueText || dialogueToText(s.dialogue || []);
+            if (dlg) lines.push(`대사:\n${dlg}`);
+            return lines.filter(Boolean).join('\n');
+          };
+          const text = scenes.map(makeBlock).join('\n\n');
+          let ok = false;
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(text); ok = true;
+          }
+          if (!ok) {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.cssText = 'position:fixed;top:-1000px';
+            document.body.appendChild(ta); ta.focus(); ta.select();
+            try { document.execCommand('copy'); ok = true; } catch (_) {}
+            document.body.removeChild(ta);
+          }
+          const t = getScenarioUiText();
+          alert(ok ? (t.scenario_copy_success || '시나리오를 복사했습니다.') : (t.scenario_copy_fail || '복사에 실패했습니다.'));
+        } catch (err) {
+          alert('복사 실패: ' + (err?.message || err));
+        }
+      });
+    }
+
+    // 모달 닫기 (레거시)
     document.addEventListener('click', (e) => {
       const target = e.target;
       if (target && target.dataset && target.dataset.close === 'common-modal') {
