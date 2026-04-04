@@ -3390,24 +3390,49 @@ function findLastCompleteSceneObject(json = "") {
 }
 
 function repairJsonString(text = "") {
-  let out = text;
-  // Fix unescaped control characters inside JSON strings
-  out = out.replace(/[\x00-\x1f]/g, (ch) => {
+  // Phase 1: fix unescaped control characters
+  let out = text.replace(/[\x00-\x1f]/g, (ch) => {
     if (ch === "\n") return "\\n";
     if (ch === "\r") return "\\r";
     if (ch === "\t") return "\\t";
     return "";
   });
-  // Fix unescaped double-quotes inside JSON string values:
-  // Match patterns like "key": "value with "bad" quotes"
-  out = out.replace(/"([^"]*?)"/g, (match, inner) => {
-    // Skip if the inner content looks like a JSON key or simple value
-    if (!/["{}\[\]]/.test(inner)) return match;
-    return match;
-  });
-  // Try removing trailing commas before } or ]
+  // Phase 2: remove trailing commas before } or ]
   out = out.replace(/,\s*([}\]])/g, "$1");
-  return out;
+  // Phase 3: fix unescaped quotes inside JSON string values
+  // Walk character by character, tracking whether we are inside a string
+  try {
+    JSON.parse(out);
+    return out;
+  } catch (_) { /* need deeper repair */ }
+  const chars = [...out];
+  const result = [];
+  let inStr = false;
+  let escaped = false;
+  let strStart = -1;
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    if (escaped) { escaped = false; result.push(c); continue; }
+    if (c === "\\") { escaped = true; result.push(c); continue; }
+    if (c === '"') {
+      if (!inStr) {
+        inStr = true; strStart = i; result.push(c); continue;
+      }
+      // We are in a string and hit a quote — is this the real end?
+      // Look ahead: skip whitespace, then expect : , } ] or end
+      let j = i + 1;
+      while (j < chars.length && (chars[j] === " " || chars[j] === "\\n" || chars[j] === "\\r" || chars[j] === "\\t")) j++;
+      const next = chars[j] || "";
+      if (next === ":" || next === "," || next === "}" || next === "]" || next === "" || next === '"') {
+        // Looks like real end of string
+        inStr = false; result.push(c); continue;
+      }
+      // Otherwise it's an unescaped quote inside the string — escape it
+      result.push("\\", '"'); continue;
+    }
+    result.push(c);
+  }
+  return result.join("");
 }
 
 function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, characters, topic }) {
