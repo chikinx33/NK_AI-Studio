@@ -981,7 +981,14 @@
       badge.textContent = getRenderStatusLabel(status);
     }
     var progressEl = document.getElementById('postprod-render-progress');
-    if (progressEl) progressEl.textContent = (status === 'rendering') ? (Math.round(Number(meta.progress) || 0) + '%') : '';
+    if (progressEl) {
+      if (status === 'rendering') {
+        var pct = Math.round(Number(meta.progress) || 0);
+        progressEl.innerHTML = '<div class="postprod-progress-row"><div class="postprod-progress-bar"><div class="postprod-progress-fill" style="width:' + pct + '%"></div></div><span class="postprod-progress-text">' + pct + '%</span></div>';
+      } else {
+        progressEl.innerHTML = '';
+      }
+    }
     var saveStateEl = document.getElementById('postprod-save-state');
     if (saveStateEl) {
       if (state.saveBusy) saveStateEl.textContent = '저장 중...';

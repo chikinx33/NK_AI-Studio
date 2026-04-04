@@ -5540,6 +5540,36 @@ html.page-shell-image #sidebar-project-card {
   font-weight: 700;
 }
 
+.postprod-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.postprod-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.postprod-progress-fill {
+  height: 100%;
+  background: #ffd500;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.postprod-progress-text {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffd500;
+  white-space: nowrap;
+  min-width: 36px;
+  text-align: right;
+}
+
 .postprod-render-info {
   color: #9fd4ff;
 }
