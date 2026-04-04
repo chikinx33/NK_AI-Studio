@@ -47,6 +47,24 @@
     ]);
   }
 
+  function sceneImageLink(scene) {
+    return firstFilled([
+      scene && scene.imagePath,
+      scene && scene.generatedImageUrl,
+      scene && scene.imageUrl
+    ]);
+  }
+
+  function sceneNarrationText(scene, payload) {
+    var narrationEnabled = payload && payload.narrationEnabled;
+    if (!narrationEnabled) return '';
+    return firstFilled([
+      scene && scene.narration,
+      scene && scene.script,
+      scene && scene.videoSpeechPrompt
+    ]);
+  }
+
   function sceneVideoUrl(scene) {
     return firstFilled([
       scene && scene.videoUrl,
@@ -262,17 +280,20 @@
     if (!project) return false;
     var scenes = Array.isArray(project.scenes) ? project.scenes : [];
     if (!scenes.length) return false;
+    var payload = project.payload || {};
     var title = fileSafeName(project.title, 'storyboard');
     var rows = scenes.map(function (scene, index) {
       var duration = sceneDuration(scene);
-      var subtitle = splitSubtitleText(firstFilled([scene.subtitleText, scene.caption, sceneNarration(scene)]), 22).join(' / ');
-      var imageUrl = sceneImageUrl(scene);
+      var subtitleRaw = firstFilled([scene.subtitleText, scene.caption, sceneNarration(scene)]);
+      var subtitle = splitSubtitleText(stripSpeakerTokens(subtitleRaw) || subtitleRaw, 22).join(' / ');
+      var narration = sceneNarrationText(scene, payload);
+      var imageUrl = sceneImageLink(scene);
       var videoUrl = sceneVideoUrl(scene);
       return '<tr>' +
         '<td>' + escapeWorksheetText(scene.id || (index + 1)) + '</td>' +
         '<td>' + escapeWorksheetText(firstFilled([scene.title, 'Scene ' + (index + 1)])) + '</td>' +
         '<td>' + escapeWorksheetText(duration + 's') + '</td>' +
-        '<td>' + escapeWorksheetText(sceneNarration(scene)) + '</td>' +
+        '<td>' + escapeWorksheetText(narration) + '</td>' +
         '<td>' + escapeWorksheetText(subtitle) + '</td>' +
         '<td>' + escapeWorksheetText(sceneVisual(scene)) + '</td>' +
         '<td>' + (imageUrl ? ('<a href="' + escapeHtml(imageUrl) + '">' + escapeWorksheetText(imageUrl) + '</a>') : '') + '</td>' +
