@@ -512,12 +512,18 @@
 
   function getClipMotionPreset(clipId) {
     if (!clipId) return 'none';
-    var clip = findClip(clipId);
-    if (clip && clip.motionPreset && clip.motionPreset !== 'none') return clip.motionPreset;
+    // sessionEdits 우선 (현재 세션에서 변경한 값)
+    var sessionEdit = state.sessionEdits && state.sessionEdits[clipId];
+    if (sessionEdit && sessionEdit.motionPreset) return sessionEdit.motionPreset;
+    // 저장된 edits에서 조회
     var project = getProjectByStateId();
-    var edits = getMergedTimelineEdits(project);
-    var edit = edits && edits[clipId];
-    return (edit && edit.motionPreset) || 'none';
+    var savedEdits = getTimelineEdits(project);
+    var savedEdit = savedEdits && savedEdits[clipId];
+    if (savedEdit && savedEdit.motionPreset) return savedEdit.motionPreset;
+    // model clip에서 조회
+    var clip = findClip(clipId);
+    if (clip && clip.motionPreset) return clip.motionPreset;
+    return 'none';
   }
 
   function setClipMotionPreset(clipId, preset) {
