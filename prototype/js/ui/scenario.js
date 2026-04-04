@@ -92,6 +92,10 @@
       scenario_story_ai_title: '이야기를 AI로 정리',
       commonDetailLabels: {
         title: '공통',
+        modalTitle: '공통 프롬프트',
+        sectionBlock: '공통 블록',
+        sectionOverview: '에피소드 개요',
+        sectionHub: '브랜드 허브',
         empty: '(공통 블록이 아직 생성되지 않았습니다)',
         brandVoice: '브랜드 보이스',
         brandStory: '브랜드 스토리',
@@ -149,6 +153,10 @@
       scenario_story_ai_title: 'Refine story with AI',
       commonDetailLabels: {
         title: 'Common',
+        modalTitle: 'Common Prompt',
+        sectionBlock: 'Common Block',
+        sectionOverview: 'Episode Overview',
+        sectionHub: 'Brand Hub',
         empty: '(Common block has not been generated yet)',
         brandVoice: 'Brand voice',
         brandStory: 'Brand story',
@@ -691,9 +699,14 @@
     const raw = String(value || '').trim();
     if (!raw) return raw;
     if (key !== 'brandCharacter') return raw;
+    if (getUiLang() === 'en') {
+      return raw
+        .replace(/(^|\n)\s*브랜드 화자\s*(?=\n|$)/g, '$1Speaker')
+        .replace(/(^|\n)\s*Brand speaker\s*(?=\n|$)/gi, '$1Speaker');
+    }
     return raw
       .replace(/(^|\n)\s*브랜드 화자\s*(?=\n|$)/g, '$1화자')
-      .replace(/(^|\n)\s*Brand speaker\s*(?=\n|$)/gi, '$1Speaker');
+      .replace(/(^|\n)\s*Brand speaker\s*(?=\n|$)/gi, '$1화자');
   };
 
   const translateScenarioOption = (value) => {
@@ -1108,18 +1121,62 @@
     const knowledge = readKnowledgeHub(p);
     const labels = getScenarioUiText().commonDetailLabels || {};
     const infoLabels = getScenarioUiText().commonInfoLabels || {};
-    const lines = [];
-    lines.push(labels.title || 'Common');
-    lines.push(p.header || (labels.empty || '(Common block has not been generated yet)'));
-    if (p.topic) lines.push(`${infoLabels.topic || 'Topic'}: ${p.topic}`);
-    if (p.story) lines.push(`${infoLabels.story || 'Story'}: ${p.story}`);
-    if (knowledge.brandVoice) lines.push(`${labels.brandVoice || 'Brand voice'}: ${knowledge.brandVoice}`);
-    if (knowledge.brandStory) lines.push(`${labels.brandStory || 'Brand story'}: ${knowledge.brandStory}`);
-    if (knowledge.brandCharacter) lines.push(`${labels.brandCharacter || 'Brand character'}: ${knowledge.brandCharacter}`);
-    if (knowledge.worldSetting) lines.push(`${labels.worldSetting || 'World setting'}: ${knowledge.worldSetting}`);
-    if (knowledge.brandRules.length) lines.push(`${labels.brandRules || 'Brand rules'}: ${knowledge.brandRules.join(', ')}`);
-    if (knowledge.bannedExpressions.length) lines.push(`${labels.bannedExpressions || 'Banned expressions'}: ${knowledge.bannedExpressions.join(', ')}`);
-    return lines.join('\n');
+    const esc = escapeHtml;
+
+    const field = (label, value) => {
+      if (!value) return '';
+      const lines = String(value).split('\n').map(l => l.trim()).filter(Boolean);
+      const valueHtml = lines.length > 1
+        ? `<ul class="cpd-list">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`
+        : `<span class="cpd-value">${esc(lines[0] || '')}</span>`;
+      return `<div class="cpd-field"><span class="cpd-label">${esc(label)}</span>${valueHtml}</div>`;
+    };
+
+    const parts = [];
+    parts.push(`<h2 class="cpd-modal-title">${esc(labels.modalTitle || 'Common Prompt')}</h2>`);
+
+    // Common Block
+    const headerText = p.header || '';
+    parts.push(`<section class="cpd-section">`);
+    parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionBlock || labels.title || 'Common Block')}</h3>`);
+    if (headerText) {
+      const headerHtml = String(headerText).split('\n').map(l => l.trim()).filter(Boolean)
+        .map(l => `<p>${esc(l)}</p>`).join('');
+      parts.push(`<div class="cpd-header-block">${headerHtml}</div>`);
+    } else {
+      parts.push(`<p class="cpd-empty">${esc(labels.empty || '')}</p>`);
+    }
+    parts.push(`</section>`);
+
+    // Episode Overview
+    if (p.topic || p.story) {
+      parts.push(`<section class="cpd-section">`);
+      parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionOverview || 'Episode Overview')}</h3>`);
+      parts.push(`<div class="cpd-fields">`);
+      if (p.topic) parts.push(field(infoLabels.topic || 'Topic', p.topic));
+      if (p.story) parts.push(field(infoLabels.story || 'Story', p.story));
+      parts.push(`</div>`);
+      parts.push(`</section>`);
+    }
+
+    // Brand Hub
+    const hasHub = knowledge.brandVoice || knowledge.brandStory || knowledge.brandCharacter
+      || knowledge.worldSetting || knowledge.brandRules.length || knowledge.bannedExpressions.length;
+    if (hasHub) {
+      parts.push(`<section class="cpd-section">`);
+      parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionHub || 'Brand Hub')}</h3>`);
+      parts.push(`<div class="cpd-fields">`);
+      if (knowledge.brandVoice) parts.push(field(labels.brandVoice || 'Brand voice', knowledge.brandVoice));
+      if (knowledge.brandStory) parts.push(field(labels.brandStory || 'Brand story', knowledge.brandStory));
+      if (knowledge.brandCharacter) parts.push(field(labels.brandCharacter || 'Brand character', normalizeKnowledgeDisplayValue('brandCharacter', knowledge.brandCharacter)));
+      if (knowledge.worldSetting) parts.push(field(labels.worldSetting || 'World setting', knowledge.worldSetting));
+      if (knowledge.brandRules.length) parts.push(field(labels.brandRules || 'Brand rules', knowledge.brandRules.join('\n')));
+      if (knowledge.bannedExpressions.length) parts.push(field(labels.bannedExpressions || 'Banned expressions', knowledge.bannedExpressions.join('\n')));
+      parts.push(`</div>`);
+      parts.push(`</section>`);
+    }
+
+    return parts.join('');
   };
 
   const getCommonBackgroundStyleFromCard = () => {
@@ -1965,7 +2022,7 @@
         const modal = document.getElementById('common-modal');
         const body = document.getElementById('common-modal-body');
         if (modal && body) {
-          body.textContent = buildCommonDetail();
+          body.innerHTML = buildCommonDetail();
           modal.classList.remove('hidden');
         }
       }
