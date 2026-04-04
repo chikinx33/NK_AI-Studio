@@ -215,6 +215,7 @@
       '<span class="scene-row-preview">' + narrationPreview + '</span>' +
       '<span class="scene-row-chips">' + statusChips + '</span>' +
       '</div>' +
+      '<div class="scene-row-body-wrap">' +
       '<div class="scene-row-body">' +
       '<div class="scene-cell story">' +
       '<div class="story-inner">' +
@@ -254,6 +255,7 @@
       '<button class="btn-secondary compact" data-action="upload-video" data-id="' + scene.id + '">업로드</button>' +
       '<button class="btn-secondary compact" data-action="library-video" data-id="' + scene.id + '">저장소</button>' +
       '<button class="btn-secondary compact" data-action="download-video" data-id="' + scene.id + '"' + (scene.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
+      '</div>' +
       '</div>' +
       '</div>' +
       '</div>' +
