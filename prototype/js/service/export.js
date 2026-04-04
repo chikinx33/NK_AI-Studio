@@ -58,7 +58,7 @@
   }
 
   function stripSpeakerTokens(text) {
-    return String(text || '').replace(/@[\w\uAC00-\uD7AF]+/g, '').replace(/\s{2,}/g, ' ').trim();
+    return String(text || '').replace(/@/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
   function sceneNarration(scene) {
