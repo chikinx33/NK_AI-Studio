@@ -5378,7 +5378,19 @@ html.page-shell-image #sidebar-project-card {
 }
 
 .postprod-history-btn {
-  min-width: 82px;
+  min-width: 32px;
+}
+
+.postprod-history-btn.icon-btn {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .postprod-history-btn.danger {

@@ -2097,9 +2097,9 @@
       '<button class="btn-secondary compact postprod-fit-btn' + (state.fitTimeline ? ' is-active' : '') + '" id="postprod-zoom-fit" type="button" aria-label="타임라인 맞춤">FIX</button>' +
       '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
-      '<button class="btn-secondary compact postprod-history-btn" id="postprod-undo-btn"' + (canUndo() ? '' : ' disabled') + '>되돌리기</button>' +
-      '<button class="btn-secondary compact postprod-history-btn" id="postprod-redo-btn"' + (canRedo() ? '' : ' disabled') + '>다시 실행</button>' +
-      '<button class="btn-secondary compact postprod-history-btn danger" id="postprod-delete-btn"' + (state.selectedClipId ? '' : ' disabled') + '>선택 삭제</button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="되돌리기"' + (canUndo() ? '' : ' disabled') + '>&#x21B6;</button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-redo-btn" title="다시 실행"' + (canRedo() ? '' : ' disabled') + '>&#x21B7;</button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn danger" id="postprod-delete-btn" title="선택 삭제"' + (state.selectedClipId ? '' : ' disabled') + '>&#x2715;</button>' +
       '</div>' +
       '</div>' +
 
