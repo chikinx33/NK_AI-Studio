@@ -5723,7 +5723,7 @@ html.page-shell-image #sidebar-project-card {
   background: rgba(6, 10, 20, 0.72);
   overflow: auto;
   padding: 6px;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
