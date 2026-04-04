@@ -1515,7 +1515,8 @@
         baseDuration: Math.max(0.2, subEnd - subStart)
       });
     }
-    var single = stripSpeakerTokens(firstFilled([scene && scene.subtitleText, scene && scene.caption]));
+    var rawSingle = firstFilled([scene && scene.subtitleText, scene && scene.caption]);
+    var single = rawSingle ? (stripSpeakerTokens(rawSingle) || rawSingle) : '';
     if (!clips.length && single) {
       clips.push({
         id: 'sub-' + sceneIndex,

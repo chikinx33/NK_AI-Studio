@@ -62,7 +62,7 @@
   }
 
   function sceneNarration(scene) {
-    var raw = firstFilled([
+    return firstFilled([
       scene && scene.videoSpeechPrompt,
       scene && scene.script,
       scene && scene.narration,
@@ -71,7 +71,6 @@
       scene && scene.lines,
       scene && scene.script
     ]);
-    return stripSpeakerTokens(raw);
   }
 
   function sceneVisual(scene) {
@@ -134,9 +133,9 @@
       var subStart = clamp(toNumber(sub.start, 0), 0, Math.max(0, duration - 0.2));
       var subEndRaw = toNumber(sub.end, subStart + 1.2);
       var subEnd = clamp(subEndRaw, subStart + 0.2, duration);
-      var text = stripSpeakerTokens(firstFilled([sub.text, sub.caption, sub.label]));
-      if (!text) continue;
-      var pieces = splitSubtitleText(text, maxChars);
+      var rawText = firstFilled([sub.text, sub.caption, sub.label]);
+      if (!rawText) continue;
+      var pieces = splitSubtitleText(stripSpeakerTokens(rawText) || rawText, maxChars);
       var pieceDuration = Math.max(0.2, (subEnd - subStart) / Math.max(1, pieces.length));
       for (var j = 0; j < pieces.length; j++) {
         var start = subStart + (pieceDuration * j);
@@ -154,9 +153,9 @@
   }
 
   function normalizeFallbackSubtitles(scene, baseStart, duration, sceneIndex, options) {
-    var text = stripSpeakerTokens(firstFilled([scene && scene.subtitleText, scene && scene.caption, sceneNarration(scene)]));
-    if (!text) return [];
-    var pieces = splitSubtitleText(text, options && options.maxChars);
+    var rawText = firstFilled([scene && scene.subtitleText, scene && scene.caption, sceneNarration(scene)]);
+    if (!rawText) return [];
+    var pieces = splitSubtitleText(stripSpeakerTokens(rawText) || rawText, options && options.maxChars);
     if (!pieces.length) return [];
     var chunkDuration = Math.max(0.8, duration / Math.max(1, pieces.length));
     return pieces.map(function (piece, idx) {
