@@ -2348,9 +2348,11 @@ textarea::-webkit-scrollbar-corner {
   cursor: default;
 }
 
+.scenario-card {
+  transition: min-height 0.28s ease, padding 0.28s ease;
+}
 .scenario-card.is-collapsed {
   box-sizing: border-box;
-  height: 46px;
   min-height: 46px;
   max-height: 46px;
   padding: 0 12px;
@@ -3924,13 +3926,11 @@ textarea::-webkit-scrollbar-corner {
 .scene-row-chip.chip-loading { background: rgba(255,122,0,0.15); color: #ff7a00; }
 
 .scene-row-body-wrap {
-  display: grid;
-  grid-template-rows: 1fr;
   overflow: hidden;
-  transition: grid-template-rows 0.28s ease;
 }
 .scene-row.is-collapsed .scene-row-body-wrap {
-  grid-template-rows: 0fr;
+  height: 0;
+  overflow: hidden;
 }
 .scene-row-body {
   display: grid;

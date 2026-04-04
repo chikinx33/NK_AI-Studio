@@ -1198,20 +1198,57 @@
     });
   };
 
-  const setScenarioCardCollapsed = (card, collapsed) => {
+  const setScenarioCardCollapsed = (card, collapsed, animate) => {
     if (!card || card.classList.contains('scenario-card-common')) return;
     const sceneId = String(card.dataset.sceneId || '').trim();
-    card.classList.toggle('is-collapsed', !!collapsed);
     const toggleBtn = card.querySelector('.scenario-card-toggle');
-    if (toggleBtn) {
-      toggleBtn.textContent = collapsed ? '+' : '-';
-      toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-      toggleBtn.setAttribute('aria-label', collapsed ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse);
-      toggleBtn.setAttribute('title', collapsed ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse);
+    const updateToggle = () => {
+      if (toggleBtn) {
+        toggleBtn.textContent = collapsed ? '+' : '-';
+        toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        toggleBtn.setAttribute('aria-label', collapsed ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse);
+        toggleBtn.setAttribute('title', collapsed ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse);
+      }
+    };
+    if (sceneId) { if (collapsed) collapsedSceneIds.add(sceneId); else collapsedSceneIds.delete(sceneId); }
+
+    if (animate !== false && card.offsetParent !== null) {
+      const DURATION = 280;
+      if (collapsed) {
+        const startH = card.scrollHeight;
+        card.style.transition = 'none';
+        card.style.height = startH + 'px';
+        card.style.minHeight = startH + 'px';
+        card.style.maxHeight = startH + 'px';
+        card.style.overflow = 'hidden';
+        card.offsetHeight; // reflow
+        card.style.transition = 'height ' + DURATION + 'ms ease, min-height ' + DURATION + 'ms ease, max-height ' + DURATION + 'ms ease, padding ' + DURATION + 'ms ease';
+        card.classList.add('is-collapsed');
+        card.style.height = '46px';
+        card.style.minHeight = '46px';
+        card.style.maxHeight = '46px';
+        updateToggle();
+        setTimeout(() => { card.style.cssText = ''; }, DURATION + 20);
+      } else {
+        card.classList.remove('is-collapsed');
+        card.style.transition = 'none';
+        card.style.height = '46px';
+        card.style.minHeight = '46px';
+        card.style.maxHeight = '46px';
+        card.style.overflow = 'hidden';
+        card.offsetHeight; // reflow
+        const targetH = card.scrollHeight;
+        card.style.transition = 'height ' + DURATION + 'ms ease, min-height ' + DURATION + 'ms ease, max-height ' + DURATION + 'ms ease, padding ' + DURATION + 'ms ease';
+        card.style.height = targetH + 'px';
+        card.style.minHeight = targetH + 'px';
+        card.style.maxHeight = targetH + 'px';
+        updateToggle();
+        setTimeout(() => { card.style.cssText = ''; }, DURATION + 20);
+      }
+    } else {
+      card.classList.toggle('is-collapsed', !!collapsed);
+      updateToggle();
     }
-    if (!sceneId) return;
-    if (collapsed) collapsedSceneIds.add(sceneId);
-    else collapsedSceneIds.delete(sceneId);
   };
 
   const toggleScenarioCardCollapsed = (card) => {

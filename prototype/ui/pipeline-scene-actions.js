@@ -38,8 +38,32 @@
         var sceneId = row.dataset.id;
         var sceneRowMod = NK.uiPipelineSceneRow || {};
         if (sceneRowMod.togglePipelineSceneCollapsed) sceneRowMod.togglePipelineSceneCollapsed(sceneId);
-        var nowCollapsed = sceneRowMod.isPipelineSceneCollapsed ? sceneRowMod.isPipelineSceneCollapsed(sceneId) : row.classList.contains('is-collapsed');
-        row.classList.toggle('is-collapsed', nowCollapsed);
+        var nowCollapsed = sceneRowMod.isPipelineSceneCollapsed ? sceneRowMod.isPipelineSceneCollapsed(sceneId) : !row.classList.contains('is-collapsed');
+        var wrap = row.querySelector('.scene-row-body-wrap');
+        var DUR = 280;
+        if (nowCollapsed) {
+          if (wrap) {
+            wrap.style.transition = 'none';
+            wrap.style.height = wrap.scrollHeight + 'px';
+            wrap.offsetHeight;
+            wrap.style.transition = 'height ' + DUR + 'ms ease';
+            wrap.style.height = '0px';
+          }
+          row.classList.add('is-collapsed');
+          setTimeout(function () { if (wrap) wrap.style.cssText = ''; }, DUR + 20);
+        } else {
+          row.classList.remove('is-collapsed');
+          if (wrap) {
+            wrap.style.transition = 'none';
+            wrap.style.height = '0px';
+            wrap.style.overflow = 'hidden';
+            wrap.offsetHeight;
+            var targetH = wrap.scrollHeight;
+            wrap.style.transition = 'height ' + DUR + 'ms ease';
+            wrap.style.height = targetH + 'px';
+            setTimeout(function () { wrap.style.cssText = ''; }, DUR + 20);
+          }
+        }
         toggleBtn.textContent = nowCollapsed ? '+' : '-';
         toggleBtn.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
         toggleBtn.setAttribute('aria-label', nowCollapsed ? '펼치기' : '접기');
