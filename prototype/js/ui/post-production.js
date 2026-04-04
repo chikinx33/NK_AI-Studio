@@ -1768,12 +1768,9 @@
   }
 
   function updateMotionDropdown() {
-    var group = document.getElementById('postprod-motion-group');
     var select = document.getElementById('postprod-motion-select');
-    if (!group) return;
-    var show = state.selectedClipId && isVisualClip(state.selectedClipId);
-    group.style.display = show ? '' : 'none';
-    if (show && select) {
+    if (!select) return;
+    if (state.selectedClipId && isVisualClip(state.selectedClipId)) {
       select.value = getClipMotionPreset(state.selectedClipId);
     }
   }
@@ -2250,10 +2247,6 @@
       '<label for="postprod-snap-step">' + t('스냅') + '</label>' +
       '<select id="postprod-snap-step">' + buildSnapOptionsHtml() + '</select>' +
       '</div>' +
-      '<div class="postprod-toolbar-group motion-group" id="postprod-motion-group" style="' + (state.selectedClipId && isVisualClip(state.selectedClipId) ? '' : 'display:none') + '">' +
-      '<label>' + t('효과') + '</label>' +
-      '<select id="postprod-motion-select">' + buildMotionOptionsHtml() + '</select>' +
-      '</div>' +
       '<div class="postprod-toolbar-group zoom-group">' +
       '<label for="postprod-zoom-range">' + t('배율') + '</label>' +
       '<button class="btn-secondary compact postprod-zoom-step" id="postprod-zoom-minus" type="button" aria-label="배율 줄이기">-</button>' +
@@ -2261,6 +2254,10 @@
       '<button class="btn-secondary compact postprod-zoom-step" id="postprod-zoom-plus" type="button" aria-label="배율 늘리기">+</button>' +
       '<span id="postprod-zoom-text">' + state.zoom + '%</span>' +
       '<button class="btn-secondary compact postprod-fit-btn' + (state.fitTimeline ? ' is-active' : '') + '" id="postprod-zoom-fit" type="button" aria-label="타임라인 맞춤">FIX</button>' +
+      '</div>' +
+      '<div class="postprod-toolbar-group motion-group" id="postprod-motion-group">' +
+      '<label>' + t('효과') + '</label>' +
+      '<select id="postprod-motion-select">' + buildMotionOptionsHtml() + '</select>' +
       '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
       '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="' + t('되돌리기') + '"' + (canUndo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>' +
