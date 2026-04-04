@@ -1874,6 +1874,7 @@
     { value: "'Black Han Sans', sans-serif", label: 'Black Han Sans' },
     { value: "'Cafe24 Ssurround', sans-serif", label: 'Cafe24 써라운드' },
     { value: "'Cafe24 Danjunghae', sans-serif", label: 'Cafe24 단정해' },
+    { value: "'KOTRA Hope', sans-serif", label: 'KOTRA 희망체' },
     { value: "'Do Hyeon', sans-serif", label: '도현' },
     { value: "'Jua', sans-serif", label: '주아' },
     { value: "'Gaegu', sans-serif", label: '개구' },
@@ -1893,10 +1894,10 @@
     { name: { ko: '뉴스', en: 'News' }, color: '#ffffff', bg: 'rgba(26,26,94,0.9)', effect: 'none', font: "'Noto Sans KR', sans-serif", size: 1 },
     { name: { ko: '아이스', en: 'Ice' }, color: '#e0f7ff', bg: 'rgba(10,61,102,0.5)', effect: 'outline', font: 'Pretendard, sans-serif', size: 1 },
     { name: { ko: '임팩트', en: 'Impact' }, color: '#ffff00', bg: 'transparent', effect: 'outline', font: "'Black Han Sans', sans-serif", size: 1.25 },
-    { name: { ko: '엘레강스', en: 'Elegance' }, color: '#ffd700', bg: 'rgba(26,10,46,0.7)', effect: 'shadow', font: "'Cafe24 Danjunghae', sans-serif", size: 1.1 },
+    { name: { ko: '엘레강스', en: 'Elegance' }, color: '#ffd700', bg: 'rgba(26,10,46,0.7)', effect: 'shadow', font: "'KOTRA Hope', sans-serif", size: 1.1 },
     { name: { ko: '레트로', en: 'Retro' }, color: '#ff6b35', bg: 'rgba(45,27,0,0.5)', effect: 'shadow', font: "'Do Hyeon', sans-serif", size: 1.1 },
     { name: { ko: '파이어', en: 'Fire' }, color: '#ff4500', bg: 'transparent', effect: 'outline', font: "'Black Han Sans', sans-serif", size: 1.2 },
-    { name: { ko: '팝', en: 'Pop' }, color: '#ff1493', bg: 'transparent', effect: 'outline', font: "'Jua', sans-serif", size: 1.15 },
+    { name: { ko: '팝', en: 'Pop' }, color: '#ff1493', bg: 'transparent', effect: 'outline', font: "'KOTRA Hope', sans-serif", size: 1.15 },
     { name: { ko: '블러드', en: 'Blood' }, color: '#cc0000', bg: 'transparent', effect: 'outline', font: "'Black Han Sans', sans-serif", size: 1.2 },
     { name: { ko: '사이버펑크', en: 'Cyberpunk' }, color: '#ff00ff', bg: 'rgba(13,13,43,0.6)', effect: 'outline', font: "'Gothic A1', sans-serif", size: 1.1 },
     { name: { ko: '오션', en: 'Ocean' }, color: '#ffffff', bg: 'rgba(0,51,102,0.8)', effect: 'outline', font: "'Noto Sans KR', sans-serif", size: 1 },
@@ -1905,7 +1906,7 @@
     { name: { ko: '라벤더', en: 'Lavender' }, color: '#f3e5f5', bg: 'rgba(74,20,140,0.8)', effect: 'shadow', font: "'Cafe24 Danjunghae', sans-serif", size: 1 },
     { name: { ko: '골드바', en: 'Gold Bar' }, color: '#000000', bg: 'rgba(255,215,0,0.9)', effect: 'none', font: 'Pretendard, sans-serif', size: 1.05 },
     { name: { ko: '스포티', en: 'Sporty' }, color: '#ffffff', bg: 'rgba(229,57,53,0.9)', effect: 'outline', font: "'Black Han Sans', sans-serif", size: 1.15 },
-    { name: { ko: '캔디', en: 'Candy' }, color: '#ff69b4', bg: 'rgba(255,255,255,0.8)', effect: 'outline', font: "'Jua', sans-serif", size: 1.1 },
+    { name: { ko: '캔디', en: 'Candy' }, color: '#ff69b4', bg: 'rgba(255,255,255,0.8)', effect: 'outline', font: "'KOTRA Hope', sans-serif", size: 1.1 },
     { name: { ko: '민초', en: 'Mint Choco' }, color: '#98ffc8', bg: 'rgba(61,43,31,0.7)', effect: 'outline', font: 'Pretendard, sans-serif', size: 1 }
   ];
 
