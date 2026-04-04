@@ -83,6 +83,47 @@
     return String(text || '').replace(/@/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
+  function detectCpuLabel() {
+    var cores = navigator.hardwareConcurrency || 0;
+    if (!cores) return '알 수 없음';
+    if (cores >= 12) return cores + '코어 · 고성능';
+    if (cores >= 6) return cores + '코어 · 중간';
+    return cores + '코어 · 저사양';
+  }
+
+  function detectRamLabel() {
+    var gb = navigator.deviceMemory;
+    if (!gb) return '알 수 없음';
+    return gb + 'GB';
+  }
+
+  var _gpuLabel = '';
+  function detectGpuLabel() {
+    if (_gpuLabel) return _gpuLabel;
+    try {
+      var canvas = document.createElement('canvas');
+      var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+      if (gl) {
+        var ext = gl.getExtension('WEBGL_debug_renderer_info');
+        if (ext) {
+          var renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '';
+          _gpuLabel = renderer.replace(/\s*\(.*?\)\s*/g, ' ').replace(/ANGLE.*?Direct3D\d*\s*/i, '').replace(/vs_\S+\s*ps_\S+/i, '').replace(/\s{2,}/g, ' ').trim();
+          if (_gpuLabel) return _gpuLabel;
+        }
+      }
+    } catch (_) { }
+    _gpuLabel = '브라우저 가속';
+    return _gpuLabel;
+  }
+
+  function detectQualityLabel() {
+    var cores = navigator.hardwareConcurrency || 0;
+    var ram = navigator.deviceMemory || 0;
+    if (cores >= 8 && ram >= 8) return '고품질';
+    if (cores >= 4 && ram >= 4) return '표준';
+    return '경량';
+  }
+
   function getSceneAssetService() {
     return (NK.service && NK.service.sceneAssets) ? NK.service.sceneAssets : null;
   }
@@ -2141,10 +2182,10 @@
       '<div class="postprod-resource-card">' +
       '<p class="title">컴퓨팅 리소스</p>' +
       '<div class="postprod-resource-grid">' +
-      '<div><span>CPU</span><strong>고성능</strong></div>' +
-      '<div><span>RAM</span><strong>8GB+</strong></div>' +
-      '<div><span>Graphics</span><strong>브라우저 가속</strong></div>' +
-      '<div><span>품질</span><strong>표준</strong></div>' +
+      '<div><span>CPU</span><strong>' + detectCpuLabel() + '</strong></div>' +
+      '<div><span>RAM</span><strong>' + detectRamLabel() + '</strong></div>' +
+      '<div><span>Graphics</span><strong>' + detectGpuLabel() + '</strong></div>' +
+      '<div><span>품질</span><strong>' + detectQualityLabel() + '</strong></div>' +
       '</div>' +
       '</div>' +
 
