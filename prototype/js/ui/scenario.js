@@ -1334,9 +1334,19 @@
         </div>
       </div>
     `).join('');
-    container.querySelectorAll('.scenario-card.is-collapsed').forEach((card) => setScenarioCardCollapsed(card, true));
+    container.querySelectorAll('.scenario-card.is-collapsed').forEach((card) => setScenarioCardCollapsed(card, true, false));
     const firstCard = container.querySelector('.scenario-card:not(.scenario-card-common)');
     if (firstCard) firstCard.classList.add('active-card');
+    // focus 모드: 첫 번째만 펼치고 나머지 접기
+    if (sceneFoldMode === 'focus') {
+      container.querySelectorAll('.scenario-card:not(.scenario-card-common)').forEach((card, idx) => {
+        if (idx > 0 && !card.classList.contains('is-collapsed')) setScenarioCardCollapsed(card, true, false);
+      });
+    } else if (sceneFoldMode === 'collapse') {
+      container.querySelectorAll('.scenario-card:not(.scenario-card-common)').forEach((card) => {
+        if (!card.classList.contains('is-collapsed')) setScenarioCardCollapsed(card, true, false);
+      });
+    }
   };
 
   // ---------- load draft into form ----------

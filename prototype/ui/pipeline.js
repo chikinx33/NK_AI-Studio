@@ -743,6 +743,24 @@
           }
         });
       } catch (_) { }
+      // 초기 렌더 시 focus 모드: 첫 번째만 펼치고 나머지 접기
+      var initFoldMode = (ctx.getPipelineFoldMode ? ctx.getPipelineFoldMode() : 'focus');
+      if (initFoldMode === 'focus' || initFoldMode === 'collapse') {
+        var allRows = pipelineScenes.querySelectorAll('.scene-row:not(.head)');
+        var srMod = NK.uiPipelineSceneRow || {};
+        allRows.forEach(function (row, idx) {
+          var shouldCollapse = initFoldMode === 'collapse' || idx > 0;
+          if (shouldCollapse) {
+            var rid = row.dataset.id;
+            if (srMod.setPipelineSceneCollapsed) srMod.setPipelineSceneCollapsed(rid, true);
+            row.classList.add('is-collapsed');
+            var wrapEl = row.querySelector('.scene-row-body-wrap');
+            if (wrapEl) wrapEl.style.height = '0px';
+            var tbtn = row.querySelector('.scene-row-toggle');
+            if (tbtn) { tbtn.textContent = '+'; tbtn.setAttribute('aria-expanded', 'false'); }
+          }
+        });
+      }
     } else {
       pipelineScenes.classList.add('empty');
       pipelineScenes.innerHTML = '<div class="card video-stage-empty-card"><p class="muted">장면이 없습니다</p></div>';
