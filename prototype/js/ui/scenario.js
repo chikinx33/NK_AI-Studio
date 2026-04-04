@@ -1916,8 +1916,8 @@
       setScenarioLoading(true, isLongInput ? '긴 입력을 파트별로 분석하는 중...' : '시나리오 생성 중...');
       try {
         const res = await NK.api.scenario(payload);
-        const headerText = (NK.service?.project?.getPromptHeader)
-          ? await NK.service.project.getPromptHeader(payload)
+        const headerText = (NK.service?.project?.buildVisualHeader)
+          ? NK.service.project.buildVisualHeader(payload)
           : '';
         if (res?.scenes) {
           const normalized = normalizeScenes(res.scenes);
@@ -1925,7 +1925,7 @@
           draft.title = payload.topic || draft.title || '새 프로젝트';
           draft.payload = payload;
           draft.scenes = normalized;
-          draft.header = sanitizeHeader(res.header || headerText || draft.header || '');
+          draft.header = headerText || draft.header || '';
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
           if (NK.service?.project?.upsertLocalDraft) {
             draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;

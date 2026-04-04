@@ -1278,14 +1278,24 @@
     };
 
     /**
-     * Get prompt header.
+     * Build visual-only header from structured payload (no AI call).
      */
-    project.getPromptHeader = async function (payload) {
-        try {
-            return await NK.api.promptHeader(payload);
-        } catch (err) {
-            console.warn('Header fetch fail', err);
-            return 'A cohesive visual world with consistent lighting, texture, and framing.';
-        }
+    project.buildVisualHeader = function (payload) {
+        var p = payload || {};
+        var parts = [];
+        var styles = [].concat(p.styles || [], p.style ? [p.style] : []).filter(Boolean);
+        if (styles.length) parts.push('스타일: ' + styles.join(', '));
+        var tones = [].concat(p.tones || [], p.tone ? [p.tone] : []).filter(Boolean);
+        if (tones.length) parts.push('분위기: ' + tones.join(', '));
+        var hub = (p.knowledgeHub && typeof p.knowledgeHub === 'object') ? p.knowledgeHub : p;
+        var world = String(hub.worldSetting || hub.knowledgeWorld || '').trim();
+        if (world) parts.push('배경: ' + world);
+        var target = String(p.target || '').trim();
+        if (target) parts.push('대상: ' + target);
+        return parts.join('. ') + (parts.length ? '.' : '');
+    };
+
+    project.getPromptHeader = function (payload) {
+        return project.buildVisualHeader(payload);
     };
 })();

@@ -136,18 +136,6 @@
     return j(text);
   };
 
-  api.promptHeader = async function (payload) {
-    var res = await fetch(withBase('/api/prompt-header'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload || {})
-    });
-    var text = await res.text();
-    if (!res.ok) throw new Error(e(text) || 'header_error');
-    var json = j(text);
-    return json.header || '';
-  };
-
   api.scenario = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/scenario'), {
       method: 'POST',
