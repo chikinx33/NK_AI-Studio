@@ -1996,12 +1996,20 @@
     }
 
     // 래퍼를 contain 영역 크기로 설정
-    if (wrapper && element.tagName === 'IMG' && element.naturalWidth && element.naturalHeight) {
+    if (wrapper && element.tagName === 'IMG') {
+      var nw = element.naturalWidth;
+      var nh = element.naturalHeight;
+      if (!nw || !nh) {
+        // 이미지 미로드 — 모션 보류
+        element.style.transform = '';
+        element.style.objectFit = 'contain';
+        return;
+      }
       var container = wrapper.parentElement;
       var cw = container ? container.clientWidth : 0;
       var ch = container ? container.clientHeight : 0;
       if (cw && ch) {
-        var imgRatio = element.naturalWidth / element.naturalHeight;
+        var imgRatio = nw / nh;
         var ctnRatio = cw / ch;
         var rw, rh;
         if (imgRatio > ctnRatio) {
@@ -2011,13 +2019,10 @@
           rh = ch;
           rw = Math.round(ch * imgRatio);
         }
-        wrapper.style.position = 'absolute';
-        wrapper.style.width = rw + 'px';
-        wrapper.style.height = rh + 'px';
-        wrapper.style.left = Math.round((cw - rw) / 2) + 'px';
-        wrapper.style.top = Math.round((ch - rh) / 2) + 'px';
-        wrapper.style.overflow = 'hidden';
-        wrapper.style.inset = '';
+        wrapper.style.cssText = 'position:absolute;overflow:hidden;' +
+          'width:' + rw + 'px;height:' + rh + 'px;' +
+          'left:' + Math.round((cw - rw) / 2) + 'px;' +
+          'top:' + Math.round((ch - rh) / 2) + 'px;';
 
         element.style.objectFit = 'cover';
         element.style.width = '100%';
@@ -2039,13 +2044,7 @@
     element.style.height = '';
     var wrapper = document.getElementById('postprod-motion-wrapper');
     if (wrapper) {
-      wrapper.style.position = '';
-      wrapper.style.overflow = '';
-      wrapper.style.width = '';
-      wrapper.style.height = '';
-      wrapper.style.left = '';
-      wrapper.style.top = '';
-      wrapper.style.inset = '0';
+      wrapper.style.cssText = 'position:absolute;inset:0;';
     }
   }
 
