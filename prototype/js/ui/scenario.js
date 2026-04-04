@@ -699,14 +699,11 @@
     const raw = String(value || '').trim();
     if (!raw) return raw;
     if (key !== 'brandCharacter') return raw;
-    if (getUiLang() === 'en') {
-      return raw
-        .replace(/(^|\n)\s*브랜드 화자\s*(?=\n|$)/g, '$1Speaker')
-        .replace(/(^|\n)\s*Brand speaker\s*(?=\n|$)/gi, '$1Speaker');
-    }
     return raw
-      .replace(/(^|\n)\s*브랜드 화자\s*(?=\n|$)/g, '$1화자')
-      .replace(/(^|\n)\s*Brand speaker\s*(?=\n|$)/gi, '$1화자');
+      .split('\n')
+      .map(l => l.replace(/^[\s\-*•]+/, '').trim())
+      .filter(l => !!l && !/^(브랜드\s*화자|화자|brand\s*speaker|speaker)$/i.test(l))
+      .join('\n');
   };
 
   const translateScenarioOption = (value) => {
