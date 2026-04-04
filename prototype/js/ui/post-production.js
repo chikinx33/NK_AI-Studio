@@ -2855,8 +2855,20 @@
     if (!root) return;
 
     if (!state.subscribed && NK.state && NK.state.subscribe) {
-      NK.state.subscribe(function () {
-        post.render();
+      var renderDebounceTimer = 0;
+      var lastProjectSnapshot = '';
+      NK.state.subscribe(function (rt) {
+        var projectId = (rt && rt.currentProject && rt.currentProject.id) || '';
+        var snapshot = projectId + '|' + JSON.stringify(
+          (rt && rt.currentProject && rt.currentProject.scenes) ? rt.currentProject.scenes.length : 0
+        );
+        if (snapshot === lastProjectSnapshot) return;
+        lastProjectSnapshot = snapshot;
+        if (renderDebounceTimer) clearTimeout(renderDebounceTimer);
+        renderDebounceTimer = setTimeout(function () {
+          renderDebounceTimer = 0;
+          post.render();
+        }, 80);
       });
       state.subscribed = true;
     }
