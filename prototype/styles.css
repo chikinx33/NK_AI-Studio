@@ -5373,7 +5373,7 @@ html.page-shell-image #sidebar-project-card {
 .postprod-toolbar-group {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-wrap: nowrap;
   flex-shrink: 0;
 }
