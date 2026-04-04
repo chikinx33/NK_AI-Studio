@@ -5214,7 +5214,7 @@ html.page-shell-image #sidebar-project-card {
 
 .postprod-shell {
   display: grid;
-  grid-template-rows: minmax(0, 1.3fr) auto minmax(0, 0.8fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 12px;
   height: 100%;
   min-height: 0;
@@ -5257,7 +5257,6 @@ html.page-shell-image #sidebar-project-card {
   min-width: 0;
   flex: 1;
   min-height: 280px;
-  max-height: 560px;
   border-radius: 14px;
   border: 1px solid var(--border);
   background: #05070d;
@@ -5338,13 +5337,16 @@ html.page-shell-image #sidebar-project-card {
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
 }
 
-.postprod-player-foot {
-  grid-column: 2 / 3;
-  grid-row: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
+.postprod-time-inlay {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 9;
+  pointer-events: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
 .postprod-toolbar {
