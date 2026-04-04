@@ -6111,6 +6111,11 @@ html.page-shell-image #sidebar-project-card {
   box-shadow: 0 0 0 2px rgba(122, 183, 255, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
+.postprod-track-overlays .postprod-clip {
+  background: rgba(99, 179, 255, 0.34);
+  border-color: rgba(99, 179, 255, 0.54);
+}
+
 .postprod-track-subtitles .postprod-clip {
   background: rgba(255, 198, 55, 0.36);
   border-color: rgba(255, 198, 55, 0.55);

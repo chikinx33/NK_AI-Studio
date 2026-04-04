@@ -50,7 +50,8 @@
     captionPosition: 6,
     captionTemplate: -1,
     sessionEdits: {},
-    lastRenderBlob: null
+    lastRenderBlob: null,
+    overlayClips: []
   };
 
   function safeParse(text) {
@@ -1218,6 +1219,29 @@
       .filter(Boolean);
   }
 
+  function getActiveOverlayClip(model, sec) {
+    var track = getTimelineTrack(model, 'overlays');
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    var time = Number(sec) || 0;
+    for (var i = 0; i < clips.length; i++) {
+      var c = clips[i];
+      if (c && c.url && time >= c.start && time < c.end) return c;
+    }
+    return null;
+  }
+
+  function renderPreviewOverlay(sec) {
+    var overlay = document.getElementById('postprod-preview-overlay');
+    if (!overlay) return;
+    var clip = getActiveOverlayClip(state.model, sec);
+    if (!clip) {
+      overlay.style.display = 'none';
+      return;
+    }
+    if (overlay.src !== clip.url) overlay.src = clip.url;
+    overlay.style.display = 'block';
+  }
+
   function getVisualClipsForRender(model) {
     var track = (model && model.tracks || []).find(function (t) { return t && t.key === 'visuals'; });
     var clips = track && Array.isArray(track.clips) ? track.clips : [];
@@ -1248,6 +1272,7 @@
       getSubtitleLabels: function (sec) {
         return getActiveSubtitleLabels(model, sec);
       },
+      overlayClips: (state.overlayClips || []).slice(),
       shouldCancel: function () {
         return state.renderJobId !== renderJobId;
       },
@@ -1843,6 +1868,7 @@
       primaryVideoUrl: firstVideoUrl,
       primaryImageUrl: firstImageUrl,
       tracks: [
+        { key: 'overlays', badge: 'I1', name: 'Images', clips: (state.overlayClips || []).slice() },
         { key: 'subtitles', badge: 'T1', name: 'Subtitles', clips: subtitles },
         { key: 'visuals', badge: 'V1', name: 'Visuals', clips: visuals },
         { key: 'audio', badge: 'A1', name: 'Audio', clips: audio },
@@ -2054,12 +2080,13 @@
       }).join('');
 
       if (!clips.length) {
-        if (track.key === 'audio' || track.key === 'music') {
-          clipsHtml = '<div class="postprod-track-empty is-uploadable" data-action="upload-' + track.key + '" style="position:absolute; top:6px; left:14px; height:28px; border:1px dashed rgba(255,255,255,0.4); border-radius:6px; padding:0 12px; display:inline-flex; align-items:center; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer;" title="' + t('클릭하여 음원 등록') + '">' +
+        if (track.key === 'audio' || track.key === 'music' || track.key === 'overlays') {
+          var uploadLabel = track.key === 'overlays' ? t('이미지 등록') : t('음원 등록');
+          clipsHtml = '<div class="postprod-track-empty is-uploadable" data-action="upload-' + track.key + '" style="position:absolute; top:6px; left:14px; height:28px; border:1px dashed rgba(255,255,255,0.4); border-radius:6px; padding:0 12px; display:inline-flex; align-items:center; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer;">' +
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 5v14M5 12h14"></path></svg>' +
-            '음원 등록</div>';
+            uploadLabel + '</div>';
         } else {
-          clipsHtml = '<div class="postprod-track-empty" style="position: absolute; top:6px; left:14px; color:rgba(255,255,255,0.4); font-size:12px; display:inline-flex; align-items:center; height:28px;">클립 없음</div>';
+          clipsHtml = '<div class="postprod-track-empty" style="position: absolute; top:6px; left:14px; color:rgba(255,255,255,0.4); font-size:12px; display:inline-flex; align-items:center; height:28px;">' + t('클립 없음') + '</div>';
         }
       }
 
@@ -2265,6 +2292,7 @@
         gap.style.display = 'none';
         empty.style.display = 'flex';
       }
+      renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
@@ -2276,6 +2304,7 @@
       pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
+      renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
@@ -2289,6 +2318,7 @@
       pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
+      renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
@@ -2311,6 +2341,7 @@
       if (clipChanged) warmPreviewVideoNeighbors(clip);
       state.previewClipId = clip.id;
       state.previewClipUrl = playableUrl;
+      renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
       return;
     }
@@ -2323,6 +2354,7 @@
       pausePreviewVideos('');
       gap.style.display = 'block';
       empty.style.display = 'none';
+      renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
@@ -2359,6 +2391,7 @@
 
     if (entry.ready) {
       activateVideo();
+      renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
       return;
     }
@@ -2417,6 +2450,7 @@
       '<div id="postprod-motion-wrapper" class="postprod-motion-wrapper">' +
       '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
       '</div>' +
+      '<img id="postprod-preview-overlay" class="postprod-preview-overlay" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:80%;max-height:80%;z-index:4;display:none;pointer-events:none;" />' +
       '<div id="postprod-preview-subtitles" class="postprod-preview-subtitles" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:6%;display:none;pointer-events:none;text-align:center;padding:0 6%;z-index:5;"></div>' +
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
@@ -3165,6 +3199,41 @@
       emptyEl.onclick = function (evt) {
         evt.stopPropagation();
         var action = emptyEl.getAttribute('data-action');
+
+        if (action === 'upload-overlays') {
+          var overlayInput = document.getElementById('postprod-overlay-upload');
+          if (!overlayInput) {
+            overlayInput = document.createElement('input');
+            overlayInput.type = 'file';
+            overlayInput.id = 'postprod-overlay-upload';
+            overlayInput.accept = 'image/png, image/jpeg, image/webp, image/gif';
+            overlayInput.style.display = 'none';
+            document.body.appendChild(overlayInput);
+          }
+          overlayInput.onchange = function (e) {
+            var file = e.target.files && e.target.files[0];
+            if (!file) return;
+            var url = URL.createObjectURL(file);
+            var duration = getTimelinePlaybackDuration(state.model) || 5;
+            state.overlayClips.push({
+              id: 'overlay-' + Date.now(),
+              label: file.name.replace(/\.[^/.]+$/, ''),
+              url: url,
+              start: 0,
+              end: duration,
+              baseDuration: duration
+            });
+            setDirty(true);
+            post.render();
+            if (NK.ui && NK.ui.common && NK.ui.common.toast) {
+              NK.ui.common.toast(file.name + ' ' + t('등록되었습니다.'));
+            }
+            overlayInput.value = '';
+          };
+          overlayInput.click();
+          return;
+        }
+
         var inputId = action === 'upload-audio' ? 'postprod-audio-upload' : 'postprod-music-upload';
         var input = document.getElementById(inputId);
         if (!input) {
@@ -3174,7 +3243,7 @@
           input.accept = 'audio/*, video/mp4';
           input.style.display = 'none';
           document.body.appendChild(input);
-          
+
           input.onchange = function(e) {
             var file = e.target.files && e.target.files[0];
             if (!file) return;
@@ -3193,7 +3262,7 @@
               }
               post.render();
               if (NK.ui && NK.ui.common && NK.ui.common.toast) {
-                NK.ui.common.toast(file.name + ' 등록되었습니다.');
+                NK.ui.common.toast(file.name + ' ' + t('등록되었습니다.'));
               }
             }
           };

@@ -583,6 +583,37 @@
       });
     };
 
+    var overlayImages = {};
+    var overlayClips = Array.isArray(opts.overlayClips) ? opts.overlayClips : [];
+    // preload overlay images
+    for (var oi = 0; oi < overlayClips.length; oi++) {
+      (function (oc) {
+        if (!oc.url) return;
+        var img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = oc.url;
+        overlayImages[oc.id] = img;
+      })(overlayClips[oi]);
+    }
+    var drawOverlay = function (sec) {
+      for (var k = 0; k < overlayClips.length; k++) {
+        var oc = overlayClips[k];
+        if (!oc || sec < oc.start || sec >= oc.end) continue;
+        var img = overlayImages[oc.id];
+        if (!img || !img.naturalWidth) continue;
+        var iw = img.naturalWidth;
+        var ih = img.naturalHeight;
+        var maxW = canvas.width * 0.8;
+        var maxH = canvas.height * 0.8;
+        var scale = Math.min(maxW / iw, maxH / ih, 1);
+        var dw = iw * scale;
+        var dh = ih * scale;
+        var dx = (canvas.width - dw) / 2;
+        var dy = (canvas.height - dh) / 2;
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
+    };
+
     var cursor = 0;
     for (var i = 0; i < clips.length; i++) {
       if (shouldCancel()) break;
@@ -613,6 +644,7 @@
               ? motionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
               : null;
             drawContainWithMotion(ctx, video, canvas.width, canvas.height, vMotion);
+            drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
           }, reportProgress, shouldCancel);
           try { video.pause(); } catch (_) { }
@@ -626,6 +658,7 @@
             ctx.font = '600 28px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('영상 로드 실패', canvas.width / 2, canvas.height / 2);
+            drawOverlay(clip.start);
             drawSubtitle(clip.start);
           }, reportProgress, shouldCancel);
           processed += duration;
@@ -642,6 +675,7 @@
               ? imgMotionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
               : null;
             drawContainWithMotion(ctx, image, canvas.width, canvas.height, iMotion);
+            drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
           }, reportProgress, shouldCancel);
           processed += duration;
@@ -654,6 +688,7 @@
             ctx.font = '600 28px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('이미지 로드 실패', canvas.width / 2, canvas.height / 2);
+            drawOverlay(clip.start);
             drawSubtitle(clip.start);
           }, reportProgress, shouldCancel);
           processed += duration;
@@ -851,6 +886,7 @@
               ? motionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
               : null;
             drawContainWithMotion(ctx, video, w, h, vMotion);
+            drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
           }, reportProgress, shouldCancel, segState);
           processed += duration;
@@ -878,6 +914,7 @@
               ? imgMotionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
               : null;
             drawContainWithMotion(ctx, image, w, h, iMotion);
+            drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
           }, reportProgress, shouldCancel, segState);
           processed += duration;
