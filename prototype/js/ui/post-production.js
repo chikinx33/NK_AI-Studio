@@ -1871,11 +1871,19 @@
   var CAPTION_FONTS = [
     { value: 'Pretendard, sans-serif', label: 'Pretendard' },
     { value: "'Noto Sans KR', sans-serif", label: 'Noto Sans KR' },
+    { value: "'Black Han Sans', sans-serif", label: 'Black Han Sans' },
+    { value: "'Cafe24 Ssurround', sans-serif", label: 'Cafe24 써라운드' },
+    { value: "'Cafe24 Danjunghae', sans-serif", label: 'Cafe24 단정해' },
+    { value: "'Do Hyeon', sans-serif", label: '도현' },
+    { value: "'Jua', sans-serif", label: '주아' },
+    { value: "'Gaegu', sans-serif", label: '개구' },
+    { value: "'Gamja Flower', sans-serif", label: '감자꽃' },
+    { value: "'Gothic A1', sans-serif", label: 'Gothic A1' },
+    { value: "'Sunflower', sans-serif", label: '해바라기' },
     { value: 'Segoe UI, sans-serif', label: 'Segoe UI' },
     { value: 'Arial, sans-serif', label: 'Arial' },
     { value: "'Georgia', serif", label: 'Georgia' },
-    { value: "'Courier New', monospace", label: 'Courier New' },
-    { value: 'sans-serif', label: 'Sans' }
+    { value: "'Courier New', monospace", label: 'Courier New' }
   ];
 
   var CAPTION_TEMPLATES = [
