@@ -358,4 +358,127 @@
     downloadBlob(new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8' }), title + '_storyboard.xls');
     return true;
   };
+
+  exporter.getProjectFileName = function (projectOrId, separator) {
+    var project = getProject(projectOrId);
+    if (!project) return 'render';
+    var title = fileSafeName(project.title, '');
+    var payload = project.payload || {};
+    var topic = fileSafeName(payload.topic || payload.episodeTitle || '', '');
+    var sep = separator || ' - ';
+    if (title && topic && title !== topic) return title + sep + topic;
+    return title || topic || 'render';
+  };
+
+  exporter.downloadPremiereZip = async function (projectOrId) {
+    if (typeof JSZip === 'undefined') {
+      alert('JSZip 라이브러리를 찾을 수 없습니다.');
+      return false;
+    }
+    var project = getProject(projectOrId);
+    if (!project) return false;
+    var scenes = Array.isArray(project.scenes) ? project.scenes : [];
+    if (!scenes.length) return false;
+
+    var fps = 30;
+    var projectName = exporter.getProjectFileName(project);
+    var zip = new JSZip();
+    var mediaFolder = zip.folder('media');
+    var clipEntries = [];
+    var cursor = 0;
+
+    for (var i = 0; i < scenes.length; i++) {
+      var scene = scenes[i] || {};
+      var dur = sceneDuration(scene);
+      var url = firstFilled([
+        scene.videoUrl, scene.videoPlaybackUrl, scene.outputVideoUrl,
+        scene.generatedVideoUrl, scene.videoPath,
+        scene.imagePath, scene.generatedImageUrl, scene.imageUrl
+      ]);
+      var isVideo = /\.(mp4|webm|mov)/i.test(url || '');
+      var ext = isVideo ? (url.match(/\.(mp4|webm|mov)/i) || ['.mp4'])[0] : '.png';
+      if (ext.charAt(0) !== '.') ext = '.' + ext;
+      var mediaName = 'scene_' + (i + 1) + ext;
+      var startFrame = Math.round(cursor * fps);
+      var endFrame = Math.round((cursor + dur) * fps);
+
+      // 미디어 파일 fetch
+      if (url) {
+        try {
+          var resolvedUrl = url;
+          if (NK.api && NK.api.mediaProxyObjectUrl && url.indexOf('gs://') === 0) {
+            resolvedUrl = NK.api.mediaProxyObjectUrl(url.replace('gs://', ''));
+          }
+          var resp = await fetch(resolvedUrl, { credentials: 'include' });
+          if (resp.ok) {
+            var blob = await resp.blob();
+            mediaFolder.file(mediaName, blob);
+          }
+        } catch (_) { }
+      } else if (scene.imageDataUrl) {
+        try {
+          var dataResp = await fetch(scene.imageDataUrl);
+          var dataBlob = await dataResp.blob();
+          mediaFolder.file(mediaName, dataBlob);
+          ext = '.png';
+          mediaName = 'scene_' + (i + 1) + ext;
+        } catch (_) { }
+      }
+
+      clipEntries.push({
+        index: i,
+        name: firstFilled([scene.title, 'Scene ' + (i + 1)]),
+        mediaName: mediaName,
+        start: startFrame,
+        end: endFrame,
+        duration: dur
+      });
+      cursor += dur;
+    }
+
+    var totalFrames = Math.round(cursor * fps);
+
+    // FCP XML 7 생성
+    var xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<!DOCTYPE xmeml>\n' +
+      '<xmeml version="5">\n' +
+      '  <sequence>\n' +
+      '    <name>' + escapeHtml(projectName) + '</name>\n' +
+      '    <duration>' + totalFrames + '</duration>\n' +
+      '    <rate><timebase>' + fps + '</timebase><ntsc>FALSE</ntsc></rate>\n' +
+      '    <media>\n' +
+      '      <video>\n' +
+      '        <track>\n';
+
+    for (var j = 0; j < clipEntries.length; j++) {
+      var c = clipEntries[j];
+      xml +=
+        '          <clipitem id="clip_' + (j + 1) + '">\n' +
+        '            <name>' + escapeHtml(c.name) + '</name>\n' +
+        '            <duration>' + (c.end - c.start) + '</duration>\n' +
+        '            <rate><timebase>' + fps + '</timebase><ntsc>FALSE</ntsc></rate>\n' +
+        '            <start>' + c.start + '</start>\n' +
+        '            <end>' + c.end + '</end>\n' +
+        '            <in>0</in>\n' +
+        '            <out>' + (c.end - c.start) + '</out>\n' +
+        '            <file id="file_' + (j + 1) + '">\n' +
+        '              <name>' + escapeHtml(c.mediaName) + '</name>\n' +
+        '              <pathurl>media/' + escapeHtml(c.mediaName) + '</pathurl>\n' +
+        '            </file>\n' +
+        '          </clipitem>\n';
+    }
+
+    xml +=
+      '        </track>\n' +
+      '      </video>\n' +
+      '    </media>\n' +
+      '  </sequence>\n' +
+      '</xmeml>';
+
+    zip.file(projectName + '.xml', xml);
+
+    var zipBlob = await zip.generateAsync({ type: 'blob' });
+    downloadBlob(zipBlob, projectName + '_premiere.zip');
+    return true;
+  };
 })();

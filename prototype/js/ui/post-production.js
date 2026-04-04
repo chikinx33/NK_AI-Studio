@@ -1429,12 +1429,37 @@
     }
   }
 
+  async function downloadPremiereNow() {
+    var project = getProjectByStateId() || resolveProject();
+    if (!(NK.service && NK.service.exporter && NK.service.exporter.downloadPremiereZip)) {
+      showMessageDialog('Premiere 내보내기 서비스를 찾지 못했습니다.', 'Premiere');
+      return;
+    }
+    showSaveOverlay(true);
+    try {
+      var ok = await NK.service.exporter.downloadPremiereZip(project);
+      if (!ok) showMessageDialog('내보낼 데이터가 없습니다.', 'Premiere');
+    } catch (err) {
+      showMessageDialog('Premiere 내보내기 실패: ' + String(err && err.message || err), 'Premiere');
+    } finally {
+      showSaveOverlay(false);
+    }
+  }
+
+  function getProjectExportFileName() {
+    var project = getProjectByStateId() || resolveProject();
+    if (NK.service && NK.service.exporter && NK.service.exporter.getProjectFileName) {
+      return NK.service.exporter.getProjectFileName(project);
+    }
+    return String((project && project.title) || 'render').trim() || 'render';
+  }
+
   async function downloadMp4Now() {
     // WebCodecs MP4 blob이 있으면 직접 다운로드
     if (state.lastRenderBlob && state.lastRenderBlob.size > 0) {
       var blobUrl = URL.createObjectURL(state.lastRenderBlob);
       try {
-        await downloadUrl(blobUrl, 'final-render.mp4');
+        await downloadUrl(blobUrl, getProjectExportFileName() + '.mp4');
       } catch (err) {
         showMessageDialog('MP4 다운로드 실패: ' + getRenderErrorMessage(err), 'MP4 다운로드');
       } finally {
@@ -1456,7 +1481,7 @@
       }
       if (url) {
         try {
-          await downloadUrl(url, 'final-render.mp4', {
+          await downloadUrl(url, getProjectExportFileName() + '.mp4', {
             expectedMime: 'video/mp4',
             validateMp4: true
           });
@@ -1516,7 +1541,7 @@
           }
       );
       updateRenderPanelUi();
-      await downloadUrl(mp4DownloadUrl || mp4PreviewUrl, 'final-render.mp4', {
+      await downloadUrl(mp4DownloadUrl || mp4PreviewUrl, getProjectExportFileName() + '.mp4', {
         expectedMime: 'video/mp4',
         validateMp4: true
       });
@@ -2466,6 +2491,7 @@
         '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>' + t('자막') + '</span><strong>SRT</strong></button>' +
         '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>' + t('스토리보드') + '</span><strong>XLS</strong></button>' +
         '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>' + t('영상') + '</span><strong>MP4</strong></button>' +
+        '<button class="postprod-download-item" id="postprod-download-premiere-btn"><span>Premiere</span><strong>ZIP</strong></button>' +
         '</div>' +
         '</div>' +
         '</aside>' +
@@ -2966,6 +2992,8 @@
     if (storyboardBtn) storyboardBtn.onclick = downloadStoryboardNow;
     var mp4Btn = document.getElementById('postprod-download-mp4-btn');
     if (mp4Btn) mp4Btn.onclick = downloadMp4Now;
+    var premiereBtn = document.getElementById('postprod-download-premiere-btn');
+    if (premiereBtn) premiereBtn.onclick = downloadPremiereNow;
     updateHistoryButtons();
     updateRenderPanelUi();
     setPlayButtonUi();
