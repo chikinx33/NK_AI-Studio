@@ -47,7 +47,8 @@
     captionColor: '#ffffff',
     captionBg: 'rgba(0,0,0,0.72)',
     captionEffect: 'shadow',
-    sessionEdits: {}
+    sessionEdits: {},
+    lastRenderBlob: null
   };
 
   function safeParse(text) {
@@ -1296,23 +1297,44 @@
       if (result && result.allVisualsFailed) {
         throw new Error('모든 씬 미디어 로드에 실패했습니다. 프로덕션에서 자산 URL을 갱신한 뒤 다시 시도해주세요.');
       }
-      var uploaded = await uploadRenderedBlobSource(
-        state.projectId,
-        result.blob,
-        result && result.mimeType
-      );
-      var outputVideoUrl = String((uploaded && uploaded.sourceUrl) || '').trim();
-      var outputVideoMime = String((uploaded && uploaded.sourceMime) || (result && result.mimeType) || 'video/webm').trim();
-      var outputSourceObjectName = String((uploaded && uploaded.sourceObjectName) || '').trim();
-      var pendingMp4 = outputVideoMime.indexOf('mp4') < 0;
-      if (oldUrl && oldUrl.indexOf('blob:') === 0 && oldUrl !== outputVideoUrl) {
-        try { URL.revokeObjectURL(oldUrl); } catch (_) { }
+
+      // MP4 직접 출력인 경우 blob URL로 즉시 사용
+      var outputVideoMime = String(result && result.mimeType || 'video/webm').trim();
+      var isMp4Direct = outputVideoMime.indexOf('mp4') >= 0;
+      var outputVideoUrl = '';
+      var outputSourceObjectName = '';
+      var pendingMp4 = false;
+
+      if (isMp4Direct) {
+        // WebCodecs MP4: 서버 업로드 없이 로컬 blob URL 사용
+        if (oldUrl && oldUrl.indexOf('blob:') === 0) {
+          try { URL.revokeObjectURL(oldUrl); } catch (_) { }
+        }
+        outputVideoUrl = URL.createObjectURL(result.blob);
+        // blob 참조를 state에 보관 (다운로드용)
+        state.lastRenderBlob = result.blob;
+      } else {
+        // MediaRecorder WebM: 서버 업로드 + transcode 필요
+        var uploaded = await uploadRenderedBlobSource(
+          state.projectId,
+          result.blob,
+          outputVideoMime
+        );
+        outputVideoUrl = String((uploaded && uploaded.sourceUrl) || '').trim();
+        outputVideoMime = String((uploaded && uploaded.sourceMime) || outputVideoMime).trim();
+        outputSourceObjectName = String((uploaded && uploaded.sourceObjectName) || '').trim();
+        pendingMp4 = outputVideoMime.indexOf('mp4') < 0;
+        if (oldUrl && oldUrl.indexOf('blob:') === 0 && oldUrl !== outputVideoUrl) {
+          try { URL.revokeObjectURL(oldUrl); } catch (_) { }
+        }
+        state.lastRenderBlob = null;
       }
+
       persistRenderMeta(
         (renderSvc && renderSvc.buildRenderSuccessMeta)
           ? renderSvc.buildRenderSuccessMeta(state.renderMeta || oldMeta, {
             outputVideoUrl: outputVideoUrl,
-            outputVideoDownloadUrl: '',
+            outputVideoDownloadUrl: isMp4Direct ? outputVideoUrl : '',
             outputVideoObjectName: '',
             outputVideoMime: outputVideoMime,
             outputSourceObjectName: outputSourceObjectName,
@@ -1324,7 +1346,7 @@
             status: 'done',
             progress: 100,
             outputVideoUrl: outputVideoUrl,
-            outputVideoDownloadUrl: '',
+            outputVideoDownloadUrl: isMp4Direct ? outputVideoUrl : '',
             outputVideoObjectName: '',
             outputVideoMime: outputVideoMime,
             outputSourceObjectName: outputSourceObjectName,
@@ -1382,6 +1404,18 @@
   }
 
   async function downloadMp4Now() {
+    // WebCodecs MP4 blob이 있으면 직접 다운로드
+    if (state.lastRenderBlob && state.lastRenderBlob.size > 0) {
+      var blobUrl = URL.createObjectURL(state.lastRenderBlob);
+      try {
+        await downloadUrl(blobUrl, 'final-render.mp4');
+      } catch (err) {
+        showMessageDialog('MP4 다운로드 실패: ' + getRenderErrorMessage(err), 'MP4 다운로드');
+      } finally {
+        setTimeout(function () { try { URL.revokeObjectURL(blobUrl); } catch (_) { } }, 500);
+      }
+      return;
+    }
     var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
     var renderApi = getPostprodRenderService();
     var url = (renderApi && renderApi.resolveMp4DownloadUrl)
