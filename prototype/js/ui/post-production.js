@@ -780,9 +780,10 @@
         state.saveGuardTimer = 0;
       }
       state.saveBusy = false;
-      if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.textContent = originalText || '저장하기';
+      var currentBtn = document.getElementById('postprod-save-btn');
+      if (currentBtn) {
+        currentBtn.disabled = false;
+        currentBtn.textContent = '저장하기';
       }
       updateRenderPanelUi();
     }
