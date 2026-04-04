@@ -47,6 +47,7 @@
     captionColor: '#ffffff',
     captionBg: 'rgba(0,0,0,0.72)',
     captionEffect: 'shadow',
+    captionPosition: 6,
     sessionEdits: {},
     lastRenderBlob: null
   };
@@ -413,6 +414,8 @@
       if (bg) state.captionBg = bg;
       var eff = localStorage.getItem('nk_post_caption_effect');
       if (eff) state.captionEffect = eff;
+      var pos = localStorage.getItem('nk_post_caption_pos');
+      if (pos) { var pn = Number(pos); if (isFinite(pn) && pn >= 0 && pn <= 50) state.captionPosition = pn; }
     } catch (_) { }
   }
 
@@ -424,6 +427,7 @@
       localStorage.setItem('nk_post_caption_color', state.captionColor || '');
       localStorage.setItem('nk_post_caption_bg', state.captionBg || '');
       localStorage.setItem('nk_post_caption_effect', state.captionEffect || 'none');
+      localStorage.setItem('nk_post_caption_pos', String(state.captionPosition || 6));
     } catch (_) { }
   }
 
@@ -1229,7 +1233,8 @@
         sizeScale: state.captionSizeScale,
         color: state.captionColor,
         bg: state.captionBg,
-        effect: state.captionEffect
+        effect: state.captionEffect,
+        position: state.captionPosition || 6
       },
       getSubtitleLabels: function (sec) {
         return getActiveSubtitleLabels(model, sec);
@@ -1863,6 +1868,52 @@
     return typeof clipId === 'string' && clipId.indexOf('vis-') === 0;
   }
 
+  var CAPTION_FONTS = [
+    { value: 'Pretendard, sans-serif', label: 'Pretendard' },
+    { value: "'Noto Sans KR', sans-serif", label: 'Noto Sans KR' },
+    { value: 'Segoe UI, sans-serif', label: 'Segoe UI' },
+    { value: 'Arial, sans-serif', label: 'Arial' },
+    { value: "'Georgia', serif", label: 'Georgia' },
+    { value: "'Courier New', monospace", label: 'Courier New' },
+    { value: 'sans-serif', label: 'Sans' }
+  ];
+
+  var CAPTION_TEMPLATES = [
+    { name: { ko: '기본 (흰색)', en: 'Default (White)' }, color: '#ffffff', bg: 'rgba(0,0,0,0.72)', effect: 'shadow', font: 'Pretendard, sans-serif', size: 1 },
+    { name: { ko: '시네마', en: 'Cinema' }, color: '#f0e6c8', bg: 'transparent', effect: 'shadow', font: "'Georgia', serif", size: 1.1 },
+    { name: { ko: '뉴스', en: 'News' }, color: '#ffffff', bg: 'rgba(0,50,120,0.85)', effect: 'none', font: 'Arial, sans-serif', size: 1 },
+    { name: { ko: '키즈', en: 'Kids' }, color: '#ffe03d', bg: 'rgba(0,0,0,0.65)', effect: 'outline', font: "'Noto Sans KR', sans-serif", size: 1.15 },
+    { name: { ko: '미니멀', en: 'Minimal' }, color: '#ffffff', bg: 'transparent', effect: 'outline', font: 'Pretendard, sans-serif', size: 0.9 },
+    { name: { ko: '강조 (노랑)', en: 'Bold (Yellow)' }, color: '#ffd500', bg: 'rgba(0,0,0,0.8)', effect: 'none', font: 'Pretendard, sans-serif', size: 1.15 }
+  ];
+
+  function applyCaptionTemplate(idx) {
+    var tmpl = CAPTION_TEMPLATES[idx];
+    if (!tmpl) return;
+    state.captionColor = tmpl.color;
+    state.captionBg = tmpl.bg;
+    state.captionEffect = tmpl.effect;
+    state.captionFont = tmpl.font;
+    state.captionSizeScale = tmpl.size;
+    saveCaptionPrefs();
+    post.render();
+  }
+
+  function buildCaptionTemplateHtml() {
+    var lang = currentLang();
+    return CAPTION_TEMPLATES.map(function (tmpl, idx) {
+      return '<option value="' + idx + '">' + escapeHtml(tmpl.name[lang] || tmpl.name.ko) + '</option>';
+    }).join('');
+  }
+
+  function buildFontOptionsHtml() {
+    var cur = String(state.captionFont || '').toLowerCase();
+    return CAPTION_FONTS.map(function (f) {
+      var selected = cur.indexOf(f.label.toLowerCase()) >= 0 ? ' selected' : '';
+      return '<option value="' + escapeHtml(f.value) + '"' + selected + ' style="font-family:' + escapeHtml(f.value) + '">' + escapeHtml(f.label) + '</option>';
+    }).join('');
+  }
+
   function buildMotionOptionsHtml() {
     var motionSvc = NK.service && NK.service.postprodMotion;
     if (!motionSvc || !motionSvc.getEffectKeys) return '<option value="none">None</option>';
@@ -2048,10 +2099,11 @@
     var sizePx = Math.max(18, Math.round(22 * (state.captionSizeScale || 1)));
     var bg = String(state.captionBg || '').trim();
     var padY = Math.max(6, Math.round(sizePx * 0.5));
+    var posPercent = Math.max(2, Math.min(45, state.captionPosition || 6));
     sub.style.position = 'absolute';
     sub.style.left = '0';
     sub.style.right = '0';
-    sub.style.bottom = '6%';
+    sub.style.bottom = posPercent + '%';
     sub.style.pointerEvents = 'none';
     sub.style.textAlign = 'center';
     sub.style.paddingLeft = '6%';
@@ -2398,23 +2450,33 @@
       '<div class="postprod-toolbar-group">' +
       '<label>' + t('자막') + '</label>' +
       '<button class="postprod-pill' + (state.captionsEnabled ? ' active' : '') + '" id="postprod-caption-toggle" type="button">' + (state.captionsEnabled ? 'ON' : 'OFF') + '</button>' +
-      '<select id="postprod-font-family">' +
-      '<option value="Pretendard, Segoe UI, Apple SD Gothic Neo, sans-serif"' + (String(state.captionFont).indexOf('Pretendard') >= 0 ? ' selected' : '') + '>Pretendard</option>' +
-      '<option value="Segoe UI, Apple SD Gothic Neo, sans-serif"' + (String(state.captionFont) === 'Segoe UI, Apple SD Gothic Neo, sans-serif' ? ' selected' : '') + '>Segoe UI</option>' +
-      '<option value="sans-serif"' + (String(state.captionFont) === 'sans-serif' ? ' selected' : '') + '>Sans</option>' +
-      '</select>' +
+      '<select id="postprod-caption-template" title="' + t('자막 템플릿') + '"><option value="">' + t('템플릿') + '</option>' + buildCaptionTemplateHtml() + '</select>' +
+      '<select id="postprod-font-family">' + buildFontOptionsHtml() + '</select>' +
       '<select id="postprod-font-size">' +
-      '<option value="0.85"' + (Number(state.captionSizeScale) < 1 ? ' selected' : '') + '>' + t('작게') + '</option>' +
-      '<option value="1"' + (Math.abs(Number(state.captionSizeScale) - 1) < 0.01 ? ' selected' : '') + '>' + t('보통') + '</option>' +
-      '<option value="1.25"' + (Number(state.captionSizeScale) > 1 ? ' selected' : '') + '>' + t('크게') + '</option>' +
+      '<option value="0.75"' + (Number(state.captionSizeScale) <= 0.75 ? ' selected' : '') + '>XS</option>' +
+      '<option value="0.85"' + (Number(state.captionSizeScale) > 0.75 && Number(state.captionSizeScale) < 1 ? ' selected' : '') + '>S</option>' +
+      '<option value="1"' + (Math.abs(Number(state.captionSizeScale) - 1) < 0.01 ? ' selected' : '') + '>M</option>' +
+      '<option value="1.15"' + (Math.abs(Number(state.captionSizeScale) - 1.15) < 0.05 ? ' selected' : '') + '>L</option>' +
+      '<option value="1.35"' + (Number(state.captionSizeScale) >= 1.3 ? ' selected' : '') + '>XL</option>' +
       '</select>' +
-      '<button class="postprod-color-chip" id="postprod-color-text" type="button" aria-label="글자색" style="background:' + String(state.captionColor || '#ffffff') + '"></button>' +
-      '<button class="postprod-color-chip dark" id="postprod-color-bg" type="button" aria-label="배경색" style="background:' + String(state.captionBg || 'rgba(0,0,0,0.72)') + '"></button>' +
+      '<input type="color" id="postprod-color-text" value="' + String(state.captionColor || '#ffffff') + '" title="' + t('글자색') + '" class="postprod-color-input" />' +
+      '<input type="color" id="postprod-color-bg-picker" value="' + (function () { var bg = String(state.captionBg || ''); var m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/); if (m) { return '#' + [m[1],m[2],m[3]].map(function(c){return Number(c).toString(16).padStart(2,'0');}).join(''); } return '#000000'; })() + '" title="' + t('배경색') + '" class="postprod-color-input dark" />' +
+      '<select id="postprod-bg-opacity" title="' + t('배경 투명도') + '">' +
+      '<option value="0.85"' + (String(state.captionBg).indexOf('0.85') >= 0 ? ' selected' : '') + '>85%</option>' +
+      '<option value="0.72"' + (String(state.captionBg).indexOf('0.72') >= 0 || String(state.captionBg).indexOf('0.85') < 0 && String(state.captionBg) !== 'transparent' && String(state.captionBg).indexOf('0.45') < 0 ? ' selected' : '') + '>72%</option>' +
+      '<option value="0.45"' + (String(state.captionBg).indexOf('0.45') >= 0 ? ' selected' : '') + '>45%</option>' +
+      '<option value="0"' + (state.captionBg === 'transparent' || String(state.captionBg).indexOf(',0)') >= 0 ? ' selected' : '') + '>0%</option>' +
+      '</select>' +
       '<select id="postprod-caption-effect">' +
       '<option value="none"' + (state.captionEffect === 'none' ? ' selected' : '') + '>' + t('없음') + '</option>' +
       '<option value="shadow"' + (state.captionEffect === 'shadow' ? ' selected' : '') + '>' + t('그림자') + '</option>' +
       '<option value="outline"' + (state.captionEffect === 'outline' ? ' selected' : '') + '>' + t('테두리') + '</option>' +
       '</select>' +
+      '<label>' + t('위치') + '</label>' +
+      '<input type="range" id="postprod-caption-pos" min="2" max="45" step="1" value="' + (state.captionPosition || 6) + '" class="postprod-pos-range" />' +
+      '<span id="postprod-caption-pos-text" class="postprod-pos-text">' + (state.captionPosition || 6) + '%</span>' +
+      '</div>' +
+      '<div class="postprod-toolbar-group">' +
       '<label for="postprod-snap-step">' + t('스냅') + '</label>' +
       '<select id="postprod-snap-step">' + buildSnapOptionsHtml() + '</select>' +
       '</div>' +
@@ -2879,28 +2941,46 @@
         syncPreviewMedia(state.currentTime);
       };
     }
-    var textChip = document.getElementById('postprod-color-text');
-    if (textChip) {
-      textChip.onclick = function () {
-        var palette = ['#ffffff', '#f5c94b', '#00e0ff', '#ff477e', '#000000'];
-        var cur = String(state.captionColor || '').toLowerCase();
-        var idx = Math.max(0, palette.findIndex(function (c) { return c.toLowerCase() === cur; }));
-        var next = palette[(idx + 1) % palette.length];
-        state.captionColor = next;
-        textChip.style.background = next;
+    var templateSel = document.getElementById('postprod-caption-template');
+    if (templateSel) {
+      templateSel.onchange = function () {
+        var idx = Number(templateSel.value);
+        if (isFinite(idx)) applyCaptionTemplate(idx);
+        templateSel.value = '';
+      };
+    }
+    var textColorInput = document.getElementById('postprod-color-text');
+    if (textColorInput) {
+      textColorInput.oninput = function () {
+        state.captionColor = textColorInput.value;
         saveCaptionPrefs();
         syncPreviewMedia(state.currentTime);
       };
     }
-    var bgChip = document.getElementById('postprod-color-bg');
-    if (bgChip) {
-      bgChip.onclick = function () {
-        var palette = ['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.45)', 'transparent'];
-        var cur = String(state.captionBg || '').replace(/\s+/g, '');
-        var idx = Math.max(0, palette.findIndex(function (c) { return c.replace(/\s+/g, '') === cur; }));
-        var next = palette[(idx + 1) % palette.length];
-        state.captionBg = next;
-        bgChip.style.background = next;
+    var bgColorInput = document.getElementById('postprod-color-bg-picker');
+    var bgOpacitySel = document.getElementById('postprod-bg-opacity');
+    function updateCaptionBg() {
+      var hex = bgColorInput ? bgColorInput.value : '#000000';
+      var opacity = bgOpacitySel ? Number(bgOpacitySel.value) : 0.72;
+      if (opacity <= 0) {
+        state.captionBg = 'transparent';
+      } else {
+        var r = parseInt(hex.slice(1, 3), 16) || 0;
+        var g = parseInt(hex.slice(3, 5), 16) || 0;
+        var b = parseInt(hex.slice(5, 7), 16) || 0;
+        state.captionBg = 'rgba(' + r + ',' + g + ',' + b + ',' + opacity + ')';
+      }
+      saveCaptionPrefs();
+      syncPreviewMedia(state.currentTime);
+    }
+    if (bgColorInput) bgColorInput.oninput = updateCaptionBg;
+    if (bgOpacitySel) bgOpacitySel.onchange = updateCaptionBg;
+    var posRange = document.getElementById('postprod-caption-pos');
+    var posText = document.getElementById('postprod-caption-pos-text');
+    if (posRange) {
+      posRange.oninput = function () {
+        state.captionPosition = Number(posRange.value) || 6;
+        if (posText) posText.textContent = state.captionPosition + '%';
         saveCaptionPrefs();
         syncPreviewMedia(state.currentTime);
       };

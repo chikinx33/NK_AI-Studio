@@ -380,7 +380,8 @@
     var boxWidth = Math.min(maxWidth + padX * 2, Math.ceil(widest) + padX * 2);
     var boxHeight = (lines.length * lineHeight) + padY * 2;
     var boxX = Math.round((width - boxWidth) / 2);
-    var boxY = Math.max(16, Math.round(height - boxHeight - Math.max(24, height * 0.06)));
+    var captionPos = Number(opts.captions.position) || 6;
+    var boxY = Math.max(16, Math.round(height - boxHeight - Math.max(24, height * captionPos / 100)));
 
     var bg = String(opts.captions.bg || '').trim();
     var borderRadius = Math.max(4, Math.round(fontSize * 0.35));
