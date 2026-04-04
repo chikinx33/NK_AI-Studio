@@ -1978,15 +1978,53 @@
 
   function applyMotionTransform(element, clip, sec) {
     if (!element) return;
+    var wrapper = document.getElementById('postprod-motion-wrapper');
     var motionSvc = NK.service && NK.service.postprodMotion;
     var preset = (clip && clip.motionPreset) || 'none';
-    var isImg = element.tagName === 'IMG';
+
     if (!motionSvc || preset === 'none') {
       element.style.transform = '';
-      if (isImg) element.style.objectFit = 'contain';
+      element.style.objectFit = 'contain';
+      element.style.width = '';
+      element.style.height = '';
+      if (wrapper) {
+        wrapper.style.position = '';
+        wrapper.style.overflow = '';
+        wrapper.style.inset = '0';
+      }
       return;
     }
-    if (isImg) element.style.objectFit = 'cover';
+
+    // 래퍼를 contain 영역 크기로 설정
+    if (wrapper && element.tagName === 'IMG' && element.naturalWidth && element.naturalHeight) {
+      var container = wrapper.parentElement;
+      var cw = container ? container.clientWidth : 0;
+      var ch = container ? container.clientHeight : 0;
+      if (cw && ch) {
+        var imgRatio = element.naturalWidth / element.naturalHeight;
+        var ctnRatio = cw / ch;
+        var rw, rh;
+        if (imgRatio > ctnRatio) {
+          rw = cw;
+          rh = Math.round(cw / imgRatio);
+        } else {
+          rh = ch;
+          rw = Math.round(ch * imgRatio);
+        }
+        wrapper.style.position = 'absolute';
+        wrapper.style.width = rw + 'px';
+        wrapper.style.height = rh + 'px';
+        wrapper.style.left = Math.round((cw - rw) / 2) + 'px';
+        wrapper.style.top = Math.round((ch - rh) / 2) + 'px';
+        wrapper.style.overflow = 'hidden';
+        wrapper.style.inset = '';
+
+        element.style.objectFit = 'cover';
+        element.style.width = '100%';
+        element.style.height = '100%';
+      }
+    }
+
     var duration = Math.max(0.2, (clip.end || 0) - (clip.start || 0));
     var progress = clamp(((Number(sec) || 0) - (clip.start || 0)) / duration, 0, 1);
     var frame = motionSvc.computeMotionFrame(preset, progress);
@@ -1996,7 +2034,19 @@
   function clearMotionTransform(element) {
     if (!element) return;
     element.style.transform = '';
-    if (element.tagName === 'IMG') element.style.objectFit = 'contain';
+    element.style.objectFit = 'contain';
+    element.style.width = '';
+    element.style.height = '';
+    var wrapper = document.getElementById('postprod-motion-wrapper');
+    if (wrapper) {
+      wrapper.style.position = '';
+      wrapper.style.overflow = '';
+      wrapper.style.width = '';
+      wrapper.style.height = '';
+      wrapper.style.left = '';
+      wrapper.style.top = '';
+      wrapper.style.inset = '0';
+    }
   }
 
   function syncPreviewMedia(sec) {
@@ -2170,7 +2220,9 @@
     return (
       '<div class="postprod-preview-stack" style="position:relative;">' +
       '<div id="postprod-preview-video-host" class="postprod-preview-video-host"></div>' +
+      '<div id="postprod-motion-wrapper" class="postprod-motion-wrapper">' +
       '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
+      '</div>' +
       '<div id="postprod-preview-subtitles" class="postprod-preview-subtitles" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:6%;display:none;pointer-events:none;text-align:center;padding:0 6%;z-index:5;"></div>' +
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +

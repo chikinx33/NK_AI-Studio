@@ -5295,14 +5295,22 @@ html.page-shell-image #sidebar-project-card {
 
 .postprod-preview-stack .postprod-video,
 .postprod-preview-stack .postprod-preview-video-host,
-.postprod-preview-stack .postprod-image,
+.postprod-preview-stack .postprod-motion-wrapper,
 .postprod-preview-stack .postprod-preview-gap,
 .postprod-preview-stack .postprod-preview-empty {
   position: absolute;
   inset: 0;
 }
 
-.postprod-preview-stack .postprod-image,
+.postprod-motion-wrapper {
+  overflow: hidden;
+}
+
+.postprod-motion-wrapper .postprod-image {
+  will-change: transform;
+  transform-origin: center center;
+}
+
 .postprod-preview-stack .postprod-preview-video-host {
   will-change: transform;
   transform-origin: center center;
