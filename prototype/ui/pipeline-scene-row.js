@@ -159,6 +159,24 @@
     );
   }
 
+  var collapsedPipelineSceneIds = new Set();
+
+  function isPipelineSceneCollapsed(id) {
+    return collapsedPipelineSceneIds.has(String(id));
+  }
+
+  function togglePipelineSceneCollapsed(id) {
+    var key = String(id);
+    if (collapsedPipelineSceneIds.has(key)) collapsedPipelineSceneIds.delete(key);
+    else collapsedPipelineSceneIds.add(key);
+  }
+
+  function setPipelineSceneCollapsed(id, collapsed) {
+    var key = String(id);
+    if (collapsed) collapsedPipelineSceneIds.add(key);
+    else collapsedPipelineSceneIds.delete(key);
+  }
+
   function buildSceneRowHtml(scene, header, options) {
     var opts = options || {};
     var statePayload = opts.statePayload || {};
@@ -174,9 +192,30 @@
     });
     var img = buildImageCard(scene, mediaUrlResolver);
     var videoCard = buildVideoCard(scene, mediaUrlResolver);
+    var isCollapsed = isPipelineSceneCollapsed(scene.id);
+    var collapseClass = isCollapsed ? ' is-collapsed' : '';
+    var toggleIcon = isCollapsed ? '+' : '-';
+    var toggleLabel = isCollapsed ? '펼치기' : '접기';
+    var narrationPreview = extractNarrationDisplay(scene.lines || '');
+    if (narrationPreview.length > 40) narrationPreview = narrationPreview.slice(0, 40) + '…';
+    var hasImage = !!scene.imageDataUrl;
+    var hasVideo = !!(scene.videoUrl || scene.videoPlaybackUrl);
+
+    var statusChips = '';
+    if (hasImage) statusChips += '<span class="scene-row-chip chip-image">IMG</span>';
+    if (hasVideo) statusChips += '<span class="scene-row-chip chip-video">VID</span>';
+    if (scene.imgLoading) statusChips += '<span class="scene-row-chip chip-loading">생성중</span>';
+    if (videoBusy) statusChips += '<span class="scene-row-chip chip-loading">영상중</span>';
 
     return (
-      '<div class="scene-row" data-id="' + scene.id + '">' +
+      '<div class="scene-row' + collapseClass + '" data-id="' + scene.id + '">' +
+      '<div class="scene-row-header">' +
+      '<button type="button" class="scene-row-toggle" aria-expanded="' + (isCollapsed ? 'false' : 'true') + '" aria-label="' + toggleLabel + '" title="' + toggleLabel + '">' + toggleIcon + '</button>' +
+      '<span class="scene-row-title">Scene ' + scene.id + '</span>' +
+      '<span class="scene-row-preview">' + narrationPreview + '</span>' +
+      '<span class="scene-row-chips">' + statusChips + '</span>' +
+      '</div>' +
+      '<div class="scene-row-body">' +
       '<div class="scene-cell story">' +
       '<div class="story-inner">' +
       '<p class="eyebrow">Scene ' + scene.id + '</p>' +
@@ -217,6 +256,7 @@
       '<button class="btn-secondary compact" data-action="download-video" data-id="' + scene.id + '"' + (scene.videoUrl ? '' : ' disabled') + '>다운로드</button>' +
       '</div>' +
       '</div>' +
+      '</div>' +
       '</div>'
     );
   }
@@ -227,4 +267,8 @@
   sceneRow.extractNarrationDisplay = extractNarrationDisplay;
   sceneRow.buildVoiceScriptForVideo = buildVoiceScriptForVideo;
   sceneRow.buildSceneRowHtml = buildSceneRowHtml;
+  sceneRow.togglePipelineSceneCollapsed = togglePipelineSceneCollapsed;
+  sceneRow.setPipelineSceneCollapsed = setPipelineSceneCollapsed;
+  sceneRow.isPipelineSceneCollapsed = isPipelineSceneCollapsed;
+  sceneRow.collapsedPipelineSceneIds = collapsedPipelineSceneIds;
 })();

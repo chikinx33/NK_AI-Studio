@@ -3824,13 +3824,9 @@ textarea::-webkit-scrollbar-corner {
   width: 100%;
 }
 
-.scene-row,
 .scene-row.head {
   display: grid !important;
   grid-template-columns: 1.2fr 2fr 0.9fr 0.7fr;
-}
-
-.scene-row.head {
   position: sticky;
   top: 0;
   z-index: 3;
@@ -3857,6 +3853,96 @@ textarea::-webkit-scrollbar-corner {
   bottom: 8px;
   display: flex;
   gap: 6px;
+}
+
+/* ── Scene row collapse / expand ── */
+.scene-row:not(.head) {
+  display: flex !important;
+  flex-direction: column;
+}
+.scene-row-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--border);
+  min-height: 40px;
+}
+.scene-row-toggle {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.15s, background 0.15s;
+}
+.scene-row-toggle:hover {
+  border-color: rgba(255, 122, 0, 0.5);
+  background: rgba(255, 122, 0, 0.12);
+}
+.scene-row-title {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.scene-row-preview {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-muted, #888);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.scene-row-chips {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.scene-row-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.scene-row-chip.chip-image { background: rgba(59,130,246,0.15); color: #3b82f6; }
+.scene-row-chip.chip-video { background: rgba(16,185,129,0.15); color: #10b981; }
+.scene-row-chip.chip-loading { background: rgba(255,122,0,0.15); color: #ff7a00; }
+
+.scene-row-body {
+  display: grid;
+  grid-template-columns: 1.2fr 2fr 0.9fr 0.7fr;
+}
+
+.scene-row.is-collapsed .scene-row-body {
+  display: none;
+}
+.scene-row.is-collapsed {
+  border-bottom: 1px solid var(--border);
+}
+.scene-row.is-collapsed .scene-row-header {
+  border-bottom: none;
+}
+
+/* head row stays as grid, no header */
+.scene-row.head {
+  display: grid !important;
+  flex-direction: unset;
+  grid-template-columns: 1.2fr 2fr 0.9fr 0.7fr;
 }
 
 .prompt-text[contenteditable="true"] {

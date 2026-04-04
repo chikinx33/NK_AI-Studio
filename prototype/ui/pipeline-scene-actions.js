@@ -28,6 +28,24 @@
     rootEl.dataset.bound = '1';
 
     rootEl.addEventListener('click', async function (e) {
+      /* ── scene-row toggle (접힘/펼침) ── */
+      var toggleBtn = e.target.closest('.scene-row-toggle');
+      if (toggleBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        var row = toggleBtn.closest('.scene-row');
+        if (!row) return;
+        var sceneId = row.dataset.id;
+        var sceneRowMod = NK.uiPipelineSceneRow || {};
+        if (sceneRowMod.togglePipelineSceneCollapsed) sceneRowMod.togglePipelineSceneCollapsed(sceneId);
+        var nowCollapsed = sceneRowMod.isPipelineSceneCollapsed ? sceneRowMod.isPipelineSceneCollapsed(sceneId) : row.classList.contains('is-collapsed');
+        row.classList.toggle('is-collapsed', nowCollapsed);
+        toggleBtn.textContent = nowCollapsed ? '+' : '-';
+        toggleBtn.setAttribute('aria-expanded', nowCollapsed ? 'false' : 'true');
+        toggleBtn.setAttribute('aria-label', nowCollapsed ? '펼치기' : '접기');
+        toggleBtn.setAttribute('title', nowCollapsed ? '펼치기' : '접기');
+        return;
+      }
       var btn = e.target.closest('[data-action]');
       if (btn) {
         e.preventDefault();
