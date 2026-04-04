@@ -107,7 +107,19 @@
         var ext = gl.getExtension('WEBGL_debug_renderer_info');
         if (ext) {
           var renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '';
-          _gpuLabel = renderer.replace(/\s*\(.*?\)\s*/g, ' ').replace(/ANGLE.*?Direct3D\d*\s*/i, '').replace(/vs_\S+\s*ps_\S+/i, '').replace(/\s{2,}/g, ' ').trim();
+          var inner = renderer.match(/ANGLE\s*\((.+)\)/i);
+          var name = inner ? inner[1] : renderer;
+          name = name
+            .replace(/,?\s*Direct3D\d*/gi, '')
+            .replace(/,?\s*D3D\d*/gi, '')
+            .replace(/,?\s*OpenGL.*/gi, '')
+            .replace(/,?\s*Vulkan.*/gi, '')
+            .replace(/vs_\S+/gi, '')
+            .replace(/ps_\S+/gi, '')
+            .replace(/\s{2,}/g, ' ')
+            .replace(/,\s*$/, '')
+            .trim();
+          _gpuLabel = name || renderer;
           if (_gpuLabel) return _gpuLabel;
         }
       }
