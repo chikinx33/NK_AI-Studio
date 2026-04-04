@@ -477,6 +477,11 @@
 
     zip.file(projectName + '.xml', xml);
 
+    var srtText = exporter.buildSrtText(project, { maxChars: 22 });
+    if (srtText) {
+      zip.file(projectName + '.srt', srtText);
+    }
+
     var zipBlob = await zip.generateAsync({ type: 'blob' });
     downloadBlob(zipBlob, projectName + '_premiere.zip');
     return true;
