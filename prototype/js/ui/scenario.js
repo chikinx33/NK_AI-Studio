@@ -1144,34 +1144,6 @@
     }
     parts.push(`</section>`);
 
-    // Episode Overview
-    if (p.topic || p.story) {
-      parts.push(`<section class="cpd-section">`);
-      parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionOverview || 'Episode Overview')}</h3>`);
-      parts.push(`<div class="cpd-fields">`);
-      if (p.topic) parts.push(field(infoLabels.topic || 'Topic', p.topic));
-      if (p.story) parts.push(field(infoLabels.story || 'Story', p.story));
-      parts.push(`</div>`);
-      parts.push(`</section>`);
-    }
-
-    // Brand Hub
-    const hasHub = knowledge.brandVoice || knowledge.brandStory || knowledge.brandCharacter
-      || knowledge.worldSetting || knowledge.brandRules.length || knowledge.bannedExpressions.length;
-    if (hasHub) {
-      parts.push(`<section class="cpd-section">`);
-      parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionHub || 'Brand Hub')}</h3>`);
-      parts.push(`<div class="cpd-fields">`);
-      if (knowledge.brandVoice) parts.push(field(labels.brandVoice || 'Brand voice', knowledge.brandVoice));
-      if (knowledge.brandStory) parts.push(field(labels.brandStory || 'Brand story', knowledge.brandStory));
-      if (knowledge.brandCharacter) parts.push(field(labels.brandCharacter || 'Brand character', normalizeKnowledgeDisplayValue('brandCharacter', knowledge.brandCharacter)));
-      if (knowledge.worldSetting) parts.push(field(labels.worldSetting || 'World setting', knowledge.worldSetting));
-      if (knowledge.brandRules.length) parts.push(field(labels.brandRules || 'Brand rules', knowledge.brandRules.join('\n')));
-      if (knowledge.bannedExpressions.length) parts.push(field(labels.bannedExpressions || 'Banned expressions', knowledge.bannedExpressions.join('\n')));
-      parts.push(`</div>`);
-      parts.push(`</section>`);
-    }
-
     return parts.join('');
   };
 
