@@ -2508,7 +2508,7 @@
       '<option value="shadow"' + (state.captionEffect === 'shadow' ? ' selected' : '') + '>' + t('그림자') + '</option>' +
       '<option value="outline"' + (state.captionEffect === 'outline' ? ' selected' : '') + '>' + t('테두리') + '</option>' +
       '</select>' +
-      '<input type="range" id="postprod-caption-pos" min="2" max="98" step="1" value="' + (state.captionPosition || 6) + '" class="postprod-pos-range vertical" orient="vertical" />' +
+      '<input type="range" id="postprod-caption-pos" min="2" max="98" step="1" value="' + (state.captionPosition || 6) + '" class="postprod-pos-range" title="' + t('위치') + '" />' +
       '</div>' +
       '<div class="postprod-toolbar-group">' +
       '<label for="postprod-snap-step">' + t('스냅') + '</label>' +

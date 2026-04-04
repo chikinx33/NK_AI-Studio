@@ -5805,8 +5805,8 @@ html.page-shell-image #sidebar-project-card {
   color: var(--text);
   border-radius: 999px;
   height: 30px;
-  width: 50px;
-  padding: 0;
+  min-width: 50px;
+  padding: 0 10px;
   font-weight: 700;
   text-align: center;
   display: inline-flex;
@@ -5841,14 +5841,9 @@ html.page-shell-image #sidebar-project-card {
   border-radius: 4px;
 }
 
-.postprod-pos-range.vertical {
-  writing-mode: vertical-lr;
-  direction: rtl;
-  width: 20px;
-  height: 28px;
+.postprod-pos-range {
+  width: 50px;
   accent-color: #ffd500;
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
 }
 
 .zoom-group {
