@@ -5406,9 +5406,9 @@ html.page-shell-image #sidebar-project-card {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 5px 6px;
-  min-width: 72px;
-  font-size: 12px;
+  padding: 4px 4px;
+  min-width: 0;
+  font-size: 11px;
 }
 
 .postprod-toolbar #postprod-snap-step {

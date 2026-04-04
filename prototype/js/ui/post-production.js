@@ -2485,8 +2485,7 @@
 
       '<div class="card postprod-toolbar">' +
       '<div class="postprod-toolbar-group">' +
-      '<label>' + t('자막') + '</label>' +
-      '<button class="postprod-pill' + (state.captionsEnabled ? ' active' : '') + '" id="postprod-caption-toggle" type="button">' + (state.captionsEnabled ? 'ON' : 'OFF') + '</button>' +
+      '<button class="postprod-pill' + (state.captionsEnabled ? ' active' : '') + '" id="postprod-caption-toggle" type="button">' + t('자막') + '</button>' +
       '<select id="postprod-caption-template" title="' + t('자막 템플릿') + '"><option value="">' + t('템플릿') + '</option>' + buildCaptionTemplateHtml() + '</select>' +
       '<select id="postprod-font-family">' + buildFontOptionsHtml() + '</select>' +
       '<select id="postprod-font-size">' +
@@ -2516,11 +2515,9 @@
       '<select id="postprod-snap-step">' + buildSnapOptionsHtml() + '</select>' +
       '</div>' +
       '<div class="postprod-toolbar-group zoom-group">' +
-      '<label for="postprod-zoom-range">' + t('배율') + '</label>' +
       '<button class="btn-secondary compact postprod-zoom-step" id="postprod-zoom-minus" type="button" aria-label="배율 줄이기">-</button>' +
       '<input id="postprod-zoom-range" type="range" min="' + state.zoomMin + '" max="' + state.zoomMax + '" step="10" value="' + state.zoom + '" />' +
       '<button class="btn-secondary compact postprod-zoom-step" id="postprod-zoom-plus" type="button" aria-label="배율 늘리기">+</button>' +
-      '<span id="postprod-zoom-text">' + state.zoom + '%</span>' +
       '<button class="btn-secondary compact postprod-fit-btn' + (state.fitTimeline ? ' is-active' : '') + '" id="postprod-zoom-fit" type="button" aria-label="타임라인 맞춤">FIX</button>' +
       '</div>' +
       '<div class="postprod-toolbar-group motion-group" id="postprod-motion-group">' +
@@ -2954,7 +2951,6 @@
       capToggle.onclick = function () {
         state.captionsEnabled = !state.captionsEnabled;
         capToggle.classList.toggle('active', state.captionsEnabled);
-        capToggle.textContent = state.captionsEnabled ? 'ON' : 'OFF';
         saveCaptionPrefs();
         syncPreviewMedia(state.currentTime);
       };
