@@ -287,17 +287,22 @@
       var subtitleRaw = firstFilled([scene.subtitleText, scene.caption, sceneNarration(scene)]);
       var subtitle = splitSubtitleText(stripSpeakerTokens(subtitleRaw) || subtitleRaw, 22).join(' / ');
       var narration = sceneNarrationText(scene, payload);
-      var imageUrl = sceneImageLink(scene);
-      var videoUrl = sceneVideoUrl(scene);
-      return '<tr>' +
+      var dataUrl = String(scene && scene.imageDataUrl || '').trim();
+      var linkUrl = sceneImageLink(scene);
+      var imageCell = '';
+      if (dataUrl && dataUrl.indexOf('data:') === 0) {
+        imageCell = '<img src="' + escapeHtml(dataUrl) + '" width="240" style="max-height:160px;object-fit:contain;" />';
+      } else if (linkUrl) {
+        imageCell = '<a href="' + escapeHtml(linkUrl) + '">' + escapeWorksheetText(linkUrl) + '</a>';
+      }
+      return '<tr style="height:170px;">' +
         '<td>' + escapeWorksheetText(scene.id || (index + 1)) + '</td>' +
         '<td>' + escapeWorksheetText(firstFilled([scene.title, 'Scene ' + (index + 1)])) + '</td>' +
         '<td>' + escapeWorksheetText(duration + 's') + '</td>' +
         '<td>' + escapeWorksheetText(narration) + '</td>' +
         '<td>' + escapeWorksheetText(subtitle) + '</td>' +
         '<td>' + escapeWorksheetText(sceneVisual(scene)) + '</td>' +
-        '<td>' + (imageUrl ? ('<a href="' + escapeHtml(imageUrl) + '">' + escapeWorksheetText(imageUrl) + '</a>') : '') + '</td>' +
-        '<td>' + (videoUrl ? ('<a href="' + escapeHtml(videoUrl) + '">' + escapeWorksheetText(videoUrl) + '</a>') : '') + '</td>' +
+        '<td style="width:260px;text-align:center;vertical-align:middle;">' + imageCell + '</td>' +
         '</tr>';
     }).join('');
     var html =
@@ -313,7 +318,7 @@
       '</style></head><body>' +
       '<table>' +
       '<thead><tr>' +
-      '<th>씬</th><th>제목</th><th>길이</th><th>나레이션</th><th>자막</th><th>비주얼</th><th>이미지</th><th>영상</th>' +
+      '<th>씬</th><th>제목</th><th>길이</th><th>나레이션</th><th>자막</th><th>비주얼</th><th>이미지</th>' +
       '</tr></thead>' +
       '<tbody>' + rows + '</tbody></table></body></html>';
     downloadBlob(new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8' }), title + '_storyboard.xls');
