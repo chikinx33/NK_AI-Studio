@@ -1004,7 +1004,6 @@
       if (currentPayload.sourceProjectId && !payload.sourceProjectId) payload.sourceProjectId = currentPayload.sourceProjectId;
       if (currentPayload.sourceProjectTitle && !payload.sourceProjectTitle) payload.sourceProjectTitle = currentPayload.sourceProjectTitle;
     }
-    payload.backgroundStyle = getCommonBackgroundStyleFromCard() || String(currentPayload?.backgroundStyle || '').trim();
     if (NK.service?.project?.applyProjectCore) {
       Object.assign(payload, NK.service.project.applyProjectCore(payload, { payload: currentPayload }));
     }
@@ -1176,10 +1175,7 @@
     return parts.join('');
   };
 
-  const getCommonBackgroundStyleFromCard = () => {
-    const node = document.querySelector('.scenario-card-common .view-common-style-lines');
-    return String(node?.textContent || '').trim();
-  };
+  const getCommonBackgroundStyleFromCard = () => '';
 
   const setActiveScenarioCard = (targetCard) => {
     const container = document.getElementById('scenario-cards');
@@ -1258,7 +1254,6 @@
 
   const collectScenesFromCards = () => {
     const flags = getScenarioFlags(currentPayload || {});
-    const commonBackgroundStyle = getCommonBackgroundStyleFromCard() || String(currentPayload?.backgroundStyle || '').trim();
     const composeDialogueOnlyText = (dialogue = []) => (Array.isArray(dialogue) ? dialogue : [])
       .map((d) => String(d?.line || '').trim())
       .filter(Boolean)
@@ -1304,7 +1299,6 @@
         lines: subtitleText,
         subtitleText,
         sceneLocation: locationText,
-        backgroundStyle: commonBackgroundStyle,
         videoSpeechPrompt,
         script,
         narration: cleanNarration,
@@ -1324,7 +1318,6 @@
       const dialogue = (s.dialogue !== undefined ? s.dialogue : prev.dialogue) || [];
       const visual = s.visual || s.shot || prev.visual || prev.shot || '';
       const sceneLocation = (s.sceneLocation !== undefined ? s.sceneLocation : prev.sceneLocation) || '';
-      const backgroundStyle = (s.backgroundStyle !== undefined ? s.backgroundStyle : prev.backgroundStyle) || '';
       const subtitleText = (s.subtitleText !== undefined ? s.subtitleText : prev.subtitleText) || s.lines || prev.lines || '';
       const videoSpeechPrompt = (s.videoSpeechPrompt !== undefined ? s.videoSpeechPrompt : prev.videoSpeechPrompt) || '';
       const script = (s.script !== undefined ? s.script : prev.script) || '';
@@ -1333,7 +1326,6 @@
         narration,
         dialogue,
         sceneLocation,
-        backgroundStyle,
         subtitleText,
         videoSpeechPrompt,
         script,
@@ -1378,7 +1370,6 @@
     const sceneList = normalizeScenes(scenes);
     const labels = getSceneFieldLabels();
     const commonInfo = formatCommonInfo();
-    const commonBackgroundStyle = sceneList.map((scene) => String(scene.backgroundStyle || '').trim()).find(Boolean) || String(currentPayload?.backgroundStyle || '').trim();
     if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
@@ -1394,16 +1385,7 @@
     const commonInfoRow = commonInfo
       ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play common-info-copy" id="common-copy-btn" data-i18n-title="copyTitle" data-i18n-aria-label="copyScenarioAria" title="${escapeHtml(tCopyTitle)}" aria-label="${escapeHtml(tCopyAria)}">⧉</button><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>`
       : '';
-    const commonBackgroundBlock = commonBackgroundStyle ? `
-      <div class="scenario-card scenario-card-common" data-scene-id="common-background">
-        <div class="scene-visual-grid">
-          <div class="field-block">
-            <p class="field-label muted small">${escapeHtml(getScenarioUiText().commonBackgroundLabel)}</p>
-            <p class="view-lines view-common-style-lines" contenteditable="true">${escapeHtml(commonBackgroundStyle)}</p>
-          </div>
-        </div>
-      </div>` : '';
-    const commonBlock = commonInfoRow + commonBackgroundBlock;
+    const commonBlock = commonInfoRow;
     container.innerHTML = commonBlock + sceneList.map(s => `
       <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">
@@ -2087,11 +2069,9 @@
             return lines.filter(Boolean).join('\n');
           };
           const sceneBlocks = (mergedScenes.length ? mergedScenes : (draft?.scenes || [])).map(makeBlock).join('\n\n');
-          const commonStyle = getCommonBackgroundStyleFromCard() || String(currentPayload?.backgroundStyle || '').trim();
           const parts = [];
           if (info) parts.push(`▶ ${info}`);
           if (headerText) parts.push(headerText);
-          if (commonStyle) parts.push(`배경\n${commonStyle}`);
           if (sceneBlocks) parts.push(sceneBlocks);
           const text = parts.filter(Boolean).join('\n\n');
           let ok = false;
