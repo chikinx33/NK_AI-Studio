@@ -1853,6 +1853,14 @@
           extraOverlay +
           '<span class="postprod-clip-handle left" data-handle="left"></span>' +
           '<span class="postprod-clip-text">' + escapeHtml(clip.label) + '</span>' +
+          (function () {
+            if (track.key !== 'visuals') return '';
+            var mp = getClipMotionPreset(clip.id);
+            if (!mp || mp === 'none') return '';
+            var motionSvc = NK.service && NK.service.postprodMotion;
+            var label = motionSvc ? motionSvc.getPresetLabel(mp, currentLang()) : mp;
+            return '<span class="postprod-clip-motion">' + escapeHtml(label) + '</span>';
+          })() +
           '<span class="postprod-clip-handle right" data-handle="right"></span>' +
           '</button>'
         );
@@ -2989,7 +2997,8 @@
       var lastProjectSnapshot = '';
       NK.state.subscribe(function (rt) {
         var projectId = (rt && rt.currentProject && rt.currentProject.id) || '';
-        var snapshot = projectId + '|' + JSON.stringify(
+        var lang = (rt && rt.lang) || 'ko';
+        var snapshot = projectId + '|' + lang + '|' + (
           (rt && rt.currentProject && rt.currentProject.scenes) ? rt.currentProject.scenes.length : 0
         );
         if (snapshot === lastProjectSnapshot) return;
