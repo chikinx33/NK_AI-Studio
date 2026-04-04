@@ -176,6 +176,23 @@
     ctx.drawImage(source, dx, dy, dw, dh);
   }
 
+  function drawContainWithMotion(ctx, source, width, height, motionFrame) {
+    if (!ctx || !source) return;
+    if (!motionFrame || motionFrame.scale === 1 && motionFrame.x === 0 && motionFrame.y === 0) {
+      return drawContain(ctx, source, width, height);
+    }
+    var sw = Number(source.videoWidth || source.naturalWidth || source.width || 0);
+    var sh = Number(source.videoHeight || source.naturalHeight || source.height || 0);
+    if (!sw || !sh) return;
+    var baseScale = Math.min(width / sw, height / sh);
+    var finalScale = baseScale * motionFrame.scale;
+    var dw = Math.round(sw * finalScale);
+    var dh = Math.round(sh * finalScale);
+    var dx = Math.round((width - dw) / 2 + motionFrame.x * dw);
+    var dy = Math.round((height - dh) / 2 + motionFrame.y * dh);
+    ctx.drawImage(source, dx, dy, dw, dh);
+  }
+
   function waitForVideoSeek(video, timeSec, timeoutMs) {
     return new Promise(function (resolve, reject) {
       if (!video) { reject(new Error('seek_video_missing')); return; }
@@ -574,7 +591,11 @@
             if (Math.abs((video.currentTime || 0) - localElapsed) > 0.18) {
               try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
             }
-            drawContain(ctx, video, canvas.width, canvas.height);
+            var motionSvc = NK.service && NK.service.postprodMotion;
+            var vMotion = motionSvc && clip.motionPreset && clip.motionPreset !== 'none'
+              ? motionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
+              : null;
+            drawContainWithMotion(ctx, video, canvas.width, canvas.height, vMotion);
             drawSubtitle(clip.start + localElapsed);
           }, reportProgress, shouldCancel);
           try { video.pause(); } catch (_) { }
@@ -599,7 +620,11 @@
           loadedVisualCount += 1;
           var okImage = await runSegment(duration, function (localElapsed) {
             drawBackground();
-            drawContain(ctx, image, canvas.width, canvas.height);
+            var imgMotionSvc = NK.service && NK.service.postprodMotion;
+            var iMotion = imgMotionSvc && clip.motionPreset && clip.motionPreset !== 'none'
+              ? imgMotionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
+              : null;
+            drawContainWithMotion(ctx, image, canvas.width, canvas.height, iMotion);
             drawSubtitle(clip.start + localElapsed);
           }, reportProgress, shouldCancel);
           processed += duration;

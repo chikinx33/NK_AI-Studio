@@ -5295,6 +5295,12 @@ html.page-shell-image #sidebar-project-card {
   inset: 0;
 }
 
+.postprod-preview-stack .postprod-image,
+.postprod-preview-stack .postprod-preview-video-host {
+  will-change: transform;
+  transform-origin: center center;
+}
+
 .postprod-preview-gap {
   display: none;
   background: #000;
@@ -5386,6 +5392,10 @@ html.page-shell-image #sidebar-project-card {
 .postprod-toolbar #postprod-snap-step option {
   color: #111;
   background: #fff;
+}
+
+.motion-group select {
+  min-width: 100px;
 }
 
 .history-group {

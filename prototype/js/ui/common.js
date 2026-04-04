@@ -87,6 +87,7 @@
         '알 수 없음': 'Unknown',
         '스토리보드': 'Storyboard',
         '영상': 'Video',
+        '효과': 'Effect',
         '저장하기': 'Save',
         '저장 중...': 'Saving...',
         '저장': 'Save',

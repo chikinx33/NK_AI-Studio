@@ -501,6 +501,44 @@
     setDirty(true);
   }
 
+  function persistMotionPreset(clipId, preset) {
+    if (!clipId) return;
+    var edits = state.sessionEdits || (state.sessionEdits = {});
+    var prev = Object.assign({}, edits[clipId] || {});
+    edits[clipId] = Object.assign({}, prev, { motionPreset: String(preset || 'none') });
+    state.sessionEdits = edits;
+    setDirty(true);
+  }
+
+  function getClipMotionPreset(clipId) {
+    if (!clipId) return 'none';
+    var clip = findClip(clipId);
+    if (clip && clip.motionPreset && clip.motionPreset !== 'none') return clip.motionPreset;
+    var project = getProjectByStateId();
+    var edits = getMergedTimelineEdits(project);
+    var edit = edits && edits[clipId];
+    return (edit && edit.motionPreset) || 'none';
+  }
+
+  function setClipMotionPreset(clipId, preset) {
+    if (!clipId) return;
+    var before = getClipMotionPreset(clipId);
+    var after = String(preset || 'none');
+    if (before === after) return;
+    persistMotionPreset(clipId, after);
+    var clip = findClip(clipId);
+    if (clip) clip.motionPreset = after;
+    pushHistory({
+      type: 'motion',
+      clipId: clipId,
+      beforeMotion: before,
+      afterMotion: after
+    });
+    setDirty(true);
+    syncPreviewMedia(state.currentTime);
+    updateMotionDropdown();
+  }
+
   function persistRenderMeta(metaPatch) {
     var svc = getPostprodStateService();
     if (!svc || !svc.persistRenderMeta || !state.projectId) return;
@@ -1503,7 +1541,8 @@
         var start = clamp(toNumber(edit.start, clip.start), 0, Math.max(0, model.totalDuration - 0.2));
         var end = clamp(toNumber(edit.end, clip.end), start + 0.2, model.totalDuration);
         maxEnd = Math.max(maxEnd, end);
-        return Object.assign({}, clip, { start: start, end: end });
+        var motionPreset = edit.motionPreset || clip.motionPreset || 'none';
+        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset });
       }).filter(Boolean);
     });
     model.totalDuration = Math.max(model.totalDuration, Math.ceil(maxEnd));
@@ -1713,6 +1752,32 @@
     }).join('');
   }
 
+  function isVisualClip(clipId) {
+    return typeof clipId === 'string' && clipId.indexOf('vis-') === 0;
+  }
+
+  function buildMotionOptionsHtml() {
+    var motionSvc = NK.service && NK.service.postprodMotion;
+    if (!motionSvc || !motionSvc.getPresetKeys) return '<option value="none">None</option>';
+    var lang = currentLang();
+    var current = state.selectedClipId ? getClipMotionPreset(state.selectedClipId) : 'none';
+    return motionSvc.getPresetKeys().map(function (key) {
+      var selected = key === current ? ' selected' : '';
+      return '<option value="' + key + '"' + selected + '>' + motionSvc.getPresetLabel(key, lang) + '</option>';
+    }).join('');
+  }
+
+  function updateMotionDropdown() {
+    var group = document.getElementById('postprod-motion-group');
+    var select = document.getElementById('postprod-motion-select');
+    if (!group) return;
+    var show = state.selectedClipId && isVisualClip(state.selectedClipId);
+    group.style.display = show ? '' : 'none';
+    if (show && select) {
+      select.value = getClipMotionPreset(state.selectedClipId);
+    }
+  }
+
   function updateZoomUi() {
     var zoomRange = document.getElementById('postprod-zoom-range');
     var zoomText = document.getElementById('postprod-zoom-text');
@@ -1901,6 +1966,24 @@
     sub.setAttribute('aria-hidden', 'false');
   }
 
+  function applyMotionTransform(element, clip, sec) {
+    if (!element) return;
+    var motionSvc = NK.service && NK.service.postprodMotion;
+    var preset = (clip && clip.motionPreset) || 'none';
+    if (!motionSvc || preset === 'none') {
+      element.style.transform = '';
+      return;
+    }
+    var duration = Math.max(0.2, (clip.end || 0) - (clip.start || 0));
+    var progress = clamp(((Number(sec) || 0) - (clip.start || 0)) / duration, 0, 1);
+    var frame = motionSvc.computeMotionFrame(preset, progress);
+    element.style.transform = 'scale(' + frame.scale.toFixed(4) + ') translate(' + (frame.x * 100).toFixed(2) + '%, ' + (frame.y * 100).toFixed(2) + '%)';
+  }
+
+  function clearMotionTransform(element) {
+    if (element) element.style.transform = '';
+  }
+
   function syncPreviewMedia(sec) {
     var host = getPreviewVideoHost();
     var image = document.getElementById('postprod-preview-image');
@@ -1913,6 +1996,8 @@
     if (!clip) {
       host.style.display = 'none';
       image.style.display = 'none';
+      clearMotionTransform(image);
+      clearMotionTransform(host);
       pausePreviewVideos('');
       if (isInVisualGap(sec)) {
         gap.style.display = 'block';
@@ -1962,6 +2047,8 @@
       gap.style.display = 'none';
       empty.style.display = 'none';
       pausePreviewVideos('');
+      clearMotionTransform(host);
+      applyMotionTransform(image, clip, sec);
       if (clipChanged) warmPreviewVideoNeighbors(clip);
       state.previewClipId = clip.id;
       state.previewClipUrl = playableUrl;
@@ -1997,6 +2084,8 @@
       gap.style.display = 'none';
       empty.style.display = 'none';
       pausePreviewVideos(clip.id);
+      clearMotionTransform(image);
+      applyMotionTransform(host, clip, state.currentTime);
       if (Math.abs((video.currentTime || 0) - clipTime) > 0.12) {
         try { video.currentTime = clipTime; } catch (_) { }
       }
@@ -2161,6 +2250,10 @@
       '<label for="postprod-snap-step">' + t('스냅') + '</label>' +
       '<select id="postprod-snap-step">' + buildSnapOptionsHtml() + '</select>' +
       '</div>' +
+      '<div class="postprod-toolbar-group motion-group" id="postprod-motion-group" style="' + (state.selectedClipId && isVisualClip(state.selectedClipId) ? '' : 'display:none') + '">' +
+      '<label>' + t('효과') + '</label>' +
+      '<select id="postprod-motion-select">' + buildMotionOptionsHtml() + '</select>' +
+      '</div>' +
       '<div class="postprod-toolbar-group zoom-group">' +
       '<label for="postprod-zoom-range">' + t('배율') + '</label>' +
       '<button class="btn-secondary compact postprod-zoom-step" id="postprod-zoom-minus" type="button" aria-label="배율 줄이기">-</button>' +
@@ -2321,6 +2414,7 @@
       clipEl.classList.toggle('is-selected', !!isSelected);
     });
     updateHistoryButtons();
+    updateMotionDropdown();
   }
 
   function selectClip(clipId) {
@@ -2397,6 +2491,18 @@
       post.render();
       setDirty(true);
       setCurrentTime(start, true);
+      return;
+    }
+    if (type === 'motion') {
+      var motionValue = toAfter ? action.afterMotion : action.beforeMotion;
+      persistMotionPreset(action.clipId, motionValue);
+      var motionClip = findClip(action.clipId);
+      if (motionClip) motionClip.motionPreset = motionValue;
+      state.selectedClipId = action.clipId;
+      updateSelectionUi();
+      updateMotionDropdown();
+      setDirty(true);
+      syncPreviewMedia(state.currentTime);
       return;
     }
     var ok = setClipRange(action.clipId, start, end, true);
@@ -2645,6 +2751,15 @@
       snapSelect.onchange = function () {
         state.snapStep = sanitizeSnapStep(snapSelect.value);
         saveSnapStep(state.snapStep);
+      };
+    }
+
+    var motionSelect = document.getElementById('postprod-motion-select');
+    if (motionSelect) {
+      motionSelect.onchange = function () {
+        if (state.selectedClipId && isVisualClip(state.selectedClipId)) {
+          setClipMotionPreset(state.selectedClipId, motionSelect.value);
+        }
       };
     }
 
