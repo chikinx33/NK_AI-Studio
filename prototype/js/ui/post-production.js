@@ -2097,9 +2097,9 @@
       '<button class="btn-secondary compact postprod-fit-btn' + (state.fitTimeline ? ' is-active' : '') + '" id="postprod-zoom-fit" type="button" aria-label="타임라인 맞춤">FIX</button>' +
       '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
-      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="되돌리기"' + (canUndo() ? '' : ' disabled') + '>&#x21B6;</button>' +
-      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-redo-btn" title="다시 실행"' + (canRedo() ? '' : ' disabled') + '>&#x21B7;</button>' +
-      '<button class="btn-secondary compact postprod-history-btn icon-btn danger" id="postprod-delete-btn" title="선택 삭제"' + (state.selectedClipId ? '' : ' disabled') + '>&#x2715;</button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="되돌리기"' + (canUndo() ? '' : ' disabled') + '><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10h10a5 5 0 0 1 0 10H9"/><polyline points="7 14 3 10 7 6"/></svg></button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-redo-btn" title="다시 실행"' + (canRedo() ? '' : ' disabled') + '><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10H11a5 5 0 0 0 0 10h4"/><polyline points="17 14 21 10 17 6"/></svg></button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn danger" id="postprod-delete-btn" title="선택 삭제"' + (state.selectedClipId ? '' : ' disabled') + '><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
       '</div>' +
       '</div>' +
 
