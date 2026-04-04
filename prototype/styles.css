@@ -234,6 +234,11 @@
   box-sizing: border-box;
 }
 
+select option {
+  color: #111;
+  background: #fff;
+}
+
 html,
 body {
   margin: 0;
@@ -5392,6 +5397,11 @@ html.page-shell-image #sidebar-project-card {
 .postprod-toolbar #postprod-snap-step option {
   color: #111;
   background: #fff;
+}
+
+.motion-group {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .motion-group select {
