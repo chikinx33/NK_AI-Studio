@@ -5705,8 +5705,10 @@ html.page-shell-image #sidebar-project-card {
   color: var(--text);
   border-radius: 999px;
   height: 30px;
+  min-width: 48px;
   padding: 0 12px;
   font-weight: 700;
+  text-align: center;
 }
 
 .postprod-pill.active {
