@@ -5411,6 +5411,10 @@ html.page-shell-image #sidebar-project-card {
   font-size: 11px;
 }
 
+.postprod-toolbar select.postprod-select-narrow {
+  max-width: 52px;
+}
+
 .postprod-toolbar #postprod-snap-step {
   min-width: 56px;
 }

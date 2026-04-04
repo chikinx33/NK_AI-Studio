@@ -2497,7 +2497,7 @@
       '</select>' +
       '<input type="color" id="postprod-color-text" value="' + String(state.captionColor || '#ffffff') + '" title="' + t('글자색') + '" class="postprod-color-input" />' +
       '<input type="color" id="postprod-color-bg-picker" value="' + (function () { var bg = String(state.captionBg || ''); var m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/); if (m) { return '#' + [m[1],m[2],m[3]].map(function(c){return Number(c).toString(16).padStart(2,'0');}).join(''); } return '#000000'; })() + '" title="' + t('배경색') + '" class="postprod-color-input dark" />' +
-      '<select id="postprod-bg-opacity" title="' + t('배경 투명도') + '">' +
+      '<select id="postprod-bg-opacity" class="postprod-select-narrow" title="' + t('배경 투명도') + '">' +
       '<option value="0.85"' + (String(state.captionBg).indexOf('0.85') >= 0 ? ' selected' : '') + '>85%</option>' +
       '<option value="0.72"' + (String(state.captionBg).indexOf('0.72') >= 0 || String(state.captionBg).indexOf('0.85') < 0 && String(state.captionBg) !== 'transparent' && String(state.captionBg).indexOf('0.45') < 0 ? ' selected' : '') + '>72%</option>' +
       '<option value="0.45"' + (String(state.captionBg).indexOf('0.45') >= 0 ? ' selected' : '') + '>45%</option>' +
@@ -2584,8 +2584,8 @@
         '<div class="postprod-download-grid">' +
         '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>' + t('자막') + '</span><strong>SRT</strong></button>' +
         '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>' + t('스토리보드') + '</span><strong>XLS</strong></button>' +
+        '<button class="postprod-download-item" id="postprod-download-premiere-btn"><span>Premiere</span><strong>ZIP</strong></button>' +
         '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>' + t('영상') + '</span><strong>MP4</strong></button>' +
-        '<button class="postprod-download-item" id="postprod-download-premiere-btn"><span>' + t('프리미어') + '</span><strong>ZIP</strong></button>' +
         '</div>' +
         '</div>' +
         '</aside>' +
