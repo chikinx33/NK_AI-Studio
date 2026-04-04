@@ -5824,16 +5824,14 @@ html.page-shell-image #sidebar-project-card {
   border-radius: 4px;
 }
 
-.postprod-pos-range {
-  width: 60px;
+.postprod-pos-range.vertical {
+  writing-mode: vertical-lr;
+  direction: rtl;
+  width: 20px;
+  height: 28px;
   accent-color: #ffd500;
-}
-
-.postprod-pos-text {
-  font-size: 11px;
-  color: var(--muted);
-  min-width: 28px;
-  text-align: right;
+  -webkit-appearance: slider-vertical;
+  appearance: slider-vertical;
 }
 
 .zoom-group input[type="range"] {

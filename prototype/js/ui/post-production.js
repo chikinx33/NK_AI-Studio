@@ -415,7 +415,7 @@
       var eff = localStorage.getItem('nk_post_caption_effect');
       if (eff) state.captionEffect = eff;
       var pos = localStorage.getItem('nk_post_caption_pos');
-      if (pos) { var pn = Number(pos); if (isFinite(pn) && pn >= 0 && pn <= 50) state.captionPosition = pn; }
+      if (pos) { var pn = Number(pos); if (isFinite(pn) && pn >= 2 && pn <= 98) state.captionPosition = pn; }
     } catch (_) { }
   }
 
@@ -2122,7 +2122,7 @@
     var sizePx = Math.max(18, Math.round(22 * (state.captionSizeScale || 1)));
     var bg = String(state.captionBg || '').trim();
     var padY = Math.max(6, Math.round(sizePx * 0.5));
-    var posPercent = Math.max(2, Math.min(45, state.captionPosition || 6));
+    var posPercent = Math.max(2, Math.min(98, state.captionPosition || 6));
     sub.style.position = 'absolute';
     sub.style.left = '0';
     sub.style.right = '0';
@@ -2495,9 +2495,7 @@
       '<option value="shadow"' + (state.captionEffect === 'shadow' ? ' selected' : '') + '>' + t('그림자') + '</option>' +
       '<option value="outline"' + (state.captionEffect === 'outline' ? ' selected' : '') + '>' + t('테두리') + '</option>' +
       '</select>' +
-      '<label>' + t('위치') + '</label>' +
-      '<input type="range" id="postprod-caption-pos" min="2" max="45" step="1" value="' + (state.captionPosition || 6) + '" class="postprod-pos-range" />' +
-      '<span id="postprod-caption-pos-text" class="postprod-pos-text">' + (state.captionPosition || 6) + '%</span>' +
+      '<input type="range" id="postprod-caption-pos" min="2" max="98" step="1" value="' + (state.captionPosition || 6) + '" class="postprod-pos-range vertical" orient="vertical" />' +
       '</div>' +
       '<div class="postprod-toolbar-group">' +
       '<label for="postprod-snap-step">' + t('스냅') + '</label>' +
@@ -2999,11 +2997,9 @@
     if (bgColorInput) bgColorInput.oninput = updateCaptionBg;
     if (bgOpacitySel) bgOpacitySel.onchange = updateCaptionBg;
     var posRange = document.getElementById('postprod-caption-pos');
-    var posText = document.getElementById('postprod-caption-pos-text');
     if (posRange) {
       posRange.oninput = function () {
         state.captionPosition = Number(posRange.value) || 6;
-        if (posText) posText.textContent = state.captionPosition + '%';
         saveCaptionPrefs();
         syncPreviewMedia(state.currentTime);
       };
