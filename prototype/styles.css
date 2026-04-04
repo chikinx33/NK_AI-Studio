@@ -5210,6 +5210,7 @@ html.page-shell-image #sidebar-project-card {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .postprod-shell {
@@ -5750,16 +5751,12 @@ html.page-shell-image #sidebar-project-card {
   color: #1b2c47;
 }
 
-.postprod-timeline-panel {
+.card.postprod-timeline-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 8px 10px 6px;
-}
-
-.card.postprod-timeline-panel {
-  padding-bottom: 6px;
+  padding: 8px 10px 4px;
 }
 
 .postprod-timeline-head {
