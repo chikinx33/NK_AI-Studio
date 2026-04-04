@@ -11,10 +11,10 @@
     panRight:   { startScale: 1.3,  endScale: 1.3,  startX: -0.08, startY: 0,     endX: 0.08,  endY: 0,     easing: 'linear' },
     tiltUp:     { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: 0.08,  endX: 0,     endY: -0.08, easing: 'linear' },
     tiltDown:   { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: -0.08, endX: 0,     endY: 0.08,  easing: 'linear' },
-    kenBurns1:  { startScale: 1.0,  endScale: 1.3,  startX: -0.08, startY: -0.05, endX: 0.08,  endY: 0.05,  easing: 'linear' },
-    kenBurns2:  { startScale: 1.3,  endScale: 1.0,  startX: 0.08,  startY: 0.05,  endX: -0.08, endY: -0.05, easing: 'linear' },
-    kenBurns3:  { startScale: 1.0,  endScale: 1.3,  startX: 0.08,  startY: -0.05, endX: -0.08, endY: 0.05,  easing: 'linear' },
-    kenBurns4:  { startScale: 1.3,  endScale: 1.0,  startX: -0.08, startY: 0.05,  endX: 0.08,  endY: -0.05, easing: 'linear' }
+    kenBurns1:  { startScale: 1.15, endScale: 1.4,  startX: -0.05, startY: -0.03, endX: 0.05,  endY: 0.03,  easing: 'linear' },
+    kenBurns2:  { startScale: 1.4,  endScale: 1.15, startX: 0.05,  startY: 0.03,  endX: -0.05, endY: -0.03, easing: 'linear' },
+    kenBurns3:  { startScale: 1.15, endScale: 1.4,  startX: 0.05,  startY: -0.03, endX: -0.05, endY: 0.03,  easing: 'linear' },
+    kenBurns4:  { startScale: 1.4,  endScale: 1.15, startX: -0.05, startY: 0.03,  endX: 0.05,  endY: -0.03, easing: 'linear' }
   };
 
   var LABELS = {
