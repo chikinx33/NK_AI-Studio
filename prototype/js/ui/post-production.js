@@ -2042,7 +2042,13 @@
       }).join('');
 
       if (!clips.length) {
-        clipsHtml = '<div class="postprod-track-empty">클립 없음</div>';
+        if (track.key === 'audio' || track.key === 'music') {
+          clipsHtml = '<div class="postprod-track-empty is-uploadable" data-action="upload-' + track.key + '" style="position:absolute; top:6px; left:14px; height:28px; border:1px dashed rgba(255,255,255,0.4); border-radius:6px; padding:0 12px; display:inline-flex; align-items:center; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer;" title="' + t('클릭하여 음원 등록') + '">' +
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 5v14M5 12h14"></path></svg>' +
+            '음원 등록</div>';
+        } else {
+          clipsHtml = '<div class="postprod-track-empty" style="position: absolute; top:6px; left:14px; color:rgba(255,255,255,0.4); font-size:12px; display:inline-flex; align-items:center; height:28px;">클립 없음</div>';
+        }
       }
 
       return (
@@ -3147,6 +3153,47 @@
         seekByTimelinePointer(evt, ruler);
       };
     }
+
+    root.querySelectorAll('.postprod-track-empty[data-action]').forEach(function (emptyEl) {
+      emptyEl.onclick = function (evt) {
+        evt.stopPropagation();
+        var action = emptyEl.getAttribute('data-action');
+        var inputId = action === 'upload-audio' ? 'postprod-audio-upload' : 'postprod-music-upload';
+        var input = document.getElementById(inputId);
+        if (!input) {
+          input = document.createElement('input');
+          input.type = 'file';
+          input.id = inputId;
+          input.accept = 'audio/*, video/mp4';
+          input.style.display = 'none';
+          document.body.appendChild(input);
+          
+          input.onchange = function(e) {
+            var file = e.target.files && e.target.files[0];
+            if (!file) return;
+            var url = URL.createObjectURL(file);
+            var project = getProjectByStateId();
+            if (project) {
+              if (action === 'upload-music') {
+                if (!project.payload) project.payload = {};
+                project.payload.musicUrl = url;
+                project.musicUrl = url;
+              } else {
+                if (!project.scenes) project.scenes = [{}];
+                if (project.scenes.length > 0) {
+                  project.scenes[0].audioUrl = url;
+                }
+              }
+              post.render();
+              if (NK.ui && NK.ui.common && NK.ui.common.toast) {
+                NK.ui.common.toast(file.name + ' 등록되었습니다.');
+              }
+            }
+          };
+        }
+        input.click();
+      };
+    });
 
     root.querySelectorAll('.postprod-track-lane').forEach(function (laneEl) {
       laneEl.onclick = function (evt) {
