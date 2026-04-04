@@ -5755,7 +5755,11 @@ html.page-shell-image #sidebar-project-card {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  padding: 8px 10px 10px;
+  padding: 8px 10px 6px;
+}
+
+.card.postprod-timeline-panel {
+  padding-bottom: 6px;
 }
 
 .postprod-timeline-head {
@@ -5784,8 +5788,9 @@ html.page-shell-image #sidebar-project-card {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(6, 10, 20, 0.72);
-  overflow: auto;
-  padding: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 6px 2px;
   flex: 0 0 auto;
   min-height: 0;
   scrollbar-width: thin;

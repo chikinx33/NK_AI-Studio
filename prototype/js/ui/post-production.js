@@ -2167,7 +2167,7 @@
 
       '<div class="card postprod-timeline-panel">' +
       '<div class="postprod-timeline-head">' +
-      '<h3>자막 타임라인</h3>' +
+      '<h3>타임라인</h3>' +
       '<div class="postprod-scrub-wrap">' +
       '<input id="postprod-scrub-range" type="range" min="0" max="' + playbackDuration + '" value="' + state.currentTime + '" step="0.1" />' +
       '</div>' +
