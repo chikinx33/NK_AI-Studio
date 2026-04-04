@@ -1014,16 +1014,24 @@
     }
     var saveStateEl = document.getElementById('postprod-save-state');
     if (saveStateEl) {
-      if (state.saveBusy) saveStateEl.textContent = '저장 중...';
-      else if (state.dirty) saveStateEl.textContent = '편집 변경사항이 있습니다.';
-      else if (meta.lastSavedAt) saveStateEl.textContent = '마지막 저장: ' + new Date(meta.lastSavedAt).toLocaleString();
-      else saveStateEl.textContent = '아직 저장되지 않았습니다.';
+      if (state.saveBusy) saveStateEl.textContent = t('저장 중...');
+      else if (state.dirty) saveStateEl.textContent = t('편집 변경사항이 있습니다.');
+      else if (meta.lastSavedAt) {
+        var locale = currentLang() === 'en' ? 'en-US' : 'ko-KR';
+        var label = t('마지막 저장: ');
+        saveStateEl.textContent = label + new Date(meta.lastSavedAt).toLocaleString(locale, { hour12: true });
+      }
+      else saveStateEl.textContent = t('아직 저장되지 않았습니다.');
     }
     var renderInfo = document.getElementById('postprod-render-info');
     if (renderInfo) {
       if (status === 'failed' && meta.error) renderInfo.textContent = meta.error;
-      else if (status === 'done' && meta.transcodePending) renderInfo.textContent = '렌더링은 완료되었습니다. MP4 변환은 다운로드 시 진행됩니다.';
-      else if (meta.lastRenderedAt) renderInfo.textContent = '마지막 렌더: ' + new Date(meta.lastRenderedAt).toLocaleString();
+      else if (status === 'done' && meta.transcodePending) renderInfo.textContent = t('렌더링은 완료되었습니다. MP4 변환은 다운로드 시 진행됩니다.');
+      else if (meta.lastRenderedAt) {
+        var locale2 = currentLang() === 'en' ? 'en-US' : 'ko-KR';
+        var label2 = t('마지막 렌더: ');
+        renderInfo.textContent = label2 + new Date(meta.lastRenderedAt).toLocaleString(locale2, { hour12: true });
+      }
       else renderInfo.textContent = '';
     }
     syncRenderPreviewUi(meta);
@@ -1437,15 +1445,15 @@
   async function downloadPremiereNow() {
     var project = getProjectByStateId() || resolveProject();
     if (!(NK.service && NK.service.exporter && NK.service.exporter.downloadPremiereZip)) {
-      showMessageDialog('Premiere 내보내기 서비스를 찾지 못했습니다.', 'Premiere');
+      showMessageDialog(t('프리미어 내보내기 서비스를 찾지 못했습니다.'), t('프리미어'));
       return;
     }
     showSaveOverlay(true);
     try {
       var ok = await NK.service.exporter.downloadPremiereZip(project);
-      if (!ok) showMessageDialog('내보낼 데이터가 없습니다.', 'Premiere');
+      if (!ok) showMessageDialog(t('내보낼 데이터가 없습니다.'), t('프리미어'));
     } catch (err) {
-      showMessageDialog('Premiere 내보내기 실패: ' + String(err && err.message || err), 'Premiere');
+      showMessageDialog(t('프리미어 내보내기 실패: ') + String(err && err.message || err), t('프리미어'));
     } finally {
       showSaveOverlay(false);
     }
@@ -2580,7 +2588,7 @@
         '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>' + t('자막') + '</span><strong>SRT</strong></button>' +
         '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>' + t('스토리보드') + '</span><strong>XLS</strong></button>' +
         '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>' + t('영상') + '</span><strong>MP4</strong></button>' +
-        '<button class="postprod-download-item" id="postprod-download-premiere-btn"><span>Premiere</span><strong>ZIP</strong></button>' +
+        '<button class="postprod-download-item" id="postprod-download-premiere-btn"><span>' + t('프리미어') + '</span><strong>ZIP</strong></button>' +
         '</div>' +
         '</div>' +
         '</aside>' +

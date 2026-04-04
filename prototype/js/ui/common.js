@@ -106,6 +106,9 @@
         '다운로드': 'Download',
         'SRT 다운로드': 'Download SRT',
         'MP4 다운로드': 'Download MP4',
+        '프리미어': 'Premiere',
+        '프리미어 내보내기 서비스를 찾지 못했습니다.': 'Premiere export service not found.',
+        '내보낼 데이터가 없습니다.': 'No data to export.',
         '업로드': 'Upload',
         '저장소': 'Library',
         '영상 생성': 'Generate video',
@@ -908,6 +911,11 @@
         { re: /창업자/g, to: 'Founders' },
         { re: /광고/g, to: 'Ad' }
     ];
+
+    // Additional English pattern: translate failure prefix with dynamic error text
+    EN_PATTERNS.push(
+        { re: /^프리미어 내보내기 실패:\s*/, to: 'Premiere export failed: ' }
+    );
 
     var KO_TEXT_EXACT = Object.keys(EN_TEXT_EXACT).reduce(function (acc, key) {
         var en = String(EN_TEXT_EXACT[key] || '');
