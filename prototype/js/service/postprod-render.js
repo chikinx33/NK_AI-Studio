@@ -416,30 +416,25 @@
     ctx.restore();
   }
 
-  var _renderFps = 30;
   var _renderVideoTrack = null;
 
   function runSegment(durationSec, frameFn, progressFn, shouldCancel) {
-    var fps = _renderFps;
-    var frameInterval = 1 / fps;
-    var totalFrames = Math.max(1, Math.ceil(durationSec * fps));
     var track = _renderVideoTrack;
-
     return new Promise(function (resolve) {
-      var frameIndex = 0;
+      var start = performance.now();
       function step() {
         if (shouldCancel && shouldCancel()) { resolve(false); return; }
-        if (frameIndex >= totalFrames) { resolve(true); return; }
-        var t = Math.min(durationSec, frameIndex * frameInterval);
+        var elapsed = (performance.now() - start) / 1000;
+        var t = Math.min(durationSec, elapsed);
         frameFn(t);
         if (track && track.requestFrame) {
           try { track.requestFrame(); } catch (_) { }
         }
         if (progressFn) progressFn(t);
-        frameIndex++;
-        setTimeout(step, 0);
+        if (elapsed >= durationSec) { resolve(true); return; }
+        setTimeout(step, 16);
       }
-      setTimeout(step, 0);
+      step();
     });
   }
 
