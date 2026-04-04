@@ -418,8 +418,10 @@
       ctx.lineWidth = Math.max(1, Math.round(fontSize * 0.12));
       ctx.strokeStyle = 'rgba(0,0,0,0.9)';
     }
+    var textBlockHeight = lines.length * lineHeight;
+    var textStartY = boxY + (boxHeight - textBlockHeight) / 2;
     lines.forEach(function (line, idx) {
-      var y = boxY + padY + (idx * lineHeight);
+      var y = textStartY + (idx * lineHeight) + lineHeight * 0.15;
       if (doOutline) ctx.strokeText(line, width / 2, y);
       ctx.fillText(line, width / 2, y);
     });
