@@ -108,6 +108,7 @@
       scenario_copy_success: '시나리오를 복사했습니다.',
       scenario_copy_fail: '복사에 실패했습니다.',
       scenario_copy_error_prefix: '복사 실패: ',
+      saveConfirmProductionReset: '시나리오가 변경되었습니다.\n기존 프로덕션에서 생성한 이미지·영상이 초기화됩니다.\n저장하시겠습니까?',
       scenario_story_toggle_title: '원본/AI 전환',
       scenario_story_toggle_view_ai: 'AI 글 보기',
       scenario_story_toggle_view_user: '원본 보기',
@@ -169,6 +170,7 @@
       scenario_copy_success: 'Scenario copied.',
       scenario_copy_fail: 'Copy failed.',
       scenario_copy_error_prefix: 'Copy failed: ',
+      saveConfirmProductionReset: 'The scenario has been modified.\nExisting images and videos from Production will be reset.\nDo you want to save?',
       scenario_story_toggle_title: 'Toggle original/AI text',
       scenario_story_toggle_view_ai: 'View AI text',
       scenario_story_toggle_view_user: 'View original',
@@ -1916,6 +1918,16 @@
     const saveBtn = document.getElementById('save-draft');
     if (saveBtn) {
       saveBtn.onclick = async () => {
+        // 기존 프로덕션 미디어가 있으면 초기화 경고
+        const existingScenes = draft?.scenes || [];
+        const hasProductionMedia = existingScenes.some((s) =>
+          s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl ||
+          s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl
+        );
+        if (hasProductionMedia) {
+          const t = getScenarioUiText();
+          if (!confirm(t.saveConfirmProductionReset)) return;
+        }
         NK.core.setLoading(true, '저장중...');
         try {
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
