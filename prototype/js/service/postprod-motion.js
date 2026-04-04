@@ -4,17 +4,17 @@
   var motion = service.postprodMotion || (service.postprodMotion = {});
 
   var PRESETS = {
-    none:       { startScale: 1.0,  endScale: 1.0,  startX: 0,     startY: 0,     endX: 0,     endY: 0 },
-    zoomIn:     { startScale: 1.0,  endScale: 1.35, startX: 0,     startY: 0,     endX: 0,     endY: 0 },
-    zoomOut:    { startScale: 1.35, endScale: 1.0,  startX: 0,     startY: 0,     endX: 0,     endY: 0 },
-    panLeft:    { startScale: 1.3,  endScale: 1.3,  startX: 0.08,  startY: 0,     endX: -0.08, endY: 0 },
-    panRight:   { startScale: 1.3,  endScale: 1.3,  startX: -0.08, startY: 0,     endX: 0.08,  endY: 0 },
-    tiltUp:     { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: 0.08,  endX: 0,     endY: -0.08 },
-    tiltDown:   { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: -0.08, endX: 0,     endY: 0.08 },
-    kenBurns1:  { startScale: 1.0,  endScale: 1.3,  startX: -0.08, startY: -0.05, endX: 0.08,  endY: 0.05 },
-    kenBurns2:  { startScale: 1.3,  endScale: 1.0,  startX: 0.08,  startY: 0.05,  endX: -0.08, endY: -0.05 },
-    kenBurns3:  { startScale: 1.0,  endScale: 1.3,  startX: 0.08,  startY: -0.05, endX: -0.08, endY: 0.05 },
-    kenBurns4:  { startScale: 1.3,  endScale: 1.0,  startX: -0.08, startY: 0.05,  endX: 0.08,  endY: -0.05 }
+    none:       { startScale: 1.0,  endScale: 1.0,  startX: 0,     startY: 0,     endX: 0,     endY: 0,     easing: 'linear' },
+    zoomIn:     { startScale: 1.0,  endScale: 1.35, startX: 0,     startY: 0,     endX: 0,     endY: 0,     easing: 'easeInOut' },
+    zoomOut:    { startScale: 1.35, endScale: 1.0,  startX: 0,     startY: 0,     endX: 0,     endY: 0,     easing: 'easeInOut' },
+    panLeft:    { startScale: 1.3,  endScale: 1.3,  startX: 0.08,  startY: 0,     endX: -0.08, endY: 0,     easing: 'linear' },
+    panRight:   { startScale: 1.3,  endScale: 1.3,  startX: -0.08, startY: 0,     endX: 0.08,  endY: 0,     easing: 'linear' },
+    tiltUp:     { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: 0.08,  endX: 0,     endY: -0.08, easing: 'linear' },
+    tiltDown:   { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: -0.08, endX: 0,     endY: 0.08,  easing: 'linear' },
+    kenBurns1:  { startScale: 1.0,  endScale: 1.3,  startX: -0.08, startY: -0.05, endX: 0.08,  endY: 0.05,  easing: 'linear' },
+    kenBurns2:  { startScale: 1.3,  endScale: 1.0,  startX: 0.08,  startY: 0.05,  endX: -0.08, endY: -0.05, easing: 'linear' },
+    kenBurns3:  { startScale: 1.0,  endScale: 1.3,  startX: 0.08,  startY: -0.05, endX: -0.08, endY: 0.05,  easing: 'linear' },
+    kenBurns4:  { startScale: 1.3,  endScale: 1.0,  startX: -0.08, startY: 0.05,  endX: 0.08,  endY: -0.05, easing: 'linear' }
   };
 
   var LABELS = {
@@ -47,7 +47,8 @@
   motion.computeMotionFrame = function (preset, progress) {
     var p = PRESETS[preset];
     if (!p) return { scale: 1, x: 0, y: 0 };
-    var t = easeInOutCubic(Math.max(0, Math.min(1, Number(progress) || 0)));
+    var raw = Math.max(0, Math.min(1, Number(progress) || 0));
+    var t = p.easing === 'easeInOut' ? easeInOutCubic(raw) : raw;
     var scale = lerp(p.startScale, p.endScale, t);
     var x = clampOffset(lerp(p.startX, p.endX, t), scale);
     var y = clampOffset(lerp(p.startY, p.endY, t), scale);
