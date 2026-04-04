@@ -1855,11 +1855,11 @@
           '<span class="postprod-clip-text">' + escapeHtml(clip.label) + '</span>' +
           (function () {
             if (track.key !== 'visuals') return '';
-            var mp = getClipMotionPreset(clip.id);
+            var mp = clip.motionPreset || getClipMotionPreset(clip.id);
             if (!mp || mp === 'none') return '';
             var motionSvc = NK.service && NK.service.postprodMotion;
-            var label = motionSvc ? motionSvc.getPresetLabel(mp, currentLang()) : mp;
-            return '<span class="postprod-clip-motion">' + escapeHtml(label) + '</span>';
+            var shortLabel = motionSvc ? motionSvc.getPresetLabel(mp, currentLang()) : mp;
+            return '<span class="postprod-clip-motion">' + escapeHtml(shortLabel) + '</span>';
           })() +
           '<span class="postprod-clip-handle right" data-handle="right"></span>' +
           '</button>'

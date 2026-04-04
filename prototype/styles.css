@@ -5910,10 +5910,10 @@ html.page-shell-image #sidebar-project-card {
   height: 28px;
   border: 1px solid transparent;
   border-radius: 6px;
-  padding: 0 14px;
+  padding: 0 8px 0 14px;
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
+  gap: 4px;
   cursor: pointer;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.12);
@@ -5931,6 +5931,7 @@ html.page-shell-image #sidebar-project-card {
   pointer-events: none;
   flex: 1;
   min-width: 0;
+  text-align: left;
 }
 
 .postprod-clip-motion {
