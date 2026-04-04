@@ -4,6 +4,7 @@
   const scenario = ui.scenario || (ui.scenario = {});
   let currentPayload = {};
   const collapsedSceneIds = new Set();
+  let sceneFoldMode = 'focus'; // 'expand' | 'collapse' | 'focus'
   const DEFAULT_SCENARIO_FLAGS = {
     narrationEnabled: false,
     dubbingEnabled: false
@@ -1701,6 +1702,14 @@
         if (toggleBtn) {
           e.preventDefault();
           e.stopPropagation();
+          if (sceneFoldMode === 'focus') {
+            const willExpand = card.classList.contains('is-collapsed');
+            if (willExpand) {
+              cardsContainer.querySelectorAll('.scenario-card:not(.scenario-card-common)').forEach((c) => {
+                if (c !== card && !c.classList.contains('is-collapsed')) setScenarioCardCollapsed(c, true);
+              });
+            }
+          }
           toggleScenarioCardCollapsed(card);
           return;
         }
@@ -1982,6 +1991,44 @@
         } catch (err) {
           alert('복사 실패: ' + (err?.message || err));
         }
+      });
+    }
+
+    // 씬 카드 펼침/접기 모드 버튼
+    const expandAllBtn = document.getElementById('scene-expand-all');
+    const collapseAllBtn = document.getElementById('scene-collapse-all');
+    const focusModeBtn = document.getElementById('scene-focus-mode');
+    const foldModeButtons = [expandAllBtn, collapseAllBtn, focusModeBtn].filter(Boolean);
+    const setFoldModeActive = (mode) => {
+      sceneFoldMode = mode;
+      foldModeButtons.forEach((b) => b.classList.remove('active'));
+      if (mode === 'expand' && expandAllBtn) expandAllBtn.classList.add('active');
+      if (mode === 'collapse' && collapseAllBtn) collapseAllBtn.classList.add('active');
+      if (mode === 'focus' && focusModeBtn) focusModeBtn.classList.add('active');
+    };
+    if (expandAllBtn) {
+      expandAllBtn.addEventListener('click', () => {
+        setFoldModeActive('expand');
+        const container = document.getElementById('scenario-cards');
+        if (container) container.querySelectorAll('.scenario-card:not(.scenario-card-common)').forEach((c) => setScenarioCardCollapsed(c, false));
+      });
+    }
+    if (collapseAllBtn) {
+      collapseAllBtn.addEventListener('click', () => {
+        setFoldModeActive('collapse');
+        const container = document.getElementById('scenario-cards');
+        if (container) container.querySelectorAll('.scenario-card:not(.scenario-card-common)').forEach((c) => setScenarioCardCollapsed(c, true));
+      });
+    }
+    if (focusModeBtn) {
+      focusModeBtn.addEventListener('click', () => {
+        setFoldModeActive('focus');
+        const container = document.getElementById('scenario-cards');
+        if (!container) return;
+        const activeCard = container.querySelector('.scenario-card.active-card:not(.scenario-card-common)');
+        container.querySelectorAll('.scenario-card:not(.scenario-card-common)').forEach((c) => {
+          setScenarioCardCollapsed(c, c !== activeCard);
+        });
       });
     }
 
