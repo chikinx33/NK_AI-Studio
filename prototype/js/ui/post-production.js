@@ -2888,6 +2888,7 @@
 
     root.onclick = function (evt) {
       if (!evt.target) return;
+      if (evt.target.closest('.postprod-toolbar')) return;
       var clickedClip = evt.target.closest('.postprod-clip[data-clip-id]');
       if (!clickedClip) clearClipSelection();
     };
