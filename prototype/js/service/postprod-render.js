@@ -416,20 +416,30 @@
     ctx.restore();
   }
 
+  var _renderFps = 30;
+  var _renderVideoTrack = null;
+
   function runSegment(durationSec, frameFn, progressFn, shouldCancel) {
+    var fps = _renderFps;
+    var frameInterval = 1 / fps;
+    var totalFrames = Math.max(1, Math.ceil(durationSec * fps));
+    var track = _renderVideoTrack;
+
     return new Promise(function (resolve) {
-      var start = 0;
-      function step(ts) {
+      var frameIndex = 0;
+      function step() {
         if (shouldCancel && shouldCancel()) { resolve(false); return; }
-        if (!start) start = ts;
-        var elapsed = Math.max(0, (ts - start) / 1000);
-        var t = Math.min(durationSec, elapsed);
+        if (frameIndex >= totalFrames) { resolve(true); return; }
+        var t = Math.min(durationSec, frameIndex * frameInterval);
         frameFn(t);
+        if (track && track.requestFrame) {
+          try { track.requestFrame(); } catch (_) { }
+        }
         if (progressFn) progressFn(t);
-        if (elapsed >= durationSec) { resolve(true); return; }
-        requestAnimationFrame(step);
+        frameIndex++;
+        setTimeout(step, 0);
       }
-      requestAnimationFrame(step);
+      setTimeout(step, 0);
     });
   }
 
@@ -454,7 +464,8 @@
     var ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('canvas_context_unavailable');
 
-    var stream = canvas.captureStream(30);
+    var stream = canvas.captureStream(0);
+    var videoTrack = stream.getVideoTracks()[0];
     var audioCtx = null;
     var audioDest = null;
     var recordStream = stream;
@@ -523,6 +534,7 @@
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     };
 
+    _renderVideoTrack = videoTrack;
     recorder.start(250);
     if (audioCtx && audioDest) {
       try {
@@ -585,12 +597,9 @@
           loadedVisualCount += 1;
           try { video.pause(); } catch (_) { }
           try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
-          try { await video.play(); } catch (_) { }
           var okVideo = await runSegment(duration, function (localElapsed) {
             drawBackground();
-            if (Math.abs((video.currentTime || 0) - localElapsed) > 0.18) {
-              try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
-            }
+            try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
             var motionSvc = NK.service && NK.service.postprodMotion;
             var vMotion = motionSvc && clip.motionPreset && clip.motionPreset !== 'none'
               ? motionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
@@ -668,6 +677,7 @@
       processed += tail;
     }
 
+    _renderVideoTrack = null;
     try { recorder.stop(); } catch (_) { }
     var blob = await stopped;
     releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
