@@ -5693,13 +5693,26 @@ html.page-shell-image #sidebar-project-card {
 }
 
 .postprod-download-item.primary {
-  border-color: rgba(210, 140, 60, 0.5);
-  background: rgba(210, 140, 60, 0.12);
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  color: #0b0b0b;
+  border-color: transparent;
+  box-shadow: 0 12px 40px rgba(255, 122, 0, 0.25);
 }
 
 .postprod-download-item.primary:hover {
-  background: rgba(210, 140, 60, 0.22);
-  border-color: rgba(210, 140, 60, 0.7);
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  border-color: transparent;
+}
+
+.postprod-download-item.primary span,
+.postprod-download-item.primary strong {
+  color: #0b0b0b;
+}
+
+.postprod-download-item.primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .postprod-render-preview {
