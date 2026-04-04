@@ -186,10 +186,10 @@
     if (!sw || !sh) return;
     var baseScale = Math.min(width / sw, height / sh);
     var finalScale = baseScale * motionFrame.scale;
-    var dw = Math.round(sw * finalScale);
-    var dh = Math.round(sh * finalScale);
-    var dx = Math.round((width - dw) / 2 + motionFrame.x * dw);
-    var dy = Math.round((height - dh) / 2 + motionFrame.y * dh);
+    var dw = sw * finalScale;
+    var dh = sh * finalScale;
+    var dx = (width - dw) / 2 + motionFrame.x * dw;
+    var dy = (height - dh) / 2 + motionFrame.y * dh;
     ctx.drawImage(source, dx, dy, dw, dh);
   }
 
@@ -383,12 +383,22 @@
     var boxY = Math.max(16, Math.round(height - boxHeight - Math.max(24, height * 0.06)));
 
     var bg = String(opts.captions.bg || '').trim();
+    var borderRadius = Math.max(4, Math.round(fontSize * 0.35));
     if (bg && bg !== 'transparent') {
       ctx.fillStyle = bg;
-      ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1);
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(boxX, boxY, boxWidth, boxHeight, borderRadius);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      } else {
+        ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1);
+      }
     }
     var effect = String(opts.captions.effect || 'none');
     if (effect === 'shadow') {
