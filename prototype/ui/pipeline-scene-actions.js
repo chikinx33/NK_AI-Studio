@@ -48,7 +48,7 @@
             if (sceneRowMod.setPipelineSceneCollapsed) sceneRowMod.setPipelineSceneCollapsed(otherId, true);
             otherRow.classList.add('is-collapsed');
             var otherWrap = otherRow.querySelector('.scene-row-body-wrap');
-            if (otherWrap) otherWrap.style.height = '0px';
+            if (otherWrap) otherWrap.style.cssText = 'height:0px;overflow:hidden';
             var otherBtn = otherRow.querySelector('.scene-row-toggle');
             if (otherBtn) { otherBtn.textContent = '+'; otherBtn.setAttribute('aria-expanded', 'false'); }
           });

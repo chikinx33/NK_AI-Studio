@@ -858,6 +858,8 @@
         var id = row.dataset.id;
         if (sceneRowMod.setPipelineSceneCollapsed) sceneRowMod.setPipelineSceneCollapsed(id, collapsed);
         row.classList.toggle('is-collapsed', collapsed);
+        var wrap = row.querySelector('.scene-row-body-wrap');
+        if (wrap) wrap.style.cssText = collapsed ? 'height:0px;overflow:hidden' : '';
         var btn = row.querySelector('.scene-row-toggle');
         if (btn) { btn.textContent = collapsed ? '+' : '-'; btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true'); }
       });
@@ -870,6 +872,8 @@
         var id = row.dataset.id;
         if (sceneRowMod.setPipelineSceneCollapsed) sceneRowMod.setPipelineSceneCollapsed(id, true);
         row.classList.add('is-collapsed');
+        var wrap = row.querySelector('.scene-row-body-wrap');
+        if (wrap) wrap.style.cssText = 'height:0px;overflow:hidden';
         var btn = row.querySelector('.scene-row-toggle');
         if (btn) { btn.textContent = '+'; btn.setAttribute('aria-expanded', 'false'); }
       });
