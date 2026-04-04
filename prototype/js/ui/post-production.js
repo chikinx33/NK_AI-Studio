@@ -116,9 +116,14 @@
             .replace(/,?\s*Vulkan.*/gi, '')
             .replace(/vs_\S+/gi, '')
             .replace(/ps_\S+/gi, '')
-            .replace(/\s{2,}/g, ' ')
+            .replace(/\(0x[\da-f]+\)/gi, '')
             .replace(/,\s*$/, '')
+            .replace(/\s{2,}/g, ' ')
             .trim();
+          var parts = name.split(/,\s*/);
+          if (parts.length > 1) {
+            name = parts.reduce(function (a, b) { return a.length >= b.length ? a : b; });
+          }
           _gpuLabel = name || renderer;
           if (_gpuLabel) return _gpuLabel;
         }
