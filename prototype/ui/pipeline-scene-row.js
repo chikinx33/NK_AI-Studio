@@ -219,9 +219,17 @@
       '<div class="scene-row-body">' +
       '<div class="scene-cell story">' +
       '<div class="story-inner">' +
-      '<p class="eyebrow">Scene ' + scene.id + '</p>' +
-      '<p class="story-lines" data-id="' + scene.id + '">' + extractNarrationDisplay(scene.lines || '') + '</p>' +
-      voiceBlock +
+      (function () {
+        var narOn = toBool(statePayload.narrationEnabled, false);
+        var dubOn = toBool(statePayload.dubbingEnabled, false);
+        if (!narOn && !dubOn) {
+          return '<p class="eyebrow muted">대본 없음</p>';
+        }
+        var modeLabel = dubOn ? '더빙' : '나레이션';
+        return '<p class="eyebrow">' + modeLabel + '</p>' +
+          '<p class="story-lines" data-id="' + scene.id + '">' + extractNarrationDisplay(scene.lines || '') + '</p>' +
+          voiceBlock;
+      })() +
       '</div>' +
       '</div>' +
       '<div class="scene-cell prompt">' +
