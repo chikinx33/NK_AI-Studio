@@ -5361,12 +5361,13 @@ html.page-shell-image #sidebar-project-card {
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7);
 }
 
-.postprod-toolbar {
+.card.postprod-toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   padding: 8px 10px;
   flex-wrap: nowrap;
+  justify-content: center;
 }
 
 .postprod-toolbar-group {
