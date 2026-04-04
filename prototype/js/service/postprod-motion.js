@@ -50,8 +50,8 @@
     var raw = Math.max(0, Math.min(1, Number(progress) || 0));
     var t = p.easing === 'easeInOut' ? easeInOutCubic(raw) : raw;
     var scale = lerp(p.startScale, p.endScale, t);
-    var x = clampOffset(lerp(p.startX, p.endX, t), scale);
-    var y = clampOffset(lerp(p.startY, p.endY, t), scale);
+    var x = lerp(p.startX, p.endX, t);
+    var y = lerp(p.startY, p.endY, t);
     return { scale: scale, x: x, y: y };
   };
 
