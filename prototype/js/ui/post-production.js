@@ -80,7 +80,7 @@
   }
 
   function stripSpeakerTokens(text) {
-    return String(text || '').replace(/@\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+    return String(text || '').replace(/@[\w\uAC00-\uD7AF]+/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
   function getSceneAssetService() {
@@ -1694,12 +1694,13 @@
       var clips = track.clips || [];
       var clipsHtml = clips.map(function (clip, clipIdx) {
         var left = Math.round((clip.start / duration) * laneWidth);
-        var naturalWidth = Math.round(((clip.end - clip.start) / duration) * laneWidth);
-        var nextLeft = clipIdx < clips.length - 1
-          ? Math.round((clips[clipIdx + 1].start / duration) * laneWidth)
-          : laneWidth;
-        var maxWidth = Math.max(4, nextLeft - left);
-        var width = Math.min(Math.max(36, naturalWidth), maxWidth);
+        var width = Math.max(36, Math.round(((clip.end - clip.start) / duration) * laneWidth));
+        if (clipIdx < clips.length - 1) {
+          var nextLeft = Math.round((clips[clipIdx + 1].start / duration) * laneWidth);
+          if (left + width > nextLeft && nextLeft > left) {
+            width = nextLeft - left;
+          }
+        }
         var clipClass = 'postprod-clip' + (clip.empty ? ' is-empty' : '') + (state.selectedClipId === clip.id ? ' is-selected' : '');
         var title = escapeHtml(track.name + ' · ' + clip.label);
         var baseDuration = Math.max(0.2, toNumber(clip.baseDuration, clip.end - clip.start));
@@ -2041,6 +2042,10 @@
     var status = (meta && meta.status) || 'idle';
     if (state.dirty && status !== 'rendering') status = 'needs_save';
 
+    // innerHTML 재구성 시 미리보기 요소가 교체되므로 clip 추적 초기화
+    state.previewClipId = '';
+    state.previewClipUrl = '';
+
     root.innerHTML =
       '<section class="postprod-workspace">' +
       '<div class="postprod-editor-column">' +
@@ -2199,13 +2204,7 @@
     if (!clipEl || !state.model) return;
     var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
     var left = Math.round((start / duration) * state.laneWidth);
-    var naturalWidth = Math.round(((end - start) / duration) * state.laneWidth);
-    var nextSibling = clipEl.nextElementSibling;
-    var nextLeft = nextSibling && nextSibling.classList.contains('postprod-clip')
-      ? parseInt(nextSibling.style.left, 10) || state.laneWidth
-      : state.laneWidth;
-    var maxWidth = Math.max(4, nextLeft - left);
-    var width = Math.min(Math.max(36, naturalWidth), maxWidth);
+    var width = Math.max(36, Math.round(((end - start) / duration) * state.laneWidth));
     clipEl.style.left = left + 'px';
     clipEl.style.width = width + 'px';
     clipEl.dataset.start = String(start);
