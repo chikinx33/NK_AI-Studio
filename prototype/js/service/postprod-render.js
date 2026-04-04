@@ -691,8 +691,245 @@
     };
   }
 
+  // ─── WebCodecs Renderer ────────────────────────────────────────
+
+  function isWebCodecsAvailable() {
+    return typeof VideoEncoder !== 'undefined' &&
+           typeof VideoFrame !== 'undefined' &&
+           typeof Mp4Muxer !== 'undefined' &&
+           Mp4Muxer.Muxer && Mp4Muxer.ArrayBufferTarget;
+  }
+
+  function runSegmentOffline(durationSec, frameFn, progressFn, shouldCancel, state) {
+    var fps = 30;
+    var frameInterval = 1000000 / fps;
+    var totalFrames = Math.max(1, Math.ceil(durationSec * fps));
+    return new Promise(function (resolve) {
+      var i = 0;
+      function batch() {
+        var batchEnd = Math.min(i + 4, totalFrames);
+        while (i < batchEnd) {
+          if (shouldCancel && shouldCancel()) { resolve(false); return; }
+          var t = Math.min(durationSec, i / fps);
+          frameFn(t);
+          var timestamp = (state.globalFrame) * frameInterval;
+          var frame = new VideoFrame(state.canvas, { timestamp: Math.round(timestamp), duration: Math.round(frameInterval) });
+          state.encoder.encode(frame);
+          frame.close();
+          state.globalFrame++;
+          if (progressFn) progressFn(t);
+          i++;
+        }
+        if (i >= totalFrames) { resolve(true); return; }
+        setTimeout(batch, 0);
+      }
+      batch();
+    });
+  }
+
+  async function buildRenderedVideoBlobWebCodecs(options) {
+    var opts = options || {};
+    var model = opts.model;
+    if (!model) throw new Error('timeline_model_missing');
+    var clips = Array.isArray(opts.visualClips) ? opts.visualClips.slice() : [];
+    clips = clips
+      .filter(function (c) { return c && !c.empty && c.url && c.end > c.start; })
+      .sort(function (a, b) { return a.start - b.start; });
+    if (!clips.length) throw new Error('렌더링할 장면이 없습니다.');
+
+    var frameSize = opts.frameSize || { width: 1280, height: 720 };
+    var w = Number(frameSize.width) || 1280;
+    var h = Number(frameSize.height) || 720;
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('canvas_context_unavailable');
+
+    var target = new Mp4Muxer.ArrayBufferTarget();
+    var muxer = new Mp4Muxer.Muxer({
+      target: target,
+      video: { codec: 'avc', width: w, height: h },
+      fastStart: 'in-memory'
+    });
+
+    var encoder = new VideoEncoder({
+      output: function (chunk, metadata) {
+        muxer.addVideoChunk(chunk, metadata);
+      },
+      error: function (err) {
+        console.error('VideoEncoder error:', err);
+      }
+    });
+
+    encoder.configure({
+      codec: 'avc1.42001e',
+      width: w,
+      height: h,
+      bitrate: 6000000,
+      framerate: 30
+    });
+
+    var total = Math.max(1, Number(opts.playbackDuration) || 1);
+    var processed = 0;
+    var renderSources = await preloadRenderVisualSources(clips, opts);
+    var loadedVisualCount = 0;
+    var failedVisualCount = 0;
+    var lastProgressUpdate = 0;
+    var shouldCancel = typeof opts.shouldCancel === 'function' ? opts.shouldCancel : function () { return false; };
+    var reportProgress = function (localElapsed) {
+      var p = ((processed + localElapsed) / total) * 100;
+      var now = Date.now();
+      if (now - lastProgressUpdate < 150) return;
+      lastProgressUpdate = now;
+      if (typeof opts.onProgress === 'function') {
+        opts.onProgress(clamp(p, 0, 99.8));
+      }
+    };
+
+    var drawBackground = function () {
+      ctx.fillStyle = '#05070d';
+      ctx.fillRect(0, 0, w, h);
+    };
+    var drawSubtitle = function (sec) {
+      drawSubtitleOverlay(ctx, sec, w, h, {
+        getSubtitleLabels: opts.getSubtitleLabels,
+        captions: opts.captions || {}
+      });
+    };
+
+    var segState = { canvas: canvas, encoder: encoder, globalFrame: 0 };
+
+    var cursor = 0;
+    for (var i = 0; i < clips.length; i++) {
+      if (shouldCancel()) break;
+      var clip = clips[i];
+      var gap = Math.max(0, clip.start - cursor);
+      if (gap > 0) {
+        var okGap = await runSegmentOffline(gap, function (localElapsed) {
+          drawBackground();
+          drawSubtitle(cursor + localElapsed);
+        }, reportProgress, shouldCancel, segState);
+        processed += gap;
+        if (!okGap) break;
+      }
+
+      var duration = Math.max(0.2, clip.end - clip.start);
+      var renderEntry = renderSources.get(clip.id);
+      if (renderEntry && renderEntry.kind === 'video' && renderEntry.source) {
+        var video = renderEntry.source;
+        try {
+          loadedVisualCount += 1;
+          try { video.pause(); } catch (_) { }
+          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
+          var okVideo = await runSegmentOffline(duration, function (localElapsed) {
+            drawBackground();
+            try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
+            var motionSvc = NK.service && NK.service.postprodMotion;
+            var vMotion = motionSvc && clip.motionPreset && clip.motionPreset !== 'none'
+              ? motionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
+              : null;
+            drawContainWithMotion(ctx, video, w, h, vMotion);
+            drawSubtitle(clip.start + localElapsed);
+          }, reportProgress, shouldCancel, segState);
+          processed += duration;
+          if (!okVideo) break;
+        } catch (_) {
+          failedVisualCount += 1;
+          var okVF = await runSegmentOffline(duration, function () {
+            drawBackground();
+            ctx.fillStyle = '#f5c94b';
+            ctx.font = '600 28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('영상 로드 실패', w / 2, h / 2);
+          }, reportProgress, shouldCancel, segState);
+          processed += duration;
+          if (!okVF) break;
+        }
+      } else if (renderEntry && renderEntry.kind === 'image' && renderEntry.source) {
+        try {
+          var image = renderEntry.source;
+          loadedVisualCount += 1;
+          var okImage = await runSegmentOffline(duration, function (localElapsed) {
+            drawBackground();
+            var imgMotionSvc = NK.service && NK.service.postprodMotion;
+            var iMotion = imgMotionSvc && clip.motionPreset && clip.motionPreset !== 'none'
+              ? imgMotionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
+              : null;
+            drawContainWithMotion(ctx, image, w, h, iMotion);
+            drawSubtitle(clip.start + localElapsed);
+          }, reportProgress, shouldCancel, segState);
+          processed += duration;
+          if (!okImage) break;
+        } catch (_) {
+          failedVisualCount += 1;
+          var okIF = await runSegmentOffline(duration, function () {
+            drawBackground();
+            ctx.fillStyle = '#f5c94b';
+            ctx.font = '600 28px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('이미지 로드 실패', w / 2, h / 2);
+          }, reportProgress, shouldCancel, segState);
+          processed += duration;
+          if (!okIF) break;
+        }
+      } else {
+        failedVisualCount += 1;
+        var okMissing = await runSegmentOffline(duration, function (localElapsed) {
+          drawBackground();
+          ctx.fillStyle = '#f5c94b';
+          ctx.font = '600 28px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('씬 소스 없음', w / 2, h / 2);
+          drawSubtitle(clip.start + localElapsed);
+        }, reportProgress, shouldCancel, segState);
+        processed += duration;
+        if (!okMissing) break;
+      }
+      cursor = Math.max(cursor, clip.end);
+    }
+
+    if (!shouldCancel() && cursor < total) {
+      var tail = total - cursor;
+      await runSegmentOffline(tail, function (localElapsed) {
+        drawBackground();
+        drawSubtitle(cursor + localElapsed);
+      }, reportProgress, shouldCancel, segState);
+    }
+
+    await encoder.flush();
+    encoder.close();
+    releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
+    if (shouldCancel()) throw new Error('render_canceled');
+
+    muxer.finalize();
+    var mp4Blob = new Blob([target.buffer], { type: 'video/mp4' });
+    if (!mp4Blob.size) throw new Error('빈 렌더링 결과');
+
+    return {
+      blob: mp4Blob,
+      mimeType: 'video/mp4',
+      allVisualsFailed: loadedVisualCount === 0 && failedVisualCount > 0,
+      durationSec: Math.max(0.2, Number(total) || 0)
+    };
+  }
+
+  async function buildRenderedVideoBlobAuto(options) {
+    if (isWebCodecsAvailable()) {
+      try {
+        return await buildRenderedVideoBlobWebCodecs(options);
+      } catch (err) {
+        console.warn('WebCodecs render failed, falling back to MediaRecorder:', err);
+      }
+    }
+    return buildRenderedVideoBlob(options);
+  }
+
+  // ─── Exports ──────────────────────────────────────────────────
+
   postprodRender.uploadRenderedBlobSource = uploadRenderedBlobSource;
   postprodRender.transcodeSourceObjectToMp4 = transcodeSourceObjectToMp4;
   postprodRender.resolveMp4DownloadUrl = resolveMp4DownloadUrl;
-  postprodRender.buildRenderedVideoBlob = buildRenderedVideoBlob;
+  postprodRender.buildRenderedVideoBlob = buildRenderedVideoBlobAuto;
+  postprodRender.buildRenderedVideoBlobLegacy = buildRenderedVideoBlob;
 })();
