@@ -5315,15 +5315,27 @@ html.page-shell-image #sidebar-project-card {
   color: #c5cedf;
 }
 
-.postprod-play-glyph {
-  width: 56px;
-  height: 56px;
-  border-radius: 999px;
-  border: 2px solid rgba(255, 255, 255, 0.75);
-  display: grid;
-  place-items: center;
-  font-size: 22px;
-  text-indent: 3px;
+.postprod-play-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+}
+
+.postprod-preview-stack:hover .postprod-play-overlay {
+  opacity: 1;
+}
+
+.postprod-play-overlay svg {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5));
 }
 
 .postprod-player-foot {

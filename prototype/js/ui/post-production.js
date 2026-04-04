@@ -1830,7 +1830,9 @@
   function setPlayButtonUi() {
     var playBtn = document.getElementById('postprod-play-toggle');
     if (!playBtn) return;
-    playBtn.textContent = state.isPlaying ? '일시정지' : '재생';
+    playBtn.innerHTML = state.isPlaying
+      ? '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/></svg>'
+      : '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"/><circle cx="12" cy="12" r="10"/></svg>';
   }
 
   function stopPlayback() {
@@ -2056,9 +2058,13 @@
       '<div id="postprod-preview-subtitles" class="postprod-preview-subtitles" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:6%;display:none;pointer-events:none;text-align:center;padding:0 6%;z-index:5;"></div>' +
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
-      '<div class="postprod-play-glyph">▶</div>' +
       '<p>프로덕션 결과 미디어가 아직 없습니다.</p>' +
       '</div>' +
+      '<button type="button" class="postprod-play-overlay" id="postprod-play-toggle" title="재생/일시정지">' +
+      (state.isPlaying
+        ? '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="10" x2="10" y1="15" y2="9"/><line x1="14" x2="14" y1="15" y2="9"/></svg>'
+        : '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 9.003a1 1 0 0 1 1.517-.859l4.997 2.997a1 1 0 0 1 0 1.718l-4.997 2.997A1 1 0 0 1 9 14.996z"/><circle cx="12" cy="12" r="10"/></svg>') +
+      '</button>' +
       '</div>'
     );
   }
@@ -2117,7 +2123,6 @@
       buildPreviewHtml(model) +
       '</div>' +
       '<div class="postprod-player-foot">' +
-      '<button class="btn-secondary compact postprod-play-toggle" id="postprod-play-toggle">재생</button>' +
       '<div class="postprod-time-readout"><span id="postprod-time-now">' + formatTime(state.currentTime) + '</span> / <span id="postprod-time-total">' + formatTime(playbackDuration) + '</span></div>' +
       '</div>' +
       '</div>' +
