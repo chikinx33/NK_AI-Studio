@@ -79,6 +79,10 @@
       .replace(/'/g, '&#039;');
   }
 
+  function stripSpeakerTokens(text) {
+    return String(text || '').replace(/@\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+  }
+
   function getSceneAssetService() {
     return (NK.service && NK.service.sceneAssets) ? NK.service.sceneAssets : null;
   }
@@ -1038,8 +1042,7 @@
     return clips
       .filter(function (clip) {
         if (!clip) return false;
-        var isLastMoment = Math.abs(time - clip.end) < 0.001;
-        return time >= clip.start && (time < clip.end || isLastMoment);
+        return time >= clip.start && time < clip.end;
       })
       .map(function (clip) { return String(clip.label || '').trim(); })
       .filter(Boolean);
@@ -1489,7 +1492,7 @@
       return NK.service.exporter.listSubtitleEntries(wrapped, { maxChars: 22 }).map(function (clip, idx) {
         return {
           id: clip.id || ('sub-' + sceneIndex + '-' + idx),
-          label: clip.label,
+          label: stripSpeakerTokens(clip.label),
           start: round1(baseStart + Math.max(0, Number(clip.start || 0))),
           end: round1(baseStart + Math.max(0.2, Number(clip.end || 0))),
           baseDuration: Math.max(0.2, Number(clip.baseDuration || (clip.end - clip.start) || sceneDuration))
@@ -1503,7 +1506,7 @@
       var subStart = clamp(toNumber(sub.start, 0), 0, Math.max(0, sceneDuration - 0.2));
       var subEndRaw = toNumber(sub.end, subStart + 1.2);
       var subEnd = clamp(subEndRaw, subStart + 0.2, sceneDuration);
-      var text = firstFilled([sub.text, sub.caption, sub.label]) || ('자막 ' + (i + 1));
+      var text = stripSpeakerTokens(firstFilled([sub.text, sub.caption, sub.label])) || ('자막 ' + (i + 1));
       clips.push({
         id: 'sub-' + sceneIndex + '-' + i,
         label: text,
@@ -1512,7 +1515,7 @@
         baseDuration: Math.max(0.2, subEnd - subStart)
       });
     }
-    var single = firstFilled([scene && scene.subtitleText, scene && scene.caption]);
+    var single = stripSpeakerTokens(firstFilled([scene && scene.subtitleText, scene && scene.caption]));
     if (!clips.length && single) {
       clips.push({
         id: 'sub-' + sceneIndex,
@@ -1689,9 +1692,14 @@
     var duration = Math.max(1, toNumber(timelineDuration, model.totalDuration) || 1);
     return model.tracks.map(function (track) {
       var clips = track.clips || [];
-      var clipsHtml = clips.map(function (clip) {
+      var clipsHtml = clips.map(function (clip, clipIdx) {
         var left = Math.round((clip.start / duration) * laneWidth);
-        var width = Math.max(36, Math.round(((clip.end - clip.start) / duration) * laneWidth));
+        var naturalWidth = Math.round(((clip.end - clip.start) / duration) * laneWidth);
+        var nextLeft = clipIdx < clips.length - 1
+          ? Math.round((clips[clipIdx + 1].start / duration) * laneWidth)
+          : laneWidth;
+        var maxWidth = Math.max(4, nextLeft - left);
+        var width = Math.min(Math.max(36, naturalWidth), maxWidth);
         var clipClass = 'postprod-clip' + (clip.empty ? ' is-empty' : '') + (state.selectedClipId === clip.id ? ' is-selected' : '');
         var title = escapeHtml(track.name + ' · ' + clip.label);
         var baseDuration = Math.max(0.2, toNumber(clip.baseDuration, clip.end - clip.start));
@@ -2191,7 +2199,13 @@
     if (!clipEl || !state.model) return;
     var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
     var left = Math.round((start / duration) * state.laneWidth);
-    var width = Math.max(36, Math.round(((end - start) / duration) * state.laneWidth));
+    var naturalWidth = Math.round(((end - start) / duration) * state.laneWidth);
+    var nextSibling = clipEl.nextElementSibling;
+    var nextLeft = nextSibling && nextSibling.classList.contains('postprod-clip')
+      ? parseInt(nextSibling.style.left, 10) || state.laneWidth
+      : state.laneWidth;
+    var maxWidth = Math.max(4, nextLeft - left);
+    var width = Math.min(Math.max(36, naturalWidth), maxWidth);
     clipEl.style.left = left + 'px';
     clipEl.style.width = width + 'px';
     clipEl.dataset.start = String(start);
@@ -2788,6 +2802,8 @@
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;
     }
+    // 즉시 로컬 데이터로 첫 렌더링 수행 (검은 화면 방지)
+    post.render();
     Promise.resolve()
       .then(refreshProjectFromServer)
       .then(function (pid) {

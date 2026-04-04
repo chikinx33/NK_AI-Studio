@@ -57,8 +57,12 @@
     ]);
   }
 
+  function stripSpeakerTokens(text) {
+    return String(text || '').replace(/@\S+/g, '').replace(/\s{2,}/g, ' ').trim();
+  }
+
   function sceneNarration(scene) {
-    return firstFilled([
+    var raw = firstFilled([
       scene && scene.videoSpeechPrompt,
       scene && scene.script,
       scene && scene.narration,
@@ -67,6 +71,7 @@
       scene && scene.lines,
       scene && scene.script
     ]);
+    return stripSpeakerTokens(raw);
   }
 
   function sceneVisual(scene) {
@@ -129,7 +134,7 @@
       var subStart = clamp(toNumber(sub.start, 0), 0, Math.max(0, duration - 0.2));
       var subEndRaw = toNumber(sub.end, subStart + 1.2);
       var subEnd = clamp(subEndRaw, subStart + 0.2, duration);
-      var text = firstFilled([sub.text, sub.caption, sub.label]);
+      var text = stripSpeakerTokens(firstFilled([sub.text, sub.caption, sub.label]));
       if (!text) continue;
       var pieces = splitSubtitleText(text, maxChars);
       var pieceDuration = Math.max(0.2, (subEnd - subStart) / Math.max(1, pieces.length));
@@ -149,7 +154,7 @@
   }
 
   function normalizeFallbackSubtitles(scene, baseStart, duration, sceneIndex, options) {
-    var text = firstFilled([scene && scene.subtitleText, scene && scene.caption, sceneNarration(scene)]);
+    var text = stripSpeakerTokens(firstFilled([scene && scene.subtitleText, scene && scene.caption, sceneNarration(scene)]));
     if (!text) return [];
     var pieces = splitSubtitleText(text, options && options.maxChars);
     if (!pieces.length) return [];
