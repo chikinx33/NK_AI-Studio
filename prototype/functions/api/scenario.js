@@ -1173,14 +1173,19 @@ async function requestScenarioChunk(apiKey, sys, userPrompt) {
 
   const data = JSON.parse(responseText || "{}");
   const content = data.content?.[0]?.text;
+  const cleaned = cleanJsonResponse(content || "{}");
   let parsed;
   try {
-    parsed = JSON.parse(cleanJsonResponse(content || "{}"));
+    parsed = JSON.parse(cleaned);
   } catch (firstErr) {
-    const sanitized = repairJsonString(cleanJsonResponse(content || "{}"));
+    const repaired = repairJsonString(cleaned);
     try {
-      parsed = JSON.parse(sanitized);
-    } catch (_) {
+      parsed = JSON.parse(repaired);
+      console.log("[scenario] JSON repaired successfully");
+    } catch (secondErr) {
+      const pos = (firstErr.message.match(/position\s+(\d+)/i) || [])[1];
+      const snippet = pos ? cleaned.slice(Math.max(0, Number(pos) - 40), Number(pos) + 40) : cleaned.slice(0, 120);
+      console.error("[scenario] JSON repair failed near:", snippet);
       throw new Error(`JSON parse error: ${firstErr.message}`);
     }
   }
@@ -3399,40 +3404,50 @@ function repairJsonString(text = "") {
   });
   // Phase 2: remove trailing commas before } or ]
   out = out.replace(/,\s*([}\]])/g, "$1");
-  // Phase 3: fix unescaped quotes inside JSON string values
-  // Walk character by character, tracking whether we are inside a string
-  try {
-    JSON.parse(out);
-    return out;
-  } catch (_) { /* need deeper repair */ }
-  const chars = [...out];
+  // Quick check
+  try { JSON.parse(out); return out; } catch (_) { /* need deeper repair */ }
+  // Phase 3: walk character by character, fix unescaped quotes inside strings
+  const len = out.length;
   const result = [];
   let inStr = false;
-  let escaped = false;
-  let strStart = -1;
-  for (let i = 0; i < chars.length; i++) {
-    const c = chars[i];
-    if (escaped) { escaped = false; result.push(c); continue; }
-    if (c === "\\") { escaped = true; result.push(c); continue; }
-    if (c === '"') {
-      if (!inStr) {
-        inStr = true; strStart = i; result.push(c); continue;
+  let i = 0;
+  while (i < len) {
+    const c = out[i];
+    if (inStr) {
+      if (c === "\\" && i + 1 < len) {
+        result.push(c, out[i + 1]);
+        i += 2; continue;
       }
-      // We are in a string and hit a quote — is this the real end?
-      // Look ahead: skip whitespace, then expect : , } ] or end
-      let j = i + 1;
-      while (j < chars.length && (chars[j] === " " || chars[j] === "\\n" || chars[j] === "\\r" || chars[j] === "\\t")) j++;
-      const next = chars[j] || "";
-      if (next === ":" || next === "," || next === "}" || next === "]" || next === "" || next === '"') {
-        // Looks like real end of string
-        inStr = false; result.push(c); continue;
+      if (c === '"') {
+        // Is this the real end of the string?
+        let j = i + 1;
+        while (j < len && (out[j] === " " || out[j] === "\t")) j++;
+        const next = out[j] || "";
+        if (next === ":" || next === "," || next === "}" || next === "]" || next === "" || next === '"') {
+          inStr = false; result.push(c); i++; continue;
+        }
+        // Unescaped quote inside string — escape it
+        result.push("\\", '"'); i++; continue;
       }
-      // Otherwise it's an unescaped quote inside the string — escape it
-      result.push("\\", '"'); continue;
+      result.push(c); i++; continue;
     }
-    result.push(c);
+    // Not in string
+    if (c === '"') { inStr = true; }
+    result.push(c); i++;
   }
-  return result.join("");
+  out = result.join("");
+  // Phase 4: iterative positional repair — find error position, escape the offending char
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try { JSON.parse(out); return out; } catch (e) {
+      const m = e.message.match(/position\s+(\d+)/i);
+      if (!m) break;
+      const pos = Number(m[1]);
+      if (pos <= 0 || pos >= out.length) break;
+      // Insert backslash before the problematic character
+      out = out.slice(0, pos) + "\\" + out.slice(pos);
+    }
+  }
+  return out;
 }
 
 function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, characters, topic }) {
