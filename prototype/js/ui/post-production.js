@@ -2219,7 +2219,7 @@
         '<div class="postprod-download-grid">' +
         '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>자막</span><strong>SRT</strong></button>' +
         '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>스토리보드</span><strong>XLS</strong></button>' +
-        '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>Video</span><strong>MP4</strong></button>' +
+        '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>영상</span><strong>MP4</strong></button>' +
         '</div>' +
         '</div>' +
         '</aside>' +
