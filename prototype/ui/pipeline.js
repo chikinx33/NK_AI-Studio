@@ -649,6 +649,11 @@
       '<option value="grok"' + (videoModel === 'grok' ? ' selected' : '') + '>Grok Imagine</option>' +
       '</select>' +
       '</div>' +
+      '<div class="pipeline-fold-center">' +
+      '<button type="button" class="btn-icon-sm" id="pipeline-expand-all" title="전체 펼침" aria-label="전체 펼침"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 4 18 10"/><polyline points="6 14 12 20 18 14"/></svg></button>' +
+      '<button type="button" class="btn-icon-sm" id="pipeline-collapse-all" title="전체 접기" aria-label="전체 접기"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 4 12 10 18 4"/><polyline points="6 20 12 14 18 20"/></svg></button>' +
+      '<button type="button" class="btn-icon-sm active" id="pipeline-focus-mode" title="부분 펼침" aria-label="부분 펼침"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 4 18 10" stroke-width="3.2"/><polyline points="6 14 12 20 18 14" stroke-width="2.2"/></svg></button>' +
+      '</div>' +
       '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
@@ -810,6 +815,44 @@
         }
       };
     }
+
+    // ── 씬 행 펼침/접기 모드 버튼 ──
+    var pipelineFoldMode = 'focus';
+    var pExpandAll = document.getElementById('pipeline-expand-all');
+    var pCollapseAll = document.getElementById('pipeline-collapse-all');
+    var pFocusMode = document.getElementById('pipeline-focus-mode');
+    var pFoldBtns = [pExpandAll, pCollapseAll, pFocusMode].filter(Boolean);
+    var setPipelineFoldActive = function (mode) {
+      pipelineFoldMode = mode;
+      pFoldBtns.forEach(function (b) { b.classList.remove('active'); });
+      if (mode === 'expand' && pExpandAll) pExpandAll.classList.add('active');
+      if (mode === 'collapse' && pCollapseAll) pCollapseAll.classList.add('active');
+      if (mode === 'focus' && pFocusMode) pFocusMode.classList.add('active');
+    };
+    var sceneRowMod = NK.uiPipelineSceneRow || {};
+    var applyFoldToAllRows = function (collapsed) {
+      pipelineScenes.querySelectorAll('.scene-row:not(.head)').forEach(function (row) {
+        var id = row.dataset.id;
+        if (sceneRowMod.setPipelineSceneCollapsed) sceneRowMod.setPipelineSceneCollapsed(id, collapsed);
+        row.classList.toggle('is-collapsed', collapsed);
+        var btn = row.querySelector('.scene-row-toggle');
+        if (btn) { btn.textContent = collapsed ? '+' : '-'; btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true'); }
+      });
+    };
+    if (pExpandAll) pExpandAll.onclick = function () { setPipelineFoldActive('expand'); applyFoldToAllRows(false); };
+    if (pCollapseAll) pCollapseAll.onclick = function () { setPipelineFoldActive('collapse'); applyFoldToAllRows(true); };
+    if (pFocusMode) pFocusMode.onclick = function () {
+      setPipelineFoldActive('focus');
+      pipelineScenes.querySelectorAll('.scene-row:not(.head)').forEach(function (row) {
+        var id = row.dataset.id;
+        if (sceneRowMod.setPipelineSceneCollapsed) sceneRowMod.setPipelineSceneCollapsed(id, true);
+        row.classList.add('is-collapsed');
+        var btn = row.querySelector('.scene-row-toggle');
+        if (btn) { btn.textContent = '+'; btn.setAttribute('aria-expanded', 'false'); }
+      });
+    };
+    // Expose fold mode for toggle handler
+    ctx.getPipelineFoldMode = function () { return pipelineFoldMode; };
 
     if (window.NK && NK.uiPipelineSceneActions && NK.uiPipelineSceneActions.bindSceneEvents) {
       NK.uiPipelineSceneActions.bindSceneEvents({

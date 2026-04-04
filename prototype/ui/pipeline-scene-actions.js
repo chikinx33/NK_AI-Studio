@@ -39,6 +39,20 @@
         var sceneRowMod = NK.uiPipelineSceneRow || {};
         if (sceneRowMod.togglePipelineSceneCollapsed) sceneRowMod.togglePipelineSceneCollapsed(sceneId);
         var nowCollapsed = sceneRowMod.isPipelineSceneCollapsed ? sceneRowMod.isPipelineSceneCollapsed(sceneId) : !row.classList.contains('is-collapsed');
+        // Focus mode: 펼칠 때 나머지 모두 접기
+        var ctx = opts.ctx;
+        if (!nowCollapsed && ctx && ctx.getPipelineFoldMode && ctx.getPipelineFoldMode() === 'focus') {
+          rootEl.querySelectorAll('.scene-row:not(.head)').forEach(function (otherRow) {
+            if (otherRow === row || otherRow.classList.contains('is-collapsed')) return;
+            var otherId = otherRow.dataset.id;
+            if (sceneRowMod.setPipelineSceneCollapsed) sceneRowMod.setPipelineSceneCollapsed(otherId, true);
+            otherRow.classList.add('is-collapsed');
+            var otherWrap = otherRow.querySelector('.scene-row-body-wrap');
+            if (otherWrap) otherWrap.style.height = '0px';
+            var otherBtn = otherRow.querySelector('.scene-row-toggle');
+            if (otherBtn) { otherBtn.textContent = '+'; otherBtn.setAttribute('aria-expanded', 'false'); }
+          });
+        }
         var wrap = row.querySelector('.scene-row-body-wrap');
         var DUR = 280;
         if (nowCollapsed) {

@@ -3033,6 +3033,15 @@ textarea::-webkit-scrollbar-corner {
   gap: 8px;
   margin-top: 10px;
 }
+.pipeline-actions.video-model-bar {
+  justify-content: space-between;
+  align-items: center;
+}
+.pipeline-fold-center {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
 
 .side-panels {
   display: grid;
