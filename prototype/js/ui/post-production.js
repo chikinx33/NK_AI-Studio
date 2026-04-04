@@ -421,6 +421,30 @@
     } catch (_) { }
   }
 
+  function syncOverlayClipsToProject() {
+    var project = getProjectByStateId();
+    if (!project) return;
+    if (!project.payload) project.payload = {};
+    project.payload.overlayClips = (state.overlayClips || []).map(function (c) {
+      return { id: c.id, label: c.label, url: c.url, start: c.start, end: c.end, baseDuration: c.baseDuration };
+    });
+  }
+
+  function loadOverlayClipsFromProject(project) {
+    var payload = project && project.payload;
+    var saved = payload && Array.isArray(payload.overlayClips) ? payload.overlayClips : [];
+    state.overlayClips = saved.filter(function (c) { return c && c.url; }).map(function (c) {
+      return {
+        id: c.id || ('overlay-' + Date.now()),
+        label: c.label || 'Overlay',
+        url: c.url,
+        start: Number(c.start) || 0,
+        end: Number(c.end) || 5,
+        baseDuration: Number(c.baseDuration) || 5
+      };
+    });
+  }
+
   function saveCaptionPrefs() {
     try {
       localStorage.setItem('nk_post_caption_on', state.captionsEnabled ? '1' : '0');
@@ -813,6 +837,7 @@
 
       var project = getProjectByStateId();
       if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
+      syncOverlayClipsToProject();
 
       var svc = getPostprodStateService();
       var payload = (svc && svc.buildSavePayload)
@@ -2730,6 +2755,17 @@
 
   function deleteClipById(clipId, withHistory) {
     if (!clipId) return false;
+
+    // 오버레이 클립 삭제
+    if (String(clipId).indexOf('overlay-') === 0) {
+      state.overlayClips = (state.overlayClips || []).filter(function (c) { return c.id !== clipId; });
+      syncOverlayClipsToProject();
+      if (state.selectedClipId === clipId) state.selectedClipId = '';
+      setDirty(true);
+      post.render();
+      return true;
+    }
+
     var clip = findClip(clipId);
     if (!clip) return false;
 
@@ -3213,21 +3249,26 @@
           overlayInput.onchange = function (e) {
             var file = e.target.files && e.target.files[0];
             if (!file) return;
-            var url = URL.createObjectURL(file);
-            var duration = getTimelinePlaybackDuration(state.model) || 5;
-            state.overlayClips.push({
-              id: 'overlay-' + Date.now(),
-              label: file.name.replace(/\.[^/.]+$/, ''),
-              url: url,
-              start: 0,
-              end: duration,
-              baseDuration: duration
-            });
-            setDirty(true);
-            post.render();
-            if (NK.ui && NK.ui.common && NK.ui.common.toast) {
-              NK.ui.common.toast(file.name + ' ' + t('등록되었습니다.'));
-            }
+            var reader = new FileReader();
+            reader.onload = function (re) {
+              var dataUrl = re.target.result;
+              var duration = getTimelinePlaybackDuration(state.model) || 5;
+              state.overlayClips.push({
+                id: 'overlay-' + Date.now(),
+                label: file.name.replace(/\.[^/.]+$/, ''),
+                url: dataUrl,
+                start: 0,
+                end: duration,
+                baseDuration: duration
+              });
+              syncOverlayClipsToProject();
+              setDirty(true);
+              post.render();
+              if (NK.ui && NK.ui.common && NK.ui.common.toast) {
+                NK.ui.common.toast(file.name + ' ' + t('등록되었습니다.'));
+              }
+            };
+            reader.readAsDataURL(file);
             overlayInput.value = '';
           };
           overlayInput.click();
@@ -3292,6 +3333,9 @@
     if (!root) return;
 
     var project = hydrateProjectScenesFromPipeline(resolveProject());
+    if (project && !state.overlayClips.length) {
+      loadOverlayClipsFromProject(project);
+    }
     var scenes = project && Array.isArray(project.scenes) ? project.scenes : [];
     if (!project || !scenes.length) {
       stopRenderTimer();
