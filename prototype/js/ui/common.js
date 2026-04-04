@@ -912,10 +912,7 @@
         { re: /광고/g, to: 'Ad' }
     ];
 
-    // Additional English pattern: translate failure prefix with dynamic error text
-    EN_PATTERNS.push(
-        { re: /^프리미어 내보내기 실패:\s*/, to: 'Premiere export failed: ' }
-    );
+    EN_PATTERNS.push({ re: /^프리미어 내보내기 실패:\s*/, to: 'Premiere export failed: ' });
 
     var KO_TEXT_EXACT = Object.keys(EN_TEXT_EXACT).reduce(function (acc, key) {
         var en = String(EN_TEXT_EXACT[key] || '');
