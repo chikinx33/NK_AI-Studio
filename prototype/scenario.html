@@ -131,11 +131,12 @@
                 <div id="character-chips" class="character-chips scenario-switches"></div>
               </div>
                 <div class="form-group">
-                  <label data-i18n="scenario_generation_options">생성 옵션</label>
-                  <div class="scenario-switches" id="scenario-switches">
-                    <button type="button" class="scenario-flag-toggle" data-flag="narrationEnabled" data-i18n="scenario_narration_enabled">나레이션</button>
-                    <button type="button" class="scenario-flag-toggle" data-flag="dubbingEnabled" data-i18n="scenario_dubbing_enabled">더빙</button>
-                  </div>
+                  <label data-i18n="scenario_voice_mode">음성 모드</label>
+                  <select id="voice-mode-select" name="voiceMode">
+                    <option value="none" data-i18n="scenario_voice_none">없음</option>
+                    <option value="narration" data-i18n="scenario_voice_narration">나레이션</option>
+                    <option value="dubbing" data-i18n="scenario_voice_dubbing">더빙</option>
+                  </select>
                 </div>
                 <div class="form-group scenario-knowledge-group">
                   <div class="scenario-knowledge-head">

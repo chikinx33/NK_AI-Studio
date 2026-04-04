@@ -986,8 +986,9 @@
       token: c.token,
       personality: c.personality || ''
     }));
-    payload.narrationEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active');
-    payload.dubbingEnabled = !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active');
+    const voiceMode = (document.getElementById('voice-mode-select') || {}).value || 'none';
+    payload.narrationEnabled = voiceMode === 'narration';
+    payload.dubbingEnabled = voiceMode === 'dubbing';
     if (selectedCharacters.length) {
       const promptSeed = getScenarioPromptSeed(payload);
       const matchedTokens = payload.characters
@@ -1282,10 +1283,12 @@
 
   const setScenarioToggleButtons = (flags = {}) => {
     const normalized = getScenarioFlags(flags);
-    document.querySelectorAll('.scenario-flag-toggle').forEach((btn) => {
-      const key = btn.dataset.flag;
-      btn.classList.toggle('active', !!normalized[key]);
-    });
+    const sel = document.getElementById('voice-mode-select');
+    if (sel) {
+      if (normalized.narrationEnabled) sel.value = 'narration';
+      else if (normalized.dubbingEnabled) sel.value = 'dubbing';
+      else sel.value = 'none';
+    }
   };
 
   // ---------- render scenes ----------
@@ -1646,24 +1649,22 @@
         toggleStoryView();
         return;
       }
-      const btn = e.target.closest('.ratio-btn, .scenario-flag-toggle');
+      const btn = e.target.closest('.ratio-btn');
       if (!btn) return;
-      if (btn.classList.contains('ratio-btn')) {
-        setActiveButtons('.ratio-btn', btn.dataset.ratio || btn.dataset.value);
-      } else if (btn.classList.contains('scenario-flag-toggle')) {
-        btn.classList.toggle('active');
-        currentPayload = Object.assign({}, currentPayload || {}, {
-          narrationEnabled: !!document.querySelector('.scenario-flag-toggle[data-flag="narrationEnabled"]')?.classList.contains('active'),
-          dubbingEnabled: !!document.querySelector('.scenario-flag-toggle[data-flag="dubbingEnabled"]')?.classList.contains('active'),
-          characters: getSelectedCharacters(currentCharacters)
-        });
-      }
+      setActiveButtons('.ratio-btn', btn.dataset.ratio || btn.dataset.value);
       syncOverviewPayload();
     });
 
     form.addEventListener('change', (e) => {
       const target = e.target;
       if (!target) return;
+      if (target.id === 'voice-mode-select') {
+        const vm = target.value || 'none';
+        currentPayload = Object.assign({}, currentPayload || {}, {
+          narrationEnabled: vm === 'narration',
+          dubbingEnabled: vm === 'dubbing'
+        });
+      }
       if (target.id === 'purpose-category') {
         renderOverviewSelects(Object.assign({}, getOverviewSelections(), {
           purposeCategory: target.value,
