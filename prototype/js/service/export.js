@@ -275,26 +275,60 @@
     return true;
   };
 
-  exporter.downloadStoryboardXls = function (projectOrId) {
+  function createThumbnail(src, maxW, maxH) {
+    return new Promise(function (resolve) {
+      if (!src) return resolve('');
+      var img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function () {
+        try {
+          var w = img.naturalWidth || img.width;
+          var h = img.naturalHeight || img.height;
+          if (!w || !h) return resolve('');
+          var scale = Math.min(maxW / w, maxH / h, 1);
+          var tw = Math.round(w * scale);
+          var th = Math.round(h * scale);
+          var canvas = document.createElement('canvas');
+          canvas.width = tw;
+          canvas.height = th;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, tw, th);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        } catch (_) { resolve(''); }
+      };
+      img.onerror = function () { resolve(''); };
+      img.src = src;
+    });
+  }
+
+  exporter.downloadStoryboardXls = async function (projectOrId) {
     var project = getProject(projectOrId);
     if (!project) return false;
     var scenes = Array.isArray(project.scenes) ? project.scenes : [];
     if (!scenes.length) return false;
     var payload = project.payload || {};
     var title = fileSafeName(project.title, 'storyboard');
+
+    var thumbPromises = scenes.map(function (scene) {
+      var src = firstFilled([
+        scene && scene.imageDataUrl,
+        scene && scene.imagePath,
+        scene && scene.generatedImageUrl,
+        scene && scene.imageUrl
+      ]);
+      return createThumbnail(src, 320, 200);
+    });
+    var thumbs = await Promise.all(thumbPromises);
+
     var rows = scenes.map(function (scene, index) {
       var duration = sceneDuration(scene);
       var subtitleRaw = firstFilled([scene.subtitleText, scene.caption, sceneNarration(scene)]);
       var subtitle = splitSubtitleText(stripSpeakerTokens(subtitleRaw) || subtitleRaw, 22).join(' / ');
       var narration = sceneNarrationText(scene, payload);
-      var dataUrl = String(scene && scene.imageDataUrl || '').trim();
-      var linkUrl = sceneImageLink(scene);
-      var imageCell = '';
-      if (dataUrl && dataUrl.indexOf('data:') === 0) {
-        imageCell = '<img src="' + escapeHtml(dataUrl) + '" width="240" style="max-height:160px;object-fit:contain;" />';
-      } else if (linkUrl) {
-        imageCell = '<a href="' + escapeHtml(linkUrl) + '">' + escapeWorksheetText(linkUrl) + '</a>';
-      }
+      var thumb = thumbs[index];
+      var imageCell = thumb
+        ? '<img src="' + thumb + '" width="240" height="160" style="object-fit:contain;" />'
+        : '';
       return '<tr style="height:170px;">' +
         '<td>' + escapeWorksheetText(scene.id || (index + 1)) + '</td>' +
         '<td>' + escapeWorksheetText(firstFilled([scene.title, 'Scene ' + (index + 1)])) + '</td>' +

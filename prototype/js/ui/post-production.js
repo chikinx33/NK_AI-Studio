@@ -1298,13 +1298,13 @@
     setTimeout(function () { URL.revokeObjectURL(objectUrl); }, 200);
   }
 
-  function downloadStoryboardNow() {
+  async function downloadStoryboardNow() {
     var project = getProjectByStateId() || resolveProject();
     if (!(NK.service && NK.service.exporter && NK.service.exporter.downloadStoryboardXls)) {
       showMessageDialog('스토리보드 내보내기 서비스를 찾지 못했습니다.', '스토리보드');
       return;
     }
-    var ok = NK.service.exporter.downloadStoryboardXls(project);
+    var ok = await NK.service.exporter.downloadStoryboardXls(project);
     if (!ok) {
       showMessageDialog('내보낼 스토리보드 데이터가 없습니다.', '스토리보드');
     }
