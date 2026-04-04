@@ -1491,7 +1491,7 @@
       var wrapped = { scenes: [Object.assign({}, scene, { estSec: sceneDuration })] };
       return NK.service.exporter.listSubtitleEntries(wrapped, { maxChars: 22 }).map(function (clip, idx) {
         return {
-          id: clip.id || ('sub-' + sceneIndex + '-' + idx),
+          id: 'sub-' + sceneIndex + '-' + idx,
           label: stripSpeakerTokens(clip.label),
           start: round1(baseStart + Math.max(0, Number(clip.start || 0))),
           end: round1(baseStart + Math.max(0.2, Number(clip.end || 0))),
