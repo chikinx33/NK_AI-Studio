@@ -1,4 +1,4 @@
-﻿// prototype/functions/api/video.ts
+// prototype/functions/api/video.ts
 // Minimal Veo (image -> video) trigger endpoint for Cloudflare Pages Functions.
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 
@@ -61,7 +61,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI (expect gs://bucket/prefix)" }, 500);
     }
     const projectTag = (projTag || "default").toString();
-    const userId = auth.userId;
+    const userId = auth.userId || "";
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
     // 표준 경로: users/{userId}/ai-video/projects{projectId}/videos/{timestamp-sceneId}.mp4

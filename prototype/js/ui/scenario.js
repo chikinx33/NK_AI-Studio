@@ -1099,9 +1099,74 @@
   };
 
   const formatCommonInfo = () => '';
-  const buildCommonDetail = () => '';
 
-  const getCommonBackgroundStyleFromCard = () => '';
+  const buildCommonDetail = () => {
+    const p = currentPayload || {};
+    const knowledge = readKnowledgeHub(p);
+    const labels = getScenarioUiText().commonDetailLabels || {};
+    const infoLabels = getScenarioUiText().commonInfoLabels || {};
+    const esc = escapeHtml;
+
+    const field = (label, value) => {
+      if (!value) return '';
+      const lines = String(value).split('\n').map(l => l.trim()).filter(Boolean);
+      const valueHtml = lines.length > 1
+        ? `<ul class="cpd-list">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`
+        : `<span class="cpd-value">${esc(lines[0] || '')}</span>`;
+      return `<div class="cpd-field"><span class="cpd-label">${esc(label)}</span>${valueHtml}</div>`;
+    };
+
+    const parts = [];
+    parts.push(`<h2 class="cpd-modal-title">${esc(labels.modalTitle || 'Common Prompt')}</h2>`);
+
+    // Common Block
+    const headerText = p.header || '';
+    parts.push(`<section class="cpd-section">`);
+    parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionBlock || labels.title || 'Common Block')}</h3>`);
+    if (headerText) {
+      const headerHtml = String(headerText).split('\n').map(l => l.trim()).filter(Boolean)
+        .map(l => `<p>${esc(l)}</p>`).join('');
+      parts.push(`<div class="cpd-header-block">${headerHtml}</div>`);
+    } else {
+      parts.push(`<p class="cpd-empty">${esc(labels.empty || '')}</p>`);
+    }
+    parts.push(`</section>`);
+
+    // Episode Overview
+    if (p.topic || p.story) {
+      parts.push(`<section class="cpd-section">`);
+      parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionOverview || 'Episode Overview')}</h3>`);
+      parts.push(`<div class="cpd-fields">`);
+      if (p.topic) parts.push(field(infoLabels.topic || 'Topic', p.topic));
+      if (p.story) parts.push(field(infoLabels.story || 'Story', p.story));
+      parts.push(`</div>`);
+      parts.push(`</section>`);
+    }
+
+    // Brand Hub
+    const hasHub = knowledge.brandVoice || knowledge.brandStory || knowledge.brandCharacter
+      || knowledge.worldSetting || knowledge.brandRules.length || knowledge.bannedExpressions.length;
+    if (hasHub) {
+      parts.push(`<section class="cpd-section">`);
+      parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionHub || 'Brand Hub')}</h3>`);
+      parts.push(`<div class="cpd-fields">`);
+      if (knowledge.brandVoice) parts.push(field(labels.brandVoice || 'Brand voice', knowledge.brandVoice));
+      if (knowledge.brandStory) parts.push(field(labels.brandStory || 'Brand story', knowledge.brandStory));
+      if (knowledge.brandCharacter) parts.push(field(labels.brandCharacter || 'Brand character', normalizeKnowledgeDisplayValue('brandCharacter', knowledge.brandCharacter)));
+      if (knowledge.worldSetting) parts.push(field(labels.worldSetting || 'World setting', knowledge.worldSetting));
+      if (knowledge.brandRules.length) parts.push(field(labels.brandRules || 'Brand rules', knowledge.brandRules.join('\n')));
+      if (knowledge.bannedExpressions.length) parts.push(field(labels.bannedExpressions || 'Banned expressions', knowledge.bannedExpressions.join('\n')));
+      parts.push(`</div>`);
+      parts.push(`</section>`);
+    }
+
+    return parts.join('');
+  };
+
+  const getCommonBackgroundStyleFromCard = () => {
+    const node = document.querySelector('.scenario-card-common .view-common-style-lines');
+    return String(node?.textContent || '').trim();
+  };
 
   const setActiveScenarioCard = (targetCard) => {
     const container = document.getElementById('scenario-cards');
@@ -2058,6 +2123,14 @@
     // 모달 닫기 (레거시)
     document.addEventListener('click', (e) => {
       const target = e.target;
+      if (target && target.id === 'common-info-btn') {
+        const modal = document.getElementById('common-modal');
+        const body = document.getElementById('common-modal-body');
+        if (modal && body) {
+          body.innerHTML = buildCommonDetail();
+          modal.classList.remove('hidden');
+        }
+      }
       if (target && target.dataset && target.dataset.close === 'common-modal') {
         document.getElementById('common-modal')?.classList.add('hidden');
       }
