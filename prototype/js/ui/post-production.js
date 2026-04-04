@@ -48,6 +48,7 @@
     captionBg: 'rgba(0,0,0,0.72)',
     captionEffect: 'shadow',
     captionPosition: 6,
+    captionTemplate: -1,
     sessionEdits: {},
     lastRenderBlob: null
   };
@@ -1926,14 +1927,17 @@
     state.captionEffect = tmpl.effect;
     state.captionFont = tmpl.font;
     state.captionSizeScale = tmpl.size;
+    state.captionTemplate = idx;
     saveCaptionPrefs();
     post.render();
   }
 
   function buildCaptionTemplateHtml() {
     var lang = currentLang();
+    var cur = state.captionTemplate;
     return CAPTION_TEMPLATES.map(function (tmpl, idx) {
-      return '<option value="' + idx + '">' + escapeHtml(tmpl.name[lang] || tmpl.name.ko) + '</option>';
+      var selected = idx === cur ? ' selected' : '';
+      return '<option value="' + idx + '"' + selected + '>' + escapeHtml(tmpl.name[lang] || tmpl.name.ko) + '</option>';
     }).join('');
   }
 
@@ -2486,7 +2490,7 @@
       '<div class="card postprod-toolbar">' +
       '<div class="postprod-toolbar-group">' +
       '<button class="postprod-pill' + (state.captionsEnabled ? ' active' : '') + '" id="postprod-caption-toggle" type="button">' + t('자막') + '</button>' +
-      '<select id="postprod-caption-template" title="' + t('자막 템플릿') + '"><option value="">' + t('템플릿') + '</option>' + buildCaptionTemplateHtml() + '</select>' +
+      '<select id="postprod-caption-template" title="' + t('자막 템플릿') + '">' + (state.captionTemplate < 0 ? '<option value="">' + t('템플릿') + '</option>' : '') + buildCaptionTemplateHtml() + '</select>' +
       '<select id="postprod-font-family">' + buildFontOptionsHtml() + '</select>' +
       '<select id="postprod-font-size">' +
       '<option value="0.75"' + (Number(state.captionSizeScale) <= 0.75 ? ' selected' : '') + '>XS</option>' +
@@ -2977,7 +2981,6 @@
       templateSel.onchange = function () {
         var idx = Number(templateSel.value);
         if (isFinite(idx)) applyCaptionTemplate(idx);
-        templateSel.value = '';
       };
     }
     var textColorInput = document.getElementById('postprod-color-text');
