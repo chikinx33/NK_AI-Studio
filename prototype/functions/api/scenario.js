@@ -1173,7 +1173,17 @@ async function requestScenarioChunk(apiKey, sys, userPrompt) {
 
   const data = JSON.parse(responseText || "{}");
   const content = data.content?.[0]?.text;
-  const parsed = JSON.parse(cleanJsonResponse(content || "{}"));
+  let parsed;
+  try {
+    parsed = JSON.parse(cleanJsonResponse(content || "{}"));
+  } catch (firstErr) {
+    const sanitized = repairJsonString(cleanJsonResponse(content || "{}"));
+    try {
+      parsed = JSON.parse(sanitized);
+    } catch (_) {
+      throw new Error(`JSON parse error: ${firstErr.message}`);
+    }
+  }
   const scenes = parsed.scenes || parsed;
   if (!Array.isArray(scenes) || scenes.length === 0) {
     throw new Error("Invalid scenes format from Anthropic");
@@ -3377,6 +3387,27 @@ function findLastCompleteSceneObject(json = "") {
     }
   }
   return lastCompleteEnd;
+}
+
+function repairJsonString(text = "") {
+  let out = text;
+  // Fix unescaped control characters inside JSON strings
+  out = out.replace(/[\x00-\x1f]/g, (ch) => {
+    if (ch === "\n") return "\\n";
+    if (ch === "\r") return "\\r";
+    if (ch === "\t") return "\\t";
+    return "";
+  });
+  // Fix unescaped double-quotes inside JSON string values:
+  // Match patterns like "key": "value with "bad" quotes"
+  out = out.replace(/"([^"]*?)"/g, (match, inner) => {
+    // Skip if the inner content looks like a JSON key or simple value
+    if (!/["{}\[\]]/.test(inner)) return match;
+    return match;
+  });
+  // Try removing trailing commas before } or ]
+  out = out.replace(/,\s*([}\]])/g, "$1");
+  return out;
 }
 
 function buildModePrompt({ lang, narrationEnabled, dubbingEnabled, characters, topic }) {
