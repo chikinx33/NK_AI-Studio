@@ -93,7 +93,7 @@
 
   function buildImageCard(scene, mediaUrlResolver) {
     var imagePlayableUrl = mediaUrlResolver(scene.imageDataUrl || '');
-    if (scene.imgLoading) return '<div class="image-placeholder tall loading"><span>생성 중...</span></div>';
+    if (scene.imgLoading) return '<div class="image-placeholder tall loading"><div class="spinner"></div><span>이미지 생성 중...</span></div>';
     if (scene.imgError) return '<div class="image-placeholder tall error-state"><span>이미지 생성 실패</span></div>';
     if (scene.imageDataUrl) {
       return '<div class="image-box"><img class="scene-img" loading="lazy" decoding="async" data-src="' + imagePlayableUrl + '" src="' + imagePlayableUrl + '" alt="scene image" /></div>';
@@ -107,7 +107,7 @@
       var note = scene.videoMethod === 'inline' ? '<div class="video-note">내장 재생(임시 변환)</div>' : '';
       return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + videoPlayableUrl + '" type="video/mp4" /></video>' + note + '</div>';
     }
-    if (scene.videoStatus === 'processing') return '<div class="video-placeholder loading"><span>영상 생성중...</span></div>';
+    if (scene.videoStatus === 'processing') return '<div class="video-placeholder loading"><div class="spinner"></div><span>영상 생성 중...</span></div>';
     if (scene.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';
     return '<div class="video-placeholder"><span>video</span></div>';
   }
