@@ -5570,6 +5570,41 @@ html.page-shell-image #sidebar-project-card {
   text-align: right;
 }
 
+.postprod-save-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: var(--radius);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.postprod-save-overlay p {
+  margin: 0;
+}
+
+.postprod-save-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #ffd500;
+  border-radius: 50%;
+  animation: postprod-spin 0.7s linear infinite;
+}
+
+@keyframes postprod-spin {
+  to { transform: rotate(360deg); }
+}
+
 .postprod-render-info {
   color: #9fd4ff;
 }

@@ -692,6 +692,23 @@
     }
   }
 
+  function showSaveOverlay(show) {
+    var id = 'postprod-save-overlay';
+    var existing = document.getElementById(id);
+    if (!show) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return;
+    var overlay = document.createElement('div');
+    overlay.id = id;
+    overlay.className = 'postprod-save-overlay';
+    overlay.innerHTML = '<div class="postprod-save-spinner"></div><p>' + t('저장 중...') + '</p>';
+    var root = document.getElementById('postprod-root');
+    if (root) root.appendChild(overlay);
+    else document.body.appendChild(overlay);
+  }
+
   function showMessageDialog(message, title) {
     var text = String(message || '').trim();
     if (!text) return;
@@ -784,8 +801,9 @@
       }, 40000);
       if (saveBtn) {
         saveBtn.disabled = true;
-        saveBtn.textContent = '저장 중...';
+        saveBtn.textContent = t('저장 중...');
       }
+      showSaveOverlay(true);
 
       var project = getProjectByStateId();
       if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
@@ -852,10 +870,11 @@
         state.saveGuardTimer = 0;
       }
       state.saveBusy = false;
+      showSaveOverlay(false);
       var currentBtn = document.getElementById('postprod-save-btn');
       if (currentBtn) {
         currentBtn.disabled = false;
-        currentBtn.textContent = '저장하기';
+        currentBtn.textContent = t('저장하기');
       }
       updateRenderPanelUi();
     }
