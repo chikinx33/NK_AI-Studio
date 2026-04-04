@@ -707,15 +707,21 @@
     return new Promise(function (resolve) {
       var i = 0;
       function batch() {
+        if (state.encoderError) { resolve(false); return; }
         var batchEnd = Math.min(i + 4, totalFrames);
         while (i < batchEnd) {
+          if (state.encoderError) { resolve(false); return; }
           if (shouldCancel && shouldCancel()) { resolve(false); return; }
           var t = Math.min(durationSec, i / fps);
           frameFn(t);
-          var timestamp = (state.globalFrame) * frameInterval;
-          var frame = new VideoFrame(state.canvas, { timestamp: Math.round(timestamp), duration: Math.round(frameInterval) });
-          state.encoder.encode(frame);
-          frame.close();
+          var timestamp = state.globalFrame * frameInterval;
+          var frame = null;
+          try {
+            frame = new VideoFrame(state.canvas, { timestamp: Math.round(timestamp), duration: Math.round(frameInterval) });
+            state.encoder.encode(frame);
+          } finally {
+            if (frame) frame.close();
+          }
           state.globalFrame++;
           if (progressFn) progressFn(t);
           i++;
@@ -753,17 +759,19 @@
       fastStart: 'in-memory'
     });
 
+    var encoderError = null;
     var encoder = new VideoEncoder({
       output: function (chunk, metadata) {
         muxer.addVideoChunk(chunk, metadata);
       },
       error: function (err) {
+        encoderError = err;
         console.error('VideoEncoder error:', err);
       }
     });
 
     encoder.configure({
-      codec: 'avc1.42001e',
+      codec: 'avc1.640028',
       width: w,
       height: h,
       bitrate: 6000000,
@@ -798,7 +806,7 @@
       });
     };
 
-    var segState = { canvas: canvas, encoder: encoder, globalFrame: 0 };
+    var segState = { canvas: canvas, encoder: encoder, globalFrame: 0, get encoderError() { return encoderError; } };
 
     var cursor = 0;
     for (var i = 0; i < clips.length; i++) {
@@ -897,6 +905,11 @@
       }, reportProgress, shouldCancel, segState);
     }
 
+    if (encoderError) {
+      try { encoder.close(); } catch (_) { }
+      releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
+      throw encoderError;
+    }
     await encoder.flush();
     encoder.close();
     releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
