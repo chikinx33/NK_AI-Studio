@@ -761,6 +761,11 @@
           }
         });
       }
+      // 동적 렌더 후 i18n 재적용
+      if (NK.ui && NK.ui.common && NK.ui.common.applyI18n) {
+        var lang = (NK.config && NK.config.KEYS && localStorage.getItem(NK.config.KEYS.LANG)) || 'ko';
+        NK.ui.common.applyI18n(lang);
+      }
     } else {
       pipelineScenes.classList.add('empty');
       pipelineScenes.innerHTML = '<div class="card video-stage-empty-card"><p class="muted">장면이 없습니다</p></div>';
