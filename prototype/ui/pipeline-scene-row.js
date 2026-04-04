@@ -226,8 +226,22 @@
           return '<p class="eyebrow muted">대본 없음</p>';
         }
         var modeLabel = dubOn ? '더빙' : '나레이션';
+        var linesHtml = '';
+        if (dubOn && Array.isArray(scene.dialogue) && scene.dialogue.length) {
+          linesHtml = scene.dialogue.map(function (d) {
+            var speaker = String((d && d.speaker) || '').trim();
+            var line = String((d && d.line) || '').trim();
+            if (!line) return '';
+            if (speaker) {
+              return '<span class="dialogue-speaker">' + speaker + ':</span> ' + line;
+            }
+            return line;
+          }).filter(Boolean).join('<br>');
+        } else {
+          linesHtml = extractNarrationDisplay(scene.lines || '');
+        }
         return '<p class="eyebrow">' + modeLabel + '</p>' +
-          '<p class="story-lines" data-id="' + scene.id + '">' + extractNarrationDisplay(scene.lines || '') + '</p>' +
+          '<p class="story-lines" data-id="' + scene.id + '">' + linesHtml + '</p>' +
           voiceBlock;
       })() +
       '</div>' +

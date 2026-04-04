@@ -2143,6 +2143,11 @@ textarea::-webkit-scrollbar-corner {
   white-space: pre-wrap;
   line-height: 1.45;
 }
+#pipeline-scenes .dialogue-speaker {
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 12px;
+}
 
 #pipeline-scenes .scene-cell.story .voice-block {
   position: absolute;
