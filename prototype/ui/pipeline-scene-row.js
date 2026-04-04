@@ -231,9 +231,7 @@
       '<p class="prompt-visual" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (scene.shot || '') + '</p>' +
       '<p class="eyebrow">Duration</p>' +
       '<p class="prompt-duration" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(scene.estSec) || 0, 1)) + 's.</p>' +
-      ((Array.isArray(scene.resolvedCharacterIds) && scene.resolvedCharacterIds.length)
-        ? ('<p class="eyebrow">Characters</p><p class="prompt-visual" data-id="' + scene.id + '">' + scene.resolvedCharacterIds.join(', ') + '</p>')
-        : '') +
+      '' +
       '<div class="cell-actions br">' +
       (scene.editingPrompt
         ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + scene.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + scene.id + '">취소</button>'
