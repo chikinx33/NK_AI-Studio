@@ -5364,16 +5364,17 @@ html.page-shell-image #sidebar-project-card {
 .postprod-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 8px 10px;
+  flex-wrap: nowrap;
 }
 
 .postprod-toolbar-group {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 4px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
 }
 
 .postprod-toolbar-group label {
@@ -5385,13 +5386,14 @@ html.page-shell-image #sidebar-project-card {
   background: var(--layer-soft);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  min-width: 96px;
+  border-radius: 6px;
+  padding: 5px 6px;
+  min-width: 72px;
+  font-size: 12px;
 }
 
 .postprod-toolbar #postprod-snap-step {
-  min-width: 74px;
+  min-width: 56px;
 }
 
 .postprod-toolbar #postprod-snap-step option {
@@ -5399,13 +5401,8 @@ html.page-shell-image #sidebar-project-card {
   background: #fff;
 }
 
-.motion-group {
-  flex-wrap: nowrap;
-  white-space: nowrap;
-}
-
 .motion-group select {
-  min-width: 100px;
+  min-width: 80px;
 }
 
 .history-group {
@@ -5730,7 +5727,7 @@ html.page-shell-image #sidebar-project-card {
 }
 
 .zoom-group input[type="range"] {
-  width: 140px;
+  width: 100px;
   accent-color: #ffd500;
 }
 
