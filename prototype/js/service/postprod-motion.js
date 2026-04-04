@@ -7,22 +7,28 @@
     none:       { startScale: 1.0,  endScale: 1.0,  startX: 0,     startY: 0,     endX: 0,     endY: 0 },
     zoomIn:     { startScale: 1.0,  endScale: 1.35, startX: 0,     startY: 0,     endX: 0,     endY: 0 },
     zoomOut:    { startScale: 1.35, endScale: 1.0,  startX: 0,     startY: 0,     endX: 0,     endY: 0 },
-    panLeft:    { startScale: 1.15, endScale: 1.15, startX: 0.12,  startY: 0,     endX: -0.12, endY: 0 },
-    panRight:   { startScale: 1.15, endScale: 1.15, startX: -0.12, startY: 0,     endX: 0.12,  endY: 0 },
-    tiltUp:     { startScale: 1.15, endScale: 1.15, startX: 0,     startY: 0.12,  endX: 0,     endY: -0.12 },
-    tiltDown:   { startScale: 1.15, endScale: 1.15, startX: 0,     startY: -0.12, endX: 0,     endY: 0.12 },
-    kenBurns:   { startScale: 1.0,  endScale: 1.3,  startX: -0.1,  startY: -0.06, endX: 0.1,   endY: 0.06 }
+    panLeft:    { startScale: 1.3,  endScale: 1.3,  startX: 0.08,  startY: 0,     endX: -0.08, endY: 0 },
+    panRight:   { startScale: 1.3,  endScale: 1.3,  startX: -0.08, startY: 0,     endX: 0.08,  endY: 0 },
+    tiltUp:     { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: 0.08,  endX: 0,     endY: -0.08 },
+    tiltDown:   { startScale: 1.3,  endScale: 1.3,  startX: 0,     startY: -0.08, endX: 0,     endY: 0.08 },
+    kenBurns1:  { startScale: 1.0,  endScale: 1.3,  startX: -0.08, startY: -0.05, endX: 0.08,  endY: 0.05 },
+    kenBurns2:  { startScale: 1.3,  endScale: 1.0,  startX: 0.08,  startY: 0.05,  endX: -0.08, endY: -0.05 },
+    kenBurns3:  { startScale: 1.0,  endScale: 1.3,  startX: 0.08,  startY: -0.05, endX: -0.08, endY: 0.05 },
+    kenBurns4:  { startScale: 1.3,  endScale: 1.0,  startX: -0.08, startY: 0.05,  endX: 0.08,  endY: -0.05 }
   };
 
   var LABELS = {
-    none:     { ko: '없음',           en: 'None' },
-    zoomIn:   { ko: '줌 인',          en: 'Zoom In' },
-    zoomOut:  { ko: '줌 아웃',        en: 'Zoom Out' },
-    panLeft:  { ko: '좌로 이동',      en: 'Pan Left' },
-    panRight: { ko: '우로 이동',      en: 'Pan Right' },
-    tiltUp:   { ko: '위로 이동',      en: 'Tilt Up' },
-    tiltDown: { ko: '아래로 이동',    en: 'Tilt Down' },
-    kenBurns: { ko: 'Ken Burns',      en: 'Ken Burns' }
+    none:       { ko: '없음',           en: 'None' },
+    zoomIn:     { ko: '줌 인',          en: 'Zoom In' },
+    zoomOut:    { ko: '줌 아웃',        en: 'Zoom Out' },
+    panLeft:    { ko: '좌로 이동',      en: 'Pan Left' },
+    panRight:   { ko: '우로 이동',      en: 'Pan Right' },
+    tiltUp:     { ko: '위로 이동',      en: 'Tilt Up' },
+    tiltDown:   { ko: '아래로 이동',    en: 'Tilt Down' },
+    kenBurns1:  { ko: 'KB ↗ 줌인',     en: 'KB ↗ In' },
+    kenBurns2:  { ko: 'KB ↙ 줌아웃',   en: 'KB ↙ Out' },
+    kenBurns3:  { ko: 'KB ↘ 줌인',     en: 'KB ↘ In' },
+    kenBurns4:  { ko: 'KB ↖ 줌아웃',   en: 'KB ↖ Out' }
   };
 
   function easeInOutCubic(t) {

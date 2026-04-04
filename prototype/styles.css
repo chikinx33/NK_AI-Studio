@@ -5945,6 +5945,7 @@ html.page-shell-image #sidebar-project-card {
   flex-shrink: 0;
   margin-left: auto;
   padding-left: 4px;
+  padding-right: 4px;
 }
 
 .postprod-clip-extra {

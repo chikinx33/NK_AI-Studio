@@ -541,8 +541,7 @@
       afterMotion: after
     });
     setDirty(true);
-    syncPreviewMedia(state.currentTime);
-    updateMotionDropdown();
+    post.render();
   }
 
   function persistRenderMeta(metaPatch) {
@@ -1981,10 +1980,13 @@
     if (!element) return;
     var motionSvc = NK.service && NK.service.postprodMotion;
     var preset = (clip && clip.motionPreset) || 'none';
+    var isImg = element.tagName === 'IMG';
     if (!motionSvc || preset === 'none') {
       element.style.transform = '';
+      if (isImg) element.style.objectFit = 'contain';
       return;
     }
+    if (isImg) element.style.objectFit = 'cover';
     var duration = Math.max(0.2, (clip.end || 0) - (clip.start || 0));
     var progress = clamp(((Number(sec) || 0) - (clip.start || 0)) / duration, 0, 1);
     var frame = motionSvc.computeMotionFrame(preset, progress);
@@ -1992,7 +1994,9 @@
   }
 
   function clearMotionTransform(element) {
-    if (element) element.style.transform = '';
+    if (!element) return;
+    element.style.transform = '';
+    if (element.tagName === 'IMG') element.style.objectFit = 'contain';
   }
 
   function syncPreviewMedia(sec) {
