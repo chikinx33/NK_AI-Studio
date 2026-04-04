@@ -2214,10 +2214,13 @@
       buildRenderPreviewHtml(model, meta) +
       '</div>' +
 
-        '<div class="postprod-render-actions bottom">' +
-        '<button class="btn-secondary compact" id="postprod-download-srt-btn">SRT 다운로드</button>' +
-        '<button class="btn-secondary compact" id="postprod-download-storyboard-btn">스토리보드 XLS</button>' +
-        '<button class="btn-primary compact" id="postprod-download-mp4-btn">MP4 다운로드</button>' +
+        '<div class="postprod-resource-card">' +
+        '<p class="title">다운로드</p>' +
+        '<div class="postprod-download-grid">' +
+        '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>자막</span><strong>SRT</strong></button>' +
+        '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>스토리보드</span><strong>XLS</strong></button>' +
+        '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>Video</span><strong>MP4</strong></button>' +
+        '</div>' +
         '</div>' +
         '</aside>' +
         '</section>';
