@@ -59,9 +59,21 @@
     return Object.keys(PRESETS);
   };
 
+  motion.getEffectKeys = function () {
+    var keys = Object.keys(PRESETS);
+    keys.push('random');
+    return keys;
+  };
+
   motion.getPresetLabel = function (key, lang) {
+    if (key === 'random') return lang === 'en' ? 'Random' : '랜덤';
     var entry = LABELS[key];
     if (!entry) return key || '';
     return lang === 'en' ? entry.en : entry.ko;
+  };
+
+  motion.getRandomPreset = function () {
+    var keys = Object.keys(PRESETS).filter(function (k) { return k !== 'none'; });
+    return keys[Math.floor(Math.random() * keys.length)];
   };
 })();

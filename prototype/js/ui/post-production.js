@@ -544,6 +544,23 @@
     post.render();
   }
 
+  function applyRandomMotionToAll() {
+    var motionSvc = NK.service && NK.service.postprodMotion;
+    if (!motionSvc || !motionSvc.getRandomPreset) return;
+    var track = getVisualTrack(state.model);
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    if (!clips.length) return;
+    for (var i = 0; i < clips.length; i++) {
+      var clip = clips[i];
+      if (!clip || !clip.id) continue;
+      var preset = motionSvc.getRandomPreset();
+      persistMotionPreset(clip.id, preset);
+      clip.motionPreset = preset;
+    }
+    setDirty(true);
+    post.render();
+  }
+
   function persistRenderMeta(metaPatch) {
     var svc = getPostprodStateService();
     if (!svc || !svc.persistRenderMeta || !state.projectId) return;
@@ -1763,10 +1780,10 @@
 
   function buildMotionOptionsHtml() {
     var motionSvc = NK.service && NK.service.postprodMotion;
-    if (!motionSvc || !motionSvc.getPresetKeys) return '<option value="none">None</option>';
+    if (!motionSvc || !motionSvc.getEffectKeys) return '<option value="none">None</option>';
     var lang = currentLang();
     var current = state.selectedClipId ? getClipMotionPreset(state.selectedClipId) : 'none';
-    return motionSvc.getPresetKeys().map(function (key) {
+    return motionSvc.getEffectKeys().map(function (key) {
       var selected = key === current ? ' selected' : '';
       return '<option value="' + key + '"' + selected + '>' + motionSvc.getPresetLabel(key, lang) + '</option>';
     }).join('');
@@ -2823,6 +2840,10 @@
     var motionSelect = document.getElementById('postprod-motion-select');
     if (motionSelect) {
       motionSelect.onchange = function () {
+        if (motionSelect.value === 'random') {
+          applyRandomMotionToAll();
+          return;
+        }
         if (state.selectedClipId && isVisualClip(state.selectedClipId)) {
           setClipMotionPreset(state.selectedClipId, motionSelect.value);
         }
