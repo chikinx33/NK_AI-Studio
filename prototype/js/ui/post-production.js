@@ -2380,8 +2380,7 @@
       '</div>' +
       '<div class="postprod-render-actions top">' +
       '<button class="btn-primary compact postprod-save-btn" id="postprod-save-btn"' + (state.saveBusy ? ' disabled' : '') + '>' + (state.saveBusy ? t('저장 중...') : t('저장하기')) + '</button>' +
-      '<button class="btn-secondary compact" id="postprod-render-btn">' + t('렌더링 시작') + '</button>' +
-      '<button class="btn-secondary compact" id="postprod-rerender-btn">' + t('다시 렌더링') + '</button>' +
+      '<button class="btn-secondary compact" id="postprod-render-btn">' + t('렌더링') + '</button>' +
       '</div>' +
       '<p class="postprod-save-state" id="postprod-save-state"></p>' +
       '<p class="postprod-render-progress" id="postprod-render-progress"></p>' +
