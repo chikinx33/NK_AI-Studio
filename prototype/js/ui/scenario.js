@@ -1094,58 +1094,8 @@
     });
   };
 
-  const formatCommonInfo = () => {
-    const p = currentPayload || {};
-    const knowledge = readKnowledgeHub(p);
-    const labels = getScenarioUiText().commonInfoLabels || {};
-    const parts = [];
-    if (p.topic) parts.push(`${labels.topic || 'Topic'}: ${p.topic}`);
-    if (p.purposeCategory) parts.push(`${labels.genre || 'Genre'}: ${p.purposeCategory}${p.purposeTags?.length ? ` (${p.purposeTags.join(', ')})` : ''}`);
-    if (p.target) parts.push(`${labels.audience || 'Audience'}: ${p.target}`);
-    if (p.needs?.length) parts.push(`${labels.needs || 'Needs'}: ${p.needs.join(', ')}`);
-    const toneStr = Array.from(new Set([...(p.tones || []), p.tone || ''].filter(Boolean))).join(', ');
-    if (toneStr) parts.push(`${labels.tone || 'Tone'}: ${toneStr}`);
-    const styleStr = Array.from(new Set([...(p.styles || []), p.style || ''].filter(Boolean))).join(', ');
-    if (styleStr) parts.push(`${labels.style || 'Style'}: ${styleStr}`);
-    if (knowledge.brandRules.length) parts.push(`${labels.brandRules || 'Brand Hub rules'}: ${knowledge.brandRules.length}개`);
-    if (knowledge.bannedExpressions.length) parts.push(`${labels.blockedTerms || 'Blocked terms'}: ${knowledge.bannedExpressions.length}개`);
-    return parts.join(' · ');
-  };
-
-  const buildCommonDetail = () => {
-    const p = currentPayload || {};
-    const knowledge = readKnowledgeHub(p);
-    const labels = getScenarioUiText().commonDetailLabels || {};
-    const infoLabels = getScenarioUiText().commonInfoLabels || {};
-    const esc = escapeHtml;
-
-    const field = (label, value) => {
-      if (!value) return '';
-      const lines = String(value).split('\n').map(l => l.trim()).filter(Boolean);
-      const valueHtml = lines.length > 1
-        ? `<ul class="cpd-list">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>`
-        : `<span class="cpd-value">${esc(lines[0] || '')}</span>`;
-      return `<div class="cpd-field"><span class="cpd-label">${esc(label)}</span>${valueHtml}</div>`;
-    };
-
-    const parts = [];
-    parts.push(`<h2 class="cpd-modal-title">${esc(labels.modalTitle || 'Common Prompt')}</h2>`);
-
-    // Common Block
-    const headerText = p.header || '';
-    parts.push(`<section class="cpd-section">`);
-    parts.push(`<h3 class="cpd-section-title"><span class="cpd-section-marker">◆</span>${esc(labels.sectionBlock || labels.title || 'Common Block')}</h3>`);
-    if (headerText) {
-      const headerHtml = String(headerText).split('\n').map(l => l.trim()).filter(Boolean)
-        .map(l => `<p>${esc(l)}</p>`).join('');
-      parts.push(`<div class="cpd-header-block">${headerHtml}</div>`);
-    } else {
-      parts.push(`<p class="cpd-empty">${esc(labels.empty || '')}</p>`);
-    }
-    parts.push(`</section>`);
-
-    return parts.join('');
-  };
+  const formatCommonInfo = () => '';
+  const buildCommonDetail = () => '';
 
   const getCommonBackgroundStyleFromCard = () => '';
 
@@ -1341,7 +1291,6 @@
     if (!container) return;
     const sceneList = normalizeScenes(scenes);
     const labels = getSceneFieldLabels();
-    const commonInfo = formatCommonInfo();
     if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
@@ -1352,13 +1301,7 @@
         </div>`;
       return;
     }
-    const tCopyTitle = (getScenarioUiText().copyTitle || '복사');
-    const tCopyAria = (getScenarioUiText().copyScenarioAria || '시나리오 복사');
-    const commonInfoRow = commonInfo
-      ? `<div class="common-info-row" id="common-info-row"><button class="common-info-play common-info-copy" id="common-copy-btn" data-i18n-title="copyTitle" data-i18n-aria-label="copyScenarioAria" title="${escapeHtml(tCopyTitle)}" aria-label="${escapeHtml(tCopyAria)}">⧉</button><button class="common-info-play" id="common-info-btn" aria-label="${escapeHtml(getScenarioUiText().commonPromptAria)}">▶</button><span class="muted tiny">${commonInfo}</span></div>`
-      : '';
-    const commonBlock = commonInfoRow;
-    container.innerHTML = commonBlock + sceneList.map(s => `
+    container.innerHTML = sceneList.map(s => `
       <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">
           <div class="card-title-row">
@@ -2003,71 +1946,15 @@
     setTimeout(finishLoading, 350); // 약간의 딜레이로 로딩/블러가 눈에 띄게 표시되도록
     window.addEventListener('load', finishLoading);
 
-    // 공통 프롬프트 팝업
+    // 공통 프롬프트 모달 (레거시 — 비활성)
     document.addEventListener('click', (e) => {
       const target = e.target;
-      if (target && target.id === 'common-info-btn') {
-        const modal = document.getElementById('common-modal');
-        const body = document.getElementById('common-modal-body');
-        if (modal && body) {
-          body.innerHTML = buildCommonDetail();
-          modal.classList.remove('hidden');
-        }
-      }
       if (target && target.dataset && target.dataset.close === 'common-modal') {
         document.getElementById('common-modal')?.classList.add('hidden');
       }
       const modal = document.getElementById('common-modal');
       if (modal && !modal.classList.contains('hidden') && target === modal) {
         modal.classList.add('hidden');
-      }
-    });
-    document.addEventListener('click', async (e) => {
-      const target = e.target;
-      if (target && target.id === 'common-copy-btn') {
-        try {
-          const info = formatCommonInfo();
-          const headerText = buildCommonDetail();
-          const latest = collectScenesFromCards();
-          const mergedScenes = mergeSceneSnapshots(draft?.scenes || [], latest);
-          const makeBlock = (s) => {
-            const lines = [];
-            lines.push(`Scene ${s.id} · ${fmtEst(s.estSec)}`);
-            if (s.sceneLocation || s.location) lines.push(`장소: ${s.sceneLocation || s.location || ''}`.trim());
-            if (s.shot || s.visual) lines.push(`시각화: ${s.shot || s.visual || ''}`.trim());
-            if (s.narrationText || s.narration) lines.push(`나레이션: ${s.narrationText || s.narration || ''}`.trim());
-            const dlg = s.dialogueText || dialogueToText(s.dialogue || []);
-            if (dlg) lines.push(`대사:\n${dlg}`);
-            return lines.filter(Boolean).join('\n');
-          };
-          const sceneBlocks = (mergedScenes.length ? mergedScenes : (draft?.scenes || [])).map(makeBlock).join('\n\n');
-          const parts = [];
-          if (info) parts.push(`▶ ${info}`);
-          if (headerText) parts.push(headerText);
-          if (sceneBlocks) parts.push(sceneBlocks);
-          const text = parts.filter(Boolean).join('\n\n');
-          let ok = false;
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(text);
-            ok = true;
-          }
-          if (!ok) {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.top = '-1000px';
-            document.body.appendChild(ta);
-            ta.focus();
-            ta.select();
-            try { document.execCommand('copy'); ok = true; } catch (_) {}
-            document.body.removeChild(ta);
-          }
-          const t = getScenarioUiText();
-          alert(ok ? (t.scenario_copy_success || '시나리오를 복사했습니다.') : (t.scenario_copy_fail || '복사에 실패했습니다.'));
-        } catch (err) {
-          const t = getScenarioUiText();
-          alert((t.scenario_copy_error_prefix || '복사 실패: ') + (err?.message || err));
-        }
       }
     });
   };
