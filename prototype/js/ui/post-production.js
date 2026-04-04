@@ -83,17 +83,28 @@
     return String(text || '').replace(/@/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
+  function currentLang() {
+    return NK.state && NK.state.runtime && NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+  }
+
+  function t(ko) {
+    if (currentLang() !== 'en') return ko;
+    if (NK.ui && NK.ui.common && NK.ui.common.translateText) return NK.ui.common.translateText(ko, 'en');
+    return ko;
+  }
+
   function detectCpuLabel() {
     var cores = navigator.hardwareConcurrency || 0;
-    if (!cores) return '알 수 없음';
-    if (cores >= 12) return cores + '코어 · 고성능';
-    if (cores >= 6) return cores + '코어 · 중간';
-    return cores + '코어 · 저사양';
+    if (!cores) return t('알 수 없음');
+    var en = currentLang() === 'en';
+    if (cores >= 12) return cores + (en ? ' cores · High' : '코어 · 고성능');
+    if (cores >= 6) return cores + (en ? ' cores · Mid' : '코어 · 중간');
+    return cores + (en ? ' cores · Low' : '코어 · 저사양');
   }
 
   function detectRamLabel() {
     var gb = navigator.deviceMemory;
-    if (!gb) return '알 수 없음';
+    if (!gb) return t('알 수 없음');
     return gb + 'GB';
   }
 
@@ -136,9 +147,9 @@
   function detectQualityLabel() {
     var cores = navigator.hardwareConcurrency || 0;
     var ram = navigator.deviceMemory || 0;
-    if (cores >= 8 && ram >= 8) return '고품질';
-    if (cores >= 4 && ram >= 4) return '표준';
-    return '경량';
+    if (cores >= 8 && ram >= 8) return t('고품질');
+    if (cores >= 4 && ram >= 4) return t('표준');
+    return t('경량');
   }
 
   function getSceneAssetService() {
@@ -2119,7 +2130,7 @@
       '<div class="postprod-shell">' +
       '<div class="card postprod-player-panel">' +
       '<div class="postprod-panel-header">' +
-      '<h2>편집</h2>' +
+      '<h2>' + t('편집') + '</h2>' +
       '</div>' +
       '<div class="postprod-preview-stage">' +
       buildPreviewHtml(model) +
@@ -2128,7 +2139,7 @@
 
       '<div class="card postprod-toolbar">' +
       '<div class="postprod-toolbar-group">' +
-      '<label>자막</label>' +
+      '<label>' + t('자막') + '</label>' +
       '<button class="postprod-pill' + (state.captionsEnabled ? ' active' : '') + '" id="postprod-caption-toggle" type="button">' + (state.captionsEnabled ? 'ON' : 'OFF') + '</button>' +
       '<select id="postprod-font-family">' +
       '<option value="Pretendard, Segoe UI, Apple SD Gothic Neo, sans-serif"' + (String(state.captionFont).indexOf('Pretendard') >= 0 ? ' selected' : '') + '>Pretendard</option>' +
@@ -2136,22 +2147,22 @@
       '<option value="sans-serif"' + (String(state.captionFont) === 'sans-serif' ? ' selected' : '') + '>Sans</option>' +
       '</select>' +
       '<select id="postprod-font-size">' +
-      '<option value="0.85"' + (Number(state.captionSizeScale) < 1 ? ' selected' : '') + '>작게</option>' +
-      '<option value="1"' + (Math.abs(Number(state.captionSizeScale) - 1) < 0.01 ? ' selected' : '') + '>보통</option>' +
-      '<option value="1.25"' + (Number(state.captionSizeScale) > 1 ? ' selected' : '') + '>크게</option>' +
+      '<option value="0.85"' + (Number(state.captionSizeScale) < 1 ? ' selected' : '') + '>' + t('작게') + '</option>' +
+      '<option value="1"' + (Math.abs(Number(state.captionSizeScale) - 1) < 0.01 ? ' selected' : '') + '>' + t('보통') + '</option>' +
+      '<option value="1.25"' + (Number(state.captionSizeScale) > 1 ? ' selected' : '') + '>' + t('크게') + '</option>' +
       '</select>' +
       '<button class="postprod-color-chip" id="postprod-color-text" type="button" aria-label="글자색" style="background:' + String(state.captionColor || '#ffffff') + '"></button>' +
       '<button class="postprod-color-chip dark" id="postprod-color-bg" type="button" aria-label="배경색" style="background:' + String(state.captionBg || 'rgba(0,0,0,0.72)') + '"></button>' +
       '<select id="postprod-caption-effect">' +
-      '<option value="none"' + (state.captionEffect === 'none' ? ' selected' : '') + '>없음</option>' +
-      '<option value="shadow"' + (state.captionEffect === 'shadow' ? ' selected' : '') + '>그림자</option>' +
-      '<option value="outline"' + (state.captionEffect === 'outline' ? ' selected' : '') + '>테두리</option>' +
+      '<option value="none"' + (state.captionEffect === 'none' ? ' selected' : '') + '>' + t('없음') + '</option>' +
+      '<option value="shadow"' + (state.captionEffect === 'shadow' ? ' selected' : '') + '>' + t('그림자') + '</option>' +
+      '<option value="outline"' + (state.captionEffect === 'outline' ? ' selected' : '') + '>' + t('테두리') + '</option>' +
       '</select>' +
-      '<label for="postprod-snap-step">스냅</label>' +
+      '<label for="postprod-snap-step">' + t('스냅') + '</label>' +
       '<select id="postprod-snap-step">' + buildSnapOptionsHtml() + '</select>' +
       '</div>' +
       '<div class="postprod-toolbar-group zoom-group">' +
-      '<label for="postprod-zoom-range">배율</label>' +
+      '<label for="postprod-zoom-range">' + t('배율') + '</label>' +
       '<button class="btn-secondary compact postprod-zoom-step" id="postprod-zoom-minus" type="button" aria-label="배율 줄이기">-</button>' +
       '<input id="postprod-zoom-range" type="range" min="' + state.zoomMin + '" max="' + state.zoomMax + '" step="10" value="' + state.zoom + '" />' +
       '<button class="btn-secondary compact postprod-zoom-step" id="postprod-zoom-plus" type="button" aria-label="배율 늘리기">+</button>' +
@@ -2159,15 +2170,15 @@
       '<button class="btn-secondary compact postprod-fit-btn' + (state.fitTimeline ? ' is-active' : '') + '" id="postprod-zoom-fit" type="button" aria-label="타임라인 맞춤">FIX</button>' +
       '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
-      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="되돌리기"' + (canUndo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>' +
-      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-redo-btn" title="다시 실행"' + (canRedo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>' +
-      '<button class="btn-secondary compact postprod-history-btn icon-btn danger" id="postprod-delete-btn" title="선택 삭제"' + (state.selectedClipId ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="' + t('되돌리기') + '"' + (canUndo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-redo-btn" title="' + t('다시 실행') + '"' + (canRedo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>' +
+      '<button class="btn-secondary compact postprod-history-btn icon-btn danger" id="postprod-delete-btn" title="' + t('선택 삭제') + '"' + (state.selectedClipId ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
       '</div>' +
       '</div>' +
 
       '<div class="card postprod-timeline-panel">' +
       '<div class="postprod-timeline-head">' +
-      '<h3>타임라인</h3>' +
+      '<h3>' + t('타임라인') + '</h3>' +
       '<div class="postprod-scrub-wrap">' +
       '<input id="postprod-scrub-range" type="range" min="0" max="' + playbackDuration + '" value="' + state.currentTime + '" step="0.1" />' +
       '</div>' +
@@ -2188,25 +2199,25 @@
 
       '<aside class="card postprod-render-panel">' +
       '<div class="postprod-render-head">' +
-      '<h3>렌더링</h3>' +
+      '<h3>' + t('렌더링') + '</h3>' +
       '<span id="postprod-render-badge" class="postprod-render-badge ' + getRenderStatusClass(status) + '">' + getRenderStatusLabel(status) + '</span>' +
       '</div>' +
       '<div class="postprod-render-actions top">' +
-      '<button class="btn-primary compact postprod-save-btn" id="postprod-save-btn"' + (state.saveBusy ? ' disabled' : '') + '>' + (state.saveBusy ? '저장 중...' : '저장하기') + '</button>' +
-      '<button class="btn-secondary compact" id="postprod-render-btn">렌더링 시작</button>' +
-      '<button class="btn-secondary compact" id="postprod-rerender-btn">다시 렌더링</button>' +
+      '<button class="btn-primary compact postprod-save-btn" id="postprod-save-btn"' + (state.saveBusy ? ' disabled' : '') + '>' + (state.saveBusy ? t('저장 중...') : t('저장하기')) + '</button>' +
+      '<button class="btn-secondary compact" id="postprod-render-btn">' + t('렌더링 시작') + '</button>' +
+      '<button class="btn-secondary compact" id="postprod-rerender-btn">' + t('다시 렌더링') + '</button>' +
       '</div>' +
       '<p class="postprod-save-state" id="postprod-save-state"></p>' +
       '<p class="postprod-render-progress" id="postprod-render-progress"></p>' +
       '<p class="postprod-render-info" id="postprod-render-info"></p>' +
 
       '<div class="postprod-resource-card">' +
-      '<p class="title">컴퓨팅 리소스</p>' +
+      '<p class="title">' + t('컴퓨팅 리소스') + '</p>' +
       '<div class="postprod-resource-grid">' +
       '<div><span>CPU</span><strong>' + detectCpuLabel() + '</strong></div>' +
       '<div><span>RAM</span><strong>' + detectRamLabel() + '</strong></div>' +
       '<div><span>Graphics</span><strong>' + detectGpuLabel() + '</strong></div>' +
-      '<div><span>품질</span><strong>' + detectQualityLabel() + '</strong></div>' +
+      '<div><span>' + t('품질') + '</span><strong>' + detectQualityLabel() + '</strong></div>' +
       '</div>' +
       '</div>' +
 
@@ -2215,11 +2226,11 @@
       '</div>' +
 
         '<div class="postprod-resource-card">' +
-        '<p class="title">다운로드</p>' +
+        '<p class="title">' + t('다운로드') + '</p>' +
         '<div class="postprod-download-grid">' +
-        '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>자막</span><strong>SRT</strong></button>' +
-        '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>스토리보드</span><strong>XLS</strong></button>' +
-        '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>영상</span><strong>MP4</strong></button>' +
+        '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>' + t('자막') + '</span><strong>SRT</strong></button>' +
+        '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>' + t('스토리보드') + '</span><strong>XLS</strong></button>' +
+        '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>' + t('영상') + '</span><strong>MP4</strong></button>' +
         '</div>' +
         '</div>' +
         '</aside>' +
