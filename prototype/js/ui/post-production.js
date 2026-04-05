@@ -2106,9 +2106,13 @@
 
       if (!clips.length) {
         if (track.key === 'audio' || track.key === 'music' || track.key === 'overlays') {
-          var uploadLabel = track.key === 'overlays' ? t('이미지 등록') : t('음원 등록');
+          var isOverlay = track.key === 'overlays';
+          var uploadLabel = isOverlay ? t('이미지 등록') : t('음원 등록');
+          var uploadIcon = isOverlay
+            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>'
+            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 5v14M5 12h14"></path></svg>';
           clipsHtml = '<div class="postprod-track-empty is-uploadable" data-action="upload-' + track.key + '" style="position:absolute; top:6px; left:14px; height:28px; border:1px dashed rgba(255,255,255,0.4); border-radius:6px; padding:0 12px; display:inline-flex; align-items:center; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer;">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><path d="M12 5v14M5 12h14"></path></svg>' +
+            uploadIcon +
             uploadLabel + '</div>';
         } else {
           clipsHtml = '<div class="postprod-track-empty" style="position: absolute; top:6px; left:14px; color:rgba(255,255,255,0.4); font-size:12px; display:inline-flex; align-items:center; height:28px;">' + t('클립 없음') + '</div>';
