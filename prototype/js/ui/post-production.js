@@ -2576,15 +2576,15 @@
       '<option value="0.45"' + (String(state.captionBg).indexOf('0.45') >= 0 ? ' selected' : '') + '>45%</option>' +
       '<option value="0"' + (state.captionBg === 'transparent' || String(state.captionBg).indexOf(',0)') >= 0 ? ' selected' : '') + '>0%</option>' +
       '</select>' +
-      '<button class="btn-secondary compact icon-btn" id="postprod-caption-effect" type="button" title="' + t('자막 효과') + ' · ' + getCaptionEffectLabel(state.captionEffect) + '">' +
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>' +
+      '<button class="btn-secondary compact postprod-cycle-btn" id="postprod-caption-effect" type="button" title="' + t('자막 효과') + ' · ' + getCaptionEffectLabel(state.captionEffect) + '">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>' +
       '<span class="postprod-effect-label">' + getCaptionEffectLabel(state.captionEffect) + '</span>' +
       '</button>' +
       '<input type="range" id="postprod-caption-pos" min="2" max="98" step="1" value="' + (state.captionPosition || 6) + '" class="postprod-pos-range" title="' + t('위치') + '" />' +
       '</div>' +
       '<div class="postprod-toolbar-group">' +
-      '<button class="btn-secondary compact icon-btn" id="postprod-snap-step" type="button" title="' + t('스냅') + ' ' + state.snapStep + 's">' +
-      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 15 4 4"/><path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/><path d="m5 8 4 4"/></svg>' +
+      '<button class="btn-secondary compact postprod-cycle-btn" id="postprod-snap-step" type="button" title="' + t('스냅') + ' ' + state.snapStep + 's">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m12 15 4 4"/><path d="M2.352 10.648a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.029-6.029a1 1 0 1 1 3 3l-6.029 6.029a1.205 1.205 0 0 0 0 1.704l2.296 2.296a1.205 1.205 0 0 0 1.704 0l6.365-6.367A1 1 0 0 0 8.716 4.282z"/><path d="m5 8 4 4"/></svg>' +
       '<span class="postprod-snap-label">' + state.snapStep + 's</span>' +
       '</button>' +
       '</div>' +

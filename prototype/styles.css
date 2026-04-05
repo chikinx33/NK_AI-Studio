@@ -5401,6 +5401,15 @@ html.page-shell-image #sidebar-project-card {
   font-size: 12px;
 }
 
+.postprod-cycle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .postprod-toolbar select {
   background: var(--layer-soft);
   color: var(--text);
