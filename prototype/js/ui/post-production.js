@@ -3100,29 +3100,29 @@
     }
     var effBtn = document.getElementById('postprod-caption-effect');
     if (effBtn) {
-      effBtn.onclick = function () {
+      effBtn.onclick = function (evt) {
+        evt.stopPropagation();
         var idx = captionEffectOptions.indexOf(state.captionEffect);
         var next = captionEffectOptions[(idx + 1) % captionEffectOptions.length];
         state.captionEffect = next;
         saveCaptionPrefs();
+        renderLayout(state.model);
+        bindEvents();
         syncPreviewMedia(state.currentTime);
-        var label = effBtn.querySelector('.postprod-effect-label');
-        if (label) label.textContent = getCaptionEffectLabel(next);
-        effBtn.title = t('자막 효과') + ' · ' + getCaptionEffectLabel(next);
       };
     }
 
     var snapBtn = document.getElementById('postprod-snap-step');
     if (snapBtn) {
-      snapBtn.onclick = function () {
+      snapBtn.onclick = function (evt) {
+        evt.stopPropagation();
         var opts = state.snapOptions || [0.1, 0.5, 1];
         var idx = opts.indexOf(Number(state.snapStep));
         var next = opts[(idx + 1) % opts.length];
         state.snapStep = next;
         saveSnapStep(next);
-        var label = snapBtn.querySelector('.postprod-snap-label');
-        if (label) label.textContent = next + 's';
-        snapBtn.title = t('스냅') + ' ' + next + 's';
+        renderLayout(state.model);
+        bindEvents();
       };
     }
 
