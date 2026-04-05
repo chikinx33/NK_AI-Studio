@@ -399,6 +399,12 @@
     try { localStorage.setItem('nk_post_snap_step', String(step)); } catch (_) { }
   }
 
+  var captionEffectOptions = ['none', 'shadow', 'outline'];
+  function getCaptionEffectLabel(v) {
+    var map = { none: t('없음'), shadow: t('그림자'), outline: t('테두리') };
+    return map[v] || map.none;
+  }
+
   function loadCaptionPrefs() {
     try {
       var on = localStorage.getItem('nk_post_caption_on');
@@ -2570,11 +2576,10 @@
       '<option value="0.45"' + (String(state.captionBg).indexOf('0.45') >= 0 ? ' selected' : '') + '>45%</option>' +
       '<option value="0"' + (state.captionBg === 'transparent' || String(state.captionBg).indexOf(',0)') >= 0 ? ' selected' : '') + '>0%</option>' +
       '</select>' +
-      '<select id="postprod-caption-effect">' +
-      '<option value="none"' + (state.captionEffect === 'none' ? ' selected' : '') + '>' + t('없음') + '</option>' +
-      '<option value="shadow"' + (state.captionEffect === 'shadow' ? ' selected' : '') + '>' + t('그림자') + '</option>' +
-      '<option value="outline"' + (state.captionEffect === 'outline' ? ' selected' : '') + '>' + t('테두리') + '</option>' +
-      '</select>' +
+      '<button class="btn-secondary compact icon-btn" id="postprod-caption-effect" type="button" title="' + t('자막 효과') + ' · ' + getCaptionEffectLabel(state.captionEffect) + '">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="14" x="3" y="5" rx="2" ry="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>' +
+      '<span class="postprod-effect-label">' + getCaptionEffectLabel(state.captionEffect) + '</span>' +
+      '</button>' +
       '<input type="range" id="postprod-caption-pos" min="2" max="98" step="1" value="' + (state.captionPosition || 6) + '" class="postprod-pos-range" title="' + t('위치') + '" />' +
       '</div>' +
       '<div class="postprod-toolbar-group">' +
@@ -3093,12 +3098,17 @@
         syncPreviewMedia(state.currentTime);
       };
     }
-    var effSel = document.getElementById('postprod-caption-effect');
-    if (effSel) {
-      effSel.onchange = function () {
-        state.captionEffect = String(effSel.value || 'none');
+    var effBtn = document.getElementById('postprod-caption-effect');
+    if (effBtn) {
+      effBtn.onclick = function () {
+        var idx = captionEffectOptions.indexOf(state.captionEffect);
+        var next = captionEffectOptions[(idx + 1) % captionEffectOptions.length];
+        state.captionEffect = next;
         saveCaptionPrefs();
         syncPreviewMedia(state.currentTime);
+        var label = effBtn.querySelector('.postprod-effect-label');
+        if (label) label.textContent = getCaptionEffectLabel(next);
+        effBtn.title = t('자막 효과') + ' · ' + getCaptionEffectLabel(next);
       };
     }
 
