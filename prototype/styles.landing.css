@@ -98,7 +98,7 @@
   box-sizing: border-box;
   object-fit: contain;
   filter: brightness(1);
-  transition: filter 0.24s ease, transform 0.24s ease;
+  transition: filter 0.24s ease;
 }
 
 .login-icons img.is-disabled {
@@ -116,8 +116,7 @@
 
 .login-icon-link:hover img,
 .login-icon-link:focus-visible img {
-  filter: brightness(1.18);
-  transform: translateY(-1px);
+  filter: brightness(1.32);
 }
 
 .login-icons.blurred {
