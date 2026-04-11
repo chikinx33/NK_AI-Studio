@@ -1431,9 +1431,12 @@
         var safeLang = (lang === 'en') ? 'en' : 'ko';
         var t = NK.core.translations[safeLang];
         var btn = document.querySelector('[data-screen-toggle]');
+        var isFullscreen = common.isFullscreenActive();
+        if (!isFullscreen) {
+            clearFullscreenRestoreFlag();
+        }
         if (!btn || !t) return;
 
-        var isFullscreen = common.isFullscreenActive();
         var label = isFullscreen ? t.screen_to_window : t.screen_to_full;
         btn.textContent = '';
         btn.setAttribute('aria-label', label);

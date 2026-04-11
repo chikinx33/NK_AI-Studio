@@ -682,6 +682,14 @@
    * 부모 창(ai-video.html)에서만 작동하는 이벤트 및 네비게이션 설정
    */
   const setupParentLogic = () => {
+    const preserveFullscreenOnMenuNavigation = () => {
+      try {
+        if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
+          NK.ui.common.markFullscreenRestore();
+        }
+      } catch (_) { }
+    };
+
     // 사이드바 하이라이트 동기화
     NK.state.subscribe((runtime) => {
       const stage = runtime.currentStage;
@@ -724,6 +732,7 @@
         e.preventDefault();
         e.stopPropagation();
         if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        preserveFullscreenOnMenuNavigation();
         try {
           const cp = NK.state?.runtime?.currentProject;
           const pid = String(cp && cp.id || '').trim();
@@ -752,6 +761,7 @@
         e.preventDefault();
         e.stopPropagation();
         if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        preserveFullscreenOnMenuNavigation();
         try {
           sessionStorage.setItem('nk_force_dashboard_entry', '1');
           localStorage.setItem('nk_force_dashboard_entry', '1');
@@ -793,6 +803,7 @@
       if (isAiImageStageLink) {
         e.preventDefault();
         e.stopPropagation();
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const target = buildAiImageStageUrl();
         if (NK.navigation && NK.navigation.loadStage) {
@@ -810,6 +821,7 @@
       if (isAiVideoLink || isAiImageLink) {
         e.preventDefault();
         e.stopPropagation();
+        preserveFullscreenOnMenuNavigation();
         if (isAiVideoLink) {
           try {
             sessionStorage.setItem('nk_force_dashboard_entry', '1');
@@ -840,6 +852,7 @@
       if (href && href.includes('.html')) {
         e.preventDefault();
         e.stopPropagation();
+        preserveFullscreenOnMenuNavigation();
         if (NK.navigation && NK.navigation.loadStage) {
           NK.navigation.loadStage(href);
         } else {
@@ -850,30 +863,37 @@
       // 사이드바 프로젝트 카드 버튼 처리
       const action = link.dataset.action;
       if (action === 'sidebar-edit-scenario') {
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-library') {
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const url = currentProject?.id ? `library.html?projectId=${encodeURIComponent(currentProject.id)}` : 'library.html';
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-brand') {
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const url = currentProject?.id ? `brand.html?projectId=${encodeURIComponent(currentProject.id)}` : 'brand.html';
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-knowledge') {
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const url = currentProject?.id ? `knowledge.html?projectId=${encodeURIComponent(currentProject.id)}` : 'knowledge.html';
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-analytics') {
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const url = currentProject?.id ? `analytics.html?projectId=${encodeURIComponent(currentProject.id)}` : 'analytics.html';
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-scenes') {
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const url = currentProject?.id ? `scenes.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenes.html';
         NK.navigation.loadStage(url);
       } else if (action === 'sidebar-edit-media') {
+        preserveFullscreenOnMenuNavigation();
         persistCurrentProject();
         const url = currentProject?.id ? `media.html?projectId=${encodeURIComponent(currentProject.id)}` : 'media.html';
         NK.navigation.loadStage(url);
