@@ -153,7 +153,7 @@
       cameraModalTitle: '카메라 앵글 조정',
       cameraModalDesc: '프리셋과 슬라이더를 조합해 다음 생성에 반영할 시점을 정해 주세요.',
       cameraPresetLabel: '앵글 프리셋',
-      cameraPresetFront: '정면',
+      cameraPresetFront: '초기화',
       cameraPresetRear: '뒷면',
       cameraPresetLeft45: '좌 45°',
       cameraPresetRight45: '우 45°',
@@ -296,7 +296,7 @@
       cameraModalTitle: 'Adjust camera angle',
       cameraModalDesc: 'Combine presets and sliders to control the next generation angle.',
       cameraPresetLabel: 'Angle preset',
-      cameraPresetFront: 'Front',
+      cameraPresetFront: 'Reset',
       cameraPresetRear: 'Rear',
       cameraPresetLeft45: 'Left 45°',
       cameraPresetRight45: 'Right 45°',
@@ -2264,10 +2264,20 @@
     var tiltValue = document.getElementById('ai-image-camera-tilt-value');
     var distValue = document.getElementById('ai-image-camera-distance-value');
     var orbit = document.querySelector('.ai-image-camera-orbit');
+    var applyButton = document.querySelector('.ai-image-camera-apply');
+    var cameraCard = document.querySelector('.ai-image-camera-card');
     var orbitPreview = computeCameraOrbitPreview(controls);
     if (panValue) panValue.textContent = String(controls.pan);
     if (tiltValue) tiltValue.textContent = String(controls.tilt);
     if (distValue) distValue.textContent = String(controls.distance);
+    if (applyButton) applyButton.disabled = !controls.enabled;
+    if (cameraCard) cameraCard.classList.toggle('is-active', !!controls.enabled);
+    Array.prototype.forEach.call(document.querySelectorAll('.ai-image-camera-preset[data-preset]') || [], function (button) {
+      var presetKey = String(button.getAttribute('data-preset') || '').trim().toLowerCase();
+      var isResetDefault = presetKey === 'front' && isNeutralCameraControls(controls);
+      var isActive = controls.preset === presetKey || isResetDefault;
+      button.classList.toggle('active', !!isActive);
+    });
     if (orbit) {
       var toggle = orbit.querySelector('.ai-image-camera-target-toggle');
       orbit.innerHTML = buildCameraOrbitSvgMarkup(orbitPreview) + (toggle ? toggle.outerHTML : '');

@@ -82,6 +82,8 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.doesNotMatch(source, /class="trash-btn ai-image-history-clear"/);
   assert.match(source, /data-action="set-camera-preset"/);
   assert.match(source, /cameraPresetRear/);
+  assert.match(source, /cameraPresetFront: '초기화'/);
+  assert.match(source, /cameraPresetFront: 'Reset'/);
   assert.match(source, /cameraPresetUpperLeft45/);
   assert.match(source, /cameraPresetUpperRight45/);
   assert.match(source, /cameraPresetLowerLeft45/);
@@ -95,6 +97,8 @@ test('ai-image preview toggles the history panel into camera-angle controls with
   assert.match(source, /id="ai-image-camera-pan" type="range" min="0" max="359"/);
   assert.match(source, /id="ai-image-camera-tilt" type="range" min="-30" max="60"/);
   assert.match(source, /id="ai-image-camera-distance" type="range" min="0" max="2"/);
+  assert.match(source, /if \(applyButton\) applyButton\.disabled = !controls\.enabled;/);
+  assert.match(source, /button\.classList\.toggle\('active', !!isActive\);/);
 });
 
 test('ai-image preview can switch between source and history targets and camera apply follows the preview target', () => {
