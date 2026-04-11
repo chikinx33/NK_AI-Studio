@@ -725,6 +725,16 @@
     }
   }
 
+  function isTimeoutLikeImagenError(err) {
+    var raw = String((err && err.message) || err || '').trim();
+    return /request_timeout|response_timeout|timeout|aborted|network_error|failed to fetch/i.test(raw);
+  }
+
+  function shouldRetryImagenRequest(err) {
+    var status = Number(err && err.status) || 0;
+    return status >= 500 || isTimeoutLikeImagenError(err);
+  }
+
   function readTheme() {
     try {
       return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.THEME) || 'nk_theme') || 'dark';
@@ -2643,7 +2653,8 @@
     }
   }
 
-  async function generateImage() {
+  async function generateImage(attempt) {
+    var tryCount = Number(attempt || 0) || 0;
     var prompt = String(state.prompt || '').trim();
     var appliedCameraControls = normalizeCameraControls(state.cameraControls);
     var finalPrompt = buildPromptWithCameraControls(prompt, appliedCameraControls);
@@ -2657,6 +2668,10 @@
     }
 
     var chosenSize = String(state.imageSize || '1K').toUpperCase();
+    if (tryCount > 0) {
+      if (chosenSize === '2K') chosenSize = '1K';
+      else if (chosenSize === '1K') chosenSize = '512';
+    }
     var payload = {
       prompt: finalPrompt,
       aspectRatio: state.aspectRatio,
@@ -2708,38 +2723,9 @@
       appendHistoryCardIfPossible(result);
       updateResultSelectionUI();
     } catch (err) {
-      var s = (err && err.status) || 0;
-      if (s >= 500) {
+      if (shouldRetryImagenRequest(err) && tryCount < 1) {
         try {
-          if (chosenSize === '2K') chosenSize = '1K';
-          else if (chosenSize === '1K') chosenSize = '512';
-          payload.imageSize = chosenSize;
-          var response2 = await NK.api.imagen(payload);
-          var result2 = {
-            id: 'res_' + Date.now(),
-            url: String(response2 && (response2.signedUrl || response2.dataUrl) || '').trim(),
-            objectName: String(response2 && response2.objectName || '').trim(),
-            imageSize: String(response2 && response2.imageSizeApplied || chosenSize || '').trim(),
-            prompt: prompt,
-            resolvedPrompt: finalPrompt,
-            mode: state.mode,
-            generationStyle: normalizeGenerationStyle(state.generationStyle),
-            cameraControls: appliedCameraControls,
-            conversationTurnCount: Number(response2 && response2.conversationTurnCount || payload.conversationHistory.length || 0) || 0,
-            aspectRatio: state.aspectRatio,
-            createdAt: new Date().toISOString(),
-            savedToProject: false,
-            sessionId: state.sessionId
-          };
-          if (!result2.url) throw new Error('image_result_missing');
-          state.results.unshift(result2);
-          state.results = state.results.slice(0, 30);
-          state.currentResultId = result2.id;
-          state.previewTargetType = 'result';
-          state.cameraControls = createDefaultCameraControls();
-          persistHistory();
-          appendHistoryCardIfPossible(result2);
-          updateResultSelectionUI();
+          await generateImage(tryCount + 1);
           return;
         } catch (_) {}
       }
@@ -2757,6 +2743,11 @@
         if (status) hint = String(serverHint || '') + (serverHint ? ' ' : '') + '(status: ' + status + ')';
         else if (serverHint) hint = serverHint;
       } catch (_) {}
+      if (!hint && isTimeoutLikeImagenError(err)) {
+        hint = state.lang === 'en'
+          ? 'The request took too long, so we retried once with a lighter generation payload. Please try again shortly if it still fails.'
+          : '생성이 오래 걸려 한 번 더 가벼운 설정으로 자동 재시도했습니다. 계속 실패하면 잠시 후 다시 시도해 주세요.';
+      }
       alert(t('generationFailed') + msg + (hint ? ('\n힌트: ' + hint) : ''));
     } finally {
       setGlobalLoading(false);
@@ -2840,8 +2831,7 @@
       persistHistory();
       updateResultSelectionUI();
     } catch (err) {
-      var s = (err && err.status) || 0;
-      if (s >= 500 && tryCount < 1) {
+      if (shouldRetryImagenRequest(err) && tryCount < 1) {
         try {
           await generateImageCameraApply(tryCount + 1);
           return;
@@ -2861,6 +2851,11 @@
         if (status) hint = String(serverHint || '') + (serverHint ? ' ' : '') + '(status: ' + status + ')';
         else if (serverHint) hint = serverHint;
       } catch (_) {}
+      if (!hint && isTimeoutLikeImagenError(err)) {
+        hint = state.lang === 'en'
+          ? 'The request took too long, so we retried once with a lighter generation payload. Please try again shortly if it still fails.'
+          : '생성이 오래 걸려 한 번 더 가벼운 설정으로 자동 재시도했습니다. 계속 실패하면 잠시 후 다시 시도해 주세요.';
+      }
       alert(t('generationFailed') + msg + (hint ? ('\n힌트: ' + hint) : ''));
     } finally {
       setGlobalLoading(false);

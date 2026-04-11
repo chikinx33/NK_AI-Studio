@@ -105,6 +105,22 @@
 
   var j = function (t) { try { return JSON.parse(t); } catch (_) { return {}; } };
   var e = function (t) { try { return JSON.parse(t).error; } catch (_) { return t; } };
+  const getImagenTimeoutMs = function (payload, opts) {
+    var override = Number(opts && opts.timeoutMs);
+    if (Number.isFinite(override) && override > 0) return Math.max(DEFAULT_TIMEOUT_MS, override);
+    var body = payload && typeof payload === 'object' ? payload : {};
+    var mode = String(body.generationMode || body.mode || '').trim().toLowerCase();
+    var size = String(body.imageSize || body.quality || body.resolution || '').trim().toUpperCase();
+    var referenceCount = Array.isArray(body.referenceImages) ? body.referenceImages.length : 0;
+    var conversationTurnCount = Array.isArray(body.conversationHistory) ? body.conversationHistory.length : 0;
+    var timeoutMs = 120000;
+    if (mode === 'image-to-image' || referenceCount > 0) timeoutMs += 60000;
+    if (size === '2K') timeoutMs += 60000;
+    else if (size === '1K') timeoutMs += 15000;
+    if (referenceCount > 1) timeoutMs += Math.min(30000, (referenceCount - 1) * 10000);
+    if (conversationTurnCount > 0) timeoutMs += Math.min(30000, conversationTurnCount * 10000);
+    return Math.min(timeoutMs, 240000);
+  };
 
   api.tts = async function (body, opts) {
     var payload = Object.assign({}, body || {});
@@ -210,13 +226,14 @@
   api.imagen = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
+    var timeoutMs = getImagenTimeoutMs(payload, opts);
     var res = await fetchWithTimeout(withBase('/api/imagen'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
       signal: opts && opts.signal
-    }, 120000);
-    var text = await readTextWithTimeout(res, 120000);
+    }, timeoutMs);
+    var text = await readTextWithTimeout(res, timeoutMs);
     if (!res.ok) {
       var err = new Error(e(text) || 'imagen_error');
       err.status = res.status;
