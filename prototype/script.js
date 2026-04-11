@@ -2361,7 +2361,22 @@
       });
     }
 
-    const aiVideoLink = document.querySelector('#login-icons .login-icon-link[href]');
+    const preserveFullscreenForTopLevelShellMove = () => {
+      try {
+        if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
+          NK.ui.common.markFullscreenRestore();
+        }
+      } catch (_) { }
+    };
+
+    const brandStudioLink = document.querySelector('#login-icons .login-icon-link[href="brand-studio.html"]');
+    if (brandStudioLink) {
+      brandStudioLink.addEventListener('click', () => {
+        preserveFullscreenForTopLevelShellMove();
+      });
+    }
+
+    const aiVideoLink = document.querySelector('#login-icons .login-icon-link[href^="ai-video.html"]');
     if (aiVideoLink) {
       aiVideoLink.addEventListener('click', (e) => {
         if (window.self !== window.top && window.parent && window.parent.NK && window.parent.NK.navigation && typeof window.parent.NK.navigation.loadStage === 'function') {
@@ -2372,9 +2387,7 @@
           return;
         }
         try {
-          if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
-            NK.ui.common.markFullscreenRestore();
-          }
+          preserveFullscreenForTopLevelShellMove();
           sessionStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
           localStorage.setItem(FORCE_DASHBOARD_ENTRY_KEY, '1');
           sessionStorage.removeItem(STAGE_TARGET_KEY);
@@ -2385,14 +2398,10 @@
       });
     }
 
-    const aiImageLink = document.querySelector('#login-icons .login-icon-link[href="ai-image.html"]');
+    const aiImageLink = document.querySelector('#login-icons .login-icon-link[href^="ai-image.html"]');
     if (aiImageLink) {
       aiImageLink.addEventListener('click', () => {
-        try {
-          if (NK.ui && NK.ui.common && typeof NK.ui.common.markFullscreenRestore === 'function') {
-            NK.ui.common.markFullscreenRestore();
-          }
-        } catch (_) { }
+        preserveFullscreenForTopLevelShellMove();
       });
     }
 
