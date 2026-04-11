@@ -2769,7 +2769,7 @@
     }
     var cameraPrompt = buildCameraApplyPrompt(cameraOnly, previewTarget, appliedCameraTargetMode);
     var previewReferenceImages = [];
-    if (previewTarget && previewTarget.url && appliedCameraTargetMode === 'subject') {
+    if (previewTarget && previewTarget.url) {
       previewReferenceImages = [{
         referenceId: 1,
         imageDataUrl: previewTarget.url,
