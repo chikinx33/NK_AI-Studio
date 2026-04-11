@@ -97,7 +97,8 @@
   padding: calc((var(--login-icon-slot) - var(--login-icon-visual)) / 2);
   box-sizing: border-box;
   object-fit: contain;
-  filter: none;
+  filter: brightness(1);
+  transition: filter 0.24s ease, transform 0.24s ease;
 }
 
 .login-icons img.is-disabled {
@@ -111,6 +112,12 @@
   align-items: center;
   text-decoration: none;
   gap: 2px;
+}
+
+.login-icon-link:hover img,
+.login-icon-link:focus-visible img {
+  filter: brightness(1.18);
+  transform: translateY(-1px);
 }
 
 .login-icons.blurred {
