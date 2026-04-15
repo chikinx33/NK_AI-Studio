@@ -202,6 +202,25 @@
 
     try {
       var durationSeconds = snapVideoDuration(scene.estSec);
+      var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
+      var klingQuality = opts.videoModel === 'kling-final' ? 'final' : (opts.videoModel === 'kling-draft' ? 'draft' : '');
+      // 이전 씬의 마지막 프레임을 이번 씬의 끝 프레임(image_tail)으로 자동 연결 (Kling 전용)
+      var endImageDataUrl = '';
+      if (isKling && opts.idx > 0) {
+        try {
+          var prevScene = st.scenes[opts.idx - 1];
+          endImageDataUrl = (prevScene && (prevScene.lastFrameDataUrl || '')) || '';
+        } catch (_) { endImageDataUrl = ''; }
+      }
+      // 레퍼런스 이미지: 캐릭터 허브에서 해결된 참조 에셋
+      var referenceImages = [];
+      try {
+        var refIds = (scene && scene.characterReferenceAssetIds) || [];
+        if (Array.isArray(refIds) && refIds.length && NK.service && NK.service.characterRegistry && NK.service.characterRegistry.getReferenceAssetUrls) {
+          referenceImages = NK.service.characterRegistry.getReferenceAssetUrls(refIds) || [];
+        }
+      } catch (_) { referenceImages = []; }
+
       var videoPayload = {
         projectId: projectId,
         projTag: projectId,
@@ -217,7 +236,10 @@
         image_url: imageUrl,
         init_image: imageUrl,
         source_image: imageUrl,
-        videoModel: opts.videoModel
+        videoModel: opts.videoModel,
+        quality: klingQuality || undefined,
+        endImageDataUrl: endImageDataUrl || undefined,
+        referenceImages: (referenceImages && referenceImages.length) ? referenceImages : undefined
       };
       console.log('videoStart payload', {
         projectId: projectId,
@@ -345,10 +367,18 @@
         } catch (aspectErr) {
           console.warn('video aspect normalize skipped (poll):', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
         }
+        // 다음 씬의 끝 프레임(image_tail) 으로 연결하기 위해 마지막 프레임 추출 (best-effort)
+        var lastFrameDataUrl = '';
+        try {
+          if (NK.util && NK.util.extractLastFrame) {
+            lastFrameDataUrl = await NK.util.extractLastFrame(playback, { timeoutMs: 12000 });
+          }
+        } catch (_) { lastFrameDataUrl = ''; }
         st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], {
           videoUrl: playback,
           videoStatus: 'done',
-          videoError: ''
+          videoError: '',
+          lastFrameDataUrl: lastFrameDataUrl || (st.scenes[opts.idx] && st.scenes[opts.idx].lastFrameDataUrl) || ''
         });
         ctx.setState(st);
         opts.updateSceneRow(opts.idx, st.header || '', 'video');

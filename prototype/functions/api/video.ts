@@ -5,6 +5,15 @@
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
 import { buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
+import {
+  callKlingApi,
+  klingEndpoints,
+  klingModelFor,
+  normalizeKlingAspect,
+  snapKlingDuration,
+  stripDataUrlPrefix,
+  type KlingQuality,
+} from "./_shared/kling";
 
 (globalThis as any).g = globalThis;
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -69,8 +78,94 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const videoObject = `${projectPrefix}/videos/${stamp}-${sceneId}.mp4`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoObject}`;
 
-    if (videoModel !== "veo" && videoModel !== "grok") {
+    const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
+    if (videoModel !== "veo" && videoModel !== "grok" && !isKling) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
+    }
+
+    // Kling branch
+    if (isKling) {
+      const quality: KlingQuality =
+        (body as any)?.quality === "final" || videoModel === "kling-final" ? "final" : "draft";
+      const klingModel = String((body as any)?.klingModel || "").trim() || klingModelFor(quality);
+      const klingMode = quality === "final" ? "pro" : "std"; // pro = 1080p
+      const klingDuration = snapKlingDuration(durationSeconds);
+      const klingAspect = normalizeKlingAspect(aspectRatio);
+
+      // 시작 프레임(필수) - data:URL이면 base64만 추출, https/gs는 그대로 URL 사용
+      const startImageField = toKlingImageField(imageDataUrl);
+      if (!startImageField) {
+        return json({ error: "imageDataUrl is invalid (kling)" }, 400);
+      }
+
+      // 끝 프레임(옵션) - 이전 씬 last frame 이어받기용
+      const endImageRaw = String((body as any)?.endImageDataUrl || (body as any)?.image_tail || "").trim();
+      const endImageField = endImageRaw ? toKlingImageField(endImageRaw) : "";
+
+      // 레퍼런스 이미지(옵션) - 캐릭터 프레임 인 등. 여러 장이면 multi-image2video 사용.
+      const refRaw = (body as any)?.referenceImages || (body as any)?.references || [];
+      const refList: string[] = Array.isArray(refRaw)
+        ? refRaw.map((v: any) => String(v || "")).filter(Boolean)
+        : [];
+
+      const eps = klingEndpoints(env);
+      const useMulti = refList.length > 0;
+      const url = useMulti ? eps.multiImage2video : eps.image2video;
+
+      const reqBody: any = {
+        model_name: klingModel,
+        prompt: safePromptText,
+        negative_prompt: String((body as any)?.negativePrompt || ""),
+        cfg_scale: 0.5,
+        mode: klingMode,
+        aspect_ratio: klingAspect,
+        duration: klingDuration,
+      };
+      if (useMulti) {
+        // multi-image2video 입력 스펙: image_list = [{ image }] (start + references 전부 참조 이미지)
+        reqBody.image_list = [{ image: startImageField }, ...refList.map((r) => ({ image: toKlingImageField(r) }))]
+          .filter((x) => !!x.image);
+      } else {
+        reqBody.image = startImageField;
+        if (endImageField) reqBody.image_tail = endImageField;
+      }
+
+      log('kling_request', {
+        sceneId,
+        model: klingModel,
+        mode: klingMode,
+        useMulti,
+        aspect: klingAspect,
+        duration: klingDuration,
+        hasEndImage: !!endImageField,
+        refCount: refList.length,
+      });
+
+      const klingRes = await callKlingApi(env, url, {
+        method: "POST",
+        body: JSON.stringify(reqBody),
+      });
+      const klingText = await klingRes.text();
+      const klingJson = safeJson(klingText);
+      if (!klingRes.ok) {
+        return json({ error: "kling_http_error", status: klingRes.status, detail: klingJson }, klingRes.status);
+      }
+      const code = Number(klingJson?.code);
+      if (code !== 0) {
+        return json({ error: "kling_api_error", code, detail: klingJson }, 502);
+      }
+      const taskId = String(klingJson?.data?.task_id || klingJson?.task_id || "");
+      if (!taskId) {
+        return json({ error: "kling_no_task_id", raw: klingJson }, 500);
+      }
+      const jobPrefix = useMulti ? "kling-multi:" : "kling:";
+      return json({
+        job_id: `${jobPrefix}${taskId}`,
+        model: klingModel,
+        mode: klingMode,
+        aspectApplied: klingAspect,
+        outputGcsUri, // 완료 시 상태 폴링에서 이 경로로 미러링
+      });
     }
 
     // Grok Imagine branch
@@ -368,6 +463,23 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "Unknown error", stack: e?.stack ?? '' }, 500);
   }
 };
+
+// Kling image 필드 변환: https/gs URL은 그대로 URL 형식 유지, data:URL은 base64 문자열만 추출
+function toKlingImageField(src: string): string {
+  const s = String(src || "").trim();
+  if (!s) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("gs://")) {
+    // Kling은 외부 접근 가능한 URL을 요구 → gs:// 는 공개 https로 변환해 전달
+    const rest = s.slice(5);
+    const slash = rest.indexOf("/");
+    if (slash === -1) return "";
+    return `https://storage.googleapis.com/${rest.slice(0, slash)}/${rest.slice(slash + 1)}`;
+  }
+  if (s.startsWith("data:")) return stripDataUrlPrefix(s);
+  // 접두어 없는 base64 문자열로 간주
+  return s;
+}
 
 function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | null {
   if (!dataUrl || typeof dataUrl !== "string") return null;

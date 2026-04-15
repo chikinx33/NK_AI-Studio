@@ -288,6 +288,28 @@
     return { jobId, outputGcsUri, model, raw: data };
   };
 
+  api.videoLipsyncStart = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    if (!payload.userId) payload.userId = resolveUserId();
+    var res = await fetch(withBase('/api/video/lipsync'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    });
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error((e(text) || 'lipsync_api_error') + '');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    var data = j(text) || {};
+    var jobId = data.jobId || data.job_id || '';
+    if (!jobId) throw new Error('lipsyncStart succeeded but jobId missing');
+    return { jobId, raw: data };
+  };
+
   api.videoStatus = async function (params, opts) {
     var p = params || {};
     var q = new URLSearchParams();

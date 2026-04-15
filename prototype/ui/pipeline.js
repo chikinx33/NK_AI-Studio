@@ -647,6 +647,8 @@
       '<select id="video-model-select" class="video-model-select">' +
       '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo</option>' +
       '<option value="grok"' + (videoModel === 'grok' ? ' selected' : '') + '>Grok Imagine</option>' +
+      '<option value="kling-draft"' + (videoModel === 'kling-draft' ? ' selected' : '') + '>Kling Draft (v1.6)</option>' +
+      '<option value="kling-final"' + (videoModel === 'kling-final' ? ' selected' : '') + '>Kling Final (v2.1 Master · 1080p)</option>' +
       '</select>' +
       '</div>' +
       '<div class="pipeline-fold-center">' +

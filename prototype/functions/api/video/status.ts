@@ -3,6 +3,14 @@
 // Contracts: job_id (legacy) OR jobId accepted. projectId/sceneId optional metadata.
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import {
+  callKlingApi,
+  isKlingDone,
+  isKlingFailed,
+  klingEndpoints,
+  klingTaskStatus,
+  pickKlingVideoUrl,
+} from "../_shared/kling";
 
 (globalThis as any).g = globalThis; // some bundled helpers expect g
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -48,6 +56,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     const isGrok = jobId.startsWith('grok:');
+    const klingKind: 'image2video' | 'multi' | 'lipsync' | '' =
+      jobId.startsWith('kling-lipsync:') ? 'lipsync' :
+      jobId.startsWith('kling-multi:') ? 'multi' :
+      jobId.startsWith('kling:') ? 'image2video' : '';
+    const isKling = !!klingKind;
 
     const flattenPlayback = async (playbackUrl: string, sceneId: string | null) => {
       if (!playbackUrl) return '';
@@ -175,6 +188,50 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         playback: done ? (flattenedPlayback || null) : null,
         playbackUrl: done ? (flattenedPlayback || null) : null,
         status: done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing'
+      }, 200);
+    }
+
+    if (isKling) {
+      const eps = klingEndpoints(env);
+      const taskId = jobId.replace(/^kling-lipsync:/, '').replace(/^kling-multi:/, '').replace(/^kling:/, '');
+      const sub = klingKind === 'lipsync' ? 'lip-sync' : (klingKind === 'multi' ? 'multi-image2video' : 'image2video');
+      const url = `${eps.base}/v1/videos/${sub}/${encodeURIComponent(taskId)}`;
+      const res = await callKlingApi(env, url, { method: 'GET' });
+      const txt = await res.text();
+      const jsonBody = safeJson(txt);
+      if (!res.ok) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: 'kling_http_error', detail: jsonBody }, response: jsonBody, rawOperation: jsonBody, playback: null }, res.status);
+      }
+      const code = Number(jsonBody?.code);
+      if (code !== 0) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code, message: 'kling_api_error', detail: jsonBody }, response: jsonBody, rawOperation: jsonBody, playback: null }, 502);
+      }
+      const status = klingTaskStatus(jsonBody);
+      const failed = isKlingFailed(status);
+      const done = failed || isKlingDone(status);
+      const playback0 = done && !failed ? pickKlingVideoUrl(jsonBody) : '';
+      let flattened = '';
+      if (playback0) {
+        flattened = await flattenPlayback(playback0, sceneIdParam || taskId);
+      }
+      if (failed) {
+        const msg = jsonBody?.data?.task_status_msg || jsonBody?.message || 'kling_failed';
+        return corsJson({ ok: true, job_id: jobId, done: true, error: { code: 'kling_failed', message: msg }, response: jsonBody, rawOperation: jsonBody, playback: null, playbackUrl: null, status: 'error' }, 200);
+      }
+      if (done && playback0 && !flattened) {
+        // 미러링 지연 가능성 → 일시적 processing 으로 응답
+        return corsJson({ ok: true, job_id: jobId, done: false, error: null, response: jsonBody, rawOperation: jsonBody, playback: null, playbackUrl: null, status: 'processing' }, 200);
+      }
+      return corsJson({
+        ok: true,
+        job_id: jobId,
+        done,
+        error: done && !playback0 ? { code: 'done_no_url', message: 'kling done but no video url' } : null,
+        response: jsonBody,
+        rawOperation: jsonBody,
+        playback: done ? (flattened || null) : null,
+        playbackUrl: done ? (flattened || null) : null,
+        status: done ? (flattened ? 'done' : 'done_no_output') : 'processing',
       }, 200);
     }
 
