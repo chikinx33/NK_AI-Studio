@@ -1393,19 +1393,11 @@
         'Do not rotate the whole scene viewpoint or rebuild the entire background perspective.'
       ]
       : [
-        'Reconstruct the entire frame from a new camera viewpoint.',
+        'Reconstruct the entire frame from a new camera viewpoint that matches the absolute camera direction below.',
         'Rotate the whole scene perspective together, including the background, environment, depth, horizon, and subject placement.',
         'Do not keep the background fixed while rotating only a foreground subject.',
         'Update lighting direction and cast shadows to match the new viewpoint.',
         'Preserve the same scene concept and key subjects, but allow perspective and composition to shift to match the new camera angle.'
-      ];
-    var relationLines = mode === 'subject'
-      ? [
-        'Show the subject\'s opposite side relative to the previously visible side (e.g., right side visible) without changing the background perspective.'
-      ]
-      : [
-        'Move the camera to the opposite-side vantage relative to the previously visible side.',
-        'If the subject\'s left side was visible, now render the right side from the camera viewpoint and flip foreground/background ordering accordingly.'
       ];
     var sourceContext = [];
     if (previewTarget && previewTarget.type === 'result' && previewTarget.result) {
@@ -1418,7 +1410,6 @@
     return []
       .concat(modeLead)
       .concat(base ? [base] : [])
-      .concat(relationLines)
       .concat(sourceContext)
       .filter(Boolean)
       .join('\n');
@@ -2768,14 +2759,27 @@
         : (typeof window.mapCameraToPrompt === 'function' ? window.mapCameraToPrompt(appliedCameraControls) : '');
       cameraOnly = fallback || '(camera: cinematic medium shot:1.2)';
     }
-    var cameraPrompt = buildCameraApplyPrompt(cameraOnly, previewTarget, appliedCameraTargetMode);
+    // 카메라 앵글은 매 적용마다 원본 소스 기준으로 산정되도록 primary 소스를 우선 사용.
+    // 소스가 없을 때(text-to-image 등)에만 현재 미리보기 대상을 레퍼런스로 사용.
+    var primarySource = primarySourceImage();
+    var cameraReferenceTarget = previewTarget;
+    if (primarySource && String(primarySource.url || '').trim()) {
+      cameraReferenceTarget = {
+        type: 'source',
+        id: String(primarySource.id || ''),
+        url: String(primarySource.url || '').trim(),
+        name: String(primarySource.name || '').trim(),
+        sourceKind: String(primarySource.kind || 'upload').trim()
+      };
+    }
+    var cameraPrompt = buildCameraApplyPrompt(cameraOnly, cameraReferenceTarget, appliedCameraTargetMode);
     var previewReferenceImages = [];
-    if (previewTarget && previewTarget.url) {
+    if (cameraReferenceTarget && cameraReferenceTarget.url) {
       previewReferenceImages = [{
         referenceId: 1,
-        imageDataUrl: previewTarget.url,
-        subjectDescription: previewTarget.type === 'source'
-          ? (sourceKindLabel(previewTarget.sourceKind) + ' preview reference')
+        imageDataUrl: cameraReferenceTarget.url,
+        subjectDescription: cameraReferenceTarget.type === 'source'
+          ? (sourceKindLabel(cameraReferenceTarget.sourceKind) + ' source reference')
           : 'preview result reference',
         subjectType: 'SUBJECT_TYPE_DEFAULT'
       }];
@@ -2804,12 +2808,14 @@
     setGlobalLoading(true, t('generating'));
     try {
       var response = await NK.api.imagen(payload);
+      // 결과 카드와 향후 카메라 재적용 시 장면 컨셉을 이어가기 위해 요약 라벨을 prompt로 저장.
+      var cameraLabel = cameraSummary(appliedCameraControls, appliedCameraTargetMode);
       var result = {
         id: 'res_' + Date.now(),
         url: String(response && (response.signedUrl || response.dataUrl) || '').trim(),
         objectName: String(response && response.objectName || '').trim(),
         imageSize: String(response && response.imageSizeApplied || state.imageSize || '').trim(),
-        prompt: '',
+        prompt: cameraLabel,
         resolvedPrompt: cameraPrompt,
         mode: effectiveMode,
         generationStyle: normalizeGenerationStyle(state.generationStyle),
@@ -2830,6 +2836,8 @@
       state.cameraControls = createDefaultCameraControls();
       persistHistory();
       updateResultSelectionUI();
+      // 생성 성공 후 카메라 카드(슬라이더·오빗·Apply 버튼)를 리셋된 state와 동기화
+      syncInlineCameraUi();
     } catch (err) {
       if (shouldRetryImagenRequest(err) && tryCount < 1) {
         try {

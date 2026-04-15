@@ -114,7 +114,7 @@ test('ai-image preview can switch between source and history targets and camera 
   assert.match(source, /var previewTarget = currentPreviewTarget\(\);/);
   assert.match(source, /referenceImages: previewReferenceImages/);
   assert.match(source, /cameraTargetMode: appliedCameraTargetMode/);
-  assert.match(source, /buildCameraApplyPrompt\(cameraOnly, previewTarget, appliedCameraTargetMode\)/);
+  assert.match(source, /buildCameraApplyPrompt\(cameraOnly, cameraReferenceTarget, appliedCameraTargetMode\)/);
   assert.match(source, /conversationHistory: previewTarget && previewTarget\.type === 'result' \? buildConversationHistory\(3\) : \[\]/);
   assert.match(source, /state\.previewTargetType = 'result';\s*state\.cameraTargetMode = 'scene';\s*state\.cameraControls = createDefaultCameraControls\(\);/);
   assert.match(source, /function clearAllHistoryResults\(project\)/);
