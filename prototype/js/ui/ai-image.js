@@ -2935,6 +2935,8 @@
           // 카메라 앵글을 바로 사용할 수 있도록 클릭한 소스를 미리보기로 전환
           state.previewTargetType = 'source';
           updateSourceUI();
+          updatePreviewPanelUI();
+          updatePromptPanelUI();
           return;
         }
         if (action === 'load-project-library') {
