@@ -92,21 +92,47 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const klingDuration = snapKlingDuration(durationSeconds);
       const klingAspect = normalizeKlingAspect(aspectRatio);
 
-      // 시작 프레임(필수) - data:URL이면 base64만 추출, https/gs는 그대로 URL 사용
-      const startImageField = toKlingImageField(imageDataUrl);
+      // gs:// URL을 서명된 https로 변환하는 helper (Kling은 public 접근 가능한 URL 필요)
+      const signIfGs = async (src: string): Promise<string> => {
+        const s = String(src || "").trim();
+        if (!s.startsWith("gs://")) return s;
+        const parsed = parseGcsUri(s);
+        if (!parsed) return s;
+        try {
+          return await signGcsUrl({
+            bucket: parsed.bucket,
+            object: parsed.object,
+            clientEmail,
+            privateKeyPem: privateKeyRaw,
+            expiresInSec: 3600,
+          });
+        } catch (_) {
+          return gcsToHttps(s);
+        }
+      };
+
+      // 시작 프레임(필수) - data:URL이면 base64만 추출, gs://는 signed URL 로 변환
+      const startImageResolved = await signIfGs(imageDataUrl);
+      const startImageField = toKlingImageField(startImageResolved);
       if (!startImageField) {
         return json({ error: "imageDataUrl is invalid (kling)" }, 400);
       }
 
       // 끝 프레임(옵션) - 이전 씬 last frame 이어받기용
       const endImageRaw = String((body as any)?.endImageDataUrl || (body as any)?.image_tail || "").trim();
-      const endImageField = endImageRaw ? toKlingImageField(endImageRaw) : "";
+      const endImageResolved = endImageRaw ? await signIfGs(endImageRaw) : "";
+      const endImageField = endImageResolved ? toKlingImageField(endImageResolved) : "";
 
       // 레퍼런스 이미지(옵션) - 캐릭터 프레임 인 등. 여러 장이면 multi-image2video 사용.
       const refRaw = (body as any)?.referenceImages || (body as any)?.references || [];
-      const refList: string[] = Array.isArray(refRaw)
+      const refListRaw: string[] = Array.isArray(refRaw)
         ? refRaw.map((v: any) => String(v || "")).filter(Boolean)
         : [];
+      // gs:// URL은 서명된 https 로 변환해 Kling이 접근할 수 있게 함
+      const refList: string[] = [];
+      for (const raw of refListRaw) {
+        refList.push(await signIfGs(raw));
+      }
 
       const eps = klingEndpoints(env);
       const useMulti = refList.length > 0;

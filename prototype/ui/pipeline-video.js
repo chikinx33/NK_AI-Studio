@@ -73,6 +73,85 @@
     return [];
   }
 
+  // Kling 선택 시: 브랜드 허브 캐릭터 레퍼런스를 자동 수집해 image_list 로 붙인다.
+  // pipeline-image.js 의 _helpers 를 재사용해 동일한 해결 체인을 그대로 따른다.
+  // 반환: [{ imageDataUrl, subjectDescription, token }] 또는 빈 배열
+  async function resolveKlingReferenceImages(scene, statePayload, projectId, finalPrompt) {
+    try {
+      if (!NK.service || !NK.service.characterRegistry) return [];
+      if (!NK.uiPipelineImage || !NK.uiPipelineImage._helpers) return [];
+      var helpers = NK.uiPipelineImage._helpers;
+      var payload = statePayload || {};
+      // 캐릭터 사용 플래그가 꺼져있어도 Kling 에서는 허브에 레퍼런스가 있으면 일관성 유지를 위해 자동 참조.
+      // 단 payload.characters 가 전혀 없으면 탐색 의미 없음.
+      var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
+
+      // 프로젝트 draft / 브랜드 하이드레이트
+      var liveDraft = (NK.service.project && NK.service.project.getDraftById) ? NK.service.project.getDraftById(projectId) : null;
+      var hydratedBrand = null;
+      if (brandId && NK.service.brand && NK.service.brand.hydrateFromServer) {
+        try { hydratedBrand = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 }); } catch (_) {}
+      }
+
+      var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, finalPrompt);
+      var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
+      var characters = res.characters || [];
+      try { console.log('Character parse (video/kling):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, count: characters.length }); } catch (_) {}
+
+      // 1차: 현재 payload + hydrated brand 로 bundle 시도
+      var bundle = helpers.buildReferenceBundle(payload, characters, { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
+
+      // 2차: 원격 프로젝트 폴백
+      if ((!bundle || !bundle.referenceImages || !bundle.referenceImages.length) && projectId && NK.api && NK.api.projectGet) {
+        try {
+          var remoteProjectResp = await NK.api.projectGet(projectId);
+          var remoteDraft = helpers.extractRemoteProjectRecord(projectId, remoteProjectResp);
+          if (remoteDraft && remoteDraft.payload) {
+            var remotePayload = remoteDraft.payload;
+            var remoteBrandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(remotePayload) : (remotePayload.brandId || brandId || '');
+            if (!characters.length) {
+              res = NK.service.characterRegistry.resolveCharactersFromPrompt(remoteBrandId, characterResolutionPrompt, { allowNameFallback: true, payload: remotePayload });
+              characters = res.characters || [];
+            }
+            bundle = helpers.buildReferenceBundle(remotePayload, characters, { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
+            payload = remotePayload;
+            brandId = remoteBrandId;
+          }
+        } catch (_) {}
+      }
+
+      // 3차: 원격 brand 폴백
+      if ((!bundle || !bundle.referenceImages || !bundle.referenceImages.length) && brandId && NK.api && NK.api.brandGet) {
+        try {
+          var remoteBrandResp = await NK.api.brandGet(brandId);
+          var remoteBrand = helpers.extractRemoteBrandRecord(remoteBrandResp);
+          if (remoteBrand) {
+            bundle = helpers.buildReferenceBundle(payload, characters, { projectRecord: liveDraft, hydratedBrand: remoteBrand });
+          }
+        } catch (_) {}
+      }
+
+      // 4차: 브랜드 IP 라이브러리 폴백
+      if ((!bundle || !bundle.referenceImages || !bundle.referenceImages.length) && brandId && NK.api && NK.api.libraryIP) {
+        try {
+          var brandIpListing = await NK.api.libraryIP('', { brandId: brandId });
+          if (helpers.logBrandIpLookupDiagnostics) helpers.logBrandIpLookupDiagnostics(brandIpListing, { brandId: brandId });
+          var ipFallback = helpers.buildIpLibraryFallback(brandIpListing, characters);
+          if (ipFallback && ipFallback.referenceImages && ipFallback.referenceImages.length) {
+            bundle = ipFallback;
+          }
+        } catch (_) {}
+      }
+
+      var refs = (bundle && Array.isArray(bundle.referenceImages)) ? bundle.referenceImages : [];
+      try { console.log('Character references (video/kling):', { sceneId: scene.id, count: refs.length, tokens: characters.map(function (c) { return c && (c.trigger || c.name); }) }); } catch (_) {}
+      return refs;
+    } catch (err) {
+      console.warn('resolveKlingReferenceImages error:', err && err.message ? err.message : err);
+      return [];
+    }
+  }
+
   function buildCharacterResolutionPrompt(scene, prompt) {
     var row = scene && typeof scene === 'object' ? scene : {};
     var parts = [];
@@ -212,14 +291,20 @@
           endImageDataUrl = (prevScene && (prevScene.lastFrameDataUrl || '')) || '';
         } catch (_) { endImageDataUrl = ''; }
       }
-      // 레퍼런스 이미지: 캐릭터 허브에서 해결된 참조 에셋
+      // 레퍼런스 이미지: Kling 선택 시 브랜드 허브 기반 자동 수집
+      // (프레임 인 연출 대응 — 씬 시작 이미지에 없어도 프롬프트에서 캐릭터가 감지되면 참조 주입)
       var referenceImages = [];
-      try {
-        var refIds = (scene && scene.characterReferenceAssetIds) || [];
-        if (Array.isArray(refIds) && refIds.length && NK.service && NK.service.characterRegistry && NK.service.characterRegistry.getReferenceAssetUrls) {
-          referenceImages = NK.service.characterRegistry.getReferenceAssetUrls(refIds) || [];
+      if (isKling) {
+        try {
+          var bundleImages = await resolveKlingReferenceImages(scene, statePayload, projectId, finalPrompt);
+          referenceImages = (bundleImages || [])
+            .map(function (r) { return (r && r.imageDataUrl) ? String(r.imageDataUrl) : ''; })
+            .filter(Boolean);
+        } catch (refErr) {
+          console.warn('kling reference resolve skipped:', refErr && refErr.message);
+          referenceImages = [];
         }
-      } catch (_) { referenceImages = []; }
+      }
 
       var videoPayload = {
         projectId: projectId,

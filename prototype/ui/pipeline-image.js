@@ -713,4 +713,12 @@
 
   image.buildCharacterResolutionPrompt = buildCharacterResolutionPrompt;
   image.buildInlineReferencePrompt = buildInlineReferencePrompt;
+  // 영상 생성(Kling)에서 동일 레퍼런스 해결 체인을 재사용하기 위해 노출
+  image._helpers = {
+    buildReferenceBundle: buildReferenceBundle,
+    buildIpLibraryFallback: buildIpLibraryFallback,
+    extractRemoteProjectRecord: extractRemoteProjectRecord,
+    extractRemoteBrandRecord: extractRemoteBrandRecord,
+    logBrandIpLookupDiagnostics: logBrandIpLookupDiagnostics
+  };
 })();
