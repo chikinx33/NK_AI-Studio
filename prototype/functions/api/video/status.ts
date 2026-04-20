@@ -48,15 +48,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     jobId = (() => { try { return decodeURIComponent(jobIdRaw.trim()); } catch { return jobIdRaw.trim(); } })();
     log('job_id', jobId);
 
-    const projectIdEnv = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
-    if (!projectIdEnv || !clientEmail || !privateKeyRaw) {
-      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, response: null, rawOperation: null, playback: null }, 500);
+    if (!clientEmail || !privateKeyRaw) {
+      return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, response: null, rawOperation: null, playback: null }, 500);
     }
 
     const isGrok = jobId.startsWith('grok:');
     const isSeedance = jobId.startsWith('seedance:');
+    const isVeo = jobId.startsWith('veo:');
     const klingKind: 'image2video' | 'multi' | 'lipsync' | '' =
       jobId.startsWith('kling-lipsync:') ? 'lipsync' :
       jobId.startsWith('kling-multi:') ? 'multi' :
@@ -129,66 +129,46 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     
 
     if (isGrok) {
-      const xaiKey = env.XAI_API_KEY as string | undefined;
-      if (!xaiKey) {
-        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'XAI_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
       }
-      const reqId = jobId.replace(/^grok:/, '');
-      const url = `https://api.x.ai/v1/videos/${reqId}`;
-      const res = await fetch(url, { headers: { Authorization: `Bearer ${xaiKey}` } });
+      const predictionId = jobId.replace(/^grok:/, '');
+      const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
+      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
       const txt = await res.text();
       const json = safeJson(txt);
       if (!res.ok) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: json?.error || txt }, response: json, rawOperation: json, playback: null }, res.status);
       }
-      const status = (json?.status || '').toLowerCase();
-      const playback =
-        json?.video?.url ||
-        json?.data?.[0]?.url ||
+      const status = (json?.data?.status || json?.status || '').toLowerCase();
+      const done = status === 'completed' || status === 'succeeded';
+      const failed = status === 'failed' || status === 'error';
+      const playbackRaw =
+        json?.data?.outputs?.[0] ||
+        json?.data?.output?.[0] ||
+        json?.data?.url ||
+        json?.output?.[0] ||
+        json?.video_url ||
         json?.url ||
         null;
-      const doneByStatus =
-        status === 'completed' ||
-        status === 'done' ||
-        status === 'succeeded' ||
-        status === 'success' ||
-        status === 'ready';
-      const doneByPlaybackHint = !status && !!playback;
-      let done = doneByStatus || doneByPlaybackHint;
-
       let flattenedPlayback = '';
-      if (done && playback) {
-        flattenedPlayback = await flattenPlayback(playback, sceneIdParam || 'grok');
+      if (done && playbackRaw) {
+        flattenedPlayback = await flattenPlayback(playbackRaw, sceneIdParam || 'grok');
       }
-      const flattenFailed = done && !!playback && !flattenedPlayback;
-      if (doneByPlaybackHint && flattenFailed) {
-        // Grok 응답에 status 필드가 없을 때는 URL 준비 지연 가능성이 있어
-        // 즉시 실패 처리하지 않고 processing으로 재시도한다.
-        return corsJson({
-          ok: true,
-          job_id: jobId,
-          done: false,
-          error: null,
-          response: json,
-          rawOperation: json,
-          playback: null,
-          playbackUrl: null,
-          status: 'processing'
-        }, 200);
-      }
-
+      const flattenFailed = done && !!playbackRaw && !flattenedPlayback;
       return corsJson({
         ok: true,
         job_id: jobId,
         done,
-        error: flattenFailed
-          ? { code: 'mirror_failed', message: '외부 영상을 프로젝트 videos 폴더로 복제하지 못했습니다.' }
-          : (done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null),
+        error: failed
+          ? { code: 'generation_failed', message: json?.error || 'Grok generation failed' }
+          : (flattenFailed ? { code: 'mirror_failed', message: '외부 영상을 프로젝트 videos 폴더로 복제하지 못했습니다.' } : null),
         response: json,
         rawOperation: json,
         playback: done ? (flattenedPlayback || null) : null,
         playbackUrl: done ? (flattenedPlayback || null) : null,
-        status: done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing'
+        status: failed ? 'error' : (done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing')
       }, 200);
     }
 
@@ -276,6 +256,51 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return corsJson({
         ok: true, job_id: jobId, done,
         error: done && !playbackRaw ? { code: 'done_no_url', message: 'kling done but no video url' } : null,
+        response: jsonBody, rawOperation: jsonBody,
+        playback: done ? (flattened || null) : null,
+        playbackUrl: done ? (flattened || null) : null,
+        status: done ? (flattened ? 'done' : 'done_no_output') : 'processing',
+      }, 200);
+    }
+
+    if (isVeo) {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
+      }
+      const predictionId = jobId.replace(/^veo:/, '');
+      const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
+      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
+      const txt = await res.text();
+      const jsonBody = safeJson(txt);
+      if (!res.ok) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: jsonBody?.error || txt }, response: jsonBody, rawOperation: jsonBody, playback: null }, res.status);
+      }
+      const status = (jsonBody?.data?.status || jsonBody?.status || '').toLowerCase();
+      const done = status === 'completed' || status === 'succeeded';
+      const failed = status === 'failed' || status === 'error';
+      const playbackRaw =
+        jsonBody?.data?.outputs?.[0] ||
+        jsonBody?.data?.output?.[0] ||
+        jsonBody?.data?.url ||
+        jsonBody?.output?.[0] ||
+        jsonBody?.url ||
+        null;
+      let flattened = '';
+      if (done && playbackRaw) {
+        flattened = await flattenPlayback(playbackRaw, sceneIdParam || predictionId);
+      }
+      const flattenFailed = done && !!playbackRaw && !flattened;
+      if (failed) {
+        const msg = jsonBody?.data?.error || jsonBody?.error || 'veo_failed';
+        return corsJson({ ok: true, job_id: jobId, done: true, error: { code: 'veo_failed', message: msg }, response: jsonBody, rawOperation: jsonBody, playback: null, playbackUrl: null, status: 'error' }, 200);
+      }
+      if (flattenFailed) {
+        return corsJson({ ok: true, job_id: jobId, done: false, error: null, response: jsonBody, rawOperation: jsonBody, playback: null, playbackUrl: null, status: 'processing' }, 200);
+      }
+      return corsJson({
+        ok: true, job_id: jobId, done,
+        error: done && !playbackRaw ? { code: 'done_no_url', message: 'veo done but no video url' } : null,
         response: jsonBody, rawOperation: jsonBody,
         playback: done ? (flattened || null) : null,
         playbackUrl: done ? (flattened || null) : null,

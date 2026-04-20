@@ -51,22 +51,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "promptText and imageDataUrl are required" }, 400);
     }
 
-    const projectId = env.GOOGLE_PROJECT_ID as string | undefined;
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
-    const modelId = videoModel === "veo"
-      ? ((env.VIDEO_MODEL_ID as string | undefined) || "veo-3.1-fast-generate-001")
-      : ((env.GROK_MODEL_ID as string | undefined) || "grok-imagine-video");
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
 
-    if (!projectId || !clientEmail || !privateKeyRaw) {
-      return json({ error: "Missing GOOGLE_PROJECT_ID / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
+    if (!clientEmail || !privateKeyRaw) {
+      return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
     }
     if (!baseOutput) {
       return json({ error: "Missing VIDEO_OUTPUT_GCS_URI" }, 500);
     }
 
-    const location = "us-central1";
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) {
       return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI (expect gs://bucket/prefix)" }, 500);
@@ -79,6 +74,32 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const stamp = Date.now();
     const videoObject = `${projectPrefix}/videos/${stamp}-${sceneId}.mp4`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoObject}`;
+
+    // Shared Atlas Cloud helper: converts data:URL / gs:// → signed https URL
+    const signIfGs = async (src: string): Promise<string> => {
+      const s = String(src || "").trim();
+      if (!s.startsWith("gs://")) return s;
+      const parsed = parseGcsUri(s);
+      if (!parsed) return s;
+      try {
+        return await signGcsUrl({ bucket: parsed.bucket, object: parsed.object, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 });
+      } catch (_) { return gcsToHttps(s); }
+    };
+    const toAtlasImageUrl = async (src: string, suffix: string): Promise<string> => {
+      if (!src) return "";
+      if (src.startsWith("data:")) {
+        const outParsedImg = parseGcsUri(baseOutput!);
+        if (!outParsedImg) throw new Error("Invalid VIDEO_OUTPUT_GCS_URI");
+        const accessTok = await getGoogleAccessToken({ clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, scope: "https://www.googleapis.com/auth/cloud-platform" });
+        const objName = `${projectPrefix}/atlas/${stamp}-${suffix}.png`;
+        const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedImg.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
+        const b64 = src.split(",")[1] || "";
+        const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": "image/png" }, body: base64ToUint8(b64) });
+        if (!upRes.ok) throw new Error(`upload_failed: ${await upRes.text()}`);
+        return await signGcsUrl({ bucket: outParsedImg.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedImg.bucket}/${objName}`));
+      }
+      return await signIfGs(src);
+    };
 
     const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
     if (videoModel !== "veo" && videoModel !== "grok" && videoModel !== "seedance" && !isKling) {
@@ -94,37 +115,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         (body as any)?.quality === "final" || videoModel === "kling-final" ? "final" : "draft";
       const klingDuration = snapKlingDuration(durationSeconds);
       const klingAspect = normalizeKlingAspect(aspectRatio);
-
-      // gs:// URL → 서명된 https로 변환 (Atlas Cloud는 public URL 필요)
-      const signIfGs = async (src: string): Promise<string> => {
-        const s = String(src || "").trim();
-        if (!s.startsWith("gs://")) return s;
-        const parsed = parseGcsUri(s);
-        if (!parsed) return s;
-        try {
-          return await signGcsUrl({
-            bucket: parsed.bucket, object: parsed.object,
-            clientEmail, privateKeyPem: privateKeyRaw, expiresInSec: 3600,
-          });
-        } catch (_) { return gcsToHttps(s); }
-      };
-
-      // data:URL이면 GCS 업로드 후 서명 URL 획득 (Atlas Cloud는 공개 URL 필요)
-      const toAtlasImageUrl = async (src: string, suffix: string): Promise<string> => {
-        if (!src) return "";
-        if (src.startsWith("data:")) {
-          const outParsedImg = parseGcsUri(baseOutput!);
-          if (!outParsedImg) throw new Error("Invalid VIDEO_OUTPUT_GCS_URI");
-          const accessTok = await getGoogleAccessToken({ clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, scope: "https://www.googleapis.com/auth/cloud-platform" });
-          const objName = `${projectPrefix}/kling/${stamp}-${suffix}.png`;
-          const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedImg.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
-          const b64 = src.split(",")[1] || "";
-          const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": "image/png" }, body: base64ToUint8(b64) });
-          if (!upRes.ok) throw new Error(`upload_failed: ${await upRes.text()}`);
-          return await signGcsUrl({ bucket: outParsedImg.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedImg.bucket}/${objName}`));
-        }
-        return await signIfGs(src);
-      };
 
       const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
       if (!startImageResolved) return json({ error: "imageDataUrl is empty or upload failed" }, 400);
@@ -179,167 +169,33 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ job_id: `${jobPrefix}${predictionId}`, model: atlasKlingModel, aspectApplied: klingAspect, outputGcsUri });
     }
 
-    // Grok Imagine branch
+    // Grok branch (via Atlas Cloud AI)
     if (videoModel === "grok") {
-      const xaiKey = env.XAI_API_KEY as string | undefined;
-      if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
-
-      // image_url: grok은 공개 URL을 요구할 수 있으므로 data:인 경우 업로드 후 URL 확보 시도
-      let imageUrl = "";
-      if (imageDataUrl) {
-        if (/^https?:/i.test(imageDataUrl) || imageDataUrl.startsWith("gs://")) {
-          imageUrl = imageDataUrl.startsWith("gs://") ? gcsToHttps(imageDataUrl) : imageDataUrl;
-        } else if (imageDataUrl.startsWith("data:")) {
-          try {
-            if (!baseOutput) return json({ error: "Image is data URL; set VIDEO_OUTPUT_GCS_URI to upload it" }, 400);
-            const outParsed = parseGcsUri(baseOutput);
-            if (!outParsed) return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
-            const accessTokenUpload = await getGoogleAccessToken({
-              clientEmail,
-              privateKeyPem: privateKeyRaw,
-              scope: "https://www.googleapis.com/auth/cloud-platform",
-            });
-            const basePrefix = outParsed.object.replace(/\/$/, "");
-            const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
-            const stamp = Date.now();
-            const objectName = `${projectPrefix}/grok/${stamp}-${sceneId}.png`;
-            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-            const b64 = imageDataUrl.split(",")[1] || "";
-            const buf = base64ToUint8(b64);
-            const upRes = await fetch(uploadUrl, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "image/png" },
-              body: buf
-            });
-            const upTxt = await upRes.text();
-            if (!upRes.ok) {
-              return json({ error: "upload_failed", detail: upTxt }, 500);
-            }
-            const signed = await signGcsUrl({
-              bucket: outParsed.bucket,
-              object: objectName,
-              clientEmail,
-              privateKeyPem: privateKeyRaw,
-              expiresInSec: 3600,
-            }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
-            imageUrl = signed;
-          } catch (err: any) {
-            return json({ error: "image_upload_error", detail: err?.message || err }, 500);
-          }
-        }
-      }
-
-      const grokUrl = "https://api.x.ai/v1/videos/generations";
-      const grokBody: any = {
-        model: modelId || "grok-imagine-video",
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const grokAtlasModel = (env.GROK_ATLAS_MODEL_ID as string | undefined) || "x-ai/aurora";
+      const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
+      const atlasBody: any = {
+        model: grokAtlasModel,
         prompt: safePromptText,
         duration: snapDuration,
         aspect_ratio: aspectFinal,
-        // 해상도 설정 (API 스펙: 480p 또는 720p)
-        resolution: "720p",
       };
-      if (imageUrl) {
-        // API 에러(expected struct ImageUrl)에 따라 객체 형태로 변경
-        const imgObj = { url: imageUrl };
-        grokBody.image_url = imgObj;
-        grokBody.image = imgObj;
-        // 문자열 필드는 에러 유발 가능성 있으므로 제거
-        // 프롬프트 보강 유지
-        grokBody.prompt = "Animate this image. " + safePromptText;
-      }
-
-      const grokRes = await fetch(grokUrl, {
+      if (startImageResolved) atlasBody.image = startImageResolved;
+      log('grok_atlas_request', { sceneId, model: grokAtlasModel, aspect: aspectFinal, duration: snapDuration });
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${xaiKey}`,
-        },
-        body: JSON.stringify(grokBody),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
       });
-      const grokText = await grokRes.text();
-      if (!grokRes.ok) {
-        return json({ error: "grok_error", status: grokRes.status, detail: safeJson(grokText) }, grokRes.status);
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) {
+        return json({ error: "grok_http_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
       }
-      const grokJson = safeJson(grokText);
-      const reqId =
-        grokJson?.request_id ||
-        grokJson?.id ||
-        grokJson?.data?.[0]?.id ||
-        "";
-      const playback =
-        grokJson?.data?.[0]?.url ||
-        grokJson?.output_url ||
-        grokJson?.url ||
-        grokJson?.video_url ||
-        null;
-      let mirroredPlayback: string | null = null;
-
-      // Grok 영상이 생성되었다면 GCS 버킷에도 미러링 업로드 (사용자 요청 사항)
-      if (playback && playback.startsWith("gs://")) {
-        try {
-          const parsed = parseGcsUri(playback);
-          if (parsed) {
-            mirroredPlayback = await signGcsUrl({
-              bucket: parsed.bucket,
-              object: parsed.object,
-              clientEmail,
-              privateKeyPem: privateKeyRaw,
-              expiresInSec: 3600,
-            });
-          }
-        } catch (_) {
-          mirroredPlayback = gcsToHttps(playback);
-        }
-      } else if (playback && playback.startsWith("http")) {
-        try {
-          const outParsed = parseGcsUri(outputGcsUri); // outputGcsUri는 함수 상단에서 이미 정의됨
-          if (outParsed) {
-            log('mirroring_grok_video_start', playback, 'to', outputGcsUri);
-            const vidRes = await fetch(playback);
-            if (vidRes.ok) {
-              const vidBuf = await vidRes.arrayBuffer();
-              const accessToken = await getGoogleAccessToken({
-                clientEmail,
-                privateKeyPem: privateKeyRaw,
-                scope: "https://www.googleapis.com/auth/cloud-platform",
-              });
-              const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(outParsed.object)}`;
-              const upRes = await fetch(uploadUrl, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "video/mp4" },
-                body: vidBuf
-              });
-              if (!upRes.ok) {
-                log('mirroring_grok_video_fail_upload', upRes.status, await upRes.text());
-              } else {
-                log('mirroring_grok_video_success');
-                try {
-                  mirroredPlayback = await signGcsUrl({
-                    bucket: outParsed.bucket,
-                    object: outParsed.object,
-                    clientEmail,
-                    privateKeyPem: privateKeyRaw,
-                    expiresInSec: 3600,
-                  });
-                } catch (_) {
-                  mirroredPlayback = gcsToHttps(outputGcsUri);
-                }
-              }
-            } else {
-              log('mirroring_grok_video_fail_download', vidRes.status);
-            }
-          }
-        } catch (err: any) {
-          log('mirroring_grok_video_error', err?.message);
-        }
-      }
-
-      // 응답에 즉시 url이 없으면 폴링용 job_id만 반환
-      return json({
-        job_id: reqId ? `grok:${reqId}` : "",
-        playbackUrl: mirroredPlayback,
-        status: mirroredPlayback ? "done" : "processing"
-      }, mirroredPlayback ? 200 : 202);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.id || atlasJson?.prediction_id || "";
+      if (!predictionId) return json({ error: "grok_no_prediction_id", raw: atlasJson }, 500);
+      return json({ job_id: `grok:${predictionId}`, model: grokAtlasModel, aspectApplied: aspectFinal, outputGcsUri });
     }
 
     // Seedance branch (Atlas Cloud AI)
@@ -422,133 +278,36 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }, 202);
     }
 
-    // Veo branch
-    const accessToken = await getGoogleAccessToken({
-      clientEmail,
-      privateKeyPem: privateKeyRaw,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-    });
-
-    // 디버그: 최종 요청 요약 로그 (이미지 데이터는 길이만 기록)
-    log('video_request', {
-      sceneId,
-      projTag: projectTag,
-      topic: body?.topic,
-      target: body?.target,
-      tone: body?.tone || body?.tones,
-      style: body?.style || body?.styles,
-      aspectRatio: aspectFinal,
-      durationSeconds,
-      promptText,
-      safePromptText,
-      outputGcsUri,
-      imageDataUrl_len: (imageDataUrl || '').length
-    });
-
-    // imageDataUrl 처리: data:URL이면 그대로, gs:// 또는 https:// 이면 다운로드 후 base64 변환
-    let parsedImage = parseDataUrl(imageDataUrl);
-    if (!parsedImage) {
-      try {
-        const resolvedUrl = imageDataUrl.startsWith("gs://")
-          ? gcsToHttps(imageDataUrl)
-          : imageDataUrl;
-        if (!resolvedUrl) {
-          return json({ error: "imageDataUrl is invalid or missing base64 payload" }, 400);
-        }
-        const headers: Record<string, string> = {};
-        if (imageDataUrl.startsWith("gs://") || resolvedUrl.includes("storage.googleapis.com")) {
-          headers["Authorization"] = `Bearer ${accessToken}`;
-        }
-        const imgRes = await fetch(resolvedUrl, { headers });
-        if (!imgRes.ok) {
-          const t = await imgRes.text().catch(() => "");
-          return json({ error: "imageDataUrl fetch failed", status: imgRes.status, detail: t }, 400);
-        }
-        const buf = await imgRes.arrayBuffer();
-        const mime = imgRes.headers.get("content-type") || "image/png";
-        parsedImage = { base64: arrayBufferToBase64(buf), mimeType: mime };
-      } catch (err: any) {
-        return json({ error: "imageDataUrl is invalid or fetch failed", detail: err?.message || err }, 400);
-      }
-    }
-
-    // Veo는 Long Running Predict API를 사용해야 함
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${modelId}:predictLongRunning`;
-    log('request', { sceneId, modelId, durationSeconds: snapDuration, aspectRatio: aspectFinal, outputGcsUri: outputGcsUri.slice(0, 80) + '...' });
-
-    const vertexRes = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        instances: [
-          {
-            prompt: safePromptText,
-            image: {
-              bytesBase64Encoded: parsedImage.base64,
-              mimeType: parsedImage.mimeType || "image/png",
-            },
-          },
-        ],
-        parameters: {
-          durationSeconds: snapDuration,
-          aspectRatio: aspectFinal,
-          storageUri: outputGcsUri, // 저장 위치
-        },
-      }),
-    });
-
-    const text = await vertexRes.text();
-    if (!vertexRes.ok) {
-      const detail = safeJson(text);
-      log('vertex_error', { status: vertexRes.status, detail });
-      return json(
-        { error: "Vertex AI Veo error", status: vertexRes.status, detail },
-        500
-      );
-    }
-
-    // Ensure project marker object exists for folder visualization
-    try {
-      const markerName = `${projectPrefix}/.keep`;
-      const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(markerName)}`;
-      const accessTokenMarker = await getGoogleAccessToken({
-        clientEmail,
-        privateKeyPem: privateKeyRaw,
-        scope: "https://www.googleapis.com/auth/cloud-platform",
-      });
-      await fetch(uploadUrl, {
+    // Veo branch (via Atlas Cloud AI)
+    {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const veoAtlasModel = (env.VEO_ATLAS_MODEL_ID as string | undefined) || "google/veo-2";
+      const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
+      if (!startImageResolved) return json({ error: "imageDataUrl is empty or upload failed" }, 400);
+      const atlasBody: any = {
+        model: veoAtlasModel,
+        prompt: safePromptText,
+        duration: snapDuration,
+        aspect_ratio: aspectFinal,
+        image: startImageResolved,
+      };
+      log('veo_atlas_request', { sceneId, model: veoAtlasModel, aspect: aspectFinal, duration: snapDuration });
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
         method: "POST",
-        headers: { Authorization: `Bearer ${accessTokenMarker}`, "Content-Type": "text/plain" },
-        body: "1"
-      }).catch(() => { });
-    } catch (_) { }
-
-    const resJson = safeJson(text);
-    const operationName =
-      (resJson && resJson.name) ||
-      resJson?.operation?.name ||
-      "";
-
-    if (!operationName) {
-      log('no_operation_name', resJson);
-      return json({ error: "No operation name returned", raw: resJson }, 500);
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) {
+        return json({ error: "veo_http_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      }
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.id || atlasJson?.prediction_id || "";
+      if (!predictionId) return json({ error: "veo_no_prediction_id", raw: atlasJson }, 500);
+      log('veo_ok', { predictionId });
+      return json({ job_id: `veo:${predictionId}`, model: veoAtlasModel, aspectApplied: aspectFinal, outputGcsUri });
     }
-    const valid = /^projects\/[^/]+\/locations\/[^/]+\/.*?operations\/[^/]+$/.test(operationName);
-    if (!valid) {
-      log('invalid_operation_name', operationName);
-      return json({ error: "Invalid operation name format", raw: resJson }, 500);
-    }
-
-    log('ok', { job_id: operationName });
-    return json({
-      job_id: operationName,
-      outputGcsUri,
-      model: modelId,
-      aspectApplied: aspectFinal,
-    });
   } catch (e: any) {
     log('catch', e?.message, e?.stack);
     return json({ error: e?.message ?? "Unknown error", stack: e?.stack ?? '' }, 500);
