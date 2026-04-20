@@ -799,9 +799,30 @@
     var currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
     var characterSheetDraft = normalizeCharacterSheets(knowledge.characterSheets, currentCharacters);
     var modalCharacterSheetDraft = null;
+    var modalBrandCharsDraft = null;
     var modalSaveInFlight = false;
     var modalPreviewImageUrl = '';
     var modalPreviewImageAlt = '';
+
+    function normSplit(val) {
+      return String(val || '').split(/[,\n]/).map(function (t) { return t.trim(); }).filter(Boolean);
+    }
+    function getBrandCharForToken(token) {
+      var t = String(token || '').trim().toLowerCase();
+      if (!Array.isArray(modalBrandCharsDraft)) return null;
+      return modalBrandCharsDraft.find(function (c) { return String(c.trigger || '').toLowerCase() === t; }) || null;
+    }
+    function syncBrandCharField(token, field, value) {
+      var t = String(token || '').trim().toLowerCase();
+      if (!Array.isArray(modalBrandCharsDraft)) modalBrandCharsDraft = [];
+      var idx = modalBrandCharsDraft.findIndex(function (c) { return String(c.trigger || '').toLowerCase() === t; });
+      if (idx < 0) {
+        modalBrandCharsDraft.push({ id: 'char_' + Date.now(), trigger: token, name: token.replace(/^@/, '') });
+        idx = modalBrandCharsDraft.length - 1;
+      }
+      modalBrandCharsDraft[idx] = Object.assign({}, modalBrandCharsDraft[idx]);
+      modalBrandCharsDraft[idx][field] = value;
+    }
 
     function cloneCharacterSheetDraft(value) {
       try {
@@ -879,6 +900,7 @@
       if (modal) modal.classList.add('hidden');
       if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
       modalCharacterSheetDraft = null;
+      modalBrandCharsDraft = null;
       modalSaveInFlight = false;
       modalPreviewImageUrl = '';
       modalPreviewImageAlt = '';
@@ -949,6 +971,7 @@
               '</article>'
             );
           }
+          var bChar = getBrandCharForToken(entry.token);
           return (
             '<section class="character-manager-card" data-character-token="' + escapeHtml(entry.token) + '">' +
             '<div class="character-manager-card-row">' +
@@ -962,6 +985,16 @@
             '</div>' +
             '<div class="character-sheet-slot-grid">' + slotCards.join('') + '</div>' +
             '</div>' +
+            '<details class="character-props-disclosure">' +
+            '<summary>텍스트 속성 편집</summary>' +
+            '<div class="character-props-form">' +
+            '<label class="character-props-label">캐릭터 설명<textarea class="character-props-textarea" data-char-prop="description" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="외모, 성격, 특징 등을 설명합니다.">' + escapeHtml((bChar && bChar.description) || '') + '</textarea></label>' +
+            '<label class="character-props-label">고정 특성 <span class="character-props-hint">(쉼표 구분)</span><input type="text" class="character-props-input" data-char-prop="fixedTraits" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && Array.isArray(bChar.fixedTraits) ? bChar.fixedTraits.join(', ') : bChar && bChar.fixedTraits || '') || '') + '" placeholder="예: 파란 눈, 빨간 머리" /></label>' +
+            '<label class="character-props-label">금지 특성 <span class="character-props-hint">(프롬프트 텍스트에 포함)</span><input type="text" class="character-props-input" data-char-prop="bannedTraits" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && Array.isArray(bChar.bannedTraits) ? bChar.bannedTraits.join(', ') : bChar && bChar.bannedTraits || '') || '') + '" placeholder="예: 손가락 없음, 안경 없음" /></label>' +
+            '<label class="character-props-label">네거티브 프롬프트 <span class="character-props-hint">(이미지·영상 생성 시 자동 적용)</span><textarea class="character-props-textarea" data-char-prop="negativePrompt" data-character-token="' + escapeHtml(entry.token) + '" rows="2" placeholder="예: fingers, hands, extra limbs">' + escapeHtml((bChar && bChar.negativePrompt) || '') + '</textarea></label>' +
+            '<label class="character-props-label">스타일 가이드<input type="text" class="character-props-input" data-char-prop="styleGuide" data-character-token="' + escapeHtml(entry.token) + '" value="' + escapeHtml((bChar && bChar.styleGuide) || '') + '" placeholder="예: 2D 애니메이션, 파스텔 색감" /></label>' +
+            '</div>' +
+            '</details>' +
             '</section>'
           );
         }).join('')
@@ -989,6 +1022,20 @@
         '<div class="character-manager-grid">' + cardsHtml + '</div>' +
         '</div>' +
         previewHtml;
+
+      box.oninput = function (evt) {
+        var el = evt.target;
+        if (!el || !el.dataset || !el.dataset.charProp) return;
+        var token = String(el.dataset.characterToken || '').trim();
+        var prop = String(el.dataset.charProp || '').trim();
+        if (!token || !prop) return;
+        var val = String(el.value || '').trim();
+        if (prop === 'fixedTraits' || prop === 'bannedTraits') {
+          syncBrandCharField(token, prop, normSplit(val));
+        } else {
+          syncBrandCharField(token, prop, val);
+        }
+      };
 
       box.onclick = function (evt) {
         var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
@@ -1059,7 +1106,20 @@
           modalSaveInFlight = true;
           if (NK.core && NK.core.setLoading) NK.core.setLoading(true, ipLibraryUiText.saveLoading);
           renderCharacterManagerModal();
-          syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft))
+          var brandCharsPatch = Array.isArray(modalBrandCharsDraft) ? modalBrandCharsDraft.map(function (c) {
+            return Object.assign({}, c, { updatedAt: new Date().toISOString() });
+          }) : null;
+          Promise.resolve()
+            .then(function () {
+              if (brandCharsPatch && brandId && NK.service && NK.service.brand) {
+                var saveFn = NK.service.brand.persistShared || function (bId, patch) { if (NK.service.brand.update) NK.service.brand.update(bId, patch); return Promise.resolve(null); };
+                return Promise.resolve(saveFn(brandId, { brandCharacters: brandCharsPatch }));
+              }
+              return null;
+            })
+            .then(function () {
+              return syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft));
+            })
             .then(function (result) {
               characterSheetDraft = cloneCharacterSheetDraft(modalCharacterSheetDraft);
               knowledge.characterSheets = cloneCharacterSheetDraft(characterSheetDraft);
@@ -1148,6 +1208,9 @@
       if (action === 'knowledge-open-library') target = buildStageUrl('library.html', projectId, brandId);
       else if (action === 'knowledge-open-brand') target = buildStageUrl('brand.html', projectId, brandId);
       else if (action === 'knowledge-open-ip-library') {
+        if (!modalBrandCharsDraft) {
+          modalBrandCharsDraft = JSON.parse(JSON.stringify(Array.isArray(characters) ? characters : []));
+        }
         renderCharacterManagerModal();
         return;
       }
