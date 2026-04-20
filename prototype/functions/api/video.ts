@@ -294,6 +294,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         prompt: safePromptText,
         duration: snapDuration,
         aspect_ratio: aspectFinal,
+        resolution: "1080p",
         image: startImageResolved,
       };
       log('veo_atlas_request', { sceneId, model: veoAtlasModel, aspect: aspectFinal, duration: snapDuration });
