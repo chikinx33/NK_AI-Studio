@@ -79,7 +79,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outputGcsUri = `gs://${outParsed.bucket}/${videoObject}`;
 
     const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
-    if (videoModel !== "veo" && videoModel !== "grok" && !isKling) {
+    if (videoModel !== "veo" && videoModel !== "grok" && videoModel !== "seedance" && !isKling) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
 
@@ -355,6 +355,85 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         playbackUrl: mirroredPlayback,
         status: mirroredPlayback ? "done" : "processing"
       }, mirroredPlayback ? 200 : 202);
+    }
+
+    // Seedance branch (Atlas Cloud AI)
+    if (videoModel === "seedance") {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+
+      let imageUrl = "";
+      if (imageDataUrl) {
+        if (/^https?:/i.test(imageDataUrl)) {
+          imageUrl = imageDataUrl;
+        } else if (imageDataUrl.startsWith("gs://")) {
+          imageUrl = gcsToHttps(imageDataUrl);
+        } else if (imageDataUrl.startsWith("data:")) {
+          try {
+            const outParsedImg = parseGcsUri(baseOutput!);
+            if (!outParsedImg) return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
+            const accessTokenUpload = await getGoogleAccessToken({
+              clientEmail: clientEmail!,
+              privateKeyPem: privateKeyRaw!,
+              scope: "https://www.googleapis.com/auth/cloud-platform",
+            });
+            const imgObjectName = `${projectPrefix}/seedance/${stamp}-${sceneId}.png`;
+            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedImg.bucket)}/o?uploadType=media&name=${encodeURIComponent(imgObjectName)}`;
+            const b64 = imageDataUrl.split(",")[1] || "";
+            const buf = base64ToUint8(b64);
+            const upRes = await fetch(uploadUrl, {
+              method: "POST",
+              headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "image/png" },
+              body: buf
+            });
+            const upTxt = await upRes.text();
+            if (!upRes.ok) return json({ error: "upload_failed", detail: upTxt }, 500);
+            imageUrl = await signGcsUrl({
+              bucket: outParsedImg.bucket,
+              object: imgObjectName,
+              clientEmail: clientEmail!,
+              privateKeyPem: privateKeyRaw!,
+              expiresInSec: 3600,
+            }).catch(() => gcsToHttps(`gs://${outParsedImg.bucket}/${imgObjectName}`));
+          } catch (err: any) {
+            return json({ error: "image_upload_error", detail: err?.message || err }, 500);
+          }
+        }
+      }
+
+      const seedanceBody: any = {
+        model: "bytedance/seedance-2.0/image-to-video",
+        prompt: safePromptText,
+        duration: snapDuration,
+        resolution: "720p",
+        ratio: aspectFinal,
+      };
+      if (imageUrl) seedanceBody.image = imageUrl;
+
+      const seedanceRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${atlasKey}`,
+        },
+        body: JSON.stringify(seedanceBody),
+      });
+      const seedanceText = await seedanceRes.text();
+      if (!seedanceRes.ok) {
+        return json({ error: "seedance_error", status: seedanceRes.status, detail: safeJson(seedanceText) }, seedanceRes.status);
+      }
+      const seedanceJson = safeJson(seedanceText);
+      const predictionId =
+        seedanceJson?.prediction_id ||
+        seedanceJson?.id ||
+        seedanceJson?.data?.prediction_id ||
+        "";
+
+      log('seedance_ok', { predictionId });
+      return json({
+        job_id: predictionId ? `seedance:${predictionId}` : "",
+        status: "processing"
+      }, 202);
     }
 
     // Veo branch

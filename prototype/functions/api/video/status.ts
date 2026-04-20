@@ -56,6 +56,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     const isGrok = jobId.startsWith('grok:');
+    const isSeedance = jobId.startsWith('seedance:');
     const klingKind: 'image2video' | 'multi' | 'lipsync' | '' =
       jobId.startsWith('kling-lipsync:') ? 'lipsync' :
       jobId.startsWith('kling-multi:') ? 'multi' :
@@ -188,6 +189,51 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         playback: done ? (flattenedPlayback || null) : null,
         playbackUrl: done ? (flattenedPlayback || null) : null,
         status: done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing'
+      }, 200);
+    }
+
+    if (isSeedance) {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
+      }
+      const predictionId = jobId.replace(/^seedance:/, '');
+      const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
+      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
+      const txt = await res.text();
+      const json = safeJson(txt);
+      if (!res.ok) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: json?.error || txt }, response: json, rawOperation: json, playback: null }, res.status);
+      }
+      const status = (json?.status || '').toLowerCase();
+      const done = status === 'completed' || status === 'succeeded';
+      const failed = status === 'failed' || status === 'error';
+      const playbackRaw =
+        json?.output?.[0] ||
+        json?.output ||
+        json?.video_url ||
+        json?.url ||
+        json?.data?.url ||
+        null;
+
+      let flattenedPlayback = '';
+      if (done && playbackRaw) {
+        flattenedPlayback = await flattenPlayback(playbackRaw, sceneIdParam || 'seedance');
+      }
+      const flattenFailed = done && !!playbackRaw && !flattenedPlayback;
+
+      return corsJson({
+        ok: true,
+        job_id: jobId,
+        done,
+        error: failed
+          ? { code: 'generation_failed', message: json?.error || 'Seedance generation failed' }
+          : (flattenFailed ? { code: 'mirror_failed', message: '외부 영상을 프로젝트 videos 폴더로 복제하지 못했습니다.' } : null),
+        response: json,
+        rawOperation: json,
+        playback: done ? (flattenedPlayback || null) : null,
+        playbackUrl: done ? (flattenedPlayback || null) : null,
+        status: failed ? 'error' : (done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing')
       }, 200);
     }
 
