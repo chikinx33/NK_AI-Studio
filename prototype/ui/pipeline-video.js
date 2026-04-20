@@ -215,14 +215,14 @@
         var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload0) : (payload0.brandId || '');
         var characterResolutionPrompt0 = buildCharacterResolutionPrompt(scene, rawPromptForLog);
         var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, characterResolutionPrompt0, { allowNameFallback: true, payload: payload0 });
-        try { console.log('Character parse (video):', { triggers: res0.triggers || [], missing: res0.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt0 }); } catch (_) {}
+        try { console.debug('Character parse (video):', { triggers: res0.triggers || [], missing: res0.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt0 }); } catch (_) {}
         var built0 = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawPromptForLog,
           characters: res0.characters || [],
           brandRules: Array.isArray(payload0.brandRules) ? payload0.brandRules : [],
           bannedExpressions: Array.isArray(payload0.bannedExpressions) ? payload0.bannedExpressions : []
         });
-        try { console.log('Resolved prompt (video):', { sceneId: scene.id, resolvedPrompt: built0.resolvedPrompt }); } catch (_) {}
+        try { console.debug('Resolved prompt (video):', { sceneId: scene.id, resolvedPrompt: built0.resolvedPrompt }); } catch (_) {}
         finalPrompt = built0.resolvedPrompt || finalPrompt;
         var refs0 = NK.service.characterRegistry.collectCharacterReferenceAssets(res0.characters || []);
         st.scenes[opts.idx] = Object.assign({}, scene, {
@@ -326,7 +326,7 @@
         endImageDataUrl: endImageDataUrl || undefined,
         referenceImages: (referenceImages && referenceImages.length) ? referenceImages : undefined
       };
-      console.log('videoStart payload', {
+      console.debug('videoStart payload', {
         projectId: projectId,
         sceneId: scene.id,
         aspectRatio: videoPayload.aspectRatio,
@@ -359,7 +359,7 @@
         }
       }
 
-      console.log('videoStart ok', { jobId: jobId, playback: playback, resp: resp });
+      console.debug('videoStart ok', { jobId: jobId, playback: playback, resp: resp });
       st = ctx.getState() || st;
       st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], {
         videoUrl: playback,
@@ -452,10 +452,11 @@
         } catch (aspectErr) {
           console.warn('video aspect normalize skipped (poll):', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
         }
-        // 다음 씬의 끝 프레임(image_tail) 으로 연결하기 위해 마지막 프레임 추출 (best-effort)
+        // Kling 전용: 다음 씬의 image_tail 연결을 위해 마지막 프레임 추출
         var lastFrameDataUrl = '';
+        var isKlingModel = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
         try {
-          if (NK.util && NK.util.extractLastFrame) {
+          if (isKlingModel && NK.util && NK.util.extractLastFrame) {
             lastFrameDataUrl = await NK.util.extractLastFrame(playback, { timeoutMs: 12000 });
           }
         } catch (_) { lastFrameDataUrl = ''; }
