@@ -169,33 +169,37 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ job_id: `${jobPrefix}${predictionId}`, model: atlasKlingModel, aspectApplied: klingAspect, outputGcsUri });
     }
 
-    // Grok branch (via Atlas Cloud AI)
+    // Grok branch (xAI direct API — Atlas Cloud does not host Grok video)
     if (videoModel === "grok") {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
-      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
-      const grokAtlasModel = (env.GROK_ATLAS_MODEL_ID as string | undefined) || "x-ai/aurora";
+      const xaiKey = env.XAI_API_KEY as string | undefined;
+      if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
       const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
-      const atlasBody: any = {
-        model: grokAtlasModel,
+      const grokBody: any = {
+        model: (env.GROK_MODEL_ID as string | undefined) || "grok-imagine-video",
         prompt: safePromptText,
         duration: snapDuration,
         aspect_ratio: aspectFinal,
+        resolution: "720p",
       };
-      if (startImageResolved) atlasBody.image = startImageResolved;
-      log('grok_atlas_request', { sceneId, model: grokAtlasModel, aspect: aspectFinal, duration: snapDuration });
-      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
-        body: JSON.stringify(atlasBody),
-      });
-      const atlasText = await atlasRes.text();
-      if (!atlasRes.ok) {
-        return json({ error: "grok_http_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      if (startImageResolved) {
+        const imgObj = { url: startImageResolved };
+        grokBody.image_url = imgObj;
+        grokBody.image = imgObj;
+        grokBody.prompt = "Animate this image. " + safePromptText;
       }
-      const atlasJson = safeJson(atlasText);
-      const predictionId = atlasJson?.data?.id || atlasJson?.id || atlasJson?.prediction_id || "";
-      if (!predictionId) return json({ error: "grok_no_prediction_id", raw: atlasJson }, 500);
-      return json({ job_id: `grok:${predictionId}`, model: grokAtlasModel, aspectApplied: aspectFinal, outputGcsUri });
+      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration });
+      const grokRes = await fetch("https://api.x.ai/v1/videos/generations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${xaiKey}` },
+        body: JSON.stringify(grokBody),
+      });
+      const grokText = await grokRes.text();
+      if (!grokRes.ok) {
+        return json({ error: "grok_error", status: grokRes.status, detail: safeJson(grokText) }, grokRes.status);
+      }
+      const grokJson = safeJson(grokText);
+      const reqId = grokJson?.request_id || grokJson?.id || grokJson?.data?.[0]?.id || "";
+      return json({ job_id: reqId ? `grok:${reqId}` : "", status: "processing" }, 202);
     }
 
     // Seedance branch (Atlas Cloud AI)

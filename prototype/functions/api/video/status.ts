@@ -129,46 +129,39 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     
 
     if (isGrok) {
-      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
-      if (!atlasKey) {
-        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
+      const xaiKey = env.XAI_API_KEY as string | undefined;
+      if (!xaiKey) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'XAI_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
       }
-      const predictionId = jobId.replace(/^grok:/, '');
-      const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
-      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
+      const reqId = jobId.replace(/^grok:/, '');
+      const res = await fetch(`https://api.x.ai/v1/videos/${reqId}`, { headers: { Authorization: `Bearer ${xaiKey}` } });
       const txt = await res.text();
       const json = safeJson(txt);
       if (!res.ok) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: json?.error || txt }, response: json, rawOperation: json, playback: null }, res.status);
       }
-      const status = (json?.data?.status || json?.status || '').toLowerCase();
-      const done = status === 'completed' || status === 'succeeded';
-      const failed = status === 'failed' || status === 'error';
-      const playbackRaw =
-        json?.data?.outputs?.[0] ||
-        json?.data?.output?.[0] ||
-        json?.data?.url ||
-        json?.output?.[0] ||
-        json?.video_url ||
-        json?.url ||
-        null;
+      const status = (json?.status || '').toLowerCase();
+      const playback = json?.video?.url || json?.data?.[0]?.url || json?.url || null;
+      const doneByStatus = status === 'completed' || status === 'done' || status === 'succeeded' || status === 'success' || status === 'ready';
+      const doneByPlaybackHint = !status && !!playback;
+      const done = doneByStatus || doneByPlaybackHint;
       let flattenedPlayback = '';
-      if (done && playbackRaw) {
-        flattenedPlayback = await flattenPlayback(playbackRaw, sceneIdParam || 'grok');
+      if (done && playback) {
+        flattenedPlayback = await flattenPlayback(playback, sceneIdParam || 'grok');
       }
-      const flattenFailed = done && !!playbackRaw && !flattenedPlayback;
+      const flattenFailed = done && !!playback && !flattenedPlayback;
+      if (doneByPlaybackHint && flattenFailed) {
+        return corsJson({ ok: true, job_id: jobId, done: false, error: null, response: json, rawOperation: json, playback: null, playbackUrl: null, status: 'processing' }, 200);
+      }
       return corsJson({
-        ok: true,
-        job_id: jobId,
-        done,
-        error: failed
-          ? { code: 'generation_failed', message: json?.error || 'Grok generation failed' }
-          : (flattenFailed ? { code: 'mirror_failed', message: '외부 영상을 프로젝트 videos 폴더로 복제하지 못했습니다.' } : null),
-        response: json,
-        rawOperation: json,
+        ok: true, job_id: jobId, done,
+        error: flattenFailed
+          ? { code: 'mirror_failed', message: '외부 영상을 프로젝트 videos 폴더로 복제하지 못했습니다.' }
+          : (done && !playback ? { code: 'done_no_url', message: 'done but no video.url' } : null),
+        response: json, rawOperation: json,
         playback: done ? (flattenedPlayback || null) : null,
         playbackUrl: done ? (flattenedPlayback || null) : null,
-        status: failed ? 'error' : (done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing')
+        status: done ? ((flattenedPlayback && !flattenFailed) ? 'done' : 'error') : 'processing'
       }, 200);
     }
 
