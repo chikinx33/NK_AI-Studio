@@ -947,7 +947,7 @@
           toBool: toBool,
           isBucketVideoUrl: isBucketVideoUrl,
           showCopyableError: showCopyableError,
-          videoModel: videoModel
+          videoModel: (function () { var sel = document.getElementById('video-model-select'); return (sel && sel.value) || (ctx.getState() && ctx.getState().videoModel) || videoModel; })()
         });
       }
     }
