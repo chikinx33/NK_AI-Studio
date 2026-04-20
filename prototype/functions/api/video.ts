@@ -129,7 +129,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       for (const raw of refListRaw) refList.push(await toAtlasImageUrl(raw, `ref-${sceneId}-${refList.length}`).catch(() => ""));
       const refListFiltered = refList.filter(Boolean);
 
-      const useMulti = refListFiltered.length > 0;
+      // final 선택 시 캐릭터 참조 여부와 무관하게 FHD 모델 우선 (multi 모델은 720p만 지원)
+      const useMulti = refListFiltered.length > 0 && quality !== "final";
       const atlasKlingModel = useMulti
         ? "kwaivgi/kling-v1.6-multi-i2v-standard"
         : (quality === "final" ? "kwaivgi/kling-v2.6-pro/image-to-video" : "kwaivgi/kling-v1.6-i2v-standard");

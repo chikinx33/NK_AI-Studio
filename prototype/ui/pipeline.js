@@ -424,7 +424,6 @@
       }
       [data-theme="light"] .video-model-label { color: rgba(0,0,0,0.72); }
       .video-model-select::-ms-expand { display: none; }
-      .video-box { position: relative; }
       .video-model-badge {
         position: absolute;
         top: 8px;
@@ -440,8 +439,7 @@
         white-space: nowrap;
         pointer-events: none;
         opacity: 0;
-        transform: translateY(-3px);
-        transition: opacity 0.15s ease, transform 0.15s ease;
+        transition: opacity 0.15s ease;
         z-index: 10;
         backdrop-filter: blur(4px);
         box-shadow: 0 2px 10px rgba(0,0,0,0.35);
@@ -457,7 +455,6 @@
       }
       .video-box:hover .video-model-badge {
         opacity: 1;
-        transform: translateY(0);
       }
     `;
     document.head.appendChild(style);
