@@ -109,21 +109,37 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         } catch (_) { return gcsToHttps(s); }
       };
 
-      const startImageResolved = await signIfGs(imageDataUrl);
-      if (!startImageResolved || startImageResolved.startsWith("data:")) {
-        return json({ error: "imageDataUrl is invalid or data URL (kling via atlas)" }, 400);
-      }
+      // data:URL이면 GCS 업로드 후 서명 URL 획득 (Atlas Cloud는 공개 URL 필요)
+      const toAtlasImageUrl = async (src: string, suffix: string): Promise<string> => {
+        if (!src) return "";
+        if (src.startsWith("data:")) {
+          const outParsedImg = parseGcsUri(baseOutput!);
+          if (!outParsedImg) throw new Error("Invalid VIDEO_OUTPUT_GCS_URI");
+          const accessTok = await getGoogleAccessToken({ clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, scope: "https://www.googleapis.com/auth/cloud-platform" });
+          const objName = `${projectPrefix}/kling/${stamp}-${suffix}.png`;
+          const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedImg.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
+          const b64 = src.split(",")[1] || "";
+          const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": "image/png" }, body: base64ToUint8(b64) });
+          if (!upRes.ok) throw new Error(`upload_failed: ${await upRes.text()}`);
+          return await signGcsUrl({ bucket: outParsedImg.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedImg.bucket}/${objName}`));
+        }
+        return await signIfGs(src);
+      };
+
+      const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
+      if (!startImageResolved) return json({ error: "imageDataUrl is empty or upload failed" }, 400);
 
       const endImageRaw = String((body as any)?.endImageDataUrl || (body as any)?.image_tail || "").trim();
-      const endImageResolved = endImageRaw ? await signIfGs(endImageRaw) : "";
+      const endImageResolved = endImageRaw ? await toAtlasImageUrl(endImageRaw, `end-${sceneId}`).catch(() => "") : "";
 
       const refRaw = (body as any)?.referenceImages || (body as any)?.references || [];
       const refListRaw: string[] = Array.isArray(refRaw)
         ? refRaw.map((v: any) => String(v || "")).filter(Boolean) : [];
       const refList: string[] = [];
-      for (const raw of refListRaw) refList.push(await signIfGs(raw));
+      for (const raw of refListRaw) refList.push(await toAtlasImageUrl(raw, `ref-${sceneId}-${refList.length}`).catch(() => ""));
+      const refListFiltered = refList.filter(Boolean);
 
-      const useMulti = refList.length > 0;
+      const useMulti = refListFiltered.length > 0;
       const atlasKlingModel = useMulti
         ? "kwaivgi/kling-v1.6-multi-i2v-standard"
         : (quality === "final" ? "kwaivgi/kling-v2.1-i2v-master" : "kwaivgi/kling-v1.6-i2v-standard");
@@ -137,7 +153,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
 
       if (useMulti) {
-        atlasBody.images = [startImageResolved, ...refList].filter(Boolean);
+        atlasBody.images = [startImageResolved, ...refListFiltered];
       } else {
         atlasBody.image = startImageResolved;
         if (endImageResolved) atlasBody.image_tail = endImageResolved;
