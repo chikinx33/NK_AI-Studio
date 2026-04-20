@@ -936,6 +936,7 @@
     var isQuickstartOpen = readDisclosureOpen(root, 'quickstart', false);
     var isAssetsOpen = readDisclosureOpen(root, 'asset-selection', false);
     var isContentTypeOpen = readDisclosureOpen(root, 'content-type', false);
+    var isCharactersOpen = readDisclosureOpen(root, 'characters', false);
     var isComposerOpen = readDisclosureOpen(root, 'publish-composer', false);
     var isChannelPlanOpen = readDisclosureOpen(root, 'channel-plan', false);
     var isPublishResultsOpen = readDisclosureOpen(root, 'publish-results', false);
@@ -1089,6 +1090,35 @@
       '</section>' +
       '</div>' +
       '</details>' +
+      '<details class="brand-studio-disclosure" data-disclosure-id="characters" ' + (isCharactersOpen ? 'open' : '') + '>' +
+      '<summary><div><strong>캐릭터 관리</strong><span>캐릭터별 네거티브 프롬프트 · 고정 특성 설정</span></div><span class="brand-studio-disclosure-meta">' + escapeHtml(characters.length ? (characters.length + '명') : '없음') + '</span></summary>' +
+      '<div class="brand-studio-disclosure-body">' +
+      '<section class="brand-studio-panel brand-studio-panel-embedded">' +
+      '<div class="brand-asset-grid">' + characterCards + '</div>' +
+      '<div class="brand-caption-actions" style="margin-top:12px">' +
+      '<button class="btn-secondary compact" data-action="character-open-new">+ 새 캐릭터 추가</button>' +
+      '</div>' +
+      '</section>' +
+      '</div>' +
+      '</details>' +
+      '</div>' +
+      '<div id="character-edit-modal" class="brand-modal-overlay hidden">' +
+      '<div class="brand-modal-box">' +
+      '<h3 id="character-edit-modal-title">캐릭터 수정</h3>' +
+      '<div class="brand-modal-form">' +
+      '<label class="brand-modal-label">트리거 토큰 <small>(예: @홍길동)</small><input id="char-edit-trigger" class="brand-publish-input" type="text" placeholder="@캐릭터이름" /></label>' +
+      '<label class="brand-modal-label">표시 이름<input id="char-edit-name" class="brand-publish-input" type="text" placeholder="캐릭터 이름" /></label>' +
+      '<label class="brand-modal-label">캐릭터 설명<textarea id="char-edit-description" class="brand-caption-textarea" rows="3" placeholder="외모, 성격, 특징 등을 설명합니다."></textarea></label>' +
+      '<label class="brand-modal-label">고정 특성 <small>(쉼표로 구분)</small><input id="char-edit-fixed-traits" class="brand-publish-input" type="text" placeholder="예: 파란 눈, 빨간 머리" /></label>' +
+      '<label class="brand-modal-label">금지 특성 <small>(쉼표로 구분, 프롬프트 텍스트에 포함)</small><input id="char-edit-banned-traits" class="brand-publish-input" type="text" placeholder="예: 손가락 없음" /></label>' +
+      '<label class="brand-modal-label">네거티브 프롬프트 <small>(이미지·영상 생성 시 자동 적용)</small><textarea id="char-edit-negative-prompt" class="brand-caption-textarea" rows="3" placeholder="예: fingers, hands, extra limbs"></textarea></label>' +
+      '<label class="brand-modal-label">스타일 가이드<input id="char-edit-style-guide" class="brand-publish-input" type="text" placeholder="예: 2D 애니메이션, 파스텔 색감" /></label>' +
+      '</div>' +
+      '<div class="brand-caption-actions">' +
+      '<button class="btn-primary" data-action="character-save">저장</button>' +
+      '<button class="btn-secondary" data-action="character-cancel">취소</button>' +
+      '</div>' +
+      '</div>' +
       '</div>' +
       '<div class="brand-studio-side">' +
       '<details class="brand-studio-disclosure brand-studio-disclosure-featured" data-disclosure-id="publish-composer" id="brand-publish-composer" ' + (isComposerOpen ? 'open' : '') + '>' +
@@ -1233,7 +1263,99 @@
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
       var target = '';
-      if (action === 'character-open-new' || action === 'character-edit' || action === 'character-deactivate' || action === 'character-save' || action === 'character-cancel') return;
+      if (action === 'character-open-new' || action === 'character-edit' || action === 'character-deactivate' || action === 'character-save' || action === 'character-cancel') {
+        var modal = root.querySelector('#character-edit-modal');
+        if (action === 'character-cancel') {
+          if (modal) modal.classList.add('hidden');
+          return;
+        }
+        if (action === 'character-open-new') {
+          if (!modal) return;
+          modal.querySelector('#character-edit-modal-title').textContent = '새 캐릭터 추가';
+          modal.querySelector('#char-edit-trigger').value = '';
+          modal.querySelector('#char-edit-name').value = '';
+          modal.querySelector('#char-edit-description').value = '';
+          modal.querySelector('#char-edit-fixed-traits').value = '';
+          modal.querySelector('#char-edit-banned-traits').value = '';
+          modal.querySelector('#char-edit-negative-prompt').value = '';
+          modal.querySelector('#char-edit-style-guide').value = '';
+          modal.dataset.charId = '';
+          modal.classList.remove('hidden');
+          return;
+        }
+        if (action === 'character-edit') {
+          var charId = String(btn.dataset.charId || '').trim();
+          var c = characters.find(function (ch) { return ch.id === charId; });
+          if (!c || !modal) return;
+          modal.querySelector('#character-edit-modal-title').textContent = '캐릭터 수정';
+          modal.querySelector('#char-edit-trigger').value = c.trigger || '';
+          modal.querySelector('#char-edit-name').value = c.name || '';
+          modal.querySelector('#char-edit-description').value = c.description || '';
+          modal.querySelector('#char-edit-fixed-traits').value = (c.fixedTraits || []).join(', ');
+          modal.querySelector('#char-edit-banned-traits').value = (c.bannedTraits || []).join(', ');
+          modal.querySelector('#char-edit-negative-prompt').value = c.negativePrompt || '';
+          modal.querySelector('#char-edit-style-guide').value = c.styleGuide || '';
+          modal.dataset.charId = charId;
+          modal.classList.remove('hidden');
+          return;
+        }
+        if (action === 'character-deactivate') {
+          var charId = String(btn.dataset.charId || '').trim();
+          if (!charId || !brandId || !NK.service || !NK.service.brand) return;
+          var existingBrand = NK.service.brand.getById ? NK.service.brand.getById(brandId) : null;
+          var existingChars = Array.isArray(existingBrand && existingBrand.brandCharacters) ? existingBrand.brandCharacters.slice() : characters.slice();
+          var updatedChars = existingChars.map(function (ch) {
+            return ch.id === charId ? Object.assign({}, ch, { isActive: !ch.isActive }) : ch;
+          });
+          var saveFn = NK.service.brand.persistShared || function (bId, patch) { NK.service.brand.update(bId, patch); return Promise.resolve({ draft: null }); };
+          btn.disabled = true;
+          Promise.resolve(saveFn(brandId, { brandCharacters: updatedChars }))
+            .then(function () { renderNext(project); })
+            .catch(function (err) { alert('캐릭터 상태 변경 실패: ' + (err && err.message ? err.message : err)); })
+            .finally(function () { btn.disabled = false; });
+          return;
+        }
+        if (action === 'character-save') {
+          if (!modal) return;
+          var triggerVal = String(modal.querySelector('#char-edit-trigger').value || '').trim();
+          if (!triggerVal) { alert('트리거 토큰을 입력해 주세요. 예: @캐릭터이름'); modal.querySelector('#char-edit-trigger').focus(); return; }
+          if (!/^@/.test(triggerVal)) triggerVal = '@' + triggerVal;
+          var editingId = String(modal.dataset.charId || '').trim();
+          var existingBrand2 = NK.service.brand && NK.service.brand.getById ? NK.service.brand.getById(brandId) : null;
+          var existingChars2 = Array.isArray(existingBrand2 && existingBrand2.brandCharacters) ? existingBrand2.brandCharacters.slice() : characters.slice();
+          var newChar = {
+            id: editingId || ('char_' + Date.now()),
+            trigger: triggerVal,
+            name: String(modal.querySelector('#char-edit-name').value || '').trim() || triggerVal.replace(/^@/, ''),
+            description: String(modal.querySelector('#char-edit-description').value || '').trim(),
+            fixedTraits: String(modal.querySelector('#char-edit-fixed-traits').value || '').split(/[,\n]/).map(function (t) { return t.trim(); }).filter(Boolean),
+            bannedTraits: String(modal.querySelector('#char-edit-banned-traits').value || '').split(/[,\n]/).map(function (t) { return t.trim(); }).filter(Boolean),
+            negativePrompt: String(modal.querySelector('#char-edit-negative-prompt').value || '').trim(),
+            styleGuide: String(modal.querySelector('#char-edit-style-guide').value || '').trim(),
+            defaultPromptPrefix: 'Keep character identity consistent.',
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          var updatedChars2;
+          if (editingId) {
+            var found2 = false;
+            updatedChars2 = existingChars2.map(function (ch) { if (ch.id === editingId) { found2 = true; return Object.assign({}, ch, newChar, { createdAt: ch.createdAt || newChar.createdAt }); } return ch; });
+            if (!found2) updatedChars2.push(newChar);
+          } else {
+            updatedChars2 = existingChars2.concat([newChar]);
+          }
+          var saveFn2 = (NK.service.brand && NK.service.brand.persistShared) || function (bId, patch) { if (NK.service.brand && NK.service.brand.update) NK.service.brand.update(bId, patch); return Promise.resolve(); };
+          var saveBtn = btn;
+          saveBtn.disabled = true;
+          Promise.resolve(saveFn2(brandId, { brandCharacters: updatedChars2 }))
+            .then(function () { modal.classList.add('hidden'); renderNext(project); })
+            .catch(function (err) { alert('캐릭터 저장 실패: ' + (err && err.message ? err.message : err)); })
+            .finally(function () { saveBtn.disabled = false; });
+          return;
+        }
+        return;
+      }
       var captionEl = root.querySelector('#brand-caption-textarea');
       var hashtagEl = root.querySelector('#brand-hashtag-textarea');
       var publishInputEl = root.querySelector('#brand-publish-datetime');

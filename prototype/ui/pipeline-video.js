@@ -218,6 +218,7 @@
     ].filter(Boolean).join('\n');
     var finalPrompt = (scene.promptText && scene.promptText.trim()) ? scene.promptText : promptBase;
     var rawPromptForLog = finalPrompt;
+    var characterNegativePrompt = '';
     try {
       if (NK.service && NK.service.characterRegistry && opts.toBool(statePayload.charactersEnabled, Array.isArray(statePayload.characters) && statePayload.characters.length)) {
         var payload0 = st.payload || {};
@@ -231,8 +232,9 @@
           brandRules: Array.isArray(payload0.brandRules) ? payload0.brandRules : [],
           bannedExpressions: Array.isArray(payload0.bannedExpressions) ? payload0.bannedExpressions : []
         });
-        try { console.debug('Resolved prompt (video):', { sceneId: scene.id, resolvedPrompt: built0.resolvedPrompt }); } catch (_) {}
+        try { console.debug('Resolved prompt (video):', { sceneId: scene.id, resolvedPrompt: built0.resolvedPrompt, negativePromptText: built0.negativePromptText }); } catch (_) {}
         finalPrompt = built0.resolvedPrompt || finalPrompt;
+        characterNegativePrompt = built0.negativePromptText || '';
         var refs0 = NK.service.characterRegistry.collectCharacterReferenceAssets(res0.characters || []);
         st.scenes[opts.idx] = Object.assign({}, scene, {
           rawPrompt: rawPromptForLog,
@@ -331,7 +333,8 @@
         videoModel: opts.videoModel,
         quality: klingQuality || undefined,
         endImageDataUrl: endImageDataUrl || undefined,
-        referenceImages: (referenceImages && referenceImages.length) ? referenceImages : undefined
+        referenceImages: (referenceImages && referenceImages.length) ? referenceImages : undefined,
+        negativePrompt: characterNegativePrompt || undefined
       };
       console.debug('videoStart payload', {
         projectId: projectId,

@@ -255,6 +255,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         ratio: aspectFinal,
       };
       if (imageUrl) seedanceBody.image = imageUrl;
+      if ((body as any)?.negativePrompt) seedanceBody.negative_prompt = String((body as any).negativePrompt);
 
       const seedanceRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
         method: "POST",
@@ -298,6 +299,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         resolution: "1080p",
         image: startImageResolved,
       };
+      if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
       log('veo_atlas_request', { sceneId, model: veoAtlasModel, aspect: aspectFinal, duration: snapDuration });
       const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
         method: "POST",

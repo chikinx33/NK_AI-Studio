@@ -39,6 +39,7 @@
     var description = normText(src.description);
     var fixedTraits = normList(src.fixedTraits);
     var bannedTraits = normList(src.bannedTraits);
+    var negativePrompt = normText(src.negativePrompt);
     var defaultPromptPrefix = normText(src.defaultPromptPrefix);
     var styleGuide = normText(src.styleGuide);
     var isActive = src.isActive === false ? false : true;
@@ -55,6 +56,7 @@
       description: description,
       fixedTraits: fixedTraits,
       bannedTraits: bannedTraits,
+      negativePrompt: negativePrompt,
       defaultPromptPrefix: defaultPromptPrefix || 'Keep character identity consistent.',
       styleGuide: styleGuide,
       isActive: !!isActive,
@@ -87,6 +89,7 @@
         description: raw.personality || raw.description || raw.profile || raw.note || '',
         fixedTraits: raw.fixedTraits || [],
         bannedTraits: raw.bannedTraits || [],
+        negativePrompt: raw.negativePrompt || '',
         defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
         styleGuide: raw.styleGuide || '',
         isActive: raw.isActive !== false
@@ -112,6 +115,7 @@
         description: raw.personality || raw.description || raw.profile || raw.note || '',
         fixedTraits: raw.fixedTraits || [],
         bannedTraits: raw.bannedTraits || [],
+        negativePrompt: raw.negativePrompt || '',
         defaultPromptPrefix: raw.defaultPromptPrefix || 'Keep character identity consistent.',
         styleGuide: raw.styleGuide || '',
         isActive: raw.isActive !== false
@@ -256,7 +260,12 @@
     if (brandRules.length) blocks.push('Brand rules: ' + brandRules.join(', '));
     var resolved = blocks.filter(Boolean).join('\n').replace(/\n{3,}/g, '\n\n').trim();
     var ids = characters.map(function (c) { return String(c.id || ''); }).filter(Boolean);
-    return { resolvedPrompt: resolved, resolvedCharacterIds: Array.from(new Set(ids)) };
+    var negParts = [];
+    characters.forEach(function (c) {
+      if (c.negativePrompt) negParts.push(String(c.negativePrompt));
+    });
+    var negativePromptText = negParts.filter(Boolean).join(', ');
+    return { resolvedPrompt: resolved, resolvedCharacterIds: Array.from(new Set(ids)), negativePromptText: negativePromptText || '' };
   };
 
   registry.VERSION = VERSION;

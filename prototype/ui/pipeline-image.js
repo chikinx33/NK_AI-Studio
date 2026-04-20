@@ -553,6 +553,7 @@
     var finalPrompt = buildImagePrompt(scene, st.header || '', opts.cleanHeader || function (text) { return String(text || ''); });
     var rawP = finalPrompt;
     var referencePayload = null;
+    var imageCharacterNegativePrompt = '';
     try {
       if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
         var liveDraft = (NK.service && NK.service.project && NK.service.project.getDraftById)
@@ -577,8 +578,9 @@
           brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
           bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
         });
-        try { console.log('Resolved prompt (image):', { sceneId: scene.id, resolvedPrompt: built.resolvedPrompt }); } catch (_) {}
+        try { console.log('Resolved prompt (image):', { sceneId: scene.id, resolvedPrompt: built.resolvedPrompt, negativePromptText: built.negativePromptText }); } catch (_) {}
         finalPrompt = built.resolvedPrompt || finalPrompt;
+        imageCharacterNegativePrompt = built.negativePromptText || '';
         var refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
         referencePayload = buildReferenceBundle(payload, res.characters || [], { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
         if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && projectId && NK.api && NK.api.projectGet) {
@@ -597,6 +599,7 @@
                   bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
                 });
                 finalPrompt = built.resolvedPrompt || finalPrompt;
+                imageCharacterNegativePrompt = built.negativePromptText || '';
                 refs = NK.service.characterRegistry.collectCharacterReferenceAssets(res.characters || []);
               }
               referencePayload = buildReferenceBundle(payload, res.characters || [], { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
@@ -654,6 +657,9 @@
         scene = st.scenes[opts.idx];
       }
     } catch (_) { }
+    if (imageCharacterNegativePrompt) {
+      finalPrompt = finalPrompt + '\nDo not include: ' + imageCharacterNegativePrompt;
+    }
     console.log('Image prompt (scene ' + scene.id + '):', finalPrompt);
     st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: '' });
     ctx.setState(st);

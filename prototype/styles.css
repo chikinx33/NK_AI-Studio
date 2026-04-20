@@ -10074,6 +10074,53 @@ body {
   box-shadow: 0 14px 32px rgba(255, 122, 0, 0.12);
 }
 
+.brand-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.brand-modal-overlay.hidden { display: none; }
+.brand-modal-box {
+  background: var(--surface, #1e1e2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 10px;
+  padding: 24px;
+  width: 480px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.brand-modal-box h3 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.brand-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.brand-modal-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-secondary, #aaa);
+}
+.brand-modal-label small {
+  font-size: 11px;
+  opacity: 0.7;
+}
+.brand-modal-label input,
+.brand-modal-label textarea {
+  margin-top: 2px;
+}
+
 .sidebar-actions .screen-toggle:hover::before {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M8 3.75H4.75V7M20 8V4.75h-3.25M16 20.25h3.25V17M4 16v3.25H7.25' stroke='%23F5F7FD' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
