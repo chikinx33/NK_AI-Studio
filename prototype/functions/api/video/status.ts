@@ -205,15 +205,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       if (!res.ok) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: json?.error || txt }, response: json, rawOperation: json, playback: null }, res.status);
       }
-      const status = (json?.status || '').toLowerCase();
+      const status = (json?.data?.status || json?.status || '').toLowerCase();
       const done = status === 'completed' || status === 'succeeded';
       const failed = status === 'failed' || status === 'error';
       const playbackRaw =
+        json?.data?.outputs?.[0] ||
+        json?.data?.output?.[0] ||
+        json?.data?.url ||
         json?.output?.[0] ||
-        json?.output ||
         json?.video_url ||
         json?.url ||
-        json?.data?.url ||
         null;
 
       let flattenedPlayback = '';

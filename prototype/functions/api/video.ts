@@ -424,6 +424,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
       const seedanceJson = safeJson(seedanceText);
       const predictionId =
+        seedanceJson?.data?.id ||
         seedanceJson?.prediction_id ||
         seedanceJson?.id ||
         seedanceJson?.data?.prediction_id ||
