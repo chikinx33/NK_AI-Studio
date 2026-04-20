@@ -282,7 +282,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
-      const veoAtlasModel = (env.VEO_ATLAS_MODEL_ID as string | undefined) || "google/veo-2";
+      const veoAtlasModel = (env.VEO_ATLAS_MODEL_ID as string | undefined) || "google/veo3.1-fast/image-to-video";
       const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
       if (!startImageResolved) return json({ error: "imageDataUrl is empty or upload failed" }, 400);
       const atlasBody: any = {
