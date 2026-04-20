@@ -105,7 +105,13 @@
     var videoPlayableUrl = mediaUrlResolver(scene.videoUrl || '');
     if (scene.videoUrl) {
       var note = scene.videoMethod === 'inline' ? '<div class="video-note">내장 재생(임시 변환)</div>' : '';
-      return '<div class="video-box"><video class="scene-video" controls muted playsinline preload="metadata"><source src="' + videoPlayableUrl + '" type="video/mp4" /></video>' + note + '</div>';
+      var badge = scene.videoModelLabel
+        ? '<div class="video-model-badge">' + scene.videoModelLabel.replace(/</g, '&lt;') + '</div>'
+        : '';
+      return '<div class="video-box">' +
+        '<video class="scene-video" controls muted playsinline preload="metadata"><source src="' + videoPlayableUrl + '" type="video/mp4" /></video>' +
+        badge + note +
+        '</div>';
     }
     if (scene.videoStatus === 'processing') return '<div class="video-placeholder loading"><div class="spinner"></div><span>영상 생성 중...</span></div>';
     if (scene.videoError) return '<div class="video-placeholder error-state"><span>생성 실패</span></div>';

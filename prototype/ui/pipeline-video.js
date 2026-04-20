@@ -2,6 +2,12 @@
   var NK = window.NK || (window.NK = {});
   var video = NK.uiPipelineVideo || (NK.uiPipelineVideo = {});
 
+  var VIDEO_MODEL_LABELS = {
+    'veo': 'Veo 3.1 Fast', 'grok': 'Grok Imagine',
+    'kling-draft': 'Kling Draft (v1.6)', 'kling-final': 'Kling Final (v2.6 Pro)',
+    'seedance': 'Seedance 2.0'
+  };
+
   function normalizeSafetyMessage(msg) {
     var text = String(msg || 'video_error');
     if (text.indexOf('Responsible AI') !== -1 || text.indexOf('sensitive words') !== -1) {
@@ -367,7 +373,8 @@
         videoStatus: playback ? 'done' : 'processing',
         videoError: resp.error || '',
         videoJobId: jobId,
-        videoOutputGcsUri: outputGcsUri
+        videoOutputGcsUri: outputGcsUri,
+        videoModelLabel: VIDEO_MODEL_LABELS[opts.videoModel] || opts.videoModel || ''
       });
       ctx.setState(st);
       opts.updateSceneRow(opts.idx, st.header || '', 'video');
@@ -465,7 +472,8 @@
           videoUrl: playback,
           videoStatus: 'done',
           videoError: '',
-          lastFrameDataUrl: lastFrameDataUrl || (st.scenes[opts.idx] && st.scenes[opts.idx].lastFrameDataUrl) || ''
+          lastFrameDataUrl: lastFrameDataUrl || (st.scenes[opts.idx] && st.scenes[opts.idx].lastFrameDataUrl) || '',
+          videoModelLabel: VIDEO_MODEL_LABELS[opts.videoModel] || opts.videoModel || ''
         });
         ctx.setState(st);
         opts.updateSceneRow(opts.idx, st.header || '', 'video');
