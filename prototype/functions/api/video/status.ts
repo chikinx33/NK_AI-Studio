@@ -239,43 +239,44 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     }
 
     if (isKling) {
-      const eps = klingEndpoints(env);
-      const taskId = jobId.replace(/^kling-lipsync:/, '').replace(/^kling-multi:/, '').replace(/^kling:/, '');
-      const sub = klingKind === 'lipsync' ? 'lip-sync' : (klingKind === 'multi' ? 'multi-image2video' : 'image2video');
-      const url = `${eps.base}/v1/videos/${sub}/${encodeURIComponent(taskId)}`;
-      const res = await callKlingApi(env, url, { method: 'GET' });
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) {
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'ATLASCLOUD_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
+      }
+      const predictionId = jobId.replace(/^kling-lipsync:/, '').replace(/^kling-multi:/, '').replace(/^kling:/, '');
+      const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
+      const res = await fetch(statusUrl, { headers: { Authorization: `Bearer ${atlasKey}` } });
       const txt = await res.text();
       const jsonBody = safeJson(txt);
       if (!res.ok) {
-        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: 'kling_http_error', detail: jsonBody }, response: jsonBody, rawOperation: jsonBody, playback: null }, res.status);
+        return corsJson({ ok: false, job_id: jobId, done: false, error: { code: res.status, message: jsonBody?.error || txt }, response: jsonBody, rawOperation: jsonBody, playback: null }, res.status);
       }
-      const code = Number(jsonBody?.code);
-      if (code !== 0) {
-        return corsJson({ ok: false, job_id: jobId, done: false, error: { code, message: 'kling_api_error', detail: jsonBody }, response: jsonBody, rawOperation: jsonBody, playback: null }, 502);
-      }
-      const status = klingTaskStatus(jsonBody);
-      const failed = isKlingFailed(status);
-      const done = failed || isKlingDone(status);
-      const playback0 = done && !failed ? pickKlingVideoUrl(jsonBody) : '';
+      const status = (jsonBody?.data?.status || jsonBody?.status || '').toLowerCase();
+      const done = status === 'completed' || status === 'succeeded';
+      const failed = status === 'failed' || status === 'error';
+      const playbackRaw =
+        jsonBody?.data?.outputs?.[0] ||
+        jsonBody?.data?.output?.[0] ||
+        jsonBody?.data?.url ||
+        jsonBody?.output?.[0] ||
+        jsonBody?.url ||
+        null;
       let flattened = '';
-      if (playback0) {
-        flattened = await flattenPlayback(playback0, sceneIdParam || taskId);
+      if (done && playbackRaw) {
+        flattened = await flattenPlayback(playbackRaw, sceneIdParam || predictionId);
       }
+      const flattenFailed = done && !!playbackRaw && !flattened;
       if (failed) {
-        const msg = jsonBody?.data?.task_status_msg || jsonBody?.message || 'kling_failed';
+        const msg = jsonBody?.data?.error || jsonBody?.error || 'kling_failed';
         return corsJson({ ok: true, job_id: jobId, done: true, error: { code: 'kling_failed', message: msg }, response: jsonBody, rawOperation: jsonBody, playback: null, playbackUrl: null, status: 'error' }, 200);
       }
-      if (done && playback0 && !flattened) {
-        // 미러링 지연 가능성 → 일시적 processing 으로 응답
+      if (flattenFailed) {
         return corsJson({ ok: true, job_id: jobId, done: false, error: null, response: jsonBody, rawOperation: jsonBody, playback: null, playbackUrl: null, status: 'processing' }, 200);
       }
       return corsJson({
-        ok: true,
-        job_id: jobId,
-        done,
-        error: done && !playback0 ? { code: 'done_no_url', message: 'kling done but no video url' } : null,
-        response: jsonBody,
-        rawOperation: jsonBody,
+        ok: true, job_id: jobId, done,
+        error: done && !playbackRaw ? { code: 'done_no_url', message: 'kling done but no video url' } : null,
+        response: jsonBody, rawOperation: jsonBody,
         playback: done ? (flattened || null) : null,
         playbackUrl: done ? (flattened || null) : null,
         status: done ? (flattened ? 'done' : 'done_no_output') : 'processing',

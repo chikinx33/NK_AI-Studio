@@ -187,6 +187,9 @@
     if (!st) return;
     var scene = st.scenes[opts.idx];
     if (!scene || opts.isSceneVideoProcessing(scene)) return;
+    // 즉시 processing 상태로 변경해 async 구간 중 중복 호출 방지
+    st.scenes[opts.idx] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
+    ctx.setState(st);
 
     var projectId = st.draftId || (opts.getProjectId ? opts.getProjectId() : '');
     if (!projectId) {
@@ -275,12 +278,10 @@
       console.warn('image aspect normalize skipped:', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
     }
 
-    st.scenes[opts.idx] = Object.assign({}, scene, { videoStatus: 'processing', videoError: '' });
-    ctx.setState(st);
-    opts.updateSceneRow(opts.idx, st.header || '', 'video');
-
     try {
-      var durationSeconds = snapVideoDuration(scene.estSec);
+      var durationSeconds = opts.videoModel === 'seedance'
+        ? Math.min(15, Math.max(4, Math.round(Number(scene.estSec) || 5)))
+        : snapVideoDuration(scene.estSec);
       var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
       var klingQuality = opts.videoModel === 'kling-final' ? 'final' : (opts.videoModel === 'kling-draft' ? 'draft' : '');
       // 이전 씬의 마지막 프레임을 이번 씬의 끝 프레임(image_tail)으로 자동 연결 (Kling 전용)

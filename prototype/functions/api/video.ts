@@ -44,6 +44,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       : `${String(promptText || "").trim()}\n${noSpeechDirective}`.trim();
     // durationSeconds는 4/6/8만 허용 → 근접값으로 스냅 (Veo/Grok 공용)
     const snapDuration = snapToAllowedDuration(durationSeconds);
+    // Seedance는 4–15초 지원 → 스냅 없이 클램프만 적용
+    const seedanceDuration = Math.min(15, Math.max(4, Math.round(Number(durationSeconds) || 5)));
 
     if (!safePromptText || !imageDataUrl) {
       return json({ error: "promptText and imageDataUrl are required" }, 400);
@@ -83,16 +85,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
 
-    // Kling branch
+    // Kling branch (via Atlas Cloud AI)
     if (isKling) {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+
       const quality: KlingQuality =
         (body as any)?.quality === "final" || videoModel === "kling-final" ? "final" : "draft";
-      const klingModel = String((body as any)?.klingModel || "").trim() || klingModelFor(quality);
-      const klingMode = quality === "final" ? "pro" : "std"; // pro = 1080p
       const klingDuration = snapKlingDuration(durationSeconds);
       const klingAspect = normalizeKlingAspect(aspectRatio);
 
-      // gs:// URL을 서명된 https로 변환하는 helper (Kling은 public 접근 가능한 URL 필요)
+      // gs:// URL → 서명된 https로 변환 (Atlas Cloud는 public URL 필요)
       const signIfGs = async (src: string): Promise<string> => {
         const s = String(src || "").trim();
         if (!s.startsWith("gs://")) return s;
@@ -100,98 +103,64 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         if (!parsed) return s;
         try {
           return await signGcsUrl({
-            bucket: parsed.bucket,
-            object: parsed.object,
-            clientEmail,
-            privateKeyPem: privateKeyRaw,
-            expiresInSec: 3600,
+            bucket: parsed.bucket, object: parsed.object,
+            clientEmail, privateKeyPem: privateKeyRaw, expiresInSec: 3600,
           });
-        } catch (_) {
-          return gcsToHttps(s);
-        }
+        } catch (_) { return gcsToHttps(s); }
       };
 
-      // 시작 프레임(필수) - data:URL이면 base64만 추출, gs://는 signed URL 로 변환
       const startImageResolved = await signIfGs(imageDataUrl);
-      const startImageField = toKlingImageField(startImageResolved);
-      if (!startImageField) {
-        return json({ error: "imageDataUrl is invalid (kling)" }, 400);
+      if (!startImageResolved || startImageResolved.startsWith("data:")) {
+        return json({ error: "imageDataUrl is invalid or data URL (kling via atlas)" }, 400);
       }
 
-      // 끝 프레임(옵션) - 이전 씬 last frame 이어받기용
       const endImageRaw = String((body as any)?.endImageDataUrl || (body as any)?.image_tail || "").trim();
       const endImageResolved = endImageRaw ? await signIfGs(endImageRaw) : "";
-      const endImageField = endImageResolved ? toKlingImageField(endImageResolved) : "";
 
-      // 레퍼런스 이미지(옵션) - 캐릭터 프레임 인 등. 여러 장이면 multi-image2video 사용.
       const refRaw = (body as any)?.referenceImages || (body as any)?.references || [];
       const refListRaw: string[] = Array.isArray(refRaw)
-        ? refRaw.map((v: any) => String(v || "")).filter(Boolean)
-        : [];
-      // gs:// URL은 서명된 https 로 변환해 Kling이 접근할 수 있게 함
+        ? refRaw.map((v: any) => String(v || "")).filter(Boolean) : [];
       const refList: string[] = [];
-      for (const raw of refListRaw) {
-        refList.push(await signIfGs(raw));
-      }
+      for (const raw of refListRaw) refList.push(await signIfGs(raw));
 
-      const eps = klingEndpoints(env);
       const useMulti = refList.length > 0;
-      const url = useMulti ? eps.multiImage2video : eps.image2video;
+      const atlasKlingModel = useMulti
+        ? "kwaivgi/kling-v1.6-multi-i2v-standard"
+        : (quality === "final" ? "kwaivgi/kling-v2.1-i2v-master" : "kwaivgi/kling-v1.6-i2v-standard");
 
-      const reqBody: any = {
-        model_name: klingModel,
+      const atlasBody: any = {
+        model: atlasKlingModel,
         prompt: safePromptText,
-        negative_prompt: String((body as any)?.negativePrompt || ""),
-        cfg_scale: 0.5,
-        mode: klingMode,
+        duration: klingDuration,
         aspect_ratio: klingAspect,
-        duration: klingDuration,
       };
+      if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
+
       if (useMulti) {
-        // multi-image2video 입력 스펙: image_list = [{ image }] (start + references 전부 참조 이미지)
-        reqBody.image_list = [{ image: startImageField }, ...refList.map((r) => ({ image: toKlingImageField(r) }))]
-          .filter((x) => !!x.image);
+        atlasBody.images = [startImageResolved, ...refList].filter(Boolean);
       } else {
-        reqBody.image = startImageField;
-        if (endImageField) reqBody.image_tail = endImageField;
+        atlasBody.image = startImageResolved;
+        if (endImageResolved) atlasBody.image_tail = endImageResolved;
       }
 
-      log('kling_request', {
-        sceneId,
-        model: klingModel,
-        mode: klingMode,
-        useMulti,
-        aspect: klingAspect,
-        duration: klingDuration,
-        hasEndImage: !!endImageField,
-        refCount: refList.length,
-      });
+      log('kling_atlas_request', { sceneId, model: atlasKlingModel, useMulti, aspect: klingAspect, duration: klingDuration });
 
-      const klingRes = await callKlingApi(env, url, {
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
         method: "POST",
-        body: JSON.stringify(reqBody),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
       });
-      const klingText = await klingRes.text();
-      const klingJson = safeJson(klingText);
-      if (!klingRes.ok) {
-        return json({ error: "kling_http_error", status: klingRes.status, detail: klingJson }, klingRes.status);
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) {
+        return json({ error: "kling_http_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
       }
-      const code = Number(klingJson?.code);
-      if (code !== 0) {
-        return json({ error: "kling_api_error", code, detail: klingJson }, 502);
-      }
-      const taskId = String(klingJson?.data?.task_id || klingJson?.task_id || "");
-      if (!taskId) {
-        return json({ error: "kling_no_task_id", raw: klingJson }, 500);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.id || atlasJson?.prediction_id || "";
+      if (!predictionId) {
+        return json({ error: "kling_no_prediction_id", raw: atlasJson }, 500);
       }
       const jobPrefix = useMulti ? "kling-multi:" : "kling:";
-      return json({
-        job_id: `${jobPrefix}${taskId}`,
-        model: klingModel,
-        mode: klingMode,
-        aspectApplied: klingAspect,
-        outputGcsUri, // 완료 시 상태 폴링에서 이 경로로 미러링
-      });
+      return json({ job_id: `${jobPrefix}${predictionId}`, model: atlasKlingModel, aspectApplied: klingAspect, outputGcsUri });
     }
 
     // Grok Imagine branch
@@ -404,7 +373,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const seedanceBody: any = {
         model: "bytedance/seedance-2.0/image-to-video",
         prompt: safePromptText,
-        duration: snapDuration,
+        duration: seedanceDuration,
         resolution: "720p",
         ratio: aspectFinal,
       };
