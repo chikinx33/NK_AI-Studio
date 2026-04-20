@@ -132,7 +132,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const useMulti = refListFiltered.length > 0;
       const atlasKlingModel = useMulti
         ? "kwaivgi/kling-v1.6-multi-i2v-standard"
-        : (quality === "final" ? "kwaivgi/kling-v2.1-i2v-master" : "kwaivgi/kling-v1.6-i2v-standard");
+        : (quality === "final" ? "kwaivgi/kling-v2.6-pro/image-to-video" : "kwaivgi/kling-v1.6-i2v-standard");
 
       const atlasBody: any = {
         model: atlasKlingModel,
