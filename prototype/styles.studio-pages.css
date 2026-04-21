@@ -291,10 +291,14 @@
 }
 
 .brand-knowledge-grid,
-.brand-content-type-grid,
 .analytics-recommendation-grid,
 .analytics-suggestion-grid {
   grid-template-columns: 1fr;
+}
+
+/* 콘텐츠 유형 카드: 2×2 균일 그리드 — active 카드 전폭 특례 없음 */
+.brand-content-type-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .brand-knowledge-card,
@@ -373,17 +377,15 @@
     order: 0;
   }
 
+  /* 2×2 균일 유지 — is-active 전폭 제거 */
   .brand-studio-page .brand-content-type-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .brand-studio-page .brand-content-type-card,
-  .brand-studio-page .brand-content-type-card:first-child {
-    grid-column: span 1;
-  }
-
+  .brand-studio-page .brand-content-type-card:first-child,
   .brand-studio-page .brand-content-type-card.is-active {
-    grid-column: 1 / -1;
+    grid-column: span 1;
   }
 }
 

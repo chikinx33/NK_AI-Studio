@@ -1015,14 +1015,18 @@
             }
             // Native <details> open/close drives animation entirely via CSS grid-template-rows.
             // No click interception — that was the root cause of the "no response" bug.
-            // Only attach toggle listener once to fire scroll/external events on open.
+            // Dispatch nk-disclosure-opened AFTER the 300ms CSS transition completes so that
+            // scrollDisclosureIntoView calculates final (expanded) coordinates, not pre-expansion.
             if (!details.__nkDisclosureToggleBound) {
                 details.__nkDisclosureToggleBound = true;
                 details.addEventListener('toggle', function () {
                     if (details.open) {
-                        try {
-                            details.dispatchEvent(new CustomEvent('nk-disclosure-opened', { bubbles: true }));
-                        } catch (_) { }
+                        window.setTimeout(function () {
+                            if (!details.open) return; // guard: closed before timer fires
+                            try {
+                                details.dispatchEvent(new CustomEvent('nk-disclosure-opened', { bubbles: true }));
+                            } catch (_) { }
+                        }, 320); // 300ms transition + 20ms buffer
                     }
                 });
             }
