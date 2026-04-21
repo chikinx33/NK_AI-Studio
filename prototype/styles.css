@@ -7520,7 +7520,7 @@ body.layout-fixed .lib-content {
   border: 1px solid var(--border);
   border-radius: 20px;
   background: var(--bg-2);
-  overflow: hidden;
+  overflow: clip; /* clip ≠ hidden: visually clips at border-radius but does NOT create a scroll container, so wheel events pass through to .main-body */
   min-width: 0;
 }
 
@@ -9745,8 +9745,18 @@ body {
 .analytics-filter-select,
 .knowledge-reference-input,
 .brand-channel-input,
-.brand-publish-input {
+.brand-publish-input,
+.knowledge-character-personality {
   min-height: 48px;
+}
+
+.knowledge-character-personality {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0 12px;
+  font: inherit;
+  color: var(--text);
 }
 
 .brand-studio-disclosure > summary,
