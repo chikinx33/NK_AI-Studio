@@ -7596,7 +7596,7 @@ details[open] > .knowledge-hub-disclosure-body {
 }
 
 .disclosure-inner {
-  overflow: hidden;
+  overflow: clip; /* clip: visually clips content at 0fr height for grid animation, but does NOT create a scroll container — prevents wheel-event absorption when disclosure is open */
   min-height: 0;
   padding: 12px 16px 16px;
 }
