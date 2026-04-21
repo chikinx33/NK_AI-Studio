@@ -822,12 +822,19 @@
       : options.slice());
     var contentTypeCards = orderedContentTypeOptions.map(function (item) {
       var isActive = item.id === effectiveSelectedType;
+      var stateLabel = isActive ? (selectedType ? '선택됨' : '자동 기본값') : '선택';
+      var outputChips = item.outputs.split('·').map(function (t) {
+        return '<span class="brand-content-type-output-chip">' + escapeHtml(t.trim()) + '</span>';
+      }).join('');
       return (
         '<button type="button" class="brand-content-type-card ' + (isActive ? 'is-active' : '') + '" data-action="brand-select-content-type" data-content-type="' + escapeHtml(item.id) + '">' +
-        '<span class="brand-content-type-state">' + (isActive ? (selectedType ? '선택됨' : '자동 기본값') : '선택') + '</span>' +
+        '<div class="brand-content-type-card-head">' +
+        '<span class="brand-content-type-state">' + stateLabel + '</span>' +
+        (isActive ? '<span class="brand-content-type-check" aria-hidden="true"></span>' : '') +
+        '</div>' +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
         '<p>' + escapeHtml(item.desc) + '</p>' +
-        '<span class="brand-content-type-output">' + escapeHtml(item.outputs) + '</span>' +
+        '<div class="brand-content-type-outputs">' + outputChips + '</div>' +
         '</button>'
       );
     }).join('');
