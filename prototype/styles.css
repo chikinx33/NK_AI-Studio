@@ -7508,8 +7508,24 @@ body.layout-fixed .lib-content {
 
 .brand-studio-disclosure-body,
 .knowledge-hub-disclosure-body {
-  padding: 12px 16px 16px;
+  display: grid !important;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 220ms ease;
   min-width: 0;
+}
+
+details[open] > .brand-studio-disclosure-body,
+details[open] > .knowledge-hub-disclosure-body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.disclosure-inner {
+  overflow: hidden;
+  min-height: 0;
+  padding: 12px 16px 16px;
 }
 
 .brand-studio-disclosure-meta,
@@ -9650,8 +9666,8 @@ body {
   background: color-mix(in srgb, var(--panel) 78%, rgba(255, 255, 255, 0.03) 22%);
 }
 
-.brand-studio-disclosure-body,
-.knowledge-hub-disclosure-body {
+.brand-studio-disclosure-body .disclosure-inner,
+.knowledge-hub-disclosure-body .disclosure-inner {
   padding: 0 20px 20px;
 }
 

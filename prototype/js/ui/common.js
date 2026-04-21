@@ -997,107 +997,35 @@
         return null;
     }
 
-    function clearDisclosureMotion(details, body) {
-        if (details && details.__nkDisclosureTimer) {
-            window.clearTimeout(details.__nkDisclosureTimer);
-            details.__nkDisclosureTimer = 0;
-        }
-        if (body && body.style) {
-            body.style.height = '';
-            body.style.overflow = '';
-            body.style.transition = '';
-            body.style.willChange = '';
-        }
-        if (details && details.classList) {
-            details.classList.remove('is-disclosure-animating');
-        }
-        if (details) {
-            details.__nkDisclosureTargetOpen = null;
-        }
-    }
-
-    function finishDisclosureMotion(details, body, expand) {
-        if (!details) return;
-        details.open = !!expand;
-        clearDisclosureMotion(details, body);
-        if (expand) {
-            try {
-                details.dispatchEvent(new CustomEvent('nk-disclosure-opened', { bubbles: true }));
-            } catch (_) { }
-        }
-    }
-
-    function animateDisclosure(details, expand) {
-        if (!details) return;
-        var body = getDisclosureBody(details);
-        if (!body) {
-            details.open = !!expand;
-            return;
-        }
-        if (prefersReducedMotion()) {
-            finishDisclosureMotion(details, body, expand);
-            return;
-        }
-
-        clearDisclosureMotion(details, body);
-        details.__nkDisclosureTargetOpen = !!expand;
-        details.classList.add('is-disclosure-animating');
-
-        var duration = 220;
-        var easing = 'cubic-bezier(0.22, 1, 0.36, 1)';
-
-        if (expand) {
-            var startHeight = details.open ? body.getBoundingClientRect().height : 0;
-            details.open = true;
-            var endHeight = body.scrollHeight;
-            body.style.height = startHeight + 'px';
-            body.style.overflow = 'hidden';
-            body.style.willChange = 'height';
-            body.getBoundingClientRect();
-            body.style.transition = 'height ' + duration + 'ms ' + easing;
-            window.requestAnimationFrame(function () {
-                body.style.height = endHeight + 'px';
-            });
-            details.__nkDisclosureTimer = window.setTimeout(function () {
-                finishDisclosureMotion(details, body, true);
-            }, duration + 40);
-            return;
-        }
-
-        if (!details.open) {
-            finishDisclosureMotion(details, body, false);
-            return;
-        }
-        var currentHeight = body.getBoundingClientRect().height || body.scrollHeight;
-        body.style.height = currentHeight + 'px';
-        body.style.overflow = 'hidden';
-        body.style.willChange = 'height';
-        body.getBoundingClientRect();
-        body.style.transition = 'height ' + duration + 'ms ' + easing;
-        window.requestAnimationFrame(function () {
-            body.style.height = '0px';
-        });
-        details.__nkDisclosureTimer = window.setTimeout(function () {
-            finishDisclosureMotion(details, body, false);
-        }, duration + 40);
-    }
-
     common.bindDisclosureMotion = function (root) {
         if (!root || !root.querySelectorAll) return;
         var disclosures = root.querySelectorAll('.brand-studio-disclosure, .knowledge-hub-disclosure');
         Array.prototype.forEach.call(disclosures, function (details) {
-            if (!details || details.__nkDisclosureMotionBound) return;
-            var summary = details.querySelector('summary');
+            if (!details) return;
             var body = getDisclosureBody(details);
-            if (!summary || !body) return;
-            details.__nkDisclosureMotionBound = true;
-            summary.addEventListener('click', function (evt) {
-                evt.preventDefault();
-                var currentTarget = typeof details.__nkDisclosureTargetOpen === 'boolean'
-                    ? details.__nkDisclosureTargetOpen
-                    : !!details.open;
-                animateDisclosure(details, !currentTarget);
-            });
+            if (!body) return;
+            // Wrap body children in .disclosure-inner so CSS grid animation can collapse to 0 height.
+            // Padding lives on .disclosure-inner, not on the grid container, so collapse reaches 0.
+            if (!body.__nkInnerWrapped) {
+                var inner = document.createElement('div');
+                inner.className = 'disclosure-inner';
+                while (body.firstChild) inner.appendChild(body.firstChild);
+                body.appendChild(inner);
+                body.__nkInnerWrapped = true;
+            }
+            // Native <details> open/close drives animation entirely via CSS grid-template-rows.
+            // No click interception — that was the root cause of the "no response" bug.
+            // Only attach toggle listener once to fire scroll/external events on open.
+            if (!details.__nkDisclosureToggleBound) {
+                details.__nkDisclosureToggleBound = true;
+                details.addEventListener('toggle', function () {
+                    if (details.open) {
+                        try {
+                            details.dispatchEvent(new CustomEvent('nk-disclosure-opened', { bubbles: true }));
+                        } catch (_) { }
+                    }
+                });
+            }
         });
     };
 
