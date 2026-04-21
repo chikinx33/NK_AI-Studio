@@ -990,7 +990,9 @@
         for (var i = 0; i < details.children.length; i++) {
             var child = details.children[i];
             if (!child || !child.classList) continue;
-            if (child.classList.contains('brand-studio-disclosure-body') || child.classList.contains('knowledge-hub-disclosure-body')) {
+            if (child.classList.contains('brand-studio-disclosure-body') ||
+                child.classList.contains('knowledge-hub-disclosure-body') ||
+                child.classList.contains('character-props-form')) {
                 return child;
             }
         }
@@ -999,7 +1001,7 @@
 
     common.bindDisclosureMotion = function (root) {
         if (!root || !root.querySelectorAll) return;
-        var disclosures = root.querySelectorAll('.brand-studio-disclosure, .knowledge-hub-disclosure');
+        var disclosures = root.querySelectorAll('.brand-studio-disclosure, .knowledge-hub-disclosure, .character-props-disclosure');
         Array.prototype.forEach.call(disclosures, function (details) {
             if (!details) return;
             var body = getDisclosureBody(details);

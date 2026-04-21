@@ -1023,6 +1023,11 @@
         '</div>' +
         previewHtml;
 
+      // character-props-disclosure 애니메이션 바인딩 (모달은 root 밖이므로 여기서 직접 호출)
+      if (NK.ui && NK.ui.common && typeof NK.ui.common.bindDisclosureMotion === 'function') {
+        NK.ui.common.bindDisclosureMotion(box);
+      }
+
       box.oninput = function (evt) {
         var el = evt.target;
         if (!el || !el.dataset || !el.dataset.charProp) return;

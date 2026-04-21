@@ -8141,10 +8141,26 @@ details[open] > .knowledge-hub-disclosure-body {
 .character-props-disclosure > summary::-webkit-details-marker { display: none; }
 .character-props-disclosure[open] > summary { color: var(--text, #f0f0f0); }
 .character-props-form {
+  display: grid !important;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  pointer-events: none;
+  transition: grid-template-rows 300ms cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 220ms ease;
+}
+
+.character-props-disclosure[open] > .character-props-form {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* .disclosure-inner 래퍼가 실제 flex 레이아웃과 패딩을 담당 */
+.character-props-form > .disclosure-inner {
+  padding: 8px 0 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 8px;
 }
 .character-props-label {
   display: flex;
