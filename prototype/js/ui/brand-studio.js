@@ -1258,17 +1258,13 @@
       if (action === 'brand-select-content-type') {
         var typeId = String(btn.dataset.contentType || '').trim();
         if (!typeId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        btn.disabled = true;
+        // Optimistic update: re-render immediately so the card shows "선택됨" without waiting for the server.
+        // The server save runs in the background; renderNext(result.draft) on success corrects any server-side
+        // normalizations (applyProjectCore). On failure the user gets an alert.
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioContentType: typeId }) }));
         NK.service.project.updatePayload(projectId, { brandStudioContentType: typeId })
-          .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
-          })
-          .catch(function (err) {
-            alert('콘텐츠 유형 저장 실패: ' + (err && err.message ? err.message : err));
-          })
-          .finally(function () {
-            btn.disabled = false;
-          });
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function (err) { alert('콘텐츠 유형 저장 실패: ' + (err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-oneclick-draft') {
@@ -1311,33 +1307,21 @@
       if (action === 'brand-filter-assets-type') {
         var nextTypeFilter = String(btn.dataset.assetTypeFilter || 'all').trim() || 'all';
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        btn.disabled = true;
+        // Optimistic: filter UI updates instantly; server save is background
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioAssetTypeFilter: nextTypeFilter }) }));
         NK.service.project.updatePayload(projectId, { brandStudioAssetTypeFilter: nextTypeFilter })
-          .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
-          })
-          .catch(function (err) {
-            alert('자산 유형 필터 저장 실패: ' + (err && err.message ? err.message : err));
-          })
-          .finally(function () {
-            btn.disabled = false;
-          });
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function (err) { alert('자산 유형 필터 저장 실패: ' + (err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-filter-assets-project') {
         var nextProjectFilter = String(btn.dataset.assetProjectFilter || 'all').trim() || 'all';
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        btn.disabled = true;
+        // Optimistic
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioAssetProjectFilter: nextProjectFilter }) }));
         NK.service.project.updatePayload(projectId, { brandStudioAssetProjectFilter: nextProjectFilter })
-          .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
-          })
-          .catch(function (err) {
-            alert('에피소드 필터 저장 실패: ' + (err && err.message ? err.message : err));
-          })
-          .finally(function () {
-            btn.disabled = false;
-          });
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function (err) { alert('에피소드 필터 저장 실패: ' + (err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-toggle-asset') {
@@ -1347,32 +1331,20 @@
         var selectedIdx = nextAssetIds.indexOf(assetId);
         if (selectedIdx >= 0) nextAssetIds.splice(selectedIdx, 1);
         else nextAssetIds.push(assetId);
-        btn.disabled = true;
+        // Optimistic
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: nextAssetIds }) }));
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextAssetIds })
-          .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
-          })
-          .catch(function (err) {
-            alert('브랜드 자산 선택 저장 실패: ' + (err && err.message ? err.message : err));
-          })
-          .finally(function () {
-            btn.disabled = false;
-          });
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function (err) { alert('브랜드 자산 선택 저장 실패: ' + (err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-clear-assets') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        btn.disabled = true;
+        // Optimistic
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: [] }) }));
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: [] })
-          .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
-          })
-          .catch(function (err) {
-            alert('선택 자산 초기화 실패: ' + (err && err.message ? err.message : err));
-          })
-          .finally(function () {
-            btn.disabled = false;
-          });
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function (err) { alert('선택 자산 초기화 실패: ' + (err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-generate-caption' || action === 'brand-regenerate-caption') {
