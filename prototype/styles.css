@@ -5334,7 +5334,7 @@ html.page-shell-image #sidebar-project-card {
   transform-origin: center center;
 }
 
-.postprod-preview-stack .postprod-preview-video-host {
+.postprod-preview-stack .postprod-preview-video-host .postprod-video {
   will-change: transform;
   transform-origin: center center;
 }

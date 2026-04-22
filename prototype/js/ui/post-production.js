@@ -2288,7 +2288,8 @@
         element.style.height = '100%';
       }
     } else if (element.tagName !== 'IMG') {
-      // 비디오 호스트: contain 크기로 호스트를 잘라 letterbox 제거
+      // 비디오 호스트(div): 클리핑 윈도우 역할 — 이미지의 wrapper와 동일한 원리
+      // host(overflow:hidden) → video(transform) : transform은 자식에 적용해야 clip이 유효함
       var vid = element.querySelector('video');
       var vw = vid ? vid.videoWidth : 0;
       var vh = vid ? vid.videoHeight : 0;
@@ -2318,6 +2319,7 @@
           hrh = hch;
           hrw = Math.round(hch * vidRatio);
         }
+        // 호스트: contain 영역으로 크기 고정, overflow:hidden으로 클리핑 (transform 없음)
         element.style.width = hrw + 'px';
         element.style.height = hrh + 'px';
         element.style.left = Math.round((hcw - hrw) / 2) + 'px';
@@ -2325,10 +2327,16 @@
         element.style.right = 'auto';
         element.style.bottom = 'auto';
         element.style.overflow = 'hidden';
+        element.style.transform = ''; // 호스트에 transform 걸지 않음
         if (vid) {
+          // 비디오: 호스트를 꽉 채우고 transform 받을 준비
           vid.style.objectFit = 'cover';
+          vid.style.position = 'absolute';
+          vid.style.inset = '0';
           vid.style.width = '100%';
           vid.style.height = '100%';
+          vid.style.willChange = 'transform';
+          vid.style.transformOrigin = 'center center';
         }
       }
     }
@@ -2336,7 +2344,15 @@
     var duration = Math.max(0.2, (clip.end || 0) - (clip.start || 0));
     var progress = clamp(((Number(sec) || 0) - (clip.start || 0)) / duration, 0, 1);
     var frame = motionSvc.computeMotionFrame(preset, progress);
-    element.style.transform = 'scale(' + frame.scale.toFixed(4) + ') translate(' + (frame.x * 100).toFixed(2) + '%, ' + (frame.y * 100).toFixed(2) + '%)';
+    var transformStr = 'scale(' + frame.scale.toFixed(4) + ') translate(' + (frame.x * 100).toFixed(2) + '%, ' + (frame.y * 100).toFixed(2) + '%)';
+
+    // 이미지: element(img) 자체에 transform / 비디오: 내부 video 요소에 transform
+    if (element.tagName !== 'IMG') {
+      var tVid = element.querySelector('video');
+      if (tVid) tVid.style.transform = transformStr;
+    } else {
+      element.style.transform = transformStr;
+    }
   }
 
   function clearMotionTransform(element) {
@@ -2354,9 +2370,14 @@
     } else {
       var vid = element.querySelector('video');
       if (vid) {
+        vid.style.transform = '';
         vid.style.objectFit = '';
+        vid.style.position = '';
+        vid.style.inset = '';
         vid.style.width = '';
         vid.style.height = '';
+        vid.style.willChange = '';
+        vid.style.transformOrigin = '';
       }
     }
     var wrapper = document.getElementById('postprod-motion-wrapper');
