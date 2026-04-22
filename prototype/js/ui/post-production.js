@@ -1172,6 +1172,27 @@
     return c;
   }
 
+  // Chrome/Edge는 여러 video 요소가 로드되면 비활성 비디오의 디코더를 suspend한다.
+  // 이 상태의 비디오에 currentTime/fastSeek을 호출해도 화면이 갱신되지 않는다
+  // (오직 모션 transform만 적용되어 "정지 영상 + 움직이는 효과"로 보임).
+  // muted play()는 디코더 파이프라인을 즉시 재활성화시킨다. play promise가 resolve되면
+  // 다시 pause하여 스크럽 상태로 되돌린다. 소리는 muted이므로 사용자는 알 수 없다.
+  function wakeVideoDecoder(video) {
+    if (!video) return;
+    if (!video.paused) return; // 이미 활성 상태
+    try { video.muted = true; } catch (_) {}
+    var p;
+    try { p = video.play(); } catch (_) {}
+    if (p && typeof p.then === 'function') {
+      p.then(function () {
+        // 재생 중이 아닐 때만 다시 pause — 재생 상태면 유지
+        if (!state.isPlaying && !video.paused) {
+          try { video.pause(); } catch (_) {}
+        }
+      }).catch(function () {});
+    }
+  }
+
   // 정확 seek(video.currentTime = t)는 타겟 프레임까지 전체 디코딩이 필요해 느리다.
   // fastSeek(t)은 가까운 키프레임으로 점프 — 스크럽 체감 지연의 핵심 해결책.
   function scrubSeekVideo(video, t) {
@@ -2796,9 +2817,12 @@
           video.play().catch(function () { });
         }
       } else {
+        // 디코더를 먼저 깨운다 — suspend된 비디오에 seek을 보내면 화면이 갱신되지 않음.
+        // play()는 동기적으로 디코더 활성화 플래그를 세팅하므로 직후의 seek이 유효해진다.
+        wakeVideoDecoder(video);
         if (needsSeek) scheduleScrubSeek('active:' + clip.id, video, liveClipTime);
-        try { video.pause(); } catch (_) {}
         try { video.muted = true; } catch (_) {}
+        // video.pause()는 wakeVideoDecoder의 play promise resolve 후 자동 호출됨
       }
     }
 
