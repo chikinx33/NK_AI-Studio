@@ -4006,6 +4006,12 @@ textarea::-webkit-scrollbar-corner {
 .scene-row.is-collapsed {
   border-bottom: 1px solid var(--border);
 }
+.scene-row.active-row {
+  outline: 1px solid #ff7a00;
+  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.25);
+  position: relative;
+  z-index: 1;
+}
 .scene-row.is-collapsed .scene-row-header {
   border-bottom: none;
   cursor: pointer;

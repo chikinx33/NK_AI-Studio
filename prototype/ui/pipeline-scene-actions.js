@@ -27,7 +27,21 @@
     if (!rootEl || rootEl.dataset.bound) return;
     rootEl.dataset.bound = '1';
 
+    // 씬 행 외부 클릭 시 선택 해제
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.scene-row')) {
+        rootEl.querySelectorAll('.scene-row.active-row').forEach(function (r) { r.classList.remove('active-row'); });
+      }
+    });
+
     rootEl.addEventListener('click', async function (e) {
+      /* ── 클릭된 씬 행 활성화 (주황 테두리) ── */
+      var clickedRow = e.target.closest('.scene-row:not(.head)');
+      if (clickedRow) {
+        rootEl.querySelectorAll('.scene-row.active-row').forEach(function (r) { r.classList.remove('active-row'); });
+        clickedRow.classList.add('active-row');
+      }
+
       /* ── scene-row toggle (접힘/펼침) ── */
       var toggleBtn = e.target.closest('.scene-row-toggle');
       var headerArea = e.target.closest('.scene-row-header');
