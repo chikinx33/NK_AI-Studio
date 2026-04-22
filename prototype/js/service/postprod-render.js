@@ -23,7 +23,17 @@
     return new Error('transcode_failed_' + status + (reason ? ('::' + reason) : ''));
   }
 
-  async function uploadRenderedBlobSource(projectId, blob, mimeType) {
+  function buildRenderTimestamp() {
+    var d = new Date();
+    var yy = String(d.getFullYear()).slice(-2);
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mn = String(d.getMinutes()).padStart(2, '0');
+    return yy + mm + dd + hh + mn;
+  }
+
+  async function uploadRenderedBlobSource(projectId, blob, mimeType, label) {
     if (!projectId) throw new Error('project_id_missing');
     if (!blob || !blob.size) throw new Error('render_blob_missing');
     if (!NK.api || !NK.api.videoUpload) {
@@ -31,7 +41,8 @@
     }
 
     var ext = String(mimeType || '').toLowerCase().indexOf('webm') >= 0 ? 'webm' : 'mp4';
-    var uploadName = 'postprod-final-source.' + ext;
+    var ts = String(label || '').trim() || buildRenderTimestamp();
+    var uploadName = ts + '.' + ext;
     var uploadFile = null;
     try {
       uploadFile = new File([blob], uploadName, { type: mimeType || 'video/webm' });
@@ -1126,6 +1137,7 @@
 
   // ─── Exports ──────────────────────────────────────────────────
 
+  postprodRender.buildRenderTimestamp = buildRenderTimestamp;
   postprodRender.uploadRenderedBlobSource = uploadRenderedBlobSource;
   postprodRender.transcodeSourceObjectToMp4 = transcodeSourceObjectToMp4;
   postprodRender.resolveMp4DownloadUrl = resolveMp4DownloadUrl;

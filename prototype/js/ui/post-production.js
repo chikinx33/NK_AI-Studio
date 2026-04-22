@@ -1423,10 +1423,22 @@
     });
   }
 
-  async function uploadRenderedBlobSource(projectId, blob, mimeType) {
+  function buildRenderTimestamp() {
+    var svc = getPostprodRenderService();
+    if (svc && svc.buildRenderTimestamp) return svc.buildRenderTimestamp();
+    var d = new Date();
+    var yy = String(d.getFullYear()).slice(-2);
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    var hh = String(d.getHours()).padStart(2, '0');
+    var mn = String(d.getMinutes()).padStart(2, '0');
+    return yy + mm + dd + hh + mn;
+  }
+
+  async function uploadRenderedBlobSource(projectId, blob, mimeType, label) {
     var svc = getPostprodRenderService();
     if (!svc || !svc.uploadRenderedBlobSource) throw new Error('postprod_render_service_missing');
-    return svc.uploadRenderedBlobSource(projectId, blob, mimeType);
+    return svc.uploadRenderedBlobSource(projectId, blob, mimeType, label);
   }
 
   async function transcodeSourceObjectToMp4(projectId, sourceObjectName, renderJobId, sourceDurationSec) {
@@ -1624,6 +1636,7 @@
     );
     updateRenderPanelUi();
 
+    var renderTs = buildRenderTimestamp();
     try {
       var result = await buildRenderedVideoBlob(state.model, renderJobId);
       if (state.renderJobId !== renderJobId) return;
@@ -1639,19 +1652,30 @@
       var pendingMp4 = false;
 
       if (isMp4Direct) {
-        // WebCodecs MP4: 서버 업로드 없이 로컬 blob URL 사용
+        // WebCodecs MP4: 로컬 blob URL로 즉시 사용 + 백그라운드로 스토리지 업로드
         if (oldUrl && oldUrl.indexOf('blob:') === 0) {
           try { URL.revokeObjectURL(oldUrl); } catch (_) { }
         }
         outputVideoUrl = URL.createObjectURL(result.blob);
         // blob 참조를 state에 보관 (다운로드용)
         state.lastRenderBlob = result.blob;
+        // 스토리지 관리를 위해 백그라운드로 서버에도 업로드
+        (function (capturedBlob, capturedMime, capturedTs, capturedJobId) {
+          uploadRenderedBlobSource(state.projectId, capturedBlob, capturedMime, capturedTs).then(function (up) {
+            if (state.renderJobId !== capturedJobId) return;
+            var objName = String((up && up.sourceObjectName) || '').trim();
+            if (objName) {
+              setRenderMetaLocal({ outputSourceObjectName: objName });
+            }
+          }).catch(function () { });
+        })(result.blob, outputVideoMime, renderTs, renderJobId);
       } else {
         // MediaRecorder WebM: 서버 업로드 + transcode 필요
         var uploaded = await uploadRenderedBlobSource(
           state.projectId,
           result.blob,
-          outputVideoMime
+          outputVideoMime,
+          renderTs
         );
         outputVideoUrl = String((uploaded && uploaded.sourceUrl) || '').trim();
         outputVideoMime = String((uploaded && uploaded.sourceMime) || outputVideoMime).trim();
@@ -1871,6 +1895,228 @@
       showMessageDialog('MP4 변환 실패: ' + msg + '\nWEBM 미리보기는 유지되며, 잠시 후 다시 다운로드를 시도할 수 있습니다.', 'MP4 변환 실패');
     }
   }
+
+  // ── 렌더 저장소 ──────────────────────────────────────────────────────────
+  var storageModal = null;
+
+  function formatFileSize(bytes) {
+    var n = Number(bytes) || 0;
+    if (n <= 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+    return (n / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+  }
+
+  function renderStorageItemLabel(name) {
+    // item.name is the full GCS object path; extract the base filename
+    var base = String(name || '').split('/').pop();
+    var label = base.replace(/\.(webm|mp4)$/i, '');
+    var ext = (/\.(webm|mp4)$/i.exec(base) || [])[1] || '';
+    return { label: label, ext: ext.toUpperCase(), base: base };
+  }
+
+  function ensureStorageModal() {
+    if (storageModal && storageModal.root && storageModal.root.parentNode) return storageModal;
+    if (typeof document === 'undefined' || !document.body) return null;
+
+    var overlay = document.createElement('div');
+    overlay.id = 'postprod-storage-overlay';
+    overlay.className = 'postprod-storage-overlay';
+    overlay.setAttribute('aria-hidden', 'true');
+    overlay.innerHTML =
+      '<div class="postprod-storage-dialog" role="dialog" aria-modal="true">' +
+      '<div class="postprod-storage-header">' +
+      '<h4 class="postprod-storage-title">렌더 저장소</h4>' +
+      '<button type="button" class="postprod-storage-close" id="postprod-storage-close" aria-label="닫기">✕</button>' +
+      '</div>' +
+      '<div class="postprod-storage-body" id="postprod-storage-body"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+
+    var closeBtn = overlay.querySelector('#postprod-storage-close');
+    if (closeBtn) closeBtn.onclick = closeStorageModal;
+    overlay.addEventListener('click', function (e) {
+      if (e.target === overlay) closeStorageModal();
+    });
+
+    storageModal = { root: overlay, body: overlay.querySelector('#postprod-storage-body') };
+    return storageModal;
+  }
+
+  function openStorageModal() {
+    var modal = ensureStorageModal();
+    if (!modal) return;
+    modal.root.classList.add('is-open');
+    modal.root.setAttribute('aria-hidden', 'false');
+    loadStorageItems();
+  }
+
+  function closeStorageModal() {
+    if (!storageModal || !storageModal.root) return;
+    storageModal.root.classList.remove('is-open');
+    storageModal.root.setAttribute('aria-hidden', 'true');
+  }
+
+  async function loadStorageItems() {
+    var modal = ensureStorageModal();
+    if (!modal) return;
+    var body = modal.body;
+    body.innerHTML = '<p class="postprod-storage-loading">불러오는 중...</p>';
+    if (!state.projectId || !NK.api || !NK.api.postprodRenderList) {
+      body.innerHTML = '<p class="postprod-storage-empty">저장소 API를 사용할 수 없습니다.</p>';
+      return;
+    }
+    try {
+      var items = await NK.api.postprodRenderList(state.projectId);
+      if (!items.length) {
+        body.innerHTML = '<p class="postprod-storage-empty">저장된 렌더 파일이 없습니다.</p>';
+        return;
+      }
+      // Sort newest first (filename is timestamp, so lexicographic desc works)
+      items.sort(function (a, b) {
+        var na = String(a && a.name || '').split('/').pop();
+        var nb = String(b && b.name || '').split('/').pop();
+        return nb.localeCompare(na);
+      });
+      var html = '<ul class="postprod-storage-list">';
+      items.forEach(function (item, idx) {
+        var objName = String(item && item.name || '').trim();
+        if (!objName) return;
+        var info = renderStorageItemLabel(objName);
+        var sizeStr = formatFileSize(item.size || item.contentLength);
+        html +=
+          '<li class="postprod-storage-item">' +
+          '<div class="postprod-storage-item-info">' +
+          '<span class="postprod-storage-item-name">' + escapeHtml(info.label) + '</span>' +
+          '<span class="postprod-storage-item-meta">' + escapeHtml(info.ext) + (sizeStr ? ' · ' + escapeHtml(sizeStr) : '') + '</span>' +
+          '</div>' +
+          '<div class="postprod-storage-item-actions">' +
+          '<button type="button" class="btn-secondary compact postprod-storage-use" data-idx="' + idx + '">사용</button>' +
+          '<button type="button" class="btn-danger compact postprod-storage-del" data-idx="' + idx + '">삭제</button>' +
+          '</div>' +
+          '</li>';
+      });
+      html += '</ul>';
+      body.innerHTML = html;
+      body.querySelectorAll('.postprod-storage-use').forEach(function (btn) {
+        btn.onclick = function () {
+          var idx = parseInt(btn.getAttribute('data-idx'), 10);
+          useStoredRender(items[idx]);
+        };
+      });
+      body.querySelectorAll('.postprod-storage-del').forEach(function (btn) {
+        btn.onclick = function () {
+          var idx = parseInt(btn.getAttribute('data-idx'), 10);
+          deleteStoredRender(items[idx], function () { loadStorageItems(); });
+        };
+      });
+    } catch (err) {
+      body.innerHTML = '<p class="postprod-storage-empty">불러오기 실패: ' + escapeHtml(String(err && err.message || err)) + '</p>';
+    }
+  }
+
+  async function useStoredRender(item) {
+    var objName = String(item && item.name || '').trim();
+    if (!objName || !NK.api || !NK.api.mediaProxyObjectUrl) return;
+    var url = NK.api.mediaProxyObjectUrl(objName);
+    var isWebm = /\.webm$/i.test(objName);
+    var isMp4 = /\.mp4$/i.test(objName);
+    var renderSvc = getPostprodStateService();
+    closeStorageModal();
+
+    if (isMp4) {
+      persistRenderMeta(
+        (renderSvc && renderSvc.buildRenderSuccessMeta)
+          ? renderSvc.buildRenderSuccessMeta(state.renderMeta || {}, {
+            outputVideoUrl: url,
+            outputVideoDownloadUrl: url,
+            outputVideoObjectName: objName,
+            outputVideoMime: 'video/mp4',
+            transcodePending: false,
+            error: ''
+          })
+          : {
+            status: 'done',
+            progress: 100,
+            outputVideoUrl: url,
+            outputVideoDownloadUrl: url,
+            outputVideoObjectName: objName,
+            outputVideoMime: 'video/mp4',
+            transcodePending: false,
+            error: ''
+          }
+      );
+      updateRenderPanelUi();
+      return;
+    }
+
+    if (isWebm) {
+      // WebM 소스를 MP4로 트랜스코드
+      var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
+      var sourceDurationSec = Number(meta && meta.outputDurationSec) || 0;
+      if (!(sourceDurationSec > 0)) sourceDurationSec = Math.max(0.2, Number(getTimelinePlaybackDuration(state.model)) || 0);
+      setRenderMetaLocal({
+        status: 'rendering',
+        progress: 74,
+        error: '',
+        outputSourceObjectName: objName
+      });
+      try {
+        var tcResult = await transcodeSourceObjectToMp4(state.projectId, objName, undefined, sourceDurationSec);
+        persistRenderMeta(
+          (renderSvc && renderSvc.buildRenderSuccessMeta)
+            ? renderSvc.buildRenderSuccessMeta(state.renderMeta || {}, {
+              outputVideoUrl: tcResult.previewUrl || tcResult.downloadUrl,
+              outputVideoDownloadUrl: tcResult.downloadUrl || tcResult.previewUrl,
+              outputVideoObjectName: tcResult.outputObjectName,
+              outputVideoMime: 'video/mp4',
+              outputSourceObjectName: objName,
+              outputDurationSec: sourceDurationSec,
+              transcodePending: false,
+              error: ''
+            })
+            : {
+              status: 'done',
+              progress: 100,
+              outputVideoUrl: tcResult.previewUrl || tcResult.downloadUrl,
+              outputVideoDownloadUrl: tcResult.downloadUrl || tcResult.previewUrl,
+              outputVideoObjectName: tcResult.outputObjectName,
+              outputVideoMime: 'video/mp4',
+              outputSourceObjectName: objName,
+              transcodePending: false,
+              error: ''
+            }
+        );
+      } catch (err) {
+        persistRenderMeta({ status: 'failed', error: '트랜스코드 실패: ' + getRenderErrorMessage(err) });
+      }
+      updateRenderPanelUi();
+    }
+  }
+
+  async function deleteStoredRender(item, onDone) {
+    var objName = String(item && item.name || '').trim();
+    if (!objName) return;
+    if (!NK.api || !NK.api.postprodRenderDelete) {
+      showMessageDialog('삭제 API를 사용할 수 없습니다.', '저장소');
+      return;
+    }
+    // 현재 출력과 동일한 파일이면 renderMeta 초기화
+    var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
+    if (String(meta && meta.outputSourceObjectName) === objName ||
+        String(meta && meta.outputVideoObjectName) === objName) {
+      persistRenderMeta({ status: 'idle', outputVideoUrl: '', outputVideoDownloadUrl: '', outputVideoObjectName: '', outputSourceObjectName: '', error: '' });
+      updateRenderPanelUi();
+    }
+    try {
+      await NK.api.postprodRenderDelete(state.projectId, objName);
+    } catch (err) {
+      showMessageDialog('삭제 실패: ' + getRenderErrorMessage(err), '저장소');
+    }
+    if (typeof onDone === 'function') onDone();
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   function canUndo() {
     return state.historyIndex >= 0;
@@ -3132,6 +3378,7 @@
       '<div class="postprod-render-actions top">' +
       '<button class="btn-primary compact postprod-save-btn" id="postprod-save-btn"' + (state.saveBusy ? ' disabled' : '') + '>' + (state.saveBusy ? t('저장 중...') : t('저장하기')) + '</button>' +
       '<button class="btn-secondary compact" id="postprod-render-btn">' + t('렌더링') + '</button>' +
+      '<button class="btn-secondary compact" id="postprod-storage-btn">' + t('저장소') + '</button>' +
       '</div>' +
       '<p class="postprod-save-state" id="postprod-save-state"></p>' +
       '<p class="postprod-render-progress" id="postprod-render-progress"></p>' +
@@ -3925,6 +4172,8 @@
     if (saveBtn) saveBtn.onclick = saveProjectNow;
     var renderBtn = document.getElementById('postprod-render-btn');
     if (renderBtn) renderBtn.onclick = function () { startRenderProcess(false); };
+    var storageBtn = document.getElementById('postprod-storage-btn');
+    if (storageBtn) storageBtn.onclick = openStorageModal;
     var rerenderBtn = document.getElementById('postprod-rerender-btn');
     if (rerenderBtn) rerenderBtn.onclick = function () { startRenderProcess(true); };
     var srtBtn = document.getElementById('postprod-download-srt-btn');

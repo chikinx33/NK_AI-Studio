@@ -431,6 +431,24 @@
     return data;
   };
 
+  api.postprodRenderList = async function (projectId) {
+    if (!projectId) return [];
+    try {
+      var res = await api.library('video', projectId);
+      var items = Array.isArray(res && res.items) ? res.items : [];
+      return items.filter(function (item) {
+        var name = String(item && item.name || '');
+        return name.indexOf('postprod-final') >= 0;
+      });
+    } catch (_) {
+      return [];
+    }
+  };
+
+  api.postprodRenderDelete = async function (projectId, objectName) {
+    return api.projectDelete(projectId, String(objectName || ''));
+  };
+
   api.library = async function (kind, projectId) {
     var uid = resolveUserId();
     var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
