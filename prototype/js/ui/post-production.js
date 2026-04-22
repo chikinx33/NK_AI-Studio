@@ -621,7 +621,19 @@
     var svc = getPostprodStateService();
     if (!svc || !svc.persistRenderMeta || !state.projectId) return;
     var nextProject = svc.persistRenderMeta(state.projectId, metaPatch);
-    state.renderMeta = getRenderMeta(nextProject);
+    // persistRenderMeta는 blob: URL을 localStorage에 저장하지 않으므로,
+    // 현재 세션의 in-memory state에는 blob URL을 복원해둔다 (새로고침 전까지 미리보기 유지)
+    var nextMeta = getRenderMeta(nextProject);
+    var patch = metaPatch || {};
+    if (String(patch.outputVideoUrl || '').indexOf('blob:') === 0) {
+      nextMeta = Object.assign({}, nextMeta, {
+        outputVideoUrl: patch.outputVideoUrl,
+        outputVideoDownloadUrl: String(patch.outputVideoDownloadUrl || '').indexOf('blob:') === 0
+          ? patch.outputVideoDownloadUrl
+          : nextMeta.outputVideoDownloadUrl
+      });
+    }
+    state.renderMeta = nextMeta;
   }
 
   function setDirty(v) {
@@ -1945,6 +1957,9 @@
       '<h4 class="postprod-storage-title">렌더 저장소</h4>' +
       '<button type="button" class="postprod-storage-close" id="postprod-storage-close" aria-label="닫기">✕</button>' +
       '</div>' +
+      '<div class="postprod-storage-preview-wrap" id="postprod-storage-preview-wrap" style="display:none">' +
+      '<video class="postprod-storage-preview-video" id="postprod-storage-preview-video" controls playsinline></video>' +
+      '</div>' +
       '<div class="postprod-storage-body" id="postprod-storage-body"></div>' +
       '</div>';
     document.body.appendChild(overlay);
@@ -1955,8 +1970,25 @@
       if (e.target === overlay) closeStorageModal();
     });
 
-    storageModal = { root: overlay, body: overlay.querySelector('#postprod-storage-body') };
+    storageModal = {
+      root: overlay,
+      body: overlay.querySelector('#postprod-storage-body'),
+      previewWrap: overlay.querySelector('#postprod-storage-preview-wrap'),
+      previewVideo: overlay.querySelector('#postprod-storage-preview-video')
+    };
     return storageModal;
+  }
+
+  function previewStoredRender(item) {
+    var modal = ensureStorageModal();
+    if (!modal || !modal.previewWrap || !modal.previewVideo) return;
+    var objName = String(item && item.name || '').trim();
+    if (!objName || !NK.api || !NK.api.mediaProxyObjectUrl) return;
+    var url = NK.api.mediaProxyObjectUrl(objName);
+    modal.previewWrap.style.display = 'block';
+    modal.previewVideo.src = url;
+    try { modal.previewVideo.play(); } catch (_) { }
+    modal.previewVideo.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
   function openStorageModal() {
@@ -2008,7 +2040,7 @@
         var sizeStr = formatFileSize(item.size || item.contentLength);
         html +=
           '<li class="postprod-storage-item">' +
-          '<div class="postprod-storage-item-thumb" aria-hidden="true">' +
+          '<button type="button" class="postprod-storage-item-thumb postprod-storage-preview-btn" data-idx="' + idx + '" title="클릭하여 미리보기">' +
           '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
           '<rect x="2" y="2" width="20" height="20" rx="2"/>' +
           '<line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>' +
@@ -2016,7 +2048,7 @@
           '<line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/>' +
           '<line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/>' +
           '</svg>' +
-          '</div>' +
+          '</button>' +
           '<div class="postprod-storage-item-info">' +
           '<span class="postprod-storage-item-name">' + escapeHtml(info.label) + '</span>' +
           '<span class="postprod-storage-item-meta">' + escapeHtml(info.ext) + (sizeStr ? ' · ' + escapeHtml(sizeStr) : '') + '</span>' +
@@ -2029,6 +2061,12 @@
       });
       html += '</ul>';
       body.innerHTML = html;
+      body.querySelectorAll('.postprod-storage-preview-btn').forEach(function (btn) {
+        btn.onclick = function () {
+          var idx = parseInt(btn.getAttribute('data-idx'), 10);
+          previewStoredRender(items[idx]);
+        };
+      });
       body.querySelectorAll('.postprod-storage-use').forEach(function (btn) {
         btn.onclick = function () {
           var idx = parseInt(btn.getAttribute('data-idx'), 10);

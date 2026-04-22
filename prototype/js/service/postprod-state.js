@@ -142,9 +142,24 @@
   }
 
   function persistRenderMeta(projectId, metaPatch) {
+    // blob: URL은 페이지 새로고침 후 무효화되므로 localStorage에 저장하지 않음
+    var patch = Object.assign({}, metaPatch || {});
+    if (String(patch.outputVideoUrl || '').indexOf('blob:') === 0) {
+      patch.outputVideoUrl = '';
+    }
+    if (String(patch.outputVideoDownloadUrl || '').indexOf('blob:') === 0) {
+      patch.outputVideoDownloadUrl = '';
+    }
+    if (String(patch.outputSrtUrl || '').indexOf('blob:') === 0) {
+      patch.outputSrtUrl = '';
+    }
     return updateDraftProject(projectId, function (target) {
       var currentMeta = getRenderMeta(target);
-      var nextMeta = Object.assign({}, currentMeta, metaPatch || {});
+      // target 자체에 남아있는 기존 blob URL도 제거
+      if (String(currentMeta.outputVideoUrl || '').indexOf('blob:') === 0) {
+        currentMeta = Object.assign({}, currentMeta, { outputVideoUrl: '', outputVideoDownloadUrl: '' });
+      }
+      var nextMeta = Object.assign({}, currentMeta, patch);
       var nextPayload = Object.assign({}, target.payload || {}, { renderMeta: nextMeta });
       return Object.assign({}, target, {
         payload: nextPayload,
