@@ -51,7 +51,11 @@
     captionTemplate: -1,
     sessionEdits: {},
     lastRenderBlob: null,
-    overlayClips: []
+    overlayClips: [],
+    // DOM element caches (cleared on renderLayout)
+    cachedPlayheads: null,
+    cachedTimeNow: null,
+    cachedScrubRange: null
   };
 
   function safeParse(text) {
@@ -2193,11 +2197,24 @@
     if (!sub) return;
     var labels = getActiveSubtitleLabels(state.model, sec);
     if (!state.captionsEnabled || !labels.length) {
-      sub.style.display = 'none';
-      sub.setAttribute('aria-hidden', 'true');
-      sub.innerHTML = '';
+      // 이미 숨겨진 상태면 재처리 불필요
+      if (sub.__lastSubVisible) {
+        sub.style.display = 'none';
+        sub.setAttribute('aria-hidden', 'true');
+        sub.innerHTML = '';
+        sub.__lastSubKey = '';
+        sub.__lastSubVisible = false;
+      }
       return;
     }
+
+    // 렌더링 영향 요소로 캐시 키 구성 — 변화 없으면 DOM 갱신 생략
+    var subKey = labels.join('\x00') + '|' + (state.captionSizeScale || 1) + '|' +
+      (state.captionFont || '') + '|' + (state.captionColor || '') + '|' +
+      (state.captionBg || '') + '|' + (state.captionPosition || 6) + '|' + (state.captionEffect || '');
+    if (sub.__lastSubKey === subKey && sub.__lastSubVisible) return;
+    sub.__lastSubKey = subKey;
+    sub.__lastSubVisible = true;
 
     var sizePx = Math.max(18, Math.round(22 * (state.captionSizeScale || 1)));
     var bg = String(state.captionBg || '').trim();
@@ -2305,38 +2322,44 @@
         }
         return;
       }
-      var hostContainer = element.parentElement;
-      var hcw = hostContainer ? hostContainer.clientWidth : 0;
-      var hch = hostContainer ? hostContainer.clientHeight : 0;
-      if (hcw && hch) {
-        var vidRatio = vw / vh;
-        var hcRatio = hcw / hch;
-        var hrw, hrh;
-        if (vidRatio > hcRatio) {
-          hrw = hcw;
-          hrh = Math.round(hcw / vidRatio);
-        } else {
-          hrh = hch;
-          hrw = Math.round(hch * vidRatio);
-        }
-        // 호스트: contain 영역으로 크기 고정, overflow:hidden으로 클리핑 (transform 없음)
-        element.style.width = hrw + 'px';
-        element.style.height = hrh + 'px';
-        element.style.left = Math.round((hcw - hrw) / 2) + 'px';
-        element.style.top = Math.round((hch - hrh) / 2) + 'px';
-        element.style.right = 'auto';
-        element.style.bottom = 'auto';
-        element.style.overflow = 'hidden';
-        element.style.transform = ''; // 호스트에 transform 걸지 않음
-        if (vid) {
-          // 비디오: 호스트를 꽉 채우고 transform 받을 준비
-          vid.style.objectFit = 'cover';
-          vid.style.position = 'absolute';
-          vid.style.inset = '0';
-          vid.style.width = '100%';
-          vid.style.height = '100%';
-          vid.style.willChange = 'transform';
-          vid.style.transformOrigin = 'center center';
+      // 클립이 바뀔 때만 contain 크기 재계산 (clientWidth/Height 읽기 = layout reflow)
+      // 같은 클립의 반복 프레임에서는 캐시된 크기 사용 → layout thrashing 방지
+      var clipIdForCache = clip && clip.id;
+      if (element.__motionClipId !== clipIdForCache) {
+        element.__motionClipId = clipIdForCache;
+        var hostContainer = element.parentElement;
+        var hcw = hostContainer ? hostContainer.clientWidth : 0;
+        var hch = hostContainer ? hostContainer.clientHeight : 0;
+        if (hcw && hch) {
+          var vidRatio = vw / vh;
+          var hcRatio = hcw / hch;
+          var hrw, hrh;
+          if (vidRatio > hcRatio) {
+            hrw = hcw;
+            hrh = Math.round(hcw / vidRatio);
+          } else {
+            hrh = hch;
+            hrw = Math.round(hch * vidRatio);
+          }
+          // 호스트: contain 영역으로 크기 고정, overflow:hidden으로 클리핑 (transform 없음)
+          element.style.width = hrw + 'px';
+          element.style.height = hrh + 'px';
+          element.style.left = Math.round((hcw - hrw) / 2) + 'px';
+          element.style.top = Math.round((hch - hrh) / 2) + 'px';
+          element.style.right = 'auto';
+          element.style.bottom = 'auto';
+          element.style.overflow = 'hidden';
+          element.style.transform = ''; // 호스트에 transform 걸지 않음
+          if (vid) {
+            // 비디오: 호스트를 꽉 채우고 transform 받을 준비
+            vid.style.objectFit = 'cover';
+            vid.style.position = 'absolute';
+            vid.style.inset = '0';
+            vid.style.width = '100%';
+            vid.style.height = '100%';
+            vid.style.willChange = 'transform';
+            vid.style.transformOrigin = 'center center';
+          }
         }
       }
     }
@@ -2443,6 +2466,29 @@
 
     var isVideo = isVideoUrl(clip.url);
     var clipChanged = state.previewClipId !== clip.id || state.previewClipUrl !== playableUrl;
+
+    // ── Fast path: 동일 클립 ────────────────────────────────────────────────
+    // 클립이 바뀌지 않았으면 display 토글·마운트 등 무거운 작업은 건너뛰고
+    // transform과 자막만 갱신 (rAF 60fps 루프 최적화 핵심)
+    if (!clipChanged) {
+      if (isVideo) {
+        applyMotionTransform(host, clip, sec);
+        // 버퍼링 등으로 일시 정지된 경우 재개 (단, seeking 중이면 seeked 이벤트로 처리)
+        var fpEntry = state.previewVideoCache && state.previewVideoCache[clip.id];
+        var fpVid = fpEntry && fpEntry.video;
+        if (fpVid && state.isPlaying && fpVid.paused && !fpVid.seeking) {
+          try { fpVid.muted = false; } catch (_) {}
+          fpVid.play().catch(function () {});
+        }
+      } else {
+        applyMotionTransform(image, clip, sec);
+      }
+      renderPreviewOverlay(sec);
+      renderPreviewSubtitles(sec, sub);
+      return;
+    }
+    // ── End fast path ────────────────────────────────────────────────────────
+
     if (!isVideo) {
       if (state.previewClipUrl !== playableUrl) {
         image.src = playableUrl;
@@ -2503,15 +2549,32 @@
       pausePreviewVideos(clip.id);
       clearMotionTransform(image);
       applyMotionTransform(host, clip, state.currentTime);
-      if (Math.abs((video.currentTime || 0) - clipTime) > 0.12) {
-        try { video.currentTime = clipTime; } catch (_) { }
-      }
+
+      var needsSeek = Math.abs((video.currentTime || 0) - clipTime) > 0.12;
       if (state.isPlaying) {
-        try { video.muted = false; } catch (_) { }
-        video.play().catch(function () { });
+        try { video.muted = false; } catch (_) {}
+        if (needsSeek) {
+          // seek 완료 후 play — seek 도중 play 호출 시 오디오 손실 방지
+          var onSeeked = function () {
+            video.removeEventListener('seeked', onSeeked);
+            if (state.isPlaying && video.paused) {
+              video.play().catch(function () {});
+            }
+          };
+          video.addEventListener('seeked', onSeeked);
+          try { video.currentTime = clipTime; } catch (_) {
+            video.removeEventListener('seeked', onSeeked);
+          }
+        } else if (video.paused) {
+          // 이미 올바른 위치에 있고 일시정지 상태일 때만 play 호출
+          video.play().catch(function () {});
+        }
       } else {
-        try { video.pause(); } catch (_) { }
-        try { video.muted = true; } catch (_) { }
+        if (needsSeek) {
+          try { video.currentTime = clipTime; } catch (_) {}
+        }
+        try { video.pause(); } catch (_) {}
+        try { video.muted = true; } catch (_) {}
       }
     };
 
@@ -2630,9 +2693,12 @@
     var status = (meta && meta.status) || 'idle';
     if (state.dirty && status !== 'rendering') status = 'needs_save';
 
-    // innerHTML 재구성 시 미리보기 요소가 교체되므로 clip 추적 초기화
+    // innerHTML 재구성 시 미리보기 요소가 교체되므로 clip 추적 및 DOM 캐시 초기화
     state.previewClipId = '';
     state.previewClipUrl = '';
+    state.cachedPlayheads = null;
+    state.cachedTimeNow = null;
+    state.cachedScrubRange = null;
 
     root.innerHTML =
       '<section class="postprod-workspace">' +
@@ -2761,7 +2827,11 @@
     if (!state.model) return;
     var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
     var left = Math.round((state.currentTime / duration) * state.laneWidth);
-    document.querySelectorAll('.postprod-playhead').forEach(function (el) {
+    // 캐시된 playhead 요소 사용 (매 프레임 querySelectorAll 방지)
+    if (!state.cachedPlayheads) {
+      state.cachedPlayheads = Array.from(document.querySelectorAll('.postprod-playhead'));
+    }
+    state.cachedPlayheads.forEach(function (el) {
       el.style.left = left + 'px';
     });
   }
@@ -2780,10 +2850,11 @@
   function updateTimeUi() {
     var model = state.model;
     if (!model) return;
-    var nowEl = document.getElementById('postprod-time-now');
-    var scrubEl = document.getElementById('postprod-scrub-range');
-    if (nowEl) nowEl.textContent = formatTime(state.currentTime);
-    if (scrubEl) scrubEl.value = String(state.currentTime);
+    // 캐시된 요소 사용 (매 프레임 getElementById 방지)
+    if (!state.cachedTimeNow) state.cachedTimeNow = document.getElementById('postprod-time-now');
+    if (!state.cachedScrubRange) state.cachedScrubRange = document.getElementById('postprod-scrub-range');
+    if (state.cachedTimeNow) state.cachedTimeNow.textContent = formatTime(state.currentTime);
+    if (state.cachedScrubRange) state.cachedScrubRange.value = String(state.currentTime);
     updatePlayheadUi();
   }
 
