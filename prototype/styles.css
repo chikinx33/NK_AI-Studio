@@ -6042,7 +6042,9 @@ html.page-shell-image #sidebar-project-card {
   position: relative;
   height: 40px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.02);
+  background-color: rgba(255, 255, 255, 0.02);
+  background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 0);
+  background-size: 80px 100%; /* JS에서 pxPerSecond에 맞게 인라인으로 재설정됨 */
   cursor: pointer;
 }
 
@@ -6132,7 +6134,7 @@ html.page-shell-image #sidebar-project-card {
 }
 
 .postprod-clip.is-selected {
-  box-shadow: 0 0 0 2px rgba(122, 183, 255, 0.72), inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 2px rgba(122, 183, 255, 0.95), inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 .postprod-track-overlays .postprod-clip {
@@ -6198,7 +6200,8 @@ html.page-shell-image #sidebar-project-card {
 }
 
 [data-theme="light"] .postprod-track-lane {
-  background: rgba(13, 23, 47, 0.04);
+  background-color: rgba(13, 23, 47, 0.04);
+  background-image: linear-gradient(90deg, rgba(13, 23, 47, 0.12) 1px, transparent 0);
   border-bottom-color: #d8e3f6;
 }
 
@@ -6246,6 +6249,47 @@ html.page-shell-image #sidebar-project-card {
 
 .postprod-playhead.ruler-playhead {
   height: 24px;
+}
+
+/* 플레이헤드 삼각형 핸들 (ruler 하단에서 타임라인으로 이어지는 시각적 핸들) */
+.postprod-playhead.ruler-playhead::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid #ffd500;
+  filter: drop-shadow(0 2px 4px rgba(255, 213, 0, 0.5));
+}
+
+/* ── Blade(자르기) 모드 ── */
+#postprod-timeline-scroll.is-blade-mode .postprod-clip {
+  cursor: crosshair;
+}
+
+#postprod-timeline-scroll.is-blade-mode .postprod-clip:hover {
+  box-shadow: inset 0 0 0 2px rgba(255, 70, 70, 0.9);
+}
+
+/* 블레이드 모드에서 클립 위에 커서 위치를 나타내는 수직선 */
+#postprod-timeline-scroll.is-blade-mode .postprod-clip::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--blade-x, 50%);
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 70, 70, 0.0);
+  pointer-events: none;
+  z-index: 10;
+}
+
+#postprod-timeline-scroll.is-blade-mode .postprod-clip:hover::after {
+  background: rgba(255, 70, 70, 0.75);
 }
 
 .postprod-dragging {

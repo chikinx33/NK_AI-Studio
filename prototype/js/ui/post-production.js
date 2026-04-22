@@ -53,6 +53,7 @@
     lastRenderBlob: null,
     overlayClips: [],
     motionEnabled: true,
+    bladeMode: false,
     // DOM element caches (cleared on renderLayout)
     cachedPlayheads: null,
     cachedTimeNow: null,
@@ -1722,6 +1723,17 @@
 
   function applyTimelineEdits(model, editMap) {
     var maxEnd = model.totalDuration;
+
+    // split으로 생성된 신규 클립 수집 (isNew:true 항목)
+    var newClipsByTrack = {};
+    Object.keys(editMap || {}).forEach(function (clipId) {
+      var edit = editMap[clipId];
+      if (!edit || !edit.isNew) return;
+      var key = edit.trackKey || 'visuals';
+      if (!newClipsByTrack[key]) newClipsByTrack[key] = [];
+      newClipsByTrack[key].push({ id: clipId, edit: edit });
+    });
+
     model.tracks.forEach(function (track) {
       var clips = Array.isArray(track.clips) ? track.clips : [];
       track.clips = clips.map(function (clip) {
@@ -1739,6 +1751,27 @@
         var motionPreset = edit.motionPreset || clip.motionPreset || 'none';
         return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset });
       }).filter(Boolean);
+
+      // split으로 생성된 신규 클립을 트랙에 삽입
+      var newInTrack = newClipsByTrack[track.key] || [];
+      newInTrack.forEach(function (item) {
+        var edit = item.edit;
+        var sourceClip = track.clips.find(function (c) { return c && c.id === edit.sourceId; }) || null;
+        var start = clamp(toNumber(edit.start, 0), 0, model.totalDuration - 0.2);
+        var end = clamp(toNumber(edit.end, start + 0.2), start + 0.2, model.totalDuration);
+        maxEnd = Math.max(maxEnd, end);
+        var newClip = Object.assign({}, sourceClip || {}, {
+          id: item.id,
+          start: start,
+          end: end,
+          baseDuration: Math.max(0.2, end - start),
+          motionPreset: edit.motionPreset || (sourceClip && sourceClip.motionPreset) || 'none'
+        });
+        track.clips.push(newClip);
+      });
+      if (newInTrack.length > 0) {
+        track.clips.sort(function (a, b) { return a.start - b.start; });
+      }
     });
     model.totalDuration = Math.max(model.totalDuration, Math.ceil(maxEnd));
     model.contentDuration = getTimelineContentDuration(model);
@@ -2143,10 +2176,11 @@
         }
       }
 
+      var gridPx = Math.max(8, Math.round(laneWidth / duration));
       return (
         '<div class="postprod-track-row postprod-track-' + track.key + '" style="width:' + (laneWidth + 170) + 'px">' +
         '<div class="postprod-track-label"><span class="track-badge">' + track.badge + '</span><span class="track-name">' + track.name + '</span></div>' +
-        '<div class="postprod-track-lane" style="width:' + laneWidth + 'px">' +
+        '<div class="postprod-track-lane" style="width:' + laneWidth + 'px;background-size:' + gridPx + 'px 100%">' +
         clipsHtml +
         '<div class="postprod-playhead" style="left:' + playheadLeft + 'px"></div>' +
         '</div>' +
@@ -2796,6 +2830,9 @@
       '<button class="postprod-pill' + (state.motionEnabled ? ' active' : '') + '" id="postprod-motion-toggle" type="button">' + t('효과') + '</button>' +
       '<select id="postprod-motion-select">' + buildMotionOptionsHtml() + '</select>' +
       '</div>' +
+      '<div class="postprod-toolbar-group">' +
+      '<button class="postprod-pill' + (state.bladeMode ? ' active' : '') + '" id="postprod-blade-toggle" type="button" title="' + t('클립 자르기') + ' (B)">✂</button>' +
+      '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
       '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="' + t('되돌리기') + '"' + (canUndo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>' +
       '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-redo-btn" title="' + t('다시 실행') + '"' + (canRedo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>' +
@@ -3055,6 +3092,25 @@
       syncPreviewMedia(state.currentTime);
       return;
     }
+    if (type === 'split') {
+      var edits = state.sessionEdits || (state.sessionEdits = {});
+      if (toAfter) {
+        // Redo: 원본 클립 end 단축 + 신규 클립 복원
+        persistTimelineEdit(action.clipId, action.origStart, action.splitTime);
+        edits[action.newClipId] = {
+          isNew: true, sourceId: action.clipId, trackKey: action.trackKey,
+          start: action.splitTime, end: action.origEnd
+        };
+      } else {
+        // Undo: 원본 클립 end 복원 + 신규 클립 제거
+        persistTimelineEdit(action.clipId, action.origStart, action.origEnd);
+        delete edits[action.newClipId];
+      }
+      state.selectedClipId = action.clipId;
+      post.render();
+      setDirty(true);
+      return;
+    }
     var ok = setClipRange(action.clipId, start, end, true);
     if (ok) {
       state.selectedClipId = action.clipId;
@@ -3088,6 +3144,23 @@
     var isEditable = (target && target.isContentEditable) || tag === 'input' || tag === 'textarea' || tag === 'select';
     if (isEditable) return;
     var key = String(evt.key || '').toLowerCase();
+    if (key === 'escape') {
+      if (state.bladeMode) {
+        state.bladeMode = false;
+        var btEsc = document.getElementById('postprod-blade-toggle');
+        if (btEsc) btEsc.classList.remove('active');
+        updateBladeModeUi();
+      }
+      return;
+    }
+    if (key === 'b') {
+      evt.preventDefault();
+      state.bladeMode = !state.bladeMode;
+      var btB = document.getElementById('postprod-blade-toggle');
+      if (btB) btB.classList.toggle('active', state.bladeMode);
+      updateBladeModeUi();
+      return;
+    }
     if (key === 'delete' || key === 'backspace') {
       if (state.selectedClipId) {
         evt.preventDefault();
@@ -3228,6 +3301,68 @@
 
   function onWindowPointerUp() {
     endClipDrag();
+  }
+
+  // ── Blade(자르기) 모드 ──────────────────────────────────────
+  function updateBladeModeUi() {
+    var scroll = document.getElementById('postprod-timeline-scroll');
+    if (scroll) scroll.classList.toggle('is-blade-mode', !!state.bladeMode);
+  }
+
+  function splitClip(clipId, atTime) {
+    var clipMeta = findClipMeta(clipId);
+    var clip = clipMeta && clipMeta.clip;
+    var track = clipMeta && clipMeta.track;
+    if (!clip || !track || !state.model) return;
+
+    var minLen = 0.2;
+    var t = round1(clamp(atTime, clip.start + minLen, clip.end - minLen));
+    if (t <= clip.start || t >= clip.end) return;
+
+    var origStart = clip.start;
+    var origEnd = clip.end;
+    var newId = clipId + '__split__' + Date.now();
+
+    // 원본 클립: end를 자르기 지점까지 단축
+    clip.end = t;
+    persistTimelineEdit(clipId, clip.start, t);
+
+    // 신규 클립: 자르기 지점부터 원본 end까지
+    var newClip = Object.assign({}, clip, {
+      id: newId,
+      start: t,
+      end: origEnd,
+      baseDuration: Math.max(minLen, origEnd - t),
+      motionPreset: clip.motionPreset || 'none'
+    });
+
+    // 트랙에 삽입 (in-memory 즉시 반영)
+    var idx = track.clips.indexOf(clip);
+    if (idx >= 0) track.clips.splice(idx + 1, 0, newClip);
+    else track.clips.push(newClip);
+
+    // sessionEdits에 저장 → post.render() 재구축 시에도 유지
+    var edits = state.sessionEdits || (state.sessionEdits = {});
+    edits[newId] = {
+      isNew: true,
+      sourceId: clipId,
+      trackKey: track.key,
+      start: t,
+      end: origEnd
+    };
+
+    pushHistory({
+      type: 'split',
+      clipId: clipId,
+      newClipId: newId,
+      trackKey: track.key,
+      origStart: origStart,
+      origEnd: origEnd,
+      splitTime: t
+    });
+
+    setDirty(true);
+    post.render();
   }
 
   function bindEvents() {
@@ -3415,12 +3550,22 @@
     setPlayButtonUi();
     syncPreviewMedia(state.currentTime);
 
+    var bladeToggleBtn = document.getElementById('postprod-blade-toggle');
+    if (bladeToggleBtn) {
+      bladeToggleBtn.onclick = function () {
+        state.bladeMode = !state.bladeMode;
+        bladeToggleBtn.classList.toggle('active', state.bladeMode);
+        updateBladeModeUi();
+      };
+    }
+
     root.querySelectorAll('.postprod-clip[data-clip-id]').forEach(function (clipEl) {
       var leftHandle = clipEl.querySelector('[data-handle="left"]');
       var rightHandle = clipEl.querySelector('[data-handle="right"]');
 
       clipEl.onpointerdown = function (evt) {
         if (evt.button !== 0) return;
+        if (state.bladeMode) return; // blade 모드에서는 drag 시작 안 함
         var target = evt.target;
         if (target && target.getAttribute && target.getAttribute('data-handle') === 'left') {
           beginClipDrag(evt, clipEl, 'resize-left');
@@ -3433,7 +3578,20 @@
         beginClipDrag(evt, clipEl, 'move');
       };
 
-      clipEl.onclick = function () {
+      clipEl.onclick = function (evt) {
+        if (state.bladeMode) {
+          // 클릭 위치에서 클립 자르기
+          var cid = clipEl.getAttribute('data-clip-id');
+          var cMeta = findClipMeta(cid);
+          var cClip = cMeta && cMeta.clip;
+          if (!cClip) return;
+          var rect = clipEl.getBoundingClientRect();
+          var x = clamp((evt.clientX - rect.left), 0, rect.width);
+          var ratio = x / Math.max(1, rect.width);
+          var atTime = cClip.start + ratio * (cClip.end - cClip.start);
+          splitClip(cid, atTime);
+          return;
+        }
         if (state.justDragged) {
           state.justDragged = false;
           return;
@@ -3459,9 +3617,20 @@
 
     var ruler = root.querySelector('.postprod-ruler');
     if (ruler) {
-      ruler.onclick = function (evt) {
-        if (state.drag) return;
+      var rulerPid = -1;
+      ruler.onpointerdown = function (evt) {
+        if (evt.button !== 0 || state.drag) return;
+        rulerPid = evt.pointerId;
+        try { ruler.setPointerCapture(evt.pointerId); } catch (_) {}
         seekByTimelinePointer(evt, ruler);
+      };
+      ruler.onpointermove = function (evt) {
+        if (evt.pointerId !== rulerPid || state.drag) return;
+        seekByTimelinePointer(evt, ruler);
+      };
+      ruler.onpointerup = ruler.onpointercancel = function (evt) {
+        if (evt.pointerId !== rulerPid) return;
+        rulerPid = -1;
       };
     }
 
@@ -3547,11 +3716,29 @@
     });
 
     root.querySelectorAll('.postprod-track-lane').forEach(function (laneEl) {
-      laneEl.onclick = function (evt) {
+      var lanePid = -1;
+      var laneSeek = function (evt) {
         if (state.drag) return;
         if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
         seekByTimelinePointer(evt, laneEl);
       };
+      laneEl.onpointerdown = function (evt) {
+        if (evt.button !== 0) return;
+        if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
+        if (state.drag) return;
+        lanePid = evt.pointerId;
+        try { laneEl.setPointerCapture(evt.pointerId); } catch (_) {}
+        seekByTimelinePointer(evt, laneEl);
+      };
+      laneEl.onpointermove = function (evt) {
+        if (evt.pointerId !== lanePid) return;
+        laneSeek(evt);
+      };
+      laneEl.onpointerup = laneEl.onpointercancel = function (evt) {
+        if (evt.pointerId !== lanePid) return;
+        lanePid = -1;
+      };
+      laneEl.onclick = laneSeek; // fallback for simple tap
     });
 
     root.onclick = function (evt) {
@@ -3648,6 +3835,7 @@
     applyTimelineEdits(model, getMergedTimelineEdits(project));
     renderLayout(model);
     bindEvents();
+    updateBladeModeUi(); // blade 모드 클래스 복원
     setCurrentTime(state.currentTime, true);
   };
 
