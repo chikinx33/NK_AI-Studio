@@ -2417,6 +2417,7 @@ textarea::-webkit-scrollbar-corner {
   margin-top: 0;
   margin-bottom: 0;
   align-items: center;
+  cursor: pointer;
 }
 
 .scenario-card.is-collapsed .card-title-row {

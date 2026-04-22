@@ -1788,7 +1788,10 @@
         const card = e.target && e.target.closest ? e.target.closest('.scenario-card') : null;
         if (!card) return;
         const toggleBtn = e.target && e.target.closest ? e.target.closest('.scenario-card-toggle') : null;
-        if (toggleBtn) {
+        const isCollapsed = card.classList.contains('is-collapsed');
+        const inCardTop = e.target && e.target.closest ? e.target.closest('.card-top') : null;
+        // 토글 버튼 클릭 OR 접힌 상태에서 상단 바 어디든 클릭 → 접기/펼치기
+        if (toggleBtn || (isCollapsed && inCardTop)) {
           e.preventDefault();
           e.stopPropagation();
           if (sceneFoldMode === 'focus') {
