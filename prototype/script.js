@@ -253,24 +253,31 @@
       let drafts = NK.store.getDrafts();
       let changed = false;
       const idSet = new Set(ids.map(id => String(id)));
-      for (const id of ids) {
-        const has = drafts.find(d => String(d.id) === String(id));
-        if (!has) {
-          try {
-            const res = await NK.api.projectGet(id);
-            const data = res?.data || {};
-            const draft = {
-              id,
-              title: data.title || data.payload?.topic || (drafts.find(d => String(d.id) === String(id))?.title) || '프로젝트',
-              payload: data.payload || {},
-              scenes: data.scenes || [],
-              header: data.header || '',
-              aspectRatio: data.aspectRatio || data.payload?.aspectRatio
-            };
-            drafts.push(draft);
-            changed = true;
-          } catch (_) { /* ignore */ }
-        }
+      const missingIds = ids.filter(id => !drafts.find(d => String(d.id) === String(id)));
+      if (missingIds.length) {
+        const CONCURRENCY = 16;
+        const results = new Array(missingIds.length);
+        let nextIdx = 0;
+        const runWorker = async () => {
+          while (nextIdx < missingIds.length) {
+            const i = nextIdx++;
+            const id = missingIds[i];
+            try {
+              const res = await NK.api.projectGet(id);
+              const data = res?.data || {};
+              results[i] = {
+                id,
+                title: data.title || data.payload?.topic || '프로젝트',
+                payload: data.payload || {},
+                scenes: data.scenes || [],
+                header: data.header || '',
+                aspectRatio: data.aspectRatio || data.payload?.aspectRatio
+              };
+            } catch (_) { results[i] = null; }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missingIds.length) }, runWorker));
+        results.filter(Boolean).forEach(draft => { drafts.push(draft); changed = true; });
       }
       const filtered = drafts.filter(d => idSet.has(String(d.id)));
       if (filtered.length !== drafts.length) {
@@ -520,6 +527,10 @@
     );
 
     if (isMainPage) {
+      // iframe 로드 전에 projectList를 미리 호출해 대기 시간 줄이기
+      if (!window.__nk_projects_list_prefetch && NK.api?.projectList && NK.auth?.isAuthed?.()) {
+        window.__nk_projects_list_prefetch = NK.api.projectList().catch(() => null);
+      }
       const target = (isAiVideoShellPath || isShellPage)
         ? (initialTarget || STAGE_HTML_MAP[effectiveStage] || defaultDashboardForShell)
         : (STAGE_HTML_MAP[effectiveStage] || defaultDashboardForShell);

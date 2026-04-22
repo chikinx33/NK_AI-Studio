@@ -54,15 +54,19 @@
     return Array.from(map.values()).sort((a, b) => Number(b.latestEpisodeId || 0) - Number(a.latestEpisodeId || 0));
   };
 
-  const runTasksInBatches = async (items, worker, batchSize) => {
+  const runTasksInBatches = async (items, worker, concurrency) => {
     const src = Array.isArray(items) ? items.slice() : [];
-    const size = Math.max(1, Number(batchSize) || 6);
-    const results = [];
-    for (let i = 0; i < src.length; i += size) {
-      const chunk = src.slice(i, i + size);
-      const rows = await Promise.all(chunk.map((item, idx) => Promise.resolve().then(() => worker(item, i + idx))));
-      results.push.apply(results, rows);
-    }
+    const limit = Math.max(1, Number(concurrency) || 6);
+    if (!src.length) return [];
+    const results = new Array(src.length);
+    let nextIdx = 0;
+    const runWorker = async () => {
+      while (nextIdx < src.length) {
+        const i = nextIdx++;
+        results[i] = await Promise.resolve().then(() => worker(src[i], i));
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, src.length) }, runWorker));
     return results;
   };
 
@@ -186,7 +190,10 @@
       const showBlockingLoading = !(Array.isArray(drafts) && drafts.length);
       try {
         if (showBlockingLoading) setDashLoading(true, DASHBOARD_LOADING_TEXT);
-        const list = await NK.api.projectList();
+        // 부모 창에서 미리 시작한 prefetch 결과 재사용 (없으면 직접 호출)
+        const prefetchedList = (() => { try { return window.parent !== window && window.parent.__nk_projects_list_prefetch ? window.parent.__nk_projects_list_prefetch : null; } catch (_) { return null; } })();
+        if (prefetchedList) { try { window.parent.__nk_projects_list_prefetch = null; } catch (_) {} }
+        const list = await (prefetchedList || NK.api.projectList());
         const ids = Array.isArray(list?.ids) ? list.ids.filter(id => id && String(id) !== 'default') : [];
         if (!ids.length) {
           drafts = [];
@@ -225,7 +232,7 @@
           } catch (_) {
             return normalizeDraft({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
           }
-        }, 8)).filter(Boolean);
+        }, 16)).filter(Boolean);
 
         if (!fetchedDrafts.length) return;
         const nextMap = new Map(drafts.map((draft) => [String(draft.id), draft]));
