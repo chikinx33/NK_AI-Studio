@@ -1556,6 +1556,7 @@
 
     const pageLoading = document.getElementById('page-loading');
     const main = document.querySelector('.main');
+    const _scenarioLoadAt = Date.now();
     if (NK.core && NK.core.setLoading) NK.core.setLoading(true);
     if (pageLoading) pageLoading.classList.remove('hidden');
     const finishLoading = () => {
@@ -1564,6 +1565,10 @@
         if (main) main.classList.remove('loading-blur');
         if (NK.core && NK.core.setLoading) NK.core.setLoading(false);
       } catch (_) { }
+    };
+    const finishLoadingWithMinDelay = () => {
+      const _delay = Math.max(0, 300 - (Date.now() - _scenarioLoadAt));
+      if (_delay > 0) setTimeout(finishLoading, _delay); else finishLoading();
     };
     if (main) main.classList.add('loading-blur');
 
@@ -1616,7 +1621,11 @@
     let formDirty = false;
     if (pid && NK.api?.projectGet) {
       NK.api.projectGet(pid).then(srv => {
-        if (!srv?.data || formDirty) return;
+        if (!srv?.data || formDirty) {
+          // 서버 데이터 불필요 or 편집중 → 캐시 없는 경우 스피너 해제
+          if (!draft) finishLoadingWithMinDelay();
+          return;
+        }
         const serverDraft = {
           id: pid,
           title: srv.data.title || draft?.title || '프로젝트',
@@ -1633,7 +1642,12 @@
           draft = serverDraft;
         }
         loadDraft(draft);
-      }).catch(() => {});
+        // 캐시 없는 경우: 서버 렌더 완료 후 스피너 해제
+        if (!draft) finishLoadingWithMinDelay();
+      }).catch(() => {
+        // 서버 요청 실패 시에도 스피너 해제
+        if (!draft) finishLoadingWithMinDelay();
+      });
     }
 
     const syncOverviewPayload = () => {
@@ -2054,8 +2068,13 @@
         }
       };
     }
-    // 페이지 로딩 종료 처리 (초기 렌더 완료 후)
-    setTimeout(finishLoading, draft ? 300 : 350); // 로컬 캐시 있으면 즉시, 없으면 서버 응답 커버
+    // 캐시 있음: 동기 렌더 완료 후 최소 300ms 뒤 해제
+    // 캐시 없음: 서버 응답 .then()에서 해제 (안전 fallback 5s)
+    if (draft) {
+      finishLoadingWithMinDelay();
+    } else {
+      setTimeout(finishLoading, 5000); // fallback: API 응답 없을 때 stuck 방지
+    }
     window.addEventListener('load', finishLoading);
 
     // 시나리오 복사 버튼

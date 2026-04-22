@@ -4,6 +4,7 @@
   var ctx = null;
   var lastProjectId = null;
   var subscribed = false;
+  var __pipelineSpinnerAt = 0;
   // 샘플 보이스 파일 URL (짧은 무음 wav)
   var SAMPLE_VOICE_URL = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
   var getProjectId = function () {
@@ -498,9 +499,9 @@
       ctx.setState(null);
     }
     if (!state) {
+      __pipelineSpinnerAt = Date.now();
       setPipelinePageLoading(true, '로딩중...');
       setPipelineLoading(false);
-      var loadingHandledByCache = false;
       try {
         var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
         if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
@@ -607,27 +608,21 @@
         };
 
         if (stored) {
-          // 로컬 캐시로 즉시 렌더링 → 스피너 최소 300ms 후 해제
+          // 로컬 캐시 우선 렌더링 → 스피너는 DOM 완성 후 해제 (ui.render 말미에서 처리)
           state = buildStateFromData(stored, stored.draftId || projectId);
           ctx.setState(state);
-          setPipelineLoading(false);
-          loadingHandledByCache = true;
-          setTimeout(function () { setPipelinePageLoading(false); }, 300);
-          ui.refreshAssets().catch(function () {});
-          // 백그라운드에서 서버 동기화
+          // 백그라운드: 서버 동기화 (스피너가 떠 있는 동안 조용히 반영)
           fetchFromServer().then(function (sd) {
             if (!sd) return;
             state = buildStateFromData(sd, projectId);
             ctx.setState(state);
-            ui.refreshAssets().catch(function () {});
           }).catch(function () {});
         } else {
-          // 로컬 캐시 없음: 서버 응답 대기
+          // 로컬 캐시 없음: 서버 응답 대기 후 렌더링
           var serverData = await fetchFromServer();
           if (serverData) {
             state = buildStateFromData(serverData, projectId);
             ctx.setState(state);
-            await ui.refreshAssets();
           } else {
             var payload = { topic: '', purposeCategory: '', purposeTags: [], target: '', needs: [], tones: [], styles: [], tone: '', style: '', banned: '', duration: '', aspectRatio: aspectRatio };
             var headerInit = withAspectInHeader ? withAspectInHeader('', aspectRatio) : '';
@@ -637,7 +632,7 @@
         }
       } finally {
         setPipelineLoading(false);
-        if (!loadingHandledByCache) setPipelinePageLoading(false);
+        // 스피너(setPipelinePageLoading) 해제는 DOM 완성 후 ui.render 말미에서 처리
       }
     }
     var payload = state.payload;
@@ -955,6 +950,13 @@
           videoModel: (function () { var sel = document.getElementById('video-model-select'); return (sel && sel.value) || (ctx.getState() && ctx.getState().videoModel) || videoModel; })()
         });
       }
+    }
+
+    // DOM 렌더 완전 완료 후 스피너 해제 (최소 300ms 보장)
+    if (__pipelineSpinnerAt > 0) {
+      var _spinDelay = Math.max(0, 300 - (Date.now() - __pipelineSpinnerAt));
+      __pipelineSpinnerAt = 0;
+      setTimeout(function () { setPipelinePageLoading(false); }, _spinDelay);
     }
   };
 

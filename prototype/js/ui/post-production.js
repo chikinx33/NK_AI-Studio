@@ -3469,10 +3469,9 @@
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;
     }
-    // 즉시 로컬 데이터로 첫 렌더링 수행 (검은 화면 방지)
+    // 스피너 표시 → 서버 동기화 → 최종 렌더 완료 후 스피너 해제 (최소 300ms)
+    var _postSpinnerAt = Date.now();
     if (NK.core && NK.core.setLoading) NK.core.setLoading(true);
-    post.render();
-    setTimeout(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); }, 300);
     Promise.resolve()
       .then(refreshProjectFromServer)
       .then(function (pid) {
@@ -3484,6 +3483,10 @@
         } catch (_) { }
         return false;
       })
-      .finally(function () { post.render(); });
+      .finally(function () {
+        post.render();
+        var _delay = Math.max(0, 300 - (Date.now() - _postSpinnerAt));
+        setTimeout(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); }, _delay);
+      });
   };
 })();
