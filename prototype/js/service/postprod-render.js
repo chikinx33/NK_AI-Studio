@@ -193,6 +193,53 @@
     ctx.drawImage(source, dx, dy, dw, dh);
   }
 
+  // 렌더링용: seek한 뒤 실제 프레임이 presented될 때까지 대기.
+  // requestVideoFrameCallback이 있으면 "다음 렌더 프레임 presented"까지 기다리고,
+  // 없으면 seeked 이벤트로 fallback. 모두 실패 시 timeout으로 resolve(false) — 그림은
+  // 이전 프레임 그대로 그려지더라도 렌더가 계속 진행되게 한다.
+  // waitForVideoSeek과 달리 tolerance 단축(0.005) + rVFC 기반으로 정확한 프레임 보장.
+  function awaitVideoFrameAt(video, timeSec, timeoutMs) {
+    return new Promise(function (resolve) {
+      if (!video) { resolve(false); return; }
+      var target = Math.max(0, Number(timeSec) || 0);
+      var done = false;
+      var rVFCId = 0;
+      var onSeeked = null;
+      var tid = 0;
+      var finish = function (ok) {
+        if (done) return;
+        done = true;
+        if (tid) clearTimeout(tid);
+        if (onSeeked) {
+          try { video.removeEventListener('seeked', onSeeked); } catch (_) { }
+        }
+        if (rVFCId && typeof video.cancelVideoFrameCallback === 'function') {
+          try { video.cancelVideoFrameCallback(rVFCId); } catch (_) { }
+        }
+        resolve(!!ok);
+      };
+      tid = setTimeout(function () { finish(false); }, Math.max(200, Number(timeoutMs) || 400));
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        try {
+          rVFCId = video.requestVideoFrameCallback(function () { finish(true); });
+        } catch (_) { rVFCId = 0; }
+      }
+      onSeeked = function () { finish(true); };
+      try { video.addEventListener('seeked', onSeeked); } catch (_) { }
+      // 이미 타겟에 가까우면 setter가 seeked를 발생시키지 않을 수 있으므로, 강제로
+      // 살짝 다른 값으로 한 번 튕긴 뒤 타겟으로 맞추면 seeked가 안정적으로 발생.
+      var cur = Number(video.currentTime) || 0;
+      if (Math.abs(cur - target) < 0.005) {
+        // rVFC는 프레임이 새로 그려질 때마다 발화하므로 정지 프레임엔 안 올 수 있다.
+        // timeout으로 resolve되면 drawFn이 현재 frame(=target)을 그대로 그리게 된다.
+        // 이 경우에도 정확하니 OK.
+        finish(true);
+        return;
+      }
+      try { video.currentTime = target; } catch (_) { finish(false); }
+    });
+  }
+
   function waitForVideoSeek(video, timeSec, timeoutMs) {
     return new Promise(function (resolve, reject) {
       if (!video) { reject(new Error('seek_video_missing')); return; }
@@ -748,6 +795,44 @@
            Mp4Muxer.Muxer && Mp4Muxer.ArrayBufferTarget;
   }
 
+  // 비디오 클립 전용 offline 렌더: 각 프레임마다 seek을 await해서 정확한 프레임을
+  // 그린다. runSegmentOffline의 `video.currentTime = ...` 비동기 할당 방식은 이전
+  // 프레임이 그대로 그려져 "정지 영상"처럼 보이는 품질 버그가 있음.
+  async function runVideoSegmentOffline(video, segmentDuration, clipMaxTime, drawFn, progressFn, shouldCancel, state) {
+    var fps = 30;
+    var frameInterval = 1000000 / fps;
+    var totalFrames = Math.max(1, Math.ceil(segmentDuration * fps));
+    var safeMax = Math.max(0, clipMaxTime - 0.02);
+    for (var i = 0; i < totalFrames; i++) {
+      if (state.encoderError) return false;
+      if (shouldCancel && shouldCancel()) return false;
+      var t = Math.min(segmentDuration, i / fps);
+      var seekTime = Math.min(safeMax, t);
+      // seek + 프레임 presented 대기 (timeout 시 직전 프레임 그대로 진행)
+      try { await awaitVideoFrameAt(video, seekTime, 400); } catch (_) { }
+      if (state.encoderError) return false;
+      if (shouldCancel && shouldCancel()) return false;
+      drawFn(t);
+      var timestamp = state.globalFrame * frameInterval;
+      var frame = null;
+      try {
+        frame = new VideoFrame(state.canvas, { timestamp: Math.round(timestamp), duration: Math.round(frameInterval) });
+        state.encoder.encode(frame);
+      } catch (err) {
+        if (frame) { try { frame.close(); } catch (_) { } frame = null; }
+        // 인코더 reclaim/closed — fallback 경로로 넘어가도록 markEncoderError + throw
+        if (state.markEncoderError) state.markEncoderError(err);
+        throw err;
+      }
+      if (frame) { try { frame.close(); } catch (_) { } }
+      state.globalFrame++;
+      if (progressFn) progressFn(t);
+      // 주기적으로 event loop 양보 (UI 반응 + 인코더 backpressure 처리)
+      if ((i & 7) === 7) await new Promise(function (r) { setTimeout(r, 0); });
+    }
+    return true;
+  }
+
   function runSegmentOffline(durationSec, frameFn, progressFn, shouldCancel, state) {
     var fps = 30;
     var frameInterval = 1000000 / fps;
@@ -767,6 +852,13 @@
           try {
             frame = new VideoFrame(state.canvas, { timestamp: Math.round(timestamp), duration: Math.round(frameInterval) });
             state.encoder.encode(frame);
+          } catch (encErr) {
+            // encoder reclaim/closed 등 — 조용히 abort + encoderError 세팅하여
+            // 이후 바깥 경로에서 fallback으로 넘어가도록 한다.
+            if (frame) { try { frame.close(); } catch (_) { } frame = null; }
+            if (state.markEncoderError) state.markEncoderError(encErr);
+            resolve(false);
+            return;
           } finally {
             if (frame) frame.close();
           }
@@ -794,12 +886,31 @@
     var frameSize = opts.frameSize || { width: 1280, height: 720 };
     var w = Number(frameSize.width) || 1280;
     var h = Number(frameSize.height) || 720;
+
+    var shouldCancel = typeof opts.shouldCancel === 'function' ? opts.shouldCancel : function () { return false; };
+
+    // ── CRITICAL: 모든 비주얼 소스를 VideoEncoder 생성 "전에" 로드 ──────────────
+    // Chrome은 VideoEncoder가 생성된 뒤 일정 시간 내에 encode()가 호출되지 않으면
+    // "Codec reclaimed due to inactivity" 로 인코더를 회수한다. preload에는 네트워크
+    // fetch + 초기 seek이 포함되어 수 초 이상 걸릴 수 있으므로, 반드시 encoder 생성
+    // 이전에 완료해야 한다.
+    var renderSources = await preloadRenderVisualSources(clips, opts);
+    if (shouldCancel()) {
+      releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
+      throw new Error('render_canceled');
+    }
+
     var canvas = document.createElement('canvas');
     canvas.width = w;
     canvas.height = h;
     var ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('canvas_context_unavailable');
+    if (!ctx) {
+      releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
+      throw new Error('canvas_context_unavailable');
+    }
 
+    // muxer + encoder를 한 번에 생성 + configure + 첫 encode가 곧바로 이어지도록
+    // 위치 조정. 이 사이에 await가 들어가면 reclaim 위험이 다시 생긴다.
     var target = new Mp4Muxer.ArrayBufferTarget();
     var muxer = new Mp4Muxer.Muxer({
       target: target,
@@ -828,11 +939,9 @@
 
     var total = Math.max(1, Number(opts.playbackDuration) || 1);
     var processed = 0;
-    var renderSources = await preloadRenderVisualSources(clips, opts);
     var loadedVisualCount = 0;
     var failedVisualCount = 0;
     var lastProgressUpdate = 0;
-    var shouldCancel = typeof opts.shouldCancel === 'function' ? opts.shouldCancel : function () { return false; };
     var reportProgress = function (localElapsed) {
       var p = ((processed + localElapsed) / total) * 100;
       var now = Date.now();
@@ -854,7 +963,15 @@
       });
     };
 
-    var segState = { canvas: canvas, encoder: encoder, globalFrame: 0, get encoderError() { return encoderError; } };
+    var segState = {
+      canvas: canvas,
+      encoder: encoder,
+      globalFrame: 0,
+      get encoderError() { return encoderError; },
+      markEncoderError: function (err) {
+        encoderError = encoderError || err || new Error('encoder_failed');
+      }
+    };
 
     var cursor = 0;
     for (var i = 0; i < clips.length; i++) {
@@ -877,10 +994,10 @@
         try {
           loadedVisualCount += 1;
           try { video.pause(); } catch (_) { }
-          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
-          var okVideo = await runSegmentOffline(duration, function (localElapsed) {
+          // 매 프레임 seek을 await하므로 초기 reset은 짧은 timeout으로 충분
+          try { await awaitVideoFrameAt(video, 0, 500); } catch (_) { }
+          var okVideo = await runVideoSegmentOffline(video, duration, duration, function (localElapsed) {
             drawBackground();
-            try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
             var motionSvc = NK.service && NK.service.postprodMotion;
             var vMotion = motionSvc && clip.motionPreset && clip.motionPreset !== 'none'
               ? motionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
@@ -891,7 +1008,15 @@
           }, reportProgress, shouldCancel, segState);
           processed += duration;
           if (!okVideo) break;
-        } catch (_) {
+        } catch (err) {
+          // encoder reclaim / closed 등 인코더 치명적 오류는 fallback 경로로 넘긴다.
+          // (QuotaExceededError = Chrome의 codec reclaim, InvalidStateError = encoder closed)
+          var errName = err && err.name;
+          var errMsg = String(err && err.message || '');
+          if (errName === 'QuotaExceededError' || errName === 'InvalidStateError' || /reclaim|closed/i.test(errMsg)) {
+            encoderError = encoderError || err;
+            break;
+          }
           failedVisualCount += 1;
           var okVF = await runSegmentOffline(duration, function () {
             drawBackground();
@@ -960,7 +1085,13 @@
       releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
       throw encoderError;
     }
-    await encoder.flush();
+    try {
+      await encoder.flush();
+    } catch (flushErr) {
+      try { encoder.close(); } catch (_) { }
+      releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
+      throw flushErr;
+    }
     encoder.close();
     releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
     if (shouldCancel()) throw new Error('render_canceled');
