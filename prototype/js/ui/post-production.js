@@ -3502,8 +3502,8 @@
         _playerPanelHtml +
         '</div>' +
         '<div class="postprod-portrait-right">' +
-        _timelinePanelHtml +
         _toolbarHtml +
+        _timelinePanelHtml +
         _renderPanelHtml +
         '</div>' +
         '</section>';

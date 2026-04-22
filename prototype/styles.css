@@ -6525,6 +6525,7 @@ body.postprod-reordering .postprod-clip.is-dragging {
   gap: 12px;
 }
 
+/* ── 좌측: 9:16 편집 패널 ── */
 .postprod-portrait-left {
   flex-shrink: 0;
   align-self: stretch;
@@ -6554,7 +6555,7 @@ body.postprod-reordering .postprod-clip.is-dragging {
   min-height: 0;
 }
 
-/* 우측 컬럼: 세로 배치 */
+/* ── 우측 컬럼: 제어바 → 타임라인 → 렌더링 ── */
 .postprod-portrait-right {
   flex: 1;
   min-width: 0;
@@ -6565,15 +6566,7 @@ body.postprod-reordering .postprod-clip.is-dragging {
   overflow: hidden;
 }
 
-/* 타임라인: 자연 높이, 최대 30% — 빈 공간 줄이기 */
-.postprod-portrait-right .postprod-timeline-panel {
-  flex: 0 0 auto;
-  min-height: 150px;
-  max-height: 30%;
-  overflow: hidden;
-}
-
-/* 제어바: 2행 줄바꿈 */
+/* 제어바: 2행 줄바꿈 — 캡션 그룹이 1행 전체, 나머지가 2행 */
 .postprod-portrait-right .postprod-toolbar {
   flex: 0 0 auto;
   flex-wrap: wrap;
@@ -6586,11 +6579,23 @@ body.postprod-reordering .postprod-clip.is-dragging {
   flex-shrink: 0;
 }
 
-/* 렌더링 패널: 나머지 공간, 스크롤 없음 */
+/* 캡션 그룹이 1행 전체 점유 → 나머지 그룹이 2행으로 내려감 */
+.postprod-portrait-right .postprod-toolbar-group:first-child {
+  flex-basis: 100%;
+}
+
+/* 타임라인: 자연 높이 사용, 최대 40%로 여유 확보 */
+.postprod-portrait-right .postprod-timeline-panel {
+  flex: 0 0 auto;
+  min-height: 150px;
+  max-height: 40%;
+}
+
+/* 렌더링 패널: 나머지 공간, 내용이 길면 스크롤 */
 .postprod-portrait-right .postprod-render-panel {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
 }
 
 /* 컴퓨팅 리소스 카드: 세로 모드에서 숨김 */
@@ -6598,15 +6603,42 @@ body.postprod-reordering .postprod-clip.is-dragging {
   display: none;
 }
 
-/* 렌더 미리보기: 높이 압축 */
+/* 렌더 액션 버튼 (저장/렌더링/저장소): 3행 세로 배치 */
+.postprod-portrait-right .postprod-render-actions.top {
+  grid-template-columns: 1fr;
+  margin-top: 6px;
+}
+
+/* 렌더 미리보기: 9:16 비율로 중앙 표시 */
 .postprod-portrait-right .postprod-render-preview {
   min-height: 0;
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
 }
 
 .postprod-portrait-right .postprod-render-video,
 .postprod-portrait-right .postprod-render-image {
-  max-height: 100px;
+  width: auto;
+  height: 140px;
+  max-height: 140px;
+  aspect-ratio: 9 / 16;
+  object-fit: contain;
+}
+
+/* 다운로드 버튼: 4행 세로 배치 */
+.postprod-portrait-right .postprod-download-grid {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.postprod-portrait-right .postprod-download-item {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
 }
 
 /* Orient toggle buttons */
