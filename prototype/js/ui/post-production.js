@@ -2287,6 +2287,50 @@
         element.style.width = '100%';
         element.style.height = '100%';
       }
+    } else if (element.tagName !== 'IMG') {
+      // 비디오 호스트: contain 크기로 호스트를 잘라 letterbox 제거
+      var vid = element.querySelector('video');
+      var vw = vid ? vid.videoWidth : 0;
+      var vh = vid ? vid.videoHeight : 0;
+      if (!vw || !vh) {
+        // 메타데이터 미로드 — 준비되면 재적용
+        if (vid && !vid.__motionMetaWaiting) {
+          vid.__motionMetaWaiting = true;
+          vid.addEventListener('loadedmetadata', function onMeta() {
+            vid.__motionMetaWaiting = false;
+            vid.removeEventListener('loadedmetadata', onMeta);
+            applyMotionTransform(element, clip, sec);
+          });
+        }
+        return;
+      }
+      var hostContainer = element.parentElement;
+      var hcw = hostContainer ? hostContainer.clientWidth : 0;
+      var hch = hostContainer ? hostContainer.clientHeight : 0;
+      if (hcw && hch) {
+        var vidRatio = vw / vh;
+        var hcRatio = hcw / hch;
+        var hrw, hrh;
+        if (vidRatio > hcRatio) {
+          hrw = hcw;
+          hrh = Math.round(hcw / vidRatio);
+        } else {
+          hrh = hch;
+          hrw = Math.round(hch * vidRatio);
+        }
+        element.style.width = hrw + 'px';
+        element.style.height = hrh + 'px';
+        element.style.left = Math.round((hcw - hrw) / 2) + 'px';
+        element.style.top = Math.round((hch - hrh) / 2) + 'px';
+        element.style.right = 'auto';
+        element.style.bottom = 'auto';
+        element.style.overflow = 'hidden';
+        if (vid) {
+          vid.style.objectFit = 'cover';
+          vid.style.width = '100%';
+          vid.style.height = '100%';
+        }
+      }
     }
 
     var duration = Math.max(0.2, (clip.end || 0) - (clip.start || 0));
@@ -2298,9 +2342,23 @@
   function clearMotionTransform(element) {
     if (!element) return;
     element.style.transform = '';
-    element.style.objectFit = 'contain';
     element.style.width = '';
     element.style.height = '';
+    element.style.left = '';
+    element.style.top = '';
+    element.style.right = '';
+    element.style.bottom = '';
+    element.style.overflow = '';
+    if (element.tagName === 'IMG') {
+      element.style.objectFit = 'contain';
+    } else {
+      var vid = element.querySelector('video');
+      if (vid) {
+        vid.style.objectFit = '';
+        vid.style.width = '';
+        vid.style.height = '';
+      }
+    }
     var wrapper = document.getElementById('postprod-motion-wrapper');
     if (wrapper) {
       wrapper.style.cssText = 'position:absolute;inset:0;';
