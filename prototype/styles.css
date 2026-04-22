@@ -6527,7 +6527,7 @@ body.postprod-reordering .postprod-clip.is-dragging {
 
 .postprod-portrait-left {
   flex-shrink: 0;
-  height: 100%;
+  align-self: stretch;
   aspect-ratio: 9 / 16;
   display: flex;
   flex-direction: column;
@@ -6554,10 +6554,10 @@ body.postprod-reordering .postprod-clip.is-dragging {
   min-height: 0;
 }
 
+/* 우측 컬럼: 세로 배치 */
 .postprod-portrait-right {
   flex: 1;
   min-width: 0;
-  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -6565,19 +6565,48 @@ body.postprod-reordering .postprod-clip.is-dragging {
   overflow: hidden;
 }
 
+/* 타임라인: 자연 높이, 최대 30% — 빈 공간 줄이기 */
 .postprod-portrait-right .postprod-timeline-panel {
+  flex: 0 0 auto;
+  min-height: 150px;
+  max-height: 30%;
+  overflow: hidden;
+}
+
+/* 제어바: 2행 줄바꿈 */
+.postprod-portrait-right .postprod-toolbar {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+}
+
+.postprod-portrait-right .postprod-toolbar-group {
+  flex-shrink: 0;
+}
+
+/* 렌더링 패널: 나머지 공간, 스크롤 없음 */
+.postprod-portrait-right .postprod-render-panel {
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
-.postprod-portrait-right .postprod-toolbar {
-  flex-shrink: 0;
+/* 컴퓨팅 리소스 카드: 세로 모드에서 숨김 */
+.postprod-portrait-right .postprod-compute-card {
+  display: none;
 }
 
-.postprod-portrait-right .postprod-render-panel {
-  flex-shrink: 0;
-  overflow-y: auto;
-  max-height: 40%;
+/* 렌더 미리보기: 높이 압축 */
+.postprod-portrait-right .postprod-render-preview {
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+.postprod-portrait-right .postprod-render-video,
+.postprod-portrait-right .postprod-render-image {
+  max-height: 100px;
 }
 
 /* Orient toggle buttons */

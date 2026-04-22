@@ -3472,7 +3472,7 @@
       '<p class="postprod-save-state" id="postprod-save-state"></p>' +
       '<p class="postprod-render-progress" id="postprod-render-progress"></p>' +
       '<p class="postprod-render-info" id="postprod-render-info"></p>' +
-      '<div class="postprod-resource-card">' +
+      '<div class="postprod-resource-card postprod-compute-card">' +
       '<p class="title">' + t('컴퓨팅 리소스') + '</p>' +
       '<div class="postprod-resource-grid">' +
       '<div><span>CPU</span><strong>' + detectCpuLabel() + '</strong></div>' +
@@ -4302,26 +4302,17 @@
 
     var orientLandscape = document.getElementById('postprod-orient-landscape');
     var orientPortrait = document.getElementById('postprod-orient-portrait');
-    if (orientLandscape) {
-      orientLandscape.onclick = function () {
-        if (state.portraitMode) {
-          state.portraitMode = false;
-          savePortraitMode();
-          renderLayout(state.model);
-          bindEvents();
-        }
-      };
+    function switchOrientation(portrait) {
+      if (state.portraitMode === portrait) return;
+      state.portraitMode = portrait;
+      savePortraitMode();
+      renderLayout(state.model);
+      bindEvents();
+      ensureAllPreviewVideosMounted(state.model);
+      setCurrentTime(state.currentTime, true);
     }
-    if (orientPortrait) {
-      orientPortrait.onclick = function () {
-        if (!state.portraitMode) {
-          state.portraitMode = true;
-          savePortraitMode();
-          renderLayout(state.model);
-          bindEvents();
-        }
-      };
-    }
+    if (orientLandscape) orientLandscape.onclick = function () { switchOrientation(false); };
+    if (orientPortrait) orientPortrait.onclick = function () { switchOrientation(true); };
 
     var bladeToggleBtn = document.getElementById('postprod-blade-toggle');
     if (bladeToggleBtn) {
