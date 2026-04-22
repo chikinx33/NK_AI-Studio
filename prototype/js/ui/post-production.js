@@ -1176,24 +1176,37 @@
   // 이 상태의 비디오에 currentTime/fastSeek을 호출해도 화면이 갱신되지 않는다
   // (오직 모션 transform만 적용되어 "정지 영상 + 움직이는 효과"로 보임).
   //
-  // 전략: muted play()로 디코더 활성화 + keep-alive 타이머로 pause를 지연시켜 후속
-  // seek이 활성 디코더에서 처리되도록 한다. 스크럽이 계속되면 타이머가 계속 리셋되어
-  // 비디오는 muted 상태로 계속 재생되며, 사용자가 스크럽을 멈추면 짧은 딜레이 후 pause.
-  //
-  // 비디오별 타이머를 __wakeTimerId에 저장 — 여러 비디오가 있어도 각자 독립.
-  function wakeVideoDecoder(video) {
+  // 전략:
+  //  1) muted play()로 디코더 활성화. 후속 seek이 처리될 수 있는 상태 유지.
+  //  2) 각 seeked 이벤트마다 짧은 debounce(40ms) 타이머를 재스케줄. 스크럽 중엔
+  //     계속 리셋되어 디코더가 살아있고, 스크럽이 멎으면 40ms 후 pause.
+  //  3) pause 직후 `video.__scrubTarget` 값으로 snap-back. 스크럽 중 muted 상태로
+  //     살짝 앞으로 흘러간 프레임을 정확한 타겟 프레임으로 복귀시킨다 — 이게 없으면
+  //     씬 시작 프레임이 몇 프레임 앞으로 밀려 재생 시 "456789123" 현상이 생긴다.
+  //  4) 초기 fallback 타이머(120ms) — seek이 한 번도 발생하지 않을 경우 대비.
+  function wakeVideoDecoder(video, scrubTarget) {
     if (!video) return;
-    if (!video.paused) {
-      // 이미 재생 중 — keep-alive 타이머만 리셋
-      resetWakeKeepAlive(video);
-      return;
+    if (typeof scrubTarget === 'number') video.__scrubTarget = scrubTarget;
+    if (video.paused) {
+      try { video.muted = true; } catch (_) {}
+      try { video.play().catch(function () { }); } catch (_) {}
     }
-    try { video.muted = true; } catch (_) {}
-    try { video.play().catch(function () { }); } catch (_) {}
-    resetWakeKeepAlive(video);
+    attachScrubAutoPause(video);
+    scheduleAutoPause(video, 120);
   }
 
-  function resetWakeKeepAlive(video) {
+  function attachScrubAutoPause(video) {
+    if (!video || video.__scrubAutoPauseAttached) return;
+    video.__scrubAutoPauseAttached = true;
+    video.__onScrubSeeked = function () {
+      if (state.isPlaying) return;
+      // seek 한 번이 landed 됐으니 이후 짧게만 살려두면 된다
+      scheduleAutoPause(video, 40);
+    };
+    try { video.addEventListener('seeked', video.__onScrubSeeked); } catch (_) {}
+  }
+
+  function scheduleAutoPause(video, delay) {
     if (!video) return;
     if (video.__wakeTimerId) {
       clearTimeout(video.__wakeTimerId);
@@ -1201,11 +1214,23 @@
     }
     video.__wakeTimerId = setTimeout(function () {
       video.__wakeTimerId = 0;
-      // 재생 중이거나 이미 pause된 상태면 skip
       if (state.isPlaying) return;
       if (!video || video.paused) return;
+      if (video.seeking) {
+        // 아직 seek 처리 중 — 조금만 더 기다린다
+        scheduleAutoPause(video, 40);
+        return;
+      }
       try { video.pause(); } catch (_) {}
-    }, 600);
+      // snap-back: wake 동안 muted로 흘러간 프레임을 정확한 타겟으로 복귀
+      var target = video.__scrubTarget;
+      if (typeof target === 'number' && isFinite(target)) {
+        var cur = video.currentTime || 0;
+        if (Math.abs(cur - target) > 0.008) {
+          try { video.currentTime = target; } catch (_) {}
+        }
+      }
+    }, delay);
   }
 
   // 정확 seek(video.currentTime = t)는 타겟 프레임까지 전체 디코딩이 필요해 느리다.
@@ -1244,6 +1269,8 @@
   }
   function scheduleScrubSeek(id, video, time) {
     if (!id || !video) return;
+    // 타겟 프레임 기록 — wake 동안 흘러간 위치를 snap-back할 때 사용
+    if (typeof time === 'number' && isFinite(time)) video.__scrubTarget = time;
     _scrubRaf.pending[id] = { video: video, time: time };
     if (_scrubRaf.scheduled) return;
     _scrubRaf.scheduled = true;
@@ -1295,6 +1322,11 @@
         if (e.video.__wakeTimerId) {
           try { clearTimeout(e.video.__wakeTimerId); } catch (_) { }
           e.video.__wakeTimerId = 0;
+        }
+        if (e.video.__onScrubSeeked) {
+          try { e.video.removeEventListener('seeked', e.video.__onScrubSeeked); } catch (_) { }
+          e.video.__onScrubSeeked = null;
+          e.video.__scrubAutoPauseAttached = false;
         }
         if (e.video.parentNode) {
           try { e.video.parentNode.removeChild(e.video); } catch (_) { }
@@ -2738,12 +2770,20 @@
         var fpVid = fpEntry && fpEntry.video;
         if (fpVid) {
           if (!state.isPlaying) {
-            // 스크럽 중: 디코더를 깨워두고(keep-alive) 현재 시점으로 seek — fastSeek + rAF 병합으로 디코더 부하 최소화
-            wakeVideoDecoder(fpVid);
+            // 스크럽 중: 타겟이 현재와 다를 때만 wake+seek. delta가 작으면 이미
+            // 프레임이 맞고 있으므로 wake로 play를 호출하지 않는다 — 아니면 muted
+            // play가 앞으로 흘러가 씬 시작 프레임이 몇 프레임 밀리는 버그 발생.
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
             var fpDelta = Math.abs((fpVid.currentTime || 0) - fpClipTime);
             if (fpDelta > 0.03) {
+              wakeVideoDecoder(fpVid, fpClipTime);
               scheduleScrubSeek('active:' + clip.id, fpVid, fpClipTime);
+            } else if (!fpVid.paused) {
+              // 이미 타겟 프레임에 있는데 이전 wake로 재생 중이면 즉시 정지
+              try { fpVid.pause(); } catch (_) {}
+              if (Math.abs((fpVid.currentTime || 0) - fpClipTime) > 0.008) {
+                try { fpVid.currentTime = fpClipTime; } catch (_) {}
+              }
             }
           } else {
             // 재생 중: 스크럽 wake로 인한 muted 상태를 해제하고, 멈춰있다면 재개
@@ -2839,12 +2879,22 @@
           video.play().catch(function () { });
         }
       } else {
-        // 디코더를 먼저 깨운다 — suspend된 비디오에 seek을 보내면 화면이 갱신되지 않음.
-        // play()는 동기적으로 디코더 활성화 플래그를 세팅하므로 직후의 seek이 유효해진다.
-        wakeVideoDecoder(video);
-        if (needsSeek) scheduleScrubSeek('active:' + clip.id, video, liveClipTime);
+        // 스크럽(또는 씬 선택): 타겟 프레임 기록 + 디코더 wake + seek. 타겟과
+        // currentTime 차이가 작으면 wake를 생략해 muted play로 인한 프레임 밀림을 방지.
+        if (needsSeek) {
+          wakeVideoDecoder(video, liveClipTime);
+          scheduleScrubSeek('active:' + clip.id, video, liveClipTime);
+        } else {
+          // 이미 타겟 프레임에 있음 — 그냥 paused 상태만 보장
+          video.__scrubTarget = liveClipTime;
+          if (!video.paused) {
+            try { video.pause(); } catch (_) {}
+            if (Math.abs((video.currentTime || 0) - liveClipTime) > 0.008) {
+              try { video.currentTime = liveClipTime; } catch (_) {}
+            }
+          }
+        }
         try { video.muted = true; } catch (_) {}
-        // video.pause()는 wakeVideoDecoder의 play promise resolve 후 자동 호출됨
       }
     }
 
