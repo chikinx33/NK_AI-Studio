@@ -54,6 +54,7 @@
     overlayClips: [],
     motionEnabled: true,
     bladeMode: false,
+    portraitMode: false,
     // DOM element caches (cleared on renderLayout)
     cachedPlayheads: null,
     cachedTimeNow: null,
@@ -479,6 +480,19 @@
   function saveMotionPrefs() {
     try {
       localStorage.setItem('nk_post_motion_on', state.motionEnabled ? '1' : '0');
+    } catch (_) { }
+  }
+
+  function loadPortraitMode() {
+    try {
+      var v = localStorage.getItem('nk_post_portrait');
+      if (v != null) state.portraitMode = String(v) === '1';
+    } catch (_) { }
+  }
+
+  function savePortraitMode() {
+    try {
+      localStorage.setItem('nk_post_portrait', state.portraitMode ? '1' : '0');
     } catch (_) { }
   }
 
@@ -3352,19 +3366,26 @@
     state.cachedTimeNow = null;
     state.cachedScrubRange = null;
 
-    root.innerHTML =
-      '<section class="postprod-workspace">' +
-      '<div class="postprod-editor-column">' +
-      '<div class="postprod-shell">' +
+    var _orientBtns =
+      '<button class="postprod-pill postprod-pill-square postprod-orient-btn' + (!state.portraitMode ? ' active' : '') + '" id="postprod-orient-landscape" type="button" title="' + t('가로 모드') + '" aria-label="' + t('가로 모드') + '">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="12" x="2" y="6" rx="2"/></svg>' +
+      '</button>' +
+      '<button class="postprod-pill postprod-pill-square postprod-orient-btn' + (state.portraitMode ? ' active' : '') + '" id="postprod-orient-portrait" type="button" title="' + t('세로 모드') + '" aria-label="' + t('세로 모드') + '">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="12" height="20" x="6" y="2" rx="2"/></svg>' +
+      '</button>';
+
+    var _playerPanelHtml =
       '<div class="card postprod-player-panel">' +
       '<div class="postprod-panel-header">' +
       '<h2>' + t('편집') + '</h2>' +
+      _orientBtns +
       '</div>' +
       '<div class="postprod-preview-stage">' +
       buildPreviewHtml(model) +
       '</div>' +
-      '</div>' +
+      '</div>';
 
+    var _toolbarHtml =
       '<div class="card postprod-toolbar">' +
       '<div class="postprod-toolbar-group">' +
       '<button class="postprod-pill' + (state.captionsEnabled ? ' active' : '') + '" id="postprod-caption-toggle" type="button">' + t('자막') + '</button>' +
@@ -3415,8 +3436,9 @@
       '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-redo-btn" title="' + t('다시 실행') + '"' + (canRedo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>' +
       '<button class="btn-secondary compact postprod-history-btn icon-btn danger" id="postprod-delete-btn" title="' + t('선택 삭제') + '"' + (state.selectedClipId ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>' +
       '</div>' +
-      '</div>' +
+      '</div>';
 
+    var _timelinePanelHtml =
       '<div class="card postprod-timeline-panel">' +
       '<div class="postprod-timeline-head">' +
       '<h3>' + t('타임라인') + '</h3>' +
@@ -3434,10 +3456,9 @@
       '</div>' +
       buildTrackRowsHtml(model, laneWidth, playheadLeft, timelineDuration) +
       '</div>' +
-      '</div>' +
-      '</div>' +
-      '</div>' +
+      '</div>';
 
+    var _renderPanelHtml =
       '<aside class="card postprod-render-panel">' +
       '<div class="postprod-render-head">' +
       '<h3>' + t('렌더링') + '</h3>' +
@@ -3451,7 +3472,6 @@
       '<p class="postprod-save-state" id="postprod-save-state"></p>' +
       '<p class="postprod-render-progress" id="postprod-render-progress"></p>' +
       '<p class="postprod-render-info" id="postprod-render-info"></p>' +
-
       '<div class="postprod-resource-card">' +
       '<p class="title">' + t('컴퓨팅 리소스') + '</p>' +
       '<div class="postprod-resource-grid">' +
@@ -3461,22 +3481,45 @@
       '<div><span>' + t('품질') + '</span><strong>' + detectQualityLabel() + '</strong></div>' +
       '</div>' +
       '</div>' +
-
       '<div id="postprod-render-preview" class="postprod-render-preview" data-render-src="' + escapeHtml(getRenderableOutputVideoUrl(meta)) + '">' +
       buildRenderPreviewHtml(model, meta) +
       '</div>' +
+      '<div class="postprod-resource-card">' +
+      '<p class="title">' + t('다운로드') + '</p>' +
+      '<div class="postprod-download-grid">' +
+      '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>' + t('자막') + '</span><strong>SRT</strong></button>' +
+      '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>' + t('스토리보드') + '</span><strong>XLS</strong></button>' +
+      '<button class="postprod-download-item" id="postprod-download-premiere-btn"><span>Premiere</span><strong>ZIP</strong></button>' +
+      '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>' + t('영상') + '</span><strong>MP4</strong></button>' +
+      '</div>' +
+      '</div>' +
+      '</aside>';
 
-        '<div class="postprod-resource-card">' +
-        '<p class="title">' + t('다운로드') + '</p>' +
-        '<div class="postprod-download-grid">' +
-        '<button class="postprod-download-item" id="postprod-download-srt-btn"><span>' + t('자막') + '</span><strong>SRT</strong></button>' +
-        '<button class="postprod-download-item" id="postprod-download-storyboard-btn"><span>' + t('스토리보드') + '</span><strong>XLS</strong></button>' +
-        '<button class="postprod-download-item" id="postprod-download-premiere-btn"><span>Premiere</span><strong>ZIP</strong></button>' +
-        '<button class="postprod-download-item primary" id="postprod-download-mp4-btn"><span>' + t('영상') + '</span><strong>MP4</strong></button>' +
+    if (state.portraitMode) {
+      root.innerHTML =
+        '<section class="postprod-workspace is-portrait">' +
+        '<div class="postprod-portrait-left">' +
+        _playerPanelHtml +
         '</div>' +
+        '<div class="postprod-portrait-right">' +
+        _timelinePanelHtml +
+        _toolbarHtml +
+        _renderPanelHtml +
         '</div>' +
-        '</aside>' +
         '</section>';
+    } else {
+      root.innerHTML =
+        '<section class="postprod-workspace">' +
+        '<div class="postprod-editor-column">' +
+        '<div class="postprod-shell">' +
+        _playerPanelHtml +
+        _toolbarHtml +
+        _timelinePanelHtml +
+        '</div>' +
+        '</div>' +
+        _renderPanelHtml +
+        '</section>';
+    }
   }
 
   function updatePlayheadUi() {
@@ -4257,6 +4300,29 @@
     setPlayButtonUi();
     syncPreviewMedia(state.currentTime);
 
+    var orientLandscape = document.getElementById('postprod-orient-landscape');
+    var orientPortrait = document.getElementById('postprod-orient-portrait');
+    if (orientLandscape) {
+      orientLandscape.onclick = function () {
+        if (state.portraitMode) {
+          state.portraitMode = false;
+          savePortraitMode();
+          renderLayout(state.model);
+          bindEvents();
+        }
+      };
+    }
+    if (orientPortrait) {
+      orientPortrait.onclick = function () {
+        if (!state.portraitMode) {
+          state.portraitMode = true;
+          savePortraitMode();
+          renderLayout(state.model);
+          bindEvents();
+        }
+      };
+    }
+
     var bladeToggleBtn = document.getElementById('postprod-blade-toggle');
     if (bladeToggleBtn) {
       bladeToggleBtn.onclick = function () {
@@ -4575,6 +4641,7 @@
     loadSnapStep();
     loadCaptionPrefs();
     loadMotionPrefs();
+    loadPortraitMode();
     if (!state.hotkeyBound) {
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;

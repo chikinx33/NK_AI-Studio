@@ -6517,6 +6517,79 @@ body.postprod-reordering .postprod-clip.is-dragging {
   color: var(--muted);
 }
 
+/* Portrait mode (세로 모드) */
+.postprod-workspace.is-portrait {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.postprod-portrait-left {
+  flex-shrink: 0;
+  height: 100%;
+  aspect-ratio: 9 / 16;
+  display: flex;
+  flex-direction: column;
+}
+
+.postprod-portrait-left .postprod-player-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.postprod-portrait-left .postprod-panel-header {
+  grid-column: unset;
+  grid-row: unset;
+  flex-shrink: 0;
+}
+
+.postprod-portrait-left .postprod-preview-stage {
+  grid-column: unset;
+  grid-row: unset;
+  flex: 1;
+  min-height: 0;
+}
+
+.postprod-portrait-right {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.postprod-portrait-right .postprod-timeline-panel {
+  flex: 1;
+  min-height: 0;
+}
+
+.postprod-portrait-right .postprod-toolbar {
+  flex-shrink: 0;
+}
+
+.postprod-portrait-right .postprod-render-panel {
+  flex-shrink: 0;
+  overflow-y: auto;
+  max-height: 40%;
+}
+
+/* Orient toggle buttons */
+.postprod-orient-btn {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+
+.postprod-orient-btn.active {
+  opacity: 1;
+}
+
 @media (max-width: 960px) {
   .postprod-workspace {
     grid-template-columns: 1fr;
