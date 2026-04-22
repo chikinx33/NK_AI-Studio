@@ -2831,7 +2831,7 @@
       '<select id="postprod-motion-select">' + buildMotionOptionsHtml() + '</select>' +
       '</div>' +
       '<div class="postprod-toolbar-group">' +
-      '<button class="postprod-pill' + (state.bladeMode ? ' active' : '') + '" id="postprod-blade-toggle" type="button" title="' + t('클립 자르기') + ' (B)">✂</button>' +
+      '<button class="postprod-pill postprod-pill-square' + (state.bladeMode ? ' active' : '') + '" id="postprod-blade-toggle" type="button" title="' + t('클립 자르기') + ' (B)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></svg></button>' +
       '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
       '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="' + t('되돌리기') + '"' + (canUndo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>' +

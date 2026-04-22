@@ -5844,6 +5844,17 @@ html.page-shell-image #sidebar-project-card {
   color: #111;
 }
 
+.postprod-pill-square {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+  border-radius: 8px;
+}
+
+.postprod-pill-square svg {
+  display: block;
+}
+
 .postprod-color-input {
   width: 28px;
   height: 28px;
