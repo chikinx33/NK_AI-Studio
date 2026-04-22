@@ -1909,11 +1909,26 @@
   }
 
   function renderStorageItemLabel(name) {
-    // item.name is the full GCS object path; extract the base filename
+    // item.name may be a flat objectName like "{projectId}-scene-postprod-final-{file}"
+    // or a GCS path like "users/uid/.../postprod-final/{file}"
     var base = String(name || '').split('/').pop();
-    var label = base.replace(/\.(webm|mp4)$/i, '');
     var ext = (/\.(webm|mp4)$/i.exec(base) || [])[1] || '';
-    return { label: label, ext: ext.toUpperCase(), base: base };
+    var stripped = base.replace(/\.(webm|mp4)$/i, '');
+
+    // New format: ends with 10-digit timestamp (e.g. "...-2604231452")
+    var tsMatch = stripped.match(/(\d{10})$/);
+    if (tsMatch) {
+      return { label: tsMatch[1], ext: ext.toUpperCase(), base: base };
+    }
+    // Old format: "{projectId}-scene-postprod-final-{rest}" → show {rest} without "-source"
+    var prefixMatch = stripped.match(/^[\d]+[-_]scene[-_]postprod[-_]final[-_](.+)$/i);
+    if (prefixMatch) {
+      var rest = prefixMatch[1].replace(/[-_]source$/i, '') || prefixMatch[1];
+      return { label: rest || stripped, ext: ext.toUpperCase(), base: base };
+    }
+    // Fallback: strip postprod-final- prefix if present
+    var fb = stripped.replace(/^postprod[-_]final[-_]?/i, '').replace(/[-_]source$/i, '');
+    return { label: fb || stripped, ext: ext.toUpperCase(), base: base };
   }
 
   function ensureStorageModal() {
@@ -1954,6 +1969,12 @@
 
   function closeStorageModal() {
     if (!storageModal || !storageModal.root) return;
+    // aria-hidden을 설정하기 전에 모달 내 포커스된 요소를 해제해야 접근성 경고가 없음
+    try {
+      if (storageModal.root.contains(document.activeElement)) {
+        document.activeElement.blur();
+      }
+    } catch (_) { }
     storageModal.root.classList.remove('is-open');
     storageModal.root.setAttribute('aria-hidden', 'true');
   }
@@ -1987,6 +2008,15 @@
         var sizeStr = formatFileSize(item.size || item.contentLength);
         html +=
           '<li class="postprod-storage-item">' +
+          '<div class="postprod-storage-item-thumb" aria-hidden="true">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' +
+          '<rect x="2" y="2" width="20" height="20" rx="2"/>' +
+          '<line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/>' +
+          '<line x1="2" y1="12" x2="22" y2="12"/>' +
+          '<line x1="2" y1="7" x2="7" y2="7"/><line x1="17" y1="7" x2="22" y2="7"/>' +
+          '<line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/>' +
+          '</svg>' +
+          '</div>' +
           '<div class="postprod-storage-item-info">' +
           '<span class="postprod-storage-item-name">' + escapeHtml(info.label) + '</span>' +
           '<span class="postprod-storage-item-meta">' + escapeHtml(info.ext) + (sizeStr ? ' · ' + escapeHtml(sizeStr) : '') + '</span>' +

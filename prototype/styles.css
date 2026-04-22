@@ -5762,10 +5762,10 @@ html.page-shell-image #sidebar-project-card {
   max-height: min(80vh, 640px);
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--card, #0d1226);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
   border-radius: 14px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
   overflow: hidden;
 }
 .postprod-storage-header {
@@ -5773,19 +5773,19 @@ html.page-shell-image #sidebar-project-card {
   align-items: center;
   justify-content: space-between;
   padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border, rgba(255,255,255,0.1));
   flex-shrink: 0;
 }
 .postprod-storage-title {
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--text, #e8edf8);
 }
 .postprod-storage-close {
   background: none;
   border: none;
-  color: var(--text-muted, #888);
+  color: rgba(255,255,255,0.45);
   font-size: 16px;
   cursor: pointer;
   padding: 4px 8px;
@@ -5793,8 +5793,8 @@ html.page-shell-image #sidebar-project-card {
   line-height: 1;
 }
 .postprod-storage-close:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 .postprod-storage-body {
   flex: 1;
@@ -5805,7 +5805,7 @@ html.page-shell-image #sidebar-project-card {
 .postprod-storage-empty {
   margin: 20px 0;
   text-align: center;
-  color: var(--text-muted, #888);
+  color: var(--text-muted, rgba(255,255,255,0.45));
   font-size: 13px;
 }
 .postprod-storage-list {
@@ -5822,9 +5822,21 @@ html.page-shell-image #sidebar-project-card {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
+}
+.postprod-storage-item-thumb {
+  width: 48px;
+  height: 36px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
 }
 .postprod-storage-item-info {
   display: flex;
@@ -5835,14 +5847,14 @@ html.page-shell-image #sidebar-project-card {
 .postprod-storage-item-name {
   font-size: 14px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text, #e8edf8);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .postprod-storage-item-meta {
   font-size: 12px;
-  color: var(--text-muted, #888);
+  color: var(--text-muted, rgba(255,255,255,0.45));
 }
 .postprod-storage-item-actions {
   display: flex;
