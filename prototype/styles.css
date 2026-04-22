@@ -6139,9 +6139,40 @@ html.page-shell-image #sidebar-project-card {
   border-left: 1px solid rgba(255, 255, 255, 0.28);
 }
 
+/* ── Reorder 드래그 시각 효과 ────────────────────────────
+ * postprod-reordering: 순차 트랙 move 모드일 때만 적용 (resize 드래그는 제외)
+ * 형제 클립이 부드럽게 슬라이드하고, 드래그 클립은 떠오르는 리프트 효과 */
+
+/* 형제(비드래그) 클립: 자리 이동 시 smooth slide + 디밍 */
+body.postprod-reordering .postprod-clip:not(.is-dragging) {
+  transition:
+    left 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 160ms ease;
+  opacity: 0.78;
+  will-change: left;
+}
+
+/* 드래그 클립: 리프트 효과 + slot 스냅 애니메이션 */
+body.postprod-reordering .postprod-clip.is-dragging {
+  transition:
+    left 110ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 110ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 140ms ease,
+    box-shadow 140ms ease;
+  transform: translateY(-3px) scale(1.025);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.5),
+    0 0 0 2px rgba(255, 213, 0, 0.95),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  opacity: 0.96;
+  z-index: 20;
+}
+
+/* 기본 .is-dragging (resize 포함한 모든 드래그에 적용되는 기본 강조) */
 .postprod-clip.is-dragging {
-  opacity: 0.9;
-  box-shadow: 0 0 0 2px rgba(255, 213, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  opacity: 0.96;
+  box-shadow: 0 0 0 2px rgba(255, 213, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .postprod-clip.is-selected {
@@ -6305,6 +6336,10 @@ html.page-shell-image #sidebar-project-card {
 
 .postprod-dragging {
   user-select: none;
+  cursor: grabbing !important;
+}
+.postprod-dragging * {
+  cursor: grabbing !important;
 }
 
 .postprod-empty {

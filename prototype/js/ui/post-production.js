@@ -3267,6 +3267,11 @@
     selectClip(clipId);
     clipEl.classList.add('is-dragging');
     document.body.classList.add('postprod-dragging');
+    if (mode === 'move' && sequential) {
+      // 순차 reorder 드래그일 때만 reorder용 시각 효과 활성화
+      // (resize·비순차 move 드래그는 포함되지 않도록 분리)
+      document.body.classList.add('postprod-reordering');
+    }
     window.addEventListener('pointermove', onWindowPointerMove, true);
     window.addEventListener('pointerup', onWindowPointerUp, true);
     window.addEventListener('pointercancel', onWindowPointerUp, true);
@@ -3374,6 +3379,7 @@
     var d = state.drag;
     d.clipEl.classList.remove('is-dragging');
     document.body.classList.remove('postprod-dragging');
+    document.body.classList.remove('postprod-reordering');
 
     // ── 순차 트랙 reorder 커밋 ──
     if (d.reorderedEdits && Object.keys(d.reorderedEdits).length > 0) {
