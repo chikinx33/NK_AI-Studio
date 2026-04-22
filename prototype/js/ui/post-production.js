@@ -3076,8 +3076,24 @@
   }
 
   function applyHistoryAction(action, toAfter) {
-    if (!action || !action.clipId) return;
+    if (!action) return;
     var type = action.type || 'range';
+    // 'reorder'는 clipId 대신 edits 맵을 사용하므로 상단에서 먼저 처리
+    if (type === 'reorder') {
+      var reorderEdits = action.edits || {};
+      Object.keys(reorderEdits).forEach(function (id) {
+        var e = reorderEdits[id];
+        var s = toAfter ? e.afterStart : e.beforeStart;
+        var en = toAfter ? e.afterEnd : e.beforeEnd;
+        var clipObj = findClip(id);
+        if (clipObj) { clipObj.start = s; clipObj.end = en; }
+        persistTimelineEdit(id, s, en);
+      });
+      post.render();
+      setDirty(true);
+      return;
+    }
+    if (!action.clipId) return;
     var start = toAfter ? action.afterStart : action.beforeStart;
     var end = toAfter ? action.afterEnd : action.beforeEnd;
     if (type === 'delete') {
@@ -3205,6 +3221,28 @@
     if (!clip || !state.model) return;
     var neighbor = getNeighborBounds(clipMeta);
 
+    // ── 'move' 모드: 트랙 내 순서 변경(reorder) 지원 ──
+    // 시작 시점 스냅샷을 찍어두고, 드래그 중심이 이웃 클립 중심을 넘어가면 순서 재배치
+    var origSiblings = null;
+    var trackKey = null;
+    var sequential = false;
+    if (mode === 'move' && clipMeta.track) {
+      trackKey = clipMeta.track.key;
+      origSiblings = (clipMeta.track.clips || [])
+        .filter(function (c) { return c && c.id; })
+        .slice()
+        .sort(function (a, b) { return a.start - b.start; })
+        .map(function (c) {
+          return { id: c.id, origStart: c.start, origEnd: c.end, duration: c.end - c.start };
+        });
+      // 순차 트랙 판정: 모든 이웃이 간극 없이 붙어있으면 reorder 허용
+      sequential = origSiblings.length > 1;
+      for (var si = 1; si < origSiblings.length; si++) {
+        var gap = origSiblings[si].origStart - origSiblings[si - 1].origEnd;
+        if (gap > 0.05) { sequential = false; break; }
+      }
+    }
+
     evt.preventDefault();
     evt.stopPropagation();
     state.isPointerDown = true;
@@ -3212,6 +3250,7 @@
       mode: mode,
       clipId: clipId,
       clipEl: clipEl,
+      trackKey: trackKey,
       startX: evt.clientX,
       origStart: clip.start,
       origEnd: clip.end,
@@ -3220,6 +3259,9 @@
       nextEnd: clip.end,
       prevBoundEnd: neighbor.prevEnd,
       nextBoundStart: neighbor.nextStart,
+      origSiblings: origSiblings,
+      sequential: sequential,
+      reorderedEdits: null,
       moved: false
     };
     selectClip(clipId);
@@ -3238,6 +3280,58 @@
     var deltaSec = (dx / state.laneWidth) * duration;
     if (Math.abs(dx) > 3) d.moved = true;
     var minLen = 0.2;
+
+    // ── Move + 순차 트랙: 자유 reorder (이웃 클립을 넘어 순서 변경 가능) ──
+    if (d.mode === 'move' && d.sequential && d.origSiblings && d.origSiblings.length > 1) {
+      var trackStart = d.origSiblings[0].origStart;
+      var trackEnd = d.origSiblings[d.origSiblings.length - 1].origEnd;
+      var floatStart = clamp(d.origStart + deltaSec, trackStart, Math.max(trackStart, trackEnd - d.duration));
+      var floatCenter = floatStart + d.duration / 2;
+
+      // 드래그 클립의 중심이 각 이웃 중심보다 오른쪽이면 순서 +1
+      var newIdx = 0;
+      for (var ii = 0; ii < d.origSiblings.length; ii++) {
+        var sibA = d.origSiblings[ii];
+        if (sibA.id === d.clipId) continue;
+        var sibCenter = sibA.origStart + sibA.duration / 2;
+        if (sibCenter < floatCenter) newIdx++;
+      }
+
+      // 새 순서: 드래그 클립 제외한 이웃들 + 드래그 클립을 newIdx 위치에 삽입
+      var otherSibs = d.origSiblings.filter(function (s) { return s.id !== d.clipId; });
+      var selfEntry = { id: d.clipId, duration: d.duration };
+      var newOrder = otherSibs.slice(0, newIdx).concat([selfEntry]).concat(otherSibs.slice(newIdx));
+
+      // 순차 패킹: trackStart부터 각 클립 duration 만큼씩 할당
+      var t = trackStart;
+      var edits = {};
+      for (var oi = 0; oi < newOrder.length; oi++) {
+        var entry = newOrder[oi];
+        var ns = round1(t);
+        var ne = round1(t + entry.duration);
+        var el = document.querySelector('.postprod-clip[data-clip-id="' + entry.id + '"]');
+        if (el) updateClipElement(el, ns, ne);
+        if (entry.id === d.clipId) {
+          d.nextStart = ns;
+          d.nextEnd = ne;
+        }
+        var orig = null;
+        for (var oj = 0; oj < d.origSiblings.length; oj++) {
+          if (d.origSiblings[oj].id === entry.id) { orig = d.origSiblings[oj]; break; }
+        }
+        if (orig && (Math.abs(orig.origStart - ns) > 0.001 || Math.abs(orig.origEnd - ne) > 0.001)) {
+          edits[entry.id] = {
+            beforeStart: orig.origStart, beforeEnd: orig.origEnd,
+            afterStart: ns, afterEnd: ne
+          };
+        }
+        t = ne;
+      }
+      d.reorderedEdits = edits;
+      return;
+    }
+
+    // ── 기본 경로: 이웃 경계 내에서만 이동/리사이즈 ──
     var start = d.origStart;
     var end = d.origEnd;
     var prevEnd = clamp(d.prevBoundEnd, 0, state.model.totalDuration);
@@ -3280,6 +3374,33 @@
     var d = state.drag;
     d.clipEl.classList.remove('is-dragging');
     document.body.classList.remove('postprod-dragging');
+
+    // ── 순차 트랙 reorder 커밋 ──
+    if (d.reorderedEdits && Object.keys(d.reorderedEdits).length > 0) {
+      var editMap = d.reorderedEdits;
+      Object.keys(editMap).forEach(function (id) {
+        var e = editMap[id];
+        var clipObj = findClip(id);
+        if (clipObj) {
+          clipObj.start = e.afterStart;
+          clipObj.end = e.afterEnd;
+        }
+        persistTimelineEdit(id, e.afterStart, e.afterEnd);
+      });
+      pushHistory({
+        type: 'reorder',
+        trackKey: d.trackKey,
+        edits: editMap
+      });
+      setDirty(true);
+      state.selectedClipId = d.clipId;
+      setCurrentTime(d.nextStart, true);
+      state.justDragged = !!d.moved;
+      state.isPointerDown = false;
+      state.drag = null;
+      updateHistoryButtons();
+      return;
+    }
 
     var clip = findClip(d.clipId);
     if (clip) {
