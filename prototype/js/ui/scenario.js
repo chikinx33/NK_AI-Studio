@@ -1567,12 +1567,28 @@
     };
     if (main) main.classList.add('loading-blur');
 
+    // 로컬 캐시를 먼저 확보
+    let draft = null;
+    if (NK.service?.project?.resolveCurrent) {
+      draft = NK.service.project.resolveCurrent({ search: location.search }) || null;
+    }
+    if (!draft) {
+      try {
+        const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
+        if (saved) draft = JSON.parse(saved);
+      } catch (_) {}
+    }
+    const pid = draft?.id || new URLSearchParams(location.search).get('projectId');
+
+    // draft가 없을 때만 기본값으로 초기화 (loadDraft 내부에서도 호출되므로 중복 방지)
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
-    renderOverviewSelects({
-      purposeCategory: categories[0] || '',
-      target: TARGET_OPTIONS[0]?.value || '',
-      durationPreset: NK.config.DEFAULTS?.DURATION || '15'
-    });
+    if (!draft) {
+      renderOverviewSelects({
+        purposeCategory: categories[0] || '',
+        target: TARGET_OPTIONS[0]?.value || '',
+        durationPreset: NK.config.DEFAULTS?.DURATION || '15'
+      });
+    }
 
     // 화면 비율 버튼 이벤트
     const ratioGroup = document.getElementById('ratio-group');
@@ -1585,38 +1601,7 @@
       });
     }
 
-    let draft = null;
-    if (NK.service?.project?.resolveCurrent) {
-      draft = NK.service.project.resolveCurrent({ search: location.search }) || null;
-    }
-    if (!draft) {
-      const saved = localStorage.getItem(NK.config.KEYS.SELECTED_DRAFT);
-      if (saved) draft = JSON.parse(saved);
-    }
-    const pid = draft?.id || new URLSearchParams(location.search).get('projectId');
-
-    // 서버 최신 데이터를 우선 로드
-    if (pid && NK.api?.projectGet) {
-      try {
-        const srv = await NK.api.projectGet(pid);
-        if (srv?.data) {
-          draft = {
-            id: pid,
-            title: srv.data.title || draft?.title || '프로젝트',
-            payload: srv.data.payload || draft?.payload || {},
-            scenes: srv.data.scenes || draft?.scenes || [],
-            header: srv.data.header || draft?.header || ''
-          };
-          if (NK.service?.project?.upsertLocalDraft) {
-            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
-          } else if (NK.service?.project?.setCurrent) {
-            NK.service.project.setCurrent(draft);
-          }
-        }
-      } catch (_) { }
-    }
-
-    // 저장된 초안 로드
+    // 로컬 캐시로 즉시 렌더 (서버 대기 없이)
     loadDraft(draft);
     if (!draft) {
       currentCharacters = [];
@@ -1625,6 +1610,30 @@
       renderCharacterChips();
       syncCharacterUi();
       renderKnowledgeHint(currentPayload);
+    }
+
+    // 서버 최신 데이터를 백그라운드에서 갱신 (사용자가 편집 시작 전에 도착하면 재렌더)
+    let formDirty = false;
+    if (pid && NK.api?.projectGet) {
+      NK.api.projectGet(pid).then(srv => {
+        if (!srv?.data || formDirty) return;
+        const serverDraft = {
+          id: pid,
+          title: srv.data.title || draft?.title || '프로젝트',
+          payload: srv.data.payload || draft?.payload || {},
+          scenes: srv.data.scenes || draft?.scenes || [],
+          header: srv.data.header || draft?.header || ''
+        };
+        if (NK.service?.project?.upsertLocalDraft) {
+          draft = NK.service.project.upsertLocalDraft(serverDraft, { setCurrent: true }) || serverDraft;
+        } else if (NK.service?.project?.setCurrent) {
+          NK.service.project.setCurrent(serverDraft);
+          draft = serverDraft;
+        } else {
+          draft = serverDraft;
+        }
+        loadDraft(draft);
+      }).catch(() => {});
     }
 
     const syncOverviewPayload = () => {
@@ -1721,6 +1730,7 @@
     });
 
     form.addEventListener('change', (e) => {
+      formDirty = true;
       const target = e.target;
       if (!target) return;
       if (target.id === 'voice-mode-select') {
@@ -1742,6 +1752,7 @@
     });
 
     form.addEventListener('input', (e) => {
+      formDirty = true;
       const target = e.target;
       if (!target) return;
       if (target.id === 'duration-custom-input') {
@@ -2040,7 +2051,7 @@
       };
     }
     // 페이지 로딩 종료 처리 (초기 렌더 완료 후)
-    setTimeout(finishLoading, 350); // 약간의 딜레이로 로딩/블러가 눈에 띄게 표시되도록
+    setTimeout(finishLoading, draft ? 80 : 350); // 로컬 캐시 있으면 즉시, 없으면 서버 응답 커버
     window.addEventListener('load', finishLoading);
 
     // 시나리오 복사 버튼
