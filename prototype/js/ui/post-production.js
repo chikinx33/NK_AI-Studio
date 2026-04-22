@@ -2301,12 +2301,50 @@
     if (zoomText) zoomText.textContent = state.zoom + '%';
   }
 
+  // zoom/fit 변경 시 타임라인 스크롤 영역만 재구성.
+  // renderLayout 전체를 호출하면 렌더 결과 패널(우측)의 video 요소까지 재생성되어
+  // 렌더 완료 후 영상이 새로고침되는 문제가 생긴다.
+  function renderTimelineSection(model) {
+    var scroll = document.getElementById('postprod-timeline-scroll');
+    if (!scroll) {
+      // 스크롤 영역이 없으면 아직 초기 렌더 전 — 전체 렌더로 fallback
+      renderLayout(model);
+      return;
+    }
+    var playbackDuration = getTimelinePlaybackDuration(model);
+    var timelineDuration = getTimelineViewportDuration(model);
+    state.timelineDuration = timelineDuration;
+    state.currentTime = clamp(state.currentTime, 0, playbackDuration);
+    state.pxPerSecond = Math.max(36, Math.round(36 + (state.zoom * 1.1)));
+    var laneWidthByZoom = Math.ceil(model.totalDuration * state.pxPerSecond);
+    var laneWidth = state.fitTimeline && state.fitLaneWidth > 0
+      ? Math.max(60, state.fitLaneWidth)
+      : Math.max(960, laneWidthByZoom);
+    state.laneWidth = laneWidth;
+    var playheadLeft = Math.round((state.currentTime / Math.max(1, timelineDuration)) * laneWidth);
+    // DOM 캐시 초기화 (재생성된 요소 참조 해제). previewClipId/Url은 유지 → 빠른 경로 유지
+    state.cachedPlayheads = null;
+    state.cachedTimeNow = null;
+    state.cachedScrubRange = null;
+    // 타임라인 스크롤 영역만 재구성 — 렌더 패널(우측)은 그대로 둠
+    scroll.innerHTML =
+      '<div class="postprod-ruler-row" style="width:' + (laneWidth + 170) + 'px">' +
+      '<div class="postprod-track-label ruler-label">TRACKS</div>' +
+      '<div class="postprod-ruler" style="width:' + laneWidth + 'px">' +
+      buildRulerHtml(timelineDuration, laneWidth) +
+      '<div class="postprod-playhead ruler-playhead" style="left:' + playheadLeft + 'px"></div>' +
+      '</div>' +
+      '</div>' +
+      buildTrackRowsHtml(model, laneWidth, playheadLeft, timelineDuration);
+    updateZoomUi();
+  }
+
   function applyZoom(nextZoom) {
     state.zoom = quantizeZoom(nextZoom);
     state.fitTimeline = false;
     state.fitLaneWidth = 0;
     if (!state.model) return;
-    renderLayout(state.model);
+    renderTimelineSection(state.model);
     bindEvents();
     setCurrentTime(state.currentTime, true);
   }
@@ -2335,7 +2373,7 @@
     var fitDuration = getTimelineContentDuration(state.model);
     var zoomApprox = ((laneWidth / Math.max(1, fitDuration)) - 36) / 1.1;
     state.zoom = quantizeZoom(zoomApprox);
-    renderLayout(state.model);
+    renderTimelineSection(state.model);
     bindEvents();
     setCurrentTime(state.currentTime, true);
   }

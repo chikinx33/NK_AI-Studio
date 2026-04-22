@@ -812,7 +812,9 @@
       try { await awaitVideoFrameAt(video, seekTime, 400); } catch (_) { }
       if (state.encoderError) return false;
       if (shouldCancel && shouldCancel()) return false;
-      drawFn(t);
+      // drawImage(video)는 video.error 상태에서 InvalidStateError를 던질 수 있다.
+      // 한 프레임 실패가 전체 씬을 죽이지 않도록 try-catch로 보호.
+      try { drawFn(t); } catch (_) { /* 실패한 프레임은 이전 캔버스 상태 유지 */ }
       var timestamp = state.globalFrame * frameInterval;
       var frame = null;
       try {
@@ -1009,11 +1011,14 @@
           processed += duration;
           if (!okVideo) break;
         } catch (err) {
-          // encoder reclaim / closed 등 인코더 치명적 오류는 fallback 경로로 넘긴다.
-          // (QuotaExceededError = Chrome의 codec reclaim, InvalidStateError = encoder closed)
+          // encoder reclaim/closed/tainted canvas 등 치명적 오류는 fallback 경로로 넘긴다.
+          // QuotaExceededError = Chrome codec reclaim
+          // InvalidStateError  = encoder closed / video error 상태
+          // SecurityError      = canvas taint (crossOrigin 미설정 video로 drawImage 후 VideoFrame 생성 시)
           var errName = err && err.name;
           var errMsg = String(err && err.message || '');
-          if (errName === 'QuotaExceededError' || errName === 'InvalidStateError' || /reclaim|closed/i.test(errMsg)) {
+          if (errName === 'QuotaExceededError' || errName === 'InvalidStateError' ||
+              errName === 'SecurityError' || /reclaim|closed/i.test(errMsg)) {
             encoderError = encoderError || err;
             break;
           }

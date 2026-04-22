@@ -5964,7 +5964,7 @@ html.page-shell-image #sidebar-project-card {
   background: rgba(6, 10, 20, 0.72);
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 6px 6px 2px;
+  padding: 6px 6px 2px 0; /* left 0: sticky track-label이 좌 경계에 바짝 붙도록 */
   flex: 0 0 auto;
   min-height: 0;
   scrollbar-width: thin;
@@ -6286,7 +6286,7 @@ body.postprod-reordering .postprod-clip.is-dragging {
   background: #ffd500;
   box-shadow: 0 0 10px rgba(255, 213, 0, 0.45);
   pointer-events: none;
-  z-index: 5;
+  z-index: 3; /* track-label(z-index:4) 아래에 위치 — 라벨 위로 올라오는 어색함 방지 */
 }
 
 .postprod-playhead.ruler-playhead {

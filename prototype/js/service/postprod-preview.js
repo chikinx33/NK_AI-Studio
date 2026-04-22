@@ -90,6 +90,10 @@
         var resolvedUrl = resolveMediaUrl(url);
         var safeTimeoutMs = Math.max(1500, Number(timeoutMs) || 20000);
         var video = document.createElement('video');
+        // crossOrigin: 'anonymous' 필수 — 없으면 canvas.drawImage(video) 가 캔버스를
+        // taint시켜 WebCodecs의 new VideoFrame(canvas) 에서 SecurityError가 발생하고
+        // 렌더링이 실패한다. blob: URL 포함 same-origin 리소스도 이 속성과 호환된다.
+        video.crossOrigin = 'anonymous';
         video.preload = 'auto';
         video.playsInline = true;
         video.muted = true;
