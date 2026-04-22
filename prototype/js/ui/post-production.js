@@ -2257,11 +2257,13 @@
       var nw = element.naturalWidth;
       var nh = element.naturalHeight;
       if (!nw || !nh) {
-        // 이미지 미로드 — 모션 보류
+        // 이미지 미로드 — 모션 보류 (onload 후 재적용)
         element.style.transform = '';
         element.style.objectFit = 'contain';
+        element.style.visibility = 'hidden'; // 원본 전체 노출 방지
         return;
       }
+      element.style.visibility = ''; // 로드 완료 후 복원
       var container = wrapper.parentElement;
       var cw = container ? container.clientWidth : 0;
       var ch = container ? container.clientHeight : 0;
@@ -2365,6 +2367,16 @@
     if (!isVideo) {
       if (state.previewClipUrl !== playableUrl) {
         image.src = playableUrl;
+        // 이미지 로드 완료 후 모션 변환 재적용 (로드 전엔 naturalWidth=0이므로 보류됨)
+        image.onload = (function (capturedClip) {
+          return function () {
+            image.onload = null;
+            var activeClip = getActiveVisualClip(state.currentTime);
+            if (activeClip && activeClip.id === capturedClip.id) {
+              applyMotionTransform(image, activeClip, state.currentTime);
+            }
+          };
+        })(clip);
       }
       host.style.display = 'none';
       image.style.display = 'block';
