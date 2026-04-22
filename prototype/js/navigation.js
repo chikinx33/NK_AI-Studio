@@ -99,6 +99,12 @@
         __lastAt = now;
 
         if (isIframe) {
+            // 이동 전에 부모에게 overlay 활성화 요청 (빈 폼 flash 방지)
+            try {
+                if (window.parent) {
+                    window.parent.postMessage({ type: 'stage-loading', stage: st }, '*');
+                }
+            } catch (_) {}
             // 1. 아이프레임 스스로 이동
             window.location.assign(url);
             // 2. 부모에게 상태 변경 알림
@@ -235,6 +241,18 @@
                     applySync();
                     setTimeout(applySync, 120);
                 } catch (_) { }
+                // stage-loading으로 숨겨진 경우 로드 완료 후 복원
+                try {
+                    var ov2 = document.getElementById('stage-overlay');
+                    if (ov2 && ov2.classList.contains('is-active')) {
+                        if (iframe.__nkReadyTimer) clearTimeout(iframe.__nkReadyTimer);
+                        iframe.__nkReadyTimer = setTimeout(function () {
+                            try { iframe.style.opacity = '1'; } catch (_) {}
+                            try { if (ov2) ov2.classList.remove('is-active'); } catch (_) {}
+                            try { iframe.__nkReadyTimer = 0; } catch (_) {}
+                        }, 1200);
+                    }
+                } catch (_) {}
             });
             content.appendChild(iframe);
             try {

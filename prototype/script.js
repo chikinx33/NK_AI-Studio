@@ -899,6 +899,15 @@
       if (data.type === 'stage-changed' && data.stage) {
         NK.navigation.setStage(data.stage);
       }
+      if (data.type === 'stage-loading') {
+        // iframe이 스스로 다른 stage로 이동 중 - overlay로 빈 폼 flash 방지
+        try {
+          const iframe = document.getElementById('stage-iframe');
+          const ov = document.getElementById('stage-overlay');
+          if (iframe) { iframe.style.transition = 'opacity 160ms ease'; iframe.style.opacity = '0.01'; }
+          if (ov) ov.classList.add('is-active');
+        } catch (_) {}
+      }
       if (data.type === 'load-stage' && data.url) {
         NK.navigation.loadStage(data.url);
       }
