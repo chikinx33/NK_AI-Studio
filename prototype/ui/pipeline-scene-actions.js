@@ -384,10 +384,6 @@
 
       var cell = e.target.closest('.scene-cell');
       if (!cell) return;
-      var table = rootEl.querySelector('.scene-table');
-      if (!table) return;
-      table.querySelectorAll('.scene-cell.active-cell').forEach(function (c) { c.classList.remove('active-cell'); });
-      cell.classList.add('active-cell');
     });
 
     rootEl.addEventListener('click', function (e) {

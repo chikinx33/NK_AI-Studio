@@ -4007,8 +4007,7 @@ textarea::-webkit-scrollbar-corner {
   border-bottom: 1px solid var(--border);
 }
 .scene-row.active-row {
-  outline: 1px solid #ff7a00;
-  box-shadow: 0 0 0 2px rgba(255, 122, 0, 0.25);
+  box-shadow: inset 0 0 0 2px #ff7a00;
   position: relative;
   z-index: 1;
 }
