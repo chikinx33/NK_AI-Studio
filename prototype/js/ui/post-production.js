@@ -2272,17 +2272,32 @@
     if (!state.motionEnabled) preset = 'none';
 
     if (!motionSvc || preset === 'none') {
-      element.style.transform = '';
-      element.style.objectFit = 'contain';
-      element.style.width = '';
-      element.style.height = '';
-      // 비디오 호스트: 캐시 무효화 + 내부 video 스타일 초기화
-      if (element.tagName !== 'IMG') {
+      if (element.tagName === 'IMG') {
+        // 이미지: 트랜스폼 제거, contain 복원
+        element.style.transform = '';
+        element.style.objectFit = 'contain';
+        element.style.width = '';
+        element.style.height = '';
+        if (wrapper) {
+          wrapper.style.position = '';
+          wrapper.style.overflow = '';
+          wrapper.style.inset = '0';
+        }
+      } else {
+        // 비디오 호스트: 모든 인라인 위치/크기 초기화 → CSS inset:0 복원으로 화면 유지
         element.__motionClipId = null;
+        element.style.transform = '';
+        element.style.width = '';
+        element.style.height = '';
+        element.style.left = '';
+        element.style.top = '';
+        element.style.right = '';
+        element.style.bottom = '';
+        element.style.overflow = '';
         var vNone = element.querySelector('video');
         if (vNone) {
-          vNone.style.transform = '';
-          vNone.style.objectFit = '';
+          vNone.style.transform = '';   // 트랜스폼만 제거, 나머지는 CSS 기본값으로
+          vNone.style.objectFit = '';   // CSS: object-fit: contain
           vNone.style.position = '';
           vNone.style.inset = '';
           vNone.style.width = '';
@@ -2290,11 +2305,6 @@
           vNone.style.willChange = '';
           vNone.style.transformOrigin = '';
         }
-      }
-      if (wrapper) {
-        wrapper.style.position = '';
-        wrapper.style.overflow = '';
-        wrapper.style.inset = '0';
       }
       return;
     }
