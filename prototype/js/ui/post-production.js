@@ -1156,6 +1156,22 @@
     return document.getElementById('postprod-preview-video-host');
   }
 
+  // 브라우저는 DOM에 삽입되지 않은 video 요소의 loadedmetadata를 throttle하거나
+  // 아예 발생시키지 않을 수 있다. 워밍된 이웃 클립 영상이 준비 상태로 전환되지
+  // 않는 근본 원인. → 숨겨진 프리로드 컨테이너에 즉시 삽입해 브라우저가 메타데이터를
+  // 로드하게 강제한다.
+  function getVideoPreloadContainer() {
+    var id = 'postprod-video-preload';
+    var c = document.getElementById(id);
+    if (!c) {
+      c = document.createElement('div');
+      c.id = id;
+      c.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none;visibility:hidden;';
+      document.body.appendChild(c);
+    }
+    return c;
+  }
+
   function mountPreviewVideo(entry, clipId) {
     var host = getPreviewVideoHost();
     var svc = getPostprodPreviewService();
@@ -1190,6 +1206,20 @@
       resolveMediaUrl: toPlayableMediaUrl,
       releaseVideoSource: releaseVideoSource,
       isVideoUrl: isVideoUrl
+    });
+    // 워밍된 이웃 클립의 video 요소를 숨겨진 프리로드 컨테이너에 삽입.
+    // 부모가 없는(off-DOM) 상태에서는 브라우저가 loadedmetadata를 보장하지 않으므로
+    // DOM에 있는 상태를 유지해 entry.ready = true 가 빠르게 설정되도록 한다.
+    // (활성 클립의 video는 mountPreviewVideo 가 실제 host로 이동하므로 제외)
+    var activeId = String(clip.id || '');
+    var cache = state.previewVideoCache || {};
+    var container = getVideoPreloadContainer();
+    Object.keys(cache).forEach(function (id) {
+      var entry = cache[id];
+      if (!entry || !entry.video || id === activeId) return;
+      if (!entry.video.parentNode) {
+        container.appendChild(entry.video);
+      }
     });
   }
 
@@ -2565,6 +2595,20 @@
             // 재생 중 버퍼링으로 멈춘 경우 재개
             try { fpVid.muted = false; } catch (_) {}
             fpVid.play().catch(function () {});
+          }
+        }
+        // 안전망: readyPromise가 fast-path 도중에 해결됐지만 host가 아직 숨겨진 경우.
+        // (clipChanged=true 시 등록한 .then(activateVideo)가 당시 다른 클립이어서 no-op 처리된
+        // 후 다시 이 클립으로 돌아왔을 때의 edge-case를 포함.)
+        if (fpEntry && fpEntry.ready && host.style.display !== 'block') {
+          var fpMounted = mountPreviewVideo(fpEntry, clip.id);
+          if (fpMounted) {
+            host.style.display = 'block';
+            image.style.display = 'none';
+            gap.style.display = 'none';
+            empty.style.display = 'none';
+            pausePreviewVideos(clip.id);
+            clearMotionTransform(image);
           }
         }
       } else {
