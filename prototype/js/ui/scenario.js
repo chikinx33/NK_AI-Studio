@@ -2055,7 +2055,7 @@
       };
     }
     // 페이지 로딩 종료 처리 (초기 렌더 완료 후)
-    setTimeout(finishLoading, draft ? 80 : 350); // 로컬 캐시 있으면 즉시, 없으면 서버 응답 커버
+    setTimeout(finishLoading, draft ? 300 : 350); // 로컬 캐시 있으면 즉시, 없으면 서버 응답 커버
     window.addEventListener('load', finishLoading);
 
     // 시나리오 복사 버튼

@@ -500,6 +500,7 @@
     if (!state) {
       setPipelinePageLoading(true, '로딩중...');
       setPipelineLoading(false);
+      var loadingHandledByCache = false;
       try {
         var stored = (function () { try { return loadPipeline ? loadPipeline() : null; } catch (_) { return null; } })();
         if (stored && projectId && stored.draftId && String(stored.draftId) !== String(projectId)) stored = null;
@@ -606,11 +607,12 @@
         };
 
         if (stored) {
-          // 로컬 캐시로 즉시 렌더링 → 스피너 바로 해제
+          // 로컬 캐시로 즉시 렌더링 → 스피너 최소 300ms 후 해제
           state = buildStateFromData(stored, stored.draftId || projectId);
           ctx.setState(state);
           setPipelineLoading(false);
-          setPipelinePageLoading(false);
+          loadingHandledByCache = true;
+          setTimeout(function () { setPipelinePageLoading(false); }, 300);
           ui.refreshAssets().catch(function () {});
           // 백그라운드에서 서버 동기화
           fetchFromServer().then(function (sd) {
@@ -635,7 +637,7 @@
         }
       } finally {
         setPipelineLoading(false);
-        setPipelinePageLoading(false);
+        if (!loadingHandledByCache) setPipelinePageLoading(false);
       }
     }
     var payload = state.payload;

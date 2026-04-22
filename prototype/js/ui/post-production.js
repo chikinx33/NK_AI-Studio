@@ -3470,7 +3470,9 @@
       state.hotkeyBound = true;
     }
     // 즉시 로컬 데이터로 첫 렌더링 수행 (검은 화면 방지)
+    if (NK.core && NK.core.setLoading) NK.core.setLoading(true);
     post.render();
+    setTimeout(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); }, 300);
     Promise.resolve()
       .then(refreshProjectFromServer)
       .then(function (pid) {
