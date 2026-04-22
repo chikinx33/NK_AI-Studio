@@ -1175,22 +1175,37 @@
   // Chrome/Edge는 여러 video 요소가 로드되면 비활성 비디오의 디코더를 suspend한다.
   // 이 상태의 비디오에 currentTime/fastSeek을 호출해도 화면이 갱신되지 않는다
   // (오직 모션 transform만 적용되어 "정지 영상 + 움직이는 효과"로 보임).
-  // muted play()는 디코더 파이프라인을 즉시 재활성화시킨다. play promise가 resolve되면
-  // 다시 pause하여 스크럽 상태로 되돌린다. 소리는 muted이므로 사용자는 알 수 없다.
+  //
+  // 전략: muted play()로 디코더 활성화 + keep-alive 타이머로 pause를 지연시켜 후속
+  // seek이 활성 디코더에서 처리되도록 한다. 스크럽이 계속되면 타이머가 계속 리셋되어
+  // 비디오는 muted 상태로 계속 재생되며, 사용자가 스크럽을 멈추면 짧은 딜레이 후 pause.
+  //
+  // 비디오별 타이머를 __wakeTimerId에 저장 — 여러 비디오가 있어도 각자 독립.
   function wakeVideoDecoder(video) {
     if (!video) return;
-    if (!video.paused) return; // 이미 활성 상태
-    try { video.muted = true; } catch (_) {}
-    var p;
-    try { p = video.play(); } catch (_) {}
-    if (p && typeof p.then === 'function') {
-      p.then(function () {
-        // 재생 중이 아닐 때만 다시 pause — 재생 상태면 유지
-        if (!state.isPlaying && !video.paused) {
-          try { video.pause(); } catch (_) {}
-        }
-      }).catch(function () {});
+    if (!video.paused) {
+      // 이미 재생 중 — keep-alive 타이머만 리셋
+      resetWakeKeepAlive(video);
+      return;
     }
+    try { video.muted = true; } catch (_) {}
+    try { video.play().catch(function () { }); } catch (_) {}
+    resetWakeKeepAlive(video);
+  }
+
+  function resetWakeKeepAlive(video) {
+    if (!video) return;
+    if (video.__wakeTimerId) {
+      clearTimeout(video.__wakeTimerId);
+      video.__wakeTimerId = 0;
+    }
+    video.__wakeTimerId = setTimeout(function () {
+      video.__wakeTimerId = 0;
+      // 재생 중이거나 이미 pause된 상태면 skip
+      if (state.isPlaying) return;
+      if (!video || video.paused) return;
+      try { video.pause(); } catch (_) {}
+    }, 600);
   }
 
   // 정확 seek(video.currentTime = t)는 타겟 프레임까지 전체 디코딩이 필요해 느리다.
@@ -1277,6 +1292,10 @@
         if (keep[id]) return;
         var e = cache[id];
         if (!e || !e.video) { delete cache[id]; return; }
+        if (e.video.__wakeTimerId) {
+          try { clearTimeout(e.video.__wakeTimerId); } catch (_) { }
+          e.video.__wakeTimerId = 0;
+        }
         if (e.video.parentNode) {
           try { e.video.parentNode.removeChild(e.video); } catch (_) { }
         }
@@ -2719,16 +2738,19 @@
         var fpVid = fpEntry && fpEntry.video;
         if (fpVid) {
           if (!state.isPlaying) {
-            // 스크럽 중: 현재 시점으로 seek — fastSeek + rAF 병합으로 디코더 부하 최소화
+            // 스크럽 중: 디코더를 깨워두고(keep-alive) 현재 시점으로 seek — fastSeek + rAF 병합으로 디코더 부하 최소화
+            wakeVideoDecoder(fpVid);
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
             var fpDelta = Math.abs((fpVid.currentTime || 0) - fpClipTime);
             if (fpDelta > 0.03) {
               scheduleScrubSeek('active:' + clip.id, fpVid, fpClipTime);
             }
-          } else if (fpVid.paused && !fpVid.seeking) {
-            // 재생 중 버퍼링으로 멈춘 경우 재개
-            try { fpVid.muted = false; } catch (_) {}
-            fpVid.play().catch(function () {});
+          } else {
+            // 재생 중: 스크럽 wake로 인한 muted 상태를 해제하고, 멈춰있다면 재개
+            if (fpVid.muted) { try { fpVid.muted = false; } catch (_) {} }
+            if (fpVid.paused && !fpVid.seeking) {
+              fpVid.play().catch(function () {});
+            }
           }
         }
       } else {
