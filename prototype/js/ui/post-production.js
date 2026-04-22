@@ -52,6 +52,7 @@
     sessionEdits: {},
     lastRenderBlob: null,
     overlayClips: [],
+    motionEnabled: true,
     // DOM element caches (cleared on renderLayout)
     cachedPlayheads: null,
     cachedTimeNow: null,
@@ -464,6 +465,19 @@
       localStorage.setItem('nk_post_caption_bg', state.captionBg || '');
       localStorage.setItem('nk_post_caption_effect', state.captionEffect || 'none');
       localStorage.setItem('nk_post_caption_pos', String(state.captionPosition || 6));
+    } catch (_) { }
+  }
+
+  function loadMotionPrefs() {
+    try {
+      var on = localStorage.getItem('nk_post_motion_on');
+      if (on != null) state.motionEnabled = String(on) !== '0';
+    } catch (_) { }
+  }
+
+  function saveMotionPrefs() {
+    try {
+      localStorage.setItem('nk_post_motion_on', state.motionEnabled ? '1' : '0');
     } catch (_) { }
   }
 
@@ -2255,12 +2269,28 @@
     var wrapper = document.getElementById('postprod-motion-wrapper');
     var motionSvc = NK.service && NK.service.postprodMotion;
     var preset = (clip && clip.motionPreset) || 'none';
+    if (!state.motionEnabled) preset = 'none';
 
     if (!motionSvc || preset === 'none') {
       element.style.transform = '';
       element.style.objectFit = 'contain';
       element.style.width = '';
       element.style.height = '';
+      // 비디오 호스트: 캐시 무효화 + 내부 video 스타일 초기화
+      if (element.tagName !== 'IMG') {
+        element.__motionClipId = null;
+        var vNone = element.querySelector('video');
+        if (vNone) {
+          vNone.style.transform = '';
+          vNone.style.objectFit = '';
+          vNone.style.position = '';
+          vNone.style.inset = '';
+          vNone.style.width = '';
+          vNone.style.height = '';
+          vNone.style.willChange = '';
+          vNone.style.transformOrigin = '';
+        }
+      }
       if (wrapper) {
         wrapper.style.position = '';
         wrapper.style.overflow = '';
@@ -2326,11 +2356,11 @@
       // 같은 클립의 반복 프레임에서는 캐시된 크기 사용 → layout thrashing 방지
       var clipIdForCache = clip && clip.id;
       if (element.__motionClipId !== clipIdForCache) {
-        element.__motionClipId = clipIdForCache;
         var hostContainer = element.parentElement;
         var hcw = hostContainer ? hostContainer.clientWidth : 0;
         var hch = hostContainer ? hostContainer.clientHeight : 0;
         if (hcw && hch) {
+          element.__motionClipId = clipIdForCache; // 크기 계산 성공 시에만 캐시 저장
           var vidRatio = vw / vh;
           var hcRatio = hcw / hch;
           var hrw, hrh;
@@ -2391,6 +2421,7 @@
     if (element.tagName === 'IMG') {
       element.style.objectFit = 'contain';
     } else {
+      element.__motionClipId = null; // 캐시 무효화 — 다음 applyMotionTransform에서 재측정
       var vid = element.querySelector('video');
       if (vid) {
         vid.style.transform = '';
@@ -2752,7 +2783,7 @@
       '<button class="btn-secondary compact postprod-fit-btn' + (state.fitTimeline ? ' is-active' : '') + '" id="postprod-zoom-fit" type="button" aria-label="타임라인 맞춤">FIX</button>' +
       '</div>' +
       '<div class="postprod-toolbar-group motion-group" id="postprod-motion-group">' +
-      '<label>' + t('효과') + '</label>' +
+      '<button class="postprod-pill' + (state.motionEnabled ? ' active' : '') + '" id="postprod-motion-toggle" type="button">' + t('효과') + '</button>' +
       '<select id="postprod-motion-select">' + buildMotionOptionsHtml() + '</select>' +
       '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
@@ -3202,6 +3233,15 @@
         syncPreviewMedia(state.currentTime);
       };
     }
+    var motionToggle = document.getElementById('postprod-motion-toggle');
+    if (motionToggle) {
+      motionToggle.onclick = function () {
+        state.motionEnabled = !state.motionEnabled;
+        motionToggle.classList.toggle('active', state.motionEnabled);
+        saveMotionPrefs();
+        syncPreviewMedia(state.currentTime);
+      };
+    }
     var fontSel = document.getElementById('postprod-font-family');
     if (fontSel) {
       fontSel.onchange = function () {
@@ -3627,6 +3667,7 @@
 
     loadSnapStep();
     loadCaptionPrefs();
+    loadMotionPrefs();
     if (!state.hotkeyBound) {
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;
