@@ -2544,16 +2544,28 @@
 
     // ── Fast path: 동일 클립 ────────────────────────────────────────────────
     // 클립이 바뀌지 않았으면 display 토글·마운트 등 무거운 작업은 건너뛰고
-    // transform과 자막만 갱신 (rAF 60fps 루프 최적화 핵심)
+    // transform + 자막 갱신. 비디오는 스크럽 중 seek도 수행 (핵심 fix).
     if (!clipChanged) {
       if (isVideo) {
         applyMotionTransform(host, clip, sec);
-        // 버퍼링 등으로 일시 정지된 경우 재개 (단, seeking 중이면 seeked 이벤트로 처리)
         var fpEntry = state.previewVideoCache && state.previewVideoCache[clip.id];
         var fpVid = fpEntry && fpEntry.video;
-        if (fpVid && state.isPlaying && fpVid.paused && !fpVid.seeking) {
-          try { fpVid.muted = false; } catch (_) {}
-          fpVid.play().catch(function () {});
+        if (fpVid) {
+          if (!state.isPlaying) {
+            // 스크럽 중: 영상 프레임을 현재 시점으로 seek
+            // seeking 플래그로 디코더 부하 자동 조절 (seek 완료 전 중복 호출 방지)
+            var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
+            if (!fpVid.seeking) {
+              var fpDelta = Math.abs((fpVid.currentTime || 0) - fpClipTime);
+              if (fpDelta > 0.04) {
+                try { fpVid.currentTime = fpClipTime; } catch (_) {}
+              }
+            }
+          } else if (fpVid.paused && !fpVid.seeking) {
+            // 재생 중 버퍼링으로 멈춘 경우 재개
+            try { fpVid.muted = false; } catch (_) {}
+            fpVid.play().catch(function () {});
+          }
         }
       } else {
         applyMotionTransform(image, clip, sec);
@@ -2624,8 +2636,10 @@
       pausePreviewVideos(clip.id);
       clearMotionTransform(image);
       applyMotionTransform(host, clip, state.currentTime);
-
-      var needsSeek = Math.abs((video.currentTime || 0) - clipTime) > 0.12;
+      // 클로저 캡처 시점(sec)이 아닌 현재 state.currentTime으로 seek
+      // — readyPromise 비동기 해결 시 스크럽 위치가 이미 달라진 경우 대응
+      var liveClipTime = clamp(state.currentTime - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
+      var needsSeek = Math.abs((video.currentTime || 0) - liveClipTime) > 0.12;
       if (state.isPlaying) {
         try { video.muted = false; } catch (_) {}
         if (needsSeek) {
@@ -2637,7 +2651,7 @@
             }
           };
           video.addEventListener('seeked', onSeeked);
-          try { video.currentTime = clipTime; } catch (_) {
+          try { video.currentTime = liveClipTime; } catch (_) {
             video.removeEventListener('seeked', onSeeked);
           }
         } else if (video.paused) {
@@ -2646,7 +2660,7 @@
         }
       } else {
         if (needsSeek) {
-          try { video.currentTime = clipTime; } catch (_) {}
+          try { video.currentTime = liveClipTime; } catch (_) {}
         }
         try { video.pause(); } catch (_) {}
         try { video.muted = true; } catch (_) {}
