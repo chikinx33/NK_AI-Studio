@@ -1802,6 +1802,7 @@
               });
             }
           }
+          setActiveScenarioCard(card);
           toggleScenarioCardCollapsed(card);
           return;
         }

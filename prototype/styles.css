@@ -4008,6 +4008,7 @@ textarea::-webkit-scrollbar-corner {
 }
 .scene-row.is-collapsed .scene-row-header {
   border-bottom: none;
+  cursor: pointer;
 }
 
 /* head row stays as grid, no header */

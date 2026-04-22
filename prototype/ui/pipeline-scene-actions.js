@@ -30,6 +30,12 @@
     rootEl.addEventListener('click', async function (e) {
       /* ── scene-row toggle (접힘/펼침) ── */
       var toggleBtn = e.target.closest('.scene-row-toggle');
+      var headerArea = e.target.closest('.scene-row-header');
+      var rowFromHeader = headerArea ? headerArea.closest('.scene-row') : null;
+      // 접힌 상태에서 헤더 전체 클릭도 토글 처리
+      if (!toggleBtn && headerArea && rowFromHeader && rowFromHeader.classList.contains('is-collapsed')) {
+        toggleBtn = rowFromHeader.querySelector('.scene-row-toggle');
+      }
       if (toggleBtn) {
         e.preventDefault();
         e.stopPropagation();
