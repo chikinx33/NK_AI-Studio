@@ -50,12 +50,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // Seedance는 4–15초 지원 → 스냅 없이 클램프만 적용
     const seedanceDuration = Math.min(15, Math.max(4, Math.round(Number(durationSeconds) || 5)));
 
-    const isI2vOnlyModel = String(videoModel || "").startsWith("kling") || videoModel === "seedance";
+    const audioDataUrl = String((body as any)?.audioDataUrl || "").trim();
+    const videoDataUrl = String((body as any)?.videoDataUrl || "").trim();
+    const referenceImages: string[] = Array.isArray((body as any)?.referenceImages)
+      ? (body as any).referenceImages.map((v: any) => String(v || "")).filter(Boolean)
+      : [];
+
+    const isKlingModel = String(videoModel || "").startsWith("kling");
+    const isI2vOnlyModel = isKlingModel || videoModel === "seedance" || videoModel === "seedance-r2v" || videoModel === "vidu-q3";
     if (!safePromptText) {
       return json({ error: "promptText is required" }, 400);
     }
-    if (isI2vOnlyModel && !imageDataUrl) {
-      return json({ error: "imageDataUrl is required for this model" }, 400);
+    if (isI2vOnlyModel && !imageDataUrl && referenceImages.length === 0) {
+      return json({ error: "imageDataUrl or referenceImages is required for this model" }, 400);
     }
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
@@ -114,7 +121,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     };
 
     const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
-    if (videoModel !== "veo" && videoModel !== "grok" && videoModel !== "seedance" && !isKling) {
+    const supportedModels = ["veo", "veo-full", "grok", "seedance", "wan", "seedance-r2v", "vidu-q3"];
+    if (!supportedModels.includes(videoModel) && !isKling) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
 
@@ -180,6 +188,131 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
       const jobPrefix = useMulti ? "kling-multi:" : "kling:";
       return json({ job_id: `${jobPrefix}${predictionId}`, model: atlasKlingModel, aspectApplied: klingAspect, outputGcsUri });
+    }
+
+    // Veo Full branch (google/veo3.1/image-to-video via Atlas Cloud)
+    if (videoModel === "veo-full") {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
+      const atlasBody: any = {
+        model: "google/veo3.1/image-to-video",
+        prompt: safePromptText,
+        duration: snapDuration,
+        aspect_ratio: aspectFinal,
+        resolution: "1080p",
+      };
+      if (startImageResolved) atlasBody.image = startImageResolved;
+      if (audioDataUrl) atlasBody.audio = audioDataUrl;
+      if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "veo_full_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.id || atlasJson?.prediction_id || "";
+      if (!predictionId) return json({ error: "veo_full_no_prediction_id", raw: atlasJson }, 500);
+      return json({ job_id: `veo-full:${predictionId}`, outputGcsUri });
+    }
+
+    // Wan branch (alibaba/wan-2.7/image-to-video via Atlas Cloud)
+    if (videoModel === "wan") {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const wanDuration = Math.min(15, Math.max(2, Math.round(Number(durationSeconds) || 5)));
+      const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
+      const endImageRaw = String((body as any)?.endImageDataUrl || "").trim();
+      const endImageResolved = endImageRaw ? await toAtlasImageUrl(endImageRaw, `end-${sceneId}`).catch(() => "") : "";
+      const refResolved: string[] = [];
+      for (let i = 0; i < referenceImages.length; i++) {
+        const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
+        if (r) refResolved.push(r);
+      }
+      const atlasBody: any = {
+        model: "alibaba/wan-2.7/image-to-video",
+        prompt: safePromptText,
+        duration: wanDuration,
+        aspect_ratio: aspectFinal,
+      };
+      if (startImageResolved) atlasBody.image = startImageResolved;
+      if (endImageResolved) atlasBody.last_image = endImageResolved;
+      if (refResolved.length > 0) atlasBody.reference_images = refResolved;
+      if (audioDataUrl) atlasBody.audio = audioDataUrl;
+      if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "wan_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.id || atlasJson?.prediction_id || "";
+      if (!predictionId) return json({ error: "wan_no_prediction_id", raw: atlasJson }, 500);
+      return json({ job_id: `wan:${predictionId}`, outputGcsUri });
+    }
+
+    // Seedance R2V branch (bytedance/seedance-2.0/reference-to-video via Atlas Cloud)
+    if (videoModel === "seedance-r2v") {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const r2vDuration = Math.min(15, Math.max(4, Math.round(Number(durationSeconds) || 5)));
+      const refResolved: string[] = [];
+      for (let i = 0; i < referenceImages.length; i++) {
+        const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
+        if (r) refResolved.push(r);
+      }
+      const atlasBody: any = {
+        model: "bytedance/seedance-2.0/reference-to-video",
+        prompt: safePromptText,
+        duration: r2vDuration,
+      };
+      if (refResolved.length > 0) atlasBody.reference_images = refResolved;
+      if (audioDataUrl) atlasBody.audio = audioDataUrl;
+      if (videoDataUrl) atlasBody.video = videoDataUrl;
+      if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "seedance_r2v_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      return json({ job_id: predictionId ? `seedance-r2v:${predictionId}` : "", status: "processing" }, 202);
+    }
+
+    // Vidu Q3 branch (vidu/q3-mix/reference-to-video via Atlas Cloud)
+    if (videoModel === "vidu-q3") {
+      const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
+      if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      const viduDuration = Math.min(12, Math.max(4, Math.round(Number(durationSeconds) || 5)));
+      const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
+      const refResolved: string[] = [];
+      for (let i = 0; i < referenceImages.length; i++) {
+        const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
+        if (r) refResolved.push(r);
+      }
+      const atlasBody: any = {
+        model: "vidu/q3-mix/reference-to-video",
+        prompt: safePromptText,
+        duration: viduDuration,
+        aspect_ratio: aspectFinal,
+      };
+      if (startImageResolved) atlasBody.image = startImageResolved;
+      if (refResolved.length > 0) atlasBody.reference_images = refResolved;
+      if (audioDataUrl) atlasBody.audio = audioDataUrl;
+      if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
+      const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${atlasKey}` },
+        body: JSON.stringify(atlasBody),
+      });
+      const atlasText = await atlasRes.text();
+      if (!atlasRes.ok) return json({ error: "vidu_q3_error", status: atlasRes.status, detail: safeJson(atlasText) }, atlasRes.status);
+      const atlasJson = safeJson(atlasText);
+      const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
+      return json({ job_id: predictionId ? `vidu-q3:${predictionId}` : "", status: "processing" }, 202);
     }
 
     // Grok branch (xAI direct API — Atlas Cloud does not host Grok video)
@@ -301,16 +434,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
       const veoAtlasModel = (env.VEO_ATLAS_MODEL_ID as string | undefined) || "google/veo3.1-fast/image-to-video";
-      const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
-      if (!startImageResolved) return json({ error: "imageDataUrl is empty or upload failed" }, 400);
+      const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); }) : "";
       const atlasBody: any = {
         model: veoAtlasModel,
         prompt: safePromptText,
         duration: snapDuration,
         aspect_ratio: aspectFinal,
         resolution: "1080p",
-        image: startImageResolved,
       };
+      if (startImageResolved) atlasBody.image = startImageResolved;
       if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
       log('veo_atlas_request', { sceneId, model: veoAtlasModel, aspect: aspectFinal, duration: snapDuration });
       const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {

@@ -3,11 +3,15 @@
   var vgen = NK.uiVideoGen || (NK.uiVideoGen = {});
 
   var ALL_MODELS = [
-    { id: 'veo',         label: 'Veo 3.1 Fast',         t2v: true,  i2v: true  },
-    { id: 'grok',        label: 'Grok Imagine',           t2v: true,  i2v: true  },
-    { id: 'kling-draft', label: 'Kling Draft (v1.6)',     t2v: false, i2v: true  },
-    { id: 'kling-final', label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true  },
-    { id: 'seedance',    label: 'Seedance 2.0',           t2v: false, i2v: true  }
+    { id: 'veo',          label: 'Veo 3.1 Fast',          t2v: true,  i2v: true,  caps: ['start'] },
+    { id: 'veo-full',     label: 'Veo 3.1 Full',          t2v: true,  i2v: true,  caps: ['start', 'audio'] },
+    { id: 'grok',         label: 'Grok Imagine',           t2v: true,  i2v: true,  caps: ['start'] },
+    { id: 'kling-draft',  label: 'Kling Draft (v1.6)',     t2v: false, i2v: true,  caps: ['start', 'end', 'refs', 'camera'], maxRefs: 3 },
+    { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'end', 'camera'] },
+    { id: 'seedance',     label: 'Seedance 2.0',           t2v: false, i2v: true,  caps: ['start'] },
+    { id: 'wan',          label: 'Wan 2.7',                t2v: true,  i2v: true,  caps: ['start', 'end', 'refs', 'audio'] },
+    { id: 'seedance-r2v', label: 'Seedance 2.0 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'] },
+    { id: 'vidu-q3',      label: 'Vidu Q3-Mix',            t2v: false, i2v: true,  caps: ['start', 'refs', 'audio'], maxRefs: 4 }
   ];
 
   var ASPECT_RATIOS = ['16:9', '9:16', '1:1', '4:3'];
@@ -25,6 +29,32 @@
 
   var DURATIONS_DEFAULT  = [4, 5, 6, 8];
   var DURATIONS_SEEDANCE = [4, 5, 6, 8, 10, 15];
+  var DURATIONS_VIDU     = [4, 5, 6, 8, 10];
+
+  var MODEL_DESCS = {
+    ko: {
+      'veo':          '시작 프레임 선택적. 구글 자체 모델, 1080p 고품질 사실적 영상.',
+      'veo-full':     '구글 최고품질 + 네이티브 오디오. Fast 대비 2배 성능, 음향 포함 영상 생성.',
+      'grok':         'xAI 모델. 창의적·스타일리시 영상. 텍스트/이미지 모두 지원, 720p.',
+      'kling-draft':  '시작+끝 프레임으로 장면 구간 고정. 레퍼런스로 캐릭터 일관성 유지. 카메라 무브먼트 지원.',
+      'kling-final':  '1080p FHD 최고화질. 시작+끝 프레임, 카메라 무브먼트 지원.',
+      'seedance':     'ByteDance 모델. 자연스러운 움직임, 최대 15초 영상 지원.',
+      'wan':          '끝 프레임·레퍼런스 5장·오디오 입력 모두 지원. 가장 다양한 입력 방식. $0.085/초.',
+      'seedance-r2v': '레퍼런스+오디오 기반 영상 생성. 기존 영상 편집·연장 가능. $0.127/초.',
+      'vidu-q3':      '1~4장 레퍼런스로 인물 일관성 유지. 영상+음향 동시 1패스 생성. 1080p. $0.106/초.'
+    },
+    en: {
+      'veo':          'Optional start frame. Google model, 1080p high-quality realistic video.',
+      'veo-full':     'Top Google quality + native audio. 2× quality over Fast, audio included.',
+      'grok':         'xAI model. Creative, stylized video. Supports text & image, 720p.',
+      'kling-draft':  'Fix start & end frames. Reference images keep characters consistent. Camera movement supported.',
+      'kling-final':  '1080p FHD top quality. Start+end frames, camera movement supported.',
+      'seedance':     'ByteDance model. Smooth motion, up to 15-second video.',
+      'wan':          'End frame, 5 reference images, and audio all supported. Most versatile input. $0.085/sec.',
+      'seedance-r2v': 'Generate from references+audio. Edit or extend existing video. $0.127/sec.',
+      'vidu-q3':      '1–4 reference images for character consistency. Video+audio in one pass. 1080p. $0.106/sec.'
+    }
+  };
 
   var STORAGE_KEY         = 'nk_video_gen_results_v1';
   var STORAGE_SESSION_KEY = 'nk_video_gen_session_id';
@@ -63,6 +93,14 @@
       confirm_delete_all:'생성된 영상 전체를 삭제할까요?',
       history_loading:   '히스토리 불러오는 중...',
       server_item:       '클라우드 보관',
+      refs_label:        '레퍼런스 이미지',
+      audio_label:       '오디오',
+      video_edit_label:  '편집할 영상',
+      upload_audio:      '오디오 업로드',
+      upload_video:      '영상 업로드',
+      remove_audio:      '제거',
+      remove_video:      '제거',
+      ref_slot_label:    '레퍼런스 {n}',
       sessionLabel:      '세션',
       projectLabel:      '현재 에피소드',
       brandLabel:        '현재 브랜드',
@@ -100,6 +138,14 @@
       confirm_delete_all:'Delete all generated videos?',
       history_loading:   'Loading history...',
       server_item:       'Cloud saved',
+      refs_label:        'Reference Images',
+      audio_label:       'Audio',
+      video_edit_label:  'Video to Edit',
+      upload_audio:      'Upload Audio',
+      upload_video:      'Upload Video',
+      remove_audio:      'Remove',
+      remove_video:      'Remove',
+      ref_slot_label:    'Ref {n}',
       sessionLabel:      'Session',
       projectLabel:      'Current episode',
       brandLabel:        'Current brand',
@@ -120,6 +166,11 @@
     startImageUrl:  '',
     endImageUrl:    '',
     cameraMovement: '',
+    audioUrl:       '',
+    audioFileName:  '',
+    videoUrl:       '',
+    videoFileName:  '',
+    referenceUrls:  [],
     results:        [],
     serverItems:    [],   // GCS에서 로드된 서버 항목
     deletedSet:     {},   // 삭제된 항목 tombstone (objectName → true)
@@ -175,7 +226,26 @@
   }
 
   function durations() {
-    return state.model === 'seedance' ? DURATIONS_SEEDANCE : DURATIONS_DEFAULT;
+    if (state.model === 'seedance' || state.model === 'seedance-r2v' || state.model === 'wan') return DURATIONS_SEEDANCE;
+    if (state.model === 'vidu-q3') return DURATIONS_VIDU;
+    return DURATIONS_DEFAULT;
+  }
+
+  function currentModelObj() {
+    return ALL_MODELS.find(function (m) { return m.id === state.model; }) || ALL_MODELS[0];
+  }
+
+  function hasCap(cap) {
+    return (currentModelObj().caps || []).indexOf(cap) !== -1;
+  }
+
+  function maxRefs() {
+    var mo = currentModelObj();
+    if (mo.maxRefs) return mo.maxRefs;
+    if (state.model === 'wan') return 5;
+    if (state.model === 'vidu-q3') return 4;
+    if (state.model === 'seedance-r2v') return 5;
+    return 0;
   }
 
   // ─── Persistence ──────────────────────────────────────────
@@ -581,20 +651,119 @@
 
   // ── Right: Generation Panel ────────────────────────────────
 
+  function renderModelDesc() {
+    var mo = currentModelObj();
+    var descObj = MODEL_DESCS[state.lang] || MODEL_DESCS.ko;
+    var desc = descObj[mo.id] || '';
+    if (!desc) return document.createDocumentFragment();
+    var wrap = el('div', 'vgen-model-desc');
+    var tags = el('div', 'vgen-feature-tags');
+    var CAP_LABELS = {
+      ko: { start: '시작 프레임', end: '끝 프레임', refs: '레퍼런스', audio: '오디오', camera: '카메라', video: '영상 편집' },
+      en: { start: 'Start Frame', end: 'End Frame', refs: 'Reference', audio: 'Audio', camera: 'Camera', video: 'Video Edit' }
+    };
+    var capLabels = CAP_LABELS[state.lang] || CAP_LABELS.ko;
+    (mo.caps || []).forEach(function (cap) {
+      if (capLabels[cap]) {
+        var tag = el('span', 'vgen-feature-tag', { textContent: capLabels[cap] });
+        tags.appendChild(tag);
+      }
+    });
+    wrap.appendChild(tags);
+    var descEl = el('p', 'vgen-model-desc-text', { textContent: desc });
+    wrap.appendChild(descEl);
+    return wrap;
+  }
+
+  function renderRefSection() {
+    var max = maxRefs();
+    if (!max) return document.createDocumentFragment();
+    var section = el('div', 'vgen-refs-section');
+    section.appendChild(el('label', 'vgen-label', { textContent: t('refs_label') }));
+    var grid = el('div', 'vgen-refs-grid');
+    for (var i = 0; i < max; i++) {
+      var slotUrl = state.referenceUrls[i] || '';
+      var slot = el('div', 'vgen-ref-slot' + (slotUrl ? ' has-image' : ''));
+      slot.setAttribute('data-ref-idx', i);
+      if (slotUrl) {
+        var img = el('img', 'vgen-ref-thumb', { src: slotUrl, alt: '' });
+        img.setAttribute('data-action', 'preview-image');
+        img.setAttribute('data-src', slotUrl);
+        slot.appendChild(img);
+        var removeBtn = el('button', 'vgen-ref-remove', { type: 'button', textContent: '×' });
+        removeBtn.setAttribute('data-ref-idx', i);
+        slot.appendChild(removeBtn);
+      } else {
+        var addBtn = el('button', 'vgen-ref-add', { type: 'button', textContent: '+' });
+        addBtn.setAttribute('data-ref-idx', i);
+        slot.appendChild(addBtn);
+        var fileInp = el('input', 'vgen-ref-file', { type: 'file', accept: 'image/*', id: 'vgen-ref-file-' + i });
+        fileInp.setAttribute('data-ref-idx', i);
+        slot.appendChild(fileInp);
+      }
+      grid.appendChild(slot);
+    }
+    section.appendChild(grid);
+    return section;
+  }
+
+  function renderAudioSection() {
+    var section = el('div', 'vgen-audio-section');
+    section.appendChild(el('label', 'vgen-label', { textContent: t('audio_label') }));
+    var slot = el('div', 'vgen-audio-slot' + (state.audioUrl ? ' has-file' : ''));
+    if (state.audioUrl) {
+      var nameEl = el('span', 'vgen-audio-name', { textContent: state.audioFileName || 'audio' });
+      slot.appendChild(nameEl);
+      var removeBtn = el('button', 'vgen-audio-remove', { type: 'button', textContent: t('remove_audio') });
+      slot.appendChild(removeBtn);
+    } else {
+      var uploadBtn = el('button', 'btn-secondary vgen-audio-trigger', { type: 'button', textContent: t('upload_audio') });
+      var fileInp = el('input', '', { type: 'file', accept: 'audio/*', id: 'vgen-audio-file', style: 'display:none' });
+      slot.appendChild(uploadBtn);
+      slot.appendChild(fileInp);
+    }
+    section.appendChild(slot);
+    return section;
+  }
+
+  function renderVideoSection() {
+    var section = el('div', 'vgen-video-section');
+    section.appendChild(el('label', 'vgen-label', { textContent: t('video_edit_label') }));
+    var slot = el('div', 'vgen-video-slot' + (state.videoUrl ? ' has-file' : ''));
+    if (state.videoUrl) {
+      var nameEl = el('span', 'vgen-video-name', { textContent: state.videoFileName || 'video' });
+      slot.appendChild(nameEl);
+      var removeBtn = el('button', 'vgen-video-remove', { type: 'button', textContent: t('remove_video') });
+      slot.appendChild(removeBtn);
+    } else {
+      var uploadBtn = el('button', 'btn-secondary vgen-video-trigger', { type: 'button', textContent: t('upload_video') });
+      var fileInp = el('input', '', { type: 'file', accept: 'video/*', id: 'vgen-video-file', style: 'display:none' });
+      slot.appendChild(uploadBtn);
+      slot.appendChild(fileInp);
+    }
+    section.appendChild(slot);
+    return section;
+  }
+
   function renderGenPanel() {
     var panel = el('div', 'vgen-gen-panel');
+    var mo = currentModelObj();
+    var isI2vOnly = !mo.t2v;
+    var isI2vMode = isI2vOnly || state.mode === 'i2v';
 
-    // Mode tabs
-    var tabs = el('div', 'vgen-tabs');
-    ['t2v', 'i2v'].forEach(function (mode) {
-      var tab = el('button', 'vgen-tab' + (state.mode === mode ? ' is-active' : ''), {
-        textContent: t('tab_' + mode),
-        'data-mode': mode,
-        type: 'button'
+    // Mode tabs (T2V/I2V 모두 지원하는 모델에서만)
+    if (mo.t2v && mo.i2v) {
+      var tabs = el('div', 'vgen-tabs');
+      ['t2v', 'i2v'].forEach(function (mode) {
+        var tab = el('button', 'vgen-tab' + (state.mode === mode ? ' is-active' : ''), {
+          textContent: t('tab_' + mode),
+          'data-mode': mode,
+          type: 'button'
+        });
+        tabs.appendChild(tab);
       });
-      tabs.appendChild(tab);
-    });
-    panel.appendChild(tabs);
+      panel.appendChild(tabs);
+    }
 
     // Settings row: model / aspect / duration
     var row1 = el('div', 'vgen-row');
@@ -602,7 +771,7 @@
     var modelGrp = el('div', 'vgen-field');
     modelGrp.appendChild(el('label', 'vgen-label', { textContent: t('model_label') }));
     var modelSel = el('select', 'vgen-select', { id: 'vgen-model' });
-    availableModels().forEach(function (m) {
+    ALL_MODELS.forEach(function (m) {
       var opt = el('option', '', { value: m.id, textContent: m.label });
       if (m.id === state.model) opt.selected = true;
       modelSel.appendChild(opt);
@@ -634,12 +803,32 @@
 
     panel.appendChild(row1);
 
-    // Image slots (I2V only)
-    if (state.mode === 'i2v') {
+    // Model description + feature tags
+    panel.appendChild(renderModelDesc());
+
+    // Image slots (start/end)
+    if (isI2vMode && hasCap('start')) {
       var imgSection = el('div', 'vgen-image-section');
       imgSection.appendChild(renderImageSlot('start', t('start_frame'), state.startImageUrl, true));
-      imgSection.appendChild(renderImageSlot('end', t('end_frame'), state.endImageUrl, false));
+      if (hasCap('end')) {
+        imgSection.appendChild(renderImageSlot('end', t('end_frame'), state.endImageUrl, false));
+      }
       panel.appendChild(imgSection);
+    }
+
+    // Reference images
+    if (hasCap('refs')) {
+      panel.appendChild(renderRefSection());
+    }
+
+    // Audio
+    if (hasCap('audio')) {
+      panel.appendChild(renderAudioSection());
+    }
+
+    // Video (for editing)
+    if (hasCap('video')) {
+      panel.appendChild(renderVideoSection());
     }
 
     // Prompt
@@ -653,8 +842,8 @@
     promptWrap.appendChild(promptTA);
     panel.appendChild(promptWrap);
 
-    // Camera movement (Kling 전용)
-    if (isKling()) {
+    // Camera movement (caps에 camera가 있을 때만)
+    if (hasCap('camera')) {
       var camSection = el('div', 'vgen-cam-section');
       camSection.appendChild(el('label', 'vgen-label', { textContent: t('camera_label') }));
       var camGrid = el('div', 'vgen-cam-grid');
@@ -744,9 +933,16 @@
     if (modelSel) {
       modelSel.addEventListener('change', function () {
         state.model = modelSel.value;
-        // Kling 아닌 모델로 전환 시 카메라 무브먼트 초기화
+        // I2V only 모델로 전환 시 mode를 i2v로 고정
+        var newMo = ALL_MODELS.find(function (m) { return m.id === modelSel.value; });
+        if (newMo && !newMo.t2v) state.mode = 'i2v';
+        // 모델 전환 시 caps에 없는 상태 초기화
+        if (!hasCap('refs')) state.referenceUrls = [];
+        if (!hasCap('audio')) { state.audioUrl = ''; state.audioFileName = ''; }
+        if (!hasCap('video')) { state.videoUrl = ''; state.videoFileName = ''; }
+        if (!hasCap('end')) state.endImageUrl = '';
         if (!isKling()) state.cameraMovement = '';
-        // Refresh duration options if seedance toggled
+        // Refresh duration options
         var durSel = root.querySelector('#vgen-duration');
         if (durSel) {
           durSel.innerHTML = '';
@@ -881,6 +1077,100 @@
         render();
       });
     }
+
+    // Reference image add buttons
+    root.querySelectorAll('.vgen-ref-add').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(btn.getAttribute('data-ref-idx'), 10);
+        var inp = root.querySelector('#vgen-ref-file-' + idx);
+        if (inp) inp.click();
+      });
+    });
+
+    // Reference file inputs
+    root.querySelectorAll('.vgen-ref-file').forEach(function (inp) {
+      inp.addEventListener('change', function () {
+        var file = inp.files && inp.files[0];
+        if (!file) return;
+        var idx = parseInt(inp.getAttribute('data-ref-idx'), 10);
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          if (!state.referenceUrls) state.referenceUrls = [];
+          state.referenceUrls[idx] = ev.target.result;
+          render();
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    // Reference remove buttons
+    root.querySelectorAll('.vgen-ref-remove').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = parseInt(btn.getAttribute('data-ref-idx'), 10);
+        state.referenceUrls[idx] = '';
+        render();
+      });
+    });
+
+    // Audio trigger
+    var audioTrigger = root.querySelector('.vgen-audio-trigger');
+    if (audioTrigger) {
+      audioTrigger.addEventListener('click', function () {
+        var inp = root.querySelector('#vgen-audio-file');
+        if (inp) inp.click();
+      });
+    }
+    var audioFile = root.querySelector('#vgen-audio-file');
+    if (audioFile) {
+      audioFile.addEventListener('change', function () {
+        var file = audioFile.files && audioFile.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          state.audioUrl = ev.target.result;
+          state.audioFileName = file.name;
+          render();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    var audioRemove = root.querySelector('.vgen-audio-remove');
+    if (audioRemove) {
+      audioRemove.addEventListener('click', function () {
+        state.audioUrl = ''; state.audioFileName = '';
+        render();
+      });
+    }
+
+    // Video trigger
+    var videoTrigger = root.querySelector('.vgen-video-trigger');
+    if (videoTrigger) {
+      videoTrigger.addEventListener('click', function () {
+        var inp = root.querySelector('#vgen-video-file');
+        if (inp) inp.click();
+      });
+    }
+    var videoFile = root.querySelector('#vgen-video-file');
+    if (videoFile) {
+      videoFile.addEventListener('change', function () {
+        var file = videoFile.files && videoFile.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          state.videoUrl = ev.target.result;
+          state.videoFileName = file.name;
+          render();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+    var videoRemove = root.querySelector('.vgen-video-remove');
+    if (videoRemove) {
+      videoRemove.addEventListener('click', function () {
+        state.videoUrl = ''; state.videoFileName = '';
+        render();
+      });
+    }
   }
 
   function deleteResult(id) {
@@ -898,7 +1188,11 @@
 
     var prompt = (root.querySelector('#vgen-prompt') && root.querySelector('#vgen-prompt').value || state.prompt || '').trim();
     if (!prompt) { alert(t('no_prompt_alert')); return; }
-    if (state.mode === 'i2v' && !state.startImageUrl) { alert(t('no_image_alert')); return; }
+
+    var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
+    if (isI2vMode && hasCap('start') && !state.startImageUrl && (state.referenceUrls || []).filter(Boolean).length === 0) {
+      alert(t('no_image_alert')); return;
+    }
 
     state.prompt = prompt;
     state.generating = true;
@@ -943,16 +1237,31 @@
       };
       if (state.projectId) payload.projectId = state.projectId;
 
-      if (state.mode === 'i2v' && state.startImageUrl) {
-        payload.imageDataUrl  = state.startImageUrl;
-        payload.image         = state.startImageUrl;
-        payload.image_url     = state.startImageUrl;
-        payload.init_image    = state.startImageUrl;
-        payload.source_image  = state.startImageUrl;
+      // start image
+      if (isI2vMode && state.startImageUrl) {
+        payload.imageDataUrl = state.startImageUrl;
+        payload.image        = state.startImageUrl;
       }
+      // end image
+      if (hasCap('end') && state.endImageUrl) {
+        payload.endImageDataUrl = state.endImageUrl;
+      }
+      // reference images
+      var refs = (state.referenceUrls || []).filter(Boolean);
+      if (hasCap('refs') && refs.length > 0) {
+        payload.referenceImages = refs;
+      }
+      // audio
+      if (hasCap('audio') && state.audioUrl) {
+        payload.audioDataUrl = state.audioUrl;
+      }
+      // video (for editing)
+      if (hasCap('video') && state.videoUrl) {
+        payload.videoDataUrl = state.videoUrl;
+      }
+      // kling quality
       if (state.model === 'kling-draft' || state.model === 'kling-final') {
         payload.quality = state.model === 'kling-final' ? 'final' : 'draft';
-        if (state.endImageUrl) payload.endImageDataUrl = state.endImageUrl;
       }
 
       var startRes = await NK.api.videoStart(payload);
