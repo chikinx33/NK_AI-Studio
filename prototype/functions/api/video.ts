@@ -3,7 +3,7 @@
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
-import { buildAiVideoProjectPrefix } from "./_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import {
   callKlingApi,
@@ -27,6 +27,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const {
       sceneId = "scene",
       projTag = "",
+      source: rawSource = "",
       userId: rawUserId = "",
       promptText = "",
       imageDataUrl = "",
@@ -34,6 +35,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       aspectRatio = "16:9",
       videoModel = "veo"
     } = body || {};
+    const isVideoGen = String(rawSource || "").trim().toLowerCase() === "video-gen";
     const aspectFinal = normalizeAspectRatio(aspectRatio);
     const narrationEnabled = toBool((body as any)?.narrationEnabled, false);
     const dubbingEnabled = toBool((body as any)?.dubbingEnabled, false);
@@ -47,8 +49,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // Seedance는 4–15초 지원 → 스냅 없이 클램프만 적용
     const seedanceDuration = Math.min(15, Math.max(4, Math.round(Number(durationSeconds) || 5)));
 
-    if (!safePromptText || !imageDataUrl) {
-      return json({ error: "promptText and imageDataUrl are required" }, 400);
+    const isI2vOnlyModel = String(videoModel || "").startsWith("kling") || videoModel === "seedance";
+    if (!safePromptText) {
+      return json({ error: "promptText is required" }, 400);
+    }
+    if (isI2vOnlyModel && !imageDataUrl) {
+      return json({ error: "imageDataUrl is required for this model" }, 400);
     }
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
@@ -69,8 +75,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectTag = (projTag || "default").toString();
     const userId = auth.userId || "";
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
-    // 표준 경로: users/{userId}/ai-video/projects{projectId}/videos/{timestamp-sceneId}.mp4
+    // AI 시네마: users/{userId}/ai-video/projects{projectId}/videos/
+    // AI 영상(video-gen): users/{userId}/ai-video-gen/videos/
+    const projectPrefix = isVideoGen
+      ? buildAiVideoGenPrefix(basePrefix, userId)
+      : buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
     const stamp = Date.now();
     const videoObject = `${projectPrefix}/videos/${stamp}-${sceneId}.mp4`;
     const outputGcsUri = `gs://${outParsed.bucket}/${videoObject}`;

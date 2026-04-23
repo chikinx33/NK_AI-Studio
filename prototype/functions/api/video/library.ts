@@ -1,7 +1,7 @@
 // prototype/functions/api/video/library.ts
 // List GCS videos from:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/videos/
-import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -25,9 +25,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
     const url = new URL(request.url);
     const projectId = (url.searchParams.get("projectId") || "").trim();
+    const source = (url.searchParams.get("source") || "").trim();
+    const isVideoGen = source === "video-gen";
     const userId = auth.userId;
     const sceneId = (url.searchParams.get("sceneId") || "").trim();
-    if (!projectId) return send({ error: "projectId is required" }, 400, origin);
+    if (!isVideoGen && !projectId) return send({ error: "projectId is required" }, 400, origin);
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
@@ -38,7 +40,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
-    const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
+    const projectPrefix = isVideoGen
+      ? buildAiVideoGenPrefix(basePrefix, userId)
+      : buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const prefix = `${projectPrefix}/videos/`;
 
     const token = await getGoogleAccessToken({

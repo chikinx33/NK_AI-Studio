@@ -1,4 +1,5 @@
 export const AI_VIDEO_SERVICE = "ai-video";
+export const AI_VIDEO_GEN_SERVICE = "ai-video-gen";
 export const AI_IMAGE_SERVICE = "ai-image";
 export const DEFAULT_OWNER_USER_ID = "owner";
 export const USERDATA_FOLDER = "userdata";
@@ -40,6 +41,11 @@ export function buildAiImageUserRoot(basePrefix: string, userId: string): string
 export function buildAiVideoProjectPrefix(basePrefix: string, userId: string, projectId: string): string {
   const root = buildAiVideoUserRoot(basePrefix, userId);
   return `${root}/projects${String(projectId || "").trim()}`;
+}
+
+export function buildAiVideoGenPrefix(basePrefix: string, userId: string): string {
+  const root = buildUserRoot(basePrefix, userId);
+  return `${root}/${AI_VIDEO_GEN_SERVICE}`;
 }
 
 export function buildAiVideoBrandPrefix(basePrefix: string, userId: string, brandId: string): string {

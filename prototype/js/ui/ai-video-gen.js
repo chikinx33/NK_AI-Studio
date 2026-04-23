@@ -56,7 +56,12 @@
       upload_image:      '이미지 업로드',
       remove_image:      '제거',
       download:          '다운로드',
-      delete_result:     '삭제'
+      delete_result:     '삭제',
+      delete_all:        '전체 삭제',
+      confirm_delete:    '이 영상을 삭제할까요?',
+      confirm_delete_all:'생성된 영상 전체를 삭제할까요?',
+      history_loading:   '히스토리 불러오는 중...',
+      server_item:       '클라우드 보관'
     },
     en: {
       title:             'AI Video Gen',
@@ -82,7 +87,12 @@
       upload_image:      'Upload Image',
       remove_image:      'Remove',
       download:          'Download',
-      delete_result:     'Delete'
+      delete_result:     'Delete',
+      delete_all:        'Clear All',
+      confirm_delete:    'Delete this video?',
+      confirm_delete_all:'Delete all generated videos?',
+      history_loading:   'Loading history...',
+      server_item:       'Cloud saved'
     }
   };
 
@@ -98,11 +108,16 @@
     endImageUrl:    '',
     cameraMovement: '',
     results:        [],
+    serverItems:    [],   // GCS에서 로드된 서버 항목
+    deletedSet:     {},   // 삭제된 항목 tombstone (objectName → true)
     selectedId:     null,
     generating:     false,
+    historyLoading: false,
     lang:           'ko',
     polls:          {}
   };
+
+  var DELETED_KEY = 'nk_video_gen_deleted_v1';
 
   // ─── Helpers ──────────────────────────────────────────────
 
@@ -171,6 +186,29 @@
     } catch (_) {}
   }
 
+  function loadDeletedSet() {
+    try { state.deletedSet = JSON.parse(localStorage.getItem(DELETED_KEY) || '{}') || {}; } catch (_) {}
+  }
+
+  function saveDeletedSet() {
+    try { localStorage.setItem(DELETED_KEY, JSON.stringify(state.deletedSet)); } catch (_) {}
+  }
+
+  function syncServerHistory() {
+    if (!NK.api || !NK.api.videoGenLibrary) return;
+    state.historyLoading = true;
+    render();
+    NK.api.videoGenLibrary().then(function (data) {
+      var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
+      state.serverItems = items.filter(function (s) { return !state.deletedSet[s.name]; });
+      state.historyLoading = false;
+      render();
+    }).catch(function () {
+      state.historyLoading = false;
+      render();
+    });
+  }
+
   function updateResult(id, updates) {
     state.results = state.results.map(function (r) {
       return r.id === id ? Object.assign({}, r, updates) : r;
@@ -210,17 +248,37 @@
 
     var panelHeader = el('div', 'vgen-panel-header');
     panelHeader.appendChild(el('span', 'vgen-panel-title', { textContent: t('results_title') }));
+    var headerActions = el('div', 'vgen-panel-header-actions');
+    if (state.results.length > 0) {
+      var clearBtn = el('button', 'btn-ghost vgen-clear-all-btn', {
+        type: 'button',
+        textContent: t('delete_all'),
+        id: 'vgen-clear-all'
+      });
+      headerActions.appendChild(clearBtn);
+    }
+    panelHeader.appendChild(headerActions);
     panel.appendChild(panelHeader);
 
     var list = el('div', 'vgen-results-list');
 
-    if (!state.results.length) {
+    if (state.historyLoading) {
+      var loadingEl = el('div', 'vgen-empty vgen-loading', { textContent: t('history_loading') });
+      list.appendChild(loadingEl);
+    } else if (!state.results.length && !state.serverItems.length) {
       var empty = el('div', 'vgen-empty');
       empty.textContent = t('results_empty');
       list.appendChild(empty);
     } else {
       state.results.slice().reverse().forEach(function (r) {
         list.appendChild(renderResultCard(r));
+      });
+      // 서버에만 있는 항목 (localStorage에 없음)
+      var localIds = state.results.map(function (r) { return r.id; });
+      state.serverItems.filter(function (s) {
+        return !state.deletedSet[s.name] && !localIds.some(function (id) { return s.name.indexOf(id) !== -1; });
+      }).forEach(function (s) {
+        list.appendChild(renderServerCard(s));
       });
     }
     panel.appendChild(list);
@@ -281,6 +339,34 @@
     actions.appendChild(delBtn);
     card.appendChild(actions);
 
+    return card;
+  }
+
+  function renderServerCard(s) {
+    var objectName = String(s.name || '');
+    var card = el('div', 'vgen-result-card vgen-server-card');
+    card.dataset.serverName = objectName;
+
+    var thumb = el('div', 'vgen-result-thumb vgen-result-thumb--done');
+    thumb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5,3 19,12 5,21"/></svg>';
+    card.appendChild(thumb);
+
+    var info = el('div', 'vgen-result-info');
+    var nameParts = objectName.split('/');
+    var fileName = nameParts[nameParts.length - 1] || objectName;
+    info.appendChild(el('p', 'vgen-result-prompt', { textContent: fileName }));
+    info.appendChild(el('p', 'vgen-result-meta', { textContent: new Date(s.timeCreated || s.updated || '').toLocaleDateString() }));
+    info.appendChild(el('span', 'vgen-result-status vgen-status--done', { textContent: t('server_item') }));
+    card.appendChild(info);
+
+    var actions = el('div', 'vgen-result-actions');
+    if (s.signedUrl) {
+      var dlA = el('a', 'btn-ghost vgen-icon-btn', { href: s.signedUrl, download: 'video.mp4', title: t('download'), innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>' });
+      actions.appendChild(dlA);
+    }
+    var delBtn = el('button', 'btn-ghost vgen-icon-btn vgen-server-delete-btn', { title: t('delete_result'), 'data-name': objectName, innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>' });
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
     return card;
   }
 
@@ -521,13 +607,44 @@
       });
     });
 
-    // Delete
+    // Delete individual
     root.querySelectorAll('.vgen-delete-btn').forEach(function (btn) {
       btn.addEventListener('click', function (e) {
         e.stopPropagation();
+        if (!window.confirm(t('confirm_delete'))) return;
         deleteResult(btn.dataset.id);
       });
     });
+
+    // Delete server-only item (tombstone)
+    root.querySelectorAll('.vgen-server-delete-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (!window.confirm(t('confirm_delete'))) return;
+        var name = btn.dataset.name;
+        if (name) {
+          state.deletedSet[name] = true;
+          saveDeletedSet();
+          state.serverItems = state.serverItems.filter(function (s) { return s.name !== name; });
+          render();
+        }
+      });
+    });
+
+    // Clear all
+    var clearAllBtn = root.querySelector('#vgen-clear-all');
+    if (clearAllBtn) {
+      clearAllBtn.addEventListener('click', function () {
+        if (!window.confirm(t('confirm_delete_all'))) return;
+        Object.values(state.polls).forEach(function (id) { clearInterval(id); });
+        state.polls = {};
+        state.results = [];
+        state.serverItems = [];
+        state.selectedId = null;
+        saveResults();
+        render();
+      });
+    }
   }
 
   function deleteResult(id) {
@@ -582,6 +699,7 @@
       var finalPrompt = prompt + camSuffix;
 
       var payload = {
+        source:          'video-gen',
         projectId:       projectId,
         sceneId:         resultId,
         promptText:      finalPrompt,
@@ -628,7 +746,7 @@
       }
       attempts++;
 
-      NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId })
+      NK.api.videoStatus({ projectId: projectId, sceneId: resultId, jobId: jobId, source: 'video-gen' })
         .then(function (data) {
           var s = String((data && (data.status || data.state)) || '').toLowerCase();
           var done = /^(done|succeeded|success|completed)$/.test(s);
@@ -671,8 +789,10 @@
   vgen.mount = function (container) {
     root = container;
     loadResults();
+    loadDeletedSet();
     detectLang();
     render();
+    syncServerHistory();
 
     window.addEventListener('message', function (evt) {
       try {

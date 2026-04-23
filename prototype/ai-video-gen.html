@@ -69,18 +69,49 @@
     }
 
     .vgen-panel-header {
-      padding: 14px 16px 10px;
+      padding: 10px 14px;
       flex-shrink: 0;
       border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
     }
 
     .vgen-panel-title {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: var(--muted);
     }
+
+    .vgen-panel-header-actions { display: flex; gap: 4px; }
+
+    .vgen-clear-all-btn {
+      font-size: 0.72rem;
+      padding: 3px 10px;
+      color: #f87171;
+      border: 1px solid color-mix(in srgb, #ef4444 25%, var(--border));
+      border-radius: 6px;
+    }
+
+    .vgen-clear-all-btn:hover {
+      background: color-mix(in srgb, #ef4444 10%, transparent);
+      color: #fca5a5;
+    }
+
+    .vgen-loading {
+      animation: vgen-pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes vgen-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    .vgen-server-card { opacity: 0.85; }
+    .vgen-server-card:hover { opacity: 1; }
 
     .vgen-results-list {
       flex: 1;

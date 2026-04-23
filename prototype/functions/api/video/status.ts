@@ -1,7 +1,7 @@
 ﻿// prototype/functions/api/video/status.ts
 // Poll Veo operation status and return a playable video URL (signed GCS URL if possible).
 // Contracts: job_id (legacy) OR jobId accepted. projectId/sceneId optional metadata.
-import { buildAiVideoProjectPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import {
   callKlingApi,
@@ -39,6 +39,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const jobIdRaw = url.searchParams.get('job_id') || url.searchParams.get('jobId') || '';
     const projectTag = (url.searchParams.get('projectId') || '').trim();
     const sceneIdParam = (url.searchParams.get('sceneId') || '').trim();
+    const source = (url.searchParams.get('source') || '').trim();
+    const isVideoGen = source === 'video-gen';
     const userId = auth.userId;
 
     if (!jobIdRaw.trim()) {
@@ -70,7 +72,9 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         if (!outParsed || !clientEmail || !privateKeyRaw) return '';
         const objectBase = outParsed.object.replace(/\/$/, "");
         const projectFolder = projectTag || 'default';
-        const projectPrefix = buildAiVideoProjectPrefix(objectBase, userId, projectFolder);
+        const projectPrefix = isVideoGen
+          ? buildAiVideoGenPrefix(objectBase, userId)
+          : buildAiVideoProjectPrefix(objectBase, userId, projectFolder);
         const targetPrefix = `${projectPrefix}/videos/`;
 
         const signAsStorageUrl = async (bucket: string, object: string) => {

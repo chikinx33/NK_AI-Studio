@@ -315,6 +315,7 @@
     var q = new URLSearchParams();
     if (p.projectId) q.set('projectId', String(p.projectId));
     if (p.sceneId) q.set('sceneId', String(p.sceneId));
+    if (p.source) q.set('source', String(p.source));
     q.set('userId', String(p.userId || resolveUserId()));
     var job = p.jobId || p.job_id || p.job || '';
     if (job) q.set('job_id', String(job));
@@ -447,6 +448,17 @@
 
   api.postprodRenderDelete = async function (projectId, objectName) {
     return api.projectDelete(projectId, String(objectName || ''));
+  };
+
+  api.videoGenLibrary = async function () {
+    var uid = resolveUserId();
+    var token = getAuthToken();
+    var q = 'source=video-gen&userId=' + encodeURIComponent(uid);
+    if (token) q += '&nk_token=' + encodeURIComponent(token);
+    var res = await fetch(withBase('/api/video/library?' + q), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(text || 'video_gen_library_error');
+    return j(text);
   };
 
   api.library = async function (kind, projectId) {
