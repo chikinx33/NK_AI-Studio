@@ -589,7 +589,8 @@
     const path = String(window.location.pathname || '').toLowerCase();
     const isBrandShell = /\bpage-shell-brand\b/.test(htmlCls) || /brand-studio|brand-dashboard/.test(path);
     const isImageShell = /\bpage-shell-image\b/.test(htmlCls) || /ai-image|image-dashboard/.test(path);
-    if (isBrandShell || isImageShell) {
+    const isVideoGenShell = /\bpage-shell-videogen\b/.test(htmlCls) || /ai-video-gen|video-gen-dashboard/.test(path);
+    if (isBrandShell || isImageShell || isVideoGenShell) {
       container.innerHTML = '';
       container.style.display = 'none';
       setSidebarProjectLayout(false);
