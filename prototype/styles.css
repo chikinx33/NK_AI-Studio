@@ -6597,28 +6597,23 @@ body.postprod-reordering .postprod-clip.is-dragging {
   max-height: 40%;
 }
 
-/* 렌더링 패널: 미리보기(좌) + 컨트롤(우) 2열 그리드 */
+/* 렌더링 패널: 미리보기(좌) + 컨트롤(우) 3열 그리드 — 하단은 컴퓨팅/다운로드 2분할 */
 .postprod-portrait-right .postprod-render-panel {
   flex: 1;
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr 1fr;
   grid-template-areas:
-    "preview head"
-    "preview actions"
-    "preview save"
-    "preview progress"
-    "preview info"
-    "preview download";
+    "preview head      head"
+    "preview actions   actions"
+    "preview save      save"
+    "preview progress  progress"
+    "preview info      info"
+    "preview compute   download";
   column-gap: 10px;
   row-gap: 4px;
   align-items: start;
-}
-
-/* 컴퓨팅 리소스 카드: 세로 모드에서 숨김 */
-.postprod-portrait-right .postprod-compute-card {
-  display: none;
 }
 
 /* 미리보기: 좌측 열 전체 높이, 9:16 비율 */
@@ -6651,7 +6646,21 @@ body.postprod-reordering .postprod-clip.is-dragging {
 .postprod-portrait-right .postprod-save-state { grid-area: save; }
 .postprod-portrait-right .postprod-render-progress { grid-area: progress; }
 .postprod-portrait-right .postprod-render-info { grid-area: info; }
+
+/* 컴퓨팅 리소스: 하단 좌측 (숨김 해제) */
+.postprod-portrait-right .postprod-compute-card {
+  display: block;
+  grid-area: compute;
+}
+
+/* 다운로드: 하단 우측 */
 .postprod-portrait-right .postprod-resource-card:not(.postprod-compute-card) { grid-area: download; }
+
+/* 컴퓨팅 리소스 그리드: 좁은 영역에서 1열로 */
+.postprod-portrait-right .postprod-resource-grid {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
 
 /* 다운로드 버튼: 4행 세로 배치 */
 .postprod-portrait-right .postprod-download-grid {
