@@ -751,19 +751,21 @@
     var isI2vOnly = !mo.t2v;
     var isI2vMode = isI2vOnly || state.mode === 'i2v';
 
-    // Mode tabs (T2V/I2V 모두 지원하는 모델에서만)
-    if (mo.t2v && mo.i2v) {
-      var tabs = el('div', 'vgen-tabs');
-      ['t2v', 'i2v'].forEach(function (mode) {
-        var tab = el('button', 'vgen-tab' + (state.mode === mode ? ' is-active' : ''), {
-          textContent: t('tab_' + mode),
-          'data-mode': mode,
-          type: 'button'
-        });
-        tabs.appendChild(tab);
+    // Mode tabs (항상 표시; I2V 전용 모델은 T2V 탭 비활성)
+    var tabs = el('div', 'vgen-tabs');
+    ['t2v', 'i2v'].forEach(function (mode) {
+      var isActive = state.mode === mode;
+      var isDisabled = mode === 't2v' && isI2vOnly;
+      var cls = 'vgen-tab' + (isActive ? ' is-active' : '') + (isDisabled ? ' is-disabled' : '');
+      var tab = el('button', cls, {
+        textContent: t('tab_' + mode),
+        'data-mode': mode,
+        type: 'button'
       });
-      panel.appendChild(tabs);
-    }
+      if (isDisabled) tab.setAttribute('disabled', '');
+      tabs.appendChild(tab);
+    });
+    panel.appendChild(tabs);
 
     // Settings row: model / aspect / duration
     var row1 = el('div', 'vgen-row');
