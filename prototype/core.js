@@ -508,7 +508,7 @@
       theme_to_light: 'Light',
       theme_to_dark: 'Dark',
       top_brand_label: 'Brand Studio',
-      top_ai_video_label: 'AI Video',
+      top_ai_video_label: 'AI Cinema',
       top_ai_image_label: 'AI Image',
     },
     ko: {
@@ -534,7 +534,7 @@
       sidebar_postproduction_fixed: 'Post - production',
       badge_render_queue: '자동화 큐 3',
       top_brand_label: '브랜드 스튜디오',
-      top_ai_video_label: 'AI 비디오',
+      top_ai_video_label: 'AI 시네마',
       top_ai_image_label: 'AI 이미지',
       btn_new_project: '새 파이프라인',
       project_label: '파이프라인',
