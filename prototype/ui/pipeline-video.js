@@ -3,9 +3,12 @@
   var video = NK.uiPipelineVideo || (NK.uiPipelineVideo = {});
 
   var VIDEO_MODEL_LABELS = {
-    'veo': 'Veo 3.1 Fast', 'grok': 'Grok Imagine',
+    'veo': 'Veo 3.1 Fast', 'veo-full': 'Veo 3.1 Full',
+    'grok': 'Grok Imagine',
     'kling-draft': 'Kling Draft (v1.6)', 'kling-final': 'Kling Final (v2.6 Pro)',
-    'seedance': 'Seedance 2.0'
+    'seedance': 'Seedance 2.0', 'seedance-r2v': 'Seedance 2.0 Reference',
+    'wan': 'Wan 2.7',
+    'vidu-q3': 'Vidu Q3-Mix'
   };
 
   function normalizeSafetyMessage(msg) {
@@ -287,7 +290,8 @@
     }
 
     try {
-      var durationSeconds = opts.videoModel === 'seedance'
+      var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v';
+      var durationSeconds = isSeedanceFamily
         ? Math.min(15, Math.max(4, Math.round(Number(scene.estSec) || 5)))
         : snapVideoDuration(scene.estSec);
       var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
@@ -300,17 +304,19 @@
           endImageDataUrl = (prevScene && (prevScene.lastFrameDataUrl || '')) || '';
         } catch (_) { endImageDataUrl = ''; }
       }
-      // 레퍼런스 이미지: Kling 선택 시 브랜드 허브 기반 자동 수집
-      // (프레임 인 연출 대응 — 씬 시작 이미지에 없어도 프롬프트에서 캐릭터가 감지되면 참조 주입)
+      // 레퍼런스 이미지: refs cap 보유 모델에서 브랜드 허브 기반 자동 수집
+      // (kling-draft, wan, seedance-r2v, vidu-q3 — @캐릭터명 태그로 레퍼런스 주입)
+      var REFS_MODELS = ['kling-draft', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
+      var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
-      if (isKling) {
+      if (isRefsModel) {
         try {
           var bundleImages = await resolveKlingReferenceImages(scene, statePayload, projectId, finalPrompt);
           referenceImages = (bundleImages || [])
             .map(function (r) { return (r && r.imageDataUrl) ? String(r.imageDataUrl) : ''; })
             .filter(Boolean);
         } catch (refErr) {
-          console.warn('kling reference resolve skipped:', refErr && refErr.message);
+          console.warn('reference resolve skipped:', refErr && refErr.message);
           referenceImages = [];
         }
       }

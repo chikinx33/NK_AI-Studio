@@ -645,11 +645,15 @@
       '<div class="video-model-left">' +
       '<span class="video-model-label">영상생성 모델</span>' +
       '<select id="video-model-select" class="video-model-select">' +
-      '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo</option>' +
+      '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo 3.1 Fast</option>' +
+      '<option value="veo-full"' + (videoModel === 'veo-full' ? ' selected' : '') + '>Veo 3.1 Full</option>' +
       '<option value="grok"' + (videoModel === 'grok' ? ' selected' : '') + '>Grok Imagine</option>' +
       '<option value="kling-draft"' + (videoModel === 'kling-draft' ? ' selected' : '') + '>Kling Draft (v1.6)</option>' +
       '<option value="kling-final"' + (videoModel === 'kling-final' ? ' selected' : '') + '>Kling Final (v2.6 Pro · FHD)</option>' +
       '<option value="seedance"' + (videoModel === 'seedance' ? ' selected' : '') + '>Seedance 2.0</option>' +
+      '<option value="seedance-r2v"' + (videoModel === 'seedance-r2v' ? ' selected' : '') + '>Seedance 2.0 Reference</option>' +
+      '<option value="wan"' + (videoModel === 'wan' ? ' selected' : '') + '>Wan 2.7</option>' +
+      '<option value="vidu-q3"' + (videoModel === 'vidu-q3' ? ' selected' : '') + '>Vidu Q3-Mix</option>' +
       '</select>' +
       '</div>' +
       '<div class="pipeline-fold-center">' +
