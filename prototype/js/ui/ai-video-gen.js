@@ -685,10 +685,6 @@
     if (!max) return document.createDocumentFragment();
     var combineAudio = (state.model === 'vidu-q3' || state.model === 'wan') && hasCap('audio');
     var section = el('div', 'vgen-refs-section');
-    var labelText = combineAudio
-      ? (state.lang === 'en' ? 'References · Audio' : '레퍼런스 이미지 · 오디오')
-      : t('refs_label');
-    section.appendChild(el('label', 'vgen-label', { textContent: labelText }));
     var grid = el('div', 'vgen-refs-grid');
     for (var i = 0; i < max; i++) {
       var slotUrl = state.referenceUrls[i] || '';
@@ -875,7 +871,6 @@
     // Camera movement (caps에 camera가 있을 때만)
     if (hasCap('camera')) {
       var camSection = el('div', 'vgen-cam-section');
-      camSection.appendChild(el('label', 'vgen-label', { textContent: t('camera_label') }));
       var camGrid = el('div', 'vgen-cam-grid');
       CAMERA_MOVEMENTS.forEach(function (c) {
         var btn = el('button', 'vgen-cam-btn' + (state.cameraMovement === c.id ? ' is-active' : ''), {
