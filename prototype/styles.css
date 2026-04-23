@@ -4056,6 +4056,7 @@ textarea::-webkit-scrollbar-corner {
   position: relative;
   display: flex;
   flex-direction: column;
+  padding-bottom: 42px;
 }
 
 .user-lock-message {
