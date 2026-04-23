@@ -748,10 +748,31 @@
       const raw = a.getAttribute('href') || '';
       let abs = '';
       try { abs = new URL(raw, window.location.href).href; } catch (_) { abs = raw; }
-      const isAiVideo = /\/ai-video(\.html)?([?#]|$)/i.test(abs) || abs.indexOf('https://nk-ai-studio.pages.dev/ai-video') === 0;
-      const isAiImage = /\/ai-image(\.html)?([?#]|$)/i.test(abs) || abs.indexOf('https://nk-ai-studio.pages.dev/ai-image') === 0;
+      const isAiVideo = /\/ai-video(\.html)?([?#]|$)/i.test(abs) || /^https:\/\/nk-ai-studio\.pages\.dev\/ai-video([?#\/]|$)/i.test(abs);
+      const isAiImage = /\/ai-image(\.html)?([?#]|$)/i.test(abs) || /^https:\/\/nk-ai-studio\.pages\.dev\/ai-image([?#\/]|$)/i.test(abs);
       const isSidebarNav = !!(a.closest && a.closest('.sidebar .nav'));
       const isAiImageShell = /(^|[\\\/])ai-image(\.html)?([?#]|$)/i.test(window.location.pathname || '');
+      const isAiVideoGenShell = /(^|[\\\/])ai-video-gen(\.html)?([?#]|$)/i.test(window.location.pathname || '');
+      const isAiVideoGenStageHref = /(^|[\\\/])ai-video-gen-stage\.html([?#]|$)/i.test(raw);
+      if (isAiVideoGenStageHref && isSidebarNav && isAiVideoGenShell) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        try {
+          const cp = NK.state?.runtime?.currentProject;
+          const pid = String(cp && cp.id || '').trim();
+          const explicit = String(sessionStorage.getItem('nk_ai_video_gen_selection_explicit') || '').trim() === '1';
+          let target = 'ai-video-gen-stage.html?detached=1';
+          if (explicit && pid) target = `ai-video-gen-stage.html?projectId=${encodeURIComponent(pid)}`;
+          if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage(target);
+          else window.location.href = `ai-video-gen.html?stageHref=${encodeURIComponent(target)}`;
+          try { sessionStorage.removeItem('nk_ai_video_gen_selection_explicit'); } catch (_) {}
+        } catch (_) {
+          if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('ai-video-gen-stage.html?detached=1');
+          else window.location.href = 'ai-video-gen.html';
+        }
+        return;
+      }
       if (isAiImage && isSidebarNav && isAiImageShell) {
         e.preventDefault();
         e.stopPropagation();
