@@ -381,11 +381,26 @@
       padding: 0 4px; line-height: 1.3;
     }
 
-    /* Standalone audio slot (ref 그리드 외부, veo-full 등) */
-    .vgen-audio-solo-section { display: flex; }
-    .vgen-audio-solo-section > .vgen-ref-slot--audio {
+    /* Standalone audio/video slot (ref 그리드 외부) */
+    .vgen-audio-solo-section, .vgen-video-solo-section { display: flex; }
+    .vgen-audio-solo-section > .vgen-ref-slot--audio,
+    .vgen-video-solo-section > .vgen-ref-slot--video {
       flex: 0 0 calc((100% - 24px) / 5);
     }
+    .vgen-ref-slot--video { flex-direction: column; gap: 3px; }
+    .vgen-ref-slot--video.has-file {
+      border-style: solid;
+      border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+      padding: 4px;
+    }
+    .vgen-ref-add--video {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; width: 100%; height: 100%; background: none; border: none;
+      color: var(--muted); cursor: pointer; transition: color 0.15s;
+    }
+    .vgen-ref-add--video:hover { color: var(--accent); }
+    .vgen-video-grid-icon { font-size: 1.3rem; line-height: 1; }
+    .vgen-video-grid-label { font-size: 0.6rem; }
 
     /* Audio section */
     .vgen-audio-section { display: flex; flex-direction: column; gap: 6px; }

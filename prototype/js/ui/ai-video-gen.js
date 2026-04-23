@@ -758,22 +758,28 @@
     return section;
   }
 
-  function renderVideoSection() {
-    var section = el('div', 'vgen-video-section');
-    section.appendChild(el('label', 'vgen-label', { textContent: t('video_edit_label') }));
-    var slot = el('div', 'vgen-video-slot' + (state.videoUrl ? ' has-file' : ''));
+  function renderStandaloneVideoSlot() {
+    var section = el('div', 'vgen-video-solo-section');
+    var videoSlot = el('div', 'vgen-ref-slot vgen-ref-slot--video' + (state.videoUrl ? ' has-file' : ''));
+    var videoLabel = state.lang === 'en' ? 'Video' : '영상';
     if (state.videoUrl) {
-      var nameEl = el('span', 'vgen-video-name', { textContent: state.videoFileName || 'video' });
-      slot.appendChild(nameEl);
-      var removeBtn = el('button', 'vgen-video-remove', { type: 'button', textContent: t('remove_video') });
-      slot.appendChild(removeBtn);
+      var icon = el('span', 'vgen-video-grid-icon', { textContent: '▶' });
+      var nameEl = el('span', 'vgen-audio-name-mini', { textContent: state.videoFileName || 'video' });
+      nameEl.title = state.videoFileName || 'video';
+      var removeBtn = el('button', 'vgen-ref-remove', { type: 'button', textContent: '×', 'data-grid-video-remove': '1' });
+      videoSlot.appendChild(icon);
+      videoSlot.appendChild(nameEl);
+      videoSlot.appendChild(removeBtn);
     } else {
-      var uploadBtn = el('button', 'btn-secondary vgen-video-trigger', { type: 'button', textContent: t('upload_video') });
-      var fileInp = el('input', '', { type: 'file', accept: 'video/*', id: 'vgen-video-file', style: 'display:none' });
-      slot.appendChild(uploadBtn);
-      slot.appendChild(fileInp);
+      var addBtn = el('button', 'vgen-ref-add vgen-ref-add--video', {
+        type: 'button',
+        innerHTML: '<span class="vgen-video-grid-icon">▶</span><span class="vgen-video-grid-label">' + videoLabel + '</span>'
+      });
+      var fileInp = el('input', 'vgen-ref-file', { type: 'file', accept: 'video/*', id: 'vgen-video-file', style: 'display:none' });
+      videoSlot.appendChild(addBtn);
+      videoSlot.appendChild(fileInp);
     }
-    section.appendChild(slot);
+    section.appendChild(videoSlot);
     return section;
   }
 
@@ -856,7 +862,7 @@
 
     // Video (for editing)
     if (hasCap('video')) {
-      panel.appendChild(renderVideoSection());
+      panel.appendChild(renderStandaloneVideoSlot());
     }
 
     // Prompt
@@ -1186,14 +1192,19 @@
       });
     }
 
-    // Video trigger
-    var videoTrigger = root.querySelector('.vgen-video-trigger');
-    if (videoTrigger) {
-      videoTrigger.addEventListener('click', function () {
+    // Video slot (standalone grid style)
+    root.querySelectorAll('.vgen-ref-add--video').forEach(function (btn) {
+      btn.addEventListener('click', function () {
         var inp = root.querySelector('#vgen-video-file');
         if (inp) inp.click();
       });
-    }
+    });
+    root.querySelectorAll('[data-grid-video-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.videoUrl = ''; state.videoFileName = '';
+        render();
+      });
+    });
     var videoFile = root.querySelector('#vgen-video-file');
     if (videoFile) {
       videoFile.addEventListener('change', function () {
@@ -1206,13 +1217,6 @@
           render();
         };
         reader.readAsDataURL(file);
-      });
-    }
-    var videoRemove = root.querySelector('.vgen-video-remove');
-    if (videoRemove) {
-      videoRemove.addEventListener('click', function () {
-        state.videoUrl = ''; state.videoFileName = '';
-        render();
       });
     }
   }
