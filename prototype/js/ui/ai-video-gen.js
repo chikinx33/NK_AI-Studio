@@ -836,9 +836,6 @@
 
     panel.appendChild(row1);
 
-    // Model description + feature tags
-    panel.appendChild(renderModelDesc());
-
     // Image slots (start/end)
     if (isI2vMode && hasCap('start')) {
       var imgSection = el('div', 'vgen-image-section');
