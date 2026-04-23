@@ -510,7 +510,7 @@
       top_brand_label: 'Brand Studio',
       top_ai_video_label: 'AI Cinema',
       top_ai_image_label: 'AI Image',
-      top_ai_video_gen_label: 'AI Video Gen',
+      top_ai_video_gen_label: 'AI Video',
     },
     ko: {
       brand_title: 'NK_Studio',
@@ -537,7 +537,7 @@
       top_brand_label: '브랜드 스튜디오',
       top_ai_video_label: 'AI 시네마',
       top_ai_image_label: 'AI 이미지',
-      top_ai_video_gen_label: 'AI 영상생성',
+      top_ai_video_gen_label: 'AI 영상',
       btn_new_project: '새 파이프라인',
       project_label: '파이프라인',
       search_placeholder: '명령/검색 (Ctrl + K)',
