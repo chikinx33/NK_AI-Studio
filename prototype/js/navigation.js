@@ -8,6 +8,7 @@
             cls = String(cls).toLowerCase();
             if (/\bpage-shell-brand\b/.test(cls) || /brand-dashboard\.html|brand-studio\.html/i.test(location.pathname)) return 'brand';
             if (/\bpage-shell-image\b/.test(cls) || /image-dashboard\.html|ai-image(\.html)?/i.test(location.pathname)) return 'image';
+            if (/\bpage-shell-videogen\b/.test(cls) || /ai-video-gen(\.html)?/i.test(location.pathname)) return 'videogen';
             if (/\bpage-shell-video\b/.test(cls) || /video-dashboard\.html|ai-video(\.html)?/i.test(location.pathname)) return 'video';
         } catch (_) { }
         return 'video';
@@ -19,6 +20,7 @@
         var sh = detectShell();
         if (sh === 'brand') return 'brand-dashboard.html';
         if (sh === 'image') return 'image-dashboard.html';
+        if (sh === 'videogen') return 'ai-video-gen.html';
         return 'dashboard.html';
     }
 
