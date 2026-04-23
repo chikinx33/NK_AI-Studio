@@ -306,7 +306,7 @@
       }
       // 레퍼런스 이미지: refs cap 보유 모델에서 브랜드 허브 기반 자동 수집
       // (kling-draft, wan, seedance-r2v, vidu-q3 — @캐릭터명 태그로 레퍼런스 주입)
-      var REFS_MODELS = ['kling-draft', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
+      var REFS_MODELS = ['grok', 'kling-draft', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {

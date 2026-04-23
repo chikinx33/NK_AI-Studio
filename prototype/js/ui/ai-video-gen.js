@@ -5,7 +5,7 @@
   var ALL_MODELS = [
     { id: 'veo',          label: 'Veo 3.1 Fast',          t2v: true,  i2v: true,  caps: ['start'] },
     { id: 'veo-full',     label: 'Veo 3.1 Full',          t2v: true,  i2v: true,  caps: ['start', 'audio'] },
-    { id: 'grok',         label: 'Grok Imagine',           t2v: true,  i2v: true,  caps: ['start'] },
+    { id: 'grok',         label: 'Grok Imagine',           t2v: true,  i2v: true,  caps: ['start', 'refs'] },
     { id: 'grok-extend',  label: 'Grok Extend',            t2v: false, i2v: true,  caps: ['video'] },
     { id: 'kling-draft',  label: 'Kling Draft (v1.6)',     t2v: false, i2v: true,  caps: ['start', 'end', 'refs', 'camera'], maxRefs: 3 },
     { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'end', 'camera'] },

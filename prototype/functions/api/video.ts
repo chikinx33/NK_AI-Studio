@@ -368,7 +368,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (videoModel === "grok") {
       const xaiKey = env.XAI_API_KEY as string | undefined;
       if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
-      const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
       const grokBody: any = {
         model: (env.GROK_MODEL_ID as string | undefined) || "grok-imagine-video",
         prompt: safePromptText,
@@ -376,13 +375,25 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         aspect_ratio: aspectFinal,
         resolution: "720p",
       };
-      if (startImageResolved) {
-        const imgObj = { url: startImageResolved };
-        grokBody.image_url = imgObj;
-        grokBody.image = imgObj;
-        grokBody.prompt = "Animate this image. " + safePromptText;
+      // R2V 모드: reference_images 우선 (image_url과 동시 사용 불가)
+      if (referenceImages.length > 0) {
+        const refResolved: { url: string }[] = [];
+        for (let i = 0; i < referenceImages.length; i++) {
+          const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
+          if (r) refResolved.push({ url: r });
+        }
+        if (refResolved.length > 0) grokBody.reference_images = refResolved;
+      } else {
+        // I2V 모드: 시작 이미지
+        const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
+        if (startImageResolved) {
+          const imgObj = { url: startImageResolved };
+          grokBody.image_url = imgObj;
+          grokBody.image = imgObj;
+          grokBody.prompt = "Animate this image. " + safePromptText;
+        }
       }
-      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration });
+      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration, r2v: referenceImages.length > 0 });
       const grokRes = await fetch("https://api.x.ai/v1/videos/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${xaiKey}` },
