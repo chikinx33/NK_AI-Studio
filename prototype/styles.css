@@ -6597,11 +6597,23 @@ body.postprod-reordering .postprod-clip.is-dragging {
   max-height: 40%;
 }
 
-/* 렌더링 패널: 나머지 공간, 내용이 길면 스크롤 */
+/* 렌더링 패널: 미리보기(좌) + 컨트롤(우) 2열 그리드 */
 .postprod-portrait-right .postprod-render-panel {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "preview head"
+    "preview actions"
+    "preview save"
+    "preview progress"
+    "preview info"
+    "preview download";
+  column-gap: 10px;
+  row-gap: 4px;
+  align-items: start;
 }
 
 /* 컴퓨팅 리소스 카드: 세로 모드에서 숨김 */
@@ -6609,30 +6621,37 @@ body.postprod-reordering .postprod-clip.is-dragging {
   display: none;
 }
 
-/* 렌더 액션 버튼 (저장/렌더링/저장소): 3행 세로 배치 */
-.postprod-portrait-right .postprod-render-actions.top {
-  grid-template-columns: 1fr;
-  margin-top: 6px;
-}
-
-/* 렌더 미리보기: 9:16 비율로 중앙 표시 */
+/* 미리보기: 좌측 열 전체 높이, 9:16 비율 */
 .postprod-portrait-right .postprod-render-preview {
+  grid-area: preview;
+  align-self: stretch;
+  aspect-ratio: 9 / 16;
+  min-width: 80px;
   min-height: 0;
-  flex: 0 0 auto;
+  height: auto;
+  padding: 0;
+  flex: unset;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px;
 }
 
 .postprod-portrait-right .postprod-render-video,
 .postprod-portrait-right .postprod-render-image {
-  width: auto;
-  height: 140px;
-  max-height: 140px;
-  aspect-ratio: 9 / 16;
+  width: 100%;
+  height: 100%;
+  max-height: unset;
+  aspect-ratio: unset;
   object-fit: contain;
 }
+
+/* 우측 열 항목 배치 */
+.postprod-portrait-right .postprod-render-head { grid-area: head; }
+.postprod-portrait-right .postprod-render-actions.top { grid-area: actions; grid-template-columns: 1fr; margin-top: 0; }
+.postprod-portrait-right .postprod-save-state { grid-area: save; }
+.postprod-portrait-right .postprod-render-progress { grid-area: progress; }
+.postprod-portrait-right .postprod-render-info { grid-area: info; }
+.postprod-portrait-right .postprod-resource-card:not(.postprod-compute-card) { grid-area: download; }
 
 /* 다운로드 버튼: 4행 세로 배치 */
 .postprod-portrait-right .postprod-download-grid {
