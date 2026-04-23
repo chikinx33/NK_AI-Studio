@@ -26,7 +26,8 @@
   var DURATIONS_DEFAULT  = [4, 5, 6, 8];
   var DURATIONS_SEEDANCE = [4, 5, 6, 8, 10, 15];
 
-  var STORAGE_KEY  = 'nk_video_gen_results_v1';
+  var STORAGE_KEY         = 'nk_video_gen_results_v1';
+  var STORAGE_SESSION_KEY = 'nk_video_gen_session_id';
   var MAX_RESULTS  = 50;
   var POLL_INTERVAL_MS = 4000;
   var MAX_POLL_ATTEMPTS = 120; // ~8 min
@@ -61,7 +62,13 @@
       confirm_delete:    '이 영상을 삭제할까요?',
       confirm_delete_all:'생성된 영상 전체를 삭제할까요?',
       history_loading:   '히스토리 불러오는 중...',
-      server_item:       '클라우드 보관'
+      server_item:       '클라우드 보관',
+      sessionLabel:      '세션',
+      projectLabel:      '현재 에피소드',
+      brandLabel:        '현재 브랜드',
+      noProject:         '에피소드 없음',
+      noBrand:           '브랜드 없음',
+      noneLabel:         '없음'
     },
     en: {
       title:             'AI Video Gen',
@@ -92,7 +99,13 @@
       confirm_delete:    'Delete this video?',
       confirm_delete_all:'Delete all generated videos?',
       history_loading:   'Loading history...',
-      server_item:       'Cloud saved'
+      server_item:       'Cloud saved',
+      sessionLabel:      'Session',
+      projectLabel:      'Current episode',
+      brandLabel:        'Current brand',
+      noProject:         'No episode',
+      noBrand:           'No brand',
+      noneLabel:         'None'
     }
   };
 
@@ -115,7 +128,10 @@
     historyLoading: false,
     lang:           'ko',
     polls:          {},
-    projectId:      ''    // from URL ?projectId=; empty = detached mode
+    projectId:      '',   // from URL ?projectId=; empty = detached mode
+    sessionId:      '',
+    currentProject: null,
+    currentBrand:   null
   };
 
   var DELETED_KEY = 'nk_video_gen_deleted_v1';
@@ -212,16 +228,63 @@
 
   var root = null;
 
+  function ensureSessionId() {
+    try {
+      var cur = String(localStorage.getItem(STORAGE_SESSION_KEY) || '').trim();
+      if (cur) return cur;
+      var next = 'vg_' + Date.now();
+      localStorage.setItem(STORAGE_SESSION_KEY, next);
+      return next;
+    } catch (_) { return 'vg_' + Date.now(); }
+  }
+
+  function readCurrentProject() {
+    try {
+      var qp = new URLSearchParams(String(window.location.search || ''));
+      if (String(qp.get('detached') || '').trim() === '1') return null;
+      return (NK.service && NK.service.project && NK.service.project.resolveCurrent)
+        ? NK.service.project.resolveCurrent({ search: window.location.search })
+        : null;
+    } catch (_) { return null; }
+  }
+
+  function readCurrentBrand() {
+    try {
+      var qp = new URLSearchParams(String(window.location.search || ''));
+      if (String(qp.get('detached') || '').trim() === '1') return null;
+      return (NK.service && NK.service.brand && NK.service.brand.resolveCurrent)
+        ? NK.service.brand.resolveCurrent({ search: window.location.search })
+        : null;
+    } catch (_) { return null; }
+  }
+
+  function makePill(labelText, valueText) {
+    var pill = el('span', 'studio-hero-pill');
+    pill.appendChild(el('em', '', { textContent: labelText }));
+    pill.appendChild(el('strong', '', { textContent: valueText }));
+    return pill;
+  }
+
   function render() {
     if (!root) return;
     root.innerHTML = '';
 
     var wrap = el('div', 'vgen-wrap');
 
-    // Page title
+    // Header with title + status pills
     var header = el('div', 'vgen-header');
-    var title = el('h2', 'vgen-title', { textContent: t('title') });
-    header.appendChild(title);
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('h2', 'vgen-title', { textContent: t('title') }));
+    header.appendChild(titleWrap);
+
+    var detached = !state.projectId;
+    var project  = state.currentProject;
+    var brand    = state.currentBrand;
+    var pillsRow = el('div', 'vgen-status-pills');
+    pillsRow.appendChild(makePill(t('sessionLabel'), detached ? t('noneLabel') : state.sessionId));
+    pillsRow.appendChild(makePill(t('projectLabel'), detached ? t('noneLabel') : (project && project.title ? project.title : t('noProject'))));
+    pillsRow.appendChild(makePill(t('brandLabel'),   detached ? t('noneLabel') : (brand && brand.brandTitle ? brand.brandTitle : t('noBrand'))));
+    header.appendChild(pillsRow);
     wrap.appendChild(header);
 
     // Two-panel layout
@@ -786,6 +849,9 @@
       var det = urlParams.get('detached') === '1';
       state.projectId = (pid && !det) ? pid : '';
     } catch (_) {}
+    state.sessionId      = ensureSessionId();
+    state.currentProject = readCurrentProject();
+    state.currentBrand   = readCurrentBrand();
     loadResults();
     loadDeletedSet();
     detectLang();

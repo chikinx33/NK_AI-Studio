@@ -32,7 +32,11 @@
     }
 
     .vgen-header {
-      padding: 20px 24px 12px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 24px 12px;
       flex-shrink: 0;
       border-bottom: 1px solid var(--border);
     }
@@ -43,6 +47,14 @@
       color: var(--text);
       margin: 0;
       letter-spacing: -0.01em;
+    }
+
+    .vgen-status-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: flex-start;
     }
 
     .vgen-layout {
