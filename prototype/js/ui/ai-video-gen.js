@@ -247,7 +247,7 @@
   function maxRefs() {
     var mo = currentModelObj();
     if (mo.maxRefs) return mo.maxRefs;
-    if (state.model === 'wan') return 5;
+    if (state.model === 'wan') return 4;
     if (state.model === 'vidu-q3') return 4;
     if (state.model === 'seedance-r2v') return 5;
     return 0;
@@ -683,7 +683,7 @@
   function renderRefSection() {
     var max = maxRefs();
     if (!max) return document.createDocumentFragment();
-    var combineAudio = state.model === 'vidu-q3' && hasCap('audio');
+    var combineAudio = (state.model === 'vidu-q3' || state.model === 'wan') && hasCap('audio');
     var section = el('div', 'vgen-refs-section');
     var labelText = combineAudio
       ? (state.lang === 'en' ? 'References · Audio' : '레퍼런스 이미지 · 오디오')
@@ -855,7 +855,7 @@
     }
 
     // Audio (vidu-q3는 ref 그리드에 통합되므로 별도 섹션 생략)
-    if (hasCap('audio') && state.model !== 'vidu-q3') {
+    if (hasCap('audio') && state.model !== 'vidu-q3' && state.model !== 'wan') {
       panel.appendChild(renderAudioSection());
     }
 
