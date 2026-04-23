@@ -473,11 +473,15 @@ body.page-shell-brand .brand-mark {
 }
 
 body.page-shell-video .brand-mark {
-  background-image: url('./images/icon-ai-video.png');
+  background-image: url('./images/icon-ai-cinema.png');
 }
 
 body.page-shell-image .brand-mark {
   background-image: url('./images/icon-ai-image.png');
+}
+
+body.page-shell-videogen .brand-mark {
+  background-image: url('./images/icon-ai-video.png');
 }
 
 .brand-text .title {

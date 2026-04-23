@@ -2150,10 +2150,10 @@
           { pattern: /brand-studio/i, perm: 'brand' },
         ];
         icons.querySelectorAll('a.login-icon-link[href]').forEach(function (a) {
-          if (!loggedIn || !_perms.length) { a.style.display = ''; return; }
           const href = a.getAttribute('href') || '';
           const entry = _iconPermMap.find(function (m) { return m.pattern.test(href); });
-          a.style.display = (!entry || _perms.indexOf(entry.perm) !== -1) ? '' : 'none';
+          const allowed = !loggedIn || !_perms.length || !entry || _perms.indexOf(entry.perm) !== -1;
+          a.classList.toggle('is-disabled', !allowed);
         });
       }
 

@@ -106,6 +106,12 @@
   cursor: not-allowed;
 }
 
+.login-icon-link.is-disabled {
+  opacity: 0.22;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .login-icon-link {
   display: inline-flex;
   flex-direction: column;
