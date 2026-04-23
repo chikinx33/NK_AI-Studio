@@ -170,6 +170,10 @@
     });
   }
 
+  function isKling() {
+    return state.model === 'kling-draft' || state.model === 'kling-final';
+  }
+
   function durations() {
     return state.model === 'seedance' ? DURATIONS_SEEDANCE : DURATIONS_DEFAULT;
   }
@@ -649,19 +653,22 @@
     promptWrap.appendChild(promptTA);
     panel.appendChild(promptWrap);
 
-    // Camera movement
-    var row2 = el('div', 'vgen-row');
-    var camGrp = el('div', 'vgen-field vgen-field--full');
-    camGrp.appendChild(el('label', 'vgen-label', { textContent: t('camera_label') }));
-    var camSel = el('select', 'vgen-select', { id: 'vgen-camera' });
-    CAMERA_MOVEMENTS.forEach(function (c) {
-      var opt = el('option', '', { value: c.id, textContent: camLabel(c) });
-      if (c.id === state.cameraMovement) opt.selected = true;
-      camSel.appendChild(opt);
-    });
-    camGrp.appendChild(camSel);
-    row2.appendChild(camGrp);
-    panel.appendChild(row2);
+    // Camera movement (Kling 전용)
+    if (isKling()) {
+      var camSection = el('div', 'vgen-cam-section');
+      camSection.appendChild(el('label', 'vgen-label', { textContent: t('camera_label') }));
+      var camGrid = el('div', 'vgen-cam-grid');
+      CAMERA_MOVEMENTS.forEach(function (c) {
+        var btn = el('button', 'vgen-cam-btn' + (state.cameraMovement === c.id ? ' is-active' : ''), {
+          type: 'button',
+          textContent: camLabel(c),
+          'data-cam': c.id
+        });
+        camGrid.appendChild(btn);
+      });
+      camSection.appendChild(camGrid);
+      panel.appendChild(camSection);
+    }
 
     // Generate button
     var genBtn = el('button', 'btn-primary vgen-gen-btn' + (state.generating ? ' is-loading' : ''), {
@@ -737,6 +744,8 @@
     if (modelSel) {
       modelSel.addEventListener('change', function () {
         state.model = modelSel.value;
+        // Kling 아닌 모델로 전환 시 카메라 무브먼트 초기화
+        if (!isKling()) state.cameraMovement = '';
         // Refresh duration options if seedance toggled
         var durSel = root.querySelector('#vgen-duration');
         if (durSel) {
@@ -751,6 +760,7 @@
             durSel.value = state.duration;
           }
         }
+        render();
       });
     }
 
@@ -766,9 +776,15 @@
     var promptTA = root.querySelector('#vgen-prompt');
     if (promptTA) promptTA.addEventListener('input', function () { state.prompt = promptTA.value; });
 
-    // Camera
-    var camSel = root.querySelector('#vgen-camera');
-    if (camSel) camSel.addEventListener('change', function () { state.cameraMovement = camSel.value; });
+    // Camera movement buttons (Kling 전용)
+    root.querySelectorAll('.vgen-cam-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.cameraMovement = btn.dataset.cam;
+        root.querySelectorAll('.vgen-cam-btn').forEach(function (b) {
+          b.classList.toggle('is-active', b.dataset.cam === state.cameraMovement);
+        });
+      });
+    });
 
     // Image upload trigger buttons
     root.querySelectorAll('.vgen-upload-trigger').forEach(function (btn) {
