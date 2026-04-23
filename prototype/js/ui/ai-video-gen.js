@@ -6,6 +6,7 @@
     { id: 'veo',          label: 'Veo 3.1 Fast',          t2v: true,  i2v: true,  caps: ['start'] },
     { id: 'veo-full',     label: 'Veo 3.1 Full',          t2v: true,  i2v: true,  caps: ['start', 'audio'] },
     { id: 'grok',         label: 'Grok Imagine',           t2v: true,  i2v: true,  caps: ['start'] },
+    { id: 'grok-extend',  label: 'Grok Extend',            t2v: false, i2v: true,  caps: ['video'] },
     { id: 'kling-draft',  label: 'Kling Draft (v1.6)',     t2v: false, i2v: true,  caps: ['start', 'end', 'refs', 'camera'], maxRefs: 3 },
     { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'end', 'camera'] },
     { id: 'seedance',     label: 'Seedance 2.0',           t2v: false, i2v: true,  caps: ['start'] },
@@ -36,6 +37,7 @@
       'veo':          '시작 프레임 선택적. 구글 자체 모델, 1080p 고품질 사실적 영상.',
       'veo-full':     '구글 최고품질 + 네이티브 오디오. Fast 대비 2배 성능, 음향 포함 영상 생성.',
       'grok':         'xAI 모델. 창의적·스타일리시 영상. 텍스트/이미지 모두 지원, 720p.',
+      'grok-extend':  'Grok 영상을 마지막 프레임에서 자연스럽게 연장. 기존 영상 업로드 → 이어지는 장면 생성. 720p.',
       'kling-draft':  '시작+끝 프레임으로 장면 구간 고정. 레퍼런스로 캐릭터 일관성 유지. 카메라 무브먼트 지원.',
       'kling-final':  '1080p FHD 최고화질. 시작+끝 프레임, 카메라 무브먼트 지원.',
       'seedance':     'ByteDance 모델. 자연스러운 움직임, 최대 15초 영상 지원.',
@@ -47,6 +49,7 @@
       'veo':          'Optional start frame. Google model, 1080p high-quality realistic video.',
       'veo-full':     'Top Google quality + native audio. 2× quality over Fast, audio included.',
       'grok':         'xAI model. Creative, stylized video. Supports text & image, 720p.',
+      'grok-extend':  'Extend a Grok video from its last frame. Upload an existing video → generate a seamless continuation. 720p.',
       'kling-draft':  'Fix start & end frames. Reference images keep characters consistent. Camera movement supported.',
       'kling-final':  '1080p FHD top quality. Start+end frames, camera movement supported.',
       'seedance':     'ByteDance model. Smooth motion, up to 15-second video.',
@@ -84,6 +87,7 @@
       status_error:      '오류',
       no_prompt_alert:   '프롬프트를 입력해주세요.',
       no_image_alert:    'Image to Video 모드에서는 시작 프레임 이미지가 필요합니다.',
+      no_video_alert:    '이 모델은 연장할 영상을 업로드해야 합니다.',
       upload_image:      '이미지 업로드',
       remove_image:      '제거',
       download:          '다운로드',
@@ -129,6 +133,7 @@
       status_error:      'Error',
       no_prompt_alert:   'Please enter a prompt.',
       no_image_alert:    'A start frame image is required for Image to Video mode.',
+      no_video_alert:    'This model requires uploading a source video to extend.',
       upload_image:      'Upload Image',
       remove_image:      'Remove',
       download:          'Download',
@@ -1194,6 +1199,9 @@
     var isI2vMode = state.mode === 'i2v' || !currentModelObj().t2v;
     if (isI2vMode && hasCap('start') && !state.startImageUrl && (state.referenceUrls || []).filter(Boolean).length === 0) {
       alert(t('no_image_alert')); return;
+    }
+    if (hasCap('video') && !hasCap('start') && !hasCap('refs') && !state.videoUrl) {
+      alert(t('no_video_alert')); return;
     }
 
     state.prompt = prompt;

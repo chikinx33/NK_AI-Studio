@@ -121,7 +121,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     };
 
     const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
-    const supportedModels = ["veo", "veo-full", "grok", "seedance", "wan", "seedance-r2v", "vidu-q3"];
+    const supportedModels = ["veo", "veo-full", "grok", "grok-extend", "seedance", "wan", "seedance-r2v", "vidu-q3"];
     if (!supportedModels.includes(videoModel) && !isKling) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
@@ -313,6 +313,55 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const atlasJson = safeJson(atlasText);
       const predictionId = atlasJson?.data?.id || atlasJson?.prediction_id || atlasJson?.id || "";
       return json({ job_id: predictionId ? `vidu-q3:${predictionId}` : "", status: "processing" }, 202);
+    }
+
+    // Grok Extend branch (xAI direct API — extends existing video from last frame)
+    if (videoModel === "grok-extend") {
+      const xaiKey = env.XAI_API_KEY as string | undefined;
+      if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
+      if (!videoDataUrl) return json({ error: "videoDataUrl is required for grok-extend" }, 400);
+
+      // Upload source video to GCS to get a publicly accessible signed URL
+      const sourceVideoUrl = await (async () => {
+        if (/^https?:/i.test(videoDataUrl)) return videoDataUrl;
+        if (videoDataUrl.startsWith("gs://")) return await signIfGs(videoDataUrl);
+        if (videoDataUrl.startsWith("data:")) {
+          const outParsedVid = parseGcsUri(baseOutput!);
+          if (!outParsedVid) throw new Error("Invalid VIDEO_OUTPUT_GCS_URI");
+          const accessTok = await getGoogleAccessToken({ clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, scope: "https://www.googleapis.com/auth/cloud-platform" });
+          const objName = `${projectPrefix}/grok-extend/${stamp}-${sceneId}.mp4`;
+          const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedVid.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
+          const b64 = videoDataUrl.split(",")[1] || "";
+          const upRes = await fetch(upUrl, { method: "POST", headers: { Authorization: `Bearer ${accessTok}`, "Content-Type": "video/mp4" }, body: base64ToUint8(b64) });
+          if (!upRes.ok) throw new Error(`video_upload_failed: ${await upRes.text()}`);
+          return await signGcsUrl({ bucket: outParsedVid.bucket, object: objName, clientEmail: clientEmail!, privateKeyPem: privateKeyRaw!, expiresInSec: 3600 }).catch(() => gcsToHttps(`gs://${outParsedVid.bucket}/${objName}`));
+        }
+        return "";
+      })().catch((e: any) => { throw new Error("video_upload_error: " + (e?.message || e)); });
+
+      if (!sourceVideoUrl) return json({ error: "source video URL could not be resolved" }, 400);
+
+      const grokExtendBody: any = {
+        model: "grok-imagine-video-extension",
+        video_url: { url: sourceVideoUrl },
+        prompt: safePromptText,
+        duration: snapDuration,
+        aspect_ratio: aspectFinal,
+        resolution: "720p",
+      };
+      log('grok_extend_request', { sceneId, aspect: aspectFinal, duration: snapDuration });
+      const extRes = await fetch("https://api.x.ai/v1/videos/extensions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${xaiKey}` },
+        body: JSON.stringify(grokExtendBody),
+      });
+      const extText = await extRes.text();
+      if (!extRes.ok) {
+        return json({ error: "grok_extend_error", status: extRes.status, detail: safeJson(extText) }, extRes.status);
+      }
+      const extJson = safeJson(extText);
+      const reqId = extJson?.request_id || extJson?.id || extJson?.data?.[0]?.id || "";
+      return json({ job_id: reqId ? `grok-extend:${reqId}` : "", status: "processing" }, 202);
     }
 
     // Grok branch (xAI direct API — Atlas Cloud does not host Grok video)

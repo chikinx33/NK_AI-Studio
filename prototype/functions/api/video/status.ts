@@ -56,7 +56,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY' }, response: null, rawOperation: null, playback: null }, 500);
     }
 
-    const isGrok = jobId.startsWith('grok:');
+    const isGrok = jobId.startsWith('grok:') || jobId.startsWith('grok-extend:');
     const isSeedance = jobId.startsWith('seedance:') && !jobId.startsWith('seedance-r2v:');
     const isSeedanceR2v = jobId.startsWith('seedance-r2v:');
     const isVeo = jobId.startsWith('veo:') && !jobId.startsWith('veo-full:');
@@ -141,7 +141,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       if (!xaiKey) {
         return corsJson({ ok: false, job_id: jobId, done: false, error: { code: 'CONFIG_MISSING', message: 'XAI_API_KEY missing' }, response: null, rawOperation: null, playback: null }, 500);
       }
-      const reqId = jobId.replace(/^grok:/, '');
+      const reqId = jobId.replace(/^grok-extend:/, '').replace(/^grok:/, '');
       const res = await fetch(`https://api.x.ai/v1/videos/${reqId}`, { headers: { Authorization: `Bearer ${xaiKey}` } });
       const txt = await res.text();
       const json = safeJson(txt);
