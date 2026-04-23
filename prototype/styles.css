@@ -6647,19 +6647,17 @@ body.postprod-reordering .postprod-clip.is-dragging {
 .postprod-portrait-right .postprod-render-progress { grid-area: progress; }
 .postprod-portrait-right .postprod-render-info { grid-area: info; }
 
-/* 컴퓨팅 리소스: 하단 좌측 (숨김 해제) */
+/* 컴퓨팅 리소스: 하단 좌측 (숨김 해제), 다운로드 카드와 높이 동일 */
 .postprod-portrait-right .postprod-compute-card {
   display: block;
   grid-area: compute;
+  align-self: stretch;
 }
 
-/* 다운로드: 하단 우측 */
-.postprod-portrait-right .postprod-resource-card:not(.postprod-compute-card) { grid-area: download; }
-
-/* 컴퓨팅 리소스 그리드: 좁은 영역에서 1열로 */
-.postprod-portrait-right .postprod-resource-grid {
-  grid-template-columns: 1fr;
-  gap: 4px;
+/* 다운로드: 하단 우측, 컴퓨팅 리소스 카드와 높이 동일 */
+.postprod-portrait-right .postprod-resource-card:not(.postprod-compute-card) {
+  grid-area: download;
+  align-self: stretch;
 }
 
 /* 다운로드 버튼: 4행 세로 배치 */
