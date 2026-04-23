@@ -1052,7 +1052,7 @@ async function generateScenarioScenes(input) {
   }
 
   if (!merged.length) {
-    throw new Error(failedChunks[0]?.message || "Invalid scenes format from OpenAI");
+    throw new Error(failedChunks[0]?.message || "Invalid scenes format from Claude");
   }
 
   const normalizedScenes = merged.map((scene, index) => Object.assign({}, scene, {

@@ -54,7 +54,7 @@ These UI modules currently correspond to the early `Creative Studio` portion of 
 
 ### 4. Server functions
 
-- `prototype/functions/api/scenario.js`: OpenAI-based scene generation with fallback scenes
+- `prototype/functions/api/scenario.js`: Claude (Anthropic `claude-sonnet-4-6`) 기반 씬 생성, 실패 시 fallback 씬 반환
 - `prototype/functions/api/imagen.ts`: image generation backend
 - `prototype/functions/api/video.ts`: Veo/Grok video generation and GCS handling
 - `prototype/functions/api/project/*.ts`: project persistence and listing
