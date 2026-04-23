@@ -265,6 +265,67 @@
     return pill;
   }
 
+  var DOWNLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>';
+  var TRASH_SVG    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.75h6l.6 1.5H19a.75.75 0 0 1 0 1.5h-.66l-.8 10.05A2.25 2.25 0 0 1 15.29 20H8.71a2.25 2.25 0 0 1-2.24-2.2l-.81-10.05H5a.75.75 0 0 1 0-1.5h3.4L9 4.75Z"/><path d="M10 10v5.25M14 10v5.25"/></svg>';
+  var PLAY_SVG     = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
+
+  async function downloadVideo(url, filename) {
+    var name = filename || 'video.mp4';
+    try {
+      var res = await fetch(url);
+      var blob = await res.blob();
+      var blobUrl = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = blobUrl; a.download = name;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 60000);
+    } catch (_) {
+      var a = document.createElement('a');
+      a.href = url; a.download = name; a.target = '_blank';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+  }
+
+  function openVideoModal(url) {
+    closeVideoModal();
+    var overlay = document.createElement('div');
+    overlay.className = 'vgen-modal-overlay';
+    overlay.setAttribute('data-vgen-modal', '1');
+    var inner = document.createElement('div');
+    inner.className = 'vgen-modal-inner';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'vgen-modal-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', '닫기');
+    closeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+    var vid = document.createElement('video');
+    vid.className = 'vgen-modal-video';
+    vid.src = url;
+    vid.controls = true;
+    vid.autoplay = true;
+    vid.setAttribute('playsinline', '1');
+    inner.appendChild(closeBtn);
+    inner.appendChild(vid);
+    overlay.appendChild(inner);
+    document.body.appendChild(overlay);
+    closeBtn.addEventListener('click', closeVideoModal);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeVideoModal(); });
+    document.addEventListener('keydown', _modalKeyHandler);
+  }
+
+  function _modalKeyHandler(e) {
+    if (e.key === 'Escape') closeVideoModal();
+  }
+
+  function closeVideoModal() {
+    document.querySelectorAll('[data-vgen-modal]').forEach(function (el) {
+      var vid = el.querySelector('video');
+      if (vid) { try { vid.pause(); } catch (_) {} }
+      el.remove();
+    });
+    document.removeEventListener('keydown', _modalKeyHandler);
+  }
+
   function render() {
     if (!root) return;
     root.innerHTML = '';
@@ -305,11 +366,9 @@
     var panelHeader = el('div', 'vgen-panel-header');
     panelHeader.appendChild(el('span', 'vgen-panel-title', { textContent: t('results_title') }));
     var headerActions = el('div', 'vgen-panel-header-actions');
-    if (state.results.length > 0) {
+    if (state.results.length > 0 || state.serverItems.length > 0) {
       var clearBtn = el('button', 'btn-ghost vgen-clear-all-btn', {
-        type: 'button',
-        textContent: t('delete_all'),
-        id: 'vgen-clear-all'
+        type: 'button', textContent: t('delete_all'), id: 'vgen-clear-all'
       });
       headerActions.appendChild(clearBtn);
     }
@@ -317,42 +376,20 @@
     panel.appendChild(panelHeader);
 
     var list = el('div', 'vgen-results-list');
-
     if (state.historyLoading) {
-      var loadingEl = el('div', 'vgen-empty vgen-loading', { textContent: t('history_loading') });
-      list.appendChild(loadingEl);
+      list.appendChild(el('div', 'vgen-empty vgen-loading', { textContent: t('history_loading') }));
     } else if (!state.results.length && !state.serverItems.length) {
       var empty = el('div', 'vgen-empty');
       empty.textContent = t('results_empty');
       list.appendChild(empty);
     } else {
-      state.results.slice().reverse().forEach(function (r) {
-        list.appendChild(renderResultCard(r));
-      });
-      // 서버에만 있는 항목 (localStorage에 없음)
+      state.results.slice().reverse().forEach(function (r) { list.appendChild(renderResultCard(r)); });
       var localIds = state.results.map(function (r) { return r.id; });
       state.serverItems.filter(function (s) {
         return !state.deletedSet[s.name] && !localIds.some(function (id) { return s.name.indexOf(id) !== -1; });
-      }).forEach(function (s) {
-        list.appendChild(renderServerCard(s));
-      });
+      }).forEach(function (s) { list.appendChild(renderServerCard(s)); });
     }
     panel.appendChild(list);
-
-    // Inline video player for selected result
-    var sel = state.selectedId && state.results.find(function (r) { return r.id === state.selectedId; });
-    if (sel && sel.videoUrl) {
-      var playerWrap = el('div', 'vgen-player-wrap');
-      var vid = el('video', 'vgen-player');
-      vid.src = sel.videoUrl;
-      vid.controls = true;
-      vid.autoplay = true;
-      vid.loop = true;
-      vid.setAttribute('playsinline', '1');
-      playerWrap.appendChild(vid);
-      panel.appendChild(playerWrap);
-    }
-
     return panel;
   }
 
@@ -361,7 +398,6 @@
     var card = el('div', 'vgen-result-card' + (isSelected ? ' is-selected' : ''));
     card.dataset.id = r.id;
 
-    // Thumbnail
     var thumb = el('div', 'vgen-result-thumb');
     if (r.thumbnailDataUrl) {
       thumb.appendChild(el('img', '', { src: r.thumbnailDataUrl, alt: '' }));
@@ -369,32 +405,36 @@
       thumb.appendChild(el('div', 'vgen-spinner'));
     } else if (r.status === 'done') {
       thumb.classList.add('vgen-result-thumb--done');
-      thumb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5,3 19,12 5,21"/></svg>';
+      thumb.innerHTML = PLAY_SVG;
     } else {
       thumb.classList.add('vgen-result-thumb--error');
       thumb.textContent = '!';
     }
     card.appendChild(thumb);
 
-    // Info
     var info = el('div', 'vgen-result-info');
     var promptText = (r.prompt || '').slice(0, 60) + ((r.prompt || '').length > 60 ? '…' : '');
     info.appendChild(el('p', 'vgen-result-prompt', { textContent: promptText }));
     info.appendChild(el('p', 'vgen-result-meta', { textContent: (r.modelLabel || r.model || '') + ' · ' + (r.aspectRatio || '') + ' · ' + (r.duration || '') + (state.lang === 'ko' ? '초' : 's') }));
-    var statusEl = el('span', 'vgen-result-status vgen-status--' + (r.status || 'processing'), { textContent: t('status_' + (r.status || 'processing')) });
-    info.appendChild(statusEl);
+    info.appendChild(el('span', 'vgen-result-status vgen-status--' + (r.status || 'processing'), { textContent: t('status_' + (r.status || 'processing')) }));
     card.appendChild(info);
 
-    // Actions
     var actions = el('div', 'vgen-result-actions');
     if (r.status === 'done' && r.videoUrl) {
-      var dlA = el('a', 'btn-ghost vgen-icon-btn', { href: r.videoUrl, download: 'video.mp4', title: t('download'), innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>' });
-      actions.appendChild(dlA);
+      var playBtn = el('button', 'vgen-action-btn vgen-action-btn--play', {
+        type: 'button', title: '재생', 'data-action': 'play-result', 'data-url': r.videoUrl, innerHTML: PLAY_SVG
+      });
+      actions.appendChild(playBtn);
+      var dlBtn = el('button', 'vgen-action-btn', {
+        type: 'button', title: t('download'), 'data-action': 'download-result', 'data-url': r.videoUrl, 'data-id': r.id, innerHTML: DOWNLOAD_SVG
+      });
+      actions.appendChild(dlBtn);
     }
-    var delBtn = el('button', 'btn-ghost vgen-icon-btn vgen-delete-btn', { title: t('delete_result'), 'data-id': r.id, innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>' });
+    var delBtn = el('button', 'vgen-action-btn vgen-action-btn--danger vgen-delete-btn', {
+      type: 'button', title: t('delete_result'), 'data-action': 'delete-result', 'data-id': r.id, innerHTML: TRASH_SVG
+    });
     actions.appendChild(delBtn);
     card.appendChild(actions);
-
     return card;
   }
 
@@ -404,7 +444,7 @@
     card.dataset.serverName = objectName;
 
     var thumb = el('div', 'vgen-result-thumb vgen-result-thumb--done');
-    thumb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5,3 19,12 5,21"/></svg>';
+    thumb.innerHTML = PLAY_SVG;
     card.appendChild(thumb);
 
     var info = el('div', 'vgen-result-info');
@@ -417,10 +457,18 @@
 
     var actions = el('div', 'vgen-result-actions');
     if (s.signedUrl) {
-      var dlA = el('a', 'btn-ghost vgen-icon-btn', { href: s.signedUrl, download: 'video.mp4', title: t('download'), innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M8 11l4 4 4-4M3 17v2a2 2 0 002 2h14a2 2 0 002-2v-2"/></svg>' });
-      actions.appendChild(dlA);
+      var playBtn = el('button', 'vgen-action-btn vgen-action-btn--play', {
+        type: 'button', title: '재생', 'data-action': 'play-result', 'data-url': s.signedUrl, innerHTML: PLAY_SVG
+      });
+      actions.appendChild(playBtn);
+      var dlBtn = el('button', 'vgen-action-btn', {
+        type: 'button', title: t('download'), 'data-action': 'download-result', 'data-url': s.signedUrl, innerHTML: DOWNLOAD_SVG
+      });
+      actions.appendChild(dlBtn);
     }
-    var delBtn = el('button', 'btn-ghost vgen-icon-btn vgen-server-delete-btn', { title: t('delete_result'), 'data-name': objectName, innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>' });
+    var delBtn = el('button', 'vgen-action-btn vgen-action-btn--danger vgen-server-delete-btn', {
+      type: 'button', title: t('delete_result'), 'data-action': 'delete-server', 'data-name': objectName, innerHTML: TRASH_SVG
+    });
     actions.appendChild(delBtn);
     card.appendChild(actions);
     return card;
@@ -656,33 +704,41 @@
     // Result card click (select / deselect)
     root.querySelectorAll('.vgen-result-card').forEach(function (card) {
       card.addEventListener('click', function (e) {
-        if (e.target.closest('.vgen-delete-btn') || e.target.closest('.vgen-icon-btn[href]')) return;
+        if (e.target.closest('[data-action]')) return;
         var id = card.dataset.id;
-        state.selectedId = (state.selectedId === id) ? null : id;
-        render();
-      });
-    });
-
-    // Delete individual
-    root.querySelectorAll('.vgen-delete-btn').forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        if (!window.confirm(t('confirm_delete'))) return;
-        deleteResult(btn.dataset.id);
-      });
-    });
-
-    // Delete server-only item (tombstone)
-    root.querySelectorAll('.vgen-server-delete-btn').forEach(function (btn) {
-      btn.addEventListener('click', function (e) {
-        e.stopPropagation();
-        if (!window.confirm(t('confirm_delete'))) return;
-        var name = btn.dataset.name;
-        if (name) {
-          state.deletedSet[name] = true;
-          saveDeletedSet();
-          state.serverItems = state.serverItems.filter(function (s) { return s.name !== name; });
+        if (id) {
+          state.selectedId = (state.selectedId === id) ? null : id;
           render();
+        }
+      });
+    });
+
+    // Action buttons (play / download / delete)
+    root.querySelectorAll('[data-action]').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var action = btn.dataset.action;
+        if (action === 'play-result') {
+          var url = btn.dataset.url;
+          if (url) openVideoModal(url);
+        } else if (action === 'download-result') {
+          var url = btn.dataset.url;
+          var id  = btn.dataset.id;
+          var r   = id && state.results.find(function (x) { return x.id === id; });
+          var filename = r ? ('vg_' + (r.model || 'video') + '_' + r.id + '.mp4') : 'video.mp4';
+          if (url) downloadVideo(url, filename);
+        } else if (action === 'delete-result') {
+          if (!window.confirm(t('confirm_delete'))) return;
+          deleteResult(btn.dataset.id);
+        } else if (action === 'delete-server') {
+          if (!window.confirm(t('confirm_delete'))) return;
+          var name = btn.dataset.name;
+          if (name) {
+            state.deletedSet[name] = true;
+            saveDeletedSet();
+            state.serverItems = state.serverItems.filter(function (s) { return s.name !== name; });
+            render();
+          }
         }
       });
     });

@@ -16,33 +16,34 @@
   <link rel="stylesheet" href="styles.css" />
 
   <style>
-    /* ── Video Gen stage layout ─────────────────────────────── */
-    .page-videogen .main-body {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      overflow: hidden;
-    }
+    /* ── Height chain ────────────────────────────────────────── */
+    body.layout-fixed.page-videogen .main { height: 100vh; min-height: 0; overflow: hidden; }
+    body.layout-fixed.page-videogen .main-body { height: 100%; min-height: 0; overflow: hidden !important; }
+    body.layout-fixed.page-videogen .content { height: 100%; min-height: 0; overflow: hidden; }
 
+    /* ── Shell wrapper ───────────────────────────────────────── */
     .vgen-wrap {
       display: flex;
       flex-direction: column;
+      width: 100%;
       height: 100%;
+      min-height: 0;
       overflow: hidden;
     }
 
+    /* ── Header ──────────────────────────────────────────────── */
     .vgen-header {
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
       gap: 12px;
-      padding: 10px 24px 12px;
+      padding: 10px 16px 0;
       flex-shrink: 0;
-      border-bottom: 1px solid var(--border);
+      min-width: 0;
     }
 
     .vgen-title {
-      font-size: 1.1rem;
+      font-size: clamp(18px, 1.8vw, 24px);
       font-weight: 700;
       color: var(--text);
       margin: 0;
@@ -57,29 +58,48 @@
       align-items: flex-start;
     }
 
+    /* ── Workspace grid ──────────────────────────────────────── */
     .vgen-layout {
       display: grid;
-      grid-template-columns: 1fr 400px;
-      flex: 1;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 10px;
+      padding: 10px 16px 12px;
+      flex: 1 1 auto;
+      min-height: 0;
       overflow: hidden;
     }
 
     @media (max-width: 900px) {
-      .vgen-layout {
-        grid-template-columns: 1fr;
-        grid-template-rows: 1fr auto;
-      }
+      .vgen-layout { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
     }
 
-    /* ── Results panel (left) ──────────────────────────────── */
+    /* ── Panel cards ─────────────────────────────────────────── */
     .vgen-results-panel {
       display: flex;
       flex-direction: column;
-      border-right: 1px solid var(--border);
       overflow: hidden;
-      background: var(--panel);
+      min-height: 0;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--card);
     }
 
+    .vgen-gen-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      padding: 16px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      min-height: 0;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    .vgen-gen-panel::-webkit-scrollbar { display: none; }
+
+    /* ── Panel header ────────────────────────────────────────── */
     .vgen-panel-header {
       padding: 10px 14px;
       flex-shrink: 0;
@@ -107,20 +127,14 @@
       border: 1px solid color-mix(in srgb, #ef4444 25%, var(--border));
       border-radius: 6px;
     }
-
     .vgen-clear-all-btn:hover {
       background: color-mix(in srgb, #ef4444 10%, transparent);
       color: #fca5a5;
     }
 
-    .vgen-loading {
-      animation: vgen-pulse 1.2s ease-in-out infinite;
-    }
-
-    @keyframes vgen-pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
+    /* ── Results list ────────────────────────────────────────── */
+    .vgen-loading { animation: vgen-pulse 1.2s ease-in-out infinite; }
+    @keyframes vgen-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
     .vgen-server-card { opacity: 0.85; }
     .vgen-server-card:hover { opacity: 1; }
@@ -129,6 +143,7 @@
       flex: 1;
       overflow-y: auto;
       padding: 8px 0;
+      min-height: 0;
     }
 
     .vgen-empty {
@@ -140,334 +155,168 @@
       line-height: 1.6;
     }
 
+    /* ── Result cards ────────────────────────────────────────── */
     .vgen-result-card {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       gap: 10px;
       padding: 10px 14px;
       cursor: pointer;
       border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
       transition: background 0.12s;
-      position: relative;
     }
-
-    .vgen-result-card:hover {
-      background: color-mix(in srgb, var(--accent) 5%, var(--panel));
-    }
-
+    .vgen-result-card:hover { background: color-mix(in srgb, var(--accent) 5%, var(--card)); }
     .vgen-result-card.is-selected {
-      background: color-mix(in srgb, var(--accent) 10%, var(--panel));
+      background: color-mix(in srgb, var(--accent) 10%, var(--card));
       border-left: 3px solid var(--accent);
     }
 
     .vgen-result-thumb {
-      width: 54px;
-      height: 40px;
-      flex-shrink: 0;
-      border-radius: 6px;
-      overflow: hidden;
+      width: 54px; height: 40px; flex-shrink: 0;
+      border-radius: 6px; overflow: hidden;
       background: var(--bg-2, var(--bg));
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--muted);
-      font-size: 0.8rem;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--muted); font-size: 0.8rem;
     }
+    .vgen-result-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .vgen-result-thumb--done { color: var(--accent); }
+    .vgen-result-thumb--done svg { width: 18px; height: 18px; }
+    .vgen-result-thumb--error { color: #f87171; font-weight: 700; font-size: 1rem; }
 
-    .vgen-result-thumb img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-
-    .vgen-result-thumb--done {
-      color: var(--accent);
-    }
-
-    .vgen-result-thumb--done svg {
-      width: 18px;
-      height: 18px;
-    }
-
-    .vgen-result-thumb--error {
-      color: #f87171;
-      font-weight: 700;
-      font-size: 1rem;
-    }
-
-    .vgen-result-info {
-      flex: 1;
-      min-width: 0;
-    }
-
+    .vgen-result-info { flex: 1; min-width: 0; }
     .vgen-result-prompt {
-      font-size: 0.8rem;
-      color: var(--text);
-      margin: 0 0 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      font-size: 0.8rem; color: var(--text); margin: 0 0 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
+    .vgen-result-meta { font-size: 0.72rem; color: var(--muted); margin: 0 0 4px; }
+    .vgen-result-status { font-size: 0.7rem; font-weight: 600; padding: 1px 7px; border-radius: 99px; }
+    .vgen-status--processing { background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+    .vgen-status--done { background: color-mix(in srgb, #22c55e 15%, transparent); color: #4ade80; }
+    .vgen-status--error { background: color-mix(in srgb, #ef4444 15%, transparent); color: #f87171; }
 
-    .vgen-result-meta {
-      font-size: 0.72rem;
-      color: var(--muted);
-      margin: 0 0 4px;
-    }
+    /* ── Action buttons (rounded square) ────────────────────── */
+    .vgen-result-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 
-    .vgen-result-status {
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 1px 7px;
-      border-radius: 99px;
-    }
-
-    .vgen-status--processing {
-      background: color-mix(in srgb, var(--accent) 15%, transparent);
-      color: var(--accent);
-    }
-
-    .vgen-status--done {
-      background: color-mix(in srgb, #22c55e 15%, transparent);
-      color: #4ade80;
-    }
-
-    .vgen-status--error {
-      background: color-mix(in srgb, #ef4444 15%, transparent);
-      color: #f87171;
-    }
-
-    .vgen-result-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      flex-shrink: 0;
-    }
-
-    .vgen-icon-btn {
-      width: 28px;
-      height: 28px;
-      padding: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 6px;
-      color: var(--muted);
-    }
-
-    .vgen-icon-btn:hover { color: var(--text); }
-    .vgen-icon-btn svg { width: 14px; height: 14px; }
-
-    /* Player */
-    .vgen-player-wrap {
-      flex-shrink: 0;
-      padding: 12px;
-      border-top: 1px solid var(--border);
-      background: var(--bg);
-    }
-
-    .vgen-player {
-      width: 100%;
+    .vgen-action-btn {
+      width: 30px; height: 30px;
+      display: flex; align-items: center; justify-content: center;
       border-radius: 8px;
-      max-height: 200px;
-      background: #000;
-      display: block;
-    }
-
-    /* ── Generation panel (right) ──────────────────────────── */
-    .vgen-gen-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      overflow-y: auto;
-      padding: 20px 24px 24px;
-    }
-
-    /* Mode tabs */
-    .vgen-tabs {
-      display: flex;
-      gap: 4px;
+      border: 1px solid var(--border);
       background: var(--bg-2, var(--bg));
-      padding: 4px;
-      border-radius: 10px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s;
+      text-decoration: none;
+      padding: 0;
+    }
+    .vgen-action-btn:hover { color: var(--text); background: color-mix(in srgb, var(--bg-2, var(--bg)) 80%, var(--accent) 20%); }
+    .vgen-action-btn svg { width: 14px; height: 14px; }
+    .vgen-action-btn--danger:hover {
+      background: color-mix(in srgb, #ef4444 12%, transparent);
+      color: #f87171;
+      border-color: color-mix(in srgb, #ef4444 30%, var(--border));
+    }
+    .vgen-action-btn--play { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+    .vgen-action-btn--play:hover { background: color-mix(in srgb, var(--accent) 15%, var(--bg-2, var(--bg))); }
+
+    /* ── Video modal popup ───────────────────────────────────── */
+    .vgen-modal-overlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.88);
+      z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .vgen-modal-inner {
+      position: relative;
+      max-width: 90vw; max-height: 90vh;
+      background: #000;
+      border-radius: 12px; overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.65);
+    }
+    .vgen-modal-close {
+      position: absolute; top: 10px; right: 10px;
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      background: rgba(0,0,0,0.65);
+      color: #fff; font-size: 1rem; line-height: 1;
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1; cursor: pointer;
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .vgen-modal-close:hover { background: rgba(20,20,20,0.95); }
+    .vgen-modal-video { display: block; max-width: 90vw; max-height: 80vh; min-width: 320px; }
+
+    /* ── Gen panel controls ──────────────────────────────────── */
+    .vgen-tabs {
+      display: flex; gap: 4px;
+      background: var(--bg-2, var(--bg));
+      padding: 4px; border-radius: 10px;
       border: 1px solid var(--border);
       align-self: flex-start;
     }
-
     .vgen-tab {
-      padding: 6px 18px;
-      border-radius: 7px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      color: var(--muted);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      transition: background 0.12s, color 0.12s;
+      padding: 6px 18px; border-radius: 7px;
+      font-size: 0.82rem; font-weight: 600;
+      color: var(--muted); background: transparent; border: none;
+      cursor: pointer; transition: background 0.12s, color 0.12s;
       white-space: nowrap;
     }
-
     .vgen-tab:hover { color: var(--text); }
+    .vgen-tab.is-active { background: var(--bg); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 
-    .vgen-tab.is-active {
-      background: var(--card);
-      color: var(--accent);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-    }
-
-    /* Settings rows */
-    .vgen-row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .vgen-field {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      flex: 1;
-      min-width: 100px;
-    }
-
+    .vgen-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .vgen-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 100px; }
     .vgen-field--full { flex: 1 1 100%; }
-
-    .vgen-label {
-      font-size: 0.72rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      color: var(--muted);
-    }
+    .vgen-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
 
     .vgen-select {
-      background: var(--card);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 8px;
-      padding: 7px 10px;
-      font-size: 0.82rem;
-      cursor: pointer;
-      appearance: auto;
-      min-width: 0;
+      background: var(--bg-2, var(--bg));
+      border: 1px solid var(--border); color: var(--text);
+      border-radius: 8px; padding: 7px 10px;
+      font-size: 0.82rem; cursor: pointer; appearance: auto; min-width: 0;
     }
-
-    .vgen-select:focus {
-      outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
-      outline-offset: 1px;
-    }
-
-    /* global option color fix */
+    .vgen-select:focus { outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent); outline-offset: 1px; }
     .vgen-select option { color: #111; background: #fff; }
 
-    /* Image section */
-    .vgen-image-section {
-      display: flex;
-      gap: 12px;
-    }
-
-    .vgen-image-slot {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
+    .vgen-image-section { display: flex; gap: 12px; }
+    .vgen-image-slot { flex: 1; display: flex; flex-direction: column; gap: 6px; }
     .vgen-image-preview {
-      border: 2px dashed var(--border);
-      border-radius: 10px;
-      min-height: 100px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 12px;
-      position: relative;
-      overflow: hidden;
-      background: color-mix(in srgb, var(--card) 60%, transparent);
+      border: 2px dashed var(--border); border-radius: 10px; min-height: 100px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 12px; overflow: hidden;
+      background: color-mix(in srgb, var(--bg-2, var(--bg)) 60%, transparent);
       transition: border-color 0.15s;
     }
+    .vgen-image-slot--required .vgen-image-preview { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
+    .vgen-image-thumb { width: 100%; height: 100px; object-fit: cover; border-radius: 6px; }
+    .vgen-remove-img { font-size: 0.72rem; color: var(--muted); padding: 2px 8px; }
+    .vgen-upload-trigger { font-size: 0.78rem; padding: 6px 14px; }
+    .vgen-file-input { display: none; }
 
-    .vgen-image-slot--required .vgen-image-preview {
-      border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-    }
-
-    .vgen-image-thumb {
-      width: 100%;
-      height: 100px;
-      object-fit: cover;
-      border-radius: 6px;
-    }
-
-    .vgen-remove-img {
-      font-size: 0.72rem;
-      color: var(--muted);
-      padding: 2px 8px;
-    }
-
-    .vgen-upload-trigger {
-      font-size: 0.78rem;
-      padding: 6px 14px;
-    }
-
-    .vgen-file-input {
-      display: none;
-    }
-
-    /* Prompt */
     .vgen-prompt-wrap { display: flex; flex-direction: column; }
-
     .vgen-prompt {
-      background: var(--card);
-      border: 1px solid var(--border);
-      color: var(--text);
-      border-radius: 10px;
-      padding: 12px 14px;
-      font-size: 0.85rem;
-      resize: vertical;
-      font-family: inherit;
-      line-height: 1.5;
-      min-height: 100px;
-      transition: border-color 0.15s;
+      background: var(--bg-2, var(--bg));
+      border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 12px 14px;
+      font-size: 0.85rem; resize: vertical; font-family: inherit;
+      line-height: 1.5; min-height: 100px; transition: border-color 0.15s;
     }
-
-    .vgen-prompt:focus {
-      outline: none;
-      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
-    }
-
+    .vgen-prompt:focus { outline: none; border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
     .vgen-prompt::placeholder { color: var(--muted); }
 
-    /* Generate button */
     .vgen-gen-btn {
-      width: 100%;
-      padding: 13px;
-      font-size: 0.9rem;
-      font-weight: 700;
-      border-radius: 10px;
-      letter-spacing: 0.02em;
-      margin-top: 4px;
+      width: 100%; padding: 13px; font-size: 0.9rem; font-weight: 700;
+      border-radius: 10px; letter-spacing: 0.02em; margin-top: 4px;
     }
+    .vgen-gen-btn.is-loading { opacity: 0.65; cursor: not-allowed; }
 
-    .vgen-gen-btn.is-loading {
-      opacity: 0.65;
-      cursor: not-allowed;
-    }
-
-    /* Spinner */
     .vgen-spinner {
-      width: 20px;
-      height: 20px;
-      border: 2px solid var(--border);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: vgen-spin 0.7s linear infinite;
+      width: 20px; height: 20px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: vgen-spin 0.7s linear infinite;
     }
-
-    @keyframes vgen-spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes vgen-spin { to { transform: rotate(360deg); } }
   </style>
 
   <script src="core.js" defer></script>
