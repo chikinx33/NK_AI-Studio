@@ -9,8 +9,8 @@
     { id: 'kling-draft',  label: 'Kling Draft (v1.6)',     t2v: false, i2v: true,  caps: ['start', 'end', 'refs', 'camera'], maxRefs: 3 },
     { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'end', 'camera'] },
     { id: 'seedance',     label: 'Seedance 2.0',           t2v: false, i2v: true,  caps: ['start'] },
-    { id: 'wan',          label: 'Wan 2.7',                t2v: true,  i2v: true,  caps: ['start', 'end', 'refs', 'audio'] },
     { id: 'seedance-r2v', label: 'Seedance 2.0 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'] },
+    { id: 'wan',          label: 'Wan 2.7',                t2v: true,  i2v: true,  caps: ['start', 'end', 'refs', 'audio'] },
     { id: 'vidu-q3',      label: 'Vidu Q3-Mix',            t2v: false, i2v: true,  caps: ['start', 'refs', 'audio'], maxRefs: 4 }
   ];
 
@@ -768,7 +768,7 @@
     // Settings row: model / aspect / duration
     var row1 = el('div', 'vgen-row');
 
-    var modelGrp = el('div', 'vgen-field');
+    var modelGrp = el('div', 'vgen-field vgen-field--model');
     modelGrp.appendChild(el('label', 'vgen-label', { textContent: t('model_label') }));
     var modelSel = el('select', 'vgen-select', { id: 'vgen-model' });
     ALL_MODELS.forEach(function (m) {

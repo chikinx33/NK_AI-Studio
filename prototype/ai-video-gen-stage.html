@@ -268,8 +268,9 @@
     .vgen-tab:hover { color: var(--text); }
     .vgen-tab.is-active { background: var(--bg); color: var(--accent); box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
 
-    .vgen-row { display: flex; gap: 12px; flex-wrap: wrap; }
-    .vgen-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 100px; }
+    .vgen-row { display: flex; gap: 12px; flex-wrap: nowrap; }
+    .vgen-field { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+    .vgen-field--model { flex: 2 1 0; }
     .vgen-field--full { flex: 1 1 100%; }
     .vgen-label { font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
 
@@ -394,7 +395,7 @@
     .vgen-cam-section { display: flex; flex-direction: column; gap: 6px; }
     .vgen-cam-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 6px;
     }
     .vgen-cam-btn {
