@@ -1,7 +1,7 @@
 // prototype/functions/api/video/library.ts
 // List GCS videos from:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/videos/
-import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -41,7 +41,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     if (!outParsed) return send({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500, origin);
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = isVideoGen
-      ? buildAiVideoGenPrefix(basePrefix, userId)
+      ? (projectId ? buildAiVideoGenProjectPrefix(basePrefix, userId, projectId) : buildAiVideoGenPrefix(basePrefix, userId))
       : buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const prefix = `${projectPrefix}/videos/`;
 

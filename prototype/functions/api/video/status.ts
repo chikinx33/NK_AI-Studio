@@ -1,7 +1,7 @@
 ﻿// prototype/functions/api/video/status.ts
 // Poll Veo operation status and return a playable video URL (signed GCS URL if possible).
 // Contracts: job_id (legacy) OR jobId accepted. projectId/sceneId optional metadata.
-import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix } from "../_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import {
   callKlingApi,
@@ -73,7 +73,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         const objectBase = outParsed.object.replace(/\/$/, "");
         const projectFolder = projectTag || 'default';
         const projectPrefix = isVideoGen
-          ? buildAiVideoGenPrefix(objectBase, userId)
+          ? (projectTag ? buildAiVideoGenProjectPrefix(objectBase, userId, projectTag) : buildAiVideoGenPrefix(objectBase, userId))
           : buildAiVideoProjectPrefix(objectBase, userId, projectFolder);
         const targetPrefix = `${projectPrefix}/videos/`;
 

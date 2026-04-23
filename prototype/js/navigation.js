@@ -20,7 +20,7 @@
         var sh = detectShell();
         if (sh === 'brand') return 'brand-dashboard.html';
         if (sh === 'image') return 'image-dashboard.html';
-        if (sh === 'videogen') return 'ai-video-gen.html';
+        if (sh === 'videogen') return 'video-gen-dashboard.html';
         return 'dashboard.html';
     }
 
@@ -186,9 +186,10 @@
             const parts = raw.split(/[\\\/]/);
             const base = parts.pop() || raw;
             const name = base.replace(/\.html?$/, '');
-            if (name === 'brand-dashboard' || name === 'image-dashboard' || name === 'video-dashboard') return 'dashboard';
+            if (name === 'brand-dashboard' || name === 'image-dashboard' || name === 'video-dashboard' || name === 'video-gen-dashboard') return 'dashboard';
             if (name === 'ai-image') return 'ai-image-stage';
-            if (['scenario', 'scenes', 'ai-image-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
+            if (name === 'ai-video-gen') return 'ai-video-gen-stage';
+            if (['scenario', 'scenes', 'ai-image-stage', 'ai-video-gen-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
                 return name === 'ai-video' ? 'dashboard' : name;
             }
             if (name === 'index' || name === '') return 'options';

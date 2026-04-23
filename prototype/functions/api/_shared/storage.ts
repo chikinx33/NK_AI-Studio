@@ -48,6 +48,10 @@ export function buildAiVideoGenPrefix(basePrefix: string, userId: string): strin
   return `${root}/${AI_VIDEO_GEN_SERVICE}`;
 }
 
+export function buildAiVideoGenProjectPrefix(basePrefix: string, userId: string, projectId: string): string {
+  return `${buildAiVideoGenPrefix(basePrefix, userId)}/projects${String(projectId || "").trim()}`;
+}
+
 export function buildAiVideoBrandPrefix(basePrefix: string, userId: string, brandId: string): string {
   const root = buildAiVideoUserRoot(basePrefix, userId);
   const safeBrandId = String(brandId || "").trim().replace(/[^a-zA-Z0-9._-]+/g, "_") || "brand";

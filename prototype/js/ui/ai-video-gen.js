@@ -114,7 +114,8 @@
     generating:     false,
     historyLoading: false,
     lang:           'ko',
-    polls:          {}
+    polls:          {},
+    projectId:      ''    // from URL ?projectId=; empty = detached mode
   };
 
   var DELETED_KEY = 'nk_video_gen_deleted_v1';
@@ -145,14 +146,6 @@
 
   function generateId() {
     return 'vg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
-  }
-
-  function getProjectId() {
-    try {
-      var userId = '';
-      if (NK.auth && NK.auth.getUser) userId = String(NK.auth.getUser() || '').trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_').slice(0, 32);
-      return 'vgen-' + (userId || 'guest');
-    } catch (_) { return 'vgen-guest'; }
   }
 
   function availableModels() {
@@ -198,7 +191,7 @@
     if (!NK.api || !NK.api.videoGenLibrary) return;
     state.historyLoading = true;
     render();
-    NK.api.videoGenLibrary().then(function (data) {
+    NK.api.videoGenLibrary(state.projectId || null).then(function (data) {
       var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
       state.serverItems = items.filter(function (s) { return !state.deletedSet[s.name]; });
       state.historyLoading = false;
@@ -692,7 +685,6 @@
     render();
 
     try {
-      var projectId = getProjectId();
       var camSuffix = state.cameraMovement
         ? '\nCamera movement: ' + state.cameraMovement.replace(/_/g, ' ') + '.'
         : '';
@@ -700,13 +692,13 @@
 
       var payload = {
         source:          'video-gen',
-        projectId:       projectId,
         sceneId:         resultId,
         promptText:      finalPrompt,
         aspectRatio:     state.aspectRatio,
         durationSeconds: state.duration,
         videoModel:      state.model
       };
+      if (state.projectId) payload.projectId = state.projectId;
 
       if (state.mode === 'i2v' && state.startImageUrl) {
         payload.imageDataUrl  = state.startImageUrl;
@@ -723,7 +715,7 @@
       var startRes = await NK.api.videoStart(payload);
       updateResult(resultId, { jobId: startRes.jobId });
       saveResults();
-      pollVideoStatus(resultId, startRes.jobId, projectId);
+      pollVideoStatus(resultId, startRes.jobId, state.projectId || null);
 
     } catch (err) {
       updateResult(resultId, { status: 'error', errorMessage: (err && err.message) || 'error' });
@@ -788,6 +780,12 @@
 
   vgen.mount = function (container) {
     root = container;
+    try {
+      var urlParams = new URLSearchParams(window.location.search);
+      var pid = (urlParams.get('projectId') || '').trim();
+      var det = urlParams.get('detached') === '1';
+      state.projectId = (pid && !det) ? pid : '';
+    } catch (_) {}
     loadResults();
     loadDeletedSet();
     detectLang();

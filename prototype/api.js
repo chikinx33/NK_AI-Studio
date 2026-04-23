@@ -450,10 +450,11 @@
     return api.projectDelete(projectId, String(objectName || ''));
   };
 
-  api.videoGenLibrary = async function () {
+  api.videoGenLibrary = async function (projectId) {
     var uid = resolveUserId();
     var token = getAuthToken();
     var q = 'source=video-gen&userId=' + encodeURIComponent(uid);
+    if (projectId) q += '&projectId=' + encodeURIComponent(projectId);
     if (token) q += '&nk_token=' + encodeURIComponent(token);
     var res = await fetch(withBase('/api/video/library?' + q), { headers: buildAuthHeaders() });
     var text = await res.text();

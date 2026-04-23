@@ -36,6 +36,7 @@
     scenario: 'scenario.html',
     scenes: 'scenes.html',
     'ai-image-stage': 'ai-image-stage.html',
+    'ai-video-gen-stage': 'ai-video-gen-stage.html',
     library: 'library.html',
     brand: 'brand.html',
     knowledge: 'knowledge.html',
@@ -43,7 +44,7 @@
     media: 'media.html',
     publish: 'publish.html'
   };
-  const RESTORABLE_STAGES = ['scenario', 'scenes', 'ai-image-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish'];
+  const RESTORABLE_STAGES = ['scenario', 'scenes', 'ai-image-stage', 'ai-video-gen-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish'];
   const STAGE_TARGET_KEY = 'nk_current_stage_href';
   const FORCE_DASHBOARD_ENTRY_KEY = 'nk_force_dashboard_entry';
   const LOGIN_RETURN_PARAM = 'returnTo';
@@ -367,6 +368,7 @@
         const p = String(window.location.pathname || '').toLowerCase();
         if (/brand-studio|brand-dashboard/.test(p)) return 'brand';
         if (/ai-image|image-dashboard/.test(p)) return 'image';
+        if (/ai-video-gen|video-gen-dashboard/.test(p)) return 'videogen';
         return 'video';
       })();
       const scopedKey = STAGE_TARGET_KEY + '_' + sh;
@@ -433,6 +435,7 @@
       const path = String(window.location.pathname || '').toLowerCase();
       const isAiVideoShell = /(^|\/)ai-video(\.html)?\/?$/i.test(path);
       const isAiImageShell = /(^|\/)ai-image(\.html)?\/?$/i.test(path);
+      const isAiVideoGenShell = /(^|\/)ai-video-gen(\.html)?\/?$/i.test(path);
       if (!isIframe && isAiVideoShell) {
         const hasStageHref = urlParams.has('stageHref') || urlParams.has('projectId') || urlParams.has('brandId');
         if (hasStageHref) {
@@ -461,6 +464,20 @@
           window.history.replaceState({}, '', clean.toString());
         }
       }
+      if (!isIframe && isAiVideoGenShell) {
+        const hasStageHref = urlParams.has('stageHref') || urlParams.has('projectId') || urlParams.has('brandId');
+        if (hasStageHref) {
+          sessionStorage.removeItem(STAGE_TARGET_KEY);
+          localStorage.removeItem(STAGE_TARGET_KEY);
+          sessionStorage.removeItem('nk_current_stage');
+          localStorage.removeItem('nk_current_stage');
+          const clean = new URL(window.location.href);
+          clean.searchParams.delete('stageHref');
+          clean.searchParams.delete('projectId');
+          clean.searchParams.delete('brandId');
+          window.history.replaceState({}, '', clean.toString());
+        }
+      }
     } catch (_) { }
     if (urlParams.get('embed') === '1') {
       document.documentElement.setAttribute('data-embed', '1');
@@ -471,22 +488,25 @@
     const isAiVideoShellPath = /(^|\/)ai-video(\.html)?\/?$/i.test(loweredPath);
     const isBrandShellPath = /(^|\/)brand-studio(\.html)?\/?$/i.test(loweredPath);
     const isAiImageShellPath = /(^|\/)ai-image(\.html)?\/?$/i.test(loweredPath);
+    const isAiVideoGenShellPath = /(^|\/)ai-video-gen(\.html)?\/?$/i.test(loweredPath);
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
-    const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath;
+    const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath || isAiVideoGenShellPath;
     const stageParamRaw = urlParams.get('stage');
     const hasExplicitShellTarget = urlParams.has('stageHref') || (urlParams.has('stage') && String(stageParamRaw || '').toLowerCase() !== 'dashboard');
     const defaultDashboardForShell = isBrandShellPath
       ? 'brand-dashboard.html'
-      : (isAiImageShellPath ? 'image-dashboard.html' : 'dashboard.html');
-    const initialTargetRaw = (isAiVideoShellPath || isShellPage)
+      : (isAiImageShellPath ? 'image-dashboard.html' : (isAiVideoGenShellPath ? 'video-gen-dashboard.html' : 'dashboard.html'));
+    const initialTargetRaw = (isAiVideoShellPath || isAiVideoGenShellPath || isShellPage)
       ? (isKnownShellPath && !hasExplicitShellTarget ? defaultDashboardForShell : resolveInitialStageTarget(urlParams))
       : '';
     const initialTarget = isBrandShellPath
       ? (initialTargetRaw || 'brand-dashboard.html')
       : (isAiImageShellPath
         ? (initialTargetRaw || 'image-dashboard.html')
-        : initialTargetRaw);
-    const initialStage = (isAiVideoShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
+        : (isAiVideoGenShellPath
+          ? (initialTargetRaw || 'video-gen-dashboard.html')
+          : initialTargetRaw));
+    const initialStage = (isAiVideoShellPath || isAiVideoGenShellPath || isShellPage) ? NK.navigation.normalizeStageName(initialTarget) : stage;
     const effectiveStage = initialStage || stage;
 
     // 2. 스테이지 상태 초기화 (네비게이션 파싱 후)
@@ -523,6 +543,7 @@
     const isMainPage = !isIframe && !isOptionsPage && (
       effectiveStage === 'dashboard' ||
       isAiVideoShellPath ||
+      isAiVideoGenShellPath ||
       isShellPage
     );
 
@@ -531,7 +552,7 @@
       if (!window.__nk_projects_list_prefetch && NK.api?.projectList && NK.auth?.isAuthed?.()) {
         window.__nk_projects_list_prefetch = NK.api.projectList().catch(() => null);
       }
-      const target = (isAiVideoShellPath || isShellPage)
+      const target = (isAiVideoShellPath || isAiVideoGenShellPath || isShellPage)
         ? (initialTarget || STAGE_HTML_MAP[effectiveStage] || defaultDashboardForShell)
         : (STAGE_HTML_MAP[effectiveStage] || defaultDashboardForShell);
       NK.navigation.loadStage(target);
@@ -812,6 +833,28 @@
           window.location.href = target;
         }
         try { sessionStorage.removeItem('nk_ai_image_selection_explicit'); } catch (_) {}
+        return;
+      }
+
+      const buildAiVideoGenStageUrl = () => {
+        const cp = NK.state?.runtime?.currentProject;
+        const pid = String(cp && cp.id || '').trim();
+        const explicit = String(sessionStorage.getItem('nk_ai_video_gen_selection_explicit') || '').trim() === '1';
+        if (!explicit || !pid) return 'ai-video-gen-stage.html?detached=1';
+        return `ai-video-gen-stage.html?projectId=${encodeURIComponent(pid)}`;
+      };
+      const isAiVideoGenStageLink = !!href && /(^|[\\\/])ai-video-gen-stage\.html([?#]|$)/i.test(href);
+      if (isAiVideoGenStageLink) {
+        e.preventDefault();
+        e.stopPropagation();
+        persistCurrentProject();
+        const target = buildAiVideoGenStageUrl();
+        if (NK.navigation && NK.navigation.loadStage) {
+          NK.navigation.loadStage(target);
+        } else {
+          window.location.href = target;
+        }
+        try { sessionStorage.removeItem('nk_ai_video_gen_selection_explicit'); } catch (_) {}
         return;
       }
 
@@ -3056,7 +3099,7 @@
       const href = item.getAttribute('href') || '';
       const file = href.replace(/.*\//, '').split('?')[0].replace(/\.html?$/, '') || 'index';
       let targetStage = file;
-      if (file === 'brand-dashboard' || file === 'image-dashboard' || file === 'video-dashboard') targetStage = 'dashboard';
+      if (file === 'brand-dashboard' || file === 'image-dashboard' || file === 'video-dashboard' || file === 'video-gen-dashboard') targetStage = 'dashboard';
       if (file === 'ai-video') targetStage = 'dashboard';
       const isMatch = (stage === targetStage) || (stage === 'dashboard' && (targetStage === 'index' || targetStage === 'dashboard'));
       if (isMatch) item.classList.add('active');

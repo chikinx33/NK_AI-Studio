@@ -3,7 +3,7 @@
 // Goal: return job/operation name to confirm Vertex AI request is accepted.
 
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
-import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix } from "./_shared/storage";
+import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import {
   callKlingApi,
@@ -27,6 +27,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const {
       sceneId = "scene",
       projTag = "",
+      projectId: rawProjectId = "",
       source: rawSource = "",
       userId: rawUserId = "",
       promptText = "",
@@ -73,12 +74,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI (expect gs://bucket/prefix)" }, 500);
     }
     const projectTag = (projTag || "default").toString();
+    const safeVideoGenProjectId = String(rawProjectId || "").trim();
     const userId = auth.userId || "";
     const basePrefix = outParsed.object.replace(/\/$/, "");
     // AI 시네마: users/{userId}/ai-video/projects{projectId}/videos/
-    // AI 영상(video-gen): users/{userId}/ai-video-gen/videos/
+    // AI 영상(video-gen, detached): users/{userId}/ai-video-gen/videos/
+    // AI 영상(video-gen, project): users/{userId}/ai-video-gen/projects{projectId}/videos/
     const projectPrefix = isVideoGen
-      ? buildAiVideoGenPrefix(basePrefix, userId)
+      ? (safeVideoGenProjectId ? buildAiVideoGenProjectPrefix(basePrefix, userId, safeVideoGenProjectId) : buildAiVideoGenPrefix(basePrefix, userId))
       : buildAiVideoProjectPrefix(basePrefix, userId, projectTag);
     const stamp = Date.now();
     const videoObject = `${projectPrefix}/videos/${stamp}-${sceneId}.mp4`;
