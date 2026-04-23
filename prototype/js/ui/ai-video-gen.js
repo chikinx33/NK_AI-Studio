@@ -1152,6 +1152,7 @@
     });
 
     // Audio trigger
+    var audioTrigger = root.querySelector('.vgen-audio-trigger');
     if (audioTrigger) {
       audioTrigger.addEventListener('click', function () {
         var inp = root.querySelector('#vgen-audio-file');
