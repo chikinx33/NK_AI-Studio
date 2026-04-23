@@ -898,7 +898,6 @@
 
   function renderImageSlot(slotId, labelText, currentUrl, required) {
     var slot = el('div', 'vgen-image-slot' + (required ? ' vgen-image-slot--required' : ''));
-    slot.appendChild(el('span', 'vgen-label', { textContent: labelText }));
 
     var preview = el('div', 'vgen-image-preview', { id: 'vgen-img-preview-' + slotId });
 
@@ -915,9 +914,12 @@
       });
       preview.appendChild(removeBtn);
     } else {
+      var btnText = slotId === 'start'
+        ? (state.lang === 'en' ? 'Start Image' : '시작 이미지')
+        : (state.lang === 'en' ? 'End Image'   : '끝 이미지');
       var uploadBtn = el('button', 'btn-secondary vgen-upload-trigger', {
         type: 'button',
-        textContent: t('upload_image'),
+        textContent: btnText,
         'data-slot': slotId
       });
       var fileInp = el('input', 'vgen-file-input', {
