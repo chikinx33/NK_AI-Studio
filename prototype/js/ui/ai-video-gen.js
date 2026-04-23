@@ -1008,6 +1008,15 @@
 
   vgen.mount = function (container) {
     root = container;
+    // Per-user storage isolation: namespace keys by logged-in userId
+    try {
+      var _uid = (NK.auth && NK.auth.getUser) ? String(NK.auth.getUser() || '').trim() : '';
+      if (_uid) {
+        STORAGE_KEY         = 'nk_video_gen_results_v1_'   + _uid;
+        STORAGE_SESSION_KEY = 'nk_video_gen_session_id_'   + _uid;
+        DELETED_KEY         = 'nk_video_gen_deleted_v1_'   + _uid;
+      }
+    } catch (_) {}
     try {
       var urlParams = new URLSearchParams(window.location.search);
       var pid = (urlParams.get('projectId') || '').trim();

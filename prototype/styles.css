@@ -4056,6 +4056,7 @@ textarea::-webkit-scrollbar-corner {
   position: relative;
   display: flex;
   flex-direction: column;
+  overflow: visible;
 }
 
 .user-lock-message {
@@ -4443,7 +4444,7 @@ html.page-shell-image #sidebar-project-card {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 0 2px;
+  padding: 8px 0 10px;
 }
 
 .favorite-page-dots {
@@ -4540,6 +4541,7 @@ html.page-shell-image #sidebar-project-card {
   font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
+  z-index: 2;
 }
 
 .favorite-category {
