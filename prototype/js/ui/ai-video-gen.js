@@ -734,22 +734,27 @@
     return section;
   }
 
-  function renderAudioSection() {
-    var section = el('div', 'vgen-audio-section');
-    section.appendChild(el('label', 'vgen-label', { textContent: t('audio_label') }));
-    var slot = el('div', 'vgen-audio-slot' + (state.audioUrl ? ' has-file' : ''));
+  function renderStandaloneAudioSlot() {
+    var section = el('div', 'vgen-audio-solo-section');
+    var audioSlot = el('div', 'vgen-ref-slot vgen-ref-slot--audio' + (state.audioUrl ? ' has-file' : ''));
     if (state.audioUrl) {
-      var nameEl = el('span', 'vgen-audio-name', { textContent: state.audioFileName || 'audio' });
-      slot.appendChild(nameEl);
-      var removeBtn = el('button', 'vgen-audio-remove', { type: 'button', textContent: t('remove_audio') });
-      slot.appendChild(removeBtn);
+      var icon = el('span', 'vgen-audio-grid-icon', { textContent: '♪' });
+      var nameEl = el('span', 'vgen-audio-name-mini', { textContent: state.audioFileName || 'audio' });
+      nameEl.title = state.audioFileName || 'audio';
+      var removeBtn = el('button', 'vgen-ref-remove', { type: 'button', textContent: '×', 'data-grid-audio-remove': '1' });
+      audioSlot.appendChild(icon);
+      audioSlot.appendChild(nameEl);
+      audioSlot.appendChild(removeBtn);
     } else {
-      var uploadBtn = el('button', 'btn-secondary vgen-audio-trigger', { type: 'button', textContent: t('upload_audio') });
-      var fileInp = el('input', '', { type: 'file', accept: 'audio/*', id: 'vgen-audio-file', style: 'display:none' });
-      slot.appendChild(uploadBtn);
-      slot.appendChild(fileInp);
+      var addBtn = el('button', 'vgen-ref-add vgen-ref-add--audio', {
+        type: 'button',
+        innerHTML: '<span class="vgen-audio-grid-icon">♪</span><span class="vgen-audio-grid-label">' + t('audio_label') + '</span>'
+      });
+      var fileInp = el('input', 'vgen-ref-file', { type: 'file', accept: 'audio/*', id: 'vgen-audio-file', style: 'display:none' });
+      audioSlot.appendChild(addBtn);
+      audioSlot.appendChild(fileInp);
     }
-    section.appendChild(slot);
+    section.appendChild(audioSlot);
     return section;
   }
 
@@ -844,9 +849,9 @@
       panel.appendChild(renderRefSection());
     }
 
-    // Audio (vidu-q3는 ref 그리드에 통합되므로 별도 섹션 생략)
+    // Audio (vidu-q3, wan은 ref 그리드에 통합; 나머지는 standalone slot)
     if (hasCap('audio') && state.model !== 'vidu-q3' && state.model !== 'wan') {
-      panel.appendChild(renderAudioSection());
+      panel.appendChild(renderStandaloneAudioSlot());
     }
 
     // Video (for editing)
