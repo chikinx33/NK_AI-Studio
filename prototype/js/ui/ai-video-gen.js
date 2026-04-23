@@ -798,7 +798,6 @@
     var row1 = el('div', 'vgen-row');
 
     var modelGrp = el('div', 'vgen-field vgen-field--model');
-    modelGrp.appendChild(el('label', 'vgen-label', { textContent: t('model_label') }));
     var modelSel = el('select', 'vgen-select', { id: 'vgen-model' });
     ALL_MODELS.forEach(function (m) {
       var opt = el('option', '', { value: m.id, textContent: m.label });
@@ -809,7 +808,6 @@
     row1.appendChild(modelGrp);
 
     var aspectGrp = el('div', 'vgen-field');
-    aspectGrp.appendChild(el('label', 'vgen-label', { textContent: t('aspect_label') }));
     var aspectSel = el('select', 'vgen-select', { id: 'vgen-aspect' });
     ASPECT_RATIOS.forEach(function (r) {
       var opt = el('option', '', { value: r, textContent: r });
@@ -820,7 +818,6 @@
     row1.appendChild(aspectGrp);
 
     var durGrp = el('div', 'vgen-field');
-    durGrp.appendChild(el('label', 'vgen-label', { textContent: t('duration_label') }));
     var durSel = el('select', 'vgen-select', { id: 'vgen-duration' });
     durations().forEach(function (d) {
       var opt = el('option', '', { value: d, textContent: d + t('duration_unit') });
