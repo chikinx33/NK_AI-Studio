@@ -121,7 +121,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     };
 
     const isKling = videoModel === "kling" || videoModel === "kling-draft" || videoModel === "kling-final";
-    const supportedModels = ["veo", "veo-full", "grok", "grok-extend", "seedance", "wan", "seedance-r2v", "vidu-q3"];
+    const supportedModels = ["veo", "veo-full", "grok", "grok-r2v", "grok-extend", "seedance", "wan", "seedance-r2v", "vidu-q3"];
     if (!supportedModels.includes(videoModel) && !isKling) {
       return json({ error: "unsupported_video_model", detail: videoModel }, 400);
     }
@@ -365,7 +365,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     // Grok branch (xAI direct API — Atlas Cloud does not host Grok video)
-    if (videoModel === "grok") {
+    if (videoModel === "grok" || videoModel === "grok-r2v") {
       const xaiKey = env.XAI_API_KEY as string | undefined;
       if (!xaiKey) return json({ error: "XAI_API_KEY missing" }, 500);
       const grokBody: any = {
@@ -375,8 +375,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         aspect_ratio: aspectFinal,
         resolution: "720p",
       };
-      // R2V 모드: reference_images 우선 (image_url과 동시 사용 불가)
-      if (referenceImages.length > 0) {
+      const useR2V = videoModel === "grok-r2v" || (videoModel === "grok" && referenceImages.length > 0);
+      if (useR2V) {
+        // R2V 모드: reference_images (image_url과 동시 사용 불가)
         const refResolved: { url: string }[] = [];
         for (let i = 0; i < referenceImages.length; i++) {
           const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
@@ -393,7 +394,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           grokBody.prompt = "Animate this image. " + safePromptText;
         }
       }
-      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration, r2v: referenceImages.length > 0 });
+      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration, r2v: useR2V });
       const grokRes = await fetch("https://api.x.ai/v1/videos/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${xaiKey}` },

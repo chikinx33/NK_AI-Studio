@@ -4,7 +4,7 @@
 
   var VIDEO_MODEL_LABELS = {
     'veo': 'Veo 3.1 Fast', 'veo-full': 'Veo 3.1 Full',
-    'grok': 'Grok Imagine',
+    'grok': 'Grok Imagine', 'grok-r2v': 'Grok R2V',
     'kling-draft': 'Kling Draft (v1.6)', 'kling-final': 'Kling Final (v2.6 Pro)',
     'seedance': 'Seedance 2.0', 'seedance-r2v': 'Seedance 2.0 Reference',
     'wan': 'Wan 2.7',
