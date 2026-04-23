@@ -855,14 +855,17 @@
       panel.appendChild(renderRefSection());
     }
 
-    // Audio (vidu-q3, wan은 ref 그리드에 통합; 나머지는 standalone slot)
-    if (hasCap('audio') && state.model !== 'vidu-q3' && state.model !== 'wan') {
-      panel.appendChild(renderStandaloneAudioSlot());
-    }
-
-    // Video (for editing)
-    if (hasCap('video')) {
-      panel.appendChild(renderStandaloneVideoSlot());
+    // Audio + Video: 둘 다 있으면 한 행으로 묶기 (seedance-r2v 등)
+    var showAudio = hasCap('audio') && state.model !== 'vidu-q3' && state.model !== 'wan';
+    var showVideo = hasCap('video');
+    if (showAudio && showVideo) {
+      var avRow = el('div', 'vgen-av-row');
+      avRow.appendChild(renderStandaloneAudioSlot());
+      avRow.appendChild(renderStandaloneVideoSlot());
+      panel.appendChild(avRow);
+    } else {
+      if (showAudio) panel.appendChild(renderStandaloneAudioSlot());
+      if (showVideo) panel.appendChild(renderStandaloneVideoSlot());
     }
 
     // Prompt
