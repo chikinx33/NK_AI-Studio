@@ -491,6 +491,29 @@
     const isAiVideoGenShellPath = /(^|\/)ai-video-gen(\.html)?\/?$/i.test(loweredPath);
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts');
     const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath || isAiVideoGenShellPath;
+
+    // Permission guard: redirect restricted users away from disallowed shell pages
+    if (!isIframe && isKnownShellPath && NK.auth && NK.auth.isAuthed && NK.auth.isAuthed()) {
+      const _guardPerms = (NK.auth.getPermissions) ? NK.auth.getPermissions() : [];
+      if (_guardPerms.length) {
+        const _shellPermMap = [
+          { test: isAiVideoGenShellPath, perm: 'videogen', href: 'ai-video-gen.html' },
+          { test: isAiImageShellPath, perm: 'image', href: 'ai-image.html' },
+          { test: isAiVideoShellPath, perm: 'video', href: 'ai-video.html' },
+          { test: isBrandShellPath, perm: 'brand', href: 'brand-studio.html' },
+        ];
+        const currentEntry = _shellPermMap.find(function (m) { return m.test; });
+        if (currentEntry && _guardPerms.indexOf(currentEntry.perm) === -1) {
+          const fallbackHref = (function () {
+            const redirectMap = { videogen: 'ai-video-gen.html', image: 'ai-image.html', video: 'ai-video.html', brand: 'brand-studio.html' };
+            return redirectMap[_guardPerms[0]] || 'index.html';
+          })();
+          window.location.replace(fallbackHref);
+          return;
+        }
+      }
+    }
+
     const stageParamRaw = urlParams.get('stage');
     const hasExplicitShellTarget = urlParams.has('stageHref') || (urlParams.has('stage') && String(stageParamRaw || '').toLowerCase() !== 'dashboard');
     const defaultDashboardForShell = isBrandShellPath
@@ -2117,6 +2140,22 @@
           try { alert(currentLang === 'en' ? 'Please sign in first.' : '로그인 후 이용 가능합니다.'); } catch (_) {}
         }, true);
       }
+      // Permission-based icon visibility
+      if (icons) {
+        const _perms = (NK.auth && NK.auth.getPermissions) ? NK.auth.getPermissions() : [];
+        const _iconPermMap = [
+          { pattern: /ai-video-gen/i, perm: 'videogen' },
+          { pattern: /ai-image/i, perm: 'image' },
+          { pattern: /ai-video\.html/i, perm: 'video' },
+          { pattern: /brand-studio/i, perm: 'brand' },
+        ];
+        icons.querySelectorAll('a.login-icon-link[href]').forEach(function (a) {
+          if (!loggedIn || !_perms.length) { a.style.display = ''; return; }
+          const href = a.getAttribute('href') || '';
+          const entry = _iconPermMap.find(function (m) { return m.pattern.test(href); });
+          a.style.display = (!entry || _perms.indexOf(entry.perm) !== -1) ? '' : 'none';
+        });
+      }
 
       if (loggedIn && user) {
         const brand = readLoginBrandLocal(user);
@@ -2475,6 +2514,14 @@
             } catch (_) {
               window.location.replace(requestedReturnTarget);
             }
+            return;
+          }
+          // Auto-redirect restricted users to their allowed page
+          const _loginPerms = (NK.auth.getPermissions) ? NK.auth.getPermissions() : [];
+          if (_loginPerms.length) {
+            const _loginRedirectMap = { videogen: 'ai-video-gen.html', image: 'ai-image.html', video: 'ai-video.html', brand: 'brand-studio.html' };
+            const _dest = _loginRedirectMap[_loginPerms[0]] || 'index.html';
+            window.location.replace(_dest);
             return;
           }
           alert(translateUiText('로그인 성공'));

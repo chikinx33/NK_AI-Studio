@@ -44,12 +44,27 @@
         } catch (_) { return false; }
     };
 
-    auth.setAuthed = function (val, user = '', token = '') {
+    auth.setAuthed = function (val, user = '', token = '', permissions = []) {
         try {
             localStorage.setItem(KEYS.AUTH, val ? 'true' : 'false');
             localStorage.setItem(KEYS.USER, val ? user : '');
             localStorage.setItem(KEYS.AUTH_TOKEN, val ? String(token || '') : '');
+            localStorage.setItem(KEYS.PERMISSIONS, val ? JSON.stringify(Array.isArray(permissions) ? permissions : []) : '[]');
         } catch (_) { }
+    };
+
+    auth.getPermissions = function () {
+        try {
+            const raw = localStorage.getItem(KEYS.PERMISSIONS) || '[]';
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (_) { return []; }
+    };
+
+    auth.hasPermission = function (page) {
+        const perms = auth.getPermissions();
+        if (!perms.length) return true;
+        return perms.indexOf(page) !== -1;
     };
 
     auth.getUser = function () {
@@ -65,7 +80,7 @@
             const res = await NK.api.login(id, pw);
             if (res && res.ok && res.token) {
                 lastError = '';
-                auth.setAuthed(true, res.user || id, res.token);
+                auth.setAuthed(true, res.user || id, res.token, res.permissions || []);
                 return true;
             }
             lastError = '로그인 응답이 올바르지 않습니다.';
