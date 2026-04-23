@@ -359,6 +359,28 @@
     }
     .vgen-ref-file { display: none; }
 
+    /* Audio slot merged into ref grid (Vidu Q3) */
+    .vgen-ref-slot--audio { flex-direction: column; gap: 3px; }
+    .vgen-ref-slot--audio.has-file {
+      border-style: solid;
+      border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+      padding: 4px;
+    }
+    .vgen-ref-add--audio {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; width: 100%; height: 100%; background: none; border: none;
+      color: var(--muted); cursor: pointer; transition: color 0.15s;
+    }
+    .vgen-ref-add--audio:hover { color: var(--accent); }
+    .vgen-audio-grid-icon { font-size: 1.3rem; line-height: 1; }
+    .vgen-audio-grid-label { font-size: 0.6rem; }
+    .vgen-audio-name-mini {
+      font-size: 0.58rem; color: var(--text);
+      width: 100%; text-align: center;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      padding: 0 4px; line-height: 1.3;
+    }
+
     /* Audio section */
     .vgen-audio-section { display: flex; flex-direction: column; gap: 6px; }
     .vgen-audio-slot {

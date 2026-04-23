@@ -683,8 +683,12 @@
   function renderRefSection() {
     var max = maxRefs();
     if (!max) return document.createDocumentFragment();
+    var combineAudio = state.model === 'vidu-q3' && hasCap('audio');
     var section = el('div', 'vgen-refs-section');
-    section.appendChild(el('label', 'vgen-label', { textContent: t('refs_label') }));
+    var labelText = combineAudio
+      ? (state.lang === 'en' ? 'References · Audio' : '레퍼런스 이미지 · 오디오')
+      : t('refs_label');
+    section.appendChild(el('label', 'vgen-label', { textContent: labelText }));
     var grid = el('div', 'vgen-refs-grid');
     for (var i = 0; i < max; i++) {
       var slotUrl = state.referenceUrls[i] || '';
@@ -707,6 +711,28 @@
         slot.appendChild(fileInp);
       }
       grid.appendChild(slot);
+    }
+    // vidu-q3: 오디오 슬롯을 레퍼런스 그리드 마지막에 통합 (5번째 슬롯)
+    if (combineAudio) {
+      var audioSlot = el('div', 'vgen-ref-slot vgen-ref-slot--audio' + (state.audioUrl ? ' has-file' : ''));
+      if (state.audioUrl) {
+        var audioIcon = el('span', 'vgen-audio-grid-icon', { textContent: '♪' });
+        var audioName = el('span', 'vgen-audio-name-mini', { textContent: state.audioFileName || 'audio' });
+        audioName.title = state.audioFileName || 'audio';
+        var audioRemoveBtn = el('button', 'vgen-ref-remove', { type: 'button', textContent: '×', 'data-grid-audio-remove': '1' });
+        audioSlot.appendChild(audioIcon);
+        audioSlot.appendChild(audioName);
+        audioSlot.appendChild(audioRemoveBtn);
+      } else {
+        var audioAddBtn = el('button', 'vgen-ref-add vgen-ref-add--audio', {
+          type: 'button',
+          innerHTML: '<span class="vgen-audio-grid-icon">♪</span><span class="vgen-audio-grid-label">' + t('audio_label') + '</span>'
+        });
+        var audioFileInp = el('input', 'vgen-ref-file', { type: 'file', accept: 'audio/*', id: 'vgen-audio-file', style: 'display:none' });
+        audioSlot.appendChild(audioAddBtn);
+        audioSlot.appendChild(audioFileInp);
+      }
+      grid.appendChild(audioSlot);
     }
     section.appendChild(grid);
     return section;
@@ -828,8 +854,8 @@
       panel.appendChild(renderRefSection());
     }
 
-    // Audio
-    if (hasCap('audio')) {
+    // Audio (vidu-q3는 ref 그리드에 통합되므로 별도 섹션 생략)
+    if (hasCap('audio') && state.model !== 'vidu-q3') {
       panel.appendChild(renderAudioSection());
     }
 
@@ -1119,8 +1145,22 @@
       });
     });
 
+    // Audio-in-grid add button (vidu-q3 통합 슬롯)
+    root.querySelectorAll('.vgen-ref-add--audio').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var inp = root.querySelector('#vgen-audio-file');
+        if (inp) inp.click();
+      });
+    });
+    // Audio-in-grid remove button
+    root.querySelectorAll('[data-grid-audio-remove]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.audioUrl = ''; state.audioFileName = '';
+        render();
+      });
+    });
+
     // Audio trigger
-    var audioTrigger = root.querySelector('.vgen-audio-trigger');
     if (audioTrigger) {
       audioTrigger.addEventListener('click', function () {
         var inp = root.querySelector('#vgen-audio-file');
