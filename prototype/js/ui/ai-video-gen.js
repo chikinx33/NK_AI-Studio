@@ -265,6 +265,98 @@
     return pill;
   }
 
+  var _capturingIds = {};
+  var _serverThumbCache = {};
+
+  function tryCaptureThumbnail(r) {
+    if (!r || !r.id || r.thumbnailDataUrl || r.status !== 'done' || !r.videoUrl) return;
+    if (_capturingIds[r.id]) return;
+    _capturingIds[r.id] = true;
+    var vid = document.createElement('video');
+    vid.crossOrigin = 'anonymous';
+    vid.muted = true;
+    vid.preload = 'metadata';
+    vid.src = r.videoUrl;
+    var captured = false;
+    function captureFrame() {
+      if (captured) return;
+      try {
+        var w = Math.min(vid.videoWidth || 320, 320);
+        var h = Math.min(vid.videoHeight || 180, 180);
+        if (!w || !h) return;
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(vid, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+        if (dataUrl && dataUrl.length > 200) {
+          captured = true;
+          updateResult(r.id, { thumbnailDataUrl: dataUrl });
+          saveResults();
+          render();
+        }
+      } catch (_) {}
+      delete _capturingIds[r.id];
+    }
+    vid.addEventListener('seeked', captureFrame);
+    vid.addEventListener('loadeddata', function () { try { vid.currentTime = 0.5; } catch (_) {} });
+    vid.addEventListener('error', function () { delete _capturingIds[r.id]; });
+    vid.load();
+  }
+
+  function tryCaptureThumbnailServer(objectName, videoUrl, onDone) {
+    if (!objectName || !videoUrl || _serverThumbCache[objectName]) return;
+    _serverThumbCache[objectName] = 'loading';
+    var vid = document.createElement('video');
+    vid.crossOrigin = 'anonymous';
+    vid.muted = true;
+    vid.preload = 'metadata';
+    vid.src = videoUrl;
+    vid.addEventListener('seeked', function () {
+      try {
+        var w = Math.min(vid.videoWidth || 320, 320);
+        var h = Math.min(vid.videoHeight || 180, 180);
+        if (!w || !h) return;
+        var canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(vid, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+        if (dataUrl && dataUrl.length > 200) {
+          _serverThumbCache[objectName] = dataUrl;
+          if (onDone) onDone(dataUrl);
+        }
+      } catch (_) { delete _serverThumbCache[objectName]; }
+    });
+    vid.addEventListener('loadeddata', function () { try { vid.currentTime = 0.5; } catch (_) {} });
+    vid.addEventListener('error', function () { delete _serverThumbCache[objectName]; });
+    vid.load();
+  }
+
+  function openImageModal(url) {
+    closeVideoModal();
+    var overlay = document.createElement('div');
+    overlay.className = 'vgen-modal-overlay';
+    overlay.setAttribute('data-vgen-modal', '1');
+    var inner = document.createElement('div');
+    inner.className = 'vgen-modal-inner';
+    inner.style.background = 'transparent';
+    inner.style.boxShadow = 'none';
+    var closeBtn = document.createElement('button');
+    closeBtn.className = 'vgen-modal-close';
+    closeBtn.type = 'button';
+    closeBtn.setAttribute('aria-label', '닫기');
+    closeBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+    var img = document.createElement('img');
+    img.className = 'vgen-img-modal-img';
+    img.src = url;
+    inner.appendChild(closeBtn);
+    inner.appendChild(img);
+    overlay.appendChild(inner);
+    document.body.appendChild(overlay);
+    closeBtn.addEventListener('click', closeVideoModal);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) closeVideoModal(); });
+    document.addEventListener('keydown', _modalKeyHandler);
+  }
+
   var DOWNLOAD_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M8 11l4 4 4-4"/><path d="M5 19h14"/></svg>';
   var TRASH_SVG    = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.75h6l.6 1.5H19a.75.75 0 0 1 0 1.5h-.66l-.8 10.05A2.25 2.25 0 0 1 15.29 20H8.71a2.25 2.25 0 0 1-2.24-2.2l-.81-10.05H5a.75.75 0 0 1 0-1.5h3.4L9 4.75Z"/><path d="M10 10v5.25M14 10v5.25"/></svg>';
   var PLAY_SVG     = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
@@ -443,8 +535,17 @@
     var card = el('div', 'vgen-result-card vgen-server-card');
     card.dataset.serverName = objectName;
 
-    var thumb = el('div', 'vgen-result-thumb vgen-result-thumb--done');
-    thumb.innerHTML = PLAY_SVG;
+    var thumb = el('div', 'vgen-result-thumb');
+    var cachedThumb = _serverThumbCache[objectName];
+    if (cachedThumb && cachedThumb !== 'loading') {
+      thumb.appendChild(el('img', '', { src: cachedThumb, alt: '' }));
+    } else {
+      thumb.classList.add('vgen-result-thumb--done');
+      thumb.innerHTML = PLAY_SVG;
+      if (s.signedUrl && cachedThumb !== 'loading') {
+        tryCaptureThumbnailServer(objectName, s.signedUrl, function () { render(); });
+      }
+    }
     card.appendChild(thumb);
 
     var info = el('div', 'vgen-result-info');
@@ -581,7 +682,11 @@
     var preview = el('div', 'vgen-image-preview', { id: 'vgen-img-preview-' + slotId });
 
     if (currentUrl) {
-      preview.appendChild(el('img', 'vgen-image-thumb', { src: currentUrl, alt: '' }));
+      var previewImg = el('img', 'vgen-image-thumb', {
+        src: currentUrl, alt: '',
+        'data-action': 'preview-image', 'data-src': currentUrl
+      });
+      preview.appendChild(previewImg);
       var removeBtn = el('button', 'btn-ghost vgen-remove-img', {
         type: 'button',
         textContent: t('remove_image'),
@@ -730,6 +835,9 @@
         } else if (action === 'delete-result') {
           if (!window.confirm(t('confirm_delete'))) return;
           deleteResult(btn.dataset.id);
+        } else if (action === 'preview-image') {
+          var src = btn.getAttribute('data-src') || btn.getAttribute('src') || '';
+          if (src) openImageModal(src);
         } else if (action === 'delete-server') {
           if (!window.confirm(t('confirm_delete'))) return;
           var name = btn.dataset.name;
@@ -871,6 +979,7 @@
             updateResult(resultId, { status: 'done', videoUrl: proxyUrl, rawVideoUrl: rawUrl });
             saveResults();
             render();
+            tryCaptureThumbnail(state.results.find(function (r) { return r.id === resultId; }));
           } else if (failed) {
             clearInterval(state.polls[resultId]);
             delete state.polls[resultId];
@@ -907,11 +1016,16 @@
     } catch (_) {}
     state.sessionId      = ensureSessionId();
     state.currentProject = readCurrentProject();
+
     state.currentBrand   = readCurrentBrand();
     loadResults();
     loadDeletedSet();
     detectLang();
     render();
+    // 기존 완료 결과 중 썸네일 없는 것 캡처 시도
+    state.results.forEach(function (r) {
+      if (r.status === 'done' && r.videoUrl && !r.thumbnailDataUrl) tryCaptureThumbnail(r);
+    });
     syncServerHistory();
 
     window.addEventListener('message', function (evt) {
