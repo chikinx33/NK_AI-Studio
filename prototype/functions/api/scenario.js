@@ -1,6 +1,14 @@
 ﻿// Phase 0 Step 8 — 선언적 블록 규칙 기반 프롬프트/검증기 연결
-import { buildSystemPrompt as buildRuleSystemPrompt } from "./scenario/prompt-builder.js";
+// v2.684: 풀 systemPrompt 를 덧붙이면 CF 30s 리밋 근처에서 타임아웃 났던 문제 수정.
+// enforcement-only compact suffix 로 전환, 재시도는 시간 예산에 여유가 있을 때만.
+import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
 import { runWithAutoRetry as runSceneValidator } from "./scenario/validator.js";
+
+// 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
+// requestScenarioChunk 자체가 29s 타임아웃이므로 안전 마진 포함 16s.
+const RULE_RETRY_MIN_REMAINING_MS = 16000;
+// onRequestPost 시작 시각으로부터의 전체 예산(ms). CF 하드 리밋 30s 보다 짧게 잡는다.
+const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -975,12 +983,13 @@ async function generateScenarioScenes(input) {
   let refinedChunks = 0;
   let validationFallbackChunks = 0;
 
-  // Phase 0 Step 8 — 선언적 블록 규칙에서 현재 입력에 맞는 validatorSpec + prompt suffix 생성.
+  // Phase 0 Step 8 — 선언적 블록 규칙에서 현재 입력에 맞는 validatorSpec + compact suffix 생성.
+  // 풀 systemPrompt 가 아닌 enforcement-only suffix 만 이어 붙여 토큰 증가를 최소화한다.
   // 실패해도 레거시 경로가 살아있도록 try/catch 로 감싼다.
   let ruleValidatorSpec = null;
   let rulePromptSuffix = "";
   try {
-    const ruleBuilt = buildRuleSystemPrompt({
+    const ruleBuilt = buildEnforcementSuffix({
       lang: input.lang,
       durationSec: Number(input.duration) || 0,
       sceneCount: Math.max(1, Number(input.sceneCount) || 1),
@@ -992,12 +1001,13 @@ async function generateScenarioScenes(input) {
       styles: input.styles,
     });
     ruleValidatorSpec = ruleBuilt.validatorSpec;
-    rulePromptSuffix = ruleBuilt.systemPrompt;
+    rulePromptSuffix = ruleBuilt.suffix;
   } catch (_) {
     // 블록 규칙이 아직 커버하지 않는 케이스 — 조용히 레거시만 사용
   }
   let ruleRetried = false;
   let ruleCriticalRemaining = 0;
+  const runStartedAt = Date.now();
 
   for (let i = 0; i < chunks.length; i++) {
     const chunkText = String(chunks[i] || "").trim();
@@ -1076,8 +1086,13 @@ async function generateScenarioScenes(input) {
 
       // Phase 0 Step 8 — single-chunk 이고 블록 규칙이 활성화됐을 때만
       // critical 위반 시 1회 자동 재시도. 다중 청크는 기존 경로 그대로.
+      // v2.684: 첫 호출이 오래 걸려 남은 예산이 모자라면 재시도를 생략한다
+      //         (재시도 중 CF 30s 리밋에 걸려 전체가 실패하는 것을 방지).
       let chunkScenes = firstPass.scenes;
-      if (chunks.length === 1 && ruleValidatorSpec) {
+      const elapsedMs = Date.now() - runStartedAt;
+      const remainingMs = RULE_RETRY_TOTAL_BUDGET_MS - elapsedMs;
+      const hasTimeForRetry = remainingMs >= RULE_RETRY_MIN_REMAINING_MS;
+      if (chunks.length === 1 && ruleValidatorSpec && hasTimeForRetry) {
         const retryResult = await runSceneValidator({
           scenes: chunkScenes,
           spec: ruleValidatorSpec,

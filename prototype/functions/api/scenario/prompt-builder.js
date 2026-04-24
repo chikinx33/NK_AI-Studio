@@ -213,6 +213,57 @@ export function buildSystemPrompt(input = {}) {
 }
 
 /**
+ * 레거시 scenario.js 의 기존 system prompt 에 "덧붙일" 용도의 compact 버전.
+ *
+ * 기존 프롬프트가 이미 포맷/장르 규칙 상당수를 문장 형태로 담고 있어,
+ * 그 위에 buildSystemPrompt 의 풀 텍스트를 또 얹으면 토큰이 과도하게 늘어나
+ * Cloudflare 30초 리밋 근처에서 타임아웃이 난다.
+ *
+ * 이 함수는 **새 블록 시스템에서만 확정할 수 있는 enforcement-only 조각**
+ * (무대 1줄 + 비트 시트 + 수치 제약 + 금지/필수 토큰) 만 돌려준다.
+ * 중복되는 인트로/일반 규칙은 제외.
+ *
+ * @param {PromptBuilderInput} input
+ * @returns {{ suffix: string, validatorSpec: any, progressLabel: string|null }}
+ */
+export function buildEnforcementSuffix(input = {}) {
+  const language = input.lang === "en" ? "en" : "ko";
+  const selection = toSelection(input);
+  const ruleSet = composeRuleSet(selection);
+  const isEn = language === "en";
+
+  const beats = describeBeats(ruleSet.beatStructure, language);
+  const constraints = describeConstraints(ruleSet.constraints, language);
+  const tokens = describeTokens(
+    ruleSet.forbiddenTokens,
+    ruleSet.mandatoryTokens,
+    language,
+  );
+
+  const stage = ruleSet.stage;
+  let stageLine = "";
+  if (stage) {
+    const place = isEn ? stage.placeEn : stage.placeKo;
+    const bg = isEn ? stage.backgroundEn : stage.backgroundKo;
+    if (place) {
+      stageLine = isEn
+        ? `[Stage] ${place}. ${bg || ""}`.trim()
+        : `[무대] ${place}. ${bg || ""}`.trim();
+    }
+  }
+
+  const suffix = [stageLine, beats, constraints, tokens]
+    .filter((s) => s && String(s).trim())
+    .join("\n\n");
+
+  return {
+    suffix,
+    validatorSpec: toValidatorSpec(ruleSet),
+    progressLabel: isEn ? ruleSet.progressLabelEn : ruleSet.progressLabelKo,
+  };
+}
+
+/**
  * 디버깅/로그용 — 프롬프트 + 디스크립터를 한 문자열로.
  */
 export function describeBuilt(result) {
@@ -223,4 +274,4 @@ export function describeBuilt(result) {
   ].join("\n---\n");
 }
 
-export default { buildSystemPrompt, describeBuilt };
+export default { buildSystemPrompt, buildEnforcementSuffix, describeBuilt };
