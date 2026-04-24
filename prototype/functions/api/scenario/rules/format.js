@@ -81,27 +81,32 @@ export const format30s = defineBlock({
   layer: "format",
   labelKo: "30초 광고/예고",
   labelEn: "30s Ad/Trailer",
-  sceneCountMin: 5,
-  sceneCountMax: 8,
-  sceneCountPreferred: 7,
+  sceneCountMin: 9,
+  sceneCountMax: 12,
+  sceneCountPreferred: 10,
   beatStructure: [
-    { name: "Attention", sec: 4,  goalKo: "시각적 충격 또는 공감 진입점",  goalEn: "Visual hook or relatable entry",  minCuts: 2, maxCuts: 4 },
-    { name: "Interest",  sec: 8,  goalKo: "문제/상황/욕구 구체화",          goalEn: "Problem / situation / desire",    minCuts: 4, maxCuts: 6 },
-    { name: "Desire",    sec: 12, goalKo: "해결책/제품/주장의 구체 증거",   goalEn: "Solution / proof / evidence",     minCuts: 6, maxCuts: 9 },
-    { name: "Action",    sec: 6,  goalKo: "명확한 행동 유도 1가지",          goalEn: "One clear call to action",        minCuts: 2, maxCuts: 3 },
+    { name: "Attention", sec: 3,  goalKo: "시각적 충격 또는 공감 진입점 (1~2씬)",  goalEn: "Visual hook or relatable entry (1-2 scenes)",  minCuts: 2, maxCuts: 4 },
+    { name: "Interest",  sec: 6,  goalKo: "문제/상황/욕구 구체화 (2씬)",            goalEn: "Problem / situation / desire (2 scenes)",      minCuts: 3, maxCuts: 5 },
+    { name: "Desire",    sec: 10, goalKo: "해결책/제품/주장의 구체 증거 (3~4씬)",   goalEn: "Solution / proof / evidence (3-4 scenes)",     minCuts: 5, maxCuts: 8 },
+    { name: "Climax",    sec: 5,  goalKo: "감정 정점 또는 결정적 결과 샷 (1~2씬)",  goalEn: "Emotional climax or decisive payoff shot (1-2 scenes)", minCuts: 2, maxCuts: 4 },
+    { name: "Action",    sec: 6,  goalKo: "타이틀 카드 + CTA 1가지 (1~2씬)",         goalEn: "Title card + one clear CTA (1-2 scenes)",      minCuts: 2, maxCuts: 4 },
   ],
   constraints: {
-    cutDensity: { min: 15, max: 22, severity: SEVERITY.HIGH, labelKo: "컷 밀도", labelEn: "Cut count" },
+    cutDensity: { min: 15, max: 24, severity: SEVERITY.HIGH, labelKo: "컷 밀도", labelEn: "Cut count" },
     shotLengthAvgSec: { min: 1.3, max: 2.2, severity: SEVERITY.MEDIUM, labelKo: "평균 샷 길이", labelEn: "Avg shot length" },
   },
   promptFragments: {
     ko: `[포맷: 30초 광고]
-- 5~7씬, 컷 15~22개. AIDA 구조 (Attention/Interest/Desire/Action).
-- 첫 2초 안에 시각적 충격. CTA 씬에는 오직 한 개의 행동만 요구한다.
+- 9~12씬(권장 10씬), 컷 15~24개. 한 씬은 절대 6초 초과 금지(영상 생성 모델 한계). 평균 2.5~3초.
+- 5단계 구조: Attention → Interest → Desire → Climax → Action.
+- 첫 2초 안에 시각적 훅. Climax 비트에는 감정 절정 또는 변화의 결정적 결과 샷이 반드시 들어간다.
+- 마지막 비트는 타이틀 카드(브랜드/슬로건 노출 1씬) + CTA 1씬으로 구성. CTA 는 단 하나의 행동만 요구.
 - 제품/주장이 있다면 Desire 구간에 구체 증거(체험/수치/비교) 를 반드시 배치.`,
     en: `[Format: 30s Ad]
-- 5~7 scenes, 15~22 cuts. AIDA structure (Attention/Interest/Desire/Action).
-- Visual shock within the first 2 seconds. CTA scene requests exactly one action.
+- 9-12 scenes (10 recommended), 15-24 cuts. No scene may exceed 6 seconds (AI video model limit). Average 2.5-3s per scene.
+- 5-beat structure: Attention → Interest → Desire → Climax → Action.
+- Visual shock within the first 2 seconds. The Climax beat must contain an emotional peak or a decisive payoff shot.
+- The final beat = a title card scene (brand/slogan reveal) + one CTA scene. The CTA requests exactly one action.
 - If a product/claim exists, place concrete evidence (demo/number/comparison) in the Desire block.`,
   },
 });
@@ -112,9 +117,9 @@ export const format60s = defineBlock({
   layer: "format",
   labelKo: "60초 브랜드 필름",
   labelEn: "60s Brand Film",
-  sceneCountMin: 8,
-  sceneCountMax: 12,
-  sceneCountPreferred: 10,
+  sceneCountMin: 11,
+  sceneCountMax: 14,
+  sceneCountPreferred: 12,
   beatStructure: [
     { name: "Exposition",  sec: 10, goalKo: "세계/인물 제시",             goalEn: "Establish world / character",    minCuts: 3, maxCuts: 5 },
     { name: "Incident",    sec: 10, goalKo: "사건/변화의 트리거",          goalEn: "Triggering incident",            minCuts: 4, maxCuts: 6 },
@@ -128,11 +133,11 @@ export const format60s = defineBlock({
   },
   promptFragments: {
     ko: `[포맷: 60초 브랜드 필름]
-- 8~12씬, 컷 30~45개. Freytag 5막 간략 구조.
+- 11~14씬(권장 12씬), 컷 30~45개. 한 씬은 절대 6초 초과 금지. Freytag 5막 간략 구조.
 - Exposition 은 빠르게, Rising 과 Climax 에 시간을 투자한다.
 - 한 편의 미니 스토리가 되어야 한다. 단순 정보 나열 금지.`,
     en: `[Format: 60s Brand Film]
-- 8~12 scenes, 30~45 cuts. Simplified Freytag 5-act structure.
+- 11-14 scenes (12 recommended), 30-45 cuts. No scene may exceed 6 seconds. Simplified Freytag 5-act structure.
 - Move through Exposition quickly; invest time in Rising and Climax.
 - Must read as one mini-story. No flat info list.`,
   },

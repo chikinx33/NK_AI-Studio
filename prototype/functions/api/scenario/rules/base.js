@@ -21,6 +21,13 @@ export const baseBlock = defineBlock({
       labelKo: "평균 샷 길이",
       labelEn: "Average shot length",
     },
+    maxSecPerScene: {
+      min: 1,
+      max: 6,
+      severity: SEVERITY.CRITICAL,
+      labelKo: "씬당 최대 길이",
+      labelEn: "Max seconds per scene",
+    },
   },
 
   forbiddenTokens: [
@@ -41,14 +48,16 @@ export const baseBlock = defineBlock({
 - 추상 형용사(느낌/분위기/감성/드라마틱) 금지. 구체 명사·동사로 쓴다.
 - 각 씬의 visual 첫 문장은 이전 씬의 마지막 상태와 연결된다.
 - 점프컷이 필요하면 시간/장소 전환을 명시한다.
-- estSec 과 내용 밀도를 맞춘다: 2~3초 = 행동 1개, 4~5초 = 행동+환경, 6~7초 = 동작 시퀀스 또는 대사 1마디.`,
+- 한 씬은 절대 6초를 넘기지 않는다. 영상 생성 모델의 안정 출력 한계 때문이다. 더 긴 흐름이 필요하면 씬을 쪼개라.
+- estSec 과 내용 밀도를 맞춘다: 2~3초 = 행동 1개, 4~5초 = 행동+환경, 6초 = 짧은 동작 시퀀스 또는 대사 1마디(상한).`,
     en: `[Common Video Grammar]
 - Every scene must "show", not "explain".
 - In visual, write only what the camera literally captures: place, objects, human physical action, angle/movement.
 - No abstract adjectives (feeling/mood/emotional/dramatic). Use concrete nouns and verbs.
 - The first sentence of each scene's visual must connect to the ending state of the previous scene.
 - If a jump cut is needed, explicitly mark the time/place change.
-- Match estSec to content density: 2-3s = one action, 4-5s = action+detail, 6-7s = motion sequence or one line+reaction.`,
+- A single scene must never exceed 6 seconds — current AI video models cannot reliably hold longer takes. Split into multiple scenes if needed.
+- Match estSec to content density: 2-3s = one action, 4-5s = action+detail, 6s (max) = short motion sequence or one line+reaction.`,
   },
 
   signals: ["show_dont_tell", "concrete_visual"],

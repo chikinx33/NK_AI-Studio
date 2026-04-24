@@ -20,9 +20,9 @@ const corsHeaders = (origin) => ({
 });
 
 const durationToScenes = {
-  "15": 4,
-  "30": 7,
-  "45": 10,
+  "15": 5,
+  "30": 10,
+  "45": 11,
   "60": 12,
   "1800": 120,
   "3600": 240,
@@ -694,7 +694,8 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
 5. estSec과 내용 밀도를 맞춘다.
 - 2~3초 씬: 행동 1개 또는 반응 1개만
 - 4~5초 씬: 행동 1개 + 환경 디테일 1개
-- 6~7초 씬: 짧은 동작 시퀀스 또는 대화 1마디 + 반응
+- 6초 씬(상한): 짧은 동작 시퀀스 또는 대사 1마디 + 반응
+- 절대 금지: 7초 이상의 씬. 영상 생성 모델(Runway/Kling/Veo 등)이 안정적으로 만들 수 있는 단일 샷 한계가 5~6초이며, 길어지면 시각적 재미도 떨어진다. 더 긴 흐름이 필요하면 반드시 씬을 쪼개라.
 반드시 JSON만 반환한다.
 응답 형식: {"scenes":[...]}.
 각 scene에는 id, estSec, sceneIntent, sceneLocation, visual은 항상 포함한다.
@@ -769,7 +770,8 @@ function buildSystemPromptEn(sceneCount, duration, spec = {}) {
 5. Match estSec to content density.
 - 2-3 seconds: one action or one reaction only
 - 4-5 seconds: one action plus one environmental detail
-- 6-7 seconds: a short motion sequence or one spoken line plus a reaction
+- 6 seconds (hard cap): a short motion sequence or one spoken line plus a reaction
+- Never exceed 6 seconds for a single scene. Current AI video models (Runway/Kling/Veo etc.) cannot reliably produce a stable shot longer than 5-6 seconds, and longer takes lose visual interest. If you need a longer flow, split it into multiple scenes.
 Return JSON only.
 Output format: {"scenes":[...]}.
 Each scene must include id, estSec, sceneIntent, sceneLocation, and visual.
@@ -832,13 +834,17 @@ function buildGenreProgressionGuide(input = {}) {
   if (matches.ad) {
     blocks.push(isKo
       ? `장르가 "광고"인 경우:
-- 전체 5단계: Hook(1-2초) -> 문제제시(2-3초) -> 해결등장(2-3초) -> 증거/체험(3-5초) -> CTA(2-3초)
+- 한 씬은 절대 6초 초과 금지(영상 생성 모델 한계). 30초 광고는 9~12씬으로 쪼갠다.
+- 전체 5단계: Attention(2-3초, 1~2씬) -> Interest(5-6초, 2씬) -> Desire(8-10초, 3~4씬) -> Climax(3-5초, 1~2씬) -> Action(4-6초, 타이틀카드+CTA 1~2씬)
 - 첫 씬은 반드시 시각적 충격 또는 의외성으로 시작
-- 마지막 씬에 명확한 행동 유도 1개만`
+- Climax 씬에는 감정 정점 또는 결정적 결과 샷이 반드시 들어간다 (변화 전/후 대비, 표정 클로즈업, 결과물 리빌 등)
+- 마지막은 타이틀 카드(브랜드/슬로건 노출 1씬) + CTA 1씬으로 종결. CTA 는 단 하나의 행동만 요구.`
       : `If the genre is "advertising":
-- Use 5 stages overall: Hook (1-2s) -> Problem (2-3s) -> Solution appears (2-3s) -> Proof/experience (3-5s) -> CTA (2-3s)
+- No scene may exceed 6 seconds (AI video model limit). A 30s ad must be broken into 9-12 scenes.
+- Use 5 stages overall: Attention (2-3s, 1-2 scenes) -> Interest (5-6s, 2 scenes) -> Desire (8-10s, 3-4 scenes) -> Climax (3-5s, 1-2 scenes) -> Action (4-6s, title card + CTA, 1-2 scenes)
 - The first scene must begin with visual surprise or unexpected contrast
-- The last scene should contain only one clear call to action`);
+- The Climax scene(s) must contain an emotional peak or a decisive payoff shot (before/after contrast, facial close-up, product reveal, etc.)
+- End with a title card scene (brand/slogan reveal) + a CTA scene. The CTA requests exactly one action.`);
   }
   if (matches.news) {
     blocks.push(isKo

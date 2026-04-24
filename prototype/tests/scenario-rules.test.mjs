@@ -150,8 +150,10 @@ test('user prompt adds genre-specific scene progression guide for advertising', 
   });
 
   assert.match(prompt, /\[장르별 씬 전개 규칙\]/);
-  assert.match(prompt, /Hook\(1-2초\)/);
-  assert.match(prompt, /마지막 씬에 명확한 행동 유도 1개만/);
+  assert.match(prompt, /Attention\(2-3초/);
+  assert.match(prompt, /Climax\(3-5초/);
+  assert.match(prompt, /타이틀 카드/);
+  assert.match(prompt, /6초 초과 금지/);
 });
 
 test('scenario spec turns learning-play-humor overview into hard signals and blueprint', () => {
