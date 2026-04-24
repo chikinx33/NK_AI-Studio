@@ -1059,12 +1059,14 @@
     var genBtn = root.querySelector('#vgen-generate-btn');
     if (genBtn) genBtn.addEventListener('click', startGeneration);
 
-    // Result card click (select / deselect)
+    // Result card click (select / deselect + copy prompt to input)
     root.querySelectorAll('.vgen-result-card').forEach(function (card) {
       card.addEventListener('click', function (e) {
         if (e.target.closest('[data-action]')) return;
         var id = card.dataset.id;
         if (id) {
+          var r = state.results.find(function (x) { return x.id === id; });
+          if (r && r.prompt) state.prompt = r.prompt;
           state.selectedId = (state.selectedId === id) ? null : id;
           render();
         }
