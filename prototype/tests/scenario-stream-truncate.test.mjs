@@ -70,3 +70,99 @@ test("closeTruncatedJson: 정상 종료 JSON 은 변형하지 않는다", () => 
   const out = closeTruncatedJson(input);
   assert.equal(out, input);
 });
+
+// ─── salvageCompletedScenes ─────────────────────────────────────────────
+// scenario.js 의 salvageCompletedScenes 와 동일 — 미러로 복사해 단위 검증.
+function salvageCompletedScenes(text) {
+  const s = String(text || "");
+  if (!s) return null;
+  const m = s.match(/"scenes"\s*:\s*\[/);
+  if (!m) return null;
+  const arrayOpen = m.index + m[0].length - 1;
+  const prefix = s.slice(0, arrayOpen + 1);
+
+  let i = arrayOpen + 1;
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  let lastSafeEnd = -1;
+  let sawAnyElement = false;
+
+  while (i < s.length) {
+    const c = s[i];
+    if (escape) { escape = false; i++; continue; }
+    if (c === "\\") { escape = true; i++; continue; }
+    if (inStr) {
+      if (c === '"') inStr = false;
+      i++; continue;
+    }
+    if (c === '"') { inStr = true; i++; continue; }
+    if (c === "{" || c === "[") {
+      depth++;
+      sawAnyElement = true;
+      i++; continue;
+    }
+    if (c === "}" || c === "]") {
+      depth--;
+      i++;
+      if (depth === 0) {
+        lastSafeEnd = i;
+      } else if (depth < 0) {
+        return s.slice(0, i) + "}";
+      }
+      continue;
+    }
+    i++;
+  }
+
+  if (!sawAnyElement || lastSafeEnd < 0) {
+    return prefix + "]}";
+  }
+  return s.slice(0, lastSafeEnd) + "]}";
+}
+
+test("salvageCompletedScenes: 마지막 부분 씬을 통째로 버리고 완성된 씬만 살린다", () => {
+  // 1번 씬은 완성, 2번은 mid-string 에서 잘림
+  const input = '{"scenes":[{"id":1,"title":"first","visual":"A complete scene."},{"id":2,"title":"sec';
+  const out = salvageCompletedScenes(input);
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.scenes.length, 1);
+  assert.equal(parsed.scenes[0].title, "first");
+});
+
+test("salvageCompletedScenes: 두 씬 완성 후 세 번째 씬 잘림 → 완성된 두 개 보존", () => {
+  const input = '{"scenes":[{"id":1,"title":"A"},{"id":2,"title":"B"},{"id":3,"title":"un';
+  const out = salvageCompletedScenes(input);
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.scenes.length, 2);
+  assert.deepEqual(parsed.scenes.map((s) => s.title), ["A", "B"]);
+});
+
+test("salvageCompletedScenes: 문자열 안 따옴표 이슈가 있어도 완성 씬은 안전하게 추려진다", () => {
+  // 첫 씬은 정상, 두 번째는 visual 안에 unescaped 가능성 있는 트레일링
+  const input = '{"scenes":[{"id":1,"narration":"hello world"},{"id":2,"narration":"broken \\"quote';
+  const out = salvageCompletedScenes(input);
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.scenes.length, 1);
+  assert.equal(parsed.scenes[0].narration, "hello world");
+});
+
+test("salvageCompletedScenes: 한 씬도 완성 안 됐으면 빈 배열로 닫힌다", () => {
+  const input = '{"scenes":[{"id":1,"title":"truncat';
+  const out = salvageCompletedScenes(input);
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.scenes.length, 0);
+});
+
+test("salvageCompletedScenes: 정상 JSON 은 그대로 보존", () => {
+  const input = '{"scenes":[{"id":1,"title":"A"},{"id":2,"title":"B"}]}';
+  const out = salvageCompletedScenes(input);
+  const parsed = JSON.parse(out);
+  assert.equal(parsed.scenes.length, 2);
+});
+
+test("salvageCompletedScenes: scenes 키가 없으면 null 반환", () => {
+  const input = '{"other":[1,2,3]}';
+  const out = salvageCompletedScenes(input);
+  assert.equal(out, null);
+});

@@ -1229,10 +1229,14 @@ function resolveMaxTokensForScenes(sceneCount) {
 
 /**
  * 부분 수신된 JSON 텍스트의 미닫힌 괄호/문자열을 강제로 닫아 파싱 가능한 모양으로 만든다.
- * 스트리밍이 27s 한계로 중단됐을 때 마지막 씬 직전까지의 데이터를 살리는 게 목적.
+ * 스트리밍이 한계로 중단됐을 때 1차 fallback.
  *
  * - 문자열 안에서 끊겼으면 닫는 따옴표 + 그 시점의 객체/배열 모두 닫는다.
  * - 마지막 컴마/콜론 뒤가 잘렸으면 그 부분도 잘라낸다.
+ *
+ * 주의: 문자열 내부의 unescaped quote 가 있으면 inStr 추적이 어긋나
+ * 잘못된 위치를 닫을 수 있다. 그래서 scene-level salvage 가 1차이고
+ * 이 함수는 2차 fallback.
  */
 function closeTruncatedJson(text) {
   let s = String(text || "");
@@ -1265,6 +1269,71 @@ function closeTruncatedJson(text) {
     s += open === "{" ? "}" : "]";
   }
   return s;
+}
+
+/**
+ * 잘린 응답에서 "완전히 닫힌 씬 객체" 만 추려서 `{"scenes":[...]}` 형태로 다시 만든다.
+ * closeTruncatedJson 보다 강력한 1차 복구 전략 — 문자열 내부 unescaped quote 가
+ * 있어도 마지막으로 깊이가 0 으로 돌아온 시점만 신뢰하기 때문에 안정적.
+ *
+ * 동작:
+ *  1. `"scenes"\s*:\s*\[` 위치를 찾는다.
+ *  2. 그 `[` 이후로 한 글자씩 진행하면서 문자열/이스케이프/괄호 깊이를 추적.
+ *  3. 깊이가 다시 0 으로 돌아온 (= 씬 하나가 완전히 닫힌) 시점을 lastSafeEnd 로 기록.
+ *  4. 마지막으로 기록된 lastSafeEnd 까지만 보존하고 `]}` 로 닫는다.
+ *
+ * 결과: 마지막 부분 씬은 통째로 버리되, 이전에 들어온 완성 씬들은 그대로 산다.
+ */
+function salvageCompletedScenes(text) {
+  const s = String(text || "");
+  if (!s) return null;
+  const m = s.match(/"scenes"\s*:\s*\[/);
+  if (!m) return null;
+  const arrayOpen = m.index + m[0].length - 1; // index of '['
+  const prefix = s.slice(0, arrayOpen + 1); // up to and including '['
+
+  let i = arrayOpen + 1;
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  let lastSafeEnd = -1; // 배열 안에서 깊이가 0 으로 돌아온 직후 위치 (다음 ',' 또는 ']' 직전)
+  let sawAnyElement = false;
+
+  while (i < s.length) {
+    const c = s[i];
+    if (escape) { escape = false; i++; continue; }
+    if (c === "\\") { escape = true; i++; continue; }
+    if (inStr) {
+      if (c === '"') inStr = false;
+      i++;
+      continue;
+    }
+    if (c === '"') { inStr = true; i++; continue; }
+    if (c === "{" || c === "[") {
+      depth++;
+      sawAnyElement = true;
+      i++;
+      continue;
+    }
+    if (c === "}" || c === "]") {
+      depth--;
+      i++;
+      if (depth === 0) {
+        lastSafeEnd = i; // 닫는 괄호 포함 위치
+      } else if (depth < 0) {
+        // 우리가 본 ']' 가 scenes 배열 자체의 닫기였다면 — 정상 종료, 그대로 반환
+        return s.slice(0, i) + "}";
+      }
+      continue;
+    }
+    i++;
+  }
+
+  if (!sawAnyElement || lastSafeEnd < 0) {
+    // 한 씬도 완성 못 했다면 빈 배열로라도 닫아 호출자가 다른 fallback 으로 가도록.
+    return prefix + "]}";
+  }
+  return s.slice(0, lastSafeEnd) + "]}";
 }
 
 /**
@@ -1370,30 +1439,51 @@ async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
   }
 
   const cleaned = cleanJsonResponse(text || "{}");
-  // 스트림이 잘렸으면 미완 괄호/문자열을 강제로 닫아서 한 번 더 시도한다.
-  const candidate = timedOut ? closeTruncatedJson(cleaned) : cleaned;
 
-  let parsed;
-  try {
-    parsed = JSON.parse(candidate);
-  } catch (firstErr) {
-    const repaired = repairJsonString(candidate);
-    try {
-      parsed = JSON.parse(repaired);
-      console.log(`[scenario] JSON repaired (timedOut=${timedOut})`);
-    } catch (secondErr) {
-      // 마지막 수단: 잘림 보정 한 번 더 → 전체 repair
-      const lastDitch = repairJsonString(closeTruncatedJson(cleaned));
-      try {
-        parsed = JSON.parse(lastDitch);
-        console.log(`[scenario] JSON last-ditch repair ok (timedOut=${timedOut})`);
-      } catch (_) {
-        const pos = (firstErr.message.match(/position\s+(\d+)/i) || [])[1];
-        const snippet = pos ? candidate.slice(Math.max(0, Number(pos) - 40), Number(pos) + 40) : candidate.slice(0, 120);
-        console.error("[scenario] JSON repair failed near:", snippet);
-        throw new Error(`JSON parse error${timedOut ? " (stream truncated)" : ""}: ${firstErr.message}`);
-      }
+  // 복구 cascade: 가장 안전한 전략부터 차례로 시도.
+  //  1) 원본 그대로 (정상 종료 케이스)
+  //  2) repair (제어문자/이스케이프/trailing comma)
+  //  3) salvage (완성된 씬만 추리고 뒤를 잘라 닫음) ← timedOut 일 때 핵심
+  //  4) salvage + repair
+  //  5) closeTruncatedJson + repair (LIFO 강제 닫기 — 마지막 안전망)
+  const tryParse = (src) => {
+    try { return JSON.parse(src); } catch (_) { return null; }
+  };
+  const tryRepairThenParse = (src) => {
+    try { return JSON.parse(repairJsonString(src)); } catch (_) { return null; }
+  };
+
+  let parsed = null;
+  let strategy = "raw";
+  let firstErr = null;
+
+  parsed = tryParse(cleaned);
+  if (!parsed) {
+    try { JSON.parse(cleaned); } catch (e) { firstErr = e; }
+    strategy = "repair";
+    parsed = tryRepairThenParse(cleaned);
+  }
+  if (!parsed) {
+    const salvaged = salvageCompletedScenes(cleaned);
+    if (salvaged) {
+      strategy = "salvage";
+      parsed = tryParse(salvaged) || tryRepairThenParse(salvaged);
+      if (parsed) strategy = "salvage+repair";
     }
+  }
+  if (!parsed) {
+    strategy = "closeTrunc";
+    parsed = tryRepairThenParse(closeTruncatedJson(cleaned));
+  }
+
+  if (!parsed) {
+    const pos = (firstErr?.message?.match(/position\s+(\d+)/i) || [])[1];
+    const snippet = pos ? cleaned.slice(Math.max(0, Number(pos) - 40), Number(pos) + 40) : cleaned.slice(0, 120);
+    console.error("[scenario] JSON repair failed near:", snippet, "len=", cleaned.length, "timedOut=", timedOut);
+    throw new Error(`JSON parse error${timedOut ? " (stream truncated)" : ""}: ${firstErr?.message || "unknown"}`);
+  }
+  if (strategy !== "raw") {
+    console.log(`[scenario] JSON recovered via strategy=${strategy} (timedOut=${timedOut})`);
   }
   const scenes = parsed.scenes || parsed;
   if (!Array.isArray(scenes) || scenes.length === 0) {
