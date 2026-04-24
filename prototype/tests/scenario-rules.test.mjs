@@ -10,7 +10,13 @@ function loadScenarioHelpers() {
   source = source
     .replace('export function calculateSceneCountForDuration', 'function calculateSceneCountForDuration')
     .replace('export async function onRequestPost', 'async function onRequestPost')
-    .replace('export async function onRequestOptions', 'async function onRequestOptions');
+    .replace('export async function onRequestOptions', 'async function onRequestOptions')
+    // Phase 0 Step 8 이후 scenario.js 는 블록 규칙 모듈을 ESM 으로 import 한다.
+    // vm 스크립트 컨텍스트는 import 를 지원하지 않으므로 테스트에선 스텁으로 치환한다.
+    .replace(/^import\s+.*from\s+["']\.\/scenario\/prompt-builder\.js["'];\s*$/m,
+      'const buildRuleSystemPrompt = () => { throw new Error("rule-builder disabled in test harness"); };')
+    .replace(/^import\s+.*from\s+["']\.\/scenario\/validator\.js["'];\s*$/m,
+      'const runSceneValidator = async (args) => ({ scenes: args?.scenes || [], violations: [], hasCritical: false, retried: false });');
   source += '\nmodule.exports = { calculateSceneCountForDuration, normalizeKnowledgeHubInput, buildUserPrompt, buildSystemPromptKo, buildScenarioSpec, validateScenarioAgainstSpec, alignScenesToScenarioSpec, getSpeechCharLimit };';
   const context = vm.createContext({
     console,

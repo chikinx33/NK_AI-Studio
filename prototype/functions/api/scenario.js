@@ -1,4 +1,8 @@
-﻿const corsHeaders = (origin) => ({
+﻿// Phase 0 Step 8 — 선언적 블록 규칙 기반 프롬프트/검증기 연결
+import { buildSystemPrompt as buildRuleSystemPrompt } from "./scenario/prompt-builder.js";
+import { runWithAutoRetry as runSceneValidator } from "./scenario/validator.js";
+
+const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
@@ -971,6 +975,30 @@ async function generateScenarioScenes(input) {
   let refinedChunks = 0;
   let validationFallbackChunks = 0;
 
+  // Phase 0 Step 8 — 선언적 블록 규칙에서 현재 입력에 맞는 validatorSpec + prompt suffix 생성.
+  // 실패해도 레거시 경로가 살아있도록 try/catch 로 감싼다.
+  let ruleValidatorSpec = null;
+  let rulePromptSuffix = "";
+  try {
+    const ruleBuilt = buildRuleSystemPrompt({
+      lang: input.lang,
+      durationSec: Number(input.duration) || 0,
+      sceneCount: Math.max(1, Number(input.sceneCount) || 1),
+      purposeCategory: input.purposeCategory,
+      purposeTags: input.purposeTags,
+      target: input.target,
+      needs: input.needs,
+      tones: input.tones,
+      styles: input.styles,
+    });
+    ruleValidatorSpec = ruleBuilt.validatorSpec;
+    rulePromptSuffix = ruleBuilt.systemPrompt;
+  } catch (_) {
+    // 블록 규칙이 아직 커버하지 않는 케이스 — 조용히 레거시만 사용
+  }
+  let ruleRetried = false;
+  let ruleCriticalRemaining = 0;
+
   for (let i = 0; i < chunks.length; i++) {
     const chunkText = String(chunks[i] || "").trim();
     if (!chunkText) continue;
@@ -994,9 +1022,13 @@ async function generateScenarioScenes(input) {
       duration: String(chunkDuration),
       sceneCount: chunkSceneCount,
     });
-    const sys = input.lang === "en"
+    const legacySys = input.lang === "en"
       ? buildSystemPromptEn(chunkSceneCount, chunkDuration, spec)
       : buildSystemPromptKo(chunkSceneCount, chunkDuration, spec);
+    // 레거시 프롬프트 뒤에 블록 규칙 조각을 이어붙인다. suffix 가 비어 있으면 레거시 그대로.
+    const sys = rulePromptSuffix
+      ? `${legacySys}\n\n[블록 규칙]\n${rulePromptSuffix}`
+      : legacySys;
     const basePrompt = buildUserPrompt({
       lang: input.lang,
       topic: chunkText,
@@ -1028,20 +1060,49 @@ async function generateScenarioScenes(input) {
     });
 
     try {
+      const chunkOpts = Object.assign({}, input, {
+        topic: chunkText,
+        sceneCount: chunkSceneCount,
+        duration: chunkDuration,
+        defaultSpeaker: input.characters[0]?.token || "@narrator",
+      });
       const firstPass = await requestAndShapeScenarioChunk({
         apiKey: input.env.ANTHROPIC_API_KEY,
         sys,
         userPrompt: basePrompt,
         spec,
-        options: Object.assign({}, input, {
-          topic: chunkText,
-          sceneCount: chunkSceneCount,
-          duration: chunkDuration,
-          defaultSpeaker: input.characters[0]?.token || "@narrator",
-        }),
+        options: chunkOpts,
       });
 
-      merged.push(...rebalanceEstSec(firstPass.scenes, chunkDuration));
+      // Phase 0 Step 8 — single-chunk 이고 블록 규칙이 활성화됐을 때만
+      // critical 위반 시 1회 자동 재시도. 다중 청크는 기존 경로 그대로.
+      let chunkScenes = firstPass.scenes;
+      if (chunks.length === 1 && ruleValidatorSpec) {
+        const retryResult = await runSceneValidator({
+          scenes: chunkScenes,
+          spec: ruleValidatorSpec,
+          language: input.lang === "en" ? "en" : "ko",
+          regenerate: async (refinePrompt) => {
+            const retrySys = `${sys}\n\n[재생성 지시]\n${refinePrompt}`;
+            const retryPass = await requestAndShapeScenarioChunk({
+              apiKey: input.env.ANTHROPIC_API_KEY,
+              sys: retrySys,
+              userPrompt: basePrompt,
+              spec,
+              options: chunkOpts,
+            });
+            return retryPass.scenes;
+          },
+          logger: () => {}, // 사용자에게 숨김
+        });
+        chunkScenes = retryResult.scenes;
+        if (retryResult.retried) ruleRetried = true;
+        if (retryResult.hasCritical) {
+          ruleCriticalRemaining = retryResult.violations.filter((v) => v.severity === "critical").length;
+        }
+      }
+
+      merged.push(...rebalanceEstSec(chunkScenes, chunkDuration));
     } catch (err) {
       failedChunks.push({
         index: i + 1,
@@ -1070,6 +1131,8 @@ async function generateScenarioScenes(input) {
       partial: failedChunks.length > 0,
       refinedChunks,
       validationFallbackChunks,
+      ruleRetried,
+      ruleCriticalRemaining,
     },
   };
 }
