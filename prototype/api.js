@@ -201,6 +201,29 @@
     return data;
   };
 
+  api.overviewSuggest = async function (payload) {
+    // Phase 0 Step 10 — 주제/이야기 입력으로 개요 나머지 필드를 자동 제안
+    var res = await fetchWithTimeout(withBase('/api/overview-suggest'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }, 25000);
+    var text = await readTextWithTimeout(res, 25000);
+    if (!res.ok && res.status !== 402) {
+      var err = new Error(e(text) || 'overview_suggest_api_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    var data = j(text);
+    if (!data || typeof data.suggestions !== 'object') {
+      var invalidErr = new Error('overview_suggest_response_invalid');
+      invalidErr.detail = text;
+      throw invalidErr;
+    }
+    return data;
+  };
+
   api.generateHashtags = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/hashtags'), {
       method: 'POST',

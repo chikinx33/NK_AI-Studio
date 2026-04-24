@@ -1655,6 +1655,69 @@
       renderKnowledgeHint(currentPayload);
     };
 
+    const applyOverviewSuggestions = (suggestions) => {
+      // Phase 0 Step 10 — 이미 채워진 필드는 절대 덮어쓰지 않는다 (사용자 의도 보존)
+      if (!suggestions || typeof suggestions !== 'object') return [];
+      const current = getOverviewSelections();
+      const applied = [];
+
+      const pickText = (v) => String(v == null ? '' : v).trim();
+      const pickFirstArr = (v) => {
+        if (Array.isArray(v)) return pickText(v[0]);
+        return pickText(v);
+      };
+
+      // 이미 값이 있으면 스킵하는 헬퍼
+      const maybeApply = (currentVal, suggestedVal, label) => {
+        const cur = pickText(currentVal);
+        const sug = pickText(suggestedVal);
+        if (cur || !sug) return null;
+        applied.push(label);
+        return sug;
+      };
+
+      const nextState = {
+        purposeCategory: maybeApply(current.purposeCategory, suggestions.purposeCategory, '장르') ?? current.purposeCategory,
+        purposeTag:      maybeApply(current.purposeTag,      pickFirstArr(suggestions.purposeTags), '세부 장르') ?? current.purposeTag,
+        target:          maybeApply(current.target,          suggestions.target, '시청 타겟') ?? current.target,
+        need:            maybeApply(current.need,            suggestions.need, '시청 목적') ?? current.need,
+        tone:            maybeApply(current.tone,            pickFirstArr(suggestions.tones), '톤') ?? current.tone,
+        style:           maybeApply(current.style,           pickFirstArr(suggestions.styles), '스타일') ?? current.style,
+        durationPreset:  current.durationPreset,
+      };
+
+      // duration 처리: custom 값이 있으면 보존. preset 도 값이 있으면 보존.
+      const customDur = String(current.durationCustom || '').trim();
+      const hasCustom = /^\d+$/.test(customDur) && Number(customDur) > 0;
+      if (!current.durationPreset && !hasCustom && suggestions.duration) {
+        nextState.durationPreset = pickText(suggestions.duration);
+        applied.push('영상 길이');
+      }
+
+      renderOverviewSelects(nextState);
+      // renderOverviewSelects 는 subgenre 를 categories[purposeCategory] 로 다시 그린다.
+      // purposeTag 을 보존해 재설정.
+      const tagSelect = document.getElementById('purpose-tag-select');
+      if (tagSelect && nextState.purposeTag) tagSelect.value = nextState.purposeTag;
+
+      return applied;
+    };
+
+    const showOverviewSuggestedToast = (appliedFields) => {
+      if (!appliedFields || !appliedFields.length) return;
+      const msg = appliedFields.length === 1
+        ? `${appliedFields[0]} 항목을 자동 제안했습니다.`
+        : `${appliedFields.join(', ')} 항목을 자동 제안했습니다.`;
+      // 기존 알림 시스템 재활용 (없으면 console 로그만)
+      if (NK.ui?.toast?.show) {
+        NK.ui.toast.show(msg, { type: 'info', duration: 3800 });
+      } else if (NK.utils?.toast) {
+        NK.utils.toast(msg);
+      } else {
+        try { console.info('[overview-suggest]', msg); } catch (_) {}
+      }
+    };
+
     const organizeStoryDraft = async (triggerBtn) => {
       const storyField = form.story || document.getElementById('scenario-story-input');
       if (!storyField) return;
@@ -1672,17 +1735,48 @@
       }
       setStoryStructureLoading(true);
       try {
-        const result = await NK.api.storyStructure(Object.assign({}, payload, { language: getRuntimeLang() }));
-        const nextStory = sanitizeText(result?.story || rawStory);
+        // 1) 이야기 정리 + 개요 자동 제안을 병렬 실행 (Phase 0 Step 10)
+        const language = getRuntimeLang();
+        const currentSel = getOverviewSelections();
+        const filled = {
+          purposeCategory: currentSel.purposeCategory,
+          purposeTags: currentSel.purposeTag ? [currentSel.purposeTag] : [],
+          target: currentSel.target,
+          need: currentSel.need,
+          duration: currentSel.durationPreset || String(currentSel.durationCustom || '').trim(),
+          tones: currentSel.tone ? [currentSel.tone] : [],
+          styles: currentSel.style ? [currentSel.style] : [],
+        };
+
+        const storyReq = NK.api.storyStructure(Object.assign({}, payload, { language }));
+        const suggestReq = (NK.api.overviewSuggest
+          ? NK.api.overviewSuggest({ topic: payload.topic, story: rawStory, language, filled })
+          : Promise.resolve(null)
+        ).catch(() => null); // 제안 실패는 조용히 무시 (핵심 흐름은 이야기 정리)
+
+        const [storyResult, suggestResult] = await Promise.all([storyReq, suggestReq]);
+
+        // 2) 이야기 정리 결과 반영
+        const nextStory = sanitizeText(storyResult?.story || rawStory);
         if (nextStory) {
           storyField.dataset.userStory = rawStory;
           storyField.dataset.aiStory = nextStory;
           storyField.dataset.view = 'ai';
           storyField.value = nextStory;
           cacheStorySelection(storyField);
-          syncOverviewPayload();
           updateStoryToggleButtonUi('ai');
         }
+
+        // 3) 개요 자동 제안 반영 (이미 채워진 필드는 덮어쓰지 않음)
+        let appliedFields = [];
+        if (suggestResult && suggestResult.suggestions) {
+          appliedFields = applyOverviewSuggestions(suggestResult.suggestions);
+        }
+
+        syncOverviewPayload();
+
+        // 4) 사용자 피드백 토스트
+        if (appliedFields.length) showOverviewSuggestedToast(appliedFields);
       } catch (err) {
         alert(getScenarioText('scenario_story_structure_failed', '이야기 정리 실패') + ': ' + (err?.message || err));
       } finally {
