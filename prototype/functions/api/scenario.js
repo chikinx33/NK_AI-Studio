@@ -1227,6 +1227,123 @@ function resolveMaxTokensForScenes(sceneCount) {
   return Math.min(3200, Math.max(1100, target));
 }
 
+/**
+ * 부분 수신된 JSON 텍스트의 미닫힌 괄호/문자열을 강제로 닫아 파싱 가능한 모양으로 만든다.
+ * 스트리밍이 27s 한계로 중단됐을 때 마지막 씬 직전까지의 데이터를 살리는 게 목적.
+ *
+ * - 문자열 안에서 끊겼으면 닫는 따옴표 + 그 시점의 객체/배열 모두 닫는다.
+ * - 마지막 컴마/콜론 뒤가 잘렸으면 그 부분도 잘라낸다.
+ */
+function closeTruncatedJson(text) {
+  let s = String(text || "");
+  if (!s) return s;
+  let inStr = false;
+  let escape = false;
+  const stack = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (escape) { escape = false; continue; }
+    if (c === "\\") { escape = true; continue; }
+    if (inStr) {
+      if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') { inStr = true; continue; }
+    if (c === "{" || c === "[") stack.push(c);
+    else if (c === "}" || c === "]") stack.pop();
+  }
+  // 미완 문자열은 따옴표로 닫는다
+  if (inStr) s += '"';
+  // 마지막에 매달린 컴마/콜론 정리: ",..."  ":..."  "{key:" 같은 경우
+  s = s.replace(/[,:]\s*$/, "");
+  // 미완 키-값(`"key":`) 같이 키만 있고 값이 없는 경우 키 토큰 자체를 제거
+  s = s.replace(/,\s*"[^"\\]*"\s*$/, "");
+  s = s.replace(/\{\s*"[^"\\]*"\s*$/, "{");
+  // 스택을 LIFO 로 닫는다
+  while (stack.length) {
+    const open = stack.pop();
+    s += open === "{" ? "}" : "]";
+  }
+  return s;
+}
+
+/**
+ * Anthropic SSE 스트림에서 text_delta 만 모아 합본 텍스트를 반환한다.
+ * abort 가 걸리면 그 시점까지의 텍스트와 timedOut=true 를 같이 돌려준다.
+ */
+async function streamAnthropicText({ apiKey, payload, signal, timeoutMs }) {
+  const controller = new AbortController();
+  // 외부 signal 이 있으면 같이 묶어둔다
+  if (signal) signal.addEventListener("abort", () => controller.abort(signal.reason));
+  const timer = setTimeout(() => controller.abort("scenario_stream_timeout"), timeoutMs);
+
+  let collected = "";
+  let timedOut = false;
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      if (res.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(errText)) {
+        throw new Error("CREDIT_EXHAUSTED");
+      }
+      throw new Error(`Anthropic error: ${res.status} ${errText}`);
+    }
+    const reader = res.body && res.body.getReader ? res.body.getReader() : null;
+    if (!reader) throw new Error("Anthropic stream not readable");
+    const decoder = new TextDecoder();
+    let buffer = "";
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf("\n")) !== -1) {
+          const line = buffer.slice(0, idx).trim();
+          buffer = buffer.slice(idx + 1);
+          if (!line.startsWith("data:")) continue;
+          const data = line.slice(5).trim();
+          if (!data || data === "[DONE]") continue;
+          try {
+            const evt = JSON.parse(data);
+            if (evt.type === "content_block_delta" && evt.delta?.type === "text_delta") {
+              collected += evt.delta.text || "";
+            } else if (evt.type === "message_stop") {
+              // end of message
+            }
+          } catch (_) { /* ignore malformed sse line */ }
+        }
+      }
+    } catch (streamErr) {
+      if (controller.signal.aborted) {
+        timedOut = true;
+      } else {
+        throw streamErr;
+      }
+    }
+  } catch (err) {
+    if (controller.signal.aborted && /abort/i.test(String(err?.message || ""))) {
+      timedOut = true;
+    } else {
+      throw err;
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+
+  return { text: collected, timedOut };
+}
+
 async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
   const maxTokens = resolveMaxTokensForScenes(opts.sceneCount);
   const payload = {
@@ -1237,56 +1354,53 @@ async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
       { role: "user", content: userPrompt },
     ],
     temperature: 0.5,
+    stream: true,
   };
-  const responseText = await retryAsync(async () => {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 29000); // 29s timeout (Cloudflare limit is 30s)
 
-    try {
-      const completion = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      const text = await completion.text();
-      if (!completion.ok) {
-        if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
-          throw new Error("CREDIT_EXHAUSTED");
-        }
-        throw new Error(`Anthropic error: ${completion.status} ${text}`);
-      }
-      return text;
-    } finally {
-      clearTimeout(timeoutId);
-    }
-  }, MAX_COMPLETION_RETRIES, BASE_RETRY_DELAY_MS);
+  // 27초 타임아웃: CF 30s 리밋 안쪽에 안전 마진 3초.
+  // 끝까지 못 받아도 그 시점까지의 텍스트를 살려서 부분 씬이라도 돌려준다.
+  const { text, timedOut } = await streamAnthropicText({
+    apiKey,
+    payload,
+    timeoutMs: 27000,
+  });
 
-  const data = JSON.parse(responseText || "{}");
-  const content = data.content?.[0]?.text;
-  const cleaned = cleanJsonResponse(content || "{}");
+  if (!text) {
+    throw new Error(timedOut ? "Anthropic stream timed out before any content" : "Anthropic empty response");
+  }
+
+  const cleaned = cleanJsonResponse(text || "{}");
+  // 스트림이 잘렸으면 미완 괄호/문자열을 강제로 닫아서 한 번 더 시도한다.
+  const candidate = timedOut ? closeTruncatedJson(cleaned) : cleaned;
+
   let parsed;
   try {
-    parsed = JSON.parse(cleaned);
+    parsed = JSON.parse(candidate);
   } catch (firstErr) {
-    const repaired = repairJsonString(cleaned);
+    const repaired = repairJsonString(candidate);
     try {
       parsed = JSON.parse(repaired);
-      console.log("[scenario] JSON repaired successfully");
+      console.log(`[scenario] JSON repaired (timedOut=${timedOut})`);
     } catch (secondErr) {
-      const pos = (firstErr.message.match(/position\s+(\d+)/i) || [])[1];
-      const snippet = pos ? cleaned.slice(Math.max(0, Number(pos) - 40), Number(pos) + 40) : cleaned.slice(0, 120);
-      console.error("[scenario] JSON repair failed near:", snippet);
-      throw new Error(`JSON parse error: ${firstErr.message}`);
+      // 마지막 수단: 잘림 보정 한 번 더 → 전체 repair
+      const lastDitch = repairJsonString(closeTruncatedJson(cleaned));
+      try {
+        parsed = JSON.parse(lastDitch);
+        console.log(`[scenario] JSON last-ditch repair ok (timedOut=${timedOut})`);
+      } catch (_) {
+        const pos = (firstErr.message.match(/position\s+(\d+)/i) || [])[1];
+        const snippet = pos ? candidate.slice(Math.max(0, Number(pos) - 40), Number(pos) + 40) : candidate.slice(0, 120);
+        console.error("[scenario] JSON repair failed near:", snippet);
+        throw new Error(`JSON parse error${timedOut ? " (stream truncated)" : ""}: ${firstErr.message}`);
+      }
     }
   }
   const scenes = parsed.scenes || parsed;
   if (!Array.isArray(scenes) || scenes.length === 0) {
     throw new Error("Invalid scenes format from Anthropic");
+  }
+  if (timedOut) {
+    console.log(`[scenario] stream truncated, salvaged ${scenes.length} scene(s)`);
   }
   return scenes;
 }
