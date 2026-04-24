@@ -9,7 +9,9 @@ const LEGACY_AUTH_PW = "limfactory1234";
 // Additional hardcoded users with per-user permission lists.
 // permissions: [] = full access; ['videogen'] = AI Video Gen only; etc.
 const EXTRA_USERS: Array<{ id: string; pw: string; permissions: string[] }> = [
-  { id: "hongaeitacademy1", pw: "hongaeitacademy1", permissions: ["videogen"] },
+  { id: "hongdaeitacademy1", pw: "hongdaeitacademy1", permissions: ["videogen"] },
+  { id: "hongdaeitacademy2", pw: "hongdaeitacademy2", permissions: ["videogen"] },
+  { id: "hongdaeitacademy3", pw: "hongdaeitacademy3", permissions: ["videogen"] },
 ];
 
 const corsHeaders = (origin: string | null) => ({
