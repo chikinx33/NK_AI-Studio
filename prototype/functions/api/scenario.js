@@ -1272,9 +1272,70 @@ function closeTruncatedJson(text) {
 }
 
 /**
+ * 잘린 응답에서 각 씬 객체(`{...}`) 만 개별로 잘라 따로따로 JSON.parse 한다.
+ * 개별 파싱이라 한 씬에 unescaped quote 가 있어도 그 씬만 버리고 나머진 산다.
+ * 가장 안정적인 1차 복구 전략 — 전체 텍스트 한 번에 파싱하는 게 실패할 때 사용.
+ *
+ * 반환: 파싱된 씬 객체 배열, 하나도 못 살리면 null.
+ */
+function extractIndividualScenes(text) {
+  const s = String(text || "");
+  if (!s) return null;
+  const m = s.match(/"scenes"\s*:\s*\[/);
+  if (!m) return null;
+  const arrayContentStart = m.index + m[0].length;
+
+  const scenes = [];
+  let i = arrayContentStart;
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  let sceneStart = -1;
+
+  while (i < s.length) {
+    const c = s[i];
+    if (escape) { escape = false; i++; continue; }
+    if (c === "\\") { escape = true; i++; continue; }
+    if (inStr) {
+      if (c === '"') inStr = false;
+      i++;
+      continue;
+    }
+    if (c === '"') { inStr = true; i++; continue; }
+    if (c === "{" || c === "[") {
+      if (depth === 0 && c === "{") sceneStart = i;
+      depth++;
+      i++;
+      continue;
+    }
+    if (c === "}" || c === "]") {
+      const wasArrayLevel = depth === 1 && c === "}";
+      depth--;
+      i++;
+      if (depth === 0 && sceneStart >= 0 && wasArrayLevel) {
+        const sceneText = s.slice(sceneStart, i);
+        let parsed = null;
+        try { parsed = JSON.parse(sceneText); } catch (_) {
+          try { parsed = JSON.parse(repairJsonString(sceneText)); } catch (_) { parsed = null; }
+        }
+        if (parsed && typeof parsed === "object") scenes.push(parsed);
+        sceneStart = -1;
+      } else if (depth < 0) {
+        // scenes 배열 자체가 닫힌 시점
+        break;
+      }
+      continue;
+    }
+    i++;
+  }
+
+  return scenes.length ? scenes : null;
+}
+
+/**
  * 잘린 응답에서 "완전히 닫힌 씬 객체" 만 추려서 `{"scenes":[...]}` 형태로 다시 만든다.
- * closeTruncatedJson 보다 강력한 1차 복구 전략 — 문자열 내부 unescaped quote 가
- * 있어도 마지막으로 깊이가 0 으로 돌아온 시점만 신뢰하기 때문에 안정적.
+ * closeTruncatedJson 보다 강력한 fallback — 문자열 내부 unescaped quote 가
+ * 있어도 마지막으로 깊이가 0 으로 돌아온 시점만 신뢰하기 때문에 비교적 안정적.
  *
  * 동작:
  *  1. `"scenes"\s*:\s*\[` 위치를 찾는다.
@@ -1441,11 +1502,12 @@ async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
   const cleaned = cleanJsonResponse(text || "{}");
 
   // 복구 cascade: 가장 안전한 전략부터 차례로 시도.
-  //  1) 원본 그대로 (정상 종료 케이스)
-  //  2) repair (제어문자/이스케이프/trailing comma)
-  //  3) salvage (완성된 씬만 추리고 뒤를 잘라 닫음) ← timedOut 일 때 핵심
-  //  4) salvage + repair
-  //  5) closeTruncatedJson + repair (LIFO 강제 닫기 — 마지막 안전망)
+  //  1) cleaned 원본 (정상 종료 케이스)
+  //  2) cleaned + repair (제어문자/이스케이프/trailing comma)
+  //  3) extractIndividualScenes(raw)  ← 핵심: 씬을 하나씩 따로 파싱
+  //  4) extractIndividualScenes(cleaned) — cleanJsonResponse 가 다른 모양으로 만들었을 수 있어 한 번 더
+  //  5) salvageCompletedScenes(cleaned) + repair
+  //  6) closeTruncatedJson(cleaned) + repair (LIFO — 마지막 안전망)
   const tryParse = (src) => {
     try { return JSON.parse(src); } catch (_) { return null; }
   };
@@ -1462,6 +1524,15 @@ async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
     try { JSON.parse(cleaned); } catch (e) { firstErr = e; }
     strategy = "repair";
     parsed = tryRepairThenParse(cleaned);
+  }
+  // 개별 씬 파싱 — RAW 텍스트 우선. cleanJsonResponse 가 truncated 응답에서
+  // 깊이 추적 실수로 잘못된 위치에 ]} 를 박는 경우가 있어, 원본을 먼저 본다.
+  if (!parsed) {
+    const indiv = extractIndividualScenes(text) || extractIndividualScenes(cleaned);
+    if (indiv && indiv.length) {
+      strategy = "individual-scenes";
+      parsed = { scenes: indiv };
+    }
   }
   if (!parsed) {
     const salvaged = salvageCompletedScenes(cleaned);

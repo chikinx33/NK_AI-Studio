@@ -166,3 +166,90 @@ test("salvageCompletedScenes: scenes 키가 없으면 null 반환", () => {
   const out = salvageCompletedScenes(input);
   assert.equal(out, null);
 });
+
+// ─── extractIndividualScenes ────────────────────────────────────────────
+// 미러: scenario.js 의 extractIndividualScenes (repair 부분만 단순화 — JSON.parse 만 시도).
+function extractIndividualScenesMirror(text) {
+  const s = String(text || "");
+  if (!s) return null;
+  const m = s.match(/"scenes"\s*:\s*\[/);
+  if (!m) return null;
+  const arrayContentStart = m.index + m[0].length;
+
+  const scenes = [];
+  let i = arrayContentStart;
+  let depth = 0;
+  let inStr = false;
+  let escape = false;
+  let sceneStart = -1;
+
+  while (i < s.length) {
+    const c = s[i];
+    if (escape) { escape = false; i++; continue; }
+    if (c === "\\") { escape = true; i++; continue; }
+    if (inStr) {
+      if (c === '"') inStr = false;
+      i++;
+      continue;
+    }
+    if (c === '"') { inStr = true; i++; continue; }
+    if (c === "{" || c === "[") {
+      if (depth === 0 && c === "{") sceneStart = i;
+      depth++;
+      i++;
+      continue;
+    }
+    if (c === "}" || c === "]") {
+      const wasArrayLevel = depth === 1 && c === "}";
+      depth--;
+      i++;
+      if (depth === 0 && sceneStart >= 0 && wasArrayLevel) {
+        const sceneText = s.slice(sceneStart, i);
+        let parsed = null;
+        try { parsed = JSON.parse(sceneText); } catch (_) { parsed = null; }
+        if (parsed && typeof parsed === "object") scenes.push(parsed);
+        sceneStart = -1;
+      } else if (depth < 0) {
+        break;
+      }
+      continue;
+    }
+    i++;
+  }
+  return scenes.length ? scenes : null;
+}
+
+test("extractIndividualScenes: 잘린 응답에서 완성된 씬만 개별 파싱", () => {
+  const input = '{"scenes":[{"id":1,"title":"first"},{"id":2,"title":"second"},{"id":3,"title":"trun';
+  const scenes = extractIndividualScenesMirror(input);
+  assert.equal(scenes.length, 2);
+  assert.equal(scenes[0].title, "first");
+  assert.equal(scenes[1].title, "second");
+});
+
+test("extractIndividualScenes: 모든 씬이 정상이면 모두 반환", () => {
+  const input = '{"scenes":[{"id":1},{"id":2},{"id":3}]}';
+  const scenes = extractIndividualScenesMirror(input);
+  assert.equal(scenes.length, 3);
+});
+
+test("extractIndividualScenes: 한 씬도 완성 못 하면 null", () => {
+  const input = '{"scenes":[{"id":1,"title":"trun';
+  const scenes = extractIndividualScenesMirror(input);
+  assert.equal(scenes, null);
+});
+
+test("extractIndividualScenes: scenes 키 없으면 null", () => {
+  const input = '{"other":1}';
+  const scenes = extractIndividualScenesMirror(input);
+  assert.equal(scenes, null);
+});
+
+test("extractIndividualScenes: 중첩 객체/배열을 가진 씬도 정확히 추출", () => {
+  const input = '{"scenes":[{"id":1,"meta":{"a":1,"b":[1,2,3]}},{"id":2,"tags":["x","y"]},{"id":3,"trun';
+  const scenes = extractIndividualScenesMirror(input);
+  assert.equal(scenes.length, 2);
+  assert.equal(scenes[0].id, 1);
+  assert.deepEqual(scenes[0].meta.b, [1, 2, 3]);
+  assert.deepEqual(scenes[1].tags, ["x", "y"]);
+});
