@@ -2038,7 +2038,28 @@
       } catch (_) { }
       const topicLength = String(getScenarioNarrativeText(payload) || '').length;
       const isLongInput = topicLength >= 2800;
-      setScenarioLoading(true, isLongInput ? '긴 입력을 파트별로 분석하는 중...' : '시나리오 생성 중...');
+      // Phase 0 Step 9 — 장르/세부장르에 따라 로딩 라벨을 동적으로 전환.
+      // 긴 입력은 청크 안내가 우선이므로 기존 문구 유지.
+      const uiLangNow = getUiLang();
+      let progressTimer = null;
+      if (isLongInput) {
+        setScenarioLoading(true, uiLangNow === 'en' ? 'Analyzing the long input by parts…' : '긴 입력을 파트별로 분석하는 중...');
+      } else if (NK.scenarioProgress && NK.scenarioProgress.buildSequence) {
+        const seq = NK.scenarioProgress.buildSequence({
+          lang: uiLangNow,
+          purposeCategory: payload?.purposeCategory || '',
+          purposeTag: (Array.isArray(payload?.purposeTags) ? payload.purposeTags[0] : payload?.purposeTags) || '',
+          target: payload?.target || ''
+        });
+        let seqIdx = 0;
+        setScenarioLoading(true, seq[0]);
+        progressTimer = setInterval(() => {
+          seqIdx = (seqIdx + 1) % seq.length;
+          setScenarioLoading(true, seq[seqIdx]);
+        }, 2400);
+      } else {
+        setScenarioLoading(true, uiLangNow === 'en' ? 'Generating scenario…' : '시나리오 생성 중...');
+      }
       try {
         const res = await NK.api.scenario(payload);
         const headerText = (NK.service?.project?.buildVisualHeader)
@@ -2108,6 +2129,7 @@
           alert('시나리오 생성 실패: ' + (err?.message || err));
         }
       } finally {
+        if (progressTimer) { try { clearInterval(progressTimer); } catch (_) { } progressTimer = null; }
         setScenarioLoading(false);
         NK.core.setLoading(false);
       }
