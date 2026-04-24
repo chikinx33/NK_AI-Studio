@@ -1155,7 +1155,9 @@ async function generateScenarioScenes(input) {
 }
 
 async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, options }) {
-  const rawScenes = await requestScenarioChunk(apiKey, sys, userPrompt);
+  const rawScenes = await requestScenarioChunk(apiKey, sys, userPrompt, {
+    sceneCount: options.sceneCount,
+  });
   const shaped = shapeScenesFromModel(rawScenes, {
     lang: options.lang,
     topic: options.topic,
@@ -1213,10 +1215,23 @@ async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, opt
   };
 }
 
-async function requestScenarioChunk(apiKey, sys, userPrompt) {
+/**
+ * 씬 개수에 맞춰 max_tokens 를 동적으로 계산한다.
+ * - 씬 당 대략 220 토큰 (id/title/intent/location/visual/narration/dialogue 총합) + JSON 오버헤드 400
+ * - 하한 1100, 상한 3200 (CF 30s 리밋 안에서 안전하게 생성 가능한 폭)
+ * 이전엔 고정 2000 이라 씬 4개에도 2000 까지 생성하려다 30s 리밋을 넘기는 케이스가 있었다.
+ */
+function resolveMaxTokensForScenes(sceneCount) {
+  const n = Math.max(1, Number(sceneCount) || 1);
+  const target = 220 * n + 400;
+  return Math.min(3200, Math.max(1100, target));
+}
+
+async function requestScenarioChunk(apiKey, sys, userPrompt, opts = {}) {
+  const maxTokens = resolveMaxTokensForScenes(opts.sceneCount);
   const payload = {
     model: "claude-sonnet-4-6",
-    max_tokens: 2000,
+    max_tokens: maxTokens,
     system: sys,
     messages: [
       { role: "user", content: userPrompt },
