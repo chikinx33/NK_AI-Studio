@@ -1364,7 +1364,7 @@
           if (done) {
             clearInterval(state.polls[resultId]);
             delete state.polls[resultId];
-            var rawUrl = data.videoUrl || data.video_url || data.outputUrl || data.output_url || '';
+            var rawUrl = data.playbackUrl || data.playback || data.videoUrl || data.video_url || data.outputUrl || data.output_url || '';
             var proxyUrl = (rawUrl && NK.api && NK.api.mediaProxyUrl) ? NK.api.mediaProxyUrl(rawUrl) : rawUrl;
             updateResult(resultId, { status: 'done', videoUrl: proxyUrl, rawVideoUrl: rawUrl });
             saveResults();
