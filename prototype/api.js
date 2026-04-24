@@ -462,6 +462,19 @@
     return j(text);
   };
 
+  api.videoDelete = async function (objectName) {
+    var name = String(objectName || '').trim();
+    if (!name) throw new Error('objectName is required');
+    var res = await fetch(withBase('/api/video/delete'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ objectName: name, confirm: 'yes' })
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'video_delete_error');
+    return j(text);
+  };
+
   api.library = async function (kind, projectId) {
     var uid = resolveUserId();
     var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();

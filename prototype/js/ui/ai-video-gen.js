@@ -1095,10 +1095,18 @@
           if (!window.confirm(t('confirm_delete'))) return;
           var name = btn.dataset.name;
           if (name) {
-            state.deletedSet[name] = true;
-            saveDeletedSet();
-            state.serverItems = state.serverItems.filter(function (s) { return s.name !== name; });
-            render();
+            btn.disabled = true;
+            (NK.api && NK.api.videoDelete ? NK.api.videoDelete(name) : Promise.reject(new Error('videoDelete unavailable')))
+              .then(function () {
+                state.deletedSet[name] = true;
+                saveDeletedSet();
+                state.serverItems = state.serverItems.filter(function (s) { return s.name !== name; });
+                render();
+              })
+              .catch(function (err) {
+                btn.disabled = false;
+                window.alert((err && err.message) ? err.message : 'delete failed');
+              });
           }
         }
       });
