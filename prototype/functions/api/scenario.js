@@ -1032,13 +1032,12 @@ async function generateScenarioScenes(input) {
       duration: String(chunkDuration),
       sceneCount: chunkSceneCount,
     });
-    const legacySys = input.lang === "en"
+    const sys = input.lang === "en"
       ? buildSystemPromptEn(chunkSceneCount, chunkDuration, spec)
       : buildSystemPromptKo(chunkSceneCount, chunkDuration, spec);
-    // 레거시 프롬프트 뒤에 블록 규칙 조각을 이어붙인다. suffix 가 비어 있으면 레거시 그대로.
-    const sys = rulePromptSuffix
-      ? `${legacySys}\n\n[블록 규칙]\n${rulePromptSuffix}`
-      : legacySys;
+    // v2.685: 첫 호출 system prompt 는 레거시 그대로 유지한다.
+    // 블록 규칙 suffix 를 첫 호출에 덧붙이면 생성 시간이 29s 한계를 넘어
+    // aborted 에러가 난다. suffix 는 critical 위반 재시도 경로에서만 사용.
     const basePrompt = buildUserPrompt({
       lang: input.lang,
       topic: chunkText,
@@ -1098,7 +1097,10 @@ async function generateScenarioScenes(input) {
           spec: ruleValidatorSpec,
           language: input.lang === "en" ? "en" : "ko",
           regenerate: async (refinePrompt) => {
-            const retrySys = `${sys}\n\n[재생성 지시]\n${refinePrompt}`;
+            // 재시도에는 블록 규칙 enforcement suffix 를 같이 실어, LLM 이
+            // critical 위반 원인(무대/금칙/비트)을 명시적으로 볼 수 있게 한다.
+            const suffixPart = rulePromptSuffix ? `\n\n[블록 규칙]\n${rulePromptSuffix}` : "";
+            const retrySys = `${sys}${suffixPart}\n\n[재생성 지시]\n${refinePrompt}`;
             const retryPass = await requestAndShapeScenarioChunk({
               apiKey: input.env.ANTHROPIC_API_KEY,
               sys: retrySys,
