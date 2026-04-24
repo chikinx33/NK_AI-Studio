@@ -140,10 +140,19 @@ export function composeRuleSet(selection) {
   // 8) stage — genre 가 정의 (subgenre 가 override 원하면 stage 필드를 주면 됨)
   const stage = subgenre?.stage || genre?.stage || null;
 
-  // 9) progressLabel — 가장 구체적인 블록 우선
-  const progressSource = subgenre || audience || purpose || genre || format;
-  const progressLabelKo = progressSource?.progressLabelKo || null;
-  const progressLabelEn = progressSource?.progressLabelEn || null;
+  // 9) progressLabel — 가장 구체적인 블록 우선, 단 실제 라벨을 가진 블록을 골라야
+  //    한다. audience/purpose 처럼 라벨이 비어 있는 블록이 중간에 끼면 건너뛰고
+  //    다음 블록으로 폴백.
+  const progressChain = [subgenre, audience, purpose, genre, format];
+  let progressLabelKo = null;
+  let progressLabelEn = null;
+  for (const b of progressChain) {
+    if (b && (b.progressLabelKo || b.progressLabelEn)) {
+      progressLabelKo = b.progressLabelKo || progressLabelKo;
+      progressLabelEn = b.progressLabelEn || progressLabelEn;
+      break;
+    }
+  }
 
   return {
     blocks: activeBlocks,
