@@ -205,6 +205,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const voiceVoiceId = typeof s?.voiceVoiceId === "string" ? s.voiceVoiceId : "";
       const voiceError = typeof s?.voiceError === "string" ? s.voiceError : "";
       const sceneId = Number(s?.id ?? idx + 1);
+      // 새 평탄화 모델: scene 자체에 카메라 셋업 정보
+      const shotType = typeof s?.shotType === "string" ? s.shotType : "MS";
+      const cameraMove = typeof s?.cameraMove === "string" ? s.cameraMove : "static";
+      const composition = typeof s?.composition === "string" ? s.composition : "";
+      const action = typeof s?.action === "string" ? s.action : "";
       return {
         id: sceneId,
         title: typeof s?.title === "string" ? s.title : "",
@@ -218,6 +223,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         script,
         shot: visual,
         visual,
+        shotType,
+        cameraMove,
+        composition,
+        action,
         shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: imagePath || imageUrl,

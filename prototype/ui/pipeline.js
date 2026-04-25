@@ -549,11 +549,70 @@
           var hRaw = data.header || data.payload?.header || (loadHeader ? loadHeader() : '') || '';
           var hWithAspect = withAspectInHeader ? withAspectInHeader(hRaw, aspectRatio) : hRaw;
           var hClean = cleanHeader(hWithAspect);
-          var scenes = (data.scenes || []).map(function (s, idx) {
+          // legacy 마이그레이션: scene.shots 가 길이 ≥ 2 면 평탄화 (각 shot → 개별 scene)
+          var rawScenes = Array.isArray(data.scenes) ? data.scenes : [];
+          var migratedScenes = [];
+          var migratedAny = false;
+          var nextFlatId = 1;
+          rawScenes.forEach(function (parent) {
+            if (!parent || typeof parent !== 'object') return;
+            var shots = Array.isArray(parent.shots) ? parent.shots : [];
+            if (shots.length < 2) {
+              migratedScenes.push(parent);
+              return;
+            }
+            // 평탄화: 각 shot 을 새 scene 으로
+            migratedAny = true;
+            shots.forEach(function (sh, j) {
+              if (!sh || typeof sh !== 'object') return;
+              var isFirst = j === 0;
+              var composition = String(sh.composition || '').trim();
+              var action = String(sh.action || '').trim();
+              var visualParts = [];
+              if (composition) visualParts.push(composition);
+              if (action) visualParts.push(action);
+              var visual = visualParts.join(' / ').trim() || (parent.visual || parent.shot || '');
+              migratedScenes.push({
+                id: nextFlatId++,
+                title: parent.title || '',
+                sceneLocation: parent.sceneLocation || parent.location || '',
+                backgroundStyle: parent.backgroundStyle || '',
+                narration: isFirst ? (parent.narration || '') : '',
+                dialogue: isFirst ? (parent.dialogue || parent.dialogues || []) : [],
+                lines: isFirst ? (parent.lines || '') : '',
+                subtitleText: isFirst ? (parent.subtitleText || '') : '',
+                videoSpeechPrompt: isFirst ? (parent.videoSpeechPrompt || '') : '',
+                script: isFirst ? (parent.script || '') : '',
+                visual: visual,
+                shot: visual,
+                composition: composition,
+                action: action,
+                shotType: String(sh.shotType || 'MS'),
+                cameraMove: String(sh.cameraMove || 'static'),
+                estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
+                // shot 의 기존 미디어가 있으면 새 scene 의 미디어로 승격
+                imageDataUrl: sh.imageDataUrl || sh.imagePath || '',
+                imagePath: sh.imagePath || '',
+                videoUrl: sh.videoUrl || sh.videoPath || '',
+                videoPath: sh.videoPath || '',
+                videoStatus: sh.videoStatus || '',
+                videoError: sh.videoError || '',
+                videoJobId: sh.videoJobId || '',
+                videoMethod: sh.videoMethod || '',
+                parentSceneId: parent.id != null ? parent.id : null,
+                shotIndexInParent: j
+              });
+            });
+          });
+          // 마이그레이션이 일어나면 id 를 1..N 으로 재할당해 일관성 유지
+          if (migratedAny) {
+            migratedScenes = migratedScenes.map(function (s, i) {
+              return Object.assign({}, s, { id: i + 1 });
+            });
+          }
+          var scenes = migratedScenes.map(function (s, idx) {
             var imageRef = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
             var videoRef = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
-            // 시나리오 페이지에서 만든 컷(shots) 분해 결과를 그대로 보존.
-            // 각 shot 의 미디어 필드도 함께 (이미지/영상 컷별 결과).
             var sceneId = (s.id != null ? s.id : (idx + 1));
             var shots = Array.isArray(s.shots) ? s.shots.map(function (sh, j) {
               if (!sh || typeof sh !== 'object') return null;
@@ -587,6 +646,11 @@
               dialogue: s.dialogue || s.dialogues || [],
               script: s.script || '',
               estSec: s.estSec,
+              // 새 평탄화 모델: scene 자체에 카메라 셋업
+              shotType: String(s.shotType || 'MS'),
+              cameraMove: String(s.cameraMove || 'static'),
+              composition: String(s.composition || ''),
+              action: String(s.action || ''),
               promptText: (s.promptText || ['Common', hClean, 'Visual', (s.shot || '')].join('\n')),
               imageDataUrl: imageRef,
               imgLoading: false,
@@ -602,6 +666,7 @@
               voiceStatus: s.voiceStatus || '',
               voiceError: s.voiceError || '',
               voiceVoiceId: s.voiceVoiceId || '',
+              // legacy 호환: shots 는 더 이상 사용하지 않지만 그대로 두면 무해 (UI 가 무시)
               shots: shots,
             };
           });

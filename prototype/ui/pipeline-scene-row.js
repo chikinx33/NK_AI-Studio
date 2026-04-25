@@ -264,6 +264,10 @@
   }
 
   function buildShotSection(scene, options) {
+    // v2.702: 평탄화 모델로 전환 — shot 서브섹션은 더 이상 렌더하지 않음.
+    // scene 자체가 한 카메라 셋업 단위라서 shots 가 들어와도 무시 (legacy 데이터 안전 처리).
+    return '';
+    // 이하 데드 코드 (참고용 — 다음 cleanup 단계에서 제거 예정):
     var opts = options || {};
     var mediaUrlResolver = typeof opts.toPlayableMediaUrl === 'function'
       ? opts.toPlayableMediaUrl
@@ -315,6 +319,9 @@
     var hasVideo = !!(scene.videoUrl || scene.videoPlaybackUrl);
 
     var statusChips = '';
+    // 카메라 셋업 칩 (scene 단위)
+    if (scene.shotType) statusChips += '<span class="scene-row-chip chip-shot-type" title="shot type">' + escapeText(scene.shotType) + '</span>';
+    if (scene.cameraMove) statusChips += '<span class="scene-row-chip chip-camera-move" title="camera move">' + escapeText(scene.cameraMove) + '</span>';
     if (hasImage) statusChips += '<span class="scene-row-chip chip-image">IMG</span>';
     if (hasVideo) statusChips += '<span class="scene-row-chip chip-video">VID</span>';
     if (scene.imgLoading) statusChips += '<span class="scene-row-chip chip-loading">생성중</span>';
@@ -364,6 +371,15 @@
       '<p class="prompt-common" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + header + '</p>' +
       '<p class="eyebrow">Visual</p>' +
       '<p class="prompt-visual" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (scene.shot || '') + '</p>' +
+      ((scene.composition || scene.action)
+        ? ('<p class="eyebrow">Camera</p>' +
+           '<p class="prompt-shot-meta" data-id="' + scene.id + '">' +
+           (scene.shotType ? ('<span class="shot-meta-chip">' + escapeText(scene.shotType) + '</span> ') : '') +
+           (scene.cameraMove ? ('<span class="shot-meta-chip">' + escapeText(scene.cameraMove) + '</span>') : '') +
+           '</p>' +
+           (scene.composition ? ('<p class="prompt-composition" data-id="' + scene.id + '"><span class="shot-tag">화면</span> ' + escapeText(scene.composition) + '</p>') : '') +
+           (scene.action ? ('<p class="prompt-action" data-id="' + scene.id + '"><span class="shot-tag">행동</span> ' + escapeText(scene.action) + '</p>') : ''))
+        : '') +
       '<p class="eyebrow">Duration</p>' +
       '<p class="prompt-duration" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(scene.estSec) || 0, 1)) + 's.</p>' +
       '' +

@@ -1091,6 +1091,12 @@
         videoSpeechPrompt: String(s.videoSpeechPrompt || '').trim(),
         script: String(s.script || '').trim(),
         shot: applyCharacterTokenHints(String(shot || '').trim(), activeCharacters),
+        // 새 평탄화 모델 — 각 씬은 단일 카메라 셋업
+        shotType: String(s.shotType || 'MS'),
+        cameraMove: String(s.cameraMove || 'static'),
+        composition: String(s.composition || '').trim(),
+        action: String(s.action || '').trim(),
+        // legacy 호환: shots[] 가 들어오면 보존 (마이그레이션 대상)
         shots: Array.isArray(s.shots) ? s.shots.map((sh, j) => ({
           id: String(sh?.id || `${s.id != null ? s.id : (i + 1)}.${j + 1}`),
           duration: Number(sh?.duration) || 0,
@@ -1365,7 +1371,62 @@
   };
 
   // ---------- render scenes ----------
+  // legacy 평탄화: scene.shots 가 길이 ≥ 2 면 각 shot 을 새 scene 으로 펼침
+  function flattenLegacyShots(rawScenes) {
+    if (!Array.isArray(rawScenes)) return [];
+    const out = [];
+    let mutated = false;
+    let nextId = 1;
+    rawScenes.forEach((parent) => {
+      if (!parent || typeof parent !== 'object') return;
+      const shots = Array.isArray(parent.shots) ? parent.shots : [];
+      if (shots.length < 2) {
+        out.push(parent);
+        return;
+      }
+      mutated = true;
+      shots.forEach((sh, j) => {
+        if (!sh || typeof sh !== 'object') return;
+        const isFirst = j === 0;
+        const composition = String(sh.composition || '').trim();
+        const action = String(sh.action || '').trim();
+        const visualParts = [];
+        if (composition) visualParts.push(composition);
+        if (action) visualParts.push(action);
+        const visual = visualParts.join(' / ').trim() || (parent.visual || parent.shot || '');
+        out.push({
+          id: nextId++,
+          title: parent.title || '',
+          sceneLocation: parent.sceneLocation || parent.location || '',
+          backgroundStyle: parent.backgroundStyle || '',
+          narration: isFirst ? (parent.narration || '') : '',
+          dialogue: isFirst ? (parent.dialogue || parent.dialogues || []) : [],
+          lines: isFirst ? (parent.lines || '') : '',
+          subtitleText: isFirst ? (parent.subtitleText || '') : '',
+          videoSpeechPrompt: isFirst ? (parent.videoSpeechPrompt || '') : '',
+          script: isFirst ? (parent.script || '') : '',
+          visual,
+          shot: visual,
+          composition,
+          action,
+          shotType: String(sh.shotType || 'MS'),
+          cameraMove: String(sh.cameraMove || 'static'),
+          estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
+          parentSceneId: parent.id != null ? parent.id : null,
+          shotIndexInParent: j
+        });
+      });
+    });
+    if (mutated) {
+      // id 1..N 으로 재할당
+      return out.map((s, i) => Object.assign({}, s, { id: i + 1 }));
+    }
+    return out;
+  }
+
   scenario.renderScenes = function (scenes = []) {
+    // 진입 직전 legacy shots[] 가 있으면 평탄화
+    scenes = flattenLegacyShots(scenes);
     const container = document.getElementById('scenario-cards');
     if (!container) return;
     const sceneList = normalizeScenes(scenes);
@@ -1408,25 +1469,15 @@
               .replace(/\r?\n+/g, ' · '))}</p>
           </div>
         </div>
-        ${(Array.isArray(s.shots) && s.shots.length) ? `
-          <div class="scene-shot-grid" data-scene-id="${s.id}">
-            <p class="field-label muted small">콘티 / Shot</p>
-            <ol class="shot-list">
-              ${s.shots.map((sh) => `
-                <li class="shot-item" data-shot-id="${escapeHtml(sh.id)}">
-                  <div class="shot-head">
-                    <span class="shot-id">${escapeHtml(sh.id)}</span>
-                    <span class="shot-type" title="shot type">${escapeHtml(sh.shotType)}</span>
-                    <span class="shot-move" title="camera move">${escapeHtml(sh.cameraMove)}</span>
-                    <span class="shot-dur">${escapeHtml(String(sh.duration))}s</span>
-                  </div>
-                  <div class="shot-body">
-                    <p class="shot-comp"><span class="shot-tag">화면</span> ${escapeHtml(sh.composition || '')}</p>
-                    <p class="shot-act"><span class="shot-tag">행동</span> ${escapeHtml(sh.action || '')}</p>
-                  </div>
-                </li>
-              `).join('')}
-            </ol>
+        ${(s.shotType || s.cameraMove || s.composition || s.action) ? `
+          <div class="scene-shot-meta" data-scene-id="${s.id}">
+            <p class="field-label muted small">콘티 (Shot)</p>
+            <div class="scene-shot-meta-chips">
+              ${s.shotType ? `<span class="shot-type" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}
+              ${s.cameraMove ? `<span class="shot-move" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
+            </div>
+            ${s.composition ? `<p class="shot-comp"><span class="shot-tag">화면</span> ${escapeHtml(s.composition)}</p>` : ''}
+            ${s.action ? `<p class="shot-act"><span class="shot-tag">행동</span> ${escapeHtml(s.action)}</p>` : ''}
           </div>
         ` : ''}
       </div>
@@ -2097,21 +2148,24 @@
           : '';
         if (res?.scenes) {
           // Pass 2: scene 을 콘티 단위 shot 으로 분해. 실패해도 시나리오는 살림.
-          let scenesWithShots = res.scenes;
+          // Pass 2: 씬 세분화 (서버에서 평탄화된 scene 배열 반환)
+          let flatScenes = res.scenes;
           try {
             if (NK.api?.scenarioShots) {
               const shotsRes = await NK.api.scenarioShots({
                 scenes: res.scenes,
                 language: payload?.language === 'en' ? 'en' : 'ko'
               });
-              if (shotsRes && Array.isArray(shotsRes.scenes)) {
-                scenesWithShots = shotsRes.scenes;
+              // v2.702 부터 서버가 flat scenes 반환 (각 shot → top-level scene).
+              // meta.flattened 가 true 인 경우만 채택. 안전.
+              if (shotsRes && Array.isArray(shotsRes.scenes) && shotsRes.meta?.flattened) {
+                flatScenes = shotsRes.scenes;
               }
             }
           } catch (shotsErr) {
-            console.warn('[scenario] shot decomposition failed; keeping scenes without shots', shotsErr);
+            console.warn('[scenario] scene 세분화 실패; Pass 1 결과 유지', shotsErr);
           }
-          const normalized = normalizeScenes(scenesWithShots);
+          const normalized = normalizeScenes(flatScenes);
           draft = draft || { id: Date.now(), title: payload.topic || '새 프로젝트' };
           draft.title = payload.topic || draft.title || '새 프로젝트';
           draft.payload = payload;

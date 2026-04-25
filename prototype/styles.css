@@ -2555,6 +2555,84 @@ textarea::-webkit-scrollbar-corner {
   padding-top: 2px;
 }
 
+/* 평탄화 모델: 씬 카드 안 콘티(Shot) 메타 (shotType/cameraMove + composition/action) */
+.scenario-card .scene-shot-meta {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scenario-card.is-collapsed .scene-shot-meta { display: none; }
+.scenario-card .scene-shot-meta-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.scenario-card .scene-shot-meta .shot-type,
+.scenario-card .scene-shot-meta .shot-move {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--layer-strong);
+  border: 1px solid var(--chip-border);
+  color: var(--text);
+  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.scenario-card .scene-shot-meta .shot-comp,
+.scenario-card .scene-shot-meta .shot-act {
+  margin: 0;
+  display: flex;
+  gap: 6px;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* 프로덕션 페이지 scene-row 헤더의 카메라 셋업 칩 */
+.scene-row-chip.chip-shot-type,
+.scene-row-chip.chip-camera-move {
+  background: var(--layer-strong);
+  border: 1px solid var(--chip-border);
+  color: var(--text);
+}
+/* prompt 셀 안의 camera 메타 */
+.scene-row .prompt-shot-meta { margin: 0; display: flex; gap: 6px; flex-wrap: wrap; }
+.scene-row .prompt-shot-meta .shot-meta-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--layer-strong);
+  border: 1px solid var(--chip-border);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+}
+.scene-row .prompt-composition,
+.scene-row .prompt-action {
+  margin: 2px 0 0;
+  display: flex;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.scene-row .prompt-composition .shot-tag,
+.scene-row .prompt-action .shot-tag {
+  flex: 0 0 auto;
+  min-width: 28px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 2px;
+}
+
 /* ── 프로덕션 페이지 (scene-row) shot 섹션 ── */
 .scene-row .scene-shot-section {
   margin: 10px 12px 12px;

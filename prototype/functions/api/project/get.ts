@@ -202,6 +202,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const voiceObjectName = typeof s?.voiceObjectName === "string" ? s.voiceObjectName : "";
       const voiceUrl = voiceObjectName ? "" : voiceUrlRaw;
       const sceneId = Number(s?.id ?? idx + 1);
+      const shotType = typeof s?.shotType === "string" ? s.shotType : "MS";
+      const cameraMove = typeof s?.cameraMove === "string" ? s.cameraMove : "static";
+      const composition = typeof s?.composition === "string" ? s.composition : "";
+      const action = typeof s?.action === "string" ? s.action : "";
       return {
         id: sceneId,
         title: typeof s?.title === "string" ? s.title : "",
@@ -215,6 +219,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         script,
         shot: visual,
         visual,
+        shotType,
+        cameraMove,
+        composition,
+        action,
         shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: imagePath || imageUrl,

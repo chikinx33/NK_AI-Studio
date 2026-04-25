@@ -20,6 +20,85 @@
 
 import { decomposeScenes } from "./scenario/shots/index.js";
 
+/**
+ * 분해 결과를 평탄화. 부모 씬의 narration/dialogue 는 첫 sub-scene 에만 두고,
+ * 나머지 sub-scenes 는 sceneLocation/backgroundStyle 만 상속한다 (영상 단위로 분리).
+ *
+ * sub-scene id 규칙:
+ *   - 첫 번째: 부모 id 의 정수부 그대로 (예: parent id = 3 → 3)
+ *   - 두 번째 이후: 새 정수 id 부여 (parent + 0.1, 0.2, ... 같은 식이 아니라
+ *     호출자 측에서 시퀀스 재할당하기 좋게 그냥 ordinal)
+ *
+ * 호출자 (client / save) 가 다시 1..N 으로 재배열할 수 있도록 raw structure 를 유지.
+ */
+function flattenScenesWithShots(parentScenes) {
+  if (!Array.isArray(parentScenes)) return [];
+  const flat = [];
+  let nextId = 1;
+  for (const parent of parentScenes) {
+    if (!parent || typeof parent !== "object") continue;
+    const shots = Array.isArray(parent.shots) ? parent.shots : [];
+    if (!shots.length) {
+      // shots 가 없으면 부모 씬을 그대로 single 로 (visual 만 있는 legacy fallback)
+      flat.push({
+        id: nextId++,
+        title: parent.title || "",
+        sceneLocation: parent.sceneLocation || parent.location || "",
+        backgroundStyle: parent.backgroundStyle || "",
+        narration: parent.narration || "",
+        dialogue: parent.dialogue || parent.dialogues || [],
+        lines: parent.lines || "",
+        subtitleText: parent.subtitleText || "",
+        videoSpeechPrompt: parent.videoSpeechPrompt || "",
+        script: parent.script || "",
+        visual: parent.visual || parent.shot || "",
+        shot: parent.visual || parent.shot || "",
+        composition: "",
+        action: "",
+        shotType: "MS",
+        cameraMove: "static",
+        estSec: Number(parent.estSec) || 0,
+      });
+      continue;
+    }
+    shots.forEach((sh, j) => {
+      if (!sh || typeof sh !== "object") return;
+      const isFirst = j === 0;
+      const composition = String(sh.composition || "").trim();
+      const action = String(sh.action || "").trim();
+      // 합성 visual: "[shotType] composition / action" — UI 가 visual 만 봐도 의미 전달
+      const visualParts = [];
+      if (composition) visualParts.push(composition);
+      if (action) visualParts.push(action);
+      const visual = visualParts.join(" / ").trim() || (parent.visual || parent.shot || "");
+      flat.push({
+        id: nextId++,
+        title: parent.title || "",
+        sceneLocation: parent.sceneLocation || parent.location || "",
+        backgroundStyle: parent.backgroundStyle || "",
+        // 첫 번째 sub-scene 만 부모의 narration/dialogue 를 가져감
+        narration: isFirst ? (parent.narration || "") : "",
+        dialogue: isFirst ? (parent.dialogue || parent.dialogues || []) : [],
+        lines: isFirst ? (parent.lines || "") : "",
+        subtitleText: isFirst ? (parent.subtitleText || "") : "",
+        videoSpeechPrompt: isFirst ? (parent.videoSpeechPrompt || "") : "",
+        script: isFirst ? (parent.script || "") : "",
+        visual,
+        shot: visual,
+        composition,
+        action,
+        shotType: String(sh.shotType || "MS"),
+        cameraMove: String(sh.cameraMove || "static"),
+        estSec: Math.max(1, Math.round(Number(sh.duration) || 0)),
+        // 부모 추적용 (마이그레이션/디버깅)
+        parentSceneId: parent.id != null ? parent.id : null,
+        shotIndexInParent: j,
+      });
+    });
+  }
+  return flat;
+}
+
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -64,14 +143,12 @@ export async function onRequestPost(context) {
 
   try {
     const result = await decomposeScenes(env.ANTHROPIC_API_KEY, scenes, { lang });
-    // decomposeScenes 의 정상 결과는 { scenes, meta } 형태 (input 길이≥1 일 때)
-    if (Array.isArray(result)) {
-      return new Response(JSON.stringify({ scenes: result, meta: { total: result.length, ok: 0, failed: 0, fallback: result.length } }), {
-        status: 200,
-        headers: corsHeaders(origin),
-      });
-    }
-    return new Response(JSON.stringify(result), {
+    // decomposeScenes 의 정상 결과: { scenes, meta } 또는 array fallback
+    const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
+    const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };
+    // 평탄화: 각 shot 을 top-level scene 으로
+    const flatScenes = flattenScenesWithShots(decomposed);
+    return new Response(JSON.stringify({ scenes: flatScenes, meta: { ...meta, flattened: true, flatCount: flatScenes.length } }), {
       status: 200,
       headers: corsHeaders(origin),
     });
