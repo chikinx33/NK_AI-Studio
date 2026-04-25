@@ -2228,6 +2228,66 @@
         }
       };
     }
+
+    // 컷 분해 버튼 — 기존 씬을 유지한 채 Pass 2 만 다시 돌려서 shots 추가/갱신
+    const decomposeBtn = document.getElementById('decompose-shots');
+    if (decomposeBtn) {
+      decomposeBtn.onclick = async () => {
+        try {
+          if (!NK.api?.scenarioShots) {
+            alert('컷 분해 API 가 없습니다.');
+            return;
+          }
+          // 화면의 최신 편집 내용을 먼저 머지
+          const latest = collectScenesFromCards();
+          const mergedBase = mergeSceneSnapshots(draft?.scenes || [], latest);
+          if (!Array.isArray(mergedBase) || !mergedBase.length) {
+            alert('분해할 씬이 없습니다. 먼저 시나리오를 생성하거나 불러와 주세요.');
+            return;
+          }
+          const lang = (draft?.payload?.language === 'en') ? 'en' : 'ko';
+          NK.core.setLoading(true, '씬을 컷 단위로 분해 중...');
+          const shotsRes = await NK.api.scenarioShots({ scenes: mergedBase, language: lang });
+          const decomposed = (shotsRes && Array.isArray(shotsRes.scenes)) ? shotsRes.scenes : null;
+          if (!decomposed) {
+            alert('컷 분해 응답이 비었습니다.');
+            return;
+          }
+          // 기존 scene 의 shots 만 교체 (다른 필드는 그대로)
+          const byId = new Map(decomposed.map(s => [String(s?.id), s]));
+          const updated = mergedBase.map((s, i) => {
+            const fresh = byId.get(String(s?.id)) || decomposed[i];
+            const newShots = (fresh && Array.isArray(fresh.shots)) ? fresh.shots : (Array.isArray(s.shots) ? s.shots : []);
+            return Object.assign({}, s, { shots: newShots });
+          });
+          draft = draft || { id: Date.now(), title: '새 프로젝트' };
+          draft.scenes = normalizeScenes(updated);
+          if (NK.service?.project?.upsertLocalDraft) {
+            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
+          } else {
+            if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
+            NK.store.saveDrafts([draft]);
+          }
+          // 서버에도 즉시 반영 (가능하면)
+          if (NK.api?.projectSave) {
+            try {
+              await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });
+            } catch (saveErr) {
+              console.warn('[scenario] decompose-shots: 서버 저장 실패 (로컬은 유지):', saveErr);
+            }
+          }
+          // UI 다시 그림
+          scenario.renderScenes(draft.scenes || []);
+          const total = decomposed.reduce((acc, s) => acc + (Array.isArray(s.shots) ? s.shots.length : 0), 0);
+          const meta = shotsRes.meta || {};
+          alert(`컷 분해 완료: ${total} 컷 (성공 ${meta.ok || 0} / 실패 ${meta.failed || 0} / fallback ${meta.fallback || 0}). 저장됨.`);
+        } catch (err) {
+          alert('컷 분해 실패: ' + (err?.message || err));
+        } finally {
+          NK.core.setLoading(false);
+        }
+      };
+    }
     // 캐시 있음: 동기 렌더 완료 후 최소 300ms 뒤 해제
     // 캐시 없음: 서버 응답 .then()에서 해제 (안전 fallback 5s)
     if (draft) {
