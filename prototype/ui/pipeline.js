@@ -786,18 +786,18 @@
       var voiceCache = {};
       try { voiceCache = JSON.parse(localStorage.getItem(voiceCacheKey) || '{}') || {}; } catch (_) { voiceCache = {}; }
       pipelineScenes.classList.remove('empty');
-      // 그룹 라벨: parentSceneId(AI Pass 1 의 비트 단위) 가 같은 연속 씬을 한 그룹.
-      // 한 비트 안에서 sub-location 이 달라질 수 있음 (외부→내부 등). location 매칭 X.
-      var __lastPid = null;
+      // 그룹 라벨: sceneLocation 기준. Pass 1 새 프롬프트가 sub-location 변화는 broad
+      // sceneLocation 으로 통일하므로 location 만으로 충분.
+      var __lastLoc = null;
       var __parentNo = 0;
       var __cutNo = 0;
       var __totalByParent = {};
       var __labels = scenes.map(function (s) {
-        var pid = (s && s.parentSceneId != null) ? String(s.parentSceneId) : null;
-        if (pid == null || pid !== __lastPid) {
+        var loc = String((s && s.sceneLocation) || '').trim();
+        if (!loc || loc !== __lastLoc) {
           __parentNo += 1;
           __cutNo = 1;
-          __lastPid = pid;
+          __lastLoc = loc;
         } else {
           __cutNo += 1;
         }

@@ -1382,7 +1382,7 @@
   // ---------- render scenes ----------
   // 모든 씬의 sceneLocation 에서 공통으로 시작하는 prefix 를 찾는다.
   // 예: ["중세 판타지 전장 — 광활한 평원", "중세 판타지 전장 — 황량한 능선"] → "중세 판타지 전장"
-  // 끝에 붙은 구분자(— - : · / 등)와 공백은 제거.
+  // 끝에 붙은 구분자(— - : · / ( 등)와 공백은 제거 (orphan 괄호 방지).
   function findCommonLocationPrefix(scenes) {
     const locs = (Array.isArray(scenes) ? scenes : [])
       .map((s) => String((s && s.sceneLocation) || '').trim())
@@ -1395,17 +1395,23 @@
         if (!common) return '';
       }
     }
-    // 의미 있는 길이 (2 자 이상) 만 인정. 끝에 붙은 구분자 trim.
-    const trimmed = common.replace(/[\s—\-:·、,/]+$/u, '').trim();
+    // 의미 있는 길이 (2 자 이상) 만 인정. 끝에 붙은 구분자/괄호 trim.
+    const trimmed = common.replace(/[\s—\-:·、,/(]+$/u, '').trim();
     if (trimmed.length < 2) return '';
     return trimmed;
   }
 
-  // 주어진 location 텍스트에서 commonPrefix 를 떼어낸 unique 부분 반환
+  // 주어진 location 텍스트에서 commonPrefix 를 떼어낸 unique 부분 반환.
+  // 양 끝의 orphan 구분자/괄호도 함께 정리.
   function stripLocationPrefix(loc, prefix) {
     const s = String(loc || '');
     if (!prefix || s.indexOf(prefix) !== 0) return s;
-    return s.slice(prefix.length).replace(/^[\s—\-:·、,/]+/u, '').trim();
+    let result = s.slice(prefix.length);
+    // 선두 구분자 + 여는 괄호 trim
+    result = result.replace(/^[\s—\-:·、,/(]+/u, '');
+    // 말미 구분자 + 닫는 괄호 trim
+    result = result.replace(/[\s—\-:·、,/)]+$/u, '');
+    return result.trim();
   }
 
   // 현재 렌더 사이클에 적용된 공통 location prefix (collectScenesFromCards 에서 다시 prepend 하기 위해 보관)
@@ -1488,22 +1494,23 @@
     // 공통 location prefix 자동 감지 (모든 씬 sceneLocation 의 가장 긴 공통 시작 부분).
     // 발견되면 헤더 입력엔 unique 부분만 표시, 저장 시 다시 prepend → 데이터 손실 없음.
     __currentLocationPrefix = findCommonLocationPrefix(sceneList);
-    // 그룹 라벨 메타: parentSceneId(AI 의 Pass 1 비트 분할) 가 같은 연속 씬을 한 그룹.
-    // 한 비트 안에서 sub-location 이 달라질 수 있음 (외부→내부 진입 등) — location 매칭 X.
+    // 그룹 라벨 메타: sceneLocation 기준. Pass 1 새 프롬프트가 한 비트 안의 sub-location 변화는
+    // broad sceneLocation 으로 통일하므로 location 만으로 충분. parentSceneId 는 legacy 데이터에서
+    // 제각각이라 그룹화 신호로 부적합. location 비어있으면 매번 새 그룹.
     // 첫 컷은 "Scene N cut1", 이후 컷은 보이지 않는 "Scene N " spacer + "cutM" 로 정렬.
-    // 단일 컷 또는 parentSceneId 가 없는 씬은 그냥 "Scene N".
+    // 단일 컷은 그냥 "Scene N".
     const labelByIdx = (function () {
-      let lastPid = null;
+      let lastLoc = null;
       let parentNo = 0;
       let cutNo = 0;
       const seq = [];
       const totalByParent = {};
       sceneList.forEach((sc) => {
-        const pid = (sc && sc.parentSceneId != null) ? String(sc.parentSceneId) : null;
-        if (pid == null || pid !== lastPid) {
+        const loc = String((sc && sc.sceneLocation) || '').trim();
+        if (!loc || loc !== lastLoc) {
           parentNo += 1;
           cutNo = 1;
-          lastPid = pid;
+          lastLoc = loc;
         } else {
           cutNo += 1;
         }
