@@ -369,17 +369,16 @@
       '<div class="scene-cell prompt">' +
       '<p class="eyebrow">Common</p>' +
       '<p class="prompt-common" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + header + '</p>' +
-      '<p class="eyebrow">Visual</p>' +
-      '<p class="prompt-visual" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (scene.shot || '') + '</p>' +
+      // composition/action 이 있으면 화면/행동을 별도 라인으로 (Visual 라인은 숨김 — 중복 방지).
+      // 둘 다 없으면 기존 Visual 사용.
       ((scene.composition || scene.action)
-        ? ('<p class="eyebrow">Camera</p>' +
-           '<p class="prompt-shot-meta" data-id="' + scene.id + '">' +
-           (scene.shotType ? ('<span class="shot-meta-chip">' + escapeText(scene.shotType) + '</span> ') : '') +
-           (scene.cameraMove ? ('<span class="shot-meta-chip">' + escapeText(scene.cameraMove) + '</span>') : '') +
-           '</p>' +
-           (scene.composition ? ('<p class="prompt-composition" data-id="' + scene.id + '"><span class="shot-tag">화면</span> ' + escapeText(scene.composition) + '</p>') : '') +
-           (scene.action ? ('<p class="prompt-action" data-id="' + scene.id + '"><span class="shot-tag">행동</span> ' + escapeText(scene.action) + '</p>') : ''))
-        : '') +
+        ? ('<p class="eyebrow">화면</p>' +
+           '<p class="prompt-composition" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + escapeText(scene.composition || '') + '</p>' +
+           '<p class="eyebrow">행동</p>' +
+           '<p class="prompt-action" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + escapeText(scene.action || '') + '</p>')
+        : ('<p class="eyebrow">Visual</p>' +
+           '<p class="prompt-visual" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (scene.shot || '') + '</p>')
+      ) +
       '<p class="eyebrow">Duration</p>' +
       '<p class="prompt-duration" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(scene.estSec) || 0, 1)) + 's.</p>' +
       '' +

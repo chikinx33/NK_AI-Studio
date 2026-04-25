@@ -1468,7 +1468,7 @@
         const pid = (sc && sc.parentSceneId != null) ? String(sc.parentSceneId) : null;
         const total = pid != null ? (totalCutsPerParent.get(pid) || 1) : 1;
         if (total > 1) {
-          return 'Scene ' + meta.parentNo + ' · 컷 ' + meta.cutNo;
+          return 'Scene ' + meta.parentNo + ' - ' + meta.cutNo;
         }
         return 'Scene ' + meta.parentNo;
       });
@@ -1476,14 +1476,17 @@
 
     container.innerHTML = sceneList.map((s, i) => {
       const displayLabel = labelByIdx[i] || ('Scene ' + (i + 1));
-      // composition/action 중 하나라도 있으면 화면/행동이 곧 시각화이므로 시각화 row 숨김 (중복 방지)
-      const hasStructured = !!(String(s.composition || '').trim() || String(s.action || '').trim());
+      const hasComposition = !!String(s.composition || '').trim();
+      const hasAction = !!String(s.action || '').trim();
+      const hasStructured = hasComposition || hasAction;
       return `
       <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">
           <div class="card-title-row">
             <h5>${escapeHtml(displayLabel)}</h5>
             <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
+            ${s.shotType ? `<span class="card-camera-chip" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}
+            ${s.cameraMove ? `<span class="card-camera-chip" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
           </div>
           <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}" title="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
         </div>
@@ -1492,7 +1495,15 @@
             <p class="field-label muted small">${labels.location}</p>
             <p class="view-lines view-location-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.sceneLocation || '')}</p>
           </div>
-          ${hasStructured ? '' : `
+          ${hasStructured ? `
+          <div class="field-block">
+            <p class="field-label muted small">화면</p>
+            <p class="view-lines view-composition-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.composition || '')}</p>
+          </div>
+          <div class="field-block">
+            <p class="field-label muted small">행동</p>
+            <p class="view-lines view-action-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.action || '')}</p>
+          </div>` : `
           <div class="field-block">
             <p class="field-label muted small">${labels.visual}</p>
             <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.shot || '')}</p>
@@ -1507,17 +1518,6 @@
               .replace(/\r?\n+/g, ' · '))}</p>
           </div>
         </div>
-        ${(s.shotType || s.cameraMove || s.composition || s.action) ? `
-          <div class="scene-shot-meta" data-scene-id="${s.id}">
-            <p class="field-label muted small">콘티 (Shot)</p>
-            <div class="scene-shot-meta-chips">
-              ${s.shotType ? `<span class="shot-type" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}
-              ${s.cameraMove ? `<span class="shot-move" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
-            </div>
-            ${s.composition ? `<p class="shot-comp"><span class="shot-tag">화면</span> ${escapeHtml(s.composition)}</p>` : ''}
-            ${s.action ? `<p class="shot-act"><span class="shot-tag">행동</span> ${escapeHtml(s.action)}</p>` : ''}
-          </div>
-        ` : ''}
       </div>
     `;
     }).join('');

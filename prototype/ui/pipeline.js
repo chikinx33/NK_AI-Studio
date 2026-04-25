@@ -802,7 +802,7 @@
         var pid = lab.pid;
         var totalCuts = pid != null ? __cutCount[pid] : 1;
         var displayLabel = (totalCuts > 1)
-          ? ('Scene ' + lab.parentNo + ' · 컷 ' + lab.cutNo)
+          ? ('Scene ' + lab.parentNo + ' - ' + lab.cutNo)
           : ('Scene ' + lab.parentNo);
         var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;

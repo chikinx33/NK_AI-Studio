@@ -2554,26 +2554,10 @@ textarea::-webkit-scrollbar-corner {
   padding-top: 2px;
 }
 
-/* 평탄화 모델: 씬 카드 안 콘티(Shot) 메타 (shotType/cameraMove + composition/action) */
-.scenario-card .scene-shot-meta {
-  margin-top: 12px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--border);
-  color: var(--text);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.scenario-card.is-collapsed .scene-shot-meta { display: none; }
-.scenario-card .scene-shot-meta-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.scenario-card .scene-shot-meta .shot-type,
-.scenario-card .scene-shot-meta .shot-move {
+/* 시나리오 카드 헤더의 카메라 칩 (Scene 1 - 1 옆 [3s] 다음에 [EWS] [static]) */
+.scenario-card .card-title-row .card-camera-chip {
   display: inline-block;
-  padding: 1px 6px;
+  padding: 1px 8px;
   border-radius: 4px;
   background: var(--layer-strong);
   border: 1px solid var(--chip-border);
@@ -2581,15 +2565,8 @@ textarea::-webkit-scrollbar-corner {
   font-weight: 500;
   font-size: 11px;
   letter-spacing: 0.02em;
-}
-.scenario-card .scene-shot-meta .shot-comp,
-.scenario-card .scene-shot-meta .shot-act {
-  margin: 0;
-  display: flex;
-  gap: 6px;
-  color: var(--text);
-  font-size: 12px;
-  line-height: 1.45;
+  align-self: center;
+  white-space: nowrap;
 }
 
 /* 프로덕션 페이지 scene-row 헤더의 카메라 셋업 칩 */
