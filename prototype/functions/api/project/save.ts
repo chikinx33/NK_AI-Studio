@@ -129,6 +129,20 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         .map((sh: any, j: number) => {
           if (!sh || typeof sh !== "object") return null;
           const dur = Number(sh.duration);
+          const shotImageUrl =
+            typeof sh.imageDataUrl === "string" ? sh.imageDataUrl
+              : (typeof sh.imagePath === "string" ? sh.imagePath
+                : (typeof sh.generatedImageUrl === "string" ? sh.generatedImageUrl
+                  : (typeof sh.imageUrl === "string" ? sh.imageUrl : "")));
+          const shotImagePath = toGcsPath(shotImageUrl) || (typeof sh.imagePath === "string" ? sh.imagePath : "");
+          const shotVideoUrlRaw =
+            typeof sh.videoUrl === "string" ? sh.videoUrl
+              : (typeof sh.videoPlaybackUrl === "string" ? sh.videoPlaybackUrl
+                : (typeof sh.videoPath === "string" ? sh.videoPath
+                  : (typeof sh.generatedVideoUrl === "string" ? sh.generatedVideoUrl : "")));
+          const shotVideoPath = toGcsPath(shotVideoUrlRaw) || (typeof sh.videoPath === "string" ? sh.videoPath : "");
+          const keepInlineShotVideo = String(shotVideoUrlRaw).startsWith("data:video/");
+          const shotVideoUrl = shotVideoPath || (keepInlineShotVideo ? shotVideoUrlRaw : "");
           return {
             id: String(sh.id || `${sceneId}.${j + 1}`),
             duration: Number.isFinite(dur) && dur > 0 ? dur : 0,
@@ -136,6 +150,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
             cameraMove: typeof sh.cameraMove === "string" ? sh.cameraMove : "static",
             composition: typeof sh.composition === "string" ? sh.composition : "",
             action: typeof sh.action === "string" ? sh.action : "",
+            imageDataUrl: shotImagePath || shotImageUrl,
+            imagePath: shotImagePath,
+            videoUrl: shotVideoUrl,
+            videoPath: shotVideoPath,
+            videoStatus: typeof sh.videoStatus === "string" ? sh.videoStatus : "",
+            videoError: typeof sh.videoError === "string" ? sh.videoError : "",
+            videoJobId: typeof sh.videoJobId === "string" ? sh.videoJobId : "",
+            videoMethod: typeof sh.videoMethod === "string" ? sh.videoMethod : "",
           };
         })
         .filter(Boolean);

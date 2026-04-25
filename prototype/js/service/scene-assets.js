@@ -86,6 +86,40 @@
     ]);
   }
 
+  function getShotImageUrl(shot) {
+    return firstFilled([
+      shot && shot.imageDataUrl,
+      shot && shot.imagePath,
+      shot && shot.generatedImageUrl,
+      shot && shot.imageUrl
+    ]);
+  }
+
+  function getShotVideoUrl(shot) {
+    return firstFilled([
+      shot && shot.videoUrl,
+      shot && shot.videoPlaybackUrl,
+      shot && shot.generatedVideoUrl,
+      shot && shot.videoPath
+    ]);
+  }
+
+  /**
+   * 씬을 컷 단위로 풀어 영상을 합칠 때 쓸 정렬된 비디오 URL 배열.
+   * - 씬에 컷별 영상이 하나라도 있으면 → 그 컷 영상들을 id 순으로 사용
+   * - 컷이 없거나 컷 영상이 하나도 없으면 → 씬 단위 영상 1개로 폴백
+   * - 둘 다 없으면 빈 배열
+   */
+  function getOrderedSceneClipUrls(scene) {
+    var shots = scene && Array.isArray(scene.shots) ? scene.shots : [];
+    var shotUrls = shots
+      .map(function (sh) { return getShotVideoUrl(sh); })
+      .filter(function (u) { return !!u; });
+    if (shotUrls.length) return shotUrls;
+    var sceneVideo = getSceneVideoUrl(scene);
+    return sceneVideo ? [sceneVideo] : [];
+  }
+
   function findSceneVideoFromLibrary(scene, vidItems) {
     if (!scene || !Array.isArray(vidItems) || !vidItems.length) return '';
     var sid = String(scene.id || '').trim();
@@ -321,6 +355,9 @@
   sceneAssets.isSceneMediaUrlStale = isSceneMediaUrlStale;
   sceneAssets.getSceneImageUrl = getSceneImageUrl;
   sceneAssets.getSceneVideoUrl = getSceneVideoUrl;
+  sceneAssets.getShotImageUrl = getShotImageUrl;
+  sceneAssets.getShotVideoUrl = getShotVideoUrl;
+  sceneAssets.getOrderedSceneClipUrls = getOrderedSceneClipUrls;
   sceneAssets.findSceneVideoFromLibrary = findSceneVideoFromLibrary;
   sceneAssets.projectNeedsAssetRefresh = projectNeedsAssetRefresh;
   sceneAssets.refreshProjectSceneAssets = refreshProjectSceneAssets;
