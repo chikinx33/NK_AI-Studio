@@ -2569,6 +2569,21 @@ textarea::-webkit-scrollbar-corner {
   white-space: nowrap;
 }
 
+/* 헤더의 장소 인풋 — 가능한 공간을 채움. est-input 다음, 카메라 칩 이전 */
+.scenario-card .card-title-row .location-input {
+  flex: 1 1 auto;
+  min-width: 120px;
+  font-size: 12px;
+  padding: 4px 8px;
+  background: var(--layer-soft);
+  border: 1px solid var(--chip-border);
+  color: var(--text);
+  border-radius: 4px;
+}
+.scenario-card .card-title-row .location-input::placeholder {
+  color: var(--muted);
+}
+
 /* 프로덕션 페이지 scene-row 헤더의 카메라 셋업 칩 */
 .scene-row-chip.chip-shot-type,
 .scene-row-chip.chip-camera-move {

@@ -1281,7 +1281,10 @@
       const est = parseEst(estTxt);
       const narrationText = card.querySelector('.view-narration-lines')?.textContent?.trim() || '';
       const uiDialogueText = card.querySelector('.view-dialogue-lines')?.textContent?.trim() || '';
-      const locationText = card.querySelector('.view-location-lines')?.textContent?.trim() || '';
+      // 장소: 새 layout(.location-input) 우선, legacy(.view-location-lines) 폴백
+      const locationText = (card.querySelector('.location-input')?.value
+        || card.querySelector('.view-location-lines')?.textContent
+        || '').trim();
       const normalizedDialogueText = uiDialogueText.replace(/\s*·\s*/g, '\n');
       const dialogue = normalizeDialogue(normalizedDialogueText, currentCharacters);
       const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
@@ -1479,16 +1482,13 @@
           <div class="card-title-row">
             <h5>${escapeHtml(displayLabel)}</h5>
             <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
+            <input class="chip-input location-input" data-id="${s.id}" value="${escapeHtml(s.sceneLocation || '')}" placeholder="${escapeHtml(labels.location || '장소')}" title="${escapeHtml(labels.location || '장소')}" />
             ${s.shotType ? `<span class="card-camera-chip" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}
             ${s.cameraMove ? `<span class="card-camera-chip" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
           </div>
           <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}" title="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
         </div>
         <div class="scene-visual-grid">
-          <div class="field-block">
-            <p class="field-label muted small">${labels.location}</p>
-            <p class="view-lines view-location-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.sceneLocation || '')}</p>
-          </div>
           ${hasStructured ? `
           <div class="field-block">
             <p class="field-label muted small">화면</p>
