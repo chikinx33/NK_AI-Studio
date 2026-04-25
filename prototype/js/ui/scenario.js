@@ -1471,6 +1471,10 @@
     if (!container) return;
     const sceneList = normalizeScenes(scenes);
     const labels = getSceneFieldLabels();
+    // 음성 모드: 없음/나레이션/더빙 → 나레이션/대사 row 표시 여부 결정
+    const __voiceFlags = getScenarioFlags(currentPayload || {});
+    const __showNarration = !!__voiceFlags.narrationEnabled;
+    const __showDialogue = !!__voiceFlags.dubbingEnabled;
     if (!sceneList.length) {
       container.innerHTML = `
         <div class="empty-state center-empty">
@@ -1546,15 +1550,17 @@
             <p class="field-label muted small">${labels.visual}</p>
             <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.shot || '')}</p>
           </div>`}
+          ${__showNarration ? `
           <div class="field-block">
             <p class="field-label muted small">${labels.narration}</p>
             <p class="view-lines view-narration-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.narrationText || '')}</p>
-          </div>
+          </div>` : ''}
+          ${__showDialogue ? `
           <div class="field-block">
             <p class="field-label muted small">${labels.dialogue}</p>
             <p class="view-lines view-dialogue-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(String(s.dialogueText || dialogueToText(s.dialogue || []))
               .replace(/\r?\n+/g, ' · '))}</p>
-          </div>
+          </div>` : ''}
         </div>
       </div>
     `;

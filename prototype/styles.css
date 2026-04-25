@@ -2592,12 +2592,13 @@ textarea::-webkit-scrollbar-corner {
   color: var(--text);
 }
 
-/* 헤더의 장소 인풋 — 가능한 공간을 채움. est-input 다음, 카메라 칩 이전 */
+/* 헤더의 장소 인풋 — est-input 다음, 카메라 칩 이전. 2배 넓이 + 왼쪽 정렬 */
 .scenario-card .card-title-row .location-input {
-  flex: 1 1 auto;
-  min-width: 120px;
+  flex: 2 1 auto;
+  min-width: 240px;
+  text-align: left;
   font-size: 12px;
-  padding: 4px 8px;
+  padding: 4px 10px;
   background: var(--layer-soft);
   border: 1px solid var(--chip-border);
   color: var(--text);
@@ -2605,6 +2606,7 @@ textarea::-webkit-scrollbar-corner {
 }
 .scenario-card .card-title-row .location-input::placeholder {
   color: var(--muted);
+  text-align: left;
 }
 
 /* 프로덕션 페이지 scene-row 헤더의 카메라 셋업 칩 */
