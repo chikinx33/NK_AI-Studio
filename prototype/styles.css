@@ -2385,7 +2385,7 @@ textarea::-webkit-scrollbar-corner {
   display: flex;
   flex-direction: column;
   height: auto;
-  min-height: 258px;
+  /* min-height 제거: 콘텐츠 (장소가 헤더로 이동, 화면/행동/나레이션/대사 4 줄) 에 맞춰 자동 */
   --scene-field-height: 36px;
   --scene-shot-height: 74px;
   --scene-dialogue-height: 36px;
@@ -2567,6 +2567,29 @@ textarea::-webkit-scrollbar-corner {
   letter-spacing: 0.02em;
   align-self: center;
   white-space: nowrap;
+}
+
+/* 모든 씬에 공통으로 적용된 배경 (공통 prefix) 배지 — 시나리오 카드들 위 한 줄 */
+.scenario-common-prefix-badge {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--layer-soft);
+  border: 1px solid var(--chip-border);
+  color: var(--text);
+  font-size: 12px;
+}
+.scenario-common-prefix-badge .badge-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.scenario-common-prefix-badge .badge-value {
+  flex: 1 1 auto;
+  color: var(--text);
 }
 
 /* 헤더의 장소 인풋 — 가능한 공간을 채움. est-input 다음, 카메라 칩 이전 */

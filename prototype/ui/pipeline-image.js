@@ -368,9 +368,33 @@
     };
   }
 
+  // sceneLocation 에서 Common 헤더(common) 와 중복되는 시작 부분을 잘라낸다.
+  // 예: common="...배경: 중세 판타지 전장. ...", sceneLocation="중세 판타지 전장 — 광활한 평원"
+  //     → "광활한 평원" 만 남김 (중세 판타지 전장 은 Common 에 이미 있음)
+  function dedupeLocationAgainstCommon(loc, common) {
+    var s = String(loc || '').trim();
+    if (!s || !common) return s;
+    // common 텍스트 안에 sceneLocation 의 시작 단어들이 등장하는지 검사.
+    // 가장 긴 prefix 부터 시도해 매칭되면 잘라냄.
+    var maxLen = Math.min(s.length, 80);
+    for (var len = maxLen; len >= 4; len--) {
+      var head = s.slice(0, len).trim();
+      if (!head) continue;
+      // 끝이 구분자/공백이면 빼고 비교
+      var headStripped = head.replace(/[\s—\-:·、,/]+$/u, '');
+      if (headStripped.length < 4) continue;
+      if (common.indexOf(headStripped) !== -1) {
+        // 매칭 — slice 해서 잘라낸 뒤 선두 구분자 제거
+        return s.slice(len).replace(/^[\s—\-:·、,/]+/u, '').trim();
+      }
+    }
+    return s;
+  }
+
   function buildImagePrompt(scene, header, cleanHeader) {
     var common = cleanHeader(header || '');
-    var sceneLocation = String((scene && (scene.sceneLocation || scene.location)) || '').trim();
+    var rawLocation = String((scene && (scene.sceneLocation || scene.location)) || '').trim();
+    var sceneLocation = dedupeLocationAgainstCommon(rawLocation, common);
     var composition = String((scene && scene.composition) || '').trim();
     var action = String((scene && scene.action) || '').trim();
     var primaryVisual = String((scene && scene.shot) || '').trim();

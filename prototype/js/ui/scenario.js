@@ -1282,9 +1282,15 @@
       const narrationText = card.querySelector('.view-narration-lines')?.textContent?.trim() || '';
       const uiDialogueText = card.querySelector('.view-dialogue-lines')?.textContent?.trim() || '';
       // 장소: 새 layout(.location-input) 우선, legacy(.view-location-lines) 폴백
-      const locationText = (card.querySelector('.location-input')?.value
+      const locationRawInput = (card.querySelector('.location-input')?.value
         || card.querySelector('.view-location-lines')?.textContent
         || '').trim();
+      // 공통 prefix 가 strip 되어 표시 중이면 다시 붙여 원본 형태로 저장
+      const locationText = (__currentLocationPrefix && locationRawInput)
+        ? (locationRawInput.indexOf(__currentLocationPrefix) === 0
+            ? locationRawInput
+            : (__currentLocationPrefix + ' — ' + locationRawInput))
+        : locationRawInput;
       const normalizedDialogueText = uiDialogueText.replace(/\s*·\s*/g, '\n');
       const dialogue = normalizeDialogue(normalizedDialogueText, currentCharacters);
       const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
@@ -1374,6 +1380,37 @@
   };
 
   // ---------- render scenes ----------
+  // 모든 씬의 sceneLocation 에서 공통으로 시작하는 prefix 를 찾는다.
+  // 예: ["중세 판타지 전장 — 광활한 평원", "중세 판타지 전장 — 황량한 능선"] → "중세 판타지 전장"
+  // 끝에 붙은 구분자(— - : · / 등)와 공백은 제거.
+  function findCommonLocationPrefix(scenes) {
+    const locs = (Array.isArray(scenes) ? scenes : [])
+      .map((s) => String((s && s.sceneLocation) || '').trim())
+      .filter(Boolean);
+    if (locs.length < 2) return '';
+    let common = locs[0];
+    for (const l of locs) {
+      while (l.indexOf(common) !== 0) {
+        common = common.slice(0, -1);
+        if (!common) return '';
+      }
+    }
+    // 의미 있는 길이 (2 자 이상) 만 인정. 끝에 붙은 구분자 trim.
+    const trimmed = common.replace(/[\s—\-:·、,/]+$/u, '').trim();
+    if (trimmed.length < 2) return '';
+    return trimmed;
+  }
+
+  // 주어진 location 텍스트에서 commonPrefix 를 떼어낸 unique 부분 반환
+  function stripLocationPrefix(loc, prefix) {
+    const s = String(loc || '');
+    if (!prefix || s.indexOf(prefix) !== 0) return s;
+    return s.slice(prefix.length).replace(/^[\s—\-:·、,/]+/u, '').trim();
+  }
+
+  // 현재 렌더 사이클에 적용된 공통 location prefix (collectScenesFromCards 에서 다시 prepend 하기 위해 보관)
+  let __currentLocationPrefix = '';
+
   // legacy 평탄화: scene.shots 가 길이 ≥ 2 면 각 shot 을 새 scene 으로 펼침
   function flattenLegacyShots(rawScenes) {
     if (!Array.isArray(rawScenes)) return [];
@@ -1444,6 +1481,9 @@
         </div>`;
       return;
     }
+    // 공통 location prefix 자동 감지 (모든 씬 sceneLocation 의 가장 긴 공통 시작 부분).
+    // 발견되면 헤더 입력엔 unique 부분만 표시, 저장 시 다시 prepend → 데이터 손실 없음.
+    __currentLocationPrefix = findCommonLocationPrefix(sceneList);
     // 그룹 라벨: 연속된 씬이 같은 sceneLocation 을 공유하면 한 그룹으로 묶어
     // "Scene N - M" 표시. 단일 컷은 "Scene N".
     // (장소가 바뀌면 새 씬, 장소가 비어 있으면 매번 새 씬으로 취급)
@@ -1471,7 +1511,11 @@
       });
     })();
 
-    container.innerHTML = sceneList.map((s, i) => {
+    // 공통 prefix 가 있으면 카드들 위에 작은 배지 한 줄 추가 (참고용 — 사용자가 어떤 prefix 가 strip 됐는지 알 수 있게)
+    const commonPrefixBadge = __currentLocationPrefix
+      ? `<div class="scenario-common-prefix-badge" title="모든 씬에 공통으로 적용된 배경. 이미지 생성에는 Common 영역을 통해 이미 반영됩니다."><span class="badge-label muted small">공통 배경</span><span class="badge-value">${escapeHtml(__currentLocationPrefix)}</span></div>`
+      : '';
+    container.innerHTML = commonPrefixBadge + sceneList.map((s, i) => {
       const displayLabel = labelByIdx[i] || ('Scene ' + (i + 1));
       const hasComposition = !!String(s.composition || '').trim();
       const hasAction = !!String(s.action || '').trim();
@@ -1482,7 +1526,7 @@
           <div class="card-title-row">
             <h5>${escapeHtml(displayLabel)}</h5>
             <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
-            <input class="chip-input location-input" data-id="${s.id}" value="${escapeHtml(s.sceneLocation || '')}" placeholder="${escapeHtml(labels.location || '장소')}" title="${escapeHtml(labels.location || '장소')}" />
+            <input class="chip-input location-input" data-id="${s.id}" value="${escapeHtml(stripLocationPrefix(s.sceneLocation || '', __currentLocationPrefix))}" placeholder="${escapeHtml(labels.location || '장소')}" title="${escapeHtml(s.sceneLocation || labels.location || '장소')}" />
             ${s.shotType ? `<span class="card-camera-chip" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}
             ${s.cameraMove ? `<span class="card-camera-chip" title="camera move">${escapeHtml(s.cameraMove)}</span>` : ''}
           </div>
