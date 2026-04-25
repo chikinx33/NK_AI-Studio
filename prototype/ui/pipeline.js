@@ -807,12 +807,19 @@
       var rows = scenes.map(function (s, i) {
         var lab = __labels[i];
         var totalCuts = __totalByParent[lab.parentNo] || 1;
-        var displayLabel = (totalCuts > 1)
-          ? ('Scene ' + lab.parentNo + ' - ' + lab.cutNo)
-          : ('Scene ' + lab.parentNo);
+        var displayLabel, displayLabelHtml;
+        if (totalCuts <= 1) {
+          displayLabel = 'Scene ' + lab.parentNo;
+          displayLabelHtml = displayLabel;
+        } else {
+          // 복수 컷: cut1 은 "Scene N cut1" 로, cut2~ 는 "Scene N " spacer 로 정렬 유지
+          var prefixCls = lab.cutNo === 1 ? 'label-scene' : 'label-scene label-scene-spacer';
+          displayLabel = 'Scene ' + lab.parentNo + ' cut' + lab.cutNo;
+          displayLabelHtml = '<span class="' + prefixCls + '">Scene ' + lab.parentNo + ' </span><span class="label-cut">cut' + lab.cutNo + '</span>';
+        }
         var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
-        var updatedScene = Object.assign({}, s, { promptText: displayPrompt, displayLabel: displayLabel });
+        var updatedScene = Object.assign({}, s, { promptText: displayPrompt, displayLabel: displayLabel, displayLabelHtml: displayLabelHtml });
         return buildSceneRowHtml(updatedScene, header);
       }).join('');
       state.scenes = scenes.map(function (s) {

@@ -1488,9 +1488,9 @@
     // 공통 location prefix 자동 감지 (모든 씬 sceneLocation 의 가장 긴 공통 시작 부분).
     // 발견되면 헤더 입력엔 unique 부분만 표시, 저장 시 다시 prepend → 데이터 손실 없음.
     __currentLocationPrefix = findCommonLocationPrefix(sceneList);
-    // 그룹 라벨: 연속된 씬이 같은 sceneLocation 을 공유하면 한 그룹으로 묶어
-    // "Scene N - M" 표시. 단일 컷은 "Scene N".
-    // (장소가 바뀌면 새 씬, 장소가 비어 있으면 매번 새 씬으로 취급)
+    // 그룹 라벨 메타: 연속된 씬이 같은 sceneLocation 을 공유하면 한 그룹.
+    // 첫 컷은 "Scene N cut1", 이후 컷은 보이지 않는 "Scene N " spacer + "cutM" 으로
+    // 시각적 좌측 정렬을 유지. 단일 컷은 그냥 "Scene N".
     const labelByIdx = (function () {
       let lastLoc = null;
       let parentNo = 0;
@@ -1511,7 +1511,14 @@
       });
       return seq.map((g) => {
         const total = totalByParent[g.parentNo] || 1;
-        return total > 1 ? ('Scene ' + g.parentNo + ' - ' + g.cutNo) : ('Scene ' + g.parentNo);
+        if (total <= 1) {
+          // 단일 컷: 평범하게 "Scene N"
+          return { html: 'Scene ' + g.parentNo, plain: 'Scene ' + g.parentNo };
+        }
+        // 복수 컷: prefix "Scene N " + "cutM". cutNo>=2 면 prefix 를 보이지 않게 (visibility:hidden) 하여 정렬 유지.
+        const prefixCls = g.cutNo === 1 ? 'label-scene' : 'label-scene label-scene-spacer';
+        const html = '<span class="' + prefixCls + '">Scene ' + g.parentNo + ' </span><span class="label-cut">cut' + g.cutNo + '</span>';
+        return { html: html, plain: 'Scene ' + g.parentNo + ' cut' + g.cutNo };
       });
     })();
 
@@ -1520,7 +1527,7 @@
       ? `<div class="scenario-common-prefix-badge" title="모든 씬에 공통으로 적용된 배경. 이미지 생성에는 Common 영역을 통해 이미 반영됩니다."><span class="badge-label muted small">공통 배경</span><span class="badge-value">${escapeHtml(__currentLocationPrefix)}</span></div>`
       : '';
     container.innerHTML = commonPrefixBadge + sceneList.map((s, i) => {
-      const displayLabel = labelByIdx[i] || ('Scene ' + (i + 1));
+      const labelMeta = labelByIdx[i] || { html: 'Scene ' + (i + 1), plain: 'Scene ' + (i + 1) };
       const hasComposition = !!String(s.composition || '').trim();
       const hasAction = !!String(s.action || '').trim();
       const hasStructured = hasComposition || hasAction;
@@ -1528,7 +1535,7 @@
       <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">
           <div class="card-title-row">
-            <h5>${escapeHtml(displayLabel)}</h5>
+            <h5 title="${escapeHtml(labelMeta.plain)}">${labelMeta.html}</h5>
             <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
             <input class="chip-input location-input" data-id="${s.id}" value="${escapeHtml(stripLocationPrefix(s.sceneLocation || '', __currentLocationPrefix))}" placeholder="${escapeHtml(labels.location || '장소')}" title="${escapeHtml(s.sceneLocation || labels.location || '장소')}" />
             ${s.shotType ? `<span class="card-camera-chip" title="shot type">${escapeHtml(s.shotType)}</span>` : ''}

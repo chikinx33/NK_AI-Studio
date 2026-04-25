@@ -2564,6 +2564,14 @@ textarea::-webkit-scrollbar-corner {
   padding-top: 2px;
 }
 
+/* 같은 부모 씬의 cut2~cutN 라벨에서 "Scene N " 부분은 보이지 않게 하되 너비는 유지하여
+   첫 컷의 "Scene N cut1" 과 좌측 정렬을 맞춘다. */
+.label-scene-spacer {
+  visibility: hidden;
+}
+.label-scene { white-space: pre; }
+.label-cut { color: var(--text); }
+
 /* 시나리오 카드 헤더의 카메라 칩 (Scene 1 - 1 옆 [3s] 다음에 [EWS] [static]) */
 .scenario-card .card-title-row .card-camera-chip {
   display: inline-block;

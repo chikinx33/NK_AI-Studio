@@ -331,7 +331,7 @@
       '<div class="scene-row' + collapseClass + '" data-id="' + scene.id + '">' +
       '<div class="scene-row-header">' +
       '<button type="button" class="scene-row-toggle" aria-expanded="' + (isCollapsed ? 'false' : 'true') + '" aria-label="' + toggleLabel + '" title="' + toggleLabel + '">' + toggleIcon + '</button>' +
-      '<span class="scene-row-title">' + escapeText(scene.displayLabel || ('Scene ' + scene.id)) + '</span>' +
+      '<span class="scene-row-title" title="' + escapeAttr(scene.displayLabel || ('Scene ' + scene.id)) + '">' + (scene.displayLabelHtml || escapeText(scene.displayLabel || ('Scene ' + scene.id))) + '</span>' +
       '<span class="scene-row-preview">' + narrationPreview + '</span>' +
       '<span class="scene-row-chips">' + statusChips + '</span>' +
       '</div>' +
