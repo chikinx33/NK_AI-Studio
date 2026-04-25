@@ -1091,6 +1091,14 @@
         videoSpeechPrompt: String(s.videoSpeechPrompt || '').trim(),
         script: String(s.script || '').trim(),
         shot: applyCharacterTokenHints(String(shot || '').trim(), activeCharacters),
+        shots: Array.isArray(s.shots) ? s.shots.map((sh, j) => ({
+          id: String(sh?.id || `${s.id != null ? s.id : (i + 1)}.${j + 1}`),
+          duration: Number(sh?.duration) || 0,
+          shotType: String(sh?.shotType || 'MS'),
+          cameraMove: String(sh?.cameraMove || 'static'),
+          composition: String(sh?.composition || '').trim(),
+          action: String(sh?.action || '').trim()
+        })) : [],
         estSec: est,
         narrationEnabled: boolVal(s?.narrationEnabled, boolVal(currentPayload?.narrationEnabled, false)),
         dubbingEnabled: boolVal(s?.dubbingEnabled, boolVal(currentPayload?.dubbingEnabled, false))
@@ -1400,6 +1408,27 @@
               .replace(/\r?\n+/g, ' · '))}</p>
           </div>
         </div>
+        ${(Array.isArray(s.shots) && s.shots.length) ? `
+          <div class="scene-shot-grid" data-scene-id="${s.id}">
+            <p class="field-label muted small">콘티 / Shot</p>
+            <ol class="shot-list">
+              ${s.shots.map((sh) => `
+                <li class="shot-item" data-shot-id="${escapeHtml(sh.id)}">
+                  <div class="shot-head">
+                    <span class="shot-id">${escapeHtml(sh.id)}</span>
+                    <span class="shot-type" title="shot type">${escapeHtml(sh.shotType)}</span>
+                    <span class="shot-move" title="camera move">${escapeHtml(sh.cameraMove)}</span>
+                    <span class="shot-dur">${escapeHtml(String(sh.duration))}s</span>
+                  </div>
+                  <div class="shot-body">
+                    <p class="shot-comp"><span class="shot-tag">화면</span> ${escapeHtml(sh.composition || '')}</p>
+                    <p class="shot-act"><span class="shot-tag">행동</span> ${escapeHtml(sh.action || '')}</p>
+                  </div>
+                </li>
+              `).join('')}
+            </ol>
+          </div>
+        ` : ''}
       </div>
     `).join('');
     container.querySelectorAll('.scenario-card.is-collapsed').forEach((card) => setScenarioCardCollapsed(card, true, false));
@@ -2066,7 +2095,22 @@
           ? NK.service.project.buildVisualHeader(payload)
           : '';
         if (res?.scenes) {
-          const normalized = normalizeScenes(res.scenes);
+          // Pass 2: scene 을 콘티 단위 shot 으로 분해. 실패해도 시나리오는 살림.
+          let scenesWithShots = res.scenes;
+          try {
+            if (NK.api?.scenarioShots) {
+              const shotsRes = await NK.api.scenarioShots({
+                scenes: res.scenes,
+                language: payload?.language === 'en' ? 'en' : 'ko'
+              });
+              if (shotsRes && Array.isArray(shotsRes.scenes)) {
+                scenesWithShots = shotsRes.scenes;
+              }
+            }
+          } catch (shotsErr) {
+            console.warn('[scenario] shot decomposition failed; keeping scenes without shots', shotsErr);
+          }
+          const normalized = normalizeScenes(scenesWithShots);
           draft = draft || { id: Date.now(), title: payload.topic || '새 프로젝트' };
           draft.title = payload.topic || draft.title || '새 프로젝트';
           draft.payload = payload;

@@ -179,6 +179,38 @@
     return data;
   };
 
+  // Pass 2: scene 배열을 받아 각 scene 을 1~5 shot 으로 분해.
+  // 실패 시 throw — 호출 측에서 원본 scenes 그대로 사용 가능 (shots 없는 단계).
+  api.scenarioShots = async function (payload) {
+    var scenes = (payload && payload.scenes) || [];
+    if (!Array.isArray(scenes) || !scenes.length) {
+      throw new Error('scenarioShots_no_scenes');
+    }
+    var res = await fetchWithTimeout(withBase('/api/scenario-shots'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }, 60000);
+    var text = await readTextWithTimeout(res, 60000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'scenario_shots_failed');
+      err.status = res.status;
+      err.detail = text;
+      if (res.status === 402 || /CREDIT_EXHAUSTED/.test(text)) {
+        err.message = 'CREDIT_EXHAUSTED';
+        err.creditExhausted = true;
+      }
+      throw err;
+    }
+    var data = j(text);
+    if (!data || !Array.isArray(data.scenes)) {
+      var invalid = new Error('scenario_shots_response_invalid');
+      invalid.detail = text;
+      throw invalid;
+    }
+    return data;
+  };
+
   api.storyStructure = async function (payload) {
     var res = await fetchWithTimeout(withBase('/api/story-structure'), {
       method: 'POST',
