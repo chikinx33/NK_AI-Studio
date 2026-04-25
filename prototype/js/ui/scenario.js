@@ -1441,36 +1441,30 @@
         </div>`;
       return;
     }
-    // 부모 그룹 라벨 계산: parentSceneId 가 같은 연속 씬을 한 그룹으로 묶어
-    // "Scene N 컷 M" 형태로 표시. parentSceneId 가 없으면 단순 "Scene N".
+    // 그룹 라벨: 연속된 씬이 같은 sceneLocation 을 공유하면 한 그룹으로 묶어
+    // "Scene N - M" 표시. 단일 컷은 "Scene N".
+    // (장소가 바뀌면 새 씬, 장소가 비어 있으면 매번 새 씬으로 취급)
     const labelByIdx = (function () {
-      const out = new Map();
-      const parentSeq = new Map(); // parentSceneId → 1..N
-      const cutCounters = new Map(); // parentSceneId → current cut count
-      let nextParentNo = 1;
-      sceneList.forEach((sc, i) => {
-        const pid = (sc && sc.parentSceneId != null) ? String(sc.parentSceneId) : null;
-        if (pid != null) {
-          if (!parentSeq.has(pid)) parentSeq.set(pid, nextParentNo++);
-          const parentNo = parentSeq.get(pid);
-          const cutNo = (cutCounters.get(pid) || 0) + 1;
-          cutCounters.set(pid, cutNo);
-          // 같은 parent 그룹 안에 컷이 여럿이면 "Scene N 컷 M", 단일이면 "Scene N"
-          out.set(i, { parentNo: parentNo, cutNo: cutNo });
+      let lastLoc = null;
+      let parentNo = 0;
+      let cutNo = 0;
+      const seq = [];
+      const totalByParent = {};
+      sceneList.forEach((sc) => {
+        const loc = String((sc && sc.sceneLocation) || '').trim();
+        if (!loc || loc !== lastLoc) {
+          parentNo += 1;
+          cutNo = 1;
+          lastLoc = loc;
         } else {
-          out.set(i, { parentNo: nextParentNo++, cutNo: 1 });
+          cutNo += 1;
         }
+        seq.push({ parentNo, cutNo });
+        totalByParent[parentNo] = cutNo;
       });
-      // 각 parent 그룹의 총 컷 수를 알기 위해 카운터 다시 사용
-      const totalCutsPerParent = cutCounters; // 위에서 누적된 최종값
-      return sceneList.map((sc, i) => {
-        const meta = out.get(i);
-        const pid = (sc && sc.parentSceneId != null) ? String(sc.parentSceneId) : null;
-        const total = pid != null ? (totalCutsPerParent.get(pid) || 1) : 1;
-        if (total > 1) {
-          return 'Scene ' + meta.parentNo + ' - ' + meta.cutNo;
-        }
-        return 'Scene ' + meta.parentNo;
+      return seq.map((g) => {
+        const total = totalByParent[g.parentNo] || 1;
+        return total > 1 ? ('Scene ' + g.parentNo + ' - ' + g.cutNo) : ('Scene ' + g.parentNo);
       });
     })();
 

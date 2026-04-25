@@ -786,21 +786,27 @@
       var voiceCache = {};
       try { voiceCache = JSON.parse(localStorage.getItem(voiceCacheKey) || '{}') || {}; } catch (_) { voiceCache = {}; }
       pipelineScenes.classList.remove('empty');
-      // 부모 그룹 계산: parentSceneId 가 같은 연속 씬을 한 그룹으로
-      var __parentSeq = {}; var __cutCount = {}; var __nextParentNo = 1;
-      var labels = scenes.map(function (s) {
-        var pid = (s && s.parentSceneId != null) ? String(s.parentSceneId) : null;
-        if (pid != null) {
-          if (__parentSeq[pid] == null) __parentSeq[pid] = __nextParentNo++;
-          __cutCount[pid] = (__cutCount[pid] || 0) + 1;
-          return { parentNo: __parentSeq[pid], cutNo: __cutCount[pid], pid: pid };
+      // 그룹 라벨: 연속된 씬이 같은 sceneLocation 을 공유하면 한 그룹.
+      // 장소가 바뀌면 새 씬. 장소가 비어 있으면 매번 새 씬.
+      var __lastLoc = null;
+      var __parentNo = 0;
+      var __cutNo = 0;
+      var __totalByParent = {};
+      var __labels = scenes.map(function (s) {
+        var loc = String((s && s.sceneLocation) || '').trim();
+        if (!loc || loc !== __lastLoc) {
+          __parentNo += 1;
+          __cutNo = 1;
+          __lastLoc = loc;
+        } else {
+          __cutNo += 1;
         }
-        return { parentNo: __nextParentNo++, cutNo: 1, pid: null };
+        __totalByParent[__parentNo] = __cutNo;
+        return { parentNo: __parentNo, cutNo: __cutNo };
       });
       var rows = scenes.map(function (s, i) {
-        var lab = labels[i];
-        var pid = lab.pid;
-        var totalCuts = pid != null ? __cutCount[pid] : 1;
+        var lab = __labels[i];
+        var totalCuts = __totalByParent[lab.parentNo] || 1;
         var displayLabel = (totalCuts > 1)
           ? ('Scene ' + lab.parentNo + ' - ' + lab.cutNo)
           : ('Scene ' + lab.parentNo);
