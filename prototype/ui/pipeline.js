@@ -638,11 +638,31 @@
           // 로컬 캐시 우선 렌더링 → 스피너는 DOM 완성 후 해제 (ui.render 말미에서 처리)
           state = buildStateFromData(stored, stored.draftId || projectId);
           ctx.setState(state);
-          // 백그라운드: 서버 동기화 (스피너가 떠 있는 동안 조용히 반영)
+          // 백그라운드: 서버 동기화 — 새 shots / 미디어가 있을 수 있으므로 재렌더 필요
           fetchFromServer().then(function (sd) {
             if (!sd) return;
-            state = buildStateFromData(sd, projectId);
-            ctx.setState(state);
+            var freshState = buildStateFromData(sd, projectId);
+            // 서버에 더 풍부한 데이터(shots 추가, 미디어 변경 등)가 있을 때만 재렌더
+            var prev = ctx.getState ? ctx.getState() : state;
+            var prevScenes = (prev && Array.isArray(prev.scenes)) ? prev.scenes : [];
+            var nextScenes = Array.isArray(freshState.scenes) ? freshState.scenes : [];
+            var changed = false;
+            if (prevScenes.length !== nextScenes.length) changed = true;
+            if (!changed) {
+              for (var i = 0; i < nextScenes.length; i++) {
+                var ps = prevScenes[i] || {};
+                var ns = nextScenes[i] || {};
+                var pShots = Array.isArray(ps.shots) ? ps.shots.length : 0;
+                var nShots = Array.isArray(ns.shots) ? ns.shots.length : 0;
+                if (pShots !== nShots) { changed = true; break; }
+                if ((ps.imageDataUrl || '') !== (ns.imageDataUrl || '')) { changed = true; break; }
+                if ((ps.videoUrl || '') !== (ns.videoUrl || '')) { changed = true; break; }
+              }
+            }
+            ctx.setState(freshState);
+            if (changed && NK.uiPipeline && NK.uiPipeline.render) {
+              try { NK.uiPipeline.render(); } catch (_) {}
+            }
           }).catch(function () {});
         } else {
           // 로컬 캐시 없음: 서버 응답 대기 후 렌더링
