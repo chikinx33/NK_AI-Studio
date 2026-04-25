@@ -691,6 +691,12 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
 - 각 씬의 visual 첫 문장은 이전 씬의 마지막 상태와 연결되어야 한다.
 - Scene 2의 시작은 Scene 1의 끝에서 자연스럽게 이어지는 화면이어야 한다.
 - 점프컷이 필요하면 시간/장소 전환을 명시적으로 드러낸다. 예: "3시간 후, 같은 장소", "컷 전환: 실내→야외"
+- 비트(scene) 경계 룰: 한 씬은 "한 행동·감정 단위" 이다. 같은 액션/감정 비트가 연속이면
+  공간이 미세하게 변해도(예: "우주선 외부 → 에어록 내부 진입", "궁전 복도 → 침실로 들어감")
+  반드시 한 씬으로 묶어라. Pass 2 가 그 씬을 여러 컷으로 분해해 sub-location 차이를 표현한다.
+  새 씬은 (a) 명백한 시간 점프, (b) 무관한 새 액션/감정 비트, (c) 다른 캐릭터 시퀀스로 전환할 때만.
+- sceneLocation 작성: 그 비트의 broad / 우선 location 을 적는다. 비트 안에 sub-location 이
+  여럿이면 둘 다 포함하거나 ("우주선 (외부+에어록)") 우선 sub-location 을 적는다.
 5. estSec과 내용 밀도를 맞춘다.
 - 2~3초 씬: 행동 1개 또는 반응 1개만
 - 4~5초 씬: 행동 1개 + 환경 디테일 1개
@@ -767,6 +773,13 @@ function buildSystemPromptEn(sceneCount, duration, spec = {}) {
 - The first sentence of each visual should connect to the ending state of the previous scene.
 - Scene 2 should begin from where Scene 1 visually ends.
 - If a jump cut is needed, mark the time/place change explicitly. Example: "3 hours later, same place", "Cut transition: indoors to outdoors"
+- Beat boundary rule: a scene = one action/emotional beat. If consecutive moments share the
+  same beat, keep them in ONE scene even when the sub-location shifts (e.g., "spaceship exterior →
+  airlock interior on entry", "palace corridor → bedroom"). Pass 2 will decompose that scene into
+  shots that express the sub-location difference. Start a NEW scene only on (a) explicit time
+  jump, (b) unrelated new action/emotional beat, or (c) switch to a different character sequence.
+- Writing sceneLocation: put the broad / primary location of the beat. If the beat covers multiple
+  sub-locations, either include both ("Spaceship (exterior + airlock)") or pick the primary one.
 5. Match estSec to content density.
 - 2-3 seconds: one action or one reaction only
 - 4-5 seconds: one action plus one environmental detail

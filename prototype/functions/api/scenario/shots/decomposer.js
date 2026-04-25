@@ -44,6 +44,12 @@ export function buildShotPromptKo() {
 4. 같은 행동을 여러 앵글로 쪼갠다. 예: "전사가 칼을 뽑는다(4초)"
    → CU 얼굴(1초) + INSERT 손(1초) + MS 뒷모습 실루엣(2초)
 5. composition: 프레임 안에 보이는 것을 명사 중심으로. "얼굴 클로즈업, 눈만 프레임" 처럼 구체적으로.
+   - 씬의 sceneLocation 이 broad 일 때 (예: "우주선", "궁전") 컷별 sub-location 을
+     composition 안에 자유롭게 명시하라. 예:
+       cut1 composition: "우주선 외부 측면, 선체 표면이 프레임을 가로지름"
+       cut2 composition: "에어록 내부, 닫히는 해치 너머로 스타필드 흐릿하게"
+       cut3 composition: "함교, 콘솔 LED 클로즈업"
+     모든 컷이 같은 sub-location 일 필요 없음. 한 비트 안에서 sub-location 이 진행될 수 있다.
 6. action: 이 샷에서 일어나는 물리적 행동·움직임. 추상 표현 금지.
 7. shotType, cameraMove 는 아래 어휘 안에서만 선택. 다른 단어 절대 금지.
 
@@ -67,6 +73,12 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 4. Cut the same action across multiple angles. Example: "warrior draws sword (4s)"
    → CU face (1s) + INSERT hand on hilt (1s) + MS silhouette from behind (2s)
 5. composition: noun-centric description of what is visible in frame. "Face close-up, only eyes in frame".
+   - When sceneLocation is broad (e.g., "Spaceship", "Palace"), feel free to specify per-shot
+     sub-locations inside composition. Example:
+       cut1 composition: "Spaceship exterior side, hull surface filling the frame"
+       cut2 composition: "Airlock interior, closing hatch with starfield blurred behind"
+       cut3 composition: "Bridge, close-up of console LEDs"
+     Shots within one beat may walk through different sub-locations.
 6. action: the physical motion happening in this specific shot. No abstract phrasing.
 7. shotType and cameraMove must be selected from the controlled vocabulary below — no other words allowed.
 

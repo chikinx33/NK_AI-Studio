@@ -1488,21 +1488,22 @@
     // 공통 location prefix 자동 감지 (모든 씬 sceneLocation 의 가장 긴 공통 시작 부분).
     // 발견되면 헤더 입력엔 unique 부분만 표시, 저장 시 다시 prepend → 데이터 손실 없음.
     __currentLocationPrefix = findCommonLocationPrefix(sceneList);
-    // 그룹 라벨 메타: 연속된 씬이 같은 sceneLocation 을 공유하면 한 그룹.
-    // 첫 컷은 "Scene N cut1", 이후 컷은 보이지 않는 "Scene N " spacer + "cutM" 으로
-    // 시각적 좌측 정렬을 유지. 단일 컷은 그냥 "Scene N".
+    // 그룹 라벨 메타: parentSceneId(AI 의 Pass 1 비트 분할) 가 같은 연속 씬을 한 그룹.
+    // 한 비트 안에서 sub-location 이 달라질 수 있음 (외부→내부 진입 등) — location 매칭 X.
+    // 첫 컷은 "Scene N cut1", 이후 컷은 보이지 않는 "Scene N " spacer + "cutM" 로 정렬.
+    // 단일 컷 또는 parentSceneId 가 없는 씬은 그냥 "Scene N".
     const labelByIdx = (function () {
-      let lastLoc = null;
+      let lastPid = null;
       let parentNo = 0;
       let cutNo = 0;
       const seq = [];
       const totalByParent = {};
       sceneList.forEach((sc) => {
-        const loc = String((sc && sc.sceneLocation) || '').trim();
-        if (!loc || loc !== lastLoc) {
+        const pid = (sc && sc.parentSceneId != null) ? String(sc.parentSceneId) : null;
+        if (pid == null || pid !== lastPid) {
           parentNo += 1;
           cutNo = 1;
-          lastLoc = loc;
+          lastPid = pid;
         } else {
           cutNo += 1;
         }
