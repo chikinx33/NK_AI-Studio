@@ -786,10 +786,27 @@
       var voiceCache = {};
       try { voiceCache = JSON.parse(localStorage.getItem(voiceCacheKey) || '{}') || {}; } catch (_) { voiceCache = {}; }
       pipelineScenes.classList.remove('empty');
-      var rows = scenes.map(function (s) {
+      // 부모 그룹 계산: parentSceneId 가 같은 연속 씬을 한 그룹으로
+      var __parentSeq = {}; var __cutCount = {}; var __nextParentNo = 1;
+      var labels = scenes.map(function (s) {
+        var pid = (s && s.parentSceneId != null) ? String(s.parentSceneId) : null;
+        if (pid != null) {
+          if (__parentSeq[pid] == null) __parentSeq[pid] = __nextParentNo++;
+          __cutCount[pid] = (__cutCount[pid] || 0) + 1;
+          return { parentNo: __parentSeq[pid], cutNo: __cutCount[pid], pid: pid };
+        }
+        return { parentNo: __nextParentNo++, cutNo: 1, pid: null };
+      });
+      var rows = scenes.map(function (s, i) {
+        var lab = labels[i];
+        var pid = lab.pid;
+        var totalCuts = pid != null ? __cutCount[pid] : 1;
+        var displayLabel = (totalCuts > 1)
+          ? ('Scene ' + lab.parentNo + ' · 컷 ' + lab.cutNo)
+          : ('Scene ' + lab.parentNo);
         var computedPrompt = ['Common', cleanHeader(header), 'Visual', (s.shot || '')].join('\\n');
         var displayPrompt = s.promptEdited ? (s.promptText || '') : computedPrompt;
-        var updatedScene = Object.assign({}, s, { promptText: displayPrompt });
+        var updatedScene = Object.assign({}, s, { promptText: displayPrompt, displayLabel: displayLabel });
         return buildSceneRowHtml(updatedScene, header);
       }).join('');
       state.scenes = scenes.map(function (s) {

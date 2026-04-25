@@ -370,10 +370,27 @@
 
   function buildImagePrompt(scene, header, cleanHeader) {
     var common = cleanHeader(header || '');
+    var sceneLocation = String((scene && (scene.sceneLocation || scene.location)) || '').trim();
+    var composition = String((scene && scene.composition) || '').trim();
+    var action = String((scene && scene.action) || '').trim();
     var primaryVisual = String((scene && scene.shot) || '').trim();
+    var cameraHint = '';
+    try {
+      if (window.NK && NK.service && NK.service.shotVocab && NK.service.shotVocab.buildShotCameraHint) {
+        cameraHint = NK.service.shotVocab.buildShotCameraHint(scene && scene.shotType, scene && scene.cameraMove, 'en');
+      }
+    } catch (_) { cameraHint = ''; }
     var promptBlocks = [];
     if (common) promptBlocks.push(common);
-    if (primaryVisual) promptBlocks.push(primaryVisual);
+    if (sceneLocation) promptBlocks.push('Location: ' + sceneLocation);
+    // composition / action 이 있으면 그것이 canonical visual. 없으면 visual(shot) 사용.
+    if (composition || action) {
+      if (composition) promptBlocks.push('Composition: ' + composition);
+      if (action) promptBlocks.push('Action: ' + action);
+    } else if (primaryVisual) {
+      promptBlocks.push(primaryVisual);
+    }
+    if (cameraHint) promptBlocks.push(cameraHint);
     promptBlocks.push('텍스트/워터마크를 넣지 말고, 지정된 스타일만 사용.');
     return promptBlocks.join('\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
   }

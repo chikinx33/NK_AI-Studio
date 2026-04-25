@@ -1441,11 +1441,48 @@
         </div>`;
       return;
     }
-    container.innerHTML = sceneList.map(s => `
+    // 부모 그룹 라벨 계산: parentSceneId 가 같은 연속 씬을 한 그룹으로 묶어
+    // "Scene N 컷 M" 형태로 표시. parentSceneId 가 없으면 단순 "Scene N".
+    const labelByIdx = (function () {
+      const out = new Map();
+      const parentSeq = new Map(); // parentSceneId → 1..N
+      const cutCounters = new Map(); // parentSceneId → current cut count
+      let nextParentNo = 1;
+      sceneList.forEach((sc, i) => {
+        const pid = (sc && sc.parentSceneId != null) ? String(sc.parentSceneId) : null;
+        if (pid != null) {
+          if (!parentSeq.has(pid)) parentSeq.set(pid, nextParentNo++);
+          const parentNo = parentSeq.get(pid);
+          const cutNo = (cutCounters.get(pid) || 0) + 1;
+          cutCounters.set(pid, cutNo);
+          // 같은 parent 그룹 안에 컷이 여럿이면 "Scene N 컷 M", 단일이면 "Scene N"
+          out.set(i, { parentNo: parentNo, cutNo: cutNo });
+        } else {
+          out.set(i, { parentNo: nextParentNo++, cutNo: 1 });
+        }
+      });
+      // 각 parent 그룹의 총 컷 수를 알기 위해 카운터 다시 사용
+      const totalCutsPerParent = cutCounters; // 위에서 누적된 최종값
+      return sceneList.map((sc, i) => {
+        const meta = out.get(i);
+        const pid = (sc && sc.parentSceneId != null) ? String(sc.parentSceneId) : null;
+        const total = pid != null ? (totalCutsPerParent.get(pid) || 1) : 1;
+        if (total > 1) {
+          return 'Scene ' + meta.parentNo + ' · 컷 ' + meta.cutNo;
+        }
+        return 'Scene ' + meta.parentNo;
+      });
+    })();
+
+    container.innerHTML = sceneList.map((s, i) => {
+      const displayLabel = labelByIdx[i] || ('Scene ' + (i + 1));
+      // composition/action 중 하나라도 있으면 화면/행동이 곧 시각화이므로 시각화 row 숨김 (중복 방지)
+      const hasStructured = !!(String(s.composition || '').trim() || String(s.action || '').trim());
+      return `
       <div class="scenario-card${collapsedSceneIds.has(String(s.id)) ? ' is-collapsed' : ''}" data-scene-id="${s.id}">
         <div class="card-top">
           <div class="card-title-row">
-            <h5>Scene ${s.id}</h5>
+            <h5>${escapeHtml(displayLabel)}</h5>
             <input class="chip-input est-input" data-id="${s.id}" value="${fmtEst(s.estSec)}" />
           </div>
           <button type="button" class="scenario-circle-toggle scenario-card-toggle" aria-expanded="${collapsedSceneIds.has(String(s.id)) ? 'false' : 'true'}" aria-label="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}" title="${escapeHtml(collapsedSceneIds.has(String(s.id)) ? getScenarioUiText().sceneExpand : getScenarioUiText().sceneCollapse)}">${collapsedSceneIds.has(String(s.id)) ? '+' : '-'}</button>
@@ -1455,10 +1492,11 @@
             <p class="field-label muted small">${labels.location}</p>
             <p class="view-lines view-location-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.sceneLocation || '')}</p>
           </div>
+          ${hasStructured ? '' : `
           <div class="field-block">
             <p class="field-label muted small">${labels.visual}</p>
             <p class="view-shot view-shot-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.shot || '')}</p>
-          </div>
+          </div>`}
           <div class="field-block">
             <p class="field-label muted small">${labels.narration}</p>
             <p class="view-lines view-narration-lines" data-id="${s.id}" contenteditable="true">${escapeHtml(s.narrationText || '')}</p>
@@ -1481,7 +1519,8 @@
           </div>
         ` : ''}
       </div>
-    `).join('');
+    `;
+    }).join('');
     container.querySelectorAll('.scenario-card.is-collapsed').forEach((card) => setScenarioCardCollapsed(card, true, false));
     const firstCard = container.querySelector('.scenario-card:not(.scenario-card-common)');
     if (firstCard) firstCard.classList.add('active-card');
