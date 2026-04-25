@@ -1094,6 +1094,75 @@
     updateSceneRow(idx, st.header || '', 'image');
   };
 
+  // ── 컷(shot) 단위 영상 생성 ──
+  async function pollShotVideoStatus(sceneIdx, shotIdx, projectId, jobId, attempt) {
+    if (!(window.NK && NK.uiPipelineVideo && NK.uiPipelineVideo.pollShotVideoStatus)) return;
+    await NK.uiPipelineVideo.pollShotVideoStatus({
+      projectId: projectId,
+      jobId: jobId,
+      sceneIdx: sceneIdx,
+      shotIdx: shotIdx,
+      attempt: attempt,
+      ctx: ctx,
+      updateSceneRow: updateSceneRow,
+      resolveEffectiveAspectRatio: resolveEffectiveAspectRatio,
+      enforceVideoAspectRatio: enforceVideoAspectRatio,
+      isBucketVideoUrl: isBucketVideoUrl,
+      scheduleNext: function (nextAttempt) {
+        var st = ctx.getState() || {};
+        var scene = st.scenes && st.scenes[sceneIdx];
+        var shot = scene && Array.isArray(scene.shots) ? scene.shots[shotIdx] : null;
+        if (!scene || !shot) return;
+        var key = String(scene.id) + '/' + String(shot.id);
+        var cancelled = !!(ctx._cancelShotVideoPoll && ctx._cancelShotVideoPoll[key]);
+        if (!cancelled) pollShotVideoStatus(sceneIdx, shotIdx, projectId, jobId, nextAttempt);
+      }
+    });
+  }
+
+  ui.startVideoForShot = async function (sceneIdx, shotIdx) {
+    if (!(window.NK && NK.uiPipelineVideo && NK.uiPipelineVideo.startVideoForShot)) return;
+    await NK.uiPipelineVideo.startVideoForShot({
+      sceneIdx: sceneIdx,
+      shotIdx: shotIdx,
+      ctx: ctx,
+      getProjectId: getProjectId,
+      updateSceneRow: updateSceneRow,
+      resolveEffectiveAspectRatio: resolveEffectiveAspectRatio,
+      ensureStateAspectRatio: ensureStateAspectRatio,
+      enforceImageAspectRatio: enforceImageAspectRatio,
+      enforceVideoAspectRatio: enforceVideoAspectRatio,
+      isVoiceFeatureEnabled: isVoiceFeatureEnabled,
+      toBool: toBool,
+      isBucketVideoUrl: isBucketVideoUrl,
+      videoModel: (function () { var sel = document.getElementById('video-model-select'); return (sel && sel.value) || (ctx.getState() && ctx.getState().videoModel) || ''; })(),
+      scheduleShotPoll: function (sIdx, shIdx, projectId, jobId, attempt) {
+        pollShotVideoStatus(sIdx, shIdx, projectId, jobId, attempt);
+      }
+    });
+  };
+
+  ui.cancelVideoForShot = function (sceneIdx, shotIdx) {
+    var st = ctx.getState();
+    if (!st || !Array.isArray(st.scenes)) return;
+    var scene = st.scenes[sceneIdx];
+    if (!scene || !Array.isArray(scene.shots)) return;
+    var shot = scene.shots[shotIdx];
+    if (!shot) return;
+    var key = String(scene.id) + '/' + String(shot.id);
+    try {
+      ctx._cancelShotVideoPoll = ctx._cancelShotVideoPoll || {};
+      ctx._cancelShotVideoPoll[key] = true;
+      var ctrl = ctx._cancelShotVideo && ctx._cancelShotVideo[key];
+      if (ctrl && ctrl.abort) ctrl.abort();
+    } catch (_) {}
+    var nextShots = scene.shots.slice();
+    nextShots[shotIdx] = Object.assign({}, shot, { videoStatus: '', videoError: '' });
+    st.scenes[sceneIdx] = Object.assign({}, scene, { shots: nextShots });
+    ctx.setState(st);
+    updateSceneRow(sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+  };
+
   // ── 컷(shot) 단위 이미지 생성 ──
   ui.generateImageForShot = async function (sceneIdx, shotIdx, retryCount) {
     if (!(window.NK && NK.uiPipelineImage && NK.uiPipelineImage.generateImageForShot)) return;

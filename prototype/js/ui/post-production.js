@@ -2429,31 +2429,72 @@
       var sceneEnd = sceneStart + sceneDuration;
       var sceneLabel = firstFilled([scene.title]) || ('씬 ' + (i + 1));
 
-      var visualUrl = firstFilled([
-        scene.videoUrl,
-        scene.videoPlaybackUrl,
-        scene.outputVideoUrl,
-        scene.generatedVideoUrl,
-        scene.videoPath,
-        scene.imageDataUrl,
-        scene.imagePath,
-        scene.generatedImageUrl,
-        scene.imageUrl
-      ]);
-      var visualType = visualUrl ? (isVideoUrl(visualUrl) ? 'video' : 'image') : 'empty';
-      var visualLabel = visualType === 'empty' ? (sceneLabel + ' · 미디어 없음') : sceneLabel;
-      visuals.push({
-        id: 'vis-' + i,
-        label: visualLabel,
-        start: sceneStart,
-        end: sceneEnd,
-        baseDuration: Math.max(0.2, sceneDuration),
-        url: visualUrl,
-        empty: visualType === 'empty'
+      // ── 컷(shot) 단위 클립이 있으면 우선 사용 ──
+      var shotsArr = (scene && Array.isArray(scene.shots)) ? scene.shots : [];
+      var shotsWithVideo = shotsArr.filter(function (sh) {
+        return !!firstFilled([sh && sh.videoUrl, sh && sh.videoPlaybackUrl, sh && sh.generatedVideoUrl, sh && sh.videoPath]);
+      });
+      var shotsWithImage = shotsArr.filter(function (sh) {
+        return !!firstFilled([sh && sh.imageDataUrl, sh && sh.imagePath, sh && sh.generatedImageUrl, sh && sh.imageUrl]);
       });
 
-      if (!firstVideoUrl && visualType === 'video') firstVideoUrl = visualUrl;
-      if (!firstImageUrl && visualType === 'image') firstImageUrl = visualUrl;
+      if (shotsWithVideo.length || (shotsWithImage.length && shotsArr.length)) {
+        // 한 씬을 여러 컷 클립으로 펼침. 컷 duration 합으로 sceneEnd 재계산.
+        var totalShotSec = shotsArr.reduce(function (s, sh) { return s + Math.max(0.5, Math.round(toNumber(sh && sh.duration, 0))); }, 0);
+        if (!totalShotSec) totalShotSec = sceneDuration;
+        // 비례 배분: 컷 합 vs sceneDuration 차이가 있더라도 컷 합 기준으로 펼침 (실제 영상 길이)
+        var shotCursor = sceneStart;
+        for (var sh_i = 0; sh_i < shotsArr.length; sh_i++) {
+          var sh = shotsArr[sh_i] || {};
+          var shotDur = Math.max(0.5, Math.round(toNumber(sh.duration, 0)) || 0);
+          if (!shotDur) continue;
+          var shVidUrl = firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath]);
+          var shImgUrl = firstFilled([sh.imageDataUrl, sh.imagePath, sh.generatedImageUrl, sh.imageUrl]);
+          var shVisualUrl = shVidUrl || shImgUrl;
+          var shType = shVidUrl ? 'video' : (shImgUrl ? 'image' : 'empty');
+          var shLabel = sceneLabel + ' · ' + (sh.id || (i + 1) + '.' + (sh_i + 1)) + (shType === 'empty' ? ' · 미디어 없음' : '');
+          visuals.push({
+            id: 'vis-' + i + '-' + sh_i,
+            label: shLabel,
+            start: shotCursor,
+            end: shotCursor + shotDur,
+            baseDuration: shotDur,
+            url: shVisualUrl,
+            empty: shType === 'empty'
+          });
+          if (!firstVideoUrl && shType === 'video') firstVideoUrl = shVisualUrl;
+          if (!firstImageUrl && shType === 'image') firstImageUrl = shVisualUrl;
+          shotCursor += shotDur;
+        }
+        // 씬 종료를 컷 합으로 재정렬 (sceneDuration 보다 짧으면 컷 합으로, 길면 씬 길이 유지)
+        sceneEnd = Math.max(shotCursor, sceneEnd);
+      } else {
+        var visualUrl = firstFilled([
+          scene.videoUrl,
+          scene.videoPlaybackUrl,
+          scene.outputVideoUrl,
+          scene.generatedVideoUrl,
+          scene.videoPath,
+          scene.imageDataUrl,
+          scene.imagePath,
+          scene.generatedImageUrl,
+          scene.imageUrl
+        ]);
+        var visualType = visualUrl ? (isVideoUrl(visualUrl) ? 'video' : 'image') : 'empty';
+        var visualLabel = visualType === 'empty' ? (sceneLabel + ' · 미디어 없음') : sceneLabel;
+        visuals.push({
+          id: 'vis-' + i,
+          label: visualLabel,
+          start: sceneStart,
+          end: sceneEnd,
+          baseDuration: Math.max(0.2, sceneDuration),
+          url: visualUrl,
+          empty: visualType === 'empty'
+        });
+
+        if (!firstVideoUrl && visualType === 'video') firstVideoUrl = visualUrl;
+        if (!firstImageUrl && visualType === 'image') firstImageUrl = visualUrl;
+      }
 
       var audioUrl = firstFilled([scene.voiceUrl, scene.audioUrl, scene.ttsUrl]);
       if (audioUrl) {

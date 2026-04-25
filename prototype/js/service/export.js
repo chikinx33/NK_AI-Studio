@@ -387,22 +387,13 @@
     var clipEntries = [];
     var cursor = 0;
 
-    for (var i = 0; i < scenes.length; i++) {
-      var scene = scenes[i] || {};
-      var dur = sceneDuration(scene);
-      var url = firstFilled([
-        scene.videoUrl, scene.videoPlaybackUrl, scene.outputVideoUrl,
-        scene.generatedVideoUrl, scene.videoPath,
-        scene.imagePath, scene.generatedImageUrl, scene.imageUrl
-      ]);
-      var isVideo = /\.(mp4|webm|mov)/i.test(url || '');
-      var ext = isVideo ? (url.match(/\.(mp4|webm|mov)/i) || ['.mp4'])[0] : '.png';
-      if (ext.charAt(0) !== '.') ext = '.' + ext;
-      var mediaName = 'scene_' + (i + 1) + ext;
-      var startFrame = Math.round(cursor * fps);
-      var endFrame = Math.round((cursor + dur) * fps);
-
-      // 미디어 파일 fetch
+    // 컷별 미디어 fetch + 클립 등록 헬퍼 (시퀀스/이미지 모두)
+    async function fetchAndRegister(rawUrl, mediaNameBase, fallbackImageDataUrl) {
+      var url = rawUrl || '';
+      var isVideoLocal = /\.(mp4|webm|mov)/i.test(url || '');
+      var extLocal = isVideoLocal ? (url.match(/\.(mp4|webm|mov)/i) || ['.mp4'])[0] : '.png';
+      if (extLocal.charAt(0) !== '.') extLocal = '.' + extLocal;
+      var mediaName = mediaNameBase + extLocal;
       if (url) {
         try {
           var resolvedUrl = url;
@@ -415,25 +406,67 @@
             mediaFolder.file(mediaName, blob);
           }
         } catch (_) { }
-      } else if (scene.imageDataUrl) {
+      } else if (fallbackImageDataUrl) {
         try {
-          var dataResp = await fetch(scene.imageDataUrl);
+          var dataResp = await fetch(fallbackImageDataUrl);
           var dataBlob = await dataResp.blob();
+          extLocal = '.png';
+          mediaName = mediaNameBase + extLocal;
           mediaFolder.file(mediaName, dataBlob);
-          ext = '.png';
-          mediaName = 'scene_' + (i + 1) + ext;
         } catch (_) { }
       }
+      return mediaName;
+    }
 
-      clipEntries.push({
-        index: i,
-        name: firstFilled([scene.title, 'Scene ' + (i + 1)]),
-        mediaName: mediaName,
-        start: startFrame,
-        end: endFrame,
-        duration: dur
+    for (var i = 0; i < scenes.length; i++) {
+      var scene = scenes[i] || {};
+      var sceneDur = sceneDuration(scene);
+
+      // ── 컷(shot) 단위 미디어가 있으면 컷별로 클립 분할 ──
+      var shotsArr = (scene && Array.isArray(scene.shots)) ? scene.shots : [];
+      var anyShotMedia = shotsArr.some(function (sh) {
+        return !!firstFilled([sh && sh.videoUrl, sh && sh.videoPlaybackUrl, sh && sh.generatedVideoUrl, sh && sh.videoPath, sh && sh.imageDataUrl, sh && sh.imagePath, sh && sh.generatedImageUrl, sh && sh.imageUrl]);
       });
-      cursor += dur;
+
+      if (anyShotMedia && shotsArr.length) {
+        for (var sh_i = 0; sh_i < shotsArr.length; sh_i++) {
+          var sh = shotsArr[sh_i] || {};
+          var shDur = Math.max(0.5, Number(sh.duration) || 0);
+          if (!shDur) continue;
+          var shUrl = firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath, sh.imagePath, sh.generatedImageUrl, sh.imageUrl]);
+          var shStartFrame = Math.round(cursor * fps);
+          var shEndFrame = Math.round((cursor + shDur) * fps);
+          var shBase = 'scene_' + (i + 1) + '_shot_' + (sh_i + 1);
+          var shMediaName = await fetchAndRegister(shUrl, shBase, sh.imageDataUrl);
+          clipEntries.push({
+            index: clipEntries.length,
+            name: 'Scene ' + (i + 1) + ' · Shot ' + (sh.id || ((i + 1) + '.' + (sh_i + 1))),
+            mediaName: shMediaName,
+            start: shStartFrame,
+            end: shEndFrame,
+            duration: shDur
+          });
+          cursor += shDur;
+        }
+      } else {
+        var url = firstFilled([
+          scene.videoUrl, scene.videoPlaybackUrl, scene.outputVideoUrl,
+          scene.generatedVideoUrl, scene.videoPath,
+          scene.imagePath, scene.generatedImageUrl, scene.imageUrl
+        ]);
+        var startFrame = Math.round(cursor * fps);
+        var endFrame = Math.round((cursor + sceneDur) * fps);
+        var sceneMediaName = await fetchAndRegister(url, 'scene_' + (i + 1), scene.imageDataUrl);
+        clipEntries.push({
+          index: clipEntries.length,
+          name: firstFilled([scene.title, 'Scene ' + (i + 1)]),
+          mediaName: sceneMediaName,
+          start: startFrame,
+          end: endFrame,
+          duration: sceneDur
+        });
+        cursor += sceneDur;
+      }
     }
 
     var totalFrames = Math.round(cursor * fps);

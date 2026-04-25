@@ -422,6 +422,284 @@
     if (ctx.persistPipeline) ctx.persistPipeline();
   };
 
+  // ── 컷(shot) 단위 영상 생성 ──
+  function buildShotVideoPrompt(scene, shot, header, statePayload) {
+    var sharedContext = header || buildSelections(statePayload || {});
+    var sceneLocation = String((scene && (scene.sceneLocation || scene.location)) || '').trim();
+    var composition = String((shot && shot.composition) || '').trim();
+    var action = String((shot && shot.action) || '').trim();
+    var cameraHint = '';
+    try {
+      if (window.NK && NK.service && NK.service.shotVocab && NK.service.shotVocab.buildShotCameraHint) {
+        cameraHint = NK.service.shotVocab.buildShotCameraHint(shot && shot.shotType, shot && shot.cameraMove, 'en');
+      }
+    } catch (_) { cameraHint = ''; }
+    var blocks = [
+      'Global', sharedContext,
+      sceneLocation ? 'Location' : '', sceneLocation,
+      composition ? 'Composition' : '', composition,
+      action ? 'Action' : '', action,
+      cameraHint ? cameraHint : '',
+      'Duration', ((Math.max(Number(shot && shot.duration) || 0, 1)) + 's.')
+    ].filter(function (x) { return x && String(x).trim(); });
+    return blocks.join('\n');
+  }
+
+  // shot 의 비디오 상태/에러/jobId/url 을 갱신하는 헬퍼
+  function applyShotPatch(ctx, sceneIdx, shotId, patch) {
+    var st = ctx.getState();
+    if (!st || !Array.isArray(st.scenes)) return null;
+    var scene = st.scenes[sceneIdx];
+    if (!scene || !Array.isArray(scene.shots)) return null;
+    var sIdx = scene.shots.findIndex(function (sh) { return String(sh && sh.id) === String(shotId); });
+    if (sIdx < 0) return null;
+    var nextShots = scene.shots.slice();
+    nextShots[sIdx] = Object.assign({}, scene.shots[sIdx], patch || {});
+    st.scenes[sceneIdx] = Object.assign({}, scene, { shots: nextShots });
+    ctx.setState(st);
+    return { st: st, sceneIdx: sceneIdx, shotIdx: sIdx, scene: st.scenes[sceneIdx], shot: nextShots[sIdx] };
+  }
+
+  video.startVideoForShot = async function (options) {
+    var opts = options || {};
+    var ctx = opts.ctx;
+    if (!ctx || !ctx.getState) return;
+    var st = ctx.getState();
+    if (!st || !Array.isArray(st.scenes)) return;
+    var scene = st.scenes[opts.sceneIdx];
+    if (!scene || !Array.isArray(scene.shots)) return;
+    var shotIdx = Number(opts.shotIdx);
+    var shot = scene.shots[shotIdx];
+    if (!shot) return;
+    if (String(shot.videoStatus || '').toLowerCase() === 'processing') return;
+
+    var projectId = st.draftId || (opts.getProjectId ? opts.getProjectId() : '');
+    if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+
+    var imageUrl = shot.imageDataUrl || shot.imagePath || '';
+    if (!imageUrl) {
+      alert('컷 영상 생성을 위해서는 컷 이미지가 먼저 필요합니다. 컷 [이미지] 버튼으로 먼저 생성해 주세요.');
+      return;
+    }
+
+    // processing 상태로 즉시 마킹
+    var marked = applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: 'processing', videoError: '' });
+    if (marked && opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, marked.st.header || '', 'shot:' + scene.id + ':' + shot.id);
+
+    var desiredAspectRatio = opts.resolveEffectiveAspectRatio(st, ctx);
+    st = opts.ensureStateAspectRatio(st, desiredAspectRatio);
+    scene = st.scenes[opts.sceneIdx];
+    shot = scene.shots[shotIdx];
+
+    var statePayload = st.payload || {};
+    var header = st.header || '';
+    var rawPrompt = buildShotVideoPrompt(scene, shot, header, statePayload);
+    var finalPrompt = rawPrompt;
+    var characterNegativePrompt = '';
+
+    // 캐릭터 해석 — scene 단위와 동일
+    try {
+      if (NK.service && NK.service.characterRegistry && opts.toBool(statePayload.charactersEnabled, Array.isArray(statePayload.characters) && statePayload.characters.length)) {
+        var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(statePayload) : (statePayload.brandId || '');
+        var charPrompt = buildCharacterResolutionPrompt(scene, rawPrompt);
+        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, charPrompt, { allowNameFallback: true, payload: statePayload });
+        var built0 = NK.service.characterRegistry.buildResolvedPrompt({
+          rawPrompt: rawPrompt,
+          characters: res0.characters || [],
+          brandRules: Array.isArray(statePayload.brandRules) ? statePayload.brandRules : [],
+          bannedExpressions: Array.isArray(statePayload.bannedExpressions) ? statePayload.bannedExpressions : []
+        });
+        finalPrompt = built0.resolvedPrompt || finalPrompt;
+        characterNegativePrompt = built0.negativePromptText || '';
+      }
+    } catch (_) {}
+
+    var voiceEnabled = opts.isVoiceFeatureEnabled(statePayload);
+    if (!voiceEnabled) {
+      var noVoiceDirective = 'No speech, no dialogue, no voice-over, no lip sync, keep mouths closed.';
+      if (!/no\s*speech|lip\s*sync|voice-?over/i.test(finalPrompt)) {
+        finalPrompt = finalPrompt + '\n' + noVoiceDirective;
+      }
+    }
+
+    try {
+      var normalizedImage = await opts.enforceImageAspectRatio(imageUrl, desiredAspectRatio);
+      if (normalizedImage && normalizedImage.url && normalizedImage.url !== imageUrl) {
+        imageUrl = normalizedImage.url;
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { imageDataUrl: imageUrl });
+      }
+    } catch (e) { console.warn('shot image aspect normalize skipped:', e && e.message); }
+
+    try {
+      var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v';
+      var shotDur = Math.max(1, Math.min(6, Math.round(Number(shot.duration) || 4)));
+      var durationSeconds = isSeedanceFamily ? shotDur : snapVideoDuration(shotDur);
+      var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
+      var klingQuality = opts.videoModel === 'kling-final' ? 'final' : (opts.videoModel === 'kling-draft' ? 'draft' : '');
+
+      var REFS_MODELS = ['grok', 'kling-draft', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
+      var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
+      var referenceImages = [];
+      if (isRefsModel) {
+        try {
+          var bundleImages = await resolveKlingReferenceImages(scene, statePayload, projectId, finalPrompt);
+          referenceImages = (bundleImages || [])
+            .map(function (r) { return (r && r.imageDataUrl) ? String(r.imageDataUrl) : ''; })
+            .filter(Boolean);
+        } catch (refErr) { referenceImages = []; }
+      }
+
+      // sceneId 슬롯에 컷 id 를 합성해 서버 측이 컷 단위로 기록하게
+      var virtualSceneId = String(scene.id) + '_' + String(shot.id).replace(/[^0-9A-Za-z._-]/g, '_');
+
+      var videoPayload = {
+        projectId: projectId,
+        projTag: projectId,
+        sceneId: virtualSceneId,
+        promptText: (imageUrl && opts.videoModel === 'grok') ? ('Animate this image. ' + finalPrompt) : finalPrompt,
+        script: '', // 컷 단위에서는 voice 미사용 (추후 옵션)
+        narrationEnabled: false,
+        dubbingEnabled: false,
+        aspectRatio: desiredAspectRatio,
+        durationSeconds: durationSeconds,
+        imageDataUrl: imageUrl,
+        image: imageUrl,
+        image_url: imageUrl,
+        init_image: imageUrl,
+        source_image: imageUrl,
+        videoModel: opts.videoModel,
+        quality: klingQuality || undefined,
+        referenceImages: (referenceImages && referenceImages.length) ? referenceImages : undefined,
+        negativePrompt: characterNegativePrompt || undefined
+      };
+      console.debug('shot videoStart payload', { sceneId: virtualSceneId, shotId: shot.id, durationSeconds: durationSeconds });
+
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      try {
+        if (ctx) {
+          ctx._cancelShotVideo = ctx._cancelShotVideo || {};
+          ctx._cancelShotVideo[String(scene.id) + '/' + String(shot.id)] = ctrl;
+        }
+      } catch (_) {}
+      var resp = await NK.api.videoStart(videoPayload, { signal: ctrl ? ctrl.signal : undefined });
+      var rawResp = (resp && resp.raw) ? resp.raw : {};
+      var jobId = resp.jobId || resp.job_id || resp.id || resp.operationName || rawResp.job_id || rawResp.id || '';
+      var playbackRaw = resp.playbackUrl || resp.videoUrl || resp.outputUrl || resp.url || rawResp.playbackUrl || rawResp.videoUrl || rawResp.outputUrl || rawResp.url || '';
+      var playback = opts.isBucketVideoUrl(playbackRaw) ? playbackRaw : '';
+      var outputGcsUri = resp.outputGcsUri || rawResp.outputGcsUri || rawResp.output_gcs_uri || '';
+      if (playback) {
+        try {
+          var adjustedPlayback = await opts.enforceVideoAspectRatio(projectId, outputGcsUri, playback, desiredAspectRatio);
+          if (adjustedPlayback && adjustedPlayback.url) playback = adjustedPlayback.url;
+        } catch (e2) {}
+      }
+      applyShotPatch(ctx, opts.sceneIdx, shot.id, {
+        videoUrl: playback,
+        videoStatus: playback ? 'done' : 'processing',
+        videoError: resp.error || '',
+        videoJobId: jobId,
+        videoOutputGcsUri: outputGcsUri,
+        videoMethod: opts.videoModel || ''
+      });
+      if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+
+      var pollingJobId = jobId || resp.job_id || resp.id || '';
+      if (pollingJobId && !playback && opts.scheduleShotPoll) {
+        opts.scheduleShotPoll(opts.sceneIdx, shotIdx, projectId, pollingJobId, 0);
+      } else if (!pollingJobId) {
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: 'error', videoError: 'no jobId in videoStart response' });
+        if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+      }
+    } catch (err) {
+      var aborted = (err && (err.name === 'AbortError' || String(err.message || '').toLowerCase().indexOf('abort') >= 0));
+      var msg = normalizeSafetyMessage(err && err.message ? err.message : 'video_error');
+      var detail = (err && err.detail) ? err.detail : '';
+      console.error('shot videoStart error:', msg, detail);
+      if (aborted) {
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: '', videoError: '' });
+      } else {
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: 'error', videoError: detail ? (msg + ' ' + detail) : msg });
+      }
+      if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+    }
+
+    if (ctx.persistPipeline) ctx.persistPipeline();
+  };
+
+  video.pollShotVideoStatus = async function (options) {
+    var opts = options || {};
+    var ctx = opts.ctx;
+    if (!ctx || !ctx.getState) return;
+    var maxAttempts = Number(opts.maxAttempts || 120);
+    var delay = Number(opts.delay || 5000);
+    try {
+      var st = ctx.getState();
+      var scene = st && st.scenes && st.scenes[opts.sceneIdx];
+      if (!scene || !Array.isArray(scene.shots)) return;
+      var shot = scene.shots[opts.shotIdx];
+      if (!shot) return;
+      var cancelKey = String(scene.id) + '/' + String(shot.id);
+      var cancelled = !!(ctx._cancelShotVideoPoll && ctx._cancelShotVideoPoll[cancelKey]);
+      if (cancelled) return;
+      var virtualSceneId = String(scene.id) + '_' + String(shot.id).replace(/[^0-9A-Za-z._-]/g, '_');
+      var res = await NK.api.videoStatus({ projectId: opts.projectId, jobId: opts.jobId, sceneId: virtualSceneId });
+      var playback = res.playbackUrl || res.playback || res.videoUrl || res.outputUrl || res.url ||
+        (res.response && res.response.video && res.response.video.url) ||
+        (res.response && res.response.url) || '';
+      if (playback && !opts.isBucketVideoUrl(playback)) playback = '';
+      var status = res.status || '';
+
+      if (res.done && res.error) {
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: 'error', videoError: normalizeSafetyMessage(res.error.message || 'video_error') });
+        if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+        return;
+      }
+      if (res.done && !playback) {
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: 'error', videoError: 'done but no playback (가공 실패)' });
+        if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+        return;
+      }
+      if (playback) {
+        var desiredAspectRatio = opts.resolveEffectiveAspectRatio(st, ctx);
+        var outputHint = (shot && shot.videoOutputGcsUri) || '';
+        try {
+          var adjusted = await opts.enforceVideoAspectRatio(opts.projectId, outputHint, playback, desiredAspectRatio);
+          if (adjusted && adjusted.url) playback = adjusted.url;
+        } catch (_) {}
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoUrl: playback, videoStatus: 'done', videoError: '' });
+        if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+        if (ctx.persistPipeline) ctx.persistPipeline();
+        return;
+      }
+      if (status && String(status).toLowerCase() === 'error') {
+        var errMsg2 = res.error || 'video_error';
+        if (typeof errMsg2 === 'string') errMsg2 = normalizeSafetyMessage(errMsg2);
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: 'error', videoError: errMsg2 });
+        if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+        return;
+      }
+      if (opts.attempt + 1 >= maxAttempts) {
+        applyShotPatch(ctx, opts.sceneIdx, shot.id, { videoStatus: 'error', videoError: '응답 시간 초과 (작업은 진행 중일 수 있음)' });
+        if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+        return;
+      }
+      setTimeout(function () {
+        opts.scheduleNext(opts.attempt + 1, delay);
+      }, delay);
+    } catch (err) {
+      var msg2 = normalizeSafetyMessage(err && err.message ? err.message : 'video_error');
+      var detail2 = (err && err.detail) ? err.detail : '';
+      console.error('shot videoStatus polling error:', msg2, detail2);
+      var stCur = ctx.getState();
+      var sceneCur = stCur && stCur.scenes && stCur.scenes[opts.sceneIdx];
+      var shotCur = sceneCur && Array.isArray(sceneCur.shots) ? sceneCur.shots[opts.shotIdx] : null;
+      if (shotCur) {
+        applyShotPatch(ctx, opts.sceneIdx, shotCur.id, { videoStatus: 'error', videoError: detail2 ? (msg2 + ' ' + detail2) : msg2 });
+        if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, stCur.header || '', 'shot:' + sceneCur.id + ':' + shotCur.id);
+      }
+    }
+  };
+
   video.pollVideoStatus = async function (options) {
     var opts = options || {};
     var ctx = opts.ctx;
