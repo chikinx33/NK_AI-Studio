@@ -378,6 +378,40 @@
     return promptBlocks.join('\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
   }
 
+  /**
+   * 한 컷(shot)을 위한 이미지 프롬프트.
+   * scene 의 공통 컨텍스트(공통 헤더, 장소, 씬의 주요 비주얼)는 유지하면서
+   * shot 의 composition / action 을 메인으로 하고 shotType / cameraMove
+   * 자연어 힌트를 카메라 라인에 추가한다.
+   */
+  function buildShotImagePrompt(scene, shot, header, cleanHeader) {
+    var common = cleanHeader(header || '');
+    var sceneLocation = String((scene && (scene.sceneLocation || scene.location)) || '').trim();
+    var sceneVisual = String((scene && (scene.shot || scene.visual)) || '').trim();
+    var composition = String((shot && shot.composition) || '').trim();
+    var action = String((shot && shot.action) || '').trim();
+    var cameraHint = '';
+    try {
+      if (window.NK && NK.service && NK.service.shotVocab && NK.service.shotVocab.buildShotCameraHint) {
+        cameraHint = NK.service.shotVocab.buildShotCameraHint(shot && shot.shotType, shot && shot.cameraMove, 'en');
+      }
+    } catch (_) { cameraHint = ''; }
+    var blocks = [];
+    if (common) blocks.push(common);
+    if (sceneLocation) blocks.push('Location / setting: ' + sceneLocation);
+    // 씬의 전체 비주얼은 상황 설명으로만 짧게
+    if (sceneVisual && sceneVisual !== composition) {
+      var trimmed = sceneVisual.length > 220 ? sceneVisual.slice(0, 219) + '…' : sceneVisual;
+      blocks.push('Scene context (broader beat): ' + trimmed);
+    }
+    if (composition) blocks.push('Composition: ' + composition);
+    if (action) blocks.push('Action: ' + action);
+    if (cameraHint) blocks.push(cameraHint);
+    blocks.push('Render this single shot only — do NOT depict the entire scene at once. Keep framing/composition strictly to the camera spec above.');
+    blocks.push('텍스트/워터마크를 넣지 말고, 지정된 스타일만 사용.');
+    return blocks.join('\n').replace(/[;]+/g, ',').replace(/\s+,/g, ',').trim();
+  }
+
   function extractRemoteProjectRecord(projectId, resp) {
     var data = resp && resp.data && typeof resp.data === 'object' ? resp.data : (resp && typeof resp === 'object' ? resp : null);
     if (!data) return null;
@@ -717,8 +751,163 @@
     if (ctx.persistPipeline) ctx.persistPipeline();
   };
 
+  /**
+   * 컷(shot) 1 개의 이미지를 생성한다.
+   * 캐릭터 레퍼런스 해석 / brand IP 룩업은 generateImageForIdx 와 동일한 체인을
+   * 재사용하되, 입력 프롬프트는 shot 단위로 빌드하고 결과는
+   * scene.shots[shotIdx].imageDataUrl 에 저장한다.
+   *
+   * options:
+   *   - sceneIdx, shotIdx
+   *   - ctx, getProjectId, resolveEffectiveAspectRatio, ensureStateAspectRatio,
+   *     cleanHeader, toBool, enforceImageAspectRatio, updateSceneRow
+   *   - retryShotImage(sceneIdx, shotIdx, retryCount): 재시도 콜백
+   *   - retryCount: 현재 재시도 회차
+   */
+  image.generateImageForShot = async function (options) {
+    var opts = options || {};
+    var ctx = opts.ctx;
+    if (!ctx || !ctx.getState) return;
+    var st = ctx.getState();
+    if (!st || !Array.isArray(st.scenes)) return;
+    var scene = st.scenes[opts.sceneIdx];
+    if (!scene || !Array.isArray(scene.shots)) return;
+    var shotIdx = Number(opts.shotIdx);
+    var shot = scene.shots[shotIdx];
+    if (!shot || shot.imgLoading) return;
+
+    var projectId = st.draftId || (opts.getProjectId ? opts.getProjectId() : '');
+    if (!projectId) {
+      alert('프로젝트 ID를 찾을 수 없어 이미지를 생성할 수 없습니다.');
+      return;
+    }
+
+    var aspectRatio = opts.resolveEffectiveAspectRatio(st, ctx);
+    st = opts.ensureStateAspectRatio(st, aspectRatio);
+    scene = st.scenes[opts.sceneIdx];
+    shot = scene.shots[shotIdx];
+
+    var basePrompt = buildShotImagePrompt(scene, shot, st.header || '', opts.cleanHeader || function (t) { return String(t || ''); });
+    var finalPrompt = basePrompt;
+    var rawP = basePrompt;
+    var referencePayload = null;
+    var imageCharacterNegativePrompt = '';
+
+    // ── 캐릭터 레퍼런스 해결: scene 단위와 동일 체인을 그대로 사용 ──
+    try {
+      if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
+        var liveDraft = (NK.service && NK.service.project && NK.service.project.getDraftById)
+          ? NK.service.project.getDraftById(projectId)
+          : null;
+        var payload = liveDraft && liveDraft.payload && typeof liveDraft.payload === 'object'
+          ? liveDraft.payload
+          : (st.payload || {});
+        var brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
+        var hydratedBrand = null;
+        if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+          try { hydratedBrand = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 }); } catch (_) {}
+        }
+        // shot 의 action/composition + 씬의 narration / dialogue 모두 캐릭터 해석 입력으로
+        var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
+        var built = NK.service.characterRegistry.buildResolvedPrompt({
+          rawPrompt: rawP,
+          characters: res.characters || [],
+          brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
+          bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
+        });
+        finalPrompt = built.resolvedPrompt || finalPrompt;
+        imageCharacterNegativePrompt = built.negativePromptText || '';
+        referencePayload = buildReferenceBundle(payload, res.characters || [], { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
+        if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && brandId && NK.api && NK.api.libraryIP) {
+          try {
+            var brandIpListing = await NK.api.libraryIP('', { brandId: brandId });
+            var ipFallback = buildIpLibraryFallback(brandIpListing, res.characters || []);
+            if (ipFallback && ipFallback.referenceImages && ipFallback.referenceImages.length) {
+              referencePayload = ipFallback;
+            }
+          } catch (_) {}
+        }
+        if (referencePayload && referencePayload.referenceImages && referencePayload.referenceImages.length) {
+          finalPrompt = buildInlineReferencePrompt(finalPrompt, referencePayload.referenceSubjects || []);
+          finalPrompt = [referencePayload.promptPrefix || '', finalPrompt, referencePayload.promptSuffix || ''].filter(Boolean).join('\n');
+        }
+      }
+    } catch (_) { }
+
+    if (imageCharacterNegativePrompt) {
+      finalPrompt = finalPrompt + '\nDo not include: ' + imageCharacterNegativePrompt;
+    }
+
+    try { console.log('Shot image prompt (shot ' + shot.id + '):', finalPrompt); } catch (_) {}
+
+    // 로딩 플래그 set
+    var nextShots = scene.shots.slice();
+    nextShots[shotIdx] = Object.assign({}, shot, { imgLoading: true, imgError: '' });
+    st.scenes[opts.sceneIdx] = Object.assign({}, scene, { shots: nextShots });
+    ctx.setState(st);
+    if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+
+    try {
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      try {
+        if (ctx) {
+          ctx._cancelShotImage = ctx._cancelShotImage || {};
+          ctx._cancelShotImage[String(scene.id) + '/' + String(shot.id)] = ctrl;
+        }
+      } catch (_) {}
+      var json = await NK.api.imagen({
+        prompt: finalPrompt,
+        aspectRatio: aspectRatio,
+        projectId: projectId,
+        referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
+      }, { signal: ctrl ? ctrl.signal : undefined });
+      var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
+      var signedUrl = String(json.signedUrl || '').trim();
+      var imageRef = signedUrl || dataUrl;
+      if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
+      var normalized = await opts.enforceImageAspectRatio(imageRef, aspectRatio);
+      if (normalized && normalized.url) imageRef = normalized.url;
+
+      // 다시 fresh state 에서 shots 갱신 (사이에 다른 작업이 있을 수 있음)
+      var st2 = ctx.getState();
+      var scene2 = st2.scenes[opts.sceneIdx];
+      var shots2 = (scene2 && Array.isArray(scene2.shots)) ? scene2.shots.slice() : nextShots.slice();
+      var sIdx2 = shots2.findIndex(function (sh) { return String(sh && sh.id) === String(shot.id); });
+      if (sIdx2 < 0) sIdx2 = shotIdx;
+      shots2[sIdx2] = Object.assign({}, shots2[sIdx2] || shot, { imageDataUrl: imageRef, imgLoading: false, imgError: '' });
+      st2.scenes[opts.sceneIdx] = Object.assign({}, scene2 || scene, { shots: shots2 });
+      ctx.setState(st2);
+      if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st2.header || '', 'shot:' + scene.id + ':' + shot.id);
+      if (ctx.persistPipeline) ctx.persistPipeline();
+      console.log('Shot ' + shot.id + ' 이미지 생성 완료');
+    } catch (err) {
+      var msg = (err && err.message) || '';
+      var detail = (err && err.detail) ? (' detail: ' + err.detail) : '';
+      console.error('Shot ' + shot.id + ' 이미지 생성 실패:', msg, detail);
+      var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
+      var retryCount = Number(opts.retryCount) || 0;
+      if (is500 && retryCount < 2 && opts.retryShotImage) {
+        console.warn('재시도 ' + (retryCount + 1) + '/2...');
+        await new Promise(function (r) { return setTimeout(r, 2000 * Math.pow(2, retryCount)); });
+        return opts.retryShotImage(opts.sceneIdx, shotIdx, retryCount + 1);
+      }
+      var st3 = ctx.getState();
+      var scene3 = st3.scenes[opts.sceneIdx];
+      var shots3 = (scene3 && Array.isArray(scene3.shots)) ? scene3.shots.slice() : nextShots.slice();
+      var sIdx3 = shots3.findIndex(function (sh) { return String(sh && sh.id) === String(shot.id); });
+      if (sIdx3 < 0) sIdx3 = shotIdx;
+      shots3[sIdx3] = Object.assign({}, shots3[sIdx3] || shot, { imgLoading: false, imgError: msg || '이미지 생성 실패' });
+      st3.scenes[opts.sceneIdx] = Object.assign({}, scene3 || scene, { shots: shots3 });
+      ctx.setState(st3);
+      if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st3.header || '', 'shot:' + scene.id + ':' + shot.id);
+      if (ctx.persistPipeline) ctx.persistPipeline();
+    }
+  };
+
   image.buildCharacterResolutionPrompt = buildCharacterResolutionPrompt;
   image.buildInlineReferencePrompt = buildInlineReferencePrompt;
+  image.buildShotImagePrompt = buildShotImagePrompt;
   // 영상 생성(Kling)에서 동일 레퍼런스 해결 체인을 재사용하기 위해 노출
   image._helpers = {
     buildReferenceBundle: buildReferenceBundle,

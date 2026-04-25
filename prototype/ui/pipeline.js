@@ -1093,6 +1093,66 @@
     ctx.setState(st);
     updateSceneRow(idx, st.header || '', 'image');
   };
+
+  // ── 컷(shot) 단위 이미지 생성 ──
+  ui.generateImageForShot = async function (sceneIdx, shotIdx, retryCount) {
+    if (!(window.NK && NK.uiPipelineImage && NK.uiPipelineImage.generateImageForShot)) return;
+    await NK.uiPipelineImage.generateImageForShot({
+      sceneIdx: sceneIdx,
+      shotIdx: shotIdx,
+      retryCount: retryCount,
+      ctx: ctx,
+      getProjectId: getProjectId,
+      resolveEffectiveAspectRatio: resolveEffectiveAspectRatio,
+      ensureStateAspectRatio: ensureStateAspectRatio,
+      cleanHeader: cleanHeader,
+      toBool: toBool,
+      enforceImageAspectRatio: enforceImageAspectRatio,
+      updateSceneRow: updateSceneRow,
+      retryShotImage: function (sIdx, shIdx, nextRetry) {
+        return ui.generateImageForShot(sIdx, shIdx, nextRetry);
+      }
+    });
+  };
+
+  ui.cancelImageForShot = function (sceneIdx, shotIdx) {
+    var st = ctx.getState();
+    if (!st || !Array.isArray(st.scenes)) return;
+    var scene = st.scenes[sceneIdx];
+    if (!scene || !Array.isArray(scene.shots)) return;
+    var shot = scene.shots[shotIdx];
+    if (!shot) return;
+    try {
+      var map = ctx._cancelShotImage || {};
+      var key = String(scene.id) + '/' + String(shot.id);
+      var ctrl = map[key];
+      if (ctrl && ctrl.abort) ctrl.abort();
+    } catch (_) {}
+    var nextShots = scene.shots.slice();
+    nextShots[shotIdx] = Object.assign({}, shot, { imgLoading: false, imgError: '' });
+    st.scenes[sceneIdx] = Object.assign({}, scene, { shots: nextShots });
+    ctx.setState(st);
+    updateSceneRow(sceneIdx, st.header || '', 'shot:' + scene.id + ':' + shot.id);
+  };
+
+  // 한 씬의 모든 컷을 직렬로 이미지 생성
+  ui.generateAllShotImagesForScene = async function (sceneIdx) {
+    var st = ctx.getState();
+    if (!st || !Array.isArray(st.scenes)) return;
+    var scene = st.scenes[sceneIdx];
+    if (!scene || !Array.isArray(scene.shots) || !scene.shots.length) return;
+    for (var i = 0; i < scene.shots.length; i++) {
+      // 매 반복마다 fresh state 에서 가져옴 (취소/삭제 반영)
+      var stCur = ctx.getState();
+      var sceneCur = stCur && stCur.scenes && stCur.scenes[sceneIdx];
+      if (!sceneCur || !Array.isArray(sceneCur.shots) || i >= sceneCur.shots.length) break;
+      var shotCur = sceneCur.shots[i];
+      if (!shotCur || shotCur.imageDataUrl) continue; // 이미 있으면 스킵
+      try {
+        await ui.generateImageForShot(sceneIdx, i);
+      } catch (_) { /* 다음 컷으로 진행 */ }
+    }
+  };
 })();
 
 function pickValidAspectRatio(raw) {
@@ -1303,6 +1363,53 @@ function updateSceneRow(idx, headerText, partHint) {
       var vidHtml = helpers.buildVideoCard(scene, toPlayableMediaUrl);
       if (vidSlot) vidSlot.innerHTML = vidHtml;
       else stack2.insertAdjacentHTML('beforeend', '<div class="video-slot">' + vidHtml + '</div>');
+      return;
+    }
+  }
+  if (partHint === 'shots' && helpers.buildShotSection) {
+    var existing = row.querySelector('.scene-shot-section');
+    var newShotsHtml = helpers.buildShotSection(scene, { toPlayableMediaUrl: toPlayableMediaUrl });
+    if (existing) {
+      // 펼침 상태 보존
+      var wasCollapsed = existing.classList.contains('is-collapsed');
+      if (newShotsHtml) {
+        existing.outerHTML = newShotsHtml;
+        if (wasCollapsed) {
+          var refreshed = row.querySelector('.scene-shot-section');
+          if (refreshed) refreshed.classList.add('is-collapsed');
+        }
+      } else {
+        existing.remove();
+      }
+    } else if (newShotsHtml) {
+      var bodyWrap = row.querySelector('.scene-row-body-wrap');
+      if (bodyWrap) bodyWrap.insertAdjacentHTML('beforeend', newShotsHtml);
+    }
+    return;
+  }
+  // shot 단위 부분 업데이트 — 'shot:<sceneId>:<shotId>'
+  if (typeof partHint === 'string' && partHint.indexOf('shot:') === 0 && helpers.buildShotRowHtml) {
+    var parts = partHint.split(':');
+    var targetShotId = parts.slice(2).join(':');
+    var shots = Array.isArray(scene.shots) ? scene.shots : [];
+    var shotIdx = shots.findIndex(function (sh) { return String(sh && sh.id) === String(targetShotId); });
+    if (shotIdx >= 0) {
+      var shotLi = row.querySelector('.shot-row[data-shot-id="' + (window.CSS && CSS.escape ? CSS.escape(targetShotId) : targetShotId) + '"]');
+      var newRowHtml = helpers.buildShotRowHtml(scene, shots[shotIdx], shotIdx, toPlayableMediaUrl);
+      if (shotLi) {
+        shotLi.outerHTML = newRowHtml;
+      } else {
+        // shot 섹션을 통째로 다시
+        if (helpers.buildShotSection) {
+          var existing2 = row.querySelector('.scene-shot-section');
+          var newShotsHtml2 = helpers.buildShotSection(scene, { toPlayableMediaUrl: toPlayableMediaUrl });
+          if (existing2) existing2.outerHTML = newShotsHtml2;
+          else if (newShotsHtml2) {
+            var bw = row.querySelector('.scene-row-body-wrap');
+            if (bw) bw.insertAdjacentHTML('beforeend', newShotsHtml2);
+          }
+        }
+      }
       return;
     }
   }

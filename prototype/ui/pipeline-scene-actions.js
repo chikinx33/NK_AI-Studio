@@ -108,6 +108,78 @@
       if (btn) {
         e.preventDefault();
         var action = btn.dataset.action || '';
+        // ── 컷 섹션 펼침/접힘 토글 ──
+        if (action === 'shot-section-toggle') {
+          var sec = btn.closest('.scene-shot-section');
+          if (sec) {
+            sec.classList.toggle('is-collapsed');
+            btn.textContent = sec.classList.contains('is-collapsed') ? '▸' : '▾';
+            btn.title = sec.classList.contains('is-collapsed') ? '펼치기' : '접기';
+          }
+          return;
+        }
+        // ── shot 단위 액션 (sceneId + shotId) ──
+        var shotSceneId = btn.dataset.sceneId;
+        var shotShotId = btn.dataset.shotId;
+        if (action === 'shot-image' || action === 'shot-video' || action === 'scene-shots-batch' || action === 'shot-delete-image' || action === 'shot-delete-video') {
+          var ctxS = opts.ctx;
+          var uiS = opts.ui;
+          if (!ctxS || !ctxS.getState) return;
+          var stS = ctxS.getState();
+          if (!stS || !Array.isArray(stS.scenes) || !shotSceneId) return;
+          var sceneIdxS = stS.scenes.findIndex(function (s) { return String(s.id) === String(shotSceneId); });
+          if (sceneIdxS < 0) return;
+          var sceneS = stS.scenes[sceneIdxS];
+          var shots = (sceneS && Array.isArray(sceneS.shots)) ? sceneS.shots : [];
+          var shotIdxS = shotShotId ? shots.findIndex(function (sh) { return String(sh && sh.id) === String(shotShotId); }) : -1;
+          var projectIdS = stS.draftId || (opts.getProjectId ? opts.getProjectId() : '');
+
+          if (action === 'scene-shots-batch') {
+            if (!projectIdS) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (!shots.length) { alert('이 씬에는 분해된 컷이 없습니다.'); return; }
+            if (uiS && uiS.generateAllShotImagesForScene) {
+              btn.disabled = true;
+              try { await uiS.generateAllShotImagesForScene(sceneIdxS); }
+              finally { btn.disabled = false; }
+            }
+            return;
+          }
+          if (shotIdxS < 0) return;
+          var shotS = shots[shotIdxS];
+
+          if (action === 'shot-image') {
+            if (!projectIdS) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (shotS && shotS.imgLoading) {
+              if (uiS && uiS.cancelImageForShot) uiS.cancelImageForShot(sceneIdxS, shotIdxS);
+              return;
+            }
+            if (uiS && uiS.generateImageForShot) await uiS.generateImageForShot(sceneIdxS, shotIdxS);
+            return;
+          }
+          if (action === 'shot-video') {
+            if (!projectIdS) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+            if (shotS && String(shotS.videoStatus || '').toLowerCase() === 'processing') {
+              if (uiS && uiS.cancelVideoForShot) uiS.cancelVideoForShot(sceneIdxS, shotIdxS);
+              return;
+            }
+            if (uiS && uiS.startVideoForShot) await uiS.startVideoForShot(sceneIdxS, shotIdxS);
+            return;
+          }
+          if (action === 'shot-delete-image' || action === 'shot-delete-video') {
+            var nextShots = shots.slice();
+            if (action === 'shot-delete-image') {
+              nextShots[shotIdxS] = Object.assign({}, shotS, { imageDataUrl: '', imagePath: '', imgError: '', imgLoading: false });
+            } else {
+              nextShots[shotIdxS] = Object.assign({}, shotS, { videoUrl: '', videoPath: '', videoStatus: '', videoError: '', videoJobId: '' });
+            }
+            stS.scenes[sceneIdxS] = Object.assign({}, sceneS, { shots: nextShots });
+            ctxS.setState(stS);
+            if (opts.updateSceneRow) opts.updateSceneRow(sceneIdxS, stS.header || '', 'shot:' + sceneS.id + ':' + shotS.id);
+            if (ctxS.persistPipeline) ctxS.persistPipeline();
+            return;
+          }
+        }
+
         var sceneId = btn.dataset.id;
         var ctx = opts.ctx;
         var ui = opts.ui;

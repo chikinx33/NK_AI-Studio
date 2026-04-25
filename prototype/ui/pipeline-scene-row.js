@@ -183,6 +183,113 @@
     else collapsedPipelineSceneIds.delete(key);
   }
 
+  function escapeAttr(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function escapeText(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
+  function buildShotMiniMedia(shot, mediaUrlResolver) {
+    var imgUrl = (shot && (shot.imageDataUrl || shot.imagePath || shot.generatedImageUrl || shot.imageUrl)) || '';
+    var vidUrl = (shot && (shot.videoUrl || shot.videoPlaybackUrl || shot.generatedVideoUrl || shot.videoPath)) || '';
+    var resolvedImg = imgUrl ? mediaUrlResolver(imgUrl) : '';
+    var resolvedVid = vidUrl ? mediaUrlResolver(vidUrl) : '';
+    var imgHtml;
+    if (shot && shot.imgLoading) {
+      imgHtml = '<div class="shot-thumb shot-thumb-img loading"><div class="spinner"></div></div>';
+    } else if (shot && shot.imgError) {
+      imgHtml = '<div class="shot-thumb shot-thumb-img error" title="' + escapeAttr(shot.imgError) + '">!</div>';
+    } else if (resolvedImg) {
+      imgHtml = '<div class="shot-thumb shot-thumb-img"><img class="shot-img" loading="lazy" decoding="async" src="' + escapeAttr(resolvedImg) + '" alt="shot image" /></div>';
+    } else {
+      imgHtml = '<div class="shot-thumb shot-thumb-img empty">img</div>';
+    }
+    var vidHtml;
+    var shotVideoBusy = String(shot && shot.videoStatus || '').toLowerCase() === 'processing';
+    if (shotVideoBusy) {
+      vidHtml = '<div class="shot-thumb shot-thumb-vid loading"><div class="spinner"></div></div>';
+    } else if (shot && shot.videoError) {
+      vidHtml = '<div class="shot-thumb shot-thumb-vid error" title="' + escapeAttr(shot.videoError) + '">!</div>';
+    } else if (resolvedVid) {
+      vidHtml = '<div class="shot-thumb shot-thumb-vid"><video class="shot-video" muted playsinline preload="metadata"><source src="' + escapeAttr(resolvedVid) + '" type="video/mp4" /></video></div>';
+    } else {
+      vidHtml = '<div class="shot-thumb shot-thumb-vid empty">vid</div>';
+    }
+    return '<div class="shot-thumbs">' + imgHtml + vidHtml + '</div>';
+  }
+
+  function buildShotRowHtml(scene, shot, idx, mediaUrlResolver) {
+    var sceneId = scene && scene.id;
+    var sid = String((shot && shot.id) || (sceneId + '.' + (idx + 1)));
+    var dur = Math.max(Number(shot && shot.duration) || 0, 0);
+    var hasImage = !!(shot && (shot.imageDataUrl || shot.imagePath || shot.generatedImageUrl || shot.imageUrl));
+    var hasVideo = !!(shot && (shot.videoUrl || shot.videoPlaybackUrl || shot.generatedVideoUrl || shot.videoPath));
+    var imgBusy = !!(shot && shot.imgLoading);
+    var vidBusy = String(shot && shot.videoStatus || '').toLowerCase() === 'processing';
+    var imgBtnLabel = imgBusy ? '생성중(취소)' : (hasImage ? '재생성' : '이미지');
+    var vidBtnLabel = vidBusy ? '생성중(취소)' : (hasVideo ? '재생성' : '영상');
+    var thumbs = buildShotMiniMedia(shot, mediaUrlResolver);
+    var typeLabel = (shot && shot.shotType) || '';
+    var moveLabel = (shot && shot.cameraMove) || '';
+    return (
+      '<li class="shot-row" data-scene-id="' + escapeAttr(sceneId) + '" data-shot-id="' + escapeAttr(sid) + '">' +
+      '<div class="shot-row-head">' +
+      '<span class="shot-id">' + escapeText(sid) + '</span>' +
+      '<span class="shot-type-chip" title="shot type">' + escapeText(typeLabel) + '</span>' +
+      '<span class="shot-move-chip" title="camera move">' + escapeText(moveLabel) + '</span>' +
+      '<span class="shot-dur">' + dur + 's</span>' +
+      '</div>' +
+      thumbs +
+      '<div class="shot-row-body">' +
+      '<p class="shot-comp"><span class="shot-tag">화면</span> ' + escapeText((shot && shot.composition) || '') + '</p>' +
+      '<p class="shot-act"><span class="shot-tag">행동</span> ' + escapeText((shot && shot.action) || '') + '</p>' +
+      '</div>' +
+      '<div class="shot-row-actions">' +
+      '<button class="btn-secondary compact" data-action="shot-image" data-scene-id="' + escapeAttr(sceneId) + '" data-shot-id="' + escapeAttr(sid) + '">' + imgBtnLabel + '</button>' +
+      '<button class="btn-secondary compact" data-action="shot-video" data-scene-id="' + escapeAttr(sceneId) + '" data-shot-id="' + escapeAttr(sid) + '">' + vidBtnLabel + '</button>' +
+      '<button class="btn-ghost compact" data-action="shot-delete-image" data-scene-id="' + escapeAttr(sceneId) + '" data-shot-id="' + escapeAttr(sid) + '"' + (hasImage ? '' : ' disabled') + ' title="이미지 삭제">img×</button>' +
+      '<button class="btn-ghost compact" data-action="shot-delete-video" data-scene-id="' + escapeAttr(sceneId) + '" data-shot-id="' + escapeAttr(sid) + '"' + (hasVideo ? '' : ' disabled') + ' title="영상 삭제">vid×</button>' +
+      '</div>' +
+      '</li>'
+    );
+  }
+
+  function buildShotSection(scene, options) {
+    var opts = options || {};
+    var mediaUrlResolver = typeof opts.toPlayableMediaUrl === 'function'
+      ? opts.toPlayableMediaUrl
+      : function (value) { return String(value || ''); };
+    var shots = (scene && Array.isArray(scene.shots)) ? scene.shots : [];
+    if (!shots.length) return '';
+    var hasSceneImage = !!(scene && scene.imageDataUrl);
+    // 씬 이미지가 이미 있으면 접힘으로 시작 (워크플로 방해 없음)
+    var collapsed = !!hasSceneImage;
+    var anyShotImg = shots.some(function (sh) { return !!(sh && (sh.imageDataUrl || sh.imagePath)); });
+    var anyShotVid = shots.some(function (sh) { return !!(sh && (sh.videoUrl || sh.videoPath)); });
+    if (anyShotImg || anyShotVid) collapsed = false; // 컷별 결과가 있으면 항상 펼침
+    var rowsHtml = shots.map(function (sh, i) { return buildShotRowHtml(scene, sh, i, mediaUrlResolver); }).join('');
+    var batchBusy = shots.some(function (sh) { return !!(sh && sh.imgLoading) || String(sh && sh.videoStatus || '').toLowerCase() === 'processing'; });
+    return (
+      '<div class="scene-shot-section' + (collapsed ? ' is-collapsed' : '') + '" data-scene-id="' + escapeAttr(scene.id) + '">' +
+      '<div class="scene-shot-section-head">' +
+      '<button type="button" class="scene-shot-toggle" data-action="shot-section-toggle" data-scene-id="' + escapeAttr(scene.id) + '" title="' + (collapsed ? '펼치기' : '접기') + '">' + (collapsed ? '▸' : '▾') + '</button>' +
+      '<span class="scene-shot-section-title">콘티 / Shot (' + shots.length + ')</span>' +
+      '<button class="btn-secondary compact scene-shot-batch-btn" data-action="scene-shots-batch" data-scene-id="' + escapeAttr(scene.id) + '"' + (batchBusy ? ' disabled' : '') + '>' + (batchBusy ? '생성 중...' : '컷 전체 이미지 생성') + '</button>' +
+      '</div>' +
+      '<ol class="shot-row-list">' + rowsHtml + '</ol>' +
+      '</div>'
+    );
+  }
+
   function buildSceneRowHtml(scene, header, options) {
     var opts = options || {};
     var statePayload = opts.statePayload || {};
@@ -284,11 +391,18 @@
       '</div>' +
       '</div>' +
       '</div>' +
+      buildShotSection(scene, { toPlayableMediaUrl: mediaUrlResolver }) +
       '</div>' +
       '</div>'
     );
   }
 
+  sceneRow.buildShotSection = buildShotSection;
+  sceneRow.buildShotRowHtml = buildShotRowHtml;
+  sceneRow.buildShotMiniMedia = buildShotMiniMedia;
+  sceneRow.buildImageCard = buildImageCard;
+  sceneRow.buildVideoCard = buildVideoCard;
+  sceneRow.buildVoiceBlock = buildVoiceBlock;
   sceneRow.isVoiceFeatureEnabled = isVoiceFeatureEnabled;
   sceneRow.isSceneVideoProcessing = isSceneVideoProcessing;
   sceneRow.isSceneVoiceProcessing = isSceneVoiceProcessing;
