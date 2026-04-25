@@ -552,8 +552,34 @@
           var scenes = (data.scenes || []).map(function (s, idx) {
             var imageRef = s.imageDataUrl || s.imagePath || s.generatedImageUrl || s.imageUrl || s.image || s.image_url || s.init_image || s.source_image || '';
             var videoRef = s.videoUrl || s.videoPlaybackUrl || s.videoPath || s.generatedVideoUrl || '';
+            // 시나리오 페이지에서 만든 컷(shots) 분해 결과를 그대로 보존.
+            // 각 shot 의 미디어 필드도 함께 (이미지/영상 컷별 결과).
+            var sceneId = (s.id != null ? s.id : (idx + 1));
+            var shots = Array.isArray(s.shots) ? s.shots.map(function (sh, j) {
+              if (!sh || typeof sh !== 'object') return null;
+              var shImg = sh.imageDataUrl || sh.imagePath || sh.generatedImageUrl || sh.imageUrl || '';
+              var shVid = sh.videoUrl || sh.videoPlaybackUrl || sh.videoPath || sh.generatedVideoUrl || '';
+              return {
+                id: String(sh.id || (sceneId + '.' + (j + 1))),
+                duration: Number(sh.duration) || 0,
+                shotType: String(sh.shotType || 'MS'),
+                cameraMove: String(sh.cameraMove || 'static'),
+                composition: String(sh.composition || ''),
+                action: String(sh.action || ''),
+                imageDataUrl: shImg,
+                imagePath: sh.imagePath || '',
+                videoUrl: shVid,
+                videoPath: sh.videoPath || '',
+                videoStatus: sh.videoStatus || '',
+                videoError: sh.videoError || '',
+                videoJobId: sh.videoJobId || '',
+                videoMethod: sh.videoMethod || '',
+                imgLoading: false,
+                imgError: ''
+              };
+            }).filter(Boolean) : [];
             return {
-              id: (s.id != null ? s.id : (idx + 1)),
+              id: sceneId,
               lines: s.lines || '',
               shot: s.shot || s.visual || '',
               sceneLocation: s.sceneLocation || s.location || '',
@@ -576,6 +602,7 @@
               voiceStatus: s.voiceStatus || '',
               voiceError: s.voiceError || '',
               voiceVoiceId: s.voiceVoiceId || '',
+              shots: shots,
             };
           });
           return { payload: pl, header: hClean, scenes: scenes, savedAt: data.savedAt || '', aspectRatio: aspectRatio, isPlaceholder: false, draftId: (draftId || null) };
