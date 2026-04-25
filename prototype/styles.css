@@ -2569,6 +2569,68 @@ textarea::-webkit-scrollbar-corner {
   white-space: nowrap;
 }
 
+/* 카메라 용어 안내 모달 */
+#camera-vocab-modal .camera-vocab-modal-box {
+  width: min(880px, 92vw);
+  max-height: 85vh;
+  overflow: auto;
+  padding: 24px;
+  background: var(--card);
+  color: var(--text);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.vocab-modal-title {
+  margin: 0 0 6px;
+  font-size: 18px;
+  color: var(--text);
+}
+.vocab-modal-intro { margin: 0 0 16px; }
+.vocab-section { margin-top: 16px; }
+.vocab-section-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 0.02em;
+}
+.vocab-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 8px;
+}
+.vocab-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--layer-soft);
+  padding: 8px 10px;
+}
+.vocab-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+.vocab-code {
+  font-weight: 700;
+  color: var(--accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+.vocab-ko {
+  font-weight: 600;
+  color: var(--text);
+  font-size: 13px;
+}
+.vocab-en { font-size: 11px; }
+.vocab-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 /* 모든 씬에 공통으로 적용된 배경 (공통 prefix) 배지 — 시나리오 카드들 위 한 줄 */
 .scenario-common-prefix-badge {
   display: flex;

@@ -2435,6 +2435,66 @@
     }
     window.addEventListener('load', finishLoading);
 
+    // 카메라 용어 안내 버튼
+    const cameraVocabBtn = document.getElementById('camera-vocab-btn');
+    if (cameraVocabBtn) {
+      cameraVocabBtn.addEventListener('click', () => {
+        const modal = document.getElementById('camera-vocab-modal');
+        const body = document.getElementById('camera-vocab-modal-body');
+        if (!modal || !body) return;
+        const vocab = (window.NK && NK.service && NK.service.shotVocab) || null;
+        if (!vocab) {
+          body.innerHTML = '<p class="muted">카메라 용어 데이터를 불러오지 못했습니다.</p>';
+          modal.classList.remove('hidden');
+          return;
+        }
+        const buildSection = (title, dict, keys) => {
+          const items = keys.map((k) => {
+            const v = dict[k] || {};
+            return (
+              '<div class="vocab-item">' +
+              '<div class="vocab-item-head">' +
+              '<span class="vocab-code">' + escapeHtml(k) + '</span>' +
+              '<span class="vocab-ko">' + escapeHtml(v.ko || '') + '</span>' +
+              '<span class="vocab-en muted small">' + escapeHtml(v.en || '') + '</span>' +
+              '</div>' +
+              '<p class="vocab-hint">' + escapeHtml(v.hint || '') + '</p>' +
+              '</div>'
+            );
+          }).join('');
+          return (
+            '<section class="vocab-section">' +
+            '<h3 class="vocab-section-title">' + escapeHtml(title) + '</h3>' +
+            '<div class="vocab-grid">' + items + '</div>' +
+            '</section>'
+          );
+        };
+        body.innerHTML = (
+          '<h2 class="vocab-modal-title">카메라 용어 안내</h2>' +
+          '<p class="vocab-modal-intro muted small">시나리오 생성 / 이미지 · 영상 생성 시 사용되는 카메라 셋업 어휘입니다. ' +
+          '각 씬의 [shotType] [cameraMove] 칩 값이 아래 표의 코드 중 하나로 채워집니다.</p>' +
+          buildSection('Shot Type (' + vocab.SHOT_TYPE_KEYS.length + '종)', vocab.SHOT_TYPES, vocab.SHOT_TYPE_KEYS) +
+          buildSection('Camera Move (' + vocab.CAMERA_MOVE_KEYS.length + '종)', vocab.CAMERA_MOVES, vocab.CAMERA_MOVE_KEYS)
+        );
+        modal.classList.remove('hidden');
+      });
+    }
+    // 모달 닫기 (data-close 패턴 공용)
+    document.addEventListener('click', (e) => {
+      const closeBtn = e.target && e.target.closest ? e.target.closest('[data-close]') : null;
+      if (closeBtn) {
+        const id = closeBtn.getAttribute('data-close');
+        const m = id ? document.getElementById(id) : null;
+        if (m) m.classList.add('hidden');
+        return;
+      }
+      // 배경 클릭 시 닫기 (camera-vocab-modal 만)
+      const camModal = document.getElementById('camera-vocab-modal');
+      if (camModal && !camModal.classList.contains('hidden') && e.target === camModal) {
+        camModal.classList.add('hidden');
+      }
+    });
+
     // 시나리오 복사 버튼
     const scenarioCopyBtn = document.getElementById('scenario-copy-btn');
     if (scenarioCopyBtn) {
