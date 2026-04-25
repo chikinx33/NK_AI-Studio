@@ -1289,9 +1289,9 @@ a.btn-primary:active {
 }
 
 .caption-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
 }
 
@@ -1299,12 +1299,22 @@ a.btn-primary:active {
   display: flex;
   gap: 16px;
   align-items: center;
+  justify-self: end;
 }
 
 .caption-left {
   display: flex;
   align-items: center;
   gap: 6px;
+  justify-self: start;
+}
+
+/* 가운데 정렬되는 펼침/접기/포커스 토글 그룹 */
+.caption-fold-mode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: center;
 }
 
 .caption-divider {
