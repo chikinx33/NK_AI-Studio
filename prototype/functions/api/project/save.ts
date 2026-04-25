@@ -123,6 +123,24 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return [];
     };
 
+    const normalizeShots = (value: any, sceneId: number) => {
+      if (!Array.isArray(value)) return [];
+      return value
+        .map((sh: any, j: number) => {
+          if (!sh || typeof sh !== "object") return null;
+          const dur = Number(sh.duration);
+          return {
+            id: String(sh.id || `${sceneId}.${j + 1}`),
+            duration: Number.isFinite(dur) && dur > 0 ? dur : 0,
+            shotType: typeof sh.shotType === "string" ? sh.shotType : "MS",
+            cameraMove: typeof sh.cameraMove === "string" ? sh.cameraMove : "static",
+            composition: typeof sh.composition === "string" ? sh.composition : "",
+            action: typeof sh.action === "string" ? sh.action : "",
+          };
+        })
+        .filter(Boolean);
+    };
+
     const normalizeScene = (s: any, idx: number) => {
       const est = Number(s?.estSec ?? s?.duration ?? s?.len ?? 0);
       const dialogue = normalizeDialogue(s?.dialogue ?? s?.dialogues ?? []);
@@ -164,8 +182,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const voiceStatus = typeof s?.voiceStatus === "string" ? s.voiceStatus : "";
       const voiceVoiceId = typeof s?.voiceVoiceId === "string" ? s.voiceVoiceId : "";
       const voiceError = typeof s?.voiceError === "string" ? s.voiceError : "";
+      const sceneId = Number(s?.id ?? idx + 1);
       return {
-        id: Number(s?.id ?? idx + 1),
+        id: sceneId,
         title: typeof s?.title === "string" ? s.title : "",
         lines: subtitleText,
         narration,
@@ -177,6 +196,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         script,
         shot: visual,
         visual,
+        shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,
         imageDataUrl: imagePath || imageUrl,
         imagePath,

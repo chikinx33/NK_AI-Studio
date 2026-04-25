@@ -2474,13 +2474,14 @@ textarea::-webkit-scrollbar-corner {
 .scenario-card .scene-shot-grid {
   margin-top: 12px;
   padding-top: 10px;
-  border-top: 1px dashed var(--border, #ddd);
+  border-top: 1px dashed var(--border);
   display: flex;
   flex-direction: column;
   gap: 6px;
   max-height: 320px;
   overflow-y: auto;
   scrollbar-width: thin;
+  color: var(--text);
 }
 .scenario-card.is-collapsed .scene-shot-grid {
   display: none;
@@ -2494,10 +2495,11 @@ textarea::-webkit-scrollbar-corner {
   gap: 6px;
 }
 .scenario-card .shot-item {
-  border: 1px solid var(--border, #e6e6e6);
+  border: 1px solid var(--border);
   border-radius: 6px;
   padding: 6px 8px;
-  background: var(--surface-2, #fafafa);
+  background: var(--layer-soft);
+  color: var(--text);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -2508,9 +2510,10 @@ textarea::-webkit-scrollbar-corner {
   flex-wrap: wrap;
   margin-bottom: 4px;
   font-weight: 600;
+  color: var(--text);
 }
 .scenario-card .shot-id {
-  color: var(--accent, #4a6cf7);
+  color: var(--accent);
   min-width: 36px;
 }
 .scenario-card .shot-type,
@@ -2518,15 +2521,16 @@ textarea::-webkit-scrollbar-corner {
   display: inline-block;
   padding: 1px 6px;
   border-radius: 4px;
-  background: var(--chip, #ececec);
-  color: var(--text-2, #444);
+  background: var(--layer-strong);
+  border: 1px solid var(--chip-border);
+  color: var(--text);
   font-weight: 500;
   font-size: 11px;
   letter-spacing: 0.02em;
 }
 .scenario-card .shot-dur {
   margin-left: auto;
-  color: var(--text-3, #888);
+  color: var(--muted);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -2534,11 +2538,16 @@ textarea::-webkit-scrollbar-corner {
   margin: 0;
   display: flex;
   gap: 6px;
+  color: var(--text);
+}
+.scenario-card .shot-comp,
+.scenario-card .shot-act {
+  color: var(--text);
 }
 .scenario-card .shot-tag {
   flex: 0 0 auto;
   min-width: 32px;
-  color: var(--text-3, #888);
+  color: var(--muted);
   font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
