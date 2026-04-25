@@ -2599,12 +2599,36 @@ textarea::-webkit-scrollbar-corner {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
+.vocab-modal-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+}
 .vocab-modal-title {
-  margin: 0 0 6px;
+  margin: 0;
   font-size: 18px;
   color: var(--text);
+  flex: 1 1 auto;
 }
-.vocab-modal-intro { margin: 0 0 16px; }
+.vocab-modal-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+.vocab-modal-close:hover {
+  background: var(--layer-strong);
+}
 .vocab-section { margin-top: 16px; }
 .vocab-section-title {
   margin: 0 0 8px;

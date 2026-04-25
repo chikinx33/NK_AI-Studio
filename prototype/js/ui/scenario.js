@@ -2450,22 +2450,36 @@
         const body = document.getElementById('camera-vocab-modal-body');
         if (!modal || !body) return;
         const vocab = (window.NK && NK.service && NK.service.shotVocab) || null;
+        const lang = getUiLang();
+        const titleText = lang === 'en' ? 'Camera Terms' : '카메라 용어 안내';
         if (!vocab) {
-          body.innerHTML = '<p class="muted">카메라 용어 데이터를 불러오지 못했습니다.</p>';
+          body.innerHTML = (
+            '<div class="vocab-modal-titlebar">' +
+            '<h2 class="vocab-modal-title">' + escapeHtml(titleText) + '</h2>' +
+            '<button class="close-modal vocab-modal-close" data-close="camera-vocab-modal" aria-label="닫기">✕</button>' +
+            '</div>' +
+            '<p class="muted">' + (lang === 'en' ? 'Failed to load camera vocabulary.' : '카메라 용어 데이터를 불러오지 못했습니다.') + '</p>'
+          );
           modal.classList.remove('hidden');
           return;
         }
         const buildSection = (title, dict, keys) => {
           const items = keys.map((k) => {
             const v = dict[k] || {};
+            // 영어 모드: 한글(ko) 라벨 + hint 한글 모두 제거. en + enHint 만.
+            // 한글 모드: ko 메인, en 보조, hint 한글.
+            const headParts = ['<span class="vocab-code">' + escapeHtml(k) + '</span>'];
+            if (lang === 'en') {
+              headParts.push('<span class="vocab-en">' + escapeHtml(v.en || '') + '</span>');
+            } else {
+              headParts.push('<span class="vocab-ko">' + escapeHtml(v.ko || '') + '</span>');
+              headParts.push('<span class="vocab-en muted small">' + escapeHtml(v.en || '') + '</span>');
+            }
+            const hint = lang === 'en' ? (v.enHint || '') : (v.hint || '');
             return (
               '<div class="vocab-item">' +
-              '<div class="vocab-item-head">' +
-              '<span class="vocab-code">' + escapeHtml(k) + '</span>' +
-              '<span class="vocab-ko">' + escapeHtml(v.ko || '') + '</span>' +
-              '<span class="vocab-en muted small">' + escapeHtml(v.en || '') + '</span>' +
-              '</div>' +
-              '<p class="vocab-hint">' + escapeHtml(v.hint || '') + '</p>' +
+              '<div class="vocab-item-head">' + headParts.join('') + '</div>' +
+              '<p class="vocab-hint">' + escapeHtml(hint) + '</p>' +
               '</div>'
             );
           }).join('');
@@ -2476,12 +2490,19 @@
             '</section>'
           );
         };
+        const shotSectionTitle = lang === 'en'
+          ? 'Shot Type (' + vocab.SHOT_TYPE_KEYS.length + ')'
+          : 'Shot Type (' + vocab.SHOT_TYPE_KEYS.length + '종)';
+        const moveSectionTitle = lang === 'en'
+          ? 'Camera Move (' + vocab.CAMERA_MOVE_KEYS.length + ')'
+          : 'Camera Move (' + vocab.CAMERA_MOVE_KEYS.length + '종)';
         body.innerHTML = (
-          '<h2 class="vocab-modal-title">카메라 용어 안내</h2>' +
-          '<p class="vocab-modal-intro muted small">시나리오 생성 / 이미지 · 영상 생성 시 사용되는 카메라 셋업 어휘입니다. ' +
-          '각 씬의 [shotType] [cameraMove] 칩 값이 아래 표의 코드 중 하나로 채워집니다.</p>' +
-          buildSection('Shot Type (' + vocab.SHOT_TYPE_KEYS.length + '종)', vocab.SHOT_TYPES, vocab.SHOT_TYPE_KEYS) +
-          buildSection('Camera Move (' + vocab.CAMERA_MOVE_KEYS.length + '종)', vocab.CAMERA_MOVES, vocab.CAMERA_MOVE_KEYS)
+          '<div class="vocab-modal-titlebar">' +
+          '<h2 class="vocab-modal-title">' + escapeHtml(titleText) + '</h2>' +
+          '<button class="close-modal vocab-modal-close" data-close="camera-vocab-modal" aria-label="닫기">✕</button>' +
+          '</div>' +
+          buildSection(shotSectionTitle, vocab.SHOT_TYPES, vocab.SHOT_TYPE_KEYS) +
+          buildSection(moveSectionTitle, vocab.CAMERA_MOVES, vocab.CAMERA_MOVE_KEYS)
         );
         modal.classList.remove('hidden');
       });
