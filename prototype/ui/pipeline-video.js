@@ -11,6 +11,36 @@
     'vidu-q3': 'Vidu Q3-Mix'
   };
 
+  // 모델별 최대 영상 길이(초). 사용자가 직접 입력한 값에만 적용되는 상한.
+  // AI 자동 처리는 안정성을 위해 6초 캡 (DEFAULT_DURATION_CAP).
+  var MODEL_MAX_DURATION = {
+    'veo': 8, 'veo-full': 8,
+    'grok': 6, 'grok-r2v': 6,
+    'kling-draft': 10, 'kling-final': 10,
+    'seedance': 15, 'seedance-r2v': 15,
+    'wan': 5,
+    'vidu-q3': 8
+  };
+  var DEFAULT_DURATION_CAP = 6;
+
+  function getModelMaxDuration(model) {
+    if (model && Object.prototype.hasOwnProperty.call(MODEL_MAX_DURATION, model)) {
+      return MODEL_MAX_DURATION[model];
+    }
+    return 8; // 알 수 없는 모델은 8초로 안전 폴백
+  }
+
+  function getModelLabel(model) {
+    return VIDEO_MODEL_LABELS[model] || model || '';
+  }
+
+  // 영상 생성 시 적용되는 실효 길이.
+  // userOverride=true 인 경우만 모델 max 까지 허용, 아니면 6 초 캡.
+  function getEffectiveDurationCap(model, userOverride) {
+    var modelMax = getModelMaxDuration(model);
+    return userOverride ? modelMax : Math.min(DEFAULT_DURATION_CAP, modelMax);
+  }
+
   function normalizeSafetyMessage(msg) {
     var text = String(msg || 'video_error');
     if (text.indexOf('Responsible AI') !== -1 || text.indexOf('sensitive words') !== -1) {
@@ -291,9 +321,14 @@
 
     try {
       var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v';
+      // 안정성: AI 자동 처리는 6초 캡, 사용자가 prompt 편집 시에만 모델 max 까지 허용.
+      var userOverride = !!scene.promptEdited;
+      var cap = getEffectiveDurationCap(opts.videoModel, userOverride);
+      var rawEst = Number(scene.estSec) || 5;
+      var capped = Math.min(rawEst, cap);
       var durationSeconds = isSeedanceFamily
-        ? Math.min(15, Math.max(4, Math.round(Number(scene.estSec) || 5)))
-        : snapVideoDuration(scene.estSec);
+        ? Math.min(cap, Math.max(4, Math.round(capped)))
+        : snapVideoDuration(capped);
       var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
       var klingQuality = opts.videoModel === 'kling-final' ? 'final' : (opts.videoModel === 'kling-draft' ? 'draft' : '');
       // 이전 씬의 마지막 프레임을 이번 씬의 끝 프레임(image_tail)으로 자동 연결 (Kling 전용)
@@ -532,7 +567,9 @@
 
     try {
       var isSeedanceFamily = opts.videoModel === 'seedance' || opts.videoModel === 'seedance-r2v';
-      var shotDur = Math.max(1, Math.min(6, Math.round(Number(shot.duration) || 4)));
+      // 컷은 항상 6 초 캡 (decomposer 의 MAX_SHOT_DURATION 와 일치). 모델 max 도 함께 적용.
+      var shotCap = Math.min(DEFAULT_DURATION_CAP, getModelMaxDuration(opts.videoModel));
+      var shotDur = Math.max(1, Math.min(shotCap, Math.round(Number(shot.duration) || 4)));
       var durationSeconds = isSeedanceFamily ? shotDur : snapVideoDuration(shotDur);
       var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
       var klingQuality = opts.videoModel === 'kling-final' ? 'final' : (opts.videoModel === 'kling-draft' ? 'draft' : '');
@@ -799,4 +836,11 @@
       opts.updateSceneRow(opts.idx, currentState.header || '', 'video');
     }
   };
+
+  // 외부(액션 핸들러 등)에서 사용자 입력 검증에 쓸 수 있도록 helper 노출
+  video.MODEL_MAX_DURATION = MODEL_MAX_DURATION;
+  video.DEFAULT_DURATION_CAP = DEFAULT_DURATION_CAP;
+  video.getModelMaxDuration = getModelMaxDuration;
+  video.getModelLabel = getModelLabel;
+  video.getEffectiveDurationCap = getEffectiveDurationCap;
 })();

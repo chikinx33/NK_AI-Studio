@@ -215,6 +215,25 @@
         }
         if (action === 'save-prompt') {
           applyPromptDraft(true);
+          // 사용자가 직접 입력한 duration 을 모델 최대값에 맞춰 검증/클램프.
+          try {
+            var modelEl = document.getElementById('video-model-select');
+            var curModel = modelEl ? modelEl.value : '';
+            var videoMod = NK.uiPipelineVideo;
+            if (videoMod && videoMod.getModelMaxDuration) {
+              var modelMax = videoMod.getModelMaxDuration(curModel);
+              var sceneNow = st.scenes[idx];
+              if (sceneNow && Number(sceneNow.estSec) > modelMax) {
+                var label = videoMod.getModelLabel ? videoMod.getModelLabel(curModel) : curModel;
+                alert('해당 ' + (label || '선택된') + ' 모델의 영상 재생 최대 분량은 ' + modelMax + '초 입니다. ' + modelMax + '초로 자동 조정됩니다.');
+                st.scenes[idx] = Object.assign({}, sceneNow, { estSec: modelMax });
+                scene = st.scenes[idx];
+                // DOM 의 duration 셀도 최신값으로 갱신
+                var durEl = rootEl.querySelector('.prompt-duration[data-id="' + sceneId + '"]');
+                if (durEl) durEl.textContent = modelMax + 's.';
+              }
+            }
+          } catch (_) {}
           refreshAndPersist(true);
           return;
         }
