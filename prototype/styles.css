@@ -2570,7 +2570,11 @@ textarea::-webkit-scrollbar-corner {
   visibility: hidden;
 }
 .label-scene { white-space: pre; }
-.label-cut { color: var(--text); }
+/* cutN 텍스트는 하늘색으로 강조 (시나리오/프로덕션 공통) */
+.label-cut {
+  color: #38bdf8;
+  font-weight: 600;
+}
 
 /* 시나리오 카드 헤더의 카메라 칩 (Scene 1 - 1 옆 [3s] 다음에 [EWS] [static]) */
 .scenario-card .card-title-row .card-camera-chip {
