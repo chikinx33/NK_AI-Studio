@@ -46,8 +46,8 @@
       var toggleBtn = e.target.closest('.scene-row-toggle');
       var headerArea = e.target.closest('.scene-row-header');
       var rowFromHeader = headerArea ? headerArea.closest('.scene-row') : null;
-      // 접힌 상태에서 헤더 전체 클릭도 토글 처리
-      if (!toggleBtn && headerArea && rowFromHeader && rowFromHeader.classList.contains('is-collapsed')) {
+      // 헤더 어디를 눌러도 양방향 토글 (접힘 ↔ 펼침). head 행은 제외.
+      if (!toggleBtn && headerArea && rowFromHeader && !rowFromHeader.classList.contains('head')) {
         toggleBtn = rowFromHeader.querySelector('.scene-row-toggle');
       }
       if (toggleBtn) {

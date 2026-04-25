@@ -1925,10 +1925,11 @@
         const card = e.target && e.target.closest ? e.target.closest('.scenario-card') : null;
         if (!card) return;
         const toggleBtn = e.target && e.target.closest ? e.target.closest('.scenario-card-toggle') : null;
-        const isCollapsed = card.classList.contains('is-collapsed');
         const inCardTop = e.target && e.target.closest ? e.target.closest('.card-top') : null;
-        // 토글 버튼 클릭 OR 접힌 상태에서 상단 바 어디든 클릭 → 접기/펼치기
-        if (toggleBtn || (isCollapsed && inCardTop)) {
+        // card-top 에 있는 편집 가능 요소(est-input 등) 클릭은 토글에서 제외
+        const inEditable = e.target && e.target.closest ? e.target.closest('input, textarea, select, [contenteditable="true"]') : null;
+        // 토글 버튼 클릭 OR 상단 바(편집 요소 제외) 어디든 클릭 → 접기/펼치기 양방향 토글
+        if (toggleBtn || (inCardTop && !inEditable)) {
           e.preventDefault();
           e.stopPropagation();
           if (sceneFoldMode === 'focus') {
