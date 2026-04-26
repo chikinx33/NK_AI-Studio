@@ -824,6 +824,38 @@ body.layout-fixed.page-shell-image .content {
   height: 18px;
 }
 
+.ai-image-clear-fab {
+  position: absolute;
+  right: 12px;
+  bottom: 62px;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  background: rgba(8, 12, 18, 0.84);
+  color: #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.34);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  z-index: 2;
+}
+
+.ai-image-clear-fab:hover {
+  border-color: rgba(248, 113, 113, 0.52);
+  color: #fecaca;
+}
+
+.ai-image-clear-fab .icon {
+  width: 18px;
+  height: 18px;
+}
+
 .ai-image-panel-preview .ai-image-preview-foot {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);

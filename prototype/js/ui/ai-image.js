@@ -87,6 +87,7 @@
       providerLabel: '이미지 모델',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
+      clearPreview: '미리보기 비우기',
       generate: '생성',
       generating: '생성 중...',
       resultsTitle: '결과',
@@ -233,6 +234,7 @@
       providerLabel: 'Image model',
       providerGemini: 'Gemini 3.1 Flash',
       providerOpenai: 'GPT Image 2',
+      clearPreview: 'Clear preview',
       generate: 'Generate',
       generating: 'Generating...',
       resultsTitle: 'Results',
@@ -1381,6 +1383,10 @@
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 9.5A2.5 2.5 0 0 1 7 7h2.2l1.3-1.7h2.9L14.8 7H17a2.5 2.5 0 0 1 2.5 2.5v6A2.5 2.5 0 0 1 17 18H7a2.5 2.5 0 0 1-2.5-2.5v-6Z"></path><circle cx="12" cy="12.5" r="3.3"></circle><path d="M7.5 9.5h.01"></path></svg>';
   }
 
+  function clearPreviewIconSvg() {
+    return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 22-1-4"></path><path d="M19 14a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v1a1 1 0 0 0 1 1"></path><path d="M19 14H5l-1.973 6.767A1 1 0 0 0 4 22h16a1 1 0 0 0 .973-1.233z"></path><path d="m8 22 1-4"></path></svg>';
+  }
+
   function cameraSceneTargetIconSvg() {
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h18"></path><path d="M4 18l5.2-7.2L13 16l2.7-3.8L20 18"></path><path d="M14 6.5l1.2-1.2L17 7.1l3.1-3.1"></path></svg>';
   }
@@ -1626,6 +1632,7 @@
           '<button type="button" class="ai-image-preview-trigger" data-action="toggle-preview-modal" data-url="' + escapeHtml(previewUrl) + '">' +
           '<img src="' + escapeHtml(previewUrl) + '" alt="" class="ai-image-preview-image" />' +
           '</button>' +
+          '<button type="button" class="ai-image-clear-fab" data-action="clear-preview" aria-label="' + escapeHtml(t('clearPreview')) + '" title="' + escapeHtml(t('clearPreview')) + '">' + clearPreviewIconSvg() + '</button>' +
           '<button type="button" class="ai-image-camera-fab' + (cameraPanelActive ? ' is-active' : '') + '" data-action="toggle-camera-panel" aria-label="' + escapeHtml(t('cameraButton')) + '" title="' + escapeHtml(t('cameraButton')) + '">' + cameraFabIconSvg() + '</button>' +
           '</div>' +
           '<div class="ai-image-preview-foot">' +
@@ -3037,6 +3044,17 @@
         if (action === 'toggle-camera-panel') {
           state.historyPanelMode = normalizeHistoryPanelMode(state.historyPanelMode) === 'camera' ? 'history' : 'camera';
           updatePreviewPanelUI();
+          updateHistoryPanelUI();
+          return;
+        }
+        if (action === 'clear-preview') {
+          state.currentResultId = '';
+          state.previewTargetType = 'none';
+          state.historyPanelMode = 'history';
+          state.cameraTargetMode = 'scene';
+          state.cameraControls = createDefaultCameraControls();
+          updatePreviewPanelUI();
+          updateResultSelectionUI();
           updateHistoryPanelUI();
           return;
         }
