@@ -32,27 +32,38 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "prompt is required" }, 400);
     }
 
+    const provider = normalizeProvider(body?.provider || env.AI_IMAGE_PROVIDER);
     const apiKey = String(env.GOOGLE_API_KEY || "").trim();
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
+    const openaiApiKey = String(env.OPENAI_API_KEY || "").trim();
+    const openaiModel = String(env.OPENAI_IMAGE_MODEL || "").trim() || "gpt-image-2";
     const incomingSize = String(body?.imageSize || body?.quality || body?.resolution || "").trim().toUpperCase();
     const sizeAllowed = new Set(["512", "1K", "2K"]);
     const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "1K";
     const geminiImageSize = sizeAllowed.has(incomingSize) ? incomingSize : sizeDefault;
 
-    if (!apiKey) {
-      return json({ error: "Missing GOOGLE_API_KEY" }, 500);
-    }
-    if (!clientEmail || !privateKeyRaw) {
-      return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
+    if (provider === "openai") {
+      if (!openaiApiKey) {
+        return json({ error: "Missing OPENAI_API_KEY" }, 500);
+      }
+    } else {
+      if (!apiKey) {
+        return json({ error: "Missing GOOGLE_API_KEY" }, 500);
+      }
+      if (!clientEmail || !privateKeyRaw) {
+        return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
+      }
     }
 
-    const accessToken = await getGoogleAccessToken({
-      clientEmail,
-      privateKeyPem: privateKeyRaw,
-      scope: "https://www.googleapis.com/auth/cloud-platform",
-    });
+    const accessToken = (clientEmail && privateKeyRaw)
+      ? await getGoogleAccessToken({
+          clientEmail,
+          privateKeyPem: privateKeyRaw,
+          scope: "https://www.googleapis.com/auth/cloud-platform",
+        })
+      : "";
 
     const referenceImages = await normalizeReferenceImages({
       items: incomingReferenceImages,
@@ -83,45 +94,69 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       cameraTargetMode
     );
 
-    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
-    const requestPayload = {
-      contents: buildGeminiContents(conversationHistory, referenceImages, finalPrompt),
-      generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
-    };
-    let geminiRes: Response | null = null;
-    let geminiText = "";
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        geminiRes = await fetch(generateUrl, {
-          method: "POST",
-          headers: {
-            "x-goog-api-key": apiKey,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(requestPayload),
-        });
-        geminiText = await geminiRes.text();
-        if (geminiRes.ok || (geminiRes.status >= 400 && geminiRes.status < 500)) break;
-      } catch (_) {
+    let imageOutput: { data: string; mimeType: string } | null = null;
+    let modelUsed = "";
+
+    if (provider === "openai") {
+      const openaiResult = await callOpenAIImage({
+        apiKey: openaiApiKey,
+        model: openaiModel,
+        prompt: finalPrompt,
+        aspectRatio: aspectFinal,
+        qualityHint: geminiImageSize,
+        referenceImages,
+        conversationHistory,
+      });
+      if (openaiResult.error) {
+        return json(openaiResult.error, openaiResult.status || 500);
       }
-      await sleep(400 * Math.pow(2, attempt));
+      imageOutput = { data: openaiResult.b64 || "", mimeType: "image/png" };
+      modelUsed = openaiModel;
+    } else {
+      const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
+      const requestPayload = {
+        contents: buildGeminiContents(conversationHistory, referenceImages, finalPrompt),
+        generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
+      };
+      let geminiRes: Response | null = null;
+      let geminiText = "";
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          geminiRes = await fetch(generateUrl, {
+            method: "POST",
+            headers: {
+              "x-goog-api-key": apiKey,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestPayload),
+          });
+          geminiText = await geminiRes.text();
+          if (geminiRes.ok || (geminiRes.status >= 400 && geminiRes.status < 500)) break;
+        } catch (_) {
+        }
+        await sleep(400 * Math.pow(2, attempt));
+      }
+
+      if (!geminiRes) {
+        return json({ error: "Gemini API error", status: 500, detail: "network_error", hint: "네트워크 오류로 Gemini 호출에 실패했습니다. 잠시 후 다시 시도하세요." }, 500);
+      }
+      if (!geminiRes.ok) {
+        const detail = safeJson(geminiText);
+        const mapped = explainGeminiError(geminiRes.status, detail, { model: geminiModel });
+        return json(Object.assign({ error: "Gemini API error", status: geminiRes.status, detail }, mapped), 500);
+      }
+
+      const geminiJson = safeJson(geminiText) || {};
+      imageOutput = extractGeminiImage(geminiJson);
+      modelUsed = geminiModel;
+      if (!imageOutput?.data) {
+        return json({ error: "No image bytes returned", raw: geminiJson }, 500);
+      }
     }
 
-    if (!geminiRes) {
-      return json({ error: "Gemini API error", status: 500, detail: "network_error", hint: "네트워크 오류로 Gemini 호출에 실패했습니다. 잠시 후 다시 시도하세요." }, 500);
-    }
-    if (!geminiRes.ok) {
-      const detail = safeJson(geminiText);
-      const mapped = explainGeminiError(geminiRes.status, detail, { model: geminiModel });
-      return json(Object.assign({ error: "Gemini API error", status: geminiRes.status, detail }, mapped), 500);
-    }
-
-    const geminiJson = safeJson(geminiText) || {};
-    const imageOutput = extractGeminiImage(geminiJson);
     const bytesBase64Encoded = imageOutput?.data || "";
-
     if (!bytesBase64Encoded) {
-      return json({ error: "No image bytes returned", raw: geminiJson }, 500);
+      return json({ error: "No image bytes returned" }, 500);
     }
 
     const projTagRaw = (body?.projectId ?? body?.projTag ?? "").toString().trim();
@@ -131,7 +166,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
     let signedUrl = "";
     let objectName = "";
-    if (outParsed) {
+    if (outParsed && accessToken) {
       const basePrefix = outParsed.object.replace(/\/$/, "");
       const stamp = Date.now();
       if (storageService === "ai-image") {
@@ -166,9 +201,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       dataUrl: `data:${imageOutput?.mimeType || "image/png"};base64,${bytesBase64Encoded}`,
       signedUrl,
       objectName,
-      model: geminiModel,
+      model: modelUsed,
       imageSizeApplied: geminiImageSize,
-      provider: "gemini-api",
+      provider: provider === "openai" ? "openai-api" : "gemini-api",
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
@@ -368,6 +403,146 @@ function explainGeminiError(status: number, detail: any, ctx?: { model?: string 
 function normalizeStorageService(value: unknown) {
   const raw = String(value || "").trim().toLowerCase();
   return raw === "ai-image" ? "ai-image" : "ai-video";
+}
+
+function normalizeProvider(value: unknown): "gemini" | "openai" {
+  const raw = String(value || "").trim().toLowerCase();
+  if (raw === "openai" || raw === "gpt-image" || raw === "gpt-image-2") return "openai";
+  return "gemini";
+}
+
+function mapAspectToOpenAISize(aspectRatio: string): string {
+  switch (aspectRatio) {
+    case "9:16": return "1024x1536";
+    case "1:1": return "1024x1024";
+    case "16:9":
+    default: return "1536x1024";
+  }
+}
+
+function mapImageSizeToOpenAIQuality(imageSize: string): "low" | "medium" | "high" {
+  const v = String(imageSize || "").trim().toUpperCase();
+  if (v === "512") return "low";
+  if (v === "2K") return "high";
+  return "medium";
+}
+
+async function callOpenAIImage(opts: {
+  apiKey: string;
+  model: string;
+  prompt: string;
+  aspectRatio: string;
+  qualityHint: string;
+  referenceImages: NormalizedReferenceImage[];
+  conversationHistory: ConversationHistoryTurn[];
+}): Promise<{ b64?: string; error?: any; status?: number }> {
+  const size = mapAspectToOpenAISize(opts.aspectRatio);
+  const quality = mapImageSizeToOpenAIQuality(opts.qualityHint);
+  const allRefs: Array<{ base64: string; mimeType: string }> = [
+    ...opts.conversationHistory.map((t) => ({ base64: t.imageBase64, mimeType: t.imageMimeType })),
+    ...opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
+  ];
+
+  const isEdit = allRefs.length > 0;
+  const url = isEdit
+    ? "https://api.openai.com/v1/images/edits"
+    : "https://api.openai.com/v1/images/generations";
+
+  let res: Response | null = null;
+  let bodyText = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const init: RequestInit = isEdit
+        ? buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey)
+        : buildOpenAIGenerationsRequest(opts.model, opts.prompt, size, quality, opts.apiKey);
+      res = await fetch(url, init);
+      bodyText = await res.text();
+      if (res.ok || (res.status >= 400 && res.status < 500)) break;
+    } catch (_) {}
+    await sleep(400 * Math.pow(2, attempt));
+  }
+
+  if (!res) {
+    return {
+      error: { error: "OpenAI API error", status: 500, detail: "network_error", hint: "네트워크 오류로 OpenAI 호출에 실패했습니다. 잠시 후 다시 시도하세요." },
+      status: 500,
+    };
+  }
+  if (!res.ok) {
+    const detail = safeJson(bodyText);
+    const message = String((detail as any)?.error?.message || (detail as any)?.message || "").trim();
+    let hint = "";
+    if (res.status === 401) hint = "OPENAI_API_KEY가 유효하지 않거나 권한이 없습니다.";
+    else if (res.status === 403) hint = "OpenAI 계정 권한 또는 결제 상태를 확인하세요.";
+    else if (res.status === 429) hint = "OpenAI 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.";
+    else if (res.status === 400) hint = "요청 파라미터가 잘못되었을 수 있습니다. 프롬프트/사이즈/레퍼런스 이미지를 확인하세요.";
+    else if (res.status >= 500) hint = "OpenAI 서버 일시 오류입니다. 잠시 후 다시 시도하세요.";
+    return {
+      error: { error: "OpenAI API error", status: res.status, detail, message, hint },
+      status: 500,
+    };
+  }
+
+  const json = safeJson(bodyText) || {};
+  const data = Array.isArray((json as any).data) ? (json as any).data : [];
+  const b64 = String(data[0]?.b64_json || "").trim();
+  if (!b64) {
+    return { error: { error: "No image bytes returned", raw: json }, status: 500 };
+  }
+  return { b64 };
+}
+
+function buildOpenAIGenerationsRequest(
+  model: string,
+  prompt: string,
+  size: string,
+  quality: string,
+  apiKey: string
+): RequestInit {
+  return {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      prompt,
+      size,
+      quality,
+      n: 1,
+    }),
+  };
+}
+
+function buildOpenAIEditsRequest(
+  model: string,
+  prompt: string,
+  size: string,
+  quality: string,
+  refs: Array<{ base64: string; mimeType: string }>,
+  apiKey: string
+): RequestInit {
+  const fd = new FormData();
+  fd.append("model", model);
+  fd.append("prompt", prompt);
+  fd.append("size", size);
+  fd.append("quality", quality);
+  fd.append("n", "1");
+  refs.forEach((ref, i) => {
+    const bytes = base64ToUint8(ref.base64);
+    const mime = ref.mimeType || "image/png";
+    const ext = (mime.split("/")[1] || "png").toLowerCase();
+    const blob = new Blob([bytes], { type: mime });
+    fd.append("image[]", blob, `ref-${i}.${ext}`);
+  });
+  return {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: fd as unknown as BodyInit,
+  };
 }
 
 function normalizeGenerationMode(value: unknown, hasReferences: boolean): "text-to-image" | "image-to-image" {
