@@ -752,9 +752,21 @@
     var savedAt = state.savedAt;
     var header = state.header;
     var videoModel = state.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'grok';
+    var imageProvider = (function () {
+      try {
+        var key = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
+        var raw = String(localStorage.getItem(key) || '').trim().toLowerCase();
+        return raw === 'openai' ? 'openai' : 'gemini';
+      } catch (_) { return 'gemini'; }
+    })();
     pipelineMeta.innerHTML = (
       '<div class="pipeline-actions video-model-bar">' +
       '<div class="video-model-left">' +
+      '<span class="video-model-label">이미지생성 모델</span>' +
+      '<select id="image-provider-select" class="video-model-select">' +
+      '<option value="gemini"' + (imageProvider === 'gemini' ? ' selected' : '') + '>Gemini 3.1 Flash</option>' +
+      '<option value="openai"' + (imageProvider === 'openai' ? ' selected' : '') + '>GPT Image 2</option>' +
+      '</select>' +
       '<span class="video-model-label">영상생성 모델</span>' +
       '<select id="video-model-select" class="video-model-select">' +
       '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo 3.1 Fast</option>' +
@@ -964,6 +976,15 @@
         st2.videoModel = val;
         ctx.setState(st2);
         try { localStorage.setItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model', val); } catch (_) { }
+      };
+    }
+
+    var providerSelect = document.getElementById('image-provider-select');
+    if (providerSelect) {
+      providerSelect.onchange = function () {
+        var raw = String(providerSelect.value || '').trim().toLowerCase();
+        var val = raw === 'openai' ? 'openai' : 'gemini';
+        try { localStorage.setItem((NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider', val); } catch (_) { }
       };
     }
 

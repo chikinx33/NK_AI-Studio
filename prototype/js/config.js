@@ -2,7 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '2.717';
+    config.APP_VERSION = '2.718';
 
     // Storage Keys
     config.KEYS = {
@@ -21,6 +21,7 @@
         CURRENT_PROJECT: 'nk_current_project',
         SELECTED_DRAFT: 'nk_selected_draft',
         VIDEO_MODEL: 'nk_video_model',
+        IMAGE_PROVIDER: 'nk_ai_image_provider',
         BRANDS: 'nk_brands_v1',
         CURRENT_BRAND: 'nk_current_brand',
         PERMISSIONS: 'nk_user_permissions'

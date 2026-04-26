@@ -281,6 +281,13 @@
   api.imagen = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();
+    if (!payload.provider) {
+      try {
+        var providerKey = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
+        var stored = String(localStorage.getItem(providerKey) || '').trim().toLowerCase();
+        if (stored === 'openai' || stored === 'gemini') payload.provider = stored;
+      } catch (_) {}
+    }
     var timeoutMs = getImagenTimeoutMs(payload, opts);
     var res = await fetchWithTimeout(withBase('/api/imagen'), {
       method: 'POST',

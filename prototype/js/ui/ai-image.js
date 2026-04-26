@@ -13,6 +13,7 @@
     prompt: '',
     aspectRatio: '1:1',
     imageSize: '1K',
+    provider: 'gemini',
     sourceImages: [],
     selectedSourceId: '',
     projectLibraryItems: [],
@@ -83,6 +84,9 @@
       sizeFast: '빠름(512)',
       sizeStd: '표준(1K)',
       sizeHigh: '고품질(2K)',
+      providerLabel: '이미지 모델',
+      providerGemini: 'Gemini 3.1 Flash',
+      providerOpenai: 'GPT Image 2',
       generate: '생성',
       generating: '생성 중...',
       resultsTitle: '결과',
@@ -226,6 +230,9 @@
       sizeFast: 'Fast (512)',
       sizeStd: 'Standard (1K)',
       sizeHigh: 'High (2K)',
+      providerLabel: 'Image model',
+      providerGemini: 'Gemini 3.1 Flash',
+      providerOpenai: 'GPT Image 2',
       generate: 'Generate',
       generating: 'Generating...',
       resultsTitle: 'Results',
@@ -1001,6 +1008,20 @@
     return raw === 'conversation' ? 'conversation' : 'single';
   }
 
+  function normalizeProviderValue(value) {
+    var raw = String(value || '').trim().toLowerCase();
+    return raw === 'openai' ? 'openai' : 'gemini';
+  }
+
+  function readStoredProvider() {
+    try {
+      var key = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
+      return normalizeProviderValue(localStorage.getItem(key) || 'gemini');
+    } catch (_) {
+      return 'gemini';
+    }
+  }
+
   function generationStyleShortLabel(value) {
     return normalizeGenerationStyle(value) === 'conversation'
       ? t('generationStyleConversationShort')
@@ -1541,6 +1562,15 @@
       '</div>' +
       '<div class="ai-image-controls-stack">' +
         '<div class="ai-image-settings-grid">' +
+          '<div class="ai-image-setting-card is-compact">' +
+            '<div class="ai-image-source-library-title">' + escapeHtml(t('providerLabel')) + '</div>' +
+            '<div class="ai-image-size-row">' +
+              '<select id="ai-image-provider" class="btn-secondary ai-image-select">' +
+                '<option value="gemini"' + (normalizeProviderValue(state.provider) === 'gemini' ? ' selected' : '') + '>' + escapeHtml(t('providerGemini')) + '</option>' +
+                '<option value="openai"' + (normalizeProviderValue(state.provider) === 'openai' ? ' selected' : '') + '>' + escapeHtml(t('providerOpenai')) + '</option>' +
+              '</select>' +
+            '</div>' +
+          '</div>' +
           '<div class="ai-image-setting-card is-compact">' +
             '<div class="ai-image-source-library-title">' + escapeHtml(t('sizeLabel')) + '</div>' +
             '<div class="ai-image-size-row">' +
@@ -3421,6 +3451,15 @@
         state.generationStyle = normalizeGenerationStyle(target.value || 'single');
         return;
       }
+      if (target.id === 'ai-image-provider') {
+        var nextProvider = normalizeProviderValue(target.value || 'gemini');
+        state.provider = nextProvider;
+        try {
+          var providerKey = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
+          localStorage.setItem(providerKey, nextProvider);
+        } catch (_) {}
+        return;
+      }
     });
 
     document.addEventListener('input', function (evt) {
@@ -3460,6 +3499,7 @@
     state.sessionId = ensureSessionId();
     state.currentProject = readCurrentProject();
     state.currentBrand = readCurrentBrand();
+    state.provider = readStoredProvider();
     loadHistory();
     try {
       NK.core.APP_VERSION = NK.config.APP_VERSION;
