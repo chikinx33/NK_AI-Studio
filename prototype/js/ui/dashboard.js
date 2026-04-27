@@ -14,6 +14,12 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  const truncateEpisodeTitle = (value, max = 10) => {
+    const s = String(value == null ? '' : value);
+    const arr = Array.from(s);
+    return arr.length > max ? arr.slice(0, max).join('') + '...' : s;
+  };
+
   const setDashLoading = (show, text) => {
     const overlay = document.getElementById('dashboard-loading');
     const blurTarget = document.getElementById('dashboard-drafts');
@@ -343,7 +349,7 @@
             <div class="draft-thumb"></div>
             <div class="draft-info">
               <div class="draft-title-row">
-                <h4 class="draft-title" data-id="${escapeHtml(d.id)}">${escapeHtml(d.title || '제목없음')}</h4>
+                <h4 class="draft-title" data-id="${escapeHtml(d.id)}" title="${escapeHtml(d.title || '제목없음')}">${escapeHtml(host === 'video' ? truncateEpisodeTitle(d.title || '제목없음') : (d.title || '제목없음'))}</h4>
               </div>
               <div class="draft-meta">
                 <div class="draft-meta-project">${labels.project} : ${escapeHtml(d.seriesTitle || '-')}</div>
@@ -631,7 +637,7 @@
       <div class="draft-top">
         <div class="draft-thumb"></div>
       </div>
-      <h4 class="sidebar-card-title">${escapeHtml(normalized.title || '제목없음')}</h4>
+      <h4 class="sidebar-card-title" title="${escapeHtml(normalized.title || '제목없음')}">${escapeHtml(truncateEpisodeTitle(normalized.title || '제목없음'))}</h4>
       <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
       <div class="sidebar-card-actions">
         <button class="btn-secondary" data-action="sidebar-edit-scenario" data-i18n="sidebar_preproduction_fixed">Pre - production</button>
