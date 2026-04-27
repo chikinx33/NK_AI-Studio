@@ -194,12 +194,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (videoModel === "veo-full") {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
+      // veo3.1은 16:9, 9:16만 지원 — 1:1 요청 시 9:16으로 자동 대체
+      const veoAspect = aspectFinal === "1:1" ? "9:16" : aspectFinal;
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
       const atlasBody: any = {
         model: "google/veo3.1/image-to-video",
         prompt: safePromptText,
         duration: snapDuration,
-        aspect_ratio: aspectFinal,
+        aspect_ratio: veoAspect,
         resolution: "1080p",
       };
       if (startImageResolved) atlasBody.image = startImageResolved;
@@ -375,7 +377,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         aspect_ratio: aspectFinal,
         resolution: "720p",
       };
-      const useR2V = videoModel === "grok-r2v" || (videoModel === "grok" && referenceImages.length > 0);
+      // grok은 항상 I2V(씬 이미지 기반). grok-r2v만 R2V 모드 사용.
+      const useR2V = videoModel === "grok-r2v";
       if (useR2V) {
         // R2V 모드: reference_images (image_url과 동시 사용 불가)
         const refResolved: { url: string }[] = [];
