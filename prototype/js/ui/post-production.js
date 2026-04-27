@@ -1213,6 +1213,8 @@
   function wakeVideoDecoder(video, scrubTarget) {
     if (!video) return;
     if (typeof scrubTarget === 'number') video.__scrubTarget = scrubTarget;
+    // cold 비디오(메타 없음): play 시도 없이 메타 로드 후 seek만 수행
+    if (video.readyState < 1) return;
     if (video.paused) {
       try { video.muted = true; } catch (_) {}
       try { video.play().catch(function () { }); } catch (_) {}
@@ -1261,9 +1263,18 @@
 
   // 정확 seek(video.currentTime = t)는 타겟 프레임까지 전체 디코딩이 필요해 느리다.
   // fastSeek(t)은 가까운 키프레임으로 점프 — 스크럽 체감 지연의 핵심 해결책.
+  // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
+    if (video.readyState < 1) {
+      var onMeta = function () {
+        video.removeEventListener('loadedmetadata', onMeta);
+        scrubSeekVideo(video, target);
+      };
+      video.addEventListener('loadedmetadata', onMeta);
+      return;
+    }
     try {
       if (typeof video.fastSeek === 'function') {
         video.fastSeek(target);
@@ -1429,10 +1440,11 @@
       if (!target || target.empty || !target.url || !isVideoUrl(target.url)) return;
       var entry = state.previewVideoCache && state.previewVideoCache[target.id];
       if (!entry || !entry.video || !entry.ready) return;
-      // 이전 클립 → 끝 부분으로 preseek / 다음 클립 → 시작(0)으로 preseek
+      // 이전 클립 → 끝 부분으로 preseek / 다음 클립 → 시작 위치(videoOffset)로 preseek
+      var tOffset = target.videoOffset || 0;
       var targetT = targetIdx < idx
-        ? Math.max(0, (target.end - target.start) - 0.05)
-        : 0;
+        ? Math.max(0, (target.end - target.start) - 0.05) + tOffset
+        : tOffset;
       scheduleScrubSeek('warm:' + target.id, entry.video, targetT);
     });
   }
@@ -2005,6 +2017,129 @@
     modal.previewVideo.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 
+  // ── 미디어 브라우저 모달 ─────────────────────────────────────────────────
+  var mediaBrowserModal = null;
+
+  function getProjectMediaItems() {
+    var project = getProjectByStateId() || resolveProject();
+    if (!project) return [];
+    var scenes = Array.isArray(project.scenes) ? project.scenes : [];
+    var allEdits = getMergedTimelineEdits(project);
+    var items = [];
+    scenes.forEach(function (scene, i) {
+      var shotsArr = Array.isArray(scene.shots) ? scene.shots : [];
+      var shotsWithMedia = shotsArr.filter(function (sh) {
+        return !!(firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath,
+          sh.imageDataUrl, sh.imagePath, sh.generatedImageUrl, sh.imageUrl]));
+      });
+      if (shotsWithMedia.length) {
+        shotsArr.forEach(function (sh, j) {
+          var vidUrl = firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath]);
+          var imgUrl = firstFilled([sh.imageDataUrl, sh.imagePath, sh.generatedImageUrl, sh.imageUrl]);
+          if (!vidUrl && !imgUrl) return;
+          var clipId = 'vis-' + i + '-' + j;
+          var edit = allEdits[clipId] || {};
+          items.push({
+            id: clipId,
+            label: '씬 ' + (i + 1) + ' · 컷 ' + (j + 1),
+            url: vidUrl || imgUrl,
+            thumbUrl: imgUrl || vidUrl,
+            isVideo: !!vidUrl,
+            deleted: edit.deleted === true
+          });
+        });
+      } else {
+        var vidUrl = firstFilled([scene.videoUrl, scene.videoPlaybackUrl, scene.outputVideoUrl, scene.generatedVideoUrl, scene.videoPath]);
+        var imgUrl = firstFilled([scene.imageDataUrl, scene.imagePath, scene.generatedImageUrl, scene.imageUrl]);
+        if (!vidUrl && !imgUrl) return;
+        var clipId = 'vis-' + i;
+        var edit = allEdits[clipId] || {};
+        items.push({
+          id: clipId,
+          label: '씬 ' + (i + 1),
+          url: vidUrl || imgUrl,
+          thumbUrl: imgUrl || vidUrl,
+          isVideo: !!vidUrl,
+          deleted: edit.deleted === true
+        });
+      }
+    });
+    return items;
+  }
+
+  function ensureMediaBrowserModal() {
+    if (mediaBrowserModal && mediaBrowserModal.root && mediaBrowserModal.root.parentNode) return mediaBrowserModal;
+    var root = document.createElement('div');
+    root.className = 'postprod-media-browser-modal';
+    root.setAttribute('aria-hidden', 'true');
+    root.innerHTML =
+      '<div class="postprod-media-browser-inner" role="dialog" aria-modal="true" aria-labelledby="postprod-mb-title">' +
+      '<div class="postprod-mb-header">' +
+      '<h3 id="postprod-mb-title">미디어 불러오기</h3>' +
+      '<button class="postprod-mb-close btn-secondary compact" type="button" aria-label="닫기">✕</button>' +
+      '</div>' +
+      '<p class="postprod-mb-desc">프로젝트에서 생성된 이미지·영상을 타임라인에 추가하거나 삭제된 클립을 복원합니다.</p>' +
+      '<div class="postprod-mb-grid" id="postprod-mb-grid"></div>' +
+      '</div>';
+    document.body.appendChild(root);
+    var closeBtn = root.querySelector('.postprod-mb-close');
+    var close = function () {
+      root.classList.remove('is-open');
+      root.setAttribute('aria-hidden', 'true');
+    };
+    root.addEventListener('click', function (e) {
+      if (e.target === root) close();
+    });
+    if (closeBtn) closeBtn.onclick = close;
+    mediaBrowserModal = { root: root, grid: root.querySelector('#postprod-mb-grid'), close: close };
+    return mediaBrowserModal;
+  }
+
+  function openMediaBrowserModal() {
+    var modal = ensureMediaBrowserModal();
+    if (!modal) return;
+    var items = getProjectMediaItems();
+    var grid = modal.grid;
+    if (!grid) return;
+    if (!items.length) {
+      grid.innerHTML = '<p class="postprod-mb-empty">불러올 수 있는 미디어가 없습니다.</p>';
+    } else {
+      grid.innerHTML = items.map(function (item) {
+        var thumbHtml = item.isVideo
+          ? '<div class="postprod-mb-thumb postprod-mb-thumb-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M10 10l5 2.5-5 2.5V10z" fill="currentColor" stroke="none"/></svg></div>'
+          : '<img class="postprod-mb-thumb" src="' + escapeHtml(toPlayableMediaUrl(item.thumbUrl) || '') + '" alt="" loading="lazy" />';
+        var badge = item.deleted
+          ? '<span class="postprod-mb-badge deleted">삭제됨</span>'
+          : '<span class="postprod-mb-badge active">타임라인</span>';
+        var btn = item.deleted
+          ? '<button class="btn-primary compact postprod-mb-action" data-clip-id="' + escapeHtml(item.id) + '" data-action="restore">복원</button>'
+          : '<span class="postprod-mb-in-timeline">타임라인에 있음</span>';
+        return '<div class="postprod-mb-item">' +
+          thumbHtml +
+          '<div class="postprod-mb-info">' +
+          '<span class="postprod-mb-label">' + escapeHtml(item.label) + '</span>' +
+          '<span class="postprod-mb-type">' + (item.isVideo ? '영상' : '이미지') + '</span>' +
+          badge +
+          '</div>' +
+          '<div class="postprod-mb-actions">' + btn + '</div>' +
+          '</div>';
+      }).join('');
+      grid.addEventListener('click', function onGridClick(e) {
+        var btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        var action = btn.dataset.action;
+        var clipId = btn.dataset.clipId;
+        if (action === 'restore' && clipId) {
+          persistTimelineDeleted(clipId, false);
+          post.render();
+          modal.close();
+        }
+      }, { once: true });
+    }
+    modal.root.classList.add('is-open');
+    modal.root.setAttribute('aria-hidden', 'false');
+  }
+
   function openStorageModal() {
     var modal = ensureStorageModal();
     if (!modal) return;
@@ -2311,6 +2446,7 @@
           start: start,
           end: end,
           baseDuration: Math.max(0.2, end - start),
+          videoOffset: typeof edit.videoOffset === 'number' ? edit.videoOffset : ((sourceClip && sourceClip.videoOffset) || 0),
           motionPreset: edit.motionPreset || (sourceClip && sourceClip.motionPreset) || 'none'
         });
         track.clips.push(newClip);
@@ -3180,7 +3316,7 @@
             // 스크럽 중: 타겟이 현재와 다를 때만 wake+seek. delta가 작으면 이미
             // 프레임이 맞고 있으므로 wake로 play를 호출하지 않는다 — 아니면 muted
             // play가 앞으로 흘러가 씬 시작 프레임이 몇 프레임 밀리는 버그 발생.
-            var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
+            var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
             var fpDelta = Math.abs((fpVid.currentTime || 0) - fpClipTime);
             if (fpDelta > 0.03) {
               wakeVideoDecoder(fpVid, fpClipTime);
@@ -3268,7 +3404,7 @@
     applyMotionTransform(host, clip, sec);
 
     if (video) {
-      var liveClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02));
+      var liveClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
       var needsSeek = Math.abs((video.currentTime || 0) - liveClipTime) > 0.1;
       if (state.isPlaying) {
         try { video.muted = false; } catch (_) {}
@@ -3471,6 +3607,9 @@
       '</div>' +
       '<div class="postprod-toolbar-group">' +
       '<button class="postprod-pill postprod-pill-square' + (state.bladeMode ? ' active' : '') + '" id="postprod-blade-toggle" type="button" title="' + t('클립 자르기') + ' (B)"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></svg></button>' +
+      '</div>' +
+      '<div class="postprod-toolbar-group">' +
+      '<button class="postprod-pill postprod-pill-square" id="postprod-media-browser-btn" type="button" title="' + t('미디어 불러오기') + '"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>' +
       '</div>' +
       '<div class="postprod-toolbar-group history-group">' +
       '<button class="btn-secondary compact postprod-history-btn icon-btn" id="postprod-undo-btn" title="' + t('되돌리기') + '"' + (canUndo() ? '' : ' disabled') + '><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>' +
@@ -3822,6 +3961,12 @@
     var isEditable = (target && target.isContentEditable) || tag === 'input' || tag === 'textarea' || tag === 'select';
     if (isEditable) return;
     var key = String(evt.key || '').toLowerCase();
+    if (key === ' ') {
+      evt.preventDefault();
+      if (state.isPlaying) stopPlayback();
+      else startPlayback();
+      return;
+    }
     if (key === 'escape') {
       if (state.bladeMode) {
         state.bladeMode = false;
@@ -4117,11 +4262,14 @@
     persistTimelineEdit(clipId, clip.start, t);
 
     // 신규 클립: 자르기 지점부터 원본 end까지
+    // videoOffset: 소스 영상에서 이 클립이 시작되어야 하는 절대 시간
+    var newVideoOffset = (clip.videoOffset || 0) + (t - clip.start);
     var newClip = Object.assign({}, clip, {
       id: newId,
       start: t,
       end: origEnd,
       baseDuration: Math.max(minLen, origEnd - t),
+      videoOffset: newVideoOffset,
       motionPreset: clip.motionPreset || 'none'
     });
 
@@ -4137,7 +4285,8 @@
       sourceId: clipId,
       trackKey: track.key,
       start: t,
-      end: origEnd
+      end: origEnd,
+      videoOffset: newVideoOffset
     };
 
     pushHistory({
@@ -4362,6 +4511,11 @@
         bladeToggleBtn.classList.toggle('active', state.bladeMode);
         updateBladeModeUi();
       };
+    }
+
+    var mediaBrowserBtn = document.getElementById('postprod-media-browser-btn');
+    if (mediaBrowserBtn) {
+      mediaBrowserBtn.onclick = function () { openMediaBrowserModal(); };
     }
 
     root.querySelectorAll('.postprod-clip[data-clip-id]').forEach(function (clipEl) {
