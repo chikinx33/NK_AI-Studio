@@ -161,7 +161,17 @@
   };
 
   const getSelectedProjectId = () => {
-    return String(NK.state?.runtime?.currentProject?.id || '').trim();
+    const runtimeId = String(NK.state?.runtime?.currentProject?.id || '').trim();
+    if (runtimeId) return runtimeId;
+    try {
+      const key = (NK.config && NK.config.KEYS && NK.config.KEYS.CURRENT_PROJECT) || 'nk_current_project';
+      const raw = localStorage.getItem(key) || localStorage.getItem('nk_current_project');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.id) return String(parsed.id).trim();
+      }
+    } catch (_) {}
+    return '';
   };
 
   const getHostShell = () => {
@@ -447,6 +457,12 @@
     }).join('');
 
     container.innerHTML = filterBar + list;
+
+    // 선택된 카드를 뷰포트 안으로 스크롤
+    try {
+      const selectedCard = container.querySelector('.draft-card.is-selected');
+      if (selectedCard) selectedCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (_) {}
 
     container.onclick = (e) => {
       const btn = e.target.closest('[data-action]');
