@@ -411,7 +411,7 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 
 .draft-thumb.has-image {
   border: 1px solid var(--border);
-  background: #0f172a;
+  background: transparent;
   cursor: pointer;
 }
 
