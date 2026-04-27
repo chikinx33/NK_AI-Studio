@@ -194,14 +194,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (videoModel === "veo-full") {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
-      // veo3.1은 16:9, 9:16만 지원 — 1:1 요청 시 9:16으로 자동 대체
-      const veoAspect = aspectFinal === "1:1" ? "9:16" : aspectFinal;
       const startImageResolved = imageDataUrl ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch(() => "") : "";
       const atlasBody: any = {
         model: "google/veo3.1/image-to-video",
         prompt: safePromptText,
         duration: snapDuration,
-        aspect_ratio: veoAspect,
+        aspect_ratio: aspectFinal,
         resolution: "1080p",
       };
       if (startImageResolved) atlasBody.image = startImageResolved;
@@ -377,27 +375,26 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         aspect_ratio: aspectFinal,
         resolution: "720p",
       };
-      // grok은 항상 I2V(씬 이미지 기반). grok-r2v만 R2V 모드 사용.
-      const useR2V = videoModel === "grok-r2v";
-      if (useR2V) {
-        // R2V 모드: reference_images (image_url과 동시 사용 불가)
+      // 씬 이미지: grok(I2V) / grok-r2v(I2V + 허브 레퍼런스) 모두 시작 프레임 전달
+      const startImageResolved = imageDataUrl
+        ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); })
+        : "";
+      if (startImageResolved) {
+        const imgObj = { url: startImageResolved };
+        grokBody.image_url = imgObj;
+        grokBody.image = imgObj;
+        grokBody.prompt = "Animate this image. " + safePromptText;
+      }
+      // grok-r2v: 추가로 허브 레퍼런스 이미지 전달 (xAI API 동시 지원 여부는 응답으로 확인)
+      if (videoModel === "grok-r2v" && referenceImages.length > 0) {
         const refResolved: { url: string }[] = [];
         for (let i = 0; i < referenceImages.length; i++) {
           const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
           if (r) refResolved.push({ url: r });
         }
         if (refResolved.length > 0) grokBody.reference_images = refResolved;
-      } else {
-        // I2V 모드: 시작 이미지
-        const startImageResolved = await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); });
-        if (startImageResolved) {
-          const imgObj = { url: startImageResolved };
-          grokBody.image_url = imgObj;
-          grokBody.image = imgObj;
-          grokBody.prompt = "Animate this image. " + safePromptText;
-        }
       }
-      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration, r2v: useR2V });
+      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration, model: videoModel, hasStartImage: !!startImageResolved, refCount: referenceImages.length });
       const grokRes = await fetch("https://api.x.ai/v1/videos/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${xaiKey}` },

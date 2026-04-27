@@ -759,6 +759,23 @@
         return raw === 'openai' ? 'openai' : 'gemini';
       } catch (_) { return 'gemini'; }
     })();
+    var __modelAspectSupport = {
+      'veo':          ['16:9', '9:16'],
+      'veo-full':     ['16:9', '9:16'],
+      'grok':         ['16:9', '9:16'],
+      'grok-r2v':     ['16:9', '9:16'],
+      'kling-draft':  ['16:9', '9:16', '1:1'],
+      'kling-final':  ['16:9', '9:16', '1:1'],
+      'seedance':     ['16:9', '9:16', '1:1'],
+      'seedance-r2v': ['16:9', '9:16', '1:1'],
+      'wan':          ['16:9', '9:16', '1:1'],
+      'vidu-q3':      ['16:9', '9:16', '1:1']
+    };
+    var __mopt = function (val, label, sel, ar) {
+      var ok = !__modelAspectSupport[val] || __modelAspectSupport[val].indexOf(ar) !== -1;
+      return '<option value="' + val + '"' + (sel === val ? ' selected' : '') + (ok ? '' : ' disabled') + '>' +
+        label + (ok ? '' : ' (' + ar + ' 미지원)') + '</option>';
+    };
     pipelineMeta.innerHTML = (
       '<div class="pipeline-actions video-model-bar">' +
       '<div class="video-model-left">' +
@@ -769,15 +786,16 @@
       '</select>' +
       '<span class="video-model-label">영상생성 모델</span>' +
       '<select id="video-model-select" class="video-model-select">' +
-      '<option value="veo"' + (videoModel === 'veo' ? ' selected' : '') + '>Veo 3.1 Fast</option>' +
-      '<option value="veo-full"' + (videoModel === 'veo-full' ? ' selected' : '') + '>Veo 3.1 Full</option>' +
-      '<option value="grok"' + (videoModel === 'grok' ? ' selected' : '') + '>Grok Imagine</option>' +
-      '<option value="kling-draft"' + (videoModel === 'kling-draft' ? ' selected' : '') + '>Kling Draft (v1.6)</option>' +
-      '<option value="kling-final"' + (videoModel === 'kling-final' ? ' selected' : '') + '>Kling Final (v2.6 Pro · FHD)</option>' +
-      '<option value="seedance"' + (videoModel === 'seedance' ? ' selected' : '') + '>Seedance 2.0</option>' +
-      '<option value="seedance-r2v"' + (videoModel === 'seedance-r2v' ? ' selected' : '') + '>Seedance 2.0 Reference</option>' +
-      '<option value="wan"' + (videoModel === 'wan' ? ' selected' : '') + '>Wan 2.7</option>' +
-      '<option value="vidu-q3"' + (videoModel === 'vidu-q3' ? ' selected' : '') + '>Vidu Q3-Mix</option>' +
+      __mopt('veo',          'Veo 3.1 Fast',              videoModel, aspectRatio) +
+      __mopt('veo-full',     'Veo 3.1 Full',              videoModel, aspectRatio) +
+      __mopt('grok',         'Grok Imagine',              videoModel, aspectRatio) +
+      __mopt('grok-r2v',     'Grok R2V',                  videoModel, aspectRatio) +
+      __mopt('kling-draft',  'Kling Draft (v1.6)',        videoModel, aspectRatio) +
+      __mopt('kling-final',  'Kling Final (v2.6 Pro · FHD)', videoModel, aspectRatio) +
+      __mopt('seedance',     'Seedance 2.0',              videoModel, aspectRatio) +
+      __mopt('seedance-r2v', 'Seedance 2.0 Reference',   videoModel, aspectRatio) +
+      __mopt('wan',          'Wan 2.7',                   videoModel, aspectRatio) +
+      __mopt('vidu-q3',      'Vidu Q3-Mix',               videoModel, aspectRatio) +
       '</select>' +
       '</div>' +
       '<div class="pipeline-fold-center">' +
