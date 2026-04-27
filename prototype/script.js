@@ -3191,6 +3191,12 @@
       const isMatch = (stage === targetStage) || (stage === 'dashboard' && (targetStage === 'index' || targetStage === 'dashboard'));
       if (isMatch) item.classList.add('active');
       else item.classList.remove('active');
+
+      // data-stage 속성이 있는 메뉴는 해당 스테이지일 때만 표시
+      const requiredStage = item.dataset.stage;
+      if (requiredStage) {
+        item.style.display = (stage === requiredStage) ? '' : 'none';
+      }
     });
 
     // 2. 사이드바 프로젝트 카드 버튼 (프리/프로/포스트)
