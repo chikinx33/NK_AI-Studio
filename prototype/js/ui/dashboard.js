@@ -17,8 +17,7 @@
   const truncateEpisodeTitle = (value) => {
     const s = String(value == null ? '' : value);
     const arr = Array.from(s);
-    const hasKorean = /[ㄱ-ㆎ가-힣]/.test(s);
-    const max = hasKorean ? 10 : 20;
+    const max = 20;
     return arr.length > max ? arr.slice(0, max).join('') + '...' : s;
   };
 
