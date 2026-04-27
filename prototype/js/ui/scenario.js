@@ -1007,6 +1007,7 @@
       if (currentPayload.parentProjectTitle && !payload.parentProjectTitle) payload.parentProjectTitle = currentPayload.parentProjectTitle;
       if (currentPayload.sourceProjectId && !payload.sourceProjectId) payload.sourceProjectId = currentPayload.sourceProjectId;
       if (currentPayload.sourceProjectTitle && !payload.sourceProjectTitle) payload.sourceProjectTitle = currentPayload.sourceProjectTitle;
+      if (currentPayload.thumbnailObjectName && !payload.thumbnailObjectName) payload.thumbnailObjectName = currentPayload.thumbnailObjectName;
     }
     if (NK.service?.project?.applyProjectCore) {
       Object.assign(payload, NK.service.project.applyProjectCore(payload, { payload: currentPayload }));
