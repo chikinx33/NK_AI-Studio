@@ -414,12 +414,17 @@
         ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" alt="" /></button>`
         : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
 
+      const editBtn = showTitleEdit ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
+      const deleteBtn = showDelete ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
+      const thumbBtnsHtml = (editBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${deleteBtn}</div>` : '';
+
       return `
         <article class="draft-card ${isSelected ? 'is-selected' : ''}" data-draft-id="${escapeHtml(d.id)}">
-          ${showTitleEdit ? `<button class="edit-btn top-right" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : ``}
-          ${showDelete ? `<button class="trash-btn top-right action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : ``}
           <div class="draft-top">
-            ${thumbHtml}
+            <div class="draft-thumb-col">
+              ${thumbHtml}
+              ${thumbBtnsHtml}
+            </div>
             <div class="draft-info">
               <div class="draft-title-row">
                 <h4 class="draft-title" data-id="${escapeHtml(d.id)}" title="${escapeHtml(d.title || '제목없음')}">${escapeHtml(host === 'video' ? truncateEpisodeTitle(d.title || '제목없음') : (d.title || '제목없음'))}</h4>
@@ -642,9 +647,9 @@
         (async () => {
           var ok = true;
           if (NK.ui && NK.ui.dialog && NK.ui.dialog.confirm) {
-            ok = await NK.ui.dialog.confirm('삭제하시겠습니까?', { title: '삭제 확인' });
+            ok = await NK.ui.dialog.confirm('해당 에피소드를 삭제하시겠습니까?', { title: '삭제 확인' });
           } else {
-            ok = confirm('삭제하시겠습니까?');
+            ok = confirm('해당 에피소드를 삭제하시겠습니까?');
           }
           if (!ok) return;
           setDashLoading(true, '삭제 중...');
