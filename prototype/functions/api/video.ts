@@ -424,44 +424,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const atlasKey = env.ATLASCLOUD_API_KEY as string | undefined;
       if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY missing" }, 500);
 
-      let imageUrl = "";
-      if (imageDataUrl) {
-        if (/^https?:/i.test(imageDataUrl)) {
-          imageUrl = imageDataUrl;
-        } else if (imageDataUrl.startsWith("gs://")) {
-          imageUrl = gcsToHttps(imageDataUrl);
-        } else if (imageDataUrl.startsWith("data:")) {
-          try {
-            const outParsedImg = parseGcsUri(baseOutput!);
-            if (!outParsedImg) return json({ error: "Invalid VIDEO_OUTPUT_GCS_URI" }, 500);
-            const accessTokenUpload = await getGoogleAccessToken({
-              clientEmail: clientEmail!,
-              privateKeyPem: privateKeyRaw!,
-              scope: "https://www.googleapis.com/auth/cloud-platform",
-            });
-            const imgObjectName = `${projectPrefix}/seedance/${stamp}-${sceneId}.png`;
-            const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsedImg.bucket)}/o?uploadType=media&name=${encodeURIComponent(imgObjectName)}`;
-            const b64 = imageDataUrl.split(",")[1] || "";
-            const buf = base64ToUint8(b64);
-            const upRes = await fetch(uploadUrl, {
-              method: "POST",
-              headers: { Authorization: `Bearer ${accessTokenUpload}`, "Content-Type": "image/png" },
-              body: buf
-            });
-            const upTxt = await upRes.text();
-            if (!upRes.ok) return json({ error: "upload_failed", detail: upTxt }, 500);
-            imageUrl = await signGcsUrl({
-              bucket: outParsedImg.bucket,
-              object: imgObjectName,
-              clientEmail: clientEmail!,
-              privateKeyPem: privateKeyRaw!,
-              expiresInSec: 3600,
-            }).catch(() => gcsToHttps(`gs://${outParsedImg.bucket}/${imgObjectName}`));
-          } catch (err: any) {
-            return json({ error: "image_upload_error", detail: err?.message || err }, 500);
-          }
-        }
-      }
+      const imageUrl = imageDataUrl
+        ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); })
+        : "";
 
       const seedanceBody: any = {
         model: "bytedance/seedance-2.0/image-to-video",
