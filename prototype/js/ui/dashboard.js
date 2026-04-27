@@ -14,9 +14,11 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-  const truncateEpisodeTitle = (value, max = 10) => {
+  const truncateEpisodeTitle = (value) => {
     const s = String(value == null ? '' : value);
     const arr = Array.from(s);
+    const hasKorean = /[ㄱ-ㆎ가-힣]/.test(s);
+    const max = hasKorean ? 10 : 20;
     return arr.length > max ? arr.slice(0, max).join('') + '...' : s;
   };
 
@@ -361,9 +363,9 @@
           </div>
           ${showStageButtons ? `
             <div class="draft-actions">
-              <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre - production</button>
+              <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre-Pod</button>
               <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_production_fixed">Production</button>
-              <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post - production</button>
+              <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post-Pod</button>
             </div>` : ``}
         </article>
       `;
@@ -640,9 +642,9 @@
       <h4 class="sidebar-card-title" title="${escapeHtml(normalized.title || '제목없음')}">${escapeHtml(truncateEpisodeTitle(normalized.title || '제목없음'))}</h4>
       <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
       <div class="sidebar-card-actions">
-        <button class="btn-secondary" data-action="sidebar-edit-scenario" data-i18n="sidebar_preproduction_fixed">Pre - production</button>
+        <button class="btn-secondary" data-action="sidebar-edit-scenario" data-i18n="sidebar_preproduction_fixed">Pre-Pod</button>
         <button class="btn-secondary" data-action="sidebar-edit-scenes" data-i18n="sidebar_production_fixed">Production</button>
-        <button class="btn-secondary" data-action="sidebar-edit-media" data-i18n="sidebar_postproduction_fixed">Post - production</button>
+        <button class="btn-secondary" data-action="sidebar-edit-media" data-i18n="sidebar_postproduction_fixed">Post-Pod</button>
       </div>
     `;
     container.style.display = 'block';
