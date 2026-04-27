@@ -3074,12 +3074,22 @@
         if (NK.ui.dashboard && NK.ui.dashboard.renderDrafts) {
           NK.ui.dashboard.renderDrafts();
         }
-        const url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
+        const docCls = document.documentElement.classList;
+        const isBrandHost = docCls.contains('page-shell-brand');
+        let url;
+        let highlightStage;
+        if (isBrandHost) {
+          url = draft.id ? `brand.html?projectId=${encodeURIComponent(draft.id)}` : 'brand.html';
+          highlightStage = 'brand';
+        } else {
+          url = draft.id ? `scenario.html?projectId=${encodeURIComponent(draft.id)}` : 'scenario.html';
+          highlightStage = 'scenario';
+        }
         setCreatingState(false);
         close();
         NK.navigation.loadStage(url);
         // 즉시 하이라이트 반영
-        updateSidebarHighlight('scenario');
+        updateSidebarHighlight(highlightStage);
       } catch (err) {
         alert('프로젝트 생성 실패: ' + (err?.message || err));
       } finally {

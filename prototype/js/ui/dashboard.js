@@ -303,7 +303,7 @@
         <button class="btn-secondary compact danger ${selectedSeries ? '' : 'disabled'}" data-action="series-delete" ${selectedSeries ? '' : 'disabled'}>시리즈 삭제</button>
       </div>` : '';
 
-    const showCreateButton = host === 'brand';
+    const showCreateButton = host === 'brand' || host === 'video';
     const filterBar = `
       <div class="series-filter-bar">
         <div class="series-filter-main">
