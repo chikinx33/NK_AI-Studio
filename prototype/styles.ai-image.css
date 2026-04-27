@@ -959,36 +959,6 @@ body.layout-fixed.page-shell-image .content {
   display: block;
 }
 
-.ai-image-analysis-icon {
-  position: relative;
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
-.ai-image-analysis-icon::before,
-.ai-image-analysis-icon::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  background: linear-gradient(180deg, #8bd8ff 0%, #5da2ff 100%);
-  clip-path: polygon(50% 0%, 66% 34%, 100% 50%, 66% 66%, 50% 100%, 34% 66%, 0% 50%, 34% 34%);
-}
-
-.ai-image-analysis-icon::before {
-  width: 14px;
-  height: 14px;
-}
-
-.ai-image-analysis-icon::after {
-  width: 6px;
-  height: 6px;
-  right: -7px;
-  top: -7px;
-  inset: auto;
-  opacity: 0.95;
-}
 
 .ai-image-panel-preview .ai-image-preview-meta p:first-child {
   white-space: nowrap;
