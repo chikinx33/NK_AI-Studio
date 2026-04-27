@@ -53,7 +53,13 @@
         const resp = await NK.api.imageUpload(id, file);
         const objectName = String(resp && resp.objectName || '').trim();
         if (!objectName) throw new Error('objectName_missing');
-        await NK.service.project.updatePayload(id, { thumbnailObjectName: objectName });
+        const allDrafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        const thisDraft = allDrafts.find(d => String(d.id) === id);
+        const seriesId = thisDraft && thisDraft.seriesId;
+        const targets = seriesId
+          ? allDrafts.filter(d => String(d.seriesId) === String(seriesId))
+          : allDrafts.filter(d => String(d.id) === id);
+        await Promise.all(targets.map(d => NK.service.project.updatePayload(d.id, { thumbnailObjectName: objectName })));
         if (NK.ui && NK.ui.dashboard && typeof NK.ui.dashboard.renderDrafts === 'function') {
           NK.ui.dashboard.renderDrafts();
         }
