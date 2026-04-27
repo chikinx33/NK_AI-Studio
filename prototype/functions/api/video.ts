@@ -294,14 +294,24 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
         if (r) refResolved.push(r);
       }
+      // vidu/q3-mix/reference-to-video: images 배열(1~7개) 필수
+      // 씬 이미지를 첫 번째로, 허브 레퍼런스 이미지를 뒤에 추가
+      const viduImages: string[] = [];
+      if (startImageResolved) viduImages.push(startImageResolved);
+      for (const r of refResolved) {
+        if (viduImages.length >= 7) break;
+        if (r !== startImageResolved) viduImages.push(r);
+      }
+      if (viduImages.length === 0) {
+        return json({ error: "vidu_q3_requires_image", detail: "씬 이미지 또는 레퍼런스 이미지가 필요합니다." }, 400);
+      }
       const atlasBody: any = {
         model: "vidu/q3-mix/reference-to-video",
         prompt: safePromptText,
         duration: viduDuration,
         aspect_ratio: aspectFinal,
+        images: viduImages,
       };
-      if (startImageResolved) atlasBody.image = startImageResolved;
-      if (refResolved.length > 0) atlasBody.reference_images = refResolved;
       if (audioDataUrl) atlasBody.audio = audioDataUrl;
       if ((body as any)?.negativePrompt) atlasBody.negative_prompt = String((body as any).negativePrompt);
       const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateVideo", {
