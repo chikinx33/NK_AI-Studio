@@ -5,20 +5,30 @@
   function readPromptDraft(rootEl, sceneId, scene, strictCommon) {
     var commonEl = rootEl.querySelector('.prompt-common[data-id="' + sceneId + '"]');
     var visualEl = rootEl.querySelector('.prompt-visual[data-id="' + sceneId + '"]');
+    var compositionEl = rootEl.querySelector('.prompt-composition[data-id="' + sceneId + '"]');
+    var actionEl = rootEl.querySelector('.prompt-action[data-id="' + sceneId + '"]');
     var durEl = rootEl.querySelector('.prompt-duration[data-id="' + sceneId + '"]');
     var commonText = (commonEl && commonEl.textContent) ? commonEl.textContent.trim() : '';
     var promptFallback = String((scene && scene.promptText) || '').split('\n')[0] || '';
     var common = commonText || (strictCommon ? '' : promptFallback);
     var visual = (visualEl && visualEl.textContent) ? visualEl.textContent.trim() : String((scene && scene.shot) || '');
+    var newComposition = compositionEl ? compositionEl.textContent.trim() : null;
+    var newAction = actionEl ? actionEl.textContent.trim() : null;
     var durTxt = (durEl && durEl.textContent) ? durEl.textContent.replace(/[^0-9.]/g, '') : '';
     var est = Number(durTxt) || Number((scene && scene.estSec) || 0) || 0;
-    return {
-      promptText: [common, visual, 'Duration', (est ? est + 's.' : '')].join('\n'),
+    var visualLine = newComposition !== null
+      ? [newComposition, newAction || ''].filter(Boolean).join('\n')
+      : visual;
+    var result = {
+      promptText: [common, visualLine, 'Duration', (est ? est + 's.' : '')].filter(Boolean).join('\n'),
       promptEdited: true,
       editingPrompt: false,
       shot: visual,
       estSec: est
     };
+    if (newComposition !== null) result.composition = newComposition;
+    if (newAction !== null) result.action = newAction;
+    return result;
   }
 
   actions.bindSceneEvents = function (options) {
