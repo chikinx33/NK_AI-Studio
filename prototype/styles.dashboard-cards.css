@@ -382,9 +382,50 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
   width: 100px;
   height: 100px;
   border-radius: 14px;
-  background: linear-gradient(135deg, rgba(255, 122, 0, 0.18), rgba(11, 191, 165, 0.18));
-  border: 1px solid var(--border);
   flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  color: var(--muted, #94a3b8);
+  background: transparent;
+  border: 1.5px dashed var(--border);
+  transition: border-color 120ms ease, color 120ms ease, background 120ms ease;
+}
+
+.draft-thumb.empty:hover,
+.draft-thumb.empty:focus-visible {
+  border-color: rgba(255, 183, 77, 0.6);
+  color: rgba(255, 183, 77, 0.95);
+  background: rgba(255, 183, 77, 0.05);
+}
+
+.draft-thumb.empty svg {
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+}
+
+.draft-thumb.has-image {
+  border: 1px solid var(--border);
+  background: #0f172a;
+  cursor: pointer;
+}
+
+.draft-thumb.has-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.draft-thumb.is-busy {
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 .draft-title {

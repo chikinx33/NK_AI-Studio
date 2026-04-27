@@ -22,6 +22,62 @@
     return arr.length > max ? arr.slice(0, max).join('') + '...' : s;
   };
 
+  const triggerThumbnailUpload = (projectId, anchorEl) => {
+    const id = String(projectId || '').trim();
+    if (!id) return;
+    if (!NK.api || typeof NK.api.imageUpload !== 'function') {
+      alert('이미지 업로드 API를 사용할 수 없습니다.');
+      return;
+    }
+    if (!NK.service || !NK.service.project || typeof NK.service.project.updatePayload !== 'function') {
+      alert('프로젝트 저장 API를 사용할 수 없습니다.');
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    const cleanup = () => {
+      try { input.remove(); } catch (_) { }
+    };
+    input.addEventListener('change', async () => {
+      const file = input.files && input.files[0];
+      if (!file) { cleanup(); return; }
+      const prevDisabled = anchorEl && 'disabled' in anchorEl ? anchorEl.disabled : false;
+      try {
+        if (anchorEl) {
+          anchorEl.classList.add('is-busy');
+          if ('disabled' in anchorEl) anchorEl.disabled = true;
+        }
+        const resp = await NK.api.imageUpload(id, file);
+        const objectName = String(resp && resp.objectName || '').trim();
+        if (!objectName) throw new Error('objectName_missing');
+        await NK.service.project.updatePayload(id, { thumbnailObjectName: objectName });
+        if (NK.ui && NK.ui.dashboard && typeof NK.ui.dashboard.renderDrafts === 'function') {
+          NK.ui.dashboard.renderDrafts();
+        }
+        try {
+          const current = NK.service.project.resolveCurrent
+            ? NK.service.project.resolveCurrent({ search: window.location.search })
+            : null;
+          if (current && String(current.id) === id && NK.ui && NK.ui.dashboard && typeof NK.ui.dashboard.renderSidebarProjectCard === 'function') {
+            NK.ui.dashboard.renderSidebarProjectCard(current);
+          }
+        } catch (_) { }
+      } catch (err) {
+        alert('썸네일 업로드 실패: ' + (err && err.message ? err.message : err));
+      } finally {
+        if (anchorEl) {
+          anchorEl.classList.remove('is-busy');
+          if ('disabled' in anchorEl) anchorEl.disabled = prevDisabled;
+        }
+        cleanup();
+      }
+    }, { once: true });
+    input.click();
+  };
+
   const setDashLoading = (show, text) => {
     const overlay = document.getElementById('dashboard-loading');
     const blurTarget = document.getElementById('dashboard-drafts');
@@ -342,13 +398,20 @@
       const tgt = d.payload?.target || '';
       const genre = `${cat} ${tags}`.trim();
       const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
+      const thumbObj = String(d.payload?.thumbnailObjectName || '').trim();
+      const thumbUrl = thumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
+        ? NK.api.mediaProxyObjectUrl(thumbObj)
+        : '';
+      const thumbHtml = thumbUrl
+        ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" alt="" /></button>`
+        : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
 
       return `
         <article class="draft-card ${isSelected ? 'is-selected' : ''}" data-draft-id="${escapeHtml(d.id)}">
           ${showTitleEdit ? `<button class="edit-btn top-right" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : ``}
           ${showDelete ? `<button class="trash-btn top-right action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : ``}
           <div class="draft-top">
-            <div class="draft-thumb"></div>
+            ${thumbHtml}
             <div class="draft-info">
               <div class="draft-title-row">
                 <h4 class="draft-title" data-id="${escapeHtml(d.id)}" title="${escapeHtml(d.title || '제목없음')}">${escapeHtml(host === 'video' ? truncateEpisodeTitle(d.title || '제목없음') : (d.title || '제목없음'))}</h4>
@@ -564,6 +627,9 @@
           if (overlay) overlay.classList.remove('hidden');
           if (app) app.classList.add('blur-active');
         }
+      } else if (action === 'thumb-upload') {
+        triggerThumbnailUpload(id, target);
+        return;
       } else if (action === 'draft-delete') {
         (async () => {
           var ok = true;
@@ -635,9 +701,17 @@
       `${labels.duration} : ${dur}`
     ].join('\n');
 
+    const sidebarThumbObj = String(normalized.payload?.thumbnailObjectName || '').trim();
+    const sidebarThumbUrl = sidebarThumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
+      ? NK.api.mediaProxyObjectUrl(sidebarThumbObj)
+      : '';
+    const sidebarThumbHtml = sidebarThumbUrl
+      ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(normalized.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(sidebarThumbUrl)}" alt="" /></button>`
+      : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(normalized.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
+
     container.innerHTML = `
       <div class="draft-top">
-        <div class="draft-thumb"></div>
+        ${sidebarThumbHtml}
       </div>
       <h4 class="sidebar-card-title" title="${escapeHtml(normalized.title || '제목없음')}">${escapeHtml(truncateEpisodeTitle(normalized.title || '제목없음'))}</h4>
       <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
