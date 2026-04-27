@@ -27,32 +27,15 @@
         'targetAudience'
     ];
     var PROJECT_CORE_LIST_FIELDS = [];
+    // 새 에피소드 생성 시 같은 시리즈의 부모 에피소드에서 상속할 필드.
+    // 브랜드/시리즈 단위 컨텍스트만 포함하며, 에피소드별 콘텐츠
+    // (topic/story/purposeCategory/purposeTags/needs/tones/styles/duration/...)는
+    // 상속하지 않아 새 에피소드는 빈 개요 상태로 시작한다.
     var EPISODE_TEMPLATE_FIELDS = [
-        'topic',
-        'story',
-        'purposeCategory',
-        'purposeTags',
         'target',
         'targetAudience',
-        'needs',
-        'tones',
-        'styles',
-        'tone',
-        'style',
-        'duration',
-        'durationMode',
-        'durationCustom',
         'aspectRatio',
-        'narrationEnabled',
-        'dubbingEnabled',
-        'charactersEnabled',
-        'characters',
-        'characterHints',
-        'manualDirectives',
-        'extraNotes',
-        'banned',
         'projectType',
-        'contentStyle',
         'brandSummary',
         'coreMessage',
         'brandKeywords',
@@ -883,7 +866,7 @@
         var ratio = NK.store.getAspectRatio();
         var parentProjectTitle = normalizeText(parentDraft && parentDraft.title || (parentProjectId && inheritedPayload.episodeTitle) || '');
         var basePayload = Object.assign({}, inheritedPayload, requestedCore, {
-            topic: normalizeText(inheritedPayload.topic || (parentDraft && parentDraft.payload && parentDraft.payload.topic) || ''),
+            topic: normalizeText(inheritedPayload.topic || ''),
             aspectRatio: normalizeText(inheritedPayload.aspectRatio || ratio) || ratio,
             brandId: normalizeBrandId(inheritedContext.brandId || seriesId),
             brandTitle: normalizeText(inheritedContext.brandTitle || seriesTitle) || seriesTitle,

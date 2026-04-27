@@ -353,7 +353,7 @@
     const rawStory = sanitizeText(payload?.story || payload?.storyPrompt || '');
     if (rawStory) {
       return {
-        topic: rawTopic || sanitizeText(draft?.title || payload?.episodeTitle || ''),
+        topic: rawTopic,
         story: rawStory
       };
     }
@@ -1661,7 +1661,7 @@
     const selectedDurationCustom = p.durationMode === 'custom'
       ? String(p.durationCustom || durationValue || '')
       : (hasPresetDuration(durationValue) ? '' : durationValue);
-    if (form.topic) form.topic.value = overviewFields.topic || draft.title || '';
+    if (form.topic) form.topic.value = overviewFields.topic || '';
     if (form.story) form.story.value = overviewFields.story || '';
     if (form.story) cacheStorySelection(form.story);
     renderOverviewSelects({

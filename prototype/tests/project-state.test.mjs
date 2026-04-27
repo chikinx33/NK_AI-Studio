@@ -177,7 +177,7 @@ test('postprodState.applySaveSuccess updates payload/renderMeta via project.upda
   assert.equal(ctx.NK.state.runtime.currentProject.renderMeta.outputVideoUrl, 'https://example.com/out.webm');
 });
 
-test('project.create inherits scenario context from selected parent project episode', async () => {
+test('project.create inherits brand/series context but resets episode content fields', async () => {
   const ctx = createContext([
     {
       id: 'parent1',
@@ -235,12 +235,18 @@ test('project.create inherits scenario context from selected parent project epis
   assert.equal(created.seriesId, 'shapes');
   assert.equal(created.payload.parentProjectId, 'parent1');
   assert.equal(created.payload.parentProjectTitle, '모양새 친구들');
-  assert.equal(created.payload.topic, '모양새 친구들 EP1');
-  assert.equal(created.payload.story, '모양새 친구들이 숲에서 모험을 떠난다');
-  assert.equal(JSON.stringify(created.payload.tones), JSON.stringify(['유머']));
-  assert.equal(JSON.stringify(created.payload.styles), JSON.stringify(['애니메이션(2D)']));
-  assert.equal(created.payload.charactersEnabled, true);
-  assert.equal(created.payload.characters[0].token, '@네모');
+  // 에피소드별 콘텐츠 필드는 상속하지 않고 빈 상태로 시작한다
+  assert.equal(created.payload.topic, '');
+  assert.equal(created.payload.story || '', '');
+  assert.equal(created.payload.purposeCategory || '', '');
+  assert.equal(JSON.stringify(created.payload.purposeTags || []), JSON.stringify([]));
+  assert.equal(JSON.stringify(created.payload.tones || []), JSON.stringify([]));
+  assert.equal(JSON.stringify(created.payload.styles || []), JSON.stringify([]));
+  assert.equal(created.payload.duration || '', '');
+  assert.equal(JSON.stringify(created.payload.characters || []), JSON.stringify([]));
+  // 시리즈/브랜드 컨텍스트는 상속한다
+  assert.equal(created.payload.aspectRatio, '16:9');
+  assert.equal(created.payload.target, '아동');
   assert.equal(created.payload.knowledgeHub.brandVoice, '따뜻하고 명확하게 말한다.');
   assert.equal(created.payload.knowledgeHub.worldSetting, '형태들이 살아가는 숲 마을');
   assert.equal(JSON.stringify(created.scenes), JSON.stringify([]));
