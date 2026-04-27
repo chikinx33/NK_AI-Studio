@@ -294,9 +294,21 @@
     );
   }
 
+  function buildCutRefOptions(allScenes, currentId, selectedId) {
+    var result = '<option value="">컷 선택</option>';
+    (allScenes || []).forEach(function (s) {
+      if (!s || String(s.id) === String(currentId) || !s.imageDataUrl) return;
+      var lbl = escapeText(s.displayLabel || ('cut ' + s.id));
+      var sel = String(s.id) === String(selectedId) ? ' selected' : '';
+      result += '<option value="' + escapeAttr(String(s.id)) + '"' + sel + '>' + lbl + '</option>';
+    });
+    return result;
+  }
+
   function buildSceneRowHtml(scene, header, options) {
     var opts = options || {};
     var statePayload = opts.statePayload || {};
+    var allScenes = Array.isArray(opts.allScenes) ? opts.allScenes : [];
     var mediaUrlResolver = typeof opts.toPlayableMediaUrl === 'function'
       ? opts.toPlayableMediaUrl
       : function (value) { return String(value || ''); };
@@ -396,6 +408,13 @@
       '<button class="btn-secondary compact" data-action="upload-image" data-id="' + scene.id + '">업로드</button>' +
       '<button class="btn-secondary compact" data-action="library-image" data-id="' + scene.id + '">저장소</button>' +
       '<button class="btn-secondary compact" data-action="download-image" data-id="' + scene.id + '"' + (scene.imageDataUrl ? '' : ' disabled') + '>다운로드</button>' +
+      '<label class="cut-ref-check-label">' +
+      '<input type="checkbox" class="cut-ref-check" data-action="toggle-cut-ref" data-id="' + scene.id + '"' + (scene.cutRefEnabled ? ' checked' : '') + '>' +
+      ' 컷 기반 생성' +
+      '</label>' +
+      '<select class="cut-ref-select" data-action="change-cut-ref" data-id="' + scene.id + '"' + (!scene.cutRefEnabled ? ' disabled' : '') + '>' +
+      buildCutRefOptions(allScenes, scene.id, scene.cutRefId) +
+      '</select>' +
       '</div>' +
       '<div class="action-buttons grid video-actions">' +
       '<button class="btn-secondary compact span2" data-action="video" data-id="' + scene.id + '">' + (videoBusy ? '생성중(취소)' : '영상 생성') + '</button>' +

@@ -248,6 +248,11 @@
           await ui.generateImageForIdx(idx);
           return;
         }
+        if (action === 'toggle-cut-ref') {
+          st.scenes[idx] = Object.assign({}, scene, { cutRefEnabled: !scene.cutRefEnabled });
+          refreshAndPersist(true, 'image');
+          return;
+        }
         if (action === 'delete-image') {
           st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: '', imgError: '', imgLoading: false });
           refreshAndPersist(true, 'image');
@@ -487,6 +492,21 @@
       if (vid && (vid.currentSrc || vid.src)) {
         opts.openVideoModal(vid.currentSrc || vid.src);
       }
+    });
+
+    rootEl.addEventListener('change', function (e) {
+      var sel = e.target.closest('[data-action="change-cut-ref"]');
+      if (!sel) return;
+      var selSceneId = sel.dataset.id;
+      var ctx = opts.ctx;
+      if (!ctx || !ctx.getState) return;
+      var st = ctx.getState();
+      if (!st || !st.scenes || !selSceneId) return;
+      var idx = st.scenes.findIndex(function (s) { return String(s.id) === String(selSceneId); });
+      if (idx < 0) return;
+      st.scenes[idx] = Object.assign({}, st.scenes[idx], { cutRefId: sel.value });
+      ctx.setState(st);
+      if (ctx.persistPipeline) ctx.persistPipeline();
     });
   };
 })();

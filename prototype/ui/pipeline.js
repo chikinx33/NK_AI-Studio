@@ -1531,7 +1531,8 @@ function buildSceneRowHtml(s, header) {
   if (!helpers.buildSceneRowHtml) return '';
   return helpers.buildSceneRowHtml(s, header, {
     statePayload: st && st.payload ? st.payload : {},
-    toPlayableMediaUrl: toPlayableMediaUrl
+    toPlayableMediaUrl: toPlayableMediaUrl,
+    allScenes: st && st.scenes ? st.scenes : []
   });
 }
 

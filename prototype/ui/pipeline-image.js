@@ -732,6 +732,24 @@
         scene = st.scenes[opts.idx];
       }
     } catch (_) { }
+    if (scene.cutRefEnabled && scene.cutRefId) {
+      var stCutRef = ctx.getState();
+      var refCutIdx = stCutRef.scenes.findIndex(function (s) { return String(s && s.id) === String(scene.cutRefId); });
+      var refCutImg = refCutIdx >= 0 ? String(stCutRef.scenes[refCutIdx].imageDataUrl || '') : '';
+      if (refCutImg) {
+        var baseRefs = referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.slice() : [];
+        baseRefs.push({
+          referenceId: baseRefs.length + 1,
+          referenceType: 'REFERENCE_TYPE_STYLE',
+          imageDataUrl: refCutImg,
+          subjectDescription: 'Visual consistency reference: maintain the same character appearance, costume, environment, and lighting as shown.',
+          subjectType: 'SUBJECT_TYPE_DEFAULT'
+        });
+        referencePayload = referencePayload
+          ? Object.assign({}, referencePayload, { referenceImages: baseRefs })
+          : { referenceImages: baseRefs, promptPrefix: '', promptSuffix: '', referenceMeta: [] };
+      }
+    }
     if (imageCharacterNegativePrompt) {
       finalPrompt = finalPrompt + '\nDo not include: ' + imageCharacterNegativePrompt;
     }
