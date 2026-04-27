@@ -947,6 +947,15 @@
 
       // 사이드바 프로젝트 카드 버튼 처리
       const action = link.dataset.action;
+      if (action === 'thumb-upload') {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = String(link.dataset.id || '').trim();
+        if (id && NK.ui && NK.ui.dashboard && typeof NK.ui.dashboard.triggerThumbnailUpload === 'function') {
+          NK.ui.dashboard.triggerThumbnailUpload(id, link);
+        }
+        return;
+      }
       if (action === 'sidebar-edit-scenario') {
         persistCurrentProject();
         const url = currentProject?.id ? `scenario.html?projectId=${encodeURIComponent(currentProject.id)}` : 'scenario.html';

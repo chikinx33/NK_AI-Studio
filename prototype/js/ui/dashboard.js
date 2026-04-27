@@ -224,6 +224,8 @@
     if (NK.state?.broadcast) NK.state.broadcast('update-project', { project: draft });
   };
 
+  dashboard.triggerThumbnailUpload = triggerThumbnailUpload;
+
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
@@ -628,7 +630,7 @@
           if (app) app.classList.add('blur-active');
         }
       } else if (action === 'thumb-upload') {
-        triggerThumbnailUpload(id, target);
+        triggerThumbnailUpload(id, btn);
         return;
       } else if (action === 'draft-delete') {
         (async () => {
