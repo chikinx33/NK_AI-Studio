@@ -402,7 +402,9 @@
       ${manageBarHtml}
     `;
 
-    const selectedProjectId = getSelectedProjectId();
+    const _rawSelectedId = getSelectedProjectId();
+    const selectedProjectId = _rawSelectedId ||
+      (filteredDrafts.length > 0 ? String(filteredDrafts[0].id) : '');
     const showStageButtons = host === 'video';
     const showTitleEdit = (host === 'video' || host === 'brand');
     const showDelete = (host === 'video' || host === 'brand');
@@ -474,7 +476,8 @@
         const draft = drafts.find(d => String(d.id) === cardId);
         if (!draft) return;
         selectProject(draft);
-        dashboard.renderDrafts();
+        container.querySelectorAll('.draft-card.is-selected').forEach(c => c.classList.remove('is-selected'));
+        card.classList.add('is-selected');
         const host = getHostShell();
         if (host === 'brand') {
           if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('brand.html');
