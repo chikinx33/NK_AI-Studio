@@ -4362,6 +4362,25 @@
     updateClipElement(d.clipEl, d.nextStart, d.nextEnd);
   }
 
+  // 모든 트랙의 클립 max end로부터 model.totalDuration 재계산 후 변경됐으면 true 반환.
+  // 사용자가 클립을 끝 너머로 끌면 타임라인이 늘어나야 하므로, 드래그 종료 시 호출해
+  // ruler/grid를 확장한다.
+  function recomputeModelTotalDuration() {
+    if (!state.model) return false;
+    var maxEnd = 0;
+    (state.model.tracks || []).forEach(function (track) {
+      (track.clips || []).forEach(function (clip) {
+        if (clip && typeof clip.end === 'number' && clip.end > maxEnd) maxEnd = clip.end;
+      });
+    });
+    var newTotal = Math.max(12, Math.ceil(maxEnd));
+    if (newTotal !== state.model.totalDuration) {
+      state.model.totalDuration = newTotal;
+      return true;
+    }
+    return false;
+  }
+
   function endClipDrag() {
     if (!state.drag) return;
     window.removeEventListener('pointermove', onWindowPointerMove, true);
@@ -4391,6 +4410,11 @@
       });
       setDirty(true);
       state.selectedClipId = d.clipId;
+      // 끝 너머로 이동했으면 타임라인 확장 후 재렌더
+      if (recomputeModelTotalDuration()) {
+        renderTimelineSection(state.model);
+        bindEvents();
+      }
       setCurrentTime(d.nextStart, true);
       state.justDragged = !!d.moved;
       state.isPointerDown = false;
@@ -4417,6 +4441,11 @@
           afterEnd: clip.end
         });
         setDirty(true);
+      }
+      // 끝 너머로 이동했으면 타임라인 확장 후 재렌더
+      if (recomputeModelTotalDuration()) {
+        renderTimelineSection(state.model);
+        bindEvents();
       }
       setCurrentTime(clip.start, true);
     }
