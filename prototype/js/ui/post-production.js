@@ -1306,8 +1306,11 @@
     }, delay);
   }
 
-  // 정확 seek(video.currentTime = t)는 타겟 프레임까지 전체 디코딩이 필요해 느리다.
-  // fastSeek(t)은 가까운 키프레임으로 점프 — 스크럽 체감 지연의 핵심 해결책.
+  // 스크럽 seek: 정확한 currentTime 할당을 사용한다.
+  // fastSeek은 가까운 키프레임으로 점프(키프레임 간격 1-2초 → 슬라이더를 작게
+  // 움직여도 같은 키프레임에 계속 떨어져 화면 프레임이 갱신되지 않는 현상 발생).
+  // currentTime은 타겟까지 디코딩이 필요해 약간 느리지만, wake play()로 디코더가
+  // 활성 상태를 유지하므로 실측 지연은 무시 가능.
   // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
   function scrubSeekVideo(video, t) {
     if (!video) return;
@@ -1320,15 +1323,7 @@
       video.addEventListener('loadedmetadata', onMeta);
       return;
     }
-    try {
-      if (typeof video.fastSeek === 'function') {
-        video.fastSeek(target);
-      } else {
-        video.currentTime = target;
-      }
-    } catch (_) {
-      try { video.currentTime = target; } catch (_) { }
-    }
+    try { video.currentTime = target; } catch (_) { }
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -3437,7 +3432,7 @@
 
     // ── Fast path: 동일 클립 ────────────────────────────────────────────────
     // 클립이 바뀌지 않았으면 display 토글·마운트 등 무거운 작업은 건너뛰고
-    // transform + 자막 갱신. 비디오는 스크럽 중 fastSeek을 rAF로 병합해 호출.
+    // transform + 자막 갱신. 비디오는 스크럽 중 currentTime= 정확 seek를 rAF로 병합해 호출.
     if (!clipChanged) {
       if (isVideo) {
         applyMotionTransform(host, clip, sec);
