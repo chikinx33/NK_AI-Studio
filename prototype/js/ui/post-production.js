@@ -35,6 +35,7 @@
     playLastTick: 0,
     previewClipId: '',
     previewClipUrl: '',
+    previewActiveUrl: '',
     previewVideoCache: {},
     subscribed: false,
     assetRefreshInFlight: false,
@@ -1213,10 +1214,21 @@
   }
 
   function clearPreviewVideoCache() {
-    var svc = getPostprodPreviewService();
-    state.previewVideoCache = (svc && svc.clearPreviewVideoCache)
-      ? svc.clearPreviewVideoCache(state.previewVideoCache, { releaseVideoSource: releaseVideoSource })
-      : {};
+    var cache = state.previewVideoCache || {};
+    Object.keys(cache).forEach(function (url) {
+      var e = cache[url];
+      if (!e || !e.video) return;
+      if (e.video.__scrubPauseTimer) {
+        try { clearTimeout(e.video.__scrubPauseTimer); } catch (_) {}
+        e.video.__scrubPauseTimer = 0;
+      }
+      if (e.video.parentNode) {
+        try { e.video.parentNode.removeChild(e.video); } catch (_) { }
+      }
+      try { releaseVideoSource(e.video); } catch (_) {}
+    });
+    state.previewVideoCache = {};
+    state.previewActiveUrl = '';
     state.previewClipId = '';
     state.previewClipUrl = '';
   }
@@ -1384,62 +1396,11 @@
   // 모든 비디오 클립을 host 내부에 영구 마운트 — DOM 이동 비용 제거.
   // 활성 클립은 opacity:1, 나머지는 opacity:0으로 대기. 클립 전환 시 appendChild가
   // 아닌 단순 CSS 전환으로 즉시 표시되어 "정지 프레임" 현상이 사라진다.
-  function ensureAllPreviewVideosMounted(model) {
-    var host = getPreviewVideoHost();
-    if (!host || !model) return;
-    var svc = getPostprodPreviewService();
-    if (!svc || !svc.getPreviewVideoCacheEntry) return;
-    var track = getVisualTrack(model);
-    var clips = track && Array.isArray(track.clips) ? track.clips : [];
-    var keepIds = [];
-    clips.forEach(function (clip) {
-      if (!clip || clip.empty || !clip.url || !isVideoUrl(clip.url)) return;
-      keepIds.push(clip.id);
-      var result = svc.getPreviewVideoCacheEntry(state.previewVideoCache, clip, {
-        resolveMediaUrl: toPlayableMediaUrl,
-        releaseVideoSource: releaseVideoSource
-      });
-      state.previewVideoCache = result && result.cache ? result.cache : state.previewVideoCache;
-      var entry = result && result.entry;
-      if (!entry || !entry.video) return;
-      var vid = entry.video;
-      // 각 비디오를 host의 레이어로 고정 — 활성만 보이게 opacity로 토글
-      if (vid.parentNode !== host) host.appendChild(vid);
-      applyVideoLayerStyles(vid);
-      // objectFit은 CSS 기본값(contain)에 맡긴다 — 모션 활성 시에만 'cover'로 override됨
-      if (!vid.style.opacity) vid.style.opacity = '0';
-      // readyPromise catch 누락 시 unhandled rejection 방지
-      if (entry.readyPromise && !entry.__catchAttached) {
-        entry.__catchAttached = true;
-        entry.readyPromise.catch(function () { });
-      }
-    });
-    // 모델에서 제거된 클립의 비디오는 정리
-    if (svc.prunePreviewVideoCache || true) {
-      var cache = state.previewVideoCache || {};
-      var keep = {};
-      keepIds.forEach(function (id) { keep[String(id || '')] = true; });
-      Object.keys(cache).forEach(function (id) {
-        if (keep[id]) return;
-        var e = cache[id];
-        if (!e || !e.video) { delete cache[id]; return; }
-        if (e.video.__wakeTimerId) {
-          try { clearTimeout(e.video.__wakeTimerId); } catch (_) { }
-          e.video.__wakeTimerId = 0;
-        }
-        if (e.video.__onScrubSeeked) {
-          try { e.video.removeEventListener('seeked', e.video.__onScrubSeeked); } catch (_) { }
-          e.video.__onScrubSeeked = null;
-          e.video.__scrubAutoPauseAttached = false;
-        }
-        if (e.video.parentNode) {
-          try { e.video.parentNode.removeChild(e.video); } catch (_) { }
-        }
-        releaseVideoSource(e.video);
-        delete cache[id];
-      });
-    }
-  }
+  // ── URL 기반 비디오 캐시 ─────────────────────────────────────────────────
+  // 같은 소스 URL을 쓰는 모든 클립(자른 조각들)이 하나의 video 엘리먼트를 공유.
+  // 클립 경계를 넘어도 같은 URL이면 src 재로드/디코더 재초기화 없이 seek만 변경 →
+  // 컷 클립 스크럽이 매끄러움. Chrome 디코더 풀(~6개) 한계도 자연스럽게 회피.
+  // state.previewVideoCache는 이제 URL을 키로 사용한다 (이전엔 clip.id).
 
   function applyVideoLayerStyles(vid) {
     if (!vid) return;
@@ -1450,19 +1411,79 @@
     vid.style.pointerEvents = 'none';
   }
 
-  function mountPreviewVideo(entry, clipId) {
+  function ensurePreviewVideoForUrl(playableUrl) {
+    if (!playableUrl) return null;
     var host = getPreviewVideoHost();
-    if (!host || !entry || !entry.video) return null;
-    // 모든 캐시 비디오가 host에 이미 존재함(ensureAllPreviewVideosMounted). 여기서는
-    // id / opacity / z-index 만 전환 — DOM 이동 없음 = 전환 지연 0.
-    var activeId = String(clipId || '');
+    if (!host) return null;
+    var cache = state.previewVideoCache || (state.previewVideoCache = {});
+    var existing = cache[playableUrl];
+    if (existing && existing.video) return existing;
+    var video = document.createElement('video');
+    video.className = 'postprod-video';
+    video.preload = 'auto';
+    video.playsInline = true;
+    video.muted = true;
+    video.crossOrigin = 'anonymous';
+    video.setAttribute('playsinline', '');
+    video.src = playableUrl;
+    applyVideoLayerStyles(video);
+    video.style.opacity = '0';
+    host.appendChild(video);
+    var entry = { url: playableUrl, video: video, ready: false, failed: false };
+    var onReady = function () { entry.ready = true; };
+    var onErr = function () { entry.failed = true; };
+    try { video.addEventListener('loadedmetadata', onReady); } catch (_) {}
+    try { video.addEventListener('error', onErr); } catch (_) {}
+    cache[playableUrl] = entry;
+    return entry;
+  }
+
+  function ensureAllPreviewVideosMounted(model) {
+    var host = getPreviewVideoHost();
+    if (!host || !model) return;
+    var track = getVisualTrack(model);
+    var clips = track && Array.isArray(track.clips) ? track.clips : [];
+    var keepUrls = {};
+    clips.forEach(function (clip) {
+      if (!clip || clip.empty || !clip.url || !isVideoUrl(clip.url)) return;
+      var url = toPlayableMediaUrl(clip.url);
+      if (!url) return;
+      keepUrls[url] = true;
+      ensurePreviewVideoForUrl(url);
+    });
+    // 모델에서 제거된 URL의 비디오는 정리
     var cache = state.previewVideoCache || {};
-    Object.keys(cache).forEach(function (id) {
-      var e = cache[id];
+    Object.keys(cache).forEach(function (url) {
+      if (keepUrls[url]) return;
+      var e = cache[url];
+      if (!e || !e.video) { delete cache[url]; return; }
+      if (e.video.__scrubPauseTimer) {
+        try { clearTimeout(e.video.__scrubPauseTimer); } catch (_) {}
+        e.video.__scrubPauseTimer = 0;
+      }
+      if (e.video.parentNode) {
+        try { e.video.parentNode.removeChild(e.video); } catch (_) { }
+      }
+      releaseVideoSource(e.video);
+      delete cache[url];
+    });
+  }
+
+  function mountPreviewVideoByUrl(playableUrl) {
+    var host = getPreviewVideoHost();
+    if (!host || !playableUrl) return null;
+    var cache = state.previewVideoCache || {};
+    var activeEntry = cache[playableUrl];
+    if (!activeEntry || !activeEntry.video) {
+      activeEntry = ensurePreviewVideoForUrl(playableUrl);
+    }
+    if (!activeEntry) return null;
+    Object.keys(cache).forEach(function (cachedUrl) {
+      var e = cache[cachedUrl];
       if (!e || !e.video) return;
       if (e.video.parentNode !== host) host.appendChild(e.video);
       applyVideoLayerStyles(e.video);
-      if (id === activeId) {
+      if (cachedUrl === playableUrl) {
         e.video.id = 'postprod-preview-video';
         e.video.style.opacity = '1';
         e.video.style.zIndex = '2';
@@ -1472,48 +1493,27 @@
         e.video.style.zIndex = '1';
       }
     });
-    return entry.video;
+    state.previewActiveUrl = playableUrl;
+    return activeEntry.video;
   }
 
-  function pausePreviewVideos(exceptClipId) {
-    var svc = getPostprodPreviewService();
-    if (!svc || !svc.pausePreviewVideos) return;
-    svc.pausePreviewVideos(state.previewVideoCache, exceptClipId);
-  }
-
-  function getPreviewVideoCacheEntry(clip) {
-    var svc = getPostprodPreviewService();
-    if (!svc || !svc.getPreviewVideoCacheEntry) return null;
-    var result = svc.getPreviewVideoCacheEntry(state.previewVideoCache, clip, {
-      resolveMediaUrl: toPlayableMediaUrl,
-      releaseVideoSource: releaseVideoSource
+  function pausePreviewVideos(exceptUrl) {
+    var keepUrl = String(exceptUrl || '');
+    var cache = state.previewVideoCache || {};
+    Object.keys(cache).forEach(function (url) {
+      if (keepUrl && url === keepUrl) return;
+      var e = cache[url];
+      if (!e || !e.video) return;
+      try { e.video.pause(); } catch (_) {}
+      try { e.video.muted = true; } catch (_) {}
     });
-    state.previewVideoCache = result && result.cache ? result.cache : state.previewVideoCache;
-    return result ? result.entry : null;
   }
 
-  function warmPreviewVideoNeighbors(clip) {
-    // 새 아키텍처에서는 ensureAllPreviewVideosMounted가 모델 렌더 시 모든 비디오 클립을
-    // host에 미리 마운트한다. 여기서는 ±1 이웃 비디오를 사용자의 근사 위치로 pre-seek해
-    // 클립 경계 교차 시 타겟 프레임이 이미 디코딩된 상태가 되도록 준비한다.
-    if (!clip || !state.model) return;
-    var track = getVisualTrack(state.model);
-    var clips = track && Array.isArray(track.clips) ? track.clips : [];
-    var idx = clips.findIndex(function (c) { return c && c.id === clip.id; });
-    if (idx < 0) return;
-    [idx - 1, idx + 1].forEach(function (targetIdx) {
-      if (targetIdx < 0 || targetIdx >= clips.length) return;
-      var target = clips[targetIdx];
-      if (!target || target.empty || !target.url || !isVideoUrl(target.url)) return;
-      var entry = state.previewVideoCache && state.previewVideoCache[target.id];
-      if (!entry || !entry.video || !entry.ready) return;
-      // 이전 클립 → 끝 부분으로 preseek / 다음 클립 → 시작 위치(videoOffset)로 preseek
-      var tOffset = target.videoOffset || 0;
-      var targetT = targetIdx < idx
-        ? Math.max(0, (target.end - target.start) - 0.05) + tOffset
-        : tOffset;
-      scheduleScrubSeek('warm:' + target.id, entry.video, targetT);
-    });
+  function warmPreviewVideoNeighbors(/* clip */) {
+    // URL 기반 캐시에서는 ensureAllPreviewVideosMounted가 이미 모든 고유 URL의
+    // 비디오 엘리먼트를 생성/preload하므로 별도 warm은 불필요. 게다가 이전 구조의
+    // warm은 이웃 비디오에 muted play를 트리거해 전환 시 wake 누락 버그(연속 클립
+    // 정지화면)의 원인이었다 → 완전히 비활성화.
   }
 
   async function hasLoadableVisualClip(model) {
@@ -3475,7 +3475,8 @@
     if (!clipChanged) {
       if (isVideo) {
         applyMotionTransform(host, clip, sec);
-        var fpEntry = state.previewVideoCache && state.previewVideoCache[clip.id];
+        // URL 기반 캐시: 같은 소스 URL을 쓰는 클립들은 동일 video 엘리먼트 공유
+        var fpEntry = state.previewVideoCache && state.previewVideoCache[playableUrl];
         var fpVid = fpEntry && fpEntry.video;
         if (fpVid) {
           if (!state.isPlaying) {
@@ -3483,7 +3484,7 @@
             // 디코더 강제 디코드 + snap-back을 통합 처리). delta threshold 없음 —
             // 작은 위치 변화도 정확히 반영되어 슬로우 스크럽도 부드럽게 동작.
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
-            scheduleScrubSeek('active:' + clip.id, fpVid, fpClipTime);
+            scheduleScrubSeek('active', fpVid, fpClipTime);
           } else {
             // 재생 중: 스크럽 wake로 인한 muted 상태를 해제하고, 멈춰있다면 재개
             if (fpVid.muted) { try { fpVid.muted = false; } catch (_) {} }
@@ -3530,8 +3531,17 @@
       return;
     }
 
-    var entry = getPreviewVideoCacheEntry(clip);
-    if (!entry) {
+    // URL 기반 캐시: 같은 소스 URL을 쓰는 클립들(자른 조각들)은 동일 video 엘리먼트 공유.
+    // URL이 같으면 src 재로드/디코더 재초기화 없이 seek만 변경됨 → 컷 클립 스크럽 매끄러움.
+    var urlChanged = state.previewActiveUrl !== playableUrl;
+    var video;
+    if (urlChanged) {
+      video = mountPreviewVideoByUrl(playableUrl);
+    } else {
+      var existing = state.previewVideoCache && state.previewVideoCache[playableUrl];
+      video = existing && existing.video ? existing.video : mountPreviewVideoByUrl(playableUrl);
+    }
+    if (!video) {
       host.style.display = 'none';
       image.style.display = 'none';
       pausePreviewVideos('');
@@ -3547,42 +3557,36 @@
     state.previewClipId = clip.id;
     state.previewClipUrl = playableUrl;
 
-    // 모든 비디오가 host에 사전 마운트되어 있으므로 opacity 전환만으로 즉시 활성화.
-    // readyPromise 대기 없음 — 프레임이 아직 디코딩되지 않았으면 바로 전 프레임이 살짝
-    // 보이다 곧바로 업데이트되며, "정지" 체감 없음.
-    var video = mountPreviewVideo(entry, clip.id);
     host.style.display = 'block';
     image.style.display = 'none';
     gap.style.display = 'none';
     empty.style.display = 'none';
-    pausePreviewVideos(clip.id);
+    if (urlChanged) {
+      // URL이 바뀐 경우에만 다른 비디오들 일시정지 (같은 URL 클립 간 전환은 영향 없음)
+      pausePreviewVideos(playableUrl);
+    }
     clearMotionTransform(image);
     applyMotionTransform(host, clip, sec);
 
-    if (video) {
-      var liveClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
-      var needsSeek = Math.abs((video.currentTime || 0) - liveClipTime) > 0.1;
-      if (state.isPlaying) {
-        try { video.muted = false; } catch (_) {}
-        if (needsSeek) {
-          // 재생 시에는 정확 seek + onSeeked에서 play 재개
-          var onSeeked = function () {
-            video.removeEventListener('seeked', onSeeked);
-            if (state.isPlaying && video.paused) video.play().catch(function () { });
-          };
-          video.addEventListener('seeked', onSeeked);
-          try { video.currentTime = liveClipTime; } catch (_) {
-            video.removeEventListener('seeked', onSeeked);
-          }
-        } else if (video.paused) {
-          video.play().catch(function () { });
+    var liveClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
+    var needsSeek = Math.abs((video.currentTime || 0) - liveClipTime) > 0.1;
+    if (state.isPlaying) {
+      try { video.muted = false; } catch (_) {}
+      if (needsSeek) {
+        var onSeeked = function () {
+          video.removeEventListener('seeked', onSeeked);
+          if (state.isPlaying && video.paused) video.play().catch(function () { });
+        };
+        video.addEventListener('seeked', onSeeked);
+        try { video.currentTime = liveClipTime; } catch (_) {
+          video.removeEventListener('seeked', onSeeked);
         }
-      } else {
-        // 스크럽(또는 씬 선택): scrubSeekVideo가 seek + 디코더 wake + snap-back을
-        // 통합 처리. needsSeek 분기 없이 항상 호출 — 작은 위치 차이도 정확히 반영.
-        scheduleScrubSeek('active:' + clip.id, video, liveClipTime);
-        try { video.muted = true; } catch (_) {}
+      } else if (video.paused) {
+        video.play().catch(function () { });
       }
+    } else {
+      scheduleScrubSeek('active', video, liveClipTime);
+      try { video.muted = true; } catch (_) {}
     }
 
     // 이웃 클립(±1) pre-seek — 경계 교차 시 즉시 표시되도록 준비
