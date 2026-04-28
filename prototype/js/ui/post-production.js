@@ -2555,9 +2555,13 @@
         return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset });
       }).filter(Boolean);
 
-      // split으로 생성된 신규 클립을 트랙에 삽입
+      // split / 미디어 브라우저로 생성된 신규 클립을 트랙에 삽입.
+      // applyTimelineEdits는 buildTimelineModel 내부 + post.render에서 두 번 호출되므로,
+      // 같은 ID 클립이 이미 있으면 중복 push를 방지한다 (저장·재로드 시 split 결과
+      // 클립이 두 개로 복제되던 버그 해결).
       var newInTrack = newClipsByTrack[track.key] || [];
       newInTrack.forEach(function (item) {
+        if (track.clips.some(function (c) { return c && c.id === item.id; })) return;
         var edit = item.edit;
         var sourceClip = track.clips.find(function (c) { return c && c.id === edit.sourceId; }) || null;
         var start = clamp(toNumber(edit.start, 0), 0, clampUpper - 0.2);
