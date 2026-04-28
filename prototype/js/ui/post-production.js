@@ -1256,14 +1256,16 @@
   function wakeVideoDecoder(video, scrubTarget) {
     if (!video) return;
     if (typeof scrubTarget === 'number') video.__scrubTarget = scrubTarget;
-    // cold 비디오(메타 없음): play 시도 없이 메타 로드 후 seek만 수행
-    if (video.readyState < 1) return;
+    // cold 비디오(readyState < 1)에도 play()를 시도한다. 브라우저는 메타가 로드된
+    // 시점에 자동으로 재생을 시작하므로, 이게 없으면 paused 상태에서 fastSeek이
+    // 화면 프레임을 갱신하지 못한다(Chromium 알려진 동작).
     if (video.paused) {
       try { video.muted = true; } catch (_) {}
       try { video.play().catch(function () { }); } catch (_) {}
     }
     attachScrubAutoPause(video);
-    scheduleAutoPause(video, 120);
+    // cold일수록 메타 로드 시간이 필요하므로 첫 auto-pause를 더 늦게 잡는다
+    scheduleAutoPause(video, video.readyState < 2 ? 220 : 120);
   }
 
   function attachScrubAutoPause(video) {
