@@ -4227,7 +4227,9 @@
       origSiblings: origSiblings,
       sequential: sequential,
       reorderedEdits: null,
-      moved: false
+      moved: false,
+      swapMode: false,
+      swapModeTimer: 0
     };
     selectClip(clipId);
     clipEl.classList.add('is-dragging');
@@ -4236,6 +4238,19 @@
       // 순차 reorder 드래그일 때만 reorder용 시각 효과 활성화
       // (resize·비순차 move 드래그는 포함되지 않도록 분리)
       document.body.classList.add('postprod-reordering');
+    }
+    // 1.5초 동안 움직임 없이 누르고 있으면 'swap 모드' 진입 → 클립 색상이
+    // 파란색(이동) → 주황색(교체)으로 바뀌고, 드래그 종료 시 겹치는 클립과 무조건 swap
+    if (mode === 'move') {
+      state.drag.swapModeTimer = setTimeout(function () {
+        if (!state.drag) return;
+        if (state.drag.moved) return;
+        if (state.drag.swapMode) return;
+        state.drag.swapMode = true;
+        state.drag.swapModeTimer = 0;
+        try { state.drag.clipEl.classList.add('is-swap-mode'); } catch (_) {}
+        try { document.body.classList.add('postprod-swap-mode'); } catch (_) {}
+      }, 1500);
     }
     window.addEventListener('pointermove', onWindowPointerMove, true);
     window.addEventListener('pointerup', onWindowPointerUp, true);
@@ -4278,7 +4293,14 @@
     var dx = evt.clientX - d.startX;
     var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
     var deltaSec = (dx / state.laneWidth) * duration;
-    if (Math.abs(dx) > 3) d.moved = true;
+    if (Math.abs(dx) > 3) {
+      d.moved = true;
+      // 1.5초 hold 전에 움직였으면 일반 이동 모드로 잠금 (swap 모드 진입 취소)
+      if (!d.swapMode && d.swapModeTimer) {
+        try { clearTimeout(d.swapModeTimer); } catch (_) {}
+        d.swapModeTimer = 0;
+      }
+    }
     var minLen = 0.2;
     // Shift 키 누르고 있으면 다른 클립 시작/끝점에 자동 흡착 (8px 화면 거리 기준)
     var shiftHeld = !!(evt && evt.shiftKey);
@@ -4418,28 +4440,41 @@
     }
     if (!primary) return null; // 자유 배치 — 변경 없음
 
-    var primaryCenter = primary.origStart + primary.duration / 2;
     var edits = {};
     var newDraggedStart, newDraggedEnd;
 
-    if (draggedEnd <= primaryCenter) {
-      // snap-left: primary 왼쪽 가장자리에 붙임 (primary는 그대로)
-      newDraggedStart = round1(Math.max(0, primary.origStart - draggedDuration));
-      newDraggedEnd = round1(newDraggedStart + draggedDuration);
-    } else if (draggedStart >= primaryCenter) {
-      // snap-right: primary 오른쪽 가장자리에 붙임 (primary는 그대로)
-      newDraggedStart = round1(primary.origEnd);
-      newDraggedEnd = round1(newDraggedStart + draggedDuration);
-    } else {
-      // swap: 두 클립 위치 교환
+    if (d.swapMode) {
+      // 교체 모드 (1.5초 hold 후 진입): 위치 무관하게 항상 swap.
+      // snap-left/snap-right 분기 없음 — 사용자가 명시적으로 교체를 선택한 상태.
       newDraggedStart = round1(primary.origStart);
       newDraggedEnd = round1(newDraggedStart + draggedDuration);
-      var primaryNewStart = round1(d.origStart);
-      var primaryNewEnd = round1(primaryNewStart + primary.duration);
+      var primarySwapStart = round1(d.origStart);
+      var primarySwapEnd = round1(primarySwapStart + primary.duration);
       edits[primary.id] = {
         beforeStart: primary.origStart, beforeEnd: primary.origEnd,
-        afterStart: primaryNewStart, afterEnd: primaryNewEnd
+        afterStart: primarySwapStart, afterEnd: primarySwapEnd
       };
+    } else {
+      var primaryCenter = primary.origStart + primary.duration / 2;
+      if (draggedEnd <= primaryCenter) {
+        // snap-left: primary 왼쪽 가장자리에 붙임 (primary는 그대로)
+        newDraggedStart = round1(Math.max(0, primary.origStart - draggedDuration));
+        newDraggedEnd = round1(newDraggedStart + draggedDuration);
+      } else if (draggedStart >= primaryCenter) {
+        // snap-right: primary 오른쪽 가장자리에 붙임 (primary는 그대로)
+        newDraggedStart = round1(primary.origEnd);
+        newDraggedEnd = round1(newDraggedStart + draggedDuration);
+      } else {
+        // swap: 두 클립 위치 교환
+        newDraggedStart = round1(primary.origStart);
+        newDraggedEnd = round1(newDraggedStart + draggedDuration);
+        var primaryNewStart = round1(d.origStart);
+        var primaryNewEnd = round1(primaryNewStart + primary.duration);
+        edits[primary.id] = {
+          beforeStart: primary.origStart, beforeEnd: primary.origEnd,
+          afterStart: primaryNewStart, afterEnd: primaryNewEnd
+        };
+      }
     }
     edits[d.clipId] = {
       beforeStart: d.origStart, beforeEnd: d.origEnd,
@@ -4454,6 +4489,13 @@
     window.removeEventListener('pointerup', onWindowPointerUp, true);
     window.removeEventListener('pointercancel', onWindowPointerUp, true);
     var d = state.drag;
+    // swap 모드 timer/class cleanup
+    if (d.swapModeTimer) {
+      try { clearTimeout(d.swapModeTimer); } catch (_) {}
+      d.swapModeTimer = 0;
+    }
+    try { d.clipEl.classList.remove('is-swap-mode'); } catch (_) {}
+    try { document.body.classList.remove('postprod-swap-mode'); } catch (_) {}
     d.clipEl.classList.remove('is-dragging');
     document.body.classList.remove('postprod-dragging');
     document.body.classList.remove('postprod-reordering');
