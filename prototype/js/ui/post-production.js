@@ -1328,11 +1328,13 @@
     try { video.currentTime = target; } catch (_) { return; }
     // 재생 중이면 wake 불필요 (이미 디코더 활성)
     if (state.isPlaying) return;
-    // paused 비디오: muted play로 디코더 강제 wake → 프레임 갱신 보장
-    if (video.paused) {
-      try { video.muted = true; } catch (_) {}
-      try { video.play().catch(function () { }); } catch (_) {}
-    }
+    // paused 가드 없이 항상 muted + play() 호출. 이미 playing이면 브라우저가
+    // no-op으로 처리하지만, 'playing 중인데 디코더가 suspend된' 상태(warm
+    // pre-play 후 다른 클립으로 갔다가 돌아온 경우 등)에서도 명시적 wake가 일어남.
+    // 이전엔 if (video.paused) 가드 때문에 'warm으로 인해 playing 중인 첫 도달
+    // 클립'은 wake가 스킵되어 화면이 정지되는 비결정적 동작이 발생했다.
+    try { video.muted = true; } catch (_) {}
+    try { video.play().catch(function () { }); } catch (_) {}
     // snap-back: 80ms 후 pause + 정확 위치로 복귀 (drift 방지)
     if (video.__scrubPauseTimer) {
       clearTimeout(video.__scrubPauseTimer);
