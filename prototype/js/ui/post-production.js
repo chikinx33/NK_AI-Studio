@@ -4239,104 +4239,25 @@
     if (Math.abs(dx) > 3) d.moved = true;
     var minLen = 0.2;
 
-    // ── Move + 순차 트랙: 자유 reorder (이웃 클립을 넘어 순서 변경 가능) ──
+    // ── Move + 순차 트랙: 드래그 중에는 끌리는 클립만 자유 이동.
+    // 다른 클립(멈춰있는 클립)은 절대 움직이지 않는다 — preview swap 금지.
+    // snap/swap 결정은 마우스 놓을 때(endClipDrag)에서 수행.
     if (d.mode === 'move' && d.sequential && d.origSiblings && d.origSiblings.length > 1) {
-      var trackStart = d.origSiblings[0].origStart;
-      var trackEnd = d.origSiblings[d.origSiblings.length - 1].origEnd;
-      // 자유 모드 검사: 드래그 위치가 다른 sibling 어떤 것과도 겹치지 않으면
-      // packing 없이 그 위치에 자유 배치 (가운데 빈 공간 / 트랙 끝 너머 모두 허용).
-      // 사용자가 마지막 클립을 삭제한 후 남은 클립을 빈 공간으로 옮길 수 있도록.
       var rawStart = Math.max(0, d.origStart + deltaSec);
       var rawEnd = rawStart + d.duration;
-      var overlapsAnySibling = false;
-      for (var fi = 0; fi < d.origSiblings.length; fi++) {
-        var fsib = d.origSiblings[fi];
-        if (fsib.id === d.clipId) continue;
-        if (rawStart < fsib.origEnd && rawEnd > fsib.origStart) {
-          overlapsAnySibling = true;
-          break;
-        }
+      // 다른 sibling들을 모두 origin 위치로 복귀 (혹시 이전에 잔여 변경이 있었다면)
+      for (var ri = 0; ri < d.origSiblings.length; ri++) {
+        var rsib = d.origSiblings[ri];
+        if (rsib.id === d.clipId) continue;
+        var rEl = document.querySelector('.postprod-clip[data-clip-id="' + rsib.id + '"]');
+        if (rEl) updateClipElement(rEl, rsib.origStart, rsib.origEnd, { skipOverlapCheck: true });
       }
-      if (!overlapsAnySibling) {
-        var nsFree = round1(rawStart);
-        var neFree = round1(rawEnd);
-        // 이전 frame에서 reorder packing이 적용됐을 수 있으니 다른 클립들을 origin으로 복귀
-        for (var ri = 0; ri < d.origSiblings.length; ri++) {
-          var rsib = d.origSiblings[ri];
-          if (rsib.id === d.clipId) continue;
-          var rEl = document.querySelector('.postprod-clip[data-clip-id="' + rsib.id + '"]');
-          if (rEl) updateClipElement(rEl, rsib.origStart, rsib.origEnd, { skipOverlapCheck: true });
-        }
-        updateClipElement(d.clipEl, nsFree, neFree, { skipOverlapCheck: true });
-        d.nextStart = nsFree;
-        d.nextEnd = neFree;
-        d.reorderedEdits = null;
-        return;
-      }
-      // ── 겹침 처리: 단순 2-클립 swap 또는 가장자리 snap (packing 안 함) ──
-      // 드래그 클립이 다른 sibling과 겹쳤을 때, packing으로 모든 클립을 trackStart부터
-      // 채우면 사용자가 만든 빈 공간이 다 닫혀버린다. 대신:
-      //  · 가장 많이 겹친 sibling 1개를 'primary'로 결정
-      //  · 드래그 중심이 primary의 중심을 넘었으면 → 두 클립의 위치를 swap
-      //  · 안 넘었으면 → primary의 가까운 가장자리로 snap (no overlap)
-      // 다른 클립들은 절대 건드리지 않아 빈 공간 유지.
-      var draggedCenter = rawStart + d.duration / 2;
-      var primary = null;
-      var primaryOverlap = 0;
-      for (var pi = 0; pi < d.origSiblings.length; pi++) {
-        var psib = d.origSiblings[pi];
-        if (psib.id === d.clipId) continue;
-        if (rawStart >= psib.origEnd || rawEnd <= psib.origStart) continue;
-        var ovStart = Math.max(rawStart, psib.origStart);
-        var ovEnd = Math.min(rawEnd, psib.origEnd);
-        var ov = ovEnd - ovStart;
-        if (ov > primaryOverlap) {
-          primaryOverlap = ov;
-          primary = psib;
-        }
-      }
-      // 다른 sibling들은 모두 origin 위치로 복귀 (이전 frame swap 잔여물 제거)
-      for (var ri2 = 0; ri2 < d.origSiblings.length; ri2++) {
-        var rs = d.origSiblings[ri2];
-        if (rs.id === d.clipId || (primary && rs.id === primary.id)) continue;
-        var rEl2 = document.querySelector('.postprod-clip[data-clip-id="' + rs.id + '"]');
-        if (rEl2) updateClipElement(rEl2, rs.origStart, rs.origEnd, { skipOverlapCheck: true });
-      }
-      var primaryCenter = primary.origStart + primary.duration / 2;
-      var draggedNs, draggedNe, primaryNs, primaryNe;
-      if (draggedCenter < primaryCenter) {
-        // 중심 미통과: primary 왼쪽 가장자리에 snap (primary는 그대로)
-        draggedNs = round1(Math.max(0, primary.origStart - d.duration));
-        draggedNe = round1(draggedNs + d.duration);
-        primaryNs = primary.origStart;
-        primaryNe = primary.origEnd;
-        // primary는 origin 그대로 두기만 하면 됨 (위 복귀 루프에서 제외했지만 갱신은 별도)
-        var pEl = document.querySelector('.postprod-clip[data-clip-id="' + primary.id + '"]');
-        if (pEl) updateClipElement(pEl, primaryNs, primaryNe, { skipOverlapCheck: true });
-      } else {
-        // 중심 통과: 두 클립 위치 swap
-        draggedNs = round1(primary.origStart);
-        draggedNe = round1(draggedNs + d.duration);
-        primaryNs = round1(d.origStart);
-        primaryNe = round1(primaryNs + primary.duration);
-        var pEl2 = document.querySelector('.postprod-clip[data-clip-id="' + primary.id + '"]');
-        if (pEl2) updateClipElement(pEl2, primaryNs, primaryNe, { skipOverlapCheck: true });
-      }
-      updateClipElement(d.clipEl, draggedNs, draggedNe, { skipOverlapCheck: true });
-      d.nextStart = draggedNs;
-      d.nextEnd = draggedNe;
-      var swapEdits = {};
-      swapEdits[d.clipId] = {
-        beforeStart: d.origStart, beforeEnd: d.origEnd,
-        afterStart: draggedNs, afterEnd: draggedNe
-      };
-      if (Math.abs(primary.origStart - primaryNs) > 0.001 || Math.abs(primary.origEnd - primaryNe) > 0.001) {
-        swapEdits[primary.id] = {
-          beforeStart: primary.origStart, beforeEnd: primary.origEnd,
-          afterStart: primaryNs, afterEnd: primaryNe
-        };
-      }
-      d.reorderedEdits = swapEdits;
+      var nsFree = round1(rawStart);
+      var neFree = round1(rawEnd);
+      updateClipElement(d.clipEl, nsFree, neFree, { skipOverlapCheck: true });
+      d.nextStart = nsFree;
+      d.nextEnd = neFree;
+      d.reorderedEdits = null; // endClipDrag에서 최종 위치 기준으로 결정
       return;
     }
 
@@ -4396,6 +4317,62 @@
     return false;
   }
 
+  // 드래그 종료 시 sequential 모드의 최종 위치를 검사해 snap/swap을 결정.
+  // 규칙:
+  //  - 드래그 클립이 다른 sibling과 안 겹치면 → 자유 배치 (그대로)
+  //  - 겹친 sibling 중 가장 많이 겹친 1개를 primary로 결정
+  //  - 드래그 우측 가장자리가 primary 중심선보다 왼쪽 → snap-left (primary 왼쪽에 붙임)
+  //  - 드래그 좌측 가장자리가 primary 중심선보다 오른쪽 → snap-right (primary 오른쪽에 붙임)
+  //  - 드래그가 primary 중심선을 가로지름 → swap (두 클립 위치 교환)
+  // snap의 경우 primary는 그대로, swap의 경우 두 클립만 위치 교환 (다른 클립 안 건드림)
+  function resolveSnapOrSwap(d) {
+    if (!d || !d.sequential || !d.origSiblings || d.origSiblings.length <= 1) return null;
+    var draggedStart = d.nextStart;
+    var draggedEnd = d.nextEnd;
+    var draggedDuration = d.duration;
+    var primary = null;
+    var primaryOverlap = 0;
+    for (var pi = 0; pi < d.origSiblings.length; pi++) {
+      var psib = d.origSiblings[pi];
+      if (psib.id === d.clipId) continue;
+      if (draggedStart >= psib.origEnd || draggedEnd <= psib.origStart) continue;
+      var ovStart = Math.max(draggedStart, psib.origStart);
+      var ovEnd = Math.min(draggedEnd, psib.origEnd);
+      var ov = ovEnd - ovStart;
+      if (ov > primaryOverlap) { primaryOverlap = ov; primary = psib; }
+    }
+    if (!primary) return null; // 자유 배치 — 변경 없음
+
+    var primaryCenter = primary.origStart + primary.duration / 2;
+    var edits = {};
+    var newDraggedStart, newDraggedEnd;
+
+    if (draggedEnd <= primaryCenter) {
+      // snap-left: primary 왼쪽 가장자리에 붙임 (primary는 그대로)
+      newDraggedStart = round1(Math.max(0, primary.origStart - draggedDuration));
+      newDraggedEnd = round1(newDraggedStart + draggedDuration);
+    } else if (draggedStart >= primaryCenter) {
+      // snap-right: primary 오른쪽 가장자리에 붙임 (primary는 그대로)
+      newDraggedStart = round1(primary.origEnd);
+      newDraggedEnd = round1(newDraggedStart + draggedDuration);
+    } else {
+      // swap: 두 클립 위치 교환
+      newDraggedStart = round1(primary.origStart);
+      newDraggedEnd = round1(newDraggedStart + draggedDuration);
+      var primaryNewStart = round1(d.origStart);
+      var primaryNewEnd = round1(primaryNewStart + primary.duration);
+      edits[primary.id] = {
+        beforeStart: primary.origStart, beforeEnd: primary.origEnd,
+        afterStart: primaryNewStart, afterEnd: primaryNewEnd
+      };
+    }
+    edits[d.clipId] = {
+      beforeStart: d.origStart, beforeEnd: d.origEnd,
+      afterStart: newDraggedStart, afterEnd: newDraggedEnd
+    };
+    return { edits: edits, draggedStart: newDraggedStart, draggedEnd: newDraggedEnd };
+  }
+
   function endClipDrag() {
     if (!state.drag) return;
     window.removeEventListener('pointermove', onWindowPointerMove, true);
@@ -4405,6 +4382,14 @@
     d.clipEl.classList.remove('is-dragging');
     document.body.classList.remove('postprod-dragging');
     document.body.classList.remove('postprod-reordering');
+
+    // 드래그 종료 시점에 snap/swap 결정 (sequential 모드만)
+    var resolved = resolveSnapOrSwap(d);
+    if (resolved) {
+      d.reorderedEdits = resolved.edits;
+      d.nextStart = resolved.draggedStart;
+      d.nextEnd = resolved.draggedEnd;
+    }
 
     // ── 순차 트랙 reorder 커밋 ──
     if (d.reorderedEdits && Object.keys(d.reorderedEdits).length > 0) {
