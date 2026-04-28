@@ -4435,7 +4435,10 @@
     if (idx >= 0) track.clips.splice(idx + 1, 0, newClip);
     else track.clips.push(newClip);
 
-    // sessionEdits에 저장 → post.render() 재구축 시에도 유지
+    // sessionEdits에 저장 → post.render() 재구축 시에도 유지.
+    // url/label/empty/baseDuration도 함께 보존: 사용자가 원본(좌측) 클립을 삭제하면
+    // applyTimelineEdits가 deleted 필터를 먼저 돌려 sourceClip이 null이 되므로,
+    // edit에 직접 저장해 두지 않으면 우측 클립의 URL이 사라져 검은 화면이 된다.
     var edits = state.sessionEdits || (state.sessionEdits = {});
     edits[newId] = {
       isNew: true,
@@ -4443,7 +4446,11 @@
       trackKey: track.key,
       start: t,
       end: origEnd,
-      videoOffset: newVideoOffset
+      videoOffset: newVideoOffset,
+      url: clip.url || '',
+      label: clip.label || '',
+      empty: !!clip.empty,
+      baseDuration: Math.max(minLen, origEnd - t)
     };
 
     pushHistory({
