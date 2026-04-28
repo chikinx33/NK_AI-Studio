@@ -855,6 +855,49 @@
     return detail;
   }
 
+  // 프로덕션에서 저장된 상태로 타임라인 초기화.
+  // 모든 postprod 편집(이동/리사이즈/삭제/분할/모션/오버레이)을 제거하고
+  // buildTimelineModel이 raw scene 데이터로 재구성하도록 한다.
+  function resetToProductionState() {
+    if (state.saveBusy) return;
+    var msg = '타임라인을 프로덕션 저장 시점으로 초기화합니다.\n\n' +
+      '이 작업은 모든 편집(이동·리사이즈·자르기·삭제·모션·오버레이)을 되돌립니다.\n계속할까요?';
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm(msg)) return;
+
+    // 1) in-memory 세션 편집 초기화
+    state.sessionEdits = {};
+    state.overlayClips = [];
+    state.history = [];
+    state.historyIndex = -1;
+    state.selectedClipId = '';
+    state.dirty = false;
+
+    // 2) 저장된 postprod 편집을 비워서 즉시 영속화
+    var svc = getPostprodStateService();
+    if (svc && svc.applySavedPostProductionPayload && state.projectId) {
+      try {
+        svc.applySavedPostProductionPayload(state.projectId, {
+          postTimelineEdits: {}
+        });
+      } catch (_) { }
+    }
+
+    // 3) 프로젝트 payload의 overlayClips도 비움
+    var project = getProjectByStateId();
+    if (project && project.payload) {
+      project.payload.overlayClips = [];
+    }
+
+    // 4) 프리뷰 캐시 초기화 + 재생 정지
+    stopPlayback();
+    clearPreviewVideoCache();
+
+    // 5) 렌더 + 재생 위치 리셋 후 전체 재구축
+    state.currentTime = 0;
+    post.render();
+    showMessageDialog('프로덕션 저장 상태로 초기화되었습니다.', '초기화 완료');
+  }
+
   async function saveProjectNow(options) {
     options = options || {};
     if (state.saveBusy) return false;
@@ -3645,6 +3688,7 @@
       '<span id="postprod-render-badge" class="postprod-render-badge ' + getRenderStatusClass(status) + '">' + getRenderStatusLabel(status) + '</span>' +
       '</div>' +
       '<div class="postprod-render-actions top">' +
+      '<button class="btn-secondary compact postprod-reset-btn" id="postprod-reset-btn" type="button" title="' + t('프로덕션 저장 상태로 초기화') + '">' + t('초기화') + '</button>' +
       '<button class="btn-primary compact postprod-save-btn" id="postprod-save-btn"' + (state.saveBusy ? ' disabled' : '') + '>' + (state.saveBusy ? t('저장 중...') : t('저장하기')) + '</button>' +
       '<button class="btn-secondary compact" id="postprod-render-btn">' + t('렌더링') + '</button>' +
       '<button class="btn-secondary compact" id="postprod-storage-btn">' + t('저장소') + '</button>' +
@@ -4497,6 +4541,8 @@
     if (delBtn) delBtn.onclick = deleteSelectedClip;
     var saveBtn = document.getElementById('postprod-save-btn');
     if (saveBtn) saveBtn.onclick = saveProjectNow;
+    var resetBtn = document.getElementById('postprod-reset-btn');
+    if (resetBtn) resetBtn.onclick = resetToProductionState;
     var renderBtn = document.getElementById('postprod-render-btn');
     if (renderBtn) renderBtn.onclick = function () { startRenderProcess(false); };
     var storageBtn = document.getElementById('postprod-storage-btn');
