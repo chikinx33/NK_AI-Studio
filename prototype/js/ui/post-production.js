@@ -3747,14 +3747,17 @@
     }
   }
 
-  function updateClipElement(clipEl, start, end) {
+  function updateClipElement(clipEl, start, end, opts) {
     if (!clipEl || !state.model) return;
     var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
     var left = Math.round((start / duration) * state.laneWidth);
     var width = Math.max(8, Math.round(((end - start) / duration) * state.laneWidth));
-    // 같은 트랙의 다음 클립을 덮지 않도록 폭을 보정 (드래그 중 시각 겹침 방지)
+    // 같은 트랙의 다음 클립을 덮지 않도록 폭을 보정 (드래그 중 시각 겹침 방지).
+    // reorder 중에는 다른 클립들도 같은 호출 사이클에서 위치가 바뀌므로 STATE 기준
+    // 보정은 잘못된 결과를 낸다 → 호출자가 skipOverlapCheck로 우회.
     var ownIdAttr = clipEl.getAttribute('data-clip-id');
-    if (ownIdAttr) {
+    var skipOverlap = !!(opts && opts.skipOverlapCheck);
+    if (ownIdAttr && !skipOverlap) {
       var meta = findClipMeta(ownIdAttr);
       if (meta && meta.track && Array.isArray(meta.track.clips)) {
         var siblings = meta.track.clips;
@@ -4103,13 +4106,17 @@
       var floatStart = clamp(d.origStart + deltaSec, trackStart, Math.max(trackStart, trackEnd - d.duration));
       var floatCenter = floatStart + d.duration / 2;
 
-      // 드래그 클립의 중심이 각 이웃 중심보다 오른쪽이면 순서 +1
+      // 드래그 클립의 중심이 각 이웃의 "가까운 가장자리"를 넘으면 순서 +1.
+      // - 이웃이 왼쪽에 있으면 가까운 가장자리 = origEnd (이웃의 오른쪽)
+      // - 이웃이 오른쪽에 있으면 가까운 가장자리 = origStart (이웃의 왼쪽)
+      // 중심-vs-중심보다 훨씬 빨리 swap이 발동되어 짧은 클립을 긴 클립 위로
+      // 살짝 끌어도 자리바꿈이 일어남.
       var newIdx = 0;
       for (var ii = 0; ii < d.origSiblings.length; ii++) {
         var sibA = d.origSiblings[ii];
         if (sibA.id === d.clipId) continue;
-        var sibCenter = sibA.origStart + sibA.duration / 2;
-        if (sibCenter < floatCenter) newIdx++;
+        var swapPoint = sibA.origStart < d.origStart ? sibA.origEnd : sibA.origStart;
+        if (swapPoint < floatCenter) newIdx++;
       }
 
       // 새 순서: 드래그 클립 제외한 이웃들 + 드래그 클립을 newIdx 위치에 삽입
@@ -4117,7 +4124,9 @@
       var selfEntry = { id: d.clipId, duration: d.duration };
       var newOrder = otherSibs.slice(0, newIdx).concat([selfEntry]).concat(otherSibs.slice(newIdx));
 
-      // 순차 패킹: trackStart부터 각 클립 duration 만큼씩 할당
+      // 순차 패킹: trackStart부터 각 클립 duration 만큼씩 할당.
+      // 같은 사이클에서 여러 클립을 옮기므로 STATE 기준 겹침 보정은 잘못된
+      // 결과를 낸다 → updateClipElement에 skipOverlapCheck 플래그로 우회.
       var t = trackStart;
       var edits = {};
       for (var oi = 0; oi < newOrder.length; oi++) {
@@ -4125,7 +4134,7 @@
         var ns = round1(t);
         var ne = round1(t + entry.duration);
         var el = document.querySelector('.postprod-clip[data-clip-id="' + entry.id + '"]');
-        if (el) updateClipElement(el, ns, ne);
+        if (el) updateClipElement(el, ns, ne, { skipOverlapCheck: true });
         if (entry.id === d.clipId) {
           d.nextStart = ns;
           d.nextEnd = ne;
