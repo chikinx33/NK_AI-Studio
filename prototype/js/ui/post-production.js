@@ -4239,6 +4239,36 @@
     window.addEventListener('pointercancel', onWindowPointerUp, true);
   }
 
+  // Shift 스냅 헬퍼: 후보 위치 candidatePos를 다른 클립들의 시작/끝점 또는 t=0에
+  // 흡착시킨다. thresholdSec 안에 있는 가장 가까운 스냅 포인트를 선택, 없으면 원본
+  // 후보 위치 그대로 반환. siblings는 동일 트랙의 클립들 (origSiblings).
+  function snapShiftPos(candidatePos, siblings, ownId, thresholdSec) {
+    var bestPos = candidatePos;
+    var bestDist = Infinity;
+    if (siblings && siblings.length) {
+      for (var i = 0; i < siblings.length; i++) {
+        var sib = siblings[i];
+        if (!sib || sib.id === ownId) continue;
+        var targets = [sib.origStart, sib.origEnd];
+        for (var t = 0; t < targets.length; t++) {
+          var tt = targets[t];
+          var dd = Math.abs(tt - candidatePos);
+          if (dd < thresholdSec && dd < bestDist) {
+            bestDist = dd;
+            bestPos = tt;
+          }
+        }
+      }
+    }
+    // t=0 (타임라인 시작)에도 스냅
+    var dz = Math.abs(candidatePos - 0);
+    if (dz < thresholdSec && dz < bestDist) {
+      bestDist = dz;
+      bestPos = 0;
+    }
+    return bestPos;
+  }
+
   function updateClipDrag(evt) {
     if (!state.drag || !state.model) return;
     var d = state.drag;
@@ -4247,12 +4277,26 @@
     var deltaSec = (dx / state.laneWidth) * duration;
     if (Math.abs(dx) > 3) d.moved = true;
     var minLen = 0.2;
+    // Shift 키 누르고 있으면 다른 클립 시작/끝점에 자동 흡착 (8px 화면 거리 기준)
+    var shiftHeld = !!(evt && evt.shiftKey);
+    var pixelsPerSec = state.laneWidth / Math.max(1, duration);
+    var snapThresholdSec = 8 / Math.max(1, pixelsPerSec);
+    var snapSiblings = d.origSiblings || [];
 
     // ── Move + 순차 트랙: 드래그 중에는 끌리는 클립만 자유 이동.
     // 다른 클립(멈춰있는 클립)은 절대 움직이지 않는다 — preview swap 금지.
     // snap/swap 결정은 마우스 놓을 때(endClipDrag)에서 수행.
     if (d.mode === 'move' && d.sequential && d.origSiblings && d.origSiblings.length > 1) {
       var rawStart = Math.max(0, d.origStart + deltaSec);
+      // Shift 스냅: 좌측 가장자리 또는 우측 가장자리 중 더 가까운 쪽을 흡착
+      if (shiftHeld) {
+        var snapL = snapShiftPos(rawStart, snapSiblings, d.clipId, snapThresholdSec);
+        var snapR = snapShiftPos(rawStart + d.duration, snapSiblings, d.clipId, snapThresholdSec);
+        var dL = Math.abs(snapL - rawStart);
+        var dR = Math.abs(snapR - (rawStart + d.duration));
+        if (dL <= dR && dL < snapThresholdSec) rawStart = Math.max(0, snapL);
+        else if (dR < snapThresholdSec) rawStart = Math.max(0, snapR - d.duration);
+      }
       var rawEnd = rawStart + d.duration;
       // 다른 sibling들을 모두 origin 위치로 복귀 (혹시 이전에 잔여 변경이 있었다면)
       for (var ri = 0; ri < d.origSiblings.length; ri++) {
@@ -4284,14 +4328,28 @@
       var maxStart = nextStart - d.duration;
       if (maxStart < minStart) maxStart = minStart;
       start = clamp(d.origStart + deltaSec, minStart, maxStart);
-      start = clamp(snap(start), minStart, maxStart);
+      if (shiftHeld) {
+        var snapLm = snapShiftPos(start, snapSiblings, d.clipId, snapThresholdSec);
+        var snapRm = snapShiftPos(start + d.duration, snapSiblings, d.clipId, snapThresholdSec);
+        var dLm = Math.abs(snapLm - start);
+        var dRm = Math.abs(snapRm - (start + d.duration));
+        if (dLm <= dRm && dLm < snapThresholdSec) start = clamp(snapLm, minStart, maxStart);
+        else if (dRm < snapThresholdSec) start = clamp(snapRm - d.duration, minStart, maxStart);
+      } else {
+        start = clamp(snap(start), minStart, maxStart);
+      }
       end = start + d.duration;
     } else if (d.mode === 'resize-left') {
       var leftMin = prevEnd;
       var leftMax = d.origEnd - minLen;
       if (leftMax < leftMin) leftMax = leftMin;
       start = clamp(d.origStart + deltaSec, leftMin, leftMax);
-      start = clamp(snap(start), leftMin, leftMax);
+      if (shiftHeld) {
+        var snappedL = snapShiftPos(start, snapSiblings, d.clipId, snapThresholdSec);
+        start = clamp(snappedL, leftMin, leftMax);
+      } else {
+        start = clamp(snap(start), leftMin, leftMax);
+      }
       end = d.origEnd;
     } else if (d.mode === 'resize-right') {
       start = d.origStart;
@@ -4299,7 +4357,12 @@
       var rightMax = nextStart;
       if (rightMax < rightMin) rightMax = rightMin;
       end = clamp(d.origEnd + deltaSec, rightMin, rightMax);
-      end = clamp(snap(end), rightMin, rightMax);
+      if (shiftHeld) {
+        var snappedR = snapShiftPos(end, snapSiblings, d.clipId, snapThresholdSec);
+        end = clamp(snappedR, rightMin, rightMax);
+      } else {
+        end = clamp(snap(end), rightMin, rightMax);
+      }
     }
 
     d.nextStart = round1(clamp(start, 0, upperLimit));
