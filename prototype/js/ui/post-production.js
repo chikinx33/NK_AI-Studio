@@ -2533,6 +2533,10 @@
       newClipsByTrack[key].push({ id: clipId, edit: edit });
     });
 
+    // 사용자가 클립을 totalDuration 너머로 끌어 타임라인을 늘릴 수 있도록 상한을
+    // totalDuration이 아닌 generous 값으로 둔다. 최종 totalDuration은 maxEnd에서
+    // 자동 갱신됨.
+    var clampUpper = Math.max(model.totalDuration, model.totalDuration + 600, 7200); // 최대 2시간
     model.tracks.forEach(function (track) {
       var clips = Array.isArray(track.clips) ? track.clips : [];
       track.clips = clips.map(function (clip) {
@@ -2544,8 +2548,8 @@
         if (edit.deleted === true) {
           return null;
         }
-        var start = clamp(toNumber(edit.start, clip.start), 0, Math.max(0, model.totalDuration - 0.2));
-        var end = clamp(toNumber(edit.end, clip.end), start + 0.2, model.totalDuration);
+        var start = clamp(toNumber(edit.start, clip.start), 0, Math.max(0, clampUpper - 0.2));
+        var end = clamp(toNumber(edit.end, clip.end), start + 0.2, clampUpper);
         maxEnd = Math.max(maxEnd, end);
         var motionPreset = edit.motionPreset || clip.motionPreset || 'none';
         return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset });
@@ -2556,8 +2560,8 @@
       newInTrack.forEach(function (item) {
         var edit = item.edit;
         var sourceClip = track.clips.find(function (c) { return c && c.id === edit.sourceId; }) || null;
-        var start = clamp(toNumber(edit.start, 0), 0, model.totalDuration - 0.2);
-        var end = clamp(toNumber(edit.end, start + 0.2), start + 0.2, model.totalDuration);
+        var start = clamp(toNumber(edit.start, 0), 0, clampUpper - 0.2);
+        var end = clamp(toNumber(edit.end, start + 0.2), start + 0.2, clampUpper);
         maxEnd = Math.max(maxEnd, end);
         var newClip = Object.assign({}, sourceClip || {}, {
           id: item.id,
@@ -2614,8 +2618,12 @@
   }
 
   function getNeighborBounds(clipMeta) {
+    // 마지막 클립의 nextStart는 totalDuration이 아니라 totalDuration + 600s로 두어
+    // 사용자가 끝 너머 자유롭게 끌어 타임라인을 늘릴 수 있게 한다.
+    var totalDur = state.model ? state.model.totalDuration : 0;
+    var freeRightLimit = totalDur + 600;
     if (!clipMeta || !clipMeta.track || !clipMeta.clip || !state.model) {
-      return { prevEnd: 0, nextStart: state.model ? state.model.totalDuration : 0 };
+      return { prevEnd: 0, nextStart: freeRightLimit };
     }
     var ownId = clipMeta.clip.id;
     var siblings = (clipMeta.track.clips || []).slice().sort(function (a, b) {
@@ -2628,7 +2636,7 @@
     var next = idx >= 0 && idx < siblings.length - 1 ? siblings[idx + 1] : null;
     return {
       prevEnd: prev ? prev.end : 0,
-      nextStart: next ? next.start : state.model.totalDuration
+      nextStart: next ? next.start : freeRightLimit
     };
   }
 
@@ -4231,6 +4239,36 @@
     if (d.mode === 'move' && d.sequential && d.origSiblings && d.origSiblings.length > 1) {
       var trackStart = d.origSiblings[0].origStart;
       var trackEnd = d.origSiblings[d.origSiblings.length - 1].origEnd;
+      // 자유 모드 검사: 드래그 위치가 다른 sibling 어떤 것과도 겹치지 않으면
+      // packing 없이 그 위치에 자유 배치 (가운데 빈 공간 / 트랙 끝 너머 모두 허용).
+      // 사용자가 마지막 클립을 삭제한 후 남은 클립을 빈 공간으로 옮길 수 있도록.
+      var rawStart = Math.max(0, d.origStart + deltaSec);
+      var rawEnd = rawStart + d.duration;
+      var overlapsAnySibling = false;
+      for (var fi = 0; fi < d.origSiblings.length; fi++) {
+        var fsib = d.origSiblings[fi];
+        if (fsib.id === d.clipId) continue;
+        if (rawStart < fsib.origEnd && rawEnd > fsib.origStart) {
+          overlapsAnySibling = true;
+          break;
+        }
+      }
+      if (!overlapsAnySibling) {
+        var nsFree = round1(rawStart);
+        var neFree = round1(rawEnd);
+        // 이전 frame에서 reorder packing이 적용됐을 수 있으니 다른 클립들을 origin으로 복귀
+        for (var ri = 0; ri < d.origSiblings.length; ri++) {
+          var rsib = d.origSiblings[ri];
+          if (rsib.id === d.clipId) continue;
+          var rEl = document.querySelector('.postprod-clip[data-clip-id="' + rsib.id + '"]');
+          if (rEl) updateClipElement(rEl, rsib.origStart, rsib.origEnd, { skipOverlapCheck: true });
+        }
+        updateClipElement(d.clipEl, nsFree, neFree, { skipOverlapCheck: true });
+        d.nextStart = nsFree;
+        d.nextEnd = neFree;
+        d.reorderedEdits = null;
+        return;
+      }
       var floatStart = clamp(d.origStart + deltaSec, trackStart, Math.max(trackStart, trackEnd - d.duration));
       var floatCenter = floatStart + d.duration / 2;
 
@@ -4284,10 +4322,12 @@
     }
 
     // ── 기본 경로: 이웃 경계 내에서만 이동/리사이즈 ──
+    // upperLimit: 사용자가 끝 너머로 자유롭게 끌 수 있도록 totalDuration+600s까지 허용
+    var upperLimit = state.model.totalDuration + 600;
     var start = d.origStart;
     var end = d.origEnd;
-    var prevEnd = clamp(d.prevBoundEnd, 0, state.model.totalDuration);
-    var nextStart = clamp(d.nextBoundStart, 0, state.model.totalDuration);
+    var prevEnd = clamp(d.prevBoundEnd, 0, upperLimit);
+    var nextStart = clamp(d.nextBoundStart, 0, upperLimit);
     var snap = function (v) { return roundToStep(v, state.snapStep); };
 
     if (d.mode === 'move') {
@@ -4313,8 +4353,8 @@
       end = clamp(snap(end), rightMin, rightMax);
     }
 
-    d.nextStart = round1(clamp(start, 0, state.model.totalDuration));
-    d.nextEnd = round1(clamp(end, d.nextStart + minLen, state.model.totalDuration));
+    d.nextStart = round1(clamp(start, 0, upperLimit));
+    d.nextEnd = round1(clamp(end, d.nextStart + minLen, upperLimit));
     updateClipElement(d.clipEl, d.nextStart, d.nextEnd);
   }
 
