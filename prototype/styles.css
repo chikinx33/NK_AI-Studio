@@ -6473,6 +6473,7 @@ html.page-shell-image #sidebar-project-card {
 }
 .postprod-mb-badge.deleted { background: rgba(220,53,69,0.18); color: #ff7070; border: 1px solid rgba(220,53,69,0.3); }
 .postprod-mb-badge.active { background: rgba(56,189,120,0.14); color: #5ae09f; border: 1px solid rgba(56,189,120,0.25); }
+.postprod-mb-badge.add { background: rgba(96,165,250,0.14); color: #93c5fd; border: 1px solid rgba(96,165,250,0.3); }
 .postprod-mb-actions { flex-shrink: 0; }
 .postprod-mb-in-timeline {
   font-size: 11px; color: var(--text-muted, rgba(255,255,255,0.3)); white-space: nowrap;

@@ -2063,6 +2063,45 @@
   // ── 미디어 브라우저 모달 ─────────────────────────────────────────────────
   var mediaBrowserModal = null;
 
+  // 한 씬/컷에서 영상과 이미지가 모두 있으면 각각 별도 카드로 노출.
+  // - 영상이 있으면 영상이 "primary"(타임라인 기본 클립과 동일 ID, 'vis-N' 또는 'vis-N-M')
+  // - 이미지가 있으면: 영상도 있을 땐 'alt'(합성 ID, isNew 신규 클립으로 추가됨)
+  //   영상이 없을 땐 이미지 자체가 primary
+  function buildMediaItemsForUnit(unitIdx, unitData, baseId, baseLabel, allEdits) {
+    var items = [];
+    var vidUrl = firstFilled([unitData.videoUrl, unitData.videoPlaybackUrl, unitData.outputVideoUrl, unitData.generatedVideoUrl, unitData.videoPath]);
+    var imgUrl = firstFilled([unitData.imageDataUrl, unitData.imagePath, unitData.generatedImageUrl, unitData.imageUrl]);
+    if (!vidUrl && !imgUrl) return items;
+    var primaryIsVideo = !!vidUrl;
+    if (vidUrl) {
+      var vidId = primaryIsVideo ? baseId : ('mb-alt-' + baseId + '-vid');
+      items.push({
+        id: vidId,
+        sourceId: baseId,
+        label: baseLabel,
+        url: vidUrl,
+        thumbUrl: imgUrl || vidUrl,
+        isVideo: true,
+        isPrimary: primaryIsVideo,
+        edit: allEdits[vidId] || null
+      });
+    }
+    if (imgUrl) {
+      var imgId = !primaryIsVideo ? baseId : ('mb-alt-' + baseId + '-img');
+      items.push({
+        id: imgId,
+        sourceId: baseId,
+        label: baseLabel,
+        url: imgUrl,
+        thumbUrl: imgUrl,
+        isVideo: false,
+        isPrimary: !primaryIsVideo,
+        edit: allEdits[imgId] || null
+      });
+    }
+    return items;
+  }
+
   function getProjectMediaItems() {
     var project = getProjectByStateId() || resolveProject();
     if (!project) return [];
@@ -2077,37 +2116,29 @@
       });
       if (shotsWithMedia.length) {
         shotsArr.forEach(function (sh, j) {
-          var vidUrl = firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath]);
-          var imgUrl = firstFilled([sh.imageDataUrl, sh.imagePath, sh.generatedImageUrl, sh.imageUrl]);
-          if (!vidUrl && !imgUrl) return;
-          var clipId = 'vis-' + i + '-' + j;
-          var edit = allEdits[clipId] || {};
-          items.push({
-            id: clipId,
-            label: '씬 ' + (i + 1) + ' · 컷 ' + (j + 1),
-            url: vidUrl || imgUrl,
-            thumbUrl: imgUrl || vidUrl,
-            isVideo: !!vidUrl,
-            deleted: edit.deleted === true
-          });
+          var baseId = 'vis-' + i + '-' + j;
+          var baseLabel = '씬 ' + (i + 1) + ' · 컷 ' + (j + 1);
+          items = items.concat(buildMediaItemsForUnit(i, sh, baseId, baseLabel, allEdits));
         });
       } else {
-        var vidUrl = firstFilled([scene.videoUrl, scene.videoPlaybackUrl, scene.outputVideoUrl, scene.generatedVideoUrl, scene.videoPath]);
-        var imgUrl = firstFilled([scene.imageDataUrl, scene.imagePath, scene.generatedImageUrl, scene.imageUrl]);
-        if (!vidUrl && !imgUrl) return;
-        var clipId = 'vis-' + i;
-        var edit = allEdits[clipId] || {};
-        items.push({
-          id: clipId,
-          label: '씬 ' + (i + 1),
-          url: vidUrl || imgUrl,
-          thumbUrl: imgUrl || vidUrl,
-          isVideo: !!vidUrl,
-          deleted: edit.deleted === true
-        });
+        var baseId = 'vis-' + i;
+        var baseLabel = '씬 ' + (i + 1);
+        items = items.concat(buildMediaItemsForUnit(i, scene, baseId, baseLabel, allEdits));
       }
     });
     return items;
+  }
+
+  // status: 'in_timeline' | 'restorable' | 'add'
+  function getMediaItemStatus(item) {
+    var edit = item.edit || {};
+    if (item.isPrimary) {
+      return edit.deleted === true ? 'restorable' : 'in_timeline';
+    }
+    // alternate (synthetic isNew 클립)
+    if (edit && edit.isNew && edit.deleted !== true) return 'in_timeline';
+    if (edit && edit.isNew && edit.deleted === true) return 'restorable';
+    return 'add';
   }
 
   function ensureMediaBrowserModal() {
@@ -2138,6 +2169,40 @@
     return mediaBrowserModal;
   }
 
+  // 미디어 브라우저에서 alternate(영상↔이미지 다른 쪽) 미디어를 타임라인에 추가.
+  // sessionEdits에 { isNew, sourceId, url, label, ... }로 등록 → applyTimelineEdits가
+  // visuals 트랙 끝에 새 클립으로 삽입.
+  function addAlternateMediaToTimeline(item) {
+    if (!item || !item.id || !item.url) return;
+    if (!state.model) return;
+    var visualTrack = getVisualTrack(state.model);
+    if (!visualTrack) return;
+    var clips = visualTrack.clips || [];
+    var lastEnd = 0;
+    for (var i = 0; i < clips.length; i++) {
+      var c = clips[i];
+      if (c && typeof c.end === 'number' && c.end > lastEnd) lastEnd = c.end;
+    }
+    var defaultDur = 3;
+    var ns = round1(lastEnd);
+    var ne = round1(lastEnd + defaultDur);
+    var edits = state.sessionEdits || (state.sessionEdits = {});
+    edits[item.id] = Object.assign({}, edits[item.id] || {}, {
+      isNew: true,
+      sourceId: item.sourceId || '',
+      trackKey: 'visuals',
+      start: ns,
+      end: ne,
+      url: item.url,
+      label: item.label + (item.isVideo ? ' · 영상' : ' · 이미지'),
+      empty: false,
+      deleted: false
+    });
+    state.sessionEdits = edits;
+    setDirty(true);
+    post.render();
+  }
+
   function openMediaBrowserModal() {
     var modal = ensureMediaBrowserModal();
     if (!modal) return;
@@ -2148,15 +2213,21 @@
       grid.innerHTML = '<p class="postprod-mb-empty">불러올 수 있는 미디어가 없습니다.</p>';
     } else {
       grid.innerHTML = items.map(function (item) {
+        var status = getMediaItemStatus(item);
         var thumbHtml = item.isVideo
           ? '<div class="postprod-mb-thumb postprod-mb-thumb-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M10 10l5 2.5-5 2.5V10z" fill="currentColor" stroke="none"/></svg></div>'
           : '<img class="postprod-mb-thumb" src="' + escapeHtml(toPlayableMediaUrl(item.thumbUrl) || '') + '" alt="" loading="lazy" />';
-        var badge = item.deleted
-          ? '<span class="postprod-mb-badge deleted">삭제됨</span>'
-          : '<span class="postprod-mb-badge active">타임라인</span>';
-        var btn = item.deleted
-          ? '<button class="btn-primary compact postprod-mb-action" data-clip-id="' + escapeHtml(item.id) + '" data-action="restore">복원</button>'
-          : '<span class="postprod-mb-in-timeline">타임라인에 있음</span>';
+        var badge, btn;
+        if (status === 'in_timeline') {
+          badge = '<span class="postprod-mb-badge active">타임라인</span>';
+          btn = '<span class="postprod-mb-in-timeline">타임라인에 있음</span>';
+        } else if (status === 'restorable') {
+          badge = '<span class="postprod-mb-badge deleted">삭제됨</span>';
+          btn = '<button class="btn-primary compact postprod-mb-action" data-mb-id="' + escapeHtml(item.id) + '" data-action="restore">복원</button>';
+        } else {
+          badge = '<span class="postprod-mb-badge add">미사용</span>';
+          btn = '<button class="btn-primary compact postprod-mb-action" data-mb-id="' + escapeHtml(item.id) + '" data-action="add">불러오기</button>';
+        }
         return '<div class="postprod-mb-item">' +
           thumbHtml +
           '<div class="postprod-mb-info">' +
@@ -2171,10 +2242,15 @@
         var btn = e.target.closest('[data-action]');
         if (!btn) return;
         var action = btn.dataset.action;
-        var clipId = btn.dataset.clipId;
-        if (action === 'restore' && clipId) {
-          persistTimelineDeleted(clipId, false);
+        var mbId = btn.dataset.mbId;
+        var found = items.filter(function (it) { return it.id === mbId; })[0];
+        if (!found) return;
+        if (action === 'restore') {
+          persistTimelineDeleted(found.id, false);
           post.render();
+          modal.close();
+        } else if (action === 'add') {
+          addAlternateMediaToTimeline(found);
           modal.close();
         }
       }, { once: true });
@@ -2448,11 +2524,13 @@
   function applyTimelineEdits(model, editMap) {
     var maxEnd = model.totalDuration;
 
-    // split으로 생성된 신규 클립 수집 (isNew:true 항목)
+    // split / 미디어 브라우저로 생성된 신규 클립 수집 (isNew:true 항목).
+    // deleted:true인 신규 클립은 사용자가 명시적으로 제거한 것이므로 스킵.
     var newClipsByTrack = {};
     Object.keys(editMap || {}).forEach(function (clipId) {
       var edit = editMap[clipId];
       if (!edit || !edit.isNew) return;
+      if (edit.deleted === true) return;
       var key = edit.trackKey || 'visuals';
       if (!newClipsByTrack[key]) newClipsByTrack[key] = [];
       newClipsByTrack[key].push({ id: clipId, edit: edit });
@@ -2492,6 +2570,15 @@
           videoOffset: typeof edit.videoOffset === 'number' ? edit.videoOffset : ((sourceClip && sourceClip.videoOffset) || 0),
           motionPreset: edit.motionPreset || (sourceClip && sourceClip.motionPreset) || 'none'
         });
+        // 미디어 브라우저로 추가된 alt 클립: url/label/empty 오버라이드 (다른 미디어로 교체).
+        // split 분할 클립은 이런 필드가 없으므로 sourceClip 값이 유지됨.
+        if (typeof edit.url === 'string' && edit.url) newClip.url = edit.url;
+        if (typeof edit.label === 'string' && edit.label) newClip.label = edit.label;
+        if (typeof edit.empty === 'boolean') newClip.empty = edit.empty;
+        // alt 클립은 새 소스 미디어이므로 videoOffset 기본 0
+        if (typeof edit.url === 'string' && edit.url && typeof edit.videoOffset !== 'number') {
+          newClip.videoOffset = 0;
+        }
         track.clips.push(newClip);
       });
       if (newInTrack.length > 0) {
