@@ -2889,11 +2889,11 @@
       var clips = track.clips || [];
       var clipsHtml = clips.map(function (clip, clipIdx) {
         var left = Math.round((clip.start / duration) * laneWidth);
-        var width = Math.max(36, Math.round(((clip.end - clip.start) / duration) * laneWidth));
+        var width = Math.max(8, Math.round(((clip.end - clip.start) / duration) * laneWidth));
         if (clipIdx < clips.length - 1) {
           var nextLeft = Math.round((clips[clipIdx + 1].start / duration) * laneWidth);
           if (left + width > nextLeft && nextLeft > left) {
-            width = nextLeft - left;
+            width = Math.max(2, nextLeft - left);
           }
         }
         var clipClass = 'postprod-clip' + (clip.empty ? ' is-empty' : '') + (state.selectedClipId === clip.id ? ' is-selected' : '');
@@ -3751,7 +3751,27 @@
     if (!clipEl || !state.model) return;
     var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
     var left = Math.round((start / duration) * state.laneWidth);
-    var width = Math.max(36, Math.round(((end - start) / duration) * state.laneWidth));
+    var width = Math.max(8, Math.round(((end - start) / duration) * state.laneWidth));
+    // 같은 트랙의 다음 클립을 덮지 않도록 폭을 보정 (드래그 중 시각 겹침 방지)
+    var ownIdAttr = clipEl.getAttribute('data-clip-id');
+    if (ownIdAttr) {
+      var meta = findClipMeta(ownIdAttr);
+      if (meta && meta.track && Array.isArray(meta.track.clips)) {
+        var siblings = meta.track.clips;
+        var nextLeftPx = Infinity;
+        for (var si = 0; si < siblings.length; si++) {
+          var sib = siblings[si];
+          if (!sib || sib.id === ownIdAttr) continue;
+          if (sib.start <= start) continue;
+          var sLeft = Math.round((sib.start / duration) * state.laneWidth);
+          if (sLeft <= left) continue;
+          if (sLeft < nextLeftPx) nextLeftPx = sLeft;
+        }
+        if (nextLeftPx !== Infinity && left + width > nextLeftPx) {
+          width = Math.max(2, nextLeftPx - left);
+        }
+      }
+    }
     clipEl.style.left = left + 'px';
     clipEl.style.width = width + 'px';
     clipEl.dataset.start = String(start);
@@ -4028,12 +4048,9 @@
         .map(function (c) {
           return { id: c.id, origStart: c.start, origEnd: c.end, duration: c.end - c.start };
         });
-      // 순차 트랙 판정: 모든 이웃이 간극 없이 붙어있으면 reorder 허용
+      // 다중 클립이면 reorder(자리바꿈) 항상 허용. 드래그 종료 시 트랙은
+      // 첫 클립의 origStart부터 차례대로 패킹되어 틈이 닫힘 — 자리바꿈 우선.
       sequential = origSiblings.length > 1;
-      for (var si = 1; si < origSiblings.length; si++) {
-        var gap = origSiblings[si].origStart - origSiblings[si - 1].origEnd;
-        if (gap > 0.05) { sequential = false; break; }
-      }
     }
 
     evt.preventDefault();
