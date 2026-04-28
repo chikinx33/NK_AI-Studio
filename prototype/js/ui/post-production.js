@@ -1417,7 +1417,15 @@
     if (!host) return null;
     var cache = state.previewVideoCache || (state.previewVideoCache = {});
     var existing = cache[playableUrl];
-    if (existing && existing.video) return existing;
+    if (existing && existing.video) {
+      // post.render → renderLayout이 host를 새로 만들면 캐시된 video는 옛(detached)
+      // host에 붙어있게 됨. 매번 현재 host에 재연결되는지 확인 (없으면 새 host에 append).
+      if (existing.video.parentNode !== host) {
+        host.appendChild(existing.video);
+        applyVideoLayerStyles(existing.video);
+      }
+      return existing;
+    }
     var video = document.createElement('video');
     video.className = 'postprod-video';
     video.preload = 'auto';
@@ -3533,14 +3541,9 @@
 
     // URL 기반 캐시: 같은 소스 URL을 쓰는 클립들(자른 조각들)은 동일 video 엘리먼트 공유.
     // URL이 같으면 src 재로드/디코더 재초기화 없이 seek만 변경됨 → 컷 클립 스크럽 매끄러움.
+    // mountPreviewVideoByUrl은 idempotent이며 parentNode/opacity를 보장하므로 항상 호출.
     var urlChanged = state.previewActiveUrl !== playableUrl;
-    var video;
-    if (urlChanged) {
-      video = mountPreviewVideoByUrl(playableUrl);
-    } else {
-      var existing = state.previewVideoCache && state.previewVideoCache[playableUrl];
-      video = existing && existing.video ? existing.video : mountPreviewVideoByUrl(playableUrl);
-    }
+    var video = mountPreviewVideoByUrl(playableUrl);
     if (!video) {
       host.style.display = 'none';
       image.style.display = 'none';
