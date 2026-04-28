@@ -1306,11 +1306,12 @@
     }, delay);
   }
 
-  // 스크럽 seek: 정확한 currentTime 할당을 사용한다.
-  // fastSeek은 가까운 키프레임으로 점프(키프레임 간격 1-2초 → 슬라이더를 작게
-  // 움직여도 같은 키프레임에 계속 떨어져 화면 프레임이 갱신되지 않는 현상 발생).
-  // currentTime은 타겟까지 디코딩이 필요해 약간 느리지만, wake play()로 디코더가
-  // 활성 상태를 유지하므로 실측 지연은 무시 가능.
+  // 스크럽 seek (통합 함수):
+  //   1) currentTime = target  — 정확한 위치로 즉시 seek
+  //   2) paused 비디오는 muted play()를 짧게 트리거 — Chromium은 paused 상태에서
+  //      currentTime 변경만으로 화면 프레임을 갱신하지 않을 때가 많아 강제 디코드 필요
+  //   3) 80ms 후 pause + snap-back  — 지속 스크럽 중에는 setTimeout이 매번 reset되어
+  //      auto-pause가 발생하지 않고, 사용자가 멈추면 정확 위치로 정착
   // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
   function scrubSeekVideo(video, t) {
     if (!video) return;
@@ -1323,7 +1324,31 @@
       video.addEventListener('loadedmetadata', onMeta);
       return;
     }
-    try { video.currentTime = target; } catch (_) { }
+    video.__scrubTarget = target;
+    try { video.currentTime = target; } catch (_) { return; }
+    // 재생 중이면 wake 불필요 (이미 디코더 활성)
+    if (state.isPlaying) return;
+    // paused 비디오: muted play로 디코더 강제 wake → 프레임 갱신 보장
+    if (video.paused) {
+      try { video.muted = true; } catch (_) {}
+      try { video.play().catch(function () { }); } catch (_) {}
+    }
+    // snap-back: 80ms 후 pause + 정확 위치로 복귀 (drift 방지)
+    if (video.__scrubPauseTimer) {
+      clearTimeout(video.__scrubPauseTimer);
+    }
+    video.__scrubPauseTimer = setTimeout(function () {
+      video.__scrubPauseTimer = 0;
+      if (state.isPlaying) return;
+      if (!video || video.paused) return;
+      try { video.pause(); } catch (_) {}
+      var t2 = video.__scrubTarget;
+      if (typeof t2 === 'number' && isFinite(t2)) {
+        if (Math.abs((video.currentTime || 0) - t2) > 0.01) {
+          try { video.currentTime = t2; } catch (_) {}
+        }
+      }
+    }, 80);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -3452,21 +3477,11 @@
         var fpVid = fpEntry && fpEntry.video;
         if (fpVid) {
           if (!state.isPlaying) {
-            // 스크럽 중: 타겟이 현재와 다를 때만 wake+seek. delta가 작으면 이미
-            // 프레임이 맞고 있으므로 wake로 play를 호출하지 않는다 — 아니면 muted
-            // play가 앞으로 흘러가 씬 시작 프레임이 몇 프레임 밀리는 버그 발생.
+            // 스크럽: 모든 이벤트마다 정확한 위치로 seek (scrubSeekVideo가 wake +
+            // 디코더 강제 디코드 + snap-back을 통합 처리). delta threshold 없음 —
+            // 작은 위치 변화도 정확히 반영되어 슬로우 스크럽도 부드럽게 동작.
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
-            var fpDelta = Math.abs((fpVid.currentTime || 0) - fpClipTime);
-            if (fpDelta > 0.03) {
-              wakeVideoDecoder(fpVid, fpClipTime);
-              scheduleScrubSeek('active:' + clip.id, fpVid, fpClipTime);
-            } else if (!fpVid.paused) {
-              // 이미 타겟 프레임에 있는데 이전 wake로 재생 중이면 즉시 정지
-              try { fpVid.pause(); } catch (_) {}
-              if (Math.abs((fpVid.currentTime || 0) - fpClipTime) > 0.008) {
-                try { fpVid.currentTime = fpClipTime; } catch (_) {}
-              }
-            }
+            scheduleScrubSeek('active:' + clip.id, fpVid, fpClipTime);
           } else {
             // 재생 중: 스크럽 wake로 인한 muted 상태를 해제하고, 멈춰있다면 재개
             if (fpVid.muted) { try { fpVid.muted = false; } catch (_) {} }
@@ -3561,21 +3576,9 @@
           video.play().catch(function () { });
         }
       } else {
-        // 스크럽(또는 씬 선택): 타겟 프레임 기록 + 디코더 wake + seek. 타겟과
-        // currentTime 차이가 작으면 wake를 생략해 muted play로 인한 프레임 밀림을 방지.
-        if (needsSeek) {
-          wakeVideoDecoder(video, liveClipTime);
-          scheduleScrubSeek('active:' + clip.id, video, liveClipTime);
-        } else {
-          // 이미 타겟 프레임에 있음 — 그냥 paused 상태만 보장
-          video.__scrubTarget = liveClipTime;
-          if (!video.paused) {
-            try { video.pause(); } catch (_) {}
-            if (Math.abs((video.currentTime || 0) - liveClipTime) > 0.008) {
-              try { video.currentTime = liveClipTime; } catch (_) {}
-            }
-          }
-        }
+        // 스크럽(또는 씬 선택): scrubSeekVideo가 seek + 디코더 wake + snap-back을
+        // 통합 처리. needsSeek 분기 없이 항상 호출 — 작은 위치 차이도 정확히 반영.
+        scheduleScrubSeek('active:' + clip.id, video, liveClipTime);
         try { video.muted = true; } catch (_) {}
       }
     }
