@@ -4508,7 +4508,7 @@
       d.nextEnd = resolved.draggedEnd;
     }
 
-    // ── 순차 트랙 reorder 커밋 ──
+    // ── 순차 트랙 reorder 커밋 (snap / swap 결과 적용) ──
     if (d.reorderedEdits && Object.keys(d.reorderedEdits).length > 0) {
       var editMap = d.reorderedEdits;
       Object.keys(editMap).forEach(function (id) {
@@ -4519,6 +4519,12 @@
           clipObj.end = e.afterEnd;
         }
         persistTimelineEdit(id, e.afterStart, e.afterEnd);
+        // 영향 받는 모든 클립의 DOM을 즉시 갱신.
+        // (swap 시 primary 클립의 DOM도 새 위치로 옮겨야 시각적으로 swap이 보임.
+        //  duration이 변하지 않는 swap에서는 recomputeModelTotalDuration이 false라
+        //  renderTimelineSection이 호출되지 않으므로 여기서 명시적으로 업데이트.)
+        var domEl = document.querySelector('.postprod-clip[data-clip-id="' + id + '"]');
+        if (domEl) updateClipElement(domEl, e.afterStart, e.afterEnd, { skipOverlapCheck: true });
       });
       pushHistory({
         type: 'reorder',
