@@ -708,11 +708,15 @@
         var video = renderEntry.source;
         try {
           loadedVisualCount += 1;
+          // videoOffset: 컷 편집으로 앞부분을 잘라낸 클립은 소스 영상의 시작 위치가
+          // clip.start가 아닌 videoOffset부터다. 무시하면 항상 영상 첫 장면이 렌더됨.
+          var videoOff = Number(clip.videoOffset) || 0;
           try { video.pause(); } catch (_) { }
-          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
+          try { await waitForVideoSeek(video, videoOff, 2500); } catch (_) { }
           var okVideo = await runSegment(duration, function (localElapsed) {
             drawBackground();
-            try { video.currentTime = clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
+            // seek: 소스 영상 내 절대 위치 = videoOffset + 클립 내 경과 시간
+            try { video.currentTime = videoOff + clamp(localElapsed, 0, Math.max(0, duration - 0.02)); } catch (_) { }
             var motionSvc = NK.service && NK.service.postprodMotion;
             var vMotion = motionSvc && clip.motionPreset && clip.motionPreset !== 'none'
               ? motionSvc.computeMotionFrame(clip.motionPreset, localElapsed / Math.max(0.2, duration))
@@ -826,16 +830,21 @@
   // 비디오 클립 전용 offline 렌더: 각 프레임마다 seek을 await해서 정확한 프레임을
   // 그린다. runSegmentOffline의 `video.currentTime = ...` 비동기 할당 방식은 이전
   // 프레임이 그대로 그려져 "정지 영상"처럼 보이는 품질 버그가 있음.
-  async function runVideoSegmentOffline(video, segmentDuration, clipMaxTime, drawFn, progressFn, shouldCancel, state) {
+  //
+  // videoOffset: 컷 편집으로 앞부분이 잘린 클립은 소스 영상에서 이 값부터 시작.
+  // 0이면 원본 그대로(컷 없음). seek = videoOffset + 클립 내 경과 시간.
+  async function runVideoSegmentOffline(video, segmentDuration, clipMaxTime, videoOffset, drawFn, progressFn, shouldCancel, state) {
     var fps = 30;
     var frameInterval = 1000000 / fps;
     var totalFrames = Math.max(1, Math.ceil(segmentDuration * fps));
-    var safeMax = Math.max(0, clipMaxTime - 0.02);
+    var voff = Number(videoOffset) || 0;
+    var safeMax = Math.max(voff, voff + clipMaxTime - 0.02);
     for (var i = 0; i < totalFrames; i++) {
       if (state.encoderError) return false;
       if (shouldCancel && shouldCancel()) return false;
       var t = Math.min(segmentDuration, i / fps);
-      var seekTime = Math.min(safeMax, t);
+      // 소스 영상 절대 위치 = videoOffset + 클립 내 경과 시간
+      var seekTime = Math.min(safeMax, voff + t);
       // seek + 프레임 presented 대기 (timeout 시 직전 프레임 그대로 진행)
       try { await awaitVideoFrameAt(video, seekTime, 400); } catch (_) { }
       if (state.encoderError) return false;
@@ -1056,10 +1065,13 @@
         var video = renderEntry.source;
         try {
           loadedVisualCount += 1;
+          // videoOffset: 컷 편집으로 앞부분을 잘라낸 클립은 소스 영상의 시작 위치가
+          // clip.start가 아닌 videoOffset부터다. 무시하면 항상 영상 첫 장면이 렌더됨.
+          var videoOffWC = Number(clip.videoOffset) || 0;
           try { video.pause(); } catch (_) { }
-          // 매 프레임 seek을 await하므로 초기 reset은 짧은 timeout으로 충분
-          try { await awaitVideoFrameAt(video, 0, 500); } catch (_) { }
-          var okVideo = await runVideoSegmentOffline(video, duration, duration, function (localElapsed) {
+          // 초기 seek → videoOffset 위치로 (기존 0은 잘못된 시작점)
+          try { await awaitVideoFrameAt(video, videoOffWC, 500); } catch (_) { }
+          var okVideo = await runVideoSegmentOffline(video, duration, duration, videoOffWC, function (localElapsed) {
             drawBackground();
             var motionSvc = NK.service && NK.service.postprodMotion;
             var vMotion = motionSvc && clip.motionPreset && clip.motionPreset !== 'none'
