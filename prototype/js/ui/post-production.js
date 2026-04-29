@@ -2319,11 +2319,21 @@
     var videos = [];
     var lang = currentLang();
     var cutFallback = lang === 'en' ? 'cut' : '컷 ';
-    // 그룹 라벨 미리 계산 → 프리/프로덕션과 1:1 일치
+    // 그룹 라벨 미리 계산 → 프리/프로덕션과 1:1 일치 (sceneLocation 기반 그룹화)
     var groupLabels = buildSceneGroupLabels(scenes, lang);
+    // 디버깅용: scene 구조 콘솔 로그 (scene.title이 'Scene N'으로 박혀있어 그룹화가
+    // 가려지는 것을 진단)
+    try {
+      var dbg = scenes.map(function (s, i) {
+        return { i: i, title: s && s.title, loc: s && s.sceneLocation, group: groupLabels[i] };
+      });
+      console.info('[postprod media-browser] scenes:', dbg);
+    } catch (_) {}
     scenes.forEach(function (scene, i) {
-      // scene.title이 명시 지정돼 있으면 우선, 없으면 그룹 기반 라벨 ('Scene 1 cut1' 등)
-      var sceneLabel = firstFilled([scene.title]) || groupLabels[i] || ((lang === 'en' ? 'Scene ' : '씬 ') + (i + 1));
+      // 항상 그룹 라벨 우선 사용 — 프리/프로덕션이 sceneLocation 기준 'Scene N cut M'
+      // 형식의 라벨을 화면에 쓰는 것과 일치시키기 위함. scene.title은 보통 시스템이
+      // 'Scene N'으로 저장해 둬서 우선 사용하면 cut 정보가 가려진다.
+      var sceneLabel = groupLabels[i] || firstFilled([scene.title]) || ((lang === 'en' ? 'Scene ' : '씬 ') + (i + 1));
       var shotsArr = Array.isArray(scene.shots) ? scene.shots : [];
       var shotsWithMedia = shotsArr.filter(function (sh) {
         return !!(firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath,
