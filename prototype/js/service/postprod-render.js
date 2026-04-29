@@ -235,8 +235,13 @@
           rVFCId = video.requestVideoFrameCallback(function () { finish(true); });
         } catch (_) { rVFCId = 0; }
       }
-      onSeeked = function () { finish(true); };
-      try { video.addEventListener('seeked', onSeeked); } catch (_) { }
+      // seeked 이벤트는 rVFC가 없을 때만 fallback으로 사용.
+      // seeked는 디코딩 완료 전에 발화하므로 rVFC와 동시에 등록하면 항상 seeked가 먼저
+      // 이기고 아직 디코딩 안 된 프레임을 그려 정지화면이 된다.
+      if (!rVFCId) {
+        onSeeked = function () { finish(true); };
+        try { video.addEventListener('seeked', onSeeked); } catch (_) { }
+      }
       // 이미 타겟에 가까우면 setter가 seeked를 발생시키지 않을 수 있으므로, 강제로
       // 살짝 다른 값으로 한 번 튕긴 뒤 타겟으로 맞추면 seeked가 안정적으로 발생.
       var cur = Number(video.currentTime) || 0;
@@ -306,7 +311,8 @@
         if (isVideoUrl(clip.url)) {
           var video = await loadVideo(clip.url, 12000);
           try { video.pause(); } catch (_) { }
-          try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
+          // videoOffset이 있으면 해당 구간으로 미리 seek — render 시 대기시간·오류 방지
+          try { await waitForVideoSeek(video, Number(clip.videoOffset) || 0, 2500); } catch (_) { }
           // soundOn !== false 이면 오디오 트랙 사용 (기본 true). 우클릭 메뉴 'Sound Off' 토글로 false 가능.
           return [clip.id, { kind: 'video', source: video, soundOn: clip.soundOn !== false }];
         }
