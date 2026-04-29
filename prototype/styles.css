@@ -6256,8 +6256,8 @@ html.page-shell-image #sidebar-project-card {
   display: flex;
 }
 .postprod-storage-dialog {
-  width: min(480px, 100%);
-  max-height: min(80vh, 640px);
+  width: min(960px, 100%);
+  max-height: min(90vh, 880px);
   display: flex;
   flex-direction: column;
   background: var(--card, #0d1226);
@@ -6332,8 +6332,9 @@ html.page-shell-image #sidebar-project-card {
   width: 100%;
   border-radius: 8px;
   background: #000;
-  max-height: 220px;
+  max-height: 60vh;
   display: block;
+  object-fit: contain;
 }
 .postprod-storage-item-thumb {
   width: 48px;

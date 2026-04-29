@@ -60,21 +60,42 @@
   }
 
   async function loadImageSourceWithFallback(url, options) {
+    if (!url) throw new Error('empty_image_url');
+    var opts = options || {};
+    var resolveMediaUrl = typeof opts.resolveMediaUrl === 'function'
+      ? opts.resolveMediaUrl
+      : function (value) { return String(value || '').trim(); };
+    // 1차: crossOrigin='anonymous'로 직접 로드 (canvas-safe → 렌더링에 가장 적합)
+    try { return await loadImageSource(url, options); } catch (e1) {
+      try { console.warn('[postprod] image load (crossOrigin) failed:', resolveMediaUrl(url), e1 && e1.message); } catch (_) {}
+    }
+    // 2차: fetch로 blob 받아서 createObjectURL → blob: URL은 same-origin이므로
+    // CORS 헤더 없이도 canvas-safe하게 그릴 수 있음. 토큰 만료/CORS 헤더 누락 회피.
     try {
-      return await loadImageSource(url, options);
-    } catch (_) {
-      return new Promise(function (resolve, reject) {
-        if (!url) { reject(new Error('empty_image_url')); return; }
-        var opts = options || {};
-        var resolveMediaUrl = typeof opts.resolveMediaUrl === 'function'
-          ? opts.resolveMediaUrl
-          : function (value) { return String(value || '').trim(); };
+      var resolvedUrl = resolveMediaUrl(url);
+      var res = await fetch(resolvedUrl, { credentials: 'same-origin' });
+      if (!res.ok) throw new Error('image_fetch_http_' + res.status);
+      var blob = await res.blob();
+      var objUrl = URL.createObjectURL(blob);
+      return await new Promise(function (resolve, reject) {
         var img = new Image();
         img.onload = function () { resolve(img); };
-        img.onerror = function () { reject(new Error('image_load_failed')); };
-        img.src = resolveMediaUrl(url);
+        img.onerror = function () { reject(new Error('image_blob_load_failed')); };
+        img.src = objUrl;
       });
+    } catch (e2) {
+      try { console.warn('[postprod] image load (fetch+blob) failed:', resolveMediaUrl(url), e2 && e2.message); } catch (_) {}
     }
+    // 3차: crossOrigin 없이 마지막 시도 (canvas tainting 위험하지만 미리보기엔 표시 가능)
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () {
+        try { console.warn('[postprod] image load (no-cors fallback) failed:', resolveMediaUrl(url)); } catch (_) {}
+        reject(new Error('image_load_failed'));
+      };
+      img.src = resolveMediaUrl(url);
+    });
   }
 
   async function loadVideoSourceWithFallback(url, timeoutMs, options) {

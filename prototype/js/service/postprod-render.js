@@ -313,6 +313,7 @@
         var image = await loadImage(clip.url);
         return [clip.id, { kind: 'image', source: image }];
       } catch (err) {
+        try { console.error('[postprod-render] preload visual failed:', clip && clip.id, clip && clip.url, err && err.message); } catch (_) {}
         return [clip.id, { kind: 'error', error: err }];
       }
     }));
@@ -745,7 +746,8 @@
           }, reportProgress, shouldCancel);
           processed += duration;
           if (!okImage) break;
-        } catch (_) {
+        } catch (errImg) {
+          try { console.error('[postprod-render] image draw failed:', clip && clip.id, clip && clip.url, errImg && errImg.message); } catch (_) {}
           failedVisualCount += 1;
           var okImageFallback = await runSegment(duration, function () {
             drawBackground();
@@ -1067,7 +1069,8 @@
           }, reportProgress, shouldCancel, segState);
           processed += duration;
           if (!okImage) break;
-        } catch (_) {
+        } catch (errImg2) {
+          try { console.error('[postprod-render offline] image draw failed:', clip && clip.id, clip && clip.url, errImg2 && errImg2.message); } catch (_) {}
           failedVisualCount += 1;
           var okIF = await runSegmentOffline(duration, function () {
             drawBackground();
