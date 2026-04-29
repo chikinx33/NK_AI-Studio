@@ -2115,82 +2115,65 @@
   // ── 미디어 브라우저 모달 ─────────────────────────────────────────────────
   var mediaBrowserModal = null;
 
-  // 한 씬/컷에서 영상과 이미지가 모두 있으면 각각 별도 카드로 노출.
-  // - 영상이 있으면 영상이 "primary"(타임라인 기본 클립과 동일 ID, 'vis-N' 또는 'vis-N-M')
-  // - 이미지가 있으면: 영상도 있을 땐 'alt'(합성 ID, isNew 신규 클립으로 추가됨)
-  //   영상이 없을 땐 이미지 자체가 primary
-  function buildMediaItemsForUnit(unitIdx, unitData, baseId, baseLabel, allEdits) {
-    var items = [];
-    var vidUrl = firstFilled([unitData.videoUrl, unitData.videoPlaybackUrl, unitData.outputVideoUrl, unitData.generatedVideoUrl, unitData.videoPath]);
-    var imgUrl = firstFilled([unitData.imageDataUrl, unitData.imagePath, unitData.generatedImageUrl, unitData.imageUrl]);
-    if (!vidUrl && !imgUrl) return items;
-    var primaryIsVideo = !!vidUrl;
-    if (vidUrl) {
-      var vidId = primaryIsVideo ? baseId : ('mb-alt-' + baseId + '-vid');
-      items.push({
-        id: vidId,
-        sourceId: baseId,
-        label: baseLabel,
-        url: vidUrl,
-        thumbUrl: imgUrl || vidUrl,
-        isVideo: true,
-        isPrimary: primaryIsVideo,
-        edit: allEdits[vidId] || null
-      });
-    }
-    if (imgUrl) {
-      var imgId = !primaryIsVideo ? baseId : ('mb-alt-' + baseId + '-img');
-      items.push({
-        id: imgId,
-        sourceId: baseId,
-        label: baseLabel,
-        url: imgUrl,
-        thumbUrl: imgUrl,
-        isVideo: false,
-        isPrimary: !primaryIsVideo,
-        edit: allEdits[imgId] || null
-      });
-    }
-    return items;
-  }
-
-  function getProjectMediaItems() {
+  // 프로젝트의 모든 이미지/영상을 두 분류로 평탄화하여 반환.
+  // 씬·컷 구분 없이 에피소드 전체 단위. 각 항목은 썸네일/원본 URL/라벨을 포함.
+  function getAllProjectMedia() {
     var project = getProjectByStateId() || resolveProject();
-    if (!project) return [];
+    if (!project) return { images: [], videos: [] };
     var scenes = Array.isArray(project.scenes) ? project.scenes : [];
-    var allEdits = getMergedTimelineEdits(project);
-    var items = [];
+    var images = [];
+    var videos = [];
     scenes.forEach(function (scene, i) {
       var shotsArr = Array.isArray(scene.shots) ? scene.shots : [];
       var shotsWithMedia = shotsArr.filter(function (sh) {
         return !!(firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath,
           sh.imageDataUrl, sh.imagePath, sh.generatedImageUrl, sh.imageUrl]));
       });
+      function pushUnit(unitData, baseId, baseLabel) {
+        var vidUrl = firstFilled([unitData.videoUrl, unitData.videoPlaybackUrl, unitData.outputVideoUrl, unitData.generatedVideoUrl, unitData.videoPath]);
+        var imgUrl = firstFilled([unitData.imageDataUrl, unitData.imagePath, unitData.generatedImageUrl, unitData.imageUrl]);
+        if (vidUrl) {
+          videos.push({
+            uid: 'vid:' + baseId,
+            baseId: baseId,
+            label: baseLabel,
+            url: vidUrl,
+            thumbUrl: imgUrl || vidUrl,
+            isVideo: true
+          });
+        }
+        if (imgUrl) {
+          images.push({
+            uid: 'img:' + baseId,
+            baseId: baseId,
+            label: baseLabel,
+            url: imgUrl,
+            thumbUrl: imgUrl,
+            isVideo: false
+          });
+        }
+      }
       if (shotsWithMedia.length) {
         shotsArr.forEach(function (sh, j) {
-          var baseId = 'vis-' + i + '-' + j;
-          var baseLabel = '씬 ' + (i + 1) + ' · 컷 ' + (j + 1);
-          items = items.concat(buildMediaItemsForUnit(i, sh, baseId, baseLabel, allEdits));
+          pushUnit(sh, 'vis-' + i + '-' + j, '씬 ' + (i + 1) + ' · 컷 ' + (j + 1));
         });
       } else {
-        var baseId = 'vis-' + i;
-        var baseLabel = '씬 ' + (i + 1);
-        items = items.concat(buildMediaItemsForUnit(i, scene, baseId, baseLabel, allEdits));
+        pushUnit(scene, 'vis-' + i, '씬 ' + (i + 1));
       }
     });
-    return items;
+    return { images: images, videos: videos };
   }
 
-  // status: 'in_timeline' | 'restorable' | 'add'
-  function getMediaItemStatus(item) {
-    var edit = item.edit || {};
-    if (item.isPrimary) {
-      return edit.deleted === true ? 'restorable' : 'in_timeline';
+  function isMediaUrlInTimeline(url) {
+    if (!url || !state.model) return false;
+    var tracks = state.model.tracks || [];
+    for (var ti = 0; ti < tracks.length; ti++) {
+      var clips = (tracks[ti] && tracks[ti].clips) || [];
+      for (var ci = 0; ci < clips.length; ci++) {
+        if (clips[ci] && clips[ci].url === url) return true;
+      }
     }
-    // alternate (synthetic isNew 클립)
-    if (edit && edit.isNew && edit.deleted !== true) return 'in_timeline';
-    if (edit && edit.isNew && edit.deleted === true) return 'restorable';
-    return 'add';
+    return false;
   }
 
   function ensureMediaBrowserModal() {
@@ -2202,31 +2185,74 @@
       '<div class="postprod-media-browser-inner" role="dialog" aria-modal="true" aria-labelledby="postprod-mb-title">' +
       '<div class="postprod-mb-header">' +
       '<h3 id="postprod-mb-title">미디어 불러오기</h3>' +
+      '<div class="postprod-mb-header-actions">' +
+      '<button class="btn-primary compact postprod-mb-insert" type="button" disabled>삽입</button>' +
       '<button class="postprod-mb-close btn-secondary compact" type="button" aria-label="닫기">✕</button>' +
       '</div>' +
-      '<p class="postprod-mb-desc">프로젝트에서 생성된 이미지·영상을 타임라인에 추가하거나 삭제된 클립을 복원합니다.</p>' +
-      '<div class="postprod-mb-grid" id="postprod-mb-grid"></div>' +
+      '</div>' +
+      '<div class="postprod-mb-body">' +
+      '<section class="postprod-mb-section" data-section="images">' +
+      '<h4 class="postprod-mb-section-title">이미지</h4>' +
+      '<div class="postprod-mb-grid" data-grid="images"></div>' +
+      '</section>' +
+      '<section class="postprod-mb-section" data-section="videos">' +
+      '<h4 class="postprod-mb-section-title">영상</h4>' +
+      '<div class="postprod-mb-grid" data-grid="videos"></div>' +
+      '</section>' +
+      '</div>' +
+      '</div>' +
+      // 라이트박스 (썸네일 돋보기 클릭 시 원본 표시)
+      '<div class="postprod-mb-lightbox" hidden>' +
+      '<button class="postprod-mb-lightbox-close" type="button" aria-label="닫기">✕</button>' +
+      '<div class="postprod-mb-lightbox-content"></div>' +
       '</div>';
     document.body.appendChild(root);
-    var closeBtn = root.querySelector('.postprod-mb-close');
     var close = function () {
       root.classList.remove('is-open');
       root.setAttribute('aria-hidden', 'true');
     };
+    var lb = root.querySelector('.postprod-mb-lightbox');
+    var closeLightbox = function () {
+      if (!lb) return;
+      var c = lb.querySelector('.postprod-mb-lightbox-content');
+      if (c) c.innerHTML = ''; // 영상 재생 정지
+      lb.classList.remove('is-open');
+      lb.setAttribute('hidden', '');
+    };
+    var closeBtn = root.querySelector('.postprod-mb-close');
+    if (closeBtn) closeBtn.onclick = close;
+    var lbClose = root.querySelector('.postprod-mb-lightbox-close');
+    if (lbClose) lbClose.onclick = closeLightbox;
+    if (lb) lb.addEventListener('click', function (e) { if (e.target === lb) closeLightbox(); });
     root.addEventListener('click', function (e) {
+      // 백드롭 클릭 시 닫기 (라이트박스 외부 영역 제외)
       if (e.target === root) close();
     });
-    if (closeBtn) closeBtn.onclick = close;
-    mediaBrowserModal = { root: root, grid: root.querySelector('#postprod-mb-grid'), close: close };
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        if (lb && lb.classList.contains('is-open')) closeLightbox();
+        else if (root.classList.contains('is-open')) close();
+      }
+    });
+    mediaBrowserModal = {
+      root: root,
+      gridImages: root.querySelector('[data-grid="images"]'),
+      gridVideos: root.querySelector('[data-grid="videos"]'),
+      sectionImages: root.querySelector('[data-section="images"]'),
+      sectionVideos: root.querySelector('[data-section="videos"]'),
+      insertBtn: root.querySelector('.postprod-mb-insert'),
+      lightbox: lb,
+      lightboxContent: lb && lb.querySelector('.postprod-mb-lightbox-content'),
+      close: close,
+      closeLightbox: closeLightbox
+    };
     return mediaBrowserModal;
   }
 
-  // 미디어 브라우저에서 alternate(영상↔이미지 다른 쪽) 미디어를 타임라인에 추가.
-  // sessionEdits에 { isNew, sourceId, url, label, ... }로 등록 → applyTimelineEdits가
-  // visuals 트랙 끝에 새 클립으로 삽입.
-  function addAlternateMediaToTimeline(item) {
-    if (!item || !item.id || !item.url) return;
-    if (!state.model) return;
+  // 선택된 미디어를 visuals 트랙 끝에 새 클립으로 삽입.
+  // 동일 미디어를 여러 번 삽입할 수 있도록 매번 새 ID 생성 (Date.now로 unique).
+  function insertMediaAtTimelineEnd(item) {
+    if (!item || !item.url || !state.model) return;
     var visualTrack = getVisualTrack(state.model);
     if (!visualTrack) return;
     var clips = visualTrack.clips || [];
@@ -2238,10 +2264,11 @@
     var defaultDur = 3;
     var ns = round1(lastEnd);
     var ne = round1(lastEnd + defaultDur);
+    var newId = 'mb-insert-' + (item.baseId || 'media') + '-' + Date.now();
     var edits = state.sessionEdits || (state.sessionEdits = {});
-    edits[item.id] = Object.assign({}, edits[item.id] || {}, {
+    edits[newId] = {
       isNew: true,
-      sourceId: item.sourceId || '',
+      sourceId: item.baseId || '',
       trackKey: 'visuals',
       start: ns,
       end: ne,
@@ -2249,64 +2276,101 @@
       label: item.label + (item.isVideo ? ' · 영상' : ' · 이미지'),
       empty: false,
       deleted: false
-    });
+    };
     state.sessionEdits = edits;
     setDirty(true);
     post.render();
   }
 
+  function renderMediaThumbnail(item, isSelected, isInTimeline) {
+    var thumbSrc = toPlayableMediaUrl(item.thumbUrl) || '';
+    var inlineBadge = isInTimeline ? '<span class="postprod-mb-thumb-badge">타임라인</span>' : '';
+    var selectedClass = isSelected ? ' is-selected' : '';
+    return (
+      '<div class="postprod-mb-tile' + selectedClass + '" data-mb-uid="' + escapeHtml(item.uid) + '" tabindex="0">' +
+        '<div class="postprod-mb-tile-thumb-wrap">' +
+          '<img class="postprod-mb-tile-thumb" src="' + escapeHtml(thumbSrc) + '" alt="" loading="lazy" />' +
+          (item.isVideo ? '<span class="postprod-mb-tile-vidicon" aria-hidden="true">▶</span>' : '') +
+          '<button class="postprod-mb-tile-zoom" type="button" data-action="preview" data-mb-uid="' + escapeHtml(item.uid) + '" aria-label="원본 보기" title="원본 보기">' +
+            '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>' +
+          '</button>' +
+          inlineBadge +
+        '</div>' +
+        '<div class="postprod-mb-tile-label" title="' + escapeHtml(item.label) + '">' + escapeHtml(item.label) + '</div>' +
+      '</div>'
+    );
+  }
+
   function openMediaBrowserModal() {
     var modal = ensureMediaBrowserModal();
     if (!modal) return;
-    var items = getProjectMediaItems();
-    var grid = modal.grid;
-    if (!grid) return;
-    if (!items.length) {
-      grid.innerHTML = '<p class="postprod-mb-empty">불러올 수 있는 미디어가 없습니다.</p>';
-    } else {
-      grid.innerHTML = items.map(function (item) {
-        var status = getMediaItemStatus(item);
-        var thumbHtml = item.isVideo
-          ? '<div class="postprod-mb-thumb postprod-mb-thumb-video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="14" x="3" y="5" rx="2"/><path d="M10 10l5 2.5-5 2.5V10z" fill="currentColor" stroke="none"/></svg></div>'
-          : '<img class="postprod-mb-thumb" src="' + escapeHtml(toPlayableMediaUrl(item.thumbUrl) || '') + '" alt="" loading="lazy" />';
-        var badge, btn;
-        if (status === 'in_timeline') {
-          badge = '<span class="postprod-mb-badge active">타임라인</span>';
-          btn = '<span class="postprod-mb-in-timeline">타임라인에 있음</span>';
-        } else if (status === 'restorable') {
-          badge = '<span class="postprod-mb-badge deleted">삭제됨</span>';
-          btn = '<button class="btn-primary compact postprod-mb-action" data-mb-id="' + escapeHtml(item.id) + '" data-action="restore">복원</button>';
-        } else {
-          badge = '<span class="postprod-mb-badge add">미사용</span>';
-          btn = '<button class="btn-primary compact postprod-mb-action" data-mb-id="' + escapeHtml(item.id) + '" data-action="add">불러오기</button>';
-        }
-        return '<div class="postprod-mb-item">' +
-          thumbHtml +
-          '<div class="postprod-mb-info">' +
-          '<span class="postprod-mb-label">' + escapeHtml(item.label) + '</span>' +
-          '<span class="postprod-mb-type">' + (item.isVideo ? '영상' : '이미지') + '</span>' +
-          badge +
-          '</div>' +
-          '<div class="postprod-mb-actions">' + btn + '</div>' +
-          '</div>';
+    var media = getAllProjectMedia();
+    var selectedUid = '';
+
+    function renderGrids() {
+      var imgHtml = media.images.map(function (it) {
+        return renderMediaThumbnail(it, it.uid === selectedUid, isMediaUrlInTimeline(it.url));
       }).join('');
-      grid.addEventListener('click', function onGridClick(e) {
-        var btn = e.target.closest('[data-action]');
-        if (!btn) return;
-        var action = btn.dataset.action;
-        var mbId = btn.dataset.mbId;
-        var found = items.filter(function (it) { return it.id === mbId; })[0];
-        if (!found) return;
-        if (action === 'restore') {
-          persistTimelineDeleted(found.id, false);
-          post.render();
-          modal.close();
-        } else if (action === 'add') {
-          addAlternateMediaToTimeline(found);
-          modal.close();
-        }
-      }, { once: true });
+      var vidHtml = media.videos.map(function (it) {
+        return renderMediaThumbnail(it, it.uid === selectedUid, isMediaUrlInTimeline(it.url));
+      }).join('');
+      modal.gridImages.innerHTML = imgHtml || '<p class="postprod-mb-empty">이미지가 없습니다.</p>';
+      modal.gridVideos.innerHTML = vidHtml || '<p class="postprod-mb-empty">영상이 없습니다.</p>';
+      modal.sectionImages.style.display = media.images.length ? '' : 'none';
+      modal.sectionVideos.style.display = media.videos.length ? '' : 'none';
+      if (modal.insertBtn) modal.insertBtn.disabled = !selectedUid;
     }
+
+    function findItemByUid(uid) {
+      var allItems = media.images.concat(media.videos);
+      for (var i = 0; i < allItems.length; i++) {
+        if (allItems[i].uid === uid) return allItems[i];
+      }
+      return null;
+    }
+
+    function openLightbox(item) {
+      if (!modal.lightbox || !modal.lightboxContent) return;
+      var url = toPlayableMediaUrl(item.url);
+      if (item.isVideo) {
+        modal.lightboxContent.innerHTML = '<video class="postprod-mb-lightbox-video" src="' + escapeHtml(url) + '" controls autoplay></video>';
+      } else {
+        modal.lightboxContent.innerHTML = '<img class="postprod-mb-lightbox-img" src="' + escapeHtml(url) + '" alt="" />';
+      }
+      modal.lightbox.removeAttribute('hidden');
+      modal.lightbox.classList.add('is-open');
+    }
+
+    // 그리드 클릭: 돋보기 → 라이트박스, 그 외 → 선택 토글
+    var onBodyClick = function (e) {
+      var zoomBtn = e.target.closest('[data-action="preview"]');
+      if (zoomBtn) {
+        e.stopPropagation();
+        var item = findItemByUid(zoomBtn.dataset.mbUid);
+        if (item) openLightbox(item);
+        return;
+      }
+      var tile = e.target.closest('.postprod-mb-tile');
+      if (!tile) return;
+      var uid = tile.dataset.mbUid;
+      selectedUid = (selectedUid === uid) ? '' : uid;
+      renderGrids();
+    };
+    var body = modal.root.querySelector('.postprod-mb-body');
+    if (body) body.onclick = onBodyClick;
+
+    if (modal.insertBtn) {
+      modal.insertBtn.onclick = function () {
+        if (!selectedUid) return;
+        var item = findItemByUid(selectedUid);
+        if (!item) return;
+        insertMediaAtTimelineEnd(item);
+        modal.close();
+      };
+    }
+
+    selectedUid = '';
+    renderGrids();
     modal.root.classList.add('is-open');
     modal.root.setAttribute('aria-hidden', 'false');
   }
