@@ -2116,14 +2116,20 @@
   var mediaBrowserModal = null;
 
   // 프로젝트의 모든 이미지/영상을 두 분류로 평탄화하여 반환.
-  // 씬·컷 구분 없이 에피소드 전체 단위. 각 항목은 썸네일/원본 URL/라벨을 포함.
+  // 라벨은 buildTimelineModel과 동일한 규칙: scene.title이 있으면 그대로,
+  // 없으면 언어별 fallback ('Scene N' / '씬 N'). 컷은 sh.id (예: '1.1') 또는
+  // 언어별 fallback ('Cut M' / '컷 M').
   function getAllProjectMedia() {
     var project = getProjectByStateId() || resolveProject();
     if (!project) return { images: [], videos: [] };
     var scenes = Array.isArray(project.scenes) ? project.scenes : [];
     var images = [];
     var videos = [];
+    var lang = currentLang();
+    var sceneFallback = lang === 'en' ? 'Scene ' : '씬 ';
+    var cutFallback = lang === 'en' ? 'Cut ' : '컷 ';
     scenes.forEach(function (scene, i) {
+      var sceneLabel = firstFilled([scene.title]) || (sceneFallback + (i + 1));
       var shotsArr = Array.isArray(scene.shots) ? scene.shots : [];
       var shotsWithMedia = shotsArr.filter(function (sh) {
         return !!(firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath,
@@ -2155,10 +2161,11 @@
       }
       if (shotsWithMedia.length) {
         shotsArr.forEach(function (sh, j) {
-          pushUnit(sh, 'vis-' + i + '-' + j, '씬 ' + (i + 1) + ' · 컷 ' + (j + 1));
+          var cutId = firstFilled([sh.id]) || (cutFallback + (j + 1));
+          pushUnit(sh, 'vis-' + i + '-' + j, sceneLabel + ' · ' + cutId);
         });
       } else {
-        pushUnit(scene, 'vis-' + i, '씬 ' + (i + 1));
+        pushUnit(scene, 'vis-' + i, sceneLabel);
       }
     });
     return { images: images, videos: videos };
@@ -2184,26 +2191,26 @@
     root.innerHTML =
       '<div class="postprod-media-browser-inner" role="dialog" aria-modal="true" aria-labelledby="postprod-mb-title">' +
       '<div class="postprod-mb-header">' +
-      '<h3 id="postprod-mb-title">미디어 불러오기</h3>' +
+      '<h3 id="postprod-mb-title"></h3>' +
       '<div class="postprod-mb-header-actions">' +
-      '<button class="btn-primary compact postprod-mb-insert" type="button" disabled>삽입</button>' +
-      '<button class="postprod-mb-close btn-secondary compact" type="button" aria-label="닫기">✕</button>' +
+      '<button class="btn-primary compact postprod-mb-insert" type="button" disabled></button>' +
+      '<button class="postprod-mb-close btn-secondary compact" type="button" aria-label="">✕</button>' +
       '</div>' +
       '</div>' +
       '<div class="postprod-mb-body">' +
       '<section class="postprod-mb-section" data-section="images">' +
-      '<h4 class="postprod-mb-section-title">이미지</h4>' +
+      '<h4 class="postprod-mb-section-title" data-i18n-section="images"></h4>' +
       '<div class="postprod-mb-grid" data-grid="images"></div>' +
       '</section>' +
       '<section class="postprod-mb-section" data-section="videos">' +
-      '<h4 class="postprod-mb-section-title">영상</h4>' +
+      '<h4 class="postprod-mb-section-title" data-i18n-section="videos"></h4>' +
       '<div class="postprod-mb-grid" data-grid="videos"></div>' +
       '</section>' +
       '</div>' +
       '</div>' +
       // 라이트박스 (썸네일 돋보기 클릭 시 원본 표시)
       '<div class="postprod-mb-lightbox" hidden>' +
-      '<button class="postprod-mb-lightbox-close" type="button" aria-label="닫기">✕</button>' +
+      '<button class="postprod-mb-lightbox-close" type="button" aria-label="">✕</button>' +
       '<div class="postprod-mb-lightbox-content"></div>' +
       '</div>';
     document.body.appendChild(root);
@@ -2282,16 +2289,16 @@
     post.render();
   }
 
-  function renderMediaThumbnail(item, isSelected, isInTimeline) {
+  function renderMediaThumbnail(item, isSelected, isInTimeline, labels) {
     var thumbSrc = toPlayableMediaUrl(item.thumbUrl) || '';
-    var inlineBadge = isInTimeline ? '<span class="postprod-mb-thumb-badge">타임라인</span>' : '';
+    var inlineBadge = isInTimeline ? '<span class="postprod-mb-thumb-badge">' + escapeHtml(labels.inTimeline) + '</span>' : '';
     var selectedClass = isSelected ? ' is-selected' : '';
     return (
       '<div class="postprod-mb-tile' + selectedClass + '" data-mb-uid="' + escapeHtml(item.uid) + '" tabindex="0">' +
         '<div class="postprod-mb-tile-thumb-wrap">' +
           '<img class="postprod-mb-tile-thumb" src="' + escapeHtml(thumbSrc) + '" alt="" loading="lazy" />' +
           (item.isVideo ? '<span class="postprod-mb-tile-vidicon" aria-hidden="true">▶</span>' : '') +
-          '<button class="postprod-mb-tile-zoom" type="button" data-action="preview" data-mb-uid="' + escapeHtml(item.uid) + '" aria-label="원본 보기" title="원본 보기">' +
+          '<button class="postprod-mb-tile-zoom" type="button" data-action="preview" data-mb-uid="' + escapeHtml(item.uid) + '" aria-label="' + escapeHtml(labels.viewOriginal) + '" title="' + escapeHtml(labels.viewOriginal) + '">' +
             '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>' +
           '</button>' +
           inlineBadge +
@@ -2307,15 +2314,50 @@
     var media = getAllProjectMedia();
     var selectedUid = '';
 
+    // 매 호출마다 현재 언어로 정적 텍스트 갱신
+    var lang = currentLang();
+    var labels = lang === 'en' ? {
+      title: 'Load Media',
+      insert: 'Insert',
+      close: 'Close',
+      images: 'IMAGES',
+      videos: 'VIDEOS',
+      noImages: 'No images.',
+      noVideos: 'No videos.',
+      inTimeline: 'In timeline',
+      viewOriginal: 'View original'
+    } : {
+      title: '미디어 불러오기',
+      insert: '삽입',
+      close: '닫기',
+      images: '이미지',
+      videos: '영상',
+      noImages: '이미지가 없습니다.',
+      noVideos: '영상이 없습니다.',
+      inTimeline: '타임라인',
+      viewOriginal: '원본 보기'
+    };
+    var titleEl = modal.root.querySelector('#postprod-mb-title');
+    if (titleEl) titleEl.textContent = labels.title;
+    if (modal.insertBtn) modal.insertBtn.textContent = labels.insert;
+    var closeBtnEl = modal.root.querySelector('.postprod-mb-close');
+    if (closeBtnEl) closeBtnEl.setAttribute('aria-label', labels.close);
+    var lbCloseEl = modal.root.querySelector('.postprod-mb-lightbox-close');
+    if (lbCloseEl) lbCloseEl.setAttribute('aria-label', labels.close);
+    var imgSec = modal.root.querySelector('[data-i18n-section="images"]');
+    if (imgSec) imgSec.textContent = labels.images;
+    var vidSec = modal.root.querySelector('[data-i18n-section="videos"]');
+    if (vidSec) vidSec.textContent = labels.videos;
+
     function renderGrids() {
       var imgHtml = media.images.map(function (it) {
-        return renderMediaThumbnail(it, it.uid === selectedUid, isMediaUrlInTimeline(it.url));
+        return renderMediaThumbnail(it, it.uid === selectedUid, isMediaUrlInTimeline(it.url), labels);
       }).join('');
       var vidHtml = media.videos.map(function (it) {
-        return renderMediaThumbnail(it, it.uid === selectedUid, isMediaUrlInTimeline(it.url));
+        return renderMediaThumbnail(it, it.uid === selectedUid, isMediaUrlInTimeline(it.url), labels);
       }).join('');
-      modal.gridImages.innerHTML = imgHtml || '<p class="postprod-mb-empty">이미지가 없습니다.</p>';
-      modal.gridVideos.innerHTML = vidHtml || '<p class="postprod-mb-empty">영상이 없습니다.</p>';
+      modal.gridImages.innerHTML = imgHtml || '<p class="postprod-mb-empty">' + escapeHtml(labels.noImages) + '</p>';
+      modal.gridVideos.innerHTML = vidHtml || '<p class="postprod-mb-empty">' + escapeHtml(labels.noVideos) + '</p>';
       modal.sectionImages.style.display = media.images.length ? '' : 'none';
       modal.sectionVideos.style.display = media.videos.length ? '' : 'none';
       if (modal.insertBtn) modal.insertBtn.disabled = !selectedUid;
