@@ -993,6 +993,39 @@
       });
     };
 
+    // ── 오버레이 클립 (WebCodecs 경로) ───────────────────────────────────────
+    // MediaRecorder 경로와 동일하게 오버레이 이미지를 미리 로드하고 drawOverlay를 정의.
+    // 누락 시 drawOverlay is not defined → catch → '이미지 로드 실패' 텍스트가 박힘.
+    var overlayImagesWC = {};
+    var overlayClipsWC = Array.isArray(opts.overlayClips) ? opts.overlayClips : [];
+    for (var owi = 0; owi < overlayClipsWC.length; owi++) {
+      (function (oc) {
+        if (!oc || !oc.url) return;
+        var img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = oc.url;
+        overlayImagesWC[oc.id] = img;
+      })(overlayClipsWC[owi]);
+    }
+    var drawOverlay = function (sec) {
+      for (var k = 0; k < overlayClipsWC.length; k++) {
+        var oc = overlayClipsWC[k];
+        if (!oc || sec < oc.start || sec >= oc.end) continue;
+        var img = overlayImagesWC[oc.id];
+        if (!img || !img.naturalWidth) continue;
+        var iw = img.naturalWidth;
+        var ih = img.naturalHeight;
+        var maxW = w * 0.8;
+        var maxH = h * 0.8;
+        var scale = Math.min(maxW / iw, maxH / ih, 1);
+        var dw = iw * scale;
+        var dh = ih * scale;
+        var dx = (w - dw) / 2;
+        var dy = (h - dh) / 2;
+        ctx.drawImage(img, dx, dy, dw, dh);
+      }
+    };
+
     var segState = {
       canvas: canvas,
       encoder: encoder,
