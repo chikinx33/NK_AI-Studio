@@ -4319,9 +4319,10 @@
     window.addEventListener('pointercancel', onWindowPointerUp, true);
   }
 
-  // Shift 스냅 헬퍼: 후보 위치 candidatePos를 다른 클립들의 시작/끝점 또는 t=0에
-  // 흡착시킨다. thresholdSec 안에 있는 가장 가까운 스냅 포인트를 선택, 없으면 원본
-  // 후보 위치 그대로 반환. siblings는 동일 트랙의 클립들 (origSiblings).
+  // Shift 스냅 헬퍼: 후보 위치 candidatePos를 다른 클립들의 시작/끝점, t=0,
+  // 그리고 현재 재생바(playhead) 위치에 흡착시킨다.
+  // thresholdSec 안에 있는 가장 가까운 스냅 포인트를 선택, 없으면 원본 그대로.
+  // siblings는 동일 트랙의 클립들 (origSiblings).
   function snapShiftPos(candidatePos, siblings, ownId, thresholdSec) {
     var bestPos = candidatePos;
     var bestDist = Infinity;
@@ -4345,6 +4346,14 @@
     if (dz < thresholdSec && dz < bestDist) {
       bestDist = dz;
       bestPos = 0;
+    }
+    // 재생바(playhead) 위치에도 스냅 — 클립 가장자리를 정확히 재생바 시점에 맞출 때
+    if (typeof state.currentTime === 'number' && isFinite(state.currentTime)) {
+      var dp = Math.abs(candidatePos - state.currentTime);
+      if (dp < thresholdSec && dp < bestDist) {
+        bestDist = dp;
+        bestPos = state.currentTime;
+      }
     }
     return bestPos;
   }
