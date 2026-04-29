@@ -6588,6 +6588,11 @@ html.page-shell-image #sidebar-project-card {
   font-weight: 700;
 }
 .postprod-ctx-label { flex: 1; }
+.postprod-ctx-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.08);
+  margin: 4px 4px;
+}
 /* ──────────────────────────────────────────────────────────────── */
 
 .postprod-render-preview {

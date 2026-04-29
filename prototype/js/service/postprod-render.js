@@ -307,7 +307,8 @@
           var video = await loadVideo(clip.url, 12000);
           try { video.pause(); } catch (_) { }
           try { await waitForVideoSeek(video, 0, 2500); } catch (_) { }
-          return [clip.id, { kind: 'video', source: video }];
+          // soundOn !== false 이면 오디오 트랙 사용 (기본 true). 우클릭 메뉴 'Sound Off' 토글로 false 가능.
+          return [clip.id, { kind: 'video', source: video, soundOn: clip.soundOn !== false }];
         }
         var image = await loadImage(clip.url);
         return [clip.id, { kind: 'image', source: image }];
@@ -621,6 +622,12 @@
         if (scheduledAudio && scheduledAudio.voiceGain) {
           renderSources.forEach(function (entry) {
             if (entry && entry.kind === 'video' && entry.source) {
+              // 우클릭 메뉴에서 Sound Off로 설정한 클립의 오디오는 렌더링에서 제외
+              if (entry.soundOn === false) {
+                try { entry.source.muted = true; } catch (_) { }
+                try { entry.source.volume = 0; } catch (_) { }
+                return;
+              }
               try {
                 try { entry.source.muted = false; } catch (_) { }
                 try { entry.source.volume = 1; } catch (_) { }

@@ -653,6 +653,20 @@
     syncPreviewMedia(state.currentTime);
   }
 
+  // 클립의 사운드 On/Off (영상 자체의 audio 트랙). 렌더링 시 includes/excludes 결정.
+  function setClipSoundOn(clipId, enabled) {
+    if (!clipId) return;
+    var clip = findClip(clipId);
+    if (clip) clip.soundOn = !!enabled;
+    var edits = state.sessionEdits || (state.sessionEdits = {});
+    var prev = Object.assign({}, edits[clipId] || {});
+    edits[clipId] = Object.assign({}, prev, { soundOn: !!enabled });
+    state.sessionEdits = edits;
+    setDirty(true);
+    // 재생 중이면 즉시 반영
+    syncPreviewMedia(state.currentTime);
+  }
+
   // ── 클립 컨텍스트 메뉴 (우클릭) ────────────────────────────────────
   var clipContextMenu = null;
   function ensureClipContextMenu() {
@@ -687,12 +701,17 @@
     var lang = currentLang();
     var fadeInChecked = !!clip.fadeIn;
     var fadeOutChecked = !!clip.fadeOut;
+    var soundOnChecked = clip.soundOn !== false; // 기본 true
     var labels = lang === 'en' ? {
       fadeIn: 'Fade In (0.5s)',
-      fadeOut: 'Fade Out (0.5s)'
+      fadeOut: 'Fade Out (0.5s)',
+      soundOn: 'Sound On',
+      soundOff: 'Sound Off'
     } : {
       fadeIn: '페이드 인 (0.5초)',
-      fadeOut: '페이드 아웃 (0.5초)'
+      fadeOut: '페이드 아웃 (0.5초)',
+      soundOn: '사운드 On',
+      soundOff: '사운드 Off'
     };
     function row(action, label, checked) {
       return (
@@ -702,7 +721,14 @@
         '</button>'
       );
     }
-    menu.root.innerHTML = row('toggle-fade-in', labels.fadeIn, fadeInChecked) + row('toggle-fade-out', labels.fadeOut, fadeOutChecked);
+    function divider() { return '<div class="postprod-ctx-divider"></div>'; }
+    // Sound On/Off는 두 줄로 표시해서 현재 상태를 명확히 보여줌 (라디오처럼).
+    menu.root.innerHTML =
+      row('toggle-fade-in', labels.fadeIn, fadeInChecked) +
+      row('toggle-fade-out', labels.fadeOut, fadeOutChecked) +
+      divider() +
+      row('sound-on', labels.soundOn, soundOnChecked) +
+      row('sound-off', labels.soundOff, !soundOnChecked);
     menu.root.dataset.clipId = clipId;
     // 일단 화면 밖에 우선 표시하여 크기 측정 후 viewport 안으로 위치 조정
     menu.root.style.display = 'block';
@@ -726,6 +752,10 @@
         setClipFade(cid, 'fadeIn', !findClip(cid).fadeIn);
       } else if (action === 'toggle-fade-out') {
         setClipFade(cid, 'fadeOut', !findClip(cid).fadeOut);
+      } else if (action === 'sound-on') {
+        setClipSoundOn(cid, true);
+      } else if (action === 'sound-off') {
+        setClipSoundOn(cid, false);
       }
       menu.hide();
     };
@@ -2853,7 +2883,8 @@
         var motionPreset = edit.motionPreset || clip.motionPreset || 'none';
         var fadeIn = typeof edit.fadeIn === 'boolean' ? edit.fadeIn : !!clip.fadeIn;
         var fadeOut = typeof edit.fadeOut === 'boolean' ? edit.fadeOut : !!clip.fadeOut;
-        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset, fadeIn: fadeIn, fadeOut: fadeOut });
+        var soundOn = typeof edit.soundOn === 'boolean' ? edit.soundOn : (clip.soundOn !== false);
+        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset, fadeIn: fadeIn, fadeOut: fadeOut, soundOn: soundOn });
       }).filter(Boolean);
 
       // split / 미디어 브라우저로 생성된 신규 클립을 트랙에 삽입.
@@ -3772,8 +3803,10 @@
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
             scheduleScrubSeek('active', fpVid, fpClipTime);
           } else {
-            // 재생 중: 스크럽 wake로 인한 muted 상태를 해제하고, 멈춰있다면 재개
-            if (fpVid.muted) { try { fpVid.muted = false; } catch (_) {} }
+            // 재생 중: 스크럽 wake로 인한 muted 상태를 해제 (단, clip.soundOn=false면 muted 유지),
+            // 멈춰있다면 재개
+            var fpDesiredMuted = clip.soundOn === false;
+            if (fpVid.muted !== fpDesiredMuted) { try { fpVid.muted = fpDesiredMuted; } catch (_) {} }
             if (fpVid.paused && !fpVid.seeking) {
               fpVid.play().catch(function () {});
             }
@@ -3852,7 +3885,8 @@
     var liveClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
     var needsSeek = Math.abs((video.currentTime || 0) - liveClipTime) > 0.1;
     if (state.isPlaying) {
-      try { video.muted = false; } catch (_) {}
+      // clip.soundOn=false면 muted 유지 (사운드 오프), true면 unmute
+      try { video.muted = (clip.soundOn === false); } catch (_) {}
       if (needsSeek) {
         var onSeeked = function () {
           video.removeEventListener('seeked', onSeeked);
