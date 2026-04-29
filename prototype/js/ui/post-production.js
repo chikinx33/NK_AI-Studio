@@ -1328,6 +1328,17 @@
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
+    // 방어적 재연결: renderTimelineSection이 host를 건드리지는 않지만,
+    // 어떤 흐름에서든 video가 detached된 상태라면 현재 host에 다시 붙인다.
+    var host = getPreviewVideoHost();
+    if (host && video.parentNode !== host) {
+      try { host.appendChild(video); } catch (_) {}
+      try { applyVideoLayerStyles(video); } catch (_) {}
+      // 활성 비디오라면 보여야 하므로 opacity도 보정
+      if (state.previewActiveUrl && video.src && state.previewActiveUrl === video.src) {
+        try { video.style.opacity = '1'; video.style.zIndex = '2'; } catch (_) {}
+      }
+    }
     if (video.readyState < 1) {
       var onMeta = function () {
         video.removeEventListener('loadedmetadata', onMeta);
@@ -4519,12 +4530,6 @@
           clipObj.end = e.afterEnd;
         }
         persistTimelineEdit(id, e.afterStart, e.afterEnd);
-        // 영향 받는 모든 클립의 DOM을 즉시 갱신.
-        // (swap 시 primary 클립의 DOM도 새 위치로 옮겨야 시각적으로 swap이 보임.
-        //  duration이 변하지 않는 swap에서는 recomputeModelTotalDuration이 false라
-        //  renderTimelineSection이 호출되지 않으므로 여기서 명시적으로 업데이트.)
-        var domEl = document.querySelector('.postprod-clip[data-clip-id="' + id + '"]');
-        if (domEl) updateClipElement(domEl, e.afterStart, e.afterEnd, { skipOverlapCheck: true });
       });
       pushHistory({
         type: 'reorder',
@@ -4533,11 +4538,12 @@
       });
       setDirty(true);
       state.selectedClipId = d.clipId;
-      // 끝 너머로 이동했으면 타임라인 확장 후 재렌더
-      if (recomputeModelTotalDuration()) {
-        renderTimelineSection(state.model);
-        bindEvents();
-      }
+      // 항상 재렌더: snap/swap으로 여러 클립 위치가 바뀌므로 단일 진리원(state)에서
+      // DOM을 다시 그려 일관성 보장. recomputeModelTotalDuration은 swap에서 false라
+      // 조건부로 호출하면 stale DOM이 남는다.
+      recomputeModelTotalDuration();
+      renderTimelineSection(state.model);
+      bindEvents();
       setCurrentTime(d.nextStart, true);
       state.justDragged = !!d.moved;
       state.isPointerDown = false;
@@ -4564,9 +4570,8 @@
           afterEnd: clip.end
         });
         setDirty(true);
-      }
-      // 끝 너머로 이동했으면 타임라인 확장 후 재렌더
-      if (recomputeModelTotalDuration()) {
+        // 위치가 변경됐으면 항상 재렌더 (DOM-state 일관성)
+        recomputeModelTotalDuration();
         renderTimelineSection(state.model);
         bindEvents();
       }
