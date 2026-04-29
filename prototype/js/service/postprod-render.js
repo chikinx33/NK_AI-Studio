@@ -375,10 +375,18 @@
   }
 
   function releaseRenderVisualSources(sourceMap, releaseVideoSource) {
-    if (!sourceMap || !sourceMap.forEach || typeof releaseVideoSource !== 'function') return;
+    if (!sourceMap || !sourceMap.forEach) return;
     sourceMap.forEach(function (entry) {
-      if (!entry || entry.kind !== 'video' || !entry.source) return;
-      releaseVideoSource(entry.source);
+      if (!entry || !entry.source) return;
+      if (entry.kind === 'video' && typeof releaseVideoSource === 'function') {
+        releaseVideoSource(entry.source);
+      } else if (entry.kind === 'image') {
+        // ImageBitmap은 GPU 메모리 점유 → 렌더 완료 후 명시적 close()로 해제.
+        // HTMLImageElement를 반환한 경우(createImageBitmap 미지원 환경)는 close가 없으므로 skip.
+        if (entry.source && typeof entry.source.close === 'function') {
+          try { entry.source.close(); } catch (_) {}
+        }
+      }
     });
   }
 

@@ -59,42 +59,85 @@
     });
   }
 
+  // 로드된 HTMLImageElement → ImageBitmap 변환.
+  //
+  // 이유: Chrome은 화면에 표시되지 않는 이미지 요소의 디코딩된 픽셀 데이터를
+  // 메모리 압박 시 조용히 해제(evict)한다. 이후 ctx.drawImage(img)를 호출하면
+  // InvalidStateError("contains no image data")가 발생해 '이미지 로드 실패' 텍스트가
+  // 렌더 영상에 박힌다.
+  //
+  // ImageBitmap은 GPU-accessible 메모리에 디코딩된 픽셀을 보존하며 Chrome이 해제하지
+  // 않는다. 또한 blob: URL에서 생성된 ImageBitmap은 canvas-safe(타이팅 없음)하므로
+  // WebCodecs의 new VideoFrame(canvas)도 SecurityError 없이 성공한다.
+  //
+  // createImageBitmap이 없는 환경(IE 등)이나 실패 시 원본 img를 그대로 반환한다.
+  async function toStableImageSource(img) {
+    if (typeof createImageBitmap === 'function') {
+      try { return await createImageBitmap(img); } catch (_) {}
+    }
+    return img;
+  }
+
   async function loadImageSourceWithFallback(url, options) {
     if (!url) throw new Error('empty_image_url');
     var opts = options || {};
     var resolveMediaUrl = typeof opts.resolveMediaUrl === 'function'
       ? opts.resolveMediaUrl
       : function (value) { return String(value || '').trim(); };
-    // 1차: crossOrigin='anonymous'로 직접 로드 (canvas-safe → 렌더링에 가장 적합)
-    try { return await loadImageSource(url, options); } catch (e1) {
-      try { console.warn('[postprod] image load (crossOrigin) failed:', resolveMediaUrl(url), e1 && e1.message); } catch (_) {}
-    }
-    // 2차: fetch로 blob 받아서 createObjectURL → blob: URL은 same-origin이므로
-    // CORS 헤더 없이도 canvas-safe하게 그릴 수 있음. 토큰 만료/CORS 헤더 누락 회피.
+    var resolvedUrl = resolveMediaUrl(url);
+
+    // 1차: crossOrigin='anonymous' 직접 로드 → canvas-safe + WebCodecs-safe.
+    // 성공 시 즉시 ImageBitmap으로 변환 (pixel eviction 방지).
     try {
-      var resolvedUrl = resolveMediaUrl(url);
-      var res = await fetch(resolvedUrl, { credentials: 'same-origin' });
+      var img1 = await loadImageSource(url, options);
+      return await toStableImageSource(img1);
+    } catch (e1) {
+      try { console.warn('[postprod] image load (crossOrigin) failed:', resolvedUrl, e1 && e1.message); } catch (_) {}
+    }
+
+    // 2차: fetch → blob → createObjectURL.
+    // blob: URL은 same-origin이므로 CORS 헤더 없이도 canvas-safe.
+    // createImageBitmap(blob)을 직접 호출하면 HTMLImageElement 경유 없이도 ImageBitmap을
+    // 얻을 수 있어 eviction 문제가 근본적으로 없다.
+    try {
+      var res = await fetch(resolvedUrl, { credentials: 'omit' });
       if (!res.ok) throw new Error('image_fetch_http_' + res.status);
       var blob = await res.blob();
+      // createImageBitmap(blob)을 직접 사용하면 HTMLImageElement 생략 가능 — 더 안정적.
+      if (typeof createImageBitmap === 'function') {
+        try { return await createImageBitmap(blob); } catch (_) {}
+      }
+      // fallback: blob → ObjectURL → HTMLImageElement → ImageBitmap
       var objUrl = URL.createObjectURL(blob);
-      return await new Promise(function (resolve, reject) {
-        var img = new Image();
-        img.onload = function () { resolve(img); };
-        img.onerror = function () { reject(new Error('image_blob_load_failed')); };
-        img.src = objUrl;
-      });
+      try {
+        var img2 = await new Promise(function (resolve, reject) {
+          var img = new Image();
+          img.onload = function () { resolve(img); };
+          img.onerror = function () { reject(new Error('image_blob_load_failed')); };
+          img.src = objUrl;
+        });
+        return await toStableImageSource(img2);
+      } finally {
+        try { URL.revokeObjectURL(objUrl); } catch (_) {}
+      }
     } catch (e2) {
-      try { console.warn('[postprod] image load (fetch+blob) failed:', resolveMediaUrl(url), e2 && e2.message); } catch (_) {}
+      try { console.warn('[postprod] image load (fetch+blob) failed:', resolvedUrl, e2 && e2.message); } catch (_) {}
     }
-    // 3차: crossOrigin 없이 마지막 시도 (canvas tainting 위험하지만 미리보기엔 표시 가능)
+
+    // 3차: crossOrigin 없이 마지막 시도.
+    // canvas를 taint하므로 WebCodecs(VideoFrame)에서 SecurityError 발생 가능.
+    // MediaRecorder 경로에서는 동작하나 WebCodecs 경로에서는 실패 후 MediaRecorder로
+    // 폴백된다. 어쨌든 'null' 반환보다 낫고 미리보기엔 항상 표시 가능.
     return new Promise(function (resolve, reject) {
-      var img = new Image();
-      img.onload = function () { resolve(img); };
-      img.onerror = function () {
-        try { console.warn('[postprod] image load (no-cors fallback) failed:', resolveMediaUrl(url)); } catch (_) {}
+      var img3 = new Image();
+      img3.onload = function () {
+        toStableImageSource(img3).then(resolve, function () { resolve(img3); });
+      };
+      img3.onerror = function () {
+        try { console.warn('[postprod] image load (no-cors fallback) failed:', resolvedUrl); } catch (_) {}
         reject(new Error('image_load_failed'));
       };
-      img.src = resolveMediaUrl(url);
+      img3.src = resolvedUrl;
     });
   }
 
