@@ -593,6 +593,144 @@
     setDirty(true);
   }
 
+  // 페이드 효과 영속화 (fadeIn/fadeOut 둘 중 하나만 갱신 가능)
+  function persistFadeEffect(clipId, patch) {
+    if (!clipId || !patch) return;
+    var edits = state.sessionEdits || (state.sessionEdits = {});
+    var prev = Object.assign({}, edits[clipId] || {});
+    var nextPatch = {};
+    if (typeof patch.fadeIn === 'boolean') nextPatch.fadeIn = patch.fadeIn;
+    if (typeof patch.fadeOut === 'boolean') nextPatch.fadeOut = patch.fadeOut;
+    edits[clipId] = Object.assign({}, prev, nextPatch);
+    state.sessionEdits = edits;
+    setDirty(true);
+  }
+
+  function getClipFadeState(clipId) {
+    var clip = findClip(clipId);
+    if (!clip) return { fadeIn: false, fadeOut: false };
+    return { fadeIn: !!clip.fadeIn, fadeOut: !!clip.fadeOut };
+  }
+
+  // 페이드 효과 길이 (초). 추후 사용자 조정 옵션 추가할 때 한 곳에서 변경.
+  var FADE_DURATION_SEC = 0.5;
+
+  // 현재 sec와 클립의 fadeIn/fadeOut 설정으로부터 검정 오버레이 opacity 계산.
+  // - fadeIn: 클립 시작 직후 0.5초 동안 1→0
+  // - fadeOut: 클립 종료 직전 0.5초 동안 0→1
+  function computeFadeOpacity(clip, sec) {
+    if (!clip) return 0;
+    var op = 0;
+    if (clip.fadeIn) {
+      var elapsed = sec - clip.start;
+      if (elapsed >= 0 && elapsed < FADE_DURATION_SEC) {
+        op = Math.max(op, 1 - (elapsed / FADE_DURATION_SEC));
+      }
+    }
+    if (clip.fadeOut) {
+      var remaining = clip.end - sec;
+      if (remaining >= 0 && remaining < FADE_DURATION_SEC) {
+        op = Math.max(op, 1 - (remaining / FADE_DURATION_SEC));
+      }
+    }
+    return Math.max(0, Math.min(1, op));
+  }
+
+  function applyFadeOverlay(clip, sec) {
+    var fadeEl = document.getElementById('postprod-preview-fade');
+    if (!fadeEl) return;
+    var op = computeFadeOpacity(clip, sec);
+    fadeEl.style.opacity = String(op);
+  }
+
+  function setClipFade(clipId, type, enabled) {
+    if (!clipId || (type !== 'fadeIn' && type !== 'fadeOut')) return;
+    var clip = findClip(clipId);
+    if (clip) clip[type] = !!enabled;
+    var patch = {};
+    patch[type] = !!enabled;
+    persistFadeEffect(clipId, patch);
+    syncPreviewMedia(state.currentTime);
+  }
+
+  // ── 클립 컨텍스트 메뉴 (우클릭) ────────────────────────────────────
+  var clipContextMenu = null;
+  function ensureClipContextMenu() {
+    if (clipContextMenu && clipContextMenu.root && clipContextMenu.root.parentNode) return clipContextMenu;
+    var root = document.createElement('div');
+    root.className = 'postprod-clip-context-menu';
+    root.setAttribute('role', 'menu');
+    root.style.display = 'none';
+    document.body.appendChild(root);
+    var hide = function () {
+      root.style.display = 'none';
+      root.dataset.clipId = '';
+    };
+    document.addEventListener('mousedown', function (e) {
+      if (root.style.display === 'none') return;
+      if (root.contains(e.target)) return;
+      hide();
+    }, true);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && root.style.display !== 'none') hide();
+    });
+    window.addEventListener('blur', hide);
+    clipContextMenu = { root: root, hide: hide };
+    return clipContextMenu;
+  }
+
+  function showClipContextMenu(clipId, x, y) {
+    var clip = findClip(clipId);
+    if (!clip) return;
+    var menu = ensureClipContextMenu();
+    if (!menu) return;
+    var lang = currentLang();
+    var fadeInChecked = !!clip.fadeIn;
+    var fadeOutChecked = !!clip.fadeOut;
+    var labels = lang === 'en' ? {
+      fadeIn: 'Fade In (0.5s)',
+      fadeOut: 'Fade Out (0.5s)'
+    } : {
+      fadeIn: '페이드 인 (0.5초)',
+      fadeOut: '페이드 아웃 (0.5초)'
+    };
+    function row(action, label, checked) {
+      return (
+        '<button type="button" class="postprod-ctx-item' + (checked ? ' is-on' : '') + '" data-action="' + action + '" role="menuitemcheckbox" aria-checked="' + (checked ? 'true' : 'false') + '">' +
+          '<span class="postprod-ctx-check">' + (checked ? '✓' : '') + '</span>' +
+          '<span class="postprod-ctx-label">' + escapeHtml(label) + '</span>' +
+        '</button>'
+      );
+    }
+    menu.root.innerHTML = row('toggle-fade-in', labels.fadeIn, fadeInChecked) + row('toggle-fade-out', labels.fadeOut, fadeOutChecked);
+    menu.root.dataset.clipId = clipId;
+    // 일단 화면 밖에 우선 표시하여 크기 측정 후 viewport 안으로 위치 조정
+    menu.root.style.display = 'block';
+    menu.root.style.left = '-9999px';
+    menu.root.style.top = '-9999px';
+    var rect = menu.root.getBoundingClientRect();
+    var vw = window.innerWidth;
+    var vh = window.innerHeight;
+    var px = Math.min(x, vw - rect.width - 4);
+    var py = Math.min(y, vh - rect.height - 4);
+    menu.root.style.left = Math.max(4, px) + 'px';
+    menu.root.style.top = Math.max(4, py) + 'px';
+    // 액션 핸들러 (메뉴 인스턴스마다 한 번만 등록)
+    menu.root.onclick = function (e) {
+      var btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      var action = btn.dataset.action;
+      var cid = menu.root.dataset.clipId;
+      if (!cid) return;
+      if (action === 'toggle-fade-in') {
+        setClipFade(cid, 'fadeIn', !findClip(cid).fadeIn);
+      } else if (action === 'toggle-fade-out') {
+        setClipFade(cid, 'fadeOut', !findClip(cid).fadeOut);
+      }
+      menu.hide();
+    };
+  }
+
   function getClipMotionPreset(clipId) {
     if (!clipId) return 'none';
     // sessionEdits 우선 (현재 세션에서 변경한 값)
@@ -2713,7 +2851,9 @@
         var end = clamp(toNumber(edit.end, clip.end), start + 0.2, clampUpper);
         maxEnd = Math.max(maxEnd, end);
         var motionPreset = edit.motionPreset || clip.motionPreset || 'none';
-        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset });
+        var fadeIn = typeof edit.fadeIn === 'boolean' ? edit.fadeIn : !!clip.fadeIn;
+        var fadeOut = typeof edit.fadeOut === 'boolean' ? edit.fadeOut : !!clip.fadeOut;
+        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset, fadeIn: fadeIn, fadeOut: fadeOut });
       }).filter(Boolean);
 
       // split / 미디어 브라우저로 생성된 신규 클립을 트랙에 삽입.
@@ -3554,6 +3694,8 @@
     if (!host || !image || !empty || !gap) return;
 
     var clip = getActiveVisualClip(sec);
+    // 페이드 오버레이는 활성 클립의 fadeIn/fadeOut 설정과 sec로 매번 갱신
+    applyFadeOverlay(clip, sec);
     if (!clip) {
       host.style.display = 'none';
       image.style.display = 'none';
@@ -3772,6 +3914,8 @@
       '<img id="postprod-preview-overlay" class="postprod-preview-overlay" style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);max-width:80%;max-height:80%;z-index:4;display:none;pointer-events:none;" />' +
       '<div id="postprod-preview-subtitles" class="postprod-preview-subtitles" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:6%;display:none;pointer-events:none;text-align:center;padding:0 6%;z-index:5;"></div>' +
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
+      // 페이드 인/아웃 오버레이 — 활성 클립의 fadeIn/fadeOut 설정에 따라 opacity 갱신
+      '<div id="postprod-preview-fade" class="postprod-preview-fade" aria-hidden="true" style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:6;"></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
       '<p>프로덕션 결과 미디어가 아직 없습니다.</p>' +
       '</div>' +
@@ -5068,6 +5212,15 @@
           return;
         }
         beginClipDrag(evt, clipEl, 'move');
+      };
+
+      // 우클릭 → 클립 컨텍스트 메뉴 (페이드 인/아웃 등). 우선 클립 선택 보정.
+      clipEl.oncontextmenu = function (evt) {
+        evt.preventDefault();
+        var cid = clipEl.getAttribute('data-clip-id');
+        if (!cid) return;
+        if (state.selectedClipId !== cid) selectClip(cid);
+        showClipContextMenu(cid, evt.clientX, evt.clientY);
       };
 
       clipEl.onclick = function (evt) {

@@ -6546,6 +6546,48 @@ html.page-shell-image #sidebar-project-card {
   font-size: 18px; cursor: pointer;
 }
 .postprod-mb-lightbox-close:hover { background: rgba(255,255,255,0.2); }
+
+/* ── 클립 우클릭 컨텍스트 메뉴 ────────────────────────────────────── */
+.postprod-clip-context-menu {
+  position: fixed;
+  z-index: 10001;
+  min-width: 180px;
+  background: var(--card, #131a2e);
+  border: 1px solid var(--border, rgba(255,255,255,0.14));
+  border-radius: 8px;
+  box-shadow: 0 14px 32px rgba(0,0,0,0.6);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.postprod-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--text, #e8edf8);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+.postprod-ctx-item:hover,
+.postprod-ctx-item:focus-visible {
+  background: rgba(255,255,255,0.07);
+  outline: none;
+}
+.postprod-ctx-item.is-on .postprod-ctx-label { color: #ffd500; font-weight: 600; }
+.postprod-ctx-check {
+  width: 14px;
+  text-align: center;
+  color: #ffd500;
+  font-weight: 700;
+}
+.postprod-ctx-label { flex: 1; }
 /* ──────────────────────────────────────────────────────────────── */
 
 .postprod-render-preview {
