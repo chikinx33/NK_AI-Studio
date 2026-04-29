@@ -2280,10 +2280,37 @@
   // ── 미디어 브라우저 모달 ─────────────────────────────────────────────────
   var mediaBrowserModal = null;
 
-  // 프로젝트의 모든 이미지/영상을 두 분류로 평탄화하여 반환.
-  // 라벨은 buildTimelineModel과 동일한 규칙: scene.title이 있으면 그대로,
-  // 없으면 언어별 fallback ('Scene N' / '씬 N'). 컷은 sh.id (예: '1.1') 또는
-  // 언어별 fallback ('Cut M' / '컷 M').
+  // 프리/프로덕션의 라벨링 로직과 일치시키기 위해 sceneLocation 기반 그룹화.
+  // 같은 sceneLocation이 연속하는 scenes를 한 'Scene N' 그룹으로 묶고, 그룹 내에
+  // cutNo 부여. 단일 컷 그룹 → 'Scene N', 복수 컷 → 'Scene N cut M'.
+  // (scenario.js의 labelByIdx 로직과 동일한 규칙.)
+  function buildSceneGroupLabels(scenes, lang) {
+    var sceneFallback = lang === 'en' ? 'Scene ' : '씬 ';
+    var cutWord = lang === 'en' ? 'cut' : '컷';
+    var lastLoc = null;
+    var parentNo = 0;
+    var cutNo = 0;
+    var seq = [];
+    var totalByParent = {};
+    (scenes || []).forEach(function (sc) {
+      var loc = String((sc && sc.sceneLocation) || '').trim();
+      if (!loc || loc !== lastLoc) {
+        parentNo += 1;
+        cutNo = 1;
+        lastLoc = loc;
+      } else {
+        cutNo += 1;
+      }
+      seq.push({ parentNo: parentNo, cutNo: cutNo });
+      totalByParent[parentNo] = cutNo;
+    });
+    return seq.map(function (g) {
+      var total = totalByParent[g.parentNo] || 1;
+      if (total <= 1) return sceneFallback + g.parentNo;
+      return sceneFallback + g.parentNo + ' ' + cutWord + g.cutNo;
+    });
+  }
+
   function getAllProjectMedia() {
     var project = getProjectByStateId() || resolveProject();
     if (!project) return { images: [], videos: [] };
@@ -2291,10 +2318,12 @@
     var images = [];
     var videos = [];
     var lang = currentLang();
-    var sceneFallback = lang === 'en' ? 'Scene ' : '씬 ';
-    var cutFallback = lang === 'en' ? 'Cut ' : '컷 ';
+    var cutFallback = lang === 'en' ? 'cut' : '컷 ';
+    // 그룹 라벨 미리 계산 → 프리/프로덕션과 1:1 일치
+    var groupLabels = buildSceneGroupLabels(scenes, lang);
     scenes.forEach(function (scene, i) {
-      var sceneLabel = firstFilled([scene.title]) || (sceneFallback + (i + 1));
+      // scene.title이 명시 지정돼 있으면 우선, 없으면 그룹 기반 라벨 ('Scene 1 cut1' 등)
+      var sceneLabel = firstFilled([scene.title]) || groupLabels[i] || ((lang === 'en' ? 'Scene ' : '씬 ') + (i + 1));
       var shotsArr = Array.isArray(scene.shots) ? scene.shots : [];
       var shotsWithMedia = shotsArr.filter(function (sh) {
         return !!(firstFilled([sh.videoUrl, sh.videoPlaybackUrl, sh.generatedVideoUrl, sh.videoPath,
@@ -2325,14 +2354,14 @@
         }
       }
       if (shotsWithMedia.length) {
+        // legacy shots 모델 — 각 shot이 컷
         shotsArr.forEach(function (sh, j) {
           var cutId = firstFilled([sh.id]) || (cutFallback + (j + 1));
           pushUnit(sh, 'vis-' + i + '-' + j, sceneLabel + ' · ' + cutId);
         });
       } else {
-        // 평탄화 모델 (v2.702+): scene 자체가 한 컷. cut 1로 명시 표시해서
-        // 프리/프로덕션의 'Scene N · Cut 1' 표기와 시각적으로 일치시킴.
-        pushUnit(scene, 'vis-' + i, sceneLabel + ' · ' + cutFallback + '1');
+        // 평탄화 모델 — sceneLabel에 이미 'Scene N cut M' 또는 'Scene N'이 들어있음
+        pushUnit(scene, 'vis-' + i, sceneLabel);
       }
     });
     return { images: images, videos: videos };
