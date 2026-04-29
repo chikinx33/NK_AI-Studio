@@ -4604,7 +4604,9 @@
       recomputeModelTotalDuration();
       renderTimelineSection(state.model);
       bindEvents();
-      setCurrentTime(d.nextStart, true);
+      // 재생바는 사용자가 둔 자리에 그대로 — 클립 이동에 따라가지 않음.
+      // 단, 미리보기는 현재 재생바 위치 기준 클립으로 업데이트.
+      syncPreviewMedia(state.currentTime);
       state.justDragged = !!d.moved;
       state.isPointerDown = false;
       state.drag = null;
@@ -4635,7 +4637,8 @@
         renderTimelineSection(state.model);
         bindEvents();
       }
-      setCurrentTime(clip.start, true);
+      // 재생바는 그대로 — 미리보기만 현재 위치 기준 클립으로 갱신
+      syncPreviewMedia(state.currentTime);
     }
     state.justDragged = !!d.moved;
     state.isPointerDown = false;
