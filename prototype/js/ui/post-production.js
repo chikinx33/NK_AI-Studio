@@ -3897,6 +3897,32 @@
     });
   }
 
+  // Shift+드래그 시 플레이헤드를 모든 트랙 클립의 시작/끝점 또는 t=0에 흡착시킴
+  function snapTimePosToAnyClipEdge(candidatePos, thresholdSec) {
+    if (!state.model) return candidatePos;
+    var bestPos = candidatePos;
+    var bestDist = Infinity;
+    var tracks = state.model.tracks || [];
+    for (var ti = 0; ti < tracks.length; ti++) {
+      var clips = (tracks[ti] && tracks[ti].clips) || [];
+      for (var i = 0; i < clips.length; i++) {
+        var c = clips[i];
+        if (!c) continue;
+        var targets = [c.start, c.end];
+        for (var tg = 0; tg < targets.length; tg++) {
+          var dd = Math.abs(targets[tg] - candidatePos);
+          if (dd < thresholdSec && dd < bestDist) {
+            bestDist = dd;
+            bestPos = targets[tg];
+          }
+        }
+      }
+    }
+    var dz = Math.abs(candidatePos);
+    if (dz < thresholdSec && dz < bestDist) { bestDist = dz; bestPos = 0; }
+    return bestPos;
+  }
+
   function seekByTimelinePointer(evt, laneEl) {
     if (!evt || !laneEl || !state.model) return;
     var rect = laneEl.getBoundingClientRect();
@@ -3905,6 +3931,12 @@
     var ratio = x / rect.width;
     var duration = Math.max(1, toNumber(state.timelineDuration, getTimelineViewportDuration(state.model)) || 1);
     var sec = ratio * duration;
+    // Shift 누르고 있으면 모든 트랙 클립의 시작/끝점에 자동 흡착 (8px 화면 거리 기준)
+    if (evt.shiftKey) {
+      var pixelsPerSec = state.laneWidth / Math.max(1, duration);
+      var snapThresholdSec = 8 / Math.max(1, pixelsPerSec);
+      sec = snapTimePosToAnyClipEdge(sec, snapThresholdSec);
+    }
     setCurrentTime(sec, true);
   }
 
