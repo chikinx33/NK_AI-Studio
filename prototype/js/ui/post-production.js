@@ -2330,7 +2330,9 @@
           pushUnit(sh, 'vis-' + i + '-' + j, sceneLabel + ' · ' + cutId);
         });
       } else {
-        pushUnit(scene, 'vis-' + i, sceneLabel);
+        // 평탄화 모델 (v2.702+): scene 자체가 한 컷. cut 1로 명시 표시해서
+        // 프리/프로덕션의 'Scene N · Cut 1' 표기와 시각적으로 일치시킴.
+        pushUnit(scene, 'vis-' + i, sceneLabel + ' · ' + cutFallback + '1');
       }
     });
     return { images: images, videos: videos };
