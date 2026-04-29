@@ -1328,16 +1328,13 @@
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
-    // 방어적 재연결: renderTimelineSection이 host를 건드리지는 않지만,
-    // 어떤 흐름에서든 video가 detached된 상태라면 현재 host에 다시 붙인다.
+    // 방어적 재연결: 어떤 흐름에서든 video가 detached됐다면 현재 host에 다시 붙임.
+    // scrubSeekVideo는 활성 비디오에만 호출되므로 opacity 1로 보정해도 안전.
     var host = getPreviewVideoHost();
     if (host && video.parentNode !== host) {
       try { host.appendChild(video); } catch (_) {}
       try { applyVideoLayerStyles(video); } catch (_) {}
-      // 활성 비디오라면 보여야 하므로 opacity도 보정
-      if (state.previewActiveUrl && video.src && state.previewActiveUrl === video.src) {
-        try { video.style.opacity = '1'; video.style.zIndex = '2'; } catch (_) {}
-      }
+      try { video.style.opacity = '1'; video.style.zIndex = '2'; } catch (_) {}
     }
     if (video.readyState < 1) {
       var onMeta = function () {
@@ -3497,6 +3494,16 @@
         // URL 기반 캐시: 같은 소스 URL을 쓰는 클립들은 동일 video 엘리먼트 공유
         var fpEntry = state.previewVideoCache && state.previewVideoCache[playableUrl];
         var fpVid = fpEntry && fpEntry.video;
+        // 캐시 miss recovery: 어떤 이유로든 캐시에 없으면 즉시 생성·마운트.
+        // 편집 후 reload된 split 클립 등에서 발생하는 비결정적 cache miss로
+        // 인한 'frame이 갱신 안 됨' 회귀를 차단.
+        if (!fpVid) {
+          var fpRecover = ensurePreviewVideoForUrl(playableUrl);
+          if (fpRecover && fpRecover.video) {
+            mountPreviewVideoByUrl(playableUrl);
+            fpVid = fpRecover.video;
+          }
+        }
         if (fpVid) {
           if (!state.isPlaying) {
             // 스크럽: 모든 이벤트마다 정확한 위치로 seek (scrubSeekVideo가 wake +
