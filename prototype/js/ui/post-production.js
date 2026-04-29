@@ -701,17 +701,15 @@
     var lang = currentLang();
     var fadeInChecked = !!clip.fadeIn;
     var fadeOutChecked = !!clip.fadeOut;
-    var soundOnChecked = clip.soundOn !== false; // 기본 true
+    var audioChecked = clip.soundOn !== false; // 기본 true (✓이면 오디오 켜짐)
     var labels = lang === 'en' ? {
       fadeIn: 'Fade In (0.5s)',
       fadeOut: 'Fade Out (0.5s)',
-      soundOn: 'Sound On',
-      soundOff: 'Sound Off'
+      audio: 'Audio'
     } : {
       fadeIn: '페이드 인 (0.5초)',
       fadeOut: '페이드 아웃 (0.5초)',
-      soundOn: '사운드 On',
-      soundOff: '사운드 Off'
+      audio: '오디오'
     };
     function row(action, label, checked) {
       return (
@@ -722,13 +720,11 @@
       );
     }
     function divider() { return '<div class="postprod-ctx-divider"></div>'; }
-    // Sound On/Off는 두 줄로 표시해서 현재 상태를 명확히 보여줌 (라디오처럼).
     menu.root.innerHTML =
       row('toggle-fade-in', labels.fadeIn, fadeInChecked) +
       row('toggle-fade-out', labels.fadeOut, fadeOutChecked) +
       divider() +
-      row('sound-on', labels.soundOn, soundOnChecked) +
-      row('sound-off', labels.soundOff, !soundOnChecked);
+      row('toggle-audio', labels.audio, audioChecked);
     menu.root.dataset.clipId = clipId;
     // 일단 화면 밖에 우선 표시하여 크기 측정 후 viewport 안으로 위치 조정
     menu.root.style.display = 'block';
@@ -752,10 +748,11 @@
         setClipFade(cid, 'fadeIn', !findClip(cid).fadeIn);
       } else if (action === 'toggle-fade-out') {
         setClipFade(cid, 'fadeOut', !findClip(cid).fadeOut);
-      } else if (action === 'sound-on') {
-        setClipSoundOn(cid, true);
-      } else if (action === 'sound-off') {
-        setClipSoundOn(cid, false);
+      } else if (action === 'toggle-audio') {
+        // 현재 오디오 상태(soundOn) 반전. 기본 true이므로 undefined도 true로 처리.
+        var cur = findClip(cid);
+        var isOn = cur ? (cur.soundOn !== false) : true;
+        setClipSoundOn(cid, !isOn);
       }
       menu.hide();
     };
