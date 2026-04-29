@@ -2390,7 +2390,22 @@
   }
 
   function ensureMediaBrowserModal() {
-    if (mediaBrowserModal && mediaBrowserModal.root && mediaBrowserModal.root.parentNode) return mediaBrowserModal;
+    // 1) 캐시된 modal이 있고 DOM에 살아있으며 i18n 핵심 셀렉터가 모두 존재하면 재사용.
+    //    (OLD 버전이 남아있는 경우 셀렉터가 누락되어 textContent 갱신이 안 됨 → 재생성)
+    if (mediaBrowserModal && mediaBrowserModal.root && mediaBrowserModal.root.parentNode) {
+      var hasTitle = !!mediaBrowserModal.root.querySelector('#postprod-mb-title');
+      var hasInsert = !!mediaBrowserModal.insertBtn;
+      var hasImgSec = !!mediaBrowserModal.root.querySelector('[data-i18n-section="images"]');
+      if (hasTitle && hasInsert && hasImgSec) return mediaBrowserModal;
+      // 옛 구조 — 제거 후 재생성
+      try { mediaBrowserModal.root.remove(); } catch (_) {}
+      mediaBrowserModal = null;
+    }
+    // 2) DOM에 동일 클래스의 stray modal이 있으면(이전 페이지 로드 잔존) 모두 제거
+    try {
+      var stray = document.querySelectorAll('.postprod-media-browser-modal');
+      stray.forEach(function (el) { try { el.remove(); } catch (_) {} });
+    } catch (_) {}
     var root = document.createElement('div');
     root.className = 'postprod-media-browser-modal';
     root.setAttribute('aria-hidden', 'true');
