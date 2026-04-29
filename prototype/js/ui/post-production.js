@@ -3340,6 +3340,8 @@
       renderLayout(model);
       return;
     }
+    // scroll.innerHTML 교체 시 scrollLeft가 0으로 초기화되므로 사전 보존 → 사후 복원.
+    var prevScrollLeft = Number(scroll.scrollLeft || 0);
     var playbackDuration = getTimelinePlaybackDuration(model);
     var timelineDuration = getTimelineViewportDuration(model);
     state.timelineDuration = timelineDuration;
@@ -3365,6 +3367,9 @@
       '</div>' +
       '</div>' +
       buildTrackRowsHtml(model, laneWidth, playheadLeft, timelineDuration);
+    if (prevScrollLeft > 0) {
+      try { scroll.scrollLeft = prevScrollLeft; } catch (_) { }
+    }
     updateZoomUi();
   }
 
@@ -4658,10 +4663,14 @@
 
   // Shift 스냅 헬퍼: 후보 위치 candidatePos를 다른 클립들의 시작/끝점, t=0,
   // 그리고 현재 재생바(playhead) 위치에 흡착시킨다.
-  // thresholdSec 안에 있는 가장 가까운 스냅 포인트를 선택, 없으면 원본 그대로.
+  // thresholdSec 안에 있는 가장 가까운 스냅 포인트를 반환, 없으면 null.
+  //
+  // ⚠️ 호출자 주의: 스냅 미발생을 candidatePos로 표현하면, 호출자가
+  // dist=|snap-cand|=0으로 잘못 해석해 "거리 0인 완벽한 스냅"으로 우대해버린다.
+  // 그래서 미스 시 null을 돌려 명시적으로 구분한다.
   // siblings는 동일 트랙의 클립들 (origSiblings).
   function snapShiftPos(candidatePos, siblings, ownId, thresholdSec) {
-    var bestPos = candidatePos;
+    var bestPos = null;
     var bestDist = Infinity;
     if (siblings && siblings.length) {
       for (var i = 0; i < siblings.length; i++) {
@@ -4692,7 +4701,7 @@
         bestPos = state.currentTime;
       }
     }
-    return bestPos;
+    return bestPos; // null = no snap, else snap target position
   }
 
   function updateClipDrag(evt) {
@@ -4721,12 +4730,13 @@
     // snap/swap 결정은 마우스 놓을 때(endClipDrag)에서 수행.
     if (d.mode === 'move' && d.sequential && d.origSiblings && d.origSiblings.length > 1) {
       var rawStart = Math.max(0, d.origStart + deltaSec);
-      // Shift 스냅: 좌측 가장자리 또는 우측 가장자리 중 더 가까운 쪽을 흡착
+      // Shift 스냅: 좌측 가장자리 또는 우측 가장자리 중 더 가까운 쪽을 흡착.
+      // snapShiftPos가 null을 반환하면(=미스) 거리는 Infinity로 처리 → 가짜 0 우선순위 방지.
       if (shiftHeld) {
         var snapL = snapShiftPos(rawStart, snapSiblings, d.clipId, snapThresholdSec);
         var snapR = snapShiftPos(rawStart + d.duration, snapSiblings, d.clipId, snapThresholdSec);
-        var dL = Math.abs(snapL - rawStart);
-        var dR = Math.abs(snapR - (rawStart + d.duration));
+        var dL = (snapL == null) ? Infinity : Math.abs(snapL - rawStart);
+        var dR = (snapR == null) ? Infinity : Math.abs(snapR - (rawStart + d.duration));
         if (dL <= dR && dL < snapThresholdSec) rawStart = Math.max(0, snapL);
         else if (dR < snapThresholdSec) rawStart = Math.max(0, snapR - d.duration);
       }
@@ -4764,8 +4774,8 @@
       if (shiftHeld) {
         var snapLm = snapShiftPos(start, snapSiblings, d.clipId, snapThresholdSec);
         var snapRm = snapShiftPos(start + d.duration, snapSiblings, d.clipId, snapThresholdSec);
-        var dLm = Math.abs(snapLm - start);
-        var dRm = Math.abs(snapRm - (start + d.duration));
+        var dLm = (snapLm == null) ? Infinity : Math.abs(snapLm - start);
+        var dRm = (snapRm == null) ? Infinity : Math.abs(snapRm - (start + d.duration));
         if (dLm <= dRm && dLm < snapThresholdSec) start = clamp(snapLm, minStart, maxStart);
         else if (dRm < snapThresholdSec) start = clamp(snapRm - d.duration, minStart, maxStart);
       } else {
@@ -4779,7 +4789,7 @@
       start = clamp(d.origStart + deltaSec, leftMin, leftMax);
       if (shiftHeld) {
         var snappedL = snapShiftPos(start, snapSiblings, d.clipId, snapThresholdSec);
-        start = clamp(snappedL, leftMin, leftMax);
+        if (snappedL != null) start = clamp(snappedL, leftMin, leftMax);
       } else {
         start = clamp(snap(start), leftMin, leftMax);
       }
@@ -4792,7 +4802,7 @@
       end = clamp(d.origEnd + deltaSec, rightMin, rightMax);
       if (shiftHeld) {
         var snappedR = snapShiftPos(end, snapSiblings, d.clipId, snapThresholdSec);
-        end = clamp(snappedR, rightMin, rightMax);
+        if (snappedR != null) end = clamp(snappedR, rightMin, rightMax);
       } else {
         end = clamp(snap(end), rightMin, rightMax);
       }
@@ -5485,6 +5495,15 @@
     var root = document.getElementById('postprod-root');
     if (!root) return;
 
+    // 타임라인 가로 스크롤 위치 보존: post.render는 root.innerHTML을 통째로
+    // 재구성하므로, 클립 자르기/삭제/이동 직후 사용자가 보고 있던 위치가
+    // 0으로 되돌아가 작업 흐름이 끊긴다. 재구성 전에 저장 → 재구성 후 복원.
+    var __prevScrollLeft = 0;
+    try {
+      var __prevScrollEl = document.getElementById('postprod-timeline-scroll');
+      if (__prevScrollEl) __prevScrollLeft = Number(__prevScrollEl.scrollLeft || 0);
+    } catch (_) { }
+
     var project = hydrateProjectScenesFromPipeline(resolveProject());
     if (project && !state.overlayClips.length) {
       loadOverlayClipsFromProject(project);
@@ -5571,6 +5590,14 @@
     // 모든 비디오 클립을 host에 사전 마운트 — 스크럽 전환 시 DOM 이동 지연 제거
     ensureAllPreviewVideosMounted(model);
     setCurrentTime(state.currentTime, true);
+
+    // 가로 스크롤 위치 복원 (재구성으로 0으로 되돌아간 것을 사용자 위치로 되돌림).
+    if (__prevScrollLeft > 0) {
+      try {
+        var __nextScrollEl = document.getElementById('postprod-timeline-scroll');
+        if (__nextScrollEl) __nextScrollEl.scrollLeft = __prevScrollLeft;
+      } catch (_) { }
+    }
   };
 
   post.init = function () {
