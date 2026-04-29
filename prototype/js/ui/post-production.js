@@ -305,6 +305,18 @@
     if (raw.indexOf('storage.googleapis.com') >= 0 || raw.indexOf('gs://') === 0) {
       return NK.api.mediaProxyUrl(raw);
     }
+    // 이미 /api/media/proxy?objectName=...&nk_token=... 형태라면 token이 만료됐을 수
+    // 있으므로 objectName만 추출해 현재 token으로 재생성. 편집·저장 후 재로드 시
+    // 옛 token이 박힌 URL로 video.src를 설정하면 401 발생하던 회귀 차단.
+    try {
+      var parsed = new URL(raw, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
+      if (parsed.pathname === '/api/media/proxy' || parsed.pathname.indexOf('/api/media/proxy') >= 0) {
+        var obj = parsed.searchParams.get('objectName') || '';
+        if (obj && NK.api.mediaProxyObjectUrl) {
+          return NK.api.mediaProxyObjectUrl(obj);
+        }
+      }
+    } catch (_) { }
     return raw;
   }
 
