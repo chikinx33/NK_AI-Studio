@@ -1403,6 +1403,10 @@
         try { e.video.cancelVideoFrameCallback(e.video.__scrubRVFCId); } catch (_) {}
         e.video.__scrubRVFCId = 0;
       }
+      if (e.video.__scrubOnSeeked) {
+        try { e.video.removeEventListener('seeked', e.video.__scrubOnSeeked); } catch (_) {}
+        e.video.__scrubOnSeeked = null;
+      }
       if (e.video.parentNode) {
         try { e.video.parentNode.removeChild(e.video); } catch (_) { }
       }
@@ -1503,15 +1507,20 @@
   //   1) currentTime = target  — 정확한 위치로 즉시 seek
   //   2) paused 비디오는 muted play()를 트리거 — Chromium은 paused 상태에서
   //      currentTime 변경만으로 화면 프레임을 갱신하지 않으므로 강제 디코드 필요
-  //   3-A) requestVideoFrameCallback(rVFC) 사용 가능하면 프레임이 실제로
-  //        화면에 표시된 직후 pause + snap-back (정확한 타이밍, 고정 ms 불필요)
-  //   3-B) rVFC 없으면 150ms 타이머로 fallback
-  //   4) 항상 300ms 안전망 타이머: rVFC가 와도 안오는 상황(play() 거절, 디코더
-  //      정지 등) 에서도 반드시 snap-back이 실행되도록 보장
-  // ── 정지화면 발생 근본 원인 ──────────────────────────────────────────────
-  //   구 80ms 고정 타이머: 디코더가 80ms 내에 새 프레임을 디코딩하지 못하면
-  //   타이머가 먼저 발화 → 이전 프레임 상태로 pause → 정지화면.
-  //   rVFC는 실제 새 프레임이 GPU 출력된 직후 발화하므로 이 레이스가 원천 차단됨.
+  //   3) seeked 이벤트 — seek 완료 직후 즉시 pause (video 엘리먼트 표시는 seeked 시점에 갱신)
+  //   4) 150ms 안전망 타이머 — seeked 미발화·play() 거절 시 fallback
+  //
+  // ── 왜 seeked이고 rVFC가 아닌가 ─────────────────────────────────────────
+  //   rVFC(requestVideoFrameCallback)는 "GPU 출력 직후" 발화하는데, seek 이전
+  //   프레임에도 발화한다. 즉 seek 완료 전에 rVFC가 먼저 fire → 엉뚱한 프레임에서
+  //   pause → 정지화면. 더욱이 300ms 안전망까지 더해져 심한 버벅임이 발생.
+  //
+  //   seeked는 seek 완료 시점에만 발화. video 엘리먼트 표시는 이 시점에 이미 새
+  //   프레임으로 갱신됨(canvas.drawImage 와 달리 video 엘리먼트 자체는 seeked 시점에
+  //   올바른 프레임을 렌더링). → seek 완료 즉시 pause → 정확하고 빠른 스크럽.
+  //
+  //   rVFC는 렌더링 경로(canvas 캡처용)에만 사용. 스크럽 프리뷰(video 엘리먼트 표시)는
+  //   seeked가 최적.
   // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
   function scrubSeekVideo(video, t) {
     if (!video) return;
@@ -1535,7 +1544,7 @@
     try { video.currentTime = target; } catch (_) { return; }
     // 재생 중이면 wake 불필요 (이미 디코더 활성)
     if (state.isPlaying) return;
-    // 이전 pause/rVFC 메커니즘 취소 — 새 seek에 의해 무효화됨
+    // 이전 pause/seeked 메커니즘 취소 — 새 seek에 의해 무효화됨
     if (video.__scrubPauseTimer) {
       clearTimeout(video.__scrubPauseTimer);
       video.__scrubPauseTimer = 0;
@@ -1544,51 +1553,46 @@
       try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
       video.__scrubRVFCId = 0;
     }
+    if (video.__scrubOnSeeked) {
+      try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
+      video.__scrubOnSeeked = null;
+    }
     try { video.muted = true; } catch (_) {}
     try { video.play().catch(function () { }); } catch (_) {}
-    // 세대 카운터: 취소된 rVFC 콜백이 늦게 발화해도 stale 여부를 구분
+    // 세대 카운터: 연속 seek 시 stale 이벤트 무시용
     var gen = (video.__scrubGen = ((video.__scrubGen || 0) + 1) & 0xFFFF);
-    // snap-back 공통 처리: pause + 타겟 위치 정밀 복귀
-    var snapBack = function () {
-      if (state.isPlaying) return;
-      if (!video.paused) { try { video.pause(); } catch (_) {} }
+    var capturedGen = gen;
+    // 1차: seeked 이벤트 — seek 완료 직후 즉시 pause (반응 속도 최우선)
+    // seek 완료 시 currentTime이 이미 target이므로 snap-back 불필요
+    video.__scrubOnSeeked = function () {
+      try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
+      video.__scrubOnSeeked = null;
+      if (video.__scrubGen !== capturedGen) return;   // stale: 이미 다음 seek 진행 중
+      if (video.__scrubPauseTimer) {
+        clearTimeout(video.__scrubPauseTimer);
+        video.__scrubPauseTimer = 0;
+      }
+      if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
+    };
+    try { video.addEventListener('seeked', video.__scrubOnSeeked); } catch (_) {
+      video.__scrubOnSeeked = null;
+    }
+    // 안전망 타이머: seeked 미발화(이미 타겟 위치·play() 거절·버퍼 없음) 시 대비
+    // snap-back은 여기서만: 타임아웃 경로에서 drifted 경우에만 보정
+    video.__scrubPauseTimer = setTimeout(function () {
+      video.__scrubPauseTimer = 0;
+      if (video.__scrubOnSeeked) {
+        try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
+        video.__scrubOnSeeked = null;
+      }
+      if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
       var t2 = video.__scrubTarget;
       if (typeof t2 === 'number' && isFinite(t2)) {
         if (Math.abs((video.currentTime || 0) - t2) > 0.01) {
           try { video.currentTime = t2; } catch (_) {}
         }
       }
-    };
-    // 우선: requestVideoFrameCallback — 실제 프레임 표시 직후 발화 (정지화면 방지의 핵심)
-    var useRVFC = typeof video.requestVideoFrameCallback === 'function';
-    if (useRVFC) {
-      var capturedGen = gen;
-      try {
-        video.__scrubRVFCId = video.requestVideoFrameCallback(function () {
-          video.__scrubRVFCId = 0;
-          // stale 콜백 무시: 이미 다음 seek가 발행된 경우
-          if (video.__scrubGen !== capturedGen) return;
-          if (video.__scrubPauseTimer) {
-            clearTimeout(video.__scrubPauseTimer);
-            video.__scrubPauseTimer = 0;
-          }
-          snapBack();
-        });
-      } catch (_) {
-        video.__scrubRVFCId = 0;
-        useRVFC = false;
-      }
-    }
-    // 안전망 타이머: rVFC가 없거나 play() 거절·디코더 정지 등으로 rVFC가 오지 않을 때 동작
-    // rVFC 사용 시 300ms(충분한 여유), 미사용 시 150ms(구 80ms보다 넉넉하게)
-    video.__scrubPauseTimer = setTimeout(function () {
-      video.__scrubPauseTimer = 0;
-      if (video.__scrubRVFCId && typeof video.cancelVideoFrameCallback === 'function') {
-        try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
-        video.__scrubRVFCId = 0;
-      }
-      snapBack();
-    }, useRVFC ? 300 : 150);
+    }, 150);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -1695,6 +1699,10 @@
       if (e.video.__scrubRVFCId && typeof e.video.cancelVideoFrameCallback === 'function') {
         try { e.video.cancelVideoFrameCallback(e.video.__scrubRVFCId); } catch (_) {}
         e.video.__scrubRVFCId = 0;
+      }
+      if (e.video.__scrubOnSeeked) {
+        try { e.video.removeEventListener('seeked', e.video.__scrubOnSeeked); } catch (_) {}
+        e.video.__scrubOnSeeked = null;
       }
       if (e.video.parentNode) {
         try { e.video.parentNode.removeChild(e.video); } catch (_) { }
