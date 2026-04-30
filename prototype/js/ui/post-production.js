@@ -2937,7 +2937,10 @@
         var fadeIn = typeof edit.fadeIn === 'boolean' ? edit.fadeIn : !!clip.fadeIn;
         var fadeOut = typeof edit.fadeOut === 'boolean' ? edit.fadeOut : !!clip.fadeOut;
         var soundOn = typeof edit.soundOn === 'boolean' ? edit.soundOn : (clip.soundOn !== false);
-        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset, fadeIn: fadeIn, fadeOut: fadeOut, soundOn: soundOn });
+        // edit에 videoOffset이 명시된 경우 반드시 적용 (isNew 클립이 두 번째 applyTimelineEdits
+        // 패스에서 "기존 클립"으로 처리될 때 videoOffset을 유지시키기 위한 방어 코드)
+        var videoOffset = typeof edit.videoOffset === 'number' ? edit.videoOffset : (clip.videoOffset || 0);
+        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset, fadeIn: fadeIn, fadeOut: fadeOut, soundOn: soundOn, videoOffset: videoOffset });
       }).filter(Boolean);
 
       // split / 미디어 브라우저로 생성된 신규 클립을 트랙에 삽입.
@@ -4493,9 +4496,16 @@
       if (toAfter) {
         // Redo: 원본 클립 end 단축 + 신규 클립 복원
         persistTimelineEdit(action.clipId, action.origStart, action.splitTime);
+        // videoOffset·url·label·empty 없이 복원하면 save+reload 시 videoOffset=0으로
+        // 초기화되어 잘못된 구간이 재생되는 버그 발생 → 모든 필드 함께 저장
         edits[action.newClipId] = {
           isNew: true, sourceId: action.clipId, trackKey: action.trackKey,
-          start: action.splitTime, end: action.origEnd
+          start: action.splitTime, end: action.origEnd,
+          videoOffset: typeof action.newVideoOffset === 'number' ? action.newVideoOffset : 0,
+          url: action.clipUrl || '',
+          label: action.clipLabel || '',
+          empty: !!action.clipEmpty,
+          baseDuration: Math.max(0.2, action.origEnd - action.splitTime)
         };
       } else {
         // Undo: 원본 클립 end 복원 + 신규 클립 제거
@@ -5068,7 +5078,12 @@
       trackKey: track.key,
       origStart: origStart,
       origEnd: origEnd,
-      splitTime: t
+      splitTime: t,
+      // Redo 복원 시 videoOffset·url 등이 필요하므로 함께 보관
+      newVideoOffset: newVideoOffset,
+      clipUrl: clip.url || '',
+      clipLabel: clip.label || '',
+      clipEmpty: !!clip.empty
     });
 
     setDirty(true);
