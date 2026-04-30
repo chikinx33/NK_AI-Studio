@@ -1399,6 +1399,10 @@
         try { clearTimeout(e.video.__scrubPauseTimer); } catch (_) {}
         e.video.__scrubPauseTimer = 0;
       }
+      if (e.video.__scrubRVFCId && typeof e.video.cancelVideoFrameCallback === 'function') {
+        try { e.video.cancelVideoFrameCallback(e.video.__scrubRVFCId); } catch (_) {}
+        e.video.__scrubRVFCId = 0;
+      }
       if (e.video.parentNode) {
         try { e.video.parentNode.removeChild(e.video); } catch (_) { }
       }
@@ -1497,16 +1501,22 @@
 
   // 스크럽 seek (통합 함수):
   //   1) currentTime = target  — 정확한 위치로 즉시 seek
-  //   2) paused 비디오는 muted play()를 짧게 트리거 — Chromium은 paused 상태에서
-  //      currentTime 변경만으로 화면 프레임을 갱신하지 않을 때가 많아 강제 디코드 필요
-  //   3) 80ms 후 pause + snap-back  — 지속 스크럽 중에는 setTimeout이 매번 reset되어
-  //      auto-pause가 발생하지 않고, 사용자가 멈추면 정확 위치로 정착
+  //   2) paused 비디오는 muted play()를 트리거 — Chromium은 paused 상태에서
+  //      currentTime 변경만으로 화면 프레임을 갱신하지 않으므로 강제 디코드 필요
+  //   3-A) requestVideoFrameCallback(rVFC) 사용 가능하면 프레임이 실제로
+  //        화면에 표시된 직후 pause + snap-back (정확한 타이밍, 고정 ms 불필요)
+  //   3-B) rVFC 없으면 150ms 타이머로 fallback
+  //   4) 항상 300ms 안전망 타이머: rVFC가 와도 안오는 상황(play() 거절, 디코더
+  //      정지 등) 에서도 반드시 snap-back이 실행되도록 보장
+  // ── 정지화면 발생 근본 원인 ──────────────────────────────────────────────
+  //   구 80ms 고정 타이머: 디코더가 80ms 내에 새 프레임을 디코딩하지 못하면
+  //   타이머가 먼저 발화 → 이전 프레임 상태로 pause → 정지화면.
+  //   rVFC는 실제 새 프레임이 GPU 출력된 직후 발화하므로 이 레이스가 원천 차단됨.
   // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
     // 방어적 재연결: 어떤 흐름에서든 video가 detached됐다면 현재 host에 다시 붙임.
-    // scrubSeekVideo는 활성 비디오에만 호출되므로 opacity 1로 보정해도 안전.
     var host = getPreviewVideoHost();
     if (host && video.parentNode !== host) {
       try { host.appendChild(video); } catch (_) {}
@@ -1525,33 +1535,66 @@
     try { video.currentTime = target; } catch (_) { return; }
     // 재생 중이면 wake 불필요 (이미 디코더 활성)
     if (state.isPlaying) return;
-    // paused 가드 없이 항상 muted + play() 호출. 이미 playing이면 브라우저가
-    // no-op으로 처리하지만, 'playing 중인데 디코더가 suspend된' 상태(warm
-    // pre-play 후 다른 클립으로 갔다가 돌아온 경우 등)에서도 명시적 wake가 일어남.
-    // 이전엔 if (video.paused) 가드 때문에 'warm으로 인해 playing 중인 첫 도달
-    // 클립'은 wake가 스킵되어 화면이 정지되는 비결정적 동작이 발생했다.
-    try { video.muted = true; } catch (_) {}
-    try { video.play().catch(function () { }); } catch (_) {}
-    // snap-back: 80ms 후 pause + 정확 위치로 복귀 (drift 방지)
+    // 이전 pause/rVFC 메커니즘 취소 — 새 seek에 의해 무효화됨
     if (video.__scrubPauseTimer) {
       clearTimeout(video.__scrubPauseTimer);
-    }
-    video.__scrubPauseTimer = setTimeout(function () {
       video.__scrubPauseTimer = 0;
+    }
+    if (video.__scrubRVFCId && typeof video.cancelVideoFrameCallback === 'function') {
+      try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
+      video.__scrubRVFCId = 0;
+    }
+    try { video.muted = true; } catch (_) {}
+    try { video.play().catch(function () { }); } catch (_) {}
+    // 세대 카운터: 취소된 rVFC 콜백이 늦게 발화해도 stale 여부를 구분
+    var gen = (video.__scrubGen = ((video.__scrubGen || 0) + 1) & 0xFFFF);
+    // snap-back 공통 처리: pause + 타겟 위치 정밀 복귀
+    var snapBack = function () {
       if (state.isPlaying) return;
-      if (!video || video.paused) return;
-      try { video.pause(); } catch (_) {}
+      if (!video.paused) { try { video.pause(); } catch (_) {} }
       var t2 = video.__scrubTarget;
       if (typeof t2 === 'number' && isFinite(t2)) {
         if (Math.abs((video.currentTime || 0) - t2) > 0.01) {
           try { video.currentTime = t2; } catch (_) {}
         }
       }
-    }, 80);
+    };
+    // 우선: requestVideoFrameCallback — 실제 프레임 표시 직후 발화 (정지화면 방지의 핵심)
+    var useRVFC = typeof video.requestVideoFrameCallback === 'function';
+    if (useRVFC) {
+      var capturedGen = gen;
+      try {
+        video.__scrubRVFCId = video.requestVideoFrameCallback(function () {
+          video.__scrubRVFCId = 0;
+          // stale 콜백 무시: 이미 다음 seek가 발행된 경우
+          if (video.__scrubGen !== capturedGen) return;
+          if (video.__scrubPauseTimer) {
+            clearTimeout(video.__scrubPauseTimer);
+            video.__scrubPauseTimer = 0;
+          }
+          snapBack();
+        });
+      } catch (_) {
+        video.__scrubRVFCId = 0;
+        useRVFC = false;
+      }
+    }
+    // 안전망 타이머: rVFC가 없거나 play() 거절·디코더 정지 등으로 rVFC가 오지 않을 때 동작
+    // rVFC 사용 시 300ms(충분한 여유), 미사용 시 150ms(구 80ms보다 넉넉하게)
+    video.__scrubPauseTimer = setTimeout(function () {
+      video.__scrubPauseTimer = 0;
+      if (video.__scrubRVFCId && typeof video.cancelVideoFrameCallback === 'function') {
+        try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
+        video.__scrubRVFCId = 0;
+      }
+      snapBack();
+    }, useRVFC ? 300 : 150);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
   // 디코더를 압도하는 것을 방지. 마지막 요청만 다음 프레임에 반영.
+  // seeking 가드 제거: scrubSeekVideo가 이전 rVFC/타이머를 취소하므로
+  // 이전 seek가 진행 중이어도 즉시 새 seek를 시작하는 것이 올바르고 더 반응적임.
   var _scrubRaf = { pending: {}, scheduled: false };
   function flushScrubSeeks() {
     _scrubRaf.scheduled = false;
@@ -1560,11 +1603,6 @@
     Object.keys(map).forEach(function (id) {
       var req = map[id];
       if (!req || !req.video) return;
-      if (req.video.seeking) {
-        // 현재 seek 중 — 다음 rAF에서 재시도
-        scheduleScrubSeek(id, req.video, req.time);
-        return;
-      }
       scrubSeekVideo(req.video, req.time);
     });
   }
@@ -1653,6 +1691,10 @@
       if (e.video.__scrubPauseTimer) {
         try { clearTimeout(e.video.__scrubPauseTimer); } catch (_) {}
         e.video.__scrubPauseTimer = 0;
+      }
+      if (e.video.__scrubRVFCId && typeof e.video.cancelVideoFrameCallback === 'function') {
+        try { e.video.cancelVideoFrameCallback(e.video.__scrubRVFCId); } catch (_) {}
+        e.video.__scrubRVFCId = 0;
       }
       if (e.video.parentNode) {
         try { e.video.parentNode.removeChild(e.video); } catch (_) { }
