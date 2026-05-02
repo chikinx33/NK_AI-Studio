@@ -541,8 +541,51 @@
     applyCurrentLocale();
   }
 
+  function captureDisclosureOpenState(root) {
+    if (!root || !root.querySelectorAll) return [];
+    var disclosures = root.querySelectorAll('.knowledge-hub-disclosure');
+    return Array.prototype.map.call(disclosures, function (el) { return !!el.open; });
+  }
+
+  function restoreDisclosureOpenState(root, state) {
+    if (!root || !state || !state.length || !root.querySelectorAll) return;
+    var disclosures = root.querySelectorAll('.knowledge-hub-disclosure');
+    Array.prototype.forEach.call(disclosures, function (el, idx) {
+      if (state[idx]) el.setAttribute('open', '');
+      else el.removeAttribute('open');
+    });
+  }
+
+  function captureActiveFieldState(root) {
+    if (!root) return null;
+    var active = (typeof document !== 'undefined') ? document.activeElement : null;
+    if (!active || !root.contains || !root.contains(active)) return null;
+    var id = active.id || '';
+    if (!id) return null;
+    var state = { id: id };
+    try {
+      if (typeof active.selectionStart === 'number') state.selectionStart = active.selectionStart;
+      if (typeof active.selectionEnd === 'number') state.selectionEnd = active.selectionEnd;
+    } catch (_) {}
+    return state;
+  }
+
+  function restoreActiveFieldState(root, state) {
+    if (!root || !state || !state.id) return;
+    var el = root.querySelector('#' + (window.CSS && CSS.escape ? CSS.escape(state.id) : state.id));
+    if (!el || typeof el.focus !== 'function') return;
+    try { el.focus(); } catch (_) {}
+    try {
+      if (typeof state.selectionStart === 'number' && typeof el.setSelectionRange === 'function') {
+        el.setSelectionRange(state.selectionStart, state.selectionEnd != null ? state.selectionEnd : state.selectionStart);
+      }
+    } catch (_) {}
+  }
+
   function renderProject(root, project, brand) {
     var preservedFieldScroll = captureFieldScrollState(root);
+    var preservedDisclosureOpen = captureDisclosureOpenState(root);
+    var preservedActiveField = captureActiveFieldState(root);
     var projectId = String(project && project.id || '').trim();
     var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
     var payload = (project && project.payload) || {};
@@ -794,7 +837,9 @@
       '</div>' +
       '</section>';
     applyCurrentLocale();
+    restoreDisclosureOpenState(root, preservedDisclosureOpen);
     restoreFieldScrollState(root, preservedFieldScroll);
+    restoreActiveFieldState(root, preservedActiveField);
 
     var currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
     var characterSheetDraft = normalizeCharacterSheets(knowledge.characterSheets, currentCharacters);
