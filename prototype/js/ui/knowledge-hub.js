@@ -951,10 +951,74 @@
       modalPreviewImageAlt = '';
     }
 
+    function captureCharacterPropsDisclosureState(box) {
+      var state = {};
+      if (!box || !box.querySelectorAll) return state;
+      var cards = box.querySelectorAll('.character-manager-card[data-character-token]');
+      Array.prototype.forEach.call(cards, function (card) {
+        var token = String(card.getAttribute('data-character-token') || '').trim().toLowerCase();
+        if (!token) return;
+        var details = card.querySelector('.character-props-disclosure');
+        if (!details) return;
+        state[token] = !!details.open;
+      });
+      return state;
+    }
+
+    function restoreCharacterPropsDisclosureState(box, state) {
+      if (!box || !state || !box.querySelectorAll) return;
+      var cards = box.querySelectorAll('.character-manager-card[data-character-token]');
+      Array.prototype.forEach.call(cards, function (card) {
+        var token = String(card.getAttribute('data-character-token') || '').trim().toLowerCase();
+        if (!token || !(token in state)) return;
+        var details = card.querySelector('.character-props-disclosure');
+        if (!details) return;
+        if (state[token]) details.setAttribute('open', '');
+        else details.removeAttribute('open');
+      });
+    }
+
+    function captureModalActiveFieldState(box) {
+      if (!box) return null;
+      var active = (typeof document !== 'undefined') ? document.activeElement : null;
+      if (!active || !box.contains || !box.contains(active)) return null;
+      var token = String(active.getAttribute && active.getAttribute('data-character-token') || '').trim().toLowerCase();
+      var prop = String(active.getAttribute && active.getAttribute('data-char-prop') || '').trim();
+      if (!token || !prop) return null;
+      var snapshot = { token: token, prop: prop };
+      try {
+        if (typeof active.selectionStart === 'number') snapshot.selectionStart = active.selectionStart;
+        if (typeof active.selectionEnd === 'number') snapshot.selectionEnd = active.selectionEnd;
+      } catch (_) {}
+      return snapshot;
+    }
+
+    function restoreModalActiveFieldState(box, state) {
+      if (!box || !state || !state.token || !state.prop) return;
+      var selector = '[data-character-token][data-char-prop="' + state.prop.replace(/"/g, '\\"') + '"]';
+      var candidates = box.querySelectorAll ? box.querySelectorAll(selector) : [];
+      var match = null;
+      Array.prototype.some.call(candidates, function (el) {
+        var token = String(el.getAttribute('data-character-token') || '').trim().toLowerCase();
+        if (token === state.token) { match = el; return true; }
+        return false;
+      });
+      if (!match || typeof match.focus !== 'function') return;
+      try { match.focus(); } catch (_) {}
+      try {
+        if (typeof state.selectionStart === 'number' && typeof match.setSelectionRange === 'function') {
+          var end = state.selectionEnd != null ? state.selectionEnd : state.selectionStart;
+          match.setSelectionRange(state.selectionStart, end);
+        }
+      } catch (_) {}
+    }
+
     function renderCharacterManagerModal() {
       var modal = document.getElementById('character-manager-modal');
       var box = document.getElementById('character-manager-modal-content');
       if (!modal || !box) return;
+      var preservedDisclosureState = captureCharacterPropsDisclosureState(box);
+      var preservedActiveField = captureModalActiveFieldState(box);
       var ipLibraryUiText = getIpLibraryUiText();
       if (!modalCharacterSheetDraft) {
         modalCharacterSheetDraft = cloneCharacterSheetDraft(ensureCharacterSheetDraft());
@@ -1067,6 +1131,9 @@
         '<div class="character-manager-grid">' + cardsHtml + '</div>' +
         '</div>' +
         previewHtml;
+
+      restoreCharacterPropsDisclosureState(box, preservedDisclosureState);
+      restoreModalActiveFieldState(box, preservedActiveField);
 
       // character-props-disclosure 애니메이션 바인딩 (모달은 root 밖이므로 여기서 직접 호출)
       if (NK.ui && NK.ui.common && typeof NK.ui.common.bindDisclosureMotion === 'function') {
