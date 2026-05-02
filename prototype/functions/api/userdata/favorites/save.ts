@@ -92,7 +92,7 @@ type FavoriteItem = {
   iconDataUrl: string;
   slot: number;
 };
-const FAVORITE_CATEGORY_COUNT = 8;
+const FAVORITE_CATEGORY_COUNT = 9;
 const FAVORITE_SLOT_COUNT = FAVORITE_CATEGORY_COUNT * 12;
 const THEME_PRESET_IDS = {
   dark: ["dark-classic", "dark-midnight", "dark-forest", "dark-slate", "dark-royal"],
