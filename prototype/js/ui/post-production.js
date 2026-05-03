@@ -4718,6 +4718,7 @@
         _renderPanelHtml +
         '</section>';
     }
+    attachRenderPreviewLoadingTracking();
   }
 
   function updatePlayheadUi() {
