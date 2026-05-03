@@ -2334,9 +2334,8 @@
     if (version.id === 'v0') {
       targetEdits = Object.assign({}, version.postTimelineEdits || {});
     } else {
-      var originalClipIds = buildOriginalClipIds();
       var baseEdits = {};
-      originalClipIds.forEach(function (clipId) { baseEdits[clipId] = { deleted: true }; });
+      baseEdits['__clear_track_visuals__'] = { clearTrack: true };
       var renderedClipId = 'rendered-clip-' + version.id;
       var renderedUrl = (NK.api && NK.api.mediaProxyObjectUrl)
         ? NK.api.mediaProxyObjectUrl(version.sourceObjectName) : '';
@@ -2398,15 +2397,7 @@
     // state.model이 있으면 현재 타임라인의 모든 클립 ID 수집 (분할·추가 등 세션 편집 포함)
     // 없으면 buildOriginalClipIds로 씬 기반 클립 ID만 수집
     var baseEdits = {};
-    if (state.model) {
-      (state.model.tracks || []).forEach(function (track) {
-        (track.clips || []).forEach(function (clip) {
-          if (clip && clip.id) baseEdits[clip.id] = { deleted: true };
-        });
-      });
-    } else {
-      buildOriginalClipIds().forEach(function (clipId) { baseEdits[clipId] = { deleted: true }; });
-    }
+    baseEdits['__clear_track_visuals__'] = { clearTrack: true };
 
     var meta = state.renderMeta || getRenderMeta(project);
     var durationSec = Number(meta && meta.outputDurationSec) || 0;
@@ -3242,33 +3233,41 @@
       newClipsByTrack[key].push({ id: clipId, edit: edit });
     });
 
+    // 특수 플래그: 트랙 전체를 ID에 관계없이 클리어 (렌더링 버전 전환 시 사용)
+    var clearTrackKeys = {};
+    if (editMap && editMap['__clear_track_visuals__']) clearTrackKeys['visuals'] = true;
+
     // 사용자가 클립을 totalDuration 너머로 끌어 타임라인을 늘릴 수 있도록 상한을
     // totalDuration이 아닌 generous 값으로 둔다. 최종 totalDuration은 maxEnd에서
     // 자동 갱신됨.
     var clampUpper = Math.max(model.totalDuration, model.totalDuration + 600, 7200); // 최대 2시간
     model.tracks.forEach(function (track) {
-      var clips = Array.isArray(track.clips) ? track.clips : [];
-      track.clips = clips.map(function (clip) {
-        var edit = editMap && editMap[clip.id];
-        if (!edit) {
-          maxEnd = Math.max(maxEnd, clip.end);
-          return clip;
-        }
-        if (edit.deleted === true) {
-          return null;
-        }
-        var start = clamp(toNumber(edit.start, clip.start), 0, Math.max(0, clampUpper - 0.2));
-        var end = clamp(toNumber(edit.end, clip.end), start + 0.2, clampUpper);
-        maxEnd = Math.max(maxEnd, end);
-        var motionPreset = edit.motionPreset || clip.motionPreset || 'none';
-        var fadeIn = typeof edit.fadeIn === 'boolean' ? edit.fadeIn : !!clip.fadeIn;
-        var fadeOut = typeof edit.fadeOut === 'boolean' ? edit.fadeOut : !!clip.fadeOut;
-        var soundOn = typeof edit.soundOn === 'boolean' ? edit.soundOn : (clip.soundOn !== false);
-        // edit에 videoOffset이 명시된 경우 반드시 적용 (isNew 클립이 두 번째 applyTimelineEdits
-        // 패스에서 "기존 클립"으로 처리될 때 videoOffset을 유지시키기 위한 방어 코드)
-        var videoOffset = typeof edit.videoOffset === 'number' ? edit.videoOffset : (clip.videoOffset || 0);
-        return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset, fadeIn: fadeIn, fadeOut: fadeOut, soundOn: soundOn, videoOffset: videoOffset });
-      }).filter(Boolean);
+      if (clearTrackKeys[track.key]) {
+        track.clips = [];
+      } else {
+        var clips = Array.isArray(track.clips) ? track.clips : [];
+        track.clips = clips.map(function (clip) {
+          var edit = editMap && editMap[clip.id];
+          if (!edit) {
+            maxEnd = Math.max(maxEnd, clip.end);
+            return clip;
+          }
+          if (edit.deleted === true) {
+            return null;
+          }
+          var start = clamp(toNumber(edit.start, clip.start), 0, Math.max(0, clampUpper - 0.2));
+          var end = clamp(toNumber(edit.end, clip.end), start + 0.2, clampUpper);
+          maxEnd = Math.max(maxEnd, end);
+          var motionPreset = edit.motionPreset || clip.motionPreset || 'none';
+          var fadeIn = typeof edit.fadeIn === 'boolean' ? edit.fadeIn : !!clip.fadeIn;
+          var fadeOut = typeof edit.fadeOut === 'boolean' ? edit.fadeOut : !!clip.fadeOut;
+          var soundOn = typeof edit.soundOn === 'boolean' ? edit.soundOn : (clip.soundOn !== false);
+          // edit에 videoOffset이 명시된 경우 반드시 적용 (isNew 클립이 두 번째 applyTimelineEdits
+          // 패스에서 "기존 클립"으로 처리될 때 videoOffset을 유지시키기 위한 방어 코드)
+          var videoOffset = typeof edit.videoOffset === 'number' ? edit.videoOffset : (clip.videoOffset || 0);
+          return Object.assign({}, clip, { start: start, end: end, motionPreset: motionPreset, fadeIn: fadeIn, fadeOut: fadeOut, soundOn: soundOn, videoOffset: videoOffset });
+        }).filter(Boolean);
+      }
 
       // split / 미디어 브라우저로 생성된 신규 클립을 트랙에 삽입.
       // applyTimelineEdits는 buildTimelineModel 내부 + post.render에서 두 번 호출되므로,
