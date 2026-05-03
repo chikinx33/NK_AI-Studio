@@ -2309,7 +2309,9 @@
   }
 
   function buildOriginalClipIds() {
-    var project = getProjectByStateId();
+    // 파이프라인 hydration을 포함한 최신 프로젝트를 사용 — 샷 기반 클립(vis-0-0, vis-0-1)과
+    // 씬 기반 클립(vis-0, vis-1)을 모두 올바르게 수집하기 위해 hydrate 필수.
+    var project = hydrateProjectScenesFromPipeline(resolveProject()) || getProjectByStateId();
     if (!project) return [];
     var cleanProject = Object.assign({}, project, {
       postTimelineEdits: {},
@@ -2393,9 +2395,18 @@
     var newVersionId = 'v' + (editVersionCount + 1);
     var newVersionLabel = (editVersionCount + 1) + '차 편집';
 
-    var originalClipIds = buildOriginalClipIds();
+    // state.model이 있으면 현재 타임라인의 모든 클립 ID 수집 (분할·추가 등 세션 편집 포함)
+    // 없으면 buildOriginalClipIds로 씬 기반 클립 ID만 수집
     var baseEdits = {};
-    originalClipIds.forEach(function (clipId) { baseEdits[clipId] = { deleted: true }; });
+    if (state.model) {
+      (state.model.tracks || []).forEach(function (track) {
+        (track.clips || []).forEach(function (clip) {
+          if (clip && clip.id) baseEdits[clip.id] = { deleted: true };
+        });
+      });
+    } else {
+      buildOriginalClipIds().forEach(function (clipId) { baseEdits[clipId] = { deleted: true }; });
+    }
 
     var meta = state.renderMeta || getRenderMeta(project);
     var durationSec = Number(meta && meta.outputDurationSec) || 0;
