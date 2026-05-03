@@ -1557,9 +1557,11 @@
       }
       return;
     }
-    try { video.currentTime = target; } catch (_) { return; }
-    // 재생 중이면 wake 불필요 (이미 디코더 활성)
-    if (state.isPlaying) return;
+    // 재생 중이면 currentTime만 설정하고 종료 (이미 디코더 활성)
+    if (state.isPlaying) {
+      try { video.currentTime = target; } catch (_) {}
+      return;
+    }
     // 이전 pause/seeked 메커니즘 취소 — 새 seek에 의해 무효화됨
     if (video.__scrubPauseTimer) {
       clearTimeout(video.__scrubPauseTimer);
@@ -1573,30 +1575,59 @@
       try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
       video.__scrubOnSeeked = null;
     }
+    // ── 디코더 wake + seek 병렬 처리 ─────────────────────────────────────
+    // Chromium은 paused 비디오의 디코더를 suspend하며, 이 상태에서 currentTime= 만으로는
+    // 화면 프레임이 갱신되지 않는다. play() → seek → seeked → pause 사이클이 필요.
+    // play()를 먼저 호출(promise는 비동기로 resolve)하고 즉시 currentTime을 설정 →
+    // play resolve 시점에 currentTime이 최신 타겟이 되도록 함.
     try { video.muted = true; } catch (_) {}
-    try { video.play().catch(function () { }); } catch (_) {}
+    var playPromise = null;
+    try { playPromise = video.play(); } catch (_) { playPromise = null; }
+    try { video.currentTime = target; } catch (_) {}
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise.then(function () {
+        // play resolve 후 currentTime이 drift됐다면 최신 __scrubTarget으로 재설정
+        var latest = video.__scrubTarget;
+        if (typeof latest === 'number' && isFinite(latest)) {
+          if (Math.abs((video.currentTime || 0) - latest) > 0.05) {
+            try { video.currentTime = latest; } catch (_) {}
+          }
+        }
+      }).catch(function () { /* autoplay 거절 등 무시 */ });
+    }
     // 세대 카운터: 연속 seek 시 stale 이벤트 무시용
     var gen = (video.__scrubGen = ((video.__scrubGen || 0) + 1) & 0xFFFF);
     var capturedGen = gen;
     // 1차: seeked 이벤트 — seek 완료 직후 즉시 pause (반응 속도 최우선)
-    // seek 완료 시 currentTime이 이미 target이므로 snap-back 불필요
     video.__scrubOnSeeked = function () {
+      if (video.__scrubGen !== capturedGen) return;   // stale: 이미 다음 seek 진행 중
       try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
       video.__scrubOnSeeked = null;
-      if (video.__scrubGen !== capturedGen) return;   // stale: 이미 다음 seek 진행 중
       if (video.__scrubPauseTimer) {
         clearTimeout(video.__scrubPauseTimer);
         video.__scrubPauseTimer = 0;
       }
-      if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
+      // seeked 시점에 video 엘리먼트는 이미 새 프레임을 렌더링한 상태.
+      // pause 전에 살짝 대기해 GPU paint 완료 보장 (프레임 미반영 회귀 방지).
+      setTimeout(function () {
+        if (video.__scrubGen !== capturedGen) return;
+        if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
+        // snap-back: wake 동안 흘러간 프레임을 정확한 타겟으로 복귀
+        var t2 = video.__scrubTarget;
+        if (typeof t2 === 'number' && isFinite(t2)) {
+          if (Math.abs((video.currentTime || 0) - t2) > 0.01) {
+            try { video.currentTime = t2; } catch (_) {}
+          }
+        }
+      }, 30);
     };
     try { video.addEventListener('seeked', video.__scrubOnSeeked); } catch (_) {
       video.__scrubOnSeeked = null;
     }
-    // 안전망 타이머: seeked 미발화(이미 타겟 위치·play() 거절·버퍼 없음) 시 대비
-    // snap-back은 여기서만: 타임아웃 경로에서 drifted 경우에만 보정
+    // 안전망 타이머: seeked 미발화 시 대비 — 250ms로 늘려 cold 비디오에도 충분한 시간 부여
     video.__scrubPauseTimer = setTimeout(function () {
       video.__scrubPauseTimer = 0;
+      if (video.__scrubGen !== capturedGen) return;
       if (video.__scrubOnSeeked) {
         try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
         video.__scrubOnSeeked = null;
@@ -1608,7 +1639,7 @@
           try { video.currentTime = t2; } catch (_) {}
         }
       }
-    }, 150);
+    }, 250);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
