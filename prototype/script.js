@@ -1019,9 +1019,7 @@
     try {
       const isEmbed = document.documentElement.getAttribute('data-embed') === '1';
       if (isEmbed && window.parent) {
-        setTimeout(() => {
-          try { window.parent.postMessage({ type: 'stage-ready' }, '*'); } catch (_) { }
-        }, 120);
+        try { window.parent.postMessage({ type: 'stage-ready' }, '*'); } catch (_) { }
       }
     } catch (_) { }
   });

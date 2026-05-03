@@ -133,7 +133,7 @@
                                 if (ov) ov.classList.remove('is-active');
                             } catch (_) {}
                             try { iframe.__nkReadyTimer = 0; } catch (_) {}
-                        }, 1200);
+                        }, 250);
                     } catch (_) {}
                     iframe.removeEventListener('load', onLoad);
                 };
@@ -253,7 +253,7 @@
                             try { iframe.style.opacity = '1'; } catch (_) {}
                             try { if (ov2) ov2.classList.remove('is-active'); } catch (_) {}
                             try { iframe.__nkReadyTimer = 0; } catch (_) {}
-                        }, 1200);
+                        }, 250);
                     }
                 } catch (_) {}
             });
