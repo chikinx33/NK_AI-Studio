@@ -4313,22 +4313,9 @@
             // 스크럽: 디코더 wake 후 즉시 seek — Chrome은 paused 상태에서 디코더를 suspend하므로
             // play()로 wake 후 동기적으로 currentTime= 설정. play()는 paused일 때만 호출(tick당 1회).
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
-            if (fpVid.readyState >= 1) {
-              try { fpVid.muted = true; } catch (_) {}
-              // paused면 play()로 디코더 활성화 (즉시 currentTime= 설정으로 전진 없음)
-              if (fpVid.paused) { try { fpVid.play().catch(function () {}); } catch (_) {} }
-              try { fpVid.currentTime = fpClipTime; } catch (_) {}
-              fpVid.__scrubTarget = fpClipTime;
-              // 마지막 tick 200ms 후 pause — 스크럽 중에는 decoder 활성 유지
-              if (fpVid.__scrubPauseTimer) clearTimeout(fpVid.__scrubPauseTimer);
-              fpVid.__scrubPauseTimer = setTimeout(function () {
-                fpVid.__scrubPauseTimer = 0;
-                if (!state.isPlaying && !fpVid.paused) { try { fpVid.pause(); } catch (_) {} }
-              }, 200);
-            } else {
-              // metadata 미로드 — scrubSeekVideo로 위임 (loadedmetadata 후 재시도)
-              scheduleScrubSeek('active', fpVid, fpClipTime);
-            }
+            // rAF로 seek 병합 — pointermove가 주사율보다 빠를 때(초당 100회+) 디코더 과부하 방지.
+            // scrubSeekVideo가 wake·seek·pause-timer를 일괄 처리하므로 직접 호출 불필요.
+            scheduleScrubSeek('active', fpVid, fpClipTime);
           } else {
             // 재생 중: 스크럽 wake로 인한 muted 상태를 해제 (단, clip.soundOn=false면 muted 유지),
             // 멈춰있다면 재개
