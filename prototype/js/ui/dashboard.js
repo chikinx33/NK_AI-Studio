@@ -272,9 +272,22 @@
         window.__nk_projects_sync_started = true;
       }
       if (!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed())) return;
-      const showBlockingLoading = !(Array.isArray(drafts) && drafts.length);
+
+      // 안전망: projectList가 600ms 안에 응답 안 오면 그제야 로딩 오버레이 (빠른 응답에는 안 보임)
+      const hasLocalDrafts = Array.isArray(drafts) && drafts.length > 0;
+      let loadingTimer = null;
+      if (!hasLocalDrafts) {
+        loadingTimer = setTimeout(() => {
+          loadingTimer = null;
+          setDashLoading(true, DASHBOARD_LOADING_TEXT);
+        }, 600);
+      }
+      const clearLoading = () => {
+        if (loadingTimer) { clearTimeout(loadingTimer); loadingTimer = null; }
+        if (!hasLocalDrafts) setDashLoading(false);
+      };
+
       try {
-        if (showBlockingLoading) setDashLoading(true, DASHBOARD_LOADING_TEXT);
         // 부모 창에서 미리 시작한 prefetch 결과 재사용 (없으면 직접 호출)
         const prefetchedList = (() => { try { return window.parent !== window && window.parent.__nk_projects_list_prefetch ? window.parent.__nk_projects_list_prefetch : null; } catch (_) { return null; } })();
         if (prefetchedList) { try { window.parent.__nk_projects_list_prefetch = null; } catch (_) {} }
@@ -287,51 +300,81 @@
           serverMerged = true;
           return;
         }
+
         drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
-        let changed = false;
         const idSet = new Set(ids.map((v) => String(v)));
-        const filtered = drafts.filter(d => idSet.has(String(d.id)));
-        if (filtered.length !== drafts.length) {
-          drafts = filtered;
-          changed = true;
-        }
+        drafts = drafts.filter(d => idSet.has(String(d.id)));
         const knownIds = new Set(drafts.map((d) => String(d.id)));
         const missingIds = ids.filter((id) => !knownIds.has(String(id)));
-        if (changed) {
-          if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
-          else NK.store.saveDrafts(drafts);
-        }
-        if (!missingIds.length || !NK.api.projectGet) return;
 
-        const fetchedDrafts = (await runTasksInBatches(missingIds, async (id) => {
+        const orderMap = new Map(ids.map((id, index) => [String(id), index]));
+        const nextMap = new Map(drafts.map((draft) => [String(draft.id), draft]));
+
+        // Placeholder: 모르는 id에 빈 draft를 즉시 추가하여 카드 슬롯이 바로 보이게 함
+        // (__pending 플래그로 표시, 최종 persist 시 제외)
+        missingIds.forEach((id) => {
+          nextMap.set(String(id), normalizeDraft({
+            id, title: '', payload: {}, scenes: [], header: '', __pending: true
+          }));
+        });
+
+        const sortByOrder = (map) => Array.from(map.values()).sort((a, b) => {
+          const ai = orderMap.has(String(a.id)) ? orderMap.get(String(a.id)) : Number.MAX_SAFE_INTEGER;
+          const bi = orderMap.has(String(b.id)) ? orderMap.get(String(b.id)) : Number.MAX_SAFE_INTEGER;
+          return ai - bi;
+        });
+        const persistFinal = () => {
+          const sorted = sortByOrder(nextMap);
+          const persistList = sorted.filter(d => !d.__pending);
+          if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(persistList);
+          else NK.store.saveDrafts(persistList);
+        };
+
+        // 1차 즉시 렌더 (placeholder 포함). 로딩 오버레이는 즉시 해제.
+        clearLoading();
+        // 메모리 store에 임시 반영 (renderDrafts가 store에서 읽음)
+        // pending 플래그 포함 - persist는 안 함
+        NK.store.saveDrafts(sortByOrder(nextMap));
+        dashboard.renderDrafts();
+
+        if (!missingIds.length || !NK.api.projectGet) {
+          serverMerged = true;
+          return;
+        }
+
+        // worker pool로 병렬 fetch + 도착 즉시 부분 업데이트 (50ms throttled render)
+        // - requestAnimationFrame은 background tab에서 throttle되므로 setTimeout 사용
+        let renderScheduled = false;
+        const scheduleRender = () => {
+          if (renderScheduled) return;
+          renderScheduled = true;
+          setTimeout(() => {
+            renderScheduled = false;
+            NK.store.saveDrafts(sortByOrder(nextMap));
+            dashboard.renderDrafts();
+          }, 50);
+        };
+
+        await runTasksInBatches(missingIds, async (id) => {
           try {
             const res = await NK.api.projectGet(id);
             const data = res?.data || {};
-            return normalizeDraft({
+            nextMap.set(String(id), normalizeDraft({
               id,
               title: data.title || data.payload?.episodeTitle || data.payload?.topic || '프로젝트',
               payload: data.payload || {},
               scenes: data.scenes || [],
               header: data.header || '',
-            });
+            }));
           } catch (_) {
-            return normalizeDraft({ id, title: '프로젝트', payload: {}, scenes: [], header: '' });
+            nextMap.set(String(id), normalizeDraft({ id, title: '프로젝트', payload: {}, scenes: [], header: '' }));
           }
-        }, 16)).filter(Boolean);
+          scheduleRender();
+        }, 16);
 
-        if (!fetchedDrafts.length) return;
-        const nextMap = new Map(drafts.map((draft) => [String(draft.id), draft]));
-        fetchedDrafts.forEach((draft) => {
-          nextMap.set(String(draft.id), draft);
-        });
-        const orderMap = new Map(ids.map((id, index) => [String(id), index]));
-        drafts = Array.from(nextMap.values()).sort((a, b) => {
-          const ai = orderMap.has(String(a.id)) ? orderMap.get(String(a.id)) : Number.MAX_SAFE_INTEGER;
-          const bi = orderMap.has(String(b.id)) ? orderMap.get(String(b.id)) : Number.MAX_SAFE_INTEGER;
-          return ai - bi;
-        });
-        if (NK.service?.project?.replaceLocalDrafts) NK.service.project.replaceLocalDrafts(drafts);
-        else NK.store.saveDrafts(drafts);
+        // 모든 데이터 도착 - 최종 persist + 마지막 render
+        persistFinal();
+        dashboard.renderDrafts();
         serverMerged = true;
       } catch (err) {
         serverMerged = true;
@@ -341,12 +384,13 @@
         }
       }
       finally {
-        if (showBlockingLoading) setDashLoading(false);
+        clearLoading();
       }
     };
 
     if (NK.api && NK.api.projectList && !serverMerged) {
-      mergeFromServer().then(() => dashboard.renderDrafts());
+      // mergeFromServer 자체가 점진적으로 renderDrafts를 호출하므로 .then 추가 호출은 불필요
+      mergeFromServer();
     }
 
     drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
@@ -429,8 +473,9 @@
       const deleteBtn = showDelete ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
       const thumbBtnsHtml = (editBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${deleteBtn}</div>` : '';
 
+      const isPending = !!d.__pending;
       return `
-        <article class="draft-card ${isSelected ? 'is-selected' : ''}" data-draft-id="${escapeHtml(d.id)}">
+        <article class="draft-card ${isSelected ? 'is-selected' : ''} ${isPending ? 'is-pending' : ''}" data-draft-id="${escapeHtml(d.id)}">
           <div class="draft-top">
             <div class="draft-thumb-col">
               ${thumbHtml}

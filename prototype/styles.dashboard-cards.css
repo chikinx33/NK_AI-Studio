@@ -153,6 +153,39 @@ body.layout-fixed .sidebar.has-project-selection .nav::-webkit-scrollbar {
   align-content: flex-start;
 }
 
+/* 데이터 도착 전 placeholder 카드 */
+.draft-card.is-pending {
+  pointer-events: none;
+  position: relative;
+  overflow: hidden;
+}
+.draft-card.is-pending .draft-title,
+.draft-card.is-pending .draft-meta > div {
+  color: transparent;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--border) 60%, transparent),
+    color-mix(in srgb, var(--border) 30%, transparent),
+    color-mix(in srgb, var(--border) 60%, transparent));
+  background-size: 200% 100%;
+  border-radius: 6px;
+  animation: nk-skeleton-shimmer 1.2s ease-in-out infinite;
+  display: inline-block;
+  min-height: 1em;
+  min-width: 60%;
+}
+.draft-card.is-pending .draft-thumb {
+  opacity: 0.4;
+}
+.draft-card.is-pending .draft-thumb-btns,
+.draft-card.is-pending .edit-btn,
+.draft-card.is-pending .trash-btn {
+  visibility: hidden;
+}
+@keyframes nk-skeleton-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
 .series-filter-bar {
   grid-column: 1 / -1;
   display: grid;
