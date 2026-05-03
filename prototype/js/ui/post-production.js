@@ -380,6 +380,13 @@
             payload: Object.assign({}, (cur && cur.payload) || {}, data.payload || {}),
             scenes: Array.isArray(data.scenes) ? data.scenes : ((cur && cur.scenes) || [])
           });
+          // getTimelineEdits는 root.postTimelineEdits가 payload.postTimelineEdits를 덮어쓰므로,
+          // 서버 리프레시 후 stale 로컬 root 값이 올바른 서버 edits를 무효화하지 않도록 동기화.
+          if (data.payload && Object.prototype.hasOwnProperty.call(data.payload, 'postTimelineEdits')) {
+            next.postTimelineEdits = data.payload.postTimelineEdits;
+          } else if (Object.prototype.hasOwnProperty.call(data, 'postTimelineEdits')) {
+            next.postTimelineEdits = data.postTimelineEdits;
+          }
           return next;
         });
       }
