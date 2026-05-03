@@ -1634,14 +1634,37 @@
       return;
     }
     try { video.muted = true; } catch (_) {}
+    // 이전 seeked 핸들러 / 타이머 정리
+    if (video.__scrubOnSeeked) {
+      try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
+      video.__scrubOnSeeked = null;
+    }
+    if (video.__scrubPauseTimer) { clearTimeout(video.__scrubPauseTimer); video.__scrubPauseTimer = 0; }
     if (video.paused) { try { video.play().catch(function () {}); } catch (_) {} }
     try { video.currentTime = target; } catch (_) {}
     video.__scrubTarget = target;
-    if (video.__scrubPauseTimer) clearTimeout(video.__scrubPauseTimer);
-    video.__scrubPauseTimer = setTimeout(function () {
-      video.__scrubPauseTimer = 0;
-      if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
-    }, 200);
+    // 드래그 중이 아닐 때만 seeked 기반 pause (seek 완료 후 프레임 보장)
+    if (!state.isScrubbing) {
+      (function (vid) {
+        var onSeeked = function () {
+          try { vid.removeEventListener('seeked', onSeeked); } catch (_) {}
+          if (vid.__scrubOnSeeked === onSeeked) vid.__scrubOnSeeked = null;
+          if (vid.__scrubPauseTimer) { clearTimeout(vid.__scrubPauseTimer); vid.__scrubPauseTimer = 0; }
+          if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
+        };
+        vid.__scrubOnSeeked = onSeeked;
+        try { vid.addEventListener('seeked', onSeeked); } catch (_) {}
+        // seeked가 오지 않을 경우 1s 폴백
+        vid.__scrubPauseTimer = setTimeout(function () {
+          vid.__scrubPauseTimer = 0;
+          if (vid.__scrubOnSeeked) {
+            try { vid.removeEventListener('seeked', vid.__scrubOnSeeked); } catch (_) {}
+            vid.__scrubOnSeeked = null;
+          }
+          if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
+        }, 1000);
+      })(video);
+    }
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -4322,18 +4345,40 @@
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
             if (fpVid.readyState >= 1) {
               try { fpVid.muted = true; } catch (_) {}
-              // paused면 play()로 디코더 활성화. isScrubbing=true면 이미 warm하므로 스킵됨.
+              // 이전 seeked 핸들러 / 타이머 정리
+              if (fpVid.__scrubOnSeeked) {
+                try { fpVid.removeEventListener('seeked', fpVid.__scrubOnSeeked); } catch (_) {}
+                fpVid.__scrubOnSeeked = null;
+              }
+              if (fpVid.__scrubPauseTimer) { clearTimeout(fpVid.__scrubPauseTimer); fpVid.__scrubPauseTimer = 0; }
+              // 디코더 wake: paused일 때만 play() 호출
               if (fpVid.paused) { try { fpVid.play().catch(function () {}); } catch (_) {} }
               try { fpVid.currentTime = fpClipTime; } catch (_) {}
               fpVid.__scrubTarget = fpClipTime;
-              if (fpVid.__scrubPauseTimer) clearTimeout(fpVid.__scrubPauseTimer);
               if (!state.isScrubbing) {
-                // 드래그 종료 후에만 200ms 뒤 pause — 드래그 중에는 decoder warm 유지
-                fpVid.__scrubPauseTimer = setTimeout(function () {
-                  fpVid.__scrubPauseTimer = 0;
-                  if (!state.isPlaying && !fpVid.paused) { try { fpVid.pause(); } catch (_) {} }
-                }, 200);
+                // seeked 이벤트 기반 pause: seek 완료(프레임 보장) 후 멈춤
+                // 200ms 고정 타이머 대신 seeked를 사용해 원격 비디오의 느린 seek도 올바르게 처리
+                (function (vid) {
+                  var onSeeked = function () {
+                    try { vid.removeEventListener('seeked', onSeeked); } catch (_) {}
+                    if (vid.__scrubOnSeeked === onSeeked) vid.__scrubOnSeeked = null;
+                    if (vid.__scrubPauseTimer) { clearTimeout(vid.__scrubPauseTimer); vid.__scrubPauseTimer = 0; }
+                    if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
+                  };
+                  vid.__scrubOnSeeked = onSeeked;
+                  try { vid.addEventListener('seeked', onSeeked); } catch (_) {}
+                  // seeked가 오지 않을 경우 1s 폴백
+                  vid.__scrubPauseTimer = setTimeout(function () {
+                    vid.__scrubPauseTimer = 0;
+                    if (vid.__scrubOnSeeked) {
+                      try { vid.removeEventListener('seeked', vid.__scrubOnSeeked); } catch (_) {}
+                      vid.__scrubOnSeeked = null;
+                    }
+                    if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
+                  }, 1000);
+                })(fpVid);
               }
+              // isScrubbing=true: 핸들러 없이 decoder warm 유지 (pointerup 시 처리)
             } else {
               // metadata 미로드 — scrubSeekVideo로 위임 (loadedmetadata 후 재시도)
               scheduleScrubSeek('active', fpVid, fpClipTime);
