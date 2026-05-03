@@ -5872,7 +5872,7 @@
       ruler.onpointerdown = function (evt) {
         if (evt.button !== 0 || state.drag) return;
         rulerPid = evt.pointerId;
-        state.isScrubbing = true;
+        // isScrubbing은 실제 이동 시에만 설정 — 클릭 유지 중 재생 방지
         try { ruler.setPointerCapture(evt.pointerId); } catch (_) {}
         seekByTimelinePointer(evt, ruler);
       };
@@ -5880,6 +5880,7 @@
         if (evt.pointerId !== rulerPid || state.drag) return;
         rulerMoveX = evt.clientX;
         rulerMoveShift = evt.shiftKey;
+        if (!state.isScrubbing) state.isScrubbing = true;
         if (rulerMoveRaf) return;
         rulerMoveRaf = requestAnimationFrame(function () {
           rulerMoveRaf = 0;
@@ -5992,7 +5993,7 @@
         if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
         if (state.drag) return;
         lanePid = evt.pointerId;
-        state.isScrubbing = true;
+        // isScrubbing은 실제 이동 시에만 설정 — 클릭 유지 중 재생 방지
         try { laneEl.setPointerCapture(evt.pointerId); } catch (_) {}
         seekByTimelinePointer(evt, laneEl);
       };
@@ -6002,6 +6003,7 @@
         laneMoveX = evt.clientX;
         laneMoveShift = evt.shiftKey;
         laneMoveTarget = evt.target;
+        if (!state.isScrubbing) state.isScrubbing = true;
         if (laneMoveRaf) return;
         laneMoveRaf = requestAnimationFrame(function () {
           laneMoveRaf = 0;
