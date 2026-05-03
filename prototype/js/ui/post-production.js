@@ -1523,9 +1523,10 @@
   //   rVFC는 렌더링 경로(canvas 캡처용)에만 사용. 스크럽 프리뷰(video 엘리먼트 표시)는
   //   seeked가 최적.
   // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
-  // ── 기본적인 스크럽: video.currentTime 설정만 ─────────────────────────
-  // 복잡한 wake/pause/rVFC 메커니즘을 모두 제거. 브라우저의 native seek 동작에 위임.
-  // metadata가 아직 로드되지 않았으면 loadedmetadata 후 seek 재시도.
+  // ── 스크럽 seek: play()로 디코더 wake 후 즉시 currentTime= ─────────────
+  // Chrome은 paused 비디오의 디코더를 suspend → currentTime= 만으로는 프레임 갱신 없음.
+  // play()로 디코더를 활성화 (paused일 때만 호출, tick당 1회), 동기적으로 currentTime= 설정.
+  // 마지막 tick 후 200ms에 pause. metadata 미로드 시 loadedmetadata 후 재시도.
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
@@ -1557,9 +1558,15 @@
       }
       return;
     }
-    // 기본: currentTime 설정 끝. 브라우저가 seek 처리 + 새 프레임 paint를 자동 수행.
     try { video.muted = true; } catch (_) {}
+    if (video.paused) { try { video.play().catch(function () {}); } catch (_) {} }
     try { video.currentTime = target; } catch (_) {}
+    video.__scrubTarget = target;
+    if (video.__scrubPauseTimer) clearTimeout(video.__scrubPauseTimer);
+    video.__scrubPauseTimer = setTimeout(function () {
+      video.__scrubPauseTimer = 0;
+      if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
+    }, 200);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -1649,15 +1656,15 @@
   }
 
   // 편집 미리보기 로딩 오버레이 — 활성 video의 readyState를 기준으로 표시 토글
+  // 임계값: HAVE_METADATA(1) 미만일 때만 로딩 표시 → metadata 로드 후 즉시 숨김
+  // (HAVE_CURRENT_DATA(2)까지 기다리면 일부 환경에서 영영 도달 못 해 영구 표시되는 회귀 발생)
   function updatePreviewLoadingFromActiveVideo() {
     var loadingEl = document.getElementById('postprod-preview-loading');
     if (!loadingEl) return;
     var activeUrl = state.previewActiveUrl || '';
     var entry = activeUrl && state.previewVideoCache ? state.previewVideoCache[activeUrl] : null;
     var video = entry && entry.video;
-    // 활성 video가 없거나 readyState가 HAVE_CURRENT_DATA(2) 미만이면 로딩 표시
-    var isLoading = !!video && video.readyState < 2 && !entry.failed;
-    // host가 표시 상태(편집 화면에 video가 보이는 상태)일 때만 로딩 표시
+    var isLoading = !!video && video.readyState < 1 && !entry.failed;
     var host = document.getElementById('postprod-preview-video-host');
     var hostShown = host && getComputedStyle(host).display !== 'none';
     if (isLoading && hostShown) {
@@ -4170,11 +4177,25 @@
         }
         if (fpVid) {
           if (!state.isPlaying) {
-            // 스크럽: 모든 이벤트마다 정확한 위치로 seek (scrubSeekVideo가 wake +
-            // 디코더 강제 디코드 + snap-back을 통합 처리). delta threshold 없음 —
-            // 작은 위치 변화도 정확히 반영되어 슬로우 스크럽도 부드럽게 동작.
+            // 스크럽: 디코더 wake 후 즉시 seek — Chrome은 paused 상태에서 디코더를 suspend하므로
+            // play()로 wake 후 동기적으로 currentTime= 설정. play()는 paused일 때만 호출(tick당 1회).
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
-            scheduleScrubSeek('active', fpVid, fpClipTime);
+            if (fpVid.readyState >= 1) {
+              try { fpVid.muted = true; } catch (_) {}
+              // paused면 play()로 디코더 활성화 (즉시 currentTime= 설정으로 전진 없음)
+              if (fpVid.paused) { try { fpVid.play().catch(function () {}); } catch (_) {} }
+              try { fpVid.currentTime = fpClipTime; } catch (_) {}
+              fpVid.__scrubTarget = fpClipTime;
+              // 마지막 tick 200ms 후 pause — 스크럽 중에는 decoder 활성 유지
+              if (fpVid.__scrubPauseTimer) clearTimeout(fpVid.__scrubPauseTimer);
+              fpVid.__scrubPauseTimer = setTimeout(function () {
+                fpVid.__scrubPauseTimer = 0;
+                if (!state.isPlaying && !fpVid.paused) { try { fpVid.pause(); } catch (_) {} }
+              }, 200);
+            } else {
+              // metadata 미로드 — scrubSeekVideo로 위임 (loadedmetadata 후 재시도)
+              scheduleScrubSeek('active', fpVid, fpClipTime);
+            }
           } else {
             // 재생 중: 스크럽 wake로 인한 muted 상태를 해제 (단, clip.soundOn=false면 muted 유지),
             // 멈춰있다면 재개

@@ -5857,14 +5857,14 @@ html.page-shell-image #sidebar-project-card {
   font-size: 14px;
 }
 
-/* 미리보기 로딩 오버레이 — video readyState < HAVE_CURRENT_DATA(2)일 때 표시 */
+/* 미리보기 로딩 오버레이 — video readyState < HAVE_METADATA(1)일 때 표시 (metadata 로드 후 즉시 사라짐) */
 .postprod-preview-loading {
   position: absolute;
   inset: 0;
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.55);
+  background: transparent;
   z-index: 7;
   pointer-events: none;
 }
