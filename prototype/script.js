@@ -3192,6 +3192,13 @@
       if (isMatch) item.classList.add('active');
       else item.classList.remove('active');
 
+      // 대시보드 스테이지에서 프로젝트 선택이 필요한 메뉴는 비활성화
+      const needsProject = ['brand', 'knowledge', 'analytics', 'library'];
+      if (needsProject.includes(file)) {
+        if (stage === 'dashboard') item.classList.add('disabled');
+        else item.classList.remove('disabled');
+      }
+
       // data-stage 속성이 있는 메뉴는 해당 스테이지일 때만 표시
       const requiredStage = item.dataset.stage;
       if (requiredStage) {
