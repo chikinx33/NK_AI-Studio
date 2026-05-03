@@ -1110,6 +1110,7 @@
       var project = getProjectByStateId();
       if (!project) throw new Error('프로젝트를 찾을 수 없습니다.');
       syncOverlayClipsToProject();
+      captureCurrentToActiveVersion();
 
       var svc = getPostprodStateService();
       var payload = (svc && svc.buildSavePayload)
@@ -2244,6 +2245,229 @@
     }
   }
 
+  // ── 편집 버전 관리 ───────────────────────────────────────────────────────
+
+  function getEditVersions() {
+    var project = getProjectByStateId();
+    var svc = getPostprodStateService();
+    if (svc && svc.getEditVersions) return svc.getEditVersions(project);
+    var versions = project && project.payload && Array.isArray(project.payload.editVersions)
+      ? project.payload.editVersions : [];
+    return versions;
+  }
+
+  function getActiveVersionId() {
+    var project = getProjectByStateId();
+    var svc = getPostprodStateService();
+    if (svc && svc.getActiveVersionId) return svc.getActiveVersionId(project);
+    return (project && project.payload && project.payload.activeVersionId) || 'v0';
+  }
+
+  function setVersionsToProject(versions, activeId) {
+    var project = getProjectByStateId();
+    if (!project) return;
+    if (!project.payload) project.payload = {};
+    project.payload.editVersions = versions;
+    project.payload.activeVersionId = activeId || 'v0';
+    var svc = getPostprodStateService();
+    if (svc && svc.applySavedPostProductionPayload && state.projectId) {
+      try {
+        svc.applySavedPostProductionPayload(state.projectId, {
+          editVersions: versions,
+          activeVersionId: activeId || 'v0'
+        });
+      } catch (_) { }
+    }
+  }
+
+  function captureCurrentToActiveVersion() {
+    var project = getProjectByStateId();
+    if (!project) return;
+    var versions = getEditVersions();
+    if (!versions.length) return;
+    var activeId = getActiveVersionId();
+    var version = versions.find(function (v) { return v.id === activeId; });
+    if (!version) return;
+    version.postTimelineEdits = getMergedTimelineEdits(project);
+    version.overlayClips = (state.overlayClips || []).slice();
+    setVersionsToProject(versions, activeId);
+  }
+
+  function buildOriginalClipIds() {
+    var project = getProjectByStateId();
+    if (!project) return [];
+    var cleanProject = Object.assign({}, project, {
+      postTimelineEdits: {},
+      payload: Object.assign({}, project.payload || {}, { postTimelineEdits: {} })
+    });
+    var tmpModel = buildTimelineModel(cleanProject);
+    var ids = [];
+    (tmpModel.tracks || []).forEach(function (track) {
+      (track.clips || []).forEach(function (clip) {
+        if (clip && clip.id) ids.push(clip.id);
+      });
+    });
+    return ids;
+  }
+
+  function _applyVersionState(version) {
+    var project = getProjectByStateId();
+    if (!project || !version) return;
+    var targetEdits;
+    if (version.id === 'v0') {
+      targetEdits = Object.assign({}, version.postTimelineEdits || {});
+    } else {
+      var originalClipIds = buildOriginalClipIds();
+      var baseEdits = {};
+      originalClipIds.forEach(function (clipId) { baseEdits[clipId] = { deleted: true }; });
+      var renderedClipId = 'rendered-clip-' + version.id;
+      var renderedUrl = (NK.api && NK.api.mediaProxyObjectUrl)
+        ? NK.api.mediaProxyObjectUrl(version.sourceObjectName) : '';
+      var savedClipEdit = version.postTimelineEdits && version.postTimelineEdits[renderedClipId];
+      var durationSec = (savedClipEdit && savedClipEdit.end) || 30;
+      baseEdits[renderedClipId] = {
+        isNew: true, trackKey: 'visuals',
+        url: renderedUrl, label: version.label + ' 영상',
+        start: 0, end: durationSec, baseDuration: durationSec,
+        empty: false, soundOn: true, fadeIn: false, fadeOut: false,
+        motionPreset: 'none', videoOffset: 0
+      };
+      targetEdits = Object.assign({}, baseEdits, version.postTimelineEdits || {});
+    }
+    state.sessionEdits = {};
+    state.overlayClips = (version.overlayClips || []).slice();
+    state.history = [];
+    state.historyIndex = -1;
+    state.currentTime = 0;
+    var svc = getPostprodStateService();
+    if (svc && svc.applySavedPostProductionPayload) {
+      svc.applySavedPostProductionPayload(state.projectId, { postTimelineEdits: targetEdits });
+    } else {
+      project.payload.postTimelineEdits = targetEdits;
+      project.postTimelineEdits = targetEdits;
+    }
+    project.payload.overlayClips = version.overlayClips || [];
+    stopPlayback();
+    clearPreviewVideoCache();
+    state.dirty = false;
+  }
+
+  async function loadRenderAsNewVersion(item) {
+    var objName = String(item && item.name || '').trim();
+    if (!objName || !NK.api || !NK.api.mediaProxyObjectUrl) return;
+    var project = getProjectByStateId();
+    if (!project) return;
+
+    var versions = getEditVersions();
+    if (!versions.length) {
+      versions = [{
+        id: 'v0', label: '오리지널',
+        createdAt: new Date().toISOString(),
+        sourceObjectName: null,
+        postTimelineEdits: getMergedTimelineEdits(project),
+        overlayClips: (state.overlayClips || []).slice()
+      }];
+      setVersionsToProject(versions, 'v0');
+    } else {
+      captureCurrentToActiveVersion();
+    }
+
+    closeStorageModal();
+
+    var editVersionCount = versions.filter(function (v) { return v.id !== 'v0'; }).length;
+    var newVersionId = 'v' + (editVersionCount + 1);
+    var newVersionLabel = (editVersionCount + 1) + '차 편집';
+
+    var originalClipIds = buildOriginalClipIds();
+    var baseEdits = {};
+    originalClipIds.forEach(function (clipId) { baseEdits[clipId] = { deleted: true }; });
+
+    var meta = state.renderMeta || getRenderMeta(project);
+    var durationSec = Number(meta && meta.outputDurationSec) || 0;
+    if (!(durationSec > 0)) {
+      durationSec = Math.max(10, Number(state.model && getTimelineContentDuration(state.model)) || 30);
+    }
+
+    var renderedClipId = 'rendered-clip-' + newVersionId;
+    var renderedUrl = NK.api.mediaProxyObjectUrl(objName);
+    baseEdits[renderedClipId] = {
+      isNew: true, trackKey: 'visuals',
+      url: renderedUrl, label: newVersionLabel + ' 영상',
+      start: 0, end: durationSec, baseDuration: durationSec,
+      empty: false, soundOn: true, fadeIn: false, fadeOut: false,
+      motionPreset: 'none', videoOffset: 0
+    };
+
+    var newVersion = {
+      id: newVersionId, label: newVersionLabel,
+      createdAt: new Date().toISOString(),
+      sourceObjectName: objName,
+      postTimelineEdits: {}, overlayClips: []
+    };
+    versions.push(newVersion);
+
+    state.sessionEdits = {};
+    state.overlayClips = [];
+    state.history = [];
+    state.historyIndex = -1;
+    state.currentTime = 0;
+
+    var svc = getPostprodStateService();
+    if (svc && svc.applySavedPostProductionPayload) {
+      svc.applySavedPostProductionPayload(state.projectId, { postTimelineEdits: baseEdits });
+    } else {
+      project.payload.postTimelineEdits = baseEdits;
+      project.postTimelineEdits = baseEdits;
+    }
+    project.payload.overlayClips = [];
+    setVersionsToProject(versions, newVersionId);
+
+    stopPlayback();
+    clearPreviewVideoCache();
+    setDirty(true);
+    post.render();
+  }
+
+  function switchToVersion(versionId) {
+    var project = getProjectByStateId();
+    if (!project) return;
+    var versions = getEditVersions();
+    var version = versions.find(function (v) { return v.id === versionId; });
+    if (!version) return;
+    if (getActiveVersionId() === versionId) return;
+    captureCurrentToActiveVersion();
+    _applyVersionState(version);
+    setVersionsToProject(versions, versionId);
+    setDirty(false);
+    post.render();
+  }
+
+  function updateVersionPanelUi() {
+    var card = document.getElementById('postprod-version-card');
+    var list = document.getElementById('postprod-version-list');
+    if (!card || !list) return;
+    var versions = getEditVersions();
+    if (versions.length < 2) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+    var activeId = getActiveVersionId();
+    var html = '';
+    versions.forEach(function (version) {
+      var isActive = version.id === activeId;
+      html += '<button type="button" class="postprod-version-btn' + (isActive ? ' is-active' : '') +
+        '" data-version-id="' + escapeHtml(version.id) + '">' + escapeHtml(version.label) + '</button>';
+    });
+    list.innerHTML = html;
+    list.querySelectorAll('.postprod-version-btn').forEach(function (btn) {
+      btn.onclick = function () {
+        var vid = btn.getAttribute('data-version-id');
+        switchToVersion(vid);
+      };
+    });
+  }
+
   // ── 렌더 저장소 ──────────────────────────────────────────────────────────
   var storageModal = null;
 
@@ -2752,6 +2976,7 @@
           '</div>' +
           '<div class="postprod-storage-item-actions">' +
           '<button type="button" class="btn-secondary compact postprod-storage-use" data-idx="' + idx + '">사용</button>' +
+          '<button type="button" class="btn-secondary compact postprod-storage-edit" data-idx="' + idx + '">편집</button>' +
           '<button type="button" class="btn-danger compact postprod-storage-del" data-idx="' + idx + '">삭제</button>' +
           '</div>' +
           '</li>';
@@ -2768,6 +2993,12 @@
         btn.onclick = function () {
           var idx = parseInt(btn.getAttribute('data-idx'), 10);
           useStoredRender(items[idx]);
+        };
+      });
+      body.querySelectorAll('.postprod-storage-edit').forEach(function (btn) {
+        btn.onclick = function () {
+          var idx = parseInt(btn.getAttribute('data-idx'), 10);
+          loadRenderAsNewVersion(items[idx]);
         };
       });
       body.querySelectorAll('.postprod-storage-del').forEach(function (btn) {
@@ -2878,6 +3109,26 @@
       await NK.api.postprodRenderDelete(state.projectId, objName);
     } catch (err) {
       showMessageDialog('삭제 실패: ' + getRenderErrorMessage(err), '저장소');
+      if (typeof onDone === 'function') onDone();
+      return;
+    }
+    // 해당 렌더 파일을 소스로 하는 편집 버전 제거 (옵션A: 해당 버전만 삭제)
+    var versions = getEditVersions();
+    var delIdx = versions.findIndex(function (v) { return v.sourceObjectName === objName; });
+    if (delIdx >= 0) {
+      var delVersionId = versions[delIdx].id;
+      var activeId = getActiveVersionId();
+      var wasActive = (activeId === delVersionId);
+      versions.splice(delIdx, 1);
+      var newActiveId = wasActive
+        ? (versions.length > 0 ? versions[0].id : 'v0')
+        : activeId;
+      setVersionsToProject(versions, newActiveId);
+      if (wasActive && versions.length > 0) {
+        var targetVer = versions.find(function (v) { return v.id === newActiveId; });
+        if (targetVer) _applyVersionState(targetVer);
+      }
+      post.render();
     }
     if (typeof onDone === 'function') onDone();
   }
@@ -4225,6 +4476,10 @@
       '<button class="btn-primary compact postprod-save-btn" id="postprod-save-btn"' + (state.saveBusy ? ' disabled' : '') + '>' + (state.saveBusy ? t('저장 중...') : t('저장하기')) + '</button>' +
       '<button class="btn-secondary compact" id="postprod-render-btn">' + t('렌더링') + '</button>' +
       '<button class="btn-secondary compact" id="postprod-storage-btn">' + t('저장소') + '</button>' +
+      '</div>' +
+      '<div class="postprod-resource-card postprod-version-card" id="postprod-version-card" style="display:none">' +
+      '<p class="title">' + t('편집 버전') + '</p>' +
+      '<div class="postprod-version-list" id="postprod-version-list"></div>' +
       '</div>' +
       '<p class="postprod-save-state" id="postprod-save-state"></p>' +
       '<p class="postprod-render-progress" id="postprod-render-progress"></p>' +
@@ -5652,6 +5907,7 @@
     renderLayout(model);
     bindEvents();
     updateBladeModeUi(); // blade 모드 클래스 복원
+    updateVersionPanelUi();
     // 모든 비디오 클립을 host에 사전 마운트 — 스크럽 전환 시 DOM 이동 지연 제거
     ensureAllPreviewVideosMounted(model);
     setCurrentTime(state.currentTime, true);

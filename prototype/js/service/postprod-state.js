@@ -201,6 +201,12 @@
       if (Object.prototype.hasOwnProperty.call(patch, 'renderMeta')) {
         nextPayload.renderMeta = patch.renderMeta;
       }
+      if (Object.prototype.hasOwnProperty.call(patch, 'editVersions')) {
+        nextPayload.editVersions = patch.editVersions;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'activeVersionId')) {
+        nextPayload.activeVersionId = patch.activeVersionId;
+      }
       var next = Object.assign({}, target, { payload: nextPayload });
       if (Object.prototype.hasOwnProperty.call(patch, 'postTimelineEdits')) {
         next.postTimelineEdits = patch.postTimelineEdits;
@@ -210,6 +216,16 @@
       }
       return next;
     });
+  }
+
+  function getEditVersions(project) {
+    var versions = project && project.payload && Array.isArray(project.payload.editVersions)
+      ? project.payload.editVersions : [];
+    return versions;
+  }
+
+  function getActiveVersionId(project) {
+    return (project && project.payload && project.payload.activeVersionId) || 'v0';
   }
 
   function buildRenderStartMeta(currentMeta) {
@@ -277,4 +293,6 @@
   postprodState.buildRenderProgressMeta = buildRenderProgressMeta;
   postprodState.buildRenderSuccessMeta = buildRenderSuccessMeta;
   postprodState.buildRenderFailureMeta = buildRenderFailureMeta;
+  postprodState.getEditVersions = getEditVersions;
+  postprodState.getActiveVersionId = getActiveVersionId;
 })();
