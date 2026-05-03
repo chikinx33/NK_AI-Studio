@@ -5048,6 +5048,14 @@
       else startPlayback();
       return;
     }
+    if (key === 'arrowleft' || key === 'arrowright') {
+      evt.preventDefault();
+      if (state.isPlaying) stopPlayback();
+      var frameSec = 1 / 30;
+      var nextTime = state.currentTime + (key === 'arrowright' ? frameSec : -frameSec);
+      setCurrentTime(nextTime);
+      return;
+    }
     if (key === 'escape') {
       if (state.bladeMode) {
         state.bladeMode = false;
