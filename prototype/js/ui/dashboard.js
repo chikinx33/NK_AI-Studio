@@ -161,8 +161,27 @@
   };
 
   const getSelectedProjectId = () => {
+    // 1순위: pre/prod/post에서 가장 최근 작업한 프로젝트 (lastUsedAt)
+    try {
+      const drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
+      if (Array.isArray(drafts) && drafts.length) {
+        let recentId = '';
+        let recentTs = 0;
+        drafts.forEach(d => {
+          if (!d || !d.id) return;
+          const ts = Date.parse(d.lastUsedAt || '');
+          if (Number.isFinite(ts) && ts > recentTs) {
+            recentTs = ts;
+            recentId = String(d.id).trim();
+          }
+        });
+        if (recentId) return recentId;
+      }
+    } catch (_) {}
+    // 2순위: 런타임 currentProject
     const runtimeId = String(NK.state?.runtime?.currentProject?.id || '').trim();
     if (runtimeId) return runtimeId;
+    // 3순위: 로컬 스토리지
     try {
       const key = (NK.config && NK.config.KEYS && NK.config.KEYS.CURRENT_PROJECT) || 'nk_current_project';
       const raw = localStorage.getItem(key) || localStorage.getItem('nk_current_project');

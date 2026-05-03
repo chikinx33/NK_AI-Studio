@@ -5953,6 +5953,20 @@
       window.addEventListener('keydown', onGlobalKeyDown);
       state.hotkeyBound = true;
     }
+    // 가장 최근 사용 시점 기록 (대시보드 카드 하이라이트용)
+    try {
+      var _pid = '';
+      var _svc = getPostprodStateService();
+      if (_svc && _svc.getQueryProjectId) _pid = _svc.getQueryProjectId(window.location.search);
+      if (!_pid) _pid = new URLSearchParams(window.location.search).get('projectId') || '';
+      if (!_pid && _svc && _svc.resolveProject) {
+        var _resolved = _svc.resolveProject({ search: window.location.search });
+        _pid = _resolved && _resolved.id ? String(_resolved.id) : '';
+      }
+      if (_pid && NK.service && NK.service.project && NK.service.project.markUsed) {
+        NK.service.project.markUsed(_pid);
+      }
+    } catch (_) {}
     // 스피너 표시 → 서버 동기화 → 최종 렌더 완료 후 스피너 해제 (최소 300ms)
     var _postSpinnerAt = Date.now();
     if (NK.core && NK.core.setLoading) NK.core.setLoading(true);

@@ -359,6 +359,15 @@
   ui.init = function (c) {
     ctx = c || {};
     ui.__ctx = ctx; // 외부 헬퍼가 ctx에 접근할 수 있도록 공유
+    // 가장 최근 사용 시점 기록 (대시보드 카드 하이라이트용)
+    try {
+      var pid = (NK.service && NK.service.project && NK.service.project.getCurrentProjectId)
+        ? NK.service.project.getCurrentProjectId({ search: window.location.search })
+        : (new URLSearchParams(window.location.search).get('projectId') || '');
+      if (pid && NK.service && NK.service.project && NK.service.project.markUsed) {
+        NK.service.project.markUsed(pid);
+      }
+    } catch (_) {}
   };
   // 영상 모델 셀렉트 전용 스타일을 주입해 테마에 맞는 형태로 표시
   (function injectVideoModelStyle() {

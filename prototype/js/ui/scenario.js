@@ -1764,6 +1764,11 @@
     }
     const pid = draft?.id || new URLSearchParams(location.search).get('projectId');
 
+    // 가장 최근 사용 시점 기록 (대시보드 카드 하이라이트용)
+    if (pid && NK.service?.project?.markUsed) {
+      try { NK.service.project.markUsed(pid); } catch (_) {}
+    }
+
     // draft가 없을 때만 기본값으로 초기화 (loadDraft 내부에서도 호출되므로 중복 방지)
     const categories = NK.core.purposeCategories ? Object.keys(NK.core.purposeCategories) : [];
     if (!draft) {

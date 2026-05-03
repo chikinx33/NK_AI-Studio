@@ -1042,6 +1042,16 @@
             return null;
         }
     };
+    project.markUsed = function (projectId) {
+        var targetId = String(projectId || '').trim();
+        if (!targetId) return null;
+        var nowIso = new Date().toISOString();
+        var updated = project.updateLocal(targetId, function (cur) {
+            return Object.assign({}, cur || {}, { lastUsedAt: nowIso });
+        }, { forceCurrent: true });
+        return updated;
+    };
+
     project.updatePayload = async function (draftOrId, patch) {
         var draft = typeof draftOrId === 'string' ? getDraftById(draftOrId) : normalizeDraft(draftOrId);
         if (!draft || !draft.id) throw new Error('project_not_found');
