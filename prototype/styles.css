@@ -371,6 +371,11 @@ body::-webkit-scrollbar {
   display: block;
 }
 
+/* 캐시된 비활성 stage iframe (id가 없으면 hidden) */
+.stage-iframe:not(#stage-iframe) {
+  display: none !important;
+}
+
 .stage-overlay {
   position: absolute;
   inset: 0;
