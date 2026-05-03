@@ -1562,70 +1562,75 @@
       try { video.currentTime = target; } catch (_) {}
       return;
     }
-    // ── 연속 스크럽 stutter 방지 전략 ─────────────────────────────────────
-    // 매 드래그마다 wake → seek → pause 사이클을 돌면 wake 동안 흘러간 1~2 프레임이
-    // 반복적으로 보이는 stutter가 발생한다. 해법: 드래그 중에는 video를 muted-play
-    // 상태로 유지(디코더 항상 활성)하고 currentTime만 갱신, 드래그가 멈추면 pause.
-    // pause 타이머는 매 호출마다 재설정되므로 연속 드래그 중에는 pause되지 않음.
+    // ── rVFC 기반 즉시-pause 전략 ─────────────────────────────────────────
+    // Chromium은 paused 상태에서 currentTime= 만으로 화면 프레임을 갱신하지 않으므로
+    // play()로 디코더 wake가 필요. 그러나 wake 후 pause가 너무 늦으면 1~2 프레임이
+    // forward로 흘러 stutter가 보임. 해법: requestVideoFrameCallback(rVFC)로 새 프레임이
+    // GPU에 painted된 직후 즉시 pause → forward 흐름 0 프레임.
+    if (video.__scrubPauseTimer) {
+      clearTimeout(video.__scrubPauseTimer);
+      video.__scrubPauseTimer = 0;
+    }
     if (video.__scrubRVFCId && typeof video.cancelVideoFrameCallback === 'function') {
       try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
       video.__scrubRVFCId = 0;
     }
-    // 이전 seeked 리스너 정리 (이번 사이클은 keep-playing 모드라 seeked 콜백 불필요)
     if (video.__scrubOnSeeked) {
       try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
       video.__scrubOnSeeked = null;
     }
     try { video.muted = true; } catch (_) {}
-    // 디코더 wake: paused면 play 시작, 이미 활성이면 currentTime만 갱신해 즉시 새 프레임 렌더
+    // 1) 디코더 wake (paused면 play 시작 — Promise 비동기)
     if (video.paused) {
-      var playPromise = null;
-      try { playPromise = video.play(); } catch (_) { playPromise = null; }
-      if (playPromise && typeof playPromise.then === 'function') {
-        playPromise.then(function () {
-          // play resolve 후 최신 __scrubTarget으로 재설정 (wake 중 drift 보정)
-          var latest = video.__scrubTarget;
-          if (typeof latest === 'number' && isFinite(latest)) {
-            if (Math.abs((video.currentTime || 0) - latest) > 0.05) {
-              try { video.currentTime = latest; } catch (_) {}
-            }
-          }
-        }).catch(function () { /* autoplay 거절 무시 */ });
-      }
+      try { video.play().catch(function () {}); } catch (_) {}
     }
+    // 2) seek 요청
     try { video.currentTime = target; } catch (_) {}
-    // 자동 pause 타이머: 매 호출마다 재설정 → 드래그 중엔 pause 안 됨, 멈춘 뒤 180ms 후 정지
-    if (video.__scrubPauseTimer) {
-      clearTimeout(video.__scrubPauseTimer);
-      video.__scrubPauseTimer = 0;
-    }
-    var gen = (video.__scrubGen = ((video.__scrubGen || 0) + 1) & 0xFFFF);
-    var capturedGen = gen;
+    var capturedGen = (video.__scrubGen = ((video.__scrubGen || 0) + 1) & 0xFFFF);
+    var pauseAtTarget = function () {
+      if (video.__scrubGen !== capturedGen) return;
+      if (state.isPlaying) return;
+      if (!video.paused) { try { video.pause(); } catch (_) {} }
+      // snap-back: wake 동안 drift됐다면 정확한 타겟으로 복귀
+      var t2 = video.__scrubTarget;
+      if (typeof t2 === 'number' && isFinite(t2) && Math.abs((video.currentTime || 0) - t2) > 0.01) {
+        try { video.currentTime = t2; } catch (_) {}
+      }
+    };
+    // 3) seeked + rVFC 결합: seek 완료 후 다음 frame paint에서만 pause
+    //    (rVFC만 쓰면 seek 이전 frame에 발화해 엉뚱한 프레임에 pause되는 문제 회피)
+    var pauseOnNextPaint = function () {
+      if (video.__scrubGen !== capturedGen) return;
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        video.__scrubRVFCId = video.requestVideoFrameCallback(function () {
+          video.__scrubRVFCId = 0;
+          pauseAtTarget();
+        });
+      } else {
+        requestAnimationFrame(pauseAtTarget);
+      }
+    };
+    video.__scrubOnSeeked = function () {
+      try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
+      video.__scrubOnSeeked = null;
+      if (video.__scrubGen !== capturedGen) return;
+      pauseOnNextPaint();
+    };
+    try { video.addEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
+    // 4) 안전망: rVFC/seeked 미발화 시 200ms 후 강제 pause
     video.__scrubPauseTimer = setTimeout(function () {
       video.__scrubPauseTimer = 0;
       if (video.__scrubGen !== capturedGen) return;
-      if (state.isPlaying) return;
-      // 마지막 타겟으로 정확히 정렬한 뒤 pause
-      var t2 = video.__scrubTarget;
-      if (typeof t2 === 'number' && isFinite(t2)) {
-        if (Math.abs((video.currentTime || 0) - t2) > 0.01) {
-          try { video.currentTime = t2; } catch (_) {}
-        }
+      if (video.__scrubRVFCId && typeof video.cancelVideoFrameCallback === 'function') {
+        try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
+        video.__scrubRVFCId = 0;
       }
-      // seeked 이벤트로 정렬 완료 후 pause — 최종 정지 프레임이 정확히 타겟에 위치
-      var onFinalSeeked = function () {
-        try { video.removeEventListener('seeked', onFinalSeeked); } catch (_) {}
-        if (video.__scrubGen !== capturedGen) return;
-        if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
-      };
-      try { video.addEventListener('seeked', onFinalSeeked); } catch (_) {}
-      // 백업: seeked 미발화 시 50ms 뒤 강제 pause
-      setTimeout(function () {
-        try { video.removeEventListener('seeked', onFinalSeeked); } catch (_) {}
-        if (video.__scrubGen !== capturedGen) return;
-        if (!state.isPlaying && !video.paused) { try { video.pause(); } catch (_) {} }
-      }, 50);
-    }, 180);
+      if (video.__scrubOnSeeked) {
+        try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
+        video.__scrubOnSeeked = null;
+      }
+      pauseAtTarget();
+    }, 200);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -1698,14 +1703,54 @@
     video.style.opacity = '0';
     host.appendChild(video);
     var entry = { url: playableUrl, video: video, ready: false, failed: false };
-    var onReady = function () { entry.ready = true; };
-    var onErr = function () { entry.failed = true; };
+    var onReady = function () { entry.ready = true; updatePreviewLoadingFromActiveVideo(); };
+    var onErr = function () { entry.failed = true; updatePreviewLoadingFromActiveVideo(); };
     try { video.addEventListener('loadedmetadata', onReady); } catch (_) {}
+    try { video.addEventListener('canplay', onReady); } catch (_) {}
+    try { video.addEventListener('canplaythrough', onReady); } catch (_) {}
+    try { video.addEventListener('playing', onReady); } catch (_) {}
+    try { video.addEventListener('loadeddata', onReady); } catch (_) {}
+    try { video.addEventListener('waiting', updatePreviewLoadingFromActiveVideo); } catch (_) {}
+    try { video.addEventListener('stalled', updatePreviewLoadingFromActiveVideo); } catch (_) {}
     try { video.addEventListener('error', onErr); } catch (_) {}
     // src 할당 직후 명시적 load() — preload='auto'에 의존하지 않고 즉시 로드 트리거
     try { video.load(); } catch (_) {}
     cache[playableUrl] = entry;
     return entry;
+  }
+
+  // 편집 미리보기 로딩 오버레이 — 활성 video의 readyState를 기준으로 표시 토글
+  function updatePreviewLoadingFromActiveVideo() {
+    var loadingEl = document.getElementById('postprod-preview-loading');
+    if (!loadingEl) return;
+    var activeUrl = state.previewActiveUrl || '';
+    var entry = activeUrl && state.previewVideoCache ? state.previewVideoCache[activeUrl] : null;
+    var video = entry && entry.video;
+    // 활성 video가 없거나 readyState가 HAVE_CURRENT_DATA(2) 미만이면 로딩 표시
+    var isLoading = !!video && video.readyState < 2 && !entry.failed;
+    // host가 표시 상태(편집 화면에 video가 보이는 상태)일 때만 로딩 표시
+    var host = document.getElementById('postprod-preview-video-host');
+    var hostShown = host && getComputedStyle(host).display !== 'none';
+    if (isLoading && hostShown) {
+      loadingEl.classList.add('is-loading');
+    } else {
+      loadingEl.classList.remove('is-loading');
+    }
+  }
+
+  // 렌더 미리보기 로딩 오버레이 — postprod-render-video의 readyState 기준
+  function attachRenderPreviewLoadingTracking() {
+    var v = document.getElementById('postprod-render-video');
+    var loading = document.getElementById('postprod-render-loading');
+    if (!v || !loading) return;
+    var update = function () {
+      if (v.readyState >= 2) loading.classList.remove('is-loading');
+      else loading.classList.add('is-loading');
+    };
+    ['loadstart', 'loadedmetadata', 'loadeddata', 'canplay', 'canplaythrough', 'playing', 'waiting', 'stalled', 'error'].forEach(function (evt) {
+      try { v.addEventListener(evt, update); } catch (_) {}
+    });
+    update();
   }
 
   function ensureAllPreviewVideosMounted(model) {
@@ -4140,6 +4185,7 @@
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
+      updatePreviewLoadingFromActiveVideo();
       return;
     }
     if (clip.empty || !clip.url) {
@@ -4152,6 +4198,7 @@
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
+      updatePreviewLoadingFromActiveVideo();
       return;
     }
 
@@ -4166,6 +4213,7 @@
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
+      updatePreviewLoadingFromActiveVideo();
       return;
     }
 
@@ -4213,6 +4261,7 @@
       }
       renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
+      updatePreviewLoadingFromActiveVideo();
       return;
     }
     // ── End fast path ────────────────────────────────────────────────────────
@@ -4243,6 +4292,7 @@
       state.previewClipUrl = playableUrl;
       renderPreviewOverlay(sec);
       renderPreviewSubtitles(sec, sub);
+      updatePreviewLoadingFromActiveVideo();
       return;
     }
 
@@ -4261,6 +4311,7 @@
       renderPreviewSubtitles(sec, sub);
       state.previewClipId = '';
       state.previewClipUrl = '';
+      updatePreviewLoadingFromActiveVideo();
       return;
     }
 
@@ -4304,6 +4355,7 @@
     warmPreviewVideoNeighbors(clip);
     renderPreviewOverlay(sec);
     renderPreviewSubtitles(sec, sub);
+    updatePreviewLoadingFromActiveVideo();
   }
 
   function startPlayback() {
@@ -4346,6 +4398,8 @@
       '<div id="postprod-preview-gap" class="postprod-preview-gap" aria-hidden="true"></div>' +
       // 페이드 인/아웃 오버레이 — 활성 클립의 fadeIn/fadeOut 설정에 따라 opacity 갱신
       '<div id="postprod-preview-fade" class="postprod-preview-fade" aria-hidden="true" style="position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:6;"></div>' +
+      // 로딩 오버레이 — 활성 video의 readyState가 HAVE_CURRENT_DATA(2) 미만이면 표시
+      '<div id="postprod-preview-loading" class="postprod-preview-loading" aria-hidden="true"><div class="postprod-spinner"></div></div>' +
       '<div id="postprod-preview-empty" class="postprod-preview-empty">' +
       '<p>프로덕션 결과 미디어가 아직 없습니다.</p>' +
       '</div>' +
@@ -4362,7 +4416,12 @@
   function buildRenderPreviewHtml(model, meta) {
     var videoUrl = getRenderableOutputVideoUrl(meta);
     if (videoUrl) {
-      return '<video id="postprod-render-video" class="postprod-render-video" controls preload="metadata" src="' + escapeHtml(videoUrl) + '"></video>';
+      return (
+        '<div class="postprod-render-video-wrap">' +
+        '<video id="postprod-render-video" class="postprod-render-video" controls preload="metadata" src="' + escapeHtml(videoUrl) + '"></video>' +
+        '<div id="postprod-render-loading" class="postprod-preview-loading is-loading" aria-hidden="true"><div class="postprod-spinner"></div></div>' +
+        '</div>'
+      );
     }
     return '<div class="postprod-render-empty">렌더링 결과가 아직 없습니다.</div>';
   }
@@ -4375,6 +4434,7 @@
     if (src === prevSrc) return;
     wrap.setAttribute('data-render-src', src || '');
     wrap.innerHTML = buildRenderPreviewHtml(state.model || null, meta || null);
+    attachRenderPreviewLoadingTracking();
   }
 
   function renderLayout(model) {

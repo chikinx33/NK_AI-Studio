@@ -5857,6 +5857,47 @@ html.page-shell-image #sidebar-project-card {
   font-size: 14px;
 }
 
+/* 미리보기 로딩 오버레이 — video readyState < HAVE_CURRENT_DATA(2)일 때 표시 */
+.postprod-preview-loading {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 7;
+  pointer-events: none;
+}
+.postprod-preview-loading.is-loading {
+  display: flex;
+}
+.postprod-render-video-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.postprod-render-video-wrap .postprod-render-video {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.postprod-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid rgba(255, 255, 255, 0.18);
+  border-top-color: rgba(255, 255, 255, 0.92);
+  border-radius: 50%;
+  animation: postprod-spinner-rotate 0.85s linear infinite;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4));
+}
+@keyframes postprod-spinner-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .postprod-preview-empty p {
   margin: 0;
   color: #c5cedf;
