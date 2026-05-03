@@ -1523,25 +1523,27 @@
   //   rVFC는 렌더링 경로(canvas 캡처용)에만 사용. 스크럽 프리뷰(video 엘리먼트 표시)는
   //   seeked가 최적.
   // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
+  // ── 기본적인 스크럽: video.currentTime 설정만 ─────────────────────────
+  // 복잡한 wake/pause/rVFC 메커니즘을 모두 제거. 브라우저의 native seek 동작에 위임.
+  // metadata가 아직 로드되지 않았으면 loadedmetadata 후 seek 재시도.
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
-    // 방어적 재연결: 어떤 흐름에서든 video가 detached됐다면 현재 host에 다시 붙임.
+    // 호스트에서 detached됐다면 재연결
     var host = getPreviewVideoHost();
     if (host && video.parentNode !== host) {
       try { host.appendChild(video); } catch (_) {}
       try { applyVideoLayerStyles(video); } catch (_) {}
       try { video.style.opacity = '1'; video.style.zIndex = '2'; } catch (_) {}
     }
-    // 항상 최신 타겟 저장 — readyState < 1로 deferred되더라도 metadata 로드 시점에 최신 위치로 seek됨.
+    // 최신 타겟 항상 저장 — metadata 로드 후에도 가장 최근 위치로 seek되도록
     video.__scrubTarget = target;
+    // metadata 미로드 — 단일 리스너 등록 후 종료
     if (video.readyState < 1) {
-      // 단일 리스너로 통합 (중복 등록 방지). loadedmetadata/canplay 둘 다 listen해 첫 발화 시 즉시 seek.
       if (!video.__scrubMetaPending) {
         video.__scrubMetaPending = true;
         var onReady = function () {
           try { video.removeEventListener('loadedmetadata', onReady); } catch (_) {}
-          try { video.removeEventListener('canplay', onReady); } catch (_) {}
           try { video.removeEventListener('loadeddata', onReady); } catch (_) {}
           video.__scrubMetaPending = false;
           var latest = video.__scrubTarget;
@@ -1551,86 +1553,13 @@
         };
         try { video.addEventListener('loadedmetadata', onReady); } catch (_) {}
         try { video.addEventListener('loadeddata', onReady); } catch (_) {}
-        try { video.addEventListener('canplay', onReady); } catch (_) {}
-        // networkState 0(NETWORK_EMPTY) 또는 3(NETWORK_NO_SOURCE)이면 명시적으로 load() 강제.
         try { if (video.networkState === 0 || video.networkState === 3) video.load(); } catch (_) {}
       }
       return;
     }
-    // 재생 중이면 currentTime만 설정하고 종료 (이미 디코더 활성)
-    if (state.isPlaying) {
-      try { video.currentTime = target; } catch (_) {}
-      return;
-    }
-    // ── rVFC 기반 즉시-pause 전략 ─────────────────────────────────────────
-    // Chromium은 paused 상태에서 currentTime= 만으로 화면 프레임을 갱신하지 않으므로
-    // play()로 디코더 wake가 필요. 그러나 wake 후 pause가 너무 늦으면 1~2 프레임이
-    // forward로 흘러 stutter가 보임. 해법: requestVideoFrameCallback(rVFC)로 새 프레임이
-    // GPU에 painted된 직후 즉시 pause → forward 흐름 0 프레임.
-    if (video.__scrubPauseTimer) {
-      clearTimeout(video.__scrubPauseTimer);
-      video.__scrubPauseTimer = 0;
-    }
-    if (video.__scrubRVFCId && typeof video.cancelVideoFrameCallback === 'function') {
-      try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
-      video.__scrubRVFCId = 0;
-    }
-    if (video.__scrubOnSeeked) {
-      try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
-      video.__scrubOnSeeked = null;
-    }
+    // 기본: currentTime 설정 끝. 브라우저가 seek 처리 + 새 프레임 paint를 자동 수행.
     try { video.muted = true; } catch (_) {}
-    // 1) 디코더 wake (paused면 play 시작 — Promise 비동기)
-    if (video.paused) {
-      try { video.play().catch(function () {}); } catch (_) {}
-    }
-    // 2) seek 요청
     try { video.currentTime = target; } catch (_) {}
-    var capturedGen = (video.__scrubGen = ((video.__scrubGen || 0) + 1) & 0xFFFF);
-    var pauseAtTarget = function () {
-      if (video.__scrubGen !== capturedGen) return;
-      if (state.isPlaying) return;
-      if (!video.paused) { try { video.pause(); } catch (_) {} }
-      // snap-back: wake 동안 drift됐다면 정확한 타겟으로 복귀
-      var t2 = video.__scrubTarget;
-      if (typeof t2 === 'number' && isFinite(t2) && Math.abs((video.currentTime || 0) - t2) > 0.01) {
-        try { video.currentTime = t2; } catch (_) {}
-      }
-    };
-    // 3) seeked + rVFC 결합: seek 완료 후 다음 frame paint에서만 pause
-    //    (rVFC만 쓰면 seek 이전 frame에 발화해 엉뚱한 프레임에 pause되는 문제 회피)
-    var pauseOnNextPaint = function () {
-      if (video.__scrubGen !== capturedGen) return;
-      if (typeof video.requestVideoFrameCallback === 'function') {
-        video.__scrubRVFCId = video.requestVideoFrameCallback(function () {
-          video.__scrubRVFCId = 0;
-          pauseAtTarget();
-        });
-      } else {
-        requestAnimationFrame(pauseAtTarget);
-      }
-    };
-    video.__scrubOnSeeked = function () {
-      try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
-      video.__scrubOnSeeked = null;
-      if (video.__scrubGen !== capturedGen) return;
-      pauseOnNextPaint();
-    };
-    try { video.addEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
-    // 4) 안전망: rVFC/seeked 미발화 시 200ms 후 강제 pause
-    video.__scrubPauseTimer = setTimeout(function () {
-      video.__scrubPauseTimer = 0;
-      if (video.__scrubGen !== capturedGen) return;
-      if (video.__scrubRVFCId && typeof video.cancelVideoFrameCallback === 'function') {
-        try { video.cancelVideoFrameCallback(video.__scrubRVFCId); } catch (_) {}
-        video.__scrubRVFCId = 0;
-      }
-      if (video.__scrubOnSeeked) {
-        try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
-        video.__scrubOnSeeked = null;
-      }
-      pauseAtTarget();
-    }, 200);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
