@@ -1634,37 +1634,16 @@
       return;
     }
     try { video.muted = true; } catch (_) {}
-    // 이전 seeked 핸들러 / 타이머 정리
+    // 이전 핸들러 / 타이머 정리
     if (video.__scrubOnSeeked) {
       try { video.removeEventListener('seeked', video.__scrubOnSeeked); } catch (_) {}
       video.__scrubOnSeeked = null;
     }
     if (video.__scrubPauseTimer) { clearTimeout(video.__scrubPauseTimer); video.__scrubPauseTimer = 0; }
-    if (video.paused) { try { video.play().catch(function () {}); } catch (_) {} }
+    // 순수 seek: play/pause 건드리지 않고 currentTime만 변경
+    // (play/pause는 재생버튼 전용; 탐색은 currentTime만으로 충분)
     try { video.currentTime = target; } catch (_) {}
     video.__scrubTarget = target;
-    // 드래그 중이 아닐 때만 seeked 기반 pause (seek 완료 후 프레임 보장)
-    if (!state.isScrubbing) {
-      (function (vid) {
-        var onSeeked = function () {
-          try { vid.removeEventListener('seeked', onSeeked); } catch (_) {}
-          if (vid.__scrubOnSeeked === onSeeked) vid.__scrubOnSeeked = null;
-          if (vid.__scrubPauseTimer) { clearTimeout(vid.__scrubPauseTimer); vid.__scrubPauseTimer = 0; }
-          if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
-        };
-        vid.__scrubOnSeeked = onSeeked;
-        try { vid.addEventListener('seeked', onSeeked); } catch (_) {}
-        // seeked가 오지 않을 경우 1s 폴백
-        vid.__scrubPauseTimer = setTimeout(function () {
-          vid.__scrubPauseTimer = 0;
-          if (vid.__scrubOnSeeked) {
-            try { vid.removeEventListener('seeked', vid.__scrubOnSeeked); } catch (_) {}
-            vid.__scrubOnSeeked = null;
-          }
-          if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
-        }, 1000);
-      })(video);
-    }
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -4345,40 +4324,15 @@
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
             if (fpVid.readyState >= 1) {
               try { fpVid.muted = true; } catch (_) {}
-              // 이전 seeked 핸들러 / 타이머 정리
+              // 이전 핸들러 / 타이머 정리
               if (fpVid.__scrubOnSeeked) {
                 try { fpVid.removeEventListener('seeked', fpVid.__scrubOnSeeked); } catch (_) {}
                 fpVid.__scrubOnSeeked = null;
               }
               if (fpVid.__scrubPauseTimer) { clearTimeout(fpVid.__scrubPauseTimer); fpVid.__scrubPauseTimer = 0; }
-              // 디코더 wake: paused일 때만 play() 호출
-              if (fpVid.paused) { try { fpVid.play().catch(function () {}); } catch (_) {} }
+              // 순수 seek: play/pause 없이 currentTime만 변경
               try { fpVid.currentTime = fpClipTime; } catch (_) {}
               fpVid.__scrubTarget = fpClipTime;
-              if (!state.isScrubbing) {
-                // seeked 이벤트 기반 pause: seek 완료(프레임 보장) 후 멈춤
-                // 200ms 고정 타이머 대신 seeked를 사용해 원격 비디오의 느린 seek도 올바르게 처리
-                (function (vid) {
-                  var onSeeked = function () {
-                    try { vid.removeEventListener('seeked', onSeeked); } catch (_) {}
-                    if (vid.__scrubOnSeeked === onSeeked) vid.__scrubOnSeeked = null;
-                    if (vid.__scrubPauseTimer) { clearTimeout(vid.__scrubPauseTimer); vid.__scrubPauseTimer = 0; }
-                    if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
-                  };
-                  vid.__scrubOnSeeked = onSeeked;
-                  try { vid.addEventListener('seeked', onSeeked); } catch (_) {}
-                  // seeked가 오지 않을 경우 1s 폴백
-                  vid.__scrubPauseTimer = setTimeout(function () {
-                    vid.__scrubPauseTimer = 0;
-                    if (vid.__scrubOnSeeked) {
-                      try { vid.removeEventListener('seeked', vid.__scrubOnSeeked); } catch (_) {}
-                      vid.__scrubOnSeeked = null;
-                    }
-                    if (!state.isPlaying && !vid.paused) { try { vid.pause(); } catch (_) {} }
-                  }, 1000);
-                })(fpVid);
-              }
-              // isScrubbing=true: 핸들러 없이 decoder warm 유지 (pointerup 시 처리)
             } else {
               // metadata 미로드 — scrubSeekVideo로 위임 (loadedmetadata 후 재시도)
               scheduleScrubSeek('active', fpVid, fpClipTime);
@@ -4484,8 +4438,15 @@
         video.play().catch(function () { });
       }
     } else {
-      scheduleScrubSeek('active', video, liveClipTime);
+      // 탐색 중: play/pause 없이 currentTime만 설정
       try { video.muted = true; } catch (_) {}
+      if (video.readyState >= 1) {
+        try { video.currentTime = liveClipTime; } catch (_) {}
+        video.__scrubTarget = liveClipTime;
+      } else {
+        // metadata 미로드 — readyState 확보 후 재시도
+        scheduleScrubSeek('active', video, liveClipTime);
+      }
     }
 
     // 이웃 클립(±1) pre-seek — 경계 교차 시 즉시 표시되도록 준비
@@ -5925,7 +5886,8 @@
       ruler.onpointerdown = function (evt) {
         if (evt.button !== 0 || state.drag) return;
         rulerPid = evt.pointerId;
-        // isScrubbing은 실제 이동 시에만 설정 — 클릭 유지 중 재생 방지
+        state.scrubWasPlaying = !!state.isPlaying;
+        if (state.isPlaying) stopPlayback();
         try { ruler.setPointerCapture(evt.pointerId); } catch (_) {}
         seekByTimelinePointer(evt, ruler);
       };
@@ -5945,7 +5907,10 @@
         if (rulerMoveRaf) { cancelAnimationFrame(rulerMoveRaf); rulerMoveRaf = 0; }
         rulerPid = -1;
         state.isScrubbing = false;
-        syncPreviewMedia(state.currentTime); // 200ms pause 타이머 시작
+        var wasPlaying = state.scrubWasPlaying;
+        state.scrubWasPlaying = false;
+        if (wasPlaying) startPlayback();
+        else syncPreviewMedia(state.currentTime);
       };
     }
 
@@ -6046,7 +6011,8 @@
         if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
         if (state.drag) return;
         lanePid = evt.pointerId;
-        // isScrubbing은 실제 이동 시에만 설정 — 클릭 유지 중 재생 방지
+        state.scrubWasPlaying = !!state.isPlaying;
+        if (state.isPlaying) stopPlayback();
         try { laneEl.setPointerCapture(evt.pointerId); } catch (_) {}
         seekByTimelinePointer(evt, laneEl);
       };
@@ -6068,7 +6034,10 @@
         if (laneMoveRaf) { cancelAnimationFrame(laneMoveRaf); laneMoveRaf = 0; }
         lanePid = -1;
         state.isScrubbing = false;
-        syncPreviewMedia(state.currentTime); // 200ms pause 타이머 시작
+        var wasPlaying = state.scrubWasPlaying;
+        state.scrubWasPlaying = false;
+        if (wasPlaying) startPlayback();
+        else syncPreviewMedia(state.currentTime);
       };
       laneEl.onclick = laneSeek; // fallback for simple tap
     });
