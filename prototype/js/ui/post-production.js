@@ -1533,15 +1533,30 @@
       try { applyVideoLayerStyles(video); } catch (_) {}
       try { video.style.opacity = '1'; video.style.zIndex = '2'; } catch (_) {}
     }
+    // 항상 최신 타겟 저장 — readyState < 1로 deferred되더라도 metadata 로드 시점에 최신 위치로 seek됨.
+    video.__scrubTarget = target;
     if (video.readyState < 1) {
-      var onMeta = function () {
-        video.removeEventListener('loadedmetadata', onMeta);
-        scrubSeekVideo(video, target);
-      };
-      video.addEventListener('loadedmetadata', onMeta);
+      // 단일 리스너로 통합 (중복 등록 방지). loadedmetadata/canplay 둘 다 listen해 첫 발화 시 즉시 seek.
+      if (!video.__scrubMetaPending) {
+        video.__scrubMetaPending = true;
+        var onReady = function () {
+          try { video.removeEventListener('loadedmetadata', onReady); } catch (_) {}
+          try { video.removeEventListener('canplay', onReady); } catch (_) {}
+          try { video.removeEventListener('loadeddata', onReady); } catch (_) {}
+          video.__scrubMetaPending = false;
+          var latest = video.__scrubTarget;
+          if (typeof latest === 'number' && isFinite(latest)) {
+            scrubSeekVideo(video, latest);
+          }
+        };
+        try { video.addEventListener('loadedmetadata', onReady); } catch (_) {}
+        try { video.addEventListener('loadeddata', onReady); } catch (_) {}
+        try { video.addEventListener('canplay', onReady); } catch (_) {}
+        // networkState 0(NETWORK_EMPTY) 또는 3(NETWORK_NO_SOURCE)이면 명시적으로 load() 강제.
+        try { if (video.networkState === 0 || video.networkState === 3) video.load(); } catch (_) {}
+      }
       return;
     }
-    video.__scrubTarget = target;
     try { video.currentTime = target; } catch (_) { return; }
     // 재생 중이면 wake 불필요 (이미 디코더 활성)
     if (state.isPlaying) return;
@@ -1670,6 +1685,8 @@
     var onErr = function () { entry.failed = true; };
     try { video.addEventListener('loadedmetadata', onReady); } catch (_) {}
     try { video.addEventListener('error', onErr); } catch (_) {}
+    // src 할당 직후 명시적 load() — preload='auto'에 의존하지 않고 즉시 로드 트리거
+    try { video.load(); } catch (_) {}
     cache[playableUrl] = entry;
     return entry;
   }
