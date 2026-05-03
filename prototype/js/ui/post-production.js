@@ -860,6 +860,74 @@
   }
 
   var messageDialog = null;
+  var confirmDialog = null;
+
+  function ensureConfirmDialog() {
+    if (confirmDialog && confirmDialog.root && confirmDialog.root.parentNode) return confirmDialog;
+    if (typeof document === 'undefined' || !document.body) return null;
+
+    var root = document.createElement('div');
+    root.id = 'nk-confirm-alert';
+    root.className = 'nk-copy-alert';
+    root.setAttribute('aria-hidden', 'true');
+    root.innerHTML =
+      '<div class="nk-copy-alert-dialog" role="dialog" aria-modal="true" aria-labelledby="nk-confirm-alert-title">' +
+      '<h4 id="nk-confirm-alert-title" class="nk-copy-alert-title">확인</h4>' +
+      '<pre id="nk-confirm-alert-text" class="nk-copy-alert-text"></pre>' +
+      '<div class="nk-copy-alert-actions">' +
+      '<button type="button" class="btn-secondary compact" id="nk-confirm-alert-cancel">취소</button>' +
+      '<button type="button" class="btn-primary compact" id="nk-confirm-alert-ok">확인</button>' +
+      '</div>' +
+      '</div>';
+    document.body.appendChild(root);
+
+    var titleEl = root.querySelector('#nk-confirm-alert-title');
+    var textEl = root.querySelector('#nk-confirm-alert-text');
+    var cancelBtn = root.querySelector('#nk-confirm-alert-cancel');
+    var okBtn = root.querySelector('#nk-confirm-alert-ok');
+    var _onConfirm = null;
+
+    var close = function () {
+      root.classList.remove('is-open');
+      root.setAttribute('aria-hidden', 'true');
+      _onConfirm = null;
+    };
+    var open = function (cb) {
+      _onConfirm = cb || null;
+      root.classList.add('is-open');
+      root.setAttribute('aria-hidden', 'false');
+      if (okBtn && okBtn.focus) okBtn.focus();
+    };
+
+    root.addEventListener('click', function (evt) {
+      if (evt && evt.target === root) close();
+    });
+    if (cancelBtn) cancelBtn.addEventListener('click', close);
+    if (okBtn) okBtn.addEventListener('click', function () {
+      var cb = _onConfirm;
+      close();
+      if (typeof cb === 'function') cb();
+    });
+    document.addEventListener('keydown', function (evt) {
+      if (!evt) return;
+      if (evt.key === 'Escape' && root.classList.contains('is-open')) close();
+    });
+
+    confirmDialog = { root: root, titleEl: titleEl, textEl: textEl, open: open, close: close };
+    return confirmDialog;
+  }
+
+  function showConfirmDialog(message, title, onConfirm) {
+    var text = String(message || '').trim();
+    var dlg = ensureConfirmDialog();
+    if (!dlg || !dlg.root) {
+      if (window.confirm(text) && typeof onConfirm === 'function') onConfirm();
+      return;
+    }
+    if (dlg.titleEl) dlg.titleEl.textContent = String(title || '확인');
+    if (dlg.textEl) dlg.textEl.textContent = text;
+    dlg.open(onConfirm);
+  }
 
   function ensureMessageDialog() {
     if (messageDialog && messageDialog.root && messageDialog.root.parentNode) return messageDialog;
@@ -2459,6 +2527,36 @@
     post.render();
   }
 
+  function deleteEditVersion(versionId) {
+    if (!versionId || versionId === 'v0') return;
+    var versions = getEditVersions();
+    var version = versions.find(function (v) { return v.id === versionId; });
+    if (!version) return;
+    var label = version.label || versionId;
+    showConfirmDialog(
+      '"' + label + '"을(를) 삭제할까요?\n이 편집본의 타임라인 편집 내용이 모두 제거됩니다.',
+      '편집본 삭제',
+      function () {
+        var vers = getEditVersions();
+        var delIdx = vers.findIndex(function (v) { return v.id === versionId; });
+        if (delIdx < 0) return;
+        var activeId = getActiveVersionId();
+        var wasActive = (activeId === versionId);
+        vers.splice(delIdx, 1);
+        var newActiveId = wasActive
+          ? (delIdx > 0 ? vers[delIdx - 1].id : (vers.length > 0 ? vers[0].id : 'v0'))
+          : activeId;
+        setVersionsToProject(vers, newActiveId);
+        if (wasActive) {
+          var targetVer = vers.find(function (v) { return v.id === newActiveId; });
+          if (targetVer) _applyVersionState(targetVer);
+        }
+        setDirty(true);
+        post.render();
+      }
+    );
+  }
+
   function updateVersionPanelUi() {
     var card = document.getElementById('postprod-version-card');
     var list = document.getElementById('postprod-version-list');
@@ -2473,14 +2571,31 @@
     var html = '';
     versions.forEach(function (version) {
       var isActive = version.id === activeId;
-      html += '<button type="button" class="postprod-version-btn' + (isActive ? ' is-active' : '') +
+      var isOriginal = version.id === 'v0';
+      var btnHtml = '<button type="button" class="postprod-version-btn' + (isActive ? ' is-active' : '') +
         '" data-version-id="' + escapeHtml(version.id) + '">' + escapeHtml(version.label) + '</button>';
+      if (isOriginal) {
+        html += btnHtml;
+      } else {
+        html += '<span class="postprod-version-item">' + btnHtml +
+          '<button type="button" class="postprod-version-del" data-version-del-id="' + escapeHtml(version.id) +
+          '" title="' + escapeHtml(version.label) + ' 삭제" aria-label="' + escapeHtml(version.label) + ' 삭제">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
+          '</button></span>';
+      }
     });
     list.innerHTML = html;
     list.querySelectorAll('.postprod-version-btn').forEach(function (btn) {
       btn.onclick = function () {
         var vid = btn.getAttribute('data-version-id');
         switchToVersion(vid);
+      };
+    });
+    list.querySelectorAll('.postprod-version-del').forEach(function (delBtn) {
+      delBtn.onclick = function (evt) {
+        evt.stopPropagation();
+        var vid = delBtn.getAttribute('data-version-del-id');
+        deleteEditVersion(vid);
       };
     });
   }

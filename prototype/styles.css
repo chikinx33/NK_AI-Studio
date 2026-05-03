@@ -6454,6 +6454,42 @@ html.page-shell-image #sidebar-project-card {
   border-color: var(--primary, #5c6bc0);
   color: #fff;
 }
+.postprod-version-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.postprod-version-item .postprod-version-btn {
+  padding-right: 26px;
+}
+.postprod-version-del {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.45);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.postprod-version-del:hover {
+  background: rgba(220, 80, 80, 0.35);
+  color: #ff8080;
+}
+.postprod-version-btn.is-active ~ .postprod-version-del,
+.postprod-version-item:has(.postprod-version-btn.is-active) .postprod-version-del {
+  color: rgba(255,255,255,0.65);
+}
 .btn-danger {
   background: rgba(220, 53, 69, 0.12);
   color: #e05555;
