@@ -4313,9 +4313,22 @@
             // 스크럽: 디코더 wake 후 즉시 seek — Chrome은 paused 상태에서 디코더를 suspend하므로
             // play()로 wake 후 동기적으로 currentTime= 설정. play()는 paused일 때만 호출(tick당 1회).
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
-            // rAF로 seek 병합 — pointermove가 주사율보다 빠를 때(초당 100회+) 디코더 과부하 방지.
-            // scrubSeekVideo가 wake·seek·pause-timer를 일괄 처리하므로 직접 호출 불필요.
-            scheduleScrubSeek('active', fpVid, fpClipTime);
+            if (fpVid.readyState >= 1) {
+              try { fpVid.muted = true; } catch (_) {}
+              // paused면 play()로 디코더 활성화 (즉시 currentTime= 설정으로 전진 없음)
+              if (fpVid.paused) { try { fpVid.play().catch(function () {}); } catch (_) {} }
+              try { fpVid.currentTime = fpClipTime; } catch (_) {}
+              fpVid.__scrubTarget = fpClipTime;
+              // 마지막 tick 200ms 후 pause — 스크럽 중에는 decoder 활성 유지
+              if (fpVid.__scrubPauseTimer) clearTimeout(fpVid.__scrubPauseTimer);
+              fpVid.__scrubPauseTimer = setTimeout(function () {
+                fpVid.__scrubPauseTimer = 0;
+                if (!state.isPlaying && !fpVid.paused) { try { fpVid.pause(); } catch (_) {} }
+              }, 200);
+            } else {
+              // metadata 미로드 — scrubSeekVideo로 위임 (loadedmetadata 후 재시도)
+              scheduleScrubSeek('active', fpVid, fpClipTime);
+            }
           } else {
             // 재생 중: 스크럽 wake로 인한 muted 상태를 해제 (단, clip.soundOn=false면 muted 유지),
             // 멈춰있다면 재개
@@ -5844,6 +5857,9 @@
     var ruler = root.querySelector('.postprod-ruler');
     if (ruler) {
       var rulerPid = -1;
+      var rulerMoveRaf = 0;
+      var rulerMoveX = 0;
+      var rulerMoveShift = false;
       ruler.onpointerdown = function (evt) {
         if (evt.button !== 0 || state.drag) return;
         rulerPid = evt.pointerId;
@@ -5852,10 +5868,17 @@
       };
       ruler.onpointermove = function (evt) {
         if (evt.pointerId !== rulerPid || state.drag) return;
-        seekByTimelinePointer(evt, ruler);
+        rulerMoveX = evt.clientX;
+        rulerMoveShift = evt.shiftKey;
+        if (rulerMoveRaf) return;
+        rulerMoveRaf = requestAnimationFrame(function () {
+          rulerMoveRaf = 0;
+          if (rulerPid !== -1) seekByTimelinePointer({ clientX: rulerMoveX, shiftKey: rulerMoveShift }, ruler);
+        });
       };
       ruler.onpointerup = ruler.onpointercancel = function (evt) {
         if (evt.pointerId !== rulerPid) return;
+        if (rulerMoveRaf) { cancelAnimationFrame(rulerMoveRaf); rulerMoveRaf = 0; }
         rulerPid = -1;
       };
     }
@@ -5943,6 +5966,10 @@
 
     root.querySelectorAll('.postprod-track-lane').forEach(function (laneEl) {
       var lanePid = -1;
+      var laneMoveRaf = 0;
+      var laneMoveX = 0;
+      var laneMoveShift = false;
+      var laneMoveTarget = null;
       var laneSeek = function (evt) {
         if (state.drag) return;
         if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
@@ -5958,10 +5985,19 @@
       };
       laneEl.onpointermove = function (evt) {
         if (evt.pointerId !== lanePid) return;
-        laneSeek(evt);
+        if (state.drag) return;
+        laneMoveX = evt.clientX;
+        laneMoveShift = evt.shiftKey;
+        laneMoveTarget = evt.target;
+        if (laneMoveRaf) return;
+        laneMoveRaf = requestAnimationFrame(function () {
+          laneMoveRaf = 0;
+          if (lanePid !== -1) laneSeek({ clientX: laneMoveX, shiftKey: laneMoveShift, target: laneMoveTarget });
+        });
       };
       laneEl.onpointerup = laneEl.onpointercancel = function (evt) {
         if (evt.pointerId !== lanePid) return;
+        if (laneMoveRaf) { cancelAnimationFrame(laneMoveRaf); laneMoveRaf = 0; }
         lanePid = -1;
       };
       laneEl.onclick = laneSeek; // fallback for simple tap
