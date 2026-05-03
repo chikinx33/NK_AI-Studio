@@ -13,66 +13,23 @@
       var ver = (NK.core && NK.core.APP_VERSION) || (NK.config && NK.config.APP_VERSION) || '';
       var prev = '';
       try { prev = localStorage.getItem('nk_app_version') || ''; } catch (_) { prev = ''; }
-      // Append ?v to local stylesheets to avoid stale CSS without user hard refresh
-      if (ver) {
-        Array.prototype.forEach.call(document.querySelectorAll('link[rel="stylesheet"][href]'), function (ln) {
-          try {
-            var href = ln.getAttribute('href') || '';
-            if (!href) return;
-            // only same-origin or relative assets
-            var isExternal = /^https?:\/\//i.test(href) && href.indexOf(location.origin) !== 0;
-            if (isExternal) return;
-            if (!/[?&]v=/.test(href)) {
-              ln.setAttribute('href', href + (href.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver));
-            }
-          } catch (_) {}
-        });
-        // Also append ?v to local script src to bust JS cache on next load
-        Array.prototype.forEach.call(document.querySelectorAll('script[src]'), function (sc) {
-          try {
-            var src = sc.getAttribute('src') || '';
-            if (!src) return;
-            var isExternal = /^https?:\/\//i.test(src) && src.indexOf(location.origin) !== 0;
-            if (isExternal) return;
-            if (!/[?&]v=/.test(src)) {
-              sc.setAttribute('src', src + (src.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver));
-            }
-          } catch (_) {}
-        });
-        // Append ?v to icons and ensure a default favicon exists
-        try {
-          var head = document.head || document.getElementsByTagName('head')[0];
-          var iconLinks = document.querySelectorAll('link[rel~="icon"][href], link[rel="mask-icon"][href], link[rel="apple-touch-icon"][href]');
-          Array.prototype.forEach.call(iconLinks, function (ln) {
-            var href = ln.getAttribute('href') || '';
-            if (!href) return;
-            var isExternal = /^https?:\/\//i.test(href) && href.indexOf(location.origin) !== 0;
-            if (isExternal) return;
-            if (!/[?&]v=/.test(href)) {
-              ln.setAttribute('href', href + (href.indexOf('?') >= 0 ? '&' : '?') + 'v=' + encodeURIComponent(ver));
-            }
-          });
-          if (!document.querySelector('link[rel~="icon"]')) {
-            var ic = document.createElement('link');
-            ic.setAttribute('rel', 'icon');
-            ic.setAttribute('type', 'image/svg+xml');
-            ic.setAttribute('href', 'favicon.svg' + (ver ? ('?v=' + encodeURIComponent(ver)) : ''));
-            head && head.appendChild(ic);
-          }
-        } catch (_) {}
-      }
-      // One-time soft refresh with ?v to bust HTML cache and clear cross-shell stageHref
+      // 기본 favicon 보장 (없을 때만)
+      try {
+        if (!document.querySelector('link[rel~="icon"]')) {
+          var head0 = document.head || document.getElementsByTagName('head')[0];
+          var ic = document.createElement('link');
+          ic.setAttribute('rel', 'icon');
+          ic.setAttribute('type', 'image/svg+xml');
+          ic.setAttribute('href', 'favicon.svg');
+          head0 && head0.appendChild(ic);
+        }
+      } catch (_) {}
+      // 버전 변경 감지: 캐시된 stage href 정리 (풀 리로드 없이)
       if (ver && prev !== ver) {
         try {
           localStorage.setItem('nk_app_version', ver);
           var keys = ['nk_current_stage_href', 'nk_current_stage_href_brand', 'nk_current_stage_href_image', 'nk_current_stage_href_video'];
           keys.forEach(function(k){ try { localStorage.removeItem(k); sessionStorage.removeItem(k); } catch(_){ } });
-          var url = new URL(window.location.href);
-          if (url.searchParams.get('v') !== ver) {
-            url.searchParams.set('v', ver);
-            window.location.replace(url.toString());
-            return;
-          }
         } catch (_) {}
       }
     } catch (_) {}
