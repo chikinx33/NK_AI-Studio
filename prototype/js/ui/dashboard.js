@@ -418,9 +418,17 @@
       currentSeriesFilter = '__all__';
     }
     const selectedSeries = seriesList.find((s) => s.id === currentSeriesFilter) || null;
-    const filteredDrafts = currentSeriesFilter === '__all__'
-      ? drafts
-      : drafts.filter((d) => d.seriesId === currentSeriesFilter);
+    // 최신순 정렬: lastUsedAt 내림차순 → ID(생성 timestamp) 내림차순 폴백
+    const sortByRecency = (a, b) => {
+      const ta = Date.parse(a && a.lastUsedAt || '') || 0;
+      const tb = Date.parse(b && b.lastUsedAt || '') || 0;
+      if (ta !== tb) return tb - ta;
+      return Number((b && b.id) || 0) - Number((a && a.id) || 0);
+    };
+    const filteredDrafts = (currentSeriesFilter === '__all__'
+      ? drafts.slice()
+      : drafts.filter((d) => d.seriesId === currentSeriesFilter)
+    ).sort(sortByRecency);
 
     const fmtDuration = (sec) => {
       const n = Number(sec) || 0;
