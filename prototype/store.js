@@ -189,7 +189,10 @@
   };
 
   store.getDrafts = function () {
-    return deepClone(Array.isArray(memory.drafts) ? memory.drafts : []);
+    // 얕은 복사: 배열 reference는 새로 만들어 push/splice 등 array mutation은 격리.
+    // 객체 자체는 공유되므로 호출자는 객체 속성을 직접 mutate하면 안 됨.
+    // saveDrafts() 호출 시 deepClone으로 격리됨.
+    return Array.isArray(memory.drafts) ? memory.drafts.slice() : [];
   };
   store.saveDrafts = function (drafts) {
     memory.drafts = Array.isArray(drafts) ? deepClone(drafts) : [];
@@ -217,7 +220,8 @@
   };
 
   store.getPipeline = function () {
-    return deepClone(memory.pipeline);
+    // 호출자는 read-only로 사용해야 함. 변경이 필요하면 savePipeline() 호출.
+    return memory.pipeline;
   };
   store.savePipeline = function (data) {
     memory.pipeline = data && typeof data === 'object' ? deepClone(data) : null;
