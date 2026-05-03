@@ -26,7 +26,7 @@
     if (path.startsWith('http')) return path;
     return base.replace(/\/+$/, '') + path;
   };
-  const DEFAULT_TIMEOUT_MS = 30000;
+  const DEFAULT_TIMEOUT_MS = 10000;
   const getAuthToken = () => {
     try {
       if (NK.auth && NK.auth.getToken) return String(NK.auth.getToken() || '').trim();
@@ -642,6 +642,7 @@
     });
     var text = await res.text();
     var data = j(text);
+    if (res.ok) api.projectListInvalidate();
     return { ok: res.ok, status: res.status, data: data, error: e(text) };
   };
 
@@ -677,6 +678,7 @@
     var text = await res.text();
     var ok = res.ok;
     var data = j(text);
+    if (ok) api.projectListInvalidate();
     return { ok: ok, data: data, status: res.status };
   };
 
@@ -706,19 +708,48 @@
     }, 25000);
     var text = await readTextWithTimeout(res, 10000);
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
+    if (res.ok) api.projectListInvalidate();
     return j(text);
   };
 
+  // projectList in-memory 캐시 (TTL 30초, 동일 사용자 기준)
+  // 동일 시점 다중 호출은 inflight 공유로 1회 네트워크 요청만 수행.
+  // 변경 API(projectInit/Save/Delete) 성공 시 invalidate.
+  var _projectListCache = { value: null, at: 0, key: '', inflight: null };
+  var PROJECT_LIST_TTL_MS = 30000;
+  api.projectListInvalidate = function () {
+    _projectListCache = { value: null, at: 0, key: '', inflight: null };
+  };
   api.projectList = async function () {
     var token = getAuthToken();
-    var url = withBase('/api/project/list?userId=' + encodeURIComponent(resolveUserId()) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
-    var res = await fetch(url, {
-      method: 'GET',
-      headers: buildAuthHeaders()
-    });
-    var text = await res.text();
-    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'list_error')));
-    return j(text);
+    var userId = resolveUserId();
+    var key = userId + '|' + (token ? '1' : '0');
+    var now = Date.now();
+    if (_projectListCache.value
+      && _projectListCache.key === key
+      && (now - _projectListCache.at) < PROJECT_LIST_TTL_MS) {
+      return _projectListCache.value;
+    }
+    if (_projectListCache.inflight && _projectListCache.key === key) {
+      return _projectListCache.inflight;
+    }
+    var url = withBase('/api/project/list?userId=' + encodeURIComponent(userId) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
+    var p = (async () => {
+      var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
+      var text = await res.text();
+      if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'list_error')));
+      var parsed = j(text);
+      _projectListCache = { value: parsed, at: Date.now(), key: key, inflight: null };
+      return parsed;
+    })();
+    _projectListCache.inflight = p;
+    _projectListCache.key = key;
+    try { return await p; }
+    catch (err) {
+      // 실패 시 inflight 해제 (다음 호출 재시도 가능)
+      _projectListCache.inflight = null;
+      throw err;
+    }
   };
 
   api.userdataFavoritesGet = async function () {
