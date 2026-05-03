@@ -4315,16 +4315,18 @@
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
             if (fpVid.readyState >= 1) {
               try { fpVid.muted = true; } catch (_) {}
-              // paused면 play()로 디코더 활성화 (즉시 currentTime= 설정으로 전진 없음)
+              // paused면 play()로 디코더 활성화. isScrubbing=true면 이미 warm하므로 스킵됨.
               if (fpVid.paused) { try { fpVid.play().catch(function () {}); } catch (_) {} }
               try { fpVid.currentTime = fpClipTime; } catch (_) {}
               fpVid.__scrubTarget = fpClipTime;
-              // 마지막 tick 200ms 후 pause — 스크럽 중에는 decoder 활성 유지
               if (fpVid.__scrubPauseTimer) clearTimeout(fpVid.__scrubPauseTimer);
-              fpVid.__scrubPauseTimer = setTimeout(function () {
-                fpVid.__scrubPauseTimer = 0;
-                if (!state.isPlaying && !fpVid.paused) { try { fpVid.pause(); } catch (_) {} }
-              }, 200);
+              if (!state.isScrubbing) {
+                // 드래그 종료 후에만 200ms 뒤 pause — 드래그 중에는 decoder warm 유지
+                fpVid.__scrubPauseTimer = setTimeout(function () {
+                  fpVid.__scrubPauseTimer = 0;
+                  if (!state.isPlaying && !fpVid.paused) { try { fpVid.pause(); } catch (_) {} }
+                }, 200);
+              }
             } else {
               // metadata 미로드 — scrubSeekVideo로 위임 (loadedmetadata 후 재시도)
               scheduleScrubSeek('active', fpVid, fpClipTime);
@@ -5863,6 +5865,7 @@
       ruler.onpointerdown = function (evt) {
         if (evt.button !== 0 || state.drag) return;
         rulerPid = evt.pointerId;
+        state.isScrubbing = true;
         try { ruler.setPointerCapture(evt.pointerId); } catch (_) {}
         seekByTimelinePointer(evt, ruler);
       };
@@ -5880,6 +5883,8 @@
         if (evt.pointerId !== rulerPid) return;
         if (rulerMoveRaf) { cancelAnimationFrame(rulerMoveRaf); rulerMoveRaf = 0; }
         rulerPid = -1;
+        state.isScrubbing = false;
+        syncPreviewMedia(state.currentTime); // 200ms pause 타이머 시작
       };
     }
 
@@ -5980,6 +5985,7 @@
         if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
         if (state.drag) return;
         lanePid = evt.pointerId;
+        state.isScrubbing = true;
         try { laneEl.setPointerCapture(evt.pointerId); } catch (_) {}
         seekByTimelinePointer(evt, laneEl);
       };
@@ -5999,6 +6005,8 @@
         if (evt.pointerId !== lanePid) return;
         if (laneMoveRaf) { cancelAnimationFrame(laneMoveRaf); laneMoveRaf = 0; }
         lanePid = -1;
+        state.isScrubbing = false;
+        syncPreviewMedia(state.currentTime); // 200ms pause 타이머 시작
       };
       laneEl.onclick = laneSeek; // fallback for simple tap
     });
