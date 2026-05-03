@@ -4511,7 +4511,6 @@
       return (
         '<div class="postprod-render-video-wrap">' +
         '<video id="postprod-render-video" class="postprod-render-video" controls preload="metadata" src="' + escapeHtml(videoUrl) + '"></video>' +
-        '<div id="postprod-render-loading" class="postprod-preview-loading is-loading" aria-hidden="true"><div class="postprod-spinner"></div></div>' +
         '</div>'
       );
     }
