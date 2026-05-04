@@ -1640,10 +1640,65 @@
       video.__scrubOnSeeked = null;
     }
     if (video.__scrubPauseTimer) { clearTimeout(video.__scrubPauseTimer); video.__scrubPauseTimer = 0; }
-    // 순수 seek: play/pause 건드리지 않고 currentTime만 변경
-    // (play/pause는 재생버튼 전용; 탐색은 currentTime만으로 충분)
-    try { video.currentTime = target; } catch (_) {}
-    video.__scrubTarget = target;
+
+    // ── play-wake-seek-pause 패턴 ──────────────────────────────────────────
+    // Chrome은 paused 상태에서 디코더를 suspend — currentTime= 만으로는 프레임이 갱신되지 않음.
+    // play()로 디코더를 깨운 뒤 currentTime= 설정 → seeked 이벤트 확인 후 다시 pause.
+    if (video.paused) {
+      // 이미 play() 요청이 진행 중이라면 __scrubTarget 갱신만 하고 종료
+      // (play().then 콜백이 최신 __scrubTarget을 사용하도록 위에서 이미 저장됨)
+      if (video.__scrubPlayPending) return;
+      video.__scrubPlayPending = true;
+      video.__scrubVersion = (video.__scrubVersion || 0) + 1;
+      var myVersion = video.__scrubVersion;
+      var playPromise;
+      try { playPromise = video.play(); } catch (_) {
+        video.__scrubPlayPending = false;
+        // play() 자체가 throw — currentTime= 만 시도
+        try { video.currentTime = target; } catch (_2) {}
+        return;
+      }
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.then(function () {
+          video.__scrubPlayPending = false;
+          // 버전이 바뀐 경우 이미 새 사이클이 진행 중 — 이 사이클 종료
+          if (video.__scrubVersion !== myVersion) return;
+          var seekTarget = video.__scrubTarget;
+          try { video.currentTime = seekTarget; } catch (_) {}
+          var onSeeked = function () {
+            try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
+            if (video.__scrubOnSeeked === onSeeked) video.__scrubOnSeeked = null;
+            // 버전 변경: 이미 새 seek 사이클이 시작됨 — pause 하지 않음
+            if (video.__scrubVersion !== myVersion) return;
+            // 재생 중이 아니면 pause
+            if (!state.isPlaying) { try { video.pause(); } catch (_) {} }
+          };
+          video.__scrubOnSeeked = onSeeked;
+          try { video.addEventListener('seeked', onSeeked); } catch (_) {}
+        }).catch(function (err) {
+          video.__scrubPlayPending = false;
+          // AbortError: 다른 play/pause 호출에 의해 중단됨 — 무시
+          if (!err || err.name !== 'AbortError') {
+            // 그 외 에러: currentTime= 단독 시도 (디코더 wake 없이)
+            try { video.currentTime = video.__scrubTarget; } catch (_) {}
+          }
+        });
+      } else {
+        // play()가 Promise를 반환하지 않는 구형 브라우저
+        video.__scrubPlayPending = false;
+        try { video.currentTime = target; } catch (_) {}
+      }
+    } else {
+      // 이미 재생 중 — 디코더가 활성화되어 있으므로 seek만 수행
+      try { video.currentTime = target; } catch (_) {}
+      var onSeekedPlaying = function () {
+        try { video.removeEventListener('seeked', onSeekedPlaying); } catch (_) {}
+        if (video.__scrubOnSeeked === onSeekedPlaying) video.__scrubOnSeeked = null;
+        if (!state.isPlaying) { try { video.pause(); } catch (_) {} }
+      };
+      video.__scrubOnSeeked = onSeekedPlaying;
+      try { video.addEventListener('seeked', onSeekedPlaying); } catch (_) {}
+    }
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -4322,21 +4377,8 @@
             // 스크럽: 디코더 wake 후 즉시 seek — Chrome은 paused 상태에서 디코더를 suspend하므로
             // play()로 wake 후 동기적으로 currentTime= 설정. play()는 paused일 때만 호출(tick당 1회).
             var fpClipTime = clamp((Number(sec) || 0) - clip.start, 0, Math.max(0, (clip.end - clip.start) - 0.02)) + (clip.videoOffset || 0);
-            if (fpVid.readyState >= 1) {
-              try { fpVid.muted = true; } catch (_) {}
-              // 이전 핸들러 / 타이머 정리
-              if (fpVid.__scrubOnSeeked) {
-                try { fpVid.removeEventListener('seeked', fpVid.__scrubOnSeeked); } catch (_) {}
-                fpVid.__scrubOnSeeked = null;
-              }
-              if (fpVid.__scrubPauseTimer) { clearTimeout(fpVid.__scrubPauseTimer); fpVid.__scrubPauseTimer = 0; }
-              // 순수 seek: play/pause 없이 currentTime만 변경
-              try { fpVid.currentTime = fpClipTime; } catch (_) {}
-              fpVid.__scrubTarget = fpClipTime;
-            } else {
-              // metadata 미로드 — scrubSeekVideo로 위임 (loadedmetadata 후 재시도)
-              scheduleScrubSeek('active', fpVid, fpClipTime);
-            }
+            // play-wake-seek-pause 패턴으로 디코더 wake 후 seek (Chrome decoder suspension 대응)
+            scrubSeekVideo(fpVid, fpClipTime);
           } else {
             // 재생 중: 스크럽 wake로 인한 muted 상태를 해제 (단, clip.soundOn=false면 muted 유지),
             // 멈춰있다면 재개
@@ -4438,15 +4480,8 @@
         video.play().catch(function () { });
       }
     } else {
-      // 탐색 중: play/pause 없이 currentTime만 설정
-      try { video.muted = true; } catch (_) {}
-      if (video.readyState >= 1) {
-        try { video.currentTime = liveClipTime; } catch (_) {}
-        video.__scrubTarget = liveClipTime;
-      } else {
-        // metadata 미로드 — readyState 확보 후 재시도
-        scheduleScrubSeek('active', video, liveClipTime);
-      }
+      // 탐색 중: play-wake-seek-pause 패턴 (Chrome decoder suspension 대응)
+      scrubSeekVideo(video, liveClipTime);
     }
 
     // 이웃 클립(±1) pre-seek — 경계 교차 시 즉시 표시되도록 준비
