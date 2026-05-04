@@ -7274,6 +7274,88 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
   filter: drop-shadow(0 2px 4px rgba(255, 213, 0, 0.5));
 }
 
+/* ── 렌더 범위 하이라이트 (In–Out) ── */
+.postprod-render-range-bar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: rgba(251, 191, 36, 0.13);
+  border-top: 2px solid rgba(251, 191, 36, 0.45);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── 렌더 In/Out 마커 ── */
+.postprod-render-marker {
+  position: absolute;
+  top: 0;
+  width: 14px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 5;
+  user-select: none;
+  touch-action: none;
+}
+
+/* In 마커: 왼쪽 대괄호 [ */
+.postprod-render-in-marker {
+  transform: translateX(-1px);
+}
+.postprod-render-in-marker::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #fbbf24;
+  box-shadow: 0 0 5px rgba(251, 191, 36, 0.7);
+}
+.postprod-render-in-marker::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 8px;
+  height: 3px;
+  background: #fbbf24;
+  border-radius: 0 2px 0 0;
+}
+
+/* Out 마커: 오른쪽 대괄호 ] */
+.postprod-render-out-marker {
+  transform: translateX(-13px);
+}
+.postprod-render-out-marker::before {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: #fbbf24;
+  box-shadow: 0 0 5px rgba(251, 191, 36, 0.7);
+}
+.postprod-render-out-marker::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  top: 1px;
+  width: 8px;
+  height: 3px;
+  background: #fbbf24;
+  border-radius: 2px 0 0 0;
+}
+
+/* 마커 호버 강조 */
+.postprod-render-marker:hover::before {
+  background: #fff;
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.9);
+}
+.postprod-render-marker:hover::after {
+  background: #fff;
+}
+
 /* ── Blade(자르기) 모드 ── */
 #postprod-timeline-scroll.is-blade-mode .postprod-clip {
   cursor: crosshair;

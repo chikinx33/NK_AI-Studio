@@ -56,6 +56,9 @@
     motionEnabled: true,
     bladeMode: false,
     portraitMode: false,
+    // 렌더 범위 (In/Out 마커)
+    renderIn: 0,        // 렌더 시작 초 (0 = 타임라인 시작)
+    renderOut: null,    // 렌더 종료 초 (null = 컨텐츠 끝 자동)
     // DOM element caches (cleared on renderLayout)
     cachedPlayheads: null,
     cachedTimeNow: null,
@@ -2070,12 +2073,15 @@
   async function buildRenderedVideoBlob(model, renderJobId) {
     var svc = getPostprodRenderService();
     if (!svc || !svc.buildRenderedVideoBlob) throw new Error('postprod_render_service_missing');
+    var _renderInSec = Number(state.renderIn) || 0;
+    var _renderOutSec = getEffectiveRenderOut();
+    var _renderDuration = Math.max(0.5, _renderOutSec - _renderInSec);
     return svc.buildRenderedVideoBlob({
       model: model,
-      visualClips: getVisualClipsForRender(model),
-      audioClips: getAudioClipsForRender(model),
+      visualClips: adjustClipsForRenderRange(getVisualClipsForRender(model), _renderInSec, _renderOutSec),
+      audioClips: adjustClipsForRenderRange(getAudioClipsForRender(model), _renderInSec, _renderOutSec),
       frameSize: getRenderFrameSize(),
-      playbackDuration: getTimelinePlaybackDuration(model),
+      playbackDuration: _renderDuration,
       canProxyGs: !!(NK.api && NK.api.mediaProxyUrl),
       captions: {
         enabled: state.captionsEnabled,
@@ -3437,6 +3443,85 @@
     return Math.max(1, getTimelineContentDuration(model));
   }
 
+  // ── 렌더 범위 (In/Out) 헬퍼 ──────────────────────────────────────────────
+  function getEffectiveRenderOut() {
+    if (state.renderOut !== null && Number.isFinite(Number(state.renderOut))) {
+      return Number(state.renderOut);
+    }
+    // null이면 컨텐츠 끝 자동 계산
+    return getTimelinePlaybackDuration(state.model);
+  }
+
+  function getRenderDuration() {
+    return Math.max(0.5, getEffectiveRenderOut() - (Number(state.renderIn) || 0));
+  }
+
+  // 렌더 범위에 맞게 클립 배열을 트림·오프셋 조정 (render service에 전달 전)
+  function adjustClipsForRenderRange(clips, inSec, outSec) {
+    var i = Number(inSec) || 0;
+    var o = Number(outSec) || getTimelinePlaybackDuration(state.model);
+    // 범위 변경 없으면 그대로
+    if (i <= 0 && o >= getTimelinePlaybackDuration(state.model)) return clips;
+    return clips
+      .filter(function (c) { return c.end > i && c.start < o; })
+      .map(function (c) {
+        var extraOffset = Math.max(0, i - c.start); // clip이 renderIn 앞에서 시작하면 video/audio 내부 offset 보정
+        return Object.assign({}, c, {
+          start: Math.max(c.start, i) - i,
+          end: Math.min(c.end, o) - i,
+          videoOffset: (Number(c.videoOffset) || 0) + extraOffset
+        });
+      });
+  }
+
+  // 렌더 범위를 sessionEdits에 영속화
+  function persistRenderRange() {
+    var edits = state.sessionEdits || (state.sessionEdits = {});
+    edits['__renderRange'] = { 'in': Number(state.renderIn) || 0, 'out': state.renderOut };
+    state.sessionEdits = edits;
+    setDirty(true);
+  }
+
+  // 저장된 edits에서 렌더 범위 복원 (세션 편집 포함 — 드래그 후 저장 전에도 유지)
+  function loadRenderRangeFromEdits(project) {
+    var edits = getMergedTimelineEdits(project);
+    var rr = edits && edits['__renderRange'];
+    if (rr && typeof rr === 'object') {
+      state.renderIn = Math.max(0, Number(rr['in']) || 0);
+      var savedOut = rr['out'];
+      state.renderOut = (savedOut !== null && savedOut !== undefined && Number.isFinite(Number(savedOut)))
+        ? Math.max(0, Number(savedOut)) : null;
+    } else {
+      state.renderIn = 0;
+      state.renderOut = null;
+    }
+  }
+
+  // 마커/하이라이트 바 위치를 DOM에 반영 (타임라인 scroll 내 ruler 기준)
+  function updateRenderRangeUi() {
+    var inMarker = document.getElementById('postprod-render-in-marker');
+    var outMarker = document.getElementById('postprod-render-out-marker');
+    var rangeBar = document.getElementById('postprod-render-range-bar');
+    if (!inMarker && !outMarker && !rangeBar) return;
+    var duration = Math.max(1, state.timelineDuration || getTimelineViewportDuration(state.model) || 1);
+    var laneWidth = state.laneWidth || 960;
+    var inSec = Number(state.renderIn) || 0;
+    var outSec = getEffectiveRenderOut();
+    var inLeft = Math.round((inSec / duration) * laneWidth);
+    var outLeft = Math.round((outSec / duration) * laneWidth);
+    if (inMarker) inMarker.style.left = inLeft + 'px';
+    if (outMarker) outMarker.style.left = outLeft + 'px';
+    if (rangeBar) {
+      rangeBar.style.left = inLeft + 'px';
+      rangeBar.style.width = Math.max(0, outLeft - inLeft) + 'px';
+    }
+    // 시간 표시 갱신
+    var renderTimeEl = document.getElementById('postprod-render-range-time');
+    if (renderTimeEl) {
+      renderTimeEl.textContent = formatTime(inSec) + ' – ' + formatTime(outSec);
+    }
+  }
+
   function getTimelineViewportDuration(model) {
     var target = model || state.model;
     if (!target) return 1;
@@ -3781,6 +3866,19 @@
       var label = i % 2 === 0 ? '<span>' + i + '</span>' : '';
       marks.push('<div class="postprod-ruler-mark" style="left:' + left + 'px">' + label + '</div>');
     }
+    // 렌더 범위 하이라이트 + In/Out 마커
+    var dur = Math.max(1, totalDuration);
+    var inSec = Number(state.renderIn) || 0;
+    var outSec = (state.renderOut !== null && Number.isFinite(Number(state.renderOut)))
+      ? Number(state.renderOut)
+      : (state.model ? getTimelinePlaybackDuration(state.model) : totalDuration);
+    var inLeft = Math.round((inSec / dur) * laneWidth);
+    var outLeft = Math.round((outSec / dur) * laneWidth);
+    marks.push(
+      '<div id="postprod-render-range-bar" class="postprod-render-range-bar" style="left:' + inLeft + 'px;width:' + Math.max(0, outLeft - inLeft) + 'px"></div>' +
+      '<div id="postprod-render-in-marker" class="postprod-render-marker postprod-render-in-marker" style="left:' + inLeft + 'px" title="렌더 시작 (In) — 드래그로 이동"></div>' +
+      '<div id="postprod-render-out-marker" class="postprod-render-marker postprod-render-out-marker" style="left:' + outLeft + 'px" title="렌더 종료 (Out) — 드래그로 이동"></div>'
+    );
     return marks.join('');
   }
 
@@ -5966,7 +6064,63 @@
       }
     });
 
+    // ── 렌더 범위 In/Out 마커 드래그 핸들러 ──────────────────────────────
     var ruler = root.querySelector('.postprod-ruler');
+    (function () {
+      function makeMarkerDrag(markerId, isIn) {
+        var el = document.getElementById(markerId);
+        if (!el || !ruler) return;
+        var pid = -1;
+        var raf = 0;
+        var lastX = 0;
+        el.onpointerdown = function (evt) {
+          if (evt.button !== 0) return;
+          evt.stopPropagation(); // ruler seek 차단
+          pid = evt.pointerId;
+          lastX = evt.clientX;
+          try { el.setPointerCapture(evt.pointerId); } catch (_) {}
+        };
+        el.onpointermove = function (evt) {
+          if (evt.pointerId !== pid) return;
+          lastX = evt.clientX;
+          if (raf) return;
+          raf = requestAnimationFrame(function () {
+            raf = 0;
+            if (pid === -1) return;
+            var rect = ruler.getBoundingClientRect();
+            if (!rect || rect.width <= 0) return;
+            var x = clamp(lastX - rect.left, 0, rect.width);
+            var ratio = x / rect.width;
+            var dur = Math.max(1, state.timelineDuration || 1);
+            var sec = round1(ratio * dur);
+            var contentDur = getTimelinePlaybackDuration(state.model);
+            if (isIn) {
+              state.renderIn = clamp(sec, 0, getEffectiveRenderOut() - 0.5);
+            } else {
+              state.renderOut = clamp(sec, (Number(state.renderIn) || 0) + 0.5, contentDur);
+            }
+            updateRenderRangeUi();
+          });
+        };
+        el.onpointerup = el.onpointercancel = function (evt) {
+          if (evt.pointerId !== pid) return;
+          if (raf) { cancelAnimationFrame(raf); raf = 0; }
+          pid = -1;
+          persistRenderRange();
+        };
+        // 더블클릭: In이면 0으로, Out이면 null(자동)으로 리셋
+        el.ondblclick = function (evt) {
+          evt.stopPropagation();
+          if (isIn) state.renderIn = 0;
+          else state.renderOut = null;
+          updateRenderRangeUi();
+          persistRenderRange();
+        };
+      }
+      makeMarkerDrag('postprod-render-in-marker', true);
+      makeMarkerDrag('postprod-render-out-marker', false);
+    })();
+
     if (ruler) {
       var rulerPid = -1;
       var rulerMoveRaf = 0;
@@ -6260,10 +6414,13 @@
     state.justDragged = false;
     // 적용: 저장된 + 세션 편집 병합 반영
     applyTimelineEdits(model, getMergedTimelineEdits(project));
+    // 렌더 범위(In/Out) 복원 — applyTimelineEdits 이후(edits 가용), renderLayout 이전(DOM 없음)
+    loadRenderRangeFromEdits(project);
     renderLayout(model);
     bindEvents();
     updateBladeModeUi(); // blade 모드 클래스 복원
     updateVersionPanelUi();
+    updateRenderRangeUi(); // 렌더 범위 마커 위치 반영
     // 모든 비디오 클립을 host에 사전 마운트 — 스크럽 전환 시 DOM 이동 지연 제거
     ensureAllPreviewVideosMounted(model);
     setCurrentTime(state.currentTime, true);
