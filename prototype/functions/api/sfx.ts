@@ -495,20 +495,41 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     } catch (_) {}
 
     // _debug: 문제 진단용 — 이후 제거 예정
-    // Gemini 동작 여부 확인용 최소 호출
+    // Gemini 동작 여부 확인용 최소 호출 (오류 코드 포함)
     let geminiOk = false;
+    let geminiErrorCode = 0;
+    let geminiErrorSnippet = "";
     if (googleApiKey) {
-      const testText = await callGemini(googleApiKey, {
-        contents: [{ role: "user", parts: [{ text: "Reply with exactly: ok" }] }],
-        generationConfig: { maxOutputTokens: 5 },
-      });
-      geminiOk = testText.toLowerCase().includes("ok");
+      try {
+        const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(googleApiKey)}`;
+        const testRes = await fetch(testUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: "Reply with exactly: ok" }] }],
+            generationConfig: { maxOutputTokens: 5 },
+          }),
+        });
+        geminiErrorCode = testRes.status;
+        if (testRes.ok) {
+          const testJson: any = await testRes.json();
+          const testText = String(testJson?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+          geminiOk = testText.toLowerCase().includes("ok");
+        } else {
+          const errBody = await testRes.text().catch(() => "");
+          geminiErrorSnippet = errBody.slice(0, 120);
+        }
+      } catch (e: any) {
+        geminiErrorSnippet = String(e?.message || e).slice(0, 80);
+      }
     }
     const _debug = {
       clipUrlReceived: clipUrl ? clipUrl.slice(0, 80) : "(empty)",
       framesReceived: frames.length,
       analysisMode,
       geminiOk,
+      geminiStatus: geminiErrorCode,
+      geminiErr: geminiErrorSnippet.slice(0, 80),
       googleApiKeySet: !!googleApiKey,
     };
     if (signedUrl) {

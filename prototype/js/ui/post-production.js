@@ -879,7 +879,9 @@
         : (lang === 'en' ? '⚠ fallback' : '⚠ 기본값');
       var debugLine = data._debug
         ? '\nURL: ' + (data._debug.clipUrlReceived || '(없음)') + '  frames:' + data._debug.framesReceived
-          + '  gemini:' + (data._debug.geminiOk ? '✓' : '✗') + '  key:' + (data._debug.googleApiKeySet ? '✓' : '✗')
+          + '  gemini:' + (data._debug.geminiOk ? '✓' : '✗ HTTP' + data._debug.geminiStatus)
+          + '  key:' + (data._debug.googleApiKeySet ? '✓' : '✗')
+          + (data._debug.geminiErr ? '\n' + data._debug.geminiErr : '')
         : '';
       showPostprodToast(successLabel + '\n[' + modeTag + '] ' + (data.sfxPrompt ? data.sfxPrompt.slice(0, 60) : '') + debugLine, 7000);
     } catch (err) {
