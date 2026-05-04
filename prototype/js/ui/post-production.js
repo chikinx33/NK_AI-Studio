@@ -4536,22 +4536,18 @@
   // 렌더링과 달리 preview는 HTMLAudioElement를 직접 사용.
   function syncAudioTrackPreview(sec) {
     if (!state.model) return;
-    // audio + music 두 트랙 모두 처리
     ['audio', 'music'].forEach(function (trackKey) {
       var track = getTimelineTrack(state.model, trackKey);
       var clips = track && Array.isArray(track.clips) ? track.clips : [];
-      // 현재 시각에 해당하는 클립 탐색
       var activeClip = null;
       for (var i = 0; i < clips.length; i++) {
         var c = clips[i];
         if (c && !c.empty && c.url && sec >= c.start && sec < c.end) { activeClip = c; break; }
       }
-      // 트랙별 Audio 엘리먼트 캐시
       var elKey = '_previewAudio_' + trackKey;
       var audioEl = state[elKey];
       if (!activeClip || !activeClip.url) {
-        // 활성 클립 없으면 정지
-        if (audioEl) { try { audioEl.pause(); } catch (_) {} }
+        if (audioEl) { try { audioEl.pause(); audioEl._syncSeeking = false; } catch (_) {} }
         return;
       }
       var url = toPlayableMediaUrl(activeClip.url) || activeClip.url;
@@ -4560,24 +4556,34 @@
         audioEl.preload = 'auto';
         state[elKey] = audioEl;
       }
-      // 소스가 바뀐 경우 재로드
       var curSrc = audioEl.getAttribute('data-clip-src') || '';
       if (curSrc !== url) {
+        audioEl._syncSeeking = false;
         audioEl.src = url;
         audioEl.setAttribute('data-clip-src', url);
         audioEl.load();
       }
-      // 클립 내 오프셋 = (현재시각 - 클립 시작) + audioOffset
-      var clipOffset = (sec - (activeClip.start || 0)) + (activeClip.videoOffset || 0);
+      var clipOffset = Math.max(0, (sec - (activeClip.start || 0)) + (activeClip.videoOffset || 0));
       if (state.isPlaying) {
-        // 0.3초 이상 어긋나면 재동기
-        if (Math.abs((audioEl.currentTime || 0) - clipOffset) > 0.3) {
-          try { audioEl.currentTime = clipOffset; } catch (_) {}
+        var drift = Math.abs((audioEl.currentTime || 0) - clipOffset);
+        if (drift > 0.5 && !audioEl._syncSeeking) {
+          // seek 완료 후에만 play — 중간 재생 시 버버벅 방지
+          audioEl._syncSeeking = true;
+          try { audioEl.pause(); audioEl.currentTime = clipOffset; } catch (_) {}
+          var seekEl = audioEl;
+          var seekHandler = function () {
+            seekEl.removeEventListener('seeked', seekHandler);
+            seekEl._syncSeeking = false;
+            if (state.isPlaying) { try { seekEl.play().catch(function () {}); } catch (_) {} }
+          };
+          audioEl.addEventListener('seeked', seekHandler);
+        } else if (!audioEl._syncSeeking && audioEl.paused) {
+          try { audioEl.play().catch(function () {}); } catch (_) {}
         }
-        if (audioEl.paused) { try { audioEl.play().catch(function () {}); } catch (_) {} }
       } else {
-        // scrub 중: 정지 후 위치만 맞춤
-        try { audioEl.pause(); audioEl.currentTime = clipOffset; } catch (_) {}
+        if (!audioEl._syncSeeking) {
+          try { audioEl.pause(); audioEl.currentTime = clipOffset; } catch (_) {}
+        }
       }
     });
   }
