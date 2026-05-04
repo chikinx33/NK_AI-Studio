@@ -1583,43 +1583,78 @@
     }, delay);
   }
 
-  // 스크럽 seek (통합 함수):
-  //   1) currentTime = target  — 정확한 위치로 즉시 seek
-  //   2) paused 비디오는 muted play()를 트리거 — Chromium은 paused 상태에서
-  //      currentTime 변경만으로 화면 프레임을 갱신하지 않으므로 강제 디코드 필요
-  //   3) seeked 이벤트 — seek 완료 직후 즉시 pause (video 엘리먼트 표시는 seeked 시점에 갱신)
-  //   4) 150ms 안전망 타이머 — seeked 미발화·play() 거절 시 fallback
-  //
-  // ── 왜 seeked이고 rVFC가 아닌가 ─────────────────────────────────────────
-  //   rVFC(requestVideoFrameCallback)는 "GPU 출력 직후" 발화하는데, seek 이전
-  //   프레임에도 발화한다. 즉 seek 완료 전에 rVFC가 먼저 fire → 엉뚱한 프레임에서
-  //   pause → 정지화면. 더욱이 300ms 안전망까지 더해져 심한 버벅임이 발생.
-  //
-  //   seeked는 seek 완료 시점에만 발화. video 엘리먼트 표시는 이 시점에 이미 새
-  //   프레임으로 갱신됨(canvas.drawImage 와 달리 video 엘리먼트 자체는 seeked 시점에
-  //   올바른 프레임을 렌더링). → seek 완료 즉시 pause → 정확하고 빠른 스크럽.
-  //
-  //   rVFC는 렌더링 경로(canvas 캡처용)에만 사용. 스크럽 프리뷰(video 엘리먼트 표시)는
-  //   seeked가 최적.
-  // cold 비디오(readyState < 1)는 메타데이터 로드 완료 후 seek 재시도.
-  // ── 스크럽 seek: play()로 디코더 wake 후 즉시 currentTime= ─────────────
-  // Chrome은 paused 비디오의 디코더를 suspend → currentTime= 만으로는 프레임 갱신 없음.
-  // play()로 디코더를 활성화 (paused일 때만 호출, tick당 1회), 동기적으로 currentTime= 설정.
-  // 마지막 tick 후 200ms에 pause. metadata 미로드 시 loadedmetadata 후 재시도.
+  // ── Canvas 기반 스크럽 프레임 표시 ─────────────────────────────────────
+  // Chrome은 paused 상태에서 video 엘리먼트 표시를 갱신하지 않거나,
+  // play()+pause() 패턴이 누적되면 video 내부 상태가 꼬여 완전히 멈추는 현상 발생.
+  // → seeked 후 ctx.drawImage(video, ...) 로 canvas에 직접 캡처해 표시.
+  //   canvas는 video 렌더 파이프라인을 우회하므로 항상 정확한 프레임을 보여줌.
+
+  function drawVideoToScrubCanvas(video) {
+    var canvas = document.getElementById('postprod-scrub-canvas');
+    if (!canvas || !video) return false;
+    if ((video.readyState || 0) < 2) return false;
+    var vW = video.videoWidth;
+    var vH = video.videoHeight;
+    if (!vW || !vH) return false;
+    var cW = canvas.offsetWidth;
+    var cH = canvas.offsetHeight;
+    if (!cW || !cH) {
+      // offsetWidth가 0이면 부모에서 보정
+      var stack = canvas.parentNode;
+      cW = (stack && stack.offsetWidth) || 0;
+      cH = (stack && stack.offsetHeight) || 0;
+    }
+    if (!cW || !cH) return false;
+    canvas.width = cW;
+    canvas.height = cH;
+    try {
+      var ctx = canvas.getContext('2d');
+      // 검은 배경 (레터박스/필러박스)
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, cW, cH);
+      // object-fit:contain 방식으로 비율 유지 드로잉
+      var scale = Math.min(cW / vW, cH / vH);
+      var dW = Math.round(vW * scale);
+      var dH = Math.round(vH * scale);
+      var dX = Math.round((cW - dW) / 2);
+      var dY = Math.round((cH - dH) / 2);
+      ctx.drawImage(video, dX, dY, dW, dH);
+      canvas.style.display = 'block';
+      return true;
+    } catch (_) {
+      return false;  // CORS tainted 등
+    }
+  }
+
+  function hideScrubCanvas() {
+    var canvas = document.getElementById('postprod-scrub-canvas');
+    if (canvas && canvas.style.display !== 'none') canvas.style.display = 'none';
+  }
+
+  // ── scrubSeekVideo: Canvas 방식으로 완전 재작성 ─────────────────────────
+  // 전략:
+  //   1) video.currentTime = target  — Chrome은 paused 시에도 내부적으로 seek함
+  //   2) seeked 이벤트 발화 → 디코더가 target 프레임을 디코드 완료
+  //   3) ctx.drawImage(video) → canvas에 프레임 캡처 → 화면 표시
+  //   play()+pause() 패턴을 제거해 video 내부 상태 손상을 원천 차단.
+  //   canvas는 video 표시 파이프라인과 무관하므로 Chrome 정책에 영향받지 않음.
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
-    // 호스트에서 detached됐다면 재연결
+
+    // detached 비디오 재연결
     var host = getPreviewVideoHost();
     if (host && video.parentNode !== host) {
       try { host.appendChild(video); } catch (_) {}
       try { applyVideoLayerStyles(video); } catch (_) {}
       try { video.style.opacity = '1'; video.style.zIndex = '2'; } catch (_) {}
     }
-    // 최신 타겟 항상 저장 — metadata 로드 후에도 가장 최근 위치로 seek되도록
+
     video.__scrubTarget = target;
-    // metadata 미로드 — 단일 리스너 등록 후 종료
-    if (video.readyState < 1) {
+    try { video.muted = true; } catch (_) {}
+
+    // metadata 미로드 — 단일 리스너 등록 후 대기
+    if ((video.readyState || 0) < 1) {
       if (!video.__scrubMetaPending) {
         video.__scrubMetaPending = true;
         var onReady = function () {
@@ -1627,64 +1662,60 @@
           try { video.removeEventListener('loadeddata', onReady); } catch (_) {}
           video.__scrubMetaPending = false;
           var latest = video.__scrubTarget;
-          if (typeof latest === 'number' && isFinite(latest)) {
-            scrubSeekVideo(video, latest);
-          }
+          if (typeof latest === 'number' && isFinite(latest)) scrubSeekVideo(video, latest);
         };
         try { video.addEventListener('loadedmetadata', onReady); } catch (_) {}
         try { video.addEventListener('loadeddata', onReady); } catch (_) {}
-        try { if (video.networkState === 0 || video.networkState === 3) video.load(); } catch (_) {}
+        if ((video.networkState || 0) === 0 || (video.networkState || 0) === 3) {
+          try { video.load(); } catch (_) {}
+        }
       }
       return;
     }
-    // ── scrub seek 전략 ────────────────────────────────────────────────────
-    // [문제 A] play() 먼저 호출 → 버퍼 밖 seek 대기(300ms) 동안 0초부터 재생 → 1·2프레임 반복
-    // [문제 B] seeked 후 play() → 비디오가 드래그 속도보다 빨리 앞으로 달림 →
-    //          다음 seek 시 backward seek → 이전 프레임 잠깐 보임 → "2,3프레임 보인 뒤 4프레임"
-    //
-    // [해결] seek 전 비디오 pause → seek → seeked 후 play()+즉시 pause() (디코더 wake만)
-    //   seek 전 pause: play()로 앞서 달린 비디오를 제자리로 돌림
-    //   즉시 pause:    play()가 Promise resolve 전에 pause되어 프레임 전진 없음
-    //                 Chrome은 play() 호출 자체로 디코더를 깨우므로 프레임 갱신됨
 
-    // 이전 seeked-wake 핸들러 제거
+    // 이전 seeked 핸들러 정리
     if (video.__scrubSeekedWake) {
       try { video.removeEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
       video.__scrubSeekedWake = null;
     }
-    // wakeVideoDecoder 의 auto-pause 타이머 취소 (혼재 방지)
     if (video.__wakeTimerId) {
       try { clearTimeout(video.__wakeTimerId); } catch (_) {}
       video.__wakeTimerId = 0;
     }
-    try { video.muted = true; } catch (_) {}
-    // seek 전에 pause — play()로 앞서 달리던 비디오를 멈춤
+
+    // seek 전 pause — 이전 play()로 앞서 달리던 비디오 정지
     if (!state.isPlaying && !video.paused) {
       try { video.pause(); } catch (_) {}
     }
 
-    // seek 발행
     try { video.currentTime = target; } catch (_) {}
 
-    // seeked 후: play()+즉시 pause() 로 디코더만 wake, 프레임 전진 없음
-    var onSeekedWake = function () {
-      try { video.removeEventListener('seeked', onSeekedWake); } catch (_) {}
-      if (video.__scrubSeekedWake === onSeekedWake) video.__scrubSeekedWake = null;
+    var onSeeked = function () {
+      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
+      if (video.__scrubSeekedWake === onSeeked) video.__scrubSeekedWake = null;
       if (state.isPlaying) return;
-      // 디코더 wake: play() 후 즉시 pause() → 프레임 갱신만, 재생 없음
-      if (video.paused) {
-        try { video.play().catch(function () {}); } catch (_) {}
-        try { video.pause(); } catch (_) {}
+
+      // ① canvas에 프레임 캡처 (주 경로)
+      var drawn = drawVideoToScrubCanvas(video);
+
+      // ② canvas 실패 시(readyState<2, CORS 등) → play().then(pause()) 폴백
+      if (!drawn) {
+        try {
+          video.play().then(function () {
+            if (!state.isPlaying) video.pause();
+          }).catch(function () {});
+        } catch (_) {}
       }
-      // 드래그 중 target이 바뀌었으면 최신 위치로 다시 seek
+
+      // 드래그 중 target이 변경됐으면 최신 위치로 재seek
       var latest = video.__scrubTarget;
       if (typeof latest === 'number' && isFinite(latest) &&
-          Math.abs((video.currentTime || 0) - latest) > 0.016) {
+          Math.abs((video.currentTime || 0) - latest) > 0.05) {
         scrubSeekVideo(video, latest);
       }
     };
-    video.__scrubSeekedWake = onSeekedWake;
-    try { video.addEventListener('seeked', onSeekedWake); } catch (_) {}
+    video.__scrubSeekedWake = onSeeked;
+    try { video.addEventListener('seeked', onSeeked); } catch (_) {}
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -4293,6 +4324,8 @@
     var clip = getActiveVisualClip(sec);
     // 페이드 오버레이는 활성 클립의 fadeIn/fadeOut 설정과 sec로 매번 갱신
     applyFadeOverlay(clip, sec);
+    // 재생 중이면 scrub canvas 숨김 (video 엘리먼트가 직접 표시)
+    if (state.isPlaying) hideScrubCanvas();
     if (!clip) {
       host.style.display = 'none';
       image.style.display = 'none';
@@ -4392,6 +4425,7 @@
     // ── End fast path ────────────────────────────────────────────────────────
 
     if (!isVideo) {
+      hideScrubCanvas();  // 이미지 클립: canvas가 이미지 위를 가리지 않도록
       if (state.previewClipUrl !== playableUrl) {
         image.src = playableUrl;
         // 이미지 로드 완료 후 모션 변환 재적용 (로드 전엔 naturalWidth=0이므로 보류됨)
@@ -4489,6 +4523,7 @@
     if (state.currentTime >= playbackDuration) {
       setCurrentTime(0, true);
     }
+    hideScrubCanvas();   // 재생 시작 시 scrub canvas 숨김 → video 엘리먼트가 표시됨
     state.isPlaying = true;
     state.playLastTick = 0;
     setPlayButtonUi();
@@ -4515,6 +4550,7 @@
     return (
       '<div class="postprod-preview-stack" style="position:relative;">' +
       '<div id="postprod-preview-video-host" class="postprod-preview-video-host"></div>' +
+      '<canvas id="postprod-scrub-canvas" aria-hidden="true" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:3;display:none;pointer-events:none;"></canvas>' +
       '<div id="postprod-motion-wrapper" class="postprod-motion-wrapper">' +
       '<img id="postprod-preview-image" class="postprod-image" alt="장면 미리보기" />' +
       '</div>' +
