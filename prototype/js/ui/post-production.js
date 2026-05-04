@@ -1646,12 +1646,16 @@
     if (canvas && canvas.style.display !== 'none') canvas.style.display = 'none';
   }
 
-  // ── scrubSeekVideo: 네이티브 컨트롤 방식 (v2.837) ─────────────────────
-  // 전략: HTML5 <video controls>의 native 스크럽바와 동일하게 단순히 currentTime= 만 설정.
-  //   (이 방식이 동작하지 않는다고 판단해 v2.832~v2.836에서 canvas/play().then(pause()) 등
-  //    복잡한 우회 로직을 추가했으나, 실제 원인은 video.crossOrigin='anonymous' 설정으로
-  //    Chrome이 비디오를 다른 디코더 파이프라인으로 처리해 paused 상태에서 frame 갱신을
-  //    하지 않은 것이었음. crossOrigin 제거 후엔 native 컨트롤과 동일하게 작동.)
+  // ── scrubSeekVideo: currentTime + 디코더 wake (v2.838) ────────────────
+  // v2.837에서 crossOrigin 제거 후 n차 편집(단일 활성 비디오)은 currentTime= 만으로 동작.
+  // 그러나 오리지널 모드(여러 비디오, 비활성은 opacity:0)에서는 Chrome이 비활성 비디오의
+  // 디코더를 suspend하여 currentTime= 만으로는 프레임이 갱신 안 됨.
+  //
+  // 해결: muted play() + .then(pause()) — 사용자가 스페이스바 빠르게 두 번 누르는 효과.
+  //   1) currentTime = target
+  //   2) play() — 디코더 wake, 현재 프레임을 렌더 파이프라인에 공급
+  //   3) .then(pause()) — 즉시 정지 → 화면에 현재 프레임 표시
+  // (crossOrigin 미설정이므로 디코더 파이프라인 이슈 없음 — v2.836과 다른 점)
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
@@ -1665,6 +1669,7 @@
     }
 
     video.__scrubTarget = target;
+    try { video.muted = true; } catch (_) {}
 
     // metadata 미로드 — 단일 리스너 등록 후 대기
     if ((video.readyState || 0) < 1) {
@@ -1686,7 +1691,7 @@
       return;
     }
 
-    // 이전 잔존 타이머 정리 (구버전 호환)
+    // 이전 잔존 타이머 정리
     if (video.__wakeTimerId) {
       try { clearTimeout(video.__wakeTimerId); } catch (_) {}
       video.__wakeTimerId = 0;
@@ -1700,14 +1705,31 @@
       video.__scrubSeekedWake = null;
     }
 
-    // seek 전 pause — 재생 중이 아닌 상태에서 currentTime= 을 깔끔하게 적용
-    if (!state.isPlaying && !video.paused) {
-      try { video.pause(); } catch (_) {}
-    }
-
-    // 핵심: 단순히 currentTime 할당만으로 화면 프레임 갱신.
-    // crossOrigin 미설정으로 Chrome native scrub과 동일한 디코더 파이프라인 사용 → 즉시 프레임 표시.
+    // 1) currentTime 설정
     try { video.currentTime = target; } catch (_) {}
+
+    // 2) 디코더 wake — paused이고 사용자가 재생 중이 아닐 때만 실행
+    //    (재생 중이면 디코더가 이미 활성 상태이므로 불필요)
+    if (state.isPlaying || !video.paused) return;
+
+    try {
+      var p = video.play();
+      if (p && typeof p.then === 'function') {
+        p.then(function () {
+          // 3) 사용자 재생이 아니면 즉시 pause — 현재 프레임이 화면에 표시됨
+          if (state.isPlaying) return;
+          try { video.pause(); } catch (_) {}
+          // wake 동안 살짝 흘러간 경우 target으로 snap-back
+          var latest = video.__scrubTarget;
+          if (typeof latest === 'number' && isFinite(latest) &&
+              Math.abs((video.currentTime || 0) - latest) > 0.05) {
+            try { video.currentTime = latest; } catch (_) {}
+          }
+        }).catch(function () {
+          // play() 거부 — currentTime은 이미 설정됨, fallback 없음
+        });
+      }
+    } catch (_) {}
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
