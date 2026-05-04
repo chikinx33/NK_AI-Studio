@@ -2670,7 +2670,8 @@
     var list = document.getElementById('postprod-version-list');
     if (!card || !list) return;
     var versions = getEditVersions();
-    if (versions.length < 2) {
+    // 버전이 0개일 때만 숨김 — v0(오리지널) 단독이라도 현재 편집 모드를 명시적으로 보여줌
+    if (!versions || versions.length === 0) {
       card.style.display = 'none';
       return;
     }
