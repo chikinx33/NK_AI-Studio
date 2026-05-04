@@ -7299,16 +7299,13 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
   touch-action: none;
 }
 
-/* In 마커: 왼쪽 대괄호 [ */
-.postprod-render-in-marker {
-  transform: translateX(-1px);
-}
+/* In 마커: 왼쪽 대괄호 [ — 컨테이너 왼쪽 끝(left=0)이 정확히 In 위치 */
 .postprod-render-in-marker::before {
   content: '';
   position: absolute;
-  left: 4px;
+  left: 0;
   top: 0;
-  width: 2px;
+  width: 3px;
   height: 100%;
   background: #fbbf24;
   box-shadow: 0 0 5px rgba(251, 191, 36, 0.7);
@@ -7316,24 +7313,24 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
 .postprod-render-in-marker::after {
   content: '';
   position: absolute;
-  left: 4px;
-  top: 1px;
-  width: 8px;
+  left: 0;
+  top: 0;
+  width: 10px;
   height: 3px;
   background: #fbbf24;
   border-radius: 0 2px 0 0;
 }
 
-/* Out 마커: 오른쪽 대괄호 ] */
+/* Out 마커: 오른쪽 대괄호 ] — 컨테이너 오른쪽 끝(right=0)이 정확히 Out 위치 */
 .postprod-render-out-marker {
-  transform: translateX(-13px);
+  transform: translateX(-100%);
 }
 .postprod-render-out-marker::before {
   content: '';
   position: absolute;
-  right: 4px;
+  right: 0;
   top: 0;
-  width: 2px;
+  width: 3px;
   height: 100%;
   background: #fbbf24;
   box-shadow: 0 0 5px rgba(251, 191, 36, 0.7);
@@ -7341,9 +7338,9 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
 .postprod-render-out-marker::after {
   content: '';
   position: absolute;
-  right: 4px;
-  top: 1px;
-  width: 8px;
+  right: 0;
+  top: 0;
+  width: 10px;
   height: 3px;
   background: #fbbf24;
   border-radius: 2px 0 0 0;
