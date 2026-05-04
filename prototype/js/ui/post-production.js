@@ -5819,6 +5819,8 @@
       savePortraitMode();
       renderLayout(state.model);
       bindEvents();
+      updateBladeModeUi();
+      updateVersionPanelUi();   // 버전 카드(오리지널/n차 편집) 재표시 — renderLayout이 display:none으로 초기화하므로
       ensureAllPreviewVideosMounted(state.model);
       setCurrentTime(state.currentTime, true);
     }
