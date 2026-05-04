@@ -403,7 +403,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const elevenLabsKey = String(env.ELEVENLABS_API_KEY || "").trim();
     if (!elevenLabsKey) return send({ error: "ELEVENLABS_API_KEY not configured" }, 500, origin);
 
-    const googleApiKey = String(env.GOOGLE_API_KEY || "").trim();
+    // GEMINI_API_KEY 우선 사용 (Google AI Studio 키), 없으면 GOOGLE_API_KEY 폴백
+    const googleApiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
     const clientEmail = String(env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL || "").trim();
     const privateKey = String(env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY || "").trim();
     const baseOutput = String(env.AUDIO_OUTPUT_GCS_URI || env.VIDEO_OUTPUT_GCS_URI || "").trim();
