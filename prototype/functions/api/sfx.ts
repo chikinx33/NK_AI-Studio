@@ -30,27 +30,39 @@ const send = (data: any, status = 200, origin?: string | null) =>
   new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
 // ── Gemini 텍스트 생성으로 SFX 프롬프트 생성 ──────────────────────────────
+// IMPORTANT: ElevenLabs sound-generation must receive English text only.
+// If Gemini fails or returns non-English, fall back to a safe English default
+// so we never pass Korean (or any non-Latin) text to ElevenLabs.
+const SFX_FALLBACK = "cinematic ambient sound effect, atmospheric background noise";
+
 async function buildSfxPrompt(apiKey: string, clipLabel: string): Promise<string> {
-  const systemPrompt =
-    "You are a professional sound designer. Given a video clip label, respond with a concise English sound effects description (under 20 words) matching the scene. Use sensory sound words. Output ONLY the description, no explanation.";
-  const userMsg = `Video clip: "${clipLabel}"`;
+  const systemInstruction =
+    "You are a professional sound designer. Your task is to write a short English sound effects description for use with an audio generation AI. " +
+    "The description must: (1) be in English only, (2) describe physical sounds and ambience — NOT speech or narration, (3) be under 20 words, (4) use sensory sound words like: whoosh, rumble, crackle, hum, distant, reverb, ambient, etc. " +
+    "Output ONLY the English sound description. No explanations, no quotes.";
+  const userMsg =
+    `Video clip label: "${clipLabel}"\n\nDescribe the SOUND EFFECTS for this scene in English only. Do NOT narrate the label text as speech.`;
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
     const body = {
-      contents: [{ parts: [{ text: systemPrompt + "\n\n" + userMsg }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 60 }
+      systemInstruction: { parts: [{ text: systemInstruction }] },
+      contents: [{ role: "user", parts: [{ text: userMsg }] }],
+      generationConfig: { temperature: 0.6, maxOutputTokens: 60 }
     };
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) return clipLabel;
+    if (!res.ok) return SFX_FALLBACK;
     const json: any = await res.json();
     const text = String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-    return text || clipLabel;
+    // Validate: result must contain Latin characters (English).
+    // If Gemini returned Korean or empty, use the safe English fallback.
+    if (!text || !/[a-zA-Z]{3,}/.test(text)) return SFX_FALLBACK;
+    return text;
   } catch {
-    return clipLabel;
+    return SFX_FALLBACK;
   }
 }
 
@@ -198,12 +210,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid AUDIO_OUTPUT_GCS_URI" }, 500, origin);
 
-    // Step 1: SFX 프롬프트 생성 (Gemini 또는 clipLabel 직접 사용)
+    // Step 1: SFX 프롬프트 생성 (Gemini로 영어 변환, 없으면 안전한 영어 기본값)
+    // ElevenLabs sound-generation은 반드시 영어 텍스트가 필요 — 한국어 라벨을 직접 전달하면 안 됨
     let sfxPrompt = customPrompt;
     if (!sfxPrompt) {
       sfxPrompt = googleApiKey
         ? await buildSfxPrompt(googleApiKey, clipLabel)
-        : clipLabel;
+        : SFX_FALLBACK;
     }
 
     // Step 2: ElevenLabs SFX 생성
