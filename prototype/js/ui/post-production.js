@@ -703,6 +703,107 @@
     return clipContextMenu;
   }
 
+  // 클립이 속한 트랙을 찾아 반환
+  function findClipTrack(clipId) {
+    if (!state.model || !clipId) return null;
+    var tracks = state.model.tracks || [];
+    for (var i = 0; i < tracks.length; i++) {
+      var track = tracks[i];
+      var clips = Array.isArray(track && track.clips) ? track.clips : [];
+      for (var j = 0; j < clips.length; j++) {
+        if (clips[j] && clips[j].id === clipId) return track;
+      }
+    }
+    return null;
+  }
+
+  // 인증 헤더 빌더 (fetch용)
+  function buildPostprodAuthHeaders() {
+    try {
+      var key = (NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token';
+      var token = String(localStorage.getItem(key) || '').trim();
+      return token ? { Authorization: 'Bearer ' + token } : {};
+    } catch (_) { return {}; }
+  }
+
+  // API base (config.js → localStorage 우선)
+  function getPostprodApiBase() {
+    try { var ls = localStorage.getItem('nk_api_base'); if (ls) return ls.replace(/\/$/, ''); } catch (_) {}
+    return (NK.config && NK.config.API_BASE) || '';
+  }
+
+  // 효과음 생성 후 Audio 트랙(A1)에 클립으로 삽입
+  async function generateSfxForClip(clipId) {
+    var clip = findClip(clipId);
+    if (!clip) return;
+    var duration = Math.max(0.5, (clip.end || 5) - (clip.start || 0));
+    var label = String(clip.label || clip.id || '').trim() || '영상 클립';
+    var projectId = String(state.projectId || '').trim();
+    if (!projectId) {
+      showMessageDialog('프로젝트 ID를 확인할 수 없습니다.', '효과음 생성');
+      return;
+    }
+
+    var lang = currentLang();
+    var loadingLabel = lang === 'en' ? 'Generating SFX…' : '효과음 생성 중…';
+    var successLabel = lang === 'en' ? 'SFX added to Audio track' : '효과음이 Audio 트랙에 추가됐습니다';
+    var failLabel   = lang === 'en' ? 'SFX generation failed' : '효과음 생성 실패';
+
+    // 버튼에 로딩 표시
+    var menu = ensureClipContextMenu();
+    var sfxBtn = menu && menu.root.querySelector('[data-action="generate-sfx"]');
+    if (sfxBtn) {
+      sfxBtn.textContent = loadingLabel;
+      sfxBtn.disabled = true;
+    }
+
+    try {
+      var base = getPostprodApiBase();
+      var res = await fetch(base + '/api/sfx', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, buildPostprodAuthHeaders()),
+        body: JSON.stringify({
+          projectId: projectId,
+          clipId: clipId,
+          clipLabel: label,
+          clipDuration: duration
+        })
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || !data.sfxUrl) {
+        throw new Error(data.error || 'sfx_api_error');
+      }
+
+      // Audio 트랙에 새 클립 삽입 (클립 위치와 동일한 시간대)
+      var newId = 'sfx-' + clipId + '-' + Date.now();
+      var edits = state.sessionEdits || (state.sessionEdits = {});
+      edits[newId] = {
+        isNew: true,
+        trackKey: 'audio',
+        start: clip.start || 0,
+        end: (clip.start || 0) + duration,
+        baseDuration: duration,
+        url: data.sfxUrl,
+        label: (lang === 'en' ? 'SFX · ' : '효과음 · ') + label,
+        empty: false,
+        soundOn: true,
+        fadeIn: false,
+        fadeOut: false,
+        motionPreset: 'none',
+        videoOffset: 0
+      };
+      persistTimelineEdit(newId, clip.start || 0, (clip.start || 0) + duration);
+      setDirty(true);
+      post.render();
+      if (NK.ui && NK.ui.common && NK.ui.common.toast) {
+        NK.ui.common.toast(successLabel + (data.sfxPrompt ? ' (' + data.sfxPrompt.slice(0, 40) + ')' : ''));
+      }
+    } catch (err) {
+      var msg = String((err && err.message) || err || failLabel);
+      showMessageDialog(failLabel + '\n' + msg, lang === 'en' ? 'Error' : '오류');
+    }
+  }
+
   function showClipContextMenu(clipId, x, y) {
     var clip = findClip(clipId);
     if (!clip) return;
@@ -712,14 +813,21 @@
     var fadeInChecked = !!clip.fadeIn;
     var fadeOutChecked = !!clip.fadeOut;
     var audioChecked = clip.soundOn !== false; // 기본 true (✓이면 오디오 켜짐)
+
+    // 클립이 영상 트랙(visuals)의 비어있지 않은 클립인지 판별
+    var clipTrack = findClipTrack(clipId);
+    var isVisualClip = !!(clipTrack && clipTrack.key === 'visuals' && clip.url && !clip.empty);
+
     var labels = lang === 'en' ? {
       fadeIn: 'Fade In (0.5s)',
       fadeOut: 'Fade Out (0.5s)',
-      audio: 'Audio'
+      audio: 'Audio',
+      sfx: '✦ Generate SFX'
     } : {
       fadeIn: '페이드 인 (0.5초)',
       fadeOut: '페이드 아웃 (0.5초)',
-      audio: '오디오'
+      audio: '오디오',
+      sfx: '✦ 효과음 자동 생성'
     };
     function row(action, label, checked) {
       return (
@@ -729,12 +837,21 @@
         '</button>'
       );
     }
+    function actionRow(action, label) {
+      return (
+        '<button type="button" class="postprod-ctx-item postprod-ctx-action" data-action="' + action + '" role="menuitem">' +
+          '<span class="postprod-ctx-check"></span>' +
+          '<span class="postprod-ctx-label">' + escapeHtml(label) + '</span>' +
+        '</button>'
+      );
+    }
     function divider() { return '<div class="postprod-ctx-divider"></div>'; }
     menu.root.innerHTML =
       row('toggle-fade-in', labels.fadeIn, fadeInChecked) +
       row('toggle-fade-out', labels.fadeOut, fadeOutChecked) +
       divider() +
-      row('toggle-audio', labels.audio, audioChecked);
+      row('toggle-audio', labels.audio, audioChecked) +
+      (isVisualClip ? divider() + actionRow('generate-sfx', labels.sfx) : '');
     menu.root.dataset.clipId = clipId;
     // 일단 화면 밖에 우선 표시하여 크기 측정 후 viewport 안으로 위치 조정
     menu.root.style.display = 'block';
@@ -756,15 +873,24 @@
       if (!cid) return;
       if (action === 'toggle-fade-in') {
         setClipFade(cid, 'fadeIn', !findClip(cid).fadeIn);
+        menu.hide();
       } else if (action === 'toggle-fade-out') {
         setClipFade(cid, 'fadeOut', !findClip(cid).fadeOut);
+        menu.hide();
       } else if (action === 'toggle-audio') {
         // 현재 오디오 상태(soundOn) 반전. 기본 true이므로 undefined도 true로 처리.
         var cur = findClip(cid);
         var isOn = cur ? (cur.soundOn !== false) : true;
         setClipSoundOn(cid, !isOn);
+        menu.hide();
+      } else if (action === 'generate-sfx') {
+        // 메뉴를 닫지 않고 로딩 표시 → generateSfxForClip 내부에서 버튼 상태 관리
+        generateSfxForClip(cid).then(function () {
+          menu.hide();
+        }).catch(function () {
+          menu.hide();
+        });
       }
-      menu.hide();
     };
   }
 

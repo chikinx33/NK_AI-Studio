@@ -6706,6 +6706,18 @@ html.page-shell-image #sidebar-project-card {
   background: rgba(255,255,255,0.08);
   margin: 4px 4px;
 }
+/* 효과음 생성 액션 버튼 — 체크박스형이 아닌 액션형 강조 스타일 */
+.postprod-ctx-item.postprod-ctx-action .postprod-ctx-label {
+  color: #7ab7ff;
+  font-weight: 600;
+}
+.postprod-ctx-item.postprod-ctx-action:hover .postprod-ctx-label {
+  color: #a8d0ff;
+}
+.postprod-ctx-item.postprod-ctx-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 /* ──────────────────────────────────────────────────────────────── */
 
 .postprod-render-preview {
