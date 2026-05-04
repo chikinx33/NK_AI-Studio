@@ -425,8 +425,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     if (!sfxPrompt && googleApiKey) {
       if (clipUrl) {
+        // 프록시 URL(/api/media/proxy?objectName=...) → gs://bucket/objectName 으로 복원
+        // clip.url이 프록시 형식으로 저장된 경우 서버가 직접 GCS OAuth로 접근 가능하도록
+        let resolvedClipUrl = clipUrl;
+        if (clipUrl.includes("/api/media/proxy") && outParsed) {
+          try {
+            const proxyParsed = new URL(clipUrl, "http://localhost");
+            const objName = proxyParsed.searchParams.get("objectName") || "";
+            if (objName) resolvedClipUrl = `gs://${outParsed.bucket}/${objName}`;
+          } catch {}
+        }
+
         // ① 서버에서 영상 파일을 직접 다운로드 → Gemini Files API로 전체 영상 분석
-        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, clipUrl, clipLabel,
+        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, resolvedClipUrl, clipLabel,
           (clientEmail && privateKey) ? { clientEmail, privateKeyPem: privateKey } : undefined);
         if (sfxPrompt) {
           analysisMode = "video_server";
@@ -485,7 +496,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // _debug: 문제 진단용 — 이후 제거 예정
     const _debug = {
-      clipUrlScheme: clipUrl ? clipUrl.slice(0, 60) : "(empty)",
+      clipUrlReceived: clipUrl ? clipUrl.slice(0, 60) : "(empty)",
       framesReceived: frames.length,
       analysisMode,
     };
