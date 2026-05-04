@@ -4671,9 +4671,11 @@
 
   function startPlayback() {
     if (!state.model || state.isPlaying) return;
-    var playbackDuration = getTimelinePlaybackDuration(state.model);
-    if (state.currentTime >= playbackDuration) {
-      setCurrentTime(0, true);
+    var effectiveOut = getEffectiveRenderOut();
+    var effectiveIn  = Number(state.renderIn) || 0;
+    // 현재 위치가 Out 마커 이상이면 In 마커로 되감기
+    if (state.currentTime >= effectiveOut) {
+      setCurrentTime(effectiveIn, true);
     }
     hideScrubCanvas();   // 재생 시작 시 scrub canvas 숨김 → video 엘리먼트가 표시됨
     state.isPlaying = true;
@@ -4687,8 +4689,9 @@
       var delta = Math.max(0, (ts - state.playLastTick) / 1000);
       state.playLastTick = ts;
       var next = state.currentTime + delta;
-      if (next >= playbackDuration) {
-        setCurrentTime(playbackDuration, true);
+      // Out 마커(또는 전체 길이)에 도달하면 정지
+      if (next >= effectiveOut) {
+        setCurrentTime(effectiveOut, true);
         stopPlayback();
         return;
       }
