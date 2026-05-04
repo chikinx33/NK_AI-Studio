@@ -29,38 +29,81 @@ const corsHeaders = (origin?: string | null) => ({
 const send = (data: any, status = 200, origin?: string | null) =>
   new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
-// ── Gemini 텍스트 생성으로 SFX 프롬프트 생성 ──────────────────────────────
-// IMPORTANT: ElevenLabs sound-generation must receive English text only.
-// If Gemini fails or returns non-English, fall back to a safe English default
-// so we never pass Korean (or any non-Latin) text to ElevenLabs.
+// ── 공통 상수 ─────────────────────────────────────────────────────────────
+// IMPORTANT: ElevenLabs sound-generation은 반드시 영어 텍스트만 받아야 함.
+// 한국어 등 비라틴 텍스트를 보내면 TTS처럼 음성이 생성됨 → 항상 영어 폴백 사용.
 const SFX_FALLBACK = "cinematic ambient sound effect, atmospheric background noise";
 
-async function buildSfxPrompt(apiKey: string, clipLabel: string): Promise<string> {
-  const systemInstruction =
-    "You are a professional sound designer. Your task is to write a short English sound effects description for use with an audio generation AI. " +
-    "The description must: (1) be in English only, (2) describe physical sounds and ambience — NOT speech or narration, (3) be under 20 words, (4) use sensory sound words like: whoosh, rumble, crackle, hum, distant, reverb, ambient, etc. " +
-    "Output ONLY the English sound description. No explanations, no quotes.";
-  const userMsg =
-    `Video clip label: "${clipLabel}"\n\nDescribe the SOUND EFFECTS for this scene in English only. Do NOT narrate the label text as speech.`;
+const SFX_SYSTEM_INSTRUCTION =
+  "You are a professional sound designer. Analyze the visual content and write a concise English sound effects description for an audio generation AI. " +
+  "Rules: (1) English only, (2) describe physical SOUNDS and ambience only — never speech, dialogue, or narration, " +
+  "(3) under 22 words, (4) use vivid sound words: whoosh, rumble, crackle, hum, distant, reverb, footsteps, rain, wind, etc. " +
+  "Output ONLY the English sound description. No quotes, no explanation.";
+
+function isEnglish(text: string): boolean {
+  return !!text && /[a-zA-Z]{3,}/.test(text);
+}
+
+async function callGemini(apiKey: string, body: object): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) return "";
+  const json: any = await res.json();
+  return String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
+}
+
+// ── Gemini Vision — 영상 프레임(이미지) 기반 SFX 프롬프트 생성 ─────────────
+// frames: base64 JPEG 배열 (클라이언트에서 Canvas로 추출)
+async function buildSfxPromptFromFrames(
+  apiKey: string,
+  frames: string[],
+  clipLabel: string
+): Promise<string> {
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const body = {
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: "user", parts: [{ text: userMsg }] }],
-      generationConfig: { temperature: 0.6, maxOutputTokens: 60 }
+    // Gemini multimodal: 이미지 파트들 + 텍스트 파트
+    const imageParts = frames.map((f) => ({
+      inline_data: { mime_type: "image/jpeg", data: f },
+    }));
+    const textPart = {
+      text:
+        `These ${frames.length} frames are sampled from a video clip.\n` +
+        `Clip label (for reference only): "${clipLabel}"\n\n` +
+        `Look at WHAT IS HAPPENING visually — people, objects, environment, motion — ` +
+        `and describe the SOUND EFFECTS that would realistically accompany this scene. ` +
+        `English only, no speech/narration, under 22 words.`,
     };
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) return SFX_FALLBACK;
-    const json: any = await res.json();
-    const text = String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
-    // Validate: result must contain Latin characters (English).
-    // If Gemini returned Korean or empty, use the safe English fallback.
-    if (!text || !/[a-zA-Z]{3,}/.test(text)) return SFX_FALLBACK;
-    return text;
+    const body = {
+      systemInstruction: { parts: [{ text: SFX_SYSTEM_INSTRUCTION }] },
+      contents: [{ role: "user", parts: [...imageParts, textPart] }],
+      generationConfig: { temperature: 0.6, maxOutputTokens: 80 },
+    };
+    const text = await callGemini(apiKey, body);
+    if (isEnglish(text)) return text;
+    return SFX_FALLBACK;
+  } catch {
+    return SFX_FALLBACK;
+  }
+}
+
+// ── Gemini 텍스트 — 클립 라벨만으로 SFX 프롬프트 생성 (프레임 없을 때 폴백) ──
+async function buildSfxPrompt(apiKey: string, clipLabel: string): Promise<string> {
+  const userMsg =
+    `Video clip label: "${clipLabel}"\n\n` +
+    `Based on this label, describe the SOUND EFFECTS for the scene in English only. ` +
+    `Do NOT narrate or speak the label text. Describe environmental sounds only.`;
+  try {
+    const body = {
+      systemInstruction: { parts: [{ text: SFX_SYSTEM_INSTRUCTION }] },
+      contents: [{ role: "user", parts: [{ text: userMsg }] }],
+      generationConfig: { temperature: 0.6, maxOutputTokens: 60 },
+    };
+    const text = await callGemini(apiKey, body);
+    if (isEnglish(text)) return text;
+    return SFX_FALLBACK;
   } catch {
     return SFX_FALLBACK;
   }
@@ -192,6 +235,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const clipLabel = String(body.clipLabel || "").trim() || "video clip";
     const clipDuration = Math.min(22, Math.max(0.5, Number(body.clipDuration) || 5));
     const customPrompt = String(body.prompt || "").trim();
+    // 클라이언트에서 추출한 영상 프레임 (base64 JPEG 배열) — 없으면 텍스트 폴백
+    const rawFrames: any[] = Array.isArray(body.frames) ? body.frames : [];
+    const frames: string[] = rawFrames.filter(
+      (f) => typeof f === "string" && f.length > 200  // 너무 짧은 건 유효하지 않은 프레임
+    ).slice(0, 5);  // 최대 5장
 
     if (!projectId) return send({ error: "projectId required" }, 400, origin);
 
@@ -210,13 +258,20 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid AUDIO_OUTPUT_GCS_URI" }, 500, origin);
 
-    // Step 1: SFX 프롬프트 생성 (Gemini로 영어 변환, 없으면 안전한 영어 기본값)
-    // ElevenLabs sound-generation은 반드시 영어 텍스트가 필요 — 한국어 라벨을 직접 전달하면 안 됨
+    // Step 1: SFX 프롬프트 생성
+    // 우선순위: 사용자 직접 입력 > 영상 프레임 Vision 분석 > 텍스트 라벨 분석 > 기본값
+    // ElevenLabs는 영어만 허용 — 한국어를 직접 전달하면 TTS 음성이 생성됨
     let sfxPrompt = customPrompt;
     if (!sfxPrompt) {
-      sfxPrompt = googleApiKey
-        ? await buildSfxPrompt(googleApiKey, clipLabel)
-        : SFX_FALLBACK;
+      if (googleApiKey && frames.length > 0) {
+        // ✅ 실제 영상 프레임을 Gemini Vision으로 분석
+        sfxPrompt = await buildSfxPromptFromFrames(googleApiKey, frames, clipLabel);
+      } else if (googleApiKey) {
+        // 프레임 없음 (이미지 클립 등) → 텍스트 라벨만으로 분석
+        sfxPrompt = await buildSfxPrompt(googleApiKey, clipLabel);
+      } else {
+        sfxPrompt = SFX_FALLBACK;
+      }
     }
 
     // Step 2: ElevenLabs SFX 생성
@@ -254,8 +309,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       signedUrl = await signGcsUrl({ bucket: outParsed.bucket, object: objName, clientEmail, privateKeyPem: privateKey, expiresInSec: 3600 });
     } catch (_) {}
 
+    const analysisMode = frames.length > 0 ? "vision" : "text";
     if (signedUrl) {
-      return send({ sfxUrl: signedUrl, objectName: objName, sfxPrompt }, 200, origin);
+      return send({ sfxUrl: signedUrl, objectName: objName, sfxPrompt, analysisMode, framesUsed: frames.length }, 200, origin);
     }
     const b64 = btoa(String.fromCharCode(...audioBytes));
     return send({ sfxUrl: `data:audio/mpeg;base64,${b64}`, objectName: objName, sfxPrompt, warning: "sign_failed" }, 200, origin);

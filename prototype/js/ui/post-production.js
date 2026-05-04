@@ -732,6 +732,61 @@
     return (NK.config && NK.config.API_BASE) || '';
   }
 
+  // 영상 클립에서 프레임 추출 (Gemini Vision 분석용)
+  // numFrames 장을 클립 구간 내에서 균등 샘플링, base64 JPEG 배열 반환
+  function extractVideoFrames(url, clip, numFrames) {
+    numFrames = numFrames || 3;
+    return new Promise(function (resolve) {
+      var vid = document.createElement('video');
+      vid.crossOrigin = 'anonymous';
+      vid.muted = true;
+      vid.preload = 'auto';
+      var clipDuration = Math.max(0.5, (clip.end || 5) - (clip.start || 0));
+      var videoOffset  = Number(clip.videoOffset) || 0;
+      var frames = [];
+      var timestamps = [];
+      for (var i = 0; i < numFrames; i++) {
+        // 클립 구간을 균등 분할: 25%, 50%, 75% …
+        timestamps.push(videoOffset + clipDuration * ((i + 1) / (numFrames + 1)));
+      }
+      var idx = 0;
+
+      function seekNext() {
+        if (idx >= timestamps.length) {
+          try { vid.src = ''; } catch (_) {}
+          resolve(frames);
+          return;
+        }
+        try { vid.currentTime = timestamps[idx]; } catch (_) { resolve(frames); }
+      }
+
+      vid.addEventListener('seeked', function () {
+        try {
+          var canvas = document.createElement('canvas');
+          canvas.width  = 320;   // 분석에 충분한 해상도 (API 전송 크기 최소화)
+          canvas.height = 180;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(vid, 0, 0, 320, 180);
+          var b64 = canvas.toDataURL('image/jpeg', 0.75).split(',')[1];
+          if (b64) frames.push(b64);
+        } catch (e) {
+          // canvas tainted(CORS) 등 예외 — 해당 프레임 건너뜀
+        }
+        idx++;
+        seekNext();
+      });
+
+      vid.addEventListener('error', function () { resolve(frames); });
+      vid.addEventListener('loadeddata', function () { seekNext(); });
+      // 타임아웃: 10초 이상 걸리면 수집된 것만 반환
+      var timer = setTimeout(function () { resolve(frames); }, 10000);
+      vid.addEventListener('seeked', function () { clearTimeout(timer); }, { once: true });
+
+      vid.src = url;
+      vid.load();
+    });
+  }
+
   // 효과음 생성 후 Audio 트랙(A1)에 클립으로 삽입
   async function generateSfxForClip(clipId) {
     var clip = findClip(clipId);
@@ -745,6 +800,7 @@
     }
 
     var lang = currentLang();
+    var analyzeLabel = lang === 'en' ? 'Analyzing video…' : '영상 분석 중…';
     var loadingLabel = lang === 'en' ? 'Generating SFX…' : '효과음 생성 중…';
     var successLabel = lang === 'en' ? 'SFX added to Audio track' : '효과음이 Audio 트랙에 추가됐습니다';
     var failLabel   = lang === 'en' ? 'SFX generation failed' : '효과음 생성 실패';
@@ -753,11 +809,26 @@
     var menu = ensureClipContextMenu();
     var sfxBtn = menu && menu.root.querySelector('[data-action="generate-sfx"]');
     if (sfxBtn) {
-      sfxBtn.textContent = loadingLabel;
+      sfxBtn.textContent = analyzeLabel;
       sfxBtn.disabled = true;
     }
 
     try {
+      // ── Step 1: 영상 프레임 추출 (비디오 클립인 경우) ──────────────────
+      var frames = [];
+      var playableUrl = toPlayableMediaUrl(clip.url || '');
+      if (playableUrl && isVideoUrl(clip.url)) {
+        try {
+          frames = await extractVideoFrames(playableUrl, clip, 3);
+        } catch (_) {
+          frames = [];
+        }
+      }
+
+      // 프레임 추출 완료 → 효과음 생성 단계 표시
+      if (sfxBtn) sfxBtn.textContent = loadingLabel;
+
+      // ── Step 2: API 호출 ────────────────────────────────────────────────
       var base = getPostprodApiBase();
       var res = await fetch(base + '/api/sfx', {
         method: 'POST',
@@ -766,7 +837,8 @@
           projectId: projectId,
           clipId: clipId,
           clipLabel: label,
-          clipDuration: duration
+          clipDuration: duration,
+          frames: frames   // base64 JPEG 배열 — 서버에서 Gemini Vision으로 분석
         })
       });
       var data = await res.json().catch(function () { return {}; });
@@ -796,7 +868,10 @@
       setDirty(true);
       post.render();
       if (NK.ui && NK.ui.common && NK.ui.common.toast) {
-        NK.ui.common.toast(successLabel + (data.sfxPrompt ? ' (' + data.sfxPrompt.slice(0, 40) + ')' : ''));
+        var modeTag = data.analysisMode === 'vision'
+          ? (lang === 'en' ? '🎬 video analyzed' : '🎬 영상 분석')
+          : (lang === 'en' ? '📝 label used' : '📝 라벨 기반');
+        NK.ui.common.toast(successLabel + ' [' + modeTag + '] ' + (data.sfxPrompt ? '· ' + data.sfxPrompt.slice(0, 40) : ''));
       }
     } catch (err) {
       var msg = String((err && err.message) || err || failLabel);
