@@ -5817,6 +5817,8 @@ html.page-shell-image #sidebar-project-card {
   height: 100%;
   display: block;
   object-fit: contain;
+  outline: none;
+  border: none;
 }
 
 .postprod-preview-stack .postprod-video,
@@ -5912,10 +5914,16 @@ html.page-shell-image #sidebar-project-card {
   justify-content: center;
   background: transparent;
   border: none;
+  outline: none;
   cursor: pointer;
   color: rgba(255, 255, 255, 0.85);
   opacity: 0;
   transition: opacity 0.25s ease;
+}
+.postprod-play-overlay:focus,
+.postprod-play-overlay:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .postprod-preview-stack:hover .postprod-play-overlay {
