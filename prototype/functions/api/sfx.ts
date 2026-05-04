@@ -77,9 +77,9 @@ async function buildSfxPromptFromFrames(
         `These ${frames.length} frames are from a video — BASE your answer on what you see.\n` +
         `${actionHint}` +
         `Clip label: "${clipLabel}"\n\n` +
-        `Count the visible sound events (footsteps, impacts, etc.) and include the count. ` +
-        `Note motion speed: slow motion = add "slow" and use lower count. ` +
-        `Example: "two slow soft footsteps, quiet breeze" not just "footsteps". ` +
+        `Count the distinct sound events visible and include that number in your description. ` +
+        `Match the motion speed (slow motion → fewer events, add "slow/gradual"). ` +
+        `Include density qualifiers: single, sparse, brief, rapid, continuous — whatever fits. ` +
         `English only, no speech/narration, under 22 words.`,
     };
     const body = {
@@ -260,9 +260,9 @@ async function buildSfxPromptFromVideoUrl(
               `Watch this video carefully — BASE your answer strictly on what you see.\n` +
               `${actionHint}` +
               `Clip label: "${clipLabel}"\n\n` +
-              `Count the actual sound events in the video (footsteps, impacts, etc.) and include that count. ` +
-              `Note the motion speed: slow motion = add "slow" and reduce count. ` +
-              `Example: "two slow soft footsteps, quiet ambient breeze" not just "footsteps". ` +
+              `Count the distinct sound events visible and include that number in your description. ` +
+              `Match the motion speed (slow motion → fewer events, add "slow/gradual"). ` +
+              `Include density qualifiers: single, sparse, brief, rapid, continuous — whatever fits. ` +
               `English only, under 22 words.`,
           },
         ],
