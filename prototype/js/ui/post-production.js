@@ -1596,15 +1596,21 @@
     var vW = video.videoWidth;
     var vH = video.videoHeight;
     if (!vW || !vH) return false;
+    // display:none 상태에서 offsetWidth = 0이 되는 버그 방지:
+    // 측정 전에 먼저 block으로 변경하고, 실패 시 복원
+    var prevDisplay = canvas.style.display;
+    canvas.style.display = 'block';
     var cW = canvas.offsetWidth;
     var cH = canvas.offsetHeight;
     if (!cW || !cH) {
-      // offsetWidth가 0이면 부모에서 보정
       var stack = canvas.parentNode;
       cW = (stack && stack.offsetWidth) || 0;
       cH = (stack && stack.offsetHeight) || 0;
     }
-    if (!cW || !cH) return false;
+    if (!cW || !cH) {
+      canvas.style.display = prevDisplay;
+      return false;
+    }
     canvas.width = cW;
     canvas.height = cH;
     try {
@@ -1619,10 +1625,12 @@
       var dX = Math.round((cW - dW) / 2);
       var dY = Math.round((cH - dH) / 2);
       ctx.drawImage(video, dX, dY, dW, dH);
-      canvas.style.display = 'block';
+      // canvas.style.display = 'block'은 이미 위에서 설정됨
       return true;
     } catch (_) {
-      return false;  // CORS tainted 등
+      // CORS SecurityError 등 — canvas 숨김
+      canvas.style.display = 'none';
+      return false;
     }
   }
 
@@ -1631,16 +1639,18 @@
     if (canvas && canvas.style.display !== 'none') canvas.style.display = 'none';
   }
 
-  // ── scrubSeekVideo: Canvas 방식으로 완전 재작성 ─────────────────────────
-  // 전략:
-  //   1) video.currentTime = target  — Chrome은 paused 시에도 내부적으로 seek함
-  //   2) seeked 이벤트 발화 → 디코더가 target 프레임을 디코드 완료
-  //   3) ctx.drawImage(video) → canvas에 프레임 캡처 → 화면 표시
-  //   play()+pause() 패턴을 제거해 video 내부 상태 손상을 원천 차단.
-  //   canvas는 video 표시 파이프라인과 무관하므로 Chrome 정책에 영향받지 않음.
+  // ── scrubSeekVideo: 스페이스바×2 패턴 ─────────────────────────────────
+  // 전략 ("재생바 드래그 = 스페이스바를 매우 빠르게 두 번 누르는 것"):
+  //   1) video.currentTime = target  — seek 요청
+  //   2) seeked 이벤트 발화 → 디코더가 target 프레임 준비 완료
+  //   3) play()         → Chrome이 디코더를 깨우고 현재 프레임을 렌더 파이프라인에 공급
+  //   4) .then(pause()) → 재생 직후 즉시 정지 → Chrome이 현재 프레임을 화면에 표시
+  //   thisTarget 가드: 연속 스크럽 시 stale promise가 잘못된 시점에 pause()하는 것을 방지.
+  //   canvas는 play().then(pause()) 성공 후 보너스로 시도(CORS taint 시 무시됨).
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
+    var thisTarget = target;  // closure에 캡처 — async 가드용
 
     // detached 비디오 재연결
     var host = getPreviewVideoHost();
@@ -1694,17 +1704,31 @@
       try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
       if (video.__scrubSeekedWake === onSeeked) video.__scrubSeekedWake = null;
       if (state.isPlaying) return;
+      // stale seek 가드: 더 최신 scrub이 예약된 경우 이 onSeeked는 무시
+      if (video.__scrubTarget !== thisTarget) return;
 
-      // ① canvas에 프레임 캡처 (주 경로)
-      var drawn = drawVideoToScrubCanvas(video);
-
-      // ② canvas 실패 시(readyState<2, CORS 등) → play().then(pause()) 폴백
-      if (!drawn) {
-        try {
-          video.play().then(function () {
-            if (!state.isPlaying) video.pause();
-          }).catch(function () {});
-        } catch (_) {}
+      // ① 주 경로: play().then(pause()) — 스페이스바×2 패턴
+      //    Chrome은 play() 시 디코더를 깨우고, pause() 즉시 현재 프레임을 화면에 표시
+      //    cloud storage 크로스오리진 영상에도 항상 동작 (canvas CORS 제한 없음)
+      try {
+        var p = video.play();
+        if (p && typeof p.then === 'function') {
+          p.then(function () {
+            if (state.isPlaying) return;              // 사용자가 재생 시작
+            if (video.__scrubTarget !== thisTarget) return;  // 더 새 scrub이 진행 중
+            try { video.pause(); } catch (_) {}
+            // ② 보너스: canvas에도 캡처 (CORS taint 시 조용히 실패해도 무방)
+            drawVideoToScrubCanvas(video);
+          }).catch(function () {
+            // play() 거부(사용자 제스처 정책 등) → canvas만 시도
+            drawVideoToScrubCanvas(video);
+          });
+        } else {
+          // play()가 Promise 반환 안 하는 구형 브라우저 → canvas 시도
+          drawVideoToScrubCanvas(video);
+        }
+      } catch (_) {
+        drawVideoToScrubCanvas(video);
       }
 
       // 드래그 중 target이 변경됐으면 최신 위치로 재seek
