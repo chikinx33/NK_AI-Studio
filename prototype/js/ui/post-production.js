@@ -870,16 +870,14 @@
       persistTimelineEdit(newId, clip.start || 0, (clip.start || 0) + duration);
       setDirty(true);
       post.render();
-      if (NK.ui && NK.ui.common && NK.ui.common.toast) {
-        var modeTag = data.analysisMode === 'video_server'
-          ? (lang === 'en' ? '🎬 full video' : '🎬 영상 전체 분석')
-          : data.analysisMode === 'vision'
-          ? (lang === 'en' ? '🖼 frames' : '🖼 프레임 분석')
-          : data.analysisMode === 'text'
-          ? (lang === 'en' ? '📝 label' : '📝 라벨 기반')
-          : (lang === 'en' ? '⚠ fallback' : '⚠ 기본값');
-        NK.ui.common.toast(successLabel + ' [' + modeTag + '] ' + (data.sfxPrompt ? '· ' + data.sfxPrompt.slice(0, 50) : ''));
-      }
+      var modeTag = data.analysisMode === 'video_server'
+        ? (lang === 'en' ? '🎬 full video' : '🎬 영상 전체 분석')
+        : data.analysisMode === 'vision'
+        ? (lang === 'en' ? '🖼 frames' : '🖼 프레임 분석')
+        : data.analysisMode === 'text'
+        ? (lang === 'en' ? '📝 label' : '📝 라벨 기반')
+        : (lang === 'en' ? '⚠ fallback' : '⚠ 기본값');
+      showPostprodToast(successLabel + '\n[' + modeTag + '] ' + (data.sfxPrompt ? data.sfxPrompt.slice(0, 60) : ''));
     } catch (err) {
       var msg = String((err && err.message) || err || failLabel);
       showMessageDialog(failLabel + '\n' + msg, lang === 'en' ? 'Error' : '오류');
@@ -1252,6 +1250,29 @@
     var root = document.getElementById('postprod-root');
     if (root) root.appendChild(overlay);
     else document.body.appendChild(overlay);
+  }
+
+  function showPostprodToast(message, durationMs) {
+    durationMs = durationMs || 4500;
+    var existing = document.getElementById('postprod-toast');
+    if (existing) existing.parentNode && existing.parentNode.removeChild(existing);
+    var el = document.createElement('div');
+    el.id = 'postprod-toast';
+    el.textContent = String(message || '');
+    el.style.cssText = [
+      'position:fixed', 'bottom:28px', 'left:50%', 'transform:translateX(-50%)',
+      'background:#1a1f35', 'color:#d0d8f0', 'padding:10px 20px',
+      'border-radius:8px', 'font-size:13px', 'line-height:1.4',
+      'z-index:99999', 'max-width:520px', 'box-shadow:0 4px 20px rgba(0,0,0,.6)',
+      'pointer-events:none', 'white-space:pre-wrap', 'text-align:center',
+      'border:1px solid #2a3050', 'transition:opacity .35s'
+    ].join(';');
+    document.body.appendChild(el);
+    var timer = setTimeout(function () {
+      el.style.opacity = '0';
+      setTimeout(function () { el.parentNode && el.parentNode.removeChild(el); }, 380);
+    }, durationMs);
+    el._hideTimer = timer;
   }
 
   function showMessageDialog(message, title) {
@@ -6503,9 +6524,7 @@
               syncOverlayClipsToProject();
               setDirty(true);
               post.render();
-              if (NK.ui && NK.ui.common && NK.ui.common.toast) {
-                NK.ui.common.toast(file.name + ' ' + t('등록되었습니다.'));
-              }
+              showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
             };
             reader.readAsDataURL(file);
             overlayInput.value = '';
@@ -6541,9 +6560,7 @@
                 }
               }
               post.render();
-              if (NK.ui && NK.ui.common && NK.ui.common.toast) {
-                NK.ui.common.toast(file.name + ' ' + t('등록되었습니다.'));
-              }
+              showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
             }
           };
         }
