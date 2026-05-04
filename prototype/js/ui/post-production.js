@@ -908,12 +908,12 @@
     var labels = lang === 'en' ? {
       fadeIn: 'Fade In (0.5s)',
       fadeOut: 'Fade Out (0.5s)',
-      audio: 'Audio',
+      audio: audioChecked ? 'Audio ON' : 'Audio OFF',
       sfx: '✦ Generate SFX'
     } : {
       fadeIn: '페이드 인 (0.5초)',
       fadeOut: '페이드 아웃 (0.5초)',
-      audio: '오디오',
+      audio: audioChecked ? '오디오 ON' : '오디오 OFF',
       sfx: '✦ 효과음 자동 생성'
     };
     function row(action, label, checked) {
