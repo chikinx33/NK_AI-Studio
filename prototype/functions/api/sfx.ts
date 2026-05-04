@@ -239,7 +239,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const rawFrames: any[] = Array.isArray(body.frames) ? body.frames : [];
     const frames: string[] = rawFrames.filter(
       (f) => typeof f === "string" && f.length > 200  // 너무 짧은 건 유효하지 않은 프레임
-    ).slice(0, 5);  // 최대 5장
+    ).slice(0, 10);  // 최대 10장
 
     if (!projectId) return send({ error: "projectId required" }, 400, origin);
 

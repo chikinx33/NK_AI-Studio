@@ -819,7 +819,9 @@
       var playableUrl = toPlayableMediaUrl(clip.url || '');
       if (playableUrl && isVideoUrl(clip.url)) {
         try {
-          frames = await extractVideoFrames(playableUrl, clip, 3);
+          // 클립 길이에 따라 적응형 프레임 수 결정
+          var numFrames = duration <= 5 ? 3 : duration <= 10 ? 5 : duration <= 20 ? 8 : 10;
+          frames = await extractVideoFrames(playableUrl, clip, numFrames);
         } catch (_) {
           frames = [];
         }
