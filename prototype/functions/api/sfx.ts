@@ -483,8 +483,14 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       signedUrl = await signGcsUrl({ bucket: outParsed.bucket, object: objName, clientEmail, privateKeyPem: privateKey, expiresInSec: 3600 });
     } catch (_) {}
 
+    // _debug: 문제 진단용 — 이후 제거 예정
+    const _debug = {
+      clipUrlScheme: clipUrl ? clipUrl.slice(0, 60) : "(empty)",
+      framesReceived: frames.length,
+      analysisMode,
+    };
     if (signedUrl) {
-      return send({ sfxUrl: signedUrl, objectName: objName, sfxPrompt, analysisMode, framesUsed: frames.length }, 200, origin);
+      return send({ sfxUrl: signedUrl, objectName: objName, sfxPrompt, analysisMode, framesUsed: frames.length, _debug }, 200, origin);
     }
     const b64 = btoa(String.fromCharCode(...audioBytes));
     return send({ sfxUrl: `data:audio/mpeg;base64,${b64}`, objectName: objName, sfxPrompt, warning: "sign_failed" }, 200, origin);
