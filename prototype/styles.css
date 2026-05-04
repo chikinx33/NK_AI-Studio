@@ -7552,8 +7552,9 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
   align-self: stretch;
 }
 
-/* 다운로드: 하단 우측, 컴퓨팅 리소스 카드와 높이 동일 */
-.postprod-portrait-right .postprod-resource-card:not(.postprod-compute-card) {
+/* 다운로드: 하단 우측, 컴퓨팅 리소스 카드와 높이 동일.
+   버전 카드(postprod-version-card)는 자체 grid-area:version을 갖도록 제외 */
+.postprod-portrait-right .postprod-resource-card:not(.postprod-compute-card):not(.postprod-version-card) {
   grid-area: download;
   align-self: stretch;
 }
