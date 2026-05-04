@@ -1856,6 +1856,44 @@
     update();
   }
 
+  // ── 렌더 프리뷰 video 요소 영속화 ─────────────────────────────────────
+  // renderLayout이 root.innerHTML 통째로 교체하면 <video>가 재생성되어
+  // 브라우저 native controls의 로딩 스피너가 깜빡거리는 회귀 발생.
+  // → innerHTML 교체 BEFORE에 video를 detach해 보관, AFTER 같은 src면 재부착.
+  function detachRenderPreviewVideo() {
+    var v = document.getElementById('postprod-render-video');
+    if (!v) {
+      state.cachedRenderVideo = null;
+      state.cachedRenderVideoSrc = '';
+      return;
+    }
+    state.cachedRenderVideo = v;
+    state.cachedRenderVideoSrc = v.currentSrc || v.src || v.getAttribute('src') || '';
+    if (v.parentNode) {
+      try { v.parentNode.removeChild(v); } catch (_) {}
+    }
+  }
+
+  function reattachRenderPreviewVideoIfMatch() {
+    var cachedVideo = state.cachedRenderVideo;
+    var cachedSrc = String(state.cachedRenderVideoSrc || '');
+    state.cachedRenderVideo = null;
+    state.cachedRenderVideoSrc = '';
+    if (!cachedVideo) return;
+    var newVideo = document.getElementById('postprod-render-video');
+    if (!newVideo) return;  // 렌더 결과 없는 상태로 전환 — 캐시 폐기
+    var newSrc = newVideo.currentSrc || newVideo.src || newVideo.getAttribute('src') || '';
+    // src가 다르면 새 video 유지 (실제 새 렌더가 완료된 경우)
+    if (newSrc !== cachedSrc) return;
+    // 같은 src — 캐시된 video로 교체해 readyState/buffer/재생위치 유지
+    var parent = newVideo.parentNode;
+    if (!parent) return;
+    try {
+      parent.insertBefore(cachedVideo, newVideo);
+      parent.removeChild(newVideo);
+    } catch (_) {}
+  }
+
   function ensureAllPreviewVideosMounted(model) {
     var host = getPreviewVideoHost();
     if (!host || !model) return;
@@ -4706,14 +4744,20 @@
     var src = getRenderableOutputVideoUrl(meta);
     var prevSrc = String(wrap.getAttribute('data-render-src') || '');
     if (src === prevSrc) return;
+    // src가 실제로 바뀌는 경우만 wrap 재구성 — 동일 src에선 위 early return으로 video 보존
     wrap.setAttribute('data-render-src', src || '');
+    detachRenderPreviewVideo();
     wrap.innerHTML = buildRenderPreviewHtml(state.model || null, meta || null);
+    reattachRenderPreviewVideoIfMatch();
     attachRenderPreviewLoadingTracking();
   }
 
   function renderLayout(model) {
     var root = document.getElementById('postprod-root');
     if (!root) return;
+
+    // innerHTML 교체로 인한 <video> 재생성 → 브라우저 native controls 로딩 스피너 깜빡임 방지
+    detachRenderPreviewVideo();
 
     state.model = model;
     var playbackDuration = getTimelinePlaybackDuration(model);
@@ -4900,6 +4944,8 @@
         _renderPanelHtml +
         '</section>';
     }
+    // detachRenderPreviewVideo로 보관한 video를 같은 src일 때 재부착해 native 로딩 스피너 깜빡임 차단
+    reattachRenderPreviewVideoIfMatch();
     attachRenderPreviewLoadingTracking();
   }
 
