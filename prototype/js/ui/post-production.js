@@ -2467,6 +2467,12 @@
         motionPreset: 'none', videoOffset: 0
       };
       targetEdits = Object.assign({}, baseEdits, version.postTimelineEdits || {});
+      // 저장된 version.postTimelineEdits의 구 proxy URL이 baseEdits의 최신 URL을 덮어쓰는
+      // 버그 방지: Object.assign 이후 항상 renderedUrl로 강제 교체
+      // (이전 세션의 nk_token이 만료되면 영상 로드 실패 → 스크럽 불가)
+      if (renderedUrl && targetEdits[renderedClipId]) {
+        targetEdits[renderedClipId].url = renderedUrl;
+      }
     }
     state.sessionEdits = {};
     state.overlayClips = (version.overlayClips || []).slice();
@@ -6126,6 +6132,34 @@
           });
       }
     }
+
+    // ── 저장된 n차 편집 모드 최초 진입 시 proxy URL 갱신 ──────────────────────────
+    // switchToVersion은 _applyVersionState를 호출하지만, 저장된 프로젝트 로드 시
+    // post.render가 직접 호출되어 _applyVersionState가 생략된다.
+    // 결과: 구 세션 proxy URL(nk_token 만료) → 영상 로드 실패 → 스크럽 불가.
+    // 첫 로드(projectChanged) 시 _applyVersionState를 선제 호출해 URL을 새로 갱신한다.
+    (function () {
+      var nextId = (project && project.id) ? String(project.id) : '';
+      if (!nextId || String(state.projectId || '') === nextId) return;
+      var prevId = state.projectId;
+      state.projectId = nextId;   // getActiveVersionId/getEditVersions가 project를 찾도록
+      try {
+        var activeVerId = getActiveVersionId();
+        if (activeVerId && activeVerId !== 'v0') {
+          var vers = getEditVersions();
+          var ver = vers.find(function (v) { return v.id === activeVerId; });
+          if (ver) {
+            _applyVersionState(ver);
+            // _applyVersionState가 NK.state.runtime.currentProject를 갱신하므로
+            // project 레퍼런스를 최신 상태(fresh URL 포함)로 갱신
+            var refreshed = hydrateProjectScenesFromPipeline(resolveProject());
+            if (refreshed) project = refreshed;
+          }
+        }
+      } finally {
+        state.projectId = prevId;   // projectChanged 감지를 위해 원복
+      }
+    })();
 
     var model = buildTimelineModel(project);
     if (String(state.historyProjectId || '') !== String(model.projectId || '')) {
