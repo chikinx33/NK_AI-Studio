@@ -840,8 +840,9 @@
           clipId: clipId,
           clipLabel: label,
           clipDuration: duration,
-          clipUrl: isVideoUrl(clip.url) ? String(clip.url || '').trim() : '',  // 원본 GCS URL — 서버가 인증으로 직접 다운로드
-          frames: frames   // CORS 허용 환경 폴백용 프레임
+          clipUrl: isVideoUrl(clip.url) ? String(clip.url || '').trim() : '',
+          sceneAction: String(clip.sceneAction || '').trim(),
+          frames: frames
         })
       });
       var data = await res.json().catch(function () { return {}; });
@@ -4032,7 +4033,8 @@
               end: shotCursor + shotDur,
               baseDuration: shotDur,
               url: shVisualUrl,
-              empty: shType === 'empty'
+              empty: shType === 'empty',
+              sceneAction: String(sh.action || scene.action || '').trim()
             });
             if (!firstVideoUrl && shType === 'video') firstVideoUrl = shVisualUrl;
             if (!firstImageUrl && shType === 'image') firstImageUrl = shVisualUrl;
@@ -4063,7 +4065,8 @@
             end: sceneEnd,
             baseDuration: Math.max(0.2, sceneDuration),
             url: visualUrl,
-            empty: visualType === 'empty'
+            empty: visualType === 'empty',
+            sceneAction: String(scene.action || '').trim()
           });
           if (!firstVideoUrl && visualType === 'video') firstVideoUrl = visualUrl;
           if (!firstImageUrl && visualType === 'image') firstImageUrl = visualUrl;

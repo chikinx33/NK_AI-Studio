@@ -61,19 +61,23 @@ async function callGemini(apiKey: string, body: object): Promise<string> {
 async function buildSfxPromptFromFrames(
   apiKey: string,
   frames: string[],
-  clipLabel: string
+  clipLabel: string,
+  sceneAction: string
 ): Promise<string> {
   try {
-    // Gemini multimodal: 이미지 파트들 + 텍스트 파트
     const imageParts = frames.map((f) => ({
       inline_data: { mime_type: "image/jpeg", data: f },
     }));
+    const actionHint = sceneAction
+      ? `Scene action/intent (PRIMARY): "${sceneAction}"\n`
+      : "";
     const textPart = {
       text:
-        `These ${frames.length} frames are sampled from a video clip.\n` +
-        `Clip label (for reference only): "${clipLabel}"\n\n` +
-        `Look at WHAT IS HAPPENING visually — people, objects, environment, motion — ` +
-        `and describe the SOUND EFFECTS that would realistically accompany this scene. ` +
+        `${actionHint}` +
+        `These ${frames.length} frames are sampled from a video clip (use for visual detail only).\n` +
+        `Clip label: "${clipLabel}"\n\n` +
+        `Based on the scene action above, describe the SOUND EFFECTS that match this scene. ` +
+        `Use the video frames to confirm or add specific sound details. ` +
         `English only, no speech/narration, under 22 words.`,
     };
     const body = {
@@ -89,12 +93,15 @@ async function buildSfxPromptFromFrames(
   }
 }
 
-// ── Gemini 텍스트 — 클립 라벨만으로 SFX 프롬프트 생성 (프레임 없을 때 폴백) ──
-async function buildSfxPrompt(apiKey: string, clipLabel: string): Promise<string> {
+// ── Gemini 텍스트 — sceneAction + 클립 라벨로 SFX 프롬프트 생성 (영상 없을 때 폴백) ──
+async function buildSfxPrompt(apiKey: string, clipLabel: string, sceneAction: string): Promise<string> {
+  const actionLine = sceneAction
+    ? `Scene action/intent (PRIMARY): "${sceneAction}"\n`
+    : "";
   const userMsg =
-    `Video clip label: "${clipLabel}"\n\n` +
-    `Based on this label, describe the SOUND EFFECTS for the scene in English only. ` +
-    `Do NOT narrate or speak the label text. Describe environmental sounds only.`;
+    `${actionLine}Video clip label: "${clipLabel}"\n\n` +
+    `Based on the scene action above, describe the SOUND EFFECTS for this scene in English only. ` +
+    `Do NOT narrate or speak any text. Describe physical sounds, ambience, and environment only.`;
   try {
     const body = {
       systemInstruction: { parts: [{ text: SFX_SYSTEM_INSTRUCTION }] },
@@ -215,6 +222,7 @@ async function buildSfxPromptFromVideoUrl(
   apiKey: string,
   videoUrl: string,
   clipLabel: string,
+  sceneAction: string,
   gcsCredentials?: { clientEmail: string; privateKeyPem: string }
 ): Promise<string> {
   try {
@@ -234,7 +242,10 @@ async function buildSfxPromptFromVideoUrl(
       return "";
     }
 
-    // 5. Gemini로 영상 전체 분석
+    // 5. Gemini로 영상 전체 분석 (sceneAction이 주, 영상이 보조)
+    const actionHint = sceneAction
+      ? `Scene action/intent (PRIMARY — this is what the scene is about): "${sceneAction}"\n`
+      : "";
     const analysisBody = {
       systemInstruction: { parts: [{ text: SFX_SYSTEM_INSTRUCTION }] },
       contents: [{
@@ -243,8 +254,10 @@ async function buildSfxPromptFromVideoUrl(
           { file_data: { mime_type: mimeType, file_uri: fileUri } },
           {
             text:
-              `Clip label (for reference only): "${clipLabel}"\n\n` +
-              `Watch this video. Describe the SOUND EFFECTS that match what you see — ` +
+              `${actionHint}` +
+              `Clip label: "${clipLabel}"\n\n` +
+              `Watch this video to confirm the visual details. ` +
+              `Then describe the SOUND EFFECTS that best match the scene action above — ` +
               `environment, actions, objects, movement. English only, under 22 words.`,
           },
         ],
@@ -389,6 +402,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const clipLabel = String(body.clipLabel || "").trim() || "video clip";
     const clipDuration = Math.min(22, Math.max(0.5, Number(body.clipDuration) || 5));
     const customPrompt = String(body.prompt || "").trim();
+    const sceneAction = String(body.sceneAction || "").trim();
     // 영상 파일 URL — 서버가 직접 다운로드해서 Gemini Files API로 분석 (CORS 우회)
     const clipUrl = String(body.clipUrl || "").trim();
     // 클라이언트 Canvas 프레임 (CORS 허용 환경 폴백용)
@@ -438,7 +452,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         }
 
         // ① 서버에서 영상 파일을 직접 다운로드 → Gemini Files API로 전체 영상 분석
-        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, resolvedClipUrl, clipLabel,
+        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, resolvedClipUrl, clipLabel, sceneAction,
           (clientEmail && privateKey) ? { clientEmail, privateKeyPem: privateKey } : undefined);
         if (sfxPrompt) {
           analysisMode = "video_server";
@@ -446,12 +460,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
       if (!sfxPrompt && frames.length > 0) {
         // ② 클라이언트 Canvas 프레임이 있으면 Vision 분석 (폴백)
-        sfxPrompt = await buildSfxPromptFromFrames(googleApiKey, frames, clipLabel);
+        sfxPrompt = await buildSfxPromptFromFrames(googleApiKey, frames, clipLabel, sceneAction);
         if (sfxPrompt !== SFX_FALLBACK) analysisMode = "vision";
       }
       if (!sfxPrompt || sfxPrompt === SFX_FALLBACK) {
-        // ③ 텍스트 라벨만으로 분석
-        sfxPrompt = await buildSfxPrompt(googleApiKey, clipLabel);
+        // ③ sceneAction + 라벨로 분석
+        sfxPrompt = await buildSfxPrompt(googleApiKey, clipLabel, sceneAction);
         analysisMode = "text";
       }
     }
