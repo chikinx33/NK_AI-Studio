@@ -4652,6 +4652,8 @@
   }
 
   function syncPreviewMedia(sec) {
+    // 오디오 트랙은 항상 최우선 동기화 — fast path / early return 이전에 실행
+    syncAudioTrackPreview(sec);
     var host = getPreviewVideoHost();
     var image = document.getElementById('postprod-preview-image');
     var empty = document.getElementById('postprod-preview-empty');
@@ -4682,7 +4684,6 @@
       state.previewClipId = '';
       state.previewClipUrl = '';
       updatePreviewLoadingFromActiveVideo();
-      syncAudioTrackPreview(sec);
       return;
     }
     if (clip.empty || !clip.url) {
@@ -4696,7 +4697,6 @@
       state.previewClipId = '';
       state.previewClipUrl = '';
       updatePreviewLoadingFromActiveVideo();
-      syncAudioTrackPreview(sec);
       return;
     }
 
@@ -4712,7 +4712,6 @@
       state.previewClipId = '';
       state.previewClipUrl = '';
       updatePreviewLoadingFromActiveVideo();
-      syncAudioTrackPreview(sec);
       return;
     }
 
