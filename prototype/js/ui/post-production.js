@@ -6279,52 +6279,8 @@
       };
     });
 
-    root.querySelectorAll('.postprod-track-lane').forEach(function (laneEl) {
-      var lanePid = -1;
-      var laneMoveRaf = 0;
-      var laneMoveX = 0;
-      var laneMoveShift = false;
-      var laneMoveTarget = null;
-      var laneSeek = function (evt) {
-        if (state.drag) return;
-        if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
-        seekByTimelinePointer(evt, laneEl);
-      };
-      laneEl.onpointerdown = function (evt) {
-        if (evt.button !== 0) return;
-        if (evt.target && evt.target.closest && evt.target.closest('.postprod-clip[data-clip-id]')) return;
-        if (state.drag) return;
-        lanePid = evt.pointerId;
-        state.scrubWasPlaying = !!state.isPlaying;
-        if (state.isPlaying) stopPlayback();
-        try { laneEl.setPointerCapture(evt.pointerId); } catch (_) {}
-        seekByTimelinePointer(evt, laneEl);
-      };
-      laneEl.onpointermove = function (evt) {
-        if (evt.pointerId !== lanePid) return;
-        if (state.drag) return;
-        laneMoveX = evt.clientX;
-        laneMoveShift = evt.shiftKey;
-        laneMoveTarget = evt.target;
-        if (!state.isScrubbing) state.isScrubbing = true;
-        if (laneMoveRaf) return;
-        laneMoveRaf = requestAnimationFrame(function () {
-          laneMoveRaf = 0;
-          if (lanePid !== -1) laneSeek({ clientX: laneMoveX, shiftKey: laneMoveShift, target: laneMoveTarget });
-        });
-      };
-      laneEl.onpointerup = laneEl.onpointercancel = function (evt) {
-        if (evt.pointerId !== lanePid) return;
-        if (laneMoveRaf) { cancelAnimationFrame(laneMoveRaf); laneMoveRaf = 0; }
-        lanePid = -1;
-        state.isScrubbing = false;
-        var wasPlaying = state.scrubWasPlaying;
-        state.scrubWasPlaying = false;
-        if (wasPlaying) startPlayback();
-        else syncPreviewMedia(state.currentTime);
-      };
-      laneEl.onclick = laneSeek; // fallback for simple tap
-    });
+    // 재생바(scrub) 조작은 ruler(숫자 표시 영역)에서만 가능.
+    // track lane 클릭은 이미지·오디오·배경음악 버튼 등의 UI와 충돌하므로 scrub 핸들러를 달지 않음.
 
     root.onclick = function (evt) {
       if (!evt.target) return;
