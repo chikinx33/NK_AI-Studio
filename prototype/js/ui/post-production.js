@@ -1637,33 +1637,51 @@
       }
       return;
     }
-    // ── seek-first, wake-second 전략 ───────────────────────────────────────
-    // [문제] play()를 먼저 호출하면:
-    //   - 버퍼에 없는 위치(긴 렌더링 영상)는 Range 요청에 300ms+ 소요
-    //   - 그 동안 play()로 인해 position 0부터 재생 → "1~2번째 프레임 반복" 현상
-    // [해결] seek를 먼저 발행 → 버퍼 여부에 따라 wakeVideoDecoder 시점을 결정
-    //   - 버퍼 안: currentTime= 발행 → 즉시(1~2ms) seeked → THEN wakeDecoder
-    //   - 버퍼 밖: currentTime= → Range 요청 → seeked(수백ms) → THEN wakeDecoder
-    // 어느 경우든 seek 완료 시점(=seeked)에 play()가 올바른 위치에서 시작된다.
+    // ── scrub seek 전략 ────────────────────────────────────────────────────
+    // [문제 A] play() 먼저 호출 → 버퍼 밖 seek 대기(300ms) 동안 0초부터 재생 → 1·2프레임 반복
+    // [문제 B] seeked 후 play() → 비디오가 드래그 속도보다 빨리 앞으로 달림 →
+    //          다음 seek 시 backward seek → 이전 프레임 잠깐 보임 → "2,3프레임 보인 뒤 4프레임"
+    //
+    // [해결] seek 전 비디오 pause → seek → seeked 후 play()+즉시 pause() (디코더 wake만)
+    //   seek 전 pause: play()로 앞서 달린 비디오를 제자리로 돌림
+    //   즉시 pause:    play()가 Promise resolve 전에 pause되어 프레임 전진 없음
+    //                 Chrome은 play() 호출 자체로 디코더를 깨우므로 프레임 갱신됨
 
-    // 이전 seeked-wake 핸들러 제거 (새 seek 발행 전에 정리)
+    // 이전 seeked-wake 핸들러 제거
     if (video.__scrubSeekedWake) {
       try { video.removeEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
       video.__scrubSeekedWake = null;
     }
-
-    // seek 발행 먼저
+    // wakeVideoDecoder 의 auto-pause 타이머 취소 (혼재 방지)
+    if (video.__wakeTimerId) {
+      try { clearTimeout(video.__wakeTimerId); } catch (_) {}
+      video.__wakeTimerId = 0;
+    }
     try { video.muted = true; } catch (_) {}
+    // seek 전에 pause — play()로 앞서 달리던 비디오를 멈춤
+    if (!state.isPlaying && !video.paused) {
+      try { video.pause(); } catch (_) {}
+    }
+
+    // seek 발행
     try { video.currentTime = target; } catch (_) {}
 
-    // seeked 이후에 wakeVideoDecoder (디코더 활성화 + auto-pause 스케줄)
-    var wakeTarget = target;
+    // seeked 후: play()+즉시 pause() 로 디코더만 wake, 프레임 전진 없음
     var onSeekedWake = function () {
       try { video.removeEventListener('seeked', onSeekedWake); } catch (_) {}
       if (video.__scrubSeekedWake === onSeekedWake) video.__scrubSeekedWake = null;
-      if (state.isPlaying) return; // 재생 중이면 간섭하지 않음
-      // seek 완료 후 최신 타겟으로 wake (사용자가 드래그 중이면 __scrubTarget이 갱신됨)
-      wakeVideoDecoder(video, video.__scrubTarget !== undefined ? video.__scrubTarget : wakeTarget);
+      if (state.isPlaying) return;
+      // 디코더 wake: play() 후 즉시 pause() → 프레임 갱신만, 재생 없음
+      if (video.paused) {
+        try { video.play().catch(function () {}); } catch (_) {}
+        try { video.pause(); } catch (_) {}
+      }
+      // 드래그 중 target이 바뀌었으면 최신 위치로 다시 seek
+      var latest = video.__scrubTarget;
+      if (typeof latest === 'number' && isFinite(latest) &&
+          Math.abs((video.currentTime || 0) - latest) > 0.016) {
+        scrubSeekVideo(video, latest);
+      }
     };
     video.__scrubSeekedWake = onSeekedWake;
     try { video.addEventListener('seeked', onSeekedWake); } catch (_) {}
