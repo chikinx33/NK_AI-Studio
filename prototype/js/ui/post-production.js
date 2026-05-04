@@ -840,7 +840,7 @@
           clipId: clipId,
           clipLabel: label,
           clipDuration: duration,
-          clipUrl: (isVideoUrl(clip.url) && playableUrl) ? playableUrl : '',  // 서버가 직접 영상 다운로드·분석
+          clipUrl: isVideoUrl(clip.url) ? String(clip.url || '').trim() : '',  // 원본 GCS URL — 서버가 인증으로 직접 다운로드
           frames: frames   // CORS 허용 환경 폴백용 프레임
         })
       });

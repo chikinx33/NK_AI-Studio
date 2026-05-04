@@ -175,22 +175,52 @@ async function deleteGeminiFile(apiKey: string, fileUri: string): Promise<void> 
   try { await fetch(`${fileUri}?key=${encodeURIComponent(apiKey)}`, { method: "DELETE" }); } catch {}
 }
 
+async function fetchVideoBytes(
+  videoUrl: string,
+  gcsCredentials?: { clientEmail: string; privateKeyPem: string }
+): Promise<ArrayBuffer | null> {
+  // gs://bucket/object — GCS OAuth로 직접 다운로드 (서명 URL 없이도 접근 가능)
+  if (videoUrl.startsWith("gs://")) {
+    if (!gcsCredentials) return null;
+    const parsed = parseGcsUri(videoUrl);
+    if (!parsed) return null;
+    try {
+      const token = await getGoogleAccessToken({
+        clientEmail: gcsCredentials.clientEmail,
+        privateKeyPem: gcsCredentials.privateKeyPem,
+        scope: "https://www.googleapis.com/auth/cloud-platform",
+      });
+      const apiUrl =
+        `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(parsed.bucket)}` +
+        `/o/${encodeURIComponent(parsed.object)}?alt=media`;
+      const res = await fetch(apiUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return null;
+      const bytes = await res.arrayBuffer();
+      return bytes.byteLength <= MAX_VIDEO_BYTES ? bytes : null;
+    } catch { return null; }
+  }
+  // 일반 HTTPS URL (서명 URL, 공개 URL 등)
+  try {
+    const head = await fetch(videoUrl, { method: "HEAD" }).catch(() => null);
+    const size = Number(head?.headers.get("content-length") || 0);
+    if (size > MAX_VIDEO_BYTES) return null;
+    const res = await fetch(videoUrl);
+    if (!res.ok) return null;
+    const bytes = await res.arrayBuffer();
+    return bytes.byteLength <= MAX_VIDEO_BYTES ? bytes : null;
+  } catch { return null; }
+}
+
 async function buildSfxPromptFromVideoUrl(
   apiKey: string,
   videoUrl: string,
-  clipLabel: string
+  clipLabel: string,
+  gcsCredentials?: { clientEmail: string; privateKeyPem: string }
 ): Promise<string> {
   try {
-    // 1. 파일 크기 선확인 (HEAD) — 너무 크면 스킵
-    const head = await fetch(videoUrl, { method: "HEAD" }).catch(() => null);
-    const size = Number(head?.headers.get("content-length") || 0);
-    if (size > MAX_VIDEO_BYTES) return "";  // 폴백 신호 (빈 문자열)
-
-    // 2. 영상 다운로드
-    const videoRes = await fetch(videoUrl);
-    if (!videoRes.ok) return "";
-    const videoBytes = await videoRes.arrayBuffer();
-    if (videoBytes.byteLength > MAX_VIDEO_BYTES) return "";
+    // 1. 영상 다운로드 (gs:// → GCS 인증, https:// → 직접 fetch)
+    const videoBytes = await fetchVideoBytes(videoUrl, gcsCredentials);
+    if (!videoBytes) return "";
 
     // 3. Gemini Files API 업로드
     const mimeType = detectVideoMimeType(videoUrl);
@@ -396,7 +426,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!sfxPrompt && googleApiKey) {
       if (clipUrl) {
         // ① 서버에서 영상 파일을 직접 다운로드 → Gemini Files API로 전체 영상 분석
-        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, clipUrl, clipLabel);
+        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, clipUrl, clipLabel,
+          (clientEmail && privateKey) ? { clientEmail, privateKeyPem: privateKey } : undefined);
         if (sfxPrompt) {
           analysisMode = "video_server";
         }
