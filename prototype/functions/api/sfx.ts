@@ -37,7 +37,8 @@ const SFX_FALLBACK = "cinematic ambient sound effect, atmospheric background noi
 const SFX_SYSTEM_INSTRUCTION =
   "You are a professional sound designer. Analyze the visual content and write a concise English sound effects description for an audio generation AI. " +
   "Rules: (1) English only, (2) describe physical SOUNDS and ambience only — never speech, dialogue, or narration, " +
-  "(3) under 22 words, (4) use vivid sound words: whoosh, rumble, crackle, hum, distant, reverb, footsteps, rain, wind, etc. " +
+  "(3) under 22 words, (4) ALWAYS include density/tempo qualifiers: single, two, sparse, brief, slow, rapid, continuous, distant, etc. " +
+  "(5) Match the exact count and pace of events you see — slow motion = fewer events, faster motion = more events. " +
   "Output ONLY the English sound description. No quotes, no explanation.";
 
 function isEnglish(text: string): boolean {
@@ -73,11 +74,12 @@ async function buildSfxPromptFromFrames(
       : "";
     const textPart = {
       text:
-        `These ${frames.length} frames are sampled from a video clip — BASE your answer on what you actually see.\n` +
+        `These ${frames.length} frames are from a video — BASE your answer on what you see.\n` +
         `${actionHint}` +
         `Clip label: "${clipLabel}"\n\n` +
-        `Watch the frames carefully. Describe the SOUND EFFECTS that match the actual visual — ` +
-        `match the REAL pace, count, and intensity shown in the video, not the description. ` +
+        `Count the visible sound events (footsteps, impacts, etc.) and include the count. ` +
+        `Note motion speed: slow motion = add "slow" and use lower count. ` +
+        `Example: "two slow soft footsteps, quiet breeze" not just "footsteps". ` +
         `English only, no speech/narration, under 22 words.`,
     };
     const body = {
@@ -255,12 +257,13 @@ async function buildSfxPromptFromVideoUrl(
           { file_data: { mime_type: mimeType, file_uri: fileUri } },
           {
             text:
-              `Watch this video carefully — BASE your answer on what actually happens in the video.\n` +
+              `Watch this video carefully — BASE your answer strictly on what you see.\n` +
               `${actionHint}` +
               `Clip label: "${clipLabel}"\n\n` +
-              `Describe the SOUND EFFECTS that match the REAL visual content — ` +
-              `match the actual pace, count, and intensity you see in the video. ` +
-              `Do NOT extrapolate beyond what is shown. English only, under 22 words.`,
+              `Count the actual sound events in the video (footsteps, impacts, etc.) and include that count. ` +
+              `Note the motion speed: slow motion = add "slow" and reduce count. ` +
+              `Example: "two slow soft footsteps, quiet ambient breeze" not just "footsteps". ` +
+              `English only, under 22 words.`,
           },
         ],
       }],
@@ -287,7 +290,7 @@ async function generateElevenLabsSfx(
   const body: any = { text: prompt.slice(0, 450) };
   const clampedDur = Math.min(22, Math.max(0.5, durationSec));
   body.duration_seconds = Math.round(clampedDur * 10) / 10;
-  body.prompt_influence = 0.3;
+  body.prompt_influence = 0.6;
 
   const res = await fetch("https://api.elevenlabs.io/v1/sound-generation", {
     method: "POST",
