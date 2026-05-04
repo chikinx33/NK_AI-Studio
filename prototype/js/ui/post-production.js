@@ -3457,16 +3457,17 @@
   function getTimelineContentDuration(model) {
     var target = model || state.model;
     if (!target) return 1;
-    var visualTrack = getTimelineTrack(target, 'visuals');
-    var visualEnd = getTrackMaxEnd(visualTrack);
-    if (visualEnd > 0) return Math.max(1, Math.ceil(visualEnd));
-
+    // 모든 트랙(visuals, overlays/images, audio, music, subtitles)의 max end를 기준으로 계산.
+    // 이전에는 visuals 트랙이 있으면 거기서 early-return했기 때문에 overlays(이미지) 트랙의
+    // 끝이 무시되어, 이미지가 영상 뒤에 추가돼도 contentDuration이 늘어나지 않는 버그가 있었다.
     var tracks = target && Array.isArray(target.tracks) ? target.tracks : [];
-    var fallbackEnd = 0;
+    var maxEnd = 0;
     tracks.forEach(function (track) {
-      fallbackEnd = Math.max(fallbackEnd, getTrackMaxEnd(track));
+      // subtitles 트랙은 컨텐츠 길이 판단에서 제외 (자막은 영상 범위를 넘지 않음)
+      if (track && track.key === 'subtitles') return;
+      maxEnd = Math.max(maxEnd, getTrackMaxEnd(track));
     });
-    return Math.max(1, Math.ceil(fallbackEnd || toNumber(target.totalDuration, 1) || 1));
+    return Math.max(1, Math.ceil(maxEnd || toNumber(target.totalDuration, 1) || 1));
   }
 
   function getTimelinePlaybackDuration(model) {
