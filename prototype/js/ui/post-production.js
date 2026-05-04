@@ -1490,6 +1490,10 @@
         try { e.video.removeEventListener('seeked', e.video.__scrubSeekedWake); } catch (_) {}
         e.video.__scrubSeekedWake = null;
       }
+      if (e.video.__scrubFallbackTimer) {
+        try { clearTimeout(e.video.__scrubFallbackTimer); } catch (_) {}
+        e.video.__scrubFallbackTimer = 0;
+      }
       if (e.video.parentNode) {
         try { e.video.parentNode.removeChild(e.video); } catch (_) { }
       }
@@ -1686,7 +1690,7 @@
       return;
     }
 
-    // 이전 seeked 핸들러 정리
+    // 이전 핸들러·타이머 모두 정리
     if (video.__scrubSeekedWake) {
       try { video.removeEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
       video.__scrubSeekedWake = null;
@@ -1695,54 +1699,84 @@
       try { clearTimeout(video.__wakeTimerId); } catch (_) {}
       video.__wakeTimerId = 0;
     }
+    if (video.__scrubFallbackTimer) {
+      try { clearTimeout(video.__scrubFallbackTimer); } catch (_) {}
+      video.__scrubFallbackTimer = 0;
+    }
 
     // seek 전 pause — 이전 play()로 앞서 달리던 비디오 정지
     if (!state.isPlaying && !video.paused) {
       try { video.pause(); } catch (_) {}
     }
 
-    try { video.currentTime = target; } catch (_) {}
-
-    var onSeeked = function () {
-      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
-      if (video.__scrubSeekedWake === onSeeked) video.__scrubSeekedWake = null;
+    // 프레임을 실제 화면에 표시하는 핵심 동작 — seeked 이후 또는 즉시 호출됨
+    function displayFrame() {
       if (state.isPlaying) return;
-      // stale seek 가드: 더 최신 scrub이 예약된 경우 이 onSeeked는 무시
       if (video.__scrubTarget !== thisTarget) return;
-
-      // ① 주 경로: play().then(pause()) — 스페이스바×2 패턴
-      //    Chrome은 play() 시 디코더를 깨우고, pause() 즉시 현재 프레임을 화면에 표시
-      //    cloud storage 크로스오리진 영상에도 항상 동작 (canvas CORS 제한 없음)
+      // 스페이스바×2 패턴: play().then(pause())
       try {
         var p = video.play();
         if (p && typeof p.then === 'function') {
           p.then(function () {
-            if (state.isPlaying) return;              // 사용자가 재생 시작
-            if (video.__scrubTarget !== thisTarget) return;  // 더 새 scrub이 진행 중
+            if (state.isPlaying) return;
+            if (video.__scrubTarget !== thisTarget) return;
             try { video.pause(); } catch (_) {}
-            // ② 보너스: canvas에도 캡처 (CORS taint 시 조용히 실패해도 무방)
             drawVideoToScrubCanvas(video);
           }).catch(function () {
-            // play() 거부(사용자 제스처 정책 등) → canvas만 시도
             drawVideoToScrubCanvas(video);
           });
         } else {
-          // play()가 Promise 반환 안 하는 구형 브라우저 → canvas 시도
           drawVideoToScrubCanvas(video);
         }
       } catch (_) {
         drawVideoToScrubCanvas(video);
       }
-
-      // 드래그 중 target이 변경됐으면 최신 위치로 재seek
       var latest = video.__scrubTarget;
       if (typeof latest === 'number' && isFinite(latest) &&
           Math.abs((video.currentTime || 0) - latest) > 0.05) {
         scrubSeekVideo(video, latest);
       }
+    }
+
+    var onSeeked = function () {
+      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
+      if (video.__scrubSeekedWake === onSeeked) video.__scrubSeekedWake = null;
+      if (video.__scrubFallbackTimer) {
+        try { clearTimeout(video.__scrubFallbackTimer); } catch (_) {}
+        video.__scrubFallbackTimer = 0;
+      }
+      displayFrame();
     };
+
+    // ── 핵심 수정 (v2.836) ────────────────────────────────────────────────
+    // 페이지 reload 후 비디오가 캐시되어 있으면 seek가 매우 빠르게 완료되어
+    // addEventListener('seeked') 등록 BEFORE에 seeked가 fire되는 race condition 발생.
+    // → 리스너를 currentTime 할당 BEFORE에 등록.
     video.__scrubSeekedWake = onSeeked;
     try { video.addEventListener('seeked', onSeeked); } catch (_) {}
+
+    // currentTime이 이미 target과 거의 동일하면 currentTime= 할당이 no-op이 되어
+    // seeked가 발생하지 않음 → displayFrame을 즉시 호출해 프레임 표시.
+    var alreadyAtTarget = Math.abs((video.currentTime || 0) - target) < 0.01;
+
+    try { video.currentTime = target; } catch (_) {}
+
+    if (alreadyAtTarget) {
+      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
+      if (video.__scrubSeekedWake === onSeeked) video.__scrubSeekedWake = null;
+      displayFrame();
+      return;
+    }
+
+    // Fallback: seeked가 350ms 안에 발생하지 않으면 강제로 displayFrame 호출.
+    // (페이지 reload 후 일부 케이스에서 seeked가 누락/매우 지연되는 회귀 차단)
+    video.__scrubFallbackTimer = setTimeout(function () {
+      video.__scrubFallbackTimer = 0;
+      if (video.__scrubSeekedWake !== onSeeked) return; // 이미 다른 scrub이 진행 중
+      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
+      video.__scrubSeekedWake = null;
+      displayFrame();
+    }, 350);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
