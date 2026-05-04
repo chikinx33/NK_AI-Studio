@@ -840,7 +840,8 @@
           clipId: clipId,
           clipLabel: label,
           clipDuration: duration,
-          frames: frames   // base64 JPEG 배열 — 서버에서 Gemini Vision으로 분석
+          clipUrl: (isVideoUrl(clip.url) && playableUrl) ? playableUrl : '',  // 서버가 직접 영상 다운로드·분석
+          frames: frames   // CORS 허용 환경 폴백용 프레임
         })
       });
       var data = await res.json().catch(function () { return {}; });
@@ -870,10 +871,14 @@
       setDirty(true);
       post.render();
       if (NK.ui && NK.ui.common && NK.ui.common.toast) {
-        var modeTag = data.analysisMode === 'vision'
-          ? (lang === 'en' ? '🎬 video analyzed' : '🎬 영상 분석')
-          : (lang === 'en' ? '📝 label used' : '📝 라벨 기반');
-        NK.ui.common.toast(successLabel + ' [' + modeTag + '] ' + (data.sfxPrompt ? '· ' + data.sfxPrompt.slice(0, 40) : ''));
+        var modeTag = data.analysisMode === 'video_server'
+          ? (lang === 'en' ? '🎬 full video' : '🎬 영상 전체 분석')
+          : data.analysisMode === 'vision'
+          ? (lang === 'en' ? '🖼 frames' : '🖼 프레임 분석')
+          : data.analysisMode === 'text'
+          ? (lang === 'en' ? '📝 label' : '📝 라벨 기반')
+          : (lang === 'en' ? '⚠ fallback' : '⚠ 기본값');
+        NK.ui.common.toast(successLabel + ' [' + modeTag + '] ' + (data.sfxPrompt ? '· ' + data.sfxPrompt.slice(0, 50) : ''));
       }
     } catch (err) {
       var msg = String((err && err.message) || err || failLabel);

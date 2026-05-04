@@ -109,6 +109,130 @@ async function buildSfxPrompt(apiKey: string, clipLabel: string): Promise<string
   }
 }
 
+// ── Gemini Files API — 서버에서 영상 파일을 직접 다운로드·분석 ───────────────
+// 클라이언트 Canvas CORS 문제를 완전히 우회. 서버→GCS URL fetch는 CORS 무관.
+// 흐름: 영상 다운로드 → Gemini Files API 업로드 → 처리 대기 → 영상 분석 → 파일 삭제
+
+const MAX_VIDEO_BYTES = 30 * 1024 * 1024; // 30 MB (일반적인 웹 클립은 충분)
+
+function detectVideoMimeType(url: string): string {
+  const path = url.split("?")[0].toLowerCase();
+  if (path.endsWith(".webm")) return "video/webm";
+  if (path.endsWith(".mov") || path.endsWith(".qt")) return "video/quicktime";
+  if (path.endsWith(".avi")) return "video/x-msvideo";
+  if (path.endsWith(".wmv")) return "video/x-ms-wmv";
+  if (path.endsWith(".mkv")) return "video/x-matroska";
+  return "video/mp4";
+}
+
+async function uploadToGeminiFiles(
+  apiKey: string,
+  bytes: ArrayBuffer,
+  mimeType: string
+): Promise<string | null> {
+  const boundary = "gem_sfx_" + Date.now();
+  const meta = JSON.stringify({ file: { display_name: "sfx_video_" + Date.now() } });
+  const enc = new TextEncoder();
+  const head = enc.encode(
+    `--${boundary}\r\nContent-Type: application/json; charset=utf-8\r\n\r\n${meta}\r\n` +
+    `--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`
+  );
+  const tail = enc.encode(`\r\n--${boundary}--`);
+  const combined = new Uint8Array(head.byteLength + bytes.byteLength + tail.byteLength);
+  combined.set(head, 0);
+  combined.set(new Uint8Array(bytes), head.byteLength);
+  combined.set(tail, head.byteLength + bytes.byteLength);
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=multipart&key=${encodeURIComponent(apiKey)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+      body: combined,
+    }
+  );
+  if (!res.ok) return null;
+  const json: any = await res.json();
+  return String(json?.file?.uri || "") || null;
+}
+
+async function waitForGeminiFile(apiKey: string, fileUri: string, maxWaitMs = 20000): Promise<boolean> {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    const res = await fetch(`${fileUri}?key=${encodeURIComponent(apiKey)}`);
+    if (!res.ok) return false;
+    const json: any = await res.json();
+    const state = String(json?.state || "");
+    if (state === "ACTIVE") return true;
+    if (state === "FAILED") return false;
+    // PROCESSING — 2초 대기 후 재시도
+    await new Promise<void>((r) => setTimeout(r, 2000));
+  }
+  return false;
+}
+
+async function deleteGeminiFile(apiKey: string, fileUri: string): Promise<void> {
+  try { await fetch(`${fileUri}?key=${encodeURIComponent(apiKey)}`, { method: "DELETE" }); } catch {}
+}
+
+async function buildSfxPromptFromVideoUrl(
+  apiKey: string,
+  videoUrl: string,
+  clipLabel: string
+): Promise<string> {
+  try {
+    // 1. 파일 크기 선확인 (HEAD) — 너무 크면 스킵
+    const head = await fetch(videoUrl, { method: "HEAD" }).catch(() => null);
+    const size = Number(head?.headers.get("content-length") || 0);
+    if (size > MAX_VIDEO_BYTES) return "";  // 폴백 신호 (빈 문자열)
+
+    // 2. 영상 다운로드
+    const videoRes = await fetch(videoUrl);
+    if (!videoRes.ok) return "";
+    const videoBytes = await videoRes.arrayBuffer();
+    if (videoBytes.byteLength > MAX_VIDEO_BYTES) return "";
+
+    // 3. Gemini Files API 업로드
+    const mimeType = detectVideoMimeType(videoUrl);
+    const fileUri = await uploadToGeminiFiles(apiKey, videoBytes, mimeType);
+    if (!fileUri) return "";
+
+    // 4. 파일 처리 대기 (PROCESSING → ACTIVE)
+    const ready = await waitForGeminiFile(apiKey, fileUri);
+    if (!ready) {
+      deleteGeminiFile(apiKey, fileUri).catch(() => {});
+      return "";
+    }
+
+    // 5. Gemini로 영상 전체 분석
+    const analysisBody = {
+      systemInstruction: { parts: [{ text: SFX_SYSTEM_INSTRUCTION }] },
+      contents: [{
+        role: "user",
+        parts: [
+          { file_data: { mime_type: mimeType, file_uri: fileUri } },
+          {
+            text:
+              `Clip label (for reference only): "${clipLabel}"\n\n` +
+              `Watch this video. Describe the SOUND EFFECTS that match what you see — ` +
+              `environment, actions, objects, movement. English only, under 22 words.`,
+          },
+        ],
+      }],
+      generationConfig: { temperature: 0.6, maxOutputTokens: 80 },
+    };
+    const text = await callGemini(apiKey, analysisBody);
+
+    // 6. 업로드한 파일 삭제 (비동기, 오류 무시)
+    deleteGeminiFile(apiKey, fileUri).catch(() => {});
+
+    if (isEnglish(text)) return text;
+    return "";
+  } catch {
+    return "";  // 오류 시 상위에서 폴백 처리
+  }
+}
+
 // ── ElevenLabs SFX 생성 ────────────────────────────────────────────────────
 async function generateElevenLabsSfx(
   apiKey: string,
@@ -235,11 +359,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const clipLabel = String(body.clipLabel || "").trim() || "video clip";
     const clipDuration = Math.min(22, Math.max(0.5, Number(body.clipDuration) || 5));
     const customPrompt = String(body.prompt || "").trim();
-    // 클라이언트에서 추출한 영상 프레임 (base64 JPEG 배열) — 없으면 텍스트 폴백
+    // 영상 파일 URL — 서버가 직접 다운로드해서 Gemini Files API로 분석 (CORS 우회)
+    const clipUrl = String(body.clipUrl || "").trim();
+    // 클라이언트 Canvas 프레임 (CORS 허용 환경 폴백용)
     const rawFrames: any[] = Array.isArray(body.frames) ? body.frames : [];
     const frames: string[] = rawFrames.filter(
-      (f) => typeof f === "string" && f.length > 200  // 너무 짧은 건 유효하지 않은 프레임
-    ).slice(0, 10);  // 최대 10장
+      (f) => typeof f === "string" && f.length > 200
+    ).slice(0, 10);
 
     if (!projectId) return send({ error: "projectId required" }, 400, origin);
 
@@ -259,19 +385,36 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (!outParsed) return send({ error: "Invalid AUDIO_OUTPUT_GCS_URI" }, 500, origin);
 
     // Step 1: SFX 프롬프트 생성
-    // 우선순위: 사용자 직접 입력 > 영상 프레임 Vision 분석 > 텍스트 라벨 분석 > 기본값
-    // ElevenLabs는 영어만 허용 — 한국어를 직접 전달하면 TTS 음성이 생성됨
+    // 우선순위: 사용자 직접 입력
+    //           > ① 서버 영상 다운로드 + Gemini Files API 분석 (가장 정확, CORS 무관)
+    //           > ② 클라이언트 프레임 + Gemini Vision (CORS 허용 환경 폴백)
+    //           > ③ 텍스트 라벨 분석
+    //           > ④ 영어 기본값
     let sfxPrompt = customPrompt;
-    if (!sfxPrompt) {
-      if (googleApiKey && frames.length > 0) {
-        // ✅ 실제 영상 프레임을 Gemini Vision으로 분석
-        sfxPrompt = await buildSfxPromptFromFrames(googleApiKey, frames, clipLabel);
-      } else if (googleApiKey) {
-        // 프레임 없음 (이미지 클립 등) → 텍스트 라벨만으로 분석
-        sfxPrompt = await buildSfxPrompt(googleApiKey, clipLabel);
-      } else {
-        sfxPrompt = SFX_FALLBACK;
+    let analysisMode = "text";
+
+    if (!sfxPrompt && googleApiKey) {
+      if (clipUrl) {
+        // ① 서버에서 영상 파일을 직접 다운로드 → Gemini Files API로 전체 영상 분석
+        sfxPrompt = await buildSfxPromptFromVideoUrl(googleApiKey, clipUrl, clipLabel);
+        if (sfxPrompt) {
+          analysisMode = "video_server";
+        }
       }
+      if (!sfxPrompt && frames.length > 0) {
+        // ② 클라이언트 Canvas 프레임이 있으면 Vision 분석 (폴백)
+        sfxPrompt = await buildSfxPromptFromFrames(googleApiKey, frames, clipLabel);
+        if (sfxPrompt !== SFX_FALLBACK) analysisMode = "vision";
+      }
+      if (!sfxPrompt || sfxPrompt === SFX_FALLBACK) {
+        // ③ 텍스트 라벨만으로 분석
+        sfxPrompt = await buildSfxPrompt(googleApiKey, clipLabel);
+        analysisMode = "text";
+      }
+    }
+    if (!sfxPrompt) {
+      sfxPrompt = SFX_FALLBACK;
+      analysisMode = "fallback";
     }
 
     // Step 2: ElevenLabs SFX 생성
@@ -309,7 +452,6 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       signedUrl = await signGcsUrl({ bucket: outParsed.bucket, object: objName, clientEmail, privateKeyPem: privateKey, expiresInSec: 3600 });
     } catch (_) {}
 
-    const analysisMode = frames.length > 0 ? "vision" : "text";
     if (signedUrl) {
       return send({ sfxUrl: signedUrl, objectName: objName, sfxPrompt, analysisMode, framesUsed: frames.length }, 200, origin);
     }
