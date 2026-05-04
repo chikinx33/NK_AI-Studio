@@ -891,6 +891,75 @@
     }
   }
 
+  // 배경음악 AI 생성 — M1 트랙에 삽입
+  async function generateMusicForProject() {
+    var lang = currentLang();
+    var project = getProjectByStateId();
+    var payload = (project && project.payload) || {};
+    var projectId = String(state.projectId || '').trim();
+    if (!projectId) {
+      showPostprodToast(lang === 'en' ? 'Project ID not found' : '프로젝트 ID를 확인할 수 없습니다.');
+      return;
+    }
+
+    var durationSec = Math.min(22, Math.max(3, Math.round((state.model && state.model.totalDuration) || 15)));
+
+    // 버튼 로딩 상태
+    var genBtns = Array.from(document.querySelectorAll('[data-action="generate-music"]'));
+    var origTexts = genBtns.map(function (b) { return b.textContent; });
+    genBtns.forEach(function (b) {
+      b.textContent = lang === 'en' ? '…' : '…';
+      b.disabled = true;
+    });
+    showPostprodToast(lang === 'en' ? 'Generating music…' : '음악 생성 중…', 30000);
+
+    try {
+      var base = getPostprodApiBase();
+      var res = await fetch(base + '/api/music', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, buildPostprodAuthHeaders()),
+        body: JSON.stringify({
+          projectId: projectId,
+          topic:     String(payload.topic    || '').trim(),
+          story:     String(payload.story    || '').trim(),
+          genre:     String(Array.isArray(payload.purposeCategory) ? (payload.purposeCategory[0] || '') : (payload.purposeCategory || '')).trim(),
+          subgenre:  String(Array.isArray(payload.purposeTags) ? (payload.purposeTags[0] || '') : (payload.purposeTags || '')).trim(),
+          styles:    Array.isArray(payload.styles) ? payload.styles : [],
+          tones:     Array.isArray(payload.tones)  ? payload.tones  : [],
+          durationSec: durationSec
+        })
+      });
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || !data.musicUrl) throw new Error(data.error || 'music_api_error');
+
+      // M1 트랙 클립으로 저장 (project.payload.musicUrl 업데이트 → buildTimelineModel이 반영)
+      var proj2 = getProjectByStateId();
+      if (proj2) {
+        if (!proj2.payload) proj2.payload = {};
+        proj2.payload.musicUrl = data.musicUrl;
+        proj2.musicUrl = data.musicUrl;
+      }
+      setDirty(true);
+      post.render();
+
+      var truncNote = (state.model && state.model.totalDuration > 22)
+        ? (lang === 'en' ? ' · audio capped at 22s' : ' · 오디오 최대 22초') : '';
+      showPostprodToast(
+        (lang === 'en' ? 'Music added to M1 track' : '음악이 M1 트랙에 추가됐습니다') + truncNote +
+        '\n' + (data.musicPrompt ? data.musicPrompt.slice(0, 80) : ''),
+        6000
+      );
+    } catch (err) {
+      showPostprodToast((lang === 'en' ? 'Music generation failed: ' : '음악 생성 실패: ') + String((err && err.message) || err).slice(0, 120), 5000);
+    } finally {
+      var genBtns2 = Array.from(document.querySelectorAll('[data-action="generate-music"]'));
+      genBtns2.forEach(function (b, i) {
+        b.textContent = origTexts[i] || (lang === 'en' ? '✦ Generate Music' : '✦ 음악 생성');
+        b.disabled = false;
+      });
+    }
+  }
+
   function showClipContextMenu(clipId, x, y) {
     var clip = findClip(clipId);
     if (!clip) return;
@@ -4382,12 +4451,22 @@
       }).join('');
 
       if (!clips.length) {
-        if (track.key === 'audio' || track.key === 'music' || track.key === 'overlays') {
+        if (track.key === 'music') {
+          var musicNoteIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+          var genMusicLabel = currentLang() === 'en' ? 'Generate Music' : '음악 생성';
+          clipsHtml =
+            '<div style="position:absolute;top:6px;left:14px;display:inline-flex;gap:6px;align-items:center;">' +
+              '<div class="postprod-track-empty is-uploadable" data-action="upload-music" style="height:28px;border:1px dashed rgba(255,255,255,0.4);border-radius:6px;padding:0 10px;display:inline-flex;align-items:center;gap:4px;color:rgba(255,255,255,0.7);font-size:12px;cursor:pointer;">' +
+                '<span style="font-size:14px;line-height:1;">+</span>' + musicNoteIcon +
+              '</div>' +
+              '<button type="button" class="postprod-generate-music-btn" data-action="generate-music" style="height:28px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.35);border-radius:6px;padding:0 10px;color:rgba(168,85,247,0.85);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">' +
+                '✦ ' + genMusicLabel +
+              '</button>' +
+            '</div>';
+        } else if (track.key === 'audio' || track.key === 'overlays') {
           var trackIcon = track.key === 'overlays'
             ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>'
-            : track.key === 'audio'
-            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></svg>'
-            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></svg>';
           clipsHtml = '<div class="postprod-track-empty is-uploadable" data-action="upload-' + track.key + '" style="position:absolute; top:6px; left:14px; height:28px; border:1px dashed rgba(255,255,255,0.4); border-radius:6px; padding:0 12px; display:inline-flex; align-items:center; gap:4px; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer;">' +
             '<span style="font-size:14px;line-height:1;">+</span>' +
             trackIcon + '</div>';
@@ -4399,7 +4478,9 @@
       var gridPx = Math.max(8, Math.round(laneWidth / duration));
       return (
         '<div class="postprod-track-row postprod-track-' + track.key + '" style="width:' + (laneWidth + 170) + 'px">' +
-        '<div class="postprod-track-label"><span class="track-badge">' + track.badge + '</span><span class="track-name">' + track.name + '</span></div>' +
+        '<div class="postprod-track-label"><span class="track-badge">' + track.badge + '</span><span class="track-name">' + track.name + '</span>' +
+        (track.key === 'music' && clips.length ? '<button type="button" class="postprod-generate-music-btn" data-action="generate-music" title="' + (currentLang() === 'en' ? 'Generate Music' : '음악 생성') + '" style="margin-left:auto;width:20px;height:20px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:rgba(168,85,247,0.85);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">✦</button>' : '') +
+        '</div>' +
         '<div class="postprod-track-lane" style="width:' + laneWidth + 'px;background-size:' + gridPx + 'px 100%">' +
         clipsHtml +
         '<div class="postprod-playhead" style="left:' + playheadLeft + 'px"></div>' +
@@ -6574,6 +6655,14 @@
           };
         }
         input.click();
+      };
+    });
+
+    // 음악 생성 버튼
+    root.querySelectorAll('[data-action="generate-music"]').forEach(function (btn) {
+      btn.onclick = function (evt) {
+        evt.stopPropagation();
+        generateMusicForProject();
       };
     });
 
