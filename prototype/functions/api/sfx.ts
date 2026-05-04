@@ -495,10 +495,21 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     } catch (_) {}
 
     // _debug: 문제 진단용 — 이후 제거 예정
+    // Gemini 동작 여부 확인용 최소 호출
+    let geminiOk = false;
+    if (googleApiKey) {
+      const testText = await callGemini(googleApiKey, {
+        contents: [{ role: "user", parts: [{ text: "Reply with exactly: ok" }] }],
+        generationConfig: { maxOutputTokens: 5 },
+      });
+      geminiOk = testText.toLowerCase().includes("ok");
+    }
     const _debug = {
-      clipUrlReceived: clipUrl ? clipUrl.slice(0, 60) : "(empty)",
+      clipUrlReceived: clipUrl ? clipUrl.slice(0, 80) : "(empty)",
       framesReceived: frames.length,
       analysisMode,
+      geminiOk,
+      googleApiKeySet: !!googleApiKey,
     };
     if (signedUrl) {
       return send({ sfxUrl: signedUrl, objectName: objName, sfxPrompt, analysisMode, framesUsed: frames.length, _debug }, 200, origin);

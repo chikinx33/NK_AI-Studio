@@ -877,7 +877,10 @@
         : data.analysisMode === 'text'
         ? (lang === 'en' ? '📝 label' : '📝 라벨 기반')
         : (lang === 'en' ? '⚠ fallback' : '⚠ 기본값');
-      var debugLine = data._debug ? '\nURL: ' + (data._debug.clipUrlScheme || '(없음)') + '  frames:' + data._debug.framesReceived : '';
+      var debugLine = data._debug
+        ? '\nURL: ' + (data._debug.clipUrlReceived || '(없음)') + '  frames:' + data._debug.framesReceived
+          + '  gemini:' + (data._debug.geminiOk ? '✓' : '✗') + '  key:' + (data._debug.googleApiKeySet ? '✓' : '✗')
+        : '';
       showPostprodToast(successLabel + '\n[' + modeTag + '] ' + (data.sfxPrompt ? data.sfxPrompt.slice(0, 60) : '') + debugLine, 7000);
     } catch (err) {
       var msg = String((err && err.message) || err || failLabel);
