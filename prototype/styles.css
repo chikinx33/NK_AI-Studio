@@ -7482,7 +7482,8 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
   max-height: 40%;
 }
 
-/* 렌더링 패널: 미리보기(좌) + 컨트롤(우) 3열 그리드 — 하단은 컴퓨팅/다운로드 2분할 */
+/* 렌더링 패널: 미리보기(좌) + 컨트롤(우) 3열 그리드 — 하단은 컴퓨팅/다운로드 2분할
+   actions(2×2 버튼) 우측에 version 카드 배치 — download 영역과 겹침 방지 */
 .postprod-portrait-right .postprod-render-panel {
   flex: 1;
   min-height: 0;
@@ -7491,7 +7492,7 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
   grid-template-columns: auto 1fr 1fr;
   grid-template-areas:
     "preview head      head"
-    "preview actions   actions"
+    "preview actions   version"
     "preview save      save"
     "preview progress  progress"
     "preview info      info"
@@ -7527,10 +7528,22 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
 
 /* 우측 열 항목 배치 */
 .postprod-portrait-right .postprod-render-head { grid-area: head; }
-.postprod-portrait-right .postprod-render-actions.top { grid-area: actions; grid-template-columns: 1fr; margin-top: 0; }
+/* actions: 2×2 그리드 — 4개 버튼이 2행으로 배치되며 우측에 version 카드 공간 확보 */
+.postprod-portrait-right .postprod-render-actions.top {
+  grid-area: actions;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0;
+}
 .postprod-portrait-right .postprod-save-state { grid-area: save; }
 .postprod-portrait-right .postprod-render-progress { grid-area: progress; }
 .postprod-portrait-right .postprod-render-info { grid-area: info; }
+/* 편집 버전 카드: actions 우측 셀 — download와 겹침 방지 */
+.postprod-portrait-right .postprod-version-card {
+  grid-area: version;
+  margin-top: 0;
+  align-self: stretch;
+  min-width: 0;
+}
 
 /* 컴퓨팅 리소스: 하단 좌측 (숨김 해제), 다운로드 카드와 높이 동일 */
 .postprod-portrait-right .postprod-compute-card {
