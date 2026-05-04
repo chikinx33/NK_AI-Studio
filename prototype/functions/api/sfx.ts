@@ -45,7 +45,7 @@ function isEnglish(text: string): boolean {
 }
 
 async function callGemini(apiKey: string, body: object): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -502,7 +502,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     let geminiErrorSnippet = "";
     if (googleApiKey) {
       try {
-        const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(googleApiKey)}`;
+        const testUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(googleApiKey)}`;
         const testRes = await fetch(testUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
