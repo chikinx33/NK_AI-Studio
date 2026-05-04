@@ -572,21 +572,15 @@
     };
   }
 
-  function persistTimelineEdit(clipId, nextStart, nextEnd, nextVideoOffset) {
+  function persistTimelineEdit(clipId, nextStart, nextEnd) {
     if (!clipId) return;
     var edits = state.sessionEdits || (state.sessionEdits = {});
     var prev = Object.assign({}, edits[clipId] || {});
-    var patch = {
+    edits[clipId] = Object.assign({}, prev, {
       start: round1(nextStart),
       end: round1(nextEnd),
       deleted: false
-    };
-    // videoOffset이 명시되면 저장 — resize-left처럼 클립 앞부분을 잘라 소스 영상의
-    // 시작 위치가 변경된 경우 반드시 함께 영속화해야 reload 후 잘못된 구간 재생 방지
-    if (typeof nextVideoOffset === 'number' && isFinite(nextVideoOffset)) {
-      patch.videoOffset = round1(nextVideoOffset);
-    }
-    edits[clipId] = Object.assign({}, prev, patch);
+    });
     state.sessionEdits = edits;
     setDirty(true);
   }
@@ -5198,13 +5192,6 @@
     }
     var ok = setClipRange(action.clipId, start, end, true);
     if (ok) {
-      // resize-left undo/redo: videoOffset도 함께 복원
-      var historyVideoOffset = toAfter ? action.afterVideoOffset : action.beforeVideoOffset;
-      if (typeof historyVideoOffset === 'number' && isFinite(historyVideoOffset)) {
-        var rangeClip = findClip(action.clipId);
-        if (rangeClip) rangeClip.videoOffset = historyVideoOffset;
-        persistTimelineEdit(action.clipId, start, end, historyVideoOffset);
-      }
       state.selectedClipId = action.clipId;
       updateSelectionUi();
       setDirty(true);
@@ -5327,7 +5314,6 @@
       startX: evt.clientX,
       origStart: clip.start,
       origEnd: clip.end,
-      origVideoOffset: Number(clip.videoOffset) || 0,
       duration: clip.end - clip.start,
       nextStart: clip.start,
       nextEnd: clip.end,
@@ -5670,19 +5656,9 @@
     if (clip) {
       var beforeStart = d.origStart;
       var beforeEnd = d.origEnd;
-      var beforeVideoOffset = Number(d.origVideoOffset) || 0;
       clip.start = d.nextStart;
       clip.end = d.nextEnd;
-      // resize-left: 클립의 start가 +delta 만큼 이동한 만큼 videoOffset도 같은 양만큼 증가시켜
-      // 동일한 소스 영상 구간이 보이도록 유지.
-      // (resize-right/move: videoOffset 변화 없음)
-      var nextVideoOffset = beforeVideoOffset;
-      if (d.mode === 'resize-left') {
-        var startDelta = clip.start - beforeStart;
-        nextVideoOffset = Math.max(0, beforeVideoOffset + startDelta);
-        clip.videoOffset = nextVideoOffset;
-      }
-      persistTimelineEdit(d.clipId, clip.start, clip.end, nextVideoOffset);
+      persistTimelineEdit(d.clipId, clip.start, clip.end);
       var changed = Math.abs(beforeStart - clip.start) > 0.001 || Math.abs(beforeEnd - clip.end) > 0.001;
       if (changed) {
         pushHistory({
@@ -5690,10 +5666,8 @@
           clipId: d.clipId,
           beforeStart: beforeStart,
           beforeEnd: beforeEnd,
-          beforeVideoOffset: beforeVideoOffset,
           afterStart: clip.start,
-          afterEnd: clip.end,
-          afterVideoOffset: nextVideoOffset
+          afterEnd: clip.end
         });
         setDirty(true);
         // 위치가 변경됐으면 항상 재렌더 (DOM-state 일관성)
