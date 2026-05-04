@@ -4547,7 +4547,7 @@
       var elKey = '_previewAudio_' + trackKey;
       var audioEl = state[elKey];
       if (!activeClip || !activeClip.url) {
-        if (audioEl) { try { audioEl.pause(); audioEl._syncSeeking = false; } catch (_) {} }
+        if (audioEl) { try { audioEl.pause(); audioEl._syncSeeking = false; audioEl._playPending = false; } catch (_) {} }
         return;
       }
       var url = toPlayableMediaUrl(activeClip.url) || activeClip.url;
@@ -4559,29 +4559,51 @@
       var curSrc = audioEl.getAttribute('data-clip-src') || '';
       if (curSrc !== url) {
         audioEl._syncSeeking = false;
+        audioEl._playPending = false;
         audioEl.src = url;
         audioEl.setAttribute('data-clip-src', url);
         audioEl.load();
       }
+
+      // soundOn: false면 음소거 (오디오 ON/OFF 메뉴 실제 반영)
+      audioEl.muted = (activeClip.soundOn === false);
+
+      // 오디오 페이드 볼륨 — fadeIn: 시작 0.5초 0→1, fadeOut: 종료 직전 0.5초 1→0
+      if (!audioEl.muted) {
+        audioEl.volume = Math.max(0, Math.min(1, 1 - computeFadeOpacity(activeClip, sec)));
+      }
+
       var clipOffset = Math.max(0, (sec - (activeClip.start || 0)) + (activeClip.videoOffset || 0));
       if (state.isPlaying) {
         var drift = Math.abs((audioEl.currentTime || 0) - clipOffset);
         if (drift > 0.5 && !audioEl._syncSeeking) {
           // seek 완료 후에만 play — 중간 재생 시 버버벅 방지
           audioEl._syncSeeking = true;
+          audioEl._playPending = false;
           try { audioEl.pause(); audioEl.currentTime = clipOffset; } catch (_) {}
           var seekEl = audioEl;
           var seekHandler = function () {
             seekEl.removeEventListener('seeked', seekHandler);
             seekEl._syncSeeking = false;
-            if (state.isPlaying) { try { seekEl.play().catch(function () {}); } catch (_) {} }
+            if (state.isPlaying) {
+              seekEl._playPending = true;
+              var sp = seekEl.play();
+              if (sp && sp.then) { sp.then(function () { seekEl._playPending = false; }).catch(function () { seekEl._playPending = false; }); }
+              else { seekEl._playPending = false; }
+            }
           };
           audioEl.addEventListener('seeked', seekHandler);
-        } else if (!audioEl._syncSeeking && audioEl.paused) {
-          try { audioEl.play().catch(function () {}); } catch (_) {}
+        } else if (!audioEl._syncSeeking && !audioEl._playPending && audioEl.paused) {
+          // _playPending 플래그로 연속 play() 중복 호출 방지 (AbortError 방지)
+          var playEl = audioEl;
+          playEl._playPending = true;
+          var pp = playEl.play();
+          if (pp && pp.then) { pp.then(function () { playEl._playPending = false; }).catch(function () { playEl._playPending = false; }); }
+          else { playEl._playPending = false; }
         }
       } else {
         if (!audioEl._syncSeeking) {
+          audioEl._playPending = false;
           try { audioEl.pause(); audioEl.currentTime = clipOffset; } catch (_) {}
         }
       }
@@ -4591,7 +4613,7 @@
   function stopAudioTrackPreview() {
     ['audio', 'music'].forEach(function (trackKey) {
       var audioEl = state['_previewAudio_' + trackKey];
-      if (audioEl) { try { audioEl.pause(); } catch (_) {} }
+      if (audioEl) { try { audioEl.pause(); audioEl._playPending = false; } catch (_) {} }
     });
   }
 
