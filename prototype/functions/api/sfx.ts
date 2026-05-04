@@ -69,15 +69,15 @@ async function buildSfxPromptFromFrames(
       inline_data: { mime_type: "image/jpeg", data: f },
     }));
     const actionHint = sceneAction
-      ? `Scene action/intent (PRIMARY): "${sceneAction}"\n`
+      ? `Scene context/intent (use as a hint for sound type only): "${sceneAction}"\n`
       : "";
     const textPart = {
       text:
+        `These ${frames.length} frames are sampled from a video clip — BASE your answer on what you actually see.\n` +
         `${actionHint}` +
-        `These ${frames.length} frames are sampled from a video clip (use for visual detail only).\n` +
         `Clip label: "${clipLabel}"\n\n` +
-        `Based on the scene action above, describe the SOUND EFFECTS that match this scene. ` +
-        `Use the video frames to confirm or add specific sound details. ` +
+        `Watch the frames carefully. Describe the SOUND EFFECTS that match the actual visual — ` +
+        `match the REAL pace, count, and intensity shown in the video, not the description. ` +
         `English only, no speech/narration, under 22 words.`,
     };
     const body = {
@@ -96,12 +96,13 @@ async function buildSfxPromptFromFrames(
 // ── Gemini 텍스트 — sceneAction + 클립 라벨로 SFX 프롬프트 생성 (영상 없을 때 폴백) ──
 async function buildSfxPrompt(apiKey: string, clipLabel: string, sceneAction: string): Promise<string> {
   const actionLine = sceneAction
-    ? `Scene action/intent (PRIMARY): "${sceneAction}"\n`
+    ? `Scene context/intent (use as a hint for sound type only): "${sceneAction}"\n`
     : "";
   const userMsg =
     `${actionLine}Video clip label: "${clipLabel}"\n\n` +
-    `Based on the scene action above, describe the SOUND EFFECTS for this scene in English only. ` +
-    `Do NOT narrate or speak any text. Describe physical sounds, ambience, and environment only.`;
+    `Describe the SOUND EFFECTS for this scene in English only. ` +
+    `Use the scene context as a guide for the type of sound, but keep the intensity and count subtle and realistic. ` +
+    `Do NOT narrate or speak any text. Describe physical sounds and ambience only.`;
   try {
     const body = {
       systemInstruction: { parts: [{ text: SFX_SYSTEM_INSTRUCTION }] },
@@ -242,9 +243,9 @@ async function buildSfxPromptFromVideoUrl(
       return "";
     }
 
-    // 5. Gemini로 영상 전체 분석 (sceneAction이 주, 영상이 보조)
+    // 5. Gemini로 영상 전체 분석 (영상이 주, sceneAction은 소리 종류 힌트)
     const actionHint = sceneAction
-      ? `Scene action/intent (PRIMARY — this is what the scene is about): "${sceneAction}"\n`
+      ? `Scene context/intent (use as a hint for sound type only): "${sceneAction}"\n`
       : "";
     const analysisBody = {
       systemInstruction: { parts: [{ text: SFX_SYSTEM_INSTRUCTION }] },
@@ -254,11 +255,12 @@ async function buildSfxPromptFromVideoUrl(
           { file_data: { mime_type: mimeType, file_uri: fileUri } },
           {
             text:
+              `Watch this video carefully — BASE your answer on what actually happens in the video.\n` +
               `${actionHint}` +
               `Clip label: "${clipLabel}"\n\n` +
-              `Watch this video to confirm the visual details. ` +
-              `Then describe the SOUND EFFECTS that best match the scene action above — ` +
-              `environment, actions, objects, movement. English only, under 22 words.`,
+              `Describe the SOUND EFFECTS that match the REAL visual content — ` +
+              `match the actual pace, count, and intensity you see in the video. ` +
+              `Do NOT extrapolate beyond what is shown. English only, under 22 words.`,
           },
         ],
       }],
