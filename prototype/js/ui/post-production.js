@@ -1483,6 +1483,10 @@
         try { e.video.removeEventListener('seeked', e.video.__scrubOnSeeked); } catch (_) {}
         e.video.__scrubOnSeeked = null;
       }
+      if (e.video.__scrubSeekedWake) {
+        try { e.video.removeEventListener('seeked', e.video.__scrubSeekedWake); } catch (_) {}
+        e.video.__scrubSeekedWake = null;
+      }
       if (e.video.parentNode) {
         try { e.video.parentNode.removeChild(e.video); } catch (_) { }
       }
@@ -1633,11 +1637,36 @@
       }
       return;
     }
-    // wakeVideoDecoder: muted play() fire-and-forget → 디코더 활성화
-    //   + seeked마다 40ms debounce pause + snap-back (scheduleAutoPause)
-    // currentTime= 은 동기적으로 즉시 설정 — 디코더가 wake 중인 상태에서 seek 요청이 큐잉됨
-    wakeVideoDecoder(video, target);
+    // ── seek-first, wake-second 전략 ───────────────────────────────────────
+    // [문제] play()를 먼저 호출하면:
+    //   - 버퍼에 없는 위치(긴 렌더링 영상)는 Range 요청에 300ms+ 소요
+    //   - 그 동안 play()로 인해 position 0부터 재생 → "1~2번째 프레임 반복" 현상
+    // [해결] seek를 먼저 발행 → 버퍼 여부에 따라 wakeVideoDecoder 시점을 결정
+    //   - 버퍼 안: currentTime= 발행 → 즉시(1~2ms) seeked → THEN wakeDecoder
+    //   - 버퍼 밖: currentTime= → Range 요청 → seeked(수백ms) → THEN wakeDecoder
+    // 어느 경우든 seek 완료 시점(=seeked)에 play()가 올바른 위치에서 시작된다.
+
+    // 이전 seeked-wake 핸들러 제거 (새 seek 발행 전에 정리)
+    if (video.__scrubSeekedWake) {
+      try { video.removeEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
+      video.__scrubSeekedWake = null;
+    }
+
+    // seek 발행 먼저
+    try { video.muted = true; } catch (_) {}
     try { video.currentTime = target; } catch (_) {}
+
+    // seeked 이후에 wakeVideoDecoder (디코더 활성화 + auto-pause 스케줄)
+    var wakeTarget = target;
+    var onSeekedWake = function () {
+      try { video.removeEventListener('seeked', onSeekedWake); } catch (_) {}
+      if (video.__scrubSeekedWake === onSeekedWake) video.__scrubSeekedWake = null;
+      if (state.isPlaying) return; // 재생 중이면 간섭하지 않음
+      // seek 완료 후 최신 타겟으로 wake (사용자가 드래그 중이면 __scrubTarget이 갱신됨)
+      wakeVideoDecoder(video, video.__scrubTarget !== undefined ? video.__scrubTarget : wakeTarget);
+    };
+    video.__scrubSeekedWake = onSeekedWake;
+    try { video.addEventListener('seeked', onSeekedWake); } catch (_) {}
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
