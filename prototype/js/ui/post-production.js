@@ -1646,18 +1646,15 @@
     if (canvas && canvas.style.display !== 'none') canvas.style.display = 'none';
   }
 
-  // ── scrubSeekVideo: 스페이스바×2 패턴 ─────────────────────────────────
-  // 전략 ("재생바 드래그 = 스페이스바를 매우 빠르게 두 번 누르는 것"):
-  //   1) video.currentTime = target  — seek 요청
-  //   2) seeked 이벤트 발화 → 디코더가 target 프레임 준비 완료
-  //   3) play()         → Chrome이 디코더를 깨우고 현재 프레임을 렌더 파이프라인에 공급
-  //   4) .then(pause()) → 재생 직후 즉시 정지 → Chrome이 현재 프레임을 화면에 표시
-  //   thisTarget 가드: 연속 스크럽 시 stale promise가 잘못된 시점에 pause()하는 것을 방지.
-  //   canvas는 play().then(pause()) 성공 후 보너스로 시도(CORS taint 시 무시됨).
+  // ── scrubSeekVideo: 네이티브 컨트롤 방식 (v2.837) ─────────────────────
+  // 전략: HTML5 <video controls>의 native 스크럽바와 동일하게 단순히 currentTime= 만 설정.
+  //   (이 방식이 동작하지 않는다고 판단해 v2.832~v2.836에서 canvas/play().then(pause()) 등
+  //    복잡한 우회 로직을 추가했으나, 실제 원인은 video.crossOrigin='anonymous' 설정으로
+  //    Chrome이 비디오를 다른 디코더 파이프라인으로 처리해 paused 상태에서 frame 갱신을
+  //    하지 않은 것이었음. crossOrigin 제거 후엔 native 컨트롤과 동일하게 작동.)
   function scrubSeekVideo(video, t) {
     if (!video) return;
     var target = Math.max(0, Number(t) || 0);
-    var thisTarget = target;  // closure에 캡처 — async 가드용
 
     // detached 비디오 재연결
     var host = getPreviewVideoHost();
@@ -1668,7 +1665,6 @@
     }
 
     video.__scrubTarget = target;
-    try { video.muted = true; } catch (_) {}
 
     // metadata 미로드 — 단일 리스너 등록 후 대기
     if ((video.readyState || 0) < 1) {
@@ -1690,11 +1686,7 @@
       return;
     }
 
-    // 이전 핸들러·타이머 모두 정리
-    if (video.__scrubSeekedWake) {
-      try { video.removeEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
-      video.__scrubSeekedWake = null;
-    }
+    // 이전 잔존 타이머 정리 (구버전 호환)
     if (video.__wakeTimerId) {
       try { clearTimeout(video.__wakeTimerId); } catch (_) {}
       video.__wakeTimerId = 0;
@@ -1703,80 +1695,19 @@
       try { clearTimeout(video.__scrubFallbackTimer); } catch (_) {}
       video.__scrubFallbackTimer = 0;
     }
+    if (video.__scrubSeekedWake) {
+      try { video.removeEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
+      video.__scrubSeekedWake = null;
+    }
 
-    // seek 전 pause — 이전 play()로 앞서 달리던 비디오 정지
+    // seek 전 pause — 재생 중이 아닌 상태에서 currentTime= 을 깔끔하게 적용
     if (!state.isPlaying && !video.paused) {
       try { video.pause(); } catch (_) {}
     }
 
-    // 프레임을 실제 화면에 표시하는 핵심 동작 — seeked 이후 또는 즉시 호출됨
-    function displayFrame() {
-      if (state.isPlaying) return;
-      if (video.__scrubTarget !== thisTarget) return;
-      // 스페이스바×2 패턴: play().then(pause())
-      try {
-        var p = video.play();
-        if (p && typeof p.then === 'function') {
-          p.then(function () {
-            if (state.isPlaying) return;
-            if (video.__scrubTarget !== thisTarget) return;
-            try { video.pause(); } catch (_) {}
-            drawVideoToScrubCanvas(video);
-          }).catch(function () {
-            drawVideoToScrubCanvas(video);
-          });
-        } else {
-          drawVideoToScrubCanvas(video);
-        }
-      } catch (_) {
-        drawVideoToScrubCanvas(video);
-      }
-      var latest = video.__scrubTarget;
-      if (typeof latest === 'number' && isFinite(latest) &&
-          Math.abs((video.currentTime || 0) - latest) > 0.05) {
-        scrubSeekVideo(video, latest);
-      }
-    }
-
-    var onSeeked = function () {
-      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
-      if (video.__scrubSeekedWake === onSeeked) video.__scrubSeekedWake = null;
-      if (video.__scrubFallbackTimer) {
-        try { clearTimeout(video.__scrubFallbackTimer); } catch (_) {}
-        video.__scrubFallbackTimer = 0;
-      }
-      displayFrame();
-    };
-
-    // ── 핵심 수정 (v2.836) ────────────────────────────────────────────────
-    // 페이지 reload 후 비디오가 캐시되어 있으면 seek가 매우 빠르게 완료되어
-    // addEventListener('seeked') 등록 BEFORE에 seeked가 fire되는 race condition 발생.
-    // → 리스너를 currentTime 할당 BEFORE에 등록.
-    video.__scrubSeekedWake = onSeeked;
-    try { video.addEventListener('seeked', onSeeked); } catch (_) {}
-
-    // currentTime이 이미 target과 거의 동일하면 currentTime= 할당이 no-op이 되어
-    // seeked가 발생하지 않음 → displayFrame을 즉시 호출해 프레임 표시.
-    var alreadyAtTarget = Math.abs((video.currentTime || 0) - target) < 0.01;
-
+    // 핵심: 단순히 currentTime 할당만으로 화면 프레임 갱신.
+    // crossOrigin 미설정으로 Chrome native scrub과 동일한 디코더 파이프라인 사용 → 즉시 프레임 표시.
     try { video.currentTime = target; } catch (_) {}
-
-    if (alreadyAtTarget) {
-      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
-      if (video.__scrubSeekedWake === onSeeked) video.__scrubSeekedWake = null;
-      displayFrame();
-      return;
-    }
-
-    // Fallback: seeked가 350ms 안에 발생하지 않으면 강제로 displayFrame 호출.
-    // (페이지 reload 후 일부 케이스에서 seeked가 누락/매우 지연되는 회귀 차단)
-    video.__scrubFallbackTimer = setTimeout(function () {
-      video.__scrubFallbackTimer = 0;
-      if (video.__scrubSeekedWake !== onSeeked) return; // 이미 다른 scrub이 진행 중
-      try { video.removeEventListener('seeked', onSeeked); } catch (_) {}
-      video.__scrubSeekedWake = null;
-      displayFrame();
-    }, 350);
   }
 
   // rAF 단위로 seek 요청을 병합 — 빠른 스크럽 시 초당 수십 번 currentTime 할당이
@@ -1842,7 +1773,11 @@
     video.preload = 'auto';
     video.playsInline = true;
     video.muted = true;
-    video.crossOrigin = 'anonymous';
+    // crossOrigin = 'anonymous'를 설정하면 Chrome이 비디오를 다른 디코더 파이프라인으로
+    // 처리해 paused 상태에서 currentTime= 할당 시 프레임이 화면에 갱신되지 않는 회귀 발생.
+    // (렌더 미리보기 video는 crossOrigin이 없어 native 스크럽이 정상 동작 — 동일 URL인데도)
+    // canvas drawImage가 CORS taint로 실패하더라도, video element 자체가 프레임을 표시하므로
+    // 스크럽 기능에는 영향 없음. → crossOrigin 미설정.
     video.setAttribute('playsinline', '');
     video.src = playableUrl;
     applyVideoLayerStyles(video);
