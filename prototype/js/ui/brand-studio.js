@@ -828,10 +828,6 @@
       }).join('');
       return (
         '<button type="button" class="brand-content-type-card ' + (isActive ? 'is-active' : '') + '" data-action="brand-select-content-type" data-content-type="' + escapeHtml(item.id) + '">' +
-        '<div class="brand-content-type-card-head">' +
-        '<span class="brand-content-type-state">' + stateLabel + '</span>' +
-        (isActive ? '<span class="brand-content-type-check" aria-hidden="true"></span>' : '') +
-        '</div>' +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
         '<p>' + escapeHtml(item.desc) + '</p>' +
         '<div class="brand-content-type-outputs">' + outputChips + '</div>' +
@@ -971,9 +967,7 @@
     var ctrlBarHtml = (function () {
       if (activeStep === 1) {
         return (
-          '<div class="bsf-ctrl-row">' +
-          '<span class="bsf-ctrl-hint">콘텐츠 유형을 선택하면 자동 저장됩니다</span>' +
-          '</div>'
+          '<div class="bsf-ctrl-row"></div>'
         );
       }
       if (activeStep === 2) {
@@ -1041,7 +1035,6 @@
       '<div class="bsf-detail' + (activeStep === 1 ? ' is-active' : '') + '">' +
       '<div class="bsf-detail-head"><strong>01 — 포맷</strong><span>SNS에 올릴 콘텐츠 유형을 선택하세요</span></div>' +
       '<div class="brand-content-type-grid">' + contentTypeCards + '</div>' +
-      '<p class="brand-caption-help">선택하면 자동 저장됩니다. 이후에도 언제든지 변경할 수 있습니다.</p>' +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 2 ? ' is-active' : '') + '">' +
       '<div class="bsf-detail-head"><strong>02 — 자산</strong><span>사용할 영상 또는 이미지 자산을 선택하세요</span></div>' +
