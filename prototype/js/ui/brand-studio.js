@@ -713,18 +713,29 @@
     var channelRows = channelOptions();
     var channelTitleMap = {};
     channelRows.forEach(function (item) { channelTitleMap[item.id] = item.title; });
-    var contentItems = (NK.service.contentLibrary && NK.service.contentLibrary.getCachedIpAssets && brandId)
-      ? (NK.service.contentLibrary.getCachedIpAssets(brandId) || [])
-      : [];
     var projectRows = (NK.service && NK.service.brand && NK.service.brand.listProjects && brandId)
       ? NK.service.brand.listProjects(brand || brandId)
       : [project];
+    // Ensure the current project is always included
+    if (!projectRows.some(function (p) { return String(p.id || '').trim() === projectId; })) {
+      projectRows = [project].concat(projectRows);
+    }
     var projectTitleMap = {};
     projectRows.forEach(function (item) {
       projectTitleMap[String(item.id || '').trim()] = String(item.title || item.seriesTitle || item.id || '').trim() || '프로젝트';
     });
     if (!projectTitleMap[projectId]) {
       projectTitleMap[projectId] = String(project.title || project.seriesTitle || projectId).trim();
+    }
+    // Use rendered scene outputs (images + videos from scenes), not IP character sheets
+    var contentItems = [];
+    if (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents) {
+      projectRows.forEach(function (proj) {
+        try {
+          var items = NK.service.contentLibrary.listProjectContents(proj);
+          contentItems = contentItems.concat(items);
+        } catch (_) {}
+      });
     }
     var assetItems = contentItems.filter(function (item) {
       return ['image', 'video'].indexOf(String(item.type || '').trim()) >= 0;
@@ -993,11 +1004,6 @@
     restoreFieldScrollState(root, preservedFieldScroll);
     bindDisclosureState(root);
 
-    try {
-      if ((contentItems || []).length === 0 && brandId) {
-        triggerIpAssetHydration(root, brandId, brand, project);
-      }
-    } catch (_) {}
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
