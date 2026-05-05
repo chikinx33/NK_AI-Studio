@@ -2997,6 +2997,10 @@
       setVersionsToProject(versions, 'v0');
     } else {
       captureCurrentToActiveVersion();
+      // CRITICAL: capture가 storage의 versions를 업데이트했으므로 stale ref 재발급.
+      // 이후 versions.push + setVersionsToProject가 stale 배열로 storage를 덮어쓰면
+      // 방금 capture한 musicUrl/overlayClips/_captured 등이 사라지는 회귀 발생.
+      versions = getEditVersions();
     }
 
     closeStorageModal();
@@ -3077,6 +3081,12 @@
     if (!version) return;
     if (getActiveVersionId() === versionId) return;
     captureCurrentToActiveVersion();
+    // CRITICAL: capture가 versions를 storage에 업데이트하므로 stale ref를 재발급해야 함.
+    // 그렇지 않으면 아래 setVersionsToProject가 stale 배열을 다시 storage에 쓰며
+    // captureCurrentToActiveVersion이 저장한 musicUrl/overlayClips 등을 덮어씀.
+    versions = getEditVersions();
+    version = versions.find(function (v) { return v.id === versionId; });
+    if (!version) return;
     _applyVersionState(version);
     setVersionsToProject(versions, versionId);
     setDirty(false);
