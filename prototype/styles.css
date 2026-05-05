@@ -11701,10 +11701,10 @@ body {
 
 /* ---- Top card: Flow ---- */
 .bsf-flow-card {
-  border: none;
+  border: 1px solid var(--border);
   border-radius: 20px;
-  background: var(--bg-2);
-  box-shadow: var(--shadow-1), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  background: linear-gradient(145deg, rgba(18, 24, 44, 0.96), rgba(12, 20, 38, 0.88));
+  box-shadow: var(--shadow-1);
   overflow: hidden;
 }
 
