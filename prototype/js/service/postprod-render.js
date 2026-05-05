@@ -702,6 +702,7 @@
       if (gap > 0) {
         var okGap = await runSegment(gap, function (localElapsed) {
           drawBackground();
+          drawOverlay(cursor + localElapsed);
           drawSubtitle(cursor + localElapsed);
         }, reportProgress, shouldCancel);
         processed += gap;
@@ -787,6 +788,7 @@
           ctx.font = '600 28px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText('씬 소스 없음', canvas.width / 2, canvas.height / 2);
+          drawOverlay(clip.start + localElapsed);
           drawSubtitle(clip.start + localElapsed);
         }, reportProgress, shouldCancel);
         processed += duration;
@@ -800,6 +802,7 @@
       var tail = total - cursor;
       await runSegment(tail, function (localElapsed) {
         drawBackground();
+        drawOverlay(cursor + localElapsed);
         drawSubtitle(cursor + localElapsed);
       }, reportProgress, shouldCancel);
       processed += tail;
@@ -1059,6 +1062,7 @@
       if (gap > 0) {
         var okGap = await runSegmentOffline(gap, function (localElapsed) {
           drawBackground();
+          drawOverlay(cursor + localElapsed);
           drawSubtitle(cursor + localElapsed);
         }, reportProgress, shouldCancel, segState);
         processed += gap;
@@ -1149,6 +1153,7 @@
           ctx.font = '600 28px sans-serif';
           ctx.textAlign = 'center';
           ctx.fillText('씬 소스 없음', w / 2, h / 2);
+          drawOverlay(clip.start + localElapsed);
           drawSubtitle(clip.start + localElapsed);
         }, reportProgress, shouldCancel, segState);
         processed += duration;
@@ -1161,6 +1166,7 @@
       var tail = total - cursor;
       await runSegmentOffline(tail, function (localElapsed) {
         drawBackground();
+        drawOverlay(cursor + localElapsed);
         drawSubtitle(cursor + localElapsed);
       }, reportProgress, shouldCancel, segState);
     }
@@ -1194,7 +1200,10 @@
   }
 
   async function buildRenderedVideoBlobAuto(options) {
-    if (isWebCodecsAvailable()) {
+    var opts = options || {};
+    var audioClips = Array.isArray(opts.audioClips) ? opts.audioClips : [];
+    // WebCodecs 경로는 오디오 트랙을 지원하지 않으므로 오디오 클립이 있으면 MediaRecorder 경로 사용
+    if (isWebCodecsAvailable() && !audioClips.length) {
       try {
         return await buildRenderedVideoBlobWebCodecs(options);
       } catch (err) {

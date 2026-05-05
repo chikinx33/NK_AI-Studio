@@ -2855,6 +2855,7 @@
     if (!version) return;
     version.postTimelineEdits = getMergedTimelineEdits(project);
     version.overlayClips = (state.overlayClips || []).slice();
+    version.musicUrl = project.musicUrl || '';
     setVersionsToProject(versions, activeId);
   }
 
@@ -2905,12 +2906,27 @@
       if (renderedUrl && targetEdits[renderedClipId]) {
         targetEdits[renderedClipId].url = renderedUrl;
       }
+      // 렌더 버전 전환 시 M1 음악 초기화
+      // version.musicUrl이 저장돼 있으면 복원, 없으면 빈 문자열(새 렌더 버전 = 음악 없음)
+      var vMusicUrl = ('musicUrl' in version) ? (version.musicUrl || '') : '';
+      project.musicUrl = vMusicUrl;
+      if (project.payload) project.payload.musicUrl = vMusicUrl;
     }
+
+    // v0 버전의 경우, 저장된 음악 URL 복원 (captureCurrentToActiveVersion이 저장한 값)
+    if (version.id === 'v0' && 'musicUrl' in version) {
+      project.musicUrl = version.musicUrl || '';
+      if (project.payload) project.payload.musicUrl = version.musicUrl || '';
+    }
+
     state.sessionEdits = {};
-    state.overlayClips = (version.overlayClips || []).slice();
     state.history = [];
     state.historyIndex = -1;
     state.currentTime = 0;
+    // overlayClips를 svc 호출 전에 설정 — svc 내부에서 loadOverlayClipsFromProject가
+    // 프로젝트의 구 overlay 값을 state에 복원하는 버그를 방지
+    var targetOverlays = (version.overlayClips || []).slice();
+    project.payload.overlayClips = targetOverlays;
     var svc = getPostprodStateService();
     if (svc && svc.applySavedPostProductionPayload) {
       svc.applySavedPostProductionPayload(state.projectId, { postTimelineEdits: targetEdits });
@@ -2918,7 +2934,8 @@
       project.payload.postTimelineEdits = targetEdits;
       project.postTimelineEdits = targetEdits;
     }
-    project.payload.overlayClips = version.overlayClips || [];
+    // svc 호출 후 state.overlayClips 강제 설정 (svc 내부 복원이 덮어쓴 경우 재정상화)
+    state.overlayClips = targetOverlays;
     stopPlayback();
     clearPreviewVideoCache();
     state.dirty = false;
@@ -2975,15 +2992,19 @@
       id: newVersionId, label: newVersionLabel,
       createdAt: new Date().toISOString(),
       sourceObjectName: objName,
-      postTimelineEdits: {}, overlayClips: []
+      postTimelineEdits: {}, overlayClips: [],
+      musicUrl: ''  // 렌더 버전은 M1 음악 없이 시작
     };
     versions.push(newVersion);
 
     state.sessionEdits = {};
-    state.overlayClips = [];
     state.history = [];
     state.historyIndex = -1;
     state.currentTime = 0;
+    // I1 오버레이, M1 음악 초기화 — svc 호출 전에 설정해야 svc 내부 복원이 덮어쓰지 않음
+    project.payload.overlayClips = [];
+    project.musicUrl = '';
+    if (project.payload) project.payload.musicUrl = '';
 
     var svc = getPostprodStateService();
     if (svc && svc.applySavedPostProductionPayload) {
@@ -2992,6 +3013,8 @@
       project.payload.postTimelineEdits = baseEdits;
       project.postTimelineEdits = baseEdits;
     }
+    // svc 호출 후 재확인 (svc 내부에서 복원됐을 경우 강제 초기화)
+    state.overlayClips = [];
     project.payload.overlayClips = [];
     setVersionsToProject(versions, newVersionId);
 
