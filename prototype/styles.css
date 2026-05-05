@@ -7030,7 +7030,7 @@ html.page-shell-image #sidebar-project-card {
 
 .postprod-track-lane {
   position: relative;
-  height: 40px;
+  height: 34px;
   border-bottom: 1px solid var(--border);
   background-color: rgba(255, 255, 255, 0.02);
   background-image: linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 0);
@@ -7040,7 +7040,7 @@ html.page-shell-image #sidebar-project-card {
 
 .postprod-clip {
   position: absolute;
-  top: 6px;
+  top: 3px;
   height: 28px;
   border: 1px solid transparent;
   border-radius: 6px;
