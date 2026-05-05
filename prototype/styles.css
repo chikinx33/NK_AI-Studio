@@ -12030,6 +12030,152 @@ body {
   font-weight: 700;
   color: var(--text);
 }
+/* ---- 자산 트리오 (스토리·이미지·영상 카드) ---- */
+.bsf-asset-trio {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bsf-asset-type-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--bg-2);
+  transition: border-color 0.15s, background 0.15s;
+  cursor: default;
+}
+
+.bsf-asset-type-card.is-selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--bg-2) 88%, rgba(255, 122, 0, 0.08) 12%);
+}
+
+.bsf-asset-type-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bsf-asset-type-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(255, 122, 0, 0.1);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+
+.bsf-asset-type-head em {
+  font-style: normal;
+  font-size: 12px;
+  color: var(--text-3);
+  margin-left: auto;
+}
+
+.bsf-asset-story-body {
+  flex: 1;
+  overflow: hidden;
+}
+
+.bsf-asset-story-body p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bsf-asset-empty-hint {
+  color: var(--text-3) !important;
+  font-size: 12px !important;
+  text-align: center;
+  padding: 20px 0;
+}
+
+.bsf-asset-thumb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  flex: 1;
+}
+
+.bsf-thumb-img {
+  width: 100%;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--bg-3);
+  display: block;
+}
+
+.bsf-thumb-placeholder {
+  width: 100%;
+  aspect-ratio: 16/9;
+  border-radius: 8px;
+  background: var(--bg-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bsf-thumb-placeholder span {
+  font-size: 11px;
+  color: var(--text-3);
+  text-align: center;
+  padding: 4px;
+}
+
+.bsf-asset-video-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.bsf-video-thumb-item {
+  aspect-ratio: 16/9;
+  border-radius: 8px;
+  background: var(--bg-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px;
+}
+
+.bsf-video-thumb-icon {
+  font-size: 18px;
+  opacity: 0.5;
+}
+
+.bsf-video-thumb-title {
+  font-size: 10px;
+  color: var(--text-3);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.bsf-asset-type-foot {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent 20%);
+}
+
+@media (max-width: 900px) {
+  .bsf-asset-trio { grid-template-columns: 1fr; }
+}
+
+/* ---- */
 .bsf-deploy-caption-preview {
   font-size: 12px;
   color: var(--text-3);

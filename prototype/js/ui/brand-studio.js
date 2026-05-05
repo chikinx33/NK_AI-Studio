@@ -701,7 +701,6 @@
     var brandView = readBrandView(brand, project);
     var brandId = String(brandView.brandId || '').trim();
     var selectedAssetIds = readSelectedAssetIds(payload);
-    var assetTypeFilter = readAssetTypeFilter(payload);
     var knowledge = readKnowledge(brand && typeof brand === 'object' ? brand : payload);
     var channelConnections = readChannelConnections(brand, payload);
     var publishPlan = readPublishPlan(brand, payload);
@@ -720,9 +719,6 @@
     var assetItems = contentItems.filter(function (item) {
       return ['text', 'image', 'video'].indexOf(String(item.type || '').trim()) >= 0;
     });
-    var filteredAssetItems = assetItems.filter(function (item) {
-      return assetTypeFilter === 'all' || String(item.type || '').trim() === assetTypeFilter;
-    });
     var autoSelectedAssetIds = selectedAssetIds.length ? selectedAssetIds.slice() : pickAutoAssetIds(assetItems, projectId);
     var selectedAssetItems = assetItems.filter(function (item) {
       return autoSelectedAssetIds.indexOf(String(item.id || '').trim()) >= 0;
@@ -739,12 +735,6 @@
     var sourceTexts = sourceAssetItems
       .map(function (item) { return String(item.text || item.title || '').trim(); })
       .filter(Boolean);
-    var assetTypeFilters = [
-      { id: 'all', title: '전체' },
-      { id: 'text', title: '스토리' },
-      { id: 'image', title: '이미지' },
-      { id: 'video', title: '영상' }
-    ];
     var hasDraftForAnyFormat = selectedFormats.some(function (formatId) {
       var draft = formatDrafts && formatDrafts[formatId];
       return draft && (String(draft.caption || '').trim() || String(draft.hashtags || '').trim());
@@ -809,39 +799,50 @@
         '</button>'
       );
     }).join('');
-    var assetTypeFilterButtons = assetTypeFilters.map(function (item) {
-      var isActive = item.id === assetTypeFilter;
-      var count = item.id === 'all'
-        ? assetItems.length
-        : assetItems.filter(function (row) { return row.type === item.id; }).length;
-      return (
-        '<button type="button" class="brand-asset-filter ' + (isActive ? 'is-active' : '') + '" data-action="brand-filter-assets-type" data-asset-type-filter="' + escapeHtml(item.id) + '">' +
-        '<span>' + escapeHtml(item.title) + '</span>' +
-        '<strong>' + escapeHtml(count) + '</strong>' +
-        '</button>'
-      );
+    var storyItems = assetItems.filter(function (i) { return String(i.type || '').trim() === 'text'; });
+    var imageItems = assetItems.filter(function (i) { return String(i.type || '').trim() === 'image'; });
+    var videoItems = assetItems.filter(function (i) { return String(i.type || '').trim() === 'video'; });
+    function typeSelected(items) {
+      return items.length > 0 && items.every(function (i) { return autoSelectedAssetIds.indexOf(String(i.id || '').trim()) >= 0; });
+    }
+    var storySelected = typeSelected(storyItems);
+    var imageSelected = typeSelected(imageItems);
+    var videoSelected = typeSelected(videoItems);
+    // 스토리 카드
+    var storyOverview = storyItems.map(function (i) { return String(i.text || i.title || '').trim(); }).filter(Boolean).join(' ');
+    var storyPreview = storyOverview ? (storyOverview.length > 280 ? storyOverview.slice(0, 280) + '…' : storyOverview) : null;
+    var storyCardHtml =
+      '<div class="bsf-asset-type-card' + (storySelected ? ' is-selected' : '') + '">' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">스토리</span><em>' + storyItems.length + '개</em></div>' +
+      '<div class="bsf-asset-story-body">' + (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">시나리오를 작성하면<br>스토리가 표시됩니다.</p>') + '</div>' +
+      (storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? '선택 해제' : '선택') + '</button></div>' : '') +
+      '</div>';
+    // 이미지 카드
+    var imageThumbsHtml = imageItems.slice(0, 6).map(function (i) {
+      return i.url
+        ? '<img src="' + escapeHtml(i.url) + '" alt="' + escapeHtml(i.title || '') + '" class="bsf-thumb-img" loading="lazy" />'
+        : '<div class="bsf-thumb-placeholder"><span>' + escapeHtml(i.title || '이미지') + '</span></div>';
     }).join('');
-    var assetCards = filteredAssetItems.length
-      ? filteredAssetItems.map(function (item) {
-        var itemId = String(item.id || '').trim();
-        var isSelected = autoSelectedAssetIds.indexOf(itemId) >= 0;
-        var sceneLabel = item.sceneId ? ('씬 ' + item.sceneId) : '';
-        return (
-          '<article class="brand-asset-card ' + (isSelected ? 'is-selected' : '') + '">' +
-          '<div class="brand-asset-card-top">' +
-          '<span class="brand-channel-badge">' + escapeHtml(assetTypeLabel(item.type)) + '</span>' +
-          (sceneLabel ? '<span class="brand-content-type-state">' + escapeHtml(sceneLabel) + '</span>' : '') +
-          '</div>' +
-          '<strong>' + escapeHtml(item.title || '자산') + '</strong>' +
-          '<p>' + escapeHtml(assetPreviewText(item) || '미리보기 정보가 없습니다.') + '</p>' +
-          '<div class="brand-asset-actions">' +
-          '<button type="button" class="btn-secondary compact" data-action="brand-toggle-asset" data-asset-id="' + escapeHtml(itemId) + '">' + (isSelected ? '선택 해제' : '자산 선택') + '</button>' +
-          (item.url ? '<a class="btn-secondary compact" href="' + escapeHtml(item.url) + '" target="_blank" rel="noopener noreferrer">열기</a>' : '') +
-          '</div>' +
-          '</article>'
-        );
-      }).join('')
-      : '<div class="brand-asset-empty">현재 필터에 맞는 자산이 없습니다.<br><small>시나리오 작성·이미지 생성·영상 렌더링 후 자산이 표시됩니다.</small></div>';
+    var imageCardHtml =
+      '<div class="bsf-asset-type-card' + (imageSelected ? ' is-selected' : '') + '">' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">이미지</span><em>' + imageItems.length + '개</em></div>' +
+      (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">이미지 생성 후<br>표시됩니다.</p></div>') +
+      (imageItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="image">' + (imageSelected ? '선택 해제' : '선택') + '</button></div>' : '') +
+      '</div>';
+    // 영상 카드
+    var videoThumbsHtml = videoItems.slice(0, 4).map(function (i) {
+      return '<div class="bsf-video-thumb-item">' +
+        '<span class="bsf-video-thumb-icon">▶</span>' +
+        '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || '영상') + '</span>' +
+        '</div>';
+    }).join('');
+    var videoCardHtml =
+      '<div class="bsf-asset-type-card' + (videoSelected ? ' is-selected' : '') + '">' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">영상</span><em>' + videoItems.length + '개</em></div>' +
+      (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">영상 렌더링 후<br>표시됩니다.</p></div>') +
+      (videoItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="video">' + (videoSelected ? '선택 해제' : '선택') + '</button></div>' : '') +
+      '</div>';
+    var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
     var draftTabsHtml = selectedFormats.length
       ? '<div class="bsf-draft-tabs">' + selectedFormats.map(function (formatId) {
@@ -942,9 +943,8 @@
       '</div>' +
       '<div class="bsf-detail-card">' +
       '<div class="bsf-detail' + (activeStep === 1 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>01 — 자산</strong><span>사용할 영상 또는 이미지 자산을 선택하세요</span></div>' +
-      '<div class="brand-asset-filter-row">' + assetTypeFilterButtons + '</div>' +
-      '<div class="brand-asset-grid brand-asset-grid-scrollable">' + assetCards + '</div>' +
+      '<div class="bsf-detail-head"><strong>01 — 자산</strong><span>배포에 사용할 자산을 선택하세요</span></div>' +
+      assetTrioHtml +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 2 ? ' is-active' : '') + '">' +
       '<div class="bsf-detail-head"><strong>02 — 포맷</strong><span>배포할 플랫폼을 복수로 선택하세요</span></div>' +
@@ -1091,25 +1091,19 @@
           .finally(function () { btn.disabled = false; });
         return;
       }
-      if (action === 'brand-filter-assets-type') {
-        var nextTypeFilter = String(btn.dataset.assetTypeFilter || 'all').trim() || 'all';
-        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioAssetTypeFilter: nextTypeFilter }) }));
-        NK.service.project.updatePayload(projectId, { brandStudioAssetTypeFilter: nextTypeFilter })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert('자산 유형 필터 저장 실패: ' + (err && err.message ? err.message : err)); });
-        return;
-      }
-      if (action === 'brand-toggle-asset') {
-        var assetId = String(btn.dataset.assetId || '').trim();
-        if (!assetId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextAssetIds = selectedAssetIds.slice();
-        var selIdx = nextAssetIds.indexOf(assetId);
-        if (selIdx >= 0) nextAssetIds.splice(selIdx, 1); else nextAssetIds.push(assetId);
+      if (action === 'brand-toggle-asset-type') {
+        var assetType = String(btn.dataset.assetType || '').trim();
+        if (!assetType || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var typeItems = assetItems.filter(function (i) { return String(i.type || '').trim() === assetType; });
+        var typeIds = typeItems.map(function (i) { return String(i.id || '').trim(); }).filter(Boolean);
+        var allSel = typeIds.length > 0 && typeIds.every(function (id) { return selectedAssetIds.indexOf(id) >= 0; });
+        var nextAssetIds = allSel
+          ? selectedAssetIds.filter(function (id) { return typeIds.indexOf(id) < 0; })
+          : (function () { var n = selectedAssetIds.slice(); typeIds.forEach(function (id) { if (n.indexOf(id) < 0) n.push(id); }); return n; }());
         renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: nextAssetIds }) }));
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextAssetIds })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert('브랜드 자산 선택 저장 실패: ' + (err && err.message ? err.message : err)); });
+          .catch(function (err) { alert('자산 선택 저장 실패: ' + (err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-clear-assets') {
