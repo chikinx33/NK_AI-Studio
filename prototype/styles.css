@@ -7819,7 +7819,7 @@ body.layout-fixed .postprod-workspace {
 }
 
 body.layout-fixed .postprod-shell {
-  grid-template-rows: minmax(0, 1.3fr) auto minmax(0, 0.8fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
 }
 
 body.layout-fixed .postprod-render-actions.top {
