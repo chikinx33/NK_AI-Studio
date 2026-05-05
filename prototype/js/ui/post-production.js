@@ -949,6 +949,14 @@
       if (state.sessionEdits && state.sessionEdits['music-0']) {
         delete state.sessionEdits['music-0'];
       }
+      // CRITICAL: musicUrl을 storage에도 즉시 영구 반영
+      // (이후 다른 svc 호출이 storage를 다시 읽어 in-memory 변경을 덮어쓰는 것 방지)
+      try {
+        var svcMusic = getPostprodStateService();
+        if (svcMusic && svcMusic.applySavedPostProductionPayload && state.projectId) {
+          svcMusic.applySavedPostProductionPayload(state.projectId, { musicUrl: data.musicUrl });
+        }
+      } catch (_) { }
       setDirty(true);
       post.render();
 
@@ -2963,12 +2971,14 @@
 
     var versions = getEditVersions();
     if (!versions.length) {
+      // v0 인라인 생성 시 현재 musicUrl도 보존해야 v0 복귀 시 음악이 살아남음
       versions = [{
         id: 'v0', label: '오리지널',
         createdAt: new Date().toISOString(),
         sourceObjectName: null,
         postTimelineEdits: getMergedTimelineEdits(project),
-        overlayClips: (state.overlayClips || []).slice()
+        overlayClips: (state.overlayClips || []).slice(),
+        musicUrl: (project && (project.musicUrl || (project.payload && project.payload.musicUrl))) || ''
       }];
       setVersionsToProject(versions, 'v0');
     } else {
@@ -6895,6 +6905,13 @@
               if (project.postTimelineEdits && project.postTimelineEdits['music-0']) delete project.postTimelineEdits['music-0'];
               if (project.payload.postTimelineEdits && project.payload.postTimelineEdits['music-0']) delete project.payload.postTimelineEdits['music-0'];
               if (state.sessionEdits && state.sessionEdits['music-0']) delete state.sessionEdits['music-0'];
+              // CRITICAL: musicUrl을 storage에도 즉시 영구 반영
+              try {
+                var svcMusicUp = getPostprodStateService();
+                if (svcMusicUp && svcMusicUp.applySavedPostProductionPayload && state.projectId) {
+                  svcMusicUp.applySavedPostProductionPayload(state.projectId, { musicUrl: url });
+                }
+              } catch (_) { }
             } else {
               if (!project.scenes) project.scenes = [{}];
               if (project.scenes.length > 0) project.scenes[0].audioUrl = url;
