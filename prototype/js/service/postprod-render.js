@@ -380,6 +380,79 @@
     } catch (_) { }
   }
 
+  // WebCodecs 렌더링 경로에서 오디오 클립을 오프라인으로 믹싱·인코딩하여 mp4-muxer에 추가.
+  // OfflineAudioContext로 모든 클립을 한 번에 믹싱한 뒤 AudioEncoder(AAC)로 인코딩.
+  async function encodeAudioForMuxer(audioClips, totalSec, muxer, opts) {
+    if (!audioClips || !audioClips.length) return;
+    var sampleRate = 44100;
+    var numChannels = 2;
+    var totalSamples = Math.ceil(totalSec * sampleRate);
+
+    // 1) 오디오 디코딩 (임시 AudioContext 사용)
+    var decodeCtx = null;
+    var decoded;
+    try {
+      decodeCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: sampleRate });
+      decoded = await preloadRenderAudioBuffers(audioClips, decodeCtx, opts);
+    } finally {
+      if (decodeCtx) try { decodeCtx.close(); } catch (_) {}
+    }
+
+    // 2) OfflineAudioContext로 믹싱
+    var offCtx = new OfflineAudioContext(numChannels, totalSamples, sampleRate);
+    var voiceGain = offCtx.createGain(); voiceGain.gain.value = 1.0;
+    var musicGain = offCtx.createGain(); musicGain.gain.value = 0.6;
+    voiceGain.connect(offCtx.destination);
+    musicGain.connect(offCtx.destination);
+    audioClips.forEach(function (clip) {
+      var buf = decoded.get(clip.id);
+      if (!buf) return;
+      var src = offCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(clip.type === 'music' ? musicGain : voiceGain);
+      var clipDur = Math.min(Math.max(0.01, clip.end - clip.start), buf.duration);
+      try { src.start(clip.start, 0, clipDur); } catch (_) {}
+    });
+    var mixedBuf = await offCtx.startRendering();
+
+    // 3) AudioEncoder로 AAC 인코딩하여 muxer에 추가
+    var ch0 = mixedBuf.getChannelData(0);
+    var ch1 = mixedBuf.numberOfChannels > 1 ? mixedBuf.getChannelData(1) : ch0;
+    await new Promise(function (resolve, reject) {
+      var audioEnc = new AudioEncoder({
+        output: function (chunk, meta) {
+          try { muxer.addAudioChunk(chunk, meta); } catch (_) {}
+        },
+        error: reject
+      });
+      audioEnc.configure({
+        codec: 'mp4a.40.2',
+        sampleRate: sampleRate,
+        numberOfChannels: numChannels,
+        bitrate: 128000
+      });
+      var frameSize = 1024; // AAC 프레임 크기
+      var total = mixedBuf.length;
+      for (var i = 0; i < total; i += frameSize) {
+        var size = Math.min(frameSize, total - i);
+        var planar = new Float32Array(numChannels * size);
+        planar.set(ch0.subarray(i, i + size), 0);
+        planar.set(ch1.subarray(i, i + size), size);
+        var audioData = new AudioData({
+          format: 'f32-planar',
+          sampleRate: sampleRate,
+          numberOfFrames: size,
+          numberOfChannels: numChannels,
+          timestamp: Math.round((i / sampleRate) * 1e6),
+          data: planar
+        });
+        audioEnc.encode(audioData);
+        audioData.close();
+      }
+      audioEnc.flush().then(resolve).catch(reject);
+    });
+  }
+
   function releaseRenderVisualSources(sourceMap, releaseVideoSource) {
     if (!sourceMap || !sourceMap.forEach) return;
     sourceMap.forEach(function (entry) {
@@ -937,6 +1010,12 @@
 
     var shouldCancel = typeof opts.shouldCancel === 'function' ? opts.shouldCancel : function () { return false; };
 
+    var audioClips = Array.isArray(opts.audioClips) ? opts.audioClips : [];
+    // AudioEncoder + OfflineAudioContext가 모두 사용 가능할 때만 오디오 인코딩 활성화
+    var hasAudio = audioClips.length > 0
+      && typeof AudioEncoder !== 'undefined'
+      && typeof OfflineAudioContext !== 'undefined';
+
     // ── CRITICAL: 모든 비주얼 소스를 VideoEncoder 생성 "전에" 로드 ──────────────
     // Chrome은 VideoEncoder가 생성된 뒤 일정 시간 내에 encode()가 호출되지 않으면
     // "Codec reclaimed due to inactivity" 로 인코더를 회수한다. preload에는 네트워크
@@ -960,11 +1039,13 @@
     // muxer + encoder를 한 번에 생성 + configure + 첫 encode가 곧바로 이어지도록
     // 위치 조정. 이 사이에 await가 들어가면 reclaim 위험이 다시 생긴다.
     var target = new Mp4Muxer.ArrayBufferTarget();
-    var muxer = new Mp4Muxer.Muxer({
+    var muxerConfig = {
       target: target,
       video: { codec: 'avc', width: w, height: h },
       fastStart: 'in-memory'
-    });
+    };
+    if (hasAudio) muxerConfig.audio = { codec: 'aac', sampleRate: 44100, numberOfChannels: 2 };
+    var muxer = new Mp4Muxer.Muxer(muxerConfig);
 
     var encoderError = null;
     var encoder = new VideoEncoder({
@@ -1187,6 +1268,15 @@
     releaseRenderVisualSources(renderSources, opts.releaseVideoSource);
     if (shouldCancel()) throw new Error('render_canceled');
 
+    // 오디오 클립이 있으면 OfflineAudioContext + AudioEncoder로 믹싱·인코딩 후 muxer에 추가
+    if (hasAudio) {
+      try {
+        await encodeAudioForMuxer(audioClips, total, muxer, opts);
+      } catch (audioErr) {
+        console.warn('[postprod-render] WebCodecs 오디오 인코딩 실패, 오디오 없이 계속:', audioErr);
+      }
+    }
+
     muxer.finalize();
     var mp4Blob = new Blob([target.buffer], { type: 'video/mp4' });
     if (!mp4Blob.size) throw new Error('빈 렌더링 결과');
@@ -1202,8 +1292,11 @@
   async function buildRenderedVideoBlobAuto(options) {
     var opts = options || {};
     var audioClips = Array.isArray(opts.audioClips) ? opts.audioClips : [];
-    // WebCodecs 경로는 오디오 트랙을 지원하지 않으므로 오디오 클립이 있으면 MediaRecorder 경로 사용
-    if (isWebCodecsAvailable() && !audioClips.length) {
+    // 오디오 클립이 있을 때는 AudioEncoder가 있어야 WebCodecs 경로를 사용할 수 있음.
+    // AudioEncoder가 없으면 MediaRecorder 경로(실시간 AudioContext)로 fallback.
+    var audioEncoderOk = !audioClips.length
+      || (typeof AudioEncoder !== 'undefined' && typeof OfflineAudioContext !== 'undefined');
+    if (isWebCodecsAvailable() && audioEncoderOk) {
       try {
         return await buildRenderedVideoBlobWebCodecs(options);
       } catch (err) {

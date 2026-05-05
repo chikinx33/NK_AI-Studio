@@ -496,16 +496,14 @@
 
   api.postprodRenderList = async function (projectId) {
     if (!projectId) return [];
-    try {
-      var res = await api.library('video', projectId);
-      var items = Array.isArray(res && res.items) ? res.items : [];
-      return items.filter(function (item) {
-        var name = String(item && item.name || '');
-        return name.indexOf('postprod-final') >= 0;
-      });
-    } catch (_) {
-      return [];
-    }
+    // 오류를 삼키지 않고 호출자까지 전파 — UI에서 실제 오류 메시지를 표시할 수 있도록
+    var res = await api.library('video', projectId);
+    var items = Array.isArray(res) ? res
+      : Array.isArray(res && res.items) ? res.items : [];
+    return items.filter(function (item) {
+      var name = String(item && item.name || '');
+      return name.indexOf('postprod-final') >= 0;
+    });
   };
 
   api.postprodRenderDelete = async function (projectId, objectName) {

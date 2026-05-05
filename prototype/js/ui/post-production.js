@@ -3588,6 +3588,15 @@
     }
     try {
       var items = await NK.api.postprodRenderList(state.projectId);
+      // 라이브러리 API가 빈 목록을 반환하더라도 renderMeta에 최신 렌더 파일 정보가
+      // 있으면 fallback으로 보여준다 (업로드 후 GCS 인덱싱 지연 등 edge case 대응)
+      if (!items.length) {
+        var meta = state.renderMeta || getRenderMeta(getProjectByStateId());
+        var fbObj = String((meta && (meta.outputVideoObjectName || meta.outputSourceObjectName)) || '').trim();
+        if (fbObj && fbObj.indexOf('postprod-final') >= 0) {
+          items = [{ name: fbObj, size: 0 }];
+        }
+      }
       if (!items.length) {
         body.innerHTML = '<p class="postprod-storage-empty">저장된 렌더 파일이 없습니다.</p>';
         return;
