@@ -973,7 +973,6 @@
         return (
           '<div class="bsf-ctrl-row">' +
           '<span class="bsf-ctrl-hint">콘텐츠 유형을 선택하면 자동 저장됩니다</span>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="1">자산 선택으로 →</button>' +
           '</div>'
         );
       }
