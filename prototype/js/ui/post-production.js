@@ -4205,8 +4205,64 @@
     };
 
     applyTimelineEdits(model, getTimelineEdits(project));
+    syncAudioClipLabels(model);
     model.contentDuration = getTimelineContentDuration(model);
     return model;
+  }
+
+  // 스테일 레이블을 "SceneN" / "SceneN CN" 표준 형식으로 정규화.
+  // 저장된 editMap에는 생성 당시 한글·접두사·구형 포맷이 박혀 있으므로 매번 정규화한다.
+  function normalizeClipLabelText(label) {
+    if (!label) return label;
+    var s = String(label).trim();
+    // 한글/영문 SFX 접두사 제거
+    s = s.replace(/^(효과음|SFX)\s*[·•·]\s*/i, '');
+    // 타입 접미사 제거
+    s = s.replace(/\s*[·•·]\s*(영상|이미지)$/i, '');
+    // "씬 N 컷M" → "SceneN CM"
+    s = s.replace(/^씬\s*(\d+)\s+컷\s*(\d+)$/, 'Scene$1 C$2');
+    // "씬 N" → "SceneN"
+    s = s.replace(/^씬\s*(\d+)$/, 'Scene$1');
+    // "Scene N cut M" / "Scene N C M" → "SceneN CM"
+    s = s.replace(/^Scene\s+(\d+)\s+(?:cut|C)\s*(\d+)$/i, 'Scene$1 C$2');
+    // "Scene N" → "SceneN"
+    s = s.replace(/^Scene\s+(\d+)$/, 'Scene$1');
+    return s.trim() || label;
+  }
+
+  // 오디오 A1 클립 레이블을 비주얼 클립과 동기화하고,
+  // 전체 트랙의 스테일 레이블을 표준 형식으로 정규화.
+  function syncAudioClipLabels(model) {
+    if (!model) return;
+    var visualTrack = (model.tracks || []).find(function (t) { return t.key === 'visuals'; });
+    var visualClips = (visualTrack && visualTrack.clips) || [];
+
+    // 비주얼 클립 자체도 스테일 레이블 정규화
+    visualClips.forEach(function (clip) {
+      clip.label = normalizeClipLabelText(clip.label);
+    });
+
+    // 오디오 클립: 동일 시간대 비주얼 클립 레이블로 교체
+    var audioTrack = (model.tracks || []).find(function (t) { return t.key === 'audio'; });
+    if (audioTrack && visualClips.length) {
+      (audioTrack.clips || []).forEach(function (clip) {
+        var mid = clip.start + (clip.end - clip.start) / 2;
+        var match = null;
+        for (var i = 0; i < visualClips.length; i++) {
+          if (visualClips[i].start <= mid && mid < visualClips[i].end) {
+            match = visualClips[i];
+            break;
+          }
+        }
+        if (!match) {
+          match = visualClips.reduce(function (best, vc) {
+            return !best || Math.abs(vc.start - clip.start) < Math.abs(best.start - clip.start) ? vc : best;
+          }, null);
+        }
+        if (match) clip.label = match.label;
+        else clip.label = normalizeClipLabelText(clip.label);
+      });
+    }
   }
 
   function buildRulerHtml(totalDuration, laneWidth) {
@@ -6839,6 +6895,7 @@
     state.justDragged = false;
     // 적용: 저장된 + 세션 편집 병합 반영
     applyTimelineEdits(model, getMergedTimelineEdits(project));
+    syncAudioClipLabels(model);
     // 렌더 범위(In/Out) 복원 — applyTimelineEdits 이후(edits 가용), renderLayout 이전(DOM 없음)
     loadRenderRangeFromEdits(project);
     renderLayout(model);
