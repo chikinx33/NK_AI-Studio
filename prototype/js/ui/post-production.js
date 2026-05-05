@@ -1892,6 +1892,7 @@
           try { video.currentTime = target; } catch (_) {}
         }
       }
+      drawVideoToScrubCanvas(video);
     }, delay);
   }
 
@@ -2010,6 +2011,15 @@
       video.__scrubSeekedWake = null;
     }
 
+    // seeked 이벤트 후 canvas에 프레임 캡처 — Chrome paused 상태에서 video 표시가
+    // 갱신되지 않는 문제 workaround. drawVideoToScrubCanvas가 canvas를 표시함.
+    video.__scrubSeekedWake = function () {
+      try { video.removeEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
+      video.__scrubSeekedWake = null;
+      if (!state.isPlaying) drawVideoToScrubCanvas(video);
+    };
+    try { video.addEventListener('seeked', video.__scrubSeekedWake); } catch (_) {}
+
     // 1) currentTime 설정
     try { video.currentTime = target; } catch (_) {}
 
@@ -2024,12 +2034,13 @@
           // 3) 사용자 재생이 아니면 즉시 pause — 현재 프레임이 화면에 표시됨
           if (state.isPlaying) return;
           try { video.pause(); } catch (_) {}
-          // wake 동안 살짝 흘러간 경우 target으로 snap-back
+          // wake 동안 살짝 흘러간 경우 target으로 snap-back 후 canvas 재캡처
           var latest = video.__scrubTarget;
           if (typeof latest === 'number' && isFinite(latest) &&
               Math.abs((video.currentTime || 0) - latest) > 0.05) {
             try { video.currentTime = latest; } catch (_) {}
           }
+          drawVideoToScrubCanvas(video);
         }).catch(function () {
           // play() 거부 — currentTime은 이미 설정됨, fallback 없음
         });
