@@ -702,7 +702,6 @@
     var brandId = String(brandView.brandId || '').trim();
     var selectedAssetIds = readSelectedAssetIds(payload);
     var assetTypeFilter = readAssetTypeFilter(payload);
-    var assetProjectFilter = readAssetProjectFilter(payload);
     var knowledge = readKnowledge(brand && typeof brand === 'object' ? brand : payload);
     var channelConnections = readChannelConnections(brand, payload);
     var publishPlan = readPublishPlan(brand, payload);
@@ -945,7 +944,6 @@
       '<div class="bsf-detail' + (activeStep === 1 ? ' is-active' : '') + '">' +
       '<div class="bsf-detail-head"><strong>01 — 자산</strong><span>사용할 영상 또는 이미지 자산을 선택하세요</span></div>' +
       '<div class="brand-asset-filter-row">' + assetTypeFilterButtons + '</div>' +
-      '<div class="brand-asset-filter-row">' + assetProjectFilterButtons + '</div>' +
       '<div class="brand-asset-grid brand-asset-grid-scrollable">' + assetCards + '</div>' +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 2 ? ' is-active' : '') + '">' +
@@ -1100,15 +1098,6 @@
         NK.service.project.updatePayload(projectId, { brandStudioAssetTypeFilter: nextTypeFilter })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function (err) { alert('자산 유형 필터 저장 실패: ' + (err && err.message ? err.message : err)); });
-        return;
-      }
-      if (action === 'brand-filter-assets-project') {
-        var nextProjectFilter = String(btn.dataset.assetProjectFilter || 'all').trim() || 'all';
-        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioAssetProjectFilter: nextProjectFilter }) }));
-        NK.service.project.updatePayload(projectId, { brandStudioAssetProjectFilter: nextProjectFilter })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert('에피소드 필터 저장 실패: ' + (err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-toggle-asset') {
