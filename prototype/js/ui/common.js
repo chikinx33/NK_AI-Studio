@@ -64,6 +64,7 @@
         '렌더링': 'Render',
         '렌더링 시작': 'Start render',
         '다시 렌더링': 'Render again',
+        '렌더 저장소': 'Render Library',
         '편집': 'Edit',
         '재생': 'Play',
         '일시정지': 'Pause',

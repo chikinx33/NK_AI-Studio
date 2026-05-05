@@ -938,6 +938,16 @@
         if (!proj2.payload) proj2.payload = {};
         proj2.payload.musicUrl = data.musicUrl;
         proj2.musicUrl = data.musicUrl;
+        // 이전에 music-0 클립을 삭제한 적 있으면 deleted 플래그를 제거해야 새 클립이 표시됨
+        if (proj2.postTimelineEdits && proj2.postTimelineEdits['music-0']) {
+          delete proj2.postTimelineEdits['music-0'];
+        }
+        if (proj2.payload.postTimelineEdits && proj2.payload.postTimelineEdits['music-0']) {
+          delete proj2.payload.postTimelineEdits['music-0'];
+        }
+      }
+      if (state.sessionEdits && state.sessionEdits['music-0']) {
+        delete state.sessionEdits['music-0'];
       }
       setDirty(true);
       post.render();
@@ -3111,7 +3121,7 @@
     overlay.innerHTML =
       '<div class="postprod-storage-dialog" role="dialog" aria-modal="true">' +
       '<div class="postprod-storage-header">' +
-      '<h4 class="postprod-storage-title">렌더 저장소</h4>' +
+      '<h4 class="postprod-storage-title">' + t('렌더 저장소') + '</h4>' +
       '<button type="button" class="postprod-storage-close" id="postprod-storage-close" aria-label="닫기">✕</button>' +
       '</div>' +
       '<div class="postprod-storage-preview-wrap" id="postprod-storage-preview-wrap" style="display:none">' +
@@ -4549,7 +4559,7 @@
       var gridPx = Math.max(8, Math.round(laneWidth / duration));
       return (
         '<div class="postprod-track-row postprod-track-' + track.key + '" style="width:' + (laneWidth + 170) + 'px">' +
-        '<div class="postprod-track-label"><span class="track-badge">' + track.badge + '</span><span class="track-name">' + track.name + '</span>' +
+        '<div class="postprod-track-label" data-no-i18n><span class="track-badge">' + track.badge + '</span><span class="track-name">' + track.name + '</span>' +
         (track.key === 'music' && clips.length ? '<button type="button" class="postprod-generate-music-btn" data-action="generate-music" title="' + (currentLang() === 'en' ? 'Generate Music' : '음악 생성') + '" style="margin-left:auto;width:20px;height:20px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:rgba(168,85,247,0.85);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">✦</button>' : '') +
         '</div>' +
         '<div class="postprod-track-lane" style="width:' + laneWidth + 'px;background-size:' + gridPx + 'px 100%">' +
