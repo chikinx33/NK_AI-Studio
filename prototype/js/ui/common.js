@@ -631,11 +631,14 @@
         ,'분석을 시작하려면 게시 결과 입력이 필요합니다.': 'Enter publish results to start analysis.'
         ,'조회수 기반으로 상위 채널과 시간대를 계산합니다.': 'Top channels and time slots are calculated based on views.'
         ,'아직 저장된 참조 콘텐츠가 없습니다.': 'No saved reference content yet.'
+        ,'편집 버전': 'Edit Version'
+        ,'오리지널': 'Original'
     };
 
     var EN_PATTERNS = [
         { re: /^마지막 저장:\s*/, to: 'Last saved: ' },
         { re: /^마지막 렌더:\s*/, to: 'Last render: ' },
+        { re: /^(\d+)차 편집$/, fn: function (m) { return 'Edit ' + m[1]; } },
         { re: /^프로젝트\s*:\s*/, to: 'Project: ' },
         { re: /^장르\s*:\s*/, to: 'Genre: ' },
         { re: /^타겟\s*:\s*/, to: 'Target: ' },

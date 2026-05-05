@@ -3035,14 +3035,16 @@
     versions.forEach(function (version) {
       var isActive = version.id === activeId;
       var isOriginal = version.id === 'v0';
+      var versionDisplayLabel = t(version.label);
       var btnHtml = '<button type="button" class="postprod-version-btn' + (isActive ? ' is-active' : '') +
-        '" data-version-id="' + escapeHtml(version.id) + '">' + escapeHtml(version.label) + '</button>';
+        '" data-version-id="' + escapeHtml(version.id) + '">' + escapeHtml(versionDisplayLabel) + '</button>';
       if (isOriginal) {
         html += btnHtml;
       } else {
+        var delTitle = versionDisplayLabel + ' ' + t('삭제');
         html += '<span class="postprod-version-item">' + btnHtml +
           '<button type="button" class="postprod-version-del" data-version-del-id="' + escapeHtml(version.id) +
-          '" title="' + escapeHtml(version.label) + ' 삭제" aria-label="' + escapeHtml(version.label) + ' 삭제">' +
+          '" title="' + escapeHtml(delTitle) + '" aria-label="' + escapeHtml(delTitle) + '">' +
           '<svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
           '</button></span>';
       }
