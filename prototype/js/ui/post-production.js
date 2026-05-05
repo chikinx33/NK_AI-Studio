@@ -4492,6 +4492,25 @@
     setCurrentTime(state.currentTime, true);
   }
 
+  function buildTrackLabelActionsHtml(track) {
+    var lang = currentLang();
+    var btns = '';
+    if (track.key === 'music') {
+      btns += '<button type="button" class="postprod-track-action-btn is-gen" data-action="generate-music" title="' + (lang === 'en' ? 'Generate Music' : '음악 생성') + '">✦</button>';
+      btns += '<button type="button" class="postprod-track-action-btn is-uploadable" data-action="upload-music" title="' + (lang === 'en' ? 'Add Music' : '음악 추가') + '">+</button>';
+    } else if (track.key === 'audio') {
+      btns += '<button type="button" class="postprod-track-action-btn is-uploadable" data-action="upload-audio" title="' + (lang === 'en' ? 'Add Audio' : '오디오 추가') + '">+</button>';
+    } else if (track.key === 'overlays') {
+      btns += '<button type="button" class="postprod-track-action-btn is-uploadable" data-action="upload-overlays" title="' + (lang === 'en' ? 'Add Image' : '이미지 추가') + '">+</button>';
+    } else if (track.key === 'visuals') {
+      btns += '<button type="button" class="postprod-track-action-btn is-uploadable" data-action="upload-visuals" title="' + (lang === 'en' ? 'Add Video' : '영상 추가') + '">+</button>';
+    } else if (track.key === 'subtitles') {
+      btns += '<button type="button" class="postprod-track-action-btn is-uploadable" data-action="upload-subtitles" title="' + (lang === 'en' ? 'Add Subtitle' : '자막 추가') + '">+</button>';
+    }
+    if (!btns) return '';
+    return '<span style="margin-left:auto;display:flex;gap:3px;align-items:center;flex-shrink:0;">' + btns + '</span>';
+  }
+
   function buildTrackRowsHtml(model, laneWidth, playheadLeft, timelineDuration) {
     var duration = Math.max(1, toNumber(timelineDuration, model.totalDuration) || 1);
     return model.tracks.map(function (track) {
@@ -4532,35 +4551,14 @@
       }).join('');
 
       if (!clips.length) {
-        if (track.key === 'music') {
-          var musicNoteIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
-          var genMusicLabel = currentLang() === 'en' ? 'Generate Music' : '음악 생성';
-          clipsHtml =
-            '<div style="position:absolute;top:6px;left:14px;display:inline-flex;gap:6px;align-items:center;">' +
-              '<div class="postprod-track-empty is-uploadable" data-action="upload-music" style="height:28px;border:1px dashed rgba(255,255,255,0.4);border-radius:6px;padding:0 10px;display:inline-flex;align-items:center;gap:4px;color:rgba(255,255,255,0.7);font-size:12px;cursor:pointer;">' +
-                '<span style="font-size:14px;line-height:1;">+</span>' + musicNoteIcon +
-              '</div>' +
-              '<button type="button" class="postprod-generate-music-btn" data-action="generate-music" style="height:28px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.35);border-radius:6px;padding:0 10px;color:rgba(168,85,247,0.85);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">' +
-                '✦ ' + genMusicLabel +
-              '</button>' +
-            '</div>';
-        } else if (track.key === 'audio' || track.key === 'overlays') {
-          var trackIcon = track.key === 'overlays'
-            ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>'
-            : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></svg>';
-          clipsHtml = '<div class="postprod-track-empty is-uploadable" data-action="upload-' + track.key + '" style="position:absolute; top:6px; left:14px; height:28px; border:1px dashed rgba(255,255,255,0.4); border-radius:6px; padding:0 12px; display:inline-flex; align-items:center; gap:4px; color:rgba(255,255,255,0.7); font-size:12px; cursor:pointer;">' +
-            '<span style="font-size:14px;line-height:1;">+</span>' +
-            trackIcon + '</div>';
-        } else {
-          clipsHtml = '<div class="postprod-track-empty" style="position: absolute; top:6px; left:14px; color:rgba(255,255,255,0.4); font-size:12px; display:inline-flex; align-items:center; height:28px;">' + t('클립 없음') + '</div>';
-        }
+        clipsHtml = '<div class="postprod-track-empty" style="position:absolute;top:6px;left:14px;color:rgba(255,255,255,0.4);font-size:12px;display:inline-flex;align-items:center;height:28px;">' + t('클립 없음') + '</div>';
       }
 
       var gridPx = Math.max(8, Math.round(laneWidth / duration));
       return (
         '<div class="postprod-track-row postprod-track-' + track.key + '" style="width:' + (laneWidth + 170) + 'px">' +
         '<div class="postprod-track-label" data-no-i18n><span class="track-badge">' + track.badge + '</span><span class="track-name">' + track.name + '</span>' +
-        (track.key === 'music' && clips.length ? '<button type="button" class="postprod-generate-music-btn" data-action="generate-music" title="' + (currentLang() === 'en' ? 'Generate Music' : '음악 생성') + '" style="margin-left:auto;width:20px;height:20px;background:rgba(168,85,247,0.12);border:1px solid rgba(168,85,247,0.3);border-radius:4px;color:rgba(168,85,247,0.85);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">✦</button>' : '') +
+        buildTrackLabelActionsHtml(track) +
         '</div>' +
         '<div class="postprod-track-lane" style="width:' + laneWidth + 'px;background-size:' + gridPx + 'px 100%">' +
         clipsHtml +
@@ -6690,10 +6688,10 @@
       };
     }
 
-    root.querySelectorAll('.postprod-track-empty[data-action]').forEach(function (emptyEl) {
-      emptyEl.onclick = function (evt) {
+    root.querySelectorAll('.is-uploadable[data-action]').forEach(function (btn) {
+      btn.onclick = function (evt) {
         evt.stopPropagation();
-        var action = emptyEl.getAttribute('data-action');
+        var action = btn.getAttribute('data-action');
 
         if (action === 'upload-overlays') {
           var overlayInput = document.getElementById('postprod-overlay-upload');
@@ -6732,7 +6730,51 @@
           return;
         }
 
-        var inputId = action === 'upload-audio' ? 'postprod-audio-upload' : 'postprod-music-upload';
+        if (action === 'upload-visuals') {
+          var visInput = document.getElementById('postprod-visuals-upload');
+          if (!visInput) {
+            visInput = document.createElement('input');
+            visInput.type = 'file';
+            visInput.id = 'postprod-visuals-upload';
+            visInput.accept = 'video/*, image/*';
+            visInput.style.display = 'none';
+            document.body.appendChild(visInput);
+            visInput.onchange = function (e) {
+              var file = e.target.files && e.target.files[0];
+              if (!file) return;
+              var url = URL.createObjectURL(file);
+              insertMediaAtTimelineEnd({ uid: 'upload-' + Date.now(), baseId: 'upload-' + Date.now(), url: url, label: file.name.replace(/\.[^/.]+$/, ''), isVideo: file.type.indexOf('video') === 0 });
+              showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
+              visInput.value = '';
+            };
+          }
+          visInput.click();
+          return;
+        }
+
+        if (action === 'upload-subtitles') {
+          var subInput = document.getElementById('postprod-subtitles-upload');
+          if (!subInput) {
+            subInput = document.createElement('input');
+            subInput.type = 'file';
+            subInput.id = 'postprod-subtitles-upload';
+            subInput.accept = '.srt,.vtt,text/plain';
+            subInput.style.display = 'none';
+            document.body.appendChild(subInput);
+            subInput.onchange = function (e) {
+              var file = e.target.files && e.target.files[0];
+              if (!file) return;
+              showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
+              subInput.value = '';
+            };
+          }
+          subInput.click();
+          return;
+        }
+
+        // upload-audio / upload-music
+        var isMusicAction = (action === 'upload-music');
+        var inputId = isMusicAction ? 'postprod-music-upload' : 'postprod-audio-upload';
         var input = document.getElementById(inputId);
         if (!input) {
           input = document.createElement('input');
@@ -6741,33 +6783,36 @@
           input.accept = 'audio/*, video/mp4';
           input.style.display = 'none';
           document.body.appendChild(input);
-
-          input.onchange = function(e) {
-            var file = e.target.files && e.target.files[0];
-            if (!file) return;
-            var url = URL.createObjectURL(file);
-            var project = getProjectByStateId();
-            if (project) {
-              if (action === 'upload-music') {
-                if (!project.payload) project.payload = {};
-                project.payload.musicUrl = url;
-                project.musicUrl = url;
-              } else {
-                if (!project.scenes) project.scenes = [{}];
-                if (project.scenes.length > 0) {
-                  project.scenes[0].audioUrl = url;
-                }
-              }
-              post.render();
-              showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
-            }
-          };
         }
+        input.onchange = function (e) {
+          var file = e.target.files && e.target.files[0];
+          if (!file) return;
+          var url = URL.createObjectURL(file);
+          var project = getProjectByStateId();
+          if (project) {
+            if (isMusicAction) {
+              if (!project.payload) project.payload = {};
+              project.payload.musicUrl = url;
+              project.musicUrl = url;
+              // 이전 삭제 플래그 제거
+              if (project.postTimelineEdits && project.postTimelineEdits['music-0']) delete project.postTimelineEdits['music-0'];
+              if (project.payload.postTimelineEdits && project.payload.postTimelineEdits['music-0']) delete project.payload.postTimelineEdits['music-0'];
+              if (state.sessionEdits && state.sessionEdits['music-0']) delete state.sessionEdits['music-0'];
+            } else {
+              if (!project.scenes) project.scenes = [{}];
+              if (project.scenes.length > 0) project.scenes[0].audioUrl = url;
+            }
+            setDirty(true);
+            post.render();
+            showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
+          }
+          input.value = '';
+        };
         input.click();
       };
     });
 
-    // 음악 생성 버튼
+    // 음악 생성 버튼 (라벨 고정)
     root.querySelectorAll('[data-action="generate-music"]').forEach(function (btn) {
       btn.onclick = function (evt) {
         evt.stopPropagation();

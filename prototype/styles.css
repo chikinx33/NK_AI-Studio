@@ -7266,6 +7266,49 @@ body.postprod-reordering .postprod-clip.is-dragging.is-swap-mode,
   padding: 10px 12px;
 }
 
+.postprod-track-action-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+}
+
+.postprod-track-action-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text);
+}
+
+.postprod-track-action-btn.is-gen {
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.28);
+  color: rgba(168, 85, 247, 0.8);
+}
+
+.postprod-track-action-btn.is-gen:hover {
+  background: rgba(168, 85, 247, 0.2);
+  color: rgba(168, 85, 247, 1);
+}
+
+[data-theme="light"] .postprod-track-action-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+[data-theme="light"] .postprod-track-action-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
 .postprod-playhead {
   position: absolute;
   top: 0;
