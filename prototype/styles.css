@@ -6749,7 +6749,9 @@ html.page-shell-image #sidebar-project-card {
 .nk-copy-alert {
   position: fixed;
   inset: 0;
-  background: rgba(7, 10, 18, 0.62);
+  background: rgba(7, 10, 18, 0.78);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   display: none;
   align-items: center;
   justify-content: center;
@@ -6765,11 +6767,16 @@ html.page-shell-image #sidebar-project-card {
   width: min(760px, 100%);
   max-height: min(82vh, 760px);
   overflow: auto;
-  background: var(--surface);
+  /* 다이얼로그 배경 — 뒤 영상이 비치지 않도록 완전 불투명 */
+  background: #161b2c;
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.55);
   padding: 14px;
+}
+
+body.theme-light .nk-copy-alert-dialog {
+  background: #ffffff;
 }
 
 .nk-copy-alert-title {
