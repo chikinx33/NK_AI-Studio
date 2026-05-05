@@ -860,7 +860,7 @@
         end: (clip.start || 0) + duration,
         baseDuration: duration,
         url: data.sfxUrl,
-        label: (lang === 'en' ? 'SFX · ' : '효과음 · ') + label,
+        label: label,
         empty: false,
         soundOn: true,
         fadeIn: false,
