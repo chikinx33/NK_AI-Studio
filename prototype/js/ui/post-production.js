@@ -3369,7 +3369,7 @@
       start: ns,
       end: ne,
       url: item.url,
-      label: item.label + (item.isVideo ? ' · 영상' : ' · 이미지'),
+      label: item.label,
       empty: false,
       deleted: false
     };
@@ -3946,10 +3946,12 @@
           videoOffset: typeof edit.videoOffset === 'number' ? edit.videoOffset : ((sourceClip && sourceClip.videoOffset) || 0),
           motionPreset: edit.motionPreset || (sourceClip && sourceClip.motionPreset) || 'none'
         });
-        // 미디어 브라우저로 추가된 alt 클립: url/label/empty 오버라이드 (다른 미디어로 교체).
-        // split 분할 클립은 이런 필드가 없으므로 sourceClip 값이 유지됨.
+        // url/empty는 항상 edit 값으로 오버라이드 (alt·split 공통).
+        // label: sourceClip이 있으면 buildSceneGroupLabels가 생성한 최신 레이블을 유지.
+        //   edit.label에는 저장 당시 스테일한 한글/구형 포맷이 남을 수 있으므로 사용하지 않음.
+        //   sourceClip이 없는 경우(원본 삭제 후 복원 등)에만 edit.label을 fallback으로 사용.
         if (typeof edit.url === 'string' && edit.url) newClip.url = edit.url;
-        if (typeof edit.label === 'string' && edit.label) newClip.label = edit.label;
+        if (!sourceClip && typeof edit.label === 'string' && edit.label) newClip.label = edit.label;
         if (typeof edit.empty === 'boolean') newClip.empty = edit.empty;
         // alt 클립은 새 소스 미디어이므로 videoOffset 기본 0
         if (typeof edit.url === 'string' && edit.url && typeof edit.videoOffset !== 'number') {
