@@ -808,8 +808,9 @@
     var storySelected = typeSelected(storyItems);
     var imageSelected = typeSelected(imageItems);
     var videoSelected = typeSelected(videoItems);
-    // 스토리 카드
-    var storyOverview = storyItems.map(function (i) { return String(i.text || i.title || '').trim(); }).filter(Boolean).join(' ');
+    // 스토리 카드 — payload.story(이야기) 우선, 없으면 text 자산 텍스트 사용
+    var storyNarrative = String(payload.story || payload.storyPrompt || '').trim();
+    var storyOverview = storyNarrative || storyItems.map(function (i) { return String(i.text || i.title || '').trim(); }).filter(Boolean).join(' ');
     var storyPreview = storyOverview ? (storyOverview.length > 280 ? storyOverview.slice(0, 280) + '…' : storyOverview) : null;
     var storyCardHtml =
       '<div class="bsf-asset-type-card' + (storySelected ? ' is-selected' : '') + '">' +
