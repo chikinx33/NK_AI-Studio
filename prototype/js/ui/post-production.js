@@ -2864,6 +2864,10 @@
     version.postTimelineEdits = getMergedTimelineEdits(project);
     version.overlayClips = (state.overlayClips || []).slice();
     version.musicUrl = project.musicUrl || '';
+    // _captured 마커: 사용자가 이 버전을 적극 사용·저장한 적이 있음을 의미.
+    // _applyVersionState에서 이 마커가 없으면 (v2.891 이전 생성·미사용 신규 버전)
+    // overlayClips/musicUrl을 빈 상태로 강제하여 v0의 stale 데이터 잔재를 방지.
+    version._captured = true;
     setVersionsToProject(versions, activeId);
   }
 
@@ -2914,9 +2918,11 @@
       if (renderedUrl && targetEdits[renderedClipId]) {
         targetEdits[renderedClipId].url = renderedUrl;
       }
-      // 렌더 버전 전환 시 M1 음악 초기화
-      // version.musicUrl이 저장돼 있으면 복원, 없으면 빈 문자열(새 렌더 버전 = 음악 없음)
-      var vMusicUrl = ('musicUrl' in version) ? (version.musicUrl || '') : '';
+      // 렌더 버전 전환 시 M1 음악 초기화 — _captured 마커로 신·구 버전 구분
+      // _captured=true: 사용자가 적극 사용·저장한 버전 → 저장된 musicUrl 복원
+      // _captured 없음: v2.891 이전 생성된 버전 또는 신규 미사용 버전 → 빈 상태 강제
+      var isCaptured = !!version._captured;
+      var vMusicUrl = isCaptured ? (version.musicUrl || '') : '';
       project.musicUrl = vMusicUrl;
       if (project.payload) project.payload.musicUrl = vMusicUrl;
     }
@@ -2932,15 +2938,23 @@
     state.historyIndex = -1;
     state.currentTime = 0;
 
-    var targetOverlays = (version.overlayClips || []).slice();
+    // overlayClips 복원 — 렌더 버전은 _captured 마커가 있을 때만 저장값 복원, 없으면 빈 상태
+    // (v0는 항상 저장값 사용 — 원본 상태가 보존되어야 함)
+    var targetOverlays;
+    if (version.id === 'v0') {
+      targetOverlays = (version.overlayClips || []).slice();
+    } else {
+      var isCapturedOv = !!version._captured;
+      targetOverlays = isCapturedOv ? (version.overlayClips || []).slice() : [];
+    }
     state.overlayClips = targetOverlays;
 
     // CRITICAL: overlayClips, musicUrl도 service patch에 포함시켜 storage에 영구 반영해야 함
     // (단순 in-memory mutation은 svc가 storage에서 재로드하며 덮어씀)
     var svcPatch = { postTimelineEdits: targetEdits, overlayClips: targetOverlays.slice() };
     if (version.id !== 'v0') {
-      // 렌더 버전: 음악 URL 초기화 (저장된 값이 있으면 복원)
-      svcPatch.musicUrl = ('musicUrl' in version) ? (version.musicUrl || '') : '';
+      // 렌더 버전: _captured 없으면 빈 음악, 있으면 저장된 musicUrl 복원
+      svcPatch.musicUrl = (!!version._captured) ? (version.musicUrl || '') : '';
     } else if ('musicUrl' in version) {
       // v0: 저장된 음악 URL 복원
       svcPatch.musicUrl = version.musicUrl || '';
