@@ -2863,7 +2863,12 @@
     if (!version) return;
     version.postTimelineEdits = getMergedTimelineEdits(project);
     version.overlayClips = (state.overlayClips || []).slice();
-    version.musicUrl = project.musicUrl || '';
+    // CRITICAL: 서버에서 로드된 프로젝트는 musicUrl이 project.payload.musicUrl에만
+    // 존재하고 top-level project.musicUrl은 undefined일 수 있음. 두 곳 모두 확인해야
+    // 페이지 진입 직후 버전 전환 시 음악이 누락되지 않음.
+    version.musicUrl = (project && project.musicUrl)
+      || (project && project.payload && project.payload.musicUrl)
+      || '';
     // _captured 마커: 사용자가 이 버전을 적극 사용·저장한 적이 있음을 의미.
     // _applyVersionState에서 이 마커가 없으면 (v2.891 이전 생성·미사용 신규 버전)
     // overlayClips/musicUrl을 빈 상태로 강제하여 v0의 stale 데이터 잔재를 방지.
