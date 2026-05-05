@@ -11741,6 +11741,7 @@ body {
   padding: 0 12px;
   overflow-x: auto;
   scrollbar-width: none;
+  max-width: 60%;
 }
 .bsf-timeline::-webkit-scrollbar { display: none; }
 
@@ -11814,14 +11815,15 @@ body {
 .bsf-step.is-active .bsf-step-name { color: var(--accent); }
 
 .bsf-step-line {
-  flex: 1;
+  width: 40px;
   min-width: 16px;
+  max-width: 60px;
   height: 2px;
   background: var(--border);
   align-self: center;
   margin: 0 2px;
   border-radius: 1px;
-  flex-shrink: 0;
+  flex-shrink: 1;
 }
 
 /* ---- Control bar ---- */
