@@ -4447,13 +4447,41 @@
       '</div>' +
       '</div>' +
       buildTrackRowsHtml(model, laneWidth, playheadLeft, timelineDuration);
-    if (prevScrollLeft > 0) {
+    // 줌 앵커가 설정된 경우: 재생바(또는 뷰포트 중앙)가 줌 후에도 같은 화면 위치에 오도록 scrollLeft 재계산
+    if (state._zoomAnchorTime != null) {
+      var anchorPx = Math.round((state._zoomAnchorTime / Math.max(1, timelineDuration)) * laneWidth);
+      var newScrollLeft = Math.max(0, anchorPx - state._zoomAnchorViewportX);
+      delete state._zoomAnchorTime;
+      delete state._zoomAnchorViewportX;
+      try { scroll.scrollLeft = newScrollLeft; } catch (_) { }
+    } else if (prevScrollLeft > 0) {
       try { scroll.scrollLeft = prevScrollLeft; } catch (_) { }
     }
     updateZoomUi();
   }
 
   function applyZoom(nextZoom) {
+    // 줌 전: 재생바 기준 앵커 계산
+    // 재생바가 현재 뷰포트 안에 있으면 재생바 위치 고정, 아니면 뷰포트 중앙 고정
+    var scroll = document.getElementById('postprod-timeline-scroll');
+    if (scroll && state.model) {
+      var duration = Math.max(1, state.timelineDuration || (state.model && state.model.totalDuration) || 1);
+      var oldLaneWidth = state.laneWidth || 960;
+      var scrollLeft = Number(scroll.scrollLeft || 0);
+      var laneViewportW = Math.max(1, scroll.clientWidth - 170); // 170 = 트랙 라벨 열 너비
+      var oldPlayheadPx = Math.round((state.currentTime / duration) * oldLaneWidth);
+      var playheadViewportX = oldPlayheadPx - scrollLeft;
+      if (playheadViewportX >= 0 && playheadViewportX <= laneViewportW) {
+        // 재생바가 화면 안에 있음 → 재생바 위치 기준
+        state._zoomAnchorTime = state.currentTime;
+        state._zoomAnchorViewportX = playheadViewportX;
+      } else {
+        // 재생바가 화면 밖 → 뷰포트 중앙 기준
+        var centerTime = (scrollLeft + laneViewportW / 2) / oldLaneWidth * duration;
+        state._zoomAnchorTime = Math.max(0, Math.min(duration, centerTime));
+        state._zoomAnchorViewportX = laneViewportW / 2;
+      }
+    }
     state.zoom = quantizeZoom(nextZoom);
     state.fitTimeline = false;
     state.fitLaneWidth = 0;
