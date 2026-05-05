@@ -8089,12 +8089,6 @@ body.layout-fixed .lib-content {
   }
 }
 
-.brand-studio-page {
-  display: grid;
-  gap: 10px;
-  padding: 8px 0 20px;
-}
-
 .brand-studio-hero {
   display: flex;
   justify-content: space-between;
@@ -11687,4 +11681,249 @@ body {
 
 .sidebar-actions .screen-toggle.is-fullscreen:hover::before {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M9.25 9.25H4.75V4.75M9.25 9.25 4.75 4.75M14.75 9.25H19.25V4.75M14.75 9.25 19.25 4.75M14.75 14.75H19.25V19.25M14.75 14.75 19.25 19.25M9.25 14.75H4.75V19.25M9.25 14.75 4.75 19.25' stroke='%23F5F7FD' stroke-width='1.55' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+/* ================================================
+   BSF — Brand Studio Flow (2-card layout)
+   ================================================ */
+
+.brand-studio-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 8px 0 24px;
+}
+
+/* ---- Top card: Flow ---- */
+.bsf-flow-card {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg-2);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+
+.bsf-flow-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bsf-title {
+  margin: 4px 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.bsf-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+  max-width: 520px;
+}
+
+.bsf-flow-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+/* ---- Timeline ---- */
+.bsf-timeline {
+  display: flex;
+  align-items: stretch;
+  padding: 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.bsf-timeline::-webkit-scrollbar { display: none; }
+
+.bsf-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 16px 10px;
+  min-width: 80px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-radius: 10px;
+  color: var(--text-3);
+  position: relative;
+}
+.bsf-step:hover { background: var(--bg-3); }
+
+.bsf-step-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.bsf-step-dot::before { content: attr(data-num); }
+
+.bsf-step-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.bsf-step-val {
+  font-size: 10px;
+  font-style: normal;
+  color: var(--text-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 90px;
+}
+
+.bsf-step.is-done .bsf-step-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+.bsf-step.is-done .bsf-step-dot::before { content: '✓'; font-size: 12px; }
+.bsf-step.is-done { color: var(--text); }
+
+.bsf-step.is-active .bsf-step-dot {
+  border-color: var(--accent);
+  background: transparent;
+  color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+}
+.bsf-step.is-active { color: var(--text); }
+.bsf-step.is-active .bsf-step-name { color: var(--accent); }
+
+.bsf-step-line {
+  flex: 1;
+  min-width: 16px;
+  height: 2px;
+  background: var(--border);
+  align-self: center;
+  margin: 0 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+/* ---- Control bar ---- */
+.bsf-ctrl-bar {
+  border-top: 1px solid var(--border);
+  padding: 8px 16px;
+  background: var(--bg);
+}
+
+.bsf-ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.bsf-ctrl-hint {
+  font-size: 12px;
+  color: var(--text-3);
+  flex: 1;
+}
+
+.bsf-ctrl-info {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+}
+
+.bsf-ctrl-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.bsf-ctrl-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
+
+/* ---- Bottom card: Detail ---- */
+.bsf-detail-card {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--bg-2);
+  box-shadow: var(--shadow-1);
+  min-height: 320px;
+}
+
+.bsf-detail {
+  display: none;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 20px;
+}
+.bsf-detail.is-active { display: flex; }
+
+.bsf-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.bsf-detail-head strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+.bsf-detail-head span {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* Step 3 — Draft two-column layout */
+.bsf-draft-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 720px) {
+  .bsf-draft-layout { grid-template-columns: 1fr; }
+}
+
+.bsf-draft-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Step 5 — Result layout */
+.bsf-result-layout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 800px) {
+  .bsf-result-layout { grid-template-columns: 1fr; }
 }
