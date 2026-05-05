@@ -11694,6 +11694,11 @@ body {
   padding: 8px 0 24px;
 }
 
+#brand-studio-root {
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
 /* ---- Top card: Flow ---- */
 .bsf-flow-card {
   border: 1px solid var(--border);
