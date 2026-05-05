@@ -899,8 +899,7 @@ body.page-shell-videogen .brand-mark {
   margin-top: 4px;
   font-size: 11px;
   color: var(--muted);
-  text-align: left;
-  padding-left: 4px;
+  text-align: center;
 }
 
 .search input {
@@ -5218,7 +5217,7 @@ html.page-shell-image #sidebar-project-card {
   column-gap: 10px;
   align-items: center;
   width: 300px;
-  margin: 0 auto;
+  margin: 0 auto 10px;
 }
 
 .option-card .form-row label {
@@ -5297,6 +5296,7 @@ html.page-shell-image #sidebar-project-card {
 .option-actions {
   display: flex;
   justify-content: center;
+  margin-top: 6px;
 }
 
 .option-actions .btn-primary,
