@@ -309,17 +309,6 @@
   grid-column: span 1;
 }
 
-.brand-content-type-card,
-.brand-asset-card,
-.content-library-item,
-.analytics-channel-card,
-.analytics-type-card,
-.analytics-hashtag-card,
-.analytics-recommendation-card,
-.analytics-suggestion-card {
-  border-left: 3px solid transparent;
-}
-
 .brand-content-type-card.is-active,
 .brand-asset-card.is-selected,
 .analytics-view-tab.is-active,
