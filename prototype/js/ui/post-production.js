@@ -3154,8 +3154,7 @@
   // cutNo 부여. 단일 컷 그룹 → 'Scene N', 복수 컷 → 'Scene N cut M'.
   // (scenario.js의 labelByIdx 로직과 동일한 규칙.)
   function buildSceneGroupLabels(scenes, lang) {
-    var sceneFallback = lang === 'en' ? 'Scene ' : '씬 ';
-    var cutWord = lang === 'en' ? 'cut' : '컷';
+    // 언어 무관하게 항상 "SceneN" / "SceneN CN" 형식으로 통일 (lang 인수는 호환성 유지용)
     var lastLoc = null;
     var parentNo = 0;
     var cutNo = 0;
@@ -3175,8 +3174,8 @@
     });
     return seq.map(function (g) {
       var total = totalByParent[g.parentNo] || 1;
-      if (total <= 1) return sceneFallback + g.parentNo;
-      return sceneFallback + g.parentNo + ' ' + cutWord + g.cutNo;
+      if (total <= 1) return 'Scene' + g.parentNo;
+      return 'Scene' + g.parentNo + ' C' + g.cutNo;
     });
   }
 
@@ -3235,8 +3234,8 @@
       if (shotsWithMedia.length) {
         // legacy shots 모델 — 각 shot이 컷
         shotsArr.forEach(function (sh, j) {
-          var cutId = firstFilled([sh.id]) || (cutFallback + (j + 1));
-          pushUnit(sh, 'vis-' + i + '-' + j, sceneLabel + ' · ' + cutId);
+          var shotLabel = sceneLabel + (shotsArr.length > 1 ? ' C' + (j + 1) : '');
+          pushUnit(sh, 'vis-' + i + '-' + j, shotLabel);
         });
       } else {
         // 평탄화 모델 — sceneLabel에 이미 'Scene N cut M' 또는 'Scene N'이 들어있음
@@ -4073,13 +4072,14 @@
     // applyTimelineEdits가 렌더 클립 1개만 추가한다.
     var savedEdits = getTimelineEdits(project);
     var isRenderedVersion = !!(savedEdits && savedEdits['__clear_track_visuals__']);
+    var sceneGroupLabels = buildSceneGroupLabels(scenes);
 
     for (var i = 0; i < scenes.length; i++) {
       var scene = scenes[i] || {};
       var sceneDuration = Math.max(1, Math.round(toNumber(scene.estSec, toNumber(scene.durationSec, 4))));
       var sceneStart = cursor;
       var sceneEnd = sceneStart + sceneDuration;
-      var sceneLabel = firstFilled([scene.title]) || ('씬 ' + (i + 1));
+      var sceneLabel = sceneGroupLabels[i] || ('Scene' + (i + 1));
 
       // ── 컷(shot) 단위 클립이 있으면 우선 사용 ──
       var shotsArr = (scene && Array.isArray(scene.shots)) ? scene.shots : [];
@@ -4104,7 +4104,7 @@
           var shImgUrl = firstFilled([sh.imageDataUrl, sh.imagePath, sh.generatedImageUrl, sh.imageUrl]);
           var shVisualUrl = shVidUrl || shImgUrl;
           var shType = shVidUrl ? 'video' : (shImgUrl ? 'image' : 'empty');
-          var shLabel = sceneLabel + ' · ' + (sh.id || (i + 1) + '.' + (sh_i + 1)) + (shType === 'empty' ? ' · 미디어 없음' : '');
+          var shLabel = sceneLabel + (shotsArr.length > 1 ? ' C' + (sh_i + 1) : '') + (shType === 'empty' ? ' · 미디어 없음' : '');
           if (!isRenderedVersion) {
             visuals.push({
               id: 'vis-' + i + '-' + sh_i,
