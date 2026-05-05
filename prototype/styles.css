@@ -11701,7 +11701,7 @@ body {
 
 /* ---- Top card: Flow ---- */
 .bsf-flow-card {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   background: var(--bg-2);
   box-shadow: var(--shadow-1);
@@ -11874,7 +11874,7 @@ body {
 
 /* ---- Bottom card: Detail ---- */
 .bsf-detail-card {
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   background: var(--bg-2);
   box-shadow: var(--shadow-1);
