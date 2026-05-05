@@ -1025,7 +1025,6 @@
       '</div>' +
       '<div class="bsf-flow-head-actions">' +
       '<button type="button" class="btn-primary" data-action="brand-oneclick-draft">원클릭 초안</button>' +
-      '<a class="btn-secondary compact no-underline" href="' + escapeHtml(buildStageUrl('knowledge.html', projectId, brandId)) + '">브랜드 허브</a>' +
       '</div>' +
       '</div>' +
       '<div class="bsf-timeline">' + timelineHtml + '</div>' +
