@@ -1345,15 +1345,31 @@
     var el = document.createElement('div');
     el.id = 'postprod-toast';
     el.textContent = String(message || '');
-    el.style.cssText = [
-      'position:fixed', 'bottom:28px', 'left:50%', 'transform:translateX(-50%)',
-      'background:#1a1f35', 'color:#d0d8f0', 'padding:10px 20px',
-      'border-radius:8px', 'font-size:13px', 'line-height:1.4',
-      'z-index:99999', 'max-width:520px', 'box-shadow:0 4px 20px rgba(0,0,0,.6)',
-      'pointer-events:none', 'white-space:pre-wrap', 'text-align:center',
-      'border:1px solid #2a3050', 'transition:opacity .35s'
-    ].join(';');
-    document.body.appendChild(el);
+    // 편집 영상화면(preview-stack) 안에 붙이면 position:absolute로 하단 고정 가능
+    var previewStack = document.querySelector('.postprod-preview-stack');
+    if (previewStack) {
+      el.style.cssText = [
+        'position:absolute', 'bottom:14px', 'left:50%', 'transform:translateX(-50%)',
+        'background:rgba(15,20,40,0.88)', 'color:#d0d8f0', 'padding:8px 16px',
+        'border-radius:8px', 'font-size:12px', 'line-height:1.4',
+        'z-index:20', 'max-width:90%', 'box-shadow:0 4px 20px rgba(0,0,0,.6)',
+        'pointer-events:none', 'white-space:pre-wrap', 'text-align:center',
+        'border:1px solid rgba(80,100,180,0.35)', 'backdrop-filter:blur(6px)',
+        'transition:opacity .35s'
+      ].join(';');
+      previewStack.appendChild(el);
+    } else {
+      // fallback: 뷰포트 하단 중앙
+      el.style.cssText = [
+        'position:fixed', 'bottom:28px', 'left:50%', 'transform:translateX(-50%)',
+        'background:#1a1f35', 'color:#d0d8f0', 'padding:10px 20px',
+        'border-radius:8px', 'font-size:13px', 'line-height:1.4',
+        'z-index:99999', 'max-width:520px', 'box-shadow:0 4px 20px rgba(0,0,0,.6)',
+        'pointer-events:none', 'white-space:pre-wrap', 'text-align:center',
+        'border:1px solid #2a3050', 'transition:opacity .35s'
+      ].join(';');
+      document.body.appendChild(el);
+    }
     var timer = setTimeout(function () {
       el.style.opacity = '0';
       setTimeout(function () { el.parentNode && el.parentNode.removeChild(el); }, 380);
