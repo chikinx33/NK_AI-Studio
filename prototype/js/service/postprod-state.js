@@ -207,12 +207,21 @@
       if (Object.prototype.hasOwnProperty.call(patch, 'activeVersionId')) {
         nextPayload.activeVersionId = patch.activeVersionId;
       }
+      if (Object.prototype.hasOwnProperty.call(patch, 'overlayClips')) {
+        nextPayload.overlayClips = patch.overlayClips;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'musicUrl')) {
+        nextPayload.musicUrl = patch.musicUrl;
+      }
       var next = Object.assign({}, target, { payload: nextPayload });
       if (Object.prototype.hasOwnProperty.call(patch, 'postTimelineEdits')) {
         next.postTimelineEdits = patch.postTimelineEdits;
       }
       if (Object.prototype.hasOwnProperty.call(patch, 'renderMeta')) {
         next.renderMeta = patch.renderMeta;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'musicUrl')) {
+        next.musicUrl = patch.musicUrl;
       }
       return next;
     });

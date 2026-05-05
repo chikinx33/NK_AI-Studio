@@ -2923,19 +2923,33 @@
     state.history = [];
     state.historyIndex = -1;
     state.currentTime = 0;
-    // overlayClips를 svc 호출 전에 설정 — svc 내부에서 loadOverlayClipsFromProject가
-    // 프로젝트의 구 overlay 값을 state에 복원하는 버그를 방지
+
     var targetOverlays = (version.overlayClips || []).slice();
-    project.payload.overlayClips = targetOverlays;
+    state.overlayClips = targetOverlays;
+
+    // CRITICAL: overlayClips, musicUrl도 service patch에 포함시켜 storage에 영구 반영해야 함
+    // (단순 in-memory mutation은 svc가 storage에서 재로드하며 덮어씀)
+    var svcPatch = { postTimelineEdits: targetEdits, overlayClips: targetOverlays.slice() };
+    if (version.id !== 'v0') {
+      // 렌더 버전: 음악 URL 초기화 (저장된 값이 있으면 복원)
+      svcPatch.musicUrl = ('musicUrl' in version) ? (version.musicUrl || '') : '';
+    } else if ('musicUrl' in version) {
+      // v0: 저장된 음악 URL 복원
+      svcPatch.musicUrl = version.musicUrl || '';
+    }
+
     var svc = getPostprodStateService();
     if (svc && svc.applySavedPostProductionPayload) {
-      svc.applySavedPostProductionPayload(state.projectId, { postTimelineEdits: targetEdits });
+      svc.applySavedPostProductionPayload(state.projectId, svcPatch);
     } else {
       project.payload.postTimelineEdits = targetEdits;
       project.postTimelineEdits = targetEdits;
+      project.payload.overlayClips = svcPatch.overlayClips;
+      if ('musicUrl' in svcPatch) {
+        project.musicUrl = svcPatch.musicUrl;
+        project.payload.musicUrl = svcPatch.musicUrl;
+      }
     }
-    // svc 호출 후 state.overlayClips 강제 설정 (svc 내부 복원이 덮어쓴 경우 재정상화)
-    state.overlayClips = targetOverlays;
     stopPlayback();
     clearPreviewVideoCache();
     state.dirty = false;
@@ -2998,24 +3012,31 @@
     versions.push(newVersion);
 
     state.sessionEdits = {};
+    state.overlayClips = [];
     state.history = [];
     state.historyIndex = -1;
     state.currentTime = 0;
-    // I1 오버레이, M1 음악 초기화 — svc 호출 전에 설정해야 svc 내부 복원이 덮어쓰지 않음
-    project.payload.overlayClips = [];
-    project.musicUrl = '';
-    if (project.payload) project.payload.musicUrl = '';
 
+    // CRITICAL: I1 오버레이/M1 음악도 service patch에 포함시켜 storage에 영구 반영해야 함
+    // 단순히 project 객체를 mutation해도 applySavedPostProductionPayload가
+    // storage에서 다시 읽어 들이며 in-memory 변경을 덮어쓴다.
     var svc = getPostprodStateService();
     if (svc && svc.applySavedPostProductionPayload) {
-      svc.applySavedPostProductionPayload(state.projectId, { postTimelineEdits: baseEdits });
+      svc.applySavedPostProductionPayload(state.projectId, {
+        postTimelineEdits: baseEdits,
+        overlayClips: [],
+        musicUrl: ''
+      });
     } else {
       project.payload.postTimelineEdits = baseEdits;
       project.postTimelineEdits = baseEdits;
+      project.payload.overlayClips = [];
+      project.musicUrl = '';
+      project.payload.musicUrl = '';
     }
-    // svc 호출 후 재확인 (svc 내부에서 복원됐을 경우 강제 초기화)
-    state.overlayClips = [];
-    project.payload.overlayClips = [];
+    // svc는 새 project 객체를 생성하므로 최신 ref를 다시 가져와 일관성 보장
+    var projectAfterSvc = getProjectByStateId();
+    if (projectAfterSvc) project = projectAfterSvc;
     setVersionsToProject(versions, newVersionId);
 
     stopPlayback();
