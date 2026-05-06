@@ -927,6 +927,22 @@
       }
     }
 
+    function switchToStep(newStep) {
+      // ① step 버튼 is-active 토글
+      root.querySelectorAll('[data-action="brand-set-step"]').forEach(function (sb) {
+        var s = parseInt(sb.dataset.step || '0', 10);
+        sb.classList.toggle('is-active', s === newStep);
+      });
+      // ② 디테일 패널 is-active 토글 (순서: 자산=1, 포맷=2, 초안=3, 배포=4)
+      var panels = root.querySelectorAll('.bsf-detail-card > .bsf-detail');
+      panels.forEach(function (panel, idx) {
+        panel.classList.toggle('is-active', idx + 1 === newStep);
+      });
+      // ③ ctrl bar만 교체 (전체 리렌더 없음)
+      var ctrlBarEl = root.querySelector('.bsf-ctrl-bar');
+      if (ctrlBarEl) ctrlBarEl.innerHTML = makeCtrlBarHtml(newStep);
+    }
+
     function syncBrandAndProject(brandPatch, projectPatch) {
       return Promise.resolve().then(async function () {
         if (brandId && NK.service && NK.service.brand) {
@@ -1129,17 +1145,17 @@
           );
         }).join('')
       : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
-    var ctrlBarHtml = (function () {
-      if (activeStep === 1) {
+    function makeCtrlBarHtml(step) {
+      if (step === 1) {
         return (
           '<div class="bsf-ctrl-row">' +
-          '<span class="bsf-ctrl-info">' + escapeHtml(persistedSelectedAssetItems.length ? T.ctrlNSelected(persistedSelectedAssetItems.length) : T.ctrlNoSelection) + '</span>' +
-          '<button type="button" class="btn-secondary compact" data-action="brand-clear-assets"' + (persistedSelectedAssetItems.length ? '' : ' disabled') + '>' + T.ctrlClearSel + '</button>' +
+          '<span class="bsf-ctrl-info">' + escapeHtml(persistedSelCount ? T.ctrlNSelected(persistedSelCount) : T.ctrlNoSelection) + '</span>' +
+          '<button type="button" class="btn-secondary compact" data-action="brand-clear-assets"' + (persistedSelCount ? '' : ' disabled') + '>' + T.ctrlClearSel + '</button>' +
           '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="1">' + T.ctrlToFormat + '</button>' +
           '</div>'
         );
       }
-      if (activeStep === 2) {
+      if (step === 2) {
         return (
           '<div class="bsf-ctrl-row">' +
           '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? T.ctrlNFormats(selectedFormats.length) : T.ctrlSelectFormat) + '</span>' +
@@ -1147,7 +1163,7 @@
           '</div>'
         );
       }
-      if (activeStep === 3) {
+      if (step === 3) {
         return (
           '<div class="bsf-ctrl-row">' +
           '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
@@ -1163,7 +1179,8 @@
         '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
         '</div>'
       );
-    }());
+    }
+    var ctrlBarHtml = makeCtrlBarHtml(activeStep);
     root.innerHTML =
       '<section class="brand-studio-page">' +
       '<div class="bsf-flow-card">' +
@@ -1217,21 +1234,25 @@
       if (action === 'character-open-new' || action === 'character-edit' || action === 'character-deactivate' || action === 'character-save' || action === 'character-cancel') return;
       if (action === 'brand-set-step') {
         var targetStep = parseInt(String(btn.dataset.step || '0'), 10);
-        if (!targetStep || targetStep < 1 || targetStep > 4 || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioActiveStep: targetStep }) }));
-        NK.service.project.updatePayload(projectId, { brandStudioActiveStep: targetStep })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function () {});
+        if (!targetStep || targetStep < 1 || targetStep > 4) return;
+        // 즉시 단계 전환 — 리렌더 없음
+        switchToStep(targetStep);
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          NK.service.project.updatePayload(projectId, { brandStudioActiveStep: targetStep })
+            .catch(function () {});
+        }
         return;
       }
       if (action === 'brand-step-next') {
         var fromStep = parseInt(String(btn.dataset.step || '0'), 10);
         var nextStep = fromStep + 1;
-        if (!nextStep || nextStep < 1 || nextStep > 4 || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioActiveStep: nextStep }) }));
-        NK.service.project.updatePayload(projectId, { brandStudioActiveStep: nextStep })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function () {});
+        if (!nextStep || nextStep < 1 || nextStep > 4) return;
+        // 즉시 단계 전환 — 리렌더 없음
+        switchToStep(nextStep);
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          NK.service.project.updatePayload(projectId, { brandStudioActiveStep: nextStep })
+            .catch(function () {});
+        }
         return;
       }
       if (action === 'brand-toggle-format') {
