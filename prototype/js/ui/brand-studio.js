@@ -1364,7 +1364,7 @@
         '<div class="bsf-mock-row bsf-mock-ig-hd">' + mockAvatarHtml + '<span class="bsf-mock-uname">' + mockBrandName + '</span><span class="bsf-mock-dots">···</span></div>' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-ig-img') +
         '<div class="bsf-mock-ig-actions">♡ &nbsp; ✦ &nbsp; ✉</div>' +
-        '<div class="bsf-mock-ig-caption"><strong>' + mockBrandName + '</strong> ' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+        '<div class="bsf-mock-ig-caption"><strong>' + mockBrandName + '</strong> <span data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</span></div>' +
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write your caption…' : '캡션을 작성하세요')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag #tag'));
@@ -1373,7 +1373,7 @@
       return pvWrap(isEn ? 'Shorts preview' : '쇼츠 미리보기',
         '<div class="bsf-mockup bsf-mock-shorts">' +
         mockVidEl(draftFirstVidUrl, 'bsf-mock-shorts-vid') +
-        '<div class="bsf-mock-shorts-overlay"><div class="bsf-mock-shorts-caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div><div class="bsf-mock-shorts-title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div></div>' +
+        '<div class="bsf-mock-shorts-overlay"><div class="bsf-mock-shorts-caption" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div><div class="bsf-mock-shorts-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div></div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Shorts title' : '쇼츠 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Describe your video…' : '영상을 설명하세요')) +
@@ -1383,7 +1383,7 @@
       return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
         '<div class="bsf-mockup bsf-mock-tiktok">' +
         mockVidEl(draftFirstVidUrl, 'bsf-mock-tiktok-vid') +
-        '<div class="bsf-mock-tiktok-overlay"><div class="bsf-mock-tiktok-caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>' +
+        '<div class="bsf-mock-tiktok-overlay"><div class="bsf-mock-tiktok-caption" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>' +
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Write caption…' : '캡션을 작성하세요')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#FYP #tag'));
@@ -1394,7 +1394,7 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-x">' +
         '<div class="bsf-mock-row bsf-mock-x-hd">' + mockAvatarHtml + '<div><div class="bsf-mock-row" style="gap:6px"><span class="bsf-mock-uname">' + mockBrandName + '</span><span class="bsf-mock-subdued">@brand · 지금</span></div></div></div>' +
-        '<div class="bsf-mock-x-body">' + escapeHtml((captionVal || '').slice(0, 140)) + (captionVal.length > 140 ? '…' : '') + '</div>' +
+        '<div class="bsf-mock-x-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((captionVal || '').slice(0, 140)) + (captionVal.length > 140 ? '…' : '') + '</div>' +
         '<div class="bsf-mock-x-foot">♡ &nbsp; ↺ &nbsp; 📤</div>' +
         '</div>') +
       afWrap(isEn ? 'Post text' : '게시 문구',
@@ -1406,11 +1406,11 @@
       var paras = splitIntoParagraphs(captionVal, 3);
       var blogInner = '';
       if (draftFirstImgUrl) blogInner += '<img class="bsf-mock-blog-img" src="' + escapeHtml(draftFirstImgUrl) + '" />';
-      if (paras.length) blogInner += '<p class="bsf-mock-blog-para">' + escapeHtml((paras[0] || '').slice(0, 100)) + '…</p>';
+      if (paras.length) blogInner += '<p class="bsf-mock-blog-para" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((paras[0] || '').slice(0, 100)) + '…</p>';
       if (draftSelImgs.length > 1) blogInner += '<img class="bsf-mock-blog-img" src="' + escapeHtml(String(draftSelImgs[1].url || '')) + '" />';
       if (paras.length > 1) blogInner += '<p class="bsf-mock-blog-para">' + escapeHtml((paras[1] || '').slice(0, 100)) + '…</p>';
       return pvWrap(isEn ? 'Blog preview' : '블로그 미리보기',
-        '<div class="bsf-mockup bsf-mock-nblog"><div class="bsf-mock-nblog-title">' + escapeHtml(titleVal || '제목없음') + '</div>' + blogInner + '</div>') +
+        '<div class="bsf-mockup bsf-mock-nblog"><div class="bsf-mock-nblog-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal || '제목없음') + '</div>' + blogInner + '</div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Blog title' : '블로그 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Body' : '본문', ceDiv(fmtId, 'caption', captionVal, 8, isEn ? 'Blog content…' : '블로그 내용을 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags');
@@ -1419,7 +1419,7 @@
       return pvWrap(isEn ? 'Channel preview' : '채널 미리보기',
         '<div class="bsf-mockup bsf-mock-kakao"><div class="bsf-mock-kakao-hd">카카오채널</div>' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-kakao-img') +
-        '<div class="bsf-mock-kakao-body">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
+        '<div class="bsf-mock-kakao-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
       cfWrap(isEn ? 'Message' : '메시지', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write message…' : '메시지를 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'), fmtId, 'hashtags');
     }
@@ -1427,7 +1427,7 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-fb">' +
         '<div class="bsf-mock-row bsf-mock-fb-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">방금 전 · 🌐</div></div></div>' +
-        '<div class="bsf-mock-fb-body">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
+        '<div class="bsf-mock-fb-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
         (draftFirstImgUrl ? '<img class="bsf-mock-fb-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
         '<div class="bsf-mock-fb-foot">👍 좋아요 &nbsp; 💬 댓글 &nbsp; ↗ 공유</div>' +
         '</div>') +
@@ -1438,7 +1438,8 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-li">' +
         '<div class="bsf-mock-row bsf-mock-li-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">Brand · 1시간</div></div></div>' +
-        '<div class="bsf-mock-li-body">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
+        '<div class="bsf-mock-li-headline" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '').slice(0, 60) || '…') + '</div>' +
+        '<div class="bsf-mock-li-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
         (draftFirstImgUrl ? '<img class="bsf-mock-fb-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
         '<div class="bsf-mock-fb-foot" style="border-top:1px solid #2d3748;margin-top:6px;padding-top:6px">👍 &nbsp; 💬 댓글 &nbsp; ↗ 공유</div>' +
         '</div>') +
@@ -1450,8 +1451,8 @@
       return pvWrap(isEn ? 'Pin preview' : '핀 미리보기',
         '<div class="bsf-mockup bsf-mock-pin">' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-pin-img') +
-        '<div class="bsf-mock-pin-title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
-        '<div class="bsf-mock-pin-desc">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+        '<div class="bsf-mock-pin-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
+        '<div class="bsf-mock-pin-desc" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '핀 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Pin title' : '핀 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Describe your pin' : '핀을 설명하세요')) +
@@ -1464,7 +1465,7 @@
       return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
         '<div class="bsf-mockup bsf-mock-yt">' + thumbEl +
         '<div class="bsf-mock-row bsf-mock-yt-meta">' + mockAvatarHtml +
-        '<div class="bsf-mock-yt-info"><div class="bsf-mock-yt-title">' + escapeHtml((titleVal || '제목없음').slice(0, 60)) + '</div><div class="bsf-mock-subdued">' + mockBrandName + ' · 조회수 0회</div></div></div>' +
+        '<div class="bsf-mock-yt-info"><div class="bsf-mock-yt-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '제목없음').slice(0, 60)) + '</div><div class="bsf-mock-subdued">' + mockBrandName + ' · 조회수 0회</div></div></div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '영상 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Video title' : '영상 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Video description…' : '영상 설명을 작성하세요')) +
@@ -1472,9 +1473,9 @@
     }
     function buildNaverPostPreview(fmtId, captionVal, hashtagVal, titleVal) {
       return pvWrap(isEn ? 'Post preview' : '포스트 미리보기',
-        '<div class="bsf-mockup bsf-mock-npost"><div class="bsf-mock-npost-hd">' + escapeHtml((titleVal || '제목없음').slice(0, 30)) + '</div>' +
+        '<div class="bsf-mockup bsf-mock-npost"><div class="bsf-mock-npost-hd" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '제목없음').slice(0, 30)) + '</div>' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-npost-img') +
-        '<div class="bsf-mock-npost-body">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
+        '<div class="bsf-mock-npost-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Post title' : '포스트 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Content' : '내용', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Post content…' : '포스트 내용을 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags');
@@ -1483,7 +1484,7 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-band">' +
         '<div class="bsf-mock-row bsf-mock-band-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">1분 전</div></div></div>' +
-        '<div class="bsf-mock-band-body">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
+        '<div class="bsf-mock-band-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
         (draftFirstImgUrl ? '<img class="bsf-mock-band-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
         '</div>') +
       cfWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write post…' : '게시글을 작성하세요'), fmtId, 'caption') +
@@ -1645,33 +1646,44 @@
     restoreFieldScrollState(root, preservedFieldScroll);
     bindDisclosureState(root);
 
-    // contenteditable 자동 저장 (디바운스 800ms)
+    // contenteditable 자동 저장 (즉시 목업 반영 + 디바운스 800ms 서버 저장)
     var _draftSaveTimer = null;
     root.oninput = function (ev) {
       var ce = ev.target && ev.target.closest ? ev.target.closest('[data-draft-field][contenteditable]') : null;
       if (!ce) return;
+      var fmtId = String(ce.dataset.draftFormat || '').trim();
+      var fieldKey = String(ce.dataset.draftField || '').trim();
+      var newText = (ce.innerText || ce.textContent || '').trim();
+
+      // 즉시: 목업 미러 업데이트
+      if (fmtId && fieldKey) {
+        var mirrors = root.querySelectorAll('[data-mock-mirror="' + fmtId + '"][data-mock-field="' + fieldKey + '"]');
+        var mirrorText = newText.length > 80 ? newText.slice(0, 80) + '…' : (newText || '…');
+        for (var mi = 0; mi < mirrors.length; mi++) {
+          mirrors[mi].textContent = mirrorText;
+        }
+        // X/Threads 글자수 즉시 업데이트
+        if (fieldKey === 'caption' && fmtId === 'x-threads') {
+          var countEl = ce.parentElement && ce.parentElement.querySelector('.bsf-charcount');
+          if (countEl) {
+            var cLen = newText.length;
+            countEl.textContent = cLen + ' / 280';
+            countEl.className = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
+          }
+        }
+      }
+
+      // 800ms 디바운스: 서버 저장
       clearTimeout(_draftSaveTimer);
       _draftSaveTimer = setTimeout(function () {
-        var fmtId = String(ce.dataset.draftFormat || '').trim();
-        var fieldKey = String(ce.dataset.draftField || '').trim();
         if (!fmtId || !fieldKey) return;
-        var value = (ce.innerText || ce.textContent || '').trim();
         var nextFmtDraft = Object.assign({}, (formatDrafts && formatDrafts[fmtId]) || {});
-        nextFmtDraft[fieldKey] = value;
+        nextFmtDraft[fieldKey] = newText;
         var nextFormatDrafts = Object.assign({}, formatDrafts || {});
         nextFormatDrafts[fmtId] = nextFmtDraft;
         formatDrafts = nextFormatDrafts;
         if (NK.service && NK.service.project && NK.service.project.updatePayload) {
           NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts }).catch(function () {});
-        }
-        // X/Threads 글자수 업데이트
-        if (fieldKey === 'caption' && fmtId === 'x-threads') {
-          var countEl = ce.parentElement && ce.parentElement.querySelector('.bsf-charcount');
-          if (countEl) {
-            var cLen = (ce.innerText || ce.textContent || '').length;
-            countEl.textContent = cLen + ' / 280';
-            countEl.className = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
-          }
         }
       }, 800);
     };
@@ -1760,6 +1772,12 @@
         var htCe = root.querySelector('[data-draft-format="' + regenFmtId + '"][data-draft-field="hashtags"]');
         if (capCe) capCe.textContent = regenCaption;
         if (htCe) htCe.textContent = regenHashtag;
+        // 목업 미러 동기화
+        var regenCapMirrors = root.querySelectorAll('[data-mock-mirror="' + regenFmtId + '"][data-mock-field="caption"]');
+        var regenCapMirrorText = regenCaption.length > 80 ? regenCaption.slice(0, 80) + '…' : (regenCaption || '…');
+        for (var rmi = 0; rmi < regenCapMirrors.length; rmi++) {
+          regenCapMirrors[rmi].textContent = regenCapMirrorText;
+        }
         // legacy textarea fallback
         var captionElR = root.querySelector('#brand-draft-caption-' + regenFmtId);
         var hashtagElR = root.querySelector('#brand-draft-hashtag-' + regenFmtId);

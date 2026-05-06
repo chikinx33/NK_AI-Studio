@@ -12240,6 +12240,7 @@ body {
 .bsf-mock-li-hd { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; }
 .bsf-mock-fb-body,
 .bsf-mock-li-body { font-size: 12px; color: #cbd5e1; line-height: 1.45; margin-bottom: 8px; }
+.bsf-mock-li-headline { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-bottom: 4px; }
 .bsf-mock-fb-img { width: 100%; max-height: 150px; object-fit: cover; display: block; border-radius: 5px; margin-bottom: 7px; }
 .bsf-mock-fb-foot { font-size: 11px; color: #475569; display: flex; gap: 12px; }
 
