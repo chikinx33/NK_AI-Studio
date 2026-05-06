@@ -11748,18 +11748,19 @@ body {
 }
 
 .bsf-head-btn {
-  aspect-ratio: 1 / 1;
-  height: 70%;
-  min-height: 52px;
-  max-height: 80px;
-  padding: 0 4px;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  padding: 4px;
   white-space: normal;
   text-align: center;
   font-size: 11px;
   line-height: 1.3;
   border-radius: 12px;
   min-width: unset !important;
-  width: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ---- Timeline ---- */
@@ -12553,8 +12554,21 @@ body {
 .bsf-draft-tab.has-draft::after { content: ' ·'; color: var(--accent); }
 
 .bsf-format-draft-panels { position: relative; }
-.bsf-format-draft-panel { display: none; flex-direction: column; gap: 12px; }
-.bsf-format-draft-panel.is-active { display: flex; }
+.bsf-format-draft-panel { display: none; }
+.bsf-format-draft-panel.is-active {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+  align-items: start;
+}
+.bsf-format-draft-panel > .bsf-preview-legend { grid-column: 1 / -1; }
+.bsf-format-draft-panel > .bsf-field-preview {
+  grid-column: 2;
+  grid-row: 2 / span 30;
+  position: sticky;
+  top: 16px;
+}
+.bsf-format-draft-panel > .bsf-draft-regen-row { grid-column: 1; }
 
 .bsf-draft-title-row {
   display: flex;
