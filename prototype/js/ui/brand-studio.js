@@ -1355,6 +1355,53 @@
       if (panel) panel.querySelectorAll('.bsf-ce.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
     }
 
+    // ── 추가 필드 빌더 함수 ────────────────────────────────────────────────────
+    function selectField(fmtId, fieldKey, label, options, currentVal, fieldTier) {
+      var wC = fieldTier === 'copy' ? 'bsf-field-copy' : 'bsf-field-auto';
+      var bC = fieldTier === 'copy' ? 'bsf-badge-copy' : 'bsf-badge-auto';
+      var bT = fieldTier === 'copy' ? 'COPY' : 'AUTO';
+      var opts = options.map(function (o) {
+        return '<option value="' + escapeHtml(o.value) + '"' + (currentVal === o.value ? ' selected' : '') + '>' + escapeHtml(o.label) + '</option>';
+      }).join('');
+      return '<div class="bsf-field ' + wC + '"><div class="bsf-field-hd"><span class="bsf-badge ' + bC + '">' + bT + '</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' +
+        '<select class="bsf-select" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '">' + opts + '</select></div>';
+    }
+    function radioField(fmtId, fieldKey, label, options, currentVal, fieldTier) {
+      var wC = fieldTier === 'copy' ? 'bsf-field-copy' : 'bsf-field-auto';
+      var bC = fieldTier === 'copy' ? 'bsf-badge-copy' : 'bsf-badge-auto';
+      var bT = fieldTier === 'copy' ? 'COPY' : 'AUTO';
+      var gName = escapeHtml(fmtId + '_' + fieldKey);
+      var radios = options.map(function (o) {
+        return '<label><input type="radio" name="' + gName + '" value="' + escapeHtml(o.value) + '"' + (currentVal === o.value ? ' checked' : '') + ' data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '">' + escapeHtml(o.label) + '</label>';
+      }).join('');
+      return '<div class="bsf-field ' + wC + '"><div class="bsf-field-hd"><span class="bsf-badge ' + bC + '">' + bT + '</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' +
+        '<div class="bsf-radio-group">' + radios + '</div></div>';
+    }
+    function toggleField(fmtId, fieldKey, label, currentVal, fieldTier) {
+      var wC = fieldTier === 'copy' ? 'bsf-field-copy' : 'bsf-field-auto';
+      var bC = fieldTier === 'copy' ? 'bsf-badge-copy' : 'bsf-badge-auto';
+      var bT = fieldTier === 'copy' ? 'COPY' : 'AUTO';
+      var isOn = currentVal === true || currentVal === 'true';
+      return '<div class="bsf-field ' + wC + '"><div class="bsf-field-hd"><span class="bsf-badge ' + bC + '">' + bT + '</span><span class="bsf-field-label">' + escapeHtml(label) + '</span>' +
+        '<label class="bsf-toggle-wrap"><input type="checkbox" class="bsf-toggle-input" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '"' + (isOn ? ' checked' : '') + '><span class="bsf-toggle"></span></label>' +
+        '</div></div>';
+    }
+    function inputField(fmtId, fieldKey, label, placeholder, currentVal, fieldTier, inputType) {
+      var wC = fieldTier === 'copy' ? 'bsf-field-copy' : 'bsf-field-auto';
+      var bC = fieldTier === 'copy' ? 'bsf-badge-copy' : 'bsf-badge-auto';
+      var bT = fieldTier === 'copy' ? 'COPY' : 'AUTO';
+      var tp = inputType || 'text';
+      var cls = tp === 'url' ? 'bsf-input-url' : 'bsf-input-text';
+      return '<div class="bsf-field ' + wC + '"><div class="bsf-field-hd"><span class="bsf-badge ' + bC + '">' + bT + '</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' +
+        '<input type="' + tp + '" class="' + cls + '" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '" placeholder="' + escapeHtml(placeholder || '') + '" value="' + escapeHtml(String(currentVal || '')) + '"></div>';
+    }
+    function scheduledAtField(fmtId, currentVal, privacyStatus) {
+      var hidden = privacyStatus !== 'scheduled' ? ' style="display:none"' : '';
+      return '<div class="bsf-field bsf-field-auto bsf-scheduled-row" data-draft-format="' + escapeHtml(fmtId) + '"' + hidden + '>' +
+        '<div class="bsf-field-hd"><span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-field-label">' + (isEn ? 'Scheduled time' : '예약 일시') + '</span></div>' +
+        '<input type="datetime-local" class="bsf-input-datetime" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="scheduled_at" value="' + escapeHtml(String(currentVal || '')) + '"></div>';
+    }
+
     // 목업 공통 파트
     var mockAvatarHtml = '<div class="bsf-mock-avatar"></div>';
     var mockBrandName = escapeHtml((brandView.title || 'Brand').slice(0, 14));
@@ -1368,7 +1415,20 @@
     }
 
     // ── 12종 플랫폼 목업 빌더 ─────────────────────────────────────────────────
-    function buildInstagramPreview(fmtId, captionVal, hashtagVal) {
+    var ytCatOptions = function () { return [
+      { value: 'entertainment', label: isEn ? 'Entertainment' : '엔터테인먼트' },
+      { value: 'education',     label: isEn ? 'Education' : '교육' },
+      { value: 'gaming',        label: isEn ? 'Gaming' : '게임' },
+      { value: 'music',         label: isEn ? 'Music' : '음악' },
+      { value: 'etc',           label: isEn ? 'Other' : '기타' },
+    ]; };
+    var privacyOptions = function () { return [
+      { value: 'public',    label: isEn ? 'Public' : '공개' },
+      { value: 'unlisted',  label: isEn ? 'Unlisted' : '미공개' },
+      { value: 'scheduled', label: isEn ? 'Scheduled' : '예약' },
+    ]; };
+
+    function buildInstagramPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-ig">' +
         '<div class="bsf-mock-row bsf-mock-ig-hd">' + mockAvatarHtml + '<span class="bsf-mock-uname">' + mockBrandName + '</span><span class="bsf-mock-dots">···</span></div>' +
@@ -1377,9 +1437,11 @@
         '<div class="bsf-mock-ig-caption"><strong>' + mockBrandName + '</strong> <span data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</span></div>' +
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write your caption…' : '캡션을 작성하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag #tag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag #tag')) +
+      inputField(fmtId, 'location_tag', isEn ? 'Location tag' : '위치 태그', isEn ? 'Location (optional)' : '위치 태그 (선택)', draft.location_tag || '', 'auto') +
+      inputField(fmtId, 'first_comment', isEn ? 'First comment' : '첫 댓글', isEn ? 'Auto-post as first comment (optional)' : '첫 댓글로 자동 게시 (선택)', draft.first_comment || '', 'auto');
     }
-    function buildYoutubeShortsPreview(fmtId, captionVal, hashtagVal, titleVal) {
+    function buildYoutubeShortsPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Shorts preview' : '쇼츠 미리보기',
         '<div class="bsf-mockup bsf-mock-shorts">' +
         mockVidEl(draftFirstVidUrl, 'bsf-mock-shorts-vid') +
@@ -1387,18 +1449,28 @@
         '</div>') +
       afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Shorts title' : '쇼츠 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Describe your video…' : '영상을 설명하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#Shorts #tag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#Shorts #tag')) +
+      selectField(fmtId, 'category', isEn ? 'Category' : '카테고리', ytCatOptions(), draft.category || 'entertainment', 'auto') +
+      radioField(fmtId, 'privacy_status', isEn ? 'Privacy' : '공개 설정', privacyOptions(), draft.privacy_status || 'public', 'auto') +
+      scheduledAtField(fmtId, draft.scheduled_at || '', draft.privacy_status || 'public');
     }
-    function buildTiktokPreview(fmtId, captionVal, hashtagVal) {
+    function buildTiktokPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
         '<div class="bsf-mockup bsf-mock-tiktok">' +
         mockVidEl(draftFirstVidUrl, 'bsf-mock-tiktok-vid') +
         '<div class="bsf-mock-tiktok-overlay"><div class="bsf-mock-tiktok-caption" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>' +
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Write caption…' : '캡션을 작성하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#FYP #tag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#FYP #tag')) +
+      radioField(fmtId, 'privacy_level', isEn ? 'Audience' : '공개 범위', [
+        { value: 'public',      label: isEn ? 'Everyone' : '전체공개' },
+        { value: 'friends',     label: isEn ? 'Followers' : '팔로워만' },
+        { value: 'private',     label: isEn ? 'Private' : '비공개' },
+      ], draft.privacy_level || 'public', 'auto') +
+      toggleField(fmtId, 'allow_comment', isEn ? 'Allow comments' : '댓글 허용', draft.allow_comment !== false, 'auto') +
+      toggleField(fmtId, 'allow_duet',    isEn ? 'Allow duet' : '듀엣 허용',    draft.allow_duet === true, 'auto');
     }
-    function buildXThreadsPreview(fmtId, captionVal, hashtagVal) {
+    function buildXThreadsPreview(fmtId, captionVal, hashtagVal, draft) {
       var cLen = captionVal.length;
       var cCls = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
@@ -1410,30 +1482,43 @@
       afWrap(isEn ? 'Post text' : '게시 문구',
         ceDiv(fmtId, 'caption', captionVal, 4, isEn ? "What's happening?" : '무슨 일이 있나요?') +
         '<div class="bsf-charcount-row"><span class="' + cCls + '">' + cLen + ' / 280</span></div>') +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 1, '#hashtag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 1, '#hashtag')) +
+      radioField(fmtId, 'reply_setting', isEn ? 'Who can reply' : '답글 허용', [
+        { value: 'public',    label: isEn ? 'Everyone' : '전체' },
+        { value: 'followers', label: isEn ? 'Followers' : '팔로워만' },
+        { value: 'mentioned', label: isEn ? 'Mentioned only' : '언급한 사람만' },
+      ], draft.reply_setting || 'public', 'auto');
     }
-    function buildNaverBlogPreview(fmtId, captionVal, hashtagVal, titleVal) {
+    function buildNaverBlogPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       var paras = splitIntoParagraphs(captionVal, 3);
       var blogInner = '';
       if (draftFirstImgUrl) blogInner += '<img class="bsf-mock-blog-img" src="' + escapeHtml(draftFirstImgUrl) + '" />';
       if (paras.length) blogInner += '<p class="bsf-mock-blog-para" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((paras[0] || '').slice(0, 100)) + '…</p>';
       if (draftSelImgs.length > 1) blogInner += '<img class="bsf-mock-blog-img" src="' + escapeHtml(String(draftSelImgs[1].url || '')) + '" />';
       if (paras.length > 1) blogInner += '<p class="bsf-mock-blog-para">' + escapeHtml((paras[1] || '').slice(0, 100)) + '…</p>';
+      var seoDesc = String(draft.seo_description || '');
+      var seoLen = seoDesc.length;
       return pvWrap(isEn ? 'Blog preview' : '블로그 미리보기',
         '<div class="bsf-mockup bsf-mock-nblog"><div class="bsf-mock-nblog-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal || '제목없음') + '</div>' + blogInner + '</div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Blog title' : '블로그 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Body' : '본문', ceDiv(fmtId, 'caption', captionVal, 8, isEn ? 'Blog content…' : '블로그 내용을 작성하세요'), fmtId, 'caption') +
-      cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags');
+      cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags') +
+      cfWrap(isEn ? 'SEO description' : 'SEO 설명',
+        ceDiv(fmtId, 'seo_description', seoDesc, 2, isEn ? 'Search snippet (max 160 chars)' : '검색 노출용 요약 (최대 160자)') +
+        '<div class="bsf-charcount-row"><span class="bsf-charcount bsf-seo-count' + (seoLen > 150 ? ' over' : seoLen > 130 ? ' warn' : '') + '">' + seoLen + ' / 160</span></div>',
+        fmtId, 'seo_description');
     }
-    function buildKakaoPreview(fmtId, captionVal, hashtagVal) {
+    function buildKakaoPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Channel preview' : '채널 미리보기',
         '<div class="bsf-mockup bsf-mock-kakao"><div class="bsf-mock-kakao-hd">카카오채널</div>' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-kakao-img') +
         '<div class="bsf-mock-kakao-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
       cfWrap(isEn ? 'Message' : '메시지', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write message…' : '메시지를 작성하세요'), fmtId, 'caption') +
-      cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'), fmtId, 'hashtags');
+      cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'), fmtId, 'hashtags') +
+      inputField(fmtId, 'button_label', isEn ? 'Button label' : '버튼 텍스트', isEn ? 'e.g. Learn more' : '예: 자세히 보기', draft.button_label || '자세히 보기', 'copy') +
+      inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'copy', 'url');
     }
-    function buildFacebookPreview(fmtId, captionVal, hashtagVal) {
+    function buildFacebookPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-fb">' +
         '<div class="bsf-mock-row bsf-mock-fb-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">방금 전 · 🌐</div></div></div>' +
@@ -1442,9 +1527,15 @@
         '<div class="bsf-mock-fb-foot">👍 좋아요 &nbsp; 💬 댓글 &nbsp; ↗ 공유</div>' +
         '</div>') +
       afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? "What's on your mind?" : '무슨 생각을 하고 계신가요?')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
+      inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'auto', 'url') +
+      radioField(fmtId, 'privacy_status', isEn ? 'Privacy' : '공개 설정', [
+        { value: 'public',   label: isEn ? 'Everyone' : '전체공개' },
+        { value: 'friends',  label: isEn ? 'Friends' : '친구만' },
+        { value: 'private',  label: isEn ? 'Only me' : '비공개' },
+      ], draft.privacy_status || 'public', 'auto');
     }
-    function buildLinkedinPreview(fmtId, captionVal, hashtagVal, titleVal) {
+    function buildLinkedinPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-li">' +
         '<div class="bsf-mock-row bsf-mock-li-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">Brand · 1시간</div></div></div>' +
@@ -1455,9 +1546,14 @@
         '</div>') +
       afWrap(isEn ? 'Headline' : '헤드라인', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Headline or article title' : '헤드라인')) +
       afWrap(isEn ? 'Post body' : '본문', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Write your article…' : '아티클을 작성하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
+      radioField(fmtId, 'visibility', isEn ? 'Visibility' : '공개 범위', [
+        { value: 'public',      label: isEn ? 'Everyone' : '전체공개' },
+        { value: 'connections', label: isEn ? 'Connections only' : '연결만' },
+      ], draft.visibility || 'public', 'auto') +
+      inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'auto', 'url');
     }
-    function buildPinterestPreview(fmtId, captionVal, hashtagVal, titleVal) {
+    function buildPinterestPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Pin preview' : '핀 미리보기',
         '<div class="bsf-mockup bsf-mock-pin">' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-pin-img') +
@@ -1466,9 +1562,11 @@
         '</div>') +
       afWrap(isEn ? 'Title' : '핀 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Pin title' : '핀 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Describe your pin' : '핀을 설명하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
+      inputField(fmtId, 'board_name', isEn ? 'Board name' : '보드명', isEn ? 'Board to pin to' : '게시할 보드명', draft.board_name || '', 'auto') +
+      inputField(fmtId, 'link_url', isEn ? 'Destination URL' : '목적지 URL', 'https://', draft.link_url || '', 'auto', 'url');
     }
-    function buildYoutubePreview(fmtId, captionVal, hashtagVal, titleVal) {
+    function buildYoutubePreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       var thumbEl = draftFirstVidUrl
         ? '<video class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
         : (draftFirstImgUrl ? '<img class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-yt-thumb bsf-mock-media-empty"><span>▶</span></div>');
@@ -1479,18 +1577,22 @@
         '</div>') +
       afWrap(isEn ? 'Title' : '영상 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Video title' : '영상 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Video description…' : '영상 설명을 작성하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
+      selectField(fmtId, 'category', isEn ? 'Category' : '카테고리', ytCatOptions(), draft.category || 'entertainment', 'auto') +
+      radioField(fmtId, 'privacy_status', isEn ? 'Privacy' : '공개 설정', privacyOptions(), draft.privacy_status || 'public', 'auto') +
+      scheduledAtField(fmtId, draft.scheduled_at || '', draft.privacy_status || 'public');
     }
-    function buildNaverPostPreview(fmtId, captionVal, hashtagVal, titleVal) {
+    function buildNaverPostPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '포스트 미리보기',
         '<div class="bsf-mockup bsf-mock-npost"><div class="bsf-mock-npost-hd" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '제목없음').slice(0, 30)) + '</div>' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-npost-img') +
         '<div class="bsf-mock-npost-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Post title' : '포스트 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Content' : '내용', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Post content…' : '포스트 내용을 작성하세요'), fmtId, 'caption') +
-      cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags');
+      cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags') +
+      inputField(fmtId, 'series_name', isEn ? 'Series name' : '시리즈명', isEn ? 'Series (optional)' : '시리즈명 (선택)', draft.series_name || '', 'copy');
     }
-    function buildBandPreview(fmtId, captionVal, hashtagVal) {
+    function buildBandPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-band">' +
         '<div class="bsf-mock-row bsf-mock-band-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">1분 전</div></div></div>' +
@@ -1498,7 +1600,13 @@
         (draftFirstImgUrl ? '<img class="bsf-mock-band-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
         '</div>') +
       cfWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write post…' : '게시글을 작성하세요'), fmtId, 'caption') +
-      cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'), fmtId, 'hashtags');
+      cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'), fmtId, 'hashtags') +
+      selectField(fmtId, 'category', isEn ? 'Post type' : '게시 유형', [
+        { value: 'general',  label: isEn ? 'General' : '일반' },
+        { value: 'notice',   label: isEn ? 'Notice' : '공지' },
+        { value: 'poll',     label: isEn ? 'Poll' : '투표' },
+        { value: 'event',    label: isEn ? 'Event' : '이벤트' },
+      ], draft.category || 'general', 'copy');
     }
 
     // ── 플랫폼 카드 디스패처 ─────────────────────────────────────────────────
@@ -1514,18 +1622,18 @@
         '</div>';
       var bodyHtml = '';
       switch (formatId) {
-        case 'instagram':      bodyHtml = buildInstagramPreview(formatId, captionVal, hashtagVal); break;
-        case 'youtube-shorts': bodyHtml = buildYoutubeShortsPreview(formatId, captionVal, hashtagVal, titleVal); break;
-        case 'tiktok':         bodyHtml = buildTiktokPreview(formatId, captionVal, hashtagVal); break;
-        case 'x-threads':      bodyHtml = buildXThreadsPreview(formatId, captionVal, hashtagVal); break;
-        case 'naver-blog':     bodyHtml = buildNaverBlogPreview(formatId, captionVal, hashtagVal, titleVal); break;
-        case 'kakao':          bodyHtml = buildKakaoPreview(formatId, captionVal, hashtagVal); break;
-        case 'facebook':       bodyHtml = buildFacebookPreview(formatId, captionVal, hashtagVal); break;
-        case 'linkedin':       bodyHtml = buildLinkedinPreview(formatId, captionVal, hashtagVal, titleVal); break;
-        case 'pinterest':      bodyHtml = buildPinterestPreview(formatId, captionVal, hashtagVal, titleVal); break;
-        case 'youtube':        bodyHtml = buildYoutubePreview(formatId, captionVal, hashtagVal, titleVal); break;
-        case 'naver-post':     bodyHtml = buildNaverPostPreview(formatId, captionVal, hashtagVal, titleVal); break;
-        case 'band':           bodyHtml = buildBandPreview(formatId, captionVal, hashtagVal); break;
+        case 'instagram':      bodyHtml = buildInstagramPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'youtube-shorts': bodyHtml = buildYoutubeShortsPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
+        case 'tiktok':         bodyHtml = buildTiktokPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'x-threads':      bodyHtml = buildXThreadsPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'naver-blog':     bodyHtml = buildNaverBlogPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
+        case 'kakao':          bodyHtml = buildKakaoPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'facebook':       bodyHtml = buildFacebookPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'linkedin':       bodyHtml = buildLinkedinPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
+        case 'pinterest':      bodyHtml = buildPinterestPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
+        case 'youtube':        bodyHtml = buildYoutubePreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
+        case 'naver-post':     bodyHtml = buildNaverPostPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
+        case 'band':           bodyHtml = buildBandPreview(formatId, captionVal, hashtagVal, draft); break;
         default:
           bodyHtml = afWrap(isEn ? 'Caption' : '캡션', ceDiv(formatId, 'caption', captionVal, 4, isEn ? 'Caption…' : '캡션을 작성하세요')) +
                      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(formatId, 'hashtags', hashtagVal, 2, '#hashtag'));
@@ -1681,6 +1789,16 @@
             countEl.className = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
           }
         }
+        // Naver Blog SEO 설명 글자수 즉시 업데이트
+        if (fieldKey === 'seo_description' && fmtId === 'naver-blog') {
+          var seoFld = ce.closest && ce.closest('.bsf-field');
+          var seoCountEl = seoFld && seoFld.querySelector('.bsf-seo-count');
+          if (seoCountEl) {
+            var sLen = newText.length;
+            seoCountEl.textContent = sLen + ' / 160';
+            seoCountEl.className = 'bsf-charcount bsf-seo-count' + (sLen > 150 ? ' over' : sLen > 130 ? ' warn' : '');
+          }
+        }
       }
 
       // 800ms 디바운스: 서버 저장
@@ -1696,6 +1814,29 @@
           NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts }).catch(function () {});
         }
       }, 800);
+    };
+
+    // onchange: select / radio / checkbox(toggle) / input[text|url|datetime] 즉시 저장
+    root.onchange = function (ev) {
+      var el = ev.target && ev.target.closest ? ev.target.closest('[data-draft-field]') : null;
+      if (!el) return;
+      if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable) return;
+      var fmtId = String(el.dataset.draftFormat || '').trim();
+      var fieldKey = String(el.dataset.draftField || '').trim();
+      if (!fmtId || !fieldKey) return;
+      var value = el.type === 'checkbox' ? el.checked : String(el.value || '');
+      // privacy_status 변경 시 scheduled_at 행 표시/숨김
+      if (fieldKey === 'privacy_status') {
+        var scheduledRow = root.querySelector('.bsf-scheduled-row[data-draft-format="' + fmtId + '"]');
+        if (scheduledRow) scheduledRow.style.display = (value === 'scheduled') ? '' : 'none';
+      }
+      var nextDrafts = Object.assign({}, formatDrafts || {});
+      nextDrafts[fmtId] = Object.assign({}, nextDrafts[fmtId] || {});
+      nextDrafts[fmtId][fieldKey] = value;
+      formatDrafts = nextDrafts;
+      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+        NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextDrafts }).catch(function () {});
+      }
     };
 
     root.onclick = function (evt) {

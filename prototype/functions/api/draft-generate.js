@@ -130,7 +130,21 @@ export async function onRequestPost(context) {
       parsed = { caption: clean, hashtags: "" };
     }
 
-    return json(parsed, 200, origin);
+    // 추가 필드 기본값: AI 출력이 없는 필드만 채움 (AI 결과 우선)
+    const PLATFORM_DEFAULTS = {
+      youtube:          { category: "entertainment", privacy_status: "public" },
+      "youtube-shorts": { category: "entertainment", privacy_status: "public" },
+      tiktok:           { privacy_level: "public", allow_comment: true, allow_duet: false },
+      facebook:         { privacy_status: "public" },
+      linkedin:         { visibility: "public" },
+      "x-threads":      { reply_setting: "public" },
+      kakao:            { button_label: "자세히 보기" },
+      band:             { category: "general" },
+    };
+    const defaults = PLATFORM_DEFAULTS[platformId] || {};
+    const result = Object.assign({}, defaults, parsed);
+
+    return json(result, 200, origin);
   } catch (err) {
     if (/CREDIT_EXHAUSTED/.test(err?.message)) {
       return json({ error: "CREDIT_EXHAUSTED" }, 402, origin);
