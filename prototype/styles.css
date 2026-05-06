@@ -11807,8 +11807,8 @@ body {
 
 .bsf-step.is-done .bsf-step-dot {
   border-color: var(--accent);
-  background: var(--accent);
-  color: #fff;
+  background: transparent;
+  color: var(--accent);
 }
 .bsf-step.is-done .bsf-step-dot::before { content: '✓'; font-size: 12px; }
 .bsf-step.is-done { color: var(--text); }

@@ -631,7 +631,13 @@
         'tiktok': '짧은 영상 중심 빠른 확산 채널',
         'x-threads': '짧은 글·링크 중심 실시간 확산 채널',
         'naver-blog': '검색 노출 기반 블로그 콘텐츠 채널',
-        'kakao': '카카오채널·카카오스토리 운영'
+        'kakao': '카카오채널·카카오스토리 운영',
+        'facebook': '피드·릴스·그룹·페이지 브랜드 운영 채널',
+        'linkedin': 'B2B 아티클·피드·뉴스레터 전문 채널',
+        'pinterest': '이미지 핀 중심 비주얼 콘텐츠 채널',
+        'youtube': '롱폼 영상·튜토리얼·리뷰 운영 채널',
+        'naver-post': '모바일 카드뉴스·매거진형 콘텐츠 채널',
+        'band': '팬 커뮤니티·소모임 중심 운영 채널'
       },
       alertSaveFormatFail: function (e) { return '포맷 선택 저장 실패: ' + e; },
       alertDraftSaved: '초안을 저장했습니다.',
@@ -679,7 +685,13 @@
         'tiktok': 'Short-video channel for rapid viral growth',
         'x-threads': 'Short text & link real-time distribution',
         'naver-blog': 'Search-optimized blog content channel',
-        'kakao': 'KakaoChannel & KakaoStory management'
+        'kakao': 'KakaoChannel & KakaoStory management',
+        'facebook': 'Feed, Reels, Groups & Pages brand channel',
+        'linkedin': 'B2B articles, feed & newsletter channel',
+        'pinterest': 'Visual content channel focused on image pins',
+        'youtube': 'Long-form videos, tutorials & reviews channel',
+        'naver-post': 'Mobile card news & magazine-style content channel',
+        'band': 'Fan community & interest group channel'
       },
       alertSaveFormatFail: function (e) { return 'Failed to save format: ' + e; },
       alertDraftSaved: 'Draft saved.',
@@ -749,7 +761,13 @@
       { id: 'tiktok', title: 'TikTok', desc: '짧은 영상 중심 빠른 확산 채널', hasTitle: false },
       { id: 'x-threads', title: 'X · Threads', desc: '짧은 글·링크 중심 실시간 확산 채널', hasTitle: false },
       { id: 'naver-blog', title: 'Naver Blog', desc: '검색 노출 기반 블로그 콘텐츠 채널', hasTitle: true },
-      { id: 'kakao', title: 'Kakao', desc: '카카오채널·카카오스토리 운영', hasTitle: false }
+      { id: 'kakao', title: 'Kakao', desc: '카카오채널·카카오스토리 운영', hasTitle: false },
+      { id: 'facebook', title: 'Facebook', desc: '피드·릴스·그룹·페이지 브랜드 운영 채널', hasTitle: false },
+      { id: 'linkedin', title: 'LinkedIn', desc: 'B2B 아티클·피드·뉴스레터 전문 채널', hasTitle: true },
+      { id: 'pinterest', title: 'Pinterest', desc: '이미지 핀 중심 비주얼 콘텐츠 채널', hasTitle: true },
+      { id: 'youtube', title: 'YouTube', desc: '롱폼 영상·튜토리얼·리뷰 운영 채널', hasTitle: true },
+      { id: 'naver-post', title: 'Naver Post', desc: '모바일 카드뉴스·매거진형 콘텐츠 채널', hasTitle: true },
+      { id: 'band', title: 'Band', desc: '팬 커뮤니티·소모임 중심 운영 채널', hasTitle: false }
     ];
   }
 
