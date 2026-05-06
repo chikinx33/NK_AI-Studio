@@ -1983,11 +1983,6 @@
       '<div class="bsf-detail bsf-detail-draft' + (activeStep === 3 ? ' is-active' : '') + '">' +
       '<div class="bsf-detail-head bsf-detail-head-draft">' +
         '<div class="bsf-draft-head-row"><strong>' + T.head03 + '</strong>' + draftTabsHtml + '</div>' +
-        '<div class="bsf-preview-legend">' +
-          '<span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-legend-txt">' + (isEn ? 'API sendable' : 'API 자동 전송') + '</span>' +
-          '<span class="bsf-badge bsf-badge-copy">COPY</span><span class="bsf-legend-txt">' + (isEn ? 'Copy & post manually' : '복사 후 직접 게시') + '</span>' +
-          '<span class="bsf-badge bsf-badge-preview">PREVIEW</span><span class="bsf-legend-txt">' + (isEn ? 'Mockup only' : '미리보기 전용') + '</span>' +
-        '</div>' +
       '</div>' +
       '<div class="bsf-format-draft-panels">' + draftPanelsHtml + '</div>' +
       '</div>' +
