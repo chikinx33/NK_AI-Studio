@@ -1943,7 +1943,14 @@
         );
       }
       if (step === 3) {
-        return '';
+        return (
+          '<div class="bsf-ctrl-row">' +
+          '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
+          '<button type="button" class="btn-primary compact" data-action="brand-save-format-draft" disabled>' + T.ctrlSave + '</button>' +
+          '<span class="bsf-ctrl-divider"></span>' +
+          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="3"' + (hasDraftForAnyFormat ? '' : ' disabled') + '>' + T.ctrlToPublish + '</button>' +
+          '</div>'
+        );
       }
       return (
         '<div class="bsf-ctrl-row">' +
@@ -2002,6 +2009,12 @@
 
     // contenteditable 자동 저장 (즉시 목업 반영 + 디바운스 800ms 서버 저장)
     var _draftSaveTimer = null;
+    var _draftDirty = false;
+    function setSaveBtnEnabled(val) {
+      _draftDirty = val;
+      var sb = root.querySelector('[data-action="brand-save-format-draft"]');
+      if (sb) sb.disabled = !val;
+    }
     root.oninput = function (ev) {
       var ce = ev.target && ev.target.closest ? ev.target.closest('[data-draft-field][contenteditable]') : null;
       if (!ce) return;
@@ -2037,6 +2050,9 @@
         }
       }
 
+      // 변경 발생 시 저장 버튼 활성화
+      setSaveBtnEnabled(true);
+
       // 800ms 디바운스: 서버 저장
       clearTimeout(_draftSaveTimer);
       _draftSaveTimer = setTimeout(function () {
@@ -2047,7 +2063,9 @@
         nextFormatDrafts[fmtId] = nextFmtDraft;
         formatDrafts = nextFormatDrafts;
         if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-          NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts }).catch(function () {});
+          NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts })
+            .then(function () { setSaveBtnEnabled(false); })
+            .catch(function () {});
         }
       }, 800);
     };
@@ -2142,6 +2160,8 @@
         root.querySelectorAll('.bsf-format-draft-panel').forEach(function (panel) {
           panel.classList.toggle('is-active', panel.dataset.draftFormat === tabId);
         });
+        // 탭 전환 시 저장 버튼 초기화 (새 탭은 변경 없음)
+        setSaveBtnEnabled(false);
         // 비동기 저장
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         NK.service.project.updatePayload(projectId, { brandStudioActiveDraftTab: tabId })
@@ -2234,9 +2254,11 @@
         nextFormatDrafts[currentFmtId] = nextFmtDraft;
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(T.alertDraftSaved); })
-          .catch(function (err) { alert(T.alertDraftSaveFail(err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; });
+          .then(function (result) {
+            if (result && result.draft) { renderNext(result.draft); } else { setSaveBtnEnabled(false); }
+            alert(T.alertDraftSaved);
+          })
+          .catch(function (err) { alert(T.alertDraftSaveFail(err && err.message ? err.message : err)); btn.disabled = false; });
         return;
       }
       if (action === 'brand-generate-all-drafts') {
