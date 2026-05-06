@@ -1333,6 +1333,11 @@
     function pvWrap(label, innerHtml) {
       return '<div class="bsf-field bsf-field-preview"><div class="bsf-field-hd"><span class="bsf-badge bsf-badge-preview">PREVIEW</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' + innerHtml + '</div>';
     }
+    function cfWrap(label, ceHtml, fmtId, fieldKey) {
+      return '<div class="bsf-field bsf-field-copy"><div class="bsf-field-hd"><span class="bsf-badge bsf-badge-copy">COPY</span><span class="bsf-field-label">' + escapeHtml(label) + '</span>' +
+        '<button type="button" class="bsf-copy-btn" data-action="brand-copy-field" data-draft-format="' + escapeHtml(fmtId) + '" data-field-key="' + escapeHtml(fieldKey) + '">' +
+        '📋 ' + (isEn ? 'Copy' : '복사') + '</button></div>' + ceHtml + '</div>';
+    }
     function ceDiv(fmtId, fieldKey, value, rows, placeholder) {
       return '<div class="bsf-ce" contenteditable="true" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '" data-rows="' + (rows || 3) + '" data-placeholder="' + escapeHtml(placeholder || '') + '">' + escapeHtml(value) + '</div>';
     }
@@ -1406,17 +1411,17 @@
       if (paras.length > 1) blogInner += '<p class="bsf-mock-blog-para">' + escapeHtml((paras[1] || '').slice(0, 100)) + '…</p>';
       return pvWrap(isEn ? 'Blog preview' : '블로그 미리보기',
         '<div class="bsf-mockup bsf-mock-nblog"><div class="bsf-mock-nblog-title">' + escapeHtml(titleVal || '제목없음') + '</div>' + blogInner + '</div>') +
-      afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Blog title' : '블로그 제목')) +
-      afWrap(isEn ? 'Body' : '본문', ceDiv(fmtId, 'caption', captionVal, 8, isEn ? 'Blog content…' : '블로그 내용을 작성하세요')) +
-      afWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'));
+      cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Blog title' : '블로그 제목'), fmtId, 'title') +
+      cfWrap(isEn ? 'Body' : '본문', ceDiv(fmtId, 'caption', captionVal, 8, isEn ? 'Blog content…' : '블로그 내용을 작성하세요'), fmtId, 'caption') +
+      cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags');
     }
     function buildKakaoPreview(fmtId, captionVal, hashtagVal) {
       return pvWrap(isEn ? 'Channel preview' : '채널 미리보기',
         '<div class="bsf-mockup bsf-mock-kakao"><div class="bsf-mock-kakao-hd">카카오채널</div>' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-kakao-img') +
         '<div class="bsf-mock-kakao-body">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
-      afWrap(isEn ? 'Message' : '메시지', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write message…' : '메시지를 작성하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'));
+      cfWrap(isEn ? 'Message' : '메시지', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write message…' : '메시지를 작성하세요'), fmtId, 'caption') +
+      cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'), fmtId, 'hashtags');
     }
     function buildFacebookPreview(fmtId, captionVal, hashtagVal) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
@@ -1470,9 +1475,9 @@
         '<div class="bsf-mockup bsf-mock-npost"><div class="bsf-mock-npost-hd">' + escapeHtml((titleVal || '제목없음').slice(0, 30)) + '</div>' +
         mockImgEl(draftFirstImgUrl, 'bsf-mock-npost-img') +
         '<div class="bsf-mock-npost-body">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
-      afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Post title' : '포스트 제목')) +
-      afWrap(isEn ? 'Content' : '내용', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Post content…' : '포스트 내용을 작성하세요')) +
-      afWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'));
+      cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Post title' : '포스트 제목'), fmtId, 'title') +
+      cfWrap(isEn ? 'Content' : '내용', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Post content…' : '포스트 내용을 작성하세요'), fmtId, 'caption') +
+      cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags');
     }
     function buildBandPreview(fmtId, captionVal, hashtagVal) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
@@ -1481,8 +1486,8 @@
         '<div class="bsf-mock-band-body">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
         (draftFirstImgUrl ? '<img class="bsf-mock-band-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
         '</div>') +
-      afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write post…' : '게시글을 작성하세요')) +
-      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+      cfWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write post…' : '게시글을 작성하세요'), fmtId, 'caption') +
+      cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'), fmtId, 'hashtags');
     }
 
     // ── 플랫폼 카드 디스패처 ─────────────────────────────────────────────────
@@ -1492,7 +1497,8 @@
       var titleVal = String(draft.title || '').trim() || epTitle;
       var legendHtml =
         '<div class="bsf-preview-legend">' +
-        '<span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-legend-txt">' + (isEn ? 'API sendable' : 'API 전송 가능') + '</span>' +
+        '<span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-legend-txt">' + (isEn ? 'API sendable' : 'API 자동 전송') + '</span>' +
+        '<span class="bsf-badge bsf-badge-copy">COPY</span><span class="bsf-legend-txt">' + (isEn ? 'Copy & post manually' : '복사 후 직접 게시') + '</span>' +
         '<span class="bsf-badge bsf-badge-preview">PREVIEW</span><span class="bsf-legend-txt">' + (isEn ? 'Mockup only' : '미리보기 전용') + '</span>' +
         '</div>';
       var bodyHtml = '';
@@ -1776,14 +1782,19 @@
           copyVal = cpEl ? ((cpEl.innerText || cpEl.textContent || '').trim()) : '';
         }
         if (!copyVal) return;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(copyVal).catch(function () {});
-        } else {
-          try { var ta = document.createElement('textarea'); ta.value = copyVal; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (_) {}
+        function applyCopiedFeedback() {
+          var origTxt = btn.textContent;
+          btn.textContent = isEn ? '✓ Copied' : '✓ 복사됨';
+          btn.classList.add('copied');
+          setTimeout(function () { btn.textContent = origTxt; btn.classList.remove('copied'); }, 1500);
         }
-        var origTxt = btn.textContent;
-        btn.textContent = isEn ? 'Copied!' : '복사됨!';
-        setTimeout(function () { btn.textContent = origTxt; }, 1400);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(copyVal).then(applyCopiedFeedback).catch(function () {
+            try { var ta = document.createElement('textarea'); ta.value = copyVal; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); applyCopiedFeedback(); } catch (_) {}
+          });
+        } else {
+          try { var ta = document.createElement('textarea'); ta.value = copyVal; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); applyCopiedFeedback(); } catch (_) {}
+        }
         return;
       }
       if (action === 'brand-save-format-draft') {

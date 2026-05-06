@@ -12080,6 +12080,7 @@ body {
   flex-shrink: 0;
 }
 .bsf-badge-auto    { background: #14391f; color: #4ade80; }
+.bsf-badge-copy    { background: #3d2200; color: #fbbf24; }
 .bsf-badge-preview { background: #1e293b; color: #94a3b8; }
 
 /* Field wrappers */
@@ -12099,6 +12100,38 @@ body {
 }
 .bsf-field-auto    { border-left: 2px solid #4ade80; padding-left: 10px; }
 .bsf-field-preview { border-left: 2px solid #475569; padding-left: 10px; }
+.bsf-field-copy {
+  border-left: 2px solid #f59e0b;
+  padding-left: 10px;
+  background: rgba(245, 158, 11, 0.04);
+  border-radius: 0 6px 6px 0;
+}
+
+/* COPY 티어 복사 버튼 */
+.bsf-field-copy .bsf-field-hd { margin-bottom: 6px; }
+.bsf-copy-btn {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid #f59e0b;
+  border-radius: 4px;
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+  white-space: nowrap;
+}
+.bsf-copy-btn:hover {
+  background: #f59e0b;
+  color: #000;
+}
+.bsf-copy-btn.copied {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}
 
 /* Contenteditable fields */
 .bsf-ce {
