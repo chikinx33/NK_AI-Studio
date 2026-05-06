@@ -12234,12 +12234,14 @@ body {
   border: 1px solid #f59e0b;
   border-radius: 4px;
   color: #fbbf24;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 9px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
   transition: background 0.14s, color 0.14s, border-color 0.14s;
-  white-space: nowrap;
 }
 .bsf-copy-btn:hover {
   background: #f59e0b;

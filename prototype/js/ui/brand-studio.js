@@ -1458,8 +1458,9 @@
     }
     function cfWrap(label, ceHtml, fmtId, fieldKey) {
       return '<div class="bsf-field bsf-field-copy"><div class="bsf-field-hd"><span class="bsf-badge bsf-badge-copy">COPY</span><span class="bsf-field-label">' + escapeHtml(label) + '</span>' +
-        '<button type="button" class="bsf-copy-btn" data-action="brand-copy-field" data-draft-format="' + escapeHtml(fmtId) + '" data-field-key="' + escapeHtml(fieldKey) + '">' +
-        '📋 ' + (isEn ? 'Copy' : '복사') + '</button></div>' + ceHtml + '</div>';
+        '<button type="button" class="bsf-copy-btn" data-action="brand-copy-field" data-draft-format="' + escapeHtml(fmtId) + '" data-field-key="' + escapeHtml(fieldKey) + '" title="' + (isEn ? 'Copy' : '복사') + '">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>' +
+        '</button></div>' + ceHtml + '</div>';
     }
     function ceDiv(fmtId, fieldKey, value, rows, placeholder) {
       return '<div class="bsf-ce" contenteditable="true" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '" data-rows="' + (rows || 3) + '" data-placeholder="' + escapeHtml(placeholder || '') + '">' + escapeHtml(value) + '</div>';
@@ -2211,10 +2212,10 @@
         }
         if (!copyVal) return;
         function applyCopiedFeedback() {
-          var origTxt = btn.textContent;
-          btn.textContent = isEn ? '✓ Copied' : '✓ 복사됨';
+          var origHtml = btn.innerHTML;
+          btn.innerHTML = '✓';
           btn.classList.add('copied');
-          setTimeout(function () { btn.textContent = origTxt; btn.classList.remove('copied'); }, 1500);
+          setTimeout(function () { btn.innerHTML = origHtml; btn.classList.remove('copied'); }, 1500);
         }
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard.writeText(copyVal).then(applyCopiedFeedback).catch(function () {
