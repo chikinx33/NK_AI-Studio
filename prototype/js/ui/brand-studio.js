@@ -976,7 +976,7 @@
     function countExplicitSelected(items) {
       return items.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0; }).length;
     }
-    var storySelected = typeSelected(storyItems);
+    var storySelected = !!(payload.brandStudioStorySelected);
     var imageSelCount = countExplicitSelected(imageItems);
     var imageAnySelected = imageSelCount > 0;
     var imageAllSelected = imageItems.length > 0 && imageSelCount === imageItems.length;
@@ -1011,7 +1011,7 @@
     var storyCountLabel = isEn ? String(storyCount) : (storyCount + '개');
     var storyCardHtml =
       '<div class="bsf-asset-type-card bsf-story-card' + (storySelected ? ' is-selected' : '') + '"' +
-      ((storyNarrative || storyItems.length) ? ' data-action="brand-toggle-asset-type" data-asset-type="text"' : '') + '>' +
+      ((storyNarrative || storyItems.length) ? ' data-action="brand-toggle-story-card"' : '') + '>' +
       '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardStory + '</span><em>' + storyCountLabel + '</em></div>' +
       '<div class="bsf-asset-story-body">' +
       (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">' + T.hintStory.replace('\n', '<br>') + '</p>') +
@@ -1311,6 +1311,15 @@
           .finally(function () { btn.disabled = false; });
         return;
       }
+      if (action === 'brand-toggle-story-card') {
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextStorySelected = !payload.brandStudioStorySelected;
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioStorySelected: nextStorySelected }) }));
+        NK.service.project.updatePayload(projectId, { brandStudioStorySelected: nextStorySelected })
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function () {});
+        return;
+      }
       if (action === 'bsf-zoom-thumb') {
         var mediaUrl = String(btn.dataset.url || '').trim();
         var mediaType = String(btn.dataset.mediaType || 'image').trim();
@@ -1323,6 +1332,8 @@
         var nextSingleIds = selectedAssetIds.slice();
         var sidx = nextSingleIds.indexOf(singleAssetId);
         if (sidx >= 0) nextSingleIds.splice(sidx, 1); else nextSingleIds.push(singleAssetId);
+        // 즉시 시각 반응 (전체 리렌더 전에 CSS 클래스 선토글)
+        btn.classList.toggle('is-selected', sidx < 0);
         renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: nextSingleIds }) }));
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextSingleIds })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
