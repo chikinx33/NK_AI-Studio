@@ -278,6 +278,26 @@
     return data;
   };
 
+  api.draftGenerate = async function (payload) {
+    var res = await fetchWithTimeout(withBase('/api/draft-generate'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload || {})
+    }, 30000);
+    var text = await readTextWithTimeout(res, 30000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'draft_generate_api_error');
+      err.status = res.status;
+      err.detail = text;
+      if (res.status === 402 || /CREDIT_EXHAUSTED/.test(text)) {
+        err.message = 'CREDIT_EXHAUSTED';
+        err.creditExhausted = true;
+      }
+      throw err;
+    }
+    return j(text);
+  };
+
   api.imagen = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();

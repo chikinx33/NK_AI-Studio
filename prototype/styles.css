@@ -12052,7 +12052,28 @@ body {
   background: var(--accent);
   color: #fff;
 }
+.bsf-draft-regen-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
 .bsf-caption-tall { min-height: 160px; }
+
+/* ── AI 재생성 스켈레톤 로딩 ──────────────────────────────────────────── */
+.bsf-ce.bsf-skeleton {
+  color: transparent !important;
+  background: linear-gradient(90deg, #1a2133 25%, #2d3a50 50%, #1a2133 75%);
+  background-size: 200% 100%;
+  animation: bsf-shimmer 1.2s linear infinite;
+  pointer-events: none;
+  user-select: none;
+  min-height: 48px;
+  border-color: transparent !important;
+}
+@keyframes bsf-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
 
 /* ── Step 3 — 3-tier field system ─────────────────────────────────────── */
 .bsf-preview-legend {

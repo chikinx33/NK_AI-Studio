@@ -1344,6 +1344,16 @@
     function regenBtnHtml(fmtId) {
       return '<button type="button" class="bsf-draft-regen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(fmtId) + '">' + escapeHtml(T.draftRegen) + '</button>';
     }
+    function showDraftSkeleton(panel) {
+      var regenBtn = panel && panel.querySelector('[data-action="brand-regen-draft"]');
+      if (regenBtn) { regenBtn.disabled = true; regenBtn.textContent = isEn ? '⏳ Generating…' : '⏳ 생성 중…'; }
+      if (panel) panel.querySelectorAll('.bsf-ce[contenteditable]').forEach(function (el) { el.classList.add('bsf-skeleton'); });
+    }
+    function hideDraftSkeleton(panel) {
+      var regenBtn = panel && panel.querySelector('[data-action="brand-regen-draft"]');
+      if (regenBtn) { regenBtn.disabled = false; regenBtn.textContent = T.draftRegen; }
+      if (panel) panel.querySelectorAll('.bsf-ce.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
+    }
 
     // 목업 공통 파트
     var mockAvatarHtml = '<div class="bsf-mock-avatar"></div>';
@@ -1763,32 +1773,46 @@
       }
       if (action === 'brand-regen-draft') {
         var regenFmtId = String(btn.dataset.formatId || '').trim();
-        var regenFmt = formatItems.find(function (f) { return f.id === regenFmtId; });
-        if (!regenFmt) return;
-        var regenCaption = buildCaptionDraft(project, brandView, regenFmt, sourceTexts, knowledge);
-        var regenHashtag = buildHashtagDraft(project, brandView, regenFmt, sourceTexts, knowledge);
-        // contenteditable 필드 업데이트
-        var capCe = root.querySelector('[data-draft-format="' + regenFmtId + '"][data-draft-field="caption"]');
-        var htCe = root.querySelector('[data-draft-format="' + regenFmtId + '"][data-draft-field="hashtags"]');
-        if (capCe) capCe.textContent = regenCaption;
-        if (htCe) htCe.textContent = regenHashtag;
-        // 목업 미러 동기화
-        var regenCapMirrors = root.querySelectorAll('[data-mock-mirror="' + regenFmtId + '"][data-mock-field="caption"]');
-        var regenCapMirrorText = regenCaption.length > 80 ? regenCaption.slice(0, 80) + '…' : (regenCaption || '…');
-        for (var rmi = 0; rmi < regenCapMirrors.length; rmi++) {
-          regenCapMirrors[rmi].textContent = regenCapMirrorText;
-        }
-        // legacy textarea fallback
-        var captionElR = root.querySelector('#brand-draft-caption-' + regenFmtId);
-        var hashtagElR = root.querySelector('#brand-draft-hashtag-' + regenFmtId);
-        if (captionElR) captionElR.value = regenCaption;
-        if (hashtagElR) hashtagElR.value = regenHashtag;
-        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+        if (!regenFmtId) return;
+        var regenPanel = (btn.closest ? btn.closest('.bsf-format-draft-panel') : null) ||
+          root.querySelector('.bsf-format-draft-panel[data-draft-format="' + regenFmtId + '"]');
+        if (!regenPanel) return;
+        showDraftSkeleton(regenPanel);
+        var brandCtx = [
+          String(brandView && (brandView.title || brandView.brandName) || ''),
+          String(brandView && brandView.brandDescription || ''),
+          String(knowledge && knowledge.brandCharacter || ''),
+          String(knowledge && knowledge.brandVoice || ''),
+        ].filter(Boolean).join('\n');
+        (NK.api && NK.api.draftGenerate
+          ? NK.api.draftGenerate({
+              platformId: regenFmtId,
+              story: String(payload.story || payload.storyPrompt || '').trim(),
+              brandContext: brandCtx,
+            })
+          : Promise.reject(new Error('api_not_ready'))
+        ).then(function (result) {
+          hideDraftSkeleton(regenPanel);
+          ['caption', 'hashtags', 'title'].forEach(function (fieldKey) {
+            if (!result[fieldKey]) return;
+            var ceEl = regenPanel.querySelector('[data-draft-format="' + regenFmtId + '"][data-draft-field="' + fieldKey + '"]');
+            if (ceEl) ceEl.innerText = result[fieldKey];
+            var mirror = regenPanel.querySelector('[data-mock-mirror="' + regenFmtId + '"][data-mock-field="' + fieldKey + '"]');
+            if (mirror) {
+              var displayText = String(result[fieldKey]);
+              mirror.textContent = displayText.length > 80 ? displayText.slice(0, 80) + '…' : displayText;
+            }
+          });
           var regenDrafts = Object.assign({}, formatDrafts);
-          regenDrafts[regenFmtId] = Object.assign({}, regenDrafts[regenFmtId] || {}, { caption: regenCaption, hashtags: regenHashtag });
+          regenDrafts[regenFmtId] = Object.assign({}, regenDrafts[regenFmtId] || {}, result);
           formatDrafts = regenDrafts;
-          NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: regenDrafts }).catch(function () {});
-        }
+          if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+            NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: regenDrafts }).catch(function () {});
+          }
+        }).catch(function (err) {
+          hideDraftSkeleton(regenPanel);
+          console.error('[draft-generate]', err && err.message ? err.message : err);
+        });
         return;
       }
       if (action === 'brand-copy-field') {
