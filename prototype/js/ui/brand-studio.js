@@ -771,6 +771,24 @@
     ];
   }
 
+  function isFormatCompatible(id, hasStory, hasImage, hasVideo) {
+    switch (id) {
+      case 'instagram':    return hasImage || hasVideo;
+      case 'youtube-shorts': return hasVideo;
+      case 'tiktok':       return hasVideo;
+      case 'x-threads':    return hasStory || hasImage;
+      case 'naver-blog':   return hasStory || hasImage;
+      case 'kakao':        return hasImage || hasStory;
+      case 'facebook':     return hasImage || hasVideo || hasStory;
+      case 'linkedin':     return hasStory || hasImage;
+      case 'pinterest':    return hasImage;
+      case 'youtube':      return hasVideo;
+      case 'naver-post':   return hasImage;
+      case 'band':         return hasStory || hasImage || hasVideo;
+      default: return true;
+    }
+  }
+
   function inferDefaultContentType(project) {
     var payload = (project && project.payload) || {};
     var raw = String(payload.projectType || payload.purposeCategory || '').trim().toLowerCase();
@@ -906,6 +924,15 @@
     var persistedSelectedAssetItems = assetItems.filter(function (item) {
       return selectedAssetIds.indexOf(String(item.id || '').trim()) >= 0;
     });
+    var storyVirtualId = projectId + ':story';
+    var storySelected = selectedAssetIds.indexOf(storyVirtualId) >= 0;
+    var selHasImage = persistedSelectedAssetItems.some(function (i) { return String(i.type || '').trim() === 'image'; });
+    var selHasVideo = persistedSelectedAssetItems.some(function (i) {
+      if (String(i.type || '').trim() !== 'video') return false;
+      var rid = String(i.id || '');
+      return rid.indexOf(':video:render') >= 0 || rid.indexOf(':video:store:') >= 0;
+    });
+    var anyAssetSelected = storySelected || selHasImage || selHasVideo;
     var sourceAssetItems = selectedAssetItems.length
       ? selectedAssetItems
       : contentItems.filter(function (item) {
@@ -946,6 +973,33 @@
     }
 
     function switchToStep(newStep) {
+      // 포맷 탭 진입 시 자산 기반 자동 선택 (기존 선택 없을 때만)
+      if (newStep === 2 && selectedFormats.length === 0) {
+        var storySel2 = !!root.querySelector('.bsf-story-card.is-selected');
+        var imgSel2 = root.querySelectorAll('.bsf-asset-thumb-grid .bsf-thumb-wrap.is-selected').length > 0;
+        var vidSel2 = root.querySelectorAll('.bsf-asset-video-grid .bsf-video-thumb-item.is-selected').length > 0;
+        if (storySel2 || imgSel2 || vidSel2) {
+          var autoFormats = formatItems.filter(function (fmt) {
+            return isFormatCompatible(fmt.id, storySel2, imgSel2, vidSel2);
+          }).map(function (fmt) { return fmt.id; });
+          if (autoFormats.length) {
+            selectedFormats = autoFormats;
+            autoFormats.forEach(function (fid) {
+              var card = root.querySelector('[data-action="brand-toggle-format"][data-format-id="' + fid + '"]');
+              if (card) card.classList.add('is-selected');
+            });
+            var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
+            if (step2Btn) {
+              step2Btn.classList.add('is-done');
+              var step2Val = step2Btn.querySelector('.bsf-step-val');
+              if (step2Val) step2Val.textContent = T.stepValSelected(autoFormats.length);
+            }
+            if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+              NK.service.project.updatePayload(projectId, { brandStudioSelectedFormats: autoFormats }).catch(function () {});
+            }
+          }
+        }
+      }
       // ① step 버튼 is-active 토글
       root.querySelectorAll('[data-action="brand-set-step"]').forEach(function (sb) {
         var s = parseInt(sb.dataset.step || '0', 10);
@@ -1006,10 +1060,16 @@
     }).join('<span class="bsf-step-line" aria-hidden="true"></span>');
     var formatCards = formatItems.map(function (item) {
       var isSelected = selectedFormats.indexOf(item.id) >= 0;
+      var compatible = !anyAssetSelected || isFormatCompatible(item.id, storySelected, selHasImage, selHasVideo);
       var fmtDesc = (T.fmtDescs && T.fmtDescs[item.id]) || item.desc;
+      var cls = 'bsf-format-card' + (isSelected ? ' is-selected' : '') +
+        (anyAssetSelected ? (compatible ? ' is-recommended' : ' is-unavailable') : '');
       return (
-        '<button type="button" class="bsf-format-card' + (isSelected ? ' is-selected' : '') + '" data-action="brand-toggle-format" data-format-id="' + escapeHtml(item.id) + '">' +
+        '<button type="button" class="' + cls + '" data-action="brand-toggle-format" data-format-id="' + escapeHtml(item.id) + '">' +
+        '<div class="bsf-fmt-card-head">' +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
+        (anyAssetSelected && compatible ? '<span class="bsf-fmt-badge">' + (isEn ? 'Recommended' : '추천') + '</span>' : '') +
+        '</div>' +
         '<p>' + escapeHtml(fmtDesc) + '</p>' +
         '</button>'
       );
@@ -1028,8 +1088,6 @@
     function countExplicitSelected(items) {
       return items.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0; }).length;
     }
-    var storyVirtualId = projectId + ':story';
-    var storySelected = selectedAssetIds.indexOf(storyVirtualId) >= 0;
     var imageSelCount = countExplicitSelected(imageItems);
     var imageAnySelected = imageSelCount > 0;
     var imageAllSelected = imageItems.length > 0 && imageSelCount === imageItems.length;

@@ -11966,6 +11966,29 @@ body {
   border-color: var(--accent);
   background: rgba(255, 122, 0, 0.07);
 }
+.bsf-format-card.is-recommended {
+  border-color: rgba(255, 122, 0, 0.35);
+}
+.bsf-format-card.is-unavailable {
+  opacity: 0.35;
+}
+.bsf-format-card.is-unavailable:hover { border-color: var(--border); opacity: 0.55; }
+.bsf-fmt-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.bsf-fmt-badge {
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .bsf-format-card strong {
   font-size: 16px;
   font-weight: 700;
