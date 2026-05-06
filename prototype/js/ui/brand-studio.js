@@ -1201,11 +1201,12 @@
           .catch(function () {});
       }
       // 렌더 저장소 전체 목록 비동기 로드 → 영상 카드에 표시
-      if (NK.api && NK.api.postprodRenderList && projectId) {
-        NK.api.postprodRenderList(projectId)
+      var initProjectId = String(project.id || '').trim();
+      if (NK.api && NK.api.postprodRenderList && initProjectId) {
+        NK.api.postprodRenderList(initProjectId)
           .then(function (renderList) {
             if (!Array.isArray(renderList) || !renderList.length || !root.isConnected) return;
-            _renderStorageCache[projectId] = renderList;
+            _renderStorageCache[initProjectId] = renderList;
             var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || project;
             renderProject(root, freshProject, brand);
           })
