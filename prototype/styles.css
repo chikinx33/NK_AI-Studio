@@ -12139,9 +12139,11 @@ body {
 }
 
 .bsf-video-thumb-item {
+  position: relative;
   aspect-ratio: 16/9;
   border-radius: 8px;
   background: var(--bg-3);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -12150,19 +12152,46 @@ body {
   padding: 6px;
 }
 
+.bsf-thumb-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.bsf-video-thumb-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 22px;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.7);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .bsf-video-thumb-icon {
   font-size: 18px;
   opacity: 0.5;
 }
 
 .bsf-video-thumb-title {
+  position: absolute;
+  bottom: 5px;
+  left: 0;
+  right: 0;
   font-size: 10px;
-  color: var(--text-3);
+  color: #fff;
   text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+  padding: 0 6px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  z-index: 1;
 }
 
 .bsf-asset-type-foot {

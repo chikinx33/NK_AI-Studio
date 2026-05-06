@@ -847,8 +847,8 @@
       '<div class="bsf-asset-story-body">' + (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">시나리오를 작성하면<br>스토리가 표시됩니다.</p>') + '</div>' +
       (storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? '선택 해제' : '선택') + '</button></div>' : '') +
       '</div>';
-    // 이미지 카드
-    var imageThumbsHtml = imageItems.slice(0, 6).map(function (i) {
+    // 이미지 카드 — slice 제거해 전체 표시
+    var imageThumbsHtml = imageItems.map(function (i) {
       return i.url
         ? '<img src="' + escapeHtml(i.url) + '" alt="' + escapeHtml(i.title || '') + '" class="bsf-thumb-img" loading="lazy" />'
         : '<div class="bsf-thumb-placeholder"><span>' + escapeHtml(i.title || '이미지') + '</span></div>';
@@ -859,12 +859,18 @@
       (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">이미지 생성 후<br>표시됩니다.</p></div>') +
       (imageItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="image">' + (imageSelected ? '선택 해제' : '선택') + '</button></div>' : '') +
       '</div>';
-    // 영상 카드
-    var videoThumbsHtml = videoItems.slice(0, 4).map(function (i) {
-      return '<div class="bsf-video-thumb-item">' +
-        '<span class="bsf-video-thumb-icon">▶</span>' +
-        '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || '영상') + '</span>' +
-        '</div>';
+    // 영상 카드 — <video> 태그로 썸네일 표시 (#t=0.001 로 첫 프레임 강제 로드)
+    var videoThumbsHtml = videoItems.map(function (i) {
+      return i.url
+        ? '<div class="bsf-video-thumb-item">' +
+          '<video class="bsf-thumb-video" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video>' +
+          '<span class="bsf-video-thumb-overlay">▶</span>' +
+          '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || '영상') + '</span>' +
+          '</div>'
+        : '<div class="bsf-video-thumb-item bsf-video-thumb-empty">' +
+          '<span class="bsf-video-thumb-icon">▶</span>' +
+          '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || '영상') + '</span>' +
+          '</div>';
     }).join('');
     var videoCardHtml =
       '<div class="bsf-asset-type-card' + (videoSelected ? ' is-selected' : '') + '">' +
