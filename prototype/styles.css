@@ -12118,13 +12118,13 @@ body {
 }
 
 .bsf-story-meta li span {
-  color: var(--text-3);
+  color: var(--accent);
   flex-shrink: 0;
   min-width: 56px;
 }
 
 .bsf-story-meta li strong {
-  color: var(--text-2);
+  color: #5b9cf6;
   font-weight: 500;
 }
 
