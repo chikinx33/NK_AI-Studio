@@ -1029,7 +1029,7 @@
           ? '<img src="' + escapeHtml(i.url) + '" alt="' + escapeHtml(i.title || '') + '" class="bsf-thumb-img" loading="lazy" />'
           : '<div class="bsf-thumb-placeholder"><span>' + escapeHtml(i.title || T.cardImage) + '</span></div>') +
         '<div class="bsf-thumb-check">✓</div>' +
-        (i.url ? '<button type="button" class="bsf-thumb-zoom" data-action="bsf-zoom-thumb" data-url="' + escapeHtml(i.url) + '" data-media-type="image" title="View original">&#x1F50D;</button>' : '') +
+        (i.url ? '<button type="button" class="bsf-thumb-zoom" data-action="bsf-zoom-thumb" data-url="' + escapeHtml(i.url) + '" data-media-type="image" title="View original"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/></svg></button>' : '') +
         '</div>';
     }).join('');
     var imageCardHtml =
@@ -1050,7 +1050,7 @@
           '<span class="bsf-video-thumb-overlay">▶</span>' +
           '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || T.cardVideo) + '</span>' +
           '<div class="bsf-thumb-check">✓</div>' +
-          '<button type="button" class="bsf-thumb-zoom" data-action="bsf-zoom-thumb" data-url="' + escapeHtml(i.url) + '" data-media-type="video" title="Play video">&#x1F50D;</button>' +
+          '<button type="button" class="bsf-thumb-zoom" data-action="bsf-zoom-thumb" data-url="' + escapeHtml(i.url) + '" data-media-type="video" title="Play video"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/></svg></button>' +
           '</div>'
         : '<div class="bsf-video-thumb-item bsf-video-thumb-empty">' +
           '<span class="bsf-video-thumb-icon">▶</span>' +
