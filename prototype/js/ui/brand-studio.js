@@ -823,6 +823,28 @@
     }
   }
 
+  function splitIntoParagraphs(text, n) {
+    if (!text) return [];
+    var raw = text.split(/\n+/);
+    var result = [];
+    for (var i = 0; i < raw.length; i++) {
+      var p = raw[i].trim();
+      if (p) { result.push(p); if (n != null && result.length >= n) break; }
+    }
+    return result;
+  }
+  function firstSentenceOf(text) {
+    if (!text) return '';
+    var m = text.match(/^(.+?[.!?。！？])\s/);
+    return m ? m[1] : (text.length > 100 ? text.slice(0, 100) + '…' : text);
+  }
+  function first2SentencesOf(text) {
+    if (!text) return '';
+    var sents = (text.match(/[^.!?。！？]+[.!?。！？]/g) || []).filter(function (s) { return s.trim(); });
+    if (sents.length >= 2) return sents.slice(0, 2).join(' ').trim();
+    return firstSentenceOf(text);
+  }
+
   function inferDefaultContentType(project) {
     var payload = (project && project.payload) || {};
     var raw = String(payload.projectType || payload.purposeCategory || '').trim().toLowerCase();
@@ -1296,6 +1318,209 @@
         '</div>';
     }
 
+    var epTitle = String(payload.episodeTitle || (project && (project.title || project.seriesTitle)) || '').trim();
+
+    // ── 선택된 미디어 아이템 (초안 목업용) ────────────────────────────────────
+    var draftSelImgs = imageItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
+    var draftSelVids = videoItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
+    var draftFirstImgUrl = draftSelImgs.length ? String(draftSelImgs[0].url || '') : '';
+    var draftFirstVidUrl = draftSelVids.length ? String(draftSelVids[0].url || '') : '';
+
+    // ── 3단계 필드 래퍼 ──────────────────────────────────────────────────────
+    function afWrap(label, ceHtml) {
+      return '<div class="bsf-field bsf-field-auto"><div class="bsf-field-hd"><span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' + ceHtml + '</div>';
+    }
+    function pvWrap(label, innerHtml) {
+      return '<div class="bsf-field bsf-field-preview"><div class="bsf-field-hd"><span class="bsf-badge bsf-badge-preview">PREVIEW</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' + innerHtml + '</div>';
+    }
+    function ceDiv(fmtId, fieldKey, value, rows, placeholder) {
+      return '<div class="bsf-ce" contenteditable="true" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '" data-rows="' + (rows || 3) + '" data-placeholder="' + escapeHtml(placeholder || '') + '">' + escapeHtml(value) + '</div>';
+    }
+    function regenBtnHtml(fmtId) {
+      return '<button type="button" class="bsf-draft-regen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(fmtId) + '">' + escapeHtml(T.draftRegen) + '</button>';
+    }
+
+    // 목업 공통 파트
+    var mockAvatarHtml = '<div class="bsf-mock-avatar"></div>';
+    var mockBrandName = escapeHtml((brandView.title || 'Brand').slice(0, 14));
+    function mockImgEl(url, cls) {
+      if (url) return '<img class="' + (cls || 'bsf-mock-media') + '" src="' + escapeHtml(url) + '" />';
+      return '<div class="' + (cls || 'bsf-mock-media') + ' bsf-mock-media-empty"><span>📷</span></div>';
+    }
+    function mockVidEl(url, cls) {
+      if (url) return '<video class="' + (cls || 'bsf-mock-media') + '" src="' + escapeHtml(url) + '#t=0.001" preload="metadata" muted playsinline></video>';
+      return '<div class="' + (cls || 'bsf-mock-media') + ' bsf-mock-media-empty"><span>▶</span></div>';
+    }
+
+    // ── 12종 플랫폼 목업 빌더 ─────────────────────────────────────────────────
+    function buildInstagramPreview(fmtId, captionVal, hashtagVal) {
+      return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
+        '<div class="bsf-mockup bsf-mock-ig">' +
+        '<div class="bsf-mock-row bsf-mock-ig-hd">' + mockAvatarHtml + '<span class="bsf-mock-uname">' + mockBrandName + '</span><span class="bsf-mock-dots">···</span></div>' +
+        mockImgEl(draftFirstImgUrl, 'bsf-mock-ig-img') +
+        '<div class="bsf-mock-ig-actions">♡ &nbsp; ✦ &nbsp; ✉</div>' +
+        '<div class="bsf-mock-ig-caption"><strong>' + mockBrandName + '</strong> ' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+        '</div>') +
+      afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write your caption…' : '캡션을 작성하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag #tag'));
+    }
+    function buildYoutubeShortsPreview(fmtId, captionVal, hashtagVal, titleVal) {
+      return pvWrap(isEn ? 'Shorts preview' : '쇼츠 미리보기',
+        '<div class="bsf-mockup bsf-mock-shorts">' +
+        mockVidEl(draftFirstVidUrl, 'bsf-mock-shorts-vid') +
+        '<div class="bsf-mock-shorts-overlay"><div class="bsf-mock-shorts-caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div><div class="bsf-mock-shorts-title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div></div>' +
+        '</div>') +
+      afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Shorts title' : '쇼츠 제목')) +
+      afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Describe your video…' : '영상을 설명하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#Shorts #tag'));
+    }
+    function buildTiktokPreview(fmtId, captionVal, hashtagVal) {
+      return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
+        '<div class="bsf-mockup bsf-mock-tiktok">' +
+        mockVidEl(draftFirstVidUrl, 'bsf-mock-tiktok-vid') +
+        '<div class="bsf-mock-tiktok-overlay"><div class="bsf-mock-tiktok-caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>' +
+        '</div>') +
+      afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Write caption…' : '캡션을 작성하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#FYP #tag'));
+    }
+    function buildXThreadsPreview(fmtId, captionVal, hashtagVal) {
+      var cLen = captionVal.length;
+      var cCls = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
+      return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
+        '<div class="bsf-mockup bsf-mock-x">' +
+        '<div class="bsf-mock-row bsf-mock-x-hd">' + mockAvatarHtml + '<div><div class="bsf-mock-row" style="gap:6px"><span class="bsf-mock-uname">' + mockBrandName + '</span><span class="bsf-mock-subdued">@brand · 지금</span></div></div></div>' +
+        '<div class="bsf-mock-x-body">' + escapeHtml((captionVal || '').slice(0, 140)) + (captionVal.length > 140 ? '…' : '') + '</div>' +
+        '<div class="bsf-mock-x-foot">♡ &nbsp; ↺ &nbsp; 📤</div>' +
+        '</div>') +
+      afWrap(isEn ? 'Post text' : '게시 문구',
+        ceDiv(fmtId, 'caption', captionVal, 4, isEn ? "What's happening?" : '무슨 일이 있나요?') +
+        '<div class="bsf-charcount-row"><span class="' + cCls + '">' + cLen + ' / 280</span></div>') +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 1, '#hashtag'));
+    }
+    function buildNaverBlogPreview(fmtId, captionVal, hashtagVal, titleVal) {
+      var paras = splitIntoParagraphs(captionVal, 3);
+      var blogInner = '';
+      if (draftFirstImgUrl) blogInner += '<img class="bsf-mock-blog-img" src="' + escapeHtml(draftFirstImgUrl) + '" />';
+      if (paras.length) blogInner += '<p class="bsf-mock-blog-para">' + escapeHtml((paras[0] || '').slice(0, 100)) + '…</p>';
+      if (draftSelImgs.length > 1) blogInner += '<img class="bsf-mock-blog-img" src="' + escapeHtml(String(draftSelImgs[1].url || '')) + '" />';
+      if (paras.length > 1) blogInner += '<p class="bsf-mock-blog-para">' + escapeHtml((paras[1] || '').slice(0, 100)) + '…</p>';
+      return pvWrap(isEn ? 'Blog preview' : '블로그 미리보기',
+        '<div class="bsf-mockup bsf-mock-nblog"><div class="bsf-mock-nblog-title">' + escapeHtml(titleVal || '제목없음') + '</div>' + blogInner + '</div>') +
+      afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Blog title' : '블로그 제목')) +
+      afWrap(isEn ? 'Body' : '본문', ceDiv(fmtId, 'caption', captionVal, 8, isEn ? 'Blog content…' : '블로그 내용을 작성하세요')) +
+      afWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'));
+    }
+    function buildKakaoPreview(fmtId, captionVal, hashtagVal) {
+      return pvWrap(isEn ? 'Channel preview' : '채널 미리보기',
+        '<div class="bsf-mockup bsf-mock-kakao"><div class="bsf-mock-kakao-hd">카카오채널</div>' +
+        mockImgEl(draftFirstImgUrl, 'bsf-mock-kakao-img') +
+        '<div class="bsf-mock-kakao-body">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
+      afWrap(isEn ? 'Message' : '메시지', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write message…' : '메시지를 작성하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'));
+    }
+    function buildFacebookPreview(fmtId, captionVal, hashtagVal) {
+      return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
+        '<div class="bsf-mockup bsf-mock-fb">' +
+        '<div class="bsf-mock-row bsf-mock-fb-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">방금 전 · 🌐</div></div></div>' +
+        '<div class="bsf-mock-fb-body">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
+        (draftFirstImgUrl ? '<img class="bsf-mock-fb-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
+        '<div class="bsf-mock-fb-foot">👍 좋아요 &nbsp; 💬 댓글 &nbsp; ↗ 공유</div>' +
+        '</div>') +
+      afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? "What's on your mind?" : '무슨 생각을 하고 계신가요?')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+    }
+    function buildLinkedinPreview(fmtId, captionVal, hashtagVal, titleVal) {
+      return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
+        '<div class="bsf-mockup bsf-mock-li">' +
+        '<div class="bsf-mock-row bsf-mock-li-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">Brand · 1시간</div></div></div>' +
+        '<div class="bsf-mock-li-body">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
+        (draftFirstImgUrl ? '<img class="bsf-mock-fb-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
+        '<div class="bsf-mock-fb-foot" style="border-top:1px solid #2d3748;margin-top:6px;padding-top:6px">👍 &nbsp; 💬 댓글 &nbsp; ↗ 공유</div>' +
+        '</div>') +
+      afWrap(isEn ? 'Headline' : '헤드라인', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Headline or article title' : '헤드라인')) +
+      afWrap(isEn ? 'Post body' : '본문', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Write your article…' : '아티클을 작성하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+    }
+    function buildPinterestPreview(fmtId, captionVal, hashtagVal, titleVal) {
+      return pvWrap(isEn ? 'Pin preview' : '핀 미리보기',
+        '<div class="bsf-mockup bsf-mock-pin">' +
+        mockImgEl(draftFirstImgUrl, 'bsf-mock-pin-img') +
+        '<div class="bsf-mock-pin-title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
+        '<div class="bsf-mock-pin-desc">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+        '</div>') +
+      afWrap(isEn ? 'Title' : '핀 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Pin title' : '핀 제목')) +
+      afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Describe your pin' : '핀을 설명하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+    }
+    function buildYoutubePreview(fmtId, captionVal, hashtagVal, titleVal) {
+      var thumbEl = draftFirstVidUrl
+        ? '<video class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
+        : (draftFirstImgUrl ? '<img class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-yt-thumb bsf-mock-media-empty"><span>▶</span></div>');
+      return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
+        '<div class="bsf-mockup bsf-mock-yt">' + thumbEl +
+        '<div class="bsf-mock-row bsf-mock-yt-meta">' + mockAvatarHtml +
+        '<div class="bsf-mock-yt-info"><div class="bsf-mock-yt-title">' + escapeHtml((titleVal || '제목없음').slice(0, 60)) + '</div><div class="bsf-mock-subdued">' + mockBrandName + ' · 조회수 0회</div></div></div>' +
+        '</div>') +
+      afWrap(isEn ? 'Title' : '영상 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Video title' : '영상 제목')) +
+      afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Video description…' : '영상 설명을 작성하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+    }
+    function buildNaverPostPreview(fmtId, captionVal, hashtagVal, titleVal) {
+      return pvWrap(isEn ? 'Post preview' : '포스트 미리보기',
+        '<div class="bsf-mockup bsf-mock-npost"><div class="bsf-mock-npost-hd">' + escapeHtml((titleVal || '제목없음').slice(0, 30)) + '</div>' +
+        mockImgEl(draftFirstImgUrl, 'bsf-mock-npost-img') +
+        '<div class="bsf-mock-npost-body">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
+      afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Post title' : '포스트 제목')) +
+      afWrap(isEn ? 'Content' : '내용', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Post content…' : '포스트 내용을 작성하세요')) +
+      afWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'));
+    }
+    function buildBandPreview(fmtId, captionVal, hashtagVal) {
+      return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
+        '<div class="bsf-mockup bsf-mock-band">' +
+        '<div class="bsf-mock-row bsf-mock-band-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">1분 전</div></div></div>' +
+        '<div class="bsf-mock-band-body">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
+        (draftFirstImgUrl ? '<img class="bsf-mock-band-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
+        '</div>') +
+      afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write post…' : '게시글을 작성하세요')) +
+      afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'));
+    }
+
+    // ── 플랫폼 카드 디스패처 ─────────────────────────────────────────────────
+    function buildPlatformPreviewCard(formatId, fmt, isActive, draft) {
+      var captionVal = String(draft.caption || '').trim() || buildCaptionDraft(project, brandView, fmt, sourceTexts, knowledge);
+      var hashtagVal = String(draft.hashtags || '').trim() || buildHashtagDraft(project, brandView, fmt, sourceTexts, knowledge);
+      var titleVal = String(draft.title || '').trim() || epTitle;
+      var legendHtml =
+        '<div class="bsf-preview-legend">' +
+        '<span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-legend-txt">' + (isEn ? 'API sendable' : 'API 전송 가능') + '</span>' +
+        '<span class="bsf-badge bsf-badge-preview">PREVIEW</span><span class="bsf-legend-txt">' + (isEn ? 'Mockup only' : '미리보기 전용') + '</span>' +
+        '</div>';
+      var bodyHtml = '';
+      switch (formatId) {
+        case 'instagram':      bodyHtml = buildInstagramPreview(formatId, captionVal, hashtagVal); break;
+        case 'youtube-shorts': bodyHtml = buildYoutubeShortsPreview(formatId, captionVal, hashtagVal, titleVal); break;
+        case 'tiktok':         bodyHtml = buildTiktokPreview(formatId, captionVal, hashtagVal); break;
+        case 'x-threads':      bodyHtml = buildXThreadsPreview(formatId, captionVal, hashtagVal); break;
+        case 'naver-blog':     bodyHtml = buildNaverBlogPreview(formatId, captionVal, hashtagVal, titleVal); break;
+        case 'kakao':          bodyHtml = buildKakaoPreview(formatId, captionVal, hashtagVal); break;
+        case 'facebook':       bodyHtml = buildFacebookPreview(formatId, captionVal, hashtagVal); break;
+        case 'linkedin':       bodyHtml = buildLinkedinPreview(formatId, captionVal, hashtagVal, titleVal); break;
+        case 'pinterest':      bodyHtml = buildPinterestPreview(formatId, captionVal, hashtagVal, titleVal); break;
+        case 'youtube':        bodyHtml = buildYoutubePreview(formatId, captionVal, hashtagVal, titleVal); break;
+        case 'naver-post':     bodyHtml = buildNaverPostPreview(formatId, captionVal, hashtagVal, titleVal); break;
+        case 'band':           bodyHtml = buildBandPreview(formatId, captionVal, hashtagVal); break;
+        default:
+          bodyHtml = afWrap(isEn ? 'Caption' : '캡션', ceDiv(formatId, 'caption', captionVal, 4, isEn ? 'Caption…' : '캡션을 작성하세요')) +
+                     afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(formatId, 'hashtags', hashtagVal, 2, '#hashtag'));
+      }
+      return (
+        '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
+        legendHtml + bodyHtml +
+        '<div class="bsf-draft-regen-row">' + regenBtnHtml(formatId) + '</div>' +
+        '</div>'
+      );
+    }
+
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
     var draftTabsHtml = selectedFormats.length
       ? '<div class="bsf-draft-tabs">' + selectedFormats.map(function (formatId) {
@@ -1310,43 +1535,12 @@
           );
         }).join('') + '</div>'
       : '';
-    var epTitle = String(payload.episodeTitle || (project && (project.title || project.seriesTitle)) || '').trim();
     var draftPanelsHtml = selectedFormats.length
       ? selectedFormats.map(function (formatId) {
           var fmt = formatItems.find(function (f) { return f.id === formatId; });
           var isActive = activeDraftTabOrFirst === formatId;
           var draft = (formatDrafts && formatDrafts[formatId]) || {};
-          var captionVal = String(draft.caption || '').trim() || buildCaptionDraft(project, brandView, fmt, sourceTexts, knowledge);
-          var hashtagVal = String(draft.hashtags || '').trim() || buildHashtagDraft(project, brandView, fmt, sourceTexts, knowledge);
-          // 제목: 저장된 값 → 에피소드 제목 자동 반영
-          var titleVal = String(draft.title || '').trim() || epTitle;
-          var storyForStruct = String(payload.story || payload.storyPrompt || '').trim();
-          var isLongForm = !!LONG_FORM_FMTS[formatId];
-          return (
-            '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
-            // 미디어 미리보기 (스토리/이미지/영상 썸네일)
-            buildDraftMediaPreview(formatId) +
-            // 블로그/롱폼: 구조 미리보기
-            buildBlogStructHtml(formatId, storyForStruct) +
-            // 제목 입력
-            (fmt && fmt.hasTitle
-              ? '<div class="bsf-draft-title-row"><span class="brand-caption-meta-label">' + T.labelTitle + '</span><input class="brand-publish-input" id="brand-draft-title-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderTitle) + '" value="' + escapeHtml(titleVal) + '" /></div>'
-              : '') +
-            // 캡션 + 해시태그 (재생성 버튼 포함)
-            '<div class="bsf-draft-edit-head">' +
-            '<span class="brand-caption-meta-label">' + T.labelCaption + (isLongForm ? (' / ' + T.labelHashtag) : '') + '</span>' +
-            '<button type="button" class="bsf-draft-regen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(formatId) + '">' + escapeHtml(T.draftRegen) + '</button>' +
-            '</div>' +
-            '<div class="bsf-draft-layout">' +
-            '<div class="bsf-draft-col">' +
-            (isLongForm ? '' : '<span class="brand-caption-meta-label">' + T.labelCaption + '</span>') +
-            '<textarea class="brand-caption-textarea' + (isLongForm ? ' bsf-caption-tall' : '') + '" id="brand-draft-caption-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderCaption) + '">' + escapeHtml(captionVal) + '</textarea></div>' +
-            '<div class="bsf-draft-col">' +
-            (isLongForm ? '' : '<span class="brand-caption-meta-label">' + T.labelHashtag + '</span>') +
-            '<textarea class="brand-caption-textarea brand-hashtag-textarea" id="brand-draft-hashtag-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderHashtag) + '">' + escapeHtml(hashtagVal) + '</textarea></div>' +
-            '</div>' +
-            '</div>'
-          );
+          return buildPlatformPreviewCard(formatId, fmt, isActive, draft);
         }).join('')
       : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     var deployFormatSummary = selectedFormats.length
@@ -1445,6 +1639,36 @@
     restoreFieldScrollState(root, preservedFieldScroll);
     bindDisclosureState(root);
 
+    // contenteditable 자동 저장 (디바운스 800ms)
+    var _draftSaveTimer = null;
+    root.oninput = function (ev) {
+      var ce = ev.target && ev.target.closest ? ev.target.closest('[data-draft-field][contenteditable]') : null;
+      if (!ce) return;
+      clearTimeout(_draftSaveTimer);
+      _draftSaveTimer = setTimeout(function () {
+        var fmtId = String(ce.dataset.draftFormat || '').trim();
+        var fieldKey = String(ce.dataset.draftField || '').trim();
+        if (!fmtId || !fieldKey) return;
+        var value = (ce.innerText || ce.textContent || '').trim();
+        var nextFmtDraft = Object.assign({}, (formatDrafts && formatDrafts[fmtId]) || {});
+        nextFmtDraft[fieldKey] = value;
+        var nextFormatDrafts = Object.assign({}, formatDrafts || {});
+        nextFormatDrafts[fmtId] = nextFmtDraft;
+        formatDrafts = nextFormatDrafts;
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts }).catch(function () {});
+        }
+        // X/Threads 글자수 업데이트
+        if (fieldKey === 'caption' && fmtId === 'x-threads') {
+          var countEl = ce.parentElement && ce.parentElement.querySelector('.bsf-charcount');
+          if (countEl) {
+            var cLen = (ce.innerText || ce.textContent || '').length;
+            countEl.textContent = cLen + ' / 280';
+            countEl.className = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
+          }
+        }
+      }, 800);
+    };
 
     root.onclick = function (evt) {
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
@@ -1525,11 +1749,16 @@
         if (!regenFmt) return;
         var regenCaption = buildCaptionDraft(project, brandView, regenFmt, sourceTexts, knowledge);
         var regenHashtag = buildHashtagDraft(project, brandView, regenFmt, sourceTexts, knowledge);
+        // contenteditable 필드 업데이트
+        var capCe = root.querySelector('[data-draft-format="' + regenFmtId + '"][data-draft-field="caption"]');
+        var htCe = root.querySelector('[data-draft-format="' + regenFmtId + '"][data-draft-field="hashtags"]');
+        if (capCe) capCe.textContent = regenCaption;
+        if (htCe) htCe.textContent = regenHashtag;
+        // legacy textarea fallback
         var captionElR = root.querySelector('#brand-draft-caption-' + regenFmtId);
         var hashtagElR = root.querySelector('#brand-draft-hashtag-' + regenFmtId);
         if (captionElR) captionElR.value = regenCaption;
         if (hashtagElR) hashtagElR.value = regenHashtag;
-        // 자동 저장
         if (NK.service && NK.service.project && NK.service.project.updatePayload) {
           var regenDrafts = Object.assign({}, formatDrafts);
           regenDrafts[regenFmtId] = Object.assign({}, regenDrafts[regenFmtId] || {}, { caption: regenCaption, hashtags: regenHashtag });
@@ -1538,13 +1767,41 @@
         }
         return;
       }
+      if (action === 'brand-copy-field') {
+        var copyVal = String(btn.dataset.copyValue || '').trim();
+        if (!copyVal) {
+          var cpFmt = String(btn.dataset.draftFormat || '').trim();
+          var cpKey = String(btn.dataset.fieldKey || '').trim();
+          var cpEl = cpFmt && cpKey ? root.querySelector('[data-draft-format="' + cpFmt + '"][data-draft-field="' + cpKey + '"]') : null;
+          copyVal = cpEl ? ((cpEl.innerText || cpEl.textContent || '').trim()) : '';
+        }
+        if (!copyVal) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(copyVal).catch(function () {});
+        } else {
+          try { var ta = document.createElement('textarea'); ta.value = copyVal; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (_) {}
+        }
+        var origTxt = btn.textContent;
+        btn.textContent = isEn ? 'Copied!' : '복사됨!';
+        setTimeout(function () { btn.textContent = origTxt; }, 1400);
+        return;
+      }
       if (action === 'brand-save-format-draft') {
         if (!activeDraftTabOrFirst || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var currentFmtId = activeDraftTabOrFirst;
+        var nextFmtDraft = Object.assign({}, (formatDrafts && formatDrafts[currentFmtId]) || {});
+        // contenteditable 필드 읽기
+        var activePanel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + currentFmtId + '"]');
+        if (activePanel) {
+          activePanel.querySelectorAll('[data-draft-field]').forEach(function (el) {
+            var key = String(el.dataset.draftField || '').trim();
+            if (key) nextFmtDraft[key] = (el.innerText || el.textContent || '').trim();
+          });
+        }
+        // legacy textarea fallback
         var captionEl = root.querySelector('#brand-draft-caption-' + currentFmtId);
         var hashtagEl = root.querySelector('#brand-draft-hashtag-' + currentFmtId);
         var titleElFmt = root.querySelector('#brand-draft-title-' + currentFmtId);
-        var nextFmtDraft = Object.assign({}, (formatDrafts && formatDrafts[currentFmtId]) || {});
         if (captionEl) nextFmtDraft.caption = String(captionEl.value || '').trim();
         if (hashtagEl) nextFmtDraft.hashtags = String(hashtagEl.value || '').trim();
         if (titleElFmt) nextFmtDraft.title = String(titleElFmt.value || '').trim();
