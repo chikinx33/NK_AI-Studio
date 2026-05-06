@@ -1431,10 +1431,24 @@
     function buildInstagramPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-ig">' +
-        '<div class="bsf-mock-row bsf-mock-ig-hd">' + mockAvatarHtml + '<span class="bsf-mock-uname">' + mockBrandName + '</span><span class="bsf-mock-dots">···</span></div>' +
-        mockImgEl(draftFirstImgUrl, 'bsf-mock-ig-img') +
-        '<div class="bsf-mock-ig-actions">♡ &nbsp; ✦ &nbsp; ✉</div>' +
-        '<div class="bsf-mock-ig-caption"><strong>' + mockBrandName + '</strong> <span data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</span></div>' +
+        '<div class="bsf-mock-ig-hd">' +
+          '<div class="bsf-mock-ig-avatar"></div>' +
+          '<span class="bsf-mock-ig-uname">' + mockBrandName + '</span>' +
+          '<span class="bsf-mock-ig-follow">' + (isEn ? 'Follow' : '팔로우') + '</span>' +
+          '<span class="bsf-mock-ig-dots">···</span>' +
+        '</div>' +
+        (draftFirstImgUrl ? '<img class="bsf-mock-ig-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-ig-img-empty">📷</div>') +
+        '<div class="bsf-mock-ig-dots-row"><div class="bsf-mock-ig-dot active"></div><div class="bsf-mock-ig-dot"></div><div class="bsf-mock-ig-dot"></div></div>' +
+        '<div class="bsf-mock-ig-actions">' +
+          '<span class="bsf-mock-ig-action-icon">♡</span>' +
+          '<span class="bsf-mock-ig-action-icon">✦</span>' +
+          '<span class="bsf-mock-ig-action-icon">✉</span>' +
+          '<span class="bsf-mock-ig-save">⊡</span>' +
+        '</div>' +
+        '<div class="bsf-mock-ig-likes">' + (isEn ? 'Liked by others' : '좋아요 128개') + '</div>' +
+        '<div class="bsf-mock-ig-caption"><strong>' + mockBrandName + '</strong> <span data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</span> <span class="more">' + (isEn ? 'more' : '더 보기') + '</span></div>' +
+        '<div class="bsf-mock-ig-comment">' + (isEn ? 'View all 12 comments' : '댓글 12개 모두 보기') + '</div>' +
+        '<div class="bsf-mock-ig-time">' + (isEn ? '2 hours ago' : '2시간 전') + '</div>' +
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write your caption…' : '캡션을 작성하세요')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag #tag')) +
@@ -1442,10 +1456,21 @@
       inputField(fmtId, 'first_comment', isEn ? 'First comment' : '첫 댓글', isEn ? 'Auto-post as first comment (optional)' : '첫 댓글로 자동 게시 (선택)', draft.first_comment || '', 'auto');
     }
     function buildYoutubeShortsPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
+      var shortsVidHtml = draftFirstVidUrl
+        ? '<video class="bsf-mock-shorts-vid" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
+        : '<div class="bsf-mock-shorts-vid-empty">▶</div>';
       return pvWrap(isEn ? 'Shorts preview' : '쇼츠 미리보기',
         '<div class="bsf-mockup bsf-mock-shorts">' +
-        mockVidEl(draftFirstVidUrl, 'bsf-mock-shorts-vid') +
-        '<div class="bsf-mock-shorts-overlay"><div class="bsf-mock-shorts-caption" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div><div class="bsf-mock-shorts-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div></div>' +
+        shortsVidHtml +
+        '<div class="bsf-mock-shorts-sidebar">' +
+          '<div class="bsf-mock-shorts-sidebar-item"><span class="bsf-mock-shorts-sidebar-icon">♡</span><span class="bsf-mock-shorts-sidebar-count">1.2K</span></div>' +
+          '<div class="bsf-mock-shorts-sidebar-item"><span class="bsf-mock-shorts-sidebar-icon">💬</span><span class="bsf-mock-shorts-sidebar-count">48</span></div>' +
+          '<div class="bsf-mock-shorts-sidebar-item"><span class="bsf-mock-shorts-sidebar-icon">↗</span><span class="bsf-mock-shorts-sidebar-count">' + (isEn ? 'Share' : '공유') + '</span></div>' +
+        '</div>' +
+        '<div class="bsf-mock-shorts-overlay">' +
+          '<div class="bsf-mock-shorts-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
+          '<div class="bsf-mock-shorts-ch">' + mockBrandName + '</div>' +
+        '</div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Shorts title' : '쇼츠 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Describe your video…' : '영상을 설명하세요')) +
@@ -1455,10 +1480,22 @@
       scheduledAtField(fmtId, draft.scheduled_at || '', draft.privacy_status || 'public');
     }
     function buildTiktokPreview(fmtId, captionVal, hashtagVal, draft) {
+      var tiktokVidHtml = draftFirstVidUrl
+        ? '<video class="bsf-mock-tiktok-vid" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
+        : '<div class="bsf-mock-tiktok-vid-empty">▶</div>';
       return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
         '<div class="bsf-mockup bsf-mock-tiktok">' +
-        mockVidEl(draftFirstVidUrl, 'bsf-mock-tiktok-vid') +
-        '<div class="bsf-mock-tiktok-overlay"><div class="bsf-mock-tiktok-caption" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>' +
+        tiktokVidHtml +
+        '<div class="bsf-mock-tiktok-sidebar">' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">♡</span><span class="bsf-mock-tiktok-sidebar-count">4.8K</span></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">💬</span><span class="bsf-mock-tiktok-sidebar-count">312</span></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">↗</span><span class="bsf-mock-tiktok-sidebar-count">' + (isEn ? 'Share' : '공유') + '</span></div>' +
+        '</div>' +
+        '<div class="bsf-mock-tiktok-overlay">' +
+          '<div class="bsf-mock-tiktok-username">@' + mockBrandName + '</div>' +
+          '<div class="bsf-mock-tiktok-caption" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+          '<div class="bsf-mock-tiktok-music"><span>♪</span><span class="bsf-mock-tiktok-music-text">' + mockBrandName + ' - Original Sound</span></div>' +
+        '</div>' +
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Write caption…' : '캡션을 작성하세요')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#FYP #tag')) +
@@ -1475,9 +1512,16 @@
       var cCls = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-x">' +
-        '<div class="bsf-mock-row bsf-mock-x-hd">' + mockAvatarHtml + '<div><div class="bsf-mock-row" style="gap:6px"><span class="bsf-mock-uname">' + mockBrandName + '</span><span class="bsf-mock-subdued">@brand · 지금</span></div></div></div>' +
+        '<div class="bsf-mock-x-hd">' +
+          '<div class="bsf-mock-x-avatar"></div>' +
+          '<div class="bsf-mock-x-meta">' +
+            '<span class="bsf-mock-x-name">' + mockBrandName + '</span>' +
+            '<span class="bsf-mock-x-handle"> · @brand · ' + (isEn ? 'now' : '방금') + '</span>' +
+          '</div>' +
+        '</div>' +
         '<div class="bsf-mock-x-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((captionVal || '').slice(0, 140)) + (captionVal.length > 140 ? '…' : '') + '</div>' +
-        '<div class="bsf-mock-x-foot">♡ &nbsp; ↺ &nbsp; 📤</div>' +
+        '<div class="bsf-mock-x-actions">♡ &nbsp; ↺ &nbsp; 📤 &nbsp; ···</div>' +
+        '<div class="bsf-mock-x-counter"><span class="' + cCls + '">' + cLen + ' / 280</span></div>' +
         '</div>') +
       afWrap(isEn ? 'Post text' : '게시 문구',
         ceDiv(fmtId, 'caption', captionVal, 4, isEn ? "What's happening?" : '무슨 일이 있나요?') +
@@ -1499,7 +1543,13 @@
       var seoDesc = String(draft.seo_description || '');
       var seoLen = seoDesc.length;
       return pvWrap(isEn ? 'Blog preview' : '블로그 미리보기',
-        '<div class="bsf-mockup bsf-mock-nblog"><div class="bsf-mock-nblog-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal || '제목없음') + '</div>' + blogInner + '</div>') +
+        '<div class="bsf-mockup bsf-mock-nblog">' +
+        '<div class="bsf-mock-nblog-topbar"><span class="bsf-mock-nblog-topbar-logo">N</span><span class="bsf-mock-nblog-topbar-name">' + mockBrandName + '</span></div>' +
+        '<div class="bsf-mock-nblog-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal || (isEn ? 'Untitled' : '제목없음')) + '</div>' +
+        '<div class="bsf-mock-nblog-author"><div class="bsf-mock-nblog-author-avatar"></div><span class="bsf-mock-nblog-author-name">' + mockBrandName + '</span><span class="bsf-mock-nblog-author-date">' + (isEn ? 'just now' : '방금 전') + '</span></div>' +
+        blogInner +
+        '<div class="bsf-mock-nblog-reactions"><span>♡ 0</span><span>💬 0</span><span>↗ ' + (isEn ? 'Share' : '공유') + '</span></div>' +
+        '</div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Blog title' : '블로그 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Body' : '본문', ceDiv(fmtId, 'caption', captionVal, 8, isEn ? 'Blog content…' : '블로그 내용을 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags') +
@@ -1510,9 +1560,22 @@
     }
     function buildKakaoPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Channel preview' : '채널 미리보기',
-        '<div class="bsf-mockup bsf-mock-kakao"><div class="bsf-mock-kakao-hd">카카오채널</div>' +
-        mockImgEl(draftFirstImgUrl, 'bsf-mock-kakao-img') +
-        '<div class="bsf-mock-kakao-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
+        '<div class="bsf-mockup bsf-mock-kakao">' +
+        '<div class="bsf-mock-kakao-hd">' +
+          '<div class="bsf-mock-kakao-ch-icon"></div>' +
+          '<span class="bsf-mock-kakao-ch-name">' + mockBrandName + '</span>' +
+          '<span class="bsf-mock-kakao-badge">' + (isEn ? 'Channel' : '채널') + '</span>' +
+        '</div>' +
+        '<div class="bsf-mock-kakao-card">' +
+          (draftFirstImgUrl ? '<img class="bsf-mock-kakao-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-kakao-img" style="display:flex;align-items:center;justify-content:center;font-size:28px;color:#ccc">📢</div>') +
+          '<div class="bsf-mock-kakao-card-body">' +
+            '<div class="bsf-mock-kakao-card-title">' + escapeHtml(mockBrandName) + '</div>' +
+            '<div class="bsf-mock-kakao-card-desc" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+            '<div class="bsf-mock-kakao-btn">' + escapeHtml(draft.button_label || (isEn ? 'Learn more' : '자세히 보기')) + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bsf-mock-kakao-foot"><span>♡ ' + (isEn ? 'Like' : '좋아요') + '</span><span>💬 ' + (isEn ? 'Comment' : '댓글') + '</span></div>' +
+        '</div>') +
       cfWrap(isEn ? 'Message' : '메시지', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write message…' : '메시지를 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'), fmtId, 'hashtags') +
       inputField(fmtId, 'button_label', isEn ? 'Button label' : '버튼 텍스트', isEn ? 'e.g. Learn more' : '예: 자세히 보기', draft.button_label || '자세히 보기', 'copy') +
@@ -1521,10 +1584,21 @@
     function buildFacebookPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-fb">' +
-        '<div class="bsf-mock-row bsf-mock-fb-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">방금 전 · 🌐</div></div></div>' +
+        '<div class="bsf-mock-fb-hd">' +
+          '<div class="bsf-mock-fb-avatar"></div>' +
+          '<div class="bsf-mock-fb-meta">' +
+            '<div class="bsf-mock-fb-name">' + mockBrandName + '</div>' +
+            '<div class="bsf-mock-fb-sub">' + (isEn ? 'Just now · 🌐' : '방금 전 · 🌐') + '</div>' +
+          '</div>' +
+        '</div>' +
         '<div class="bsf-mock-fb-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
         (draftFirstImgUrl ? '<img class="bsf-mock-fb-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
-        '<div class="bsf-mock-fb-foot">👍 좋아요 &nbsp; 💬 댓글 &nbsp; ↗ 공유</div>' +
+        '<div class="bsf-mock-fb-reactions"><span>👍❤️😮 128</span><span>' + (isEn ? 'Comments 24 · Shares 6' : '댓글 24 · 공유 6') + '</span></div>' +
+        '<div class="bsf-mock-fb-actions">' +
+          '<span class="bsf-mock-fb-action-btn">👍 ' + (isEn ? 'Like' : '좋아요') + '</span>' +
+          '<span class="bsf-mock-fb-action-btn">💬 ' + (isEn ? 'Comment' : '댓글') + '</span>' +
+          '<span class="bsf-mock-fb-action-btn">↗ ' + (isEn ? 'Share' : '공유') + '</span>' +
+        '</div>' +
         '</div>') +
       afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? "What's on your mind?" : '무슨 생각을 하고 계신가요?')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
@@ -1538,11 +1612,24 @@
     function buildLinkedinPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-li">' +
-        '<div class="bsf-mock-row bsf-mock-li-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">Brand · 1시간</div></div></div>' +
-        '<div class="bsf-mock-li-headline" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '').slice(0, 60) || '…') + '</div>' +
+        '<div class="bsf-mock-li-hd">' +
+          '<div class="bsf-mock-li-avatar"></div>' +
+          '<div class="bsf-mock-li-meta">' +
+            '<div class="bsf-mock-li-name">' + mockBrandName + '</div>' +
+            '<div class="bsf-mock-li-title">' + (isEn ? 'Brand Page' : '브랜드 페이지') + '</div>' +
+            '<div class="bsf-mock-li-sub">' + (isEn ? '1h · 🌐' : '1시간 전 · 🌐') + '</div>' +
+          '</div>' +
+        '</div>' +
+        (titleVal ? '<div class="bsf-mock-li-headline" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal.slice(0, 60)) + '</div>' : '') +
         '<div class="bsf-mock-li-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
-        (draftFirstImgUrl ? '<img class="bsf-mock-fb-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
-        '<div class="bsf-mock-fb-foot" style="border-top:1px solid #2d3748;margin-top:6px;padding-top:6px">👍 &nbsp; 💬 댓글 &nbsp; ↗ 공유</div>' +
+        (draftFirstImgUrl ? '<img class="bsf-mock-li-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
+        '<div class="bsf-mock-li-reactions">👍 ❤️ 💡 128 · ' + (isEn ? '24 comments' : '댓글 24개') + '</div>' +
+        '<div class="bsf-mock-li-actions">' +
+          '<span class="bsf-mock-li-action-btn">👍 ' + (isEn ? 'Like' : '좋아요') + '</span>' +
+          '<span class="bsf-mock-li-action-btn">💬 ' + (isEn ? 'Comment' : '댓글') + '</span>' +
+          '<span class="bsf-mock-li-action-btn">↗ ' + (isEn ? 'Repost' : '리포스트') + '</span>' +
+          '<span class="bsf-mock-li-action-btn">✉ ' + (isEn ? 'Send' : '보내기') + '</span>' +
+        '</div>' +
         '</div>') +
       afWrap(isEn ? 'Headline' : '헤드라인', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Headline or article title' : '헤드라인')) +
       afWrap(isEn ? 'Post body' : '본문', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Write your article…' : '아티클을 작성하세요')) +
@@ -1556,9 +1643,15 @@
     function buildPinterestPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Pin preview' : '핀 미리보기',
         '<div class="bsf-mockup bsf-mock-pin">' +
-        mockImgEl(draftFirstImgUrl, 'bsf-mock-pin-img') +
-        '<div class="bsf-mock-pin-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
-        '<div class="bsf-mock-pin-desc" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+        '<div class="bsf-mock-pin-img-wrap">' +
+          (draftFirstImgUrl ? '<img class="bsf-mock-pin-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-pin-img-empty">📌</div>') +
+          '<div class="bsf-mock-pin-save-btn">' + (isEn ? 'Save' : '저장') + '</div>' +
+        '</div>' +
+        '<div class="bsf-mock-pin-body">' +
+          '<div class="bsf-mock-pin-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
+          '<div class="bsf-mock-pin-desc" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+          '<div class="bsf-mock-pin-author"><div class="bsf-mock-pin-author-avatar"></div><span class="bsf-mock-pin-author-name">' + mockBrandName + '</span></div>' +
+        '</div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '핀 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Pin title' : '핀 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Describe your pin' : '핀을 설명하세요')) +
@@ -1567,13 +1660,20 @@
       inputField(fmtId, 'link_url', isEn ? 'Destination URL' : '목적지 URL', 'https://', draft.link_url || '', 'auto', 'url');
     }
     function buildYoutubePreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
-      var thumbEl = draftFirstVidUrl
+      var thumbContent = draftFirstVidUrl
         ? '<video class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
-        : (draftFirstImgUrl ? '<img class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-yt-thumb bsf-mock-media-empty"><span>▶</span></div>');
+        : (draftFirstImgUrl ? '<img class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-yt-thumb bsf-mock-media-empty" style="aspect-ratio:16/9;background:#f0f0f0;font-size:32px">▶</div>');
       return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
-        '<div class="bsf-mockup bsf-mock-yt">' + thumbEl +
-        '<div class="bsf-mock-row bsf-mock-yt-meta">' + mockAvatarHtml +
-        '<div class="bsf-mock-yt-info"><div class="bsf-mock-yt-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '제목없음').slice(0, 60)) + '</div><div class="bsf-mock-subdued">' + mockBrandName + ' · 조회수 0회</div></div></div>' +
+        '<div class="bsf-mockup bsf-mock-yt">' +
+        '<div class="bsf-mock-yt-thumb-wrap">' + thumbContent + '<span class="bsf-mock-yt-duration">0:00</span></div>' +
+        '<div class="bsf-mock-yt-meta">' +
+          '<div class="bsf-mock-yt-ch-avatar"></div>' +
+          '<div class="bsf-mock-yt-info">' +
+            '<div class="bsf-mock-yt-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || (isEn ? 'Video title' : '제목없음')).slice(0, 60)) + '</div>' +
+            '<div class="bsf-mock-yt-ch-name">' + mockBrandName + '</div>' +
+            '<div class="bsf-mock-yt-stats">' + (isEn ? '0 views · just now' : '조회수 0회 · 방금') + '</div>' +
+          '</div>' +
+        '</div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '영상 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Video title' : '영상 제목')) +
       afWrap(isEn ? 'Description' : '설명', ceDiv(fmtId, 'caption', captionVal, 6, isEn ? 'Video description…' : '영상 설명을 작성하세요')) +
@@ -1584,9 +1684,21 @@
     }
     function buildNaverPostPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '포스트 미리보기',
-        '<div class="bsf-mockup bsf-mock-npost"><div class="bsf-mock-npost-hd" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '제목없음').slice(0, 30)) + '</div>' +
-        mockImgEl(draftFirstImgUrl, 'bsf-mock-npost-img') +
-        '<div class="bsf-mock-npost-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div></div>') +
+        '<div class="bsf-mockup bsf-mock-npost">' +
+        '<div class="bsf-mock-npost-hd">' +
+          '<span class="bsf-mock-npost-logo">POST</span>' +
+          '<span class="bsf-mock-npost-ch-name">' + mockBrandName + '</span>' +
+          '<span class="bsf-mock-npost-sub-btn">' + (isEn ? '+ Subscribe' : '+ 구독') + '</span>' +
+        '</div>' +
+        '<div class="bsf-mock-npost-card">' +
+          (draftFirstImgUrl ? '<img class="bsf-mock-npost-card-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-npost-card-img" style="display:flex;align-items:center;justify-content:center;font-size:32px;color:#ccc">🖼</div>') +
+          '<div class="bsf-mock-npost-card-overlay">' +
+            '<div class="bsf-mock-npost-card-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || (isEn ? 'Untitled' : '제목없음')).slice(0, 30)) + '</div>' +
+            '<div class="bsf-mock-npost-card-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bsf-mock-npost-foot"><span>♡ 0</span><span>💬 0</span></div>' +
+        '</div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Post title' : '포스트 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Content' : '내용', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Post content…' : '포스트 내용을 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Tags' : '태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#태그'), fmtId, 'hashtags') +
@@ -1595,9 +1707,17 @@
     function buildBandPreview(fmtId, captionVal, hashtagVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-band">' +
-        '<div class="bsf-mock-row bsf-mock-band-hd">' + mockAvatarHtml + '<div><span class="bsf-mock-uname">' + mockBrandName + '</span><div class="bsf-mock-subdued">1분 전</div></div></div>' +
+        '<div class="bsf-mock-band-topbar"><span class="bsf-mock-band-topbar-logo">BAND</span><span class="bsf-mock-band-topbar-name">' + mockBrandName + '</span></div>' +
+        '<div class="bsf-mock-band-hd">' +
+          '<div class="bsf-mock-band-avatar"></div>' +
+          '<div>' +
+            '<div><span class="bsf-mock-band-name">' + mockBrandName + '</span><span class="bsf-mock-band-badge">' + (isEn ? 'Leader' : '리더') + '</span></div>' +
+            '<div class="bsf-mock-band-date">1' + (isEn ? 'm ago' : '분 전') + '</div>' +
+          '</div>' +
+        '</div>' +
         '<div class="bsf-mock-band-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
         (draftFirstImgUrl ? '<img class="bsf-mock-band-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
+        '<div class="bsf-mock-band-foot"><span>♡ ' + (isEn ? 'Like' : '좋아요') + '</span><span>💬 ' + (isEn ? 'Comment' : '댓글') + '</span><span>↗ ' + (isEn ? 'Share' : '공유') + '</span></div>' +
         '</div>') +
       cfWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write post…' : '게시글을 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'), fmtId, 'hashtags') +
