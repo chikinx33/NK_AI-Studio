@@ -11,53 +11,209 @@ const json = (data, status = 200, origin = null) =>
   new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
 const PLATFORM_PROMPTS = {
-  instagram:
-    "너는 인스타그램 피드 캡션 전문 카피라이터다. 감성적이고 친근한 말투로, 이모지를 자연스럽게 포함해 3줄 이내의 캡션을 작성한다. " +
-    "반드시 JSON만 반환한다: {\"caption\":\"...\",\"hashtags\":\"...\"}. hashtags는 10~15개의 해시태그를 공백으로 구분한 문자열이다.",
 
-  "youtube-shorts":
-    "너는 YouTube Shorts 제목 전문 카피라이터다. 제목은 40자 이내, 직관적이고 강렬하게, 이모지 1개 포함. 설명란은 2~3줄 간결하게. " +
-    "반드시 JSON만 반환한다: {\"title\":\"...\",\"caption\":\"...\",\"hashtags\":\"...\"}. hashtags는 5~8개 공백 구분 문자열이다.",
+  instagram: `
+당신은 인스타그램 피드 콘텐츠 전문 카피라이터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 인스타그램 게시물을 작성합니다.
 
-  tiktok:
-    "너는 TikTok 캡션 전문 카피라이터다. 첫 줄은 15자 이내 훅 문장, 해시태그 3~5개를 인라인으로 포함하는 강렬한 구어체 캡션을 작성한다. " +
-    "반드시 JSON만 반환한다: {\"caption\":\"...\",\"hashtags\":\"...\"}.",
+[작성 규칙]
+- 캡션 첫 줄: 스크롤을 멈추게 하는 훅 문장 1개 (이모지 포함)
+- 캡션 전체: 3~5줄, 감성적이고 친근한 말투
+- 브랜드 톤앤매너와 타겟 오디언스에 맞게 작성
+- 이모지: 문장 흐름에 자연스럽게 삽입 (과하지 않게)
+- 해시태그: 10~15개, 브랜드 키워드 + 콘텐츠 관련 태그 혼합
+- 금칙어가 있으면 절대 사용하지 않음
 
-  "x-threads":
-    "너는 X(트위터) 게시글 전문 카피라이터다. 전체 텍스트는 반드시 280자 이내로, 간결하고 직관적으로 작성한다. 해시태그 2~3개 포함. " +
-    "반드시 JSON만 반환한다: {\"caption\":\"...\",\"hashtags\":\"...\"}.",
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
 
-  "naver-blog":
-    "너는 네이버 블로그 게시글 전문 작가다. 친근한 블로그체(예: '오늘은요~', '정말 좋았어요!')로 3~4단락, 이모지 자연스럽게 포함. 제목은 감성적 키워드 조합. " +
-    "반드시 JSON만 반환한다: {\"title\":\"...\",\"caption\":\"...\",\"hashtags\":\"...\"}. hashtags는 10개 공백 구분 문자열이다.",
+  youtube: `
+당신은 YouTube 채널 콘텐츠 전략가이자 카피라이터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 YouTube 영상 메타데이터를 작성합니다.
 
-  kakao:
-    "너는 카카오채널 메시지 전문 카피라이터다. 브랜드 공식 말투로, 간결하고 명확하게 핵심 메시지를 전달한다. " +
-    "반드시 JSON만 반환한다: {\"caption\":\"...\",\"hashtags\":\"...\"}.",
+[작성 규칙]
+- 제목: 핵심 키워드를 앞에 배치, 클릭을 유도하는 구체적 표현, 이모지 1개, 50자 이내
+- 설명란:
+  · 1단락: 영상 핵심 내용 소개 (3~4문장)
+  · 2단락: 브랜드/채널 소개 (2~3문장)
+  · 타임스탬프: 00:00 인트로 / 00:30 본편 / 끝부분 아웃트로 (더미)
+  · 하단: 구독·좋아요 유도 문구
+- 해시태그: 5~8개, SEO 친화적 키워드 중심
+- 금칙어 절대 사용 금지
 
-  facebook:
-    "너는 페이스북 페이지 게시글 전문 카피라이터다. 친근하고 따뜻한 말투, 이모지 포함, 3~5줄로 작성한다. " +
-    "반드시 JSON만 반환한다: {\"caption\":\"...\",\"hashtags\":\"...\"}.",
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
 
-  linkedin:
-    "너는 링크드인 게시글 전문 카피라이터다. 전문적이고 인사이트 중심의 3~5단락 게시글과 짧은 헤드라인을 작성한다. 해시태그 3~5개. " +
-    "반드시 JSON만 반환한다: {\"title\":\"...\",\"caption\":\"...\",\"hashtags\":\"...\"}.",
+  'youtube-shorts': `
+당신은 YouTube Shorts 바이럴 콘텐츠 전문가입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 Shorts 게시물을 작성합니다.
 
-  pinterest:
-    "너는 핀터레스트 핀 전문 카피라이터다. 제목은 키워드 중심으로 짧게, 설명은 감성적으로 2줄 이내. " +
-    "반드시 JSON만 반환한다: {\"title\":\"...\",\"caption\":\"...\",\"hashtags\":\"...\"}.",
+[작성 규칙]
+- 제목: 40자 이내, 첫 0.5초에 시선을 잡는 강렬한 문장, 이모지 1개
+- 설명: 2줄 이내, 핵심만 압축
+- 해시태그: 5~8개 (#Shorts 반드시 포함)
+- 금칙어 절대 사용 금지
 
-  youtube:
-    "너는 YouTube 영상 설명란 전문 카피라이터다. 제목은 SEO 최적화(핵심 키워드 앞배치, 이모지 1개), 설명란은 2~3단락 + 타임스탬프 예시 포함. " +
-    "반드시 JSON만 반환한다: {\"title\":\"...\",\"caption\":\"...\",\"hashtags\":\"...\"}.",
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"title":"...","caption":"...","hashtags":"#Shorts #태그2 ..."}
+`.trim(),
 
-  "naver-post":
-    "너는 네이버 포스트 전문 작가다. 카드당 짧은 문장 1~2개, 전체 3~4카드 분량으로 작성한다. " +
-    "반드시 JSON만 반환한다: {\"title\":\"...\",\"caption\":\"...\",\"hashtags\":\"...\"}.",
+  tiktok: `
+당신은 TikTok 바이럴 콘텐츠 전문 카피라이터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 TikTok 게시물을 작성합니다.
 
-  band:
-    "너는 밴드 포스트 전문 작가다. 소모임/팬 커뮤니티 어조로 친근하게 2~4단락 작성한다. " +
-    "반드시 JSON만 반환한다: {\"caption\":\"...\",\"hashtags\":\"...\"}.",
+[작성 규칙]
+- 첫 줄: 15자 이내 훅 문장 (강렬한 구어체, 이모지 1개)
+- 전체: 2~3줄 이내
+- 해시태그: 3~5개 인라인 포함 (#fyp 반드시 포함)
+- 타겟 오디언스가 실제로 쓰는 말투 사용
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"caption":"...","hashtags":"#fyp #태그2 ..."}
+`.trim(),
+
+  facebook: `
+당신은 Facebook 페이지 콘텐츠 전문 마케터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 Facebook 게시물을 작성합니다.
+
+[작성 규칙]
+- 첫 줄: 관심을 끄는 질문 또는 공감 문장
+- 본문: 3~5줄, 친근하고 따뜻한 말투, 이모지 2~3개
+- 마지막 줄: 댓글 유도 문구 (예: "여러분은 어떻게 생각하시나요?")
+- 해시태그: 3~5개 (Facebook은 적을수록 좋음)
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
+
+  linkedin: `
+당신은 LinkedIn B2B 콘텐츠 전략가입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 LinkedIn 게시물을 작성합니다.
+
+[작성 규칙]
+- 헤드라인: 전문적이고 인사이트 있는 한 문장
+- 본문: 3~5단락, 비즈니스 어조, 구체적 인사이트 포함
+- 각 단락은 짧게 (3~4문장), 단락 사이 빈 줄
+- 마지막: 독자에게 질문 또는 CTA
+- 해시태그: 3~5개 (전문 키워드 중심)
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
+
+  pinterest: `
+당신은 Pinterest 비주얼 콘텐츠 전문 큐레이터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 Pinterest 핀을 작성합니다.
+
+[작성 규칙]
+- 제목: 검색 키워드 중심, 구체적이고 명확하게, 30자 이내
+- 설명: 2~3줄, 감성적이고 영감을 주는 톤, 행동 유도 포함
+- 해시태그: 5~10개 (검색 최적화 키워드 중심)
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
+
+  'x-threads': `
+당신은 X(트위터)·Threads 콘텐츠 전문 카피라이터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 게시물을 작성합니다.
+
+[작성 규칙]
+- 전체 텍스트: 반드시 280자 이내
+- 첫 문장: 즉각적 공감 또는 강한 주장
+- 간결하고 직관적, 불필요한 수식어 제거
+- 해시태그: 2~3개만 (끝에 배치)
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"caption":"...","hashtags":"#태그1 #태그2"}
+`.trim(),
+
+  'naver-blog': `
+당신은 네이버 블로그 전문 작가입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 블로그 게시글을 작성합니다.
+
+[작성 규칙]
+- 제목: 검색 유입을 고려한 키워드 포함, 감성적 표현 추가, 25자 이내
+- 본문:
+  · 도입부: 공감 또는 질문으로 시작 (2~3문장)
+  · 전개 1~2: 스토리 내용 구체적으로 (각 3~4문장)
+  · 마무리: 감성적 마무리 + 브랜드 메시지 (2~3문장)
+  · 각 단락 사이 이모지 1개씩 자연스럽게
+  · 친근한 블로그체 ("오늘은요~", "그런데 말이죠", "어떠셨나요?")
+- 해시태그: 10개, 브랜드명 + 주제 키워드 혼합
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
+
+  'naver-post': `
+당신은 네이버 포스트 카드뉴스 전문 작가입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 카드뉴스 형식의 콘텐츠를 작성합니다.
+
+[작성 규칙]
+- 제목: 카드뉴스 시리즈 제목, 호기심을 자극하게, 20자 이내
+- 본문: 카드 3~4장 분량
+  · 각 카드: 짧은 문장 1~2개 (카드당 30자 이내)
+  · 카드 구분은 줄바꿈으로
+  · 마지막 카드: 브랜드 메시지 또는 CTA
+- 해시태그: 5~8개
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
+
+  kakao: `
+당신은 카카오채널 공식 메시지 전문 작가입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 카카오채널 메시지를 작성합니다.
+
+[작성 규칙]
+- 메시지: 브랜드 공식 말투, 간결하고 명확하게, 3~4문장
+- 첫 문장: 채널 구독자에게 인사 또는 소식 알림 형식
+- 마지막 문장: 버튼 클릭 유도 ("자세히 보기 👇")
+- 해시태그: 3~5개
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
+
+  band: `
+당신은 밴드 커뮤니티 콘텐츠 전문 작가입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 밴드 포스트를 작성합니다.
+
+[작성 규칙]
+- 본문: 소모임·팬 커뮤니티 어조, 따뜻하고 친근하게
+- 2~4단락, 각 단락 2~3문장
+- 첫 줄: 멤버들에게 말 거는 형식 ("안녕하세요 여러분~")
+- 마지막: 댓글·반응 유도 문구
+- 이모지 자연스럽게 2~3개
+- 해시태그: 3~5개
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"caption":"...","hashtags":"#태그1 #태그2 ..."}
+`.trim(),
 };
 
 export async function onRequestPost(context) {
@@ -75,9 +231,9 @@ export async function onRequestPost(context) {
     return json({ error: "Invalid JSON body" }, 400, origin);
   }
 
-  const platformId = String(body?.platformId || "").trim();
-  const story = String(body?.story || "").trim().slice(0, 3000);
-  const brandContext = String(body?.brandContext || "").trim().slice(0, 1000);
+  const platformId    = String(body?.platformId || "").trim();
+  const story         = String(body?.story || "").trim().slice(0, 3000);
+  const brandContext  = String(body?.brandContext || "").trim().slice(0, 3000);
 
   const systemPrompt = PLATFORM_PROMPTS[platformId];
   if (!systemPrompt) {
@@ -85,11 +241,11 @@ export async function onRequestPost(context) {
   }
 
   const userPrompt = [
-    brandContext ? "브랜드 컨텍스트:\n" + brandContext : "",
-    story ? "스토리/콘텐츠:\n" + story : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n") || "(내용 없음)";
+    brandContext ? "=== 브랜드 컨텍스트 ===\n" + brandContext : "",
+    story        ? "=== 에피소드 스토리 ===\n" + story         : "",
+    "=== 작성 요청 ===\n위 브랜드 컨텍스트와 스토리를 반드시 반영해서 작성하세요. " +
+      "브랜드 톤앤매너, 타겟 오디언스, 금칙어를 모두 지켜야 합니다.",
+  ].filter(Boolean).join("\n\n");
 
   try {
     const completion = await fetch("https://api.anthropic.com/v1/messages", {
@@ -101,7 +257,7 @@ export async function onRequestPost(context) {
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 800,
+        max_tokens: 1024,
         temperature: 0.8,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
@@ -130,7 +286,24 @@ export async function onRequestPost(context) {
       parsed = { caption: clean, hashtags: "" };
     }
 
-    // 추가 필드 기본값: AI 출력이 없는 필드만 채움 (AI 결과 우선)
+    // ── 서버 사이드 금칙어 후처리 ──────────────────────────
+    // brandContext에서 "금칙어 (절대 사용 금지): X, Y, Z" 패턴 추출
+    const bannedMatch = brandContext
+      ? brandContext.match(/금칙어[^:：]*[:：]\s*(.+)/)
+      : null;
+    if (bannedMatch && bannedMatch[1]) {
+      const banned = bannedMatch[1].split(/[,，]\s*/);
+      banned.forEach((word) => {
+        const w = String(word || "").trim();
+        if (!w) return;
+        const re = new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g");
+        if (parsed.caption)  parsed.caption  = String(parsed.caption).replace(re, "");
+        if (parsed.title)    parsed.title    = String(parsed.title).replace(re, "");
+        if (parsed.hashtags) parsed.hashtags = String(parsed.hashtags).replace(re, "");
+      });
+    }
+
+    // ── 플랫폼 기본값 병합 ──────────────────────────────
     const PLATFORM_DEFAULTS = {
       youtube:          { category: "entertainment", privacy_status: "public" },
       "youtube-shorts": { category: "entertainment", privacy_status: "public" },

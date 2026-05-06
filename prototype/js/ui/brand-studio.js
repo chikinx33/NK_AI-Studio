@@ -483,15 +483,86 @@
     return output.replace(/\s{2,}/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
 
+  function buildBrandContext(payload, brandView, knowledge) {
+    var sections = [];
+
+    // ── 브랜드 기본 정보 ──────────────────────────────────
+    var brandName = firstFilled([
+      brandView && brandView.title,
+      payload && payload.brandName,
+    ]);
+    if (brandName) sections.push('브랜드명: ' + brandName);
+
+    var summary = firstFilled([
+      brandView && brandView.summary,
+      payload && payload.brandSummary,
+    ]);
+    if (summary) sections.push('브랜드 요약: ' + summary);
+
+    var coreMsg = firstFilled([
+      brandView && brandView.coreMessage,
+      payload && payload.coreMessage,
+    ]);
+    if (coreMsg) sections.push('핵심 메시지: ' + coreMsg);
+
+    var target = firstFilled([
+      brandView && brandView.targetAudience,
+      payload && payload.targetAudience,
+      payload && payload.target,
+    ]);
+    if (target) sections.push('타겟 오디언스: ' + target);
+
+    var keywords = (brandView && brandView.brandKeywords)
+      || (payload && payload.brandKeywords);
+    if (Array.isArray(keywords) && keywords.length) {
+      sections.push('브랜드 키워드: ' + keywords.join(', '));
+    }
+
+    // ── 브랜드 심층 정보 (knowledge) ─────────────────────
+    if (knowledge) {
+      if (knowledge.brandVoice)
+        sections.push('톤앤매너: ' + knowledge.brandVoice);
+
+      if (knowledge.brandCharacter)
+        sections.push('브랜드 캐릭터: ' + knowledge.brandCharacter);
+
+      if (knowledge.brandStory)
+        sections.push('브랜드 스토리: ' + knowledge.brandStory);
+
+      if (knowledge.worldSetting)
+        sections.push('세계관: ' + knowledge.worldSetting);
+
+      if (Array.isArray(knowledge.brandRules) && knowledge.brandRules.length)
+        sections.push('브랜드 룰: ' + knowledge.brandRules.join(' / '));
+
+      if (Array.isArray(knowledge.bannedExpressions) && knowledge.bannedExpressions.length)
+        sections.push('금칙어 (절대 사용 금지): ' + knowledge.bannedExpressions.join(', '));
+
+      if (Array.isArray(knowledge.successCases) && knowledge.successCases.length)
+        sections.push('성공 사례 참고: ' + knowledge.successCases.slice(0, 2).join(' / '));
+    }
+
+    return sections.join('\n');
+  }
+
   function buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge) {
     var payload = (project && project.payload) || {};
     var fmtId = String(selectedOption && selectedOption.id || '');
 
-    // 에피소드 스토리만 사용 (sourceTexts = 브랜드 컨텍스트라 제외)
-    var storyText = String(payload.story || payload.storyPrompt || '').trim();
-    var brandName = firstFilled([brandView.title, project && (project.seriesTitle || project.title)]);
-    var coreMsg = String(payload.coreMessage || '').trim();
-    var primaryContent = storyText;
+    var storyText  = String(payload.story || payload.storyPrompt || '').trim();
+    var brandName  = firstFilled([brandView && brandView.title, payload.brandName]);
+    var coreMsg    = firstFilled([brandView && brandView.coreMessage, payload.coreMessage]);
+    var target     = firstFilled([brandView && brandView.targetAudience, payload.targetAudience, payload.target]);
+
+    // 타겟 기반 톤 힌트 (규칙 기반 fallback용)
+    var toneHint = '';
+    if (target) {
+      if (/유아|아이|어린이|키즈/.test(target))    toneHint = '따뜻하고 귀엽게';
+      else if (/10대|청소년/.test(target))          toneHint = '트렌디하고 친근하게';
+      else if (/20대|30대|직장/.test(target))       toneHint = '공감하기 쉽게';
+      else if (/40대|50대|중장년/.test(target))     toneHint = '신뢰감 있고 따뜻하게';
+      else if (/B2B|기업|비즈니스/.test(target))    toneHint = '전문적이고 인사이트 있게';
+    }
 
     function firstSentence(text) {
       var m = String(text || '').match(/[^.!?。\n]+[.!?。]?/);
@@ -499,81 +570,122 @@
     }
 
     var parts = [];
+
     switch (fmtId) {
       case 'naver-blog':
       case 'facebook':
+      case 'band':
+        if (storyText) parts.push(storyText);
+        if (coreMsg)   parts.push('\n\n' + coreMsg);
+        break;
+
       case 'linkedin':
-        // 긴 포맷: 에피소드 스토리 전체
-        if (primaryContent) parts.push(primaryContent);
-        if (coreMsg) parts.push('\n\n' + coreMsg);
+        if (storyText) parts.push(storyText);
+        if (coreMsg)   parts.push('\n\n' + coreMsg);
+        if (toneHint)  parts.push('\n\n— ' + (brandName || '') + ' | ' + toneHint);
         break;
+
       case 'youtube':
-        // 영상 설명: 스토리 + 브랜드 소개
-        if (primaryContent) parts.push(primaryContent);
+        if (storyText) parts.push(storyText);
         if (brandName) parts.push('\n\n─\n' + brandName);
-        if (coreMsg) parts.push('\n' + coreMsg);
+        if (coreMsg)   parts.push('\n' + coreMsg);
         break;
+
       case 'youtube-shorts':
       case 'tiktok':
-        // 훅 문구: 첫 문장만
-        var hookLine = firstSentence(primaryContent);
-        if (hookLine) parts.push(hookLine);
+        var hook = firstSentence(storyText);
+        if (hook)         parts.push(hook);
         else if (coreMsg) parts.push(coreMsg);
         break;
+
       case 'x-threads':
-        // 한 줄 임팩트
-        parts.push(compactSentence(primaryContent || coreMsg, 100));
+        parts.push(compactSentence(storyText || coreMsg, 200));
         break;
+
       case 'naver-post':
       case 'pinterest':
-        // 짧고 임팩트: 앞 120자
-        parts.push(compactSentence(primaryContent || coreMsg, 120));
+        parts.push(compactSentence(storyText || coreMsg, 120));
         break;
+
+      case 'kakao':
+        var kakaoText = firstSentence(storyText) || coreMsg;
+        parts.push(compactSentence(kakaoText, 150));
+        break;
+
       default:
-        // Instagram, Kakao, Band 등 일반 SNS
-        parts.push(compactSentence(primaryContent || coreMsg, 160));
+        // Instagram 등
+        parts.push(compactSentence(storyText || coreMsg, 160));
     }
 
     var result = parts.join('').trim();
-    return result ? scrubBannedText(result, knowledge.bannedExpressions) : '';
+
+    if (knowledge && knowledge.bannedExpressions) {
+      result = scrubBannedText(result, knowledge.bannedExpressions);
+    }
+
+    return result;
   }
 
   function buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge) {
-    var payload = (project && project.payload) || {};
-    var tokens = [];
+    var payload   = (project && project.payload) || {};
+    var fmtId     = String(selectedOption && selectedOption.id || '');
+    var brandName = firstFilled([brandView && brandView.title, payload.brandName]);
 
-    function pushToken(value) {
-      var tag = normalizeHashtagToken(value);
-      if (!tag) return;
-      if (tokens.indexOf(tag) >= 0) return;
-      tokens.push(tag);
+    var keywords = [].concat(
+      Array.isArray(brandView && brandView.brandKeywords) ? brandView.brandKeywords : [],
+      Array.isArray(payload.brandKeywords) ? payload.brandKeywords : [],
+      Array.isArray(payload.purposeTags)   ? payload.purposeTags   : []
+    );
+
+    // 중복 제거
+    keywords = keywords.filter(function (k, i, arr) {
+      return k && arr.indexOf(k) === i;
+    });
+
+    // 플랫폼별 해시태그 수
+    var maxTags = ({
+      'instagram':      13,
+      'naver-blog':     10,
+      'youtube':         7,
+      'youtube-shorts':  6,
+      'tiktok':          4,
+      'facebook':        4,
+      'linkedin':        4,
+      'pinterest':       8,
+      'x-threads':       3,
+      'naver-post':      6,
+      'kakao':           4,
+      'band':            4,
+    })[fmtId] || 5;
+
+    var tags = [];
+
+    function pushTag(raw) {
+      var t = normalizeHashtagToken(raw);
+      if (!t) return;
+      if (tags.indexOf(t) === -1) tags.push(t);
     }
 
-    function pushKeywords(value) {
-      splitHashtagKeywordCandidates(value).forEach(pushToken);
+    // 브랜드명 태그 (항상 첫 번째)
+    if (brandName) pushTag(brandName);
+
+    // 플랫폼 필수 태그
+    if (fmtId === 'tiktok' || fmtId === 'youtube-shorts') pushTag('fyp');
+    if (fmtId === 'youtube-shorts') pushTag('Shorts');
+
+    // 키워드 태그
+    keywords.forEach(function (k) {
+      if (tags.length >= maxTags) return;
+      pushTag(k);
+    });
+
+    var result = tags.slice(0, maxTags).join(' ');
+
+    if (knowledge && knowledge.bannedExpressions) {
+      result = scrubBannedText(result, knowledge.bannedExpressions);
     }
 
-    pushToken(brandView.title || (project && (project.seriesTitle || project.title)));
-    pushToken(payload.projectType);
-    pushToken(payload.targetAudience || payload.target);
-    pushToken(selectedOption && selectedOption.title);
-    pushKeywords(knowledge.brandCharacter);
-    pushKeywords(knowledge.worldSetting);
-    toTagList(payload.brandKeywords).slice(0, 4).forEach(pushToken);
-    toTagList(knowledge.referenceContents).slice(0, 2).forEach(pushKeywords);
-    toTagList(knowledge.successCases).slice(0, 2).forEach(pushKeywords);
-    toTagList(payload.purposeTags).slice(0, 3).forEach(pushToken);
-
-    var sourceLine = firstFilled(sourceTexts);
-    if (sourceLine) {
-      sourceLine.split(/\s+/).slice(0, 3).forEach(pushKeywords);
-    }
-
-    return tokens.filter(function (token) {
-      return !knowledge.bannedExpressions.some(function (term) {
-        return token.toLowerCase().indexOf(String(term || '').trim().toLowerCase()) >= 0;
-      });
-    }).slice(0, 8).join(' ');
+    return result;
   }
 
   function currentLanguage() {
@@ -2039,12 +2151,7 @@
           root.querySelector('.bsf-format-draft-panel[data-draft-format="' + regenFmtId + '"]');
         if (!regenPanel) return;
         showDraftSkeleton(regenPanel);
-        var brandCtx = [
-          String(brandView && (brandView.title || brandView.brandName) || ''),
-          String(brandView && brandView.brandDescription || ''),
-          String(knowledge && knowledge.brandCharacter || ''),
-          String(knowledge && knowledge.brandVoice || ''),
-        ].filter(Boolean).join('\n');
+        var brandCtx = buildBrandContext(payload, brandView, knowledge);
         (NK.api && NK.api.draftGenerate
           ? NK.api.draftGenerate({
               platformId: regenFmtId,
