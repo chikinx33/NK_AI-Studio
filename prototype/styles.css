@@ -11967,6 +11967,32 @@ body {
   margin: 0;
 }
 
+/* Step 3 — Draft regen button in header */
+.bsf-draft-regen-head {
+  grid-column: 3;
+  justify-self: end;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-3, #1e2030);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #60a5fa;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.bsf-draft-regen-head:hover {
+  background: rgba(96,165,250,0.15);
+  box-shadow: 0 0 0 2px rgba(96,165,250,0.3);
+}
+.bsf-draft-regen-head:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Step 3 — Draft media preview */
 .bsf-draft-media-preview {
   display: flex;
@@ -12074,33 +12100,7 @@ body {
   word-break: break-word;
 }
 
-/* Step 3 — Draft panel header with regen button */
-.bsf-draft-edit-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.bsf-draft-regen-btn {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  background: transparent;
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  padding: 3px 10px;
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s;
-}
-.bsf-draft-regen-btn:hover {
-  background: var(--accent);
-  color: #fff;
-}
-.bsf-draft-regen-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  pointer-events: none;
-}
+.bsf-caption-tall { min-height: 160px; }
 .bsf-caption-tall { min-height: 160px; }
 
 /* ── AI 재생성 스켈레톤 로딩 ──────────────────────────────────────────── */
@@ -12288,9 +12288,6 @@ body {
 .bsf-charcount      { font-size: 11px; color: var(--text-muted, #6b7280); }
 .bsf-charcount.warn { color: #fbbf24; }
 .bsf-charcount.over { color: #ef4444; }
-
-/* Regen row */
-.bsf-draft-regen-row { display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* ── Platform mockup base ─────────────────────────────────────────────── */
 .bsf-mockup {
@@ -12592,7 +12589,6 @@ body {
   position: sticky;
   top: 16px;
 }
-.bsf-format-draft-panel > .bsf-draft-regen-row { grid-column: 1; }
 
 .bsf-draft-title-row {
   display: flex;

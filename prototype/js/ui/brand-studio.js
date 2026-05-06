@@ -1469,13 +1469,13 @@
       return '<button type="button" class="bsf-draft-regen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(fmtId) + '">' + escapeHtml(T.draftRegen) + '</button>';
     }
     function showDraftSkeleton(panel) {
-      var regenBtn = panel && panel.querySelector('[data-action="brand-regen-draft"]');
-      if (regenBtn) { regenBtn.disabled = true; regenBtn.textContent = isEn ? '⏳ Generating…' : '⏳ 생성 중…'; }
+      var regenBtn = root.querySelector('.bsf-draft-regen-head');
+      if (regenBtn) regenBtn.disabled = true;
       if (panel) panel.querySelectorAll('.bsf-ce[contenteditable]').forEach(function (el) { el.classList.add('bsf-skeleton'); });
     }
     function hideDraftSkeleton(panel) {
-      var regenBtn = panel && panel.querySelector('[data-action="brand-regen-draft"]');
-      if (regenBtn) { regenBtn.disabled = false; regenBtn.textContent = T.draftRegen; }
+      var regenBtn = root.querySelector('.bsf-draft-regen-head');
+      if (regenBtn) regenBtn.disabled = false;
       if (panel) panel.querySelectorAll('.bsf-ce.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
     }
 
@@ -1885,7 +1885,6 @@
       return (
         '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
         bodyHtml +
-        '<div class="bsf-draft-regen-row">' + regenBtnHtml(formatId) + '</div>' +
         '</div>'
       );
     }
@@ -1983,7 +1982,11 @@
       '</div>' +
       '<div class="bsf-detail bsf-detail-draft' + (activeStep === 3 ? ' is-active' : '') + '">' +
       '<div class="bsf-detail-head bsf-detail-head-draft">' +
-        '<div class="bsf-draft-head-row"><strong>' + T.head03 + '</strong>' + draftTabsHtml + '</div>' +
+        '<div class="bsf-draft-head-row"><strong>' + T.head03 + '</strong>' + draftTabsHtml +
+          '<button type="button" class="bsf-draft-regen-head" data-action="brand-regen-draft" data-format-id="' + escapeHtml(activeDraftTabOrFirst) + '" title="' + escapeHtml(T.draftRegen) + '">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 9.5 9.5 2 12l7.5 2.5L12 22l2.5-7.5L22 12l-7.5-2.5z"/></svg>' +
+          '</button>' +
+        '</div>' +
       '</div>' +
       '<div class="bsf-format-draft-panels">' + draftPanelsHtml + '</div>' +
       '</div>' +
@@ -2157,6 +2160,9 @@
         });
         // 탭 전환 시 저장 버튼 초기화 (새 탭은 변경 없음)
         setSaveBtnEnabled(false);
+        // 헤더 재생성 버튼의 data-format-id 동기화
+        var rgnBtn = root.querySelector('.bsf-draft-regen-head');
+        if (rgnBtn) rgnBtn.dataset.formatId = tabId;
         // 비동기 저장
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         NK.service.project.updatePayload(projectId, { brandStudioActiveDraftTab: tabId })
