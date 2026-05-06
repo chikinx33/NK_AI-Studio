@@ -12268,7 +12268,8 @@ body {
   pointer-events: none;
   z-index: 3;
 }
-.is-selected .bsf-thumb-check {
+.bsf-thumb-wrap.is-selected .bsf-thumb-check,
+.bsf-video-thumb-item.is-selected .bsf-thumb-check {
   opacity: 1;
   transform: scale(1);
 }
