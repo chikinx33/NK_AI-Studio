@@ -11966,9 +11966,6 @@ body {
   border-color: var(--accent);
   background: rgba(255, 122, 0, 0.07);
 }
-.bsf-format-card.is-recommended {
-  border-color: var(--accent);
-}
 .bsf-format-card.is-unavailable {
   opacity: 0.35;
 }
