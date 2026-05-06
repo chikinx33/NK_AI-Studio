@@ -11715,9 +11715,13 @@ body {
 .bsf-flow-head {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
-  padding: 16px 20px 14px;
+  padding: 12px 20px 12px;
+}
+
+.bsf-flow-title-group {
+  flex-shrink: 0;
 }
 
 .bsf-title {
@@ -11745,11 +11749,13 @@ body {
 /* ---- Timeline ---- */
 .bsf-timeline {
   display: flex;
-  align-items: stretch;
-  padding: 0 12px;
+  align-items: center;
+  padding: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  max-width: 60%;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
 }
 .bsf-timeline::-webkit-scrollbar { display: none; }
 

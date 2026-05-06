@@ -1936,9 +1936,6 @@
       if (step === 3) {
         return (
           '<div class="bsf-ctrl-row">' +
-          '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-save-format-draft"' + (activeDraftTabOrFirst ? '' : ' disabled') + '>' + T.ctrlSave + '</button>' +
-          '<span class="bsf-ctrl-divider"></span>' +
           '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="3"' + (hasDraftForAnyFormat ? '' : ' disabled') + '>' + T.ctrlToPublish + '</button>' +
           '</div>'
         );
@@ -1955,16 +1952,18 @@
       '<section class="brand-studio-page">' +
       '<div class="bsf-flow-card">' +
       '<div class="bsf-flow-head">' +
-      '<div>' +
+      '<div class="bsf-flow-title-group">' +
       '<p class="brand-studio-eyebrow">' + T.eyebrow + '</p>' +
       '<h2 class="bsf-title">' + escapeHtml(brandView.title || project.seriesTitle || project.title || (isEn ? 'Project' : '프로젝트')) + '</h2>' +
       '<p class="bsf-desc">' + escapeHtml(compactSentence(brandView.summary || payload.brandSummary || T.brandSummaryHint, 100)) + '</p>' +
       '</div>' +
+      '<div class="bsf-timeline">' + timelineHtml + '</div>' +
       '<div class="bsf-flow-head-actions">' +
+      '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
+      '<button type="button" class="btn-primary compact" data-action="brand-save-format-draft"' + (activeDraftTabOrFirst ? '' : ' disabled') + '>' + T.ctrlSave + '</button>' +
       '<button type="button" class="btn-primary" data-action="brand-oneclick-draft">' + T.oneClickDraft + '</button>' +
       '</div>' +
       '</div>' +
-      '<div class="bsf-timeline">' + timelineHtml + '</div>' +
       '<div class="bsf-ctrl-bar">' + ctrlBarHtml + '</div>' +
       '</div>' +
       '<div class="bsf-detail-card">' +
