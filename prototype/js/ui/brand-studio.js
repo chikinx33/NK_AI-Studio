@@ -841,11 +841,35 @@
     var storyNarrative = String(payload.story || payload.storyPrompt || '').trim();
     var storyOverview = storyNarrative || storyItems.map(function (i) { return String(i.text || i.title || '').trim(); }).filter(Boolean).join(' ');
     var storyPreview = storyOverview ? (storyOverview.length > 280 ? storyOverview.slice(0, 280) + '…' : storyOverview) : null;
+    // 스토리는 payload.story가 있으면 무조건 1개
+    var storyCount = storyNarrative ? 1 : storyItems.length;
+    // 메타데이터 (장르·세부장르·시청목적·영상길이·화면비율·톤·스타일)
+    var storyMeta = (function () {
+      function mv(v) { return String(v || '').trim(); }
+      function firstArr(v) { return Array.isArray(v) ? mv(v[0]) : mv(v); }
+      var rows = [
+        { label: '장르',    val: mv(payload.purposeCategory) },
+        { label: '세부장르', val: firstArr(payload.purposeTag || payload.purposeTags) },
+        { label: '시청 목적', val: firstArr(payload.needs || payload.need) },
+        { label: '영상 길이', val: mv(payload.duration) ? mv(payload.duration) + '초' : '' },
+        { label: '화면 비율', val: mv(payload.aspectRatio) },
+        { label: '톤',      val: firstArr(payload.tones || payload.tone) },
+        { label: '스타일',  val: mv(payload.style) }
+      ].filter(function (r) { return !!r.val; });
+      if (!rows.length) return '';
+      return '<ul class="bsf-story-meta">' +
+        rows.map(function (r) {
+          return '<li><span>' + escapeHtml(r.label) + '</span><strong>' + escapeHtml(r.val) + '</strong></li>';
+        }).join('') + '</ul>';
+    }());
     var storyCardHtml =
       '<div class="bsf-asset-type-card' + (storySelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">스토리</span><em>' + storyItems.length + '개</em></div>' +
-      '<div class="bsf-asset-story-body">' + (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">시나리오를 작성하면<br>스토리가 표시됩니다.</p>') + '</div>' +
-      (storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? '선택 해제' : '선택') + '</button></div>' : '') +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">스토리</span><em>' + storyCount + '개</em></div>' +
+      '<div class="bsf-asset-story-body">' +
+      (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">시나리오를 작성하면<br>스토리가 표시됩니다.</p>') +
+      storyMeta +
+      '</div>' +
+      (storyNarrative || storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? '선택 해제' : '선택') + '</button></div>' : '') +
       '</div>';
     // 이미지 카드 — slice 제거해 전체 표시
     var imageThumbsHtml = imageItems.map(function (i) {
