@@ -11996,6 +11996,64 @@ body {
   flex: 1;
 }
 
+/* Step 3 — Blog structure preview */
+.bsf-blog-struct {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bsf-blog-struct-head { margin-bottom: 2px; }
+.bsf-blog-img-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bsf-blog-img {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.bsf-blog-para {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1.6;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Step 3 — Draft panel header with regen button */
+.bsf-draft-edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.bsf-draft-regen-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.bsf-draft-regen-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.bsf-caption-tall { min-height: 160px; }
+
 /* Step 3 — Draft two-column layout */
 .bsf-draft-layout {
   display: grid;

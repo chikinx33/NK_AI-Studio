@@ -487,11 +487,11 @@
     var payload = (project && project.payload) || {};
     var fmtId = String(selectedOption && selectedOption.id || '');
 
-    // 에피소드 스토리를 최우선 콘텐츠로 사용
+    // 에피소드 스토리만 사용 (sourceTexts = 브랜드 컨텍스트라 제외)
     var storyText = String(payload.story || payload.storyPrompt || '').trim();
     var brandName = firstFilled([brandView.title, project && (project.seriesTitle || project.title)]);
     var coreMsg = String(payload.coreMessage || '').trim();
-    var primaryContent = storyText || firstFilled(sourceTexts) || '';
+    var primaryContent = storyText;
 
     function firstSentence(text) {
       var m = String(text || '').match(/[^.!?。\n]+[.!?。]?/);
@@ -639,6 +639,7 @@
       ctrlNFormats: function (n) { return n + '개 포맷 선택됨'; },
       ctrlSelectFormat: '포맷을 선택하세요', ctrlToDraft: '초안 작성으로 →',
       ctrlAutoGen: '전체 자동 생성', ctrlSave: '저장', ctrlToPublish: '배포 설정으로 →',
+      draftRegen: '스토리로 재생성', draftStructLabel: '블로그 구조 미리보기',
       ctrlNChannelsReady: function (n) { return n + '개 채널에 배포 준비'; },
       ctrlPublishAll: '전체 배포',
       head01: '01 — 자산', head01sub: '배포에 사용할 자산을 선택하세요',
@@ -693,6 +694,7 @@
       ctrlNFormats: function (n) { return n + ' format' + (n === 1 ? '' : 's') + ' selected'; },
       ctrlSelectFormat: 'Select a format', ctrlToDraft: 'To Draft →',
       ctrlAutoGen: 'Auto Generate All', ctrlSave: 'Save', ctrlToPublish: 'To Publish →',
+      draftRegen: 'Regenerate from Story', draftStructLabel: 'Blog Structure Preview',
       ctrlNChannelsReady: function (n) { return n + ' channel' + (n === 1 ? '' : 's') + ' ready'; },
       ctrlPublishAll: 'Publish All',
       head01: '01 — Assets', head01sub: 'Select assets to use for deployment',
@@ -1256,6 +1258,44 @@
       return '<div class="bsf-draft-media-preview">' + rows.join('') + '</div>';
     }
 
+    // 블로그/롱폼 포맷용 구조화 미리보기 빌더
+    var LONG_FORM_FMTS = { 'naver-blog': true, 'facebook': true, 'linkedin': true, 'youtube': true, 'naver-post': true };
+    function buildBlogStructHtml(fmtId, storyTxt) {
+      if (!LONG_FORM_FMTS[fmtId]) return '';
+      var selImgs = imageItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
+      var selVids = (fmtId === 'youtube') ? videoItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; }) : [];
+      if (!storyTxt && !selImgs.length && !selVids.length) return '';
+      // 스토리를 문단 단위로 분할
+      var paras = storyTxt ? storyTxt.split(/\n+/).map(function (s) { return s.trim(); }).filter(Boolean) : [];
+      var half = Math.ceil(paras.length / 2);
+      var firstParas = paras.slice(0, half);
+      var restParas = paras.slice(half);
+      var firstImgs = selImgs.slice(0, 3);
+      var restImgs = selImgs.slice(3, 6);
+      function imgRow(imgs) {
+        return imgs.length ? '<div class="bsf-blog-img-row">' + imgs.map(function (i) {
+          return '<img class="bsf-blog-img" src="' + escapeHtml(i.url) + '" />';
+        }).join('') + '</div>' : '';
+      }
+      function paraBlock(ps) {
+        return ps.length ? '<p class="bsf-blog-para">' + escapeHtml(ps.join(' ')) + '</p>' : '';
+      }
+      var inner = '';
+      if (fmtId === 'youtube' && selVids.length) {
+        inner += '<div class="bsf-blog-img-row">' + selVids.slice(0, 2).map(function (i) {
+          return '<div class="bsf-dmp-vid-wrap" style="width:120px;height:68px"><video class="bsf-dmp-vid" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video><span class="bsf-dmp-vid-icon">▶</span></div>';
+        }).join('') + '</div>';
+      }
+      inner += imgRow(firstImgs) + paraBlock(firstParas);
+      if (restImgs.length || restParas.length) {
+        inner += imgRow(restImgs) + paraBlock(restParas);
+      }
+      return '<div class="bsf-blog-struct">' +
+        '<div class="bsf-blog-struct-head"><span class="bsf-dmp-label">' + escapeHtml(T.draftStructLabel) + '</span></div>' +
+        inner +
+        '</div>';
+    }
+
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
     var draftTabsHtml = selectedFormats.length
       ? '<div class="bsf-draft-tabs">' + selectedFormats.map(function (formatId) {
@@ -1270,6 +1310,7 @@
           );
         }).join('') + '</div>'
       : '';
+    var epTitle = String(payload.episodeTitle || (project && (project.title || project.seriesTitle)) || '').trim();
     var draftPanelsHtml = selectedFormats.length
       ? selectedFormats.map(function (formatId) {
           var fmt = formatItems.find(function (f) { return f.id === formatId; });
@@ -1277,14 +1318,32 @@
           var draft = (formatDrafts && formatDrafts[formatId]) || {};
           var captionVal = String(draft.caption || '').trim() || buildCaptionDraft(project, brandView, fmt, sourceTexts, knowledge);
           var hashtagVal = String(draft.hashtags || '').trim() || buildHashtagDraft(project, brandView, fmt, sourceTexts, knowledge);
-          var titleVal = String(draft.title || '').trim();
+          // 제목: 저장된 값 → 에피소드 제목 자동 반영
+          var titleVal = String(draft.title || '').trim() || epTitle;
+          var storyForStruct = String(payload.story || payload.storyPrompt || '').trim();
+          var isLongForm = !!LONG_FORM_FMTS[formatId];
           return (
             '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
+            // 미디어 미리보기 (스토리/이미지/영상 썸네일)
             buildDraftMediaPreview(formatId) +
-            (fmt && fmt.hasTitle ? '<div class="bsf-draft-title-row"><span class="brand-caption-meta-label">' + T.labelTitle + '</span><input class="brand-publish-input" id="brand-draft-title-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderTitle) + '" value="' + escapeHtml(titleVal) + '" /></div>' : '') +
+            // 블로그/롱폼: 구조 미리보기
+            buildBlogStructHtml(formatId, storyForStruct) +
+            // 제목 입력
+            (fmt && fmt.hasTitle
+              ? '<div class="bsf-draft-title-row"><span class="brand-caption-meta-label">' + T.labelTitle + '</span><input class="brand-publish-input" id="brand-draft-title-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderTitle) + '" value="' + escapeHtml(titleVal) + '" /></div>'
+              : '') +
+            // 캡션 + 해시태그 (재생성 버튼 포함)
+            '<div class="bsf-draft-edit-head">' +
+            '<span class="brand-caption-meta-label">' + T.labelCaption + (isLongForm ? (' / ' + T.labelHashtag) : '') + '</span>' +
+            '<button type="button" class="bsf-draft-regen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(formatId) + '">' + escapeHtml(T.draftRegen) + '</button>' +
+            '</div>' +
             '<div class="bsf-draft-layout">' +
-            '<div class="bsf-draft-col"><span class="brand-caption-meta-label">' + T.labelCaption + '</span><textarea class="brand-caption-textarea" id="brand-draft-caption-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderCaption) + '">' + escapeHtml(captionVal) + '</textarea></div>' +
-            '<div class="bsf-draft-col"><span class="brand-caption-meta-label">' + T.labelHashtag + '</span><textarea class="brand-caption-textarea brand-hashtag-textarea" id="brand-draft-hashtag-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderHashtag) + '">' + escapeHtml(hashtagVal) + '</textarea></div>' +
+            '<div class="bsf-draft-col">' +
+            (isLongForm ? '' : '<span class="brand-caption-meta-label">' + T.labelCaption + '</span>') +
+            '<textarea class="brand-caption-textarea' + (isLongForm ? ' bsf-caption-tall' : '') + '" id="brand-draft-caption-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderCaption) + '">' + escapeHtml(captionVal) + '</textarea></div>' +
+            '<div class="bsf-draft-col">' +
+            (isLongForm ? '' : '<span class="brand-caption-meta-label">' + T.labelHashtag + '</span>') +
+            '<textarea class="brand-caption-textarea brand-hashtag-textarea" id="brand-draft-hashtag-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderHashtag) + '">' + escapeHtml(hashtagVal) + '</textarea></div>' +
             '</div>' +
             '</div>'
           );
@@ -1458,6 +1517,25 @@
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         NK.service.project.updatePayload(projectId, { brandStudioActiveDraftTab: tabId })
           .catch(function () {});
+        return;
+      }
+      if (action === 'brand-regen-draft') {
+        var regenFmtId = String(btn.dataset.formatId || '').trim();
+        var regenFmt = formatItems.find(function (f) { return f.id === regenFmtId; });
+        if (!regenFmt) return;
+        var regenCaption = buildCaptionDraft(project, brandView, regenFmt, sourceTexts, knowledge);
+        var regenHashtag = buildHashtagDraft(project, brandView, regenFmt, sourceTexts, knowledge);
+        var captionElR = root.querySelector('#brand-draft-caption-' + regenFmtId);
+        var hashtagElR = root.querySelector('#brand-draft-hashtag-' + regenFmtId);
+        if (captionElR) captionElR.value = regenCaption;
+        if (hashtagElR) hashtagElR.value = regenHashtag;
+        // 자동 저장
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          var regenDrafts = Object.assign({}, formatDrafts);
+          regenDrafts[regenFmtId] = Object.assign({}, regenDrafts[regenFmtId] || {}, { caption: regenCaption, hashtags: regenHashtag });
+          formatDrafts = regenDrafts;
+          NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: regenDrafts }).catch(function () {});
+        }
         return;
       }
       if (action === 'brand-save-format-draft') {
