@@ -1314,7 +1314,8 @@
       if (action === 'brand-toggle-story-card') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var nextStorySelected = !payload.brandStudioStorySelected;
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioStorySelected: nextStorySelected }) }));
+        // 즉시 CSS 토글 — 리렌더 없음
+        btn.classList.toggle('is-selected', nextStorySelected);
         NK.service.project.updatePayload(projectId, { brandStudioStorySelected: nextStorySelected })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function () {});
@@ -1331,10 +1332,25 @@
         if (!singleAssetId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var nextSingleIds = selectedAssetIds.slice();
         var sidx = nextSingleIds.indexOf(singleAssetId);
+        var isNowSel = sidx < 0;
         if (sidx >= 0) nextSingleIds.splice(sidx, 1); else nextSingleIds.push(singleAssetId);
-        // 즉시 시각 반응 (전체 리렌더 전에 CSS 클래스 선토글)
-        btn.classList.toggle('is-selected', sidx < 0);
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: nextSingleIds }) }));
+        // ① 썸네일 즉시 토글 (리렌더 없음)
+        btn.classList.toggle('is-selected', isNowSel);
+        // ② 카드 하이라이트 + 카운트 라벨 수술적 업데이트
+        var thumbCard = btn.closest('.bsf-asset-type-card');
+        if (thumbCard) {
+          var allThumbs = thumbCard.querySelectorAll('[data-action="brand-toggle-single-asset"]');
+          var nowSelCount = 0;
+          allThumbs.forEach(function (t) { if (t.classList.contains('is-selected')) nowSelCount++; });
+          thumbCard.classList.toggle('is-selected', nowSelCount > 0);
+          var countEm = thumbCard.querySelector('.bsf-asset-type-head em');
+          if (countEm) {
+            countEm.textContent = nowSelCount > 0
+              ? (nowSelCount + '/' + allThumbs.length)
+              : (isEn ? String(allThumbs.length) : allThumbs.length + '개');
+          }
+        }
+        // ③ 비동기 저장 — 응답 후에만 전체 리렌더
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextSingleIds })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function (err) { alert(T.alertAssetSaveFail(err && err.message ? err.message : err)); });
