@@ -485,25 +485,57 @@
 
   function buildCaptionDraft(project, brandView, selectedOption, sourceTexts, knowledge) {
     var payload = (project && project.payload) || {};
-    var sourceLine = compactSentence(firstFilled(sourceTexts), 90);
-    var storyLine = compactSentence(knowledge.brandStory, 90);
-    var worldLine = compactSentence(knowledge.worldSetting, 70);
-    var successLine = compactSentence(knowledge.successCases[0], 64);
-    var ruleLead = compactSentence(knowledge.brandRules[0], 50);
-    var parts = [
-      firstFilled([brandView.summary, brandView.title, payload.brandSummary, project && (project.seriesTitle || project.title), brandView.coreMessage, payload.coreMessage]),
-      selectedOption ? (selectedOption.title + ' 형식으로 정리한 브랜드 운영 문구입니다.') : '',
-      payload.coreMessage ? ('핵심 메시지는 "' + payload.coreMessage + '" 입니다.') : '',
-      storyLine ? ('브랜드 맥락은 ' + storyLine) : '',
-      worldLine ? ('배경 문맥은 ' + worldLine) : '',
-      sourceLine ? ('이번 포인트는 ' + sourceLine + ' 입니다.') : '',
-      successLine ? ('기존에 반응이 좋았던 흐름은 ' + successLine + ' 입니다.') : '',
-      ruleLead ? ('운영 규칙은 "' + ruleLead + '"를 우선합니다.') : '',
-      knowledge.brandVoice ? ('말투 기준은 ' + compactSentence(knowledge.brandVoice, 60) + ' 입니다.') : '',
-      payload.targetAudience || payload.target ? (String(payload.targetAudience || payload.target) + '에게 자연스럽게 전달되도록 구성했습니다.') : '',
-      '자세한 내용은 프로젝트 업데이트에서 계속 이어집니다.'
-    ].filter(Boolean);
-    return scrubBannedText(parts.join(' '), knowledge.bannedExpressions);
+    var fmtId = String(selectedOption && selectedOption.id || '');
+
+    // 에피소드 스토리를 최우선 콘텐츠로 사용
+    var storyText = String(payload.story || payload.storyPrompt || '').trim();
+    var brandName = firstFilled([brandView.title, project && (project.seriesTitle || project.title)]);
+    var coreMsg = String(payload.coreMessage || '').trim();
+    var primaryContent = storyText || firstFilled(sourceTexts) || '';
+
+    function firstSentence(text) {
+      var m = String(text || '').match(/[^.!?。\n]+[.!?。]?/);
+      return m ? m[0].trim() : compactSentence(text, 80);
+    }
+
+    var parts = [];
+    switch (fmtId) {
+      case 'naver-blog':
+      case 'facebook':
+      case 'linkedin':
+        // 긴 포맷: 에피소드 스토리 전체
+        if (primaryContent) parts.push(primaryContent);
+        if (coreMsg) parts.push('\n\n' + coreMsg);
+        break;
+      case 'youtube':
+        // 영상 설명: 스토리 + 브랜드 소개
+        if (primaryContent) parts.push(primaryContent);
+        if (brandName) parts.push('\n\n─\n' + brandName);
+        if (coreMsg) parts.push('\n' + coreMsg);
+        break;
+      case 'youtube-shorts':
+      case 'tiktok':
+        // 훅 문구: 첫 문장만
+        var hookLine = firstSentence(primaryContent);
+        if (hookLine) parts.push(hookLine);
+        else if (coreMsg) parts.push(coreMsg);
+        break;
+      case 'x-threads':
+        // 한 줄 임팩트
+        parts.push(compactSentence(primaryContent || coreMsg, 100));
+        break;
+      case 'naver-post':
+      case 'pinterest':
+        // 짧고 임팩트: 앞 120자
+        parts.push(compactSentence(primaryContent || coreMsg, 120));
+        break;
+      default:
+        // Instagram, Kakao, Band 등 일반 SNS
+        parts.push(compactSentence(primaryContent || coreMsg, 160));
+    }
+
+    var result = parts.join('').trim();
+    return result ? scrubBannedText(result, knowledge.bannedExpressions) : '';
   }
 
   function buildHashtagDraft(project, brandView, selectedOption, sourceTexts, knowledge) {
@@ -1172,6 +1204,58 @@
       (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintVideo.replace('\n', '<br>') + '</p></div>') +
       '</div>';
     var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
+
+    // 초안 패널용 미디어 미리보기 빌더
+    function buildDraftMediaPreview(fmtId) {
+      var rows = [];
+      // 스토리
+      if (storySelected && storyPreview && isFormatCompatible(fmtId, true, false, false)) {
+        rows.push(
+          '<div class="bsf-dmp-row bsf-dmp-story">' +
+          '<span class="bsf-dmp-label">' + (isEn ? 'Story' : '스토리') + '</span>' +
+          '<p class="bsf-dmp-story-text">' + escapeHtml(compactSentence(storyPreview, 100)) + '</p>' +
+          '</div>'
+        );
+      }
+      // 이미지
+      if (isFormatCompatible(fmtId, false, true, false)) {
+        var selImgs = imageItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
+        if (selImgs.length) {
+          var imgHtml = selImgs.slice(0, 6).map(function (i) {
+            return '<img class="bsf-dmp-thumb" src="' + escapeHtml(i.url) + '" />';
+          }).join('');
+          rows.push(
+            '<div class="bsf-dmp-row">' +
+            '<span class="bsf-dmp-label">' + (isEn ? 'Images' : '이미지') + ' ' + selImgs.length + '</span>' +
+            '<div class="bsf-dmp-thumbs">' + imgHtml + '</div>' +
+            '</div>'
+          );
+        }
+      }
+      // 영상
+      if (isFormatCompatible(fmtId, false, false, true)) {
+        var selVids = videoItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
+        if (selVids.length) {
+          var vidHtml = selVids.slice(0, 3).map(function (i) {
+            return (
+              '<div class="bsf-dmp-vid-wrap">' +
+              '<video class="bsf-dmp-thumb bsf-dmp-vid" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video>' +
+              '<span class="bsf-dmp-vid-icon">▶</span>' +
+              '</div>'
+            );
+          }).join('');
+          rows.push(
+            '<div class="bsf-dmp-row">' +
+            '<span class="bsf-dmp-label">' + (isEn ? 'Video' : '영상') + ' ' + selVids.length + '</span>' +
+            '<div class="bsf-dmp-thumbs">' + vidHtml + '</div>' +
+            '</div>'
+          );
+        }
+      }
+      if (!rows.length) return '';
+      return '<div class="bsf-draft-media-preview">' + rows.join('') + '</div>';
+    }
+
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
     var draftTabsHtml = selectedFormats.length
       ? '<div class="bsf-draft-tabs">' + selectedFormats.map(function (formatId) {
@@ -1196,6 +1280,7 @@
           var titleVal = String(draft.title || '').trim();
           return (
             '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
+            buildDraftMediaPreview(formatId) +
             (fmt && fmt.hasTitle ? '<div class="bsf-draft-title-row"><span class="brand-caption-meta-label">' + T.labelTitle + '</span><input class="brand-publish-input" id="brand-draft-title-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderTitle) + '" value="' + escapeHtml(titleVal) + '" /></div>' : '') +
             '<div class="bsf-draft-layout">' +
             '<div class="bsf-draft-col"><span class="brand-caption-meta-label">' + T.labelCaption + '</span><textarea class="brand-caption-textarea" id="brand-draft-caption-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderCaption) + '">' + escapeHtml(captionVal) + '</textarea></div>' +
