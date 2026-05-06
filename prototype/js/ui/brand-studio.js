@@ -593,6 +593,106 @@
     };
   }
 
+  // ── 로케일 텍스트 맵 ──────────────────────────────────────────────────────
+  function bsfT(isEn) {
+    if (!isEn) return {
+      eyebrow: '브랜드 운영', oneClickDraft: '원클릭 초안',
+      stepAsset: '자산', stepFormat: '포맷', stepDraft: '초안', stepPublish: '배포',
+      stepValNoFormat: '포맷 없음', stepValDrafted: '작성됨', stepValNeedsDraft: '작성 필요',
+      stepValChannels: function (n) { return n + '개 채널'; },
+      stepValSelected: function (n) { return n + '개 선택'; }, stepValNone: '미선택',
+      stepItemsVal: function (n) { return n + '개 있음'; },
+      ctrlNoSelection: '선택 없음', ctrlNSelected: function (n) { return n + '개 선택됨'; },
+      ctrlClearSel: '선택 비우기', ctrlToFormat: '포맷 선택으로 →',
+      ctrlNFormats: function (n) { return n + '개 포맷 선택됨'; },
+      ctrlSelectFormat: '포맷을 선택하세요', ctrlToDraft: '초안 작성으로 →',
+      ctrlAutoGen: '전체 자동 생성', ctrlSave: '저장', ctrlToPublish: '배포 설정으로 →',
+      ctrlNChannelsReady: function (n) { return n + '개 채널에 배포 준비'; },
+      ctrlPublishAll: '전체 배포',
+      head01: '01 — 자산', head01sub: '배포에 사용할 자산을 선택하세요',
+      head02: '02 — 포맷', head02sub: '배포할 플랫폼을 복수로 선택하세요',
+      head03: '03 — 초안', head03sub: '각 플랫폼별 문구를 작성하세요',
+      head04: '04 — 배포', head04sub: '선택한 모든 채널에 일괄 배포합니다',
+      cardStory: '스토리', cardImage: '이미지', cardVideo: '영상',
+      metaGenre: '장르', metaSubgenre: '세부장르', metaPurpose: '시청 목적',
+      metaLength: '영상 길이', metaAspect: '화면 비율', metaTone: '톤', metaStyle: '스타일',
+      durationSuffix: '초',
+      btnSelect: '선택', btnDeselect: '선택 해제',
+      hintStory: '시나리오를 작성하면\n스토리가 표시됩니다.', hintImage: '이미지 생성 후\n표시됩니다.',
+      hintVideo: '영상 렌더링 후\n표시됩니다.', hintNoFormat: '포맷을 먼저 선택해 주세요.',
+      hintNoDraft: '초안을 먼저 작성해 주세요.',
+      labelTitle: '제목', labelCaption: '캡션', labelHashtag: '해시태그',
+      placeholderTitle: '콘텐츠 제목', placeholderCaption: '캡션을 작성하세요.',
+      placeholderHashtag: '#해시태그', placeholderSchedule: '예약 시각 (선택)',
+      brandSummaryHint: '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.',
+      fmtDescs: {
+        'instagram': '피드·릴스·스토리 중심 이미지·영상 SNS',
+        'youtube-shorts': '세로형 쇼츠·영상 업로드 및 설명 운영',
+        'tiktok': '짧은 영상 중심 빠른 확산 채널',
+        'x-threads': '짧은 글·링크 중심 실시간 확산 채널',
+        'naver-blog': '검색 노출 기반 블로그 콘텐츠 채널',
+        'kakao': '카카오채널·카카오스토리 운영'
+      },
+      alertSaveFormatFail: function (e) { return '포맷 선택 저장 실패: ' + e; },
+      alertDraftSaved: '초안을 저장했습니다.',
+      alertDraftSaveFail: function (e) { return '초안 저장 실패: ' + e; },
+      alertDraftGenFail: function (e) { return '초안 생성 실패: ' + e; },
+      alertOneClickFail: function (e) { return '원클릭 초안 생성 실패: ' + e; },
+      alertPublishSaved: function (n) { return n + '개 포맷에 배포 계획을 저장했습니다.'; },
+      alertPublishFail: function (e) { return '배포 실패: ' + e; },
+      alertAssetSaveFail: function (e) { return '자산 선택 저장 실패: ' + e; },
+      alertAssetResetFail: function (e) { return '선택 자산 초기화 실패: ' + e; }
+    };
+    return {
+      eyebrow: 'Brand Operations', oneClickDraft: 'One-Click Draft',
+      stepAsset: 'Assets', stepFormat: 'Format', stepDraft: 'Draft', stepPublish: 'Publish',
+      stepValNoFormat: 'No format', stepValDrafted: 'Written', stepValNeedsDraft: 'Needs draft',
+      stepValChannels: function (n) { return n + ' channels'; },
+      stepValSelected: function (n) { return n + ' selected'; }, stepValNone: 'None',
+      stepItemsVal: function (n) { return n + ' items'; },
+      ctrlNoSelection: 'No selection', ctrlNSelected: function (n) { return n + ' selected'; },
+      ctrlClearSel: 'Clear selection', ctrlToFormat: 'To Format →',
+      ctrlNFormats: function (n) { return n + ' format' + (n === 1 ? '' : 's') + ' selected'; },
+      ctrlSelectFormat: 'Select a format', ctrlToDraft: 'To Draft →',
+      ctrlAutoGen: 'Auto Generate All', ctrlSave: 'Save', ctrlToPublish: 'To Publish →',
+      ctrlNChannelsReady: function (n) { return n + ' channel' + (n === 1 ? '' : 's') + ' ready'; },
+      ctrlPublishAll: 'Publish All',
+      head01: '01 — Assets', head01sub: 'Select assets to use for deployment',
+      head02: '02 — Format', head02sub: 'Select one or more platforms to publish to',
+      head03: '03 — Draft', head03sub: 'Write content for each platform',
+      head04: '04 — Publish', head04sub: 'Deploy to all selected channels at once',
+      cardStory: 'STORY', cardImage: 'IMAGE', cardVideo: 'VIDEO',
+      metaGenre: 'Genre', metaSubgenre: 'Subgenre', metaPurpose: 'Purpose',
+      metaLength: 'Length', metaAspect: 'Aspect ratio', metaTone: 'Tone', metaStyle: 'Style',
+      durationSuffix: 's',
+      btnSelect: 'Select', btnDeselect: 'Deselect',
+      hintStory: 'Write a scenario to\nsee the story here.', hintImage: 'Shown after\nimage generation.',
+      hintVideo: 'Shown after\nvideo rendering.', hintNoFormat: 'Please select a format first.',
+      hintNoDraft: 'Please write a draft first.',
+      labelTitle: 'Title', labelCaption: 'Caption', labelHashtag: 'Hashtags',
+      placeholderTitle: 'Content title', placeholderCaption: 'Write a caption.',
+      placeholderHashtag: '#hashtag', placeholderSchedule: 'Scheduled time (optional)',
+      brandSummaryHint: 'Enter a brand summary to improve Brand Studio quality.',
+      fmtDescs: {
+        'instagram': 'Feed, Reels & Stories — image & video SNS',
+        'youtube-shorts': 'Vertical shorts, video uploads & descriptions',
+        'tiktok': 'Short-video channel for rapid viral growth',
+        'x-threads': 'Short text & link real-time distribution',
+        'naver-blog': 'Search-optimized blog content channel',
+        'kakao': 'KakaoChannel & KakaoStory management'
+      },
+      alertSaveFormatFail: function (e) { return 'Failed to save format: ' + e; },
+      alertDraftSaved: 'Draft saved.',
+      alertDraftSaveFail: function (e) { return 'Failed to save draft: ' + e; },
+      alertDraftGenFail: function (e) { return 'Failed to generate draft: ' + e; },
+      alertOneClickFail: function (e) { return 'One-click draft failed: ' + e; },
+      alertPublishSaved: function (n) { return 'Publish plan saved for ' + n + ' format' + (n === 1 ? '' : 's') + '.'; },
+      alertPublishFail: function (e) { return 'Publish failed: ' + e; },
+      alertAssetSaveFail: function (e) { return 'Failed to save asset selection: ' + e; },
+      alertAssetResetFail: function (e) { return 'Failed to reset asset selection: ' + e; }
+    };
+  }
+
   function channelOptions() {
     return [
       {
@@ -703,6 +803,8 @@
     var payload = project.payload || {};
     var brandView = readBrandView(brand, project);
     var brandId = String(brandView.brandId || '').trim();
+    var isEn = !!(NK.state && NK.state.runtime && NK.state.runtime.lang === 'en');
+    var T = bsfT(isEn);
     var selectedAssetIds = readSelectedAssetIds(payload);
     var knowledge = readKnowledge(brand && typeof brand === 'object' ? brand : payload);
     var channelConnections = readChannelConnections(brand, payload);
@@ -799,10 +901,10 @@
       return 4;
     }());
     var stepDefs = [
-      { id: 1, num: '01', title: '자산', done: persistedSelectedAssetItems.length > 0, value: persistedSelectedAssetItems.length ? (persistedSelectedAssetItems.length + '개 선택') : (assetItems.length ? (assetItems.length + '개 있음') : '없음') },
-      { id: 2, num: '02', title: '포맷', done: selectedFormats.length > 0, value: selectedFormats.length ? (selectedFormats.length + '개 선택') : '미선택' },
-      { id: 3, num: '03', title: '초안', done: hasDraftForAnyFormat, value: hasDraftForAnyFormat ? '작성됨' : '작성 필요' },
-      { id: 4, num: '04', title: '배포', done: !!(publishPlan.scheduledAt && publishPlan.channels.length), value: selectedFormats.length ? (selectedFormats.length + '개 채널') : '포맷 없음' }
+      { id: 1, num: '01', title: T.stepAsset, done: persistedSelectedAssetItems.length > 0, value: persistedSelectedAssetItems.length ? T.stepValSelected(persistedSelectedAssetItems.length) : (assetItems.length ? T.stepItemsVal(assetItems.length) : (isEn ? 'None' : '없음')) },
+      { id: 2, num: '02', title: T.stepFormat, done: selectedFormats.length > 0, value: selectedFormats.length ? T.stepValSelected(selectedFormats.length) : T.stepValNone },
+      { id: 3, num: '03', title: T.stepDraft, done: hasDraftForAnyFormat, value: hasDraftForAnyFormat ? T.stepValDrafted : T.stepValNeedsDraft },
+      { id: 4, num: '04', title: T.stepPublish, done: !!(publishPlan.scheduledAt && publishPlan.channels.length), value: selectedFormats.length ? T.stepValChannels(selectedFormats.length) : T.stepValNoFormat }
     ];
     var timelineHtml = stepDefs.map(function (step) {
       var cls = 'bsf-step' + (step.done ? ' is-done' : '') + (step.id === activeStep ? ' is-active' : '');
@@ -816,10 +918,11 @@
     }).join('<span class="bsf-step-line" aria-hidden="true"></span>');
     var formatCards = formatItems.map(function (item) {
       var isSelected = selectedFormats.indexOf(item.id) >= 0;
+      var fmtDesc = (T.fmtDescs && T.fmtDescs[item.id]) || item.desc;
       return (
         '<button type="button" class="bsf-format-card' + (isSelected ? ' is-selected' : '') + '" data-action="brand-toggle-format" data-format-id="' + escapeHtml(item.id) + '">' +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
-        '<p>' + escapeHtml(item.desc) + '</p>' +
+        '<p>' + escapeHtml(fmtDesc) + '</p>' +
         '</button>'
       );
     }).join('');
@@ -848,13 +951,13 @@
       function mv(v) { return String(v || '').trim(); }
       function firstArr(v) { return Array.isArray(v) ? mv(v[0]) : mv(v); }
       var rows = [
-        { label: '장르',    val: mv(payload.purposeCategory) },
-        { label: '세부장르', val: firstArr(payload.purposeTag || payload.purposeTags) },
-        { label: '시청 목적', val: firstArr(payload.needs || payload.need) },
-        { label: '영상 길이', val: mv(payload.duration) ? mv(payload.duration) + '초' : '' },
-        { label: '화면 비율', val: mv(payload.aspectRatio) },
-        { label: '톤',      val: firstArr(payload.tones || payload.tone) },
-        { label: '스타일',  val: mv(payload.style) }
+        { label: T.metaGenre,    val: mv(payload.purposeCategory) },
+        { label: T.metaSubgenre, val: firstArr(payload.purposeTag || payload.purposeTags) },
+        { label: T.metaPurpose,  val: firstArr(payload.needs || payload.need) },
+        { label: T.metaLength, val: mv(payload.duration) ? mv(payload.duration) + T.durationSuffix : '' },
+        { label: T.metaAspect, val: mv(payload.aspectRatio) },
+        { label: T.metaTone,   val: firstArr(payload.tones || payload.tone) },
+        { label: T.metaStyle,  val: mv(payload.style) }
       ].filter(function (r) { return !!r.val; });
       if (!rows.length) return '';
       return '<ul class="bsf-story-meta">' +
@@ -862,45 +965,48 @@
           return '<li><span>' + escapeHtml(r.label) + '</span><strong>' + escapeHtml(r.val) + '</strong></li>';
         }).join('') + '</ul>';
     }());
+    var storyCountLabel = isEn ? String(storyCount) : (storyCount + '개');
     var storyCardHtml =
       '<div class="bsf-asset-type-card' + (storySelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">스토리</span><em>' + storyCount + '개</em></div>' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardStory + '</span><em>' + storyCountLabel + '</em></div>' +
       '<div class="bsf-asset-story-body">' +
-      (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">시나리오를 작성하면<br>스토리가 표시됩니다.</p>') +
+      (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">' + T.hintStory.replace('\n', '<br>') + '</p>') +
       storyMeta +
       '</div>' +
-      (storyNarrative || storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? '선택 해제' : '선택') + '</button></div>' : '') +
+      (storyNarrative || storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
     // 이미지 카드 — slice 제거해 전체 표시
+    var imageCountLabel = isEn ? String(imageItems.length) : (imageItems.length + '개');
     var imageThumbsHtml = imageItems.map(function (i) {
       return i.url
         ? '<img src="' + escapeHtml(i.url) + '" alt="' + escapeHtml(i.title || '') + '" class="bsf-thumb-img" loading="lazy" />'
-        : '<div class="bsf-thumb-placeholder"><span>' + escapeHtml(i.title || '이미지') + '</span></div>';
+        : '<div class="bsf-thumb-placeholder"><span>' + escapeHtml(i.title || T.cardImage) + '</span></div>';
     }).join('');
     var imageCardHtml =
       '<div class="bsf-asset-type-card' + (imageSelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">이미지</span><em>' + imageItems.length + '개</em></div>' +
-      (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">이미지 생성 후<br>표시됩니다.</p></div>') +
-      (imageItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="image">' + (imageSelected ? '선택 해제' : '선택') + '</button></div>' : '') +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + imageCountLabel + '</em></div>' +
+      (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintImage.replace('\n', '<br>') + '</p></div>') +
+      (imageItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="image">' + (imageSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
     // 영상 카드 — <video> 태그로 썸네일 표시 (#t=0.001 로 첫 프레임 강제 로드)
+    var videoCountLabel = isEn ? String(videoItems.length) : (videoItems.length + '개');
     var videoThumbsHtml = videoItems.map(function (i) {
       return i.url
         ? '<div class="bsf-video-thumb-item">' +
           '<video class="bsf-thumb-video" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video>' +
           '<span class="bsf-video-thumb-overlay">▶</span>' +
-          '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || '영상') + '</span>' +
+          '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || T.cardVideo) + '</span>' +
           '</div>'
         : '<div class="bsf-video-thumb-item bsf-video-thumb-empty">' +
           '<span class="bsf-video-thumb-icon">▶</span>' +
-          '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || '영상') + '</span>' +
+          '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || T.cardVideo) + '</span>' +
           '</div>';
     }).join('');
     var videoCardHtml =
       '<div class="bsf-asset-type-card' + (videoSelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">영상</span><em>' + videoItems.length + '개</em></div>' +
-      (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">영상 렌더링 후<br>표시됩니다.</p></div>') +
-      (videoItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="video">' + (videoSelected ? '선택 해제' : '선택') + '</button></div>' : '') +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + videoCountLabel + '</em></div>' +
+      (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintVideo.replace('\n', '<br>') + '</p></div>') +
+      (videoItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="video">' + (videoSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
     var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
@@ -927,61 +1033,62 @@
           var titleVal = String(draft.title || '').trim();
           return (
             '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
-            (fmt && fmt.hasTitle ? '<div class="bsf-draft-title-row"><span class="brand-caption-meta-label">제목</span><input class="brand-publish-input" id="brand-draft-title-' + escapeHtml(formatId) + '" placeholder="콘텐츠 제목" value="' + escapeHtml(titleVal) + '" /></div>' : '') +
+            (fmt && fmt.hasTitle ? '<div class="bsf-draft-title-row"><span class="brand-caption-meta-label">' + T.labelTitle + '</span><input class="brand-publish-input" id="brand-draft-title-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderTitle) + '" value="' + escapeHtml(titleVal) + '" /></div>' : '') +
             '<div class="bsf-draft-layout">' +
-            '<div class="bsf-draft-col"><span class="brand-caption-meta-label">캡션</span><textarea class="brand-caption-textarea" id="brand-draft-caption-' + escapeHtml(formatId) + '" placeholder="캡션을 작성하세요.">' + escapeHtml(captionVal) + '</textarea></div>' +
-            '<div class="bsf-draft-col"><span class="brand-caption-meta-label">해시태그</span><textarea class="brand-caption-textarea brand-hashtag-textarea" id="brand-draft-hashtag-' + escapeHtml(formatId) + '" placeholder="#해시태그">' + escapeHtml(hashtagVal) + '</textarea></div>' +
+            '<div class="bsf-draft-col"><span class="brand-caption-meta-label">' + T.labelCaption + '</span><textarea class="brand-caption-textarea" id="brand-draft-caption-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderCaption) + '">' + escapeHtml(captionVal) + '</textarea></div>' +
+            '<div class="bsf-draft-col"><span class="brand-caption-meta-label">' + T.labelHashtag + '</span><textarea class="brand-caption-textarea brand-hashtag-textarea" id="brand-draft-hashtag-' + escapeHtml(formatId) + '" placeholder="' + escapeHtml(T.placeholderHashtag) + '">' + escapeHtml(hashtagVal) + '</textarea></div>' +
             '</div>' +
             '</div>'
           );
         }).join('')
-      : '<div class="brand-asset-empty">포맷을 먼저 선택해 주세요.</div>';
+      : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     var deployFormatSummary = selectedFormats.length
       ? selectedFormats.map(function (formatId) {
           var fmt = formatItems.find(function (f) { return f.id === formatId; });
           var draft = (formatDrafts && formatDrafts[formatId]) || {};
           var caption = String(draft.caption || '').trim();
           var hasDraft = !!(caption || String(draft.hashtags || '').trim());
+          var draftBadge = isEn ? (hasDraft ? 'Draft ready' : 'No draft') : (hasDraft ? '초안 완료' : '초안 없음');
           return (
             '<div class="bsf-deploy-format-row">' +
-            '<div class="bsf-deploy-format-head"><strong>' + escapeHtml(fmt ? fmt.title : formatId) + '</strong><span class="brand-channel-badge">' + (hasDraft ? '초안 완료' : '초안 없음') + '</span></div>' +
-            '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 100) : '초안을 먼저 작성해 주세요.') + '</p>' +
+            '<div class="bsf-deploy-format-head"><strong>' + escapeHtml(fmt ? fmt.title : formatId) + '</strong><span class="brand-channel-badge">' + draftBadge + '</span></div>' +
+            '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 100) : T.hintNoDraft) + '</p>' +
             '</div>'
           );
         }).join('')
-      : '<div class="brand-asset-empty">포맷을 선택하지 않았습니다.</div>';
+      : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     var ctrlBarHtml = (function () {
       if (activeStep === 1) {
         return (
           '<div class="bsf-ctrl-row">' +
-          '<span class="bsf-ctrl-info">' + escapeHtml(persistedSelectedAssetItems.length ? (persistedSelectedAssetItems.length + '개 선택됨') : '선택 없음') + '</span>' +
-          '<button type="button" class="btn-secondary compact" data-action="brand-clear-assets"' + (persistedSelectedAssetItems.length ? '' : ' disabled') + '>선택 비우기</button>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="1">포맷 선택으로 →</button>' +
+          '<span class="bsf-ctrl-info">' + escapeHtml(persistedSelectedAssetItems.length ? T.ctrlNSelected(persistedSelectedAssetItems.length) : T.ctrlNoSelection) + '</span>' +
+          '<button type="button" class="btn-secondary compact" data-action="brand-clear-assets"' + (persistedSelectedAssetItems.length ? '' : ' disabled') + '>' + T.ctrlClearSel + '</button>' +
+          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="1">' + T.ctrlToFormat + '</button>' +
           '</div>'
         );
       }
       if (activeStep === 2) {
         return (
           '<div class="bsf-ctrl-row">' +
-          '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? (selectedFormats.length + '개 포맷 선택됨') : '포맷을 선택하세요') + '</span>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="2"' + (selectedFormats.length ? '' : ' disabled') + '>초안 작성으로 →</button>' +
+          '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? T.ctrlNFormats(selectedFormats.length) : T.ctrlSelectFormat) + '</span>' +
+          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="2"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlToDraft + '</button>' +
           '</div>'
         );
       }
       if (activeStep === 3) {
         return (
           '<div class="bsf-ctrl-row">' +
-          '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>전체 자동 생성</button>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-save-format-draft"' + (activeDraftTabOrFirst ? '' : ' disabled') + '>저장</button>' +
+          '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
+          '<button type="button" class="btn-primary compact" data-action="brand-save-format-draft"' + (activeDraftTabOrFirst ? '' : ' disabled') + '>' + T.ctrlSave + '</button>' +
           '<span class="bsf-ctrl-divider"></span>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="3"' + (hasDraftForAnyFormat ? '' : ' disabled') + '>배포 설정으로 →</button>' +
+          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="3"' + (hasDraftForAnyFormat ? '' : ' disabled') + '>' + T.ctrlToPublish + '</button>' +
           '</div>'
         );
       }
       return (
         '<div class="bsf-ctrl-row">' +
-        '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? (selectedFormats.length + '개 채널에 배포 준비') : '포맷 없음') + '</span>' +
-        '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>전체 배포</button>' +
+        '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? T.ctrlNChannelsReady(selectedFormats.length) : T.stepValNoFormat) + '</span>' +
+        '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
         '</div>'
       );
     }());
@@ -990,12 +1097,12 @@
       '<div class="bsf-flow-card">' +
       '<div class="bsf-flow-head">' +
       '<div>' +
-      '<p class="brand-studio-eyebrow">Brand Operations</p>' +
-      '<h2 class="bsf-title">' + escapeHtml(brandView.title || project.seriesTitle || project.title || '프로젝트') + '</h2>' +
-      '<p class="bsf-desc">' + escapeHtml(compactSentence(brandView.summary || payload.brandSummary || '브랜드 요약을 먼저 입력하면 Brand Studio 품질이 올라갑니다.', 100)) + '</p>' +
+      '<p class="brand-studio-eyebrow">' + T.eyebrow + '</p>' +
+      '<h2 class="bsf-title">' + escapeHtml(brandView.title || project.seriesTitle || project.title || (isEn ? 'Project' : '프로젝트')) + '</h2>' +
+      '<p class="bsf-desc">' + escapeHtml(compactSentence(brandView.summary || payload.brandSummary || T.brandSummaryHint, 100)) + '</p>' +
       '</div>' +
       '<div class="bsf-flow-head-actions">' +
-      '<button type="button" class="btn-primary" data-action="brand-oneclick-draft">원클릭 초안</button>' +
+      '<button type="button" class="btn-primary" data-action="brand-oneclick-draft">' + T.oneClickDraft + '</button>' +
       '</div>' +
       '</div>' +
       '<div class="bsf-timeline">' + timelineHtml + '</div>' +
@@ -1003,23 +1110,23 @@
       '</div>' +
       '<div class="bsf-detail-card">' +
       '<div class="bsf-detail' + (activeStep === 1 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>01 — 자산</strong><span>배포에 사용할 자산을 선택하세요</span></div>' +
+      '<div class="bsf-detail-head"><strong>' + T.head01 + '</strong><span>' + T.head01sub + '</span></div>' +
       assetTrioHtml +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 2 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>02 — 포맷</strong><span>배포할 플랫폼을 복수로 선택하세요</span></div>' +
+      '<div class="bsf-detail-head"><strong>' + T.head02 + '</strong><span>' + T.head02sub + '</span></div>' +
       '<div class="bsf-format-grid">' + formatCards + '</div>' +
       '</div>' +
       '<div class="bsf-detail bsf-detail-draft' + (activeStep === 3 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>03 — 초안</strong><span>각 플랫폼별 문구를 작성하세요</span></div>' +
+      '<div class="bsf-detail-head"><strong>' + T.head03 + '</strong><span>' + T.head03sub + '</span></div>' +
       draftTabsHtml +
       '<div class="bsf-format-draft-panels">' + draftPanelsHtml + '</div>' +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 4 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>04 — 배포</strong><span>선택한 모든 채널에 일괄 배포합니다</span></div>' +
+      '<div class="bsf-detail-head"><strong>' + T.head04 + '</strong><span>' + T.head04sub + '</span></div>' +
       '<div class="bsf-deploy-summary">' + deployFormatSummary + '</div>' +
       '<div class="brand-publish-fields" style="padding-top:12px;">' +
-      '<div class="brand-publish-field"><span class="brand-caption-meta-label">예약 시각 (선택)</span>' +
+      '<div class="brand-publish-field"><span class="brand-caption-meta-label">' + T.placeholderSchedule + '</span>' +
       '<input id="brand-publish-datetime" class="brand-publish-input" type="datetime-local" value="' + escapeHtml(publishPlan.scheduledAt || '') + '" /></div>' +
       '</div>' +
       '</div>' +
@@ -1066,7 +1173,7 @@
         renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, fmtPatch) }));
         NK.service.project.updatePayload(projectId, fmtPatch)
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert('포맷 선택 저장 실패: ' + (err && err.message ? err.message : err)); });
+          .catch(function (err) { alert(T.alertSaveFormatFail(err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-set-draft-tab') {
@@ -1092,8 +1199,8 @@
         nextFormatDrafts[currentFmtId] = nextFmtDraft;
         btn.disabled = true;
         NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert('초안을 저장했습니다.'); })
-          .catch(function (err) { alert('초안 저장 실패: ' + (err && err.message ? err.message : err)); })
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(T.alertDraftSaved); })
+          .catch(function (err) { alert(T.alertDraftSaveFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
         return;
       }
@@ -1110,7 +1217,7 @@
         });
         NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextAllDrafts })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert('초안 생성 실패: ' + (err && err.message ? err.message : err)); })
+          .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
         return;
       }
@@ -1135,7 +1242,7 @@
             if (result && result.draft) renderNext(result.draft);
             setTimeout(function () { var t = root.querySelector('.brand-caption-textarea'); if (t) { scrollNodeIntoPageView(t, 'start'); t.focus(); } }, 30);
           })
-          .catch(function (err) { alert('원클릭 초안 생성 실패: ' + (err && err.message ? err.message : err)); })
+          .catch(function (err) { alert(T.alertOneClickFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
         return;
       }
@@ -1146,8 +1253,8 @@
         btn.disabled = true;
         var deployPlan = { channels: selectedFormats.slice(), scheduledAt: scheduledAt, status: scheduledAt ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(selectedFormats.length + '개 포맷에 배포 계획을 저장했습니다.'); })
-          .catch(function (err) { alert('배포 실패: ' + (err && err.message ? err.message : err)); })
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(T.alertPublishSaved(selectedFormats.length)); })
+          .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
         return;
       }
@@ -1163,7 +1270,7 @@
         renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: nextAssetIds }) }));
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextAssetIds })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert('자산 선택 저장 실패: ' + (err && err.message ? err.message : err)); });
+          .catch(function (err) { alert(T.alertAssetSaveFail(err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-clear-assets') {
@@ -1171,7 +1278,7 @@
         renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: [] }) }));
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: [] })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert('선택 자산 초기화 실패: ' + (err && err.message ? err.message : err)); });
+          .catch(function (err) { alert(T.alertAssetResetFail(err && err.message ? err.message : err)); });
         return;
       }
       var target = '';
@@ -1194,8 +1301,9 @@
   brandStudio.init = function () {
     var root = document.getElementById('brand-studio-root');
     if (!root) return;
+    var _initIsEn = !!(NK.state && NK.state.runtime && NK.state.runtime.lang === 'en');
     if (!NK.service || !NK.service.project || !NK.service.brand) {
-      renderEmpty(root, 'Brand Studio를 불러올 수 없습니다.');
+      renderEmpty(root, _initIsEn ? 'Unable to load Brand Studio.' : 'Brand Studio를 불러올 수 없습니다.');
       return;
     }
     var context = NK.service.brand.getDisplayContext
@@ -1204,7 +1312,7 @@
     var project = context && context.project ? context.project : NK.service.project.resolveCurrent({ search: window.location.search });
     var brand = context && context.brand ? context.brand : null;
     if (!project || !project.id) {
-      renderEmpty(root, '먼저 프로젝트를 선택해 주세요.');
+      renderEmpty(root, _initIsEn ? 'Please select a project first.' : '먼저 프로젝트를 선택해 주세요.');
       return;
     }
     bindDeferredHydrationFlush(root);
@@ -1249,7 +1357,7 @@
       }
     } catch (err) {
       try { console.error('BrandStudio render error:', err); } catch (_) {}
-      renderEmpty(root, 'Brand Studio 렌더링 중 오류가 발생했습니다.');
+      renderEmpty(root, _initIsEn ? 'An error occurred while rendering Brand Studio.' : 'Brand Studio 렌더링 중 오류가 발생했습니다.');
     }
   };
 })();
