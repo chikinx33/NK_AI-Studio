@@ -45,22 +45,24 @@
     }
 
     function sceneImageUrl(scene) {
-        return firstFilled([
+        var raw = firstFilled([
             scene && scene.imageDataUrl,
             scene && scene.imagePath,
             scene && scene.generatedImageUrl,
             scene && scene.imageUrl
         ]);
+        return raw ? toAssetUrl(raw) : raw;
     }
 
     function sceneVideoUrl(scene) {
-        return firstFilled([
+        var raw = firstFilled([
             scene && scene.videoUrl,
             scene && scene.videoPlaybackUrl,
             scene && scene.outputVideoUrl,
             scene && scene.generatedVideoUrl,
             scene && scene.videoPath
         ]);
+        return raw ? toAssetUrl(raw) : raw;
     }
 
     function sceneText(scene) {
@@ -313,8 +315,18 @@
     function toAssetUrl(raw) {
         var value = String(raw || '').trim();
         if (!value) return '';
+        // 이미 로드 가능한 URL
+        if (value.indexOf('data:') === 0 || value.indexOf('blob:') === 0 ||
+            value.indexOf('http://') === 0 || value.indexOf('https://') === 0) {
+            return value;
+        }
+        // gs:// → 프록시 URL
         if (/^gs:\/\//i.test(value) && NK.api && NK.api.mediaProxyUrl) {
             return NK.api.mediaProxyUrl(value);
+        }
+        // 베어 파일명 / 스토리지 오브젝트명 → 프록시 URL
+        if (NK.api && NK.api.mediaProxyObjectUrl) {
+            return NK.api.mediaProxyObjectUrl(value);
         }
         return value;
     }
