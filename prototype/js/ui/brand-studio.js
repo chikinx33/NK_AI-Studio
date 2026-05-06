@@ -1068,7 +1068,6 @@
         '<button type="button" class="' + cls + '" data-action="brand-toggle-format" data-format-id="' + escapeHtml(item.id) + '">' +
         '<div class="bsf-fmt-card-head">' +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
-        (anyAssetSelected && compatible ? '<span class="bsf-fmt-badge">' + (isEn ? 'Recommended' : '추천') + '</span>' : '') +
         '</div>' +
         '<p>' + escapeHtml(fmtDesc) + '</p>' +
         '</button>'
