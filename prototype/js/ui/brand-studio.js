@@ -740,7 +740,7 @@
   // ── 로케일 텍스트 맵 ──────────────────────────────────────────────────────
   function bsfT(isEn) {
     if (!isEn) return {
-      eyebrow: '브랜드 운영', oneClickDraft: '원클릭 초안',
+      eyebrow: '브랜드 운영', oneClickDraft: '원스탑<br>진행',
       stepAsset: '자산', stepFormat: '포맷', stepDraft: '초안', stepPublish: '배포',
       stepValNoFormat: '포맷 없음', stepValDrafted: '작성됨', stepValNeedsDraft: '작성 필요',
       stepValChannels: function (n) { return n + '개 채널'; },
@@ -750,7 +750,7 @@
       ctrlClearSel: '선택 비우기', ctrlToFormat: '포맷 선택으로 →',
       ctrlNFormats: function (n) { return n + '개 포맷 선택됨'; },
       ctrlSelectFormat: '포맷을 선택하세요', ctrlToDraft: '초안 작성으로 →',
-      ctrlAutoGen: '전체 자동 생성', ctrlSave: '저장', ctrlToPublish: '배포 설정으로 →',
+      ctrlAutoGen: '원클릭<br>초안', ctrlSave: '저장', ctrlToPublish: '배포 설정으로 →',
       draftRegen: '스토리로 재생성', draftStructLabel: '블로그 구조 미리보기',
       ctrlNChannelsReady: function (n) { return n + '개 채널에 배포 준비'; },
       ctrlPublishAll: '전체 배포',
@@ -795,7 +795,7 @@
       alertAssetResetFail: function (e) { return '선택 자산 초기화 실패: ' + e; }
     };
     return {
-      eyebrow: 'Brand Operations', oneClickDraft: 'One-Click Draft',
+      eyebrow: 'Brand Operations', oneClickDraft: 'One-Stop',
       stepAsset: 'Assets', stepFormat: 'Format', stepDraft: 'Draft', stepPublish: 'Publish',
       stepValNoFormat: 'No format', stepValDrafted: 'Written', stepValNeedsDraft: 'Needs draft',
       stepValChannels: function (n) { return n + ' channels'; },
@@ -805,7 +805,7 @@
       ctrlClearSel: 'Clear selection', ctrlToFormat: 'To Format →',
       ctrlNFormats: function (n) { return n + ' format' + (n === 1 ? '' : 's') + ' selected'; },
       ctrlSelectFormat: 'Select a format', ctrlToDraft: 'To Draft →',
-      ctrlAutoGen: 'Auto Generate All', ctrlSave: 'Save', ctrlToPublish: 'To Publish →',
+      ctrlAutoGen: 'One-Click Draft', ctrlSave: 'Save', ctrlToPublish: 'To Publish →',
       draftRegen: 'Regenerate from Story', draftStructLabel: 'Blog Structure Preview',
       ctrlNChannelsReady: function (n) { return n + ' channel' + (n === 1 ? '' : 's') + ' ready'; },
       ctrlPublishAll: 'Publish All',
@@ -1964,9 +1964,9 @@
       '</div>' +
       '<div class="bsf-timeline">' + timelineHtml + '</div>' +
       '<div class="bsf-flow-head-actions">' +
-      '<button type="button" class="btn-secondary bsf-head-btn" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
+      '<button type="button" class="btn-secondary bsf-head-btn" data-action="brand-generate-all-drafts"' + (activeStep === 3 && selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
       '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-save-format-draft" disabled>' + T.ctrlSave + '</button>' +
-      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-oneclick-draft">' + T.oneClickDraft + '</button>' +
+      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-oneclick-draft" disabled>' + T.oneClickDraft + '</button>' +
       '</div>' +
       '</div>' +
       (ctrlBarHtml ? '<div class="bsf-ctrl-bar">' + ctrlBarHtml + '</div>' : '') +
