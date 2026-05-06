@@ -1332,15 +1332,29 @@
       }
       if (action === 'brand-toggle-format') {
         var formatId = String(btn.dataset.formatId || '').trim();
-        if (!formatId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextFormats = selectedFormats.slice();
-        var fmtIdx = nextFormats.indexOf(formatId);
-        if (fmtIdx >= 0) nextFormats.splice(fmtIdx, 1); else nextFormats.push(formatId);
-        var nextTab = nextFormats.indexOf(activeDraftTabOrFirst) >= 0 ? activeDraftTabOrFirst : (nextFormats.length ? nextFormats[0] : '');
-        var fmtPatch = { brandStudioSelectedFormats: nextFormats, brandStudioActiveDraftTab: nextTab };
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, fmtPatch) }));
+        if (!formatId) return;
+        // 즉시 토글 (리렌더 없음)
+        var fmtIdx = selectedFormats.indexOf(formatId);
+        if (fmtIdx >= 0) selectedFormats.splice(fmtIdx, 1); else selectedFormats.push(formatId);
+        btn.classList.toggle('is-selected', selectedFormats.indexOf(formatId) >= 0);
+        // activeDraftTab 유지
+        if (selectedFormats.indexOf(activeDraftTabOrFirst) < 0) {
+          activeDraftTabOrFirst = selectedFormats.length ? selectedFormats[0] : '';
+        }
+        // step 2 바 업데이트
+        var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
+        if (step2Btn) {
+          step2Btn.classList.toggle('is-done', selectedFormats.length > 0);
+          var step2Val2 = step2Btn.querySelector('.bsf-step-val');
+          if (step2Val2) step2Val2.textContent = selectedFormats.length ? T.stepValSelected(selectedFormats.length) : T.stepValNone;
+        }
+        // ctrl bar 교체
+        var fmtCtrlBar = root.querySelector('.bsf-ctrl-bar');
+        if (fmtCtrlBar) fmtCtrlBar.innerHTML = makeCtrlBarHtml(2);
+        // 비동기 저장
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var fmtPatch = { brandStudioSelectedFormats: selectedFormats.slice(), brandStudioActiveDraftTab: activeDraftTabOrFirst };
         NK.service.project.updatePayload(projectId, fmtPatch)
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function (err) { alert(T.alertSaveFormatFail(err && err.message ? err.message : err)); });
         return;
       }
