@@ -1360,10 +1360,18 @@
       }
       if (action === 'brand-set-draft-tab') {
         var tabId = String(btn.dataset.draftTab || '').trim();
-        if (!tabId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioActiveDraftTab: tabId }) }));
+        if (!tabId) return;
+        // 즉시 탭/패널 전환 (리렌더 없음)
+        activeDraftTabOrFirst = tabId;
+        root.querySelectorAll('.bsf-draft-tab').forEach(function (tb) {
+          tb.classList.toggle('is-active', tb.dataset.draftTab === tabId);
+        });
+        root.querySelectorAll('.bsf-format-draft-panel').forEach(function (panel) {
+          panel.classList.toggle('is-active', panel.dataset.draftFormat === tabId);
+        });
+        // 비동기 저장
+        if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         NK.service.project.updatePayload(projectId, { brandStudioActiveDraftTab: tabId })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function () {});
         return;
       }
