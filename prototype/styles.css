@@ -12277,15 +12277,15 @@ body {
   box-shadow: inset 0 0 0 0px var(--accent);
   transition: box-shadow 0.15s;
 }
-.bsf-thumb-wrap:hover { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent 50%); }
-.bsf-thumb-wrap.is-selected { box-shadow: inset 0 0 0 2.5px var(--accent); }
+.bsf-thumb-wrap:hover { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent 40%); }
+.bsf-thumb-wrap.is-selected { box-shadow: 0 0 0 2.5px var(--accent); }
 .bsf-thumb-wrap .bsf-thumb-img { border-radius: 0; }
 
 /* ── Video thumb selection ────────────────────────────────────────────── */
 .bsf-video-thumb-item { cursor: pointer; }
-.bsf-video-thumb-item.is-selected { box-shadow: inset 0 0 0 2.5px var(--accent); }
-.bsf-video-thumb-item:hover:not(.bsf-video-thumb-empty) { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent 50%); }
-.bsf-video-thumb-item.is-selected:hover { box-shadow: inset 0 0 0 2.5px var(--accent); }
+.bsf-video-thumb-item.is-selected { box-shadow: 0 0 0 2.5px var(--accent); }
+.bsf-video-thumb-item:hover:not(.bsf-video-thumb-empty) { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent 40%); }
+.bsf-video-thumb-item.is-selected:hover { box-shadow: 0 0 0 2.5px var(--accent); }
 
 /* ── Checkmark overlay ────────────────────────────────────────────────── */
 .bsf-thumb-check {
