@@ -11946,6 +11946,24 @@ body {
   color: var(--text-3);
 }
 
+/* Step 3 — draft header with inline tabs */
+.bsf-detail-head-draft { gap: 8px; }
+.bsf-draft-head-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.bsf-draft-head-row > strong { flex-shrink: 0; }
+.bsf-draft-head-row > .bsf-draft-tabs {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 0;
+  margin: 0;
+}
+
 /* Step 3 — Draft media preview */
 .bsf-draft-media-preview {
   display: flex;
@@ -12561,10 +12579,9 @@ body {
   gap: 12px 24px;
   align-items: start;
 }
-.bsf-format-draft-panel > .bsf-preview-legend { grid-column: 1 / -1; }
 .bsf-format-draft-panel > .bsf-field-preview {
   grid-column: 2;
-  grid-row: 2 / span 30;
+  grid-row: 1 / span 30;
   position: sticky;
   top: 16px;
 }

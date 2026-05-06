@@ -1883,7 +1883,7 @@
       }
       return (
         '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
-        legendHtml + bodyHtml +
+        bodyHtml +
         '<div class="bsf-draft-regen-row">' + regenBtnHtml(formatId) + '</div>' +
         '</div>'
       );
@@ -1981,8 +1981,14 @@
       '<div class="bsf-format-grid">' + formatCards + '</div>' +
       '</div>' +
       '<div class="bsf-detail bsf-detail-draft' + (activeStep === 3 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>' + T.head03 + '</strong><span>' + T.head03sub + '</span></div>' +
-      draftTabsHtml +
+      '<div class="bsf-detail-head bsf-detail-head-draft">' +
+        '<div class="bsf-draft-head-row"><strong>' + T.head03 + '</strong>' + draftTabsHtml + '</div>' +
+        '<div class="bsf-preview-legend">' +
+          '<span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-legend-txt">' + (isEn ? 'API sendable' : 'API 자동 전송') + '</span>' +
+          '<span class="bsf-badge bsf-badge-copy">COPY</span><span class="bsf-legend-txt">' + (isEn ? 'Copy & post manually' : '복사 후 직접 게시') + '</span>' +
+          '<span class="bsf-badge bsf-badge-preview">PREVIEW</span><span class="bsf-legend-txt">' + (isEn ? 'Mockup only' : '미리보기 전용') + '</span>' +
+        '</div>' +
+      '</div>' +
       '<div class="bsf-format-draft-panels">' + draftPanelsHtml + '</div>' +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 4 ? ' is-active' : '') + '">' +
