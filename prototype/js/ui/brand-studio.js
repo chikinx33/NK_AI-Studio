@@ -911,6 +911,22 @@
       renderProject(root, fallbackProject, nextBrand || brand, options || {});
     }
 
+    function updateStep1Bar() {
+      var storySel = root.querySelector('.bsf-story-card.is-selected') ? 1 : 0;
+      var imgSel = root.querySelectorAll('.bsf-asset-thumb-grid .bsf-thumb-wrap.is-selected').length;
+      var vidSel = root.querySelectorAll('.bsf-asset-video-grid .bsf-video-thumb-item.is-selected').length;
+      var total = storySel + imgSel + vidSel;
+      var step1Btn = root.querySelector('[data-action="brand-set-step"][data-step="1"]');
+      if (!step1Btn) return;
+      step1Btn.classList.toggle('is-done', total > 0);
+      var step1Val = step1Btn.querySelector('.bsf-step-val');
+      if (step1Val) {
+        step1Val.textContent = total > 0
+          ? T.stepValSelected(total)
+          : (assetItems.length ? T.stepItemsVal(assetItems.length) : (isEn ? 'None' : '없음'));
+      }
+    }
+
     function syncBrandAndProject(brandPatch, projectPatch) {
       return Promise.resolve().then(async function () {
         if (brandId && NK.service && NK.service.brand) {
@@ -929,15 +945,17 @@
       });
     }
 
+    // 스토리(가상 ID)를 포함한 선택된 자산 총 수
+    var persistedSelCount = persistedSelectedAssetItems.length + (storySelected ? 1 : 0);
     var savedActiveStep = parseInt(String(payload.brandStudioActiveStep || '0'), 10);
     var activeStep = (savedActiveStep >= 1 && savedActiveStep <= 4) ? savedActiveStep : (function () {
-      if (!persistedSelectedAssetItems.length) return 1;
+      if (!persistedSelCount) return 1;
       if (!selectedFormats.length) return 2;
       if (!hasDraftForAnyFormat) return 3;
       return 4;
     }());
     var stepDefs = [
-      { id: 1, num: '01', title: T.stepAsset, done: persistedSelectedAssetItems.length > 0, value: persistedSelectedAssetItems.length ? T.stepValSelected(persistedSelectedAssetItems.length) : (assetItems.length ? T.stepItemsVal(assetItems.length) : (isEn ? 'None' : '없음')) },
+      { id: 1, num: '01', title: T.stepAsset, done: persistedSelCount > 0, value: persistedSelCount ? T.stepValSelected(persistedSelCount) : (assetItems.length ? T.stepItemsVal(assetItems.length) : (isEn ? 'None' : '없음')) },
       { id: 2, num: '02', title: T.stepFormat, done: selectedFormats.length > 0, value: selectedFormats.length ? T.stepValSelected(selectedFormats.length) : T.stepValNone },
       { id: 3, num: '03', title: T.stepDraft, done: hasDraftForAnyFormat, value: hasDraftForAnyFormat ? T.stepValDrafted : T.stepValNeedsDraft },
       { id: 4, num: '04', title: T.stepPublish, done: !!(publishPlan.scheduledAt && publishPlan.channels.length), value: selectedFormats.length ? T.stepValChannels(selectedFormats.length) : T.stepValNoFormat }
@@ -976,7 +994,8 @@
     function countExplicitSelected(items) {
       return items.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0; }).length;
     }
-    var storySelected = !!(payload.brandStudioStorySelected);
+    var storyVirtualId = projectId + ':story';
+    var storySelected = selectedAssetIds.indexOf(storyVirtualId) >= 0;
     var imageSelCount = countExplicitSelected(imageItems);
     var imageAnySelected = imageSelCount > 0;
     var imageAllSelected = imageItems.length > 0 && imageSelCount === imageItems.length;
@@ -1313,10 +1332,17 @@
       }
       if (action === 'brand-toggle-story-card') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextStorySelected = !payload.brandStudioStorySelected;
-        // 즉시 CSS 토글 — 리렌더 없음
-        btn.classList.toggle('is-selected', nextStorySelected);
-        NK.service.project.updatePayload(projectId, { brandStudioStorySelected: nextStorySelected })
+        var stVId = projectId + ':story';
+        var nextStoryIds = selectedAssetIds.slice();
+        var stIdx = nextStoryIds.indexOf(stVId);
+        var nextStorySel = stIdx < 0;
+        if (stIdx >= 0) nextStoryIds.splice(stIdx, 1); else nextStoryIds.push(stVId);
+        // ① 카드 즉시 CSS 토글
+        btn.classList.toggle('is-selected', nextStorySel);
+        // ② step 바 수술적 업데이트
+        updateStep1Bar();
+        // ③ 비동기 저장
+        NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextStoryIds })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function () {});
         return;
@@ -1350,7 +1376,9 @@
               : (isEn ? String(allThumbs.length) : allThumbs.length + '개');
           }
         }
-        // ③ 비동기 저장 — 응답 후에만 전체 리렌더
+        // ③ step 바 수술적 업데이트
+        updateStep1Bar();
+        // ④ 비동기 저장 — 응답 후에만 전체 리렌더
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextSingleIds })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function (err) { alert(T.alertAssetSaveFail(err && err.message ? err.message : err)); });
