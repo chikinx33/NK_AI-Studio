@@ -2238,15 +2238,56 @@
       if (action === 'brand-generate-all-drafts') {
         if (!selectedFormats.length || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         btn.disabled = true;
-        var nextAllDrafts = Object.assign({}, formatDrafts || {});
-        selectedFormats.forEach(function (fid) {
-          var fmt = formatItems.find(function (f) { return f.id === fid; });
-          nextAllDrafts[fid] = Object.assign({}, nextAllDrafts[fid] || {}, {
-            caption: buildCaptionDraft(project, brandView, fmt, sourceTexts, knowledge),
-            hashtags: buildHashtagDraft(project, brandView, fmt, sourceTexts, knowledge)
+        // Offline fallback: rule-based only when API is unavailable
+        if (!NK.api || !NK.api.draftGenerate) {
+          var nextAllDrafts = Object.assign({}, formatDrafts || {});
+          selectedFormats.forEach(function (fid) {
+            var fmt = formatItems.find(function (f) { return f.id === fid; });
+            nextAllDrafts[fid] = Object.assign({}, nextAllDrafts[fid] || {}, {
+              caption: buildCaptionDraft(project, brandView, fmt, sourceTexts, knowledge),
+              hashtags: buildHashtagDraft(project, brandView, fmt, sourceTexts, knowledge)
+            });
           });
+          NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextAllDrafts })
+            .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+            .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
+            .finally(function () { btn.disabled = false; });
+          return;
+        }
+        var genBrandCtx = buildBrandContext(payload, brandView, knowledge);
+        var genStory = String(payload.story || payload.storyPrompt || '').trim();
+        // Immediately show skeleton on every selected panel
+        selectedFormats.forEach(function (fid) {
+          var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
+          if (panel) showDraftSkeleton(panel);
         });
-        NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextAllDrafts })
+        // Parallel AI calls — each panel updates independently as it resolves
+        var aiCalls = selectedFormats.map(function (fid) {
+          return NK.api.draftGenerate({ platformId: fid, story: genStory, brandContext: genBrandCtx })
+            .then(function (res) {
+              var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
+              if (panel) {
+                hideDraftSkeleton(panel);
+                ['caption', 'hashtags', 'title'].forEach(function (fieldKey) {
+                  if (!res[fieldKey]) return;
+                  var ceEl = panel.querySelector('[data-draft-format="' + fid + '"][data-draft-field="' + fieldKey + '"]');
+                  if (ceEl) ceEl.innerText = res[fieldKey];
+                  var mirror = panel.querySelector('[data-mock-mirror="' + fid + '"][data-mock-field="' + fieldKey + '"]');
+                  if (mirror) { var dt = String(res[fieldKey]); mirror.textContent = dt.length > 80 ? dt.slice(0, 80) + '…' : dt; }
+                });
+              }
+              var nd = Object.assign({}, formatDrafts); nd[fid] = Object.assign({}, nd[fid] || {}, res); formatDrafts = nd;
+              return res;
+            })
+            .catch(function (err) {
+              var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
+              if (panel) hideDraftSkeleton(panel);
+              console.error('[draft-generate:' + fid + ']', err && err.message ? err.message : err);
+              return null;
+            });
+        });
+        Promise.all(aiCalls)
+          .then(function () { return NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: formatDrafts }); })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
@@ -2256,25 +2297,25 @@
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         btn.disabled = true;
         var defaultFormats = selectedFormats.length ? selectedFormats.slice() : ['instagram', 'x-threads'];
-        var autoFormatDrafts = Object.assign({}, formatDrafts || {});
-        defaultFormats.forEach(function (fid) {
-          var fmt = formatItems.find(function (f) { return f.id === fid; });
-          autoFormatDrafts[fid] = { caption: buildCaptionDraft(project, brandView, fmt, sourceTexts, knowledge), hashtags: buildHashtagDraft(project, brandView, fmt, sourceTexts, knowledge) };
-        });
         var oneClickPayload = {
           brandStudioSelectedAssetIds: selectedAssetIds.length ? selectedAssetIds.slice() : autoSelectedAssetIds.slice(),
           brandStudioSelectedFormats: defaultFormats,
-          brandStudioFormatDrafts: autoFormatDrafts,
+          brandStudioFormatDrafts: Object.assign({}, formatDrafts || {}),
           brandStudioActiveDraftTab: defaultFormats[0] || '',
           brandStudioActiveStep: 3
         };
         NK.service.project.updatePayload(projectId, oneClickPayload)
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
-            setTimeout(function () { var t = root.querySelector('.brand-caption-textarea'); if (t) { scrollNodeIntoPageView(t, 'start'); t.focus(); } }, 30);
+            // After step 3 renders, auto-trigger AI generation in the fresh closure context
+            setTimeout(function () {
+              var t = root.querySelector('.brand-caption-textarea');
+              if (t) { scrollNodeIntoPageView(t, 'start'); t.focus(); }
+              var genAllBtn = root.querySelector('[data-action="brand-generate-all-drafts"]');
+              if (genAllBtn && !genAllBtn.disabled) genAllBtn.click();
+            }, 30);
           })
-          .catch(function (err) { alert(T.alertOneClickFail(err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; });
+          .catch(function (err) { alert(T.alertOneClickFail(err && err.message ? err.message : err)); btn.disabled = false; });
         return;
       }
       if (action === 'brand-deploy-all-formats') {
