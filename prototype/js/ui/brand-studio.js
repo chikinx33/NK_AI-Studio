@@ -1010,13 +1010,13 @@
     }());
     var storyCountLabel = isEn ? String(storyCount) : (storyCount + '개');
     var storyCardHtml =
-      '<div class="bsf-asset-type-card' + (storySelected ? ' is-selected' : '') + '">' +
+      '<div class="bsf-asset-type-card bsf-story-card' + (storySelected ? ' is-selected' : '') + '"' +
+      ((storyNarrative || storyItems.length) ? ' data-action="brand-toggle-asset-type" data-asset-type="text"' : '') + '>' +
       '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardStory + '</span><em>' + storyCountLabel + '</em></div>' +
       '<div class="bsf-asset-story-body">' +
       (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">' + T.hintStory.replace('\n', '<br>') + '</p>') +
       storyMeta +
       '</div>' +
-      (storyNarrative || storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
     // 이미지 카드 — 개별 썸네일 선택 + 돋보기 팝업
     var imageCountLabel = imageAnySelected
@@ -1036,7 +1036,6 @@
       '<div class="bsf-asset-type-card' + (imageAnySelected ? ' is-selected' : '') + '">' +
       '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + escapeHtml(imageCountLabel) + '</em></div>' +
       (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintImage.replace('\n', '<br>') + '</p></div>') +
-      (imageItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="image">' + (imageAllSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
     // 영상 카드 — 개별 썸네일 선택 + 돋보기 팝업 + <video> 첫 프레임
     var videoCountLabel = videoAnySelected
@@ -1061,7 +1060,6 @@
       '<div class="bsf-asset-type-card' + (videoAnySelected ? ' is-selected' : '') + '">' +
       '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + escapeHtml(videoCountLabel) + '</em></div>' +
       (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintVideo.replace('\n', '<br>') + '</p></div>') +
-      (videoItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="video">' + (videoAllSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
     var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
