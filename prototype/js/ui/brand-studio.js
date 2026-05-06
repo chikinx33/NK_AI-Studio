@@ -1160,6 +1160,22 @@
           })
           .catch(function () {});
       }
+      // 씬 이미지/영상 URL 갱신 (만료된 Signed URL 또는 gs:// 경로)
+      if (NK.service && NK.service.sceneAssets && NK.service.sceneAssets.refreshProjectSceneAssets) {
+        NK.service.sceneAssets.refreshProjectSceneAssets(project)
+          .then(function (updated) {
+            if (!updated || !root.isConnected) return;
+            var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || project;
+            var freshBrand = brand;
+            try {
+              if (brandId && NK.service.brand && NK.service.brand.getById) {
+                freshBrand = NK.service.brand.getById(brandId) || brand;
+              }
+            } catch (_) {}
+            renderProject(root, freshProject, freshBrand);
+          })
+          .catch(function () {});
+      }
     } catch (err) {
       try { console.error('BrandStudio render error:', err); } catch (_) {}
       renderEmpty(root, 'Brand Studio 렌더링 중 오류가 발생했습니다.');
