@@ -11949,16 +11949,19 @@ body {
 /* Step 3 — draft header with inline tabs */
 .bsf-detail-head-draft { gap: 8px; }
 .bsf-draft-head-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 16px;
 }
-.bsf-draft-head-row > strong { flex-shrink: 0; }
+.bsf-draft-head-row > strong {
+  grid-column: 1;
+  justify-self: start;
+}
 .bsf-draft-head-row > .bsf-draft-tabs {
-  flex: 1;
+  grid-column: 2;
   display: flex;
-  justify-content: center;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 6px;
   padding-bottom: 0;
   margin: 0;
