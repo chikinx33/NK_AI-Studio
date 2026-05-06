@@ -12180,9 +12180,11 @@ body {
   border-bottom: 1px solid var(--border);
   margin-bottom: 14px;
 }
-.bsf-legend-txt {
-  font-size: 10px;
+.bsf-preview-legend .bsf-legend-txt {
+  font-size: 11px;
+  font-weight: 600;
   color: #4a90c4;
+  letter-spacing: 0.03em;
   margin-right: 10px;
 }
 .bsf-badge {
