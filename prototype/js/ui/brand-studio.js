@@ -1178,9 +1178,20 @@
       panels.forEach(function (panel, idx) {
         panel.classList.toggle('is-active', idx + 1 === newStep);
       });
-      // ③ ctrl bar만 교체 (전체 리렌더 없음)
+      // ③ ctrl bar 교체 (전체 리렌더 없음, 빈 경우 DOM 삽입/제거)
       var ctrlBarEl = root.querySelector('.bsf-ctrl-bar');
-      if (ctrlBarEl) ctrlBarEl.innerHTML = makeCtrlBarHtml(newStep);
+      var newCtrlHtml = makeCtrlBarHtml(newStep);
+      if (newCtrlHtml) {
+        if (!ctrlBarEl) {
+          ctrlBarEl = document.createElement('div');
+          ctrlBarEl.className = 'bsf-ctrl-bar';
+          var flowCard = root.querySelector('.bsf-flow-card');
+          if (flowCard) flowCard.appendChild(ctrlBarEl);
+        }
+        ctrlBarEl.innerHTML = newCtrlHtml;
+      } else {
+        if (ctrlBarEl) ctrlBarEl.remove();
+      }
     }
 
     function syncBrandAndProject(brandPatch, projectPatch) {
@@ -1921,7 +1932,6 @@
           '<div class="bsf-ctrl-row">' +
           '<span class="bsf-ctrl-info">' + escapeHtml(persistedSelCount ? T.ctrlNSelected(persistedSelCount) : T.ctrlNoSelection) + '</span>' +
           '<button type="button" class="btn-secondary compact" data-action="brand-clear-assets"' + (persistedSelCount ? '' : ' disabled') + '>' + T.ctrlClearSel + '</button>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="1">' + T.ctrlToFormat + '</button>' +
           '</div>'
         );
       }
@@ -1929,16 +1939,11 @@
         return (
           '<div class="bsf-ctrl-row">' +
           '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? T.ctrlNFormats(selectedFormats.length) : T.ctrlSelectFormat) + '</span>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="2"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlToDraft + '</button>' +
           '</div>'
         );
       }
       if (step === 3) {
-        return (
-          '<div class="bsf-ctrl-row">' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="3"' + (hasDraftForAnyFormat ? '' : ' disabled') + '>' + T.ctrlToPublish + '</button>' +
-          '</div>'
-        );
+        return '';
       }
       return (
         '<div class="bsf-ctrl-row">' +
@@ -1955,16 +1960,16 @@
       '<div class="bsf-flow-title-group">' +
       '<p class="brand-studio-eyebrow">' + T.eyebrow + '</p>' +
       '<h2 class="bsf-title">' + escapeHtml(brandView.title || project.seriesTitle || project.title || (isEn ? 'Project' : '프로젝트')) + '</h2>' +
-      '<p class="bsf-desc">' + escapeHtml(compactSentence(brandView.summary || payload.brandSummary || T.brandSummaryHint, 100)) + '</p>' +
+      '<p class="bsf-desc">' + escapeHtml((isEn ? 'Episode: ' : '에피소드: ') + (String(project.title || '').trim() || (isEn ? 'None' : '없음'))) + '</p>' +
       '</div>' +
       '<div class="bsf-timeline">' + timelineHtml + '</div>' +
       '<div class="bsf-flow-head-actions">' +
-      '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
-      '<button type="button" class="btn-primary compact" data-action="brand-save-format-draft"' + (activeDraftTabOrFirst ? '' : ' disabled') + '>' + T.ctrlSave + '</button>' +
-      '<button type="button" class="btn-primary" data-action="brand-oneclick-draft">' + T.oneClickDraft + '</button>' +
+      '<button type="button" class="btn-secondary bsf-head-btn" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
+      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-save-format-draft"' + (activeDraftTabOrFirst ? '' : ' disabled') + '>' + T.ctrlSave + '</button>' +
+      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-oneclick-draft">' + T.oneClickDraft + '</button>' +
       '</div>' +
       '</div>' +
-      '<div class="bsf-ctrl-bar">' + ctrlBarHtml + '</div>' +
+      (ctrlBarHtml ? '<div class="bsf-ctrl-bar">' + ctrlBarHtml + '</div>' : '') +
       '</div>' +
       '<div class="bsf-detail-card">' +
       '<div class="bsf-detail' + (activeStep === 1 ? ' is-active' : '') + '">' +
