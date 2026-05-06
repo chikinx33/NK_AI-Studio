@@ -1943,14 +1943,7 @@
         );
       }
       if (step === 3) {
-        return (
-          '<div class="bsf-ctrl-row">' +
-          '<button type="button" class="btn-secondary compact" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-save-format-draft" disabled>' + T.ctrlSave + '</button>' +
-          '<span class="bsf-ctrl-divider"></span>' +
-          '<button type="button" class="btn-primary compact" data-action="brand-step-next" data-step="3"' + (hasDraftForAnyFormat ? '' : ' disabled') + '>' + T.ctrlToPublish + '</button>' +
-          '</div>'
-        );
+        return '';
       }
       return (
         '<div class="bsf-ctrl-row">' +
@@ -1972,7 +1965,7 @@
       '<div class="bsf-timeline">' + timelineHtml + '</div>' +
       '<div class="bsf-flow-head-actions">' +
       '<button type="button" class="btn-secondary bsf-head-btn" data-action="brand-generate-all-drafts"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
-      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-save-format-draft"' + (activeDraftTabOrFirst ? '' : ' disabled') + '>' + T.ctrlSave + '</button>' +
+      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-save-format-draft" disabled>' + T.ctrlSave + '</button>' +
       '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-oneclick-draft">' + T.oneClickDraft + '</button>' +
       '</div>' +
       '</div>' +
