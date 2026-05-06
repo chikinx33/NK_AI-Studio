@@ -795,6 +795,42 @@
     applyCurrentLocale();
   }
 
+  function openBsfMediaPopup(url, type) {
+    var existing = document.getElementById('bsf-media-popup');
+    if (existing) existing.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'bsf-media-popup';
+    overlay.className = 'bsf-media-popup-overlay';
+    var inner = document.createElement('div');
+    inner.className = 'bsf-media-popup-inner';
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'bsf-media-popup-close';
+    closeBtn.innerHTML = '&#x2715;';
+    closeBtn.onclick = function () { overlay.remove(); };
+    inner.appendChild(closeBtn);
+    if (type === 'video') {
+      var vid = document.createElement('video');
+      vid.src = url;
+      vid.controls = true;
+      vid.autoplay = true;
+      vid.playsInline = true;
+      vid.className = 'bsf-media-popup-video';
+      inner.appendChild(vid);
+    } else {
+      var img = document.createElement('img');
+      img.src = url;
+      img.className = 'bsf-media-popup-img';
+      inner.appendChild(img);
+    }
+    overlay.appendChild(inner);
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    document.addEventListener('keydown', function onKey(e) {
+      if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onKey); }
+    });
+  }
+
   function renderProject(root, project, brand, options) {
     var renderOptions = options || {};
     var preservedFieldScroll = captureFieldScrollState(root);
@@ -937,9 +973,16 @@
     function typeSelected(items) {
       return items.length > 0 && items.every(function (i) { return autoSelectedAssetIds.indexOf(String(i.id || '').trim()) >= 0; });
     }
+    function countExplicitSelected(items) {
+      return items.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0; }).length;
+    }
     var storySelected = typeSelected(storyItems);
-    var imageSelected = typeSelected(imageItems);
-    var videoSelected = typeSelected(videoItems);
+    var imageSelCount = countExplicitSelected(imageItems);
+    var imageAnySelected = imageSelCount > 0;
+    var imageAllSelected = imageItems.length > 0 && imageSelCount === imageItems.length;
+    var videoSelCount = countExplicitSelected(videoItems);
+    var videoAnySelected = videoSelCount > 0;
+    var videoAllSelected = videoItems.length > 0 && videoSelCount === videoItems.length;
     // 스토리 카드 — payload.story(이야기) 우선, 없으면 text 자산 텍스트 사용
     var storyNarrative = String(payload.story || payload.storyPrompt || '').trim();
     var storyOverview = storyNarrative || storyItems.map(function (i) { return String(i.text || i.title || '').trim(); }).filter(Boolean).join(' ');
@@ -975,27 +1018,39 @@
       '</div>' +
       (storyNarrative || storyItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="text">' + (storySelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
-    // 이미지 카드 — slice 제거해 전체 표시
-    var imageCountLabel = isEn ? String(imageItems.length) : (imageItems.length + '개');
+    // 이미지 카드 — 개별 썸네일 선택 + 돋보기 팝업
+    var imageCountLabel = imageAnySelected
+      ? (imageSelCount + '/' + imageItems.length)
+      : (isEn ? String(imageItems.length) : imageItems.length + '개');
     var imageThumbsHtml = imageItems.map(function (i) {
-      return i.url
-        ? '<img src="' + escapeHtml(i.url) + '" alt="' + escapeHtml(i.title || '') + '" class="bsf-thumb-img" loading="lazy" />'
-        : '<div class="bsf-thumb-placeholder"><span>' + escapeHtml(i.title || T.cardImage) + '</span></div>';
+      var isSel = selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0;
+      return '<div class="bsf-thumb-wrap' + (isSel ? ' is-selected' : '') + '" data-action="brand-toggle-single-asset" data-asset-id="' + escapeHtml(i.id || '') + '">' +
+        (i.url
+          ? '<img src="' + escapeHtml(i.url) + '" alt="' + escapeHtml(i.title || '') + '" class="bsf-thumb-img" loading="lazy" />'
+          : '<div class="bsf-thumb-placeholder"><span>' + escapeHtml(i.title || T.cardImage) + '</span></div>') +
+        '<div class="bsf-thumb-check">✓</div>' +
+        (i.url ? '<button type="button" class="bsf-thumb-zoom" data-action="bsf-zoom-thumb" data-url="' + escapeHtml(i.url) + '" data-media-type="image" title="View original">&#x1F50D;</button>' : '') +
+        '</div>';
     }).join('');
     var imageCardHtml =
-      '<div class="bsf-asset-type-card' + (imageSelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + imageCountLabel + '</em></div>' +
+      '<div class="bsf-asset-type-card' + (imageAnySelected ? ' is-selected' : '') + '">' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + escapeHtml(imageCountLabel) + '</em></div>' +
       (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintImage.replace('\n', '<br>') + '</p></div>') +
-      (imageItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="image">' + (imageSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
+      (imageItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="image">' + (imageAllSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
-    // 영상 카드 — <video> 태그로 썸네일 표시 (#t=0.001 로 첫 프레임 강제 로드)
-    var videoCountLabel = isEn ? String(videoItems.length) : (videoItems.length + '개');
+    // 영상 카드 — 개별 썸네일 선택 + 돋보기 팝업 + <video> 첫 프레임
+    var videoCountLabel = videoAnySelected
+      ? (videoSelCount + '/' + videoItems.length)
+      : (isEn ? String(videoItems.length) : videoItems.length + '개');
     var videoThumbsHtml = videoItems.map(function (i) {
+      var isSel = selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0;
       return i.url
-        ? '<div class="bsf-video-thumb-item">' +
+        ? '<div class="bsf-video-thumb-item' + (isSel ? ' is-selected' : '') + '" data-action="brand-toggle-single-asset" data-asset-id="' + escapeHtml(i.id || '') + '">' +
           '<video class="bsf-thumb-video" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video>' +
           '<span class="bsf-video-thumb-overlay">▶</span>' +
           '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || T.cardVideo) + '</span>' +
+          '<div class="bsf-thumb-check">✓</div>' +
+          '<button type="button" class="bsf-thumb-zoom" data-action="bsf-zoom-thumb" data-url="' + escapeHtml(i.url) + '" data-media-type="video" title="Play video">&#x1F50D;</button>' +
           '</div>'
         : '<div class="bsf-video-thumb-item bsf-video-thumb-empty">' +
           '<span class="bsf-video-thumb-icon">▶</span>' +
@@ -1003,10 +1058,10 @@
           '</div>';
     }).join('');
     var videoCardHtml =
-      '<div class="bsf-asset-type-card' + (videoSelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + videoCountLabel + '</em></div>' +
+      '<div class="bsf-asset-type-card' + (videoAnySelected ? ' is-selected' : '') + '">' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + escapeHtml(videoCountLabel) + '</em></div>' +
       (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintVideo.replace('\n', '<br>') + '</p></div>') +
-      (videoItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="video">' + (videoSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
+      (videoItems.length ? '<div class="bsf-asset-type-foot"><button type="button" class="btn-secondary compact" data-action="brand-toggle-asset-type" data-asset-type="video">' + (videoAllSelected ? T.btnDeselect : T.btnSelect) + '</button></div>' : '') +
       '</div>';
     var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
     var activeDraftTabOrFirst = activeDraftTab || (selectedFormats.length ? selectedFormats[0] : '');
@@ -1256,6 +1311,24 @@
           .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(T.alertPublishSaved(selectedFormats.length)); })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
+        return;
+      }
+      if (action === 'bsf-zoom-thumb') {
+        var mediaUrl = String(btn.dataset.url || '').trim();
+        var mediaType = String(btn.dataset.mediaType || 'image').trim();
+        if (mediaUrl) openBsfMediaPopup(mediaUrl, mediaType);
+        return;
+      }
+      if (action === 'brand-toggle-single-asset') {
+        var singleAssetId = String(btn.dataset.assetId || '').trim();
+        if (!singleAssetId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextSingleIds = selectedAssetIds.slice();
+        var sidx = nextSingleIds.indexOf(singleAssetId);
+        if (sidx >= 0) nextSingleIds.splice(sidx, 1); else nextSingleIds.push(singleAssetId);
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: nextSingleIds }) }));
+        NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextSingleIds })
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function (err) { alert(T.alertAssetSaveFail(err && err.message ? err.message : err)); });
         return;
       }
       if (action === 'brand-toggle-asset-type') {

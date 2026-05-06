@@ -12227,6 +12227,142 @@ body {
   border-top: 1px solid color-mix(in srgb, var(--border) 80%, transparent 20%);
 }
 
+/* ── Thumb wrap (image selection) ─────────────────────────────────────── */
+.bsf-thumb-wrap {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 0px var(--accent);
+  transition: box-shadow 0.15s;
+}
+.bsf-thumb-wrap:hover { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent 50%); }
+.bsf-thumb-wrap.is-selected { box-shadow: inset 0 0 0 2.5px var(--accent); }
+.bsf-thumb-wrap .bsf-thumb-img { border-radius: 0; }
+
+/* ── Video thumb selection ────────────────────────────────────────────── */
+.bsf-video-thumb-item { cursor: pointer; }
+.bsf-video-thumb-item.is-selected { box-shadow: inset 0 0 0 2.5px var(--accent); }
+.bsf-video-thumb-item:hover:not(.bsf-video-thumb-empty) { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 50%, transparent 50%); }
+.bsf-video-thumb-item.is-selected:hover { box-shadow: inset 0 0 0 2.5px var(--accent); }
+
+/* ── Checkmark overlay ────────────────────────────────────────────────── */
+.bsf-thumb-check {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.14s, transform 0.14s;
+  pointer-events: none;
+  z-index: 3;
+}
+.is-selected .bsf-thumb-check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ── Zoom (magnifier) button ──────────────────────────────────────────── */
+.bsf-thumb-zoom {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.14s, background 0.12s;
+  z-index: 4;
+  padding: 0;
+  line-height: 1;
+}
+.bsf-thumb-wrap:hover .bsf-thumb-zoom,
+.bsf-video-thumb-item:hover .bsf-thumb-zoom { opacity: 1; }
+.bsf-thumb-zoom:hover { background: rgba(0, 0, 0, 0.8); }
+
+/* ── Media popup / lightbox ───────────────────────────────────────────── */
+.bsf-media-popup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: bsfPopupIn 0.18s ease;
+}
+@keyframes bsfPopupIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.bsf-media-popup-inner {
+  position: relative;
+  max-width: min(92vw, 1200px);
+  max-height: 90vh;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #111;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bsf-media-popup-img {
+  display: block;
+  max-width: min(92vw, 1200px);
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 14px;
+}
+.bsf-media-popup-video {
+  display: block;
+  max-width: min(92vw, 1200px);
+  max-height: 90vh;
+  border-radius: 14px;
+  background: #000;
+}
+.bsf-media-popup-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  transition: background 0.12s;
+  line-height: 1;
+  padding: 0;
+}
+.bsf-media-popup-close:hover { background: rgba(0, 0, 0, 0.9); }
+
 @media (max-width: 900px) {
   .bsf-asset-trio { grid-template-columns: 1fr; }
 }
