@@ -825,7 +825,12 @@
     }).join('');
     var storyItems = assetItems.filter(function (i) { return String(i.type || '').trim() === 'text'; });
     var imageItems = assetItems.filter(function (i) { return String(i.type || '').trim() === 'image'; });
-    var videoItems = assetItems.filter(function (i) { return String(i.type || '').trim() === 'video'; });
+    // 영상: 씬별 클립이 아닌 포스트 프로덕션 최종 렌더 전용
+    var videoItems = assetItems.filter(function (i) {
+      if (String(i.type || '').trim() !== 'video') return false;
+      var id = String(i.id || '');
+      return id.indexOf(':video:render') >= 0 || id.indexOf(':video:store:') >= 0;
+    });
     function typeSelected(items) {
       return items.length > 0 && items.every(function (i) { return autoSelectedAssetIds.indexOf(String(i.id || '').trim()) >= 0; });
     }
