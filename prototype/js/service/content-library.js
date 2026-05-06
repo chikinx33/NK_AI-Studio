@@ -192,6 +192,26 @@
             }
         }
 
+        // 포스트 프로덕션 최종 렌더 (renderMeta.outputVideoObjectName)
+        var plPayload = project.payload || {};
+        var renderMeta = plPayload.renderMeta && typeof plPayload.renderMeta === 'object' ? plPayload.renderMeta : {};
+        var renderObjName = String(renderMeta.outputVideoObjectName || '').trim();
+        if (renderObjName) {
+            var renderVidUrl = (NK.api && NK.api.mediaProxyObjectUrl)
+                ? NK.api.mediaProxyObjectUrl(renderObjName)
+                : '';
+            if (renderVidUrl) {
+                items.push({
+                    id: projectId + ':video:render',
+                    projectId: projectId,
+                    type: 'video',
+                    title: '최종 렌더링',
+                    url: renderVidUrl,
+                    status: 'ready'
+                });
+            }
+        }
+
         referenceEntries(project).forEach(function (entry) {
             items.push({
                 id: projectId + ':reference:' + entry.id,

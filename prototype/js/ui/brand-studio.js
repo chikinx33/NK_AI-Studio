@@ -3,6 +3,9 @@
   var ui = NK.ui || (NK.ui = {});
   var brandStudio = ui.brandStudio || (ui.brandStudio = {});
 
+  // 렌더 저장소 캐시: projectId → [{name, size}]
+  var _renderStorageCache = {};
+
   function escapeHtml(value) {
     return String(value == null ? '' : value)
       .replace(/&/g, '&amp;')
@@ -716,6 +719,27 @@
     if (NK.service.contentLibrary && NK.service.contentLibrary.listProjectContents) {
       try { contentItems = NK.service.contentLibrary.listProjectContents(project); } catch (_) {}
     }
+    // 렌더 저장소 캐시 병합 (비동기 로드 후 재렌더 시 반영)
+    var cachedRenders = _renderStorageCache[projectId] || [];
+    if (cachedRenders.length) {
+      var existingIds = contentItems.map(function (c) { return c.id; });
+      cachedRenders.forEach(function (item, idx) {
+        var objName = String(item && item.name || '').trim();
+        if (!objName) return;
+        var rid = projectId + ':video:store:' + idx;
+        if (existingIds.indexOf(rid) >= 0) return;
+        var rUrl = NK.api && NK.api.mediaProxyObjectUrl ? NK.api.mediaProxyObjectUrl(objName) : '';
+        if (!rUrl) return;
+        var base = objName.split('/').pop();
+        var stripped = base.replace(/\.(webm|mp4)$/i, '');
+        var tsM = stripped.match(/(\d{10})$/);
+        var label = tsM ? tsM[1] : (stripped.replace(/^postprod[-_]final[-_]?/i, '').replace(/[-_]source$/i, '') || stripped);
+        contentItems.push({
+          id: rid, projectId: projectId, type: 'video',
+          title: '렌더 ' + label, url: rUrl, status: 'ready'
+        });
+      });
+    }
     var assetItems = contentItems.filter(function (item) {
       return ['text', 'image', 'video'].indexOf(String(item.type || '').trim()) >= 0;
     });
@@ -1173,6 +1197,17 @@
               }
             } catch (_) {}
             renderProject(root, freshProject, freshBrand);
+          })
+          .catch(function () {});
+      }
+      // 렌더 저장소 전체 목록 비동기 로드 → 영상 카드에 표시
+      if (NK.api && NK.api.postprodRenderList && projectId) {
+        NK.api.postprodRenderList(projectId)
+          .then(function (renderList) {
+            if (!Array.isArray(renderList) || !renderList.length || !root.isConnected) return;
+            _renderStorageCache[projectId] = renderList;
+            var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || project;
+            renderProject(root, freshProject, brand);
           })
           .catch(function () {});
       }
