@@ -11815,9 +11815,9 @@ body {
 
 .bsf-step.is-active .bsf-step-dot {
   border-color: var(--accent);
-  background: transparent;
-  color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.15);
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent 75%);
 }
 .bsf-step.is-active { color: var(--text); }
 .bsf-step.is-active .bsf-step-name { color: var(--accent); }
