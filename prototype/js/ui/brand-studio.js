@@ -1523,7 +1523,7 @@
       var hidden = privacyStatus !== 'scheduled' ? ' style="display:none"' : '';
       return '<div class="bsf-field bsf-field-auto bsf-scheduled-row" data-draft-format="' + escapeHtml(fmtId) + '"' + hidden + '>' +
         '<div class="bsf-field-hd"><span class="bsf-badge bsf-badge-auto">AUTO</span><span class="bsf-field-label">' + (isEn ? 'Scheduled time' : '예약 일시') + '</span></div>' +
-        '<input type="datetime-local" class="bsf-input-datetime" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="scheduled_at" value="' + escapeHtml(String(currentVal || '')) + '"></div>';
+        buildDtPickerHtml(fmtId, 'scheduled_at', currentVal) + '</div>';
     }
 
     // 목업 공통 파트
@@ -1999,7 +1999,7 @@
       '<div class="bsf-deploy-summary">' + deployFormatSummary + '</div>' +
       '<div class="brand-publish-fields" style="padding-top:12px;">' +
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">' + T.placeholderSchedule + '</span>' +
-      '<input id="brand-publish-datetime" class="brand-publish-input" type="datetime-local" value="' + escapeHtml(publishPlan.scheduledAt || '') + '" /></div>' +
+      buildDtPickerHtml(null, null, publishPlan.scheduledAt || '', 'brand-publish-datetime') + '</div>' +
       '</div>' +
       '</div>' +
       '</div>' +
@@ -2017,7 +2017,138 @@
       var sb = root.querySelector('[data-action="brand-save-format-draft"]');
       if (sb) sb.disabled = !val;
     }
+    // ─── Custom DateTime Picker ────────────────────────────────────────────────
+    var _calSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>';
+    function dtParsed(val) {
+      var m = (val || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+      return m ? { y: +m[1], mo: +m[2], d: +m[3], h: +m[4], mi: +m[5] } : null;
+    }
+    function dtToISO(y, mo, d, h, mi) {
+      var p = function (n) { return String(n).padStart(2, '0'); };
+      return y + '-' + p(mo) + '-' + p(d) + 'T' + p(h) + ':' + p(mi);
+    }
+    function dtDisplay(val) {
+      var dp = dtParsed(val);
+      if (!dp) return isEn ? 'Select date & time' : '날짜 · 시간 선택';
+      var p = function (n) { return String(n).padStart(2, '0'); };
+      return isEn
+        ? (dp.y + '/' + p(dp.mo) + '/' + p(dp.d) + '  ' + p(dp.h) + ':' + p(dp.mi))
+        : (dp.y + '. ' + p(dp.mo) + '. ' + p(dp.d) + '.  ' + p(dp.h) + ':' + p(dp.mi));
+    }
+    function buildDtPickerHtml(fmtId, fieldKey, currentVal, inputId) {
+      var draftAttrs = fmtId ? (' data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '"') : '';
+      return (
+        '<div class="bsf-dt-picker">' +
+        '<input type="hidden" class="bsf-dt-hidden"' + (inputId ? ' id="' + escapeHtml(inputId) + '"' : '') + draftAttrs + ' value="' + escapeHtml(currentVal || '') + '">' +
+        '<button type="button" class="bsf-dt-trigger" data-action="bsf-dt-toggle">' +
+          _calSvg + '<span class="bsf-dt-txt">' + escapeHtml(dtDisplay(currentVal)) + '</span>' +
+        '</button>' +
+        (currentVal ? '<button type="button" class="bsf-dt-del" data-action="bsf-dt-clear-val">✕</button>' : '') +
+        '</div>'
+      );
+    }
+    function buildDtCalInner(picker) {
+      var val = String(picker.dataset.dtValue || '');
+      var dp = dtParsed(val); var now = new Date();
+      var vy = parseInt(picker.dataset.dtViewY || '') || now.getFullYear();
+      var vm = parseInt(picker.dataset.dtViewMo || '') || (now.getMonth() + 1);
+      var selD = (dp && dp.y === vy && dp.mo === vm) ? dp.d : 0;
+      var selH = dp ? dp.h : 9; var selMi = dp ? dp.mi : 0;
+      var dayNames = isEn ? ['Su','Mo','Tu','We','Th','Fr','Sa'] : ['일','월','화','수','목','금','토'];
+      var firstDay = new Date(vy, vm - 1, 1).getDay();
+      var daysInMonth = new Date(vy, vm, 0).getDate();
+      var ty = now.getFullYear(), tm = now.getMonth() + 1, td = now.getDate();
+      var moLabel = isEn
+        ? (['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][vm - 1] + ' ' + vy)
+        : (vy + '년 ' + vm + '월');
+      var cells = '';
+      for (var i = 0; i < firstDay; i++) cells += '<div class="bsf-dt-empty"></div>';
+      for (var d = 1; d <= daysInMonth; d++) {
+        var isPast = (vy < ty) || (vy === ty && vm < tm) || (vy === ty && vm === tm && d < td);
+        var cls = 'bsf-dt-day' + (d === selD ? ' is-sel' : '') + (vy === ty && vm === tm && d === td ? ' is-today' : '') + (isPast ? ' is-past' : '');
+        cells += '<button type="button" class="' + cls + '" data-action="bsf-dt-pick-day" data-dt-d="' + d + '"' + (isPast ? ' disabled' : '') + '>' + d + '</button>';
+      }
+      return (
+        '<div class="bsf-dt-nav">' +
+          '<button type="button" class="bsf-dt-nav-btn" data-action="bsf-dt-prev-mo">‹</button>' +
+          '<span class="bsf-dt-mo-lbl">' + escapeHtml(moLabel) + '</span>' +
+          '<button type="button" class="bsf-dt-nav-btn" data-action="bsf-dt-next-mo">›</button>' +
+        '</div>' +
+        '<div class="bsf-dt-dow">' + dayNames.map(function (n) { return '<span>' + n + '</span>'; }).join('') + '</div>' +
+        '<div class="bsf-dt-grid">' + cells + '</div>' +
+        '<div class="bsf-dt-time">' +
+          '<div class="bsf-dt-time-col">' +
+            '<button type="button" class="bsf-dt-spin" data-action="bsf-dt-h-up">▲</button>' +
+            '<input type="number" class="bsf-dt-tinp bsf-dt-h-inp" min="0" max="23" value="' + selH + '">' +
+            '<button type="button" class="bsf-dt-spin" data-action="bsf-dt-h-dn">▼</button>' +
+          '</div>' +
+          '<span class="bsf-dt-time-sep">:</span>' +
+          '<div class="bsf-dt-time-col">' +
+            '<button type="button" class="bsf-dt-spin" data-action="bsf-dt-m-up">▲</button>' +
+            '<input type="number" class="bsf-dt-tinp bsf-dt-m-inp" min="0" max="59" step="5" value="' + selMi + '">' +
+            '<button type="button" class="bsf-dt-spin" data-action="bsf-dt-m-dn">▼</button>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bsf-dt-foot">' +
+          '<button type="button" class="bsf-dt-foot-del" data-action="bsf-dt-del-val">' + (isEn ? 'Delete' : '삭제') + '</button>' +
+          '<button type="button" class="bsf-dt-foot-today" data-action="bsf-dt-today">' + (isEn ? 'Today' : '오늘') + '</button>' +
+        '</div>'
+      );
+    }
+    function openDtPicker(picker) {
+      var now = new Date(); var dp = dtParsed(String(picker.dataset.dtValue || ''));
+      picker.dataset.dtViewY = dp ? dp.y : now.getFullYear();
+      picker.dataset.dtViewMo = dp ? dp.mo : (now.getMonth() + 1);
+      picker.classList.add('is-open');
+      var popup = picker.querySelector('.bsf-dt-popup');
+      if (!popup) { popup = document.createElement('div'); popup.className = 'bsf-dt-popup'; picker.appendChild(popup); }
+      popup.innerHTML = buildDtCalInner(picker);
+    }
+    function closeDtPicker(picker) { picker.classList.remove('is-open'); }
+    function closeAllDtPickers() { root.querySelectorAll('.bsf-dt-picker.is-open').forEach(closeDtPicker); }
+    function getDtHM(picker) {
+      var popup = picker.querySelector('.bsf-dt-popup');
+      var dp = dtParsed(String(picker.dataset.dtValue || ''));
+      var h = dp ? dp.h : 9, mi = dp ? dp.mi : 0;
+      if (popup) {
+        var hi = popup.querySelector('.bsf-dt-h-inp'), mii = popup.querySelector('.bsf-dt-m-inp');
+        if (hi) h = Math.max(0, Math.min(23, parseInt(hi.value) || 0));
+        if (mii) mi = Math.max(0, Math.min(59, parseInt(mii.value) || 0));
+      }
+      return { h: h, mi: mi };
+    }
+    function setDtPickerValue(picker, newVal) {
+      picker.dataset.dtValue = newVal || '';
+      var hidden = picker.querySelector('.bsf-dt-hidden');
+      if (hidden) {
+        hidden.value = newVal || '';
+        var ev = document.createEvent('Event'); ev.initEvent('change', true, true); hidden.dispatchEvent(ev);
+      }
+      var txt = picker.querySelector('.bsf-dt-txt');
+      if (txt) txt.textContent = dtDisplay(newVal || '');
+      var delBtn = picker.querySelector('.bsf-dt-del');
+      if (newVal && !delBtn) {
+        var nb = document.createElement('button'); nb.type = 'button';
+        nb.className = 'bsf-dt-del'; nb.dataset.action = 'bsf-dt-clear-val'; nb.textContent = '✕';
+        picker.insertBefore(nb, picker.querySelector('.bsf-dt-popup') || null);
+      } else if (!newVal && delBtn) { delBtn.remove(); }
+    }
+    function refreshDtCal(picker) {
+      var popup = picker.querySelector('.bsf-dt-popup');
+      if (popup) popup.innerHTML = buildDtCalInner(picker);
+    }
+    function applyDtTime(picker) {
+      var dp = dtParsed(String(picker.dataset.dtValue || ''));
+      if (!dp) return;
+      var hm = getDtHM(picker);
+      setDtPickerValue(picker, dtToISO(dp.y, dp.mo, dp.d, hm.h, hm.mi));
+    }
+    // ───────────────────────────────────────────────────────────────────────────
+
     root.oninput = function (ev) {
+      // dt picker time input 직접 입력 처리
+      var timeInp = ev.target && ev.target.closest ? ev.target.closest('.bsf-dt-h-inp, .bsf-dt-m-inp') : null;
+      if (timeInp) { var tp = timeInp.closest('.bsf-dt-picker'); if (tp) applyDtTime(tp); return; }
       var ce = ev.target && ev.target.closest ? ev.target.closest('[data-draft-field][contenteditable]') : null;
       if (!ce) return;
       var fmtId = String(ce.dataset.draftFormat || '').trim();
@@ -2096,9 +2227,43 @@
     };
 
     root.onclick = function (evt) {
+      if (!evt.target.closest('.bsf-dt-picker')) closeAllDtPickers();
       var btn = evt.target && evt.target.closest ? evt.target.closest('[data-action]') : null;
       if (!btn) return;
       var action = String(btn.dataset.action || '').trim();
+      if (action.indexOf('bsf-dt-') === 0) {
+        var dtp = btn.closest('.bsf-dt-picker');
+        if (!dtp) return;
+        if (action === 'bsf-dt-toggle') {
+          if (dtp.classList.contains('is-open')) closeDtPicker(dtp); else { closeAllDtPickers(); openDtPicker(dtp); }
+        } else if (action === 'bsf-dt-clear-val' || action === 'bsf-dt-del-val') {
+          setDtPickerValue(dtp, ''); closeDtPicker(dtp);
+        } else if (action === 'bsf-dt-prev-mo' || action === 'bsf-dt-next-mo') {
+          var vy = parseInt(dtp.dataset.dtViewY || '') || new Date().getFullYear();
+          var vm = parseInt(dtp.dataset.dtViewMo || '') || (new Date().getMonth() + 1);
+          if (action === 'bsf-dt-prev-mo') { vm--; if (vm < 1) { vm = 12; vy--; } }
+          else { vm++; if (vm > 12) { vm = 1; vy++; } }
+          dtp.dataset.dtViewY = vy; dtp.dataset.dtViewMo = vm; refreshDtCal(dtp);
+        } else if (action === 'bsf-dt-pick-day') {
+          var d = parseInt(btn.dataset.dtD || '') || 0; if (!d) return;
+          var hm = getDtHM(dtp);
+          var vy2 = parseInt(dtp.dataset.dtViewY || '') || new Date().getFullYear();
+          var vm2 = parseInt(dtp.dataset.dtViewMo || '') || (new Date().getMonth() + 1);
+          setDtPickerValue(dtp, dtToISO(vy2, vm2, d, hm.h, hm.mi)); refreshDtCal(dtp);
+        } else if (action === 'bsf-dt-h-up' || action === 'bsf-dt-h-dn') {
+          var hi = dtp.querySelector('.bsf-dt-h-inp');
+          if (hi) { hi.value = Math.min(23, Math.max(0, (parseInt(hi.value) || 0) + (action === 'bsf-dt-h-up' ? 1 : -1))); applyDtTime(dtp); }
+        } else if (action === 'bsf-dt-m-up' || action === 'bsf-dt-m-dn') {
+          var mii = dtp.querySelector('.bsf-dt-m-inp');
+          if (mii) { mii.value = Math.min(59, Math.max(0, (parseInt(mii.value) || 0) + (action === 'bsf-dt-m-up' ? 5 : -5))); applyDtTime(dtp); }
+        } else if (action === 'bsf-dt-today') {
+          var now2 = new Date(); var hm2 = getDtHM(dtp);
+          dtp.dataset.dtViewY = now2.getFullYear(); dtp.dataset.dtViewMo = now2.getMonth() + 1;
+          setDtPickerValue(dtp, dtToISO(now2.getFullYear(), now2.getMonth() + 1, now2.getDate(), hm2.h, hm2.mi));
+          refreshDtCal(dtp);
+        }
+        return;
+      }
       if (action === 'character-open-new' || action === 'character-edit' || action === 'character-deactivate' || action === 'character-save' || action === 'character-cancel') return;
       if (action === 'brand-set-step') {
         var targetStep = parseInt(String(btn.dataset.step || '0'), 10);
