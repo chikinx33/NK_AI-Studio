@@ -12624,6 +12624,33 @@ body {
   font-size: 14px;
   font-weight: 700;
   color: var(--text);
+  flex: 1;
+}
+.bsf-deploy-format-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.bsf-deploy-one-btn {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+}
+.bsf-deploy-one-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.bsf-deploy-one-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 /* ---- 자산 트리오 (스토리·이미지·영상 카드) ---- */
 .bsf-asset-trio {

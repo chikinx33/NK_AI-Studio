@@ -1928,7 +1928,9 @@
           var draftBadge = isEn ? (hasDraft ? 'Draft ready' : 'No draft') : (hasDraft ? '초안 완료' : '초안 없음');
           return (
             '<div class="bsf-deploy-format-row">' +
-            '<div class="bsf-deploy-format-head"><strong>' + escapeHtml(fmt ? fmt.title : formatId) + '</strong><span class="brand-channel-badge">' + draftBadge + '</span></div>' +
+            '<div class="bsf-deploy-format-head"><strong>' + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
+            '<div class="bsf-deploy-format-head-right"><span class="brand-channel-badge">' + draftBadge + '</span>' +
+            '<button type="button" class="bsf-deploy-one-btn" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '">' + (isEn ? 'Deploy' : '배포') + '</button></div></div>' +
             '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 100) : T.hintNoDraft) + '</p>' +
             '</div>'
           );
@@ -1955,7 +1957,6 @@
       }
       return (
         '<div class="bsf-ctrl-row">' +
-        '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? T.ctrlNChannelsReady(selectedFormats.length) : T.stepValNoFormat) + '</span>' +
         '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
         '</div>'
       );
@@ -2351,6 +2352,19 @@
             }, 30);
           })
           .catch(function (err) { alert(T.alertOneClickFail(err && err.message ? err.message : err)); btn.disabled = false; });
+        return;
+      }
+      if (action === 'brand-deploy-one-format') {
+        var oneFmtId = String(btn.dataset.deployFormat || '').trim();
+        if (!oneFmtId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var publishInputElOne = root.querySelector('#brand-publish-datetime');
+        var scheduledAtOne = publishInputElOne ? String(publishInputElOne.value || '').trim() : '';
+        btn.disabled = true;
+        var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: scheduledAtOne ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
+        syncBrandAndProject({ brandStudioPublishPlan: deployPlanOne }, { brandStudioPublishPlan: deployPlanOne })
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(T.alertPublishSaved(1)); })
+          .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
+          .finally(function () { btn.disabled = false; });
         return;
       }
       if (action === 'brand-deploy-all-formats') {
