@@ -3074,7 +3074,13 @@
     // 언어 전환(nk:lang-changed) 수신 — 한 페이지 라이프사이클당 1회만 등록
     if (!window.__brandStudioLangBound) {
       window.__brandStudioLangBound = true;
-      window.addEventListener('nk:lang-changed', function () {
+      // renderProject 내부의 applyCurrentLocale()이 다시 dispatch를 일으키므로
+      // 같은 lang은 스킵하여 재귀 호출 차단
+      window.__brandStudioLastLang = (NK.state && NK.state.runtime && NK.state.runtime.lang === 'en') ? 'en' : 'ko';
+      window.addEventListener('nk:lang-changed', function (e) {
+        var newLang = (e && e.detail && e.detail.lang) === 'en' ? 'en' : 'ko';
+        if (window.__brandStudioLastLang === newLang) return; // 동일 lang 재진입 차단
+        window.__brandStudioLastLang = newLang;
         var rootEl = document.getElementById('brand-studio-root');
         if (!rootEl || !rootEl.isConnected) return;
         if (!NK.service || !NK.service.project || !NK.service.project.resolveCurrent) return;
