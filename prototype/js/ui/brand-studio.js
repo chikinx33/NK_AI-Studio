@@ -1263,7 +1263,7 @@
       var cls = 'bsf-format-card bsf-format-card--' + cardState +
         (isSelected ? ' is-selected' : '');
       var badgeHtml = (cardState === 'recommended')
-        ? '<div class="bsf-format-card__badge">' + (isEn ? '★ Recommended' : '⭐ 추천') + '</div>'
+        ? '<div class="bsf-format-card__badge">' + (isEn ? '★ Recommended' : '★ 추천') + '</div>'
         : '';
       var lockHtml = (cardState === 'unavailable')
         ? '<div class="bsf-format-card__lock">' + (isEn ? '🔒 Asset required' : '🔒 자산 필요') + '</div>'
@@ -2295,7 +2295,7 @@
         if (newState === 'recommended' && !existingBadge) {
           var b = document.createElement('div');
           b.className = 'bsf-format-card__badge';
-          b.textContent = (isEn ? '★ Recommended' : '⭐ 추천');
+          b.textContent = (isEn ? '★ Recommended' : '★ 추천');
           card.insertBefore(b, card.firstChild);
         } else if (newState !== 'recommended' && existingBadge) {
           existingBadge.remove();

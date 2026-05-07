@@ -12802,17 +12802,19 @@ body {
 }
 .bsf-format-card__badge {
   position: absolute;
-  top: -10px;
-  left: 12px;
+  top: 10px;
+  right: 10px;
   background: #f59e0b;
   color: #fff;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.02em;
   padding: 3px 9px;
-  border-radius: 20px;
+  border-radius: 11px;
   white-space: nowrap;
   z-index: 2;
-  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.18);
 }
 .bsf-format-card__lock {
   position: absolute;
