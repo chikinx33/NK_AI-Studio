@@ -1301,7 +1301,7 @@
     var storyCardHtml =
       '<div class="bsf-asset-type-card bsf-story-card' + (storySelected ? ' is-selected' : '') + '"' +
       ((storyNarrative || storyItems.length) ? ' data-action="brand-toggle-story-card"' : '') + '>' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardStory + '</span><em>' + storyCountLabel + '</em>' + (storySelected ? '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-type-assets" data-asset-type="story">' + (isEn ? 'Clear' : '선택 비우기') + '</button>' : '') + '</div>' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardStory + '</span><em>' + storyCountLabel + '</em></div>' +
       '<div class="bsf-asset-story-body">' +
       (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">' + T.hintStory.replace('\n', '<br>') + '</p>') +
       storyMeta +
@@ -1323,7 +1323,7 @@
     }).join('');
     var imageCardHtml =
       '<div class="bsf-asset-type-card' + (imageAnySelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + escapeHtml(imageCountLabel) + '</em>' + (imageAnySelected ? '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-type-assets" data-asset-type="image">' + (isEn ? 'Clear' : '선택 비우기') + '</button>' : '') + '</div>' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + escapeHtml(imageCountLabel) + '</em></div>' +
       (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintImage.replace('\n', '<br>') + '</p></div>') +
       '</div>';
     // 영상 카드 — 개별 썸네일 선택 + 돋보기 팝업 + <video> 첫 프레임
@@ -1347,7 +1347,7 @@
     }).join('');
     var videoCardHtml =
       '<div class="bsf-asset-type-card' + (videoAnySelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + escapeHtml(videoCountLabel) + '</em>' + (videoAnySelected ? '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-type-assets" data-asset-type="video">' + (isEn ? 'Clear' : '선택 비우기') + '</button>' : '') + '</div>' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + escapeHtml(videoCountLabel) + '</em></div>' +
       (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintVideo.replace('\n', '<br>') + '</p></div>') +
       '</div>';
     var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
@@ -1973,7 +1973,11 @@
       '</div>' +
       '<div class="bsf-detail-card">' +
       '<div class="bsf-detail' + (activeStep === 1 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>' + T.head01 + '</strong><span>' + T.head01sub + '</span></div>' +
+      '<div class="bsf-detail-head bsf-detail-head-asset">' +
+        '<div class="bsf-detail-head-top"><strong>' + T.head01 + '</strong>' +
+        '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-assets"' + (persistedSelCount ? '' : ' disabled') + '>' + (isEn ? 'Clear' : '선택 비우기') + '</button></div>' +
+        '<span>' + T.head01sub + '</span>' +
+      '</div>' +
       assetTrioHtml +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 2 ? ' is-active' : '') + '">' +

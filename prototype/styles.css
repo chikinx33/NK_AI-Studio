@@ -11946,6 +11946,13 @@ body {
   color: var(--text-3);
 }
 
+/* Step 1 — asset header with clear button */
+.bsf-detail-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
 /* Step 3 — draft header with inline tabs */
 .bsf-detail-head-draft { gap: 8px; }
 .bsf-draft-head-row {
