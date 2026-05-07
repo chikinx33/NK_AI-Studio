@@ -923,11 +923,11 @@
       case 'instagram':    return hasImage || hasVideo;
       case 'youtube-shorts': return hasVideo;
       case 'tiktok':       return hasVideo;
-      case 'x-threads':    return hasStory || hasImage;
+      case 'x-threads':    return hasStory || hasImage || hasVideo;
       case 'naver-blog':   return hasStory || hasImage;
-      case 'kakao':        return hasImage || hasStory;
+      case 'kakao':        return hasImage || hasStory || hasVideo;
       case 'facebook':     return hasImage || hasVideo || hasStory;
-      case 'linkedin':     return hasStory || hasImage;
+      case 'linkedin':     return hasStory || hasImage || hasVideo;
       case 'pinterest':    return hasImage;
       case 'youtube':      return hasVideo;
       case 'naver-post':   return hasImage;
