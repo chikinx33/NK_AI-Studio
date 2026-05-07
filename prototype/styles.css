@@ -12644,8 +12644,9 @@ body {
 }
 .bsf-deploy-format-head-right {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   flex-shrink: 0;
 }
 .bsf-deploy-one-btn {
