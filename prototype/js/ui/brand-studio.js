@@ -2465,6 +2465,7 @@
       }
       if (action === 'brand-save-format-draft') {
         if (!activeDraftTabOrFirst || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        flushAssetSave(); // 대기 중인 자산 선택 변경도 함께 flush
         var currentFmtId = activeDraftTabOrFirst;
         var nextFmtDraft = Object.assign({}, (formatDrafts && formatDrafts[currentFmtId]) || {});
         // contenteditable 필드 읽기
@@ -2611,7 +2612,8 @@
         btn.classList.toggle('is-selected', nextStorySel);
         // ③ step 바 수술적 업데이트
         updateStep1Bar();
-        // ④ 디바운스 저장 (renderNext 없음)
+        // ④ 저장 버튼 활성화 + 디바운스 저장
+        setSaveBtnEnabled(true);
         scheduleAssetSave();
         return;
       }
@@ -2646,7 +2648,8 @@
         }
         // ④ step 바 수술적 업데이트
         updateStep1Bar();
-        // ⑤ 디바운스 저장 (리렌더 없음)
+        // ⑤ 저장 버튼 활성화 + 디바운스 저장
+        setSaveBtnEnabled(true);
         scheduleAssetSave();
         return;
       }
@@ -2703,7 +2706,8 @@
         // ④ Clear 버튼 비활성화 + step 바 업데이트
         btn.disabled = true;
         updateStep1Bar();
-        // ⑤ 디바운스 저장 (리렌더 없음)
+        // ⑤ 저장 버튼 활성화 + 디바운스 저장
+        setSaveBtnEnabled(true);
         scheduleAssetSave();
         return;
       }
