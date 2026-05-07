@@ -2117,47 +2117,48 @@
         var s = selected[k];
         if (s.type === 'video' && s.duration != null) { videoDuration = s.duration; break; }
       }
-      // 등록 불가 판정
+      var DURATION_UNKNOWN = (videoDuration === null);
+      var OVER_600 = (videoDuration !== null && videoDuration > 600);
+      var UNDER_60 = (videoDuration !== null && videoDuration < 60);
+
+      // 핵심 5개 플랫폼 — 명시 규칙
+      switch (formatId) {
+        case 'instagram':
+          if (!hasImage && !hasVideo) return 'unavailable';
+          if (hasVideo && !DURATION_UNKNOWN && OVER_600) return 'unavailable';
+          return 'recommended';
+        case 'x-threads':
+          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+          return 'recommended';
+        case 'tiktok':
+          if (!hasVideo) return 'unavailable';
+          if (!DURATION_UNKNOWN && OVER_600) return 'unavailable';
+          return 'recommended';
+        case 'youtube':
+          if (!hasVideo) return 'unavailable';
+          if (!DURATION_UNKNOWN && UNDER_60) return 'unavailable';
+          return 'recommended';
+        case 'youtube-shorts':
+          if (!hasVideo) return 'unavailable';
+          if (!DURATION_UNKNOWN && OVER_600) return 'unavailable';
+          return 'recommended';
+      }
+
+      // 나머지 7개 플랫폼 — 기존 로직 유지
       var unavailableRules = {
-        'youtube':        !hasVideo,
-        'youtube-shorts': !hasVideo,
-        'tiktok':         !hasVideo,
         'pinterest':      !hasImage && !hasVideo
       };
       if (unavailableRules[formatId]) return 'unavailable';
-      var basicPlatforms = [
-        'instagram', 'facebook', 'linkedin', 'x-threads',
-        'naver-blog', 'naver-post', 'kakao', 'band'
-      ];
+      var basicPlatforms = ['facebook', 'linkedin', 'naver-blog', 'naver-post', 'kakao', 'band'];
       if (basicPlatforms.indexOf(formatId) >= 0) {
         if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-      }
-      // 추천 판정 — 영상 길이 기반
-      if (hasVideo && videoDuration !== null) {
-        if (formatId === 'tiktok' || formatId === 'youtube-shorts') {
-          if (videoDuration < 60) return 'recommended';
-          return 'available';
-        }
-        if (formatId === 'youtube') {
-          if (videoDuration >= 60) return 'recommended';
-          return 'available';
-        }
-        if (formatId === 'instagram') {
-          if (videoDuration < 60) return 'recommended';
-        }
-      }
-      // 영상 있지만 길이 미확인 — 추천 보류
-      if (hasVideo && videoDuration === null) {
-        if (formatId === 'tiktok' || formatId === 'youtube-shorts' || formatId === 'youtube') {
-          return 'available';
-        }
       }
       // 이미지 수 기반 추천
       if (hasImage) {
         if (formatId === 'pinterest' || formatId === 'kakao' || formatId === 'naver-post') {
           if (imageCount === 1) return 'recommended';
         }
-        if (formatId === 'instagram' || formatId === 'naver-blog') {
+        if (formatId === 'naver-blog') {
           if (imageCount >= 2) return 'recommended';
         }
         if (formatId === 'facebook' && imageCount >= 1) return 'recommended';
