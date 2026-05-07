@@ -12331,6 +12331,7 @@ body {
 .bsf-mock-yt { background: #fff; }
 .bsf-mock-yt-thumb-wrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #0f0f0f; overflow: hidden; }
 .bsf-mock-yt-thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bsf-mock-yt-player { width: 100%; height: 100%; display: block; background: #000; }
 .bsf-mock-yt-duration { position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.8); color: #fff; font-size: 11px; font-weight: 600; padding: 1px 4px; border-radius: 3px; }
 .bsf-mock-yt-meta { display: flex; gap: 10px; padding: 10px 12px 8px; align-items: flex-start; }
 .bsf-mock-yt-ch-avatar { width: 36px; height: 36px; border-radius: 50%; background: #e0e0e0; flex-shrink: 0; }

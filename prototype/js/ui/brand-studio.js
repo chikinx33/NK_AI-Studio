@@ -1784,12 +1784,20 @@
       inputField(fmtId, 'link_url', isEn ? 'Destination URL' : '목적지 URL', 'https://', draft.link_url || '', 'auto', 'url');
     }
     function buildYoutubePreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
-      var thumbContent = draftFirstVidUrl
-        ? '<video class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
-        : (draftFirstImgUrl ? '<img class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-yt-thumb bsf-mock-media-empty" style="aspect-ratio:16/9;background:#f0f0f0;font-size:32px">▶</div>');
+      var playerContent, hasDuration;
+      if (draftFirstVidUrl) {
+        playerContent = '<video class="bsf-mock-yt-player" src="' + escapeHtml(draftFirstVidUrl) + '" controls preload="metadata"></video>';
+        hasDuration = false;
+      } else if (draftFirstImgUrl) {
+        playerContent = '<img class="bsf-mock-yt-thumb" src="' + escapeHtml(draftFirstImgUrl) + '" />';
+        hasDuration = true;
+      } else {
+        playerContent = '<div class="bsf-mock-yt-thumb bsf-mock-media-empty" style="aspect-ratio:16/9;background:#0f0f0f;font-size:32px;color:#fff">▶</div>';
+        hasDuration = true;
+      }
       return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
         '<div class="bsf-mockup bsf-mock-yt">' +
-        '<div class="bsf-mock-yt-thumb-wrap">' + thumbContent + '<span class="bsf-mock-yt-duration">0:00</span></div>' +
+        '<div class="bsf-mock-yt-thumb-wrap">' + playerContent + (hasDuration ? '<span class="bsf-mock-yt-duration">0:00</span>' : '') + '</div>' +
         '<div class="bsf-mock-yt-meta">' +
           '<div class="bsf-mock-yt-ch-avatar"></div>' +
           '<div class="bsf-mock-yt-info">' +
