@@ -1142,32 +1142,36 @@
     }
 
     function switchToStep(newStep) {
-      // 포맷 탭 진입 시 자산 기반 자동 선택 — 항상 재계산 (자산이 선택된 경우)
+      // 포맷 탭 진입 시 자산 기반 자동 선택 — 자산 선택이 바뀌었을 때만 재계산
       if (newStep === 2) {
-        var storySel2 = !!root.querySelector('.bsf-story-card.is-selected');
-        var imgSel2 = root.querySelectorAll('.bsf-asset-thumb-grid .bsf-thumb-wrap.is-selected').length > 0;
-        var vidSel2 = root.querySelectorAll('.bsf-asset-video-grid .bsf-video-thumb-item.is-selected').length > 0;
-        if (storySel2 || imgSel2 || vidSel2) {
-          var autoFormats = formatItems.filter(function (fmt) {
-            return isFormatCompatible(fmt.id, storySel2, imgSel2, vidSel2);
-          }).map(function (fmt) { return fmt.id; });
-          if (autoFormats.length) {
-            selectedFormats = autoFormats;
-            // 모든 포맷 카드 초기화 후 권장 포맷만 선택 표시
-            root.querySelectorAll('[data-action="brand-toggle-format"]').forEach(function (card) {
-              var fid = String(card.dataset.formatId || '').trim();
-              card.classList.toggle('is-selected', autoFormats.indexOf(fid) >= 0);
-            });
-            var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
-            if (step2Btn) {
-              step2Btn.classList.add('is-done');
-              var step2Val = step2Btn.querySelector('.bsf-step-val');
-              if (step2Val) step2Val.textContent = T.stepValSelected(autoFormats.length);
-            }
-            if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-              NK.service.project.updatePayload(projectId, { brandStudioSelectedFormats: autoFormats }).catch(function () {});
+        var curSig = selectedAssetIds.slice().sort().join('\x00');
+        if (curSig !== _lastAutoFormatSig) {
+          var storySel2 = !!root.querySelector('.bsf-story-card.is-selected');
+          var imgSel2 = root.querySelectorAll('.bsf-asset-thumb-grid .bsf-thumb-wrap.is-selected').length > 0;
+          var vidSel2 = root.querySelectorAll('.bsf-asset-video-grid .bsf-video-thumb-item.is-selected').length > 0;
+          if (storySel2 || imgSel2 || vidSel2) {
+            var autoFormats = formatItems.filter(function (fmt) {
+              return isFormatCompatible(fmt.id, storySel2, imgSel2, vidSel2);
+            }).map(function (fmt) { return fmt.id; });
+            if (autoFormats.length) {
+              selectedFormats = autoFormats;
+              // 모든 포맷 카드 초기화 후 권장 포맷만 선택 표시
+              root.querySelectorAll('[data-action="brand-toggle-format"]').forEach(function (card) {
+                var fid = String(card.dataset.formatId || '').trim();
+                card.classList.toggle('is-selected', autoFormats.indexOf(fid) >= 0);
+              });
+              var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
+              if (step2Btn) {
+                step2Btn.classList.add('is-done');
+                var step2Val = step2Btn.querySelector('.bsf-step-val');
+                if (step2Val) step2Val.textContent = T.stepValSelected(autoFormats.length);
+              }
+              if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+                NK.service.project.updatePayload(projectId, { brandStudioSelectedFormats: autoFormats }).catch(function () {});
+              }
             }
           }
+          _lastAutoFormatSig = curSig; // 스냅샷 갱신
         }
       }
       // ① step 버튼 is-active 토글
@@ -2032,6 +2036,8 @@
     var _draftDirty = false;
     // 자산 선택 디바운스 저장
     var _assetSaveTimer = null;
+    // 포맷 자동 세팅 시 자산 스냅샷 (변경 감지용)
+    var _lastAutoFormatSig = selectedAssetIds.slice().sort().join('\x00');
     function scheduleAssetSave() {
       if (_assetSaveTimer) clearTimeout(_assetSaveTimer);
       _assetSaveTimer = setTimeout(flushAssetSave, 800);
