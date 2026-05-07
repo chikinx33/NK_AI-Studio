@@ -2121,8 +2121,8 @@
       var OVER_600 = (videoDuration !== null && videoDuration > 600);
       var UNDER_60 = (videoDuration !== null && videoDuration < 60);
 
-      // 핵심 5개 플랫폼 — 명시 규칙
       switch (formatId) {
+        // ── 핵심 5개: 명시 규칙 ────────────────────────────────────────────
         case 'instagram':
           if (!hasImage && !hasVideo) return 'unavailable';
           if (hasVideo && !DURATION_UNKNOWN && OVER_600) return 'unavailable';
@@ -2142,35 +2142,40 @@
           if (!hasVideo) return 'unavailable';
           if (!DURATION_UNKNOWN && OVER_600) return 'unavailable';
           return 'recommended';
+        // ── 나머지 7개: 기존 로직 그대로 case 이전 ─────────────────────────
+        case 'pinterest':
+          if (!hasImage && !hasVideo) return 'unavailable';
+          if (hasImage && imageCount === 1) return 'recommended';
+          return 'available';
+        case 'facebook':
+          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+          if (hasImage && imageCount >= 1) return 'recommended';
+          if (hasStory) return 'recommended';
+          return 'available';
+        case 'linkedin':
+          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+          if (hasStory) return 'recommended';
+          return 'available';
+        case 'naver-blog':
+          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+          if (hasImage && imageCount >= 2) return 'recommended';
+          if (hasStory) return 'recommended';
+          return 'available';
+        case 'naver-post':
+          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+          if (hasImage && imageCount === 1) return 'recommended';
+          return 'available';
+        case 'kakao':
+          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+          if (hasImage && imageCount === 1) return 'recommended';
+          return 'available';
+        case 'band':
+          if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+          if (hasStory) return 'recommended';
+          return 'available';
+        default:
+          return 'available';
       }
-
-      // 나머지 7개 플랫폼 — 기존 로직 유지
-      var unavailableRules = {
-        'pinterest':      !hasImage && !hasVideo
-      };
-      if (unavailableRules[formatId]) return 'unavailable';
-      var basicPlatforms = ['facebook', 'linkedin', 'naver-blog', 'naver-post', 'kakao', 'band'];
-      if (basicPlatforms.indexOf(formatId) >= 0) {
-        if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
-      }
-      // 이미지 수 기반 추천
-      if (hasImage) {
-        if (formatId === 'pinterest' || formatId === 'kakao' || formatId === 'naver-post') {
-          if (imageCount === 1) return 'recommended';
-        }
-        if (formatId === 'naver-blog') {
-          if (imageCount >= 2) return 'recommended';
-        }
-        if (formatId === 'facebook' && imageCount >= 1) return 'recommended';
-      }
-      // 스토리 기반 추천 — 텍스트 중심 플랫폼
-      if (hasStory) {
-        if (formatId === 'naver-blog' || formatId === 'linkedin'
-            || formatId === 'facebook' || formatId === 'band') {
-          return 'recommended';
-        }
-      }
-      return 'available';
     }
     function getCurrentSelectedAssetItems() {
       var arr = assetItems.filter(function (item) {
