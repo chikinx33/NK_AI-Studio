@@ -1077,9 +1077,11 @@
         var stripped = base.replace(/\.(webm|mp4)$/i, '');
         var tsM = stripped.match(/(\d{10})$/);
         var label = tsM ? tsM[1] : (stripped.replace(/^postprod[-_]final[-_]?/i, '').replace(/[-_]source$/i, '') || stripped);
+        var storeDur = (item && (Number(item.durationSec) || Number(item.duration))) || null;
         contentItems.push({
           id: rid, projectId: projectId, type: 'video',
-          title: '렌더 ' + label, url: rUrl, status: 'ready'
+          title: '렌더 ' + label, url: rUrl, status: 'ready',
+          duration: storeDur
         });
       });
     }
@@ -1146,29 +1148,27 @@
       if (newStep === 2) {
         var curSig = selectedAssetIds.slice().sort().join('\x00');
         if (curSig !== _lastAutoFormatSig) {
-          var storySel2 = !!root.querySelector('.bsf-story-card.is-selected');
-          var imgSel2 = root.querySelectorAll('.bsf-asset-thumb-grid .bsf-thumb-wrap.is-selected').length > 0;
-          var vidSel2 = root.querySelectorAll('.bsf-asset-video-grid .bsf-video-thumb-item.is-selected').length > 0;
-          if (storySel2 || imgSel2 || vidSel2) {
-            var autoFormats = formatItems.filter(function (fmt) {
-              return isFormatCompatible(fmt.id, storySel2, imgSel2, vidSel2);
-            }).map(function (fmt) { return fmt.id; });
-            if (autoFormats.length) {
-              selectedFormats = autoFormats;
-              // 모든 포맷 카드 초기화 후 권장 포맷만 선택 표시
-              root.querySelectorAll('[data-action="brand-toggle-format"]').forEach(function (card) {
-                var fid = String(card.dataset.formatId || '').trim();
-                card.classList.toggle('is-selected', autoFormats.indexOf(fid) >= 0);
-              });
-              var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
-              if (step2Btn) {
-                step2Btn.classList.add('is-done');
-                var step2Val = step2Btn.querySelector('.bsf-step-val');
-                if (step2Val) step2Val.textContent = T.stepValSelected(autoFormats.length);
-              }
-              if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-                NK.service.project.updatePayload(projectId, { brandStudioSelectedFormats: autoFormats }).catch(function () {});
-              }
+          // 카드 상태(클래스/뱃지/lock) 즉시 갱신
+          refreshFormatCardStates();
+          // 'recommended' 상태인 카드만 자동 선택
+          var curSelected = getCurrentSelectedAssetItems();
+          var autoFormats = formatItems.filter(function (fmt) {
+            return getFormatCardState(fmt.id, curSelected) === 'recommended';
+          }).map(function (fmt) { return fmt.id; });
+          if (autoFormats.length || curSelected.length) {
+            selectedFormats = autoFormats;
+            root.querySelectorAll('[data-action="brand-toggle-format"]').forEach(function (card) {
+              var fid = String(card.dataset.formatId || '').trim();
+              card.classList.toggle('is-selected', autoFormats.indexOf(fid) >= 0);
+            });
+            var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
+            if (step2Btn) {
+              step2Btn.classList.toggle('is-done', autoFormats.length > 0);
+              var step2Val = step2Btn.querySelector('.bsf-step-val');
+              if (step2Val) step2Val.textContent = autoFormats.length ? T.stepValSelected(autoFormats.length) : T.stepValNone;
+            }
+            if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+              NK.service.project.updatePayload(projectId, { brandStudioSelectedFormats: autoFormats }).catch(function () {});
             }
           }
           _lastAutoFormatSig = curSig; // 스냅샷 갱신
@@ -1245,18 +1245,36 @@
         '</button>'
       );
     }).join('<span class="bsf-step-line" aria-hidden="true"></span>');
+    var __initialSelectedForFormatState = (function () {
+      var arr = persistedSelectedAssetItems.slice();
+      var sVId = projectId + ':story';
+      if (selectedAssetIds.indexOf(sVId) >= 0) arr.push({ id: sVId, type: 'text', virtual: true });
+      return arr;
+    }());
     var formatCards = formatItems.map(function (item) {
       var isSelected = selectedFormats.indexOf(item.id) >= 0;
-      var compatible = !anyAssetSelected || isFormatCompatible(item.id, storySelected, selHasImage, selHasVideo);
+      var cardState = getFormatCardState(item.id, __initialSelectedForFormatState);
       var fmtDesc = (T.fmtDescs && T.fmtDescs[item.id]) || item.desc;
-      var cls = 'bsf-format-card' + (isSelected ? ' is-selected' : '') +
-        (anyAssetSelected ? (compatible ? ' is-recommended' : ' is-unavailable') : '');
+      var cls = 'bsf-format-card bsf-format-card--' + cardState +
+        (isSelected ? ' is-selected' : '');
+      var badgeHtml = (cardState === 'recommended')
+        ? '<div class="bsf-format-card__badge">' + (isEn ? '★ Recommended' : '⭐ 추천') + '</div>'
+        : '';
+      var lockHtml = (cardState === 'unavailable')
+        ? '<div class="bsf-format-card__lock">' + (isEn ? '🔒 Asset required' : '🔒 자산 필요') + '</div>'
+        : '';
       return (
-        '<button type="button" class="' + cls + '" data-action="brand-toggle-format" data-format-id="' + escapeHtml(item.id) + '">' +
+        '<button type="button" class="' + cls + '"' +
+        ' data-action="brand-toggle-format"' +
+        ' data-format-id="' + escapeHtml(item.id) + '"' +
+        (cardState === 'unavailable' ? ' data-unavailable="true"' : '') +
+        '>' +
+        badgeHtml +
         '<div class="bsf-fmt-card-head">' +
         '<strong>' + escapeHtml(item.title) + '</strong>' +
         '</div>' +
         '<p>' + escapeHtml(fmtDesc) + '</p>' +
+        lockHtml +
         '</button>'
       );
     }).join('');
@@ -1342,7 +1360,7 @@
       var isSel = selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0;
       return i.url
         ? '<div class="bsf-video-thumb-item' + (isSel ? ' is-selected' : '') + '" data-action="brand-toggle-single-asset" data-asset-id="' + escapeHtml(i.id || '') + '">' +
-          '<video class="bsf-thumb-video" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video>' +
+          '<video class="bsf-thumb-video" data-item-id="' + escapeHtml(i.id || '') + '" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video>' +
           '<span class="bsf-video-thumb-overlay">▶</span>' +
           '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || T.cardVideo) + '</span>' +
           '<div class="bsf-thumb-check">✓</div>' +
@@ -2077,7 +2095,119 @@
       var sb = root.querySelector('[data-action="brand-save-format-draft"]');
       if (sb) sb.disabled = !val;
     }
-    // 영상 썸네일 첫 프레임 강제 시크 + 프레임 준비 후 fade-in
+    // ── 포맷 카드 3단계 상태 판정 ─────────────────────────────────────────────
+    // returns 'recommended' | 'available' | 'unavailable'
+    function getFormatCardState(formatId, selected) {
+      var hasStory = selected.some(function (i) { return i.type === 'text'; });
+      var hasImage = selected.some(function (i) { return i.type === 'image' && i.url; });
+      var hasVideo = selected.some(function (i) { return i.type === 'video' && i.url; });
+      var imageCount = selected.filter(function (i) { return i.type === 'image' && i.url; }).length;
+      var videoDuration = null;
+      for (var k = 0; k < selected.length; k++) {
+        var s = selected[k];
+        if (s.type === 'video' && s.duration != null) { videoDuration = s.duration; break; }
+      }
+      // 등록 불가 판정
+      var unavailableRules = {
+        'youtube':        !hasVideo,
+        'youtube-shorts': !hasVideo,
+        'tiktok':         !hasVideo,
+        'pinterest':      !hasImage && !hasVideo
+      };
+      if (unavailableRules[formatId]) return 'unavailable';
+      var basicPlatforms = [
+        'instagram', 'facebook', 'linkedin', 'x-threads',
+        'naver-blog', 'naver-post', 'kakao', 'band'
+      ];
+      if (basicPlatforms.indexOf(formatId) >= 0) {
+        if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
+      }
+      // 추천 판정 — 영상 길이 기반
+      if (hasVideo && videoDuration !== null) {
+        if (formatId === 'tiktok' || formatId === 'youtube-shorts') {
+          if (videoDuration < 60) return 'recommended';
+          return 'available';
+        }
+        if (formatId === 'youtube') {
+          if (videoDuration >= 60) return 'recommended';
+          return 'available';
+        }
+        if (formatId === 'instagram') {
+          if (videoDuration < 60) return 'recommended';
+        }
+      }
+      // 영상 있지만 길이 미확인 — 추천 보류
+      if (hasVideo && videoDuration === null) {
+        if (formatId === 'tiktok' || formatId === 'youtube-shorts' || formatId === 'youtube') {
+          return 'available';
+        }
+      }
+      // 이미지 수 기반 추천
+      if (hasImage) {
+        if (formatId === 'pinterest' || formatId === 'kakao' || formatId === 'naver-post') {
+          if (imageCount === 1) return 'recommended';
+        }
+        if (formatId === 'instagram' || formatId === 'naver-blog') {
+          if (imageCount >= 2) return 'recommended';
+        }
+        if (formatId === 'facebook' && imageCount >= 1) return 'recommended';
+      }
+      // 스토리 기반 추천 — 텍스트 중심 플랫폼
+      if (hasStory) {
+        if (formatId === 'naver-blog' || formatId === 'linkedin'
+            || formatId === 'facebook' || formatId === 'band') {
+          return 'recommended';
+        }
+      }
+      return 'available';
+    }
+    function getCurrentSelectedAssetItems() {
+      var arr = assetItems.filter(function (item) {
+        return selectedAssetIds.indexOf(String(item.id || '').trim()) >= 0;
+      });
+      // 스토리 가상 카드(projectId:story)는 assetItems에 없으므로 별도 추가
+      var storyVId = projectId + ':story';
+      if (selectedAssetIds.indexOf(storyVId) >= 0) {
+        arr.push({ id: storyVId, type: 'text', virtual: true });
+      }
+      return arr;
+    }
+    // 카드 클래스/뱃지/lock을 in-place로 갱신 (자산 변경/duration 도착 시)
+    function refreshFormatCardStates() {
+      var current = getCurrentSelectedAssetItems();
+      var cards = root.querySelectorAll('.bsf-format-card');
+      cards.forEach(function (card) {
+        var fid = String(card.dataset.formatId || '').trim();
+        if (!fid) return;
+        var newState = getFormatCardState(fid, current);
+        card.classList.remove('bsf-format-card--recommended', 'bsf-format-card--available', 'bsf-format-card--unavailable');
+        card.classList.add('bsf-format-card--' + newState);
+        if (newState === 'unavailable') {
+          card.dataset.unavailable = 'true';
+        } else {
+          delete card.dataset.unavailable;
+        }
+        var existingBadge = card.querySelector('.bsf-format-card__badge');
+        if (newState === 'recommended' && !existingBadge) {
+          var b = document.createElement('div');
+          b.className = 'bsf-format-card__badge';
+          b.textContent = (isEn ? '★ Recommended' : '⭐ 추천');
+          card.insertBefore(b, card.firstChild);
+        } else if (newState !== 'recommended' && existingBadge) {
+          existingBadge.remove();
+        }
+        var existingLock = card.querySelector('.bsf-format-card__lock');
+        if (newState === 'unavailable' && !existingLock) {
+          var l = document.createElement('div');
+          l.className = 'bsf-format-card__lock';
+          l.textContent = (isEn ? '🔒 Asset required' : '🔒 자산 필요');
+          card.appendChild(l);
+        } else if (newState !== 'unavailable' && existingLock) {
+          existingLock.remove();
+        }
+      });
+    }
+    // 영상 썸네일 첫 프레임 강제 시크 + 프레임 준비 후 fade-in + duration 캡처
     function initVideoThumbs() {
       root.querySelectorAll('.bsf-thumb-video').forEach(function (v) {
         if (v.dataset.thumbInit) return; // 이미 처리됨
@@ -2086,14 +2216,32 @@
         function trySeek() {
           try { v.currentTime = 0.001; } catch (e) { showFrame(); }
         }
+        function captureDuration() {
+          var itemId = v.dataset.itemId;
+          if (!itemId || !v.duration || isNaN(v.duration)) return;
+          var sec = Math.round(v.duration);
+          for (var i = 0; i < assetItems.length; i++) {
+            if (String(assetItems[i].id) === String(itemId)) {
+              if (assetItems[i].duration == null) {
+                assetItems[i].duration = sec;
+                // 자산 변경 없이 duration만 새로 들어왔으면 카드 상태 갱신
+                refreshFormatCardStates();
+              }
+              break;
+            }
+          }
+        }
         v.addEventListener('seeked', showFrame, { once: true });
-        // seeked가 끝내 안 오면 1s 후 강제 표시 (fallback)
         var fallback = setTimeout(showFrame, 1000);
         v.addEventListener('seeked', function () { clearTimeout(fallback); }, { once: true });
         if (v.readyState >= 1) {
+          captureDuration();
           trySeek();
         } else {
-          v.addEventListener('loadedmetadata', trySeek, { once: true });
+          v.addEventListener('loadedmetadata', function () {
+            captureDuration();
+            trySeek();
+          }, { once: true });
           v.addEventListener('error', showFrame, { once: true });
         }
       });
@@ -2404,6 +2552,8 @@
         return;
       }
       if (action === 'brand-toggle-format') {
+        // 불가 상태 카드는 클릭 완전 차단
+        if (btn.dataset.unavailable === 'true') return;
         var formatId = String(btn.dataset.formatId || '').trim();
         if (!formatId) return;
         // 즉시 토글 (리렌더 없음)
@@ -2665,7 +2815,9 @@
         btn.classList.toggle('is-selected', nextStorySel);
         // ③ step 바 수술적 업데이트
         updateStep1Bar();
-        // ④ 저장 버튼 활성화 + 디바운스 저장
+        // ④ 포맷 카드 상태 즉시 갱신
+        refreshFormatCardStates();
+        // ⑤ 저장 버튼 활성화 + 디바운스 저장
         setSaveBtnEnabled(true);
         scheduleAssetSave();
         return;
@@ -2701,7 +2853,9 @@
         }
         // ④ step 바 수술적 업데이트
         updateStep1Bar();
-        // ⑤ 저장 버튼 활성화 + 디바운스 저장
+        // ⑤ 포맷 카드 상태 즉시 갱신
+        refreshFormatCardStates();
+        // ⑥ 저장 버튼 활성화 + 디바운스 저장
         setSaveBtnEnabled(true);
         scheduleAssetSave();
         return;
@@ -2759,7 +2913,9 @@
         // ④ Clear 버튼 비활성화 + step 바 업데이트
         btn.disabled = true;
         updateStep1Bar();
-        // ⑤ 저장 버튼 활성화 + 디바운스 저장
+        // ⑤ 포맷 카드 상태 즉시 갱신
+        refreshFormatCardStates();
+        // ⑥ 저장 버튼 활성화 + 디바운스 저장
         setSaveBtnEnabled(true);
         scheduleAssetSave();
         return;

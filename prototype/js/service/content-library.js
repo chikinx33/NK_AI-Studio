@@ -201,12 +201,14 @@
                 ? NK.api.mediaProxyObjectUrl(renderObjName)
                 : '';
             if (renderVidUrl) {
+                var renderDurationSec = Number(renderMeta.outputDurationSec) || null;
                 items.push({
                     id: projectId + ':video:render',
                     projectId: projectId,
                     type: 'video',
                     title: '최종 렌더링',
                     url: renderVidUrl,
+                    duration: renderDurationSec,
                     status: 'ready'
                 });
             }

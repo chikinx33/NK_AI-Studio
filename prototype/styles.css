@@ -12781,6 +12781,48 @@ body {
   opacity: 0.35;
 }
 .bsf-format-card.is-unavailable:hover { border-color: var(--border); opacity: 0.55; }
+/* ── 3-state modifier (recommended / available / unavailable) ─────────── */
+.bsf-format-card--recommended {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
+}
+.bsf-format-card--recommended:hover { border-color: #f59e0b; }
+.bsf-format-card--available { opacity: 1; }
+.bsf-format-card--unavailable {
+  opacity: 0.38;
+  cursor: not-allowed !important;
+  pointer-events: none;
+  filter: grayscale(55%);
+}
+.bsf-format-card__badge {
+  position: absolute;
+  top: -10px;
+  left: 12px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+  z-index: 2;
+  box-shadow: 0 2px 6px rgba(245, 158, 11, 0.35);
+}
+.bsf-format-card__lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 1;
+}
+.bsf-format-card { position: relative; }
 .bsf-fmt-card-head {
   display: flex;
   align-items: center;
