@@ -12207,6 +12207,7 @@ body {
 
 /* Popup */
 .bsf-dt-popup {
+  display: none;
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
@@ -12218,6 +12219,7 @@ body {
   box-shadow: 0 10px 40px rgba(0,0,0,0.5);
   min-width: 270px;
 }
+.bsf-dt-picker.is-open .bsf-dt-popup { display: block; }
 
 /* Month navigation */
 .bsf-dt-nav {
