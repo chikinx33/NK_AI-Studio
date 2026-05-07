@@ -1142,8 +1142,8 @@
     }
 
     function switchToStep(newStep) {
-      // 포맷 탭 진입 시 자산 기반 자동 선택 (기존 선택 없을 때만)
-      if (newStep === 2 && selectedFormats.length === 0) {
+      // 포맷 탭 진입 시 자산 기반 자동 선택 — 항상 재계산 (자산이 선택된 경우)
+      if (newStep === 2) {
         var storySel2 = !!root.querySelector('.bsf-story-card.is-selected');
         var imgSel2 = root.querySelectorAll('.bsf-asset-thumb-grid .bsf-thumb-wrap.is-selected').length > 0;
         var vidSel2 = root.querySelectorAll('.bsf-asset-video-grid .bsf-video-thumb-item.is-selected').length > 0;
@@ -1153,9 +1153,10 @@
           }).map(function (fmt) { return fmt.id; });
           if (autoFormats.length) {
             selectedFormats = autoFormats;
-            autoFormats.forEach(function (fid) {
-              var card = root.querySelector('[data-action="brand-toggle-format"][data-format-id="' + fid + '"]');
-              if (card) card.classList.add('is-selected');
+            // 모든 포맷 카드 초기화 후 권장 포맷만 선택 표시
+            root.querySelectorAll('[data-action="brand-toggle-format"]').forEach(function (card) {
+              var fid = String(card.dataset.formatId || '').trim();
+              card.classList.toggle('is-selected', autoFormats.indexOf(fid) >= 0);
             });
             var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
             if (step2Btn) {
