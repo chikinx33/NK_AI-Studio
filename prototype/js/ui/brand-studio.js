@@ -1186,6 +1186,11 @@
       });
       // 자산 탭(1)으로 돌아올 때 썸네일 초기화 (숨겨진 동안 로드 안 됐을 수 있음)
       if (newStep === 1) { initVideoThumbs(); initImageThumbs(); }
+      // 배포 탭(4) 진입: 초안 디바운스 즉시 flush 후 배포 요약 재빌드 (stale 데이터 방지)
+      if (newStep === 4) {
+        flushPendingDraftEdits();
+        refreshDeploySummary();
+      }
       // ③ ctrl bar 교체 (전체 리렌더 없음, 빈 경우 DOM 삽입/제거)
       var ctrlBarEl = root.querySelector('.bsf-ctrl-bar');
       var newCtrlHtml = makeCtrlBarHtml(newStep);
@@ -1960,24 +1965,27 @@
       'naver-post':     '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/></svg>',
       'band':           '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>'
     };
-    var deployFormatSummary = selectedFormats.length
-      ? selectedFormats.map(function (formatId) {
-          var fmt = formatItems.find(function (f) { return f.id === formatId; });
-          var draft = (formatDrafts && formatDrafts[formatId]) || {};
-          var caption = String(draft.caption || '').trim();
-          var hasDraft = !!(caption || String(draft.hashtags || '').trim());
-          var draftBadge = isEn ? (hasDraft ? 'Draft ready' : 'No draft') : (hasDraft ? '초안 완료' : '초안 없음');
-          var icon = _platformIcons[formatId] || '';
-          return (
-            '<div class="bsf-deploy-format-row">' +
-            '<div class="bsf-deploy-format-head"><strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
-            '<div class="bsf-deploy-format-head-right"><span class="brand-channel-badge">' + draftBadge + '</span>' +
-            '<button type="button" class="bsf-deploy-one-btn" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '">' + (isEn ? 'Deploy' : '배포') + '</button></div></div>' +
-            '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 100) : T.hintNoDraft) + '</p>' +
-            '</div>'
-          );
-        }).join('')
-      : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
+    function buildDeploySummaryHtml() {
+      return selectedFormats.length
+        ? selectedFormats.map(function (formatId) {
+            var fmt = formatItems.find(function (f) { return f.id === formatId; });
+            var draft = (formatDrafts && formatDrafts[formatId]) || {};
+            var caption = String(draft.caption || '').trim();
+            var hasDraft = !!(caption || String(draft.hashtags || '').trim());
+            var draftBadge = isEn ? (hasDraft ? 'Draft ready' : 'No draft') : (hasDraft ? '초안 완료' : '초안 없음');
+            var icon = _platformIcons[formatId] || '';
+            return (
+              '<div class="bsf-deploy-format-row">' +
+              '<div class="bsf-deploy-format-head"><strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
+              '<div class="bsf-deploy-format-head-right"><span class="brand-channel-badge">' + draftBadge + '</span>' +
+              '<button type="button" class="bsf-deploy-one-btn" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '">' + (isEn ? 'Deploy' : '배포') + '</button></div></div>' +
+              '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 100) : T.hintNoDraft) + '</p>' +
+              '</div>'
+            );
+          }).join('')
+        : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
+    }
+    var deployFormatSummary = buildDeploySummaryHtml();
     function makeCtrlBarHtml(step) {
       if (step === 1) {
         return '';
@@ -2174,6 +2182,38 @@
       }
       return arr;
     }
+    // 진행 중인 디바운스 저장이 있다면 contenteditable 현재 값을 즉시 formatDrafts에 반영
+    function flushPendingDraftEdits() {
+      var ces = root.querySelectorAll('[data-draft-field][contenteditable]');
+      if (!ces.length) return;
+      var nextDrafts = Object.assign({}, formatDrafts || {});
+      var changed = false;
+      ces.forEach(function (ce) {
+        var fmtId = String(ce.dataset.draftFormat || '').trim();
+        var fieldKey = String(ce.dataset.draftField || '').trim();
+        if (!fmtId || !fieldKey) return;
+        var cur = (ce.innerText || ce.textContent || '').trim();
+        var stored = String((nextDrafts[fmtId] && nextDrafts[fmtId][fieldKey]) || '').trim();
+        if (cur !== stored) {
+          nextDrafts[fmtId] = Object.assign({}, nextDrafts[fmtId] || {});
+          nextDrafts[fmtId][fieldKey] = cur;
+          changed = true;
+        }
+      });
+      if (!changed) return;
+      formatDrafts = nextDrafts;
+      if (_draftSaveTimer) { clearTimeout(_draftSaveTimer); _draftSaveTimer = null; }
+      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+        NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextDrafts })
+          .then(function () { setSaveBtnEnabled(false); })
+          .catch(function () {});
+      }
+    }
+    // 배포 요약 영역을 현재 selectedFormats + formatDrafts 기준으로 재빌드
+    function refreshDeploySummary() {
+      var summaryEl = root.querySelector('.bsf-deploy-summary');
+      if (summaryEl) summaryEl.innerHTML = buildDeploySummaryHtml();
+    }
     // selectedFormats에서 unavailable 상태인 포맷을 제거하고 UI/저장까지 동기화
     function pruneUnavailableSelectedFormats() {
       var current = getCurrentSelectedAssetItems();
@@ -2224,7 +2264,9 @@
         var rgnBtn = root.querySelector('.bsf-draft-regen-head');
         if (rgnBtn) rgnBtn.dataset.formatId = activeDraftTabOrFirst;
       }
-      // ⑥ 비동기 저장
+      // ⑥ 배포 요약 즉시 재빌드 (제거된 포맷 카드 자동 사라짐)
+      refreshDeploySummary();
+      // ⑦ 비동기 저장
       if (NK.service && NK.service.project && NK.service.project.updatePayload) {
         var prunePatch = { brandStudioSelectedFormats: selectedFormats.slice() };
         if (activeDraftTabOrFirst) prunePatch.brandStudioActiveDraftTab = activeDraftTabOrFirst;
