@@ -1946,11 +1946,7 @@
       if (step === 3) {
         return '';
       }
-      return (
-        '<div class="bsf-ctrl-row">' +
-        '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
-        '</div>'
-      );
+      return '';
     }
     var ctrlBarHtml = makeCtrlBarHtml(activeStep);
     root.innerHTML =
@@ -1995,7 +1991,11 @@
       '<div class="bsf-format-draft-panels">' + draftPanelsHtml + '</div>' +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 4 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>' + T.head04 + '</strong><span>' + T.head04sub + '</span></div>' +
+      '<div class="bsf-detail-head bsf-detail-head-asset">' +
+        '<strong>' + T.head04 + '</strong>' +
+        '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
+        '<span>' + T.head04sub + '</span>' +
+      '</div>' +
       '<div class="bsf-deploy-summary">' + deployFormatSummary + '</div>' +
       '<div class="brand-publish-fields" style="padding-top:12px;">' +
       '<div class="brand-publish-field"><span class="brand-caption-meta-label">' + T.placeholderSchedule + '</span>' +

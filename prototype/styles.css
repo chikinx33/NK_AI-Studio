@@ -11956,7 +11956,7 @@ body {
 }
 .bsf-detail-head-asset > strong { grid-column: 1; grid-row: 1; }
 .bsf-detail-head-asset > span   { grid-column: 1; grid-row: 2; }
-.bsf-detail-head-asset > .bsf-clear-type-btn {
+.bsf-detail-head-asset > button {
   grid-column: 2;
   grid-row: 1 / span 2;
   align-self: stretch;
