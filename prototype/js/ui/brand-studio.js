@@ -1301,7 +1301,7 @@
     var storyCardHtml =
       '<div class="bsf-asset-type-card bsf-story-card' + (storySelected ? ' is-selected' : '') + '"' +
       ((storyNarrative || storyItems.length) ? ' data-action="brand-toggle-story-card"' : '') + '>' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardStory + '</span><em>' + storyCountLabel + '</em></div>' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardStory + '</span><em>' + storyCountLabel + '</em>' + (storySelected ? '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-type-assets" data-asset-type="story">' + (isEn ? 'Clear' : '선택 비우기') + '</button>' : '') + '</div>' +
       '<div class="bsf-asset-story-body">' +
       (storyPreview ? '<p>' + escapeHtml(storyPreview) + '</p>' : '<p class="bsf-asset-empty-hint">' + T.hintStory.replace('\n', '<br>') + '</p>') +
       storyMeta +
@@ -1323,7 +1323,7 @@
     }).join('');
     var imageCardHtml =
       '<div class="bsf-asset-type-card' + (imageAnySelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + escapeHtml(imageCountLabel) + '</em></div>' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardImage + '</span><em>' + escapeHtml(imageCountLabel) + '</em>' + (imageAnySelected ? '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-type-assets" data-asset-type="image">' + (isEn ? 'Clear' : '선택 비우기') + '</button>' : '') + '</div>' +
       (imageItems.length ? '<div class="bsf-asset-thumb-grid">' + imageThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintImage.replace('\n', '<br>') + '</p></div>') +
       '</div>';
     // 영상 카드 — 개별 썸네일 선택 + 돋보기 팝업 + <video> 첫 프레임
@@ -1347,7 +1347,7 @@
     }).join('');
     var videoCardHtml =
       '<div class="bsf-asset-type-card' + (videoAnySelected ? ' is-selected' : '') + '">' +
-      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + escapeHtml(videoCountLabel) + '</em></div>' +
+      '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + escapeHtml(videoCountLabel) + '</em>' + (videoAnySelected ? '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-type-assets" data-asset-type="video">' + (isEn ? 'Clear' : '선택 비우기') + '</button>' : '') + '</div>' +
       (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintVideo.replace('\n', '<br>') + '</p></div>') +
       '</div>';
     var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
@@ -1938,19 +1938,10 @@
       : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     function makeCtrlBarHtml(step) {
       if (step === 1) {
-        return (
-          '<div class="bsf-ctrl-row">' +
-          '<span class="bsf-ctrl-info">' + escapeHtml(persistedSelCount ? T.ctrlNSelected(persistedSelCount) : T.ctrlNoSelection) + '</span>' +
-          '<button type="button" class="btn-secondary compact" data-action="brand-clear-assets"' + (persistedSelCount ? '' : ' disabled') + '>' + T.ctrlClearSel + '</button>' +
-          '</div>'
-        );
+        return '';
       }
       if (step === 2) {
-        return (
-          '<div class="bsf-ctrl-row">' +
-          '<span class="bsf-ctrl-info">' + escapeHtml(selectedFormats.length ? T.ctrlNFormats(selectedFormats.length) : T.ctrlSelectFormat) + '</span>' +
-          '</div>'
-        );
+        return '';
       }
       if (step === 3) {
         return '';
@@ -2446,6 +2437,27 @@
         NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextAssetIds })
           .then(function (result) { if (result && result.draft) renderNext(result.draft); })
           .catch(function (err) { alert(T.alertAssetSaveFail(err && err.message ? err.message : err)); });
+        return;
+      }
+      if (action === 'brand-clear-type-assets') {
+        var clearType = String(btn.dataset.assetType || '').trim();
+        if (!clearType || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+        var nextIds = selectedAssetIds.slice();
+        if (clearType === 'story') {
+          var storyVId = projectId + ':story';
+          var stIdx = nextIds.indexOf(storyVId);
+          if (stIdx >= 0) nextIds.splice(stIdx, 1);
+        } else if (clearType === 'image') {
+          var imgIds = imageItems.map(function (i) { return String(i.id || '').trim(); });
+          nextIds = nextIds.filter(function (id) { return imgIds.indexOf(id) < 0; });
+        } else if (clearType === 'video') {
+          var vidIds = videoItems.map(function (i) { return String(i.id || '').trim(); });
+          nextIds = nextIds.filter(function (id) { return vidIds.indexOf(id) < 0; });
+        }
+        renderNext(Object.assign({}, project, { payload: Object.assign({}, project.payload || {}, { brandStudioSelectedAssetIds: nextIds }) }));
+        NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: nextIds })
+          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+          .catch(function () {});
         return;
       }
       if (action === 'brand-clear-assets') {
