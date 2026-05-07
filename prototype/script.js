@@ -28,6 +28,27 @@
     light: THEME_PRESET_LIST.light[0].id,
   };
 
+  // ── 세션 만료 로그아웃 팝업 ──────────────────────────────────────────────────
+  function showLogoutPopup() {
+    if (document.getElementById('nk-logout-overlay')) return;
+    var isEn = (currentLang === 'en');
+    var overlay = document.createElement('div');
+    overlay.id = 'nk-logout-overlay';
+    overlay.className = 'nk-logout-overlay';
+    overlay.innerHTML =
+      '<div class="nk-logout-modal">' +
+        '<div class="nk-logout-icon">🔒</div>' +
+        '<p class="nk-logout-msg">' + (isEn ? 'You have been logged out.' : '로그 아웃 되었습니다.') + '</p>' +
+        '<p class="nk-logout-sub">' + (isEn ? 'Your session has expired. Please log in again.' : '세션이 만료되었습니다. 다시 로그인해 주세요.') + '</p>' +
+        '<button class="nk-logout-confirm">' + (isEn ? 'Confirm' : '확인') + '</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.nk-logout-confirm').addEventListener('click', function () {
+      try { window.top.location.href = 'index.html'; } catch (_) { window.location.href = 'index.html'; }
+    });
+  }
+  NK.showLogoutPopup = showLogoutPopup;
+
   let currentLang = 'ko';
   let currentTheme = 'dark';
   let currentThemeVariant = THEME_PRESET_DEFAULTS.dark;
@@ -846,6 +867,13 @@
     document.addEventListener('click', (e) => {
       const link = e.target.closest('.nav-item[href], [data-action]');
       if (!link) return;
+      // 세션 만료 감지 — 네비게이션 차단 후 로그아웃 팝업
+      if (NK.auth && NK.auth.isAuthed && !NK.auth.isAuthed()) {
+        e.preventDefault();
+        e.stopPropagation();
+        showLogoutPopup();
+        return;
+      }
 
       const href = link.getAttribute('href');
       const currentProject = NK.state?.runtime?.currentProject;

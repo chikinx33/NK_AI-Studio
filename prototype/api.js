@@ -80,7 +80,12 @@
 
     const timer = setTimeout(() => ctrl.abort(), ms);
     try {
-      return await fetch(url, opts);
+      const res = await fetch(url, opts);
+      // 401 감지: 서버 세션 만료 → 로그아웃 팝업
+      if (res.status === 401) {
+        try { if (window.NK && NK.showLogoutPopup) NK.showLogoutPopup(); } catch (_) {}
+      }
+      return res;
     } catch (err) {
       if (ctrl.signal && ctrl.signal.aborted) {
         const timeoutErr = new Error('request_timeout');

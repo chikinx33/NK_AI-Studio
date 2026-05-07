@@ -13263,3 +13263,68 @@ body {
   line-height: 1.45;
   margin: 0;
 }
+
+/* ── 세션 만료 로그아웃 팝업 ─────────────────────────────────────────────────── */
+.nk-logout-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: nk-logout-fadein 0.22s ease;
+}
+@keyframes nk-logout-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.nk-logout-modal {
+  background: var(--card, #121d35);
+  border: 1px solid var(--border, #1b2845);
+  border-radius: 18px;
+  padding: 36px 40px 32px;
+  text-align: center;
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.55);
+  max-width: 360px;
+  width: 90%;
+  animation: nk-logout-slideup 0.22s ease;
+}
+@keyframes nk-logout-slideup {
+  from { transform: translateY(16px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.nk-logout-icon {
+  font-size: 38px;
+  line-height: 1;
+  margin-bottom: 16px;
+  display: block;
+}
+.nk-logout-msg {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text, #e9edf7);
+  margin: 0 0 8px;
+}
+.nk-logout-sub {
+  font-size: 13px;
+  color: var(--text-3, #6478a0);
+  margin: 0 0 28px;
+  line-height: 1.5;
+}
+.nk-logout-confirm {
+  display: block;
+  width: 100%;
+  background: var(--accent, #ff7a00);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 0;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.14s;
+}
+.nk-logout-confirm:hover { opacity: 0.85; }
