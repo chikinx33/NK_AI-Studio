@@ -3071,6 +3071,24 @@
     root.innerHTML = '<div class="bsf-init-spinner"><div class="bsf-init-spinner-ring"></div></div>';
     bindDeferredHydrationFlush(root);
 
+    // 언어 전환(nk:lang-changed) 수신 — 한 페이지 라이프사이클당 1회만 등록
+    if (!window.__brandStudioLangBound) {
+      window.__brandStudioLangBound = true;
+      window.addEventListener('nk:lang-changed', function () {
+        var rootEl = document.getElementById('brand-studio-root');
+        if (!rootEl || !rootEl.isConnected) return;
+        if (!NK.service || !NK.service.project || !NK.service.project.resolveCurrent) return;
+        var p = NK.service.project.resolveCurrent({ search: window.location.search });
+        if (!p) return;
+        var b = null;
+        var bId = String((p.payload && p.payload.brandId) || p.brandId || '').trim();
+        if (bId && NK.service.brand && NK.service.brand.getById) {
+          b = NK.service.brand.getById(bId);
+        }
+        try { renderProject(rootEl, p, b); } catch (_) {}
+      });
+    }
+
     var latestProject = project;
     var latestBrand = brand;
     var initDone = false;
