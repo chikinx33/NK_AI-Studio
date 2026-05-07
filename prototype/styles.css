@@ -11956,13 +11956,13 @@ body {
   display: flex;
   opacity: 1;
 }
-/* 패널 진입 애니메이션 — switchToStep()이 display 설정 직후 opacity 1 적용 */
+/* 패널 진입 애니메이션 — translateY 제거: 레이아웃 흔들림 없이 opacity만 */
 @keyframes bsfPanelIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .bsf-detail.is-active {
-  animation: bsfPanelIn 0.18s ease forwards;
+  animation: bsfPanelIn 0.14s ease forwards;
 }
 
 .bsf-detail-head {
@@ -13030,6 +13030,11 @@ body {
   border-radius: 8px;
   background: var(--bg-3);
   display: block;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.bsf-thumb-img.is-loaded {
+  opacity: 1;
 }
 
 .bsf-thumb-placeholder {
@@ -13074,6 +13079,11 @@ body {
   height: 100%;
   object-fit: cover;
   border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+}
+.bsf-thumb-video.is-loaded {
+  opacity: 1;
 }
 
 .bsf-video-thumb-overlay {

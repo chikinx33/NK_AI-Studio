@@ -1184,8 +1184,8 @@
       panels.forEach(function (panel, idx) {
         panel.classList.toggle('is-active', idx + 1 === newStep);
       });
-      // 자산 탭(1)으로 돌아올 때 영상 썸네일 재시크 (숨겨진 동안 메타 로드 안 됐을 수 있음)
-      if (newStep === 1) initVideoThumbs();
+      // 자산 탭(1)으로 돌아올 때 썸네일 초기화 (숨겨진 동안 로드 안 됐을 수 있음)
+      if (newStep === 1) { initVideoThumbs(); initImageThumbs(); }
       // ③ ctrl bar 교체 (전체 리렌더 없음, 빈 경우 DOM 삽입/제거)
       var ctrlBarEl = root.querySelector('.bsf-ctrl-bar');
       var newCtrlHtml = makeCtrlBarHtml(newStep);
@@ -2033,6 +2033,7 @@
     restoreFieldScrollState(root, preservedFieldScroll);
     bindDisclosureState(root);
     initVideoThumbs();
+    initImageThumbs();
 
     // contenteditable 자동 저장 (즉시 목업 반영 + 디바운스 800ms 서버 저장)
     var _draftSaveTimer = null;
@@ -2076,17 +2077,38 @@
       var sb = root.querySelector('[data-action="brand-save-format-draft"]');
       if (sb) sb.disabled = !val;
     }
-    // 영상 썸네일 첫 프레임 강제 시크 — loadedmetadata 이후 currentTime 직접 제어
+    // 영상 썸네일 첫 프레임 강제 시크 + 프레임 준비 후 fade-in
     function initVideoThumbs() {
-      root.querySelectorAll('.bsf-thumb-video, .bsf-dmp-vid').forEach(function (v) {
+      root.querySelectorAll('.bsf-thumb-video').forEach(function (v) {
+        if (v.dataset.thumbInit) return; // 이미 처리됨
+        v.dataset.thumbInit = '1';
+        function showFrame() { v.classList.add('is-loaded'); }
         function trySeek() {
-          try { v.currentTime = 0.001; } catch (e) {}
+          try { v.currentTime = 0.001; } catch (e) { showFrame(); }
         }
-        // readyState >= 1(HAVE_METADATA): 이미 메타 로딩 완료 → 즉시 시크
+        v.addEventListener('seeked', showFrame, { once: true });
+        // seeked가 끝내 안 오면 1s 후 강제 표시 (fallback)
+        var fallback = setTimeout(showFrame, 1000);
+        v.addEventListener('seeked', function () { clearTimeout(fallback); }, { once: true });
         if (v.readyState >= 1) {
           trySeek();
         } else {
           v.addEventListener('loadedmetadata', trySeek, { once: true });
+          v.addEventListener('error', showFrame, { once: true });
+        }
+      });
+    }
+    // 이미지 썸네일 로드 후 fade-in (로드 전엔 배경색 플레이스홀더만 보임)
+    function initImageThumbs() {
+      root.querySelectorAll('.bsf-thumb-img').forEach(function (img) {
+        if (img.dataset.thumbInit) return;
+        img.dataset.thumbInit = '1';
+        function show() { img.classList.add('is-loaded'); }
+        if (img.complete && img.naturalWidth > 0) {
+          show();
+        } else {
+          img.addEventListener('load', show, { once: true });
+          img.addEventListener('error', show, { once: true });
         }
       });
     }
