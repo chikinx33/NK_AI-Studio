@@ -2052,6 +2052,8 @@
     bindDisclosureState(root);
     initVideoThumbs();
     initImageThumbs();
+    // 초기 렌더 시 stale한 selectedFormats(이전 세션에서 저장된 unavailable 포맷) 즉시 제거
+    pruneUnavailableSelectedFormats();
 
     // contenteditable 자동 저장 (즉시 목업 반영 + 디바운스 800ms 서버 저장)
     var _draftSaveTimer = null;
@@ -2172,8 +2174,68 @@
       }
       return arr;
     }
+    // selectedFormats에서 unavailable 상태인 포맷을 제거하고 UI/저장까지 동기화
+    function pruneUnavailableSelectedFormats() {
+      var current = getCurrentSelectedAssetItems();
+      var keep = selectedFormats.filter(function (fid) {
+        return getFormatCardState(fid, current) !== 'unavailable';
+      });
+      if (keep.length === selectedFormats.length) return false; // 변경 없음
+      selectedFormats = keep;
+      // ① 카드 is-selected 동기화
+      root.querySelectorAll('[data-action="brand-toggle-format"]').forEach(function (card) {
+        var fid = String(card.dataset.formatId || '').trim();
+        card.classList.toggle('is-selected', selectedFormats.indexOf(fid) >= 0);
+      });
+      // ② step 2 바 업데이트
+      var step2Btn = root.querySelector('[data-action="brand-set-step"][data-step="2"]');
+      if (step2Btn) {
+        step2Btn.classList.toggle('is-done', selectedFormats.length > 0);
+        var step2Val = step2Btn.querySelector('.bsf-step-val');
+        if (step2Val) step2Val.textContent = selectedFormats.length ? T.stepValSelected(selectedFormats.length) : T.stepValNone;
+      }
+      // ③ ctrl bar 교체 (현재 step이 2일 때만 즉시 반영)
+      var ctrlBar = root.querySelector('.bsf-ctrl-bar');
+      if (ctrlBar) {
+        var activeStepBtn = root.querySelector('[data-action="brand-set-step"].is-active');
+        var curStep = activeStepBtn ? parseInt(activeStepBtn.dataset.step || '0', 10) : 0;
+        var newCtrlHtml = makeCtrlBarHtml(curStep);
+        if (newCtrlHtml) ctrlBar.innerHTML = newCtrlHtml;
+        else ctrlBar.remove();
+      }
+      // ④ 드래프트 탭/패널 visibility 업데이트
+      root.querySelectorAll('.bsf-draft-tab').forEach(function (tab) {
+        var fid = String(tab.dataset.draftTab || '').trim();
+        tab.style.display = (selectedFormats.indexOf(fid) >= 0) ? '' : 'none';
+      });
+      root.querySelectorAll('.bsf-format-draft-panel').forEach(function (panel) {
+        var fid = String(panel.dataset.draftFormat || '').trim();
+        panel.style.display = (selectedFormats.indexOf(fid) >= 0) ? '' : 'none';
+      });
+      // ⑤ activeDraftTab이 제거됐으면 첫 번째로 이동
+      if (selectedFormats.indexOf(activeDraftTabOrFirst) < 0) {
+        activeDraftTabOrFirst = selectedFormats.length ? selectedFormats[0] : '';
+        root.querySelectorAll('.bsf-draft-tab').forEach(function (tab) {
+          tab.classList.toggle('is-active', tab.dataset.draftTab === activeDraftTabOrFirst);
+        });
+        root.querySelectorAll('.bsf-format-draft-panel').forEach(function (panel) {
+          panel.classList.toggle('is-active', panel.dataset.draftFormat === activeDraftTabOrFirst);
+        });
+        var rgnBtn = root.querySelector('.bsf-draft-regen-head');
+        if (rgnBtn) rgnBtn.dataset.formatId = activeDraftTabOrFirst;
+      }
+      // ⑥ 비동기 저장
+      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+        var prunePatch = { brandStudioSelectedFormats: selectedFormats.slice() };
+        if (activeDraftTabOrFirst) prunePatch.brandStudioActiveDraftTab = activeDraftTabOrFirst;
+        NK.service.project.updatePayload(projectId, prunePatch).catch(function () {});
+      }
+      return true;
+    }
     // 카드 클래스/뱃지/lock을 in-place로 갱신 (자산 변경/duration 도착 시)
     function refreshFormatCardStates() {
+      // 먼저 unavailable로 바뀐 선택 포맷 제거
+      pruneUnavailableSelectedFormats();
       var current = getCurrentSelectedAssetItems();
       var cards = root.querySelectorAll('.bsf-format-card');
       cards.forEach(function (card) {

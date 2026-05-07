@@ -6,6 +6,12 @@
   font-display: swap;
 }
 
+/* ── 프로젝트 전체: Shift/Tab 포커스 시 흰색 outline 제거 ──────────────── */
+*:focus,
+*:focus-visible {
+  outline: none !important;
+}
+
 :root {
   --orange: #ff7a00;
   --teal: #0bbfa5;
