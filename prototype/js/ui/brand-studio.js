@@ -1974,8 +1974,8 @@
       '<div class="bsf-detail-card">' +
       '<div class="bsf-detail' + (activeStep === 1 ? ' is-active' : '') + '">' +
       '<div class="bsf-detail-head bsf-detail-head-asset">' +
-        '<div class="bsf-detail-head-top"><strong>' + T.head01 + '</strong>' +
-        '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-assets"' + (persistedSelCount ? '' : ' disabled') + '>' + (isEn ? 'Clear' : '선택 비우기') + '</button></div>' +
+        '<strong>' + T.head01 + '</strong>' +
+        '<button type="button" class="bsf-clear-type-btn" data-action="brand-clear-assets"' + (persistedSelCount ? '' : ' disabled') + '>' + (isEn ? 'Clear' : '선택 비우기') + '</button>' +
         '<span>' + T.head01sub + '</span>' +
       '</div>' +
       assetTrioHtml +
