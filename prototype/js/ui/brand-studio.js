@@ -1184,6 +1184,8 @@
       panels.forEach(function (panel, idx) {
         panel.classList.toggle('is-active', idx + 1 === newStep);
       });
+      // 자산 탭(1)으로 돌아올 때 영상 썸네일 재시크 (숨겨진 동안 메타 로드 안 됐을 수 있음)
+      if (newStep === 1) initVideoThumbs();
       // ③ ctrl bar 교체 (전체 리렌더 없음, 빈 경우 DOM 삽입/제거)
       var ctrlBarEl = root.querySelector('.bsf-ctrl-bar');
       var newCtrlHtml = makeCtrlBarHtml(newStep);
@@ -2030,6 +2032,7 @@
     restoreFieldValueState(root, preservedFieldValues);
     restoreFieldScrollState(root, preservedFieldScroll);
     bindDisclosureState(root);
+    initVideoThumbs();
 
     // contenteditable 자동 저장 (즉시 목업 반영 + 디바운스 800ms 서버 저장)
     var _draftSaveTimer = null;
@@ -2072,6 +2075,20 @@
       _draftDirty = val;
       var sb = root.querySelector('[data-action="brand-save-format-draft"]');
       if (sb) sb.disabled = !val;
+    }
+    // 영상 썸네일 첫 프레임 강제 시크 — loadedmetadata 이후 currentTime 직접 제어
+    function initVideoThumbs() {
+      root.querySelectorAll('.bsf-thumb-video, .bsf-dmp-vid').forEach(function (v) {
+        function trySeek() {
+          try { v.currentTime = 0.001; } catch (e) {}
+        }
+        // readyState >= 1(HAVE_METADATA): 이미 메타 로딩 완료 → 즉시 시크
+        if (v.readyState >= 1) {
+          trySeek();
+        } else {
+          v.addEventListener('loadedmetadata', trySeek, { once: true });
+        }
+      });
     }
     // ─── Custom DateTime Picker ────────────────────────────────────────────────
     function dtParsed(val) {
