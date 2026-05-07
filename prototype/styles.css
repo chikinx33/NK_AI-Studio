@@ -12788,11 +12788,13 @@ body {
 }
 .bsf-format-card.is-unavailable:hover { border-color: var(--border); opacity: 0.55; }
 /* ── 3-state modifier (recommended / available / unavailable) ─────────── */
-.bsf-format-card--recommended {
+/* 추천 강조(주황 테두리·글로우)는 선택된 상태에서만 적용 — 사용자가
+   추천 카드를 다시 눌러 해제하면 일반 카드 외형으로 되돌아간다 */
+.bsf-format-card--recommended.is-selected {
   border-color: #f59e0b;
   box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.18);
 }
-.bsf-format-card--recommended:hover { border-color: #f59e0b; }
+.bsf-format-card--recommended.is-selected:hover { border-color: #f59e0b; }
 .bsf-format-card--available { opacity: 1; }
 .bsf-format-card--unavailable {
   opacity: 0.38;
@@ -12804,7 +12806,7 @@ body {
   position: absolute;
   top: 10px;
   right: 10px;
-  color: #f59e0b;
+  color: var(--border); /* 기본: 일반 테두리 색 (해제 상태) */
   z-index: 2;
   display: flex;
   align-items: center;
@@ -12812,6 +12814,10 @@ body {
   pointer-events: none;
 }
 .bsf-format-card__badge svg { display: block; }
+/* 선택된 추천 카드만 별을 주황으로 */
+.bsf-format-card--recommended.is-selected .bsf-format-card__badge {
+  color: #f59e0b;
+}
 .bsf-format-card__lock {
   position: absolute;
   inset: 0;
