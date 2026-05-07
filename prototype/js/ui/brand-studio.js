@@ -2798,49 +2798,75 @@
       renderEmpty(root, _initIsEn ? 'Please select a project first.' : '먼저 프로젝트를 선택해 주세요.');
       return;
     }
+    // ① 스피너 즉시 표시 — 빈 화면/깜박임 없음
+    root.innerHTML = '<div class="bsf-init-spinner"><div class="bsf-init-spinner-ring"></div></div>';
     bindDeferredHydrationFlush(root);
-    try {
-      renderProject(root, project, brand);
-      var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
-      if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
-        NK.service.brand.hydrateFromServer(brandId, { force: true, ttlMs: 0 })
-          .then(function (nextBrand) {
-            if (!nextBrand || !root.isConnected) return;
-            renderProject(root, project, nextBrand);
-          })
-          .catch(function () {});
+
+    var latestProject = project;
+    var latestBrand = brand;
+    var initDone = false;
+    var brandId = String(brand && brand.brandId || project && project.payload && project.payload.brandId || '').trim();
+    var initProjectId = String(project.id || '').trim();
+
+    function doFinalRender() {
+      if (initDone) return;
+      initDone = true;
+      clearTimeout(safetyTimer);
+      if (!root.isConnected) return;
+      try {
+        renderProject(root, latestProject, latestBrand);
+      } catch (err) {
+        try { console.error('BrandStudio render error:', err); } catch (_) {}
+        renderEmpty(root, _initIsEn ? 'An error occurred while rendering Brand Studio.' : 'Brand Studio 렌더링 중 오류가 발생했습니다.');
       }
-      // 씬 이미지/영상 URL 갱신 (만료된 Signed URL 또는 gs:// 경로)
-      if (NK.service && NK.service.sceneAssets && NK.service.sceneAssets.refreshProjectSceneAssets) {
-        NK.service.sceneAssets.refreshProjectSceneAssets(project)
+    }
+
+    // ② 비동기 작업 병렬 실행 — 결과만 수집, 렌더는 완료 후 딱 한 번
+    var promises = [];
+
+    if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+      promises.push(
+        NK.service.brand.hydrateFromServer(brandId, { force: true, ttlMs: 0 })
+          .then(function (nextBrand) { if (nextBrand && root.isConnected) latestBrand = nextBrand; })
+          .catch(function () {})
+      );
+    }
+
+    // 씬 이미지/영상 URL 갱신 (만료된 Signed URL 또는 gs:// 경로)
+    if (NK.service && NK.service.sceneAssets && NK.service.sceneAssets.refreshProjectSceneAssets) {
+      promises.push(
+        NK.service.sceneAssets.refreshProjectSceneAssets(latestProject)
           .then(function (updated) {
             if (!updated || !root.isConnected) return;
-            var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || project;
-            var freshBrand = brand;
+            latestProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || latestProject;
             try {
               if (brandId && NK.service.brand && NK.service.brand.getById) {
-                freshBrand = NK.service.brand.getById(brandId) || brand;
+                latestBrand = NK.service.brand.getById(brandId) || latestBrand;
               }
             } catch (_) {}
-            renderProject(root, freshProject, freshBrand);
           })
-          .catch(function () {});
-      }
-      // 렌더 저장소 전체 목록 비동기 로드 → 영상 카드에 표시
-      var initProjectId = String(project.id || '').trim();
-      if (NK.api && NK.api.postprodRenderList && initProjectId) {
+          .catch(function () {})
+      );
+    }
+
+    // 렌더 저장소 전체 목록 비동기 로드 → 영상 카드에 표시
+    if (NK.api && NK.api.postprodRenderList && initProjectId) {
+      promises.push(
         NK.api.postprodRenderList(initProjectId)
           .then(function (renderList) {
-            if (!Array.isArray(renderList) || !renderList.length || !root.isConnected) return;
-            _renderStorageCache[initProjectId] = renderList;
-            var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || project;
-            renderProject(root, freshProject, brand);
+            if (Array.isArray(renderList) && renderList.length && root.isConnected) {
+              _renderStorageCache[initProjectId] = renderList;
+            }
           })
-          .catch(function () {});
-      }
-    } catch (err) {
-      try { console.error('BrandStudio render error:', err); } catch (_) {}
-      renderEmpty(root, _initIsEn ? 'An error occurred while rendering Brand Studio.' : 'Brand Studio 렌더링 중 오류가 발생했습니다.');
+          .catch(function () {})
+      );
     }
+
+    // ③ 안전 타이머 — 최대 2.5초 후 강제 렌더 (느린 API 대비)
+    var safetyTimer = setTimeout(function () { doFinalRender(); }, 2500);
+
+    // ④ 모든 비동기 완료 → 단일 렌더
+    (promises.length ? Promise.all(promises) : Promise.resolve())
+      .then(function () { doFinalRender(); });
   };
 })();
