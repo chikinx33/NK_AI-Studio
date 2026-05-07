@@ -2043,7 +2043,9 @@
       _assetSaveTimer = setTimeout(flushAssetSave, 800);
     }
     function flushAssetSave() {
-      if (_assetSaveTimer) { clearTimeout(_assetSaveTimer); _assetSaveTimer = null; }
+      if (!_assetSaveTimer) return Promise.resolve(); // 대기 중인 변경 없음 → 즉시 반환
+      clearTimeout(_assetSaveTimer);
+      _assetSaveTimer = null;
       if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return Promise.resolve();
       return NK.service.project.updatePayload(projectId, { brandStudioSelectedAssetIds: selectedAssetIds.slice() })
         .catch(function () {});
@@ -2331,30 +2333,35 @@
       if (action === 'brand-set-step') {
         var targetStep = parseInt(String(btn.dataset.step || '0'), 10);
         if (!targetStep || targetStep < 1 || targetStep > 4) return;
-        switchToStep(targetStep);
-        showStepSpinner(targetStep);
-        var minWait = new Promise(function (res) { setTimeout(res, 350); });
-        Promise.all([flushAssetSave(), minWait]).then(function () {
-          hideStepSpinner(targetStep);
-          if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-            NK.service.project.updatePayload(projectId, { brandStudioActiveStep: targetStep }).catch(function () {});
-          }
-        });
+        var hasPendingAsset = !!_assetSaveTimer;
+        switchToStep(targetStep); // 즉시 패널 전환
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          NK.service.project.updatePayload(projectId, { brandStudioActiveStep: targetStep }).catch(function () {});
+        }
+        if (hasPendingAsset) {
+          // 대기 중인 자산 저장이 있을 때만 스피너 + flush
+          showStepSpinner(targetStep);
+          Promise.all([flushAssetSave(), new Promise(function (r) { setTimeout(r, 300); })]).then(function () {
+            hideStepSpinner(targetStep);
+          });
+        }
         return;
       }
       if (action === 'brand-step-next') {
         var fromStep = parseInt(String(btn.dataset.step || '0'), 10);
         var nextStep2 = fromStep + 1;
         if (!nextStep2 || nextStep2 < 1 || nextStep2 > 4) return;
-        switchToStep(nextStep2);
-        showStepSpinner(nextStep2);
-        var minWait2 = new Promise(function (res) { setTimeout(res, 350); });
-        Promise.all([flushAssetSave(), minWait2]).then(function () {
-          hideStepSpinner(nextStep2);
-          if (NK.service && NK.service.project && NK.service.project.updatePayload) {
-            NK.service.project.updatePayload(projectId, { brandStudioActiveStep: nextStep2 }).catch(function () {});
-          }
-        });
+        var hasPendingAsset2 = !!_assetSaveTimer;
+        switchToStep(nextStep2); // 즉시 패널 전환
+        if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+          NK.service.project.updatePayload(projectId, { brandStudioActiveStep: nextStep2 }).catch(function () {});
+        }
+        if (hasPendingAsset2) {
+          showStepSpinner(nextStep2);
+          Promise.all([flushAssetSave(), new Promise(function (r) { setTimeout(r, 300); })]).then(function () {
+            hideStepSpinner(nextStep2);
+          });
+        }
         return;
       }
       if (action === 'brand-toggle-format') {
