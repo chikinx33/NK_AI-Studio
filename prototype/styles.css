@@ -8681,6 +8681,7 @@ body.layout-fixed .lib-content {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
   gap: 10px;
+  max-width: 420px;
 }
 
 .brand-publish-field {
@@ -12818,10 +12819,15 @@ body {
   gap: 8px;
 }
 .bsf-deploy-format-head strong {
-  font-size: 14px;
+  font-size: 28px;
   font-weight: 700;
   color: var(--text);
   flex: 1;
+}
+.bsf-deploy-fmt-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .bsf-deploy-format-head-right {
   display: flex;
@@ -13216,7 +13222,7 @@ body {
 /* ---- */
 .bsf-deploy-caption-preview {
   font-size: 12px;
-  color: var(--text-3);
+  color: #60a5fa;
   line-height: 1.45;
   margin: 0;
 }
