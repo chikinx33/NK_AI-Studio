@@ -2687,10 +2687,13 @@
         // ctrl bar 교체
         var fmtCtrlBar = root.querySelector('.bsf-ctrl-bar');
         if (fmtCtrlBar) fmtCtrlBar.innerHTML = makeCtrlBarHtml(2);
+        // 변경 발생 → 저장 버튼 활성화 (자산 토글과 동일 패턴)
+        setSaveBtnEnabled(true);
         // 비동기 저장
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var fmtPatch = { brandStudioSelectedFormats: selectedFormats.slice(), brandStudioActiveDraftTab: activeDraftTabOrFirst };
         NK.service.project.updatePayload(projectId, fmtPatch)
+          .then(function () { setSaveBtnEnabled(false); })
           .catch(function (err) { alert(T.alertSaveFormatFail(err && err.message ? err.message : err)); });
         return;
       }
