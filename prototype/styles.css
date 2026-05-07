@@ -71,11 +71,15 @@
 [data-theme="dark"] {
   --bg: #0f172a;
   --bg-2: #0b1224;
+  --bg-3: #1e2030;
   --card: #121d35;
   --panel: #0d152a;
   --border: #1b2845;
   --text: #e9edf7;
+  --text-2: #b4c3dc;
+  --text-3: #6478a0;
   --muted: #8aa0c3;
+  --input-bg: #0f1624;
   --shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
   --bg-glow1: rgba(255, 122, 0, 0.08);
   --bg-glow2: rgba(11, 191, 165, 0.12);
@@ -92,11 +96,15 @@
 [data-theme="light"] {
   --bg: #f7f9fd;
   --bg-2: #eef2fb;
+  --bg-3: #dce6f5;
   --card: #ffffff;
   --panel: #ffffff;
   --border: #cbd6ea;
   --text: #0d172f;
+  --text-2: #3a4d6e;
+  --text-3: #7a8fa8;
   --muted: #51617f;
+  --input-bg: #f0f4fb;
   --shadow: 0 10px 26px rgba(13, 23, 47, 0.1);
   --bg-glow1: rgba(255, 122, 0, 0.08);
   --bg-glow2: rgba(11, 191, 165, 0.1);
@@ -12200,7 +12208,7 @@ body {
 /* Popup */
 .bsf-dt-popup {
   position: absolute;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   left: 0;
   z-index: 300;
   background: var(--bg-2, #141a2b);

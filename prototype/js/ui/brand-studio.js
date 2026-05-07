@@ -5,6 +5,7 @@
 
   // 렌더 저장소 캐시: projectId → [{name, size}]
   var _renderStorageCache = {};
+  var _dtDocListener = null;
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -1919,6 +1920,7 @@
           return buildPlatformPreviewCard(formatId, fmt, isActive, draft);
         }).join('')
       : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
+    var _calSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>';
     var _platformIcons = {
       'instagram':      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
       'youtube-shorts': '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-.3C16.8 4 12 4 12 4s-4.8 0-6.8.1c-.6-.1-1.9.1-3 1.2C1.3 6.2 1 8 1 8S.7 10 .7 12v1.9c0 2 .3 4 .3 4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22 12 22 12 22s4.8 0 6.8-.1c.6.1 1.9-.1 3-1.2.9-.8 1.2-2.8 1.2-2.8s.3-2 .3-4v-1.9C23.3 10 23 8 23 7zm-13.5 7.4V9.6l5.6 2.4-5.6 2.4z"/></svg>',
@@ -2033,7 +2035,6 @@
       if (sb) sb.disabled = !val;
     }
     // ─── Custom DateTime Picker ────────────────────────────────────────────────
-    var _calSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>';
     function dtParsed(val) {
       var m = (val || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
       return m ? { y: +m[1], mo: +m[2], d: +m[3], h: +m[4], mi: +m[5] } : null;
@@ -2111,6 +2112,7 @@
       );
     }
     function openDtPicker(picker) {
+      closeAllDtPickers();
       var now = new Date(); var dp = dtParsed(String(picker.dataset.dtValue || ''));
       picker.dataset.dtViewY = dp ? dp.y : now.getFullYear();
       picker.dataset.dtViewMo = dp ? dp.mo : (now.getMonth() + 1);
@@ -2118,9 +2120,18 @@
       var popup = picker.querySelector('.bsf-dt-popup');
       if (!popup) { popup = document.createElement('div'); popup.className = 'bsf-dt-popup'; picker.appendChild(popup); }
       popup.innerHTML = buildDtCalInner(picker);
+      if (!_dtDocListener) {
+        _dtDocListener = function (e) {
+          if (!e.target || !e.target.closest || !e.target.closest('.bsf-dt-picker')) closeAllDtPickers();
+        };
+        document.addEventListener('click', _dtDocListener, true);
+      }
     }
     function closeDtPicker(picker) { picker.classList.remove('is-open'); }
-    function closeAllDtPickers() { root.querySelectorAll('.bsf-dt-picker.is-open').forEach(closeDtPicker); }
+    function closeAllDtPickers() {
+      root.querySelectorAll('.bsf-dt-picker.is-open').forEach(closeDtPicker);
+      if (_dtDocListener) { document.removeEventListener('click', _dtDocListener, true); _dtDocListener = null; }
+    }
     function getDtHM(picker) {
       var popup = picker.querySelector('.bsf-dt-popup');
       var dp = dtParsed(String(picker.dataset.dtValue || ''));
