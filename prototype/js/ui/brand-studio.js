@@ -1187,7 +1187,7 @@
       // 자산 탭(1)으로 돌아올 때 썸네일 초기화 (숨겨진 동안 로드 안 됐을 수 있음)
       if (newStep === 1) { initVideoThumbs(); initImageThumbs(); }
       // 초안 탭(3) 진입: selectedFormats 변경이 있으면 드래프트 섹션 재동기화
-      if (newStep === 3) { refreshDraftSection(); }
+      if (newStep === 3) { refreshDraftSection(); bindBlogPreviewWheel(root); }
       // 배포 탭(4) 진입: 초안 디바운스 즉시 flush 후 배포 요약 재빌드 (stale 데이터 방지)
       if (newStep === 4) {
         flushPendingDraftEdits();
@@ -2072,6 +2072,8 @@
     initImageThumbs();
     // 초기 렌더 시 stale한 selectedFormats(이전 세션에서 저장된 unavailable 포맷) 즉시 제거
     pruneUnavailableSelectedFormats();
+    // 네이버 블로그 미리보기 휠 이벤트 바인딩 (초기 렌더)
+    bindBlogPreviewWheel(root);
 
     // contenteditable 자동 저장 (즉시 목업 반영 + 디바운스 800ms 서버 저장)
     var _draftSaveTimer = null;
@@ -2290,6 +2292,18 @@
       }
       return true;
     }
+    // 네이버 블로그 미리보기 카드: 마우스 휠을 카드 내부 스크롤로 캡처 (페이지 스크롤 차단)
+    function bindBlogPreviewWheel(container) {
+      var els = (container || root).querySelectorAll('.bsf-mock-nblog');
+      els.forEach(function (el) {
+        if (el.__blogWheelBound) return;
+        el.__blogWheelBound = true;
+        el.addEventListener('wheel', function (e) {
+          e.preventDefault();
+          el.scrollTop += e.deltaY;
+        }, { passive: false });
+      });
+    }
     // 초안 탭 DOM이 selectedFormats와 불일치하면 탭·패널을 재빌드
     function refreshDraftSection() {
       var panelsContainer = root.querySelector('.bsf-format-draft-panels');
@@ -2345,6 +2359,8 @@
       var rgnBtn = root.querySelector('.bsf-draft-regen-head');
       if (rgnBtn) rgnBtn.dataset.formatId = activeDraftTabOrFirst;
       bindDeferredHydrationFlush(root);
+      // 재빌드된 패널의 네이버 블로그 미리보기 휠 이벤트 바인딩
+      bindBlogPreviewWheel(root);
     }
     // 카드 클래스/뱃지/lock을 in-place로 갱신 (자산 변경/duration 도착 시)
     function refreshFormatCardStates() {
