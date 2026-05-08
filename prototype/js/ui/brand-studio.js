@@ -3183,12 +3183,17 @@
         window.location.href = target;
       }
     };
-    // Format guide modal: backdrop click + Escape to close (register once per page)
+    // Format guide modal: close button + backdrop click + Escape (register once per page)
     if (!document.__bsfFgListenerBound) {
       document.__bsfFgListenerBound = true;
       document.addEventListener('click', function (e) {
         var m = document.getElementById('bsf-format-guide-modal');
-        if (m && !m.classList.contains('hidden') && e.target === m) m.classList.add('hidden');
+        if (!m || m.classList.contains('hidden')) return;
+        // 닫기 버튼
+        var closeBtn = e.target && e.target.closest ? e.target.closest('[data-action="close-format-guide"]') : null;
+        if (closeBtn) { m.classList.add('hidden'); return; }
+        // 배경(오버레이) 클릭
+        if (e.target === m) m.classList.add('hidden');
       });
       document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape') {
