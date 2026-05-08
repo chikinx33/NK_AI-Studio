@@ -2071,7 +2071,7 @@
     // 자산 선택 디바운스 저장
     var _assetSaveTimer = null;
     // 포맷 자동 세팅 시 자산 스냅샷 (변경 감지용)
-    var _lastAutoFormatSig = selectedAssetIds.slice().sort().join('\x00');
+    var _lastAutoFormatSig = '';
     function scheduleAssetSave() {
       if (_assetSaveTimer) clearTimeout(_assetSaveTimer);
       _assetSaveTimer = setTimeout(flushAssetSave, 800);
