@@ -1186,6 +1186,8 @@
       });
       // 자산 탭(1)으로 돌아올 때 썸네일 초기화 (숨겨진 동안 로드 안 됐을 수 있음)
       if (newStep === 1) { initVideoThumbs(); initImageThumbs(); }
+      // 초안 탭(3) 진입: selectedFormats 변경이 있으면 드래프트 섹션 재동기화
+      if (newStep === 3) { refreshDraftSection(); }
       // 배포 탭(4) 진입: 초안 디바운스 즉시 flush 후 배포 요약 재빌드 (stale 데이터 방지)
       if (newStep === 4) {
         flushPendingDraftEdits();
@@ -2287,6 +2289,62 @@
         NK.service.project.updatePayload(projectId, prunePatch).catch(function () {});
       }
       return true;
+    }
+    // 초안 탭 DOM이 selectedFormats와 불일치하면 탭·패널을 재빌드
+    function refreshDraftSection() {
+      var panelsContainer = root.querySelector('.bsf-format-draft-panels');
+      if (!panelsContainer) return;
+      var domIds = Array.prototype.map.call(
+        panelsContainer.querySelectorAll('[data-draft-format]'),
+        function (el) { return String(el.dataset.draftFormat || '').trim(); }
+      );
+      // 선택 포맷과 DOM 패널이 모두 일치하면 건너뜀
+      var inSync = domIds.length === selectedFormats.length &&
+        selectedFormats.every(function (fid) { return domIds.indexOf(fid) >= 0; }) &&
+        domIds.every(function (fid) { return selectedFormats.indexOf(fid) >= 0; });
+      if (inSync) return;
+      // 편집 중인 contenteditable 내용을 먼저 flush
+      flushPendingDraftEdits();
+      // 현재 selectedAssetIds 기준으로 미디어 URL 재계산
+      var curSelImgs = imageItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
+      var curSelVids = videoItems.filter(function (i) { return selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0 && i.url; });
+      draftFirstImgUrl = curSelImgs.length ? String(curSelImgs[0].url || '') : '';
+      draftFirstVidUrl = curSelVids.length ? String(curSelVids[0].url || '') : '';
+      // activeDraftTab 유효성 검증
+      if (selectedFormats.indexOf(activeDraftTabOrFirst) < 0) {
+        activeDraftTabOrFirst = selectedFormats.length ? selectedFormats[0] : '';
+      }
+      // 탭 재빌드
+      var headRow = root.querySelector('.bsf-draft-head-row');
+      if (headRow) {
+        var oldTabs = headRow.querySelector('.bsf-draft-tabs');
+        if (oldTabs) oldTabs.remove();
+        if (selectedFormats.length) {
+          var newTabsHtml = '<div class="bsf-draft-tabs">' + selectedFormats.map(function (fid) {
+            var fmt = formatItems.find(function (f) { return f.id === fid; });
+            var draft = (formatDrafts && formatDrafts[fid]) || {};
+            var hasDraft = !!(String(draft.caption || '').trim() || String(draft.hashtags || '').trim());
+            var isActive = fid === activeDraftTabOrFirst;
+            return '<button type="button" class="bsf-draft-tab' + (isActive ? ' is-active' : '') + (hasDraft ? ' has-draft' : '') + '" data-action="brand-set-draft-tab" data-draft-tab="' + escapeHtml(fid) + '">' +
+              escapeHtml(fmt ? fmt.title : fid) + '</button>';
+          }).join('') + '</div>';
+          var tmp = document.createElement('div');
+          tmp.innerHTML = newTabsHtml;
+          var regenBtn = headRow.querySelector('.bsf-draft-regen-head');
+          headRow.insertBefore(tmp.firstChild, regenBtn || null);
+        }
+      }
+      // 패널 재빌드
+      panelsContainer.innerHTML = selectedFormats.map(function (fid) {
+        var fmt = formatItems.find(function (f) { return f.id === fid; });
+        var isActive = fid === activeDraftTabOrFirst;
+        var draft = (formatDrafts && formatDrafts[fid]) || {};
+        return buildPlatformPreviewCard(fid, fmt, isActive, draft);
+      }).join('');
+      // regen 버튼 포맷 ID 동기화
+      var rgnBtn = root.querySelector('.bsf-draft-regen-head');
+      if (rgnBtn) rgnBtn.dataset.formatId = activeDraftTabOrFirst;
+      bindDeferredHydrationFlush(root);
     }
     // 카드 클래스/뱃지/lock을 in-place로 갱신 (자산 변경/duration 도착 시)
     function refreshFormatCardStates() {
