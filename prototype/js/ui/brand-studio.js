@@ -2029,7 +2029,13 @@
       assetTrioHtml +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 2 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head"><strong>' + T.head02 + '</strong><span>' + T.head02sub + '</span></div>' +
+      '<div class="bsf-detail-head bsf-detail-head-asset">' +
+      '<strong>' + T.head02 + '</strong>' +
+      '<button type="button" class="bsf-format-guide-btn" data-action="open-format-guide" aria-label="' + (isEn ? 'Format recommendation guide' : '추천 포맷 안내') + '">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>' +
+      '</button>' +
+      '<span>' + T.head02sub + '</span>' +
+      '</div>' +
       '<div class="bsf-format-grid">' + formatCards + '</div>' +
       '</div>' +
       '<div class="bsf-detail bsf-detail-draft' + (activeStep === 3 ? ' is-active' : '') + '">' +
@@ -3036,6 +3042,76 @@
         scheduleAssetSave();
         return;
       }
+      if (action === 'open-format-guide') {
+        var fgModal = document.getElementById('bsf-format-guide-modal');
+        var fgBody = document.getElementById('bsf-format-guide-body');
+        if (!fgModal || !fgBody) return;
+        var fgTitle = isEn ? 'Format Guide' : '추천 포맷';
+        var _fgGroups = [
+          {
+            title: isEn ? 'Video Based' : '영상 기반',
+            items: [
+              { name: 'YouTube',        conds: isEn ? ['Video required', 'Min. 1 min (60s)']    : ['영상 필요', '최소 1분(60초) 이상'] },
+              { name: 'YouTube Shorts', conds: isEn ? ['Video required', 'Max 10 min (600s)']   : ['영상 필요', '최대 10분(600초) 이내'] },
+              { name: 'TikTok',         conds: isEn ? ['Video required', 'Max 10 min (600s)']   : ['영상 필요', '최대 10분(600초) 이내'] },
+            ]
+          },
+          {
+            title: isEn ? 'Image or Video' : '이미지·영상 복합',
+            items: [
+              { name: 'Instagram', conds: isEn ? ['Image or video required', 'Video ≤ 10 min'] : ['이미지 또는 영상 필요', '영상은 10분(600초) 이내'] },
+              { name: 'Facebook',  conds: isEn ? ['Image (1+) or story']                       : ['이미지 1장 이상 또는 스토리'] },
+            ]
+          },
+          {
+            title: isEn ? 'Single Image' : '이미지 1장 기반',
+            items: [
+              { name: 'Pinterest',  conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
+              { name: 'Naver Post', conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
+              { name: 'Kakao',      conds: isEn ? ['Exactly 1 image'] : ['이미지 정확히 1장'] },
+            ]
+          },
+          {
+            title: isEn ? 'Story Based' : '스토리 기반',
+            items: [
+              { name: 'LinkedIn',   conds: isEn ? ['Story required']          : ['스토리 필요'] },
+              { name: 'Naver Blog', conds: isEn ? ['Story, or 2+ images']     : ['스토리 또는 이미지 2장 이상'] },
+              { name: 'Band',       conds: isEn ? ['Story required']          : ['스토리 필요'] },
+            ]
+          },
+          {
+            title: isEn ? 'Any Asset' : '자유 조합',
+            items: [
+              { name: 'X · Threads', conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
+            ]
+          },
+        ];
+        var fgHtml = '<div class="vocab-modal-titlebar">' +
+          '<h2 class="vocab-modal-title">' + escapeHtml(fgTitle) + '</h2>' +
+          '<button type="button" class="vocab-modal-close" data-action="close-format-guide" aria-label="닫기">✕</button>' +
+          '</div>';
+        fgHtml += _fgGroups.map(function (group) {
+          var items = group.items.map(function (item) {
+            var conds = item.conds.map(function (c) { return '<li>' + escapeHtml(c) + '</li>'; }).join('');
+            return '<div class="bsf-fg-item">' +
+              '<div class="bsf-fg-item-name">' + escapeHtml(item.name) + '</div>' +
+              '<ul class="bsf-fg-item-conds">' + conds + '</ul>' +
+              '</div>';
+          }).join('');
+          return '<section class="vocab-section">' +
+            '<h3 class="vocab-section-title">' + escapeHtml(group.title) + '</h3>' +
+            '<div class="bsf-fg-grid">' + items + '</div>' +
+            '</section>';
+        }).join('');
+        fgBody.innerHTML = fgHtml;
+        fgModal.classList.remove('hidden');
+        return;
+      }
+      if (action === 'close-format-guide') {
+        var fgM = document.getElementById('bsf-format-guide-modal');
+        if (fgM) fgM.classList.add('hidden');
+        return;
+      }
       var target = '';
       if (action === 'brand-open-analytics') target = buildStageUrl('analytics.html', projectId, brandId);
       else if (action === 'brand-open-knowledge') target = buildStageUrl('knowledge.html', projectId, brandId);
@@ -3049,6 +3125,20 @@
         window.location.href = target;
       }
     };
+    // Format guide modal: backdrop click + Escape to close (register once per page)
+    if (!document.__bsfFgListenerBound) {
+      document.__bsfFgListenerBound = true;
+      document.addEventListener('click', function (e) {
+        var m = document.getElementById('bsf-format-guide-modal');
+        if (m && !m.classList.contains('hidden') && e.target === m) m.classList.add('hidden');
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          var m = document.getElementById('bsf-format-guide-modal');
+          if (m && !m.classList.contains('hidden')) m.classList.add('hidden');
+        }
+      });
+    }
   }
   // stub: keep for legacy references
   function inferDefaultContentType() { return 'instagram'; }
