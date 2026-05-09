@@ -1063,8 +1063,10 @@
       try { contentItems = NK.service.contentLibrary.listProjectContents(project); } catch (_) {}
     }
     // 렌더 저장소 캐시 병합 (비동기 로드 후 재렌더 시 반영)
+    // 토큰 만료 시 프록시 URL 생성 자체를 건너뜀 (403 방지)
+    var _renderTokenValid = !!(NK.auth && NK.auth.isAuthed ? NK.auth.isAuthed() : NK.auth && NK.auth.getToken && NK.auth.getToken());
     var cachedRenders = _renderStorageCache[projectId] || [];
-    if (cachedRenders.length) {
+    if (cachedRenders.length && _renderTokenValid) {
       var existingIds = contentItems.map(function (c) { return c.id; });
       cachedRenders.forEach(function (item, idx) {
         var objName = String(item && item.name || '').trim();
@@ -3210,6 +3212,20 @@
     var root = document.getElementById('brand-studio-root');
     if (!root) return;
     var _initIsEn = !!(NK.state && NK.state.runtime && NK.state.runtime.lang === 'en');
+    // Auth guard: 세션 만료 또는 미로그인 → 로그인 안내 (만료 토큰으로 미디어 403 방지)
+    if (NK.auth && NK.auth.isAuthed && !NK.auth.isAuthed()) {
+      root.innerHTML =
+        '<div class="brand-studio-page"><div class="brand-studio-hero empty">' +
+        '<h2>' + (_initIsEn ? 'Session Expired' : '세션이 만료되었습니다') + '</h2>' +
+        '<p style="margin-top:8px;color:var(--text-3);">' +
+          (_initIsEn ? 'Your login session has expired. Please log in again.' : '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.') +
+        '</p>' +
+        '<a href="index.html" class="btn-primary" style="margin-top:20px;display:inline-block;text-decoration:none;">' +
+          (_initIsEn ? 'Log In' : '로그인 하기') +
+        '</a>' +
+        '</div></div>';
+      return;
+    }
     if (!NK.service || !NK.service.project || !NK.service.brand) {
       renderEmpty(root, _initIsEn ? 'Unable to load Brand Studio.' : 'Brand Studio를 불러올 수 없습니다.');
       return;
