@@ -12720,18 +12720,18 @@ body {
 
 /* LinkedIn */
 .bsf-mock-li { background: #fff; }
-.bsf-mock-li-hd { display: flex; gap: 10px; padding: 12px 14px 8px; }
-.bsf-mock-li-avatar { width: 48px; height: 48px; border-radius: 50%; background: #0077b5; flex-shrink: 0; }
+.bsf-mock-li-hd { display: flex; gap: 10px; padding: 10px 14px 6px; }
+.bsf-mock-li-avatar { width: 40px; height: 40px; border-radius: 50%; background: #0077b5; flex-shrink: 0; }
 .bsf-mock-li-meta { flex: 1; }
 .bsf-mock-li-name { font-size: 14px; font-weight: 600; color: rgba(0,0,0,0.9); }
 .bsf-mock-li-title { font-size: 12px; color: rgba(0,0,0,0.6); }
 .bsf-mock-li-sub { font-size: 12px; color: rgba(0,0,0,0.6); }
-.bsf-mock-li-headline { padding: 0 14px 4px; font-size: 15px; font-weight: 600; color: rgba(0,0,0,0.9); }
-.bsf-mock-li-body { padding: 0 14px 10px; font-size: 14px; color: rgba(0,0,0,0.9); line-height: 1.5; }
+.bsf-mock-li-headline { padding: 0 14px 2px; font-size: 14px; font-weight: 600; color: rgba(0,0,0,0.9); }
+.bsf-mock-li-body { padding: 0 14px 8px; font-size: 14px; color: rgba(0,0,0,0.9); line-height: 1.5; }
 .bsf-mock-li-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #f3f2ef; }
-.bsf-mock-li-reactions { padding: 6px 14px; font-size: 12px; color: rgba(0,0,0,0.6); border-top: 1px solid #e0dfdc; }
+.bsf-mock-li-reactions { padding: 5px 14px; font-size: 12px; color: rgba(0,0,0,0.6); border-top: 1px solid #e0dfdc; }
 .bsf-mock-li-actions { display: flex; border-top: 1px solid #e0dfdc; }
-.bsf-mock-li-action-btn { flex: 1; text-align: center; padding: 10px 0; font-size: 13px; font-weight: 600; color: rgba(0,0,0,0.6); }
+.bsf-mock-li-action-btn { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; font-weight: 600; color: rgba(0,0,0,0.6); }
 
 /* Kakao */
 .bsf-mock-kakao { background: #fff; }
@@ -12776,16 +12776,16 @@ body {
 
 /* Naver Post */
 .bsf-mock-npost { background: #fff; }
-.bsf-mock-npost-hd { background: #03c75a; padding: 10px 14px; display: flex; align-items: center; gap: 8px; }
+.bsf-mock-npost-hd { background: #03c75a; padding: 8px 14px; display: flex; align-items: center; gap: 8px; }
 .bsf-mock-npost-logo { font-size: 13px; font-weight: 800; color: #fff; }
 .bsf-mock-npost-ch-name { font-size: 12px; color: rgba(255,255,255,0.85); }
 .bsf-mock-npost-sub-btn { margin-left: auto; background: rgba(255,255,255,0.25); font-size: 11px; color: #fff; padding: 3px 8px; border-radius: 20px; }
-.bsf-mock-npost-card { margin: 10px; border-radius: 8px; overflow: hidden; border: 1px solid #efefef; }
-.bsf-mock-npost-card-img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; background: #f5f5f5; min-height: 80px; }
-.bsf-mock-npost-card-overlay { background: rgba(0,0,0,0.55); padding: 10px 12px; margin-top: -64px; position: relative; }
+.bsf-mock-npost-card { margin: 8px; border-radius: 8px; overflow: hidden; border: 1px solid #efefef; }
+.bsf-mock-npost-card-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #f5f5f5; min-height: 60px; }
+.bsf-mock-npost-card-overlay { background: rgba(0,0,0,0.55); padding: 8px 12px; margin-top: -48px; position: relative; }
 .bsf-mock-npost-card-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 2px; }
 .bsf-mock-npost-card-body { font-size: 12px; color: rgba(255,255,255,0.8); line-height: 1.4; }
-.bsf-mock-npost-foot { padding: 8px 14px; font-size: 12px; color: #999; display: flex; gap: 12px; border-top: 1px solid #f0f0f0; }
+.bsf-mock-npost-foot { padding: 6px 14px; font-size: 12px; color: #999; display: flex; gap: 12px; border-top: 1px solid #f0f0f0; }
 
 /* Band */
 .bsf-mock-band { background: #fff; }
