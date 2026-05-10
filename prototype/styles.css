@@ -12689,13 +12689,19 @@ body {
 .bsf-mock-shorts { position: relative; aspect-ratio: 9/16; max-height: calc(100cqh - 40px); background: #000; border-radius: 12px; overflow: hidden; }
 .bsf-mock-shorts-vid { width: 100%; height: 100%; object-fit: cover; display: block; }
 .bsf-mock-shorts-vid-empty { width: 100%; height: 100%; background: linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); display: flex; align-items: center; justify-content: center; font-size: 48px; }
-.bsf-mock-shorts-sidebar { position: absolute; right: 10px; bottom: 100px; display: flex; flex-direction: column; align-items: center; gap: 16px; }
-.bsf-mock-shorts-sidebar-item { display: flex; flex-direction: column; align-items: center; gap: 2px; color: #fff; }
-.bsf-mock-shorts-sidebar-icon { font-size: 26px; }
-.bsf-mock-shorts-sidebar-count { font-size: 11px; font-weight: 600; }
-.bsf-mock-shorts-overlay { position: absolute; bottom: 0; left: 0; right: 0; padding: 40px 12px 16px; background: linear-gradient(transparent, rgba(0,0,0,0.75)); }
-.bsf-mock-shorts-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 3px; }
-.bsf-mock-shorts-ch { font-size: 12px; color: rgba(255,255,255,0.75); }
+.bsf-mock-shorts-sidebar { position: absolute; right: 8px; bottom: 80px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.bsf-mock-shorts-sidebar-item { display: flex; flex-direction: column; align-items: center; gap: 3px; color: #fff; }
+.bsf-mock-shorts-avatar { width: 36px; height: 36px; border-radius: 50%; background: #ff0000; border: 2px solid #fff; flex-shrink: 0; }
+.bsf-mock-shorts-sub-btn { width: 18px; height: 18px; background: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #ff0000; margin-top: -10px; line-height: 1; }
+.bsf-mock-shorts-sidebar-icon { display: flex; align-items: center; justify-content: center; }
+.bsf-mock-shorts-sidebar-count { font-size: 11px; font-weight: 600; color: #fff; }
+.bsf-mock-shorts-overlay { position: absolute; bottom: 0; left: 0; right: 56px; padding: 40px 12px 16px; background: linear-gradient(transparent, rgba(0,0,0,0.75)); }
+.bsf-mock-shorts-title { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
+.bsf-mock-shorts-ch-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.bsf-mock-shorts-ch { font-size: 13px; font-weight: 600; color: #fff; }
+.bsf-mock-shorts-sub { background: #fff; color: #000; border: none; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 3px 8px; cursor: default; flex-shrink: 0; }
+.bsf-mock-shorts-music { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #fff; overflow: hidden; }
+.bsf-mock-shorts-music-text { white-space: nowrap; animation: bsf-marquee 8s linear infinite; }
 
 /* X / Threads */
 .bsf-mock-x { background: #fff; padding: 14px; }
