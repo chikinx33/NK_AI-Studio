@@ -12633,7 +12633,7 @@ body {
 }
 
 /* Instagram */
-.bsf-mock-ig { background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: min(100%, 300px); margin: 0 auto; }
+.bsf-mock-ig { background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: min(100%, 300px); margin: 0; }
 .bsf-mock-ig-hd { display: flex; align-items: center; padding: 10px 12px; gap: 10px; border-bottom: 1px solid #efefef; }
 .bsf-mock-ig-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); border: 2px solid #fff; outline: 2px solid #e1306c; flex-shrink: 0; }
 .bsf-mock-ig-uname { font-size: 13px; font-weight: 600; color: #111; flex: 1; }
