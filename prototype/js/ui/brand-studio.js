@@ -1612,6 +1612,19 @@
     var _igSvgRefresh = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>';
     var _igSvgSend = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>';
     var _igSvgBookmark = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></svg>';
+    // 24px variants for TikTok sidebar
+    var _svgHeart24    = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/></svg>';
+    var _svgBookmark24 = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></svg>';
+    // 18px action-bar icons (shared across platforms)
+    var _svgHeart18    = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/></svg>';
+    var _svgMsg18      = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>';
+    var _svgShare18    = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>';
+    var _svgThumbsUp18 = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"/><path d="M7 10v12"/></svg>';
+    var _svgRepeat18   = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 9 3-3 3 3"/><path d="M13 18H7a2 2 0 0 1-2-2V6"/><path d="m22 15-3 3-3-3"/><path d="M11 6h6a2 2 0 0 1 2 2v10"/></svg>';
+    var _svgChart18    = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" x2="18" y1="20" y2="10"/><line x1="12" x2="12" y1="20" y2="4"/><line x1="6" x2="6" y1="20" y2="14"/></svg>';
+    var _svgUpload18   = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>';
+    var _svgSend18     = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>';
+    var _svgBookmark18 = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></svg>';
 
     function buildInstagramPreview(fmtId, captionVal, hashtagVal, draft) {
       var imgs = draftSelImgs;
@@ -1696,9 +1709,12 @@
         '<div class="bsf-mockup bsf-mock-tiktok">' +
         tiktokVidHtml +
         '<div class="bsf-mock-tiktok-sidebar">' +
-          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">♡</span><span class="bsf-mock-tiktok-sidebar-count">4.8K</span></div>' +
-          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">💬</span><span class="bsf-mock-tiktok-sidebar-count">312</span></div>' +
-          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">↗</span><span class="bsf-mock-tiktok-sidebar-count">' + (isEn ? 'Share' : '공유') + '</span></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item">' + mockAvatarEl('bsf-mock-tiktok-avatar') + '<div class="bsf-mock-tiktok-sub-btn">+</div></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">' + _svgHeart24 + '</span><span class="bsf-mock-tiktok-sidebar-count">4.8K</span></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">' + _svgMsgCircle + '</span><span class="bsf-mock-tiktok-sidebar-count">312</span></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">' + _svgBookmark24 + '</span><span class="bsf-mock-tiktok-sidebar-count">128</span></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">' + _svgShare2 + '</span><span class="bsf-mock-tiktok-sidebar-count">' + (isEn ? 'Share' : '공유') + '</span></div>' +
+          '<div class="bsf-mock-tiktok-sidebar-item"><span class="bsf-mock-tiktok-sidebar-icon">' + _svgEllipsis + '</span></div>' +
         '</div>' +
         '<div class="bsf-mock-tiktok-overlay">' +
           '<div class="bsf-mock-tiktok-username">@' + mockBrandName + '</div>' +
@@ -1729,7 +1745,14 @@
           '</div>' +
         '</div>' +
         '<div class="bsf-mock-x-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((captionVal || '').slice(0, 140)) + (captionVal.length > 140 ? '…' : '') + '</div>' +
-        '<div class="bsf-mock-x-actions">♡ &nbsp; ↺ &nbsp; 📤 &nbsp; ···</div>' +
+        '<div class="bsf-mock-x-actions">' +
+          '<span class="bsf-mock-x-action">' + _svgMsg18 + ' 12</span>' +
+          '<span class="bsf-mock-x-action">' + _svgRepeat18 + ' 48</span>' +
+          '<span class="bsf-mock-x-action">' + _svgHeart18 + ' 128</span>' +
+          '<span class="bsf-mock-x-action">' + _svgChart18 + '</span>' +
+          '<span class="bsf-mock-x-action">' + _svgBookmark18 + '</span>' +
+          '<span class="bsf-mock-x-action">' + _svgUpload18 + '</span>' +
+        '</div>' +
         '<div class="bsf-mock-x-counter"><span class="' + cCls + '">' + cLen + ' / 280</span></div>' +
         '</div>') +
       afWrap(isEn ? 'Post text' : '게시 문구',
@@ -1757,7 +1780,11 @@
         '<div class="bsf-mock-nblog-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal || (isEn ? 'Untitled' : '제목없음')) + '</div>' +
         '<div class="bsf-mock-nblog-author">' + mockAvatarEl('bsf-mock-nblog-author-avatar') + '<span class="bsf-mock-nblog-author-name">' + mockBrandName + '</span><span class="bsf-mock-nblog-author-date">' + (isEn ? 'just now' : '방금 전') + '</span></div>' +
         blogInner +
-        '<div class="bsf-mock-nblog-reactions"><span>♡ 0</span><span>💬 0</span><span>↗ ' + (isEn ? 'Share' : '공유') + '</span></div>' +
+        '<div class="bsf-mock-nblog-reactions">' +
+          '<span class="bsf-mock-action-item">' + _svgHeart18 + ' 0</span>' +
+          '<span class="bsf-mock-action-item">' + _svgMsg18 + ' 0</span>' +
+          '<span class="bsf-mock-action-item">' + _svgShare18 + ' ' + (isEn ? 'Share' : '공유') + '</span>' +
+        '</div>' +
         '</div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Blog title' : '블로그 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Body' : '본문', ceDiv(fmtId, 'caption', captionVal, 8, isEn ? 'Blog content…' : '블로그 내용을 작성하세요'), fmtId, 'caption') +
@@ -1783,7 +1810,10 @@
             '<div class="bsf-mock-kakao-btn">' + escapeHtml(draft.button_label || (isEn ? 'Learn more' : '자세히 보기')) + '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="bsf-mock-kakao-foot"><span>♡ ' + (isEn ? 'Like' : '좋아요') + '</span><span>💬 ' + (isEn ? 'Comment' : '댓글') + '</span></div>' +
+        '<div class="bsf-mock-kakao-foot">' +
+          '<span class="bsf-mock-action-item">' + _svgHeart18 + ' ' + (isEn ? 'Like' : '좋아요') + '</span>' +
+          '<span class="bsf-mock-action-item">' + _svgMsg18 + ' ' + (isEn ? 'Comment' : '댓글') + '</span>' +
+        '</div>' +
         '</div>') +
       cfWrap(isEn ? 'Message' : '메시지', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write message…' : '메시지를 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#해시태그'), fmtId, 'hashtags') +
@@ -1804,9 +1834,9 @@
         (draftFirstImgUrl ? '<img class="bsf-mock-fb-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
         '<div class="bsf-mock-fb-reactions"><span>👍❤️😮 128</span><span>' + (isEn ? 'Comments 24 · Shares 6' : '댓글 24 · 공유 6') + '</span></div>' +
         '<div class="bsf-mock-fb-actions">' +
-          '<span class="bsf-mock-fb-action-btn">👍 ' + (isEn ? 'Like' : '좋아요') + '</span>' +
-          '<span class="bsf-mock-fb-action-btn">💬 ' + (isEn ? 'Comment' : '댓글') + '</span>' +
-          '<span class="bsf-mock-fb-action-btn">↗ ' + (isEn ? 'Share' : '공유') + '</span>' +
+          '<span class="bsf-mock-fb-action-btn bsf-mock-action-item">' + _svgThumbsUp18 + ' ' + (isEn ? 'Like' : '좋아요') + '</span>' +
+          '<span class="bsf-mock-fb-action-btn bsf-mock-action-item">' + _svgMsg18 + ' ' + (isEn ? 'Comment' : '댓글') + '</span>' +
+          '<span class="bsf-mock-fb-action-btn bsf-mock-action-item">' + _svgShare18 + ' ' + (isEn ? 'Share' : '공유') + '</span>' +
         '</div>' +
         '</div>') +
       afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? "What's on your mind?" : '무슨 생각을 하고 계신가요?')) +
@@ -1834,10 +1864,10 @@
         (draftFirstImgUrl ? '<img class="bsf-mock-li-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
         '<div class="bsf-mock-li-reactions">👍 ❤️ 💡 128 · ' + (isEn ? '24 comments' : '댓글 24개') + '</div>' +
         '<div class="bsf-mock-li-actions">' +
-          '<span class="bsf-mock-li-action-btn">👍 ' + (isEn ? 'Like' : '좋아요') + '</span>' +
-          '<span class="bsf-mock-li-action-btn">💬 ' + (isEn ? 'Comment' : '댓글') + '</span>' +
-          '<span class="bsf-mock-li-action-btn">↗ ' + (isEn ? 'Repost' : '리포스트') + '</span>' +
-          '<span class="bsf-mock-li-action-btn">✉ ' + (isEn ? 'Send' : '보내기') + '</span>' +
+          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgThumbsUp18 + ' ' + (isEn ? 'Like' : '좋아요') + '</span>' +
+          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgMsg18 + ' ' + (isEn ? 'Comment' : '댓글') + '</span>' +
+          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgRepeat18 + ' ' + (isEn ? 'Repost' : '리포스트') + '</span>' +
+          '<span class="bsf-mock-li-action-btn bsf-mock-action-item">' + _svgSend18 + ' ' + (isEn ? 'Send' : '보내기') + '</span>' +
         '</div>' +
         '</div>') +
       afWrap(isEn ? 'Headline' : '헤드라인', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Headline or article title' : '헤드라인')) +
@@ -1914,7 +1944,10 @@
             '<div class="bsf-mock-npost-card-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
           '</div>' +
         '</div>' +
-        '<div class="bsf-mock-npost-foot"><span>♡ 0</span><span>💬 0</span></div>' +
+        '<div class="bsf-mock-npost-foot">' +
+          '<span class="bsf-mock-action-item">' + _svgHeart18 + ' 0</span>' +
+          '<span class="bsf-mock-action-item">' + _svgMsg18 + ' 0</span>' +
+        '</div>' +
         '</div>') +
       cfWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Post title' : '포스트 제목'), fmtId, 'title') +
       cfWrap(isEn ? 'Content' : '내용', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? 'Post content…' : '포스트 내용을 작성하세요'), fmtId, 'caption') +
@@ -1934,7 +1967,11 @@
         '</div>' +
         '<div class="bsf-mock-band-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(first2SentencesOf(captionVal) || '…') + '</div>' +
         (draftFirstImgUrl ? '<img class="bsf-mock-band-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '') +
-        '<div class="bsf-mock-band-foot"><span>♡ ' + (isEn ? 'Like' : '좋아요') + '</span><span>💬 ' + (isEn ? 'Comment' : '댓글') + '</span><span>↗ ' + (isEn ? 'Share' : '공유') + '</span></div>' +
+        '<div class="bsf-mock-band-foot">' +
+          '<span class="bsf-mock-action-item">' + _svgHeart18 + ' ' + (isEn ? 'Like' : '좋아요') + '</span>' +
+          '<span class="bsf-mock-action-item">' + _svgMsg18 + ' ' + (isEn ? 'Comment' : '댓글') + '</span>' +
+          '<span class="bsf-mock-action-item">' + _svgShare18 + ' ' + (isEn ? 'Share' : '공유') + '</span>' +
+        '</div>' +
         '</div>') +
       cfWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write post…' : '게시글을 작성하세요'), fmtId, 'caption') +
       cfWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag'), fmtId, 'hashtags') +
