@@ -12229,6 +12229,9 @@ body {
   outline: none;
   border-color: var(--accent, #6366f1);
 }
+.bsf-input-text::placeholder,
+.bsf-input-url::placeholder,
+.bsf-input-datetime::placeholder { color: var(--muted); }
 
 /* ── Custom DateTime Picker ───────────────────────────────────────────────── */
 .bsf-dt-picker {
@@ -12414,8 +12417,8 @@ body {
 .bsf-dt-foot-today:hover { background: rgba(255,154,61,0.1); }
 /* 라디오 그룹 */
 .bsf-radio-group { display: flex; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
-.bsf-radio-group label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-muted, #94a3b8); cursor: pointer; }
-.bsf-radio-group label:hover { color: var(--text, #e2e8f0); }
+.bsf-radio-group label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); cursor: pointer; }
+.bsf-radio-group label:hover { color: var(--text); }
 .bsf-radio-group input[type="radio"] { accent-color: var(--accent, #6366f1); cursor: pointer; }
 /* 토글 스위치 */
 .bsf-toggle-wrap { margin-left: auto; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; }
@@ -12533,7 +12536,7 @@ body {
   border: 1px solid var(--border, #2d3748);
   border-radius: 7px;
   font-size: 13px;
-  color: var(--text-primary, #e2e8f0);
+  color: var(--text);
   line-height: 1.55;
   outline: none;
   white-space: pre-wrap;
@@ -12544,7 +12547,7 @@ body {
 .bsf-ce:focus { border-color: var(--accent, #f97316); }
 .bsf-ce:empty::before {
   content: attr(data-placeholder);
-  color: var(--text-muted, #4b5563);
+  color: var(--muted);
   pointer-events: none;
 }
 .bsf-ce[data-rows="1"] { min-height: 38px; }
@@ -12556,7 +12559,7 @@ body {
 
 /* Character count (X/Threads) */
 .bsf-charcount-row { display: flex; justify-content: flex-end; margin-top: 4px; }
-.bsf-charcount      { font-size: 11px; color: var(--text-muted, #6b7280); }
+.bsf-charcount      { font-size: 11px; color: var(--muted); }
 .bsf-charcount.warn { color: #fbbf24; }
 .bsf-charcount.over { color: #ef4444; }
 
