@@ -12682,7 +12682,8 @@ body {
 .bsf-mock-tiktok-username { font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px; }
 .bsf-mock-tiktok-caption { font-size: 13px; color: #fff; line-height: 1.4; }
 .bsf-mock-tiktok-music { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: #fff; overflow: hidden; }
-.bsf-mock-tiktok-music-text { white-space: nowrap; animation: bsf-marquee 8s linear infinite; }
+.bsf-mock-tiktok-music > span:first-child { flex-shrink: 0; }
+.bsf-mock-tiktok-music-text { white-space: nowrap; animation: bsf-marquee 8s linear infinite; min-width: 0; }
 @keyframes bsf-marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-60px); } }
 
 /* YouTube Shorts */
@@ -12701,7 +12702,8 @@ body {
 .bsf-mock-shorts-ch { font-size: 13px; font-weight: 600; color: #fff; }
 .bsf-mock-shorts-sub { background: #fff; color: #000; border: none; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 3px 8px; cursor: default; flex-shrink: 0; }
 .bsf-mock-shorts-music { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #fff; overflow: hidden; }
-.bsf-mock-shorts-music-text { white-space: nowrap; animation: bsf-marquee 8s linear infinite; }
+.bsf-mock-shorts-music > svg { flex-shrink: 0; }
+.bsf-mock-shorts-music-text { white-space: nowrap; animation: bsf-marquee 8s linear infinite; min-width: 0; }
 
 /* X / Threads */
 .bsf-mock-x { background: #fff; padding: 14px; }

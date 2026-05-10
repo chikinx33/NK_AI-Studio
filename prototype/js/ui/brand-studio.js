@@ -1565,8 +1565,18 @@
     }
 
     // 목업 공통 파트
-    var mockAvatarHtml = '<div class="bsf-mock-avatar"></div>';
     var mockBrandName = escapeHtml((brandView.title || 'Brand').slice(0, 14));
+    var mockAvatarUrl = (function () {
+      var objName = String(payload.thumbnailObjectName || '').trim();
+      if (!objName) return '';
+      try { return (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(objName) : ''; } catch (_) { return ''; }
+    })();
+    function mockAvatarEl(cls) {
+      if (mockAvatarUrl) {
+        return '<div class="' + cls + '" style="background-image:url(\'' + mockAvatarUrl + '\');background-size:cover;background-position:center;"></div>';
+      }
+      return '<div class="' + cls + '"></div>';
+    }
     function mockImgEl(url, cls) {
       if (url) return '<img class="' + (cls || 'bsf-mock-media') + '" src="' + escapeHtml(url) + '" />';
       return '<div class="' + (cls || 'bsf-mock-media') + ' bsf-mock-media-empty"><span>📷</span></div>';
@@ -1621,7 +1631,7 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-ig">' +
         '<div class="bsf-mock-ig-hd">' +
-          '<div class="bsf-mock-ig-avatar"></div>' +
+          mockAvatarEl('bsf-mock-ig-avatar') +
           '<span class="bsf-mock-ig-uname">' + mockBrandName + '</span>' +
           '<span class="bsf-mock-ig-follow">' + (isEn ? 'Follow' : '팔로우') + '</span>' +
           '<span class="bsf-mock-ig-dots">···</span>' +
@@ -1656,7 +1666,7 @@
         shortsVidHtml +
         '<div class="bsf-mock-shorts-sidebar">' +
           '<div class="bsf-mock-shorts-sidebar-item">' +
-            '<div class="bsf-mock-shorts-avatar"></div>' +
+            mockAvatarEl('bsf-mock-shorts-avatar') +
             '<div class="bsf-mock-shorts-sub-btn">+</div>' +
           '</div>' +
           '<div class="bsf-mock-shorts-sidebar-item"><span class="bsf-mock-shorts-sidebar-icon">' + _svgThumbsUp + '</span><span class="bsf-mock-shorts-sidebar-count">1.2K</span></div>' +
@@ -1712,7 +1722,7 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-x">' +
         '<div class="bsf-mock-x-hd">' +
-          '<div class="bsf-mock-x-avatar"></div>' +
+          mockAvatarEl('bsf-mock-x-avatar') +
           '<div class="bsf-mock-x-meta">' +
             '<span class="bsf-mock-x-name">' + mockBrandName + '</span>' +
             '<span class="bsf-mock-x-handle"> · @brand · ' + (isEn ? 'now' : '방금') + '</span>' +
@@ -1745,7 +1755,7 @@
         '<div class="bsf-mockup bsf-mock-nblog">' +
         '<div class="bsf-mock-nblog-topbar"><span class="bsf-mock-nblog-topbar-logo">N</span><span class="bsf-mock-nblog-topbar-name">' + mockBrandName + '</span></div>' +
         '<div class="bsf-mock-nblog-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml(titleVal || (isEn ? 'Untitled' : '제목없음')) + '</div>' +
-        '<div class="bsf-mock-nblog-author"><div class="bsf-mock-nblog-author-avatar"></div><span class="bsf-mock-nblog-author-name">' + mockBrandName + '</span><span class="bsf-mock-nblog-author-date">' + (isEn ? 'just now' : '방금 전') + '</span></div>' +
+        '<div class="bsf-mock-nblog-author">' + mockAvatarEl('bsf-mock-nblog-author-avatar') + '<span class="bsf-mock-nblog-author-name">' + mockBrandName + '</span><span class="bsf-mock-nblog-author-date">' + (isEn ? 'just now' : '방금 전') + '</span></div>' +
         blogInner +
         '<div class="bsf-mock-nblog-reactions"><span>♡ 0</span><span>💬 0</span><span>↗ ' + (isEn ? 'Share' : '공유') + '</span></div>' +
         '</div>') +
@@ -1761,7 +1771,7 @@
       return pvWrap(isEn ? 'Channel preview' : '채널 미리보기',
         '<div class="bsf-mockup bsf-mock-kakao">' +
         '<div class="bsf-mock-kakao-hd">' +
-          '<div class="bsf-mock-kakao-ch-icon"></div>' +
+          mockAvatarEl('bsf-mock-kakao-ch-icon') +
           '<span class="bsf-mock-kakao-ch-name">' + mockBrandName + '</span>' +
           '<span class="bsf-mock-kakao-badge">' + (isEn ? 'Channel' : '채널') + '</span>' +
         '</div>' +
@@ -1784,7 +1794,7 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-fb">' +
         '<div class="bsf-mock-fb-hd">' +
-          '<div class="bsf-mock-fb-avatar"></div>' +
+          mockAvatarEl('bsf-mock-fb-avatar') +
           '<div class="bsf-mock-fb-meta">' +
             '<div class="bsf-mock-fb-name">' + mockBrandName + '</div>' +
             '<div class="bsf-mock-fb-sub">' + (isEn ? 'Just now · 🌐' : '방금 전 · 🌐') + '</div>' +
@@ -1812,7 +1822,7 @@
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-li">' +
         '<div class="bsf-mock-li-hd">' +
-          '<div class="bsf-mock-li-avatar"></div>' +
+          mockAvatarEl('bsf-mock-li-avatar') +
           '<div class="bsf-mock-li-meta">' +
             '<div class="bsf-mock-li-name">' + mockBrandName + '</div>' +
             '<div class="bsf-mock-li-title">' + (isEn ? 'Brand Page' : '브랜드 페이지') + '</div>' +
@@ -1849,7 +1859,7 @@
         '<div class="bsf-mock-pin-body">' +
           '<div class="bsf-mock-pin-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
           '<div class="bsf-mock-pin-desc" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
-          '<div class="bsf-mock-pin-author"><div class="bsf-mock-pin-author-avatar"></div><span class="bsf-mock-pin-author-name">' + mockBrandName + '</span></div>' +
+          '<div class="bsf-mock-pin-author">' + mockAvatarEl('bsf-mock-pin-author-avatar') + '<span class="bsf-mock-pin-author-name">' + mockBrandName + '</span></div>' +
         '</div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '핀 제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Pin title' : '핀 제목')) +
@@ -1874,7 +1884,7 @@
         '<div class="bsf-mockup bsf-mock-yt">' +
         '<div class="bsf-mock-yt-thumb-wrap">' + playerContent + (hasDuration ? '<span class="bsf-mock-yt-duration">0:00</span>' : '') + '</div>' +
         '<div class="bsf-mock-yt-meta">' +
-          '<div class="bsf-mock-yt-ch-avatar"></div>' +
+          mockAvatarEl('bsf-mock-yt-ch-avatar') +
           '<div class="bsf-mock-yt-info">' +
             '<div class="bsf-mock-yt-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || (isEn ? 'Video title' : '제목없음')).slice(0, 60)) + '</div>' +
             '<div class="bsf-mock-yt-ch-name">' + mockBrandName + '</div>' +
@@ -1916,7 +1926,7 @@
         '<div class="bsf-mockup bsf-mock-band">' +
         '<div class="bsf-mock-band-topbar"><span class="bsf-mock-band-topbar-logo">BAND</span><span class="bsf-mock-band-topbar-name">' + mockBrandName + '</span></div>' +
         '<div class="bsf-mock-band-hd">' +
-          '<div class="bsf-mock-band-avatar"></div>' +
+          mockAvatarEl('bsf-mock-band-avatar') +
           '<div>' +
             '<div><span class="bsf-mock-band-name">' + mockBrandName + '</span><span class="bsf-mock-band-badge">' + (isEn ? 'Leader' : '리더') + '</span></div>' +
             '<div class="bsf-mock-band-date">1' + (isEn ? 'm ago' : '분 전') + '</div>' +
