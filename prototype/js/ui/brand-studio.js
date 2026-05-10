@@ -1188,7 +1188,7 @@
         panel.classList.toggle('is-active', idx + 1 === newStep);
       });
       // 자산 탭(1)으로 돌아올 때 썸네일 초기화 (숨겨진 동안 로드 안 됐을 수 있음)
-      if (newStep === 1) { initVideoThumbs(); initImageThumbs(); }
+      if (newStep === 1) { initVideoThumbs(); initImageThumbs(); initIgSlider(); }
       // 초안 탭(3) 진입: selectedFormats 변경이 있으면 드래프트 섹션 재동기화
       if (newStep === 3) { refreshDraftSection(); }
       // 배포 탭(4) 진입: 초안 디바운스 즉시 flush 후 배포 요약 재빌드 (stale 데이터 방지)
@@ -1590,7 +1590,27 @@
       { value: 'scheduled', label: isEn ? 'Scheduled' : '예약' },
     ]; };
 
+    var _igSvgHeart = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/></svg>';
+    var _igSvgComment = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/></svg>';
+    var _igSvgRefresh = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>';
+    var _igSvgSend = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg>';
+    var _igSvgBookmark = '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2 2 0 0 1 2 2v15a1 1 0 0 1-1.496.868l-4.512-2.578a2 2 0 0 0-1.984 0l-4.512 2.578A1 1 0 0 1 5 20V5a2 2 0 0 1 2-2z"/></svg>';
+
     function buildInstagramPreview(fmtId, captionVal, hashtagVal, draft) {
+      var imgs = draftSelImgs;
+      var imgCount = imgs.length;
+      var slidesHtml = imgCount > 0
+        ? imgs.map(function (img, i) {
+            return '<img class="bsf-mock-ig-slide" src="' + escapeHtml(String(img.url || '')) + '" data-slide-idx="' + i + '" />';
+          }).join('')
+        : '<div class="bsf-mock-ig-slide bsf-mock-ig-slide-empty">📷</div>';
+      if (imgCount === 0) imgCount = 1;
+      var dotCount = Math.min(imgCount, 10);
+      var dotsHtml = '<div class="bsf-mock-ig-dots-row">';
+      for (var d = 0; d < dotCount; d++) {
+        dotsHtml += '<div class="bsf-mock-ig-dot' + (d === 0 ? ' active' : '') + '" data-dot-idx="' + d + '"></div>';
+      }
+      dotsHtml += '</div>';
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-ig">' +
         '<div class="bsf-mock-ig-hd">' +
@@ -1599,13 +1619,16 @@
           '<span class="bsf-mock-ig-follow">' + (isEn ? 'Follow' : '팔로우') + '</span>' +
           '<span class="bsf-mock-ig-dots">···</span>' +
         '</div>' +
-        (draftFirstImgUrl ? '<img class="bsf-mock-ig-img" src="' + escapeHtml(draftFirstImgUrl) + '" />' : '<div class="bsf-mock-ig-img-empty">📷</div>') +
-        '<div class="bsf-mock-ig-dots-row"><div class="bsf-mock-ig-dot active"></div><div class="bsf-mock-ig-dot"></div><div class="bsf-mock-ig-dot"></div></div>' +
+        '<div class="bsf-mock-ig-slider" data-ig-slider>' +
+          '<div class="bsf-mock-ig-slides" data-ig-slides>' + slidesHtml + '</div>' +
+        '</div>' +
+        dotsHtml +
         '<div class="bsf-mock-ig-actions">' +
-          '<span class="bsf-mock-ig-action-icon">♡</span>' +
-          '<span class="bsf-mock-ig-action-icon">✦</span>' +
-          '<span class="bsf-mock-ig-action-icon">✉</span>' +
-          '<span class="bsf-mock-ig-save">⊡</span>' +
+          '<span class="bsf-mock-ig-action-icon">' + _igSvgHeart + '</span>' +
+          '<span class="bsf-mock-ig-action-icon">' + _igSvgComment + '</span>' +
+          '<span class="bsf-mock-ig-action-icon">' + _igSvgRefresh + '</span>' +
+          '<span class="bsf-mock-ig-action-icon">' + _igSvgSend + '</span>' +
+          '<span class="bsf-mock-ig-save">' + _igSvgBookmark + '</span>' +
         '</div>' +
         '<div class="bsf-mock-ig-likes">' + (isEn ? 'Liked by others' : '좋아요 128개') + '</div>' +
         '<div class="bsf-mock-ig-caption"><strong>' + mockBrandName + '</strong> <span data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</span> <span class="more">' + (isEn ? 'more' : '더 보기') + '</span></div>' +
@@ -2073,6 +2096,7 @@
     bindDisclosureState(root);
     initVideoThumbs();
     initImageThumbs();
+    initIgSlider();
     // 초기 렌더 시 stale한 selectedFormats(이전 세션에서 저장된 unavailable 포맷) 즉시 제거
     pruneUnavailableSelectedFormats();
 
@@ -2439,6 +2463,51 @@
           img.addEventListener('error', show, { once: true });
         }
       });
+    }
+    // ─── Instagram 이미지 슬라이더 ─────────────────────────────────────────────
+    function initIgSlider() {
+      root.querySelectorAll('[data-ig-slider]').forEach(function (slider) {
+        if (slider.dataset.igSliderInit) return;
+        slider.dataset.igSliderInit = '1';
+        var slides = slider.querySelector('[data-ig-slides]');
+        if (!slides || slides.children.length <= 1) return;
+        var mockIg = slider.closest('.bsf-mock-ig');
+        var total = slides.children.length;
+        var current = 0;
+        function goTo(idx) {
+          current = ((idx % total) + total) % total;
+          slides.style.transform = 'translateX(-' + (current * 100) + '%)';
+          if (mockIg) {
+            mockIg.querySelectorAll('[data-dot-idx]').forEach(function (dot) {
+              dot.classList.toggle('active', Number(dot.dataset.dotIdx) === current);
+            });
+          }
+        }
+        var startX = 0;
+        slider.addEventListener('pointerdown', function (e) { startX = e.clientX; });
+        slider.addEventListener('pointerup', function (e) {
+          var diff = e.clientX - startX;
+          if (Math.abs(diff) > 30) goTo(diff < 0 ? current + 1 : current - 1);
+        });
+      });
+      // dot 클릭: 이벤트 위임 (한 번만 등록)
+      if (!document.__bsfIgDotBound) {
+        document.__bsfIgDotBound = true;
+        document.addEventListener('click', function (e) {
+          var dot = e.target && e.target.closest ? e.target.closest('[data-dot-idx]') : null;
+          if (!dot) return;
+          var mockIg = dot.closest('.bsf-mock-ig');
+          if (!mockIg) return;
+          var slides = mockIg.querySelector('[data-ig-slides]');
+          if (!slides) return;
+          var total = slides.children.length;
+          var idx = Math.max(0, Math.min(Number(dot.dataset.dotIdx), total - 1));
+          slides.style.transform = 'translateX(-' + (idx * 100) + '%)';
+          mockIg.querySelectorAll('[data-dot-idx]').forEach(function (d) {
+            d.classList.toggle('active', Number(d.dataset.dotIdx) === idx);
+          });
+        });
+      }
     }
     // ─── Custom DateTime Picker ────────────────────────────────────────────────
     function dtParsed(val) {
