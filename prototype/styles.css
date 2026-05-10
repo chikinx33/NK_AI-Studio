@@ -12735,8 +12735,8 @@ body {
 .bsf-mock-fb-body { padding: 0 14px 10px; font-size: 14px; color: #050505; line-height: 1.5; }
 .bsf-mock-fb-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #f0f2f5; }
 .bsf-mock-fb-reactions { padding: 8px 14px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e4e6eb; border-bottom: 1px solid #e4e6eb; font-size: 13px; color: #65676b; }
-.bsf-mock-fb-actions { display: flex; }
-.bsf-mock-fb-action-btn { flex: 1; text-align: center; padding: 8px 0; font-size: 13px; font-weight: 600; color: #65676b; }
+.bsf-mock-fb-actions { display: flex; padding: 0 10px; }
+.bsf-mock-fb-action-btn { flex: 1; display: flex; justify-content: center; align-items: center; gap: 5px; padding: 8px 0; font-size: 13px; font-weight: 600; color: #65676b; }
 
 /* LinkedIn */
 .bsf-mock-li { background: #fff; }
@@ -12750,8 +12750,8 @@ body {
 .bsf-mock-li-body { padding: 0 14px 6px; font-size: 14px; color: rgba(0,0,0,0.9); line-height: 1.45; }
 .bsf-mock-li-img { width: 100%; aspect-ratio: 16/9; object-fit: cover; display: block; background: #f3f2ef; }
 .bsf-mock-li-reactions { padding: 4px 14px; font-size: 12px; color: rgba(0,0,0,0.6); border-top: 1px solid #e0dfdc; }
-.bsf-mock-li-actions { display: flex; border-top: 1px solid #e0dfdc; }
-.bsf-mock-li-action-btn { flex: 1; text-align: center; padding: 6px 0; font-size: 13px; font-weight: 600; color: rgba(0,0,0,0.6); }
+.bsf-mock-li-actions { display: flex; padding: 0 10px; border-top: 1px solid #e0dfdc; }
+.bsf-mock-li-action-btn { flex: 1; display: flex; justify-content: center; align-items: center; gap: 5px; padding: 6px 0; font-size: 13px; font-weight: 600; color: rgba(0,0,0,0.6); }
 
 /* Kakao */
 .bsf-mock-kakao { background: #fff; }
