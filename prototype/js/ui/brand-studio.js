@@ -36,6 +36,7 @@
   function getPageScrollContainer(node) {
     var current = node;
     while (current) {
+      if (current.classList && current.classList.contains('bsf-format-draft-panel')) return current;
       if (current.classList && current.classList.contains('main-body')) return current;
       current = current.parentElement;
     }
