@@ -12633,26 +12633,26 @@ body {
 }
 
 /* Instagram */
-.bsf-mock-ig { background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; width: 100%; margin: 0; }
-.bsf-mock-ig-hd { display: flex; align-items: center; padding: 10px 12px; gap: 10px; border-bottom: 1px solid #efefef; }
+.bsf-mock-ig { background: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; width: 100%; margin: 0; max-height: calc(100cqh - 40px); display: flex; flex-direction: column; overflow: hidden; }
+.bsf-mock-ig-hd { display: flex; align-items: center; padding: 10px 12px; gap: 10px; border-bottom: 1px solid #efefef; flex-shrink: 0; }
 .bsf-mock-ig-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); border: 2px solid #fff; outline: 2px solid #e1306c; flex-shrink: 0; }
 .bsf-mock-ig-uname { font-size: 13px; font-weight: 600; color: #111; flex: 1; }
 .bsf-mock-ig-follow { font-size: 13px; font-weight: 600; color: #0095f6; }
 .bsf-mock-ig-dots { font-size: 18px; color: #111; margin-left: 8px; cursor: default; }
-.bsf-mock-ig-img { width: 100%; aspect-ratio: 1/1; object-fit: cover; background: #f0f0f0; display: block; }
-.bsf-mock-ig-img-empty { width: 100%; aspect-ratio: 1/1; background: #fafafa; display: flex; align-items: center; justify-content: center; font-size: 36px; color: #dbdbdb; }
-.bsf-mock-ig-dots-row { display: flex; justify-content: center; gap: 4px; padding: 4px 0 2px; }
+.bsf-mock-ig-img { width: 100%; flex: 1; min-height: 0; aspect-ratio: auto; object-fit: cover; background: #f0f0f0; display: block; }
+.bsf-mock-ig-img-empty { width: 100%; flex: 1; min-height: 0; aspect-ratio: auto; background: #fafafa; display: flex; align-items: center; justify-content: center; font-size: 36px; color: #dbdbdb; }
+.bsf-mock-ig-dots-row { display: flex; justify-content: center; gap: 4px; padding: 4px 0 2px; flex-shrink: 0; }
 .bsf-mock-ig-dot { width: 5px; height: 5px; border-radius: 50%; background: #dbdbdb; }
 .bsf-mock-ig-dot.active { background: #0095f6; }
-.bsf-mock-ig-actions { display: flex; align-items: center; padding: 6px 12px 2px; gap: 14px; }
+.bsf-mock-ig-actions { display: flex; align-items: center; padding: 6px 12px 2px; gap: 14px; flex-shrink: 0; }
 .bsf-mock-ig-action-icon { font-size: 20px; color: #111; cursor: default; }
 .bsf-mock-ig-save { margin-left: auto; font-size: 20px; color: #111; }
-.bsf-mock-ig-likes { padding: 2px 12px; font-size: 12px; font-weight: 600; color: #111; }
-.bsf-mock-ig-caption { padding: 2px 12px 4px; font-size: 12px; color: #111; line-height: 1.4; }
+.bsf-mock-ig-likes { padding: 2px 12px; font-size: 12px; font-weight: 600; color: #111; flex-shrink: 0; }
+.bsf-mock-ig-caption { padding: 2px 12px 4px; font-size: 12px; color: #111; line-height: 1.4; flex-shrink: 0; }
 .bsf-mock-ig-caption strong { margin-right: 4px; }
 .bsf-mock-ig-caption .more { color: #8e8e8e; }
-.bsf-mock-ig-comment { padding: 2px 12px 4px; font-size: 11px; color: #8e8e8e; }
-.bsf-mock-ig-time { padding: 0 12px 8px; font-size: 10px; color: #8e8e8e; letter-spacing: 0.02em; text-transform: uppercase; }
+.bsf-mock-ig-comment { padding: 2px 12px 4px; font-size: 11px; color: #8e8e8e; flex-shrink: 0; }
+.bsf-mock-ig-time { padding: 0 12px 8px; font-size: 10px; color: #8e8e8e; letter-spacing: 0.02em; text-transform: uppercase; flex-shrink: 0; }
 
 /* YouTube */
 .bsf-mock-yt { background: #fff; }
