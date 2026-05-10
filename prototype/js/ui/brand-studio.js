@@ -1678,7 +1678,7 @@
         '<div class="bsf-mock-shorts-overlay">' +
           '<div class="bsf-mock-shorts-title" data-mock-mirror="' + fmtId + '" data-mock-field="title">' + escapeHtml((titleVal || '…').slice(0, 50)) + '</div>' +
           '<div class="bsf-mock-shorts-ch-row"><span class="bsf-mock-shorts-ch">@' + mockBrandName + '</span><button class="bsf-mock-shorts-sub">' + (isEn ? 'Subscribe' : '구독') + '</button></div>' +
-          '<div class="bsf-mock-shorts-music">' + _svgMusic + '<span class="bsf-mock-shorts-music-text">' + mockBrandName + ' - Original Sound</span></div>' +
+          '<div class="bsf-mock-shorts-music">' + _svgMusic + '<div class="bsf-mock-shorts-music-track"><span class="bsf-mock-shorts-music-text">' + mockBrandName + ' - Original Sound</span></div></div>' +
         '</div>' +
         '</div>') +
       afWrap(isEn ? 'Title' : '제목', ceDiv(fmtId, 'title', titleVal, 1, isEn ? 'Shorts title' : '쇼츠 제목')) +
@@ -1703,7 +1703,7 @@
         '<div class="bsf-mock-tiktok-overlay">' +
           '<div class="bsf-mock-tiktok-username">@' + mockBrandName + '</div>' +
           '<div class="bsf-mock-tiktok-caption" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml(firstSentenceOf(captionVal) || '…') + '</div>' +
-          '<div class="bsf-mock-tiktok-music"><span>♪</span><span class="bsf-mock-tiktok-music-text">' + mockBrandName + ' - Original Sound</span></div>' +
+          '<div class="bsf-mock-tiktok-music"><span class="bsf-mock-tiktok-music-note">♪</span><div class="bsf-mock-tiktok-music-track"><span class="bsf-mock-tiktok-music-text">' + mockBrandName + ' - Original Sound</span></div></div>' +
         '</div>' +
         '</div>') +
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 3, isEn ? 'Write caption…' : '캡션을 작성하세요')) +
