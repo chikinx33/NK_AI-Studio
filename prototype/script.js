@@ -276,30 +276,51 @@
       let changed = false;
       const idSet = new Set(ids.map(id => String(id)));
       const missingIds = ids.filter(id => !drafts.find(d => String(d.id) === String(id)));
-      if (missingIds.length) {
+      // 로컬에 ID는 있지만 빈 스텁인 경우도 재동기화 (결제 중단 등으로 빈 데이터 저장됐을 때 복구)
+      const stubIds = ids.filter(id => {
+        const d = drafts.find(d => String(d.id) === String(id));
+        if (!d) return false;
+        const t = String(d.title || '').trim();
+        const topic = String((d.payload && d.payload.topic) || '').trim();
+        const story = String((d.payload && d.payload.story) || '').trim();
+        return (!t || t === '프로젝트' || t === 'Project') && !topic && !story;
+      });
+      const idsToFetch = missingIds.concat(stubIds.filter(id => missingIds.indexOf(id) < 0));
+      if (idsToFetch.length) {
         const CONCURRENCY = 16;
-        const results = new Array(missingIds.length);
+        const results = new Array(idsToFetch.length);
         let nextIdx = 0;
         const runWorker = async () => {
-          while (nextIdx < missingIds.length) {
+          while (nextIdx < idsToFetch.length) {
             const i = nextIdx++;
-            const id = missingIds[i];
+            const id = idsToFetch[i];
             try {
               const res = await NK.api.projectGet(id);
               const data = res?.data || {};
-              results[i] = {
+              const fetchedTitle = data.title || (data.payload && data.payload.topic) || '';
+              // 서버도 빈 데이터면 null로 스킵 (스텁 유지)
+              results[i] = fetchedTitle ? {
                 id,
-                title: data.title || data.payload?.topic || '프로젝트',
+                title: fetchedTitle,
                 payload: data.payload || {},
                 scenes: data.scenes || [],
                 header: data.header || '',
-                aspectRatio: data.aspectRatio || data.payload?.aspectRatio
-              };
+                aspectRatio: data.aspectRatio || (data.payload && data.payload.aspectRatio)
+              } : null;
             } catch (_) { results[i] = null; }
           }
         };
-        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, missingIds.length) }, runWorker));
-        results.filter(Boolean).forEach(draft => { drafts.push(draft); changed = true; });
+        await Promise.all(Array.from({ length: Math.min(CONCURRENCY, idsToFetch.length) }, runWorker));
+        results.filter(Boolean).forEach(fetched => {
+          const existingIdx = drafts.findIndex(d => String(d.id) === String(fetched.id));
+          if (existingIdx >= 0) {
+            // 스텁 → 서버 실제 데이터로 교체
+            drafts[existingIdx] = Object.assign({}, drafts[existingIdx], fetched);
+          } else {
+            drafts.push(fetched);
+          }
+          changed = true;
+        });
       }
       const filtered = drafts.filter(d => idSet.has(String(d.id)));
       if (filtered.length !== drafts.length) {
