@@ -13128,28 +13128,24 @@ body {
   white-space: nowrap;
 }
 
-/* Per-card schedule picker row */
+/* Per-card schedule picker — inline in header row */
 .bsf-deploy-card-dt {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.bsf-deploy-card-dt-label {
-  font-size: 11px;
-  color: var(--text-3);
-  white-space: nowrap;
   flex-shrink: 0;
 }
 .bsf-deploy-card-dt .bsf-dt-trigger {
   font-size: 11px;
   padding: 4px 8px;
+  white-space: nowrap;
 }
 .bsf-deploy-card-dt .bsf-dt-del {
   font-size: 11px;
   padding: 3px 5px;
+}
+.bsf-deploy-card-dt .bsf-dt-popup {
+  left: auto;
+  right: 0;
 }
 
 /* SNS connection status badge */

@@ -2077,6 +2077,7 @@
               '<div class="bsf-deploy-format-row">' +
               '<div class="bsf-deploy-format-head">' +
                 '<strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
+                '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>' +
                 '<div class="bsf-deploy-format-head-right">' +
                   '<span class="brand-channel-badge">' + draftBadge + '</span>' +
                   '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
@@ -2084,10 +2085,6 @@
                 '</div>' +
               '</div>' +
               '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
-              '<div class="bsf-deploy-card-dt">' +
-                '<span class="bsf-deploy-card-dt-label">' + (isEn ? 'Schedule' : '예약') + '</span>' +
-                perCardPicker +
-              '</div>' +
               '</div>'
             );
           }).join('')
