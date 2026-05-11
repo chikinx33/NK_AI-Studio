@@ -2164,6 +2164,7 @@
                     '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>' +
                     '<span class="brand-channel-badge bsf-deploy-status-badge">' + draftBadge + '</span>' +
                     '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
+                    (_deployedFormats[formatId] ? '<span class="bsf-deploy-done-badge">' + (isEn ? 'Published' : '배포 완료') + '</span>' : '') +
                   '</div>' +
                   '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
                 '</div>' +
@@ -2173,6 +2174,7 @@
           }).join('')
         : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     }
+    var _deployedFormats = {};
     var deployFormatSummary = buildDeploySummaryHtml();
     function makeCtrlBarHtml(step) {
       if (step === 1) {
@@ -3351,7 +3353,8 @@
           .then(function (publishResult) {
             if (publishResult && publishResult.skipped) return;
             if (publishResult && publishResult.ok) {
-              alert((isEn ? 'Published to ' : '배포 완료: ') + (publishResult.result && publishResult.result.username ? '@' + publishResult.result.username : oneFmtId));
+              _deployedFormats[oneFmtId] = true;
+              refreshDeploySummary();
             }
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
@@ -3376,7 +3379,8 @@
             }, Promise.resolve());
           })
           .then(function () {
-            alert(isEn ? 'All formats deployed.' : '전체 포맷 배포가 완료됐습니다.');
+            selectedFormats.forEach(function (fmtId) { _deployedFormats[fmtId] = true; });
+            refreshDeploySummary();
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });

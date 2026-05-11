@@ -13295,6 +13295,18 @@ textarea.bsf-skeleton {
 .bsf-deploy-connect-badge.is-disconnected {
   color: var(--text-3);
 }
+.bsf-deploy-done-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
 /* ---- 자산 트리오 (스토리·이미지·영상 카드) ---- */
 .bsf-asset-trio {
   display: grid;
