@@ -12271,13 +12271,11 @@ body {
 }
 .bsf-dt-del:hover { color: #ef4444; }
 
-/* Popup */
+/* Popup — position/top/bottom/left are overridden to fixed via JS for smart placement */
 .bsf-dt-popup {
   display: none;
-  position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  z-index: 300;
+  position: fixed;
+  z-index: 9999;
   background: var(--bg-2, #141a2b);
   border: 1px solid var(--border);
   border-radius: 14px;

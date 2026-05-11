@@ -2670,6 +2670,32 @@
       var popup = picker.querySelector('.bsf-dt-popup');
       if (!popup) { popup = document.createElement('div'); popup.className = 'bsf-dt-popup'; picker.appendChild(popup); }
       popup.innerHTML = buildDtCalInner(picker);
+
+      // Smart fixed positioning: avoids overflow:hidden clipping, auto up/down
+      var trigger = picker.querySelector('.bsf-dt-trigger');
+      if (trigger) {
+        var rect = trigger.getBoundingClientRect();
+        var popupW = 280; var popupH = 330;
+        var spaceBelow = window.innerHeight - rect.bottom - 8;
+        var spaceAbove = rect.top - 8;
+        // Horizontal: align to trigger left, clamp to viewport right edge
+        var left = rect.left;
+        if (left + popupW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - popupW - 8);
+        popup.style.position = 'fixed';
+        popup.style.zIndex = '9999';
+        popup.style.left = left + 'px';
+        popup.style.right = '';
+        popup.style.minWidth = popupW + 'px';
+        // Vertical: open downward when enough space below, otherwise upward
+        if (spaceBelow >= popupH || spaceBelow >= spaceAbove) {
+          popup.style.top = (rect.bottom + 6) + 'px';
+          popup.style.bottom = '';
+        } else {
+          popup.style.top = '';
+          popup.style.bottom = (window.innerHeight - rect.top + 6) + 'px';
+        }
+      }
+
       if (!_dtDocListener) {
         _dtDocListener = function (e) {
           if (!e.target || !e.target.closest || !e.target.closest('.bsf-dt-picker')) closeAllDtPickers();
