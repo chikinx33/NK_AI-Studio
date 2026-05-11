@@ -147,8 +147,8 @@ body.layout-fixed .sidebar.has-project-selection .nav::-webkit-scrollbar {
 
 .draft-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  gap: 14px;
   justify-content: flex-start;
   align-content: flex-start;
 }
@@ -381,12 +381,12 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 .draft-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 14px;
   box-shadow: var(--shadow);
   position: relative;
   cursor: pointer;
@@ -410,7 +410,7 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 
 .draft-top {
   display: flex;
-  gap: 16px;
+  gap: 12px;
 }
 
 .draft-info {
@@ -419,9 +419,9 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 }
 
 .draft-thumb {
-  width: 100px;
-  height: 100px;
-  border-radius: 14px;
+  width: 86px;
+  height: 86px;
+  border-radius: 12px;
   flex-shrink: 0;
   padding: 0;
   display: inline-flex;
@@ -555,36 +555,36 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 .draft-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.35;
+  font-size: 11.5px;
+  line-height: 1.3;
 }
 
 .draft-meta-project {
   color: #6fb8ff;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 700;
 }
 
 .draft-actions {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 10px;
+  gap: 6px;
   align-items: center;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .draft-actions .btn-primary,
 .draft-actions .btn-secondary {
   min-width: 0;
-  height: 38px;
-  padding: 0 10px;
+  height: 34px;
+  padding: 0 8px;
   justify-content: center;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 13px;
+  font-size: 12px;
   background: linear-gradient(135deg, rgba(255, 140, 0, 0.9), rgba(255, 110, 0, 0.9));
   color: #0b0f1c;
   border: 1px solid rgba(255, 140, 0, 0.35);
