@@ -2075,14 +2075,16 @@
             var perCardPicker = buildDtPickerHtml(null, null, '', 'bsf-deploy-dt-' + formatId);
             return (
               '<div class="bsf-deploy-format-row">' +
-              '<div class="bsf-deploy-format-head">' +
-                '<strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
-                '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>' +
-                '<span class="brand-channel-badge bsf-deploy-status-badge">' + draftBadge + '</span>' +
-                '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
-                '<button type="button" class="bsf-deploy-one-btn btn-primary compact" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected ? '' : ' disabled') + '>' + (isEn ? 'Deploy' : '배포') + '</button>' +
-              '</div>' +
-              '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
+                '<div class="bsf-deploy-format-body">' +
+                  '<div class="bsf-deploy-format-head">' +
+                    '<strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
+                    '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>' +
+                    '<span class="brand-channel-badge bsf-deploy-status-badge">' + draftBadge + '</span>' +
+                    '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
+                  '</div>' +
+                  '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
+                '</div>' +
+                '<button type="button" class="bsf-deploy-one-btn btn-primary" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected ? '' : ' disabled') + '>' + (isEn ? 'Deploy' : '배포') + '</button>' +
               '</div>'
             );
           }).join('')

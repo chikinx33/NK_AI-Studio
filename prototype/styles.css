@@ -13054,13 +13054,22 @@ body {
   gap: 10px;
 }
 .bsf-deploy-format-row {
-  padding: 13px 16px;
+  padding: 0 0 0 16px;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--bg);
   display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  overflow: hidden;
+}
+.bsf-deploy-format-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
   flex-direction: column;
   gap: 5px;
+  padding: 13px 12px 13px 0;
 }
 .bsf-deploy-format-head {
   display: flex;
@@ -13068,30 +13077,40 @@ body {
   gap: 10px;
 }
 .bsf-deploy-format-head strong {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--text);
   flex-shrink: 0;
+  line-height: 1.2;
 }
 .bsf-deploy-fmt-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
 }
+/* Uniform height for inline head items */
+.bsf-deploy-card-dt .bsf-dt-trigger,
+.bsf-deploy-status-badge,
+.bsf-deploy-connect-badge {
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+}
 .bsf-deploy-status-badge {
   flex-shrink: 0;
+  font-size: 11px;
 }
 .bsf-deploy-one-btn {
-  margin-left: auto;
   flex-shrink: 0;
-  width: 36px !important;
-  height: 36px !important;
-  min-width: 36px !important;
+  align-self: stretch;
+  aspect-ratio: 1 / 1;
   padding: 0 !important;
   display: flex !important;
   align-items: center;
   justify-content: center;
-  border-radius: 10px !important;
+  border-radius: 0 10px 10px 0 !important;
+  font-size: 13px !important;
 }
 .bsf-deploy-one-btn:disabled {
   opacity: 0.5;
