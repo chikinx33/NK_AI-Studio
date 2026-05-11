@@ -150,8 +150,6 @@
         username: result.username || '',
       });
       render();
-      // 백그라운드에서 서버 최신 데이터 동기화 (igUserId·token 등 보완)
-      loadSettings().then(function () { render(); }).catch(function () {});
       alert(platform + ' 연결 완료! @' + (result.username || ''));
     } else {
       alert(platform + ' 연결 실패: ' + (result && result.error ? result.error : '알 수 없는 오류'));
