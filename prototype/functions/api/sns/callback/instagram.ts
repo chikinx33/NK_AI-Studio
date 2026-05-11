@@ -126,8 +126,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     return popupHtml({ ok: false, error: "Invalid state" });
   }
 
-  const appId = env.META_APP_ID;
-  const appSecret = env.META_APP_SECRET;
+  const appId = env.INSTAGRAM_APP_ID;
+  const appSecret = env.INSTAGRAM_APP_SECRET;
   const redirectUri = env.META_REDIRECT_URI;
 
   if (!appId || !appSecret || !redirectUri) {

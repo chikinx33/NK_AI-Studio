@@ -11,11 +11,11 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
 
-  const appId = env.META_APP_ID;
+  const appId = env.INSTAGRAM_APP_ID;
   const redirectUri = env.META_REDIRECT_URI;
 
   if (!appId || !redirectUri) {
-    return send({ error: "META_APP_ID or META_REDIRECT_URI not configured" }, 500);
+    return send({ error: "INSTAGRAM_APP_ID or META_REDIRECT_URI not configured" }, 500);
   }
 
   const state = btoa(JSON.stringify({
@@ -26,15 +26,12 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
-    scope: [
-      "instagram_business_basic",
-      "instagram_business_content_publish",
-    ].join(","),
+    scope: "instagram_business_basic,instagram_business_content_publish",
     response_type: "code",
     state,
   });
 
-  const oauthUrl = `https://api.instagram.com/oauth/authorize?${params.toString()}`;
+  const oauthUrl = `https://www.instagram.com/oauth/authorize?${params.toString()}`;
 
   return send({ ok: true, oauthUrl });
 };
