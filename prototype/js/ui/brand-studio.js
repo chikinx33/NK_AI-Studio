@@ -3015,10 +3015,13 @@
           : Promise.reject(new Error('api_not_ready'))
         ).then(function (result) {
           hideDraftSkeleton(regenPanel);
-          ['caption', 'hashtags', 'title'].forEach(function (fieldKey) {
+          ['caption', 'hashtags', 'title', 'first_comment'].forEach(function (fieldKey) {
             if (!result[fieldKey]) return;
             var ceEl = regenPanel.querySelector('[data-draft-format="' + regenFmtId + '"][data-draft-field="' + fieldKey + '"]');
-            if (ceEl) ceEl.innerText = result[fieldKey];
+            if (ceEl) {
+              if (ceEl.tagName === 'INPUT' || ceEl.tagName === 'TEXTAREA') ceEl.value = result[fieldKey];
+              else ceEl.innerText = result[fieldKey];
+            }
             var mirror = regenPanel.querySelector('[data-mock-mirror="' + regenFmtId + '"][data-mock-field="' + fieldKey + '"]');
             if (mirror) {
               var displayText = String(result[fieldKey]);
@@ -3125,10 +3128,13 @@
               var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
               if (panel) {
                 hideDraftSkeleton(panel);
-                ['caption', 'hashtags', 'title'].forEach(function (fieldKey) {
+                ['caption', 'hashtags', 'title', 'first_comment'].forEach(function (fieldKey) {
                   if (!res[fieldKey]) return;
                   var ceEl = panel.querySelector('[data-draft-format="' + fid + '"][data-draft-field="' + fieldKey + '"]');
-                  if (ceEl) ceEl.innerText = res[fieldKey];
+                  if (ceEl) {
+                    if (ceEl.tagName === 'INPUT' || ceEl.tagName === 'TEXTAREA') ceEl.value = res[fieldKey];
+                    else ceEl.innerText = res[fieldKey];
+                  }
                   var mirror = panel.querySelector('[data-mock-mirror="' + fid + '"][data-mock-field="' + fieldKey + '"]');
                   if (mirror) { var dt = String(res[fieldKey]); mirror.textContent = dt.length > 80 ? dt.slice(0, 80) + '…' : dt; }
                 });

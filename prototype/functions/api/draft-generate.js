@@ -27,7 +27,7 @@ const PLATFORM_PROMPTS = {
 
 [출력 형식]
 반드시 아래 JSON만 반환. 설명·마크다운 없이.
-{"caption":"...","hashtags":"#태그1 #태그2 ..."}
+{"caption":"...","hashtags":"#태그1 #태그2 ...","first_comment":"첫 댓글로 자동 게시될 보조 텍스트 (추가 해시태그 또는 링크 안내 등, 1~2줄)"}
 `.trim(),
 
   youtube: `
