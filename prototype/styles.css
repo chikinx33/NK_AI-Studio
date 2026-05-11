@@ -12109,25 +12109,28 @@ body {
 }
 .bsf-refine-input:focus { border-color: var(--accent); }
 .bsf-refine-input::placeholder { color: var(--text-3); }
-.bsf-refine-btn {
+.bsf-refine-btn,
+.bsf-card-gen-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   height: 32px;
-  padding: 0 12px;
+  padding: 0 11px;
   border: none;
   border-radius: 7px;
-  background: var(--accent);
-  color: #fff;
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  color: #0b0b0b;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
   transition: opacity 0.15s;
 }
-.bsf-refine-btn:hover { opacity: 0.85; }
-.bsf-refine-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.bsf-refine-btn:hover,
+.bsf-card-gen-btn:hover { opacity: 0.85; }
+.bsf-refine-btn:disabled,
+.bsf-card-gen-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* Step 3 — Draft media preview */
 .bsf-draft-media-preview {

@@ -1548,12 +1548,16 @@
       return '<button type="button" class="bsf-draft-regen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(fmtId) + '">' + escapeHtml(T.draftRegen) + '</button>';
     }
     function refineBarHtml(fmtId) {
+      var svgRegen = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>';
+      var svgEdit  = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
       return (
         '<div class="bsf-refine-bar">' +
-          '<input type="text" class="bsf-refine-input" data-refine-format="' + escapeHtml(fmtId) + '" placeholder="' + (isEn ? 'e.g. Make the tone more comic, add CTA…' : '예: 톤을 더 코믹하게, CTA 추가해줘…') + '" maxlength="200">' +
-          '<button type="button" class="bsf-refine-btn" data-action="brand-refine-draft" data-format-id="' + escapeHtml(fmtId) + '">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>' +
-            (isEn ? 'AI Refine' : 'AI 보완') +
+          '<button type="button" class="bsf-card-gen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(fmtId) + '" title="' + (isEn ? 'Generate for this platform only' : '이 플랫폼만 신규 생성') + '">' +
+            svgRegen + (isEn ? 'Generate' : '신규 생성') +
+          '</button>' +
+          '<input type="text" class="bsf-refine-input" data-refine-format="' + escapeHtml(fmtId) + '" placeholder="' + (isEn ? 'e.g. Make the tone more comic…' : '예: 톤을 더 코믹하게…') + '" maxlength="200">' +
+          '<button type="button" class="bsf-refine-btn" data-action="brand-refine-draft" data-format-id="' + escapeHtml(fmtId) + '" title="' + (isEn ? 'Apply instruction' : '지시 적용') + '">' +
+            svgEdit + (isEn ? 'AI Refine' : 'AI 보완') +
           '</button>' +
         '</div>'
       );
