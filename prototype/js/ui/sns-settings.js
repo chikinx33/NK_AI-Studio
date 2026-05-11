@@ -95,21 +95,49 @@
     return base;
   }
 
+  function _mergeSnsState(serverSns, cachedSns) {
+    // cache가 connected인데 server가 disconnected면 cache 우선 (GCS 404 폴백 방어)
+    var out = {};
+    var keys = ['instagram', 'youtube', 'tiktok', 'facebook', 'x-threads',
+                'youtube-shorts', 'naver-blog', 'naver-post', 'kakao', 'band', 'linkedin', 'pinterest'];
+    var allKeys = {};
+    keys.forEach(function (k) { allKeys[k] = true; });
+    Object.keys(serverSns || {}).forEach(function (k) { allKeys[k] = true; });
+    Object.keys(cachedSns || {}).forEach(function (k) { allKeys[k] = true; });
+
+    Object.keys(allKeys).forEach(function (p) {
+      var srv = (serverSns && serverSns[p]) || null;
+      var cch = (cachedSns && cachedSns[p]) || null;
+      if (cch && cch.connected && (!srv || !srv.connected)) {
+        out[p] = Object.assign({}, srv || {}, cch);
+      } else if (srv) {
+        out[p] = srv;
+      } else if (cch) {
+        out[p] = cch;
+      } else {
+        out[p] = { connected: false };
+      }
+    });
+    return out;
+  }
+
   function loadSettings() {
+    var cached = _readCache();
     return apiGet('/api/userdata/sns/get').then(function (res) {
       if (res && res.ok && res.settings) {
         _settings = res.settings;
-        _writeCache(_settings.sns); // 성공 시 캐시 갱신
+        _settings.sns = _mergeSnsState(_settings.sns, cached);
+        _writeCache(_settings.sns); // 머지 결과로 캐시 갱신
       } else {
         // 서버 오류 → 캐시 폴백
         console.warn('[SNS] loadSettings server error:', res && res.error);
-        _settings = _defaultSettings(_readCache());
+        _settings = _defaultSettings(cached);
       }
       return _settings;
     }).catch(function (err) {
       // 네트워크/502 오류 → 캐시 폴백
       console.warn('[SNS] loadSettings fetch error:', err && err.message || err);
-      _settings = _defaultSettings(_readCache());
+      _settings = _defaultSettings(cached);
       return _settings;
     });
   }
