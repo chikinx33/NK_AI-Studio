@@ -2078,11 +2078,9 @@
               '<div class="bsf-deploy-format-head">' +
                 '<strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
                 '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>' +
-                '<div class="bsf-deploy-format-head-right">' +
-                  '<span class="brand-channel-badge">' + draftBadge + '</span>' +
-                  '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
-                  '<button type="button" class="bsf-deploy-one-btn" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected ? '' : ' disabled') + '>' + (isEn ? 'Deploy' : '배포') + '</button>' +
-                '</div>' +
+                '<span class="brand-channel-badge bsf-deploy-status-badge">' + draftBadge + '</span>' +
+                '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
+                '<button type="button" class="bsf-deploy-one-btn btn-primary compact" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected ? '' : ' disabled') + '>' + (isEn ? 'Deploy' : '배포') + '</button>' +
               '</div>' +
               '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
               '</div>'
