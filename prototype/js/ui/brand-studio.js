@@ -2056,7 +2056,11 @@
       'naver-post':     '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/></svg>',
       'band':           '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>'
     };
+    function _readSnsStates() {
+      try { return JSON.parse(localStorage.getItem('nk_sns_states') || '{}'); } catch (e) { return {}; }
+    }
     function buildDeploySummaryHtml() {
+      var snsStates = _readSnsStates();
       return selectedFormats.length
         ? selectedFormats.map(function (formatId) {
             var fmt = formatItems.find(function (f) { return f.id === formatId; });
@@ -2065,12 +2069,25 @@
             var hasDraft = !!(caption || String(draft.hashtags || '').trim());
             var draftBadge = isEn ? (hasDraft ? 'Draft ready' : 'No draft') : (hasDraft ? '초안 완료' : '초안 없음');
             var icon = _platformIcons[formatId] || '';
+            var isConnected = !!(snsStates[formatId] && snsStates[formatId].connected);
+            var connectLabel = isEn ? (isConnected ? 'Connected' : 'Not connected') : (isConnected ? '연결됨' : '연결 안됨');
+            var connectCls = isConnected ? 'is-connected' : 'is-disconnected';
+            var perCardPicker = buildDtPickerHtml(null, null, '', 'bsf-deploy-dt-' + formatId);
             return (
               '<div class="bsf-deploy-format-row">' +
-              '<div class="bsf-deploy-format-head"><strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
-              '<div class="bsf-deploy-format-head-right"><span class="brand-channel-badge">' + draftBadge + '</span>' +
-              '<button type="button" class="bsf-deploy-one-btn" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '">' + (isEn ? 'Deploy' : '배포') + '</button></div></div>' +
+              '<div class="bsf-deploy-format-head">' +
+                '<strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
+                '<div class="bsf-deploy-format-head-right">' +
+                  '<span class="brand-channel-badge">' + draftBadge + '</span>' +
+                  '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
+                  '<button type="button" class="bsf-deploy-one-btn" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected ? '' : ' disabled') + '>' + (isEn ? 'Deploy' : '배포') + '</button>' +
+                '</div>' +
+              '</div>' +
               '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
+              '<div class="bsf-deploy-card-dt">' +
+                '<span class="bsf-deploy-card-dt-label">' + (isEn ? 'Schedule' : '예약') + '</span>' +
+                perCardPicker +
+              '</div>' +
               '</div>'
             );
           }).join('')
@@ -2138,16 +2155,16 @@
       '<div class="bsf-format-draft-panels">' + draftPanelsHtml + '</div>' +
       '</div>' +
       '<div class="bsf-detail' + (activeStep === 4 ? ' is-active' : '') + '">' +
-      '<div class="bsf-detail-head bsf-detail-head-asset">' +
+      '<div class="bsf-detail-head bsf-detail-head-asset bsf-detail-head-deploy">' +
         '<strong>' + T.head04 + '</strong>' +
-        '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
+        '<div class="bsf-deploy-head-right">' +
+          '<span class="bsf-deploy-global-dt-label">' + T.placeholderSchedule + '</span>' +
+          buildDtPickerHtml(null, null, publishPlan.scheduledAt || '', 'brand-publish-datetime') +
+          '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
+        '</div>' +
         '<span>' + T.head04sub + '</span>' +
       '</div>' +
       '<div class="bsf-deploy-summary">' + deployFormatSummary + '</div>' +
-      '<div class="brand-publish-fields" style="padding-top:12px;">' +
-      '<div class="brand-publish-field"><span class="brand-caption-meta-label">' + T.placeholderSchedule + '</span>' +
-      buildDtPickerHtml(null, null, publishPlan.scheduledAt || '', 'brand-publish-datetime') + '</div>' +
-      '</div>' +
       '</div>' +
       '</div>' +
       '</section>';
@@ -3145,8 +3162,9 @@
       if (action === 'brand-deploy-one-format') {
         var oneFmtId = String(btn.dataset.deployFormat || '').trim();
         if (!oneFmtId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var publishInputElOne = root.querySelector('#brand-publish-datetime');
-        var scheduledAtOne = publishInputElOne ? String(publishInputElOne.value || '').trim() : '';
+        var perCardInputOne = root.querySelector('#bsf-deploy-dt-' + oneFmtId);
+        var globalInputOne = root.querySelector('#brand-publish-datetime');
+        var scheduledAtOne = (perCardInputOne && String(perCardInputOne.value || '').trim()) || (globalInputOne ? String(globalInputOne.value || '').trim() : '');
         btn.disabled = true;
         var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: scheduledAtOne ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlanOne }, { brandStudioPublishPlan: deployPlanOne })
@@ -3175,7 +3193,9 @@
             if (result && result.draft) renderNext(result.draft);
             return selectedFormats.reduce(function (chain, fmtId) {
               return chain.then(function () {
-                return snsPublishFormat(fmtId, formatDrafts, scheduledAt);
+                var fmtPerCard = root.querySelector('#bsf-deploy-dt-' + fmtId);
+                var fmtScheduledAt = (fmtPerCard && String(fmtPerCard.value || '').trim()) || scheduledAt;
+                return snsPublishFormat(fmtId, formatDrafts, fmtScheduledAt);
               });
             }, Promise.resolve());
           })
