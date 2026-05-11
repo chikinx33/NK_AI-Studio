@@ -13166,7 +13166,7 @@ textarea.bsf-skeleton {
   gap: 10px;
 }
 .bsf-deploy-format-row {
-  padding: 0 0 0 16px;
+  padding: 0;
   border-radius: 12px;
   border: 1px solid var(--border);
   background: var(--bg);
@@ -13175,13 +13175,27 @@ textarea.bsf-skeleton {
   align-items: stretch;
   overflow: hidden;
 }
+.bsf-deploy-platform-icon {
+  flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  background: var(--surface-2, rgba(255,255,255,0.04));
+  border-right: 1px solid var(--border);
+}
+.bsf-deploy-platform-icon svg {
+  width: 28px;
+  height: 28px;
+}
 .bsf-deploy-format-body {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding: 13px 12px 13px 0;
+  padding: 13px 12px 13px 14px;
 }
 .bsf-deploy-format-head {
   display: flex;

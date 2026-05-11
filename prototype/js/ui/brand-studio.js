@@ -2157,9 +2157,10 @@
             var perCardPicker = buildDtPickerHtml(null, null, '', 'bsf-deploy-dt-' + formatId);
             return (
               '<div class="bsf-deploy-format-row">' +
+                '<div class="bsf-deploy-platform-icon">' + icon + '</div>' +
                 '<div class="bsf-deploy-format-body">' +
                   '<div class="bsf-deploy-format-head">' +
-                    '<strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
+                    '<strong class="bsf-deploy-fmt-title">' + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
                     '<div class="bsf-deploy-card-dt">' + perCardPicker + '</div>' +
                     '<span class="brand-channel-badge bsf-deploy-status-badge">' + draftBadge + '</span>' +
                     '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectLabel + '</span>' +
