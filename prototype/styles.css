@@ -12515,6 +12515,18 @@ textarea.bsf-skeleton {
   transition: background 0.12s;
 }
 .bsf-dt-foot-today:hover { background: rgba(255,154,61,0.1); }
+.bsf-dt-foot-now {
+  font-size: 12px;
+  font-weight: 600;
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  border: none;
+  color: #0b0b0b;
+  border-radius: 5px;
+  padding: 4px 14px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.bsf-dt-foot-now:hover { opacity: 0.85; }
 /* 라디오 그룹 */
 .bsf-radio-group { display: flex; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
 .bsf-radio-group label { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--text-2); cursor: pointer; }

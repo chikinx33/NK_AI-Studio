@@ -269,11 +269,6 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
     const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
     const bucket = outParsed.bucket;
-    const basePrefix = outParsed.object.replace(/\/$/, "");
-    const settingsObjectName = buildUserDataObject(basePrefix, userId, "sns-settings.json");
-    const settings = await loadSnsSettings(bucket, settingsObjectName, googleToken);
-
-    if (!settings) return send({ error: "SNS 설정이 없습니다. 먼저 채널을 연결하세요." }, 400);
 
     if (platform === "instagram") {
       const accessToken = env.IG_ACCESS_TOKEN;

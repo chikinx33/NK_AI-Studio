@@ -2676,6 +2676,7 @@
       return y + '-' + p(mo) + '-' + p(d) + 'T' + p(h) + ':' + p(mi);
     }
     function dtDisplay(val) {
+      if (val === 'now') return isEn ? 'Immediately' : '즉시';
       var dp = dtParsed(val);
       if (!dp) return isEn ? 'Select date & time' : '날짜 · 시간 선택';
       var p = function (n) { return String(n).padStart(2, '0'); };
@@ -2739,6 +2740,7 @@
         '</div>' +
         '<div class="bsf-dt-foot">' +
           '<button type="button" class="bsf-dt-foot-del" data-action="bsf-dt-del-val">' + (isEn ? 'Delete' : '삭제') + '</button>' +
+          '<button type="button" class="bsf-dt-foot-now" data-action="bsf-dt-now">' + (isEn ? 'Now' : '즉시') + '</button>' +
           '<button type="button" class="bsf-dt-foot-today" data-action="bsf-dt-today">' + (isEn ? 'Today' : '오늘') + '</button>' +
         '</div>'
       );
@@ -2940,6 +2942,8 @@
         } else if (action === 'bsf-dt-m-up' || action === 'bsf-dt-m-dn') {
           var mii = dtp.querySelector('.bsf-dt-m-inp');
           if (mii) { mii.value = Math.min(59, Math.max(0, (parseInt(mii.value) || 0) + (action === 'bsf-dt-m-up' ? 5 : -5))); applyDtTime(dtp); }
+        } else if (action === 'bsf-dt-now') {
+          setDtPickerValue(dtp, 'now'); closeDtPicker(dtp);
         } else if (action === 'bsf-dt-today') {
           var now2 = new Date(); var hm2 = getDtHM(dtp);
           dtp.dataset.dtViewY = now2.getFullYear(); dtp.dataset.dtViewMo = now2.getMonth() + 1;
@@ -3319,7 +3323,7 @@
             mediaType: mediaType,
             mediaGcsPath: mediaGcsPath,
             caption: finalCaption,
-            scheduledAt: scheduledAt || '',
+            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
             firstComment: firstComment || '',
           }),
         })
@@ -3337,7 +3341,7 @@
         var globalInputOne = root.querySelector('#brand-publish-datetime');
         var scheduledAtOne = (perCardInputOne && String(perCardInputOne.value || '').trim()) || (globalInputOne ? String(globalInputOne.value || '').trim() : '');
         btn.disabled = true;
-        var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: scheduledAtOne ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
+        var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: (scheduledAtOne && scheduledAtOne !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlanOne }, { brandStudioPublishPlan: deployPlanOne })
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
@@ -3358,7 +3362,7 @@
         var publishInputEl = root.querySelector('#brand-publish-datetime');
         var scheduledAt = publishInputEl ? String(publishInputEl.value || '').trim() : '';
         btn.disabled = true;
-        var deployPlan = { channels: selectedFormats.slice(), scheduledAt: scheduledAt, status: scheduledAt ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
+        var deployPlan = { channels: selectedFormats.slice(), scheduledAt: scheduledAt, status: (scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
