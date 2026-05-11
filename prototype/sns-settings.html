@@ -1,10 +1,18 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="dark" class="layout-fixed page-shell-brand preload-veiled">
+<html lang="ko" data-theme="dark" class="layout-fixed preload-veiled">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NK_Studio · SNS 채널 설정</title>
-  <link rel="stylesheet" href="styles.dashboard-cards.css" />
+  <style>
+    html.preload-veiled, body.preload-veiled { background:#0f172a; color:#cbd5e1; }
+    html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css" />
   <script src="core.js" defer></script>
   <script src="js/config.js" defer></script>
   <script src="js/utils.js" defer></script>
@@ -20,19 +28,16 @@
   <script src="js/ui/sns-settings.js" defer></script>
   <script src="script.js" defer></script>
 </head>
-<body class="layout-fixed page-shell-brand">
-  <div class="app">
-    <aside class="sidebar">
-      <nav class="nav">
-        <a class="nav-item" href="brand-dashboard.html">대시보드</a>
-        <a class="nav-item" href="brand.html">브랜드 스튜디오</a>
-        <a class="nav-item" href="knowledge.html">브랜드 허브</a>
-        <a class="nav-item" href="analytics.html">성과 분석</a>
-        <a class="nav-item" href="library.html">콘텐츠 저장소</a>
-        <a class="nav-item is-active" href="sns-settings.html">SNS 설정</a>
-      </nav>
-    </aside>
-    <main class="main blur-target">
+<body class="layout-fixed">
+  <div class="grain"></div>
+  <div class="app no-sidebar">
+    <div id="auth-overlay" class="auth-overlay hidden">
+      <div class="auth-card">
+        <p class="auth-title">로그인 하세요.</p>
+        <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
+      </div>
+    </div>
+    <main class="main">
       <div class="main-body">
         <section class="content"></section>
       </div>
