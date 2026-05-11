@@ -43,6 +43,58 @@
     'pinterest':      '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>',
   };
 
+  var T = {
+    ko: {
+      eyebrow:       'SNS 설정 › 채널 연결',
+      heroDesc:      '채널을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.',
+      saveBtn:       '설정 저장',
+      saving:        '저장 중...',
+      saved:         '저장 완료 ✓',
+      saveFail:      '저장 실패',
+      saveErr:       '저장 오류',
+      comingSoon:    '준비 중',
+      notConnected:  '미연결',
+      connected:     '연결됨',
+      disconnect:    '연결 해제',
+      connect:       '연결하기',
+      disconnectConfirm: function (p) { return p + ' 연결을 해제할까요?'; },
+      oauthFail:     'OAuth 시작 실패',
+      serverErr:     '서버 오류',
+      connectOk:     function (p, u) { return p + ' 연결 완료! @' + u; },
+      connectFail:   function (p, e) { return p + ' 연결 실패: ' + e; },
+      unknownErr:    '알 수 없는 오류',
+      loadFail:      '설정 로드 실패',
+      defaultProject: '프로젝트',
+    },
+    en: {
+      eyebrow:       'SNS Settings › Connect Channels',
+      heroDesc:      'Connect channels to publish directly from Brand Studio.',
+      saveBtn:       'Save Settings',
+      saving:        'Saving...',
+      saved:         'Saved ✓',
+      saveFail:      'Save failed',
+      saveErr:       'Save error',
+      comingSoon:    'Coming Soon',
+      notConnected:  'Not connected',
+      connected:     'Connected',
+      disconnect:    'Disconnect',
+      connect:       'Connect',
+      disconnectConfirm: function (p) { return 'Disconnect ' + p + '?'; },
+      oauthFail:     'OAuth failed',
+      serverErr:     'Server error',
+      connectOk:     function (p, u) { return p + ' connected! @' + u; },
+      connectFail:   function (p, e) { return p + ' connection failed: ' + e; },
+      unknownErr:    'Unknown error',
+      loadFail:      'Failed to load settings',
+      defaultProject: 'Project',
+    },
+  };
+
+  function _lang() {
+    return (localStorage.getItem('nk_lang') || 'ko') === 'en' ? 'en' : 'ko';
+  }
+  function t(key) { return T[_lang()][key]; }
+
   function escapeHtml(v) {
     return String(v == null ? '' : v)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -145,7 +197,7 @@
   function saveSettings() {
     if (_saving) return Promise.resolve();
     _saving = true;
-    setStatus('저장 중...', 'pending');
+    setStatus(t('saving'), 'pending');
     var payload = {
       sns: {
         instagram: {
@@ -160,14 +212,14 @@
     return apiPost('/api/userdata/sns/save', payload)
       .then(function (res) {
         if (res && res.ok) {
-          setStatus('저장 완료 ✓', 'success');
+          setStatus(t('saved'), 'success');
           setTimeout(function () { setStatus('', ''); }, 2000);
         } else {
-          setStatus('저장 실패: ' + (res && res.error ? res.error : '알 수 없는 오류'), 'error');
+          setStatus(t('saveFail') + ': ' + (res && res.error ? res.error : t('unknownErr')), 'error');
         }
       })
       .catch(function (err) {
-        setStatus('저장 오류: ' + (err && err.message ? err.message : err), 'error');
+        setStatus(t('saveErr') + ': ' + (err && err.message ? err.message : err), 'error');
       })
       .finally(function () { _saving = false; });
   }
@@ -175,7 +227,7 @@
   function startOAuth(platform) {
     apiGet('/api/sns/connect/' + platform).then(function (res) {
       if (!res || !res.ok || !res.oauthUrl) {
-        alert('OAuth 시작 실패: ' + (res && res.error ? res.error : '서버 오류'));
+        alert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
         return;
       }
       var w = 600, h = 700;
@@ -202,9 +254,9 @@
       render();
       // 클라이언트 save 엔드포인트로 명시적 저장 (새로고침 후 유지)
       saveSettings().catch(function () {});
-      alert(platform + ' 연결 완료! @' + (result.username || ''));
+      alert(T[_lang()].connectOk(platform, result.username || ''));
     } else {
-      alert(platform + ' 연결 실패: ' + (result && result.error ? result.error : '알 수 없는 오류'));
+      alert(T[_lang()].connectFail(platform, result && result.error ? result.error : t('unknownErr')));
     }
   }
 
@@ -223,7 +275,7 @@
       var platform = toggleLabel.dataset.platform;
       var connected = !!((_settings && _settings.sns && _settings.sns[platform]) && _settings.sns[platform].connected);
       if (connected) {
-        if (!confirm(platform + ' 연결을 해제할까요?')) return;
+        if (!confirm(T[_lang()].disconnectConfirm(platform))) return;
         _settings.sns[platform] = { connected: false };
         _writeCache(_settings.sns); // 해제 상태도 캐시 반영
         saveSettings().then(function () { render(); });
@@ -249,11 +301,11 @@
     var comingSoon = !!platform.comingSoon;
     var icon = _platformIcons[platform.id] || '';
 
-    var statusText = comingSoon ? '준비 중' : (connected ? (username ? '@' + escapeHtml(username) : '연결됨') : '미연결');
+    var statusText = comingSoon ? t('comingSoon') : (connected ? (username ? '@' + escapeHtml(username) : t('connected')) : t('notConnected'));
 
     var toggleHtml = comingSoon
-      ? '<span class="sns-soon-label">준비 중</span>'
-      : '<label class="sns-toggle" data-platform="' + platform.id + '" title="' + (connected ? '연결 해제' : '연결하기') + '">' +
+      ? '<span class="sns-soon-label">' + t('comingSoon') + '</span>'
+      : '<label class="sns-toggle" data-platform="' + platform.id + '" title="' + (connected ? t('disconnect') : t('connect')) + '">' +
           '<input type="checkbox" ' + (connected ? 'checked' : '') + ' />' +
           '<span class="sns-toggle-track"></span>' +
         '</label>';
@@ -275,8 +327,8 @@
     if (!root) return;
 
     var ctx = resolveProjectContext();
-    var heroTitle = ctx.brandTitle || '프로젝트';
-    var heroDesc = '채널을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.';
+    var heroTitle = ctx.brandTitle || t('defaultProject');
+    var heroDesc = t('heroDesc');
 
     var cards = PLATFORMS.map(buildPlatformCard).join('');
 
@@ -287,13 +339,13 @@
         '<div class="bsf-flow-card sns-hero-card">',
           '<div class="bsf-flow-head">',
             '<div class="bsf-flow-title-group">',
-              '<p class="brand-studio-eyebrow">SNS 설정 &rsaquo; 채널 연결</p>',
+              '<p class="brand-studio-eyebrow">' + t('eyebrow') + '</p>',
               '<h2 class="bsf-title">', escapeHtml(heroTitle), '</h2>',
               '<p class="bsf-desc">', escapeHtml(heroDesc), '</p>',
             '</div>',
             '<div class="bsf-flow-head-actions">',
               '<span id="sns-save-status" class="sns-save-status"></span>',
-              '<button type="button" class="bsf-head-btn btn-primary" data-action="sns-save">설정 저장</button>',
+              '<button type="button" class="bsf-head-btn btn-primary" data-action="sns-save">' + t('saveBtn') + '</button>',
             '</div>',
           '</div>',
         '</div>',
@@ -322,7 +374,7 @@
       .then(function () { render(); })
       .catch(function (err) {
         var root = document.querySelector('.content');
-        if (root) root.innerHTML = '<div class="brand-asset-empty">설정 로드 실패: ' + (err && err.message ? err.message : err) + '</div>';
+        if (root) root.innerHTML = '<div class="brand-asset-empty">' + t('loadFail') + ': ' + (err && err.message ? err.message : err) + '</div>';
       });
   }
 
