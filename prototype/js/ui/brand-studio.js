@@ -2168,13 +2168,19 @@
                   '</div>' +
                   '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
                 '</div>' +
-                '<button type="button" class="bsf-deploy-one-btn btn-primary" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected ? '' : ' disabled') + '>' + (isEn ? 'Deploy' : '배포') + '</button>' +
+                (function () {
+                  var isDeploying = !!_deployingFormats[formatId];
+                  var btnCls = 'bsf-deploy-one-btn btn-primary' + (isDeploying ? ' is-deploying' : '');
+                  var btnContent = isDeploying ? '<span class="bsf-deploy-btn-spinner"></span>' : (isEn ? 'Deploy' : '배포');
+                  return '<button type="button" class="' + btnCls + '" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected && !isDeploying ? '' : ' disabled') + '>' + btnContent + '</button>';
+                })() +
               '</div>'
             );
           }).join('')
         : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     }
     var _deployedFormats = {};
+    var _deployingFormats = {};
     var deployFormatSummary = buildDeploySummaryHtml();
     function makeCtrlBarHtml(step) {
       if (step === 1) {
@@ -3343,10 +3349,8 @@
         var perCardInputOne = root.querySelector('#bsf-deploy-dt-' + oneFmtId);
         var globalInputOne = root.querySelector('#brand-publish-datetime');
         var scheduledAtOne = (perCardInputOne && String(perCardInputOne.value || '').trim()) || (globalInputOne ? String(globalInputOne.value || '').trim() : '');
-        var oneBtnLabel = isEn ? 'Deploy' : '배포';
-        btn.disabled = true;
-        btn.classList.add('is-deploying');
-        btn.innerHTML = '<span class="bsf-deploy-btn-spinner"></span>';
+        _deployingFormats[oneFmtId] = true;
+        refreshDeploySummary();
         var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: (scheduledAtOne && scheduledAtOne !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlanOne }, { brandStudioPublishPlan: deployPlanOne })
           .then(function (result) {
@@ -3357,39 +3361,43 @@
             if (publishResult && publishResult.skipped) return;
             if (publishResult && publishResult.ok) {
               _deployedFormats[oneFmtId] = true;
-              refreshDeploySummary();
             }
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; btn.classList.remove('is-deploying'); btn.textContent = oneBtnLabel; });
+          .finally(function () { delete _deployingFormats[oneFmtId]; refreshDeploySummary(); });
         return;
       }
       if (action === 'brand-deploy-all-formats') {
         if (!selectedFormats.length || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var publishInputEl = root.querySelector('#brand-publish-datetime');
         var scheduledAt = publishInputEl ? String(publishInputEl.value || '').trim() : '';
-        var allBtnLabel = btn.textContent || (isEn ? 'Publish All' : T.ctrlPublishAll);
+        var allFmtIds = selectedFormats.slice();
+        allFmtIds.forEach(function (fmtId) { _deployingFormats[fmtId] = true; });
         btn.disabled = true;
         btn.classList.add('is-deploying');
         btn.innerHTML = '<span class="bsf-deploy-btn-spinner"></span>';
-        var deployPlan = { channels: selectedFormats.slice(), scheduledAt: scheduledAt, status: (scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
+        refreshDeploySummary();
+        var deployPlan = { channels: allFmtIds, scheduledAt: scheduledAt, status: (scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
-            return selectedFormats.reduce(function (chain, fmtId) {
+            return allFmtIds.reduce(function (chain, fmtId) {
               return chain.then(function () {
                 var fmtPerCard = root.querySelector('#bsf-deploy-dt-' + fmtId);
                 var fmtScheduledAt = (fmtPerCard && String(fmtPerCard.value || '').trim()) || scheduledAt;
-                return snsPublishFormat(fmtId, formatDrafts, fmtScheduledAt);
+                return snsPublishFormat(fmtId, formatDrafts, fmtScheduledAt)
+                  .then(function () { _deployedFormats[fmtId] = true; delete _deployingFormats[fmtId]; refreshDeploySummary(); });
               });
             }, Promise.resolve());
           })
-          .then(function () {
-            selectedFormats.forEach(function (fmtId) { _deployedFormats[fmtId] = true; });
-            refreshDeploySummary();
-          })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; btn.classList.remove('is-deploying'); btn.textContent = allBtnLabel; });
+          .finally(function () {
+            allFmtIds.forEach(function (fmtId) { delete _deployingFormats[fmtId]; });
+            btn.disabled = false;
+            btn.classList.remove('is-deploying');
+            btn.textContent = isEn ? 'Publish All' : (T.ctrlPublishAll || '전체 배포');
+            refreshDeploySummary();
+          });
         return;
       }
       if (action === 'brand-toggle-story-card') {
