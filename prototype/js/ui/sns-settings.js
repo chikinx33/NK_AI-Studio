@@ -288,6 +288,10 @@
               '<h2 class="bsf-title">', escapeHtml(heroTitle), '</h2>',
               '<p class="bsf-desc">', escapeHtml(heroDesc), '</p>',
             '</div>',
+            '<div class="bsf-flow-head-actions">',
+              '<span id="sns-save-status" class="sns-save-status"></span>',
+              '<button type="button" class="bsf-head-btn btn-primary" data-action="sns-save">설정 저장</button>',
+            '</div>',
           '</div>',
         '</div>',
 
@@ -296,10 +300,6 @@
           '<div class="sns-settings-inner">',
             '<div class="sns-platform-grid">', cards, '</div>',
             igForm,
-            '<div class="sns-settings-footer">',
-              '<span id="sns-save-status" class="sns-save-status"></span>',
-              '<button type="button" class="btn-primary" data-action="sns-save">설정 저장</button>',
-            '</div>',
           '</div>',
         '</div>',
 
