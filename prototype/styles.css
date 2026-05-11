@@ -13229,16 +13229,16 @@ textarea.bsf-skeleton {
 }
 .bsf-deploy-one-btn {
   flex-shrink: 0;
-  align-self: center;
-  margin: 8px;
+  align-self: stretch;
+  margin: 5px;
   padding: 0 !important;
-  height: 34px;
   aspect-ratio: 1 / 1;
   display: flex !important;
   align-items: center;
   justify-content: center;
-  border-radius: 8px !important;
-  font-size: 13px !important;
+  border-radius: 10px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
   white-space: nowrap;
 }
 .bsf-deploy-one-btn:disabled {
