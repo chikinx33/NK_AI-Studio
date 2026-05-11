@@ -256,9 +256,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     if (!settings) return send({ error: "SNS 설정이 없습니다. 먼저 채널을 연결하세요." }, 400);
 
     if (platform === "instagram") {
-      const ig = settings?.sns?.instagram;
-      if (!ig?.connected || !ig?.accessToken || !ig?.igUserId) {
-        return send({ error: "Instagram이 연결되지 않았습니다." }, 400);
+      const accessToken = env.IG_ACCESS_TOKEN;
+      const igUserId = env.IG_USER_ID;
+      if (!accessToken || !igUserId) {
+        return send({ error: "Instagram 환경변수(IG_ACCESS_TOKEN, IG_USER_ID)가 설정되지 않았습니다." }, 400);
       }
 
       const signedUrl = await buildSignedUrl(
@@ -270,8 +271,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       );
 
       const { postId } = await publishToInstagram({
-        igUserId: ig.igUserId,
-        accessToken: ig.accessToken,
+        igUserId,
+        accessToken,
         mediaType,
         mediaUrl: signedUrl,
         caption,
