@@ -1124,7 +1124,9 @@
         'knowledgeWorld',
         'knowledgeCharacters',
         'knowledgeCharacterSheets',
-        'knowledgeHub'
+        'knowledgeHub',
+        // Card visual (thumbnail) — referenced by object name, safe to share
+        'thumbnailObjectName'
     ];
 
     // Scene fields that represent pre-production script content.
