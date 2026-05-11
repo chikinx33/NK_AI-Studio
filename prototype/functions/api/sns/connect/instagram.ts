@@ -27,15 +27,14 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     client_id: appId,
     redirect_uri: redirectUri,
     scope: [
-      "pages_show_list",
-      "instagram_basic",
-      "instagram_content_publish",
+      "instagram_business_basic",
+      "instagram_business_content_publish",
     ].join(","),
     response_type: "code",
     state,
   });
 
-  const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
+  const oauthUrl = `https://api.instagram.com/oauth/authorize?${params.toString()}`;
 
   return send({ ok: true, oauthUrl });
 };
