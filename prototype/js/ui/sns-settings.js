@@ -10,27 +10,33 @@
     {
       id: 'instagram',
       label: 'Instagram',
-      icon: '📸',
-      color: '#E1306C',
       supportedFormats: ['instagram', 'instagram_story'],
     },
     {
       id: 'youtube',
       label: 'YouTube',
-      icon: '▶️',
-      color: '#FF0000',
       supportedFormats: ['youtube', 'youtube-shorts'],
       comingSoon: true,
     },
     {
       id: 'tiktok',
       label: 'TikTok',
-      icon: '🎵',
-      color: '#010101',
       supportedFormats: ['tiktok'],
       comingSoon: true,
     },
   ];
+
+  var _platformIcons = {
+    'instagram': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
+    'youtube':   '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
+    'tiktok':    '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.78a4.85 4.85 0 0 1-1.01-.09z"/></svg>',
+  };
+
+  function escapeHtml(v) {
+    return String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 
   function apiGet(path) {
     var token = localStorage.getItem('nk_auth_token') || '';
@@ -192,31 +198,29 @@
     if (hourEl) igDefaults.defaultScheduleHour = parseInt(hourEl.value, 10) || 9;
   }
 
-  function buildPlatformCard(platform) {
+  function buildPlatformRow(platform) {
     var snsState = (_settings && _settings.sns && _settings.sns[platform.id]) || {};
     var connected = !!snsState.connected;
     var username = snsState.username || '';
     var defaults = (_settings && _settings.deployDefaults && _settings.deployDefaults[platform.id]) || {};
     var comingSoon = !!platform.comingSoon;
 
-    var connectedBadge = connected
-      ? '<span class="sns-badge sns-badge--connected">● 연결됨</span>'
+    var icon = _platformIcons[platform.id] || '';
+
+    var badge = connected
+      ? '<span class="sns-badge sns-badge--connected">● 연결됨' + (username ? '&nbsp;&nbsp;@' + escapeHtml(username) : '') + '</span>'
       : '<span class="sns-badge sns-badge--disconnected">○ 미연결</span>';
 
-    var connectBtn = comingSoon
+    var actionBtn = comingSoon
       ? '<span class="sns-coming-soon">준비 중</span>'
       : connected
         ? '<button type="button" class="btn-ghost compact" data-action="sns-disconnect" data-platform="' + platform.id + '">연결 해제</button>'
         : '<button type="button" class="btn-primary compact" data-action="sns-connect" data-platform="' + platform.id + '">연결하기</button>';
 
-    var accountInfo = connected
-      ? '<div class="sns-account-info">@' + username + '</div>'
-      : '';
-
     var defaultsForm = '';
     if (platform.id === 'instagram' && connected) {
-      var captionVal = defaults.captionTemplate || '';
-      var hashtagVal = (defaults.hashtags || []).map(function (t) { return '#' + t; }).join(' ');
+      var captionVal = escapeHtml(defaults.captionTemplate || '');
+      var hashtagVal = escapeHtml((defaults.hashtags || []).map(function (t) { return '#' + t; }).join(' '));
       var autoChecked = defaults.autoPublish ? 'checked' : '';
       var hourVal = defaults.defaultScheduleHour !== undefined ? defaults.defaultScheduleHour : 9;
 
@@ -241,7 +245,7 @@
           '</div>',
           '<div class="sns-field">',
             '<label class="sns-label">기본 발행 시간</label>',
-            '<input id="ig-schedule-hour" class="sns-input" type="number"',
+            '<input id="ig-schedule-hour" class="sns-input sns-input--sm" type="number"',
               ' min="0" max="23" value="' + hourVal + '" />',
             '<span class="sns-hint">0~23시 (예약 발행 기본값)</span>',
           '</div>',
@@ -250,14 +254,14 @@
     }
 
     return [
-      '<div class="sns-card' + (connected ? ' sns-card--connected' : '') + (comingSoon ? ' sns-card--soon' : '') + '">',
-        '<div class="sns-card-head">',
-          '<span class="sns-card-icon">' + platform.icon + '</span>',
-          '<strong class="sns-card-label">' + platform.label + '</strong>',
-          connectedBadge,
-          '<div class="sns-card-actions">' + connectBtn + '</div>',
+      '<div class="bsf-deploy-format-row sns-platform-row' + (comingSoon ? ' sns-platform-soon' : '') + (connected ? ' sns-platform-connected' : '') + '">',
+        '<div class="bsf-deploy-format-head sns-platform-head">',
+          '<strong class="bsf-deploy-fmt-title sns-platform-title">', icon, escapeHtml(platform.label), '</strong>',
+          '<div class="sns-platform-actions">',
+            badge,
+            actionBtn,
+          '</div>',
         '</div>',
-        accountInfo,
         defaultsForm,
       '</div>',
     ].join('');
@@ -267,18 +271,22 @@
     var root = document.querySelector('.content');
     if (!root) return;
 
-    var cards = PLATFORMS.map(buildPlatformCard).join('');
+    var rows = PLATFORMS.map(buildPlatformRow).join('');
 
     root.innerHTML = [
       '<div class="sns-settings-page">',
-        '<div class="sns-settings-header">',
-          '<h2 class="sns-settings-title">SNS 채널 설정</h2>',
-          '<span class="sns-settings-sub">계정을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.</span>',
-        '</div>',
-        '<div class="sns-cards">' + cards + '</div>',
-        '<div class="sns-settings-footer">',
-          '<span id="sns-save-status" class="sns-save-status"></span>',
-          '<button type="button" class="btn-primary" data-action="sns-save">설정 저장</button>',
+        '<div class="bsf-detail-card sns-settings-card">',
+          '<div class="sns-settings-inner">',
+            '<div class="bsf-detail-head">',
+              '<strong>SNS 채널 설정</strong>',
+              '<span>계정을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.</span>',
+            '</div>',
+            '<div class="bsf-deploy-summary">', rows, '</div>',
+            '<div class="sns-settings-footer">',
+              '<span id="sns-save-status" class="sns-save-status"></span>',
+              '<button type="button" class="btn-primary" data-action="sns-save">설정 저장</button>',
+            '</div>',
+          '</div>',
         '</div>',
       '</div>',
     ].join('');

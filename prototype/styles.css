@@ -13557,135 +13557,104 @@ body {
 ═══════════════════════════════════════ */
 
 .sns-settings-page {
-  max-width: 720px;
+  width: min(1560px, calc(100vw - 32px));
   margin: 0 auto;
-  padding: 32px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.sns-settings-header {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sns-settings-title {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--color-text-primary, #fff);
-  margin: 0;
-}
-
-.sns-settings-sub {
-  font-size: 0.85rem;
-  color: var(--color-text-muted, #888);
-}
-
-/* ── 플랫폼 카드 ─────────────────────── */
-
-.sns-cards {
-  display: flex;
-  flex-direction: column;
+  padding: 18px 0 36px;
+  display: grid;
   gap: 16px;
 }
 
-.sns-card {
-  background: var(--color-surface, #1a1a1a);
-  border: 1px solid var(--color-border, #2e2e2e);
-  border-radius: 12px;
-  padding: 20px;
+/* outer card — shares .bsf-detail-card visual */
+.sns-settings-card {
+  /* inherits border-radius/bg/shadow from .bsf-detail-card */
+}
+
+/* inner padding wrapper (mirrors .bsf-detail padding) */
+.sns-settings-inner {
+  padding: 18px 20px 20px;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  transition: border-color 0.2s;
 }
 
-.sns-card--connected {
-  border-color: var(--color-accent, #6366f1);
+/* ── 플랫폼 행 ───────────────────────── */
+
+.sns-platform-row {
+  /* inherits .bsf-deploy-format-row layout */
 }
 
-.sns-card--soon {
+.sns-platform-row.sns-platform-soon {
   opacity: 0.5;
   pointer-events: none;
 }
 
-.sns-card-head {
+.sns-platform-row.sns-platform-connected {
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+
+/* header: icon+name left, badge+btn right */
+.sns-platform-head {
+  /* inherits .bsf-deploy-format-head flex layout */
+}
+
+/* override bsf's 28px heading — SNS platform names are smaller */
+.sns-platform-title {
+  font-size: 15px !important;
+  font-weight: 600;
+  gap: 10px;
+  color: var(--text);
+}
+
+.sns-platform-title svg {
+  flex-shrink: 0;
+  color: var(--text-2);
+}
+
+/* right side: badge + action button stacked */
+.sns-platform-actions {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.sns-card-icon {
-  font-size: 1.4rem;
-  line-height: 1;
   flex-shrink: 0;
-}
-
-.sns-card-label {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text-primary, #fff);
-  flex: 1;
-}
-
-.sns-card-actions {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 /* ── 뱃지 ────────────────────────────── */
 
 .sns-badge {
-  font-size: 0.75rem;
+  font-size: 11px;
   font-weight: 600;
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 20px;
   white-space: nowrap;
 }
 
 .sns-badge--connected {
-  background: rgba(99, 102, 241, 0.15);
-  color: var(--color-accent, #6366f1);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
 }
 
 .sns-badge--disconnected {
-  background: var(--color-surface-raised, #252525);
-  color: var(--color-text-muted, #888);
+  background: var(--bg-3, var(--bg-2));
+  color: var(--muted);
 }
 
 .sns-coming-soon {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #888);
+  font-size: 11px;
+  color: var(--muted);
   padding: 4px 10px;
-  border: 1px solid var(--color-border, #2e2e2e);
+  border: 1px solid var(--border);
   border-radius: 6px;
-}
-
-/* ── 계정 정보 ───────────────────────── */
-
-.sns-account-info {
-  font-size: 0.85rem;
-  color: var(--color-accent, #6366f1);
-  font-weight: 500;
-  padding: 6px 12px;
-  background: rgba(99, 102, 241, 0.08);
-  border-radius: 6px;
-  display: inline-block;
-  width: fit-content;
 }
 
 /* ── 기본값 폼 ───────────────────────── */
 
 .sns-defaults-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding-top: 4px;
-  border-top: 1px solid var(--color-border, #2e2e2e);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 20px;
+  padding-top: 14px;
+  margin-top: 4px;
+  border-top: 1px solid var(--border);
 }
 
 .sns-field {
@@ -13701,20 +13670,21 @@ body {
 }
 
 .sns-label {
-  font-size: 0.8rem;
+  font-size: 11px;
   font-weight: 600;
-  color: var(--color-text-secondary, #aaa);
+  color: var(--text-3);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .sns-input {
-  background: var(--color-surface-raised, #252525);
-  border: 1px solid var(--color-border, #2e2e2e);
+  background: var(--bg);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 8px 12px;
-  color: var(--color-text-primary, #fff);
-  font-size: 0.9rem;
+  padding: 7px 11px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
   outline: none;
   transition: border-color 0.15s;
   width: 100%;
@@ -13722,16 +13692,16 @@ body {
 }
 
 .sns-input:focus {
-  border-color: var(--color-accent, #6366f1);
+  border-color: var(--accent);
 }
 
-.sns-input[type="number"] {
+.sns-input--sm {
   width: 80px;
 }
 
 .sns-hint {
-  font-size: 0.75rem;
-  color: var(--color-text-muted, #888);
+  font-size: 11px;
+  color: var(--muted);
 }
 
 /* ── 하단 저장 영역 ──────────────────── */
@@ -13741,25 +13711,17 @@ body {
   align-items: center;
   justify-content: flex-end;
   gap: 16px;
-  padding-top: 8px;
-  border-top: 1px solid var(--color-border, #2e2e2e);
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 
 .sns-save-status {
-  font-size: 0.85rem;
+  font-size: 13px;
 }
 
-.sns-save-status--pending {
-  color: var(--color-text-muted, #888);
-}
-
-.sns-save-status--success {
-  color: #4ade80;
-}
-
-.sns-save-status--error {
-  color: #f87171;
-}
+.sns-save-status--pending { color: var(--muted); }
+.sns-save-status--success { color: #4ade80; }
+.sns-save-status--error   { color: #f87171; }
 
 /* ═══════════════════════════════════════
    End SNS Settings Page
