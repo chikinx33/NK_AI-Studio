@@ -2242,7 +2242,7 @@
         '<div class="bsf-deploy-head-right">' +
           '<span class="bsf-deploy-global-dt-label">' + T.placeholderSchedule + '</span>' +
           buildDtPickerHtml(null, null, publishPlan.scheduledAt || '', 'brand-publish-datetime') +
-          '<button type="button" class="btn-primary compact" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
+          '<button type="button" class="btn-primary compact bsf-deploy-all-btn" data-action="brand-deploy-all-formats"' + (selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlPublishAll + '</button>' +
         '</div>' +
         '<span>' + T.head04sub + '</span>' +
       '</div>' +
@@ -3343,7 +3343,10 @@
         var perCardInputOne = root.querySelector('#bsf-deploy-dt-' + oneFmtId);
         var globalInputOne = root.querySelector('#brand-publish-datetime');
         var scheduledAtOne = (perCardInputOne && String(perCardInputOne.value || '').trim()) || (globalInputOne ? String(globalInputOne.value || '').trim() : '');
+        var oneBtnLabel = isEn ? 'Deploy' : '배포';
         btn.disabled = true;
+        btn.classList.add('is-deploying');
+        btn.innerHTML = '<span class="bsf-deploy-btn-spinner"></span>';
         var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: (scheduledAtOne && scheduledAtOne !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlanOne }, { brandStudioPublishPlan: deployPlanOne })
           .then(function (result) {
@@ -3358,14 +3361,17 @@
             }
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; });
+          .finally(function () { btn.disabled = false; btn.classList.remove('is-deploying'); btn.textContent = oneBtnLabel; });
         return;
       }
       if (action === 'brand-deploy-all-formats') {
         if (!selectedFormats.length || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var publishInputEl = root.querySelector('#brand-publish-datetime');
         var scheduledAt = publishInputEl ? String(publishInputEl.value || '').trim() : '';
+        var allBtnLabel = btn.textContent || (isEn ? 'Publish All' : T.ctrlPublishAll);
         btn.disabled = true;
+        btn.classList.add('is-deploying');
+        btn.innerHTML = '<span class="bsf-deploy-btn-spinner"></span>';
         var deployPlan = { channels: selectedFormats.slice(), scheduledAt: scheduledAt, status: (scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
           .then(function (result) {
@@ -3383,7 +3389,7 @@
             refreshDeploySummary();
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; });
+          .finally(function () { btn.disabled = false; btn.classList.remove('is-deploying'); btn.textContent = allBtnLabel; });
         return;
       }
       if (action === 'brand-toggle-story-card') {

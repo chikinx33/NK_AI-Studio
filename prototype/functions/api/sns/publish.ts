@@ -152,7 +152,7 @@ async function loadSnsSettings(
 async function waitForIgMedia(
   accessToken: string,
   mediaId: string,
-  maxMs = 60000
+  maxMs = 180000
 ): Promise<void> {
   const start = Date.now();
   while (Date.now() - start < maxMs) {
@@ -162,7 +162,7 @@ async function waitForIgMedia(
     const d = (await r.json()) as { status_code?: string };
     if (d.status_code === "FINISHED") return;
     if (d.status_code === "ERROR") throw new Error("Instagram 미디어 처리 실패");
-    await new Promise((res) => setTimeout(res, 3000));
+    await new Promise((res) => setTimeout(res, 5000));
   }
   throw new Error("Instagram 미디어 처리 시간 초과");
 }

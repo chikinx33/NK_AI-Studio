@@ -13307,6 +13307,22 @@ textarea.bsf-skeleton {
   font-weight: 600;
   white-space: nowrap;
 }
+.bsf-deploy-one-btn.is-deploying,
+.bsf-deploy-all-btn.is-deploying {
+  pointer-events: none;
+  opacity: 0.8;
+  min-width: 56px;
+}
+.bsf-deploy-btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: bsf-spin 0.75s linear infinite;
+  vertical-align: middle;
+}
 /* ---- 자산 트리오 (스토리·이미지·영상 카드) ---- */
 .bsf-asset-trio {
   display: grid;
