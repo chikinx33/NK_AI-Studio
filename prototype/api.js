@@ -330,6 +330,73 @@
     return j(text);
   };
 
+  // ── AI 문서 / Knowledge RAG ──────────────────────────────
+  api.knowledgeStats = async function (opts) {
+    var res = await fetch(withBase('/api/knowledge/stats'), {
+      method: 'GET',
+      headers: buildAuthHeaders({}),
+      signal: opts && opts.signal,
+    });
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'knowledge_stats_error');
+      err.status = res.status; err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
+  api.knowledgeIndex = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    var res = await fetchWithTimeout(withBase('/api/knowledge'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal,
+    }, 120000);
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'knowledge_index_error');
+      err.status = res.status; err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
+  api.knowledgeDelete = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    var res = await fetch(withBase('/api/knowledge'), {
+      method: 'DELETE',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal,
+    });
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'knowledge_delete_error');
+      err.status = res.status; err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
+  api.knowledgeSearch = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    var res = await fetchWithTimeout(withBase('/api/knowledge/search'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal,
+    }, 30000);
+    var text = await res.text();
+    if (!res.ok) {
+      var err = new Error(e(text) || 'knowledge_search_error');
+      err.status = res.status; err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
   api.imagenDescribe = async function (body, opts) {
     var payload = Object.assign({}, body || {});
     if (!payload.userId) payload.userId = resolveUserId();

@@ -114,11 +114,18 @@ S1 히어로, S2 문제 공감, S3 베네핏 3개, S4 USP 차별점, S5 근거/�
 - [ ] "API 키 설정" 모달 — 서버 키 사용 시 안내 메시지로 대체
 - [ ] 생성 취소 (AbortController)
 
-### 단계 4 — 지식파일 / RAG (사용자 결정 필요)
-- [ ] 지식파일 업로드 UI (PDF/TXT/MD)
-- [ ] **1차**: 로컬 fallback (텍스트만 추출해 프롬프트에 첨부)
-- [ ] **2차** (사용자 결정 후): `/api/knowledge` 신규 구현 — Neon pgvector 또는 대체 솔루션
-- [ ] Knowledge stats 표시 (RAG 활성화 시)
+### 단계 4 — 지식파일 / RAG (완료, 사용자 환경 설정만 남음)
+- [x] 지식파일 업로드 UI (PDF/TXT/MD)
+- [x] **1차**: 로컬 fallback (텍스트 추출해 프롬프트에 첨부)
+- [x] **2차**: `/api/knowledge` 신규 구현 — Neon Postgres + pgvector + OpenAI Embeddings
+  - `prototype/functions/api/knowledge/_shared.ts` — 헬퍼 (스키마/임베딩/청킹)
+  - `prototype/functions/api/knowledge/index.ts` — POST(인덱싱), DELETE(삭제)
+  - `prototype/functions/api/knowledge/search.ts` — POST(top-K 검색)
+  - `prototype/functions/api/knowledge/stats.ts` — GET(상태)
+- [x] Knowledge stats 표시 (RAG 활성화 시 칩 표시)
+- [x] 운영자 키(`KNOWLEDGE_ADMIN_KEY`) / 접근 키(`KNOWLEDGE_ACCESS_KEYS`) 입력 UI
+- [x] 생성 시 자동 RAG 검색 → 실패 시 로컬 fallback
+- [ ] **(사용자 작업)** Neon 가입 + `DATABASE_URL` 환경변수 등록 — `docs/ai-doc-neon-setup.md` 참조
 
 ---
 

@@ -325,10 +325,21 @@
     <div class="ai-doc-modal">
       <header class="ai-doc-modal-head">
         <h3 data-i18n="ai_doc_knowledge_title">사전 지식 파일 등록</h3>
+        <span class="ai-doc-chip ai-doc-chip-muted" id="ai-doc-knowledge-status">로컬 fallback</span>
         <button type="button" class="btn-ghost" data-action="close" aria-label="닫기">✕</button>
       </header>
       <div class="ai-doc-modal-body">
-        <p class="muted" data-i18n="ai_doc_knowledge_desc">PDF, TXT, MD 파일을 등록하면 생성 시 텍스트가 함께 첨부됩니다. (RAG는 추후 활성화)</p>
+        <p class="muted" data-i18n="ai_doc_knowledge_desc">PDF, TXT, MD 파일을 등록하면 생성 시 검색 또는 첨부됩니다. Neon RAG 활성 시 임베딩 검색이 자동 적용됩니다.</p>
+
+        <div class="form-row" id="ai-doc-admin-key-row" style="display:none;">
+          <label for="ai-doc-admin-key-input" data-i18n="ai_doc_admin_key_label">운영자 등록 키 (KNOWLEDGE_ADMIN_KEY)</label>
+          <input type="password" id="ai-doc-admin-key-input" placeholder="지식파일 등록·삭제 권한 키" autocomplete="off" />
+        </div>
+        <div class="form-row" id="ai-doc-access-key-row" style="display:none;">
+          <label for="ai-doc-access-key-input" data-i18n="ai_doc_access_key_label">지식 사용 키 (선택)</label>
+          <input type="password" id="ai-doc-access-key-input" placeholder="생성 시 RAG 검색에 사용" autocomplete="off" />
+        </div>
+
         <button type="button" class="ai-doc-dropzone ai-doc-dropzone-sm" id="ai-doc-knowledge-dropzone">
           <span class="ai-doc-dropzone-icon" aria-hidden="true">📄</span>
           <strong data-i18n="ai_doc_knowledge_upload">PDF, TXT, MD 지식파일 등록</strong>

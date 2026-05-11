@@ -8,6 +8,18 @@
     knowledge: 'nk_ai_doc_knowledge_v1',
     sharedToggle: 'nk_ai_doc_use_shared',
     lastModel: 'nk_ai_doc_model',
+    adminKey: 'nk_ai_doc_admin_key',
+    accessKey: 'nk_ai_doc_access_key',
+  };
+
+  // RAG 서버 상태 (Neon 활성화 여부 등)
+  const ragState = {
+    configured: false,
+    documents: 0,
+    chunks: 0,
+    adminRequired: false,
+    accessRequired: false,
+    lastFetchedAt: 0,
   };
 
   // 8개 기본 섹션 템플릿 (원본 IrumHahn/redesign-maker-10 기준, 한이룸 브랜드 표현 제거)
@@ -338,6 +350,90 @@
     return await NK.api.imagen(payload, { signal, timeoutMs: 180000 });
   }
 
+  // ── RAG (Neon Postgres + pgvector) ─────────────────────
+  async function fetchRagStats(force) {
+    if (!NK.api || !NK.api.knowledgeStats) return;
+    if (!force && (Date.now() - ragState.lastFetchedAt) < 30000) return;
+    try {
+      const data = await NK.api.knowledgeStats();
+      ragState.configured = Boolean(data && data.configured);
+      ragState.documents = Number(data && data.documents || 0);
+      ragState.chunks = Number(data && data.chunks || 0);
+      ragState.adminRequired = Boolean(data && data.adminRequired);
+      ragState.accessRequired = Boolean(data && data.accessRequired);
+      ragState.lastFetchedAt = Date.now();
+    } catch (_) {
+      ragState.configured = false;
+      ragState.lastFetchedAt = Date.now();
+    }
+    reflectRagStatus();
+  }
+
+  function reflectRagStatus() {
+    const libRag = $('#ai-doc-lib-rag');
+    if (libRag) {
+      if (ragState.configured) {
+        libRag.textContent = 'Neon RAG 활성 (' + ragState.chunks + ' chunks)';
+        libRag.classList.remove('ai-doc-chip-muted');
+        libRag.classList.add('ai-doc-chip-good');
+      } else {
+        libRag.textContent = '로컬 fallback (RAG 미설정)';
+        libRag.classList.add('ai-doc-chip-muted');
+        libRag.classList.remove('ai-doc-chip-good');
+      }
+    }
+    const docs = $('#ai-doc-lib-docs');
+    if (docs) {
+      const localCount = state.knowledge.length;
+      const serverCount = ragState.documents;
+      docs.textContent = (ragState.configured ? serverCount : localCount) + '개';
+    }
+    const adminRow = $('#ai-doc-admin-key-row');
+    if (adminRow) adminRow.style.display = ragState.adminRequired ? '' : 'none';
+    const accessRow = $('#ai-doc-access-key-row');
+    if (accessRow) accessRow.style.display = ragState.accessRequired ? '' : 'none';
+    const status = $('#ai-doc-knowledge-status');
+    if (status) {
+      if (ragState.configured) {
+        status.textContent = '서버 RAG 활성 — ' + ragState.documents + '개 문서 · ' + ragState.chunks + ' 청크';
+        status.className = 'ai-doc-chip ai-doc-chip-good';
+      } else {
+        status.textContent = '서버 RAG 미설정 — 로컬 fallback';
+        status.className = 'ai-doc-chip ai-doc-chip-muted';
+      }
+    }
+  }
+
+  function getAdminKey() {
+    try { return String(localStorage.getItem(STORAGE.adminKey) || '').trim(); } catch (_) { return ''; }
+  }
+  function setAdminKey(v) {
+    try { localStorage.setItem(STORAGE.adminKey, String(v || '').trim()); } catch (_) {}
+  }
+  function getAccessKey() {
+    try { return String(localStorage.getItem(STORAGE.accessKey) || '').trim(); } catch (_) { return ''; }
+  }
+  function setAccessKey(v) {
+    try { localStorage.setItem(STORAGE.accessKey, String(v || '').trim()); } catch (_) {}
+  }
+
+  async function searchKnowledgeContext(queryText) {
+    if (!state.useShared) return '';
+    if (!ragState.configured) return buildKnowledgeText(); // 로컬 fallback
+    if (!NK.api || !NK.api.knowledgeSearch) return buildKnowledgeText();
+    try {
+      const data = await NK.api.knowledgeSearch({ query: queryText, limit: 8, accessKey: getAccessKey() });
+      const chunks = (data && data.chunks) || [];
+      if (!chunks.length) return buildKnowledgeText();
+      return chunks
+        .map((c, i) => '# RAG 검색 ' + (i + 1) + ' (' + (c.sourceName || '문서') + ' / chunk ' + ((c.chunkIndex || 0) + 1) + ', similarity ' + (Number(c.similarity || 0).toFixed(3)) + ')\n' + c.content)
+        .join('\n\n')
+        .slice(0, 12000);
+    } catch (e) {
+      return buildKnowledgeText();
+    }
+  }
+
   // ── Progress overlay ──────────────────────────────────
   function showProgress(total) {
     state.progress = { startedAt: Date.now(), sectionIndex: 0, total: total };
@@ -419,7 +515,14 @@
       state.referenceDataUrls = await prepareReferences(state.files);
       if (!state.referenceDataUrls.length) throw new Error('참조 이미지를 준비하지 못했습니다.');
 
-      const knowledgeText = buildKnowledgeText();
+      // RAG 검색 1회 — 채널·요청·전체 흐름을 쿼리로 사용 (활성화 시), 미설정 시 로컬 fallback
+      await fetchRagStats(true);
+      const ragQuery = [
+        '상세페이지 리디자인 CRO 지식',
+        '판매 채널: ' + state.channel,
+        '추가 요청사항: ' + (state.request || '전환율 중심 리디자인'),
+      ].join('\n');
+      const knowledgeText = await searchKnowledgeContext(ragQuery);
       const aspectRatio = state.ratio || '9:16';
 
       for (let i = 0; i < templates.length; i++) {
@@ -735,7 +838,13 @@
 
     state.generating = true;
     state.abortFlag = false;
-    const knowledgeText = buildKnowledgeText();
+    await fetchRagStats(true);
+    const ragQuery = [
+      '상세페이지 리디자인 CRO 지식',
+      '판매 채널: ' + (project.channel || '스마트스토어'),
+      '추가 요청사항: ' + (project.request || '전환율 중심 리디자인'),
+    ].join('\n');
+    const knowledgeText = await searchKnowledgeContext(ragQuery);
     const aspectRatio = project.ratio || '9:16';
     showProgress(remaining.length);
 
@@ -782,6 +891,15 @@
   async function registerKnowledgeFiles(files) {
     const selected = Array.from(files || []).slice(0, 5);
     if (!selected.length) return;
+
+    await fetchRagStats(true);
+    const adminKey = ragState.adminRequired ? getAdminKey() : '';
+    if (ragState.adminRequired && !adminKey) {
+      toast('지식파일 등록용 운영자 키를 먼저 입력해주세요.');
+      const input = $('#ai-doc-admin-key-input'); if (input) input.focus();
+      return;
+    }
+
     toast('지식파일 텍스트를 추출하는 중입니다…');
     const next = [];
     for (const f of selected) {
@@ -795,6 +913,25 @@
           continue;
         }
         if (!text.trim()) continue;
+
+        // 서버 인덱싱 시도 (RAG 활성 시)
+        let indexed = false;
+        let documentId = '';
+        let chunks = 0;
+        let reason = '';
+        if (NK.api && NK.api.knowledgeIndex) {
+          try {
+            const res = await NK.api.knowledgeIndex({ name: f.name, text, adminKey });
+            if (res && res.indexed) {
+              indexed = true; documentId = res.documentId; chunks = Number(res.chunks || 0);
+            } else if (res && res.reason) {
+              reason = String(res.reason);
+            }
+          } catch (e) {
+            reason = (e && e.message) || '인덱싱 실패';
+          }
+        }
+
         next.push({
           id: f.name + '-' + f.size + '-' + Date.now() + '-' + Math.random().toString(16).slice(2),
           name: f.name,
@@ -802,7 +939,10 @@
           size: f.size,
           text: text.slice(0, 18000),
           createdAt: new Date().toISOString(),
-          indexed: false,
+          indexed,
+          documentId,
+          chunks,
+          reason,
         });
       } catch (e) {
         toast(f.name + ' 처리 실패: ' + (e && e.message || ''));
@@ -810,9 +950,15 @@
     }
     state.knowledge = [...next, ...state.knowledge].slice(0, 10);
     saveKnowledge(state.knowledge);
+    await fetchRagStats(true);
     renderKnowledgeList();
     renderDashboard();
-    if (next.length) toast(next.length + '개 지식파일을 등록했습니다. (로컬 fallback)');
+    const indexedCount = next.filter((k) => k.indexed).length;
+    if (indexedCount) {
+      toast(indexedCount + '개를 Neon RAG로 인덱싱했습니다.');
+    } else if (next.length) {
+      toast(next.length + '개 지식파일을 로컬 fallback으로 등록했습니다.');
+    }
   }
 
   function renderKnowledgeList() {
@@ -825,13 +971,24 @@
       left.innerHTML = '📄 ';
       const name = document.createElement('strong'); name.textContent = k.name; left.appendChild(name);
       const meta = document.createElement('span'); meta.className = 'muted';
-      meta.textContent = '  ' + (k.text ? k.text.length.toLocaleString() : 0) + '자 · 로컬 fallback';
+      const sizeLabel = (k.text ? k.text.length.toLocaleString() : 0) + '자';
+      const ragLabel = k.indexed ? ' · RAG ' + (k.chunks || 0) + ' chunks' : ' · 로컬 fallback';
+      meta.textContent = '  ' + sizeLabel + ragLabel;
       left.appendChild(meta);
       const del = document.createElement('button');
       del.type = 'button'; del.className = 'btn-ghost'; del.textContent = '삭제';
-      del.addEventListener('click', () => {
+      del.addEventListener('click', async () => {
+        // 서버 RAG에서도 삭제 시도
+        if (k.indexed && k.documentId && NK.api && NK.api.knowledgeDelete) {
+          try {
+            await NK.api.knowledgeDelete({ documentId: k.documentId, adminKey: getAdminKey() });
+          } catch (e) {
+            toast('서버 RAG 삭제 실패: ' + (e && e.message || '')); // UI는 계속 진행
+          }
+        }
         state.knowledge = state.knowledge.filter((x) => x.id !== k.id);
         saveKnowledge(state.knowledge);
+        await fetchRagStats(true);
         renderKnowledgeList(); renderDashboard();
       });
       row.appendChild(left); row.appendChild(del);
@@ -885,7 +1042,23 @@
     // dashboard buttons
     const newBtn = $('#ai-doc-new-project'); if (newBtn) newBtn.addEventListener('click', () => setView('workspace'));
     const settingsBtn = $('#ai-doc-open-settings'); if (settingsBtn) settingsBtn.addEventListener('click', () => show($('#ai-doc-settings-modal')));
-    const kBtn = $('#ai-doc-open-knowledge'); if (kBtn) kBtn.addEventListener('click', () => { renderKnowledgeList(); show($('#ai-doc-knowledge-modal')); });
+    const kBtn = $('#ai-doc-open-knowledge'); if (kBtn) kBtn.addEventListener('click', async () => {
+      await fetchRagStats(true);
+      renderKnowledgeList();
+      show($('#ai-doc-knowledge-modal'));
+    });
+
+    // Admin / access key inputs
+    const adminInput = $('#ai-doc-admin-key-input');
+    if (adminInput) {
+      adminInput.value = getAdminKey();
+      adminInput.addEventListener('input', (e) => setAdminKey(e.target.value));
+    }
+    const accessInput = $('#ai-doc-access-key-input');
+    if (accessInput) {
+      accessInput.value = getAccessKey();
+      accessInput.addEventListener('input', (e) => setAccessKey(e.target.value));
+    }
 
     // workspace
     const dropzone = $('#ai-doc-dropzone');
@@ -994,6 +1167,8 @@
     applyInitialState();
     bindEvents();
     setView(readInitialView());
+    // 백그라운드에서 RAG 상태 조회 (Neon 활성화 여부)
+    fetchRagStats(true).catch(() => {});
   }
 
   if (document.readyState === 'loading') {
