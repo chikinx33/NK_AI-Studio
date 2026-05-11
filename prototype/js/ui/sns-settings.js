@@ -142,7 +142,16 @@
     var result = evt.data.result;
     var platform = evt.data.platform;
     if (result && result.ok) {
-      loadSettings().then(function () { render(); });
+      // 즉시 로컬 상태 업데이트 → 토글 바로 반영
+      _settings = _settings || {};
+      _settings.sns = _settings.sns || {};
+      _settings.sns[platform] = Object.assign({}, _settings.sns[platform], {
+        connected: true,
+        username: result.username || '',
+      });
+      render();
+      // 백그라운드에서 서버 최신 데이터 동기화 (igUserId·token 등 보완)
+      loadSettings().then(function () { render(); }).catch(function () {});
       alert(platform + ' 연결 완료! @' + (result.username || ''));
     } else {
       alert(platform + ' 연결 실패: ' + (result && result.error ? result.error : '알 수 없는 오류'));
@@ -301,7 +310,11 @@
       '</div>',
     ].join('');
 
-    root.addEventListener('click', onAction);
+    // 클릭 리스너는 한 번만 등록 (중복 방지)
+    if (!root._snsListenerAttached) {
+      root.addEventListener('click', onAction);
+      root._snsListenerAttached = true;
+    }
   }
 
   function init() {
