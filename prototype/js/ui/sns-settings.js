@@ -156,7 +156,6 @@
         youtube: { connected: false },
         tiktok: { connected: false },
       },
-      deployDefaults: _settings.deployDefaults || {},
     };
     return apiPost('/api/userdata/sns/save', payload)
       .then(function (res) {
@@ -239,26 +238,8 @@
     var action = btn.dataset.action;
 
     if (action === 'sns-save') {
-      collectFormValues();
       saveSettings();
     }
-  }
-
-  function collectFormValues() {
-    _settings = _settings || {};
-    _settings.deployDefaults = _settings.deployDefaults || {};
-    var igDefaults = _settings.deployDefaults.instagram = _settings.deployDefaults.instagram || {};
-    var captionEl = document.getElementById('ig-caption-template');
-    if (captionEl) igDefaults.captionTemplate = captionEl.value.trim();
-    var hashtagEl = document.getElementById('ig-hashtags');
-    if (hashtagEl) {
-      igDefaults.hashtags = hashtagEl.value.split(/[\s,]+/)
-        .map(function (t) { return t.trim().replace(/^#/, ''); }).filter(Boolean);
-    }
-    var autoEl = document.getElementById('ig-auto-publish');
-    if (autoEl) igDefaults.autoPublish = autoEl.checked;
-    var hourEl = document.getElementById('ig-schedule-hour');
-    if (hourEl) igDefaults.defaultScheduleHour = parseInt(hourEl.value, 10) || 9;
   }
 
   function buildPlatformCard(platform) {
@@ -289,35 +270,6 @@
     ].join('');
   }
 
-  function buildIgDefaultsForm() {
-    var snsState = (_settings && _settings.sns && _settings.sns.instagram) || {};
-    if (!snsState.connected) return '';
-    var d = (_settings && _settings.deployDefaults && _settings.deployDefaults.instagram) || {};
-    var captionVal = escapeHtml(d.captionTemplate || '');
-    var hashtagVal = escapeHtml((d.hashtags || []).map(function (t) { return '#' + t; }).join(' '));
-    var autoChecked = d.autoPublish ? 'checked' : '';
-    var hourVal = d.defaultScheduleHour !== undefined ? d.defaultScheduleHour : 9;
-    return [
-      '<div class="sns-ig-defaults">',
-        '<div class="sns-ig-defaults-head"><span class="sns-ig-defaults-title">Instagram 기본 설정</span></div>',
-        '<div class="sns-defaults-form">',
-          '<div class="sns-field"><label class="sns-label">캡션 템플릿</label>',
-            '<input id="ig-caption-template" class="sns-input" type="text" placeholder="예: #{브랜드명} #{시즌}" value="' + captionVal + '" />',
-            '<span class="sns-hint">배포 탭에서 기본 캡션으로 자동 적용됩니다.</span></div>',
-          '<div class="sns-field"><label class="sns-label">기본 해시태그</label>',
-            '<input id="ig-hashtags" class="sns-input" type="text" placeholder="#NK #브랜드스튜디오" value="' + hashtagVal + '" />',
-            '<span class="sns-hint">띄어쓰기 또는 쉼표로 구분</span></div>',
-          '<div class="sns-field sns-field--row"><label class="sns-label">즉시 발행</label>',
-            '<input id="ig-auto-publish" type="checkbox" ' + autoChecked + ' />',
-            '<span class="sns-hint">체크 시 배포 버튼 클릭 즉시 발행</span></div>',
-          '<div class="sns-field"><label class="sns-label">기본 발행 시간</label>',
-            '<input id="ig-schedule-hour" class="sns-input sns-input--sm" type="number" min="0" max="23" value="' + hourVal + '" />',
-            '<span class="sns-hint">0~23시 (예약 발행 기본값)</span></div>',
-        '</div>',
-      '</div>',
-    ].join('');
-  }
-
   function render() {
     var root = document.querySelector('.content');
     if (!root) return;
@@ -327,7 +279,6 @@
     var heroDesc = '채널을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.';
 
     var cards = PLATFORMS.map(buildPlatformCard).join('');
-    var igForm = buildIgDefaultsForm();
 
     root.innerHTML = [
       '<div class="sns-settings-page">',
@@ -351,7 +302,6 @@
         '<div class="bsf-detail-card sns-settings-card">',
           '<div class="sns-settings-inner">',
             '<div class="sns-platform-grid">', cards, '</div>',
-            igForm,
           '</div>',
         '</div>',
 

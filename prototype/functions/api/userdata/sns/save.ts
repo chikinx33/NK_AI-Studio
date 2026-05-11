@@ -89,16 +89,6 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         connected: !!(body?.sns?.tiktok?.connected),
       },
     },
-    deployDefaults: {
-      instagram: {
-        captionTemplate: String(body?.deployDefaults?.instagram?.captionTemplate || ""),
-        hashtags: Array.isArray(body?.deployDefaults?.instagram?.hashtags)
-          ? body.deployDefaults.instagram.hashtags.map(String)
-          : [],
-        autoPublish: !!(body?.deployDefaults?.instagram?.autoPublish),
-        defaultScheduleHour: Number(body?.deployDefaults?.instagram?.defaultScheduleHour ?? 9),
-      },
-    },
     updatedAt: new Date().toISOString(),
   };
 
