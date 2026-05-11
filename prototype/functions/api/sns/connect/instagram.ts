@@ -27,15 +27,15 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     client_id: appId,
     redirect_uri: redirectUri,
     scope: [
-      "instagram_basic",
-      "instagram_content_publish",
-      "pages_read_engagement",
+      "instagram_business_basic",
+      "instagram_business_content_publish",
     ].join(","),
     response_type: "code",
     state,
   });
 
-  const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?${params.toString()}`;
+  // Instagram Business Login endpoint (new, replaces deprecated Facebook Login scopes)
+  const oauthUrl = `https://api.instagram.com/oauth/authorize?${params.toString()}`;
 
   return send({ ok: true, oauthUrl });
 };

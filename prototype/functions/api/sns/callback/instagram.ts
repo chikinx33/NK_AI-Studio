@@ -135,46 +135,54 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   }
 
   try {
-    const tokenRes = await fetch("https://graph.facebook.com/v19.0/oauth/access_token", {
+    // Step 1: short-lived token (Instagram Business Login endpoint)
+    const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: appId,
         client_secret: appSecret,
         redirect_uri: redirectUri,
+        grant_type: "authorization_code",
         code,
       }).toString(),
     });
     const tokenData = (await tokenRes.json()) as {
       access_token?: string;
+      user_id?: number;
       error?: { message: string };
+      error_message?: string;
     };
     if (!tokenData.access_token) {
-      throw new Error(tokenData.error?.message || "Token exchange failed");
+      throw new Error(tokenData.error?.message || tokenData.error_message || "Token exchange failed");
     }
 
+    // Step 2: exchange for long-lived token (60 days)
     const longRes = await fetch(
-      `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token` +
-      `&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${tokenData.access_token}`
+      `https://graph.instagram.com/access_token?grant_type=ig_exchange_token` +
+      `&client_secret=${appSecret}&access_token=${tokenData.access_token}`
     );
     const longData = (await longRes.json()) as {
       access_token?: string;
       expires_in?: number;
+      error?: { message: string };
     };
     const longToken = longData.access_token || tokenData.access_token;
     const expiresAt = longData.expires_in
       ? new Date(Date.now() + longData.expires_in * 1000).toISOString()
       : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString();
 
+    // Step 3: fetch Instagram user id + username
     const igRes = await fetch(
-      `https://graph.facebook.com/v19.0/me/accounts?fields=instagram_business_account{id,username}&access_token=${longToken}`
+      `https://graph.instagram.com/me?fields=id,username&access_token=${longToken}`
     );
-    const igData = (await igRes.json()) as {
-      data?: Array<{ instagram_business_account?: { id: string; username: string } }>;
+    const igAccount = (await igRes.json()) as {
+      id?: string;
+      username?: string;
+      error?: { message: string };
     };
-    const igAccount = igData.data?.find((p) => p.instagram_business_account)?.instagram_business_account;
-    if (!igAccount) {
-      throw new Error("Instagram 비즈니스 계정을 찾을 수 없습니다. 페이지에 Instagram이 연결되어 있는지 확인하세요.");
+    if (!igAccount.id) {
+      throw new Error(igAccount.error?.message || "Instagram 계정 정보를 가져올 수 없습니다.");
     }
 
     const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
@@ -194,14 +202,14 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       googleToken,
       patch: {
         connected: true,
-        igUserId: igAccount.id,
-        username: igAccount.username,
+        igUserId: igAccount.id!,
+        username: igAccount.username || "",
         accessToken: longToken,
         tokenExpiresAt: expiresAt,
       },
     });
 
-    return popupHtml({ ok: true, username: igAccount.username });
+    return popupHtml({ ok: true, username: igAccount.username || "" });
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

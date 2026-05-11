@@ -157,7 +157,7 @@ async function waitForIgMedia(
   const start = Date.now();
   while (Date.now() - start < maxMs) {
     const r = await fetch(
-      `https://graph.facebook.com/v19.0/${mediaId}?fields=status_code&access_token=${accessToken}`
+      `https://graph.instagram.com/v21.0/${mediaId}?fields=status_code&access_token=${accessToken}`
     );
     const d = (await r.json()) as { status_code?: string };
     if (d.status_code === "FINISHED") return;
@@ -192,7 +192,7 @@ async function publishToInstagram(opts: {
         };
 
   const cRes = await fetch(
-    `https://graph.facebook.com/v19.0/${igUserId}/media`,
+    `https://graph.instagram.com/v21.0/${igUserId}/media`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -205,7 +205,7 @@ async function publishToInstagram(opts: {
   if (mediaType === "video") await waitForIgMedia(accessToken, cData.id);
 
   const pRes = await fetch(
-    `https://graph.facebook.com/v19.0/${igUserId}/media_publish`,
+    `https://graph.instagram.com/v21.0/${igUserId}/media_publish`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
