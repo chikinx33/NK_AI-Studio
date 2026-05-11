@@ -269,7 +269,7 @@
     if (!root) return;
 
     var ctx = resolveProjectContext();
-    var heroTitle = ctx.episodeTitle || ctx.brandTitle || '프로젝트';
+    var heroTitle = ctx.brandTitle || '프로젝트';
     var heroDesc = '채널을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.';
 
     var cards = PLATFORMS.map(buildPlatformCard).join('');
