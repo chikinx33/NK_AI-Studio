@@ -12089,15 +12089,11 @@ body {
 
 /* Step 3 — Per-card AI refine bar */
 .bsf-refine-bar {
-  grid-column: 1 / -1;
+  grid-column: 1;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-1);
-  border-radius: 0 0 10px 10px;
-  margin-top: 4px;
+  padding: 10px 0 4px;
 }
 .bsf-refine-input {
   flex: 1;
@@ -12244,15 +12240,21 @@ body {
 .bsf-caption-tall { min-height: 160px; }
 
 /* ── AI 재생성 스켈레톤 로딩 ──────────────────────────────────────────── */
-.bsf-ce.bsf-skeleton {
+.bsf-ce.bsf-skeleton,
+input.bsf-skeleton {
   color: transparent !important;
   background: linear-gradient(90deg, #1a2133 25%, #2d3a50 50%, #1a2133 75%);
   background-size: 200% 100%;
   animation: bsf-shimmer 1.2s linear infinite;
   pointer-events: none;
   user-select: none;
-  min-height: 48px;
   border-color: transparent !important;
+}
+.bsf-ce.bsf-skeleton { min-height: 48px; }
+[data-theme="light"] .bsf-ce.bsf-skeleton,
+[data-theme="light"] input.bsf-skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
 }
 @keyframes bsf-shimmer {
   0%   { background-position: 200% 0; }

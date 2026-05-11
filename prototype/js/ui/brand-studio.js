@@ -1561,12 +1561,18 @@
     function showDraftSkeleton(panel) {
       var regenBtn = root.querySelector('.bsf-draft-regen-head');
       if (regenBtn) regenBtn.disabled = true;
-      if (panel) panel.querySelectorAll('.bsf-ce[contenteditable]').forEach(function (el) { el.classList.add('bsf-skeleton'); });
+      if (panel) {
+        panel.querySelectorAll('.bsf-ce[contenteditable]').forEach(function (el) { el.classList.add('bsf-skeleton'); });
+        panel.querySelectorAll('input[data-draft-field]:not([disabled])').forEach(function (el) { el.classList.add('bsf-skeleton'); });
+      }
     }
     function hideDraftSkeleton(panel) {
       var regenBtn = root.querySelector('.bsf-draft-regen-head');
       if (regenBtn) regenBtn.disabled = false;
-      if (panel) panel.querySelectorAll('.bsf-ce.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
+      if (panel) {
+        panel.querySelectorAll('.bsf-ce.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
+        panel.querySelectorAll('input.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
+      }
     }
 
     // ── 추가 필드 빌더 함수 ────────────────────────────────────────────────────
