@@ -4,6 +4,14 @@
 
   var _settings = null;
   var _saving = false;
+  var _CACHE_KEY = 'nk_sns_states';
+
+  function _readCache() {
+    try { return JSON.parse(localStorage.getItem(_CACHE_KEY) || '{}'); } catch (e) { return {}; }
+  }
+  function _writeCache(sns) {
+    try { localStorage.setItem(_CACHE_KEY, JSON.stringify(sns || {})); } catch (e) {}
+  }
 
   var PLATFORMS = [
     { id: 'instagram',      label: 'Instagram' },
@@ -78,16 +86,30 @@
     }).then(function (r) { return r.json(); });
   }
 
+  function _defaultSettings(override) {
+    var base = {
+      sns: { instagram: { connected: false }, youtube: { connected: false }, tiktok: { connected: false } },
+      deployDefaults: {},
+    };
+    if (override) base.sns = Object.assign(base.sns, override);
+    return base;
+  }
+
   function loadSettings() {
     return apiGet('/api/userdata/sns/get').then(function (res) {
-      if (res && res.ok) {
+      if (res && res.ok && res.settings) {
         _settings = res.settings;
+        _writeCache(_settings.sns); // 성공 시 캐시 갱신
       } else {
-        _settings = {
-          sns: { instagram: { connected: false }, youtube: { connected: false }, tiktok: { connected: false } },
-          deployDefaults: {},
-        };
+        // 서버 오류 → 캐시 폴백
+        console.warn('[SNS] loadSettings server error:', res && res.error);
+        _settings = _defaultSettings(_readCache());
       }
+      return _settings;
+    }).catch(function (err) {
+      // 네트워크/502 오류 → 캐시 폴백
+      console.warn('[SNS] loadSettings fetch error:', err && err.message || err);
+      _settings = _defaultSettings(_readCache());
       return _settings;
     });
   }
@@ -149,6 +171,7 @@
         connected: true,
         username: result.username || '',
       });
+      _writeCache(_settings.sns); // 새로고침 후 복원용 캐시 저장
       render();
       // 클라이언트 save 엔드포인트로 명시적 저장 (새로고침 후 유지)
       saveSettings().catch(function () {});
@@ -175,6 +198,7 @@
       if (connected) {
         if (!confirm(platform + ' 연결을 해제할까요?')) return;
         _settings.sns[platform] = { connected: false };
+        _writeCache(_settings.sns); // 해제 상태도 캐시 반영
         saveSettings().then(function () { render(); });
       } else {
         startOAuth(platform);
