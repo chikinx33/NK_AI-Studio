@@ -569,6 +569,19 @@
       if (knowledge.brandCharacter)
         sections.push('브랜드 캐릭터: ' + knowledge.brandCharacter);
 
+      var charList = Array.isArray(knowledge.characters) ? knowledge.characters : [];
+      if (!charList.length && Array.isArray(brandView && brandView.knowledgeCharacters))
+        charList = brandView.knowledgeCharacters;
+      if (charList.length) {
+        var charLines = charList.slice(0, 8).map(function (c) {
+          var name = String(c.displayName || c.name || '').trim();
+          var desc = String(c.personality || c.description || c.profile || '').trim();
+          return name + (desc ? ': ' + desc : '');
+        }).filter(Boolean);
+        if (charLines.length)
+          sections.push('캐릭터 자산 (콘텐츠에서 캐릭터를 표현할 경우 참고):\n' + charLines.map(function (l) { return '- ' + l; }).join('\n'));
+      }
+
       if (knowledge.brandStory)
         sections.push('브랜드 스토리: ' + knowledge.brandStory);
 
