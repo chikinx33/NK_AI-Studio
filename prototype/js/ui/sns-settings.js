@@ -6,30 +6,35 @@
   var _saving = false;
   var _oauthPopup = null;
 
+  // 12개 플랫폼 — instagram만 활성, 나머지 comingSoon
   var PLATFORMS = [
-    {
-      id: 'instagram',
-      label: 'Instagram',
-      supportedFormats: ['instagram', 'instagram_story'],
-    },
-    {
-      id: 'youtube',
-      label: 'YouTube',
-      supportedFormats: ['youtube', 'youtube-shorts'],
-      comingSoon: true,
-    },
-    {
-      id: 'tiktok',
-      label: 'TikTok',
-      supportedFormats: ['tiktok'],
-      comingSoon: true,
-    },
+    { id: 'instagram',      label: 'Instagram' },
+    { id: 'youtube',        label: 'YouTube',        comingSoon: true },
+    { id: 'youtube-shorts', label: 'YouTube Shorts', comingSoon: true },
+    { id: 'tiktok',         label: 'TikTok',         comingSoon: true },
+    { id: 'facebook',       label: 'Facebook',       comingSoon: true },
+    { id: 'x-threads',      label: 'X / Threads',    comingSoon: true },
+    { id: 'naver-blog',     label: '네이버 블로그',   comingSoon: true },
+    { id: 'naver-post',     label: '네이버 포스트',   comingSoon: true },
+    { id: 'kakao',          label: '카카오',          comingSoon: true },
+    { id: 'band',           label: 'BAND',            comingSoon: true },
+    { id: 'linkedin',       label: 'LinkedIn',        comingSoon: true },
+    { id: 'pinterest',      label: 'Pinterest',       comingSoon: true },
   ];
 
   var _platformIcons = {
-    'instagram': '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
-    'youtube':   '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
-    'tiktok':    '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.78a4.85 4.85 0 0 1-1.01-.09z"/></svg>',
+    'instagram':      '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
+    'youtube':        '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
+    'youtube-shorts': '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-.3C16.8 4 12 4 12 4s-4.8 0-6.8.1c-.6-.1-1.9.1-3 1.2C1.3 6.2 1 8 1 8S.7 10 .7 12v1.9c0 2 .3 4 .3 4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22 12 22 12 22s4.8 0 6.8-.1c.6.1 1.9-.1 3-1.2.9-.8 1.2-2.8 1.2-2.8s.3-2 .3-4v-1.9C23.3 10 23 8 23 7zm-13.5 7.4V9.6l5.6 2.4-5.6 2.4z"/></svg>',
+    'tiktok':         '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.78a4.85 4.85 0 0 1-1.01-.09z"/></svg>',
+    'facebook':       '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
+    'x-threads':      '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+    'naver-blog':     '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z"/></svg>',
+    'naver-post':     '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/></svg>',
+    'kakao':          '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.7 5.1 4.2 6.6L5.1 21l4.4-2.9c.8.1 1.7.2 2.5.2 5.523 0 10-3.477 10-7.5S17.523 3 12 3z"/></svg>',
+    'band':           '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>',
+    'linkedin':       '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>',
+    'pinterest':      '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12c0 5.084 3.163 9.426 7.627 11.174-.105-.949-.2-2.405.042-3.441.218-.937 1.407-5.965 1.407-5.965s-.359-.719-.359-1.782c0-1.668.967-2.914 2.171-2.914 1.023 0 1.518.769 1.518 1.69 0 1.029-.655 2.568-.994 3.995-.283 1.194.599 2.169 1.777 2.169 2.133 0 3.772-2.249 3.772-5.495 0-2.873-2.064-4.882-5.012-4.882-3.414 0-5.418 2.561-5.418 5.207 0 1.031.397 2.138.893 2.738a.36.36 0 0 1 .083.345l-.333 1.36c-.053.22-.174.267-.402.161-1.499-.698-2.436-2.889-2.436-4.649 0-3.785 2.75-7.262 7.929-7.262 4.163 0 7.398 2.967 7.398 6.931 0 4.136-2.607 7.464-6.227 7.464-1.216 0-2.359-.632-2.75-1.378l-.748 2.853c-.271 1.043-1.002 2.35-1.492 3.146C9.57 23.812 10.763 24 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0z"/></svg>',
   };
 
   function escapeHtml(v) {
@@ -198,33 +203,56 @@
     if (hourEl) igDefaults.defaultScheduleHour = parseInt(hourEl.value, 10) || 9;
   }
 
-  function buildPlatformRow(platform) {
+  function buildPlatformCard(platform) {
     var snsState = (_settings && _settings.sns && _settings.sns[platform.id]) || {};
     var connected = !!snsState.connected;
     var username = snsState.username || '';
-    var defaults = (_settings && _settings.deployDefaults && _settings.deployDefaults[platform.id]) || {};
     var comingSoon = !!platform.comingSoon;
-
     var icon = _platformIcons[platform.id] || '';
 
     var badge = connected
-      ? '<span class="sns-badge sns-badge--connected">● 연결됨' + (username ? '&nbsp;&nbsp;@' + escapeHtml(username) : '') + '</span>'
-      : '<span class="sns-badge sns-badge--disconnected">○ 미연결</span>';
+      ? '<span class="sns-badge sns-badge--connected">● 연결됨</span>'
+      : comingSoon
+        ? '<span class="sns-badge sns-badge--soon">준비 중</span>'
+        : '<span class="sns-badge sns-badge--disconnected">○ 미연결</span>';
 
     var actionBtn = comingSoon
-      ? '<span class="sns-coming-soon">준비 중</span>'
+      ? ''
       : connected
-        ? '<button type="button" class="btn-ghost compact" data-action="sns-disconnect" data-platform="' + platform.id + '">연결 해제</button>'
-        : '<button type="button" class="btn-primary compact" data-action="sns-connect" data-platform="' + platform.id + '">연결하기</button>';
+        ? '<button type="button" class="btn-ghost compact" data-action="sns-disconnect" data-platform="' + platform.id + '">해제</button>'
+        : '<button type="button" class="btn-primary compact" data-action="sns-connect" data-platform="' + platform.id + '">연결</button>';
 
-    var defaultsForm = '';
-    if (platform.id === 'instagram' && connected) {
-      var captionVal = escapeHtml(defaults.captionTemplate || '');
-      var hashtagVal = escapeHtml((defaults.hashtags || []).map(function (t) { return '#' + t; }).join(' '));
-      var autoChecked = defaults.autoPublish ? 'checked' : '';
-      var hourVal = defaults.defaultScheduleHour !== undefined ? defaults.defaultScheduleHour : 9;
+    var userLine = (connected && username)
+      ? '<div class="sns-pcard-user">@' + escapeHtml(username) + '</div>'
+      : '';
 
-      defaultsForm = [
+    return [
+      '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
+        '<div class="sns-pcard-icon">', icon, '</div>',
+        '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
+        userLine,
+        '<div class="sns-pcard-foot">',
+          badge,
+          actionBtn,
+        '</div>',
+      '</div>',
+    ].join('');
+  }
+
+  function buildIgDefaultsForm() {
+    var snsState = (_settings && _settings.sns && _settings.sns.instagram) || {};
+    if (!snsState.connected) return '';
+    var defaults = (_settings && _settings.deployDefaults && _settings.deployDefaults.instagram) || {};
+    var captionVal = escapeHtml(defaults.captionTemplate || '');
+    var hashtagVal = escapeHtml((defaults.hashtags || []).map(function (t) { return '#' + t; }).join(' '));
+    var autoChecked = defaults.autoPublish ? 'checked' : '';
+    var hourVal = defaults.defaultScheduleHour !== undefined ? defaults.defaultScheduleHour : 9;
+
+    return [
+      '<div class="sns-ig-defaults">',
+        '<div class="sns-ig-defaults-head">',
+          '<span class="sns-ig-defaults-title">Instagram 기본 설정</span>',
+        '</div>',
         '<div class="sns-defaults-form">',
           '<div class="sns-field">',
             '<label class="sns-label">캡션 템플릿</label>',
@@ -250,19 +278,6 @@
             '<span class="sns-hint">0~23시 (예약 발행 기본값)</span>',
           '</div>',
         '</div>',
-      ].join('');
-    }
-
-    return [
-      '<div class="bsf-deploy-format-row sns-platform-row' + (comingSoon ? ' sns-platform-soon' : '') + (connected ? ' sns-platform-connected' : '') + '">',
-        '<div class="bsf-deploy-format-head sns-platform-head">',
-          '<strong class="bsf-deploy-fmt-title sns-platform-title">', icon, escapeHtml(platform.label), '</strong>',
-          '<div class="sns-platform-actions">',
-            badge,
-            actionBtn,
-          '</div>',
-        '</div>',
-        defaultsForm,
       '</div>',
     ].join('');
   }
@@ -271,7 +286,8 @@
     var root = document.querySelector('.content');
     if (!root) return;
 
-    var rows = PLATFORMS.map(buildPlatformRow).join('');
+    var cards = PLATFORMS.map(buildPlatformCard).join('');
+    var igForm = buildIgDefaultsForm();
 
     root.innerHTML = [
       '<div class="sns-settings-page">',
@@ -281,7 +297,8 @@
               '<strong>SNS 채널 설정</strong>',
               '<span>계정을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.</span>',
             '</div>',
-            '<div class="bsf-deploy-summary">', rows, '</div>',
+            '<div class="sns-platform-grid">', cards, '</div>',
+            igForm,
             '<div class="sns-settings-footer">',
               '<span id="sns-save-status" class="sns-save-status"></span>',
               '<button type="button" class="btn-primary" data-action="sns-save">설정 저장</button>',

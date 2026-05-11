@@ -13577,45 +13577,86 @@ body {
   gap: 14px;
 }
 
-/* ── 플랫폼 행 ───────────────────────── */
+/* ── 4×3 플랫폼 그리드 ───────────────── */
 
-.sns-platform-row {
-  /* inherits .bsf-deploy-format-row layout */
+.sns-platform-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
-.sns-platform-row.sns-platform-soon {
-  opacity: 0.5;
-  pointer-events: none;
+/* ── 플랫폼 카드 ─────────────────────── */
+
+.sns-pcard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 18px 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  text-align: center;
+  transition: border-color 0.18s;
 }
 
-.sns-platform-row.sns-platform-connected {
-  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+.sns-pcard--connected {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 4%, var(--bg));
 }
 
-/* header: icon+name left, badge+btn right */
-.sns-platform-head {
-  /* inherits .bsf-deploy-format-head flex layout */
+.sns-pcard--soon {
+  opacity: 0.45;
 }
 
-/* override bsf's 28px heading — SNS platform names are smaller */
-.sns-platform-title {
-  font-size: 15px !important;
-  font-weight: 600;
-  gap: 10px;
-  color: var(--text);
-}
-
-.sns-platform-title svg {
-  flex-shrink: 0;
+.sns-pcard-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   color: var(--text-2);
 }
 
-/* right side: badge + action button stacked */
-.sns-platform-actions {
+.sns-pcard--connected .sns-pcard-icon {
+  color: var(--accent);
+}
+
+.sns-pcard-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.sns-pcard-user {
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.sns-pcard-foot {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
+  gap: 6px;
+  margin-top: 2px;
+  width: 100%;
+}
+
+/* ── Instagram 기본 설정 폼 ──────────── */
+
+.sns-ig-defaults {
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+
+.sns-ig-defaults-head {
+  margin-bottom: 12px;
+}
+
+.sns-ig-defaults-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 /* ── 뱃지 ────────────────────────────── */
@@ -13636,6 +13677,12 @@ body {
 .sns-badge--disconnected {
   background: var(--bg-3, var(--bg-2));
   color: var(--muted);
+}
+
+.sns-badge--soon {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
 }
 
 .sns-coming-soon {
