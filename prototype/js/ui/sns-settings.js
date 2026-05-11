@@ -65,7 +65,7 @@
 
   function apiGet(path) {
     var token = localStorage.getItem('nk_auth_token') || '';
-    return fetch(path, { headers: { Authorization: 'Bearer ' + token } })
+    return fetch(path, { headers: { Authorization: 'Bearer ' + token }, cache: 'no-store' })
       .then(function (r) { return r.json(); });
   }
 
@@ -150,6 +150,8 @@
         username: result.username || '',
       });
       render();
+      // 클라이언트 save 엔드포인트로 명시적 저장 (새로고침 후 유지)
+      saveSettings().catch(function () {});
       alert(platform + ' 연결 완료! @' + (result.username || ''));
     } else {
       alert(platform + ' 연결 실패: ' + (result && result.error ? result.error : '알 수 없는 오류'));
