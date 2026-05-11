@@ -497,8 +497,9 @@
         : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
 
       const editBtn = showTitleEdit ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
+      const duplicateBtn = showDelete ? `<button class="copy-btn" data-action="draft-duplicate" data-id="${escapeHtml(d.id)}" aria-label="복제" title="복제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="15" x2="15" y1="12" y2="18"></line><line x1="12" x2="18" y1="15" y2="15"></line><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>` : '';
       const deleteBtn = showDelete ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
-      const thumbBtnsHtml = (editBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${deleteBtn}</div>` : '';
+      const thumbBtnsHtml = (editBtn || duplicateBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${deleteBtn}</div>` : '';
 
       const isPending = !!d.__pending;
       return `
@@ -522,9 +523,9 @@
           </div>
           ${showStageButtons ? `
             <div class="draft-actions">
-              <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre-Pod</button>
+              <button class="btn-primary" data-action="draft-edit" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_preproduction_fixed">Pre-Prod</button>
               <button class="btn-secondary" data-action="draft-production" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_production_fixed">Production</button>
-              <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post-Pod</button>
+              <button class="btn-secondary" data-action="draft-post" data-id="${escapeHtml(d.id)}" data-i18n="sidebar_postproduction_fixed">Post-Prod</button>
             </div>` : ``}
         </article>
       `;
@@ -733,6 +734,29 @@
       } else if (action === 'thumb-upload') {
         triggerThumbnailUpload(id, btn);
         return;
+      } else if (action === 'draft-duplicate') {
+        (async () => {
+          if (!NK.service || !NK.service.project || !NK.service.project.duplicate) {
+            alert('복제 기능을 사용할 수 없습니다.');
+            return;
+          }
+          setDashLoading(true, '복제 중...');
+          try {
+            const cloned = await NK.service.project.duplicate(id);
+            serverMerged = false;
+            dashboard.renderDrafts();
+            if (cloned) {
+              NK.service.project.setCurrent(cloned);
+              if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
+                NK.ui.dashboard.renderSidebarProjectCard(cloned);
+              }
+            }
+          } catch (err) {
+            alert('복제 실패: ' + (err?.message || err));
+          } finally {
+            setDashLoading(false);
+          }
+        })();
       } else if (action === 'draft-delete') {
         (async () => {
           var ok = true;
@@ -819,9 +843,9 @@
       <h4 class="sidebar-card-title" title="${escapeHtml(normalized.title || '제목없음')}">${escapeHtml(truncateEpisodeTitle(normalized.title || '제목없음'))}</h4>
       <p class="sidebar-card-lines">${escapeHtml(desc)}</p>
       <div class="sidebar-card-actions">
-        <button class="btn-secondary" data-action="sidebar-edit-scenario" data-i18n="sidebar_preproduction_fixed">Pre-Pod</button>
+        <button class="btn-secondary" data-action="sidebar-edit-scenario" data-i18n="sidebar_preproduction_fixed">Pre-Prod</button>
         <button class="btn-secondary" data-action="sidebar-edit-scenes" data-i18n="sidebar_production_fixed">Production</button>
-        <button class="btn-secondary" data-action="sidebar-edit-media" data-i18n="sidebar_postproduction_fixed">Post-Pod</button>
+        <button class="btn-secondary" data-action="sidebar-edit-media" data-i18n="sidebar_postproduction_fixed">Post-Prod</button>
       </div>
     `;
     container.style.display = 'block';

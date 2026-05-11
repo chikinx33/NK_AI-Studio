@@ -1073,6 +1073,157 @@
         };
     };
 
+    // Pre-production payload fields copied when duplicating a project episode.
+    // Production/post-production outputs (rendered media, publish results, analytics)
+    // are intentionally excluded.
+    var PREPRODUCTION_PAYLOAD_FIELDS = [
+        // Overview
+        'topic',
+        'story',
+        'storyOriginal',
+        'storyAi',
+        'storyView',
+        'purposeCategory',
+        'purposeTags',
+        'target',
+        'targetAudience',
+        'needs',
+        'duration',
+        'durationCustom',
+        'aspectRatio',
+        'tones',
+        'tone',
+        'styles',
+        'style',
+        'characters',
+        'voiceMode',
+        'language',
+        // Project core
+        'projectType',
+        'contentStyle',
+        // Brand/series context (kept so the clone stays in the same series)
+        'seriesId',
+        'seriesTitle',
+        'brandId',
+        'brandTitle',
+        'brandRef',
+        'brandSummary',
+        'coreMessage',
+        'brandKeywords',
+        'connectedChannels',
+        'brandVoice',
+        'brandTone',
+        'brandStory',
+        'brandCharacter',
+        'brandRules',
+        'bannedExpressions',
+        'referenceContents',
+        'referenceContentEntries',
+        'successCases',
+        'worldSetting',
+        'knowledgeWorld',
+        'knowledgeCharacters',
+        'knowledgeCharacterSheets',
+        'knowledgeHub'
+    ];
+
+    // Scene fields that represent pre-production script content.
+    // Generated media (image/video URLs, status, object names) are dropped.
+    var PREPRODUCTION_SCENE_FIELDS = [
+        'id',
+        'title',
+        'narration',
+        'story',
+        'text',
+        'content',
+        'lines',
+        'subtitleText',
+        'caption',
+        'visual',
+        'shot',
+        'sceneLocation',
+        'location',
+        'backgroundStyle',
+        'sharedBackgroundStyle',
+        'dialogue',
+        'dialogues',
+        'estSec',
+        'duration',
+        'script',
+        'voiceScript',
+        'videoSpeechPrompt',
+        'spokenPrompt',
+        'characters',
+        'camera'
+    ];
+
+    function pickFields(source, keys) {
+        var out = {};
+        if (!source || typeof source !== 'object') return out;
+        keys.forEach(function (key) {
+            if (Object.prototype.hasOwnProperty.call(source, key)) {
+                out[key] = cloneTemplateValue(source[key]);
+            }
+        });
+        return out;
+    }
+
+    function stripProductionFromScenes(scenes) {
+        if (!Array.isArray(scenes)) return [];
+        return scenes.map(function (scene) {
+            if (!scene || typeof scene !== 'object') return scene;
+            return pickFields(scene, PREPRODUCTION_SCENE_FIELDS);
+        });
+    }
+
+    /**
+     * Duplicate an existing project episode within the same series.
+     * Copies pre-production payload (overview) and scenario scripts.
+     * Production/post-production outputs and brand-studio results are excluded.
+     */
+    project.duplicate = async function (sourceId) {
+        var srcId = String(sourceId || '').trim();
+        if (!srcId) throw new Error('project_id_required');
+        var source = getDraftById(srcId);
+        if (!source) throw new Error('project_not_found');
+
+        var srcPayload = source.payload || {};
+        var prePayload = pickFields(srcPayload, PREPRODUCTION_PAYLOAD_FIELDS);
+
+        var newId = uniqueEpisodeId();
+        var baseTitle = String(source.title || srcPayload.episodeTitle || '제목없음').trim() || '제목없음';
+        var newTitle = baseTitle + ' (복제)';
+
+        prePayload.episodeTitle = newTitle;
+        prePayload.parentProjectId = '';
+        prePayload.parentProjectTitle = '';
+        prePayload.sourceProjectId = '';
+        prePayload.sourceProjectTitle = '';
+
+        var newDraft = {
+            id: newId,
+            title: newTitle,
+            seriesId: source.seriesId || srcPayload.seriesId || '',
+            seriesTitle: source.seriesTitle || srcPayload.seriesTitle || '',
+            parentProjectId: '',
+            parentProjectTitle: '',
+            payload: applyProjectCore(prePayload, { payload: prePayload }),
+            scenes: stripProductionFromScenes(source.scenes)
+        };
+
+        var saved = project.upsertLocalDraft(newDraft, { setCurrent: false, limit: 100, prepend: true }) || newDraft;
+        syncBrandFromDraft(saved);
+
+        try {
+            if (NK.api && NK.api.projectInit) await NK.api.projectInit(String(newId));
+            await syncDraftToServer(saved);
+        } catch (err) {
+            console.warn('Project duplicate init/save error', err);
+        }
+
+        return saved;
+    };
+
     /**
      * Rename a series title and sync all episode metadata.
      */
