@@ -302,7 +302,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         result: {
           platform: "instagram",
           postId,
-          username: ig.username,
+          username: igUserId,
           status: "published",
           publishedAt: new Date().toISOString(),
         },
