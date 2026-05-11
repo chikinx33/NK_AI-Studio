@@ -288,6 +288,13 @@
     return Object.assign({}, src);
   }
 
+  function readDeployedFormats(payload) {
+    var src = payload && payload.brandStudioDeployedFormats && typeof payload.brandStudioDeployedFormats === 'object'
+      ? payload.brandStudioDeployedFormats
+      : {};
+    return Object.assign({}, src);
+  }
+
   function readActiveDraftTab(payload) {
     return String(payload && payload.brandStudioActiveDraftTab || '').trim();
   }
@@ -1107,6 +1114,7 @@
     var publishPlan = readPublishPlan(brand, payload);
     var selectedFormats = readSelectedFormats(payload);
     var formatDrafts = readFormatDrafts(payload);
+    var persistedDeployedFormats = readDeployedFormats(payload);
     var activeDraftTab = readActiveDraftTab(payload) || (selectedFormats.length ? selectedFormats[0] : '');
     var formatItems = channelFormats();
     var channelRows = channelOptions();
@@ -2179,7 +2187,7 @@
           }).join('')
         : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     }
-    var _deployedFormats = {};
+    var _deployedFormats = persistedDeployedFormats;
     var _deployingFormats = {};
     var deployFormatSummary = buildDeploySummaryHtml();
     function makeCtrlBarHtml(step) {
@@ -2415,6 +2423,13 @@
       if (NK.service && NK.service.project && NK.service.project.updatePayload) {
         NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextDrafts })
           .then(function () { setSaveBtnEnabled(false); })
+          .catch(function () {});
+      }
+    }
+    // 배포 완료 상태를 payload에 영구 저장
+    function persistDeployedFormats() {
+      if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+        NK.service.project.updatePayload(projectId, { brandStudioDeployedFormats: Object.assign({}, _deployedFormats) })
           .catch(function () {});
       }
     }
@@ -3361,6 +3376,7 @@
             if (publishResult && publishResult.skipped) return;
             if (publishResult && publishResult.ok) {
               _deployedFormats[oneFmtId] = true;
+              persistDeployedFormats();
             }
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
@@ -3386,7 +3402,7 @@
                 var fmtPerCard = root.querySelector('#bsf-deploy-dt-' + fmtId);
                 var fmtScheduledAt = (fmtPerCard && String(fmtPerCard.value || '').trim()) || scheduledAt;
                 return snsPublishFormat(fmtId, formatDrafts, fmtScheduledAt)
-                  .then(function () { _deployedFormats[fmtId] = true; delete _deployingFormats[fmtId]; refreshDeploySummary(); });
+                  .then(function () { _deployedFormats[fmtId] = true; persistDeployedFormats(); delete _deployingFormats[fmtId]; refreshDeploySummary(); });
               });
             }, Promise.resolve());
           })
