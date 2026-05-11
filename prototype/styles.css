@@ -13301,9 +13301,11 @@ textarea.bsf-skeleton {
 .bsf-deploy-done-badge {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   height: 26px;
   padding: 0 8px;
+  line-height: 1;
   border-radius: 5px;
   background: rgba(34, 197, 94, 0.05);
   color: rgba(34, 197, 94, 0.4);
@@ -13324,6 +13326,7 @@ textarea.bsf-skeleton {
   border: 1px solid rgba(34, 197, 94, 0.35);
 }
 .bsf-deploy-done-badge svg {
+  display: block;
   width: 13px;
   height: 13px;
   flex-shrink: 0;
