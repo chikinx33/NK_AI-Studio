@@ -23,11 +23,11 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     });
     const oauthUrl = `https://www.instagram.com/oauth/authorize?${params.toString()}`;
     return new Response(
-      `<html><body>
+      `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Instagram 토큰 발급</title></head><body>
         <h2>Instagram 토큰 발급</h2>
         <a href="${oauthUrl}" style="font-size:20px">Instagram 로그인</a>
       </body></html>`,
-      { headers: { "Content-Type": "text/html" } }
+      { headers: { "Content-Type": "text/html; charset=utf-8" } }
     );
   }
 
