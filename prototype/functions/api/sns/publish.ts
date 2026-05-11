@@ -167,6 +167,24 @@ async function waitForIgMedia(
   throw new Error("Instagram 미디어 처리 시간 초과");
 }
 
+async function postInstagramComment(opts: {
+  postId: string;
+  accessToken: string;
+  message: string;
+}): Promise<void> {
+  const { postId, accessToken, message } = opts;
+  const res = await fetch(
+    `https://graph.instagram.com/v21.0/${postId}/comments`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message, access_token: accessToken }),
+    }
+  );
+  const data = (await res.json()) as { id?: string; error?: { message: string } };
+  if (!data.id) throw new Error(`첫 댓글 게시 실패: ${data.error?.message}`);
+}
+
 async function publishToInstagram(opts: {
   igUserId: string;
   accessToken: string;
@@ -228,6 +246,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     mediaType: "image" | "video";
     mediaGcsPath: string;
     caption: string;
+    scheduledAt?: string;
+    firstComment?: string;
   };
   try {
     body = await request.json();
@@ -235,7 +255,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     return send({ error: "Invalid JSON" }, 400);
   }
 
-  const { platform, mediaType, mediaGcsPath, caption } = body;
+  const { platform, mediaType, mediaGcsPath, caption, firstComment } = body;
   if (!platform || !mediaType || !mediaGcsPath || caption === undefined) {
     return send({ error: "필수 필드 누락: platform, mediaType, mediaGcsPath, caption" }, 400);
   }
@@ -277,6 +297,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         mediaUrl: signedUrl,
         caption,
       });
+
+      if (firstComment && firstComment.trim()) {
+        await postInstagramComment({ postId, accessToken, message: firstComment.trim() });
+      }
 
       return send({
         ok: true,

@@ -3159,6 +3159,7 @@
         var draftHashtags = String(draft.hashtags || '').trim();
         var finalCaption = [draftCaption, draftHashtags].filter(Boolean).join('\n\n');
         if (!finalCaption) finalCaption = '';
+        var firstComment = String(draft.first_comment || '').trim();
 
         var token = localStorage.getItem('nk_auth_token') || '';
         return fetch('/api/sns/publish', {
@@ -3173,6 +3174,7 @@
             mediaGcsPath: mediaGcsPath,
             caption: finalCaption,
             scheduledAt: scheduledAt || '',
+            firstComment: firstComment || '',
           }),
         })
           .then(function (r) { return r.json(); })
