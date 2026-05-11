@@ -3093,6 +3093,55 @@
           .catch(function (err) { alert(T.alertOneClickFail(err && err.message ? err.message : err)); btn.disabled = false; });
         return;
       }
+      // ── SNS 배포 헬퍼 ─────────────────────────────────
+      function snsPublishFormat(formatId, drafts, scheduledAt) {
+        var SNS_PLATFORMS = ['instagram'];
+        if (SNS_PLATFORMS.indexOf(formatId) === -1) {
+          return Promise.resolve({ skipped: true });
+        }
+
+        var renders = _renderStorageCache[projectId] || [];
+        if (!renders.length) {
+          alert(isEn
+            ? 'No rendered file found. Please render in Post-Production first.'
+            : '렌더링된 파일이 없습니다. 포스트프로덕션에서 먼저 렌더링하세요.');
+          return Promise.resolve({ skipped: true });
+        }
+
+        var renderItem = renders[0];
+        var mediaGcsPath = String(renderItem.name || '').trim();
+
+        var ext = mediaGcsPath.split('.').pop().toLowerCase();
+        var mediaType = (ext === 'mp4' || ext === 'webm') ? 'video' : 'image';
+
+        var draft = (drafts && drafts[formatId]) || {};
+        var draftCaption = String(draft.caption || '').trim();
+        var draftHashtags = String(draft.hashtags || '').trim();
+        var finalCaption = [draftCaption, draftHashtags].filter(Boolean).join('\n\n');
+        if (!finalCaption) finalCaption = '';
+
+        var token = localStorage.getItem('nk_auth_token') || '';
+        return fetch('/api/sns/publish', {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + token,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            platform: formatId,
+            mediaType: mediaType,
+            mediaGcsPath: mediaGcsPath,
+            caption: finalCaption,
+            scheduledAt: scheduledAt || '',
+          }),
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (!res.ok) throw new Error(res.error || 'SNS publish failed');
+            return res;
+          });
+      }
+
       if (action === 'brand-deploy-one-format') {
         var oneFmtId = String(btn.dataset.deployFormat || '').trim();
         if (!oneFmtId || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
@@ -3101,7 +3150,16 @@
         btn.disabled = true;
         var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: scheduledAtOne ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlanOne }, { brandStudioPublishPlan: deployPlanOne })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(T.alertPublishSaved(1)); })
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+            return snsPublishFormat(oneFmtId, formatDrafts, scheduledAtOne);
+          })
+          .then(function (publishResult) {
+            if (publishResult && publishResult.skipped) return;
+            if (publishResult && publishResult.ok) {
+              alert((isEn ? 'Published to ' : '배포 완료: ') + (publishResult.result && publishResult.result.username ? '@' + publishResult.result.username : oneFmtId));
+            }
+          })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
         return;
@@ -3113,7 +3171,17 @@
         btn.disabled = true;
         var deployPlan = { channels: selectedFormats.slice(), scheduledAt: scheduledAt, status: scheduledAt ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); alert(T.alertPublishSaved(selectedFormats.length)); })
+          .then(function (result) {
+            if (result && result.draft) renderNext(result.draft);
+            return selectedFormats.reduce(function (chain, fmtId) {
+              return chain.then(function () {
+                return snsPublishFormat(fmtId, formatDrafts, scheduledAt);
+              });
+            }, Promise.resolve());
+          })
+          .then(function () {
+            alert(isEn ? 'All formats deployed.' : '전체 포맷 배포가 완료됐습니다.');
+          })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () { btn.disabled = false; });
         return;
