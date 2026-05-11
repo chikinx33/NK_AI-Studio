@@ -2070,7 +2070,7 @@
               '<div class="bsf-deploy-format-head"><strong class="bsf-deploy-fmt-title">' + icon + escapeHtml(fmt ? fmt.title : formatId) + '</strong>' +
               '<div class="bsf-deploy-format-head-right"><span class="brand-channel-badge">' + draftBadge + '</span>' +
               '<button type="button" class="bsf-deploy-one-btn" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '">' + (isEn ? 'Deploy' : '배포') + '</button></div></div>' +
-              '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 100) : T.hintNoDraft) + '</p>' +
+              '<p class="bsf-deploy-caption-preview">' + escapeHtml(caption ? compactSentence(caption, 50) : T.hintNoDraft) + '</p>' +
               '</div>'
             );
           }).join('')
