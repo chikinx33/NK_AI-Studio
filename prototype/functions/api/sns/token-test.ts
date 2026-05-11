@@ -11,7 +11,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const url = new URL(request.url);
   const step = url.searchParams.get("step") || "start";
 
-  const appId = env.META_APP_ID;
+  const appId = env.INSTAGRAM_APP_ID;
   const redirectUri = env.META_REDIRECT_URI;
 
   if (step === "start") {
@@ -39,7 +39,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: appId,
-      client_secret: env.META_APP_SECRET,
+      client_secret: env.INSTAGRAM_APP_SECRET,
       grant_type: "authorization_code",
       redirect_uri: redirectUri.replace("callback/instagram", "sns/token-test"),
       code,
@@ -53,7 +53,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
   // Long-lived token 교환
   const longRes = await fetch(
-    `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${env.META_APP_SECRET}&access_token=${tokenData.access_token}`
+    `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${env.INSTAGRAM_APP_SECRET}&access_token=${tokenData.access_token}`
   );
   const longData = (await longRes.json()) as any;
   const finalToken = longData.access_token || tokenData.access_token;
