@@ -1,5 +1,6 @@
 sample/
 sample_aivideo/
+_external/
 .claude/settings.local.json
 .claude/
 .claude/worktrees/

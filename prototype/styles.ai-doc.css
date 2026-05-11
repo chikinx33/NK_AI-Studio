@@ -1,0 +1,684 @@
+/* AI 문서 (상세페이지 리디자인 마법사) - 우리 테마 기반 스타일 */
+
+.page-shell-ai-doc .main { background: transparent; }
+
+.ai-doc-root {
+  padding: 24px;
+  display: block;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+}
+
+.ai-doc-view {
+  display: block;
+}
+
+.ai-doc-view.hidden {
+  display: none;
+}
+
+/* ── Topbar ─────────────────────────────────────────────── */
+.ai-doc-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0 18px;
+  flex-wrap: wrap;
+}
+
+.ai-doc-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.ai-doc-topbar-actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ai-doc-topbar-actions .btn-primary,
+.ai-doc-topbar-actions .btn-secondary {
+  min-width: 120px;
+}
+
+.ai-doc-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+/* ── Cards ──────────────────────────────────────────────── */
+.ai-doc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.ai-doc-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-doc-card-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-doc-card-head p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 60px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--layer-soft);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ai-doc-chip-muted {
+  color: var(--muted);
+}
+
+.ai-doc-chip-good {
+  border-color: rgba(11, 191, 165, 0.45);
+  background: rgba(11, 191, 165, 0.12);
+  color: #0bbfa5;
+}
+
+/* ── Dashboard layout ───────────────────────────────────── */
+.ai-doc-grid-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+}
+
+.ai-doc-grid-right {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.ai-doc-recent-list {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-doc-recent-item {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.ai-doc-recent-item:hover {
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--border) 40%);
+}
+
+.ai-doc-recent-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--bg-2), var(--bg-3));
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  color: var(--muted);
+}
+
+.ai-doc-recent-info {
+  min-width: 0;
+}
+
+.ai-doc-recent-info strong {
+  display: block;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-doc-recent-meta {
+  margin-top: 4px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ai-doc-recent-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.ai-doc-empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 8px;
+  padding: 36px 18px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--layer-soft);
+}
+
+.ai-doc-empty-icon {
+  font-size: 32px;
+  opacity: 0.6;
+}
+
+.ai-doc-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-doc-stat {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+
+.ai-doc-stat strong {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-doc-stat .muted {
+  font-size: 11px;
+}
+
+.ai-doc-lib-rows {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-doc-lib-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 13px;
+}
+
+/* ── Workspace layout ───────────────────────────────────── */
+.ai-doc-grid-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+}
+
+.ai-doc-col-main,
+.ai-doc-col-side {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.ai-doc-dropzone {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  padding: 36px 18px;
+  min-height: 200px;
+  border: 1px dashed var(--accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 84%, var(--accent) 16%);
+  cursor: pointer;
+  text-align: center;
+  color: var(--text-2);
+}
+
+.ai-doc-dropzone.is-dragover {
+  background: color-mix(in srgb, var(--panel) 72%, var(--accent) 28%);
+  border-color: var(--accent);
+}
+
+.ai-doc-dropzone-sm {
+  min-height: 120px;
+  padding: 24px 16px;
+  width: 100%;
+}
+
+.ai-doc-dropzone-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  color: var(--accent);
+}
+
+.ai-doc-dropzone strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-doc-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.ai-doc-file-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.ai-doc-file-pill button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0;
+  line-height: 1;
+}
+
+.ai-doc-toggle-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.ai-doc-toggle-btn,
+.ai-doc-model-btn {
+  min-height: 44px;
+  min-width: 120px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text-2);
+  font-weight: 600;
+  cursor: pointer;
+  display: grid;
+  gap: 2px;
+  text-align: center;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ai-doc-toggle-btn.is-active,
+.ai-doc-model-btn.is-active {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+
+.ai-doc-model-btn .muted {
+  font-size: 11px;
+}
+
+.ai-doc-model-btn.is-active .muted {
+  color: color-mix(in srgb, var(--bg) 70%, transparent 30%);
+}
+
+.ai-doc-model-group {
+  display: grid;
+  gap: 8px;
+}
+
+/* form-row + select styling - rely on shared styles.css but override colors */
+.ai-doc-card .form-row label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.ai-doc-card .form-row textarea,
+.ai-doc-card .form-row select,
+.ai-doc-card .form-row input[type="text"] {
+  width: 100%;
+  background: var(--input-bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-doc-card .form-row textarea {
+  resize: vertical;
+  min-height: 96px;
+}
+
+/* ── Results layout ─────────────────────────────────────── */
+.ai-doc-results-meta {
+  margin-bottom: 16px;
+}
+
+.ai-doc-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.ai-doc-section-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.ai-doc-section-thumb {
+  width: 100%;
+  aspect-ratio: 9 / 16;
+  background: linear-gradient(135deg, var(--bg-2), var(--bg-3));
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  position: relative;
+}
+
+.ai-doc-section-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ai-doc-section-thumb.is-pending::after {
+  content: "생성 대기";
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ai-doc-section-thumb.is-loading::after {
+  content: "생성 중…";
+  font-size: 12px;
+  color: var(--accent);
+}
+
+.ai-doc-section-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.ai-doc-section-meta strong {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.ai-doc-section-purpose {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+  min-height: 32px;
+}
+
+.ai-doc-section-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ai-doc-section-actions .btn-secondary,
+.ai-doc-section-actions .btn-ghost {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+/* ── Modal ─────────────────────────────────────────────── */
+.ai-doc-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 80;
+  backdrop-filter: blur(4px);
+}
+
+.ai-doc-modal-overlay.hidden {
+  display: none;
+}
+
+.ai-doc-modal {
+  width: min(540px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+
+.ai-doc-modal-head {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-doc-modal-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ai-doc-modal-body {
+  padding: 18px;
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+}
+
+.ai-doc-modal-foot {
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.ai-doc-modal-foot .btn-primary,
+.ai-doc-modal-foot .btn-secondary {
+  min-width: 100px;
+}
+
+.ai-doc-knowledge-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-doc-knowledge-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 12px;
+}
+
+.ai-doc-server-status {
+  display: grid;
+  gap: 8px;
+}
+
+/* ── Progress overlay ───────────────────────────────────── */
+.ai-doc-progress-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.6);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  z-index: 90;
+  padding: 24px;
+}
+
+.ai-doc-progress-overlay.hidden {
+  display: none;
+}
+
+.ai-doc-progress-card {
+  width: min(420px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px;
+  display: grid;
+  gap: 12px;
+  text-align: center;
+  box-shadow: var(--shadow-1);
+}
+
+.ai-doc-progress-card h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.ai-doc-progress-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--progress-bg);
+  overflow: hidden;
+}
+
+.ai-doc-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--teal));
+  transition: width 0.6s ease;
+}
+
+.ai-doc-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ai-doc-progress-card .btn-secondary {
+  justify-self: center;
+  min-width: 120px;
+}
+
+/* ── Toast ──────────────────────────────────────────────── */
+.ai-doc-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--text);
+  color: var(--bg);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  box-shadow: var(--shadow-1);
+  z-index: 100;
+  max-width: 360px;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.ai-doc-toast.hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 1180px) {
+  .ai-doc-grid-dashboard,
+  .ai-doc-grid-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ai-doc-grid-workspace .ai-doc-col-side {
+    order: -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .ai-doc-root { padding: 16px; }
+  .ai-doc-stats { grid-template-columns: 1fr; }
+  .ai-doc-section-grid { grid-template-columns: 1fr; }
+  .ai-doc-topbar-actions .btn-primary,
+  .ai-doc-topbar-actions .btn-secondary {
+    min-width: 0;
+    flex: 1;
+  }
+}

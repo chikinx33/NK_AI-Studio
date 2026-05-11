@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark" class="layout-fixed page-shell-ai-doc preload-veiled">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NK_Studio · AI 문서</title>
+  <style>
+    html.preload-veiled, body.preload-veiled { background:#0f172a; color:#cbd5e1; }
+    html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.ai-doc.css" />
+  <script src="core.js" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/utils.js" defer></script>
+  <script src="store.js" defer></script>
+  <script src="api.js" defer></script>
+  <script src="js/state.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/navigation.js" defer></script>
+  <script src="js/ui/common.js" defer></script>
+  <script src="js/ui/ai-doc.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+
+<body class="layout-fixed page-shell-ai-doc">
+  <div class="grain"></div>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div class="brand-text">
+          <span class="title" data-i18n="brand_title">NK_Studio</span>
+          <span class="subtitle" data-i18n="ai_doc_subtitle">AI 상세페이지 마법사</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item" href="#" data-ai-doc-view="dashboard">
+          <span data-i18n="ai_doc_nav_dashboard">대시보드</span>
+        </a>
+        <a class="nav-item" href="#" data-ai-doc-view="workspace">
+          <span data-i18n="ai_doc_nav_workspace">리디자인 작업</span>
+        </a>
+        <a class="nav-item" href="#" data-ai-doc-view="results">
+          <span data-i18n="ai_doc_nav_results">결과 확인</span>
+        </a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="sidebar-actions">
+          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
+          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('global')"></button>
+          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
+          <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
+        </div>
+        <div class="sidebar-version">ver</div>
+      </div>
+    </aside>
+
+    <div id="auth-overlay" class="auth-overlay hidden">
+      <div class="auth-card">
+        <p class="auth-title">로그인 하세요.</p>
+        <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
+      </div>
+    </div>
+
+    <main class="main blur-target">
+      <div class="main-body">
+        <section class="content ai-doc-root" id="ai-doc-root" aria-live="polite">
+          <!-- Dashboard view -->
+          <section class="ai-doc-view" data-view="dashboard">
+            <header class="ai-doc-topbar">
+              <div class="ai-doc-eyebrow" data-i18n="ai_doc_eyebrow_dashboard">DASHBOARD</div>
+              <div class="ai-doc-topbar-actions">
+                <button class="btn-secondary" id="ai-doc-open-settings" type="button">
+                  <span data-i18n="ai_doc_btn_settings">API 키 설정</span>
+                </button>
+                <button class="btn-secondary" id="ai-doc-open-knowledge" type="button">
+                  <span data-i18n="ai_doc_btn_knowledge">지식파일 등록</span>
+                  <span class="ai-doc-badge" id="ai-doc-knowledge-count" hidden>0</span>
+                </button>
+                <button class="btn-primary" id="ai-doc-new-project" type="button" data-i18n="ai_doc_btn_new">새 프로젝트 생성</button>
+              </div>
+            </header>
+
+            <div class="ai-doc-grid-dashboard">
+              <article class="card ai-doc-card">
+                <header class="ai-doc-card-head">
+                  <div>
+                    <h3 data-i18n="ai_doc_recent_title">최근 리디자인 프로젝트</h3>
+                    <p class="muted" data-i18n="ai_doc_recent_desc">업로드한 원본 자료를 기준으로 생성된 작업 목록</p>
+                  </div>
+                  <span class="ai-doc-chip" data-i18n="ai_doc_chip_default">6~8장 기본</span>
+                </header>
+                <div class="ai-doc-recent-list" id="ai-doc-recent-list">
+                  <div class="ai-doc-empty" id="ai-doc-recent-empty">
+                    <div class="ai-doc-empty-icon" aria-hidden="true">📄</div>
+                    <strong data-i18n="ai_doc_empty_title">아직 작업한 리디자인 작업이 없습니다.</strong>
+                    <p class="muted" data-i18n="ai_doc_empty_desc">새 프로젝트를 생성하면 이곳에 최근 작업이 표시됩니다.</p>
+                  </div>
+                </div>
+              </article>
+
+              <div class="ai-doc-grid-right">
+                <article class="card ai-doc-card">
+                  <header class="ai-doc-card-head">
+                    <div>
+                      <h3 data-i18n="ai_doc_stats_title">오늘의 작업 상태</h3>
+                      <p class="muted" data-i18n="ai_doc_stats_desc">전환 설계 중심으로 생성 품질을 추적</p>
+                    </div>
+                  </header>
+                  <div class="ai-doc-stats">
+                    <div class="ai-doc-stat">
+                      <span class="muted" data-i18n="ai_doc_stat_recent">최근</span>
+                      <strong id="ai-doc-stat-recent">0</strong>
+                      <span class="muted" data-i18n="ai_doc_stat_recent_sub">프로젝트</span>
+                    </div>
+                    <div class="ai-doc-stat">
+                      <span class="muted" data-i18n="ai_doc_stat_avg">평균</span>
+                      <strong id="ai-doc-stat-avg">-</strong>
+                      <span class="muted" data-i18n="ai_doc_stat_avg_sub">이미지 장수</span>
+                    </div>
+                    <div class="ai-doc-stat">
+                      <span class="muted" data-i18n="ai_doc_stat_ratio">기본</span>
+                      <strong>9:16</strong>
+                      <span class="muted" data-i18n="ai_doc_stat_ratio_sub">출력 비율</span>
+                    </div>
+                  </div>
+                </article>
+                <article class="card ai-doc-card">
+                  <header class="ai-doc-card-head">
+                    <div>
+                      <h3 data-i18n="ai_doc_lib_title">사전 지식 라이브러리</h3>
+                      <p class="muted" data-i18n="ai_doc_lib_desc">생성 프롬프트에 함께 첨부되는 텍스트 지식</p>
+                    </div>
+                  </header>
+                  <div class="ai-doc-lib-rows">
+                    <div class="ai-doc-lib-row">
+                      <span data-i18n="ai_doc_lib_docs">등록 문서</span>
+                      <span class="ai-doc-chip" id="ai-doc-lib-docs">0개</span>
+                    </div>
+                    <div class="ai-doc-lib-row">
+                      <span data-i18n="ai_doc_lib_chars">총 문자수</span>
+                      <span class="ai-doc-chip" id="ai-doc-lib-chars">0</span>
+                    </div>
+                    <div class="ai-doc-lib-row">
+                      <span data-i18n="ai_doc_lib_rag">RAG 상태</span>
+                      <span class="ai-doc-chip ai-doc-chip-muted" id="ai-doc-lib-rag" data-i18n="ai_doc_lib_rag_off">로컬 fallback</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <!-- Workspace view -->
+          <section class="ai-doc-view hidden" data-view="workspace">
+            <header class="ai-doc-topbar">
+              <div class="ai-doc-eyebrow" data-i18n="ai_doc_eyebrow_workspace">REDESIGN WORKSPACE</div>
+              <div class="ai-doc-topbar-actions">
+                <button class="btn-secondary" id="ai-doc-back-dashboard" type="button" data-i18n="ai_doc_btn_back">대시보드로</button>
+                <button class="btn-primary" id="ai-doc-generate" type="button" data-i18n="ai_doc_btn_generate">리디자인 생성</button>
+              </div>
+            </header>
+
+            <div class="ai-doc-grid-workspace">
+              <div class="ai-doc-col-main">
+                <article class="card ai-doc-card">
+                  <header class="ai-doc-card-head">
+                    <div>
+                      <h3 data-i18n="ai_doc_upload_title">기존 상세페이지 자료 업로드</h3>
+                      <p class="muted" data-i18n="ai_doc_upload_desc">이미지 또는 PDF를 첨부하면 원본 정보와 전환 저해 요소를 분석합니다.</p>
+                    </div>
+                    <span class="ai-doc-chip" data-i18n="ai_doc_chip_bulk">대용량 가능</span>
+                  </header>
+                  <div class="ai-doc-dropzone" id="ai-doc-dropzone" tabindex="0" role="button" aria-label="이미지 또는 PDF를 여기에 놓기">
+                    <div class="ai-doc-dropzone-icon" aria-hidden="true">⬆</div>
+                    <strong data-i18n="ai_doc_dropzone_title">이미지 또는 PDF를 여기에 놓기</strong>
+                    <span class="muted" data-i18n="ai_doc_dropzone_sub">원본 제품컷, 수치, 리뷰, 인증, 오퍼 문구를 최대한 보존합니다.</span>
+                    <input type="file" id="ai-doc-file-input" multiple accept="image/*,.pdf" hidden />
+                  </div>
+                  <div class="ai-doc-file-list" id="ai-doc-file-list" hidden></div>
+
+                  <div class="form-row">
+                    <label for="ai-doc-request" data-i18n="ai_doc_request_label">추가 요청사항</label>
+                    <textarea id="ai-doc-request" rows="5" data-i18n-placeholder="ai_doc_request_placeholder">첫 화면에서 제품의 차별점이 바로 보이게 하고, 구매 불안을 줄이는 근거 섹션을 강화해주세요. 과장 표현은 피하고 스마트스토어에 맞춰 스캔이 쉬운 구성으로 정리해주세요.</textarea>
+                  </div>
+                </article>
+
+                <article class="card ai-doc-card">
+                  <header class="ai-doc-card-head">
+                    <div>
+                      <h3 data-i18n="ai_doc_shared_title">공통 사전 지식 사용</h3>
+                      <p class="muted" data-i18n="ai_doc_shared_desc">등록된 지식파일 텍스트를 생성 프롬프트에 첨부합니다.</p>
+                    </div>
+                    <span class="ai-doc-chip" id="ai-doc-shared-count">0개 등록</span>
+                  </header>
+                  <div class="ai-doc-toggle-group" role="group" aria-label="공통 지식 사용">
+                    <button type="button" class="ai-doc-toggle-btn is-active" data-shared="on" data-i18n="ai_doc_toggle_on">사용</button>
+                    <button type="button" class="ai-doc-toggle-btn" data-shared="off" data-i18n="ai_doc_toggle_off">사용 안 함</button>
+                  </div>
+                </article>
+              </div>
+
+              <div class="ai-doc-col-side">
+                <article class="card ai-doc-card">
+                  <header class="ai-doc-card-head">
+                    <div>
+                      <h3 data-i18n="ai_doc_model_title">모델 선택</h3>
+                      <p class="muted" data-i18n="ai_doc_model_desc">이미지 생성 엔진</p>
+                    </div>
+                  </header>
+                  <div class="ai-doc-model-group">
+                    <button type="button" class="ai-doc-model-btn is-active" data-model="openai">
+                      <strong>OpenAI Image</strong>
+                      <span class="muted">gpt-image-2</span>
+                    </button>
+                    <button type="button" class="ai-doc-model-btn" data-model="gemini">
+                      <strong>Google Gemini</strong>
+                      <span class="muted">nano-banana 2</span>
+                    </button>
+                  </div>
+                </article>
+
+                <article class="card ai-doc-card">
+                  <header class="ai-doc-card-head">
+                    <div>
+                      <h3 data-i18n="ai_doc_options_title">출력 옵션</h3>
+                    </div>
+                  </header>
+                  <div class="form-row">
+                    <label for="ai-doc-channel" data-i18n="ai_doc_channel_label">판매 채널</label>
+                    <select id="ai-doc-channel">
+                      <option value="스마트스토어">스마트스토어</option>
+                      <option value="쿠팡">쿠팡</option>
+                      <option value="자사몰">자사몰</option>
+                      <option value="11번가">11번가</option>
+                      <option value="G마켓/옥션">G마켓/옥션</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label for="ai-doc-count" data-i18n="ai_doc_count_label">생성 장수</label>
+                    <select id="ai-doc-count">
+                      <option value="1">1장 (히어로만)</option>
+                      <option value="3">3장</option>
+                      <option value="6">6장</option>
+                      <option value="8" selected>8장 (권장)</option>
+                      <option value="10">10장 (최대)</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label for="ai-doc-ratio" data-i18n="ai_doc_ratio_label">비율</label>
+                    <select id="ai-doc-ratio">
+                      <option value="9:16" selected>9:16 (세로)</option>
+                      <option value="1:1">1:1 (정사각)</option>
+                      <option value="16:9">16:9 (가로)</option>
+                    </select>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <!-- Results view -->
+          <section class="ai-doc-view hidden" data-view="results">
+            <header class="ai-doc-topbar">
+              <div class="ai-doc-eyebrow" data-i18n="ai_doc_eyebrow_results">RESULTS</div>
+              <div class="ai-doc-topbar-actions">
+                <button class="btn-secondary" id="ai-doc-results-back" type="button" data-i18n="ai_doc_btn_back">대시보드로</button>
+                <button class="btn-secondary" id="ai-doc-results-rest" type="button" data-i18n="ai_doc_btn_rest">나머지 생성</button>
+                <button class="btn-secondary" id="ai-doc-results-save" type="button" data-i18n="ai_doc_btn_save">작업 저장</button>
+                <button class="btn-secondary" id="ai-doc-results-download" type="button" data-i18n="ai_doc_btn_download_all">전체 다운로드</button>
+              </div>
+            </header>
+
+            <article class="card ai-doc-card ai-doc-results-meta" id="ai-doc-results-meta">
+              <header class="ai-doc-card-head">
+                <div>
+                  <h3 id="ai-doc-results-title">프로젝트</h3>
+                  <p class="muted" id="ai-doc-results-summary">—</p>
+                </div>
+                <span class="ai-doc-chip" id="ai-doc-results-status">진행 중</span>
+              </header>
+            </article>
+
+            <div class="ai-doc-section-grid" id="ai-doc-section-grid"></div>
+          </section>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="ai-doc-modal-overlay hidden" id="ai-doc-settings-modal">
+    <div class="ai-doc-modal">
+      <header class="ai-doc-modal-head">
+        <h3 data-i18n="ai_doc_settings_title">API 키 설정</h3>
+        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기">✕</button>
+      </header>
+      <div class="ai-doc-modal-body">
+        <p class="muted" data-i18n="ai_doc_settings_desc">이미지 생성은 서버 환경변수의 OPENAI_API_KEY / GOOGLE_API_KEY를 사용합니다. 사용자 키를 별도로 입력할 필요는 없습니다.</p>
+        <div class="ai-doc-server-status">
+          <div class="ai-doc-lib-row">
+            <span>OpenAI Image</span>
+            <span class="ai-doc-chip ai-doc-chip-good" data-i18n="ai_doc_status_server">서버 키 사용</span>
+          </div>
+          <div class="ai-doc-lib-row">
+            <span>Google Gemini Image</span>
+            <span class="ai-doc-chip ai-doc-chip-good" data-i18n="ai_doc_status_server2">서버 키 사용</span>
+          </div>
+        </div>
+      </div>
+      <footer class="ai-doc-modal-foot">
+        <button type="button" class="btn-primary" data-action="close" data-i18n="ai_doc_btn_done">닫기</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Knowledge modal -->
+  <div class="ai-doc-modal-overlay hidden" id="ai-doc-knowledge-modal">
+    <div class="ai-doc-modal">
+      <header class="ai-doc-modal-head">
+        <h3 data-i18n="ai_doc_knowledge_title">사전 지식 파일 등록</h3>
+        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기">✕</button>
+      </header>
+      <div class="ai-doc-modal-body">
+        <p class="muted" data-i18n="ai_doc_knowledge_desc">PDF, TXT, MD 파일을 등록하면 생성 시 텍스트가 함께 첨부됩니다. (RAG는 추후 활성화)</p>
+        <button type="button" class="ai-doc-dropzone ai-doc-dropzone-sm" id="ai-doc-knowledge-dropzone">
+          <span class="ai-doc-dropzone-icon" aria-hidden="true">📄</span>
+          <strong data-i18n="ai_doc_knowledge_upload">PDF, TXT, MD 지식파일 등록</strong>
+        </button>
+        <input type="file" id="ai-doc-knowledge-input" multiple accept=".pdf,.txt,.md,text/*,application/pdf" hidden />
+        <div class="ai-doc-knowledge-list" id="ai-doc-knowledge-list"></div>
+      </div>
+      <footer class="ai-doc-modal-foot">
+        <button type="button" class="btn-primary" data-action="close" data-i18n="ai_doc_btn_done">닫기</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Section edit modal -->
+  <div class="ai-doc-modal-overlay hidden" id="ai-doc-edit-modal">
+    <div class="ai-doc-modal">
+      <header class="ai-doc-modal-head">
+        <h3 id="ai-doc-edit-title">섹션 수정</h3>
+        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기">✕</button>
+      </header>
+      <div class="ai-doc-modal-body">
+        <p class="muted" id="ai-doc-edit-desc">수정 요청을 입력하면 이 섹션 이미지만 다시 생성합니다.</p>
+        <div class="form-row">
+          <label for="ai-doc-edit-request" data-i18n="ai_doc_edit_request_label">수정 요청</label>
+          <textarea id="ai-doc-edit-request" rows="4" placeholder="예: 헤드라인을 더 짧게, 제품컷을 더 크게"></textarea>
+        </div>
+      </div>
+      <footer class="ai-doc-modal-foot">
+        <button type="button" class="btn-secondary" data-action="close" data-i18n="ai_doc_btn_cancel">취소</button>
+        <button type="button" class="btn-primary" id="ai-doc-edit-submit" data-i18n="ai_doc_btn_apply">수정 실행</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Generation progress overlay -->
+  <div class="ai-doc-progress-overlay hidden" id="ai-doc-progress">
+    <div class="ai-doc-progress-card">
+      <h3 id="ai-doc-progress-title">생성 중…</h3>
+      <div class="ai-doc-progress-bar">
+        <div class="ai-doc-progress-fill" id="ai-doc-progress-fill" style="width:4%"></div>
+      </div>
+      <div class="ai-doc-progress-meta">
+        <span id="ai-doc-progress-phase">준비</span>
+        <span id="ai-doc-progress-time">0s</span>
+      </div>
+      <p class="muted" id="ai-doc-progress-tip">상세페이지의 첫 화면은 3초 내에 메시지가 전달되어야 합니다.</p>
+      <button type="button" class="btn-secondary" id="ai-doc-progress-cancel" data-i18n="ai_doc_btn_cancel">취소</button>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="ai-doc-toast hidden" id="ai-doc-toast" role="status" aria-live="polite"></div>
+
+  <!-- pdfjs (only loaded when needed via dynamic import in ai-doc.js) -->
+</body>
+
+</html>
