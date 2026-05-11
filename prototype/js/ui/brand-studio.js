@@ -2683,9 +2683,9 @@
         if (left + popupW > window.innerWidth - 8) left = Math.max(8, window.innerWidth - popupW - 8);
         popup.style.position = 'fixed';
         popup.style.zIndex = '9999';
+        popup.style.width = popupW + 'px';
         popup.style.left = left + 'px';
         popup.style.right = '';
-        popup.style.minWidth = popupW + 'px';
         // Vertical: open downward when enough space below, otherwise upward
         if (spaceBelow >= popupH || spaceBelow >= spaceAbove) {
           popup.style.top = (rect.bottom + 6) + 'px';
