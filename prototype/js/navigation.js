@@ -263,7 +263,7 @@
             if (name === 'brand-dashboard' || name === 'image-dashboard' || name === 'video-dashboard' || name === 'video-gen-dashboard') return 'dashboard';
             if (name === 'ai-image') return 'ai-image-stage';
             if (name === 'ai-video-gen') return 'ai-video-gen-stage';
-            if (['scenario', 'scenes', 'ai-image-stage', 'ai-video-gen-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video'].includes(name)) {
+            if (['scenario', 'scenes', 'ai-image-stage', 'ai-video-gen-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video', 'sns-settings'].includes(name)) {
                 return name === 'ai-video' ? 'dashboard' : name;
             }
             if (name === 'index' || name === '') return 'options';

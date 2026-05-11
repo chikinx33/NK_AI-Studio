@@ -888,6 +888,12 @@
     document.addEventListener('click', (e) => {
       const link = e.target.closest('.nav-item[href], [data-action]');
       if (!link) return;
+      // 이미 활성 상태인 nav-item 클릭 무시
+      if (link.classList.contains('nav-item') && link.classList.contains('active')) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       // 세션 만료 감지 — 네비게이션 차단 후 로그아웃 팝업
       if (NK.auth && NK.auth.isAuthed && !NK.auth.isAuthed()) {
         e.preventDefault();
@@ -3240,7 +3246,7 @@
       else item.classList.remove('active');
 
       // 대시보드 스테이지에서 프로젝트 선택이 필요한 메뉴는 비활성화
-      const needsProject = ['brand', 'knowledge', 'analytics', 'library'];
+      const needsProject = ['brand', 'knowledge', 'analytics', 'library', 'sns-settings'];
       if (needsProject.includes(file)) {
         if (stage === 'dashboard') item.classList.add('disabled');
         else item.classList.remove('disabled');
