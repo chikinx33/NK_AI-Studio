@@ -457,6 +457,12 @@
         var rest = u.slice(5);
         var slash = rest.indexOf('/');
         objectName = slash >= 0 ? rest.slice(slash + 1) : '';
+      } else if (u.indexOf('/api/media/proxy') !== -1 && u.indexOf('objectName=') !== -1) {
+        // 이미 프록시 URL이면 안쪽 objectName을 추출
+        var qIdx = u.indexOf('?');
+        var query = qIdx >= 0 ? u.slice(qIdx + 1) : u;
+        var pParams = new URLSearchParams(query);
+        objectName = String(pParams.get('objectName') || '').trim();
       } else {
         var parsed = new URL(u, (typeof window !== 'undefined' ? window.location.href : 'http://localhost/'));
         if (parsed.hostname === 'storage.googleapis.com') {
@@ -472,6 +478,21 @@
 
   api.mediaProxyObjectUrl = function (objectName) {
     var n = String(objectName || '').trim();
+    if (!n) return '';
+    // 이중 래핑 방어: 입력이 이미 /api/media/proxy?objectName=... 이면 안쪽 objectName을 추출
+    // (과거 코드에서 prox URL이 thumbnailObjectName 등으로 잘못 저장된 케이스 대응)
+    var unwrapGuard = 0;
+    while (unwrapGuard < 3 && n.indexOf('/api/media/proxy') !== -1 && n.indexOf('objectName=') !== -1) {
+      try {
+        var qIdx = n.indexOf('?');
+        var query = qIdx >= 0 ? n.slice(qIdx + 1) : n;
+        var params = new URLSearchParams(query);
+        var inner = params.get('objectName');
+        if (!inner || inner === n) break;
+        n = inner.trim();
+      } catch (_) { break; }
+      unwrapGuard++;
+    }
     if (!n) return '';
     var token = getAuthToken();
     return withBase('/api/media/proxy?objectName=' + encodeURIComponent(n) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
