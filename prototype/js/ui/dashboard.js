@@ -515,7 +515,7 @@
                 <h4 class="draft-title" data-id="${escapeHtml(d.id)}" title="${escapeHtml(d.title || '제목없음')}">${escapeHtml(host === 'video' ? truncateEpisodeTitle(d.title || '제목없음') : (d.title || '제목없음'))}</h4>
               </div>
               <div class="draft-meta">
-                <div class="draft-meta-project">${labels.project} : ${escapeHtml(d.seriesTitle || '-')}</div>
+                <div class="draft-meta-project">${escapeHtml(d.seriesTitle || '-')}</div>
                 <div class="draft-meta-genre">${labels.genre} : ${escapeHtml(genre || '-')}</div>
                 <div>${labels.target} : ${escapeHtml(tgt || '-')}</div>
                 <div>${labels.purpose} : ${escapeHtml(needs || '-')}</div>

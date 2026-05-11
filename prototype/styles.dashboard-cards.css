@@ -563,8 +563,9 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 
 .draft-meta-project {
   color: #6fb8ff;
-  font-size: 12.5px;
+  font-size: 16px;
   font-weight: 700;
+  margin-bottom: 4px;
 }
 
 .draft-actions {
