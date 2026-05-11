@@ -52,7 +52,7 @@
   }
 
   function loadSettings() {
-    return apiGet('/api/userdata/sns').then(function (res) {
+    return apiGet('/api/userdata/sns/get').then(function (res) {
       if (res && res.ok) {
         _settings = res.settings;
       } else {
@@ -87,7 +87,7 @@
       deployDefaults: _settings.deployDefaults || {},
     };
 
-    return apiPost('/api/userdata/sns', payload)
+    return apiPost('/api/userdata/sns/save', payload)
       .then(function (res) {
         if (res && res.ok) {
           setStatus('저장 완료 ✓', 'success');
