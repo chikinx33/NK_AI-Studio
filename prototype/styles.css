@@ -10584,10 +10584,16 @@ body {
   text-transform: uppercase;
 }
 
-.brand-studio-eyebrow,
-.knowledge-hub-eyebrow,
-.analytics-eyebrow {
+[data-theme="dark"] .brand-studio-eyebrow,
+[data-theme="dark"] .knowledge-hub-eyebrow,
+[data-theme="dark"] .analytics-eyebrow {
   color: rgba(219, 234, 254, 0.9);
+}
+[data-theme="light"] .brand-studio-eyebrow,
+[data-theme="light"] .knowledge-hub-eyebrow,
+[data-theme="light"] .analytics-eyebrow,
+[data-theme="light"] .content-library-eyebrow {
+  color: var(--accent);
 }
 
 .brand-studio-hero h2,
