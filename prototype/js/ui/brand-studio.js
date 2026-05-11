@@ -3093,7 +3093,6 @@
         }
         var currentDraftObj = formatDrafts && formatDrafts[refineFmtId] ? formatDrafts[refineFmtId] : {};
         btn.disabled = true;
-        btn.textContent = isEn ? 'Applying…' : '적용 중…';
         showDraftSkeleton(refinePanel);
         var refineBrandCtx = buildBrandContext(payload, brandView, knowledge);
         var refineStory = buildEpisodeStory(payload, project.scenes || []);
@@ -3135,7 +3134,7 @@
           console.error('[draft-refine]', err && err.message ? err.message : err);
         }).finally(function () {
           btn.disabled = false;
-          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>' + (isEn ? 'AI Refine' : 'AI 보완');
+          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
         });
         return;
       }
