@@ -485,6 +485,47 @@
     return output.replace(/\s{2,}/g, ' ').replace(/\s+([,.!?])/g, '$1').trim();
   }
 
+  function buildEpisodeStory(payload, scenes) {
+    var parts = [];
+    function mv(v) { return String(v || '').trim(); }
+    function firstArr(v) { return Array.isArray(v) ? mv(v[0]) : mv(v); }
+
+    var epTitle = mv(payload.episodeTitle || payload.topic || payload.seriesTitle);
+    if (epTitle) parts.push('에피소드: ' + epTitle);
+
+    var meta = [];
+    var genre    = mv(payload.purposeCategory);
+    var subgenre = firstArr(payload.purposeTag || payload.purposeTags);
+    var needs    = firstArr(payload.needs || payload.need);
+    var tone     = firstArr(payload.tones || payload.tone);
+    var style    = mv(payload.style);
+    var duration = mv(payload.duration);
+    if (genre)    meta.push('장르: ' + genre);
+    if (subgenre) meta.push('세부장르: ' + subgenre);
+    if (needs)    meta.push('시청 목적: ' + needs);
+    if (tone)     meta.push('톤: ' + tone);
+    if (style)    meta.push('스타일: ' + style);
+    if (duration) meta.push('영상 길이: ' + duration + '초');
+    if (meta.length) parts.push(meta.join(' / '));
+
+    var story = mv(payload.story || payload.storyPrompt);
+    if (story) parts.push('스토리: ' + story);
+
+    if (Array.isArray(scenes) && scenes.length) {
+      var sceneLines = scenes.slice(0, 8).map(function (sc, i) {
+        var narr = mv(sc.narration);
+        var dial = Array.isArray(sc.dialogue)
+          ? sc.dialogue.map(function (d) { return mv(d.line || d.text || d); }).filter(Boolean).join(' / ')
+          : '';
+        if (!narr && !dial) return null;
+        return '씬' + (i + 1) + (narr ? ' 나레이션: ' + narr : '') + (dial ? ' 대사: ' + dial : '');
+      }).filter(Boolean);
+      if (sceneLines.length) parts.push(sceneLines.join('\n'));
+    }
+
+    return parts.join('\n\n');
+  }
+
   function buildBrandContext(payload, brandView, knowledge) {
     var sections = [];
 
@@ -2968,7 +3009,7 @@
         (NK.api && NK.api.draftGenerate
           ? NK.api.draftGenerate({
               platformId: regenFmtId,
-              story: String(payload.story || payload.storyPrompt || '').trim(),
+              story: buildEpisodeStory(payload, project.scenes || []),
               brandContext: brandCtx,
             })
           : Promise.reject(new Error('api_not_ready'))
@@ -3071,7 +3112,7 @@
           return;
         }
         var genBrandCtx = buildBrandContext(payload, brandView, knowledge);
-        var genStory = String(payload.story || payload.storyPrompt || '').trim();
+        var genStory = buildEpisodeStory(payload, project.scenes || []);
         // Immediately show skeleton on every selected panel
         selectedFormats.forEach(function (fid) {
           var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
