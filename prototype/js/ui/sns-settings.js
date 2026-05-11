@@ -271,8 +271,8 @@
     if (!root) return;
 
     var ctx = resolveProjectContext();
-    var heroTitle = ctx.brandTitle || '프로젝트';
-    var heroEpisode = ctx.episodeTitle ? '에피소드: ' + ctx.episodeTitle : '';
+    var heroTitle = ctx.episodeTitle || ctx.brandTitle || '프로젝트';
+    var heroDesc = '채널을 연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.';
 
     var cards = PLATFORMS.map(buildPlatformCard).join('');
     var igForm = buildIgDefaultsForm();
@@ -280,13 +280,13 @@
     root.innerHTML = [
       '<div class="sns-settings-page">',
 
-        // ── 상단 hero 카드 (bsf-flow-card 동일 스타일)
+        // ── 상단 hero 카드
         '<div class="bsf-flow-card sns-hero-card">',
           '<div class="bsf-flow-head">',
             '<div class="bsf-flow-title-group">',
-              '<p class="brand-studio-eyebrow">브랜드 운영 &rsaquo; SNS 설정</p>',
+              '<p class="brand-studio-eyebrow">SNS 설정 &rsaquo; 채널 연결</p>',
               '<h2 class="bsf-title">', escapeHtml(heroTitle), '</h2>',
-              heroEpisode ? '<p class="bsf-desc">' + escapeHtml(heroEpisode) + '</p>' : '',
+              '<p class="bsf-desc">', escapeHtml(heroDesc), '</p>',
             '</div>',
           '</div>',
         '</div>',
@@ -294,10 +294,6 @@
         // ── 플랫폼 그리드 카드
         '<div class="bsf-detail-card sns-settings-card">',
           '<div class="sns-settings-inner">',
-            '<div class="bsf-detail-head">',
-              '<strong>채널 연결</strong>',
-              '<span>연결하면 브랜드 스튜디오에서 바로 배포할 수 있습니다.</span>',
-            '</div>',
             '<div class="sns-platform-grid">', cards, '</div>',
             igForm,
             '<div class="sns-settings-footer">',
