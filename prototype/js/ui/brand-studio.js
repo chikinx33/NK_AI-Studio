@@ -1569,7 +1569,7 @@
       if (regenBtn) regenBtn.disabled = true;
       if (panel) {
         panel.querySelectorAll('.bsf-ce[contenteditable]').forEach(function (el) { el.classList.add('bsf-skeleton'); });
-        panel.querySelectorAll('input[data-draft-field]:not([disabled])').forEach(function (el) { el.classList.add('bsf-skeleton'); });
+        panel.querySelectorAll('input[data-draft-field]:not([disabled]), textarea[data-draft-field]:not([disabled])').forEach(function (el) { el.classList.add('bsf-skeleton'); });
       }
     }
     function hideDraftSkeleton(panel) {
@@ -1577,7 +1577,7 @@
       if (regenBtn) regenBtn.disabled = false;
       if (panel) {
         panel.querySelectorAll('.bsf-ce.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
-        panel.querySelectorAll('input.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
+        panel.querySelectorAll('input.bsf-skeleton, textarea.bsf-skeleton').forEach(function (el) { el.classList.remove('bsf-skeleton'); });
       }
     }
 
@@ -1617,10 +1617,13 @@
       var bC = fieldTier === 'copy' ? 'bsf-badge-copy' : 'bsf-badge-auto';
       var bT = fieldTier === 'copy' ? 'COPY' : 'AUTO';
       var tp = inputType || 'text';
-      var cls = tp === 'url' ? 'bsf-input-url' : 'bsf-input-text';
       var disabledAttr = disabled ? ' disabled' : '';
-      return '<div class="bsf-field ' + wC + '"><div class="bsf-field-hd"><span class="bsf-badge ' + bC + '">' + bT + '</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>' +
-        '<input type="' + tp + '" class="' + cls + '" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '" placeholder="' + escapeHtml(placeholder || '') + '" value="' + escapeHtml(String(currentVal || '')) + '"' + disabledAttr + '></div>';
+      var head = '<div class="bsf-field ' + wC + '"><div class="bsf-field-hd"><span class="bsf-badge ' + bC + '">' + bT + '</span><span class="bsf-field-label">' + escapeHtml(label) + '</span></div>';
+      if (tp === 'textarea') {
+        return head + '<textarea class="bsf-input-textarea" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '" placeholder="' + escapeHtml(placeholder || '') + '"' + disabledAttr + '>' + escapeHtml(String(currentVal || '')) + '</textarea></div>';
+      }
+      var cls = tp === 'url' ? 'bsf-input-url' : 'bsf-input-text';
+      return head + '<input type="' + tp + '" class="' + cls + '" data-draft-format="' + escapeHtml(fmtId) + '" data-draft-field="' + escapeHtml(fieldKey) + '" placeholder="' + escapeHtml(placeholder || '') + '" value="' + escapeHtml(String(currentVal || '')) + '"' + disabledAttr + '></div>';
     }
     function scheduledAtField(fmtId, currentVal, privacyStatus) {
       var hidden = privacyStatus !== 'scheduled' ? ' style="display:none"' : '';
@@ -1733,7 +1736,7 @@
       afWrap(isEn ? 'Caption' : '캡션', ceDiv(fmtId, 'caption', captionVal, 4, isEn ? 'Write your caption…' : '캡션을 작성하세요')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag #tag')) +
       inputField(fmtId, 'location_tag', isEn ? 'Location tag' : '위치 태그', isEn ? 'Unavailable' : '비활성', '', 'auto', 'text', true) +
-      inputField(fmtId, 'first_comment', isEn ? 'First comment' : '첫 댓글', isEn ? 'Auto-post as first comment (optional)' : '첫 댓글로 자동 게시 (선택)', draft.first_comment || '', 'auto');
+      inputField(fmtId, 'first_comment', isEn ? 'First comment' : '첫 댓글', isEn ? 'Auto-post as first comment (optional)' : '첫 댓글로 자동 게시 (선택)', draft.first_comment || '', 'auto', 'textarea');
     }
     function buildYoutubeShortsPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       var shortsVidHtml = draftFirstVidUrl

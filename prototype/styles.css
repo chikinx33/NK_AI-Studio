@@ -12266,7 +12266,8 @@ body {
 
 /* ── AI 재생성 스켈레톤 로딩 ──────────────────────────────────────────── */
 .bsf-ce.bsf-skeleton,
-input.bsf-skeleton {
+input.bsf-skeleton,
+textarea.bsf-skeleton {
   color: transparent !important;
   background: linear-gradient(90deg, #1a2133 25%, #2d3a50 50%, #1a2133 75%);
   background-size: 200% 100%;
@@ -12277,7 +12278,8 @@ input.bsf-skeleton {
 }
 .bsf-ce.bsf-skeleton { min-height: 48px; }
 [data-theme="light"] .bsf-ce.bsf-skeleton,
-[data-theme="light"] input.bsf-skeleton {
+[data-theme="light"] input.bsf-skeleton,
+[data-theme="light"] textarea.bsf-skeleton {
   background: linear-gradient(90deg, #e2e8f0 25%, #cbd5e1 50%, #e2e8f0 75%);
   background-size: 200% 100%;
 }
@@ -12287,6 +12289,27 @@ input.bsf-skeleton {
 }
 
 /* ── D단계 추가 필드 공통 ──────────────────────────────────────────────── */
+.bsf-input-textarea {
+  width: 100%;
+  min-height: 72px;
+  background: var(--input-bg, #0f1624);
+  border: 1px solid var(--border, #2d3748);
+  border-radius: 8px;
+  color: var(--text-1);
+  font-size: 13px;
+  padding: 8px 10px;
+  margin-top: 4px;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: inherit;
+}
+.bsf-input-textarea:focus {
+  outline: none;
+  border-color: var(--accent, #6366f1);
+}
+.bsf-input-textarea::placeholder { color: var(--muted); }
+
 .bsf-select,
 .bsf-input-text,
 .bsf-input-url,
