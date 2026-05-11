@@ -12095,10 +12095,14 @@ body {
   gap: 8px;
   padding: 10px 0 4px;
 }
-.bsf-refine-input {
+.bsf-refine-input-wrap {
+  position: relative;
   flex: 1;
+}
+.bsf-refine-input {
+  width: 100%;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 40px 0 10px;
   border: 1px solid var(--border);
   border-radius: 7px;
   background: var(--surface-2);
@@ -12106,10 +12110,29 @@ body {
   font-size: 12px;
   outline: none;
   transition: border-color 0.15s;
+  box-sizing: border-box;
 }
 .bsf-refine-input:focus { border-color: var(--accent); }
 .bsf-refine-input::placeholder { color: var(--text-3); }
-.bsf-refine-btn,
+.bsf-refine-btn {
+  position: absolute;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  color: #0b0b0b;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
 .bsf-card-gen-btn {
   display: inline-flex;
   align-items: center;

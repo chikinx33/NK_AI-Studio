@@ -1555,10 +1555,12 @@
           '<button type="button" class="bsf-card-gen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(fmtId) + '" title="' + (isEn ? 'Generate for this platform only' : '이 플랫폼만 신규 생성') + '">' +
             svgRegen + (isEn ? 'Generate' : '신규 생성') +
           '</button>' +
-          '<input type="text" class="bsf-refine-input" data-refine-format="' + escapeHtml(fmtId) + '" placeholder="' + (isEn ? 'e.g. Make the tone more comic…' : '예: 톤을 더 코믹하게…') + '" maxlength="200">' +
-          '<button type="button" class="bsf-refine-btn" data-action="brand-refine-draft" data-format-id="' + escapeHtml(fmtId) + '" title="' + (isEn ? 'Apply instruction' : '지시 적용') + '">' +
-            svgEdit + (isEn ? 'AI Refine' : 'AI 보완') +
-          '</button>' +
+          '<div class="bsf-refine-input-wrap">' +
+            '<input type="text" class="bsf-refine-input" data-refine-format="' + escapeHtml(fmtId) + '" placeholder="' + (isEn ? 'e.g. Make the tone more comic…' : '예: 톤을 더 코믹하게…') + '" maxlength="200">' +
+            '<button type="button" class="bsf-refine-btn" data-action="brand-refine-draft" data-format-id="' + escapeHtml(fmtId) + '" title="' + (isEn ? 'AI Refine' : 'AI 보완') + '">' +
+              svgEdit +
+            '</button>' +
+          '</div>' +
         '</div>'
       );
     }
