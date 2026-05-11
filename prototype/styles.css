@@ -7719,9 +7719,9 @@ body.layout-fixed .app.no-sidebar {
 }
 
 html.layout-fixed:not([data-embed="1"]) body.layout-fixed .app.no-sidebar {
-  width: 1440px;
+  width: 100%;
   min-width: 1440px;
-  margin: 0 auto;
+  margin: 0;
 }
 
 html.layout-fixed[data-embed="1"] body.layout-fixed .app {
