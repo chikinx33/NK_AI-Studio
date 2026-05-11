@@ -1193,14 +1193,15 @@
         var prePayload = pickFields(srcPayload, PREPRODUCTION_PAYLOAD_FIELDS);
 
         var newId = uniqueEpisodeId();
-        // Use the source title verbatim. We intentionally do not append a
-        // "(복제)" suffix because it has caused user confusion when the suffix
-        // appeared to "come back" after editing + reload (some sync paths
-        // re-derive title from related fields). Users can rename via the
-        // dashboard pencil right after duplicating.
-        var newTitle = String(source.title || srcPayload.episodeTitle || '제목없음').trim() || '제목없음';
+        var baseTitle = String(source.title || srcPayload.episodeTitle || '제목없음').trim() || '제목없음';
+        var newTitle = baseTitle + ' (복제)';
 
+        // Keep title fields in sync. We also overwrite payload.topic so that
+        // any fallback path (data.title → episodeTitle → topic) sees a
+        // consistent value and, more importantly, a later rename via the
+        // dashboard pencil cannot be "undone" by a topic-based fallback.
         prePayload.episodeTitle = newTitle;
+        prePayload.topic = newTitle;
         prePayload.parentProjectId = '';
         prePayload.parentProjectTitle = '';
         prePayload.sourceProjectId = '';

@@ -438,8 +438,8 @@
     };
     const runtimeLang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
     const labels = runtimeLang === 'en'
-      ? { project: 'Project', genre: 'Genre', target: 'Target', duration: 'Duration', aspect: 'Aspect ratio' }
-      : { project: '프로젝트', genre: '장르', target: '타겟', duration: '길이', aspect: '비율' };
+      ? { project: 'Project', genre: 'Genre', target: 'Target', purpose: 'Purpose', duration: 'Duration', aspect: 'Aspect ratio' }
+      : { project: '프로젝트', genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율' };
     const categoryTitle = runtimeLang === 'en' ? 'Category' : '카테고리';
     const host = getHostShell();
     const manageBarHtml = host === 'video' ? `
@@ -486,6 +486,7 @@
       const cat = d.payload?.purposeCategory || '';
       const tags = Array.isArray(d.payload?.purposeTags) ? d.payload.purposeTags.join(', ') : '';
       const tgt = d.payload?.target || '';
+      const needs = Array.isArray(d.payload?.needs) ? d.payload.needs.filter(Boolean).join(', ') : (d.payload?.needs || '');
       const genre = `${cat} ${tags}`.trim();
       const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
       const thumbObj = String(d.payload?.thumbnailObjectName || '').trim();
@@ -517,6 +518,7 @@
                 <div class="draft-meta-project">${labels.project} : ${escapeHtml(d.seriesTitle || '-')}</div>
                 <div class="draft-meta-genre">${labels.genre} : ${escapeHtml(genre || '-')}</div>
                 <div>${labels.target} : ${escapeHtml(tgt || '-')}</div>
+                <div>${labels.purpose} : ${escapeHtml(needs || '-')}</div>
                 <div>${labels.duration} : ${escapeHtml(dur)} · ${labels.aspect} : ${escapeHtml(ar)}</div>
               </div>
             </div>
@@ -649,13 +651,16 @@
           const draft = drafts.find(d => String(d.id) === String(id));
           if (!draft) return;
           const newTitle = (titleEl.textContent || '').trim() || '제목없음';
+          // Update title, episodeTitle AND topic together. Otherwise any sync
+          // path that re-derives title from payload.topic (scenario save,
+          // generate, etc.) can "undo" the rename on the next reload.
           const nextDraft = Object.assign({}, draft, {
             title: newTitle,
-            payload: Object.assign({}, draft.payload || {}, { episodeTitle: newTitle })
+            payload: Object.assign({}, draft.payload || {}, { episodeTitle: newTitle, topic: newTitle })
           });
           const savedDraft = NK.service?.project?.updateLocal
             ? NK.service.project.updateLocal(id, nextDraft, { forceCurrent: String(NK.service?.project?.getCurrentProjectId?.() || '') === String(id) })
-            : (draft.title = newTitle, draft.payload = Object.assign({}, draft.payload || {}, { episodeTitle: newTitle }), NK.store.saveDrafts(drafts), draft);
+            : (draft.title = newTitle, draft.payload = Object.assign({}, draft.payload || {}, { episodeTitle: newTitle, topic: newTitle }), NK.store.saveDrafts(drafts), draft);
           titleEl.textContent = newTitle;
           titleEl.contentEditable = 'false';
           titleEl.classList.remove('editing');
@@ -816,15 +821,19 @@
     const cat = normalized.payload?.purposeCategory || '';
     const tags = Array.isArray(normalized.payload?.purposeTags) ? normalized.payload.purposeTags.join(', ') : '';
     const tgt = normalized.payload?.target || '';
+    const sidebarNeeds = Array.isArray(normalized.payload?.needs)
+      ? normalized.payload.needs.filter(Boolean).join(', ')
+      : (normalized.payload?.needs || '');
     const genre = `${cat} ${tags}`.trim();
     const runtimeLang = (NK.state && NK.state.runtime && NK.state.runtime.lang) === 'en' ? 'en' : 'ko';
     const labels = runtimeLang === 'en'
-      ? { project: 'Project', genre: 'Genre', target: 'Target', duration: 'Duration', aspect: 'Aspect ratio' }
-      : { project: '프로젝트', genre: '장르', target: '타겟', duration: '길이', aspect: '비율' };
+      ? { project: 'Project', genre: 'Genre', target: 'Target', purpose: 'Purpose', duration: 'Duration', aspect: 'Aspect ratio' }
+      : { project: '프로젝트', genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율' };
     const desc = [
       `${labels.project} : ${normalized.seriesTitle || '-'}`,
       `${labels.genre} : ${genre || '-'}`,
       `${labels.target} : ${tgt || '-'}`,
+      `${labels.purpose} : ${sidebarNeeds || '-'}`,
       `${labels.duration} : ${dur}`
     ].join('\n');
 
