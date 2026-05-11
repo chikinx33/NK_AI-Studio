@@ -1547,6 +1547,17 @@
     function regenBtnHtml(fmtId) {
       return '<button type="button" class="bsf-draft-regen-btn" data-action="brand-regen-draft" data-format-id="' + escapeHtml(fmtId) + '">' + escapeHtml(T.draftRegen) + '</button>';
     }
+    function refineBarHtml(fmtId) {
+      return (
+        '<div class="bsf-refine-bar">' +
+          '<input type="text" class="bsf-refine-input" data-refine-format="' + escapeHtml(fmtId) + '" placeholder="' + (isEn ? 'e.g. Make the tone more comic, add CTA…' : '예: 톤을 더 코믹하게, CTA 추가해줘…') + '" maxlength="200">' +
+          '<button type="button" class="bsf-refine-btn" data-action="brand-refine-draft" data-format-id="' + escapeHtml(fmtId) + '">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>' +
+            (isEn ? 'AI Refine' : 'AI 보완') +
+          '</button>' +
+        '</div>'
+      );
+    }
     function showDraftSkeleton(panel) {
       var regenBtn = root.querySelector('.bsf-draft-regen-head');
       if (regenBtn) regenBtn.disabled = true;
@@ -2057,6 +2068,7 @@
       return (
         '<div class="bsf-format-draft-panel' + (isActive ? ' is-active' : '') + '" data-draft-format="' + escapeHtml(formatId) + '">' +
         bodyHtml +
+        refineBarHtml(formatId) +
         '</div>'
       );
     }
@@ -3037,6 +3049,65 @@
         }).catch(function (err) {
           hideDraftSkeleton(regenPanel);
           console.error('[draft-generate]', err && err.message ? err.message : err);
+        });
+        return;
+      }
+      if (action === 'brand-refine-draft') {
+        var refineFmtId = String(btn.dataset.formatId || '').trim();
+        if (!refineFmtId) return;
+        var refinePanel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + refineFmtId + '"]');
+        if (!refinePanel) return;
+        var refineInput = refinePanel.querySelector('.bsf-refine-input[data-refine-format="' + refineFmtId + '"]');
+        var instruction = refineInput ? String(refineInput.value || '').trim() : '';
+        if (!instruction) {
+          if (refineInput) refineInput.focus();
+          return;
+        }
+        var currentDraftObj = formatDrafts && formatDrafts[refineFmtId] ? formatDrafts[refineFmtId] : {};
+        btn.disabled = true;
+        btn.textContent = isEn ? 'Applying…' : '적용 중…';
+        showDraftSkeleton(refinePanel);
+        var refineBrandCtx = buildBrandContext(payload, brandView, knowledge);
+        var refineStory = buildEpisodeStory(payload, project.scenes || []);
+        (NK.api && NK.api.draftGenerate
+          ? NK.api.draftGenerate({
+              platformId: refineFmtId,
+              story: refineStory,
+              brandContext: refineBrandCtx,
+              userInstruction: instruction,
+              currentDraft: {
+                caption:       String(currentDraftObj.caption       || '').trim(),
+                hashtags:      String(currentDraftObj.hashtags      || '').trim(),
+                title:         String(currentDraftObj.title         || '').trim(),
+                first_comment: String(currentDraftObj.first_comment || '').trim(),
+              },
+            })
+          : Promise.reject(new Error('api_not_ready'))
+        ).then(function (result) {
+          hideDraftSkeleton(refinePanel);
+          ['caption', 'hashtags', 'title', 'first_comment'].forEach(function (fieldKey) {
+            if (!result[fieldKey]) return;
+            var ceEl = refinePanel.querySelector('[data-draft-format="' + refineFmtId + '"][data-draft-field="' + fieldKey + '"]');
+            if (ceEl) {
+              if (ceEl.tagName === 'INPUT' || ceEl.tagName === 'TEXTAREA') ceEl.value = result[fieldKey];
+              else ceEl.innerText = result[fieldKey];
+            }
+            var mirror = refinePanel.querySelector('[data-mock-mirror="' + refineFmtId + '"][data-mock-field="' + fieldKey + '"]');
+            if (mirror) { var dt = String(result[fieldKey]); mirror.textContent = dt.length > 80 ? dt.slice(0, 80) + '…' : dt; }
+          });
+          var refinedDrafts = Object.assign({}, formatDrafts);
+          refinedDrafts[refineFmtId] = Object.assign({}, refinedDrafts[refineFmtId] || {}, result);
+          formatDrafts = refinedDrafts;
+          if (refineInput) refineInput.value = '';
+          if (NK.service && NK.service.project && NK.service.project.updatePayload) {
+            NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: refinedDrafts }).catch(function () {});
+          }
+        }).catch(function (err) {
+          hideDraftSkeleton(refinePanel);
+          console.error('[draft-refine]', err && err.message ? err.message : err);
+        }).finally(function () {
+          btn.disabled = false;
+          btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>' + (isEn ? 'AI Refine' : 'AI 보완');
         });
         return;
       }

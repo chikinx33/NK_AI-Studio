@@ -12087,6 +12087,52 @@ body {
   cursor: not-allowed;
 }
 
+/* Step 3 — Per-card AI refine bar */
+.bsf-refine-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+  border-radius: 0 0 10px 10px;
+  margin-top: 4px;
+}
+.bsf-refine-input {
+  flex: 1;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface-2);
+  color: var(--text-1);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+.bsf-refine-input:focus { border-color: var(--accent); }
+.bsf-refine-input::placeholder { color: var(--text-3); }
+.bsf-refine-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 7px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+}
+.bsf-refine-btn:hover { opacity: 0.85; }
+.bsf-refine-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Step 3 — Draft media preview */
 .bsf-draft-media-preview {
   display: flex;

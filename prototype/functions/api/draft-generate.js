@@ -237,23 +237,49 @@ export async function onRequestPost(context) {
     return json({ error: "Invalid JSON body" }, 400, origin);
   }
 
-  const platformId    = String(body?.platformId || "").trim();
-  const story         = String(body?.story || "").trim().slice(0, 3000);
-  const brandContext  = String(body?.brandContext || "").trim().slice(0, 3000);
+  const platformId       = String(body?.platformId || "").trim();
+  const story            = String(body?.story || "").trim().slice(0, 3000);
+  const brandContext     = String(body?.brandContext || "").trim().slice(0, 3000);
+  const userInstruction  = String(body?.userInstruction || "").trim().slice(0, 500);
+  const currentDraft     = body?.currentDraft && typeof body.currentDraft === "object" ? body.currentDraft : null;
 
-  const systemPrompt = PLATFORM_PROMPTS[platformId];
-  if (!systemPrompt) {
+  const basePlatformPrompt = PLATFORM_PROMPTS[platformId];
+  if (!basePlatformPrompt) {
     return json({ error: "Unknown platform: " + platformId }, 400, origin);
   }
 
-  const userPrompt = [
-    brandContext ? "=== 브랜드 컨텍스트 ===\n" + brandContext : "",
-    story        ? "=== 에피소드 정보 ===\n" + story          : "",
-    "=== 작성 요청 ===\n" +
-      "위 에피소드 정보(장르·시청목적·씬 나레이션·대사)를 반드시 반영해서 작성하세요. " +
-      "캡션과 해시태그는 이 에피소드의 실제 내용·감성·등장 인물·제품명을 구체적으로 담아야 합니다. " +
-      "브랜드 톤앤매너, 타겟 오디언스, 금칙어를 모두 지켜야 합니다.",
-  ].filter(Boolean).join("\n\n");
+  const isRefineMode = !!userInstruction;
+
+  const systemPrompt = isRefineMode
+    ? basePlatformPrompt + "\n\n[보완 수정 모드] 현재 초안을 사용자 지시에 따라 보완·수정합니다. 지시되지 않은 부분은 원본의 분위기와 구조를 최대한 유지하세요."
+    : basePlatformPrompt;
+
+  function formatCurrentDraft(d) {
+    const lines = [];
+    if (d.caption)       lines.push("캡션: " + d.caption);
+    if (d.hashtags)      lines.push("해시태그: " + d.hashtags);
+    if (d.title)         lines.push("제목: " + d.title);
+    if (d.first_comment) lines.push("첫 댓글: " + d.first_comment);
+    return lines.join("\n");
+  }
+
+  const userPrompt = isRefineMode
+    ? [
+        brandContext  ? "=== 브랜드 컨텍스트 ===\n" + brandContext : "",
+        story         ? "=== 에피소드 정보 ===\n" + story          : "",
+        currentDraft  ? "=== 현재 초안 ===\n" + formatCurrentDraft(currentDraft) : "",
+        "=== 사용자 지시 ===\n" + userInstruction,
+        "=== 수정 요청 ===\n현재 초안을 사용자 지시에 따라 수정하세요. " +
+          "지시와 무관한 부분은 원본을 유지하고, 브랜드 톤앤매너와 금칙어를 반드시 지켜야 합니다.",
+      ].filter(Boolean).join("\n\n")
+    : [
+        brandContext ? "=== 브랜드 컨텍스트 ===\n" + brandContext : "",
+        story        ? "=== 에피소드 정보 ===\n" + story          : "",
+        "=== 작성 요청 ===\n" +
+          "위 에피소드 정보(장르·시청목적·씬 나레이션·대사)를 반드시 반영해서 작성하세요. " +
+          "캡션과 해시태그는 이 에피소드의 실제 내용·감성·등장 인물·제품명을 구체적으로 담아야 합니다. " +
+          "브랜드 톤앤매너, 타겟 오디언스, 금칙어를 모두 지켜야 합니다.",
+      ].filter(Boolean).join("\n\n");
 
   try {
     const completion = await fetch("https://api.anthropic.com/v1/messages", {
