@@ -749,7 +749,7 @@
       ? (projects.reduce((s, p) => s + (p.sections ? p.sections.length : 0), 0) / projects.length).toFixed(1)
       : '-';
 
-    const libDocs = $('#ai-doc-lib-docs'); if (libDocs) libDocs.textContent = state.knowledge.length + '개';
+    const libDocs = $('#ai-doc-lib-docs'); if (libDocs) libDocs.textContent = state.knowledge.length + t('ai_doc_count_unit');
     const libChars = $('#ai-doc-lib-chars');
     if (libChars) libChars.textContent = state.knowledge.reduce((s, k) => s + (k.text ? k.text.length : 0), 0).toLocaleString();
     const kBadge = $('#ai-doc-knowledge-count');
@@ -1205,6 +1205,8 @@
       if (m === 'gemini' || m === 'openai') state.model = m;
     } catch (_) {}
     state.knowledge = loadKnowledge();
+    const _sc = document.getElementById('ai-doc-shared-count');
+    if (_sc) _sc.textContent = t('ai_doc_shared_count', { n: state.knowledge.length });
     $$('.ai-doc-toggle-btn[data-shared]').forEach((b) => b.classList.toggle('is-active', (b.getAttribute('data-shared') === 'on') === state.useShared));
     $$('.ai-doc-model-btn[data-model]').forEach((b) => b.classList.toggle('is-active', b.getAttribute('data-model') === state.model));
     const requestEl = $('#ai-doc-request'); if (requestEl) state.request = requestEl.value || '';
@@ -1230,6 +1232,8 @@
       _orig(lang);
       reflectRagStatus();
       renderKnowledgeList();
+      const _sc = document.getElementById('ai-doc-shared-count');
+      if (_sc) _sc.textContent = t('ai_doc_shared_count', { n: state.knowledge.length });
       if (state.view === 'dashboard') renderDashboard().catch(() => {});
       if (state.view === 'results') renderResults();
     };
