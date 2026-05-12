@@ -474,6 +474,7 @@
       top_ai_video_label: 'AI Cinema',
       top_ai_image_label: 'AI Image',
       top_ai_video_gen_label: 'AI Video',
+      top_ai_doc_label: 'AI Doc',
       // AI Doc
       ai_doc_subtitle: 'AI Detail Page Wizard',
       ai_doc_nav_dashboard: 'Dashboard',
@@ -599,6 +600,7 @@
       top_ai_video_label: 'AI 시네마',
       top_ai_image_label: 'AI 이미지',
       top_ai_video_gen_label: 'AI 영상',
+      top_ai_doc_label: 'AI 문서',
       btn_new_project: '새 파이프라인',
       project_label: '파이프라인',
       search_placeholder: '명령/검색 (Ctrl + K)',
