@@ -644,7 +644,7 @@
         titleEl.focus();
 
         let committed = false;
-        const commit = () => {
+        const commit = async () => {
           if (committed) return;
           committed = true;
           const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
@@ -664,13 +664,19 @@
           titleEl.textContent = newTitle;
           titleEl.contentEditable = 'false';
           titleEl.classList.remove('editing');
+          // 서버 저장이 완료되기 전에 다음 단계(프리프로덕션 등)로 진입하면
+          // scenario 화면이 백그라운드 projectGet에서 옛 payload(예: 복제 시점의 topic)를
+          // 받아 화면을 덮어쓰는 레이스가 발생한다. await 후 알림을 띄워
+          // 사용자가 OK를 누르기 전에 서버 동기화가 끝나도록 보장한다.
           if (NK.api && NK.api.projectSave) {
             const targetDraft = savedDraft || nextDraft;
-            NK.api.projectSave(targetDraft.id, targetDraft.payload || {}, targetDraft.scenes || [], {
-              header: targetDraft.header || '',
-              aspectRatio: targetDraft.payload?.aspectRatio,
-              title: newTitle
-            }).catch(() => { });
+            try {
+              await NK.api.projectSave(targetDraft.id, targetDraft.payload || {}, targetDraft.scenes || [], {
+                header: targetDraft.header || '',
+                aspectRatio: targetDraft.payload?.aspectRatio,
+                title: newTitle
+              });
+            } catch (_) { /* 저장 실패해도 로컬은 갱신되어 있음 */ }
           }
           alert('제목을 수정했습니다.');
         };

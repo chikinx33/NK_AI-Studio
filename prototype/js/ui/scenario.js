@@ -1810,10 +1810,30 @@
           if (!draft) finishLoadingWithMinDelay();
           return;
         }
+        // 대시보드 제목 수정 직후 진입한 경우 서버 동기화가 아직 완료되지 않아
+        // 옛 title/topic 이 돌아올 수 있다. 로컬이 비어있지 않고 서버와 다르면
+        // 로컬 값(가장 최근 사용자 의도)을 우선해 개요 주제가 옛 이름으로 되돌아가는
+        // 회귀를 막는다.
+        const sanitize = (v) => String(v == null ? '' : v).trim();
+        const localTitle = sanitize(draft?.title);
+        const serverTitle = sanitize(srv.data.title);
+        const localPayload = (draft && draft.payload) || {};
+        const localTopic = sanitize(localPayload.topic);
+        const localEpisodeTitle = sanitize(localPayload.episodeTitle);
+        const serverPayload = srv.data.payload || {};
+        const preferLocalTitle = !!(localTitle && serverTitle && localTitle !== serverTitle);
+        const mergedTitle = preferLocalTitle
+          ? localTitle
+          : (srv.data.title || draft?.title || '프로젝트');
+        const mergedPayload = Object.assign({}, serverPayload || draft?.payload || {});
+        if (preferLocalTitle) {
+          mergedPayload.episodeTitle = localEpisodeTitle || localTitle;
+          mergedPayload.topic = localTopic || localTitle;
+        }
         const serverDraft = {
           id: pid,
-          title: srv.data.title || draft?.title || '프로젝트',
-          payload: srv.data.payload || draft?.payload || {},
+          title: mergedTitle,
+          payload: mergedPayload,
           scenes: srv.data.scenes || draft?.scenes || [],
           header: srv.data.header || draft?.header || ''
         };
