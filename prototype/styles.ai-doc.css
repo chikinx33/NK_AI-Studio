@@ -46,10 +46,15 @@
 
 .ai-doc-cat-placeholder {
   display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 80px);
+  padding: 6px 24px 40px;
+}
+.ai-doc-cat-placeholder-body {
+  flex: 1;
+  display: flex;
   align-items: center;
   justify-content: center;
-  min-height: calc(100vh - 80px);
-  padding: 40px 24px;
 }
 
 .ai-doc-cat-placeholder.hidden { display: none; }
@@ -120,11 +125,23 @@
 }
 
 .ai-doc-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-size: 11px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.12em;
   font-weight: 700;
   color: var(--muted);
   text-transform: uppercase;
+}
+.ai-doc-bc-cat {
+  opacity: 0.5;
+}
+.ai-doc-bc-sep {
+  opacity: 0.3;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-size: 13px;
 }
 
 .ai-doc-topbar-actions {
