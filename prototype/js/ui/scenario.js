@@ -1471,6 +1471,37 @@
     return out;
   }
 
+  // sceneLocation 기준으로 카드 라벨(Scene N / Scene N cutM)을 계산.
+  // renderScenes 와 시나리오 복사 버튼이 동일한 라벨 체계를 공유하도록 추출.
+  function computeSceneLabels(sceneList) {
+    let lastLoc = null;
+    let parentNo = 0;
+    let cutNo = 0;
+    const seq = [];
+    const totalByParent = {};
+    (Array.isArray(sceneList) ? sceneList : []).forEach((sc) => {
+      const loc = String((sc && sc.sceneLocation) || '').trim();
+      if (!loc || loc !== lastLoc) {
+        parentNo += 1;
+        cutNo = 1;
+        lastLoc = loc;
+      } else {
+        cutNo += 1;
+      }
+      seq.push({ parentNo, cutNo });
+      totalByParent[parentNo] = cutNo;
+    });
+    return seq.map((g) => {
+      const total = totalByParent[g.parentNo] || 1;
+      if (total <= 1) {
+        return { html: 'Scene ' + g.parentNo, plain: 'Scene ' + g.parentNo, parentNo: g.parentNo, cutNo: 0, isMulti: false };
+      }
+      const prefixCls = g.cutNo === 1 ? 'label-scene' : 'label-scene label-scene-spacer';
+      const html = '<span class="' + prefixCls + '">Scene ' + g.parentNo + ' </span><span class="label-cut">cut' + g.cutNo + '</span>';
+      return { html: html, plain: 'Scene ' + g.parentNo + ' cut' + g.cutNo, parentNo: g.parentNo, cutNo: g.cutNo, isMulti: true };
+    });
+  }
+
   scenario.renderScenes = function (scenes = []) {
     // 진입 직전 legacy shots[] 가 있으면 평탄화
     scenes = flattenLegacyShots(scenes);
@@ -1500,36 +1531,7 @@
     // 제각각이라 그룹화 신호로 부적합. location 비어있으면 매번 새 그룹.
     // 첫 컷은 "Scene N cut1", 이후 컷은 보이지 않는 "Scene N " spacer + "cutM" 로 정렬.
     // 단일 컷은 그냥 "Scene N".
-    const labelByIdx = (function () {
-      let lastLoc = null;
-      let parentNo = 0;
-      let cutNo = 0;
-      const seq = [];
-      const totalByParent = {};
-      sceneList.forEach((sc) => {
-        const loc = String((sc && sc.sceneLocation) || '').trim();
-        if (!loc || loc !== lastLoc) {
-          parentNo += 1;
-          cutNo = 1;
-          lastLoc = loc;
-        } else {
-          cutNo += 1;
-        }
-        seq.push({ parentNo, cutNo });
-        totalByParent[parentNo] = cutNo;
-      });
-      return seq.map((g) => {
-        const total = totalByParent[g.parentNo] || 1;
-        if (total <= 1) {
-          // 단일 컷: 평범하게 "Scene N"
-          return { html: 'Scene ' + g.parentNo, plain: 'Scene ' + g.parentNo };
-        }
-        // 복수 컷: prefix "Scene N " + "cutM". cutNo>=2 면 prefix 를 보이지 않게 (visibility:hidden) 하여 정렬 유지.
-        const prefixCls = g.cutNo === 1 ? 'label-scene' : 'label-scene label-scene-spacer';
-        const html = '<span class="' + prefixCls + '">Scene ' + g.parentNo + ' </span><span class="label-cut">cut' + g.cutNo + '</span>';
-        return { html: html, plain: 'Scene ' + g.parentNo + ' cut' + g.cutNo };
-      });
-    })();
+    const labelByIdx = computeSceneLabels(sceneList);
 
     // 공통 prefix 가 있으면 카드들 위에 작은 배지 한 줄 추가 (참고용 — 사용자가 어떤 prefix 가 strip 됐는지 알 수 있게)
     const commonPrefixBadge = __currentLocationPrefix
@@ -2566,9 +2568,12 @@
           const mergedScenes = mergeSceneSnapshots(draft?.scenes || [], latest);
           const scenes = mergedScenes.length ? mergedScenes : (draft?.scenes || []);
           if (!scenes.length) { alert('복사할 시나리오가 없습니다.'); return; }
-          const makeBlock = (s) => {
+          // 카드 UI 와 동일한 sceneLocation 기반 그룹핑 라벨(Scene N / Scene N cutM) 적용
+          const labels = computeSceneLabels(scenes);
+          const makeBlock = (s, idx) => {
+            const label = (labels[idx] && labels[idx].plain) || ('Scene ' + (s.id != null ? s.id : (idx + 1)));
             const lines = [];
-            lines.push(`Scene ${s.id} · ${fmtEst(s.estSec)}`);
+            lines.push(`${label} · ${fmtEst(s.estSec)}`);
             if (s.sceneLocation || s.location) lines.push(`장소: ${s.sceneLocation || s.location}`);
             if (s.shot || s.visual) lines.push(`시각화: ${s.shot || s.visual}`);
             if (s.narrationText || s.narration) lines.push(`나레이션: ${s.narrationText || s.narration}`);
@@ -2576,7 +2581,7 @@
             if (dlg) lines.push(`대사:\n${dlg}`);
             return lines.filter(Boolean).join('\n');
           };
-          const text = scenes.map(makeBlock).join('\n\n');
+          const text = scenes.map((s, i) => makeBlock(s, i)).join('\n\n');
           let ok = false;
           if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(text); ok = true;
