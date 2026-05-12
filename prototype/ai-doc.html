@@ -223,7 +223,7 @@
 
                   <div class="form-row">
                     <label for="ai-doc-request" data-i18n="ai_doc_request_label">추가 요청사항</label>
-                    <textarea id="ai-doc-request" rows="5" data-i18n-placeholder="ai_doc_request_placeholder">첫 화면에서 제품의 차별점이 바로 보이게 하고, 구매 불안을 줄이는 근거 섹션을 강화해주세요. 과장 표현은 피하고 스마트스토어에 맞춰 스캔이 쉬운 구성으로 정리해주세요.</textarea>
+                    <textarea id="ai-doc-request" rows="5" data-i18n-placeholder="ai_doc_request_placeholder"></textarea>
                   </div>
                 </article>
 
@@ -271,29 +271,29 @@
                   <div class="form-row">
                     <label for="ai-doc-channel" data-i18n="ai_doc_channel_label">판매 채널</label>
                     <select id="ai-doc-channel">
-                      <option value="스마트스토어">스마트스토어</option>
-                      <option value="쿠팡">쿠팡</option>
-                      <option value="자사몰">자사몰</option>
-                      <option value="11번가">11번가</option>
-                      <option value="G마켓/옥션">G마켓/옥션</option>
+                      <option value="스마트스토어" data-i18n="ai_doc_channel_smartstore">스마트스토어</option>
+                      <option value="쿠팡" data-i18n="ai_doc_channel_coupang">쿠팡</option>
+                      <option value="자사몰" data-i18n="ai_doc_channel_own">자사몰</option>
+                      <option value="11번가" data-i18n="ai_doc_channel_11st">11번가</option>
+                      <option value="G마켓/옥션" data-i18n="ai_doc_channel_gmarket">G마켓/옥션</option>
                     </select>
                   </div>
                   <div class="form-row">
                     <label for="ai-doc-count" data-i18n="ai_doc_count_label">생성 장수</label>
                     <select id="ai-doc-count">
-                      <option value="1">1장 (히어로만)</option>
-                      <option value="3">3장</option>
-                      <option value="6">6장</option>
-                      <option value="8" selected>8장 (권장)</option>
-                      <option value="10">10장 (최대)</option>
+                      <option value="1" data-i18n="ai_doc_count_1">1장 (히어로만)</option>
+                      <option value="3" data-i18n="ai_doc_count_3">3장</option>
+                      <option value="6" data-i18n="ai_doc_count_6">6장</option>
+                      <option value="8" selected data-i18n="ai_doc_count_8">8장 (권장)</option>
+                      <option value="10" data-i18n="ai_doc_count_10">10장 (최대)</option>
                     </select>
                   </div>
                   <div class="form-row">
                     <label for="ai-doc-ratio" data-i18n="ai_doc_ratio_label">비율</label>
                     <select id="ai-doc-ratio">
-                      <option value="9:16" selected>9:16 (세로)</option>
-                      <option value="1:1">1:1 (정사각)</option>
-                      <option value="16:9">16:9 (가로)</option>
+                      <option value="9:16" selected data-i18n="ai_doc_ratio_portrait">9:16 (세로)</option>
+                      <option value="1:1" data-i18n="ai_doc_ratio_square">1:1 (정사각)</option>
+                      <option value="16:9" data-i18n="ai_doc_ratio_landscape">16:9 (가로)</option>
                     </select>
                   </div>
                 </article>
@@ -403,7 +403,7 @@
     <div class="ai-doc-modal">
       <header class="ai-doc-modal-head">
         <h3 data-i18n="ai_doc_knowledge_title">사전 지식 파일 등록</h3>
-        <span class="ai-doc-chip ai-doc-chip-muted" id="ai-doc-knowledge-status">로컬 fallback</span>
+        <span class="ai-doc-chip ai-doc-chip-muted" id="ai-doc-knowledge-status" data-i18n="ai_doc_lib_rag_off">로컬 fallback</span>
         <button type="button" class="btn-ghost" data-action="close" aria-label="닫기" data-i18n-aria-label="ai_doc_btn_done">✕</button>
       </header>
       <div class="ai-doc-modal-body">
@@ -411,11 +411,11 @@
 
         <div class="form-row" id="ai-doc-admin-key-row" style="display:none;">
           <label for="ai-doc-admin-key-input" data-i18n="ai_doc_admin_key_label">운영자 등록 키 (KNOWLEDGE_ADMIN_KEY)</label>
-          <input type="password" id="ai-doc-admin-key-input" placeholder="지식파일 등록·삭제 권한 키" autocomplete="off" />
+          <input type="password" id="ai-doc-admin-key-input" placeholder="지식파일 등록·삭제 권한 키" data-i18n-placeholder="ai_doc_admin_key_placeholder" autocomplete="off" />
         </div>
         <div class="form-row" id="ai-doc-access-key-row" style="display:none;">
           <label for="ai-doc-access-key-input" data-i18n="ai_doc_access_key_label">지식 사용 키 (선택)</label>
-          <input type="password" id="ai-doc-access-key-input" placeholder="생성 시 RAG 검색에 사용" autocomplete="off" />
+          <input type="password" id="ai-doc-access-key-input" placeholder="생성 시 RAG 검색에 사용" data-i18n-placeholder="ai_doc_access_key_placeholder" autocomplete="off" />
         </div>
 
         <button type="button" class="ai-doc-dropzone ai-doc-dropzone-sm" id="ai-doc-knowledge-dropzone">

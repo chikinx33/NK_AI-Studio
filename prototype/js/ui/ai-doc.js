@@ -101,6 +101,21 @@
     } catch (_) { return key; }
   }
 
+  const CHANNEL_KEY_MAP = {
+    '스마트스토어': 'ai_doc_channel_smartstore',
+    '쿠팡': 'ai_doc_channel_coupang',
+    '자사몰': 'ai_doc_channel_own',
+    '11번가': 'ai_doc_channel_11st',
+    'G마켓/옥션': 'ai_doc_channel_gmarket',
+  };
+  function tChannel(ch) { return t(CHANNEL_KEY_MAP[ch] || '') || ch || ''; }
+  function translateStatus(s) {
+    if (!s || s === '진행 중' || s === 'generating') return t('ai_doc_status_generating');
+    if (s === '완료' || s === 'done') return t('ai_doc_status_done');
+    if (s === '취소됨' || s === 'cancelled') return t('ai_doc_status_cancelled');
+    return s;
+  }
+
   // ── DOM helpers ─────────────────────────────────────────
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -386,7 +401,7 @@
 
   // ── RAG (Neon Postgres + pgvector) ─────────────────────
   async function fetchRagStats(force) {
-    if (!NK.api || !NK.api.knowledgeStats) return;
+    if (!NK.api || !NK.api.knowledgeStats) { reflectRagStatus(); return; }
     if (!force && (Date.now() - ragState.lastFetchedAt) < 30000) return;
     try {
       const data = await NK.api.knowledgeStats();
@@ -535,7 +550,7 @@
       request: state.request,
       files: state.files.map((f) => f.name),
       createdAt: new Date().toISOString(),
-      status: '진행 중',
+      status: 'generating',
       sections: templates.map((t) => ({ id: t.id, name: t.name, purpose: t.purpose, source: t.source, imageUrl: '', prompt: '' })),
     };
     state.activeProject = project;
@@ -604,7 +619,7 @@
         }
       }
 
-      project.status = state.abortFlag ? '취소됨' : '완료';
+      project.status = state.abortFlag ? 'cancelled' : 'done';
       state.activeProject = project;
       renderResults();
       toast('상세페이지 ' + project.sections.filter((s) => s.imageUrl).length + '장 생성 완료');
@@ -710,13 +725,13 @@
             '</div>' +
           '</div>' +
           '<div class="ai-doc-recent-actions">' +
-            '<button type="button" class="btn-ghost" data-action="open" data-i18n="ai_doc_btn_open" title="열기">열기</button>' +
-            '<button type="button" class="btn-ghost" data-action="delete" data-i18n="ai_doc_btn_delete" title="삭제">삭제</button>' +
+            '<button type="button" class="btn-ghost" data-action="open" data-i18n="ai_doc_btn_open" title="' + t('ai_doc_btn_open') + '">' + t('ai_doc_btn_open') + '</button>' +
+            '<button type="button" class="btn-ghost" data-action="delete" data-i18n="ai_doc_btn_delete" title="' + t('ai_doc_btn_delete') + '">' + t('ai_doc_btn_delete') + '</button>' +
           '</div>';
         const spans = div.querySelectorAll('.ai-doc-recent-meta span');
         div.querySelector('strong').textContent = p.title || '프로젝트';
-        spans[0].textContent = p.channel || '';
-        spans[1].textContent = (p.sections && p.sections.length || 0) + '장';
+        spans[0].textContent = tChannel(p.channel);
+        spans[1].textContent = (p.sections && p.sections.length || 0) + t('ai_doc_slides_unit');
         spans[2].textContent = p.ratio || '9:16';
         div.querySelector('[data-action="open"]').addEventListener('click', () => { state.activeProject = p; setView('results'); });
         div.querySelector('[data-action="delete"]').addEventListener('click', async () => {
@@ -762,8 +777,8 @@
       return;
     }
     title.textContent = project.title;
-    summary.textContent = (project.channel || '') + ' · ' + (project.sections ? project.sections.length : 0) + '장 · ' + (project.ratio || '9:16');
-    status.textContent = project.status || '완료';
+    summary.textContent = tChannel(project.channel) + ' · ' + (project.sections ? project.sections.length : 0) + t('ai_doc_slides_unit') + ' · ' + (project.ratio || '9:16');
+    status.textContent = translateStatus(project.status);
 
     (project.sections || []).forEach((section) => {
       grid.appendChild(buildSectionCard(section));
@@ -915,7 +930,7 @@
           break;
         }
       }
-      project.status = '완료';
+      project.status = 'done';
       renderResults();
     } finally {
       hideProgress();
