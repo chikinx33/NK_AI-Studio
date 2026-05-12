@@ -14,30 +14,31 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 8px 4px;
+  gap: 6px;
+  padding: 10px 4px;
   border: none;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   cursor: pointer;
   color: var(--muted);
   font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  transition: background 0.15s, color 0.15s;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
   line-height: 1;
 }
 
 .ai-doc-cat-tab svg { flex-shrink: 0; }
 
 .ai-doc-cat-tab:hover {
-  background: rgba(240, 98, 28, 0.1);
-  color: #f0621c;
+  background: rgba(255, 122, 0, 0.12);
+  color: #ff7a00;
 }
 
 .ai-doc-cat-tab.is-active {
-  background: rgba(240, 98, 28, 0.18);
-  color: #f0621c;
+  background: linear-gradient(135deg, #ff7a00, #ff9f3a);
+  color: #0b0b0b;
+  box-shadow: 0 6px 20px rgba(255, 122, 0, 0.35);
 }
 
 /* ── Cat-view visibility ────────────────────────────────── */
