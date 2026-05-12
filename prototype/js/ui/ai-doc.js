@@ -90,6 +90,17 @@
     progressTimer: null,
   };
 
+  // ── i18n helper ────────────────────────────────────────
+  function t(key, vars) {
+    try {
+      const lang = localStorage.getItem('nk_lang') || 'ko';
+      const tr = window.NK && window.NK.core && window.NK.core.translations && window.NK.core.translations[lang];
+      let text = (tr && tr[key]) || key;
+      if (vars) Object.keys(vars).forEach((k) => { text = text.replace('{' + k + '}', vars[k]); });
+      return text;
+    } catch (_) { return key; }
+  }
+
   // ── DOM helpers ─────────────────────────────────────────
   const $ = (sel, root) => (root || document).querySelector(sel);
   const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
@@ -373,11 +384,11 @@
     const libRag = $('#ai-doc-lib-rag');
     if (libRag) {
       if (ragState.configured) {
-        libRag.textContent = 'Neon RAG 활성 (' + ragState.chunks + ' chunks)';
+        libRag.textContent = t('ai_doc_rag_active', { n: ragState.chunks });
         libRag.classList.remove('ai-doc-chip-muted');
         libRag.classList.add('ai-doc-chip-good');
       } else {
-        libRag.textContent = '로컬 fallback (RAG 미설정)';
+        libRag.textContent = t('ai_doc_rag_inactive');
         libRag.classList.add('ai-doc-chip-muted');
         libRag.classList.remove('ai-doc-chip-good');
       }
@@ -386,7 +397,7 @@
     if (docs) {
       const localCount = state.knowledge.length;
       const serverCount = ragState.documents;
-      docs.textContent = (ragState.configured ? serverCount : localCount) + '개';
+      docs.textContent = (ragState.configured ? serverCount : localCount) + t('ai_doc_count_unit');
     }
     const adminRow = $('#ai-doc-admin-key-row');
     if (adminRow) adminRow.style.display = ragState.adminRequired ? '' : 'none';
@@ -395,10 +406,10 @@
     const status = $('#ai-doc-knowledge-status');
     if (status) {
       if (ragState.configured) {
-        status.textContent = '서버 RAG 활성 — ' + ragState.documents + '개 문서 · ' + ragState.chunks + ' 청크';
+        status.textContent = t('ai_doc_rag_server_active', { docs: ragState.documents, chunks: ragState.chunks });
         status.className = 'ai-doc-chip ai-doc-chip-good';
       } else {
-        status.textContent = '서버 RAG 미설정 — 로컬 fallback';
+        status.textContent = t('ai_doc_rag_server_inactive');
         status.className = 'ai-doc-chip ai-doc-chip-muted';
       }
     }
@@ -676,8 +687,8 @@
             '</div>' +
           '</div>' +
           '<div class="ai-doc-recent-actions">' +
-            '<button type="button" class="btn-ghost" data-action="open" title="열기">열기</button>' +
-            '<button type="button" class="btn-ghost" data-action="delete" title="삭제">삭제</button>' +
+            '<button type="button" class="btn-ghost" data-action="open" data-i18n="ai_doc_btn_open" title="열기">열기</button>' +
+            '<button type="button" class="btn-ghost" data-action="delete" data-i18n="ai_doc_btn_delete" title="삭제">삭제</button>' +
           '</div>';
         const spans = div.querySelectorAll('.ai-doc-recent-meta span');
         div.querySelector('strong').textContent = p.title || '프로젝트';
@@ -709,7 +720,7 @@
       else kBadge.hidden = true;
     }
     const sharedCount = $('#ai-doc-shared-count');
-    if (sharedCount) sharedCount.textContent = state.knowledge.length + '개 등록';
+    if (sharedCount) sharedCount.textContent = t('ai_doc_shared_count', { n: state.knowledge.length });
   }
 
   // ── Render: Results ────────────────────────────────────
@@ -774,11 +785,13 @@
     actions.className = 'ai-doc-section-actions';
     const editBtn = document.createElement('button');
     editBtn.type = 'button'; editBtn.className = 'btn-secondary';
-    editBtn.textContent = '수정';
+    editBtn.textContent = t('ai_doc_btn_edit');
+    editBtn.setAttribute('data-i18n', 'ai_doc_btn_edit');
     editBtn.addEventListener('click', () => openEditModal(section.id));
     const dlBtn = document.createElement('button');
     dlBtn.type = 'button'; dlBtn.className = 'btn-ghost';
-    dlBtn.textContent = '다운로드';
+    dlBtn.textContent = t('ai_doc_btn_download');
+    dlBtn.setAttribute('data-i18n', 'ai_doc_btn_download');
     dlBtn.addEventListener('click', () => downloadSection(section));
     actions.appendChild(editBtn); actions.appendChild(dlBtn);
 
@@ -972,12 +985,14 @@
       left.innerHTML = '📄 ';
       const name = document.createElement('strong'); name.textContent = k.name; left.appendChild(name);
       const meta = document.createElement('span'); meta.className = 'muted';
-      const sizeLabel = (k.text ? k.text.length.toLocaleString() : 0) + '자';
-      const ragLabel = k.indexed ? ' · RAG ' + (k.chunks || 0) + ' chunks' : ' · 로컬 fallback';
+      const sizeLabel = (k.text ? k.text.length.toLocaleString() : 0) + t('ai_doc_char_unit');
+      const ragLabel = k.indexed ? ' · RAG ' + (k.chunks || 0) + ' chunks' : ' · ' + t('ai_doc_rag_inactive').split(' (')[0];
       meta.textContent = '  ' + sizeLabel + ragLabel;
       left.appendChild(meta);
       const del = document.createElement('button');
-      del.type = 'button'; del.className = 'btn-ghost'; del.textContent = '삭제';
+      del.type = 'button'; del.className = 'btn-ghost';
+      del.textContent = t('ai_doc_btn_delete');
+      del.setAttribute('data-i18n', 'ai_doc_btn_delete');
       del.addEventListener('click', async () => {
         // 서버 RAG에서도 삭제 시도
         if (k.indexed && k.documentId && NK.api && NK.api.knowledgeDelete) {
@@ -1164,8 +1179,21 @@
     return 'dashboard';
   }
 
+  function hookI18n() {
+    const common = NK.ui && NK.ui.common;
+    if (!common || typeof common.applyI18n !== 'function') return;
+    const _orig = common.applyI18n.bind(common);
+    common.applyI18n = function (lang) {
+      _orig(lang);
+      reflectRagStatus();
+      renderKnowledgeList();
+      if (state.view === 'dashboard') renderDashboard().catch(() => {});
+    };
+  }
+
   function init() {
     if (!document.querySelector('.page-shell-ai-doc')) return;
+    hookI18n();
     applyInitialState();
     bindEvents();
     setView(readInitialView());

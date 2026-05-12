@@ -52,7 +52,7 @@
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-actions">
-          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
+          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면" data-i18n-aria-label="screen_to_full" data-i18n-title="screen_to_full"></button>
           <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('global')"></button>
           <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
           <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
@@ -63,8 +63,8 @@
 
     <div id="auth-overlay" class="auth-overlay hidden">
       <div class="auth-card">
-        <p class="auth-title">로그인 하세요.</p>
-        <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
+        <p class="auth-title" data-i18n="ai_doc_auth_title">로그인 하세요.</p>
+        <a class="btn-primary no-underline" href="index.html" data-i18n="ai_doc_auth_btn">로그인 하기</a>
       </div>
     </div>
 
@@ -177,7 +177,7 @@
                     </div>
                     <span class="ai-doc-chip" data-i18n="ai_doc_chip_bulk">대용량 가능</span>
                   </header>
-                  <div class="ai-doc-dropzone" id="ai-doc-dropzone" tabindex="0" role="button" aria-label="이미지 또는 PDF를 여기에 놓기">
+                  <div class="ai-doc-dropzone" id="ai-doc-dropzone" tabindex="0" role="button" aria-label="이미지 또는 PDF를 여기에 놓기" data-i18n-aria-label="ai_doc_dropzone_title">
                     <div class="ai-doc-dropzone-icon" aria-hidden="true">⬆</div>
                     <strong data-i18n="ai_doc_dropzone_title">이미지 또는 PDF를 여기에 놓기</strong>
                     <span class="muted" data-i18n="ai_doc_dropzone_sub">원본 제품컷, 수치, 리뷰, 인증, 오퍼 문구를 최대한 보존합니다.</span>
@@ -199,7 +199,7 @@
                     </div>
                     <span class="ai-doc-chip" id="ai-doc-shared-count">0개 등록</span>
                   </header>
-                  <div class="ai-doc-toggle-group" role="group" aria-label="공통 지식 사용">
+                  <div class="ai-doc-toggle-group" role="group" aria-label="공통 지식 사용" data-i18n-aria-label="ai_doc_shared_aria">
                     <button type="button" class="ai-doc-toggle-btn is-active" data-shared="on" data-i18n="ai_doc_toggle_on">사용</button>
                     <button type="button" class="ai-doc-toggle-btn" data-shared="off" data-i18n="ai_doc_toggle_off">사용 안 함</button>
                   </div>
@@ -299,7 +299,7 @@
     <div class="ai-doc-modal">
       <header class="ai-doc-modal-head">
         <h3 data-i18n="ai_doc_settings_title">API 키 설정</h3>
-        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기">✕</button>
+        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기" data-i18n-aria-label="ai_doc_btn_done">✕</button>
       </header>
       <div class="ai-doc-modal-body">
         <p class="muted" data-i18n="ai_doc_settings_desc">이미지 생성은 서버 환경변수의 OPENAI_API_KEY / GOOGLE_API_KEY를 사용합니다. 사용자 키를 별도로 입력할 필요는 없습니다.</p>
@@ -326,7 +326,7 @@
       <header class="ai-doc-modal-head">
         <h3 data-i18n="ai_doc_knowledge_title">사전 지식 파일 등록</h3>
         <span class="ai-doc-chip ai-doc-chip-muted" id="ai-doc-knowledge-status">로컬 fallback</span>
-        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기">✕</button>
+        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기" data-i18n-aria-label="ai_doc_btn_done">✕</button>
       </header>
       <div class="ai-doc-modal-body">
         <p class="muted" data-i18n="ai_doc_knowledge_desc">PDF, TXT, MD 파일을 등록하면 생성 시 검색 또는 첨부됩니다. Neon RAG 활성 시 임베딩 검색이 자동 적용됩니다.</p>
@@ -358,13 +358,13 @@
     <div class="ai-doc-modal">
       <header class="ai-doc-modal-head">
         <h3 id="ai-doc-edit-title">섹션 수정</h3>
-        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기">✕</button>
+        <button type="button" class="btn-ghost" data-action="close" aria-label="닫기" data-i18n-aria-label="ai_doc_btn_done">✕</button>
       </header>
       <div class="ai-doc-modal-body">
-        <p class="muted" id="ai-doc-edit-desc">수정 요청을 입력하면 이 섹션 이미지만 다시 생성합니다.</p>
+        <p class="muted" id="ai-doc-edit-desc" data-i18n="ai_doc_edit_desc">수정 요청을 입력하면 이 섹션 이미지만 다시 생성합니다.</p>
         <div class="form-row">
           <label for="ai-doc-edit-request" data-i18n="ai_doc_edit_request_label">수정 요청</label>
-          <textarea id="ai-doc-edit-request" rows="4" placeholder="예: 헤드라인을 더 짧게, 제품컷을 더 크게"></textarea>
+          <textarea id="ai-doc-edit-request" rows="4" placeholder="예: 헤드라인을 더 짧게, 제품컷을 더 크게" data-i18n-placeholder="ai_doc_edit_placeholder"></textarea>
         </div>
       </div>
       <footer class="ai-doc-modal-foot">
