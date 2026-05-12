@@ -2,6 +2,85 @@
 
 .page-shell-ai-doc .main { background: transparent; }
 
+/* ── Category tabs ──────────────────────────────────────── */
+.ai-doc-cat-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 10px 4px;
+}
+
+.ai-doc-cat-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.ai-doc-cat-tab svg { flex-shrink: 0; }
+
+.ai-doc-cat-tab:hover {
+  background: var(--surface-2, rgba(255,255,255,0.06));
+  color: var(--text);
+}
+
+.ai-doc-cat-tab.is-active {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+}
+
+/* ── Cat-view visibility ────────────────────────────────── */
+[data-cat-view].hidden { display: none; }
+
+.ai-doc-cat-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 80px);
+  padding: 40px 24px;
+}
+
+.ai-doc-cat-placeholder.hidden { display: none; }
+
+/* ── Coming-soon block ──────────────────────────────────── */
+.ai-doc-coming-soon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  max-width: 320px;
+}
+
+.ai-doc-coming-soon-icon {
+  opacity: 0.2;
+  color: var(--text);
+}
+
+.ai-doc-coming-soon h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 0;
+}
+
+.ai-doc-coming-soon .muted {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin: 0;
+}
+
 /* 결과 확인 뷰: 세로 스크롤 허용, 스크롤바 숨김 */
 .page-shell-ai-doc .main-body {
   overflow-y: auto;

@@ -36,10 +36,28 @@
         <div class="brand-mark"></div>
         <div class="brand-text">
           <span class="title" data-i18n="brand_title">NK_Studio</span>
-          <span class="subtitle" data-i18n="ai_doc_subtitle">AI 상세페이지 마법사</span>
+          <span class="subtitle" data-cat-subtitle="detail" data-i18n="ai_doc_subtitle">AI 상세페이지 마법사</span>
+          <span class="subtitle hidden" data-cat-subtitle="story" data-i18n="ai_doc_story_subtitle">AI 스토리 메이커</span>
+          <span class="subtitle hidden" data-cat-subtitle="ppt" data-i18n="ai_doc_ppt_subtitle">AI 슬라이드 메이커</span>
         </div>
       </div>
-      <nav class="nav">
+
+      <div class="ai-doc-cat-tabs">
+        <button class="ai-doc-cat-tab is-active" data-cat="detail" title="상세페이지" data-i18n-title="ai_doc_cat_detail">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="7" x="3" y="3" rx="1"/><rect width="9" height="7" x="3" y="14" rx="1"/><rect width="5" height="7" x="16" y="14" rx="1"/></svg>
+          <span data-i18n="ai_doc_cat_detail">상세</span>
+        </button>
+        <button class="ai-doc-cat-tab" data-cat="story" title="스토리" data-i18n-title="ai_doc_cat_story">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span data-i18n="ai_doc_cat_story">스토리</span>
+        </button>
+        <button class="ai-doc-cat-tab" data-cat="ppt" title="PPT" data-i18n-title="ai_doc_cat_ppt">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>
+          <span data-i18n="ai_doc_cat_ppt">PPT</span>
+        </button>
+      </div>
+
+      <nav class="nav" data-cat-nav="detail">
         <a class="nav-item active" href="#" data-ai-doc-view="dashboard">
           <span data-i18n="ai_doc_nav_dashboard">대시보드</span>
         </a>
@@ -48,6 +66,16 @@
         </a>
         <a class="nav-item" href="#" data-ai-doc-view="results">
           <span data-i18n="ai_doc_nav_results">결과 확인</span>
+        </a>
+      </nav>
+      <nav class="nav hidden" data-cat-nav="story">
+        <a class="nav-item active" href="#">
+          <span data-i18n="ai_doc_nav_home">홈</span>
+        </a>
+      </nav>
+      <nav class="nav hidden" data-cat-nav="ppt">
+        <a class="nav-item active" href="#">
+          <span data-i18n="ai_doc_nav_home">홈</span>
         </a>
       </nav>
       <div class="sidebar-footer">
@@ -70,7 +98,7 @@
 
     <main class="main blur-target">
       <div class="main-body">
-        <section class="content ai-doc-root" id="ai-doc-root" aria-live="polite">
+        <section class="content ai-doc-root" id="ai-doc-root" data-cat-view="detail" aria-live="polite">
           <!-- Dashboard view -->
           <section class="ai-doc-view" data-view="dashboard">
             <header class="ai-doc-topbar">
@@ -289,6 +317,26 @@
 
             <div class="ai-doc-section-grid" id="ai-doc-section-grid"></div>
           </section>
+        </section>
+
+        <!-- Story placeholder -->
+        <section class="ai-doc-cat-placeholder hidden" data-cat-view="story">
+          <div class="ai-doc-coming-soon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="ai-doc-coming-soon-icon"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+            <h2 data-i18n="ai_doc_story_title">AI 스토리 메이커</h2>
+            <p class="muted" data-i18n="ai_doc_story_desc">이야기 구조를 설계하고 자동으로 스토리를 생성합니다.</p>
+            <span class="ai-doc-chip ai-doc-chip-muted" data-i18n="ai_doc_coming_soon">준비 중</span>
+          </div>
+        </section>
+
+        <!-- PPT placeholder -->
+        <section class="ai-doc-cat-placeholder hidden" data-cat-view="ppt">
+          <div class="ai-doc-coming-soon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="ai-doc-coming-soon-icon"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>
+            <h2 data-i18n="ai_doc_ppt_title">AI 슬라이드 메이커</h2>
+            <p class="muted" data-i18n="ai_doc_ppt_desc">슬라이드 구조를 설계하고 자동으로 발표 자료를 생성합니다.</p>
+            <span class="ai-doc-chip ai-doc-chip-muted" data-i18n="ai_doc_coming_soon">준비 중</span>
+          </div>
         </section>
       </div>
     </main>

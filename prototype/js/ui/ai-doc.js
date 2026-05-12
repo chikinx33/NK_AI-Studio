@@ -119,6 +119,29 @@
     toastTimer = setTimeout(() => el.classList.add('hidden'), Math.max(1500, Number(ms) || 2800));
   }
 
+  // ── Category routing ──────────────────────────────────
+  function setCat(cat) {
+    state.cat = cat;
+    $$('.ai-doc-cat-tab').forEach((el) => el.classList.toggle('is-active', el.getAttribute('data-cat') === cat));
+    $$('[data-cat-nav]').forEach((el) => el.classList.toggle('hidden', el.getAttribute('data-cat-nav') !== cat));
+    $$('[data-cat-view]').forEach((el) => el.classList.toggle('hidden', el.getAttribute('data-cat-view') !== cat));
+    $$('[data-cat-subtitle]').forEach((el) => el.classList.toggle('hidden', el.getAttribute('data-cat-subtitle') !== cat));
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.set('cat', cat);
+      if (cat !== 'detail') params.delete('view');
+      history.replaceState(null, '', window.location.pathname + '?' + params.toString());
+    } catch (_) {}
+  }
+
+  function readInitialCat() {
+    try {
+      const c = new URLSearchParams(window.location.search).get('cat');
+      if (c === 'story' || c === 'ppt' || c === 'detail') return c;
+    } catch (_) {}
+    return 'detail';
+  }
+
   // ── View routing ───────────────────────────────────────
   function setView(view) {
     state.view = view;
@@ -133,9 +156,9 @@
     if (view === 'results') renderResults();
     try {
       const params = new URLSearchParams(window.location.search);
+      params.set('cat', state.cat || 'detail');
       params.set('view', view);
-      const next = window.location.pathname + '?' + params.toString();
-      history.replaceState(null, '', next);
+      history.replaceState(null, '', window.location.pathname + '?' + params.toString());
     } catch (_) {}
   }
 
@@ -1048,6 +1071,11 @@
 
   // ── Init ───────────────────────────────────────────────
   function bindEvents() {
+    // category tabs
+    $$('.ai-doc-cat-tab').forEach((el) => {
+      el.addEventListener('click', () => setCat(el.getAttribute('data-cat')));
+    });
+
     // sidebar nav
     $$('.sidebar .nav-item[data-ai-doc-view]').forEach((el) => {
       el.addEventListener('click', (e) => {
@@ -1196,8 +1224,9 @@
     hookI18n();
     applyInitialState();
     bindEvents();
-    setView(readInitialView());
-    // 백그라운드에서 RAG 상태 조회 (Neon 활성화 여부)
+    const cat = readInitialCat();
+    setCat(cat);
+    if (cat === 'detail') setView(readInitialView());
     fetchRagStats(true).catch(() => {});
   }
 
