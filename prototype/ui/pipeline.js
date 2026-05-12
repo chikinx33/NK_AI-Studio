@@ -716,7 +716,9 @@
           fetchFromServer().then(function (sd) {
             if (!sd) return;
             var freshState = buildStateFromData(sd, projectId);
-            // 서버에 더 풍부한 데이터(shots 추가, 미디어 변경 등)가 있을 때만 재렌더
+            // 서버에 더 풍부한 데이터가 있거나 시나리오 편집(재생시간/화면/행동/장소) 이 바뀌었을 때만 재렌더.
+            // 프리프로덕션에서 씬 텍스트를 수정·저장한 뒤 메인 프로덕션에 진입했을 때
+            // stale 한 로컬 캐시(nk_pipeline_last) 만 보여주던 회귀를 막는다.
             var prev = ctx.getState ? ctx.getState() : state;
             var prevScenes = (prev && Array.isArray(prev.scenes)) ? prev.scenes : [];
             var nextScenes = Array.isArray(freshState.scenes) ? freshState.scenes : [];
@@ -731,6 +733,12 @@
                 if (pShots !== nShots) { changed = true; break; }
                 if ((ps.imageDataUrl || '') !== (ns.imageDataUrl || '')) { changed = true; break; }
                 if ((ps.videoUrl || '') !== (ns.videoUrl || '')) { changed = true; break; }
+                if (Number(ps.estSec || 0) !== Number(ns.estSec || 0)) { changed = true; break; }
+                if (String(ps.sceneLocation || '') !== String(ns.sceneLocation || '')) { changed = true; break; }
+                if (String(ps.composition || '') !== String(ns.composition || '')) { changed = true; break; }
+                if (String(ps.action || '') !== String(ns.action || '')) { changed = true; break; }
+                if (String(ps.shot || ps.visual || '') !== String(ns.shot || ns.visual || '')) { changed = true; break; }
+                if (String(ps.narration || '') !== String(ns.narration || '')) { changed = true; break; }
               }
             }
             ctx.setState(freshState);
@@ -1084,6 +1092,7 @@
         ctx: ctx,
         ui: ui,
         getProjectId: getProjectId,
+        getProjectTitle: getProjectTitle,
         openLibraryModal: openLibraryModal,
         downloadFile: downloadFile,
         openImageModal: openImageModal,

@@ -19,11 +19,15 @@
     var visualLine = newComposition !== null
       ? [newComposition, newAction || ''].filter(Boolean).join('\n')
       : visual;
+    // shot 은 다운스트림(프리프로덕션 표시·이미지 프롬프트)이 단일 visual 라인으로 읽는다.
+    // composition/action 을 새로 편집했다면 합쳐진 visualLine 으로 갱신해야 양쪽 화면에서 동일하게 노출된다.
+    var nextShot = newComposition !== null ? visualLine : visual;
     var result = {
       promptText: [common, visualLine, 'Duration', (est ? est + 's.' : '')].filter(Boolean).join('\n'),
       promptEdited: true,
       editingPrompt: false,
-      shot: visual,
+      shot: nextShot,
+      visual: nextShot,
       estSec: est
     };
     if (newComposition !== null) result.composition = newComposition;
@@ -245,6 +249,22 @@
             }
           } catch (_) {}
           refreshAndPersist(true);
+          // 프리·메인 양방향 동기화: 씬별 편집 직후 글로벌 "저장" 을 누르지 않고
+          // 프리프로덕션으로 이동하면 옛 내용이 보이던 회귀를 막는다.
+          // 1) 로컬 draft 에 즉시 반영 → scenario.html 진입 시 최신 데이터로 렌더
+          try { if (ctx.updateDraftFromPipeline) ctx.updateDraftFromPipeline(); } catch (_) {}
+          // 2) 서버에 비동기 저장 (실패해도 로컬은 이미 갱신되어 있음)
+          try {
+            if (projectId && NK.api && NK.api.projectSave) {
+              var titleFn = opts.getProjectTitle;
+              var title = (typeof titleFn === 'function') ? (titleFn() || '') : '';
+              NK.api.projectSave(projectId, st.payload || {}, st.scenes || [], {
+                header: st.header || '',
+                aspectRatio: st.aspectRatio || '',
+                title: title
+              }).catch(function (_) { /* 백그라운드 저장 실패는 무시 — 사용자가 명시적으로 저장 누르면 다시 시도됨 */ });
+            }
+          } catch (_) {}
           return;
         }
 

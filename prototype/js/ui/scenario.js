@@ -2,6 +2,14 @@
   const NK = window.NK || (window.NK = {});
   const ui = NK.ui || (NK.ui = {});
   const scenario = ui.scenario || (ui.scenario = {});
+  // 프리프로덕션 저장 후 메인 프로덕션이 stale 한 nk_pipeline_last 캐시를 먼저 그려
+  // 옛 씬으로 회귀하는 문제를 막기 위해, 시나리오 저장 시 파이프라인 임시 캐시를 무효화한다.
+  const invalidatePipelineCache = () => {
+    try {
+      const key = (NK.config && NK.config.KEYS && NK.config.KEYS.PIPELINE) || 'nk_pipeline_last';
+      localStorage.removeItem(key);
+    } catch (_) {}
+  };
   let currentPayload = {};
   const collapsedSceneIds = new Set();
   let sceneFoldMode = 'focus'; // 'expand' | 'collapse' | 'focus'
@@ -1294,7 +1302,15 @@
         : locationRawInput;
       const normalizedDialogueText = uiDialogueText.replace(/\s*·\s*/g, '\n');
       const dialogue = normalizeDialogue(normalizedDialogueText, currentCharacters);
-      const visualText = card.querySelector('.view-shot')?.textContent?.trim() || '';
+      // 구조화된 씬(composition/action 분리 표시) 편집이 저장 시 손실되지 않도록
+      // 두 필드를 별도로 수집한다. 일반(.view-shot) 표시일 때는 view-shot 만 있음.
+      const compositionText = card.querySelector('.view-composition-lines')?.textContent?.trim() || '';
+      const actionText = card.querySelector('.view-action-lines')?.textContent?.trim() || '';
+      const shotOnlyText = card.querySelector('.view-shot')?.textContent?.trim() || '';
+      const hasStructuredEdit = !!(compositionText || actionText);
+      const visualText = hasStructuredEdit
+        ? [compositionText, actionText].filter(Boolean).join('\n')
+        : shotOnlyText;
       const cleanNarration = extractNarrationOnlyText(narrationText);
       const dialogueOnly = composeDialogueOnlyText(dialogue);
       const videoSpeechPrompt = flags.narrationEnabled && flags.dubbingEnabled
@@ -1320,6 +1336,10 @@
         dialogue,
         shot: visualText,
         visual: visualText,
+        // 구조화된 씬: composition/action 을 명시적으로 내보내 머지 시 prev 값으로 되돌아가지 않게 한다.
+        // (메인 프로덕션 / Pass 2 분해 후 편집이 양방향으로 유지되도록 동기화)
+        composition: hasStructuredEdit ? compositionText : '',
+        action: hasStructuredEdit ? actionText : '',
         estSec: est
       };
     });
@@ -1336,6 +1356,10 @@
       const subtitleText = (s.subtitleText !== undefined ? s.subtitleText : prev.subtitleText) || s.lines || prev.lines || '';
       const videoSpeechPrompt = (s.videoSpeechPrompt !== undefined ? s.videoSpeechPrompt : prev.videoSpeechPrompt) || '';
       const script = (s.script !== undefined ? s.script : prev.script) || '';
+      // 구조화된 씬(composition/action) 편집을 보존. 새 값이 비문자열이거나 prev 만 있는 경우 prev 유지.
+      const hasNewStructured = !!(String(s.composition || '').trim() || String(s.action || '').trim());
+      const composition = hasNewStructured ? String(s.composition || '') : (prev.composition || '');
+      const action = hasNewStructured ? String(s.action || '') : (prev.action || '');
       return Object.assign({}, prev, s, {
         lines: subtitleText,
         narration,
@@ -1345,7 +1369,9 @@
         videoSpeechPrompt,
         script,
         shot: visual,
-        visual
+        visual,
+        composition,
+        action
       });
     });
   };
@@ -2317,6 +2343,7 @@
               }
             }
           }
+          invalidatePipelineCache();
           if (NK.state) {
             if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
           }
@@ -2388,6 +2415,7 @@
           }
           if (NK.api?.projectSave) {
             await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header || '', aspectRatio: draft.payload?.aspectRatio, title: draft.title });
+            invalidatePipelineCache();
             // 저장 직후 사이드바/대시보드 카드에 메타(장르/타겟/길이) 반영
             try {
               if (NK.ui?.dashboard?.renderSidebarProjectCard) {
@@ -2457,6 +2485,7 @@
               console.warn('[scenario] decompose-shots: 서버 저장 실패 (로컬은 유지):', saveErr);
             }
           }
+          invalidatePipelineCache();
           // UI 다시 그림
           scenario.renderScenes(draft.scenes || []);
           const total = decomposed.reduce((acc, s) => acc + (Array.isArray(s.shots) ? s.shots.length : 0), 0);
