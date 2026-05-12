@@ -836,9 +836,16 @@ function parseDataUrl(dataUrl: string): { base64: string; mimeType: string } | n
 }
 
 function arrayBufferToBase64(buf: ArrayBuffer) {
+  // Cloudflare Workers V8 isolate 에서 큰 버퍼를 1바이트씩 연결하면
+  // O(n²) 문자열 연결이 되어 CPU 한도(에러 1102)를 넘기기 쉽다.
+  // 32KB 청크 단위로 String.fromCharCode.apply 를 호출해 선형 시간으로 인코딩.
   const bytes = new Uint8Array(buf);
+  const CHUNK = 0x8000;
   let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+    bin += String.fromCharCode.apply(null, slice as unknown as number[]);
+  }
   return btoa(bin);
 }
 

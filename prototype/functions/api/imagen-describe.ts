@@ -296,8 +296,13 @@ function gcsToHttps(uri: string) {
 }
 
 function arrayBufferToBase64(buf: ArrayBuffer) {
+  // 큰 버퍼를 1바이트씩 연결하면 O(n²) 가 되어 Workers CPU 한도를 넘긴다.
   const bytes = new Uint8Array(buf);
+  const CHUNK = 0x8000;
   let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+    bin += String.fromCharCode.apply(null, slice as unknown as number[]);
+  }
   return btoa(bin);
 }
