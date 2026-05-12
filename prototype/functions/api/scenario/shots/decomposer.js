@@ -25,7 +25,9 @@ import {
 const MAX_SHOTS_PER_SCENE = 5;
 const MIN_SHOTS_PER_SCENE = 1;
 const MAX_SHOT_DURATION = 6;
-const MIN_SHOT_DURATION = 0.5;
+// 2초 미만 컷은 영상 생성 모델에서 사실상 정지 프레임과 다름 없고,
+// 캐릭터 일관성도 추가 생성 1회만큼 흔들리므로 인접 컷에 흡수한다.
+const MIN_SHOT_DURATION = 2;
 const DURATION_TOLERANCE = 0.2; // ±20%
 
 /**
@@ -40,18 +42,23 @@ export function buildShotPromptKo() {
 [분해 원칙]
 1. 한 씬은 1~5 샷으로 분해. 정적 비트(독백 1마디, 인서트 단독)는 1샷도 OK.
 2. 각 샷은 ≤ 6초 (영상 생성 모델의 안정 출력 한계).
-3. 모든 샷의 duration 합 = 씬의 estSec (오차 ±20% 이내).
-4. 같은 행동을 여러 앵글로 쪼갠다. 예: "전사가 칼을 뽑는다(4초)"
-   → CU 얼굴(1초) + INSERT 손(1초) + MS 뒷모습 실루엣(2초)
-5. composition: 프레임 안에 보이는 것을 명사 중심으로. "얼굴 클로즈업, 눈만 프레임" 처럼 구체적으로.
+3. 각 샷은 ≥ 2초. 2초 미만 샷은 만들지 말고 인접 샷의 카메라 무브로 흡수한다.
+4. 모든 샷의 duration 합 = 씬의 estSec (오차 ±20% 이내).
+5. 같은 행동을 여러 앵글로 쪼갠다. 예: "전사가 칼을 뽑는다(4초)"
+   → CU 얼굴(2초) + MS 뒷모습 실루엣(2초)
+6. 같은 sub-location, 같은 피사체에서 단지 카메라 거리나 무브만 다르다면 1샷으로 합쳐 cameraMove 로 표현한다.
+   (예: "창틀 위 인형 정지" + "인형 얼굴로 다가옴" → 1샷, cameraMove="push-in")
+   동일 캐릭터를 같은 장소에서 두 컷으로 분리하면 매 컷마다 새로 생성되어 실루엣·디테일이 흔들린다.
+   별도 샷으로 쪼개는 건 (a) 명백한 앵글 전환 (얼굴↔손), (b) sub-location 전환 (외부↔내부), (c) 컷마다 다른 피사체 인 경우에만.
+7. composition: 프레임 안에 보이는 것을 명사 중심으로. "얼굴 클로즈업, 눈만 프레임" 처럼 구체적으로.
    - 씬의 sceneLocation 이 broad 일 때 (예: "우주선", "궁전") 컷별 sub-location 을
      composition 안에 자유롭게 명시하라. 예:
        cut1 composition: "우주선 외부 측면, 선체 표면이 프레임을 가로지름"
        cut2 composition: "에어록 내부, 닫히는 해치 너머로 스타필드 흐릿하게"
        cut3 composition: "함교, 콘솔 LED 클로즈업"
      모든 컷이 같은 sub-location 일 필요 없음. 한 비트 안에서 sub-location 이 진행될 수 있다.
-6. action: 이 샷에서 일어나는 물리적 행동·움직임. 추상 표현 금지.
-7. shotType, cameraMove 는 아래 어휘 안에서만 선택. 다른 단어 절대 금지.
+8. action: 이 샷에서 일어나는 물리적 행동·움직임. 추상 표현 금지.
+9. shotType, cameraMove 는 아래 어휘 안에서만 선택. 다른 단어 절대 금지.
 
 ${buildVocabPromptKo()}
 
@@ -69,18 +76,23 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 [Decomposition Rules]
 1. A scene decomposes into 1-5 shots. Static beats (one line of monologue, a solo insert) can be a single shot.
 2. Each shot must be ≤ 6 seconds (AI video model stability limit).
-3. Sum of shots[].duration must equal the scene's estSec (±20% tolerance).
-4. Cut the same action across multiple angles. Example: "warrior draws sword (4s)"
-   → CU face (1s) + INSERT hand on hilt (1s) + MS silhouette from behind (2s)
-5. composition: noun-centric description of what is visible in frame. "Face close-up, only eyes in frame".
+3. Each shot must be ≥ 2 seconds. Do NOT create shots shorter than 2s — absorb them as the cameraMove of an adjacent shot instead.
+4. Sum of shots[].duration must equal the scene's estSec (±20% tolerance).
+5. Cut the same action across multiple angles. Example: "warrior draws sword (4s)"
+   → CU face (2s) + MS silhouette from behind (2s).
+6. If two shots share the same sub-location and the same subject and differ only by camera distance or movement, merge them into one shot and express the change via cameraMove.
+   (e.g., "doll sitting on the sill" + "camera pushes in to the doll's face" → 1 shot with cameraMove="push-in").
+   Splitting one subject in the same location across multiple shots causes the model to re-generate the character each time, breaking silhouette/detail consistency.
+   Only split into separate shots when (a) the angle changes clearly (face↔hand), (b) the sub-location changes (exterior↔interior), or (c) the subject itself changes per shot.
+7. composition: noun-centric description of what is visible in frame. "Face close-up, only eyes in frame".
    - When sceneLocation is broad (e.g., "Spaceship", "Palace"), feel free to specify per-shot
      sub-locations inside composition. Example:
        cut1 composition: "Spaceship exterior side, hull surface filling the frame"
        cut2 composition: "Airlock interior, closing hatch with starfield blurred behind"
        cut3 composition: "Bridge, close-up of console LEDs"
      Shots within one beat may walk through different sub-locations.
-6. action: the physical motion happening in this specific shot. No abstract phrasing.
-7. shotType and cameraMove must be selected from the controlled vocabulary below — no other words allowed.
+8. action: the physical motion happening in this specific shot. No abstract phrasing.
+9. shotType and cameraMove must be selected from the controlled vocabulary below — no other words allowed.
 
 ${buildVocabPromptEn()}
 

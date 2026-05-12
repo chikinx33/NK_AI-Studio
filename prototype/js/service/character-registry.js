@@ -210,6 +210,18 @@
         if (matched) triggers.push(trigger);
       });
     }
+    // forceActiveFallback: 시나리오 visual 에 @토큰/이름이 누락된 컷에도
+    // 메인 프로덕션 단계에서 활성 캐릭터의 시트(레퍼런스)를 강제 주입하기 위해
+    // 트리거가 비어 있으면 활성 등록 캐릭터 전체를 트리거로 채운다.
+    // (캐릭터 일관성 회귀 방지용 안전망 — 호출자가 명시적으로 켤 때만 동작)
+    if (!triggers.length && options && options.forceActiveFallback) {
+      all.forEach(function (row) {
+        if (!row || !row.isActive) return;
+        var trigger = normTrigger(row.trigger);
+        if (!trigger) return;
+        triggers.push(trigger);
+      });
+    }
     if (!triggers.length) return { characters: [], missing: [], triggers: [] };
     var found = [];
     var missing = [];

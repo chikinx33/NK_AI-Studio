@@ -31,6 +31,20 @@ import { decomposeScenes } from "./scenario/shots/index.js";
  *
  * 호출자 (client / save) 가 다시 1..N 으로 재배열할 수 있도록 raw structure 를 유지.
  */
+// 부모 visual 에서 @토큰을 추출. 컷 분해 결과(composition/action) 에
+// 같은 토큰이 빠지면 캐릭터 일관성이 깨지므로, 평탄화 시 첫 컷에 prepend 해
+// 다운스트림 이미지/영상 생성기가 캐릭터 시트를 주입할 수 있게 한다.
+function extractTokensFromText(text) {
+  const out = [];
+  const re = /@[^\s"'`.,!?;:(){}\[\]<>]+/g;
+  let m;
+  while ((m = re.exec(String(text || ""))) !== null) {
+    const tok = m[0];
+    if (tok && !out.includes(tok)) out.push(tok);
+  }
+  return out;
+}
+
 function flattenScenesWithShots(parentScenes) {
   if (!Array.isArray(parentScenes)) return [];
   const flat = [];
@@ -38,6 +52,7 @@ function flattenScenesWithShots(parentScenes) {
   for (const parent of parentScenes) {
     if (!parent || typeof parent !== "object") continue;
     const shots = Array.isArray(parent.shots) ? parent.shots : [];
+    const parentTokens = extractTokensFromText(parent.visual || parent.shot || "");
     if (!shots.length) {
       // shots 가 없으면 부모 씬을 그대로 single 로 (visual 만 있는 legacy fallback)
       flat.push({
@@ -70,7 +85,13 @@ function flattenScenesWithShots(parentScenes) {
       const visualParts = [];
       if (composition) visualParts.push(composition);
       if (action) visualParts.push(action);
-      const visual = visualParts.join(" / ").trim() || (parent.visual || parent.shot || "");
+      let visual = visualParts.join(" / ").trim() || (parent.visual || parent.shot || "");
+      // 캐릭터 일관성 안전망: 부모 visual 에는 @토큰이 있었는데 컷 합성 visual 에
+      // 하나도 남아있지 않으면 첫 토큰을 prepend (다운스트림 캐릭터 시트 주입용).
+      if (parentTokens.length) {
+        const hasAny = parentTokens.some((tok) => visual.includes(tok));
+        if (!hasAny) visual = parentTokens[0] + " — " + visual;
+      }
       flat.push({
         id: nextId++,
         title: parent.title || "",

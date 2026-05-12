@@ -1228,9 +1228,13 @@ async function requestAndShapeScenarioChunk({ apiKey, sys, userPrompt, spec, opt
     dubbingEnabled: options.dubbingEnabled,
     defaultSpeaker: options.defaultSpeaker,
   });
+  // Pass 1 캐릭터 일관성 강제: 시스템 프롬프트로도 안내하지만 LLM 이
+  // 누락시키는 케이스가 있어 서버에서 한 번 더 검증해 @토큰을 채운다.
+  const anchored = enforceCharacterAnchorsInScenes(aligned, options.characters || [], options.lang);
   return {
-    scenes: aligned,
-    validation: validateScenarioAgainstSpec(aligned, spec),
+    scenes: anchored.scenes,
+    validation: validateScenarioAgainstSpec(anchored.scenes, spec),
+    characterAnchorInjections: anchored.injected,
   };
 }
 
@@ -3863,6 +3867,24 @@ If traits are provided, keep each character's speaking style and behavior consis
 캐릭터 이름이 문장에 등장하면 가능하면 @토큰으로 표기.`)
     : (lang === "en" ? "No registered characters." : "등록된 캐릭터 없음.");
 
+  // Pass 1 캐릭터 일관성 강제: 활성 캐릭터가 등록된 경우 모든 씬 visual 첫 문장에
+  // 해당 @토큰이 1회 이상 반드시 등장해야 한다. 다운스트림(이미지/영상 생성)에서
+  // @토큰을 키로 캐릭터 시트(레퍼런스)를 주입하기 때문에, 토큰이 없는 컷은
+  // 다른 인형/생물로 렌더되는 회귀가 잦았다. (Scene 1/2/3 cut2 사례)
+  const characterEnforcement = characters.length
+    ? (lang === "en"
+      ? `MANDATORY character consistency rules (apply to EVERY scene without exception):
+- Each scene's "visual" MUST include at least one registered @token (e.g., ${characters.map((c) => c.token).join(", ")}) within the first sentence.
+- Do NOT refer to a registered character only by descriptive nouns ("the yellow plush", "the doll"); always pair the description with its @token.
+- If multiple characters are active, name the primary subject of the shot by @token in sentence 1 and any co-appearing character by @token in sentence 2.
+- This rule overrides stylistic brevity: tokens are non-negotiable.`
+      : `필수 캐릭터 일관성 규칙(모든 씬에 예외 없이 적용):
+- 각 씬의 "visual" 첫 문장에 등록된 @토큰(예: ${characters.map((c) => c.token).join(", ")}) 중 최소 1개를 반드시 포함한다.
+- 등록 캐릭터를 "노란 봉제인형", "그 인형" 같은 일반 명사로만 지칭하지 말고 항상 @토큰과 함께 표기한다.
+- 복수 캐릭터가 활성화된 경우, 그 씬의 주인공을 첫 문장에 @토큰으로, 공동 등장 캐릭터를 두 번째 문장에 @토큰으로 명시한다.
+- 이 규칙은 간결성보다 우선한다. @토큰 표기는 선택이 아니라 필수다.`)
+    : "";
+
   const taggingHint = characters.length && topic
     ? (lang === "en"
       ? "If topic or lines mention a character name, prefer token form like @name."
@@ -3908,6 +3930,7 @@ D) narrationEnabled=false, dubbingEnabled=false:
 - If dubbingEnabled is true, dialogue must contain at least one line with speaker and line.
 - Keep narration/dialogue text ready for TTS usage.
 ${charGuide}
+${characterEnforcement}
 ${noCharacterRule}
 ${taggingHint}`;
   }
@@ -3936,6 +3959,7 @@ D) narrationEnabled=OFF, dubbingEnabled=OFF
   - 검증: 이 visual을 읽고 촬영감독이 바로 카메라를 세팅할 수 있어야 한다.
 - narration/dialogue 문구는 이후 TTS(음성 합성)에 바로 사용할 수 있는 문장으로 작성.
 ${charGuide}
+${characterEnforcement}
 ${noCharacterRule}
 ${taggingHint}`;
 }
@@ -4061,6 +4085,46 @@ function applyCharacterTokenHints(text, characters = []) {
     out = out.replaceAll(display, token);
   });
   return out;
+}
+
+/**
+ * Pass 1 사후 보정: 활성 캐릭터가 등록되었는데도 모델이 일부 씬 visual 에
+ * @토큰을 빠뜨려 다운스트림 이미지/영상 생성기가 캐릭터 시트를 주입하지 못해
+ * 다른 인형/생물로 렌더되는 회귀를 막는다.
+ *
+ * 누락된 씬의 visual 첫 문장 앞에 "@token 이(가) 등장한다." 형태로 anchor 문장을
+ * 1회 prepend 한다. 이미 토큰이 등장하는 씬은 건드리지 않는다.
+ *
+ * @param {Array} scenes
+ * @param {Array} characters - normalizeCharacters() 결과
+ * @param {"ko"|"en"} lang
+ * @returns {{scenes: Array, injected: number}}
+ */
+function enforceCharacterAnchorsInScenes(scenes = [], characters = [], lang = "ko") {
+  const list = (Array.isArray(characters) ? characters : [])
+    .map((c) => ({
+      token: String(c?.token || "").trim(),
+      displayName: String(c?.displayName || "").trim(),
+    }))
+    .filter((c) => c.token);
+  if (!list.length) return { scenes, injected: 0 };
+  const tokens = list.map((c) => c.token);
+  const primary = list[0];
+  let injected = 0;
+  const next = (Array.isArray(scenes) ? scenes : []).map((scene) => {
+    if (!scene || typeof scene !== "object") return scene;
+    const visual = String(scene.visual || "").trim();
+    if (!visual) return scene;
+    const hasAnyToken = tokens.some((tok) => visual.includes(tok));
+    if (hasAnyToken) return scene;
+    injected += 1;
+    const anchor = lang === "en"
+      ? `${primary.token} (${primary.displayName}) is on screen.`
+      : `${primary.token}(${primary.displayName})이(가) 화면에 등장한다.`;
+    const sep = visual.startsWith("@") ? " " : " ";
+    return Object.assign({}, scene, { visual: anchor + sep + visual });
+  });
+  return { scenes: next, injected };
 }
 
 function enforceNoCharacterPolicy({

@@ -133,7 +133,7 @@
       }
 
       var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, finalPrompt);
-      var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
+      var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
       var characters = res.characters || [];
       try { console.log('Character parse (video/kling):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, count: characters.length }); } catch (_) {}
 
@@ -149,7 +149,7 @@
             var remotePayload = remoteDraft.payload;
             var remoteBrandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(remotePayload) : (remotePayload.brandId || brandId || '');
             if (!characters.length) {
-              res = NK.service.characterRegistry.resolveCharactersFromPrompt(remoteBrandId, characterResolutionPrompt, { allowNameFallback: true, payload: remotePayload });
+              res = NK.service.characterRegistry.resolveCharactersFromPrompt(remoteBrandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: remotePayload });
               characters = res.characters || [];
             }
             bundle = helpers.buildReferenceBundle(remotePayload, characters, { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
@@ -257,7 +257,7 @@
         var payload0 = st.payload || {};
         var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload0) : (payload0.brandId || '');
         var characterResolutionPrompt0 = buildCharacterResolutionPrompt(scene, rawPromptForLog);
-        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, characterResolutionPrompt0, { allowNameFallback: true, payload: payload0 });
+        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, characterResolutionPrompt0, { allowNameFallback: true, forceActiveFallback: true, payload: payload0 });
         try { console.debug('Character parse (video):', { triggers: res0.triggers || [], missing: res0.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt0 }); } catch (_) {}
         var built0 = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawPromptForLog,
@@ -537,7 +537,7 @@
       if (NK.service && NK.service.characterRegistry && opts.toBool(statePayload.charactersEnabled, Array.isArray(statePayload.characters) && statePayload.characters.length)) {
         var brandId0 = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(statePayload) : (statePayload.brandId || '');
         var charPrompt = buildCharacterResolutionPrompt(scene, rawPrompt);
-        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, charPrompt, { allowNameFallback: true, payload: statePayload });
+        var res0 = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId0, charPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: statePayload });
         var built0 = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawPrompt,
           characters: res0.characters || [],

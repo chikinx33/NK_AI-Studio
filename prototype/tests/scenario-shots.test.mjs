@@ -157,12 +157,13 @@ test("parser: duration 이 6초를 넘으면 6초로 캡", () => {
   assert.equal(out[0].duration, 6);
 });
 
-test("parser: duration 이 0 이하면 최소값 0.5 로 보정", () => {
+test("parser: duration 이 최소값 미만이면 MIN_SHOT_DURATION(2초)로 보정", () => {
   const text = JSON.stringify({
     shots: [{ id: "1.1", duration: 0, shotType: "CU", cameraMove: "static", composition: "X", action: "Y" }],
   });
   const out = parseShotResponse(text, { id: 1 });
-  assert.equal(out[0].duration, 0.5);
+  // 2초 미만 컷은 영상 생성에서 사실상 정지 프레임이라 인접 컷에 흡수되도록 최소 2초로 보정.
+  assert.equal(out[0].duration, 2);
 });
 
 test("parser: composition + action 둘 다 비면 그 샷은 버린다", () => {

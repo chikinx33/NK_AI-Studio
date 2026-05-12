@@ -645,7 +645,7 @@
           } catch (_) {}
         }
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
-        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
         try { console.log('Character parse (image):', { triggers: res.triggers || [], missing: res.missing || [], sceneId: scene.id, characterPrompt: characterResolutionPrompt }); } catch (_) {}
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,
@@ -666,7 +666,7 @@
               payload = remoteDraft.payload;
               brandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || brandId || '');
               if (!(res.characters || []).length) {
-                res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
+                res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
                 built = NK.service.characterRegistry.buildResolvedPrompt({
                   rawPrompt: rawP,
                   characters: res.characters || [],
@@ -868,7 +868,7 @@
         }
         // shot 의 action/composition + 씬의 narration / dialogue 모두 캐릭터 해석 입력으로
         var characterResolutionPrompt = buildCharacterResolutionPrompt(scene, rawP);
-        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, payload: payload });
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, characterResolutionPrompt, { allowNameFallback: true, forceActiveFallback: true, payload: payload });
         var built = NK.service.characterRegistry.buildResolvedPrompt({
           rawPrompt: rawP,
           characters: res.characters || [],
