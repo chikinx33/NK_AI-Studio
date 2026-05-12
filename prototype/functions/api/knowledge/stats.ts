@@ -31,11 +31,9 @@ export const onRequestGet: PagesFunction = async ({ env }) => {
     const sql = getSql(env);
     if (!sql) return json({ configured: false, documents: 0, chunks: 0, adminRequired, accessRequired });
     await ensureSchema(sql);
-    const rows = await sql`
-      SELECT
-        (SELECT count(*)::int FROM knowledge_documents) AS documents,
-        (SELECT count(*)::int FROM knowledge_chunks) AS chunks
-    `;
+    const rows = await sql(
+      "SELECT (SELECT count(*)::int FROM knowledge_documents) AS documents, (SELECT count(*)::int FROM knowledge_chunks) AS chunks"
+    );
 
     return json({
       configured: true,

@@ -1,8 +1,7 @@
 // prototype/functions/api/knowledge/_shared.ts
 // AI 문서 RAG (Retrieval-Augmented Generation) 공유 헬퍼.
 // Neon Postgres + pgvector + OpenAI Embeddings 기반.
-
-import { neon } from "@neondatabase/serverless";
+// raw fetch 사용 — npm 패키지 의존성 없음 (Cloudflare Pages 번들 호환).
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 1536;
@@ -12,14 +11,47 @@ const MAX_CHUNKS_PER_DOC = 80;
 
 let schemaReady = false;
 
+export type SqlFn = (sql: string, params?: any[]) => Promise<any[]>;
+
 export function ragEnabled(env: any): boolean {
   return Boolean(env && env.DATABASE_URL && env.OPENAI_API_KEY);
 }
 
-export function getSql(env: any) {
+function parseDbHost(rawUrl: string): string {
+  const url = rawUrl.startsWith("postgres://")
+    ? rawUrl.replace("postgres://", "postgresql://")
+    : rawUrl;
+  return new URL(url).hostname;
+}
+
+async function neonQuery(dbUrl: string, sql: string, params: any[] = []): Promise<any[]> {
+  const host = parseDbHost(dbUrl);
+  const res = await fetch(`https://${host}/sql`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Neon-Connection-String": dbUrl,
+    },
+    body: JSON.stringify({ query: sql, params }),
+  });
+  const body = await res.text();
+  if (!res.ok) {
+    let msg = `Neon SQL 오류 ${res.status}`;
+    try {
+      const d = JSON.parse(body);
+      if (d?.message) msg = d.message;
+      else if (d?.error) msg = d.error;
+    } catch (_) {}
+    throw new Error(`${msg}: ${body.slice(0, 300)}`);
+  }
+  const data = JSON.parse(body);
+  return (data as any).rows || [];
+}
+
+export function getSql(env: any): SqlFn | null {
   const url = String(env && env.DATABASE_URL || "").trim();
   if (!url) return null;
-  return neon(url);
+  return (sql: string, params?: any[]) => neonQuery(url, sql, params || []);
 }
 
 export function isKnowledgeAdminRequired(env: any): boolean {
@@ -51,11 +83,11 @@ function parseKeys(value: any): string[] {
     .filter(Boolean);
 }
 
-export async function ensureSchema(sql: any) {
+export async function ensureSchema(sql: SqlFn) {
   if (schemaReady) return;
-  await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
-  await sql`CREATE EXTENSION IF NOT EXISTS vector`;
-  await sql`
+  await sql("CREATE EXTENSION IF NOT EXISTS pgcrypto");
+  await sql("CREATE EXTENSION IF NOT EXISTS vector");
+  await sql(`
     CREATE TABLE IF NOT EXISTS knowledge_documents (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       name text NOT NULL,
@@ -63,8 +95,8 @@ export async function ensureSchema(sql: any) {
       user_id text,
       created_at timestamptz NOT NULL DEFAULT now()
     )
-  `;
-  await sql`
+  `);
+  await sql(`
     CREATE TABLE IF NOT EXISTS knowledge_chunks (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       document_id uuid NOT NULL REFERENCES knowledge_documents(id) ON DELETE CASCADE,
@@ -74,16 +106,21 @@ export async function ensureSchema(sql: any) {
       embedding vector(1536) NOT NULL,
       created_at timestamptz NOT NULL DEFAULT now()
     )
-  `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx
-    ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100)
-  `;
-  await sql`
-    CREATE INDEX IF NOT EXISTS knowledge_chunks_document_id_idx
-    ON knowledge_chunks (document_id)
-  `;
+  `);
+  // ivfflat index creation may fail on empty tables; ignore and let fallback sequential scan run.
+  try {
+    await sql(`
+      CREATE INDEX IF NOT EXISTS knowledge_chunks_embedding_idx
+      ON knowledge_chunks USING ivfflat (embedding vector_cosine_ops)
+      WITH (lists = 100)
+    `);
+  } catch (_) {}
+  try {
+    await sql(`
+      CREATE INDEX IF NOT EXISTS knowledge_chunks_document_id_idx
+      ON knowledge_chunks (document_id)
+    `);
+  } catch (_) {}
   schemaReady = true;
 }
 
@@ -107,7 +144,10 @@ export async function embedText(env: any, input: string): Promise<number[]> {
   if (!res.ok) {
     let detail: any = body;
     try { detail = JSON.parse(body); } catch (_) {}
-    const msg = detail && detail.error && detail.error.message ? detail.error.message : `OpenAI Embeddings 호출 실패 (${res.status})`;
+    const msg =
+      detail && detail.error && detail.error.message
+        ? detail.error.message
+        : `OpenAI Embeddings 호출 실패 (${res.status})`;
     throw new Error(msg);
   }
   const data = JSON.parse(body);
@@ -139,7 +179,10 @@ export function toVector(values: number[]): string {
 }
 
 export async function sha256Hex(input: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(String(input || "")));
+  const buf = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(String(input || ""))
+  );
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");

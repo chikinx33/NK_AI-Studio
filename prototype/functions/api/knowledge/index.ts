@@ -54,24 +54,22 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     const contentHash = await sha256Hex(`${name}:${text}`);
-    const docRows = await sql`
-      INSERT INTO knowledge_documents (name, content_hash, user_id)
-      VALUES (${name}, ${contentHash}, ${auth.userId || ""})
-      ON CONFLICT (content_hash) DO UPDATE SET name = EXCLUDED.name
-      RETURNING id
-    `;
+    const docRows = await sql(
+      "INSERT INTO knowledge_documents (name, content_hash, user_id) VALUES ($1, $2, $3) ON CONFLICT (content_hash) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+      [name, contentHash, auth.userId || ""]
+    );
     const documentId = docRows[0]?.id as string;
     if (!documentId) return json({ configured: true, indexed: false, chunks: 0, reason: "문서 행을 만들 수 없습니다." });
 
-    await sql`DELETE FROM knowledge_chunks WHERE document_id = ${documentId}`;
+    await sql("DELETE FROM knowledge_chunks WHERE document_id = $1", [documentId]);
 
     let inserted = 0;
     for (const chunk of chunks) {
       const embedding = await embedText(env, chunk.content);
-      await sql`
-        INSERT INTO knowledge_chunks (document_id, source_name, chunk_index, content, embedding)
-        VALUES (${documentId}, ${chunk.sourceName}, ${chunk.chunkIndex}, ${chunk.content}, ${toVector(embedding)}::vector)
-      `;
+      await sql(
+        "INSERT INTO knowledge_chunks (document_id, source_name, chunk_index, content, embedding) VALUES ($1, $2, $3, $4, $5::vector)",
+        [documentId, chunk.sourceName, chunk.chunkIndex, chunk.content, toVector(embedding)]
+      );
       inserted += 1;
     }
 
@@ -107,11 +105,10 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     const sql = getSql(env);
     if (!sql) return json({ deleted: false, reason: "DATABASE_URL 없음" });
     await ensureSchema(sql);
-    const rows = await sql`
-      DELETE FROM knowledge_documents
-      WHERE id = ${documentId}
-      RETURNING id
-    `;
+    const rows = await sql(
+      "DELETE FROM knowledge_documents WHERE id = $1 RETURNING id",
+      [documentId]
+    );
     return json({ deleted: rows.length > 0 });
   } catch (e: any) {
     return json({ error: e?.message || "지식파일 삭제 중 오류가 발생했습니다." }, 500);

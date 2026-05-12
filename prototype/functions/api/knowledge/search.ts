@@ -41,13 +41,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const embedding = await embedText(env, query);
     const vec = toVector(embedding);
-    const rows = await sql`
-      SELECT source_name, chunk_index, content,
-             1 - (embedding <=> ${vec}::vector) AS similarity
-      FROM knowledge_chunks
-      ORDER BY embedding <=> ${vec}::vector
-      LIMIT ${limit}
-    `;
+    const rows = await sql(
+      "SELECT source_name, chunk_index, content, 1 - (embedding <=> $1::vector) AS similarity FROM knowledge_chunks ORDER BY embedding <=> $1::vector LIMIT $2",
+      [vec, limit]
+    );
 
     return json({
       configured: true,
