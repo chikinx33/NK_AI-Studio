@@ -3238,6 +3238,8 @@
   const updateSidebarHighlight = (stage) => {
     // 1. 일반 네비게이션 아이템 - 정확 매칭 (부분문자열 매칭 제거)
     document.querySelectorAll('.nav-item').forEach(item => {
+      // ai-doc 페이지 내부 뷰 전환 nav는 ai-doc.js가 직접 관리
+      if (item.hasAttribute('data-ai-doc-view')) return;
       const href = item.getAttribute('href') || '';
       const file = href.replace(/.*\//, '').split('?')[0].replace(/\.html?$/, '') || 'index';
       let targetStage = file;

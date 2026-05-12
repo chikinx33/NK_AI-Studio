@@ -2,6 +2,18 @@
 
 .page-shell-ai-doc .main { background: transparent; }
 
+/* 결과 확인 뷰: 세로 스크롤 허용, 스크롤바 숨김 */
+.page-shell-ai-doc .main-body {
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.page-shell-ai-doc .main-body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .ai-doc-root {
   padding: 24px;
   display: block;
