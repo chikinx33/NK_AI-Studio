@@ -56,7 +56,10 @@
       try { window.location.href = 'ai-video.html'; } catch (_) {}
       return;
     }
-    document.querySelectorAll('.nav-item').forEach(function (item) { item.classList.remove('active'); });
+    document.querySelectorAll('.nav-item').forEach(function (item) {
+      if (item.hasAttribute('data-ai-doc-view')) return;
+      item.classList.remove('active');
+    });
     var match = Array.from(document.querySelectorAll('.nav-item[href]')).find(function (a) {
       var href = a.getAttribute('href') || '';
       if (href.startsWith('#')) return false;
