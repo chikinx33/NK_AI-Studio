@@ -27,7 +27,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const text = String(body?.text || "");
     const adminKey = String(body?.adminKey || "");
 
-    if (!canManageCommonKnowledge(env, adminKey)) {
+    if (!canManageCommonKnowledge(env, adminKey, auth.ok)) {
       return json({ error: "지식파일 등록 권한 키가 올바르지 않습니다." }, 403);
     }
     if (!text.trim()) {
@@ -93,7 +93,7 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     const documentId = String(body?.documentId || "");
     const adminKey = String(body?.adminKey || "");
 
-    if (!canManageCommonKnowledge(env, adminKey)) {
+    if (!canManageCommonKnowledge(env, adminKey, auth.ok)) {
       return json({ error: "지식파일 삭제 권한 키가 올바르지 않습니다." }, 403);
     }
     if (!documentId) return json({ deleted: false, reason: "documentId가 없습니다." });

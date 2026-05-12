@@ -58,7 +58,8 @@ export function isKnowledgeAdminRequired(env: any): boolean {
   return Boolean(String(env && env.KNOWLEDGE_ADMIN_KEY || "").trim());
 }
 
-export function canManageCommonKnowledge(env: any, inputKey: string): boolean {
+export function canManageCommonKnowledge(env: any, inputKey: string, sessionAuthed = false): boolean {
+  if (sessionAuthed) return true;
   const adminKey = String(env && env.KNOWLEDGE_ADMIN_KEY || "").trim();
   if (!adminKey) return true;
   return adminKey === String(inputKey || "").trim();

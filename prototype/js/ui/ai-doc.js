@@ -893,8 +893,9 @@
     if (!selected.length) return;
 
     await fetchRagStats(true);
-    const adminKey = ragState.adminRequired ? getAdminKey() : '';
-    if (ragState.adminRequired && !adminKey) {
+    const isAuthed = !!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed());
+    const adminKey = (!isAuthed && ragState.adminRequired) ? getAdminKey() : '';
+    if (!isAuthed && ragState.adminRequired && !adminKey) {
       toast('지식파일 등록용 운영자 키를 먼저 입력해주세요.');
       const input = $('#ai-doc-admin-key-input'); if (input) input.focus();
       return;
@@ -981,7 +982,8 @@
         // 서버 RAG에서도 삭제 시도
         if (k.indexed && k.documentId && NK.api && NK.api.knowledgeDelete) {
           try {
-            await NK.api.knowledgeDelete({ documentId: k.documentId, adminKey: getAdminKey() });
+            const _isAuthed = !!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed());
+            await NK.api.knowledgeDelete({ documentId: k.documentId, adminKey: _isAuthed ? '' : getAdminKey() });
           } catch (e) {
             toast('서버 RAG 삭제 실패: ' + (e && e.message || '')); // UI는 계속 진행
           }
