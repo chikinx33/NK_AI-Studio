@@ -1231,6 +1231,7 @@
       reflectRagStatus();
       renderKnowledgeList();
       if (state.view === 'dashboard') renderDashboard().catch(() => {});
+      if (state.view === 'results') renderResults();
     };
   }
 
