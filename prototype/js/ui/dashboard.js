@@ -751,10 +751,9 @@
             serverMerged = false;
             dashboard.renderDrafts();
             if (cloned) {
-              NK.service.project.setCurrent(cloned);
-              if (NK.ui.dashboard && NK.ui.dashboard.renderSidebarProjectCard) {
-                NK.ui.dashboard.renderSidebarProjectCard(cloned);
-              }
+              // 복제본을 current로 교체하지 않음: 원본이 선택 상태를 유지해야
+              // Brand Studio가 복제 후에도 올바른 프로젝트를 로드함
+              refreshSidebarCardFromState();
             }
           } catch (err) {
             alert('복제 실패: ' + (err?.message || err));
