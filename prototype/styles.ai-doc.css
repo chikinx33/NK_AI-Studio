@@ -14,8 +14,8 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 7px 4px;
+  gap: 5px;
+  padding: 8px 4px;
   border: none;
   border-radius: 8px;
   background: transparent;
@@ -31,13 +31,13 @@
 .ai-doc-cat-tab svg { flex-shrink: 0; }
 
 .ai-doc-cat-tab:hover {
-  background: var(--surface-2, rgba(255,255,255,0.06));
-  color: var(--text);
+  background: rgba(240, 98, 28, 0.1);
+  color: #f0621c;
 }
 
 .ai-doc-cat-tab.is-active {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--accent);
+  background: rgba(240, 98, 28, 0.18);
+  color: #f0621c;
 }
 
 /* ── Cat-view visibility ────────────────────────────────── */
