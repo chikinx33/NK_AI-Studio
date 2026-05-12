@@ -993,8 +993,20 @@
         var opts = options || {};
         var drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
         var idx = drafts.findIndex(function (row) { return String(row.id) === String(normalized.id); });
-        if (idx >= 0) drafts[idx] = normalized;
-        else if (opts.prepend === false) drafts.push(normalized);
+        if (idx >= 0) {
+            // 서버 응답(project/save 가 lastUsedAt 을 보관하지 않음)으로 upsert 할 때
+            // 직전 markUsed 가 기록한 lastUsedAt 이 사라져 대시보드 하이라이트가
+            // 다른 카드로 튀는 회귀가 있었다. 입력 draft 에 클라이언트 메타데이터가
+            // 없으면 기존 항목의 값을 보존한다.
+            var existing = drafts[idx] || {};
+            if (!normalized.lastUsedAt && existing.lastUsedAt) {
+                normalized.lastUsedAt = existing.lastUsedAt;
+            }
+            if (!normalized.createdAt && existing.createdAt) {
+                normalized.createdAt = existing.createdAt;
+            }
+            drafts[idx] = normalized;
+        } else if (opts.prepend === false) drafts.push(normalized);
         else drafts.unshift(normalized);
         var nextDrafts = project.replaceLocalDrafts(drafts, {
             limit: Number(opts.limit) > 0 ? Number(opts.limit) : 100,
