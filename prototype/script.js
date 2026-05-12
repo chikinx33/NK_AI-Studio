@@ -582,7 +582,8 @@
     }
 
     // 3. 부모 창 전용 로직 (사이드바, 메시지 수신) - 구독을 먼저 설정해야 초기 상태 반영됨
-    if (!isIframe) {
+    // 자체 사이드바를 직접 관리하는 단독 페이지(ai-doc 등)는 제외
+    if (!isIframe && !isSelfContainedPage) {
       setupParentLogic();
     }
 
