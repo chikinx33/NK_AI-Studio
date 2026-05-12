@@ -6,8 +6,7 @@
   padding: 24px;
   display: block;
   width: 100%;
-  max-width: 1320px;
-  margin: 0 auto;
+  box-sizing: border-box;
 }
 
 .ai-doc-view {
