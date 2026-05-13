@@ -319,7 +319,19 @@
     return Object.assign({}, src);
   }
 
-  function readDeployedFormats(payload) {
+  function readDeployedFormats(payload, projectId) {
+    // Dedicated local key takes full precedence — immune to server-merge race conditions
+    // and draft-size eviction of nk_scenario_drafts_v1. Falls back to payload when
+    // the key is absent (e.g. first load on a new device).
+    if (projectId) {
+      try {
+        var raw = localStorage.getItem('nk_bs_deployed_' + projectId);
+        if (raw !== null) {
+          var stored = JSON.parse(raw);
+          if (stored && typeof stored === 'object') return Object.assign({}, stored);
+        }
+      } catch (_) {}
+    }
     var src = payload && payload.brandStudioDeployedFormats && typeof payload.brandStudioDeployedFormats === 'object'
       ? payload.brandStudioDeployedFormats
       : {};
@@ -1149,7 +1161,7 @@
     var publishPlan = readPublishPlan(brand, payload);
     var selectedFormats = readSelectedFormats(payload);
     var formatDrafts = readFormatDrafts(payload);
-    var persistedDeployedFormats = readDeployedFormats(payload);
+    var persistedDeployedFormats = readDeployedFormats(payload, projectId);
     var activeDraftTab = readActiveDraftTab(payload) || (selectedFormats.length ? selectedFormats[0] : '');
     var formatItems = channelFormats();
     var channelRows = channelOptions();
@@ -2504,8 +2516,13 @@
           .catch(function () {});
       }
     }
-    // 배포 완료 상태를 payload에 영구 저장
+    // 배포 완료 상태를 영구 저장
+    // ① 전용 localStorage 키 (소용량, 서버 머지 경쟁 조건에 영향 받지 않음)
+    // ② payload (다기기 동기화용 서버 저장)
     function persistDeployedFormats() {
+      try {
+        localStorage.setItem('nk_bs_deployed_' + projectId, JSON.stringify(Object.assign({}, _deployedFormats)));
+      } catch (_) {}
       if (NK.service && NK.service.project && NK.service.project.updatePayload) {
         NK.service.project.updatePayload(projectId, { brandStudioDeployedFormats: Object.assign({}, _deployedFormats) })
           .catch(function () {});
