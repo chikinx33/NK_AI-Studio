@@ -849,6 +849,7 @@
       },
       alertSaveFormatFail: function (e) { return '포맷 선택 저장 실패: ' + e; },
       savingLabel: '저장 중…',
+      oneClickLoadingLabel: '원클릭 초안 생성 중…',
       alertDraftSaved: '초안을 저장했습니다.',
       alertDraftSaveFail: function (e) { return '초안 저장 실패: ' + e; },
       alertDraftGenFail: function (e) { return '초안 생성 실패: ' + e; },
@@ -905,6 +906,7 @@
       },
       alertSaveFormatFail: function (e) { return 'Failed to save format: ' + e; },
       savingLabel: 'Saving…',
+      oneClickLoadingLabel: 'Generating one-click drafts…',
       alertDraftSaved: 'Draft saved.',
       alertDraftSaveFail: function (e) { return 'Failed to save draft: ' + e; },
       alertDraftGenFail: function (e) { return 'Failed to generate draft: ' + e; },
@@ -3289,7 +3291,14 @@
           NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextAllDrafts })
             .then(function (result) { if (result && result.draft) renderNext(result.draft); })
             .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
-            .finally(function () { btn.disabled = false; });
+            .finally(function () {
+              btn.disabled = false;
+              if (window.__bsfOneClickInProgress) {
+                window.__bsfOneClickInProgress = false;
+                if (window.__bsfOneClickSafetyTimer) { clearTimeout(window.__bsfOneClickSafetyTimer); window.__bsfOneClickSafetyTimer = null; }
+                hideSaveOverlay();
+              }
+            });
           return;
         }
         var genBrandCtx = buildBrandContext(payload, brandView, knowledge);
@@ -3323,7 +3332,14 @@
             return NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: formatDrafts })
               .then(function (result) { if (result && result.draft) renderNext(result.draft); })
               .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
-              .finally(function () { btn.disabled = false; });
+              .finally(function () {
+                btn.disabled = false;
+                if (window.__bsfOneClickInProgress) {
+                  window.__bsfOneClickInProgress = false;
+                  if (window.__bsfOneClickSafetyTimer) { clearTimeout(window.__bsfOneClickSafetyTimer); window.__bsfOneClickSafetyTimer = null; }
+                  hideSaveOverlay();
+                }
+              });
           }
           var fid = _fmtsToGen[idx];
           return NK.api.draftGenerate({ platformId: fid, story: genStory, brandContext: genBrandCtx })
@@ -3350,6 +3366,15 @@
       if (action === 'brand-oneclick-draft') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         btn.disabled = true;
+        showSaveOverlay(T.oneClickLoadingLabel || T.savingLabel);
+        // 플래그: 후속 자동 트리거되는 generate-all-drafts가 완료 시 오버레이 닫도록
+        window.__bsfOneClickInProgress = true;
+        // 안전 타임아웃: 90초 내 미완료 시 강제 해제 (오버레이 영원히 남는 상황 방지)
+        if (window.__bsfOneClickSafetyTimer) clearTimeout(window.__bsfOneClickSafetyTimer);
+        window.__bsfOneClickSafetyTimer = setTimeout(function () {
+          window.__bsfOneClickInProgress = false;
+          hideSaveOverlay();
+        }, 90000);
         var defaultFormats = selectedFormats.length ? selectedFormats.slice() : ['instagram', 'x-threads'];
         var oneClickPayload = {
           brandStudioSelectedAssetIds: selectedAssetIds.length ? selectedAssetIds.slice() : autoSelectedAssetIds.slice(),
@@ -3366,10 +3391,23 @@
               var t = root.querySelector('.brand-caption-textarea');
               if (t) { scrollNodeIntoPageView(t, 'start'); t.focus(); }
               var genAllBtn = root.querySelector('[data-action="brand-generate-all-drafts"]');
-              if (genAllBtn && !genAllBtn.disabled) genAllBtn.click();
+              if (genAllBtn && !genAllBtn.disabled) {
+                genAllBtn.click();
+              } else {
+                // generate 버튼이 없거나 비활성이면 오버레이를 여기서 해제
+                window.__bsfOneClickInProgress = false;
+                if (window.__bsfOneClickSafetyTimer) { clearTimeout(window.__bsfOneClickSafetyTimer); window.__bsfOneClickSafetyTimer = null; }
+                hideSaveOverlay();
+              }
             }, 30);
           })
-          .catch(function (err) { alert(T.alertOneClickFail(err && err.message ? err.message : err)); btn.disabled = false; });
+          .catch(function (err) {
+            alert(T.alertOneClickFail(err && err.message ? err.message : err));
+            btn.disabled = false;
+            window.__bsfOneClickInProgress = false;
+            if (window.__bsfOneClickSafetyTimer) { clearTimeout(window.__bsfOneClickSafetyTimer); window.__bsfOneClickSafetyTimer = null; }
+            hideSaveOverlay();
+          });
         return;
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
