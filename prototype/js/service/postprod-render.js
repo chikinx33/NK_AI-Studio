@@ -174,6 +174,39 @@
     return '';
   }
 
+  // 페이드 인/아웃: 프리뷰의 #postprod-preview-fade 검은 오버레이와 동일한 공식.
+  // - fadeIn: 클립 시작 후 FADE_DURATION_SEC 동안 opacity 1 → 0
+  // - fadeOut: 클립 종료 직전 FADE_DURATION_SEC 동안 opacity 0 → 1
+  // 프리뷰가 화면 전체를 덮으므로 렌더에서도 클립·오버레이·자막 모두 그린 뒤 가장 마지막에
+  // 검정을 합성해 동일한 결과를 만든다.
+  var RENDER_FADE_DURATION_SEC = 0.5;
+  function computeClipFadeOpacity(clip, localElapsed, duration) {
+    if (!clip) return 0;
+    var op = 0;
+    if (clip.fadeIn && localElapsed >= 0 && localElapsed < RENDER_FADE_DURATION_SEC) {
+      op = Math.max(op, 1 - (localElapsed / RENDER_FADE_DURATION_SEC));
+    }
+    if (clip.fadeOut) {
+      var remaining = (Number(duration) || 0) - localElapsed;
+      if (remaining >= 0 && remaining < RENDER_FADE_DURATION_SEC) {
+        op = Math.max(op, 1 - (remaining / RENDER_FADE_DURATION_SEC));
+      }
+    }
+    if (op < 0) op = 0;
+    if (op > 1) op = 1;
+    return op;
+  }
+  function drawFadeOverlay(ctx, w, h, clip, localElapsed, duration) {
+    if (!ctx || !clip) return;
+    var op = computeClipFadeOpacity(clip, localElapsed, duration);
+    if (op <= 0) return;
+    var prevAlpha = ctx.globalAlpha;
+    ctx.globalAlpha = op;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalAlpha = prevAlpha;
+  }
+
   function drawContain(ctx, source, width, height) {
     if (!ctx || !source) return;
     var sw = Number(source.videoWidth || source.naturalWidth || source.width || 0);
@@ -804,13 +837,14 @@
             drawContainWithMotion(ctx, video, canvas.width, canvas.height, vMotion);
             drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
+            drawFadeOverlay(ctx, canvas.width, canvas.height, clip, localElapsed, duration);
           }, reportProgress, shouldCancel);
           try { video.pause(); } catch (_) { }
           processed += duration;
           if (!okVideo) break;
         } catch (_) {
           failedVisualCount += 1;
-          var okVideoFallback = await runSegment(duration, function () {
+          var okVideoFallback = await runSegment(duration, function (localElapsed) {
             drawBackground();
             ctx.fillStyle = '#f5c94b';
             ctx.font = '600 28px sans-serif';
@@ -818,6 +852,7 @@
             ctx.fillText('영상 로드 실패', canvas.width / 2, canvas.height / 2);
             drawOverlay(clip.start);
             drawSubtitle(clip.start);
+            drawFadeOverlay(ctx, canvas.width, canvas.height, clip, localElapsed, duration);
           }, reportProgress, shouldCancel);
           processed += duration;
           if (!okVideoFallback) break;
@@ -835,13 +870,14 @@
             drawContainWithMotion(ctx, image, canvas.width, canvas.height, iMotion);
             drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
+            drawFadeOverlay(ctx, canvas.width, canvas.height, clip, localElapsed, duration);
           }, reportProgress, shouldCancel);
           processed += duration;
           if (!okImage) break;
         } catch (errImg) {
           try { console.error('[postprod-render] image draw failed:', clip && clip.id, clip && clip.url, errImg && errImg.message); } catch (_) {}
           failedVisualCount += 1;
-          var okImageFallback = await runSegment(duration, function () {
+          var okImageFallback = await runSegment(duration, function (localElapsed) {
             drawBackground();
             ctx.fillStyle = '#f5c94b';
             ctx.font = '600 28px sans-serif';
@@ -849,6 +885,7 @@
             ctx.fillText('이미지 로드 실패', canvas.width / 2, canvas.height / 2);
             drawOverlay(clip.start);
             drawSubtitle(clip.start);
+            drawFadeOverlay(ctx, canvas.width, canvas.height, clip, localElapsed, duration);
           }, reportProgress, shouldCancel);
           processed += duration;
           if (!okImageFallback) break;
@@ -863,6 +900,7 @@
           ctx.fillText('씬 소스 없음', canvas.width / 2, canvas.height / 2);
           drawOverlay(clip.start + localElapsed);
           drawSubtitle(clip.start + localElapsed);
+          drawFadeOverlay(ctx, canvas.width, canvas.height, clip, localElapsed, duration);
         }, reportProgress, shouldCancel);
         processed += duration;
         if (!okMissing) break;
@@ -1171,6 +1209,7 @@
             drawContainWithMotion(ctx, video, w, h, vMotion);
             drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
+            drawFadeOverlay(ctx, w, h, clip, localElapsed, duration);
           }, reportProgress, shouldCancel, segState);
           processed += duration;
           if (!okVideo) break;
@@ -1187,12 +1226,13 @@
             break;
           }
           failedVisualCount += 1;
-          var okVF = await runSegmentOffline(duration, function () {
+          var okVF = await runSegmentOffline(duration, function (localElapsed) {
             drawBackground();
             ctx.fillStyle = '#f5c94b';
             ctx.font = '600 28px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('영상 로드 실패', w / 2, h / 2);
+            drawFadeOverlay(ctx, w, h, clip, localElapsed, duration);
           }, reportProgress, shouldCancel, segState);
           processed += duration;
           if (!okVF) break;
@@ -1210,18 +1250,20 @@
             drawContainWithMotion(ctx, image, w, h, iMotion);
             drawOverlay(clip.start + localElapsed);
             drawSubtitle(clip.start + localElapsed);
+            drawFadeOverlay(ctx, w, h, clip, localElapsed, duration);
           }, reportProgress, shouldCancel, segState);
           processed += duration;
           if (!okImage) break;
         } catch (errImg2) {
           try { console.error('[postprod-render offline] image draw failed:', clip && clip.id, clip && clip.url, errImg2 && errImg2.message); } catch (_) {}
           failedVisualCount += 1;
-          var okIF = await runSegmentOffline(duration, function () {
+          var okIF = await runSegmentOffline(duration, function (localElapsed) {
             drawBackground();
             ctx.fillStyle = '#f5c94b';
             ctx.font = '600 28px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText('이미지 로드 실패', w / 2, h / 2);
+            drawFadeOverlay(ctx, w, h, clip, localElapsed, duration);
           }, reportProgress, shouldCancel, segState);
           processed += duration;
           if (!okIF) break;
@@ -1236,6 +1278,7 @@
           ctx.fillText('씬 소스 없음', w / 2, h / 2);
           drawOverlay(clip.start + localElapsed);
           drawSubtitle(clip.start + localElapsed);
+          drawFadeOverlay(ctx, w, h, clip, localElapsed, duration);
         }, reportProgress, shouldCancel, segState);
         processed += duration;
         if (!okMissing) break;
