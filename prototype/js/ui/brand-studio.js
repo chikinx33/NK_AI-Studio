@@ -1252,7 +1252,7 @@
       // 자산 탭(1)으로 돌아올 때 썸네일 초기화 (숨겨진 동안 로드 안 됐을 수 있음)
       if (newStep === 1) { initVideoThumbs(); initImageThumbs(); initIgSlider(); }
       // 초안 탭(3) 진입: selectedFormats 변경이 있으면 드래프트 섹션 재동기화
-      if (newStep === 3) { refreshDraftSection(); }
+      if (newStep === 3) { refreshDraftSection(); initMockVideoThumbs(); }
       // 배포 탭(4) 진입: 초안 디바운스 즉시 flush 후 배포 요약 재빌드 (stale 데이터 방지)
       if (newStep === 4) {
         flushPendingDraftEdits();
@@ -1434,7 +1434,7 @@
       var isSel = selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0;
       return i.url
         ? '<div class="bsf-video-thumb-item' + (isSel ? ' is-selected' : '') + '" data-action="brand-toggle-single-asset" data-asset-id="' + escapeHtml(i.id || '') + '">' +
-          '<video class="bsf-thumb-video" data-item-id="' + escapeHtml(i.id || '') + '" src="' + escapeHtml(i.url) + '#t=0.001" preload="metadata" muted playsinline></video>' +
+          '<video class="bsf-thumb-video" data-item-id="' + escapeHtml(i.id || '') + '" src="' + escapeHtml(i.url) + '" preload="auto" muted playsinline></video>' +
           '<span class="bsf-video-thumb-overlay">▶</span>' +
           '<span class="bsf-video-thumb-title">' + escapeHtml(i.title || T.cardVideo) + '</span>' +
           '<div class="bsf-thumb-check">✓</div>' +
@@ -1761,7 +1761,7 @@
     }
     function buildYoutubeShortsPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       var shortsVidHtml = draftFirstVidUrl
-        ? '<video class="bsf-mock-shorts-vid" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
+        ? '<video class="bsf-mock-shorts-vid" src="' + escapeHtml(draftFirstVidUrl) + '" preload="auto" muted playsinline></video>'
         : '<div class="bsf-mock-shorts-vid-empty">▶</div>';
       return pvWrap(isEn ? 'Shorts preview' : '쇼츠 미리보기',
         '<div class="bsf-mockup bsf-mock-shorts">' +
@@ -1792,7 +1792,7 @@
     }
     function buildTiktokPreview(fmtId, captionVal, hashtagVal, draft) {
       var tiktokVidHtml = draftFirstVidUrl
-        ? '<video class="bsf-mock-tiktok-vid" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video>'
+        ? '<video class="bsf-mock-tiktok-vid" src="' + escapeHtml(draftFirstVidUrl) + '" preload="auto" muted playsinline></video>'
         : '<div class="bsf-mock-tiktok-vid-empty">▶</div>';
       return pvWrap(isEn ? 'Video preview' : '영상 미리보기',
         '<div class="bsf-mockup bsf-mock-tiktok">' +
@@ -2275,6 +2275,7 @@
     initVideoThumbs();
     initImageThumbs();
     initIgSlider();
+    initMockVideoThumbs();
     // 초기 렌더 시 stale한 selectedFormats(이전 세션에서 저장된 unavailable 포맷) 즉시 제거
     pruneUnavailableSelectedFormats();
 
@@ -2557,6 +2558,7 @@
       var rgnBtn = root.querySelector('.bsf-draft-regen-head');
       if (rgnBtn) rgnBtn.dataset.formatId = activeDraftTabOrFirst;
       bindDeferredHydrationFlush(root);
+      initMockVideoThumbs();
     }
     // 카드 클래스/뱃지/lock을 in-place로 갱신 (자산 변경/duration 도착 시)
     function refreshFormatCardStates() {
@@ -2603,7 +2605,11 @@
         v.dataset.thumbInit = '1';
         function showFrame() { v.classList.add('is-loaded'); }
         function trySeek() {
-          try { v.currentTime = 0.001; } catch (e) { showFrame(); }
+          try {
+            // duration이 있으면 10% 지점(최소 0.5s)으로 시크해 검은 첫 프레임 회피
+            var t = (v.duration && !isNaN(v.duration)) ? Math.min(Math.max(v.duration * 0.1, 0.5), 5) : 0.5;
+            v.currentTime = t;
+          } catch (e) { showFrame(); }
         }
         function captureDuration() {
           var itemId = v.dataset.itemId;
@@ -2620,10 +2626,12 @@
             }
           }
         }
-        v.addEventListener('seeked', showFrame, { once: true });
-        var fallback = setTimeout(showFrame, 1000);
-        v.addEventListener('seeked', function () { clearTimeout(fallback); }, { once: true });
-        if (v.readyState >= 1) {
+        var fallback = setTimeout(showFrame, 2000);
+        v.addEventListener('seeked', function () { clearTimeout(fallback); showFrame(); }, { once: true });
+        v.addEventListener('loadeddata', function () { clearTimeout(fallback); showFrame(); }, { once: true });
+        if (v.readyState >= 4) {
+          clearTimeout(fallback); showFrame();
+        } else if (v.readyState >= 1) {
           captureDuration();
           trySeek();
         } else {
@@ -2631,7 +2639,7 @@
             captureDuration();
             trySeek();
           }, { once: true });
-          v.addEventListener('error', showFrame, { once: true });
+          v.addEventListener('error', function () { clearTimeout(fallback); showFrame(); }, { once: true });
         }
       });
     }
@@ -2646,6 +2654,24 @@
         } else {
           img.addEventListener('load', show, { once: true });
           img.addEventListener('error', show, { once: true });
+        }
+      });
+    }
+    // 초안 미리보기 영상(Shorts·TikTok 목업) 시크 초기화 — 검은 첫 프레임 회피
+    function initMockVideoThumbs() {
+      root.querySelectorAll('.bsf-mock-shorts-vid, .bsf-mock-tiktok-vid').forEach(function (v) {
+        if (v.dataset.mockVidInit) return;
+        v.dataset.mockVidInit = '1';
+        function trySeekMock() {
+          try {
+            var t = (v.duration && !isNaN(v.duration)) ? Math.min(Math.max(v.duration * 0.1, 0.5), 5) : 0.5;
+            v.currentTime = t;
+          } catch (e) {}
+        }
+        if (v.readyState >= 1) {
+          trySeekMock();
+        } else {
+          v.addEventListener('loadedmetadata', trySeekMock, { once: true });
         }
       });
     }
@@ -3059,6 +3085,7 @@
         root.querySelectorAll('.bsf-format-draft-panel').forEach(function (panel) {
           panel.classList.toggle('is-active', panel.dataset.draftFormat === tabId);
         });
+        initMockVideoThumbs();
         // 탭 전환 시 저장 버튼 초기화 (새 탭은 변경 없음)
         setSaveBtnEnabled(false);
         // 헤더 재생성 버튼의 data-format-id 동기화
@@ -3246,44 +3273,57 @@
         }
         var genBrandCtx = buildBrandContext(payload, brandView, knowledge);
         var genStory = buildEpisodeStory(payload, project.scenes || []);
-        // Immediately show skeleton on every selected panel
+        // 모든 패널에 스켈레톤 표시
         selectedFormats.forEach(function (fid) {
           var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
           if (panel) showDraftSkeleton(panel);
         });
-        // Parallel AI calls — each panel updates independently as it resolves
-        var aiCalls = selectedFormats.map(function (fid) {
+        // 패널 DOM 업데이트 헬퍼
+        function applyDraftToPanel(fid, res) {
+          var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
+          if (!panel) return;
+          hideDraftSkeleton(panel);
+          ['caption', 'hashtags', 'title', 'first_comment'].forEach(function (fieldKey) {
+            if (!res[fieldKey]) return;
+            var ceEl = panel.querySelector('[data-draft-format="' + fid + '"][data-draft-field="' + fieldKey + '"]');
+            if (ceEl) {
+              if (ceEl.tagName === 'INPUT' || ceEl.tagName === 'TEXTAREA') ceEl.value = res[fieldKey];
+              else ceEl.innerText = res[fieldKey];
+            }
+            var mirror = panel.querySelector('[data-mock-mirror="' + fid + '"][data-mock-field="' + fieldKey + '"]');
+            if (mirror) { var dt = String(res[fieldKey]); mirror.textContent = dt.length > 80 ? dt.slice(0, 80) + '…' : dt; }
+          });
+        }
+        // 순차 호출: 서버 동시 요청 한계·레이트리밋 회피, 각 포맷 결과 즉시 반영
+        // AI 실패 시 해당 포맷은 규칙 기반 폴백으로 콘텐츠 보장
+        var _fmtsToGen = selectedFormats.slice();
+        function generateNextFormat(idx) {
+          if (idx >= _fmtsToGen.length) {
+            return NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: formatDrafts })
+              .then(function (result) { if (result && result.draft) renderNext(result.draft); })
+              .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
+              .finally(function () { btn.disabled = false; });
+          }
+          var fid = _fmtsToGen[idx];
           return NK.api.draftGenerate({ platformId: fid, story: genStory, brandContext: genBrandCtx })
             .then(function (res) {
-              var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
-              if (panel) {
-                hideDraftSkeleton(panel);
-                ['caption', 'hashtags', 'title', 'first_comment'].forEach(function (fieldKey) {
-                  if (!res[fieldKey]) return;
-                  var ceEl = panel.querySelector('[data-draft-format="' + fid + '"][data-draft-field="' + fieldKey + '"]');
-                  if (ceEl) {
-                    if (ceEl.tagName === 'INPUT' || ceEl.tagName === 'TEXTAREA') ceEl.value = res[fieldKey];
-                    else ceEl.innerText = res[fieldKey];
-                  }
-                  var mirror = panel.querySelector('[data-mock-mirror="' + fid + '"][data-mock-field="' + fieldKey + '"]');
-                  if (mirror) { var dt = String(res[fieldKey]); mirror.textContent = dt.length > 80 ? dt.slice(0, 80) + '…' : dt; }
-                });
-              }
+              applyDraftToPanel(fid, res);
               var nd = Object.assign({}, formatDrafts); nd[fid] = Object.assign({}, nd[fid] || {}, res); formatDrafts = nd;
-              return res;
             })
             .catch(function (err) {
-              var panel = root.querySelector('.bsf-format-draft-panel[data-draft-format="' + fid + '"]');
-              if (panel) hideDraftSkeleton(panel);
+              // AI 실패 시 규칙 기반 폴백으로 해당 포맷 콘텐츠 생성
               console.error('[draft-generate:' + fid + ']', err && err.message ? err.message : err);
-              return null;
-            });
-        });
-        Promise.all(aiCalls)
-          .then(function () { return NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: formatDrafts }); })
-          .then(function (result) { if (result && result.draft) renderNext(result.draft); })
-          .catch(function (err) { alert(T.alertDraftGenFail(err && err.message ? err.message : err)); })
-          .finally(function () { btn.disabled = false; });
+              var fmt = formatItems.find(function (f) { return f.id === fid; });
+              var fallbackRes = {
+                caption: buildCaptionDraft(project, brandView, fmt, sourceTexts, knowledge),
+                hashtags: buildHashtagDraft(project, brandView, fmt, sourceTexts, knowledge)
+              };
+              applyDraftToPanel(fid, fallbackRes);
+              var nd = Object.assign({}, formatDrafts); nd[fid] = Object.assign({}, nd[fid] || {}, fallbackRes); formatDrafts = nd;
+            })
+            .then(function () { return generateNextFormat(idx + 1); });
+        }
+        generateNextFormat(0);
         return;
       }
       if (action === 'brand-oneclick-draft') {
