@@ -2222,7 +2222,7 @@
               connectLabel = isEn ? 'Not connected' : '연결 안됨';
               connectCls = 'is-disconnected';
             } else if (isEnabled) {
-              connectLabel = isEn ? 'In use' : '사용 중';
+              connectLabel = isEn ? 'Connected' : '연결 됨';
               connectCls = 'is-connected';
             } else {
               connectLabel = isEn ? 'Paused' : '사용 안 함';
