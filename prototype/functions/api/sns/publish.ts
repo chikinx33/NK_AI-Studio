@@ -248,6 +248,12 @@ async function publishCarouselToInstagram(opts: {
     throw new Error(`[carousel] 캐러셀 컨테이너 생성 실패: ${carouselData.error?.message}`);
   }
 
+  // CAROUSEL 컨테이너 자체도 비동기 처리됨 — FINISHED 가 되기 전에 publish 하면
+  // "Media ID is not available" 오류가 발생한다. 단일 REELS 와 동일하게 대기.
+  console.log(`[carousel] 캐러셀 컨테이너 처리 대기: ${carouselData.id}`);
+  await waitForIgMedia(accessToken, carouselData.id);
+  console.log(`[carousel] 캐러셀 컨테이너 완료: ${carouselData.id}`);
+
   // Step 3: 캐러셀 게시
   console.log(`[carousel] Step 3: 캐러셀 게시 (creation_id: ${carouselData.id})`);
   const pRes = await fetch(
