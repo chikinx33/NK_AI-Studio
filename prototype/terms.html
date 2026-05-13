@@ -20,6 +20,8 @@
     /* ── Legal Page Layout ──────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    html, body { height: auto; overflow: auto; }
+
     body {
       font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
       background: var(--bg);
@@ -94,24 +96,6 @@
     }
 
     .btn-icon:hover { background: var(--layer-strong); color: var(--text); }
-
-    /* ── Lang Toggle ────────────────────────────────────── */
-    .legal-lang-bar {
-      max-width: 900px; margin: 28px auto 0; padding: 0 24px;
-      display: flex; align-items: center; gap: 8px;
-    }
-
-    .lang-btn {
-      padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
-      background: var(--layer-soft); border: 1px solid var(--border);
-      color: var(--text-2); cursor: pointer; transition: all 0.14s;
-    }
-
-    .lang-btn.active {
-      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
-      border-color: color-mix(in srgb, var(--orange) 40%, var(--border) 60%);
-      color: var(--orange);
-    }
 
     /* ── Content ────────────────────────────────────────── */
     .legal-main {
@@ -281,12 +265,6 @@
         </div>
       </div>
     </header>
-
-    <!-- Language Toggle -->
-    <div class="legal-lang-bar">
-      <button class="lang-btn active" id="btn-ko" onclick="setLang('ko')">한국어</button>
-      <button class="lang-btn" id="btn-en" onclick="setLang('en')">English</button>
-    </div>
 
     <!-- Main -->
     <main class="legal-main">
@@ -562,44 +540,52 @@
   </div><!-- .legal-wrap -->
 
   <script>
+    function setLang(lang) {
+      var ko = document.getElementById('content-ko');
+      var en = document.getElementById('content-en');
+      var navKo = document.getElementById('nav-terms-ko');
+      var navPrivacy = document.getElementById('nav-privacy-ko');
+      if (lang === 'en') {
+        if (en) en.classList.add('active');
+        if (ko) ko.classList.remove('active');
+        document.documentElement.lang = 'en';
+        document.title = 'Terms of Service — NK Platform';
+        if (navKo) navKo.textContent = 'Terms';
+        if (navPrivacy) navPrivacy.textContent = 'Privacy Policy';
+      } else {
+        if (ko) ko.classList.add('active');
+        if (en) en.classList.remove('active');
+        document.documentElement.lang = 'ko';
+        document.title = '서비스 이용약관 — NK Platform';
+        if (navKo) navKo.textContent = '이용약관';
+        if (navPrivacy) navPrivacy.textContent = '개인정보처리방침';
+      }
+    }
+
     (function () {
-      // Theme restore
-      var saved = localStorage.getItem('nk_theme') || 'dark';
+      var theme = localStorage.getItem('nk_theme') || 'dark';
       var variant = localStorage.getItem('nk_theme_variant') || '';
-      document.documentElement.setAttribute('data-theme', saved);
+      document.documentElement.setAttribute('data-theme', theme);
       if (variant) document.documentElement.setAttribute('data-theme-variant', variant);
-      // Remove veil
+
       document.addEventListener('DOMContentLoaded', function () {
         document.documentElement.classList.remove('preload-veiled');
+        setLang(localStorage.getItem('nk_lang') || 'ko');
+      });
+
+      // Sync language when landing page toggle changes it in another tab
+      window.addEventListener('storage', function (e) {
+        if (e.key === 'nk_lang') setLang(e.newValue || 'ko');
+        if (e.key === 'nk_theme') {
+          document.documentElement.setAttribute('data-theme', e.newValue || 'dark');
+        }
       });
     })();
 
     function toggleThemeLocal() {
-      var current = document.documentElement.getAttribute('data-theme') || 'dark';
-      var next = current === 'dark' ? 'light' : 'dark';
+      var next = (document.documentElement.getAttribute('data-theme') || 'dark') === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       localStorage.setItem('nk_theme', next);
-    }
-
-    function setLang(lang) {
-      var ko = document.getElementById('content-ko');
-      var en = document.getElementById('content-en');
-      var btnKo = document.getElementById('btn-ko');
-      var btnEn = document.getElementById('btn-en');
-      var navKo = document.getElementById('nav-terms-ko');
-      if (lang === 'ko') {
-        ko.classList.add('active'); en.classList.remove('active');
-        btnKo.classList.add('active'); btnEn.classList.remove('active');
-        document.documentElement.lang = 'ko';
-        document.title = '서비스 이용약관 — NK Platform';
-        if (navKo) navKo.textContent = '이용약관';
-      } else {
-        en.classList.add('active'); ko.classList.remove('active');
-        btnEn.classList.add('active'); btnKo.classList.remove('active');
-        document.documentElement.lang = 'en';
-        document.title = 'Terms of Service — NK Platform';
-        if (navKo) navKo.textContent = 'Terms';
-      }
     }
   </script>
 </body>
