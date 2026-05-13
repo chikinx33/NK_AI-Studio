@@ -3483,7 +3483,7 @@
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
       function snsPublishFormat(formatId, drafts, scheduledAt) {
-        var SNS_PLATFORMS = ['instagram'];
+        var SNS_PLATFORMS = ['instagram', 'tiktok'];
         if (SNS_PLATFORMS.indexOf(formatId) === -1) {
           return Promise.resolve({ skipped: true });
         }

@@ -17,7 +17,7 @@
     { id: 'instagram',      label: 'Instagram' },
     { id: 'youtube',        label: 'YouTube',        comingSoon: true },
     { id: 'youtube-shorts', label: 'YouTube Shorts', comingSoon: true },
-    { id: 'tiktok',         label: 'TikTok',         comingSoon: true },
+    { id: 'tiktok',         label: 'TikTok' },
     { id: 'facebook',       label: 'Facebook',       comingSoon: true },
     { id: 'x-threads',      label: 'X / Threads',    comingSoon: true },
     { id: 'naver-blog',     label: '네이버 블로그',   comingSoon: true },

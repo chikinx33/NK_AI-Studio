@@ -149,6 +149,169 @@ async function loadSnsSettings(
   return await res.json();
 }
 
+// ── TikTok 헬퍼 ───────────────────────────────────────────────────────────
+
+async function refreshTikTokToken(opts: {
+  refreshToken: string;
+  clientKey: string;
+  clientSecret: string;
+}): Promise<{ accessToken: string; refreshToken: string; tokenExpiresAt: string; refreshExpiresAt: string }> {
+  const res = await fetch("https://open.tiktokapis.com/v2/oauth/token/", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_key: opts.clientKey,
+      client_secret: opts.clientSecret,
+      grant_type: "refresh_token",
+      refresh_token: opts.refreshToken,
+    }).toString(),
+  });
+  const data = (await res.json()) as {
+    access_token?: string;
+    refresh_token?: string;
+    expires_in?: number;
+    refresh_expires_in?: number;
+    error?: string;
+    error_description?: string;
+  };
+  if (!data.access_token) {
+    throw new Error(`TikTok 토큰 갱신 실패: ${data.error_description || data.error}`);
+  }
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || opts.refreshToken,
+    tokenExpiresAt: data.expires_in
+      ? new Date(Date.now() + data.expires_in * 1000).toISOString()
+      : new Date(Date.now() + 86400 * 1000).toISOString(),
+    refreshExpiresAt: data.refresh_expires_in
+      ? new Date(Date.now() + data.refresh_expires_in * 1000).toISOString()
+      : new Date(Date.now() + 365 * 86400 * 1000).toISOString(),
+  };
+}
+
+async function saveTikTokTokenPatch(opts: {
+  bucket: string;
+  objectName: string;
+  googleToken: string;
+  patch: Record<string, unknown>;
+}): Promise<void> {
+  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("/");
+  const readRes = await fetch(
+    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${encodedName}?alt=media`,
+    { headers: { Authorization: `Bearer ${opts.googleToken}` } }
+  );
+  let existing: any = { sns: {}, deployDefaults: {} };
+  if (readRes.ok) {
+    try { existing = await readRes.json(); } catch { /* keep default */ }
+  }
+  existing.sns = existing.sns || {};
+  existing.sns.tiktok = Object.assign({}, existing.sns.tiktok, opts.patch);
+  existing.updatedAt = new Date().toISOString();
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${encodedName}`;
+  const upRes = await fetch(uploadUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${opts.googleToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(existing),
+  });
+  if (!upRes.ok) throw new Error(`GCS save error: ${upRes.status}`);
+}
+
+async function waitForTikTokStatus(
+  accessToken: string,
+  publishId: string,
+  maxRetries = 10,
+  intervalMs = 3000
+): Promise<void> {
+  for (let i = 0; i < maxRetries; i++) {
+    await new Promise((r) => setTimeout(r, intervalMs));
+    const r = await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+      body: JSON.stringify({ publish_id: publishId }),
+    });
+    const d = (await r.json()) as { data?: { status?: string }; error?: { code?: string; message?: string } };
+    const status = d.data?.status;
+    console.log(`[tiktok] status poll ${i + 1}/${maxRetries}: ${status} (publish_id: ${publishId})`);
+    if (status === "PUBLISH_COMPLETE") return;
+    if (status === "FAILED") throw new Error(`TikTok 발행 실패 (publish_id: ${publishId})`);
+  }
+  throw new Error("TikTok 발행 상태 확인 시간 초과");
+}
+
+async function publishTikTokVideo(opts: {
+  accessToken: string;
+  caption: string;
+  videoUrl: string;
+}): Promise<{ publishId: string }> {
+  const { accessToken, caption, videoUrl } = opts;
+  console.log(`[tiktok] 영상 발행 시작 (pull_by_url): ${videoUrl.slice(0, 80)}...`);
+  const res = await fetch("https://open.tiktokapis.com/v2/post/publish/video/init/", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+    body: JSON.stringify({
+      post_info: {
+        title: caption,
+        privacy_level: "PUBLIC_TO_EVERYONE",
+        disable_duet: false,
+        disable_comment: false,
+        disable_stitch: false,
+        video_cover_timestamp_ms: 1000,
+      },
+      source_info: {
+        source: "PULL_FROM_URL",
+        video_url: videoUrl,
+      },
+    }),
+  });
+  const data = (await res.json()) as { data?: { publish_id?: string }; error?: { code?: string; message?: string } };
+  if (!data.data?.publish_id || data.error?.code !== "ok") {
+    throw new Error(`TikTok 영상 발행 초기화 실패: ${data.error?.message || JSON.stringify(data)}`);
+  }
+  const publishId = data.data.publish_id;
+  console.log(`[tiktok] 영상 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
+  await waitForTikTokStatus(accessToken, publishId);
+  console.log(`[tiktok] 영상 발행 완료: ${publishId}`);
+  return { publishId };
+}
+
+async function publishTikTokPhoto(opts: {
+  accessToken: string;
+  caption: string;
+  photoUrls: string[];
+}): Promise<{ publishId: string }> {
+  const { accessToken, caption, photoUrls } = opts;
+  console.log(`[tiktok] 이미지 발행 시작 (${photoUrls.length}장, photo_mode)`);
+  const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+    body: JSON.stringify({
+      post_info: {
+        title: caption,
+        privacy_level: "PUBLIC_TO_EVERYONE",
+        disable_comment: false,
+      },
+      source_info: {
+        source: "PULL_FROM_URL",
+        photo_images: photoUrls,
+        photo_cover_index: 0,
+      },
+      post_mode: "DIRECT_POST",
+      media_type: "PHOTO",
+    }),
+  });
+  const data = (await res.json()) as { data?: { publish_id?: string }; error?: { code?: string; message?: string } };
+  if (!data.data?.publish_id || data.error?.code !== "ok") {
+    throw new Error(`TikTok 이미지 발행 초기화 실패: ${data.error?.message || JSON.stringify(data)}`);
+  }
+  const publishId = data.data.publish_id;
+  console.log(`[tiktok] 이미지 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
+  await waitForTikTokStatus(accessToken, publishId);
+  console.log(`[tiktok] 이미지 발행 완료: ${publishId}`);
+  return { publishId };
+}
+
+// ── Instagram 헬퍼 ─────────────────────────────────────────────────────────
+
 async function waitForIgMedia(
   accessToken: string,
   mediaId: string,
@@ -360,10 +523,115 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       privateKeyPem: env.GOOGLE_PRIVATE_KEY,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
-    void googleToken;
 
     const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
     const bucket = outParsed.bucket;
+
+    if (platform === "tiktok") {
+      // TikTok 토큰을 GCS 사용자 설정에서 로드
+      const basePrefix = outParsed.object.replace(/\/$/, "");
+      const objectName = buildUserDataObject(basePrefix, auth.userId, "sns-settings.json");
+      const settings = await loadSnsSettings(bucket, objectName, googleToken);
+      const tiktokSettings = settings?.sns?.tiktok;
+      if (!tiktokSettings?.connected || !tiktokSettings?.accessToken) {
+        return send({ error: "TikTok 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 400);
+      }
+
+      let accessToken: string = tiktokSettings.accessToken;
+
+      // 만료 5분 전 자동 갱신
+      const expiresAt = tiktokSettings.tokenExpiresAt ? new Date(tiktokSettings.tokenExpiresAt).getTime() : 0;
+      if (expiresAt && Date.now() > expiresAt - 5 * 60 * 1000) {
+        if (!tiktokSettings.refreshToken) {
+          return send({ error: "TikTok 액세스 토큰이 만료되었습니다. SNS 설정에서 재연결해 주세요." }, 400);
+        }
+        console.log(`[tiktok] 액세스 토큰 만료 임박, 갱신 중...`);
+        const refreshed = await refreshTikTokToken({
+          refreshToken: tiktokSettings.refreshToken,
+          clientKey: env.TIKTOK_CLIENT_KEY,
+          clientSecret: env.TIKTOK_CLIENT_SECRET,
+        });
+        accessToken = refreshed.accessToken;
+        await saveTikTokTokenPatch({
+          bucket,
+          objectName,
+          googleToken,
+          patch: {
+            accessToken: refreshed.accessToken,
+            refreshToken: refreshed.refreshToken,
+            tokenExpiresAt: refreshed.tokenExpiresAt,
+            refreshExpiresAt: refreshed.refreshExpiresAt,
+          },
+        });
+        console.log(`[tiktok] 토큰 갱신 완료`);
+      }
+
+      const publishResults: { publishId: string; type: string }[] = [];
+
+      if (isCarousel) {
+        const rawItems = body.mediaItems!;
+        const videos = rawItems.filter((i) => i.mediaType === "video");
+        const images = rawItems.filter((i) => i.mediaType === "image");
+
+        // Case 3: 영상 먼저 발행
+        for (let i = 0; i < videos.length; i++) {
+          const v = videos[i];
+          const videoUrl = v.gcsPath
+            ? await buildSignedUrl(bucket, v.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600)
+            : v.mediaUrl!;
+          console.log(`[tiktok] 영상 ${i + 1}/${videos.length} 발행 중`);
+          const r = await publishTikTokVideo({ accessToken, caption, videoUrl });
+          publishResults.push({ publishId: r.publishId, type: "video" });
+        }
+
+        // Case 3: 이미지 별도 발행 (슬라이드쇼)
+        if (images.length > 0) {
+          const photoUrls: string[] = [];
+          for (const img of images) {
+            const url = img.gcsPath
+              ? await buildSignedUrl(bucket, img.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600)
+              : img.mediaUrl!;
+            photoUrls.push(url);
+          }
+          console.log(`[tiktok] 이미지 ${images.length}장 포토 모드 발행 중`);
+          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls });
+          publishResults.push({ publishId: r.publishId, type: "photo" });
+        }
+
+      } else {
+        const mediaType = body.mediaType!;
+        let mediaUrl: string;
+        if (body.mediaGcsPath) {
+          mediaUrl = await buildSignedUrl(bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+        } else if (body.mediaDirectUrl) {
+          mediaUrl = body.mediaDirectUrl;
+        } else {
+          return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+        }
+
+        if (mediaType === "video") {
+          // Case 1: 영상만
+          const r = await publishTikTokVideo({ accessToken, caption, videoUrl: mediaUrl });
+          publishResults.push({ publishId: r.publishId, type: "video" });
+        } else {
+          // Case 2: 이미지만 (단일)
+          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls: [mediaUrl] });
+          publishResults.push({ publishId: r.publishId, type: "photo" });
+        }
+      }
+
+      return send({
+        ok: true,
+        result: {
+          platform: "tiktok",
+          postId: publishResults[0]?.publishId,
+          username: tiktokSettings.username || "",
+          status: "published",
+          publishedAt: new Date().toISOString(),
+          publishResults,
+        },
+      });
+    }
 
     if (platform === "instagram") {
       const accessToken = env.IG_ACCESS_TOKEN;
