@@ -902,7 +902,9 @@
       return;
     }
 
-    var durationSec = Math.min(22, Math.max(3, Math.round((state.model && state.model.totalDuration) || 15)));
+    // Lyria 3 Pro 가 분 단위 BGM 을 지원하므로 상한을 240초(4분) 로 확장.
+    // 서버가 Lyria 실패 시 ElevenLabs 폴백(22초 한계) 으로 자동 전환하므로 클라이언트는 실제 영상 길이를 그대로 보낸다.
+    var durationSec = Math.min(240, Math.max(3, Math.round((state.model && state.model.totalDuration) || 15)));
 
     // 버튼 로딩 상태
     var genBtns = Array.from(document.querySelectorAll('[data-action="generate-music"]'));
@@ -960,12 +962,17 @@
       setDirty(true);
       post.render();
 
-      var truncNote = (state.model && state.model.totalDuration > 22)
-        ? (lang === 'en' ? ' · audio capped at 22s' : ' · 오디오 최대 22초') : '';
+      // 사용된 음악 생성 엔진 및 22초 클램프 안내 (ElevenLabs 폴백일 때만 적용).
+      var providerLabel = data.providerUsed === 'lyria-3-pro-preview'
+        ? 'Lyria 3 Pro'
+        : (data.providerUsed === 'elevenlabs' ? 'ElevenLabs (22s)' : (data.providerUsed || ''));
+      var truncNote = (data.providerUsed === 'elevenlabs' && state.model && state.model.totalDuration > 22)
+        ? (lang === 'en' ? ' · audio capped at 22s (fallback)' : ' · 폴백 엔진은 최대 22초') : '';
+      // musicPrompt 는 실제로 음악 AI 에 전달된 영문 지시문. 사용자가 결과 의도를 점검할 수 있도록 더 길게 노출.
+      var promptLine = data.musicPrompt ? ('\n[' + (providerLabel || 'engine') + '] ' + String(data.musicPrompt).slice(0, 240)) : '';
       showPostprodToast(
-        (lang === 'en' ? 'Music added to M1 track' : '음악이 M1 트랙에 추가됐습니다') + truncNote +
-        '\n' + (data.musicPrompt ? data.musicPrompt.slice(0, 80) : ''),
-        6000
+        (lang === 'en' ? 'Music added to M1 track' : '음악이 M1 트랙에 추가됐습니다') + truncNote + promptLine,
+        8000
       );
     } catch (err) {
       showPostprodToast((lang === 'en' ? 'Music generation failed: ' : '음악 생성 실패: ') + String((err && err.message) || err).slice(0, 120), 5000);

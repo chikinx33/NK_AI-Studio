@@ -30,14 +30,73 @@ const send = (data: any, status = 200, origin?: string | null) =>
 
 const MUSIC_FALLBACK = "cinematic orchestral background music, moderate tempo, emotional strings, subtle percussion";
 
-const MUSIC_SYSTEM_INSTRUCTION =
-  "You are a professional music supervisor for video production. " +
-  "Write a concise English background music description for an AI audio generator. " +
-  "Include: genre/style, tempo (slow/moderate/upbeat/fast), mood/emotion, and key instruments. " +
-  "Under 50 words. English only. Output ONLY the description. No quotes, no explanation.";
+// 영상 장르(시청 카테고리)를 음악 장르 힌트로 변환하는 사전 매핑표.
+// 영상 장르명("브이로그", "광고" 등)은 음악 장르로 그대로 던지면 AI 가 어색한 결과를 내므로
+// 음악적으로 의미 있는 표현으로 사전 번역해두고, Gemini 분석 결과가 비어있을 때 폴백으로 쓴다.
+// key 는 소문자·공백제거 정규화된 한국어/영어 키. 매칭은 부분 포함 우선으로 시도한다.
+const VIDEO_TO_MUSIC_GENRE_MAP: Record<string, string> = {
+  // 시청 카테고리 (purposeCategory)
+  "광고": "upbeat corporate pop with bright synths",
+  "브이로그": "indie acoustic lo-fi, warm guitars",
+  "vlog": "indie acoustic lo-fi, warm guitars",
+  "드라마": "cinematic orchestral, emotional strings",
+  "다큐": "ambient piano cinematic underscore",
+  "예능": "playful upbeat pop",
+  "교육": "warm instrumental folk, light piano",
+  "키즈": "cheerful playful orchestral, glockenspiel",
+  "뉴스": "tense corporate underscore",
+  "스포츠": "energetic rock, driving drums",
+  "음악": "instrumental cinematic",
+  "라이프": "indie acoustic lo-fi, warm guitars",
+  "일상": "indie acoustic lo-fi, warm guitars",
+  // 세부 태그 (purposeTags)
+  "리뷰": "modern minimal electronic underscore",
+  "튜토리얼": "light corporate, bright marimba",
+  "인터뷰": "warm ambient piano",
+  "홍보": "upbeat corporate pop",
+  "쇼츠": "energetic punchy electronic",
+  "단편": "cinematic underscore",
+  "감성": "warm ambient piano with soft strings",
+  "여행": "uplifting acoustic with ukulele and percussion",
+  "요리": "playful jazzy underscore",
+  "ASMR": "ambient drones, soft textures",
+  "호러": "tense ambient drones with dissonant strings",
+  "코미디": "playful jazzy bouncy",
+};
+
+const ANALYSIS_INSTRUCTION =
+  "You are a music supervisor analyzing a short-form video project to plan its background score. " +
+  "Read the provided overview and reply with ONLY a JSON object — no markdown, no prose. Schema: " +
+  '{"mood": "<one keyword: warm | calm | tense | melancholic | uplifting | mysterious | energetic | playful | epic | nostalgic>",' +
+  '"pace": "<one keyword: slow | moderate | upbeat | fast>",' +
+  '"intensity": "<one keyword: minimal | gentle | balanced | driving | intense>",' +
+  '"musicGenre": "<concrete music genre suited as instrumental BGM, English, 2-6 words>",' +
+  '"instruments": ["<2-4 key instruments in English>"]}.' +
+  " The genre must be a MUSIC genre (e.g., \"cinematic orchestral\", \"indie acoustic lo-fi\"), NOT a video genre.";
 
 function isEnglish(text: string): boolean {
   return !!text && /[a-zA-Z]{3,}/.test(text);
+}
+
+function normalizeKey(s: string): string {
+  return String(s || "").toLowerCase().replace(/\s+/g, "").trim();
+}
+
+function lookupGenreMap(...candidates: string[]): string {
+  for (const cand of candidates) {
+    const key = normalizeKey(cand);
+    if (!key) continue;
+    // 완전 일치 우선
+    if (VIDEO_TO_MUSIC_GENRE_MAP[cand]) return VIDEO_TO_MUSIC_GENRE_MAP[cand];
+    // 부분 일치 (예: "라이프·일상" → "라이프" 포함)
+    for (const k of Object.keys(VIDEO_TO_MUSIC_GENRE_MAP)) {
+      if (normalizeKey(k) === key) return VIDEO_TO_MUSIC_GENRE_MAP[k];
+    }
+    for (const k of Object.keys(VIDEO_TO_MUSIC_GENRE_MAP)) {
+      if (cand.indexOf(k) !== -1) return VIDEO_TO_MUSIC_GENRE_MAP[k];
+    }
+  }
+  return "";
 }
 
 async function callGemini(apiKey: string, body: object): Promise<string> {
@@ -52,7 +111,16 @@ async function callGemini(apiKey: string, body: object): Promise<string> {
   return String(json?.candidates?.[0]?.content?.parts?.[0]?.text || "").trim();
 }
 
-async function buildMusicPrompt(
+interface MusicAnalysis {
+  mood: string;
+  pace: string;
+  intensity: string;
+  musicGenre: string;
+  instruments: string[];
+}
+
+// 1단계: Gemini 가 영상 개요를 분석해 음악 키워드(JSON)를 추출.
+async function analyzeVideoForMusic(
   apiKey: string,
   topic: string,
   story: string,
@@ -60,31 +128,115 @@ async function buildMusicPrompt(
   subgenre: string,
   styles: string[],
   tones: string[]
-): Promise<string> {
+): Promise<MusicAnalysis | null> {
   const parts: string[] = [];
   if (topic) parts.push(`Topic: ${topic}`);
-  if (genre || subgenre) parts.push(`Genre: ${[genre, subgenre].filter(Boolean).join(" / ")}`);
-  if (styles.length) parts.push(`Style: ${styles.join(", ")}`);
-  if (tones.length) parts.push(`Mood/Tone: ${tones.join(", ")}`);
-  if (story) parts.push(`Story: ${story.slice(0, 300)}`);
+  if (genre || subgenre) parts.push(`Video genre: ${[genre, subgenre].filter(Boolean).join(" / ")}`);
+  if (styles.length) parts.push(`Visual style: ${styles.join(", ")}`);
+  if (tones.length) parts.push(`Overall tone: ${tones.join(", ")}`);
+  if (story) parts.push(`Story: ${story.slice(0, 600)}`);
+  if (!parts.length) return null;
 
-  if (!parts.length) return MUSIC_FALLBACK;
-
-  const userMsg =
-    `Video project overview:\n${parts.join("\n")}\n\n` +
-    `Write a background music description that fits this video.`;
-
+  const userMsg = `Analyze this short-form video project for background music planning:\n${parts.join("\n")}`;
+  const body = {
+    systemInstruction: { parts: [{ text: ANALYSIS_INSTRUCTION }] },
+    contents: [{ role: "user", parts: [{ text: userMsg }] }],
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: 250,
+      responseMimeType: "application/json",
+    },
+  };
   try {
-    const body = {
-      systemInstruction: { parts: [{ text: MUSIC_SYSTEM_INSTRUCTION }] },
-      contents: [{ role: "user", parts: [{ text: userMsg }] }],
-      generationConfig: { temperature: 0.7, maxOutputTokens: 100 },
-    };
     const text = await callGemini(apiKey, body);
-    if (isEnglish(text)) return text;
-    return MUSIC_FALLBACK;
+    if (!text) return null;
+    const parsed = JSON.parse(text);
+    return {
+      mood: String(parsed.mood || "").trim(),
+      pace: String(parsed.pace || "").trim(),
+      intensity: String(parsed.intensity || "").trim(),
+      musicGenre: String(parsed.musicGenre || "").trim(),
+      instruments: Array.isArray(parsed.instruments)
+        ? parsed.instruments.map((v: any) => String(v || "").trim()).filter(Boolean).slice(0, 4)
+        : [],
+    };
   } catch {
-    return MUSIC_FALLBACK;
+    return null;
+  }
+}
+
+// 2단계: 분석 결과 + 영상→음악 장르 매핑표 + 길이를 합쳐 최종 음악 생성 프롬프트 조립.
+// Lyria 3 는 별도 duration 필드가 없어 프롬프트 텍스트에 길이를 명시한다.
+function assembleMusicPrompt(
+  analysis: MusicAnalysis | null,
+  genre: string,
+  subgenre: string,
+  tones: string[],
+  durationSec: number
+): string {
+  const mappedGenre = lookupGenreMap(subgenre, genre);
+  const musicGenre = (analysis && analysis.musicGenre) || mappedGenre || "cinematic instrumental underscore";
+  const lines: string[] = [];
+  // 길이는 첫 줄에 강하게 명시 (Lyria 3 가 프롬프트의 시간 지시를 받아 길이를 제어)
+  lines.push(`Create a ${Math.max(3, Math.round(durationSec))}-second instrumental background music track.`);
+  lines.push(`Genre: ${musicGenre}.`);
+  if (analysis) {
+    if (analysis.mood) lines.push(`Mood: ${analysis.mood}.`);
+    if (analysis.pace) lines.push(`Tempo: ${analysis.pace}.`);
+    if (analysis.intensity) lines.push(`Intensity: ${analysis.intensity}.`);
+    if (analysis.instruments && analysis.instruments.length) {
+      lines.push(`Featured instruments: ${analysis.instruments.join(", ")}.`);
+    }
+  } else if (tones.length) {
+    lines.push(`Mood: ${tones.join(", ")}.`);
+  }
+  lines.push("No vocals, no lyrics, no spoken word. Instrumental only. Loopable.");
+  return lines.join(" ");
+}
+
+// Cloudflare Workers V8 isolate 에서 큰 base64 를 1바이트씩 디코딩하면 O(n²) 가 되어 CPU 한도를 넘긴다.
+// 청크 단위로 디코딩 후 Uint8Array 로 합친다.
+function base64ToBytes(b64: string): Uint8Array {
+  const clean = String(b64 || "").replace(/\s+/g, "");
+  if (!clean) return new Uint8Array(0);
+  const bin = atob(clean);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+// Lyria 3 Pro 로 BGM 생성. preview 단계라 막혀있거나 실패하면 null 반환 → 상위에서 ElevenLabs 로 폴백.
+async function generateLyriaMusic(
+  apiKey: string,
+  prompt: string
+): Promise<{ bytes: Uint8Array; mimeType: string } | null> {
+  try {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/lyria-3-pro-preview:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const body = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseModalities: ["AUDIO", "TEXT"],
+        responseFormat: { audio: { mimeType: "audio/mp3" } },
+      },
+    };
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const parts = json?.candidates?.[0]?.content?.parts || [];
+    for (const p of parts) {
+      const inline = (p && (p.inlineData || p.inline_data)) || null;
+      if (inline && inline.data) {
+        const mime = String(inline.mimeType || inline.mime_type || "audio/mp3");
+        return { bytes: base64ToBytes(String(inline.data)), mimeType: mime };
+      }
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 
@@ -215,14 +367,18 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const subgenre  = String(body.subgenre || "").trim();
     const styles: string[]  = Array.isArray(body.styles)  ? body.styles.map(String).filter(Boolean)  : [];
     const tones: string[]   = Array.isArray(body.tones)   ? body.tones.map(String).filter(Boolean)   : [];
-    const durationSec = Math.min(22, Math.max(3, Number(body.durationSec) || 15));
+    // 재생 길이: Lyria 3 Pro 가 분 단위를 지원하므로 상한을 240초(4분)로 확장.
+    // ElevenLabs 폴백 경로에서는 22초로 다시 클램프된다.
+    const durationSec = Math.min(240, Math.max(3, Number(body.durationSec) || 15));
 
     if (!projectId) return send({ error: "projectId required" }, 400, origin);
 
     const elevenLabsKey = String(env.ELEVENLABS_API_KEY || "").trim();
-    if (!elevenLabsKey) return send({ error: "ELEVENLABS_API_KEY not configured" }, 500, origin);
-
     const googleApiKey  = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
+    if (!elevenLabsKey && !googleApiKey) {
+      return send({ error: "No music provider configured (need GEMINI_API_KEY or ELEVENLABS_API_KEY)" }, 500, origin);
+    }
+
     const clientEmail   = String(env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL || "").trim();
     const privateKey    = String(env.TTS_GOOGLE_PRIVATE_KEY  || env.GOOGLE_PRIVATE_KEY  || "").trim();
     const baseOutput    = String(env.AUDIO_OUTPUT_GCS_URI    || env.VIDEO_OUTPUT_GCS_URI || "").trim();
@@ -233,20 +389,72 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const outParsed = parseGcsUri(baseOutput);
     if (!outParsed) return send({ error: "Invalid AUDIO_OUTPUT_GCS_URI" }, 500, origin);
 
-    // Step 1: Gemini로 음악 프롬프트 생성
-    let musicPrompt = MUSIC_FALLBACK;
+    // Step 1: 영상 개요 분석 → 음악 키워드(JSON) 추출 (Gemini)
+    let analysis: MusicAnalysis | null = null;
     if (googleApiKey) {
-      musicPrompt = await buildMusicPrompt(googleApiKey, topic, story, genre, subgenre, styles, tones);
+      analysis = await analyzeVideoForMusic(googleApiKey, topic, story, genre, subgenre, styles, tones);
+    }
+    // Step 2: 분석 결과 + 영상→음악 장르 매핑표 + 길이로 최종 프롬프트 조립
+    const musicPrompt = (analysis || tones.length || genre || subgenre)
+      ? assembleMusicPrompt(analysis, genre, subgenre, tones, durationSec)
+      : MUSIC_FALLBACK;
+
+    // Step 3: 음악 생성 — Lyria 3 Pro 우선, 실패 시 ElevenLabs 폴백
+    let audioBytes: Uint8Array | null = null;
+    let audioMimeType = "audio/mpeg";
+    let providerUsed = "";
+    let providerFallbackReason = "";
+
+    if (googleApiKey) {
+      const lyria = await generateLyriaMusic(googleApiKey, musicPrompt);
+      if (lyria && lyria.bytes && lyria.bytes.length > 0) {
+        audioBytes = lyria.bytes;
+        audioMimeType = lyria.mimeType || "audio/mp3";
+        providerUsed = "lyria-3-pro-preview";
+      } else {
+        providerFallbackReason = "lyria_unavailable_or_failed";
+      }
     }
 
-    // Step 2: ElevenLabs로 음악 생성
-    const audioBytes = await generateElevenLabsMusic(elevenLabsKey, musicPrompt, durationSec);
+    if (!audioBytes) {
+      if (!elevenLabsKey) {
+        return send({
+          error: "music_generation_failed",
+          detail: providerFallbackReason || "lyria_unavailable_and_no_elevenlabs_key",
+          musicPrompt,
+        }, 502, origin);
+      }
+      // ElevenLabs 는 22초가 한계라 별도로 클램프.
+      const fallbackDur = Math.min(22, Math.max(3, durationSec));
+      audioBytes = await generateElevenLabsMusic(elevenLabsKey, musicPrompt, fallbackDur);
+      audioMimeType = "audio/mpeg";
+      providerUsed = "elevenlabs";
+    }
 
-    // Step 3: GCS 업로드
+    if (!audioBytes || audioBytes.length === 0) {
+      return send({ error: "music_generation_returned_empty", musicPrompt, providerUsed }, 502, origin);
+    }
+
+    // Step 4: GCS 업로드 — mp3 / wav 응답을 따라 확장자·Content-Type 결정
+    const isWav = /wav/i.test(audioMimeType);
+    const extension = isWav ? "wav" : "mp3";
+    const uploadContentType = isWav ? "audio/wav" : "audio/mpeg";
+
     const userId = String(auth.userId || "").trim() || "owner";
     const basePrefix = outParsed.object.replace(/\/$/, "");
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
-    const objName = `${projectPrefix}/music/bgm-${Date.now()}.mp3`;
+    const objName = `${projectPrefix}/music/bgm-${Date.now()}.${extension}`;
+
+    // base64 인코딩은 큰 버퍼에서 O(n²) 가 되므로 청크 단위로.
+    const bytesToBase64 = (bytes: Uint8Array): string => {
+      const CHUNK = 0x8000;
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += CHUNK) {
+        const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+        bin += String.fromCharCode.apply(null, slice as unknown as number[]);
+      }
+      return btoa(bin);
+    };
 
     const userProject = String(env.GCS_BILLING_PROJECT_ID || env.GOOGLE_PROJECT_ID || "").trim();
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKey, scope: "https://www.googleapis.com/auth/cloud-platform" });
@@ -255,27 +463,50 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "audio/mpeg",
+        "Content-Type": uploadContentType,
         ...(userProject ? { "X-Goog-User-Project": userProject } : {}),
       },
       body: audioBytes,
     });
     if (!upRes.ok) {
-      const b64 = btoa(String.fromCharCode(...audioBytes));
-      return send({ musicUrl: `data:audio/mpeg;base64,${b64}`, objectName: objName, musicPrompt, durationGenerated: durationSec, warning: "upload_failed" }, 200, origin);
+      const b64 = bytesToBase64(audioBytes);
+      return send({
+        musicUrl: `data:${uploadContentType};base64,${b64}`,
+        objectName: objName,
+        musicPrompt,
+        durationGenerated: durationSec,
+        providerUsed,
+        analysis: analysis || undefined,
+        warning: "upload_failed",
+      }, 200, origin);
     }
 
-    // Step 4: 서명 URL 생성
+    // Step 5: 서명 URL 생성
     let signedUrl: string | null = null;
     try {
       signedUrl = await signGcsUrl({ bucket: outParsed.bucket, object: objName, clientEmail, privateKeyPem: privateKey, expiresInSec: 3600 });
     } catch (_) {}
 
     if (signedUrl) {
-      return send({ musicUrl: signedUrl, objectName: objName, musicPrompt, durationGenerated: durationSec }, 200, origin);
+      return send({
+        musicUrl: signedUrl,
+        objectName: objName,
+        musicPrompt,
+        durationGenerated: durationSec,
+        providerUsed,
+        analysis: analysis || undefined,
+      }, 200, origin);
     }
-    const b64 = btoa(String.fromCharCode(...audioBytes));
-    return send({ musicUrl: `data:audio/mpeg;base64,${b64}`, objectName: objName, musicPrompt, durationGenerated: durationSec, warning: "sign_failed" }, 200, origin);
+    const b64 = bytesToBase64(audioBytes);
+    return send({
+      musicUrl: `data:${uploadContentType};base64,${b64}`,
+      objectName: objName,
+      musicPrompt,
+      durationGenerated: durationSec,
+      providerUsed,
+      analysis: analysis || undefined,
+      warning: "sign_failed",
+    }, 200, origin);
 
   } catch (e: any) {
     return send({ error: String(e?.message || e || "music_error") }, 500, origin);
