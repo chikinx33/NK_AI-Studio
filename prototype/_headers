@@ -1,0 +1,27 @@
+# Cloudflare Pages cache rules
+# 목표: 코드 변경(JS/CSS/HTML)이 cross-device로 즉시 전파되도록 보장.
+# 동일 계정 = 동일 환경 원칙을 깨지 않으려면 stale JS가 디바이스마다 다른 동작을 만드는 일을 막아야 함.
+
+# HTML: 항상 서버에서 최신 확인 (참조하는 JS/CSS 변경을 빨리 잡아내기 위해)
+/*.html
+  Cache-Control: no-cache, must-revalidate
+
+/
+  Cache-Control: no-cache, must-revalidate
+
+# JS/CSS: 짧은 캐시 + 반드시 revalidate (최대 60초 stale)
+/*.js
+  Cache-Control: public, max-age=60, must-revalidate
+
+/*.css
+  Cache-Control: public, max-age=60, must-revalidate
+
+# 이미지·폰트 등 정적 자산은 길게 캐시 가능 (해시 없는 경로지만 거의 안 바뀜)
+/*.png
+  Cache-Control: public, max-age=3600
+/*.jpg
+  Cache-Control: public, max-age=3600
+/*.svg
+  Cache-Control: public, max-age=3600
+/*.woff2
+  Cache-Control: public, max-age=86400

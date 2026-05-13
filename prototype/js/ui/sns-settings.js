@@ -154,32 +154,24 @@
   }
 
   function _mergeSnsState(serverSns, cachedSns) {
-    // cache가 connected인데 server가 disconnected면 cache 우선 (GCS 404 폴백 방어)
+    // 원칙: 동일 계정이면 어디서 로그인하든 동일한 환경. → 서버가 응답한 값이 source of truth.
+    // 캐시는 서버 fetch 자체가 실패한 경우(loadSettings catch 분기)에만 폴백으로 사용된다.
+    // 과거 'cache가 connected인데 server가 disconnected면 cache 우선' 룰은
+    // cross-device 동기화를 깨뜨리는 원인이라 제거함.
     var out = {};
     var keys = ['instagram', 'youtube', 'tiktok', 'facebook', 'x-threads',
                 'youtube-shorts', 'naver-blog', 'naver-post', 'kakao', 'band', 'linkedin', 'pinterest'];
     var allKeys = {};
     keys.forEach(function (k) { allKeys[k] = true; });
     Object.keys(serverSns || {}).forEach(function (k) { allKeys[k] = true; });
-    Object.keys(cachedSns || {}).forEach(function (k) { allKeys[k] = true; });
 
     Object.keys(allKeys).forEach(function (p) {
       var srv = (serverSns && serverSns[p]) || null;
-      var cch = (cachedSns && cachedSns[p]) || null;
-      var merged;
-      if (cch && cch.connected && (!srv || !srv.connected)) {
-        merged = Object.assign({}, srv || {}, cch);
-      } else if (srv) {
-        merged = srv;
-      } else if (cch) {
-        merged = cch;
-      } else {
-        merged = { connected: false };
-      }
+      var merged = srv ? Object.assign({}, srv) : { connected: false };
       // 하위 호환: enabled 필드가 없던 기존 데이터는 connected 값으로 채움
       // (예전엔 연결 = 사용을 의미했으므로 그대로 사용 중으로 간주)
       if (merged.connected && typeof merged.enabled !== 'boolean') {
-        merged = Object.assign({}, merged, { enabled: true });
+        merged.enabled = true;
       }
       out[p] = merged;
     });
