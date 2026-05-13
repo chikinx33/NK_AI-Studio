@@ -276,26 +276,21 @@
     var result = evt.data.result;
     var platform = evt.data.platform;
     if (result && result.ok) {
-      // OAuth 콜백이 GCS에 accessToken을 포함한 전체 상태를 저장했으므로
-      // saveSettings()로 덮어쓰면 accessToken이 누락될 수 있음.
-      // 대신 loadSettings()로 서버의 최신 상태를 그대로 가져온다.
-      loadSettings().then(function () {
-        _writeCache(_settings.sns);
-        render();
-        alert(T[_lang()].connectOk(platform, result.username || ''));
-      }).catch(function () {
-        // 서버 로드 실패 시 로컬 캐시로 폴백
-        _settings = _settings || {};
-        _settings.sns = _settings.sns || {};
-        _settings.sns[platform] = Object.assign({}, _settings.sns[platform], {
-          connected: true,
-          enabled: true,
-          username: result.username || '',
-        });
-        _writeCache(_settings.sns);
-        render();
-        alert(T[_lang()].connectOk(platform, result.username || ''));
+      // 즉시 로컬 상태 업데이트 → UI 바로 반영
+      _settings = _settings || {};
+      _settings.sns = _settings.sns || {};
+      _settings.sns[platform] = Object.assign({}, _settings.sns[platform], {
+        connected: true,
+        enabled: true,
+        username: result.username || '',
       });
+      _writeCache(_settings.sns);
+      render();
+      alert(T[_lang()].connectOk(platform, result.username || ''));
+      // saveSettings() 제거: 콜백이 GCS에 accessToken 포함하여 이미 저장 완료.
+      // saveSettings() 호출 시 read-modify-write 타이밍에 따라 accessToken이
+      // 누락된 상태로 덮어쓸 수 있음. 백그라운드 loadSettings()로만 동기화.
+      loadSettings().then(function () { render(); }).catch(function () {});
     } else {
       alert(T[_lang()].connectFail(platform, result && result.error ? result.error : t('unknownErr')));
     }
