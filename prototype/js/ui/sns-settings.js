@@ -276,19 +276,26 @@
     var result = evt.data.result;
     var platform = evt.data.platform;
     if (result && result.ok) {
-      // 즉시 로컬 상태 업데이트 → 토글 바로 반영
-      _settings = _settings || {};
-      _settings.sns = _settings.sns || {};
-      _settings.sns[platform] = Object.assign({}, _settings.sns[platform], {
-        connected: true,
-        enabled: true, // 첫 연결 시 기본 사용 ON
-        username: result.username || '',
+      // OAuth 콜백이 GCS에 accessToken을 포함한 전체 상태를 저장했으므로
+      // saveSettings()로 덮어쓰면 accessToken이 누락될 수 있음.
+      // 대신 loadSettings()로 서버의 최신 상태를 그대로 가져온다.
+      loadSettings().then(function () {
+        _writeCache(_settings.sns);
+        render();
+        alert(T[_lang()].connectOk(platform, result.username || ''));
+      }).catch(function () {
+        // 서버 로드 실패 시 로컬 캐시로 폴백
+        _settings = _settings || {};
+        _settings.sns = _settings.sns || {};
+        _settings.sns[platform] = Object.assign({}, _settings.sns[platform], {
+          connected: true,
+          enabled: true,
+          username: result.username || '',
+        });
+        _writeCache(_settings.sns);
+        render();
+        alert(T[_lang()].connectOk(platform, result.username || ''));
       });
-      _writeCache(_settings.sns); // 새로고침 후 복원용 캐시 저장
-      render();
-      // 클라이언트 save 엔드포인트로 명시적 저장 (새로고침 후 유지)
-      saveSettings().catch(function () {});
-      alert(T[_lang()].connectOk(platform, result.username || ''));
     } else {
       alert(T[_lang()].connectFail(platform, result && result.error ? result.error : t('unknownErr')));
     }
