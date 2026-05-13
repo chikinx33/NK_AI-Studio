@@ -3829,6 +3829,15 @@
         renderEmpty(root, _initIsEn ? 'An error occurred while rendering Brand Studio.' : 'Brand Studio 렌더링 중 오류가 발생했습니다.');
       }
     }
+    // 최초 렌더 후 fresh 데이터가 도착했을 때 강제 리렌더
+    // (느린 네트워크에서 safety 타임아웃이 먼저 발사되어 stale 데이터로 그려진 경우 대비)
+    function forceRerender() {
+      if (!initDone || !root.isConnected) return;
+      try {
+        var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || latestProject;
+        renderProject(root, freshProject, latestBrand);
+      } catch (_) {}
+    }
 
     // ② 비동기 작업 병렬 실행 — 결과만 수집, 렌더는 완료 후 딱 한 번
     var promises = [];
@@ -3838,6 +3847,8 @@
     var refreshProjectPromise = (async function () {
       try {
         if (!NK.api || !NK.api.projectGet || !initProjectId) return;
+        var prevPayloadJson = '';
+        try { prevPayloadJson = JSON.stringify((latestProject && latestProject.payload) || {}); } catch (_) {}
         var res = await NK.api.projectGet(initProjectId);
         var data = (res && res.data) ? res.data : res;
         if (!data || (!data.scenes && !data.payload)) return;
@@ -3852,7 +3863,15 @@
             scenes: srvScenes.length ? srvScenes : curScenes
           });
         }, { forceCurrent: true });
-        if (updated && root.isConnected) latestProject = updated;
+        if (updated && root.isConnected) {
+          latestProject = updated;
+          // safety 타임아웃이 먼저 발사되어 stale 렌더가 끝난 상태라면, 페이로드 변경 시 강제 리렌더
+          if (initDone) {
+            var nextPayloadJson = '';
+            try { nextPayloadJson = JSON.stringify(updated.payload || {}); } catch (_) {}
+            if (nextPayloadJson && nextPayloadJson !== prevPayloadJson) forceRerender();
+          }
+        }
       } catch (_) {}
     })();
     promises.push(refreshProjectPromise);
@@ -3899,8 +3918,10 @@
       );
     }
 
-    // ③ 안전 타이머 — 최대 2.5초 후 강제 렌더 (느린 API 대비)
-    var safetyTimer = setTimeout(function () { doFinalRender(); }, 2500);
+    // ③ 안전 타이머 — 최대 4초 후 강제 렌더 (느린 API 대비)
+    // (느린 네트워크에서 projectGet이 2.5초 안에 못 돌아오면 stale 데이터로 그려지는 문제 완화;
+    //  더 늦게 도착해도 forceRerender가 강제 갱신)
+    var safetyTimer = setTimeout(function () { doFinalRender(); }, 4000);
 
     // ④ 모든 비동기 완료 → 단일 렌더
     (promises.length ? Promise.all(promises) : Promise.resolve())
