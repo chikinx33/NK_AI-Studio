@@ -61,11 +61,19 @@ async function saveTokenToGcs(opts: {
   patch: Record<string, unknown>;
   googleToken: string;
 }): Promise<void> {
-  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("/");
+  // %2F-encode slashes in the URL path component (GCS REST API spec)
+  const pathEncoded = opts.objectName.split("/").map(encodeURIComponent).join("%2F");
+  // For the query-parameter `name`, GCS also accepts %2F-encoded slashes
+  const nameEncoded = opts.objectName.split("/").map(encodeURIComponent).join("%2F");
+
+  console.log("[tiktok callback] saveTokenToGcs bucket:", opts.bucket, "objectName:", opts.objectName);
+
   const readRes = await fetch(
-    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${encodedName}?alt=media`,
+    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${pathEncoded}?alt=media`,
     { headers: { Authorization: `Bearer ${opts.googleToken}` } }
   );
+  console.log("[tiktok callback] GCS read status:", readRes.status);
+
   let existing: any = {
     sns: { instagram: { connected: false }, youtube: { connected: false }, tiktok: { connected: false } },
     deployDefaults: {},
@@ -78,7 +86,7 @@ async function saveTokenToGcs(opts: {
   existing.sns.tiktok = Object.assign({}, existing.sns.tiktok, opts.patch);
   existing.updatedAt = new Date().toISOString();
 
-  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${encodedName}`;
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${nameEncoded}`;
   const upRes = await fetch(uploadUrl, {
     method: "POST",
     headers: {
@@ -87,7 +95,21 @@ async function saveTokenToGcs(opts: {
     },
     body: JSON.stringify(existing),
   });
-  if (!upRes.ok) throw new Error(`GCS save error: ${upRes.status}`);
+  if (!upRes.ok) {
+    const errText = await upRes.text();
+    throw new Error(`GCS save error: ${upRes.status} ${errText}`);
+  }
+  console.log("[tiktok callback] GCS write OK:", upRes.status);
+
+  // Verify the file is readable after write (catches silent failures)
+  const verifyRes = await fetch(
+    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${pathEncoded}?alt=media`,
+    { headers: { Authorization: `Bearer ${opts.googleToken}` } }
+  );
+  console.log("[tiktok callback] GCS verify read status:", verifyRes.status);
+  if (!verifyRes.ok) {
+    throw new Error(`GCS verify failed: ${verifyRes.status} — file written but not readable`);
+  }
 }
 
 function popupHtml(result: { ok: boolean; username?: string; error?: string }) {

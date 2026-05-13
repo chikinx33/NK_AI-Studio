@@ -79,7 +79,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   const bucket = outParsed.bucket;
   const basePrefix = outParsed.object.replace(/\/$/, "");
   const objectName = buildUserDataObject(basePrefix, userId, "sns-settings.json");
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
+  const encodedName = objectName.split("/").map(encodeURIComponent).join("%2F");
+  console.log("[sns/save] bucket:", bucket, "objectName:", objectName, "userId:", userId);
 
   try {
     const token = await getGoogleAccessToken({

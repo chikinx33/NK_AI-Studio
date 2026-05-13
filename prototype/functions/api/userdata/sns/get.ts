@@ -72,7 +72,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const bucket = outParsed.bucket;
   const basePrefix = outParsed.object.replace(/\/$/, "");
   const objectName = buildUserDataObject(basePrefix, userId, "sns-settings.json");
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
+  const encodedName = objectName.split("/").map(encodeURIComponent).join("%2F");
+  console.log("[sns/get] bucket:", bucket, "objectName:", objectName, "userId:", userId);
 
   try {
     const token = await getGoogleAccessToken({
@@ -85,6 +86,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
+    console.log("[sns/get] GCS read status:", gcsRes.status);
 
     if (gcsRes.status === 404) {
       // 파일 없음(신규 사용자 또는 일시적 GCS 누락) — 가짜 'disconnected' 기본값을

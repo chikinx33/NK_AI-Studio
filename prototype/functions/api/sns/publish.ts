@@ -139,7 +139,7 @@ async function loadSnsSettings(
   objectName: string,
   googleToken: string
 ): Promise<any> {
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
+  const encodedName = objectName.split("/").map(encodeURIComponent).join("%2F");
   const res = await fetch(
     `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
     { headers: { Authorization: `Bearer ${googleToken}` } }
@@ -195,7 +195,7 @@ async function saveTikTokTokenPatch(opts: {
   googleToken: string;
   patch: Record<string, unknown>;
 }): Promise<void> {
-  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("/");
+  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("%2F");
   const readRes = await fetch(
     `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${encodedName}?alt=media`,
     { headers: { Authorization: `Bearer ${opts.googleToken}` } }
@@ -207,7 +207,7 @@ async function saveTikTokTokenPatch(opts: {
   existing.sns = existing.sns || {};
   existing.sns.tiktok = Object.assign({}, existing.sns.tiktok, opts.patch);
   existing.updatedAt = new Date().toISOString();
-  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${encodedName}`;
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${opts.objectName.split("/").map(encodeURIComponent).join("%2F")}`;
   const upRes = await fetch(uploadUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${opts.googleToken}`, "Content-Type": "application/json" },
@@ -531,8 +531,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       // TikTok 토큰을 GCS 사용자 설정에서 로드
       const basePrefix = outParsed.object.replace(/\/$/, "");
       const objectName = buildUserDataObject(basePrefix, auth.userId, "sns-settings.json");
+      console.log("[sns/publish] tiktok: bucket:", bucket, "objectName:", objectName, "userId:", auth.userId);
       const settings = await loadSnsSettings(bucket, objectName, googleToken);
       const tiktokSettings = settings?.sns?.tiktok;
+      console.log("[sns/publish] tiktokSettings found:", !!tiktokSettings, "connected:", tiktokSettings?.connected, "hasToken:", !!tiktokSettings?.accessToken);
       if (!tiktokSettings?.connected || !tiktokSettings?.accessToken) {
         return send({ error: "TikTok 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 400);
       }
