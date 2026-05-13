@@ -3774,6 +3774,30 @@
     // ② 비동기 작업 병렬 실행 — 결과만 수집, 렌더는 완료 후 딱 한 번
     var promises = [];
 
+    // 다중 기기 동기화: 서버에서 최신 프로젝트 페이로드 로드
+    // (학원에서 저장한 brandStudio* 필드가 집에서도 보이도록)
+    var refreshProjectPromise = (async function () {
+      try {
+        if (!NK.api || !NK.api.projectGet || !initProjectId) return;
+        var res = await NK.api.projectGet(initProjectId);
+        var data = (res && res.data) ? res.data : res;
+        if (!data || (!data.scenes && !data.payload)) return;
+        var updated = NK.service.project.updateLocal(initProjectId, function (cur) {
+          var curScenes = Array.isArray(cur && cur.scenes) ? cur.scenes : [];
+          var srvScenes = Array.isArray(data.scenes) ? data.scenes : [];
+          return Object.assign({}, cur || {}, {
+            title: data.title || (cur && cur.title) || '',
+            header: data.header || (cur && cur.header) || '',
+            aspectRatio: (data.aspectRatio || (data.payload && data.payload.aspectRatio) || (cur && cur.aspectRatio) || ''),
+            payload: Object.assign({}, (cur && cur.payload) || {}, data.payload || {}),
+            scenes: srvScenes.length ? srvScenes : curScenes
+          });
+        }, { forceCurrent: true });
+        if (updated && root.isConnected) latestProject = updated;
+      } catch (_) {}
+    })();
+    promises.push(refreshProjectPromise);
+
     if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       promises.push(
         NK.service.brand.hydrateFromServer(brandId, { force: true, ttlMs: 0 })
@@ -3783,9 +3807,13 @@
     }
 
     // 씬 이미지/영상 URL 갱신 (만료된 Signed URL 또는 gs:// 경로)
+    // 프로젝트 리프레시 이후 실행하여 stale 씬 데이터를 덮어쓰지 않도록 한다.
     if (NK.service && NK.service.sceneAssets && NK.service.sceneAssets.refreshProjectSceneAssets) {
       promises.push(
-        NK.service.sceneAssets.refreshProjectSceneAssets(latestProject)
+        refreshProjectPromise
+          .then(function () {
+            return NK.service.sceneAssets.refreshProjectSceneAssets(latestProject);
+          })
           .then(function (updated) {
             if (!updated || !root.isConnected) return;
             latestProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || latestProject;
