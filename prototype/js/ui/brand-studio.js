@@ -3278,6 +3278,8 @@
       if (action === 'brand-generate-all-drafts') {
         if (!selectedFormats.length || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         btn.disabled = true;
+        // 원클릭 초안: 풀스크린 블러 + 스피너 (이미 원스탑에서 떠 있다면 그대로 유지)
+        showSaveOverlay(T.oneClickLoadingLabel || T.savingLabel);
         // Offline fallback: rule-based only when API is unavailable
         if (!NK.api || !NK.api.draftGenerate) {
           var nextAllDrafts = Object.assign({}, formatDrafts || {});
@@ -3296,8 +3298,8 @@
               if (window.__bsfOneClickInProgress) {
                 window.__bsfOneClickInProgress = false;
                 if (window.__bsfOneClickSafetyTimer) { clearTimeout(window.__bsfOneClickSafetyTimer); window.__bsfOneClickSafetyTimer = null; }
-                hideSaveOverlay();
               }
+              hideSaveOverlay();
             });
           return;
         }
@@ -3337,8 +3339,8 @@
                 if (window.__bsfOneClickInProgress) {
                   window.__bsfOneClickInProgress = false;
                   if (window.__bsfOneClickSafetyTimer) { clearTimeout(window.__bsfOneClickSafetyTimer); window.__bsfOneClickSafetyTimer = null; }
-                  hideSaveOverlay();
                 }
+                hideSaveOverlay();
               });
           }
           var fid = _fmtsToGen[idx];
