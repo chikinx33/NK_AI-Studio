@@ -333,10 +333,6 @@
           <a href="terms" class="legal-nav-link" id="nav-terms-ko">이용약관</a>
           <a href="privacy" class="legal-nav-link active" id="nav-privacy-ko">개인정보처리방침</a>
         </nav>
-        <div class="legal-header-actions">
-          <button class="btn-icon" onclick="toggleThemeLocal()" id="theme-btn" title="테마 전환">◑</button>
-          <a href="/" class="btn-icon" title="홈으로">←</a>
-        </div>
       </div>
     </header>
 
@@ -986,13 +982,13 @@
       <div class="legal-footer-inner">
         <span class="legal-footer-copy">© 2026 NK Studio. All rights reserved.</span>
         <nav class="legal-footer-links">
-          <a href="terms">이용약관</a>
+          <a href="terms" id="footer-terms">이용약관</a>
           <span>|</span>
-          <a href="privacy" class="active">개인정보처리방침</a>
+          <a href="privacy" class="active" id="footer-privacy">개인정보처리방침</a>
           <span>|</span>
           <a href="mailto:chikinx1@gmail.com">Contact</a>
           <span>|</span>
-          <a href="/">홈</a>
+          <a href="/" id="footer-home">홈</a>
         </nav>
       </div>
     </footer>
@@ -1010,6 +1006,9 @@
       var en = document.getElementById('content-en');
       var navTerms = document.getElementById('nav-terms-ko');
       var navPrivacy = document.getElementById('nav-privacy-ko');
+      var fTerms = document.getElementById('footer-terms');
+      var fPrivacy = document.getElementById('footer-privacy');
+      var fHome = document.getElementById('footer-home');
       if (lang === 'en') {
         if (en) en.classList.add('active');
         if (ko) ko.classList.remove('active');
@@ -1017,6 +1016,9 @@
         document.title = 'Privacy Policy — NK Platform';
         if (navTerms) navTerms.textContent = 'Terms';
         if (navPrivacy) navPrivacy.textContent = 'Privacy Policy';
+        if (fTerms) fTerms.textContent = 'Terms';
+        if (fPrivacy) fPrivacy.textContent = 'Privacy Policy';
+        if (fHome) fHome.textContent = 'Home';
       } else {
         if (ko) ko.classList.add('active');
         if (en) en.classList.remove('active');
@@ -1024,6 +1026,9 @@
         document.title = '개인정보처리방침 — NK Platform';
         if (navTerms) navTerms.textContent = '이용약관';
         if (navPrivacy) navPrivacy.textContent = '개인정보처리방침';
+        if (fTerms) fTerms.textContent = '이용약관';
+        if (fPrivacy) fPrivacy.textContent = '개인정보처리방침';
+        if (fHome) fHome.textContent = '홈';
       }
     }
 
