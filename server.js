@@ -95,6 +95,11 @@ const server = http.createServer((req, res) => {
         const indexPath = path.join(filePath, 'index.html');
         return sendFile(res, indexPath, req);
       }
+      // Extensionless URL fallback: /terms → terms.html, /privacy → privacy.html
+      if (err && !path.extname(filePath)) {
+        const htmlPath = filePath + '.html';
+        return sendFile(res, htmlPath, req);
+      }
       return sendFile(res, filePath, req);
     });
   } catch (e) {

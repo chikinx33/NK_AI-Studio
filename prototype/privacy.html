@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark" class="preload-veiled">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>개인정보처리방침 — NK Platform</title>
+  <meta name="description" content="NK Platform 개인정보처리방침 / Privacy Policy" />
+  <style>
+    html.preload-veiled, body.preload-veiled { background: #0f172a; color: #cbd5e1; }
+    html.preload-veiled .legal-wrap { visibility: hidden; }
+    [data-theme="light"].preload-veiled, [data-theme="light"] body.preload-veiled { background: #f7f9fd; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* ── Legal Page Layout ──────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    .grain {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.5;
+    }
+
+    .legal-wrap { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .legal-header {
+      position: sticky; top: 0; z-index: 100;
+      background: color-mix(in srgb, var(--bg-2) 92%, transparent 8%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+
+    .legal-header-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px; gap: 16px;
+    }
+
+    .legal-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text); flex-shrink: 0;
+    }
+
+    .legal-logo-icon {
+      width: 28px; height: 28px; border-radius: 8px; overflow: hidden;
+    }
+
+    .legal-logo-icon img { width: 100%; height: 100%; object-fit: cover; }
+
+    .legal-logo-text {
+      font-size: 16px; font-weight: 700; letter-spacing: 0.3px;
+    }
+
+    .legal-logo-text span { color: var(--orange); }
+
+    .legal-header-nav {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .legal-nav-link {
+      font-size: 13px; font-weight: 500; color: var(--text-2);
+      text-decoration: none; padding: 6px 10px; border-radius: 8px;
+      transition: background 0.14s, color 0.14s;
+    }
+
+    .legal-nav-link:hover { background: var(--layer-strong); color: var(--text); }
+    .legal-nav-link.active { color: var(--orange); }
+
+    .legal-header-actions { display: flex; align-items: center; gap: 6px; }
+
+    .btn-icon {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--layer-soft); border: 1px solid var(--border);
+      color: var(--text-2); cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: background 0.14s, color 0.14s;
+      text-decoration: none;
+    }
+
+    .btn-icon:hover { background: var(--layer-strong); color: var(--text); }
+
+    /* ── Lang Toggle ────────────────────────────────────── */
+    .legal-lang-bar {
+      max-width: 900px; margin: 28px auto 0; padding: 0 24px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .lang-btn {
+      padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      background: var(--layer-soft); border: 1px solid var(--border);
+      color: var(--text-2); cursor: pointer; transition: all 0.14s;
+    }
+
+    .lang-btn.active {
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border-color: color-mix(in srgb, var(--orange) 40%, var(--border) 60%);
+      color: var(--orange);
+    }
+
+    /* ── Content ────────────────────────────────────────── */
+    .legal-main {
+      flex: 1; padding: 24px 24px 64px; max-width: 900px;
+      margin: 0 auto; width: 100%;
+    }
+
+    .legal-content { display: none; }
+    .legal-content.active { display: block; }
+
+    .legal-doc-title {
+      font-size: 28px; font-weight: 700; margin-bottom: 6px;
+      color: var(--text); line-height: 1.25;
+    }
+
+    .legal-doc-meta {
+      font-size: 13px; color: var(--text-3); margin-bottom: 32px;
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+
+    .legal-doc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+    .legal-toc {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 22px; margin-bottom: 36px;
+    }
+
+    .legal-toc-title {
+      font-size: 12px; font-weight: 700; color: var(--text-3);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+    }
+
+    .legal-toc-list {
+      list-style: none; display: flex; flex-direction: column; gap: 4px;
+    }
+
+    .legal-toc-list li a {
+      font-size: 13px; color: var(--text-2); text-decoration: none;
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 0; transition: color 0.12s;
+    }
+
+    .legal-toc-list li a:hover { color: var(--orange); }
+
+    .legal-toc-list li a::before {
+      content: attr(data-num); font-size: 11px; font-weight: 700;
+      color: var(--orange); min-width: 18px; opacity: 0.8;
+    }
+
+    .legal-section {
+      margin-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 36px;
+    }
+
+    .legal-section:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .legal-section-title {
+      font-size: 18px; font-weight: 700; color: var(--text);
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+
+    .legal-section-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border) 70%);
+      color: var(--orange); font-size: 12px; font-weight: 700;
+    }
+
+    .legal-p {
+      font-size: 14px; color: var(--text-2); line-height: 1.8;
+      margin-bottom: 12px;
+    }
+
+    .legal-p:last-child { margin-bottom: 0; }
+
+    .legal-list {
+      list-style: none; padding-left: 0; margin-bottom: 12px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+
+    .legal-list li {
+      font-size: 14px; color: var(--text-2); line-height: 1.7;
+      padding-left: 16px; position: relative;
+    }
+
+    .legal-list li::before {
+      content: '·'; position: absolute; left: 4px; color: var(--orange);
+      font-size: 16px; line-height: 1.4;
+    }
+
+    .legal-list li.sub {
+      padding-left: 32px; font-size: 13px; color: var(--text-3);
+    }
+
+    .legal-list li.sub::before { left: 20px; content: '–'; font-size: 14px; color: var(--text-3); }
+
+    .legal-highlight {
+      background: color-mix(in srgb, var(--orange) 8%, var(--panel) 92%);
+      border: 1px solid color-mix(in srgb, var(--orange) 20%, var(--border) 80%);
+      border-radius: 10px; padding: 14px 18px; margin: 12px 0;
+      font-size: 13px; color: var(--text-2); line-height: 1.75;
+    }
+
+    .legal-highlight strong { color: var(--orange); }
+
+    /* ── Data Table ──────────────────────────────────────── */
+    .legal-table-wrap { overflow-x: auto; margin: 12px 0; border-radius: 10px; }
+
+    .legal-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden;
+    }
+
+    .legal-table th {
+      background: color-mix(in srgb, var(--bg-3) 80%, var(--panel) 20%);
+      color: var(--text-2); font-weight: 600; text-align: left;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .legal-table td {
+      padding: 9px 14px; color: var(--text-2);
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent 50%);
+      vertical-align: top; line-height: 1.6;
+    }
+
+    .legal-table tr:last-child td { border-bottom: none; }
+    .legal-table tr:hover td { background: var(--layer-soft); }
+
+    /* ── Contact Card ────────────────────────────────────── */
+    .legal-contact-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px; margin-top: 12px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+
+    .legal-contact-item { display: flex; flex-direction: column; gap: 3px; }
+    .legal-contact-label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.8px; }
+    .legal-contact-value { font-size: 13px; color: var(--text-2); }
+    .legal-contact-value a { color: var(--orange); text-decoration: none; }
+    .legal-contact-value a:hover { text-decoration: underline; }
+
+    /* ── Footer ─────────────────────────────────────────── */
+    .legal-footer {
+      border-top: 1px solid var(--border);
+      padding: 22px 24px;
+      background: var(--bg-2);
+    }
+
+    .legal-footer-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
+
+    .legal-footer-copy { font-size: 12px; color: var(--text-3); }
+
+    .legal-footer-links {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+
+    .legal-footer-links a {
+      font-size: 12px; color: var(--text-3); text-decoration: none;
+      padding: 2px 6px; border-radius: 5px; transition: color 0.12s;
+    }
+
+    .legal-footer-links a:hover { color: var(--text); }
+    .legal-footer-links a.active { color: var(--orange); }
+    .legal-footer-links span { color: var(--border); font-size: 11px; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .legal-doc-title { font-size: 22px; }
+      .legal-section-title { font-size: 15px; }
+      .legal-toc { padding: 14px 16px; }
+      .legal-footer-inner { flex-direction: column; align-items: flex-start; }
+      .legal-contact-card { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="grain"></div>
+  <div class="legal-wrap">
+
+    <!-- Header -->
+    <header class="legal-header">
+      <div class="legal-header-inner">
+        <a href="/" class="legal-logo">
+          <div class="legal-logo-icon">
+            <img src="images/logo(500500).png" alt="NK Platform" />
+          </div>
+          <span class="legal-logo-text">NK <span>Platform</span></span>
+        </a>
+        <nav class="legal-header-nav">
+          <a href="terms" class="legal-nav-link" id="nav-terms-ko">이용약관</a>
+          <a href="privacy" class="legal-nav-link active" id="nav-privacy-ko">개인정보처리방침</a>
+        </nav>
+        <div class="legal-header-actions">
+          <button class="btn-icon" onclick="toggleThemeLocal()" id="theme-btn" title="테마 전환">◑</button>
+          <a href="/" class="btn-icon" title="홈으로">←</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Language Toggle -->
+    <div class="legal-lang-bar">
+      <button class="lang-btn active" id="btn-ko" onclick="setLang('ko')">한국어</button>
+      <button class="lang-btn" id="btn-en" onclick="setLang('en')">English</button>
+    </div>
+
+    <!-- Main -->
+    <main class="legal-main">
+
+      <!-- ═══════════════════════ KOREAN ═══════════════════════ -->
+      <article class="legal-content active" id="content-ko">
+        <h1 class="legal-doc-title">개인정보처리방침</h1>
+        <div class="legal-doc-meta">
+          <span>시행일: 2025년 1월 1일</span>
+          <span>최종 수정: 2026년 5월 14일</span>
+          <span>회사: NK Studio</span>
+        </div>
+
+        <nav class="legal-toc" aria-label="목차">
+          <p class="legal-toc-title">목차</p>
+          <ol class="legal-toc-list">
+            <li><a href="#ko-p1" data-num="1">수집하는 개인정보 항목</a></li>
+            <li><a href="#ko-p2" data-num="2">개인정보 수집 및 이용 목적</a></li>
+            <li><a href="#ko-p3" data-num="3">개인정보 보유 및 이용 기간</a></li>
+            <li><a href="#ko-p4" data-num="4">제3자 제공 및 SNS API 연동</a></li>
+            <li><a href="#ko-p5" data-num="5">개인정보 처리 위탁</a></li>
+            <li><a href="#ko-p6" data-num="6">개인정보 파기 절차 및 방법</a></li>
+            <li><a href="#ko-p7" data-num="7">이용자 권리 및 행사 방법</a></li>
+            <li><a href="#ko-p8" data-num="8">쿠키 및 자동 수집 정보</a></li>
+            <li><a href="#ko-p9" data-num="9">개인정보 보호책임자</a></li>
+          </ol>
+        </nav>
+
+        <section class="legal-section" id="ko-p1">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>수집하는 개인정보 항목</h2>
+          <p class="legal-p">NK Studio(이하 "회사")는 NK Platform 서비스 제공을 위해 아래와 같은 개인정보를 수집합니다.</p>
+
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>구분</th>
+                  <th>수집 항목</th>
+                  <th>수집 방법</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>필수</strong></td>
+                  <td>이메일 주소, 비밀번호(암호화), 서비스 이용 기록, 접속 IP, 기기 정보</td>
+                  <td>회원가입, 서비스 이용 시 자동 수집</td>
+                </tr>
+                <tr>
+                  <td><strong>SNS 연동</strong></td>
+                  <td>TikTok: 계정 ID, 액세스 토큰, 팔로워 수, 동영상 통계<br>Instagram: 계정 ID, 액세스 토큰, 미디어 정보, 인사이트 데이터</td>
+                  <td>OAuth 2.0 인증을 통한 이용자 직접 연동</td>
+                </tr>
+                <tr>
+                  <td><strong>선택</strong></td>
+                  <td>프로필 이미지, 브랜드명, 사업자 정보</td>
+                  <td>이용자 직접 입력</td>
+                </tr>
+                <tr>
+                  <td><strong>자동 수집</strong></td>
+                  <td>접속 일시, 서비스 이용 기록, 불량 이용 기록, 브라우저 유형, OS 정보</td>
+                  <td>서비스 이용 과정에서 자동 생성</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="legal-highlight">
+            <strong>SNS API 안내:</strong> TikTok 및 Instagram 계정 연동은 이용자가 직접 OAuth 인증을 통해 수행하며, 회사는 해당 플랫폼이 허용하는 범위 내에서만 데이터를 처리합니다. 연동 해제 시 관련 토큰 및 데이터를 즉시 삭제합니다.
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-p2">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>개인정보 수집 및 이용 목적</h2>
+          <p class="legal-p">수집한 개인정보는 다음 목적으로만 이용합니다.</p>
+          <ul class="legal-list">
+            <li><strong>서비스 제공:</strong> 회원 인증, 콘텐츠 생성 서비스 제공, SNS 퍼블리싱 기능 제공</li>
+            <li><strong>계정 관리:</strong> 이용자 식별, 본인 확인, 이용 제한 조치</li>
+            <li><strong>서비스 개선:</strong> 이용 통계 분석, 서비스 품질 향상, 신규 기능 개발</li>
+            <li><strong>고객 지원:</strong> 문의 응답, 분쟁 처리, 공지사항 전달</li>
+            <li><strong>법적 의무 이행:</strong> 관련 법령에 따른 기록 보존 및 의무 이행</li>
+          </ul>
+          <p class="legal-p">수집 목적 이외의 용도로 개인정보를 이용하지 않으며, 목적이 변경될 경우 사전에 동의를 구합니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-p3">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>개인정보 보유 및 이용 기간</h2>
+          <p class="legal-p">회사는 개인정보 수집 및 이용 목적이 달성된 후에는 해당 정보를 지체 없이 파기합니다. 단, 관련 법령에 의해 보존이 필요한 경우 별도 보관합니다.</p>
+
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>보존 항목</th>
+                  <th>보존 근거</th>
+                  <th>보존 기간</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>회원 계정 정보</td>
+                  <td>서비스 이용 계약</td>
+                  <td>회원 탈퇴 시까지</td>
+                </tr>
+                <tr>
+                  <td>서비스 이용 기록</td>
+                  <td>통신비밀보호법</td>
+                  <td>3개월</td>
+                </tr>
+                <tr>
+                  <td>계약·청약철회 기록</td>
+                  <td>전자상거래법</td>
+                  <td>5년</td>
+                </tr>
+                <tr>
+                  <td>대금결제 및 재화 공급 기록</td>
+                  <td>전자상거래법</td>
+                  <td>5년</td>
+                </tr>
+                <tr>
+                  <td>소비자 불만·분쟁 처리 기록</td>
+                  <td>전자상거래법</td>
+                  <td>3년</td>
+                </tr>
+                <tr>
+                  <td>SNS 연동 토큰 및 데이터</td>
+                  <td>서비스 제공 목적</td>
+                  <td>연동 해제 또는 탈퇴 시 즉시 삭제</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-p4">
+          <h2 class="legal-section-title"><span class="legal-section-num">4</span>제3자 제공 및 SNS API 연동</h2>
+          <p class="legal-p">회사는 원칙적으로 이용자의 개인정보를 제3자에게 제공하지 않습니다. 다만, 다음의 경우에는 예외로 합니다.</p>
+          <ul class="legal-list">
+            <li>이용자의 사전 동의가 있는 경우</li>
+            <li>법령의 규정에 의거하거나 수사 목적으로 법령이 정한 절차에 따라 요청이 있는 경우</li>
+          </ul>
+
+          <p class="legal-p" style="margin-top: 20px;"><strong>SNS 플랫폼 API 연동 내역</strong></p>
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>플랫폼</th>
+                  <th>연동 데이터</th>
+                  <th>이용 목적</th>
+                  <th>개인정보처리방침</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>TikTok</strong></td>
+                  <td>계정 ID, 액세스 토큰, 팔로워 통계, 동영상 메타데이터</td>
+                  <td>TikTok 콘텐츠 퍼블리싱, 계정 분석</td>
+                  <td>TikTok Privacy Policy 준수</td>
+                </tr>
+                <tr>
+                  <td><strong>Instagram</strong></td>
+                  <td>계정 ID, 액세스 토큰, 미디어 정보, 인사이트 데이터</td>
+                  <td>Instagram 콘텐츠 퍼블리싱, 계정 분석</td>
+                  <td>Meta Privacy Policy 준수</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="legal-highlight">
+            <strong>TikTok API 데이터 사용 고지:</strong> NK Platform은 TikTok for Developers API를 통해 이용자 계정 데이터에 접근합니다. 수집된 TikTok 데이터는 해당 이용자의 콘텐츠 퍼블리싱 및 계정 분석 목적으로만 사용되며, 제3자에게 판매하거나 공유하지 않습니다. 이용자는 TikTok 앱 설정에서 언제든지 NK Platform의 접근 권한을 철회할 수 있습니다.
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-p5">
+          <h2 class="legal-section-title"><span class="legal-section-num">5</span>개인정보 처리 위탁</h2>
+          <p class="legal-p">회사는 서비스 제공을 위해 다음과 같이 개인정보 처리 업무를 위탁합니다.</p>
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>수탁자</th>
+                  <th>위탁 업무</th>
+                  <th>보유 기간</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Cloudflare, Inc.</td>
+                  <td>웹 서비스 호스팅, CDN, 보안(DDoS 방어)</td>
+                  <td>서비스 이용 기간</td>
+                </tr>
+                <tr>
+                  <td>AI 모델 제공사<br>(OpenAI, Anthropic 등)</td>
+                  <td>AI 콘텐츠 생성 처리 (입력 프롬프트 전송)</td>
+                  <td>각 사 정책에 따름</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="legal-p">위탁 계약 시 개인정보 보호 관련 법령에 따라 수탁자가 개인정보를 안전하게 처리하도록 필요한 사항을 규정하고 관리·감독합니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-p6">
+          <h2 class="legal-section-title"><span class="legal-section-num">6</span>개인정보 파기 절차 및 방법</h2>
+          <p class="legal-p">회사는 개인정보 보유 기간의 경과, 처리 목적 달성 등 개인정보가 불필요하게 된 경우에는 지체 없이 해당 개인정보를 파기합니다.</p>
+          <ul class="legal-list">
+            <li><strong>파기 절차:</strong> 파기 사유 발생 → 개인정보 보호책임자 승인 → 파기 실행 → 파기 결과 기록</li>
+            <li><strong>전자적 파일:</strong> 복원 불가능한 기술적 방법으로 영구 삭제 (덮어쓰기 또는 초기화)</li>
+            <li><strong>종이 서류:</strong> 분쇄 또는 소각</li>
+            <li><strong>SNS 연동 토큰:</strong> 연동 해제 요청 즉시 서버에서 삭제하고 해당 플랫폼에 토큰 폐기 요청</li>
+          </ul>
+          <p class="legal-p">회원 탈퇴 시 개인정보는 즉시 파기 처리됩니다. 단, 관련 법령에 의해 일정 기간 보존이 필요한 정보는 별도 데이터베이스에 분리 보관 후 기간 만료 시 파기합니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-p7">
+          <h2 class="legal-section-title"><span class="legal-section-num">7</span>이용자 권리 및 행사 방법</h2>
+          <p class="legal-p">이용자(또는 법정대리인)는 언제든지 다음과 같은 개인정보 보호 관련 권리를 행사할 수 있습니다.</p>
+          <ul class="legal-list">
+            <li><strong>열람 요구:</strong> 회사가 보유한 본인의 개인정보 열람 요청</li>
+            <li><strong>정정·삭제 요구:</strong> 오류가 있는 개인정보의 정정 또는 삭제 요청</li>
+            <li><strong>처리정지 요구:</strong> 개인정보 처리의 일시 정지 요청</li>
+            <li><strong>동의 철회:</strong> 개인정보 수집·이용에 대한 동의 철회 (서비스 이용 제한 발생 가능)</li>
+            <li><strong>이동 요구:</strong> 본인의 개인정보를 다른 개인정보처리자에게 이전 요청 (해당하는 경우)</li>
+          </ul>
+          <p class="legal-p">권리 행사는 이메일(chikinx1@gmail.com)로 요청하시면 10영업일 이내에 처리합니다. 개인정보 침해에 관한 신고·상담은 아래 기관에 문의하실 수 있습니다.</p>
+          <ul class="legal-list">
+            <li>개인정보보호위원회 (privacy.go.kr / 국번 없이 182)</li>
+            <li>한국인터넷진흥원 개인정보침해신고센터 (privacy.kisa.or.kr / 118)</li>
+            <li>대검찰청 사이버범죄수사단 (spo.go.kr / 02-3480-3573)</li>
+            <li>경찰청 사이버수사국 (ecrm.police.go.kr / 182)</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="ko-p8">
+          <h2 class="legal-section-title"><span class="legal-section-num">8</span>쿠키 및 자동 수집 정보</h2>
+          <p class="legal-p">회사는 서비스 제공을 위해 쿠키(Cookie) 및 로컬스토리지를 활용합니다.</p>
+          <ul class="legal-list">
+            <li><strong>사용 목적:</strong> 로그인 상태 유지, 테마/언어 설정 저장, 서비스 이용 편의 개선</li>
+            <li><strong>저장 항목:</strong> 로그인 토큰, 테마 설정(nk_theme), 언어 설정(nk_lang), 마지막 이용 스테이지</li>
+            <li><strong>거부 방법:</strong> 브라우저 설정에서 쿠키 허용을 거부할 수 있으나, 일부 서비스 기능이 제한될 수 있습니다.</li>
+          </ul>
+          <p class="legal-p">회사는 이용자 행동을 추적하는 제3자 광고 추적 쿠키를 사용하지 않습니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-p9">
+          <h2 class="legal-section-title"><span class="legal-section-num">9</span>개인정보 보호책임자</h2>
+          <p class="legal-p">회사는 개인정보 처리에 관한 업무를 총괄하고 개인정보 처리와 관련한 이용자의 불만 처리 및 피해 구제를 위하여 아래와 같이 개인정보 보호책임자를 지정하고 있습니다.</p>
+
+          <div class="legal-contact-card">
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">성명</span>
+              <span class="legal-contact-value">NK Studio 개인정보 보호책임자</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">소속</span>
+              <span class="legal-contact-value">NK Studio</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">이메일</span>
+              <span class="legal-contact-value"><a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a></span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">처리 기간</span>
+              <span class="legal-contact-value">요청 접수 후 10영업일 이내</span>
+            </div>
+          </div>
+
+          <p class="legal-p" style="margin-top: 16px;">본 개인정보처리방침은 2026년 5월 14일부터 시행됩니다. 이전 개인정보처리방침은 서비스 공지사항에서 확인할 수 있습니다.</p>
+        </section>
+      </article>
+
+      <!-- ═══════════════════════ ENGLISH ═══════════════════════ -->
+      <article class="legal-content" id="content-en">
+        <h1 class="legal-doc-title">Privacy Policy</h1>
+        <div class="legal-doc-meta">
+          <span>Effective: January 1, 2025</span>
+          <span>Last Updated: May 14, 2026</span>
+          <span>Company: NK Studio</span>
+        </div>
+
+        <nav class="legal-toc" aria-label="Table of Contents">
+          <p class="legal-toc-title">Contents</p>
+          <ol class="legal-toc-list">
+            <li><a href="#en-p1" data-num="1">Personal Information We Collect</a></li>
+            <li><a href="#en-p2" data-num="2">Purposes of Collection &amp; Use</a></li>
+            <li><a href="#en-p3" data-num="3">Retention &amp; Use Period</a></li>
+            <li><a href="#en-p4" data-num="4">Third-Party Disclosure &amp; SNS API Integration</a></li>
+            <li><a href="#en-p5" data-num="5">Data Processing Delegation</a></li>
+            <li><a href="#en-p6" data-num="6">Data Destruction Procedures</a></li>
+            <li><a href="#en-p7" data-num="7">Your Rights &amp; How to Exercise Them</a></li>
+            <li><a href="#en-p8" data-num="8">Cookies &amp; Automatically Collected Information</a></li>
+            <li><a href="#en-p9" data-num="9">Privacy Officer Contact</a></li>
+          </ol>
+        </nav>
+
+        <section class="legal-section" id="en-p1">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>Personal Information We Collect</h2>
+          <p class="legal-p">NK Studio ("Company") collects the following personal information to provide NK Platform services.</p>
+
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>Category</th>
+                  <th>Data Collected</th>
+                  <th>Collection Method</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Required</strong></td>
+                  <td>Email address, encrypted password, service usage logs, IP address, device information</td>
+                  <td>Account registration; automatic collection during use</td>
+                </tr>
+                <tr>
+                  <td><strong>SNS Integration</strong></td>
+                  <td>TikTok: Account ID, access token, follower count, video statistics<br>Instagram: Account ID, access token, media information, insights data</td>
+                  <td>User-initiated OAuth 2.0 authorization</td>
+                </tr>
+                <tr>
+                  <td><strong>Optional</strong></td>
+                  <td>Profile image, brand name, business information</td>
+                  <td>Voluntarily entered by user</td>
+                </tr>
+                <tr>
+                  <td><strong>Automatically Collected</strong></td>
+                  <td>Access timestamp, service usage logs, browser type, OS information</td>
+                  <td>Automatically generated during service use</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="legal-highlight">
+            <strong>SNS API Notice:</strong> TikTok and Instagram account integration is performed by the user through OAuth authorization. The Company processes data only within the scope permitted by those platforms. Upon disconnection, all related tokens and data are deleted immediately.
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-p2">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>Purposes of Collection &amp; Use</h2>
+          <p class="legal-p">Collected personal information is used solely for the following purposes:</p>
+          <ul class="legal-list">
+            <li><strong>Service Delivery:</strong> Member authentication, content generation service, SNS publishing functionality</li>
+            <li><strong>Account Management:</strong> User identification, identity verification, service restriction measures</li>
+            <li><strong>Service Improvement:</strong> Usage analytics, service quality improvement, new feature development</li>
+            <li><strong>Customer Support:</strong> Responding to inquiries, handling disputes, delivering notices</li>
+            <li><strong>Legal Compliance:</strong> Record retention and obligations required by applicable law</li>
+          </ul>
+          <p class="legal-p">Personal information will not be used for purposes other than those stated. Prior consent will be obtained if the purpose changes.</p>
+        </section>
+
+        <section class="legal-section" id="en-p3">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>Retention &amp; Use Period</h2>
+          <p class="legal-p">Personal information is destroyed without delay once its collection and use purpose has been fulfilled. However, certain data may be retained separately if required by applicable law.</p>
+
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>Data Type</th>
+                  <th>Legal Basis</th>
+                  <th>Retention Period</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Member account data</td>
+                  <td>Service agreement</td>
+                  <td>Until account deletion</td>
+                </tr>
+                <tr>
+                  <td>Service usage records</td>
+                  <td>Communications Privacy Act</td>
+                  <td>3 months</td>
+                </tr>
+                <tr>
+                  <td>Contract / withdrawal records</td>
+                  <td>E-Commerce Act</td>
+                  <td>5 years</td>
+                </tr>
+                <tr>
+                  <td>Payment and supply records</td>
+                  <td>E-Commerce Act</td>
+                  <td>5 years</td>
+                </tr>
+                <tr>
+                  <td>Consumer complaint records</td>
+                  <td>E-Commerce Act</td>
+                  <td>3 years</td>
+                </tr>
+                <tr>
+                  <td>SNS tokens &amp; data</td>
+                  <td>Service provision</td>
+                  <td>Deleted immediately upon disconnection or account deletion</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-p4">
+          <h2 class="legal-section-title"><span class="legal-section-num">4</span>Third-Party Disclosure &amp; SNS API Integration</h2>
+          <p class="legal-p">The Company does not, in principle, share personal information with third parties. Exceptions include:</p>
+          <ul class="legal-list">
+            <li>Cases where the user has provided prior consent</li>
+            <li>Cases required by law or requested by law enforcement following legally prescribed procedures</li>
+          </ul>
+
+          <p class="legal-p" style="margin-top: 20px;"><strong>SNS Platform API Integrations</strong></p>
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>Platform</th>
+                  <th>Data Accessed</th>
+                  <th>Purpose</th>
+                  <th>Privacy Policy</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>TikTok</strong></td>
+                  <td>Account ID, access token, follower statistics, video metadata</td>
+                  <td>Content publishing, account analytics</td>
+                  <td>TikTok Privacy Policy applies</td>
+                </tr>
+                <tr>
+                  <td><strong>Instagram</strong></td>
+                  <td>Account ID, access token, media info, insights data</td>
+                  <td>Content publishing, account analytics</td>
+                  <td>Meta Privacy Policy applies</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="legal-highlight">
+            <strong>TikTok API Data Use Disclosure:</strong> NK Platform accesses user account data through the TikTok for Developers API. TikTok data collected is used solely for content publishing and account analytics for the respective user, and will not be sold or shared with third parties. Users may revoke NK Platform's access at any time through TikTok app settings.
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-p5">
+          <h2 class="legal-section-title"><span class="legal-section-num">5</span>Data Processing Delegation</h2>
+          <p class="legal-p">The Company delegates certain data processing tasks to third parties for service provision purposes.</p>
+          <div class="legal-table-wrap">
+            <table class="legal-table">
+              <thead>
+                <tr>
+                  <th>Processor</th>
+                  <th>Delegated Tasks</th>
+                  <th>Retention Period</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Cloudflare, Inc.</td>
+                  <td>Web hosting, CDN, security (DDoS protection)</td>
+                  <td>Duration of service use</td>
+                </tr>
+                <tr>
+                  <td>AI Model Providers<br>(OpenAI, Anthropic, etc.)</td>
+                  <td>AI content generation processing (prompt transmission)</td>
+                  <td>Per each provider's policy</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="legal-p">The Company contractually requires all processors to handle personal data securely in accordance with applicable privacy laws.</p>
+        </section>
+
+        <section class="legal-section" id="en-p6">
+          <h2 class="legal-section-title"><span class="legal-section-num">6</span>Data Destruction Procedures</h2>
+          <p class="legal-p">When personal information is no longer necessary (retention period expired, purpose fulfilled), it is destroyed without delay.</p>
+          <ul class="legal-list">
+            <li><strong>Procedure:</strong> Destruction reason identified → Approved by Privacy Officer → Destruction executed → Results recorded</li>
+            <li><strong>Electronic files:</strong> Permanently deleted using technically irreversible methods (overwriting or reformatting)</li>
+            <li><strong>Paper documents:</strong> Shredded or incinerated</li>
+            <li><strong>SNS tokens:</strong> Deleted from servers immediately upon disconnection, and token revocation is requested from the platform</li>
+          </ul>
+          <p class="legal-p">Upon account deletion, personal information is destroyed immediately. Data required to be retained by law is stored in a separate database and destroyed upon expiry of the applicable retention period.</p>
+        </section>
+
+        <section class="legal-section" id="en-p7">
+          <h2 class="legal-section-title"><span class="legal-section-num">7</span>Your Rights &amp; How to Exercise Them</h2>
+          <p class="legal-p">Users (or legal representatives) may exercise the following rights at any time:</p>
+          <ul class="legal-list">
+            <li><strong>Right of Access:</strong> Request to view personal information the Company holds about you</li>
+            <li><strong>Right to Rectification/Erasure:</strong> Request correction or deletion of inaccurate personal information</li>
+            <li><strong>Right to Restriction:</strong> Request temporary suspension of personal information processing</li>
+            <li><strong>Right to Withdraw Consent:</strong> Withdraw consent for data collection/use (may result in service restrictions)</li>
+            <li><strong>Right to Data Portability:</strong> Request transfer of your data to another controller (where applicable)</li>
+          </ul>
+          <p class="legal-p">To exercise these rights, contact us at chikinx1@gmail.com. Requests will be processed within 10 business days. For privacy complaints, you may also contact:</p>
+          <ul class="legal-list">
+            <li>Personal Information Protection Commission (privacy.go.kr / 182)</li>
+            <li>KISA Privacy Infringement Report Center (privacy.kisa.or.kr / 118)</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="en-p8">
+          <h2 class="legal-section-title"><span class="legal-section-num">8</span>Cookies &amp; Automatically Collected Information</h2>
+          <p class="legal-p">The Company uses cookies and local storage to provide the Service.</p>
+          <ul class="legal-list">
+            <li><strong>Purpose:</strong> Maintaining login session, saving theme/language preferences, improving service convenience</li>
+            <li><strong>Items Stored:</strong> Login token, theme setting (nk_theme), language setting (nk_lang), last visited stage</li>
+            <li><strong>How to Opt Out:</strong> You may disable cookies in your browser settings, but some service features may be limited as a result.</li>
+          </ul>
+          <p class="legal-p">The Company does not use third-party advertising tracking cookies.</p>
+        </section>
+
+        <section class="legal-section" id="en-p9">
+          <h2 class="legal-section-title"><span class="legal-section-num">9</span>Privacy Officer Contact</h2>
+          <p class="legal-p">The Company has designated a Privacy Officer responsible for overseeing personal information processing and handling user complaints and remediation.</p>
+
+          <div class="legal-contact-card">
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Role</span>
+              <span class="legal-contact-value">NK Studio Privacy Officer</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Organization</span>
+              <span class="legal-contact-value">NK Studio</span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Email</span>
+              <span class="legal-contact-value"><a href="mailto:chikinx1@gmail.com">chikinx1@gmail.com</a></span>
+            </div>
+            <div class="legal-contact-item">
+              <span class="legal-contact-label">Response Time</span>
+              <span class="legal-contact-value">Within 10 business days of receipt</span>
+            </div>
+          </div>
+
+          <p class="legal-p" style="margin-top: 16px;">This Privacy Policy is effective as of May 14, 2026. Previous versions of the Privacy Policy are available in the service announcements.</p>
+        </section>
+      </article>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="legal-footer">
+      <div class="legal-footer-inner">
+        <span class="legal-footer-copy">© 2026 NK Studio. All rights reserved.</span>
+        <nav class="legal-footer-links">
+          <a href="terms">이용약관</a>
+          <span>|</span>
+          <a href="privacy" class="active">개인정보처리방침</a>
+          <span>|</span>
+          <a href="mailto:chikinx1@gmail.com">Contact</a>
+          <span>|</span>
+          <a href="/">홈</a>
+        </nav>
+      </div>
+    </footer>
+
+  </div><!-- .legal-wrap -->
+
+  <script>
+    (function () {
+      var saved = localStorage.getItem('nk_theme') || 'dark';
+      var variant = localStorage.getItem('nk_theme_variant') || '';
+      document.documentElement.setAttribute('data-theme', saved);
+      if (variant) document.documentElement.setAttribute('data-theme-variant', variant);
+      document.addEventListener('DOMContentLoaded', function () {
+        document.documentElement.classList.remove('preload-veiled');
+      });
+    })();
+
+    function toggleThemeLocal() {
+      var current = document.documentElement.getAttribute('data-theme') || 'dark';
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('nk_theme', next);
+    }
+
+    function setLang(lang) {
+      var ko = document.getElementById('content-ko');
+      var en = document.getElementById('content-en');
+      var btnKo = document.getElementById('btn-ko');
+      var btnEn = document.getElementById('btn-en');
+      var navPrivacy = document.getElementById('nav-privacy-ko');
+      if (lang === 'ko') {
+        ko.classList.add('active'); en.classList.remove('active');
+        btnKo.classList.add('active'); btnEn.classList.remove('active');
+        document.documentElement.lang = 'ko';
+        document.title = '개인정보처리방침 — NK Platform';
+        if (navPrivacy) navPrivacy.textContent = '개인정보처리방침';
+      } else {
+        en.classList.add('active'); ko.classList.remove('active');
+        btnEn.classList.add('active'); btnKo.classList.remove('active');
+        document.documentElement.lang = 'en';
+        document.title = 'Privacy Policy — NK Platform';
+        if (navPrivacy) navPrivacy.textContent = 'Privacy Policy';
+      }
+    }
+  </script>
+</body>
+
+</html>

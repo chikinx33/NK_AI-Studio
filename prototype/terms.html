@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark" class="preload-veiled">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>서비스 이용약관 — NK Platform</title>
+  <meta name="description" content="NK Platform 서비스 이용약관 / Terms of Service" />
+  <style>
+    html.preload-veiled, body.preload-veiled { background: #0f172a; color: #cbd5e1; }
+    html.preload-veiled .legal-wrap { visibility: hidden; }
+    [data-theme="light"].preload-veiled, [data-theme="light"] body.preload-veiled { background: #f7f9fd; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* ── Legal Page Layout ──────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Space Grotesk', 'Pretendard', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.7;
+    }
+
+    .grain {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      opacity: 0.5;
+    }
+
+    .legal-wrap { position: relative; z-index: 1; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .legal-header {
+      position: sticky; top: 0; z-index: 100;
+      background: color-mix(in srgb, var(--bg-2) 92%, transparent 8%);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+    }
+
+    .legal-header-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px; gap: 16px;
+    }
+
+    .legal-logo {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text); flex-shrink: 0;
+    }
+
+    .legal-logo-icon {
+      width: 28px; height: 28px; border-radius: 8px; overflow: hidden;
+    }
+
+    .legal-logo-icon img { width: 100%; height: 100%; object-fit: cover; }
+
+    .legal-logo-text {
+      font-size: 16px; font-weight: 700; letter-spacing: 0.3px;
+    }
+
+    .legal-logo-text span { color: var(--orange); }
+
+    .legal-header-nav {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .legal-nav-link {
+      font-size: 13px; font-weight: 500; color: var(--text-2);
+      text-decoration: none; padding: 6px 10px; border-radius: 8px;
+      transition: background 0.14s, color 0.14s;
+    }
+
+    .legal-nav-link:hover { background: var(--layer-strong); color: var(--text); }
+    .legal-nav-link.active { color: var(--orange); }
+
+    .legal-header-actions { display: flex; align-items: center; gap: 6px; }
+
+    .btn-icon {
+      display: flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--layer-soft); border: 1px solid var(--border);
+      color: var(--text-2); cursor: pointer; font-size: 12px;
+      font-weight: 600; transition: background 0.14s, color 0.14s;
+      text-decoration: none;
+    }
+
+    .btn-icon:hover { background: var(--layer-strong); color: var(--text); }
+
+    /* ── Lang Toggle ────────────────────────────────────── */
+    .legal-lang-bar {
+      max-width: 900px; margin: 28px auto 0; padding: 0 24px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .lang-btn {
+      padding: 5px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      background: var(--layer-soft); border: 1px solid var(--border);
+      color: var(--text-2); cursor: pointer; transition: all 0.14s;
+    }
+
+    .lang-btn.active {
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border-color: color-mix(in srgb, var(--orange) 40%, var(--border) 60%);
+      color: var(--orange);
+    }
+
+    /* ── Content ────────────────────────────────────────── */
+    .legal-main {
+      flex: 1; padding: 24px 24px 64px; max-width: 900px;
+      margin: 0 auto; width: 100%;
+    }
+
+    .legal-content { display: none; }
+    .legal-content.active { display: block; }
+
+    .legal-doc-title {
+      font-size: 28px; font-weight: 700; margin-bottom: 6px;
+      color: var(--text); line-height: 1.25;
+    }
+
+    .legal-doc-meta {
+      font-size: 13px; color: var(--text-3); margin-bottom: 32px;
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+
+    .legal-doc-meta span { display: inline-flex; align-items: center; gap: 4px; }
+
+    .legal-toc {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 22px; margin-bottom: 36px;
+    }
+
+    .legal-toc-title {
+      font-size: 12px; font-weight: 700; color: var(--text-3);
+      text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;
+    }
+
+    .legal-toc-list {
+      list-style: none; display: flex; flex-direction: column; gap: 4px;
+    }
+
+    .legal-toc-list li a {
+      font-size: 13px; color: var(--text-2); text-decoration: none;
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 0; transition: color 0.12s;
+    }
+
+    .legal-toc-list li a:hover { color: var(--orange); }
+
+    .legal-toc-list li a::before {
+      content: attr(data-num); font-size: 11px; font-weight: 700;
+      color: var(--orange); min-width: 18px; opacity: 0.8;
+    }
+
+    .legal-section {
+      margin-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 36px;
+    }
+
+    .legal-section:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .legal-section-title {
+      font-size: 18px; font-weight: 700; color: var(--text);
+      margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+    }
+
+    .legal-section-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border: 1px solid color-mix(in srgb, var(--orange) 30%, var(--border) 70%);
+      color: var(--orange); font-size: 12px; font-weight: 700;
+    }
+
+    .legal-p {
+      font-size: 14px; color: var(--text-2); line-height: 1.8;
+      margin-bottom: 12px;
+    }
+
+    .legal-p:last-child { margin-bottom: 0; }
+
+    .legal-list {
+      list-style: none; padding-left: 0; margin-bottom: 12px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+
+    .legal-list li {
+      font-size: 14px; color: var(--text-2); line-height: 1.7;
+      padding-left: 16px; position: relative;
+    }
+
+    .legal-list li::before {
+      content: '·'; position: absolute; left: 4px; color: var(--orange);
+      font-size: 16px; line-height: 1.4;
+    }
+
+    .legal-list li.sub {
+      padding-left: 32px; font-size: 13px; color: var(--text-3);
+    }
+
+    .legal-list li.sub::before { left: 20px; content: '–'; font-size: 14px; color: var(--text-3); }
+
+    .legal-highlight {
+      background: color-mix(in srgb, var(--orange) 8%, var(--panel) 92%);
+      border: 1px solid color-mix(in srgb, var(--orange) 20%, var(--border) 80%);
+      border-radius: 10px; padding: 14px 18px; margin: 12px 0;
+      font-size: 13px; color: var(--text-2); line-height: 1.75;
+    }
+
+    .legal-highlight strong { color: var(--orange); }
+
+    /* ── Footer ─────────────────────────────────────────── */
+    .legal-footer {
+      border-top: 1px solid var(--border);
+      padding: 22px 24px;
+      background: var(--bg-2);
+    }
+
+    .legal-footer-inner {
+      max-width: 900px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+    }
+
+    .legal-footer-copy { font-size: 12px; color: var(--text-3); }
+
+    .legal-footer-links {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    }
+
+    .legal-footer-links a {
+      font-size: 12px; color: var(--text-3); text-decoration: none;
+      padding: 2px 6px; border-radius: 5px; transition: color 0.12s;
+    }
+
+    .legal-footer-links a:hover { color: var(--text); }
+    .legal-footer-links a.active { color: var(--orange); }
+    .legal-footer-links span { color: var(--border); font-size: 11px; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .legal-header-inner { padding: 0; }
+      .legal-doc-title { font-size: 22px; }
+      .legal-section-title { font-size: 15px; }
+      .legal-toc { padding: 14px 16px; }
+      .legal-footer-inner { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="grain"></div>
+  <div class="legal-wrap">
+
+    <!-- Header -->
+    <header class="legal-header">
+      <div class="legal-header-inner">
+        <a href="/" class="legal-logo">
+          <div class="legal-logo-icon">
+            <img src="images/logo(500500).png" alt="NK Platform" />
+          </div>
+          <span class="legal-logo-text">NK <span>Platform</span></span>
+        </a>
+        <nav class="legal-header-nav">
+          <a href="terms" class="legal-nav-link active" id="nav-terms-ko">이용약관</a>
+          <a href="privacy" class="legal-nav-link" id="nav-privacy-ko">개인정보처리방침</a>
+        </nav>
+        <div class="legal-header-actions">
+          <button class="btn-icon" onclick="toggleThemeLocal()" id="theme-btn" title="테마 전환">◑</button>
+          <a href="/" class="btn-icon" title="홈으로">←</a>
+        </div>
+      </div>
+    </header>
+
+    <!-- Language Toggle -->
+    <div class="legal-lang-bar">
+      <button class="lang-btn active" id="btn-ko" onclick="setLang('ko')">한국어</button>
+      <button class="lang-btn" id="btn-en" onclick="setLang('en')">English</button>
+    </div>
+
+    <!-- Main -->
+    <main class="legal-main">
+
+      <!-- ═══════════════════════ KOREAN ═══════════════════════ -->
+      <article class="legal-content active" id="content-ko">
+        <h1 class="legal-doc-title">서비스 이용약관</h1>
+        <div class="legal-doc-meta">
+          <span>시행일: 2025년 1월 1일</span>
+          <span>최종 수정: 2026년 5월 14일</span>
+          <span>회사: NK Studio</span>
+        </div>
+
+        <nav class="legal-toc" aria-label="목차">
+          <p class="legal-toc-title">목차</p>
+          <ol class="legal-toc-list">
+            <li><a href="#ko-s1" data-num="1">서비스 목적 및 개요</a></li>
+            <li><a href="#ko-s2" data-num="2">약관의 적용 및 동의</a></li>
+            <li><a href="#ko-s3" data-num="3">이용자 의무</a></li>
+            <li><a href="#ko-s4" data-num="4">콘텐츠 소유권 및 저작권</a></li>
+            <li><a href="#ko-s5" data-num="5">서비스 이용 제한</a></li>
+            <li><a href="#ko-s6" data-num="6">면책 조항</a></li>
+            <li><a href="#ko-s7" data-num="7">약관 변경 고지</a></li>
+            <li><a href="#ko-s8" data-num="8">분쟁 해결 및 준거법</a></li>
+          </ol>
+        </nav>
+
+        <section class="legal-section" id="ko-s1">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>서비스 목적 및 개요</h2>
+          <p class="legal-p">NK Platform(이하 "서비스")은 NK Studio(이하 "회사")가 운영하는 AI 기반 콘텐츠 제작 플랫폼입니다. 본 서비스는 영상 제작, 이미지 생성, 브랜드 관리, SNS 콘텐츠 퍼블리싱 등 디지털 콘텐츠 제작 워크플로우를 지원합니다.</p>
+          <p class="legal-p">본 약관은 NK Platform의 모든 서비스 및 기능의 이용에 관한 조건과 절차를 규정합니다. 서비스에 접근하거나 이용함으로써 이용자는 본 약관에 동의한 것으로 간주됩니다.</p>
+          <ul class="legal-list">
+            <li>서비스 접속 URL: <strong>nk-ai-studio.pages.dev</strong></li>
+            <li>운영사: NK Studio</li>
+            <li>문의 이메일: chikinx1@gmail.com</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="ko-s2">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>약관의 적용 및 동의</h2>
+          <p class="legal-p">이용자가 서비스에 최초 접속하거나 계정을 생성하는 시점에 본 약관에 동의한 것으로 봅니다. 만 14세 미만의 이용자는 법정대리인의 동의 없이 서비스를 이용할 수 없습니다.</p>
+          <ul class="legal-list">
+            <li>본 약관은 서비스 내 게시되는 순간부터 효력이 발생합니다.</li>
+            <li>회사는 필요에 따라 약관을 변경할 수 있으며, 변경 시 7일 전 사전 고지합니다.</li>
+            <li>변경 약관에 동의하지 않는 경우 서비스 이용을 중단하고 탈퇴할 수 있습니다.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="ko-s3">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>이용자 의무</h2>
+          <p class="legal-p">이용자는 서비스 이용 시 다음 사항을 준수해야 합니다.</p>
+          <ul class="legal-list">
+            <li>타인의 개인정보, 저작권 등 지식재산권을 침해하는 행위 금지</li>
+            <li>허위 정보 입력, 타인 명의 도용, 계정 양도·판매 금지</li>
+            <li>서비스의 정상적인 운영을 방해하는 행위 금지 (크롤링, DoS 공격, 악성 코드 배포 등)</li>
+            <li>음란·폭력·혐오·차별적 콘텐츠 생성 및 배포 금지</li>
+            <li>법령 또는 공서양속에 위반되는 콘텐츠 생성·이용 금지</li>
+            <li>TikTok, Instagram 등 연동 SNS 플랫폼의 이용약관 준수</li>
+            <li>계정 자격증명(비밀번호 등)의 안전한 관리 의무</li>
+          </ul>
+          <div class="legal-highlight">
+            <strong>중요:</strong> 이용자가 생성하는 AI 콘텐츠가 제3자의 권리를 침해하거나 적용 법령을 위반하는 경우, 해당 이용자가 전적인 책임을 집니다.
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-s4">
+          <h2 class="legal-section-title"><span class="legal-section-num">4</span>콘텐츠 소유권 및 저작권</h2>
+          <p class="legal-p">이용자가 서비스를 통해 생성한 콘텐츠의 저작권은 원칙적으로 이용자에게 귀속됩니다. 다만, 다음 사항에 유의하시기 바랍니다.</p>
+          <ul class="legal-list">
+            <li><strong>이용자 생성 콘텐츠:</strong> AI를 통해 생성된 산출물의 저작권 및 책임은 이용자에게 있습니다.</li>
+            <li><strong>플랫폼 서비스 라이선스:</strong> 회사는 서비스 개선 및 기술 운영 목적으로 이용자 콘텐츠를 내부적으로 처리할 수 있는 비독점적 라이선스를 보유합니다.</li>
+            <li><strong>회사 소유 자산:</strong> NK Platform의 UI, 로고, 코드, 브랜드 에셋 등의 모든 지식재산권은 회사에 귀속됩니다.</li>
+            <li><strong>제3자 콘텐츠:</strong> 연동된 SNS(TikTok, Instagram 등)에서 가져온 콘텐츠의 저작권은 원작자에게 있으며, 해당 플랫폼의 이용약관이 적용됩니다.</li>
+          </ul>
+          <p class="legal-p">이용자는 서비스에 업로드하는 모든 콘텐츠가 제3자의 저작권을 침해하지 않음을 보증합니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-s5">
+          <h2 class="legal-section-title"><span class="legal-section-num">5</span>서비스 이용 제한</h2>
+          <p class="legal-p">회사는 이용자가 다음에 해당하는 경우 사전 통보 없이 서비스 이용을 제한하거나 계정을 정지·삭제할 수 있습니다.</p>
+          <ul class="legal-list">
+            <li>본 약관을 위반한 경우</li>
+            <li>불법 행위 또는 타인의 권리를 침해하는 행위를 한 경우</li>
+            <li>허위 정보를 이용하여 계정을 생성한 경우</li>
+            <li>서비스의 안정적 운영을 방해하는 행위를 한 경우</li>
+            <li>장기간(1년 이상) 서비스를 이용하지 않은 경우</li>
+            <li>연동된 SNS API 정책을 위반한 경우</li>
+          </ul>
+          <p class="legal-p">회사는 서비스의 유지보수, 시스템 장애, 천재지변 등의 사유로 서비스 제공을 일시 중단할 수 있으며, 이 경우 사전에 공지합니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-s6">
+          <h2 class="legal-section-title"><span class="legal-section-num">6</span>면책 조항</h2>
+          <p class="legal-p">회사는 다음과 같은 경우에 발생한 손해에 대해 책임을 지지 않습니다.</p>
+          <ul class="legal-list">
+            <li>천재지변, 전쟁, 테러, 정부의 조치 등 불가항력적 사유로 인한 서비스 장애</li>
+            <li>이용자의 귀책사유로 인한 서비스 이용 장애 및 데이터 손실</li>
+            <li>이용자가 생성한 AI 콘텐츠로 인해 발생한 제3자와의 분쟁</li>
+            <li>TikTok, Instagram 등 제3자 플랫폼의 API 변경·중단으로 인한 서비스 제한</li>
+            <li>이용자 간 거래 또는 서비스 내 제3자가 제공하는 정보의 정확성</li>
+            <li>무료 서비스 이용과 관련하여 발생한 손해</li>
+          </ul>
+          <div class="legal-highlight">
+            <strong>AI 콘텐츠 면책:</strong> AI 모델이 생성한 콘텐츠는 부정확하거나 편향된 정보를 포함할 수 있습니다. 이용자는 생성된 콘텐츠를 검토하고 최종 책임을 부담합니다.
+          </div>
+        </section>
+
+        <section class="legal-section" id="ko-s7">
+          <h2 class="legal-section-title"><span class="legal-section-num">7</span>약관 변경 고지</h2>
+          <p class="legal-p">회사는 관련 법령의 개정, 서비스 정책 변경 등의 사유로 본 약관을 변경할 수 있습니다. 약관 변경 시 다음과 같이 고지합니다.</p>
+          <ul class="legal-list">
+            <li>시행 7일 전 서비스 내 공지사항 또는 이메일을 통해 사전 공지</li>
+            <li>이용자 권리에 중대한 영향을 미치는 변경의 경우 30일 전 공지</li>
+            <li>변경된 약관은 공지된 시행일부터 효력이 발생합니다.</li>
+          </ul>
+          <p class="legal-p">변경된 약관에 동의하지 않는 이용자는 서비스 이용을 중단하고 계정 삭제를 요청할 수 있습니다. 변경 시행일 이후 서비스를 계속 이용하는 경우 변경 약관에 동의한 것으로 간주합니다.</p>
+        </section>
+
+        <section class="legal-section" id="ko-s8">
+          <h2 class="legal-section-title"><span class="legal-section-num">8</span>분쟁 해결 및 준거법</h2>
+          <p class="legal-p">본 약관과 서비스 이용에 관한 분쟁은 대한민국 법률에 따라 해결됩니다. 분쟁 발생 시 회사와 이용자는 먼저 협의를 통해 해결을 시도하며, 협의가 이루어지지 않을 경우 회사 소재지를 관할하는 법원에 소를 제기할 수 있습니다.</p>
+          <ul class="legal-list">
+            <li>준거법: 대한민국 법률</li>
+            <li>관할 법원: 회사 소재지 관할 법원</li>
+            <li>문의: chikinx1@gmail.com</li>
+          </ul>
+        </section>
+      </article>
+
+      <!-- ═══════════════════════ ENGLISH ═══════════════════════ -->
+      <article class="legal-content" id="content-en">
+        <h1 class="legal-doc-title">Terms of Service</h1>
+        <div class="legal-doc-meta">
+          <span>Effective: January 1, 2025</span>
+          <span>Last Updated: May 14, 2026</span>
+          <span>Company: NK Studio</span>
+        </div>
+
+        <nav class="legal-toc" aria-label="Table of Contents">
+          <p class="legal-toc-title">Contents</p>
+          <ol class="legal-toc-list">
+            <li><a href="#en-s1" data-num="1">Service Purpose &amp; Overview</a></li>
+            <li><a href="#en-s2" data-num="2">Acceptance of Terms</a></li>
+            <li><a href="#en-s3" data-num="3">User Obligations</a></li>
+            <li><a href="#en-s4" data-num="4">Content Ownership &amp; Copyright</a></li>
+            <li><a href="#en-s5" data-num="5">Service Restrictions</a></li>
+            <li><a href="#en-s6" data-num="6">Disclaimers</a></li>
+            <li><a href="#en-s7" data-num="7">Changes to Terms</a></li>
+            <li><a href="#en-s8" data-num="8">Governing Law &amp; Disputes</a></li>
+          </ol>
+        </nav>
+
+        <section class="legal-section" id="en-s1">
+          <h2 class="legal-section-title"><span class="legal-section-num">1</span>Service Purpose &amp; Overview</h2>
+          <p class="legal-p">NK Platform ("Service") is an AI-powered content creation platform operated by NK Studio ("Company"). The Service supports digital content production workflows including video production, image generation, brand management, and SNS content publishing.</p>
+          <p class="legal-p">These Terms of Service ("Terms") govern your access to and use of NK Platform. By accessing or using the Service, you agree to be bound by these Terms.</p>
+          <ul class="legal-list">
+            <li>Service URL: <strong>nk-ai-studio.pages.dev</strong></li>
+            <li>Operator: NK Studio</li>
+            <li>Contact: chikinx1@gmail.com</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="en-s2">
+          <h2 class="legal-section-title"><span class="legal-section-num">2</span>Acceptance of Terms</h2>
+          <p class="legal-p">By accessing the Service or creating an account, you acknowledge that you have read, understood, and agree to be bound by these Terms. Users under the age of 14 may not use the Service without parental or guardian consent.</p>
+          <ul class="legal-list">
+            <li>These Terms become effective when posted within the Service.</li>
+            <li>The Company may update these Terms and will provide 7 days' prior notice before changes take effect.</li>
+            <li>If you do not agree to updated Terms, you may discontinue use and delete your account.</li>
+          </ul>
+        </section>
+
+        <section class="legal-section" id="en-s3">
+          <h2 class="legal-section-title"><span class="legal-section-num">3</span>User Obligations</h2>
+          <p class="legal-p">When using the Service, you agree to:</p>
+          <ul class="legal-list">
+            <li>Not infringe upon others' personal information, copyrights, or other intellectual property rights</li>
+            <li>Not submit false information, impersonate others, or transfer/sell your account</li>
+            <li>Not disrupt normal service operations (crawling, DoS attacks, malware distribution, etc.)</li>
+            <li>Not create or distribute obscene, violent, hateful, or discriminatory content</li>
+            <li>Not create or use content that violates applicable laws or public order</li>
+            <li>Comply with the Terms of Service of connected SNS platforms (TikTok, Instagram, etc.)</li>
+            <li>Maintain the security of your account credentials</li>
+          </ul>
+          <div class="legal-highlight">
+            <strong>Important:</strong> If AI-generated content you create infringes on third-party rights or violates applicable law, you bear sole responsibility for such content.
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-s4">
+          <h2 class="legal-section-title"><span class="legal-section-num">4</span>Content Ownership &amp; Copyright</h2>
+          <p class="legal-p">You retain ownership of content you create through the Service. However, please note the following:</p>
+          <ul class="legal-list">
+            <li><strong>User-Generated Content:</strong> You are responsible for the copyright and any consequences arising from AI-generated outputs.</li>
+            <li><strong>Platform License:</strong> The Company holds a non-exclusive license to process your content internally for service improvement and technical operations.</li>
+            <li><strong>Company Assets:</strong> All intellectual property rights in NK Platform's UI, logo, code, and brand assets belong to the Company.</li>
+            <li><strong>Third-Party Content:</strong> Content sourced from connected SNS platforms (TikTok, Instagram, etc.) is owned by the original creators and governed by those platforms' terms.</li>
+          </ul>
+          <p class="legal-p">By uploading content, you represent that it does not infringe any third-party copyright.</p>
+        </section>
+
+        <section class="legal-section" id="en-s5">
+          <h2 class="legal-section-title"><span class="legal-section-num">5</span>Service Restrictions</h2>
+          <p class="legal-p">The Company may restrict, suspend, or terminate your account without prior notice if you:</p>
+          <ul class="legal-list">
+            <li>Violate these Terms</li>
+            <li>Engage in illegal activities or infringe upon others' rights</li>
+            <li>Create an account using false information</li>
+            <li>Disrupt the stable operation of the Service</li>
+            <li>Remain inactive for an extended period (1 year or more)</li>
+            <li>Violate the API policies of connected SNS platforms</li>
+          </ul>
+          <p class="legal-p">The Company may temporarily suspend the Service for maintenance, system failures, or force majeure events, and will provide advance notice where possible.</p>
+        </section>
+
+        <section class="legal-section" id="en-s6">
+          <h2 class="legal-section-title"><span class="legal-section-num">6</span>Disclaimers</h2>
+          <p class="legal-p">The Company is not liable for damages arising from:</p>
+          <ul class="legal-list">
+            <li>Service disruptions due to force majeure (natural disasters, war, terrorism, government actions)</li>
+            <li>Service disruptions or data loss attributable to the user</li>
+            <li>Disputes with third parties arising from AI-generated content you created</li>
+            <li>Service limitations due to API changes or discontinuation by third-party platforms (TikTok, Instagram, etc.)</li>
+            <li>Accuracy of information provided by third parties within the Service</li>
+            <li>Damages arising from use of free-tier services</li>
+          </ul>
+          <div class="legal-highlight">
+            <strong>AI Content Disclaimer:</strong> Content generated by AI models may contain inaccurate or biased information. You are responsible for reviewing all generated content before use.
+          </div>
+        </section>
+
+        <section class="legal-section" id="en-s7">
+          <h2 class="legal-section-title"><span class="legal-section-num">7</span>Changes to Terms</h2>
+          <p class="legal-p">The Company may modify these Terms due to changes in applicable law or service policy. Notice of changes will be provided as follows:</p>
+          <ul class="legal-list">
+            <li>At least 7 days' advance notice via in-service announcements or email</li>
+            <li>At least 30 days' advance notice for changes that materially affect user rights</li>
+            <li>Updated Terms become effective on the announced effective date.</li>
+          </ul>
+          <p class="legal-p">If you do not agree to the updated Terms, you may stop using the Service and request account deletion. Continued use after the effective date constitutes acceptance of the updated Terms.</p>
+        </section>
+
+        <section class="legal-section" id="en-s8">
+          <h2 class="legal-section-title"><span class="legal-section-num">8</span>Governing Law &amp; Disputes</h2>
+          <p class="legal-p">These Terms and any disputes related to the Service are governed by the laws of the Republic of Korea. In the event of a dispute, the parties shall first attempt to resolve it through good-faith negotiation. If unresolved, disputes shall be submitted to the court having jurisdiction over the Company's registered address.</p>
+          <ul class="legal-list">
+            <li>Governing Law: Republic of Korea</li>
+            <li>Jurisdiction: Court having jurisdiction over the Company's location</li>
+            <li>Contact: chikinx1@gmail.com</li>
+          </ul>
+        </section>
+      </article>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="legal-footer">
+      <div class="legal-footer-inner">
+        <span class="legal-footer-copy">© 2026 NK Studio. All rights reserved.</span>
+        <nav class="legal-footer-links">
+          <a href="terms" class="active">이용약관</a>
+          <span>|</span>
+          <a href="privacy">개인정보처리방침</a>
+          <span>|</span>
+          <a href="mailto:chikinx1@gmail.com">Contact</a>
+          <span>|</span>
+          <a href="/">홈</a>
+        </nav>
+      </div>
+    </footer>
+
+  </div><!-- .legal-wrap -->
+
+  <script>
+    (function () {
+      // Theme restore
+      var saved = localStorage.getItem('nk_theme') || 'dark';
+      var variant = localStorage.getItem('nk_theme_variant') || '';
+      document.documentElement.setAttribute('data-theme', saved);
+      if (variant) document.documentElement.setAttribute('data-theme-variant', variant);
+      // Remove veil
+      document.addEventListener('DOMContentLoaded', function () {
+        document.documentElement.classList.remove('preload-veiled');
+      });
+    })();
+
+    function toggleThemeLocal() {
+      var current = document.documentElement.getAttribute('data-theme') || 'dark';
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('nk_theme', next);
+    }
+
+    function setLang(lang) {
+      var ko = document.getElementById('content-ko');
+      var en = document.getElementById('content-en');
+      var btnKo = document.getElementById('btn-ko');
+      var btnEn = document.getElementById('btn-en');
+      var navKo = document.getElementById('nav-terms-ko');
+      if (lang === 'ko') {
+        ko.classList.add('active'); en.classList.remove('active');
+        btnKo.classList.add('active'); btnEn.classList.remove('active');
+        document.documentElement.lang = 'ko';
+        document.title = '서비스 이용약관 — NK Platform';
+        if (navKo) navKo.textContent = '이용약관';
+      } else {
+        en.classList.add('active'); ko.classList.remove('active');
+        btnEn.classList.add('active'); btnKo.classList.remove('active');
+        document.documentElement.lang = 'en';
+        document.title = 'Terms of Service — NK Platform';
+        if (navKo) navKo.textContent = 'Terms';
+      }
+    }
+  </script>
+</body>
+
+</html>
