@@ -4011,6 +4011,18 @@
     })();
     promises.push(refreshProjectPromise);
 
+    // SNS 연결 상태 cache 갱신: 다른 디바이스/세션에서 disconnect 됐을 경우
+    // nk_sns_states localStorage 가 stale 상태로 남아 '사용 중' 으로 잘못 표시되는 문제 방지.
+    if (NK.ui && NK.ui.snsSettings && NK.ui.snsSettings.reload) {
+      promises.push(
+        NK.ui.snsSettings.reload()
+          .then(function () {
+            if (initDone && root.isConnected) forceRerender();
+          })
+          .catch(function () {})
+      );
+    }
+
     if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       promises.push(
         NK.service.brand.hydrateFromServer(brandId, { force: true, ttlMs: 0 })

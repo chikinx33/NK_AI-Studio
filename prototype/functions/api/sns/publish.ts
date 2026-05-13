@@ -155,6 +155,8 @@ async function waitForIgMedia(
   maxMs = 180000
 ): Promise<void> {
   const start = Date.now();
+  // 첫 폴은 1초 후(이미지는 보통 즉시 FINISHED), 이후엔 5초 간격.
+  let nextDelay = 1000;
   while (Date.now() - start < maxMs) {
     const r = await fetch(
       `https://graph.instagram.com/v21.0/${mediaId}?fields=status_code&access_token=${accessToken}`
@@ -162,7 +164,8 @@ async function waitForIgMedia(
     const d = (await r.json()) as { status_code?: string };
     if (d.status_code === "FINISHED") return;
     if (d.status_code === "ERROR") throw new Error("Instagram 미디어 처리 실패");
-    await new Promise((res) => setTimeout(res, 5000));
+    await new Promise((res) => setTimeout(res, nextDelay));
+    nextDelay = 5000;
   }
   throw new Error("Instagram 미디어 처리 시간 초과");
 }
@@ -215,11 +218,12 @@ async function publishCarouselToInstagram(opts: {
       throw new Error(`[carousel] 컨테이너 생성 실패 (아이템 ${i + 1}/${items.length}, ${item.mediaType}): ${cData.error?.message}`);
     }
 
-    if (item.mediaType === "video") {
-      console.log(`[carousel] 영상 컨테이너 처리 대기: ${cData.id}`);
-      await waitForIgMedia(accessToken, cData.id);
-      console.log(`[carousel] 영상 컨테이너 완료: ${cData.id}`);
-    }
+    // 카루셀의 모든 자식 컨테이너(영상/이미지)는 CAROUSEL 컨테이너에 묶기 전에
+    // 반드시 FINISHED 상태여야 한다. 이미지도 즉시 FINISHED 가 아닐 수 있으므로
+    // 명시적으로 대기한다 ("Media ID is not available" 오류 방지).
+    console.log(`[carousel] 자식 컨테이너 처리 대기: ${cData.id} (${item.mediaType})`);
+    await waitForIgMedia(accessToken, cData.id);
+    console.log(`[carousel] 자식 컨테이너 완료: ${cData.id}`);
 
     containerIds.push(cData.id);
   }
