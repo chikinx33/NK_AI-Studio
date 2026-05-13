@@ -200,9 +200,16 @@
     }
     return attempt(1).then(function (res) {
       if (res && res.ok && res.settings) {
+        // 서버에 데이터 존재 → 권위 있는 값
         _settings = res.settings;
         _settings.sns = _mergeSnsState(_settings.sns, cached);
         _writeCache(_settings.sns); // 머지 결과로 캐시 갱신
+      } else if (res && res.ok && res.missing) {
+        // 서버 파일 없음(신규 사용자 또는 일시적 GCS 누락) — 캐시 보존
+        // 가짜 disconnected 기본값으로 캐시를 덮어쓰지 않음(연결 상태 유실 방지)
+        console.warn('[SNS] Server file missing — preserving local cache');
+        _settings = _defaultSettings(cached);
+        // _writeCache 호출하지 않음
       } else {
         // 재시도까지 실패한 서버 오류 → 캐시 폴백
         console.warn('[SNS] loadSettings server error:', res && res.error);

@@ -87,17 +87,11 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     );
 
     if (gcsRes.status === 404) {
-      return send({
-        ok: true,
-        settings: {
-          sns: {
-            instagram: { connected: false },
-            youtube: { connected: false },
-            tiktok: { connected: false },
-          },
-          deployDefaults: {},
-        },
-      });
+      // 파일 없음(신규 사용자 또는 일시적 GCS 누락) — 가짜 'disconnected' 기본값을
+      // 권위 있는 값처럼 돌려주면 클라이언트가 로컬 캐시를 disconnected 로 덮어쓰는
+      // 부작용이 있음. 명시적으로 missing 플래그만 반환하여 클라이언트가 캐시를
+      // 보존하도록 한다.
+      return send({ ok: true, settings: null, missing: true });
     }
 
     if (!gcsRes.ok) throw new Error(`GCS read error: ${gcsRes.status}`);

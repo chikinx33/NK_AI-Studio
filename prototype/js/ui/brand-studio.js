@@ -4013,15 +4013,25 @@
 
     // SNS 연결 상태 cache 갱신: 다른 디바이스/세션에서 disconnect 됐을 경우
     // nk_sns_states localStorage 가 stale 상태로 남아 '사용 중' 으로 잘못 표시되는 문제 방지.
-    if (NK.ui && NK.ui.snsSettings && NK.ui.snsSettings.reload) {
-      promises.push(
-        NK.ui.snsSettings.reload()
-          .then(function () {
+    // brand.html 에는 sns-settings.js 가 로드되지 않으므로 직접 fetch 한다.
+    promises.push((async function () {
+      try {
+        var token = localStorage.getItem('nk_auth_token') || '';
+        if (!token) return;
+        var r = await fetch('/api/userdata/sns/get', {
+          headers: { Authorization: 'Bearer ' + token },
+          cache: 'no-store'
+        });
+        var res = await r.json();
+        if (res && res.ok && res.settings && res.settings.sns) {
+          try {
+            localStorage.setItem('nk_sns_states', JSON.stringify(res.settings.sns));
             if (initDone && root.isConnected) forceRerender();
-          })
-          .catch(function () {})
-      );
-    }
+          } catch (_) {}
+        }
+        // res.missing 인 경우 캐시 보존(덮어쓰지 않음). 서버 오류도 마찬가지.
+      } catch (_) {}
+    })());
 
     if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       promises.push(
