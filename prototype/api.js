@@ -802,12 +802,42 @@
     return j(text);
   };
 
+  // 생성 직후 이미지/영상은 scene.imageDataUrl 에 data:base64 형태로 들어 있을 수 있다.
+  // 이대로 /api/project/save 에 보내면 씬 6개 × ~1MB 가 누적된 페이로드를 Worker 가
+  // JSON 파싱·재직렬화·GCS 업로드 하면서 CPU 한도(1102)를 넘긴다.
+  // GCS 경로(signedUrl/imagePath/objectName)가 없는 data: URL 은 영속화 가치가 없으므로
+  // 전송 전에 제거한다. 메모리 상의 state 는 그대로라 현재 세션 표시에는 영향 없음.
+  function stripInlineDataUrls(scenes) {
+    if (!Array.isArray(scenes)) return [];
+    var dropDataUrl = function (v) {
+      return (typeof v === 'string' && v.indexOf('data:') === 0) ? '' : v;
+    };
+    return scenes.map(function (s) {
+      if (!s || typeof s !== 'object') return s;
+      var out = Object.assign({}, s, {
+        imageDataUrl: dropDataUrl(s.imageDataUrl),
+        videoUrl: dropDataUrl(s.videoUrl)
+      });
+      if (Array.isArray(s.shots)) {
+        out.shots = s.shots.map(function (sh) {
+          if (!sh || typeof sh !== 'object') return sh;
+          return Object.assign({}, sh, {
+            imageDataUrl: dropDataUrl(sh.imageDataUrl),
+            videoUrl: dropDataUrl(sh.videoUrl)
+          });
+        });
+      }
+      return out;
+    });
+  }
+
   api.projectSave = async function (projectId, payload, scenes, opts) {
+    var safeScenes = stripInlineDataUrls(Array.isArray(scenes) ? scenes : []);
     var body = {
       projectId: String(projectId || ''),
       userId: resolveUserId(),
       payload: payload || {},
-      scenes: Array.isArray(scenes) ? scenes : [],
+      scenes: safeScenes,
       header: opts && opts.header ? opts.header : '',
       aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',
       title: (opts && opts.title) || ''

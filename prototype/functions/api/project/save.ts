@@ -94,6 +94,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return object ? `gs://${bucket}/${object}` : "";
     };
 
+    // 메인 프로덕션이 생성한 이미지를 scene.imageDataUrl 에 data:base64 그대로 저장하면
+    // 씬 6개 × 1MB ≈ 6MB 페이로드가 되어 /api/project/save Worker 가 JSON 파싱·직렬화·업로드
+    // 단계에서 CPU 한도를 넘기고 1102(resource limits) 로 503 이 난다.
+    // 영속화 대상은 GCS path/signedUrl 이지 일회용 base64 가 아니므로,
+    // GCS 경로가 없는 data: URL 은 저장 단계에서 비운다.
+    // (생성 직후 화면 표시용 dataUrl 은 클라이언트 메모리에는 남아 있다.)
+    const stripDataUrl = (value: string) =>
+      (typeof value === "string" && value.startsWith("data:")) ? "" : value;
+
     const normalizeDialogue = (value: any) => {
       if (Array.isArray(value)) {
         return value
@@ -150,9 +159,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
             cameraMove: typeof sh.cameraMove === "string" ? sh.cameraMove : "static",
             composition: typeof sh.composition === "string" ? sh.composition : "",
             action: typeof sh.action === "string" ? sh.action : "",
-            imageDataUrl: shotImagePath || shotImageUrl,
+            imageDataUrl: stripDataUrl(shotImagePath || shotImageUrl),
             imagePath: shotImagePath,
-            videoUrl: shotVideoUrl,
+            videoUrl: stripDataUrl(shotVideoUrl),
             videoPath: shotVideoPath,
             videoStatus: typeof sh.videoStatus === "string" ? sh.videoStatus : "",
             videoError: typeof sh.videoError === "string" ? sh.videoError : "",
@@ -229,9 +238,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         action,
         shots: normalizeShots(s?.shots, sceneId),
         estSec: est > 0 ? Math.round(est) : undefined,
-        imageDataUrl: imagePath || imageUrl,
+        imageDataUrl: stripDataUrl(imagePath || imageUrl),
         imagePath,
-        videoUrl,
+        videoUrl: stripDataUrl(videoUrl),
         videoPath,
         videoStatus,
         videoError,
