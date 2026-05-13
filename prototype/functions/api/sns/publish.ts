@@ -185,6 +185,8 @@ async function postInstagramComment(opts: {
   if (!data.id) throw new Error(`첫 댓글 게시 실패: ${data.error?.message}`);
 }
 
+const INSTAGRAM_THUMB_OFFSET_MS = 1000;
+
 async function publishCarouselToInstagram(opts: {
   igUserId: string;
   accessToken: string;
@@ -201,7 +203,7 @@ async function publishCarouselToInstagram(opts: {
 
     const containerBody: Record<string, unknown> =
       item.mediaType === "video"
-        ? { media_type: "VIDEO", video_url: item.mediaUrl, is_carousel_item: true, access_token: accessToken }
+        ? { media_type: "VIDEO", video_url: item.mediaUrl, is_carousel_item: true, thumb_offset: INSTAGRAM_THUMB_OFFSET_MS, access_token: accessToken }
         : { image_url: item.mediaUrl, is_carousel_item: true, access_token: accessToken };
 
     const cRes = await fetch(
@@ -274,6 +276,7 @@ async function publishToInstagram(opts: {
           video_url: mediaUrl,
           caption,
           share_to_feed: true,
+          thumb_offset: INSTAGRAM_THUMB_OFFSET_MS,
           access_token: accessToken,
         }
       : {
