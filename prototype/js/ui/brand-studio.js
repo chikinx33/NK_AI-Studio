@@ -2219,7 +2219,7 @@
       '<div class="bsf-timeline">' + timelineHtml + '</div>' +
       '<div class="bsf-flow-head-actions">' +
       '<button type="button" class="btn-secondary bsf-head-btn" data-action="brand-generate-all-drafts"' + (activeStep === 3 && selectedFormats.length ? '' : ' disabled') + '>' + T.ctrlAutoGen + '</button>' +
-      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-save-format-draft" disabled>' + T.ctrlSave + '</button>' +
+      '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-save-format-draft">' + T.ctrlSave + '</button>' +
       '<button type="button" class="btn-primary bsf-head-btn" data-action="brand-oneclick-draft" disabled>' + T.oneClickDraft + '</button>' +
       '</div>' +
       '</div>' +
@@ -2319,7 +2319,7 @@
     function setSaveBtnEnabled(val) {
       _draftDirty = val;
       var sb = root.querySelector('[data-action="brand-save-format-draft"]');
-      if (sb) sb.disabled = !val;
+      if (sb) sb.disabled = false;
     }
     // ── 포맷 카드 3단계 상태 판정 ─────────────────────────────────────────────
     // returns 'recommended' | 'available' | 'unavailable'
