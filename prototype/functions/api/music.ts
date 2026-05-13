@@ -206,6 +206,9 @@ function base64ToBytes(b64: string): Uint8Array {
 }
 
 // Lyria 3 Pro 로 BGM 생성. preview 단계라 막혀있거나 실패하면 null 반환 → 상위에서 ElevenLabs 로 폴백.
+// 응답은 WAV 로 요청한다. MP3 는 Xing/Info VBR 헤더가 없으면 HTMLAudioElement 의 currentTime
+// 시킹이 프레임 중간으로 점프해 "삐비비" 노이즈를 내는데, Lyria preview 가 만드는 MP3 가
+// 그런 경향이 있다. WAV(PCM) 는 바이트↔시간이 정확히 매핑돼 시킹이 안정적이다.
 async function generateLyriaMusic(
   apiKey: string,
   prompt: string
@@ -216,7 +219,7 @@ async function generateLyriaMusic(
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         responseModalities: ["AUDIO", "TEXT"],
-        responseFormat: { audio: { mimeType: "audio/mp3" } },
+        responseFormat: { audio: { mimeType: "audio/wav" } },
       },
     };
     const res = await fetch(url, {
@@ -230,7 +233,7 @@ async function generateLyriaMusic(
     for (const p of parts) {
       const inline = (p && (p.inlineData || p.inline_data)) || null;
       if (inline && inline.data) {
-        const mime = String(inline.mimeType || inline.mime_type || "audio/mp3");
+        const mime = String(inline.mimeType || inline.mime_type || "audio/wav");
         return { bytes: base64ToBytes(String(inline.data)), mimeType: mime };
       }
     }
