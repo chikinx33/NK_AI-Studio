@@ -185,6 +185,79 @@ async function postInstagramComment(opts: {
   if (!data.id) throw new Error(`첫 댓글 게시 실패: ${data.error?.message}`);
 }
 
+async function publishCarouselToInstagram(opts: {
+  igUserId: string;
+  accessToken: string;
+  items: Array<{ mediaType: "image" | "video"; mediaUrl: string }>;
+  caption: string;
+}): Promise<{ postId: string }> {
+  const { igUserId, accessToken, items, caption } = opts;
+
+  // Step 1: 각 미디어를 개별 Container로 생성 (영상 → VIDEO, 이미지 → IMAGE)
+  const containerIds: string[] = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    console.log(`[carousel] Step 1/${items.length}: ${item.mediaType} 컨테이너 생성 중 (index ${i})`);
+
+    const containerBody: Record<string, unknown> =
+      item.mediaType === "video"
+        ? { media_type: "VIDEO", video_url: item.mediaUrl, is_carousel_item: true, access_token: accessToken }
+        : { image_url: item.mediaUrl, is_carousel_item: true, access_token: accessToken };
+
+    const cRes = await fetch(
+      `https://graph.instagram.com/v21.0/${igUserId}/media`,
+      { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(containerBody) }
+    );
+    const cData = (await cRes.json()) as { id?: string; error?: { message: string } };
+    if (!cData.id) {
+      throw new Error(`[carousel] 컨테이너 생성 실패 (아이템 ${i + 1}/${items.length}, ${item.mediaType}): ${cData.error?.message}`);
+    }
+
+    if (item.mediaType === "video") {
+      console.log(`[carousel] 영상 컨테이너 처리 대기: ${cData.id}`);
+      await waitForIgMedia(accessToken, cData.id);
+      console.log(`[carousel] 영상 컨테이너 완료: ${cData.id}`);
+    }
+
+    containerIds.push(cData.id);
+  }
+
+  // Step 2: 생성된 Container ID 배열을 묶어 캐러셀 Container 생성
+  console.log(`[carousel] Step 2: 캐러셀 컨테이너 생성 (children: ${containerIds.join(",")})`);
+  const carouselRes = await fetch(
+    `https://graph.instagram.com/v21.0/${igUserId}/media`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        media_type: "CAROUSEL",
+        children: containerIds.join(","),
+        caption,
+        access_token: accessToken,
+      }),
+    }
+  );
+  const carouselData = (await carouselRes.json()) as { id?: string; error?: { message: string } };
+  if (!carouselData.id) {
+    throw new Error(`[carousel] 캐러셀 컨테이너 생성 실패: ${carouselData.error?.message}`);
+  }
+
+  // Step 3: 캐러셀 게시
+  console.log(`[carousel] Step 3: 캐러셀 게시 (creation_id: ${carouselData.id})`);
+  const pRes = await fetch(
+    `https://graph.instagram.com/v21.0/${igUserId}/media_publish`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creation_id: carouselData.id, access_token: accessToken }),
+    }
+  );
+  const pData = (await pRes.json()) as { id?: string; error?: { message: string } };
+  if (!pData.id) throw new Error(`[carousel] 캐러셀 게시 실패: ${pData.error?.message}`);
+
+  return { postId: pData.id };
+}
+
 async function publishToInstagram(opts: {
   igUserId: string;
   accessToken: string;
@@ -239,15 +312,18 @@ async function publishToInstagram(opts: {
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
-  const userId = auth.userId;
 
   let body: {
     platform: string;
-    mediaType: "image" | "video";
-    mediaGcsPath: string;
     caption: string;
     scheduledAt?: string;
     firstComment?: string;
+    // 단일 포스트
+    mediaType?: "image" | "video";
+    mediaGcsPath?: string;
+    mediaDirectUrl?: string;
+    // 캐러셀
+    mediaItems?: Array<{ mediaType: "image" | "video"; gcsPath?: string; mediaUrl?: string }>;
   };
   try {
     body = await request.json();
@@ -255,9 +331,14 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     return send({ error: "Invalid JSON" }, 400);
   }
 
-  const { platform, mediaType, mediaGcsPath, caption, firstComment } = body;
-  if (!platform || !mediaType || !mediaGcsPath || caption === undefined) {
-    return send({ error: "필수 필드 누락: platform, mediaType, mediaGcsPath, caption" }, 400);
+  const { platform, caption, firstComment } = body;
+  const isCarousel = Array.isArray(body.mediaItems) && body.mediaItems.length > 0;
+
+  if (!platform || caption === undefined) {
+    return send({ error: "필수 필드 누락: platform, caption" }, 400);
+  }
+  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl) {
+    return send({ error: "단일 포스트에는 mediaType, mediaGcsPath 또는 mediaDirectUrl이 필요합니다." }, 400);
   }
 
   try {
@@ -266,6 +347,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       privateKeyPem: env.GOOGLE_PRIVATE_KEY,
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
+    void googleToken;
 
     const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
     const bucket = outParsed.bucket;
@@ -277,36 +359,52 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return send({ error: "Instagram 환경변수(IG_ACCESS_TOKEN, IG_USER_ID)가 설정되지 않았습니다." }, 400);
       }
 
-      const signedUrl = await buildSignedUrl(
-        bucket,
-        mediaGcsPath,
-        env.GOOGLE_CLIENT_EMAIL,
-        env.GOOGLE_PRIVATE_KEY,
-        3600
-      );
+      if (isCarousel) {
+        // 캐러셀 포스트: 각 아이템에 대해 서명 URL 생성 후 업로드
+        const rawItems = body.mediaItems!;
+        const resolvedItems: Array<{ mediaType: "image" | "video"; mediaUrl: string }> = [];
+        for (let i = 0; i < rawItems.length; i++) {
+          const item = rawItems[i];
+          let mediaUrl: string;
+          if (item.gcsPath) {
+            console.log(`[carousel] 서명 URL 생성 중 (${item.mediaType}, gcsPath: ${item.gcsPath})`);
+            mediaUrl = await buildSignedUrl(bucket, item.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+          } else if (item.mediaUrl) {
+            mediaUrl = item.mediaUrl;
+          } else {
+            return send({ error: `캐러셀 아이템 ${i + 1}에 gcsPath 또는 mediaUrl이 없습니다.` }, 400);
+          }
+          resolvedItems.push({ mediaType: item.mediaType, mediaUrl });
+        }
 
-      const { postId } = await publishToInstagram({
-        igUserId,
-        accessToken,
-        mediaType,
-        mediaUrl: signedUrl,
-        caption,
-      });
+        const { postId } = await publishCarouselToInstagram({ igUserId, accessToken, items: resolvedItems, caption });
 
-      if (firstComment && firstComment.trim()) {
-        await postInstagramComment({ postId, accessToken, message: firstComment.trim() });
+        if (firstComment && firstComment.trim()) {
+          await postInstagramComment({ postId, accessToken, message: firstComment.trim() });
+        }
+
+        return send({ ok: true, result: { platform: "instagram", postId, username: igUserId, status: "published", publishedAt: new Date().toISOString() } });
+
+      } else {
+        // 단일 포스트 (기존 로직 유지)
+        const mediaType = body.mediaType!;
+        let mediaUrl: string;
+        if (body.mediaGcsPath) {
+          mediaUrl = await buildSignedUrl(bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+        } else if (body.mediaDirectUrl) {
+          mediaUrl = body.mediaDirectUrl;
+        } else {
+          return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+        }
+
+        const { postId } = await publishToInstagram({ igUserId, accessToken, mediaType, mediaUrl, caption });
+
+        if (firstComment && firstComment.trim()) {
+          await postInstagramComment({ postId, accessToken, message: firstComment.trim() });
+        }
+
+        return send({ ok: true, result: { platform: "instagram", postId, username: igUserId, status: "published", publishedAt: new Date().toISOString() } });
       }
-
-      return send({
-        ok: true,
-        result: {
-          platform: "instagram",
-          postId,
-          username: igUserId,
-          status: "published",
-          publishedAt: new Date().toISOString(),
-        },
-      });
     }
 
     return send({ error: `'${platform}' 플랫폼은 아직 지원되지 않습니다.` }, 400);

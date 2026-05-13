@@ -16,6 +16,37 @@
       .replace(/'/g, '&#39;');
   }
 
+  // 프록시 URL / GCS URL / gs:// URI에서 GCS 오브젝트 경로를 추출
+  function extractGcsObjectName(url) {
+    var u = String(url || '').trim();
+    if (!u) return '';
+    // /api/media/proxy?objectName=... 형식
+    if (u.indexOf('/api/media/proxy') !== -1 && u.indexOf('objectName=') !== -1) {
+      try {
+        var qIdx = u.indexOf('?');
+        var query = qIdx >= 0 ? u.slice(qIdx + 1) : u;
+        var params = new URLSearchParams(query);
+        return String(params.get('objectName') || '').trim();
+      } catch (_) {}
+    }
+    // https://storage.googleapis.com/bucket/path 형식
+    if (u.indexOf('storage.googleapis.com') >= 0) {
+      try {
+        var parsed = new URL(u);
+        var path = String(parsed.pathname || '').replace(/^\/+/, '');
+        var firstSlash = path.indexOf('/');
+        return firstSlash >= 0 ? decodeURIComponent(path.slice(firstSlash + 1)) : '';
+      } catch (_) {}
+    }
+    // gs://bucket/path 형식
+    if (u.indexOf('gs://') === 0) {
+      var rest = u.slice(5);
+      var slash = rest.indexOf('/');
+      return slash >= 0 ? rest.slice(slash + 1) : '';
+    }
+    return '';
+  }
+
   function buildStageUrl(page, projectId, brandId) {
     var safePage = String(page || '').trim() || 'dashboard.html';
     var safeProjectId = String(projectId || '').trim();
@@ -1454,7 +1485,13 @@
       '<div class="bsf-asset-type-head"><span class="bsf-asset-type-label">' + T.cardVideo + '</span><em>' + escapeHtml(videoCountLabel) + '</em></div>' +
       (videoItems.length ? '<div class="bsf-asset-thumb-grid bsf-asset-video-grid">' + videoThumbsHtml + '</div>' : '<div class="bsf-asset-story-body"><p class="bsf-asset-empty-hint">' + T.hintVideo.replace('\n', '<br>') + '</p></div>') +
       '</div>';
-    var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>';
+    var carouselHintHtml = (imageSelCount > 0 && videoSelCount > 0)
+      ? '<div class="bsf-carousel-hint">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>' +
+        (isEn ? ' Video will be set as the first slide automatically.' : ' 영상이 첫 번째 슬라이드로 자동 설정됩니다.') +
+        '</div>'
+      : '';
+    var assetTrioHtml = '<div class="bsf-asset-trio">' + storyCardHtml + imageCardHtml + videoCardHtml + '</div>' + carouselHintHtml;
 
     // 초안 패널용 미디어 미리보기 빌더
     function buildDraftMediaPreview(fmtId) {
@@ -3434,19 +3471,60 @@
           return Promise.resolve({ skipped: true });
         }
 
-        var renders = _renderStorageCache[projectId] || [];
-        if (!renders.length) {
-          alert(isEn
-            ? 'No rendered file found. Please render in Post-Production first.'
-            : '렌더링된 파일이 없습니다. 포스트프로덕션에서 먼저 렌더링하세요.');
-          return Promise.resolve({ skipped: true });
+        // 선택된 이미지+영상 자산 수집 → 영상 먼저, 이미지 나중 정렬
+        var selMediaItems = assetItems.filter(function (i) {
+          var t = String(i.type || '').trim();
+          return (t === 'image' || t === 'video') &&
+            selectedAssetIds.indexOf(String(i.id || '').trim()) >= 0;
+        }).slice().sort(function (a, b) {
+          return (String(a.type || '') === 'video' ? 0 : 1) - (String(b.type || '') === 'video' ? 0 : 1);
+        });
+
+        // 각 자산을 { mediaType, gcsPath?, mediaUrl? } 로 변환
+        function resolveMediaItem(item) {
+          var t = String(item.type || '').trim();
+          var id = String(item.id || '');
+          var storeMatch = id.match(/:video:store:(\d+)$/);
+          if (storeMatch) {
+            var idx = parseInt(storeMatch[1], 10);
+            var cacheRenders = _renderStorageCache[projectId] || [];
+            var r = cacheRenders[idx];
+            if (r && r.name) return { mediaType: 'video', gcsPath: String(r.name).trim() };
+          }
+          if (id.indexOf(':video:render') >= 0) {
+            var pp = project.payload || {};
+            var rm = (pp.renderMeta && typeof pp.renderMeta === 'object') ? pp.renderMeta : {};
+            var on = String(rm.outputVideoObjectName || '').trim();
+            if (on) return { mediaType: 'video', gcsPath: on };
+          }
+          var url = String(item.url || '').trim();
+          var gcsPath = extractGcsObjectName(url);
+          var mt = t === 'video' ? 'video' : 'image';
+          if (gcsPath) return { mediaType: mt, gcsPath: gcsPath };
+          if (url && (url.indexOf('http://') === 0 || url.indexOf('https://') === 0)) {
+            return { mediaType: mt, mediaUrl: url };
+          }
+          return null;
         }
 
-        var renderItem = renders[0];
-        var mediaGcsPath = String(renderItem.name || '').trim();
+        var resolvedItems = selMediaItems.map(resolveMediaItem).filter(Boolean);
 
-        var ext = mediaGcsPath.split('.').pop().toLowerCase();
-        var mediaType = (ext === 'mp4' || ext === 'webm') ? 'video' : 'image';
+        // 선택된 자산 없으면 렌더 캐시 첫 항목으로 폴백 (기존 동작)
+        if (!resolvedItems.length) {
+          var renders = _renderStorageCache[projectId] || [];
+          if (!renders.length) {
+            alert(isEn
+              ? 'No rendered file found. Please render in Post-Production first.'
+              : '렌더링된 파일이 없습니다. 포스트프로덕션에서 먼저 렌더링하세요.');
+            return Promise.resolve({ skipped: true });
+          }
+          var fb = renders[0];
+          var fbPath = String(fb.name || '').trim();
+          if (!fbPath) return Promise.resolve({ skipped: true });
+          var fbExt = fbPath.split('.').pop().toLowerCase();
+          var fbType = (fbExt === 'mp4' || fbExt === 'webm') ? 'video' : 'image';
+          resolvedItems = [{ mediaType: fbType, gcsPath: fbPath }];
+        }
 
         var draft = (drafts && drafts[formatId]) || {};
         var draftCaption = String(draft.caption || '').trim();
@@ -3454,22 +3532,34 @@
         var finalCaption = [draftCaption, draftHashtags].filter(Boolean).join('\n\n');
         if (!finalCaption) finalCaption = '';
         var firstComment = String(draft.first_comment || '').trim();
-
         var token = localStorage.getItem('nk_auth_token') || '';
-        return fetch('/api/sns/publish', {
-          method: 'POST',
-          headers: {
-            'Authorization': 'Bearer ' + token,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+
+        var requestBody;
+        if (resolvedItems.length === 1) {
+          var single = resolvedItems[0];
+          requestBody = {
             platform: formatId,
-            mediaType: mediaType,
-            mediaGcsPath: mediaGcsPath,
+            mediaType: single.mediaType,
+            mediaGcsPath: single.gcsPath || '',
+            mediaDirectUrl: single.mediaUrl || '',
             caption: finalCaption,
             scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
             firstComment: firstComment || '',
-          }),
+          };
+        } else {
+          requestBody = {
+            platform: formatId,
+            mediaItems: resolvedItems,
+            caption: finalCaption,
+            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
+            firstComment: firstComment || '',
+          };
+        }
+
+        return fetch('/api/sns/publish', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(requestBody),
         })
           .then(function (r) { return r.json(); })
           .then(function (res) {

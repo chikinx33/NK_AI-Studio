@@ -13387,6 +13387,25 @@ textarea.bsf-skeleton {
   animation: bsf-spin 0.75s linear infinite;
   vertical-align: middle;
 }
+/* ---- 캐러셀 힌트 ---- */
+.bsf-carousel-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 7px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg-2) 80%, rgba(255, 122, 0, 0.12) 20%);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, var(--accent) 40%);
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.bsf-carousel-hint svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
 /* ---- 자산 트리오 (스토리·이미지·영상 카드) ---- */
 .bsf-asset-trio {
   display: grid;
