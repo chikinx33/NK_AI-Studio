@@ -3655,6 +3655,18 @@
         document.activeElement.blur();
       }
     } catch (_) { }
+    // 미리보기 영상이 재생 중이면 명시적으로 멈춘다. 모달만 숨기면 비가시 상태로
+    // 영상·오디오가 계속 재생되어 백그라운드 소리가 새는 회귀가 있었다.
+    try {
+      var pv = storageModal.previewVideo;
+      if (pv) {
+        try { pv.pause(); } catch (_) {}
+        try { pv.currentTime = 0; } catch (_) {}
+        // src 를 비우면 디코더 자원도 해제된다. removeAttribute 후 load() 로 완전히 끊는다.
+        try { pv.removeAttribute('src'); pv.load(); } catch (_) {}
+      }
+      if (storageModal.previewWrap) storageModal.previewWrap.style.display = 'none';
+    } catch (_) {}
     storageModal.root.classList.remove('is-open');
     storageModal.root.setAttribute('aria-hidden', 'true');
   }
