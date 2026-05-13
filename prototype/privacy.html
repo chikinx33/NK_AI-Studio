@@ -269,6 +269,26 @@
     .legal-footer-links a.active { color: var(--orange); }
     .legal-footer-links span { color: var(--border); font-size: 11px; }
 
+    /* ── Scroll To Top ───────────────────────────────────── */
+    .scroll-top {
+      position: fixed; bottom: 28px; right: 28px; z-index: 200;
+      width: 40px; height: 40px; border-radius: 10px;
+      background: color-mix(in srgb, var(--orange) 14%, var(--panel) 86%);
+      border: 1px solid color-mix(in srgb, var(--orange) 36%, var(--border) 64%);
+      color: var(--orange); font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+      cursor: pointer; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 1px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.28);
+      opacity: 0; pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 0.2s, transform 0.2s, background 0.14s;
+    }
+    .scroll-top.visible { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .scroll-top:hover {
+      background: color-mix(in srgb, var(--orange) 22%, var(--panel) 78%);
+    }
+    .scroll-top svg { display: block; }
+
     /* ── Responsive ──────────────────────────────────────── */
     @media (max-width: 600px) {
       .legal-doc-title { font-size: 22px; }
@@ -861,6 +881,11 @@
 
   </div><!-- .legal-wrap -->
 
+  <button class="scroll-top" id="scroll-top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" aria-label="맨 위로">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+    TOP
+  </button>
+
   <script>
     function setLang(lang) {
       var ko = document.getElementById('content-ko');
@@ -883,6 +908,13 @@
         if (navPrivacy) navPrivacy.textContent = '개인정보처리방침';
       }
     }
+
+    (function () {
+      var btn = document.getElementById('scroll-top-btn');
+      window.addEventListener('scroll', function () {
+        btn.classList.toggle('visible', window.scrollY > 300);
+      }, { passive: true });
+    })();
 
     (function () {
       var theme = localStorage.getItem('nk_theme') || 'dark';
