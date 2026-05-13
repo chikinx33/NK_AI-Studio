@@ -202,6 +202,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       googleToken,
       patch: {
         connected: true,
+        // 연결과 사용은 분리 개념. 첫 연결 시 기본 사용 ON.
+        // 이미 enabled가 명시적으로 false였다면 saveTokenToGcs의 머지가 그 값을 유지.
+        enabled: true,
         igUserId: igAccount.id!,
         username: igAccount.username || "",
         accessToken: longToken,

@@ -13335,6 +13335,9 @@ textarea.bsf-skeleton {
 .bsf-deploy-connect-badge.is-disconnected {
   color: var(--text-3);
 }
+.bsf-deploy-connect-badge.is-paused {
+  color: #f59e0b;
+}
 .bsf-deploy-done-badge {
   display: inline-flex;
   align-items: center;
@@ -13927,11 +13930,65 @@ textarea.bsf-skeleton {
 .sns-pcard--connected .sns-pcard-status {
   color: var(--accent);
 }
+.sns-pcard--paused .sns-pcard-status {
+  color: var(--muted, #888);
+}
+
+/* 카드 우측 액션 영역: 연결 체크박스 + 사용 토글 */
+.sns-pcard-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 연결 체크박스 (V 표시) — 좌측 액션 */
+.sns-connect-box {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.sns-connect-box:hover {
+  border-color: var(--accent, #5eaaff);
+}
+.sns-connect-box:active {
+  transform: scale(0.94);
+}
+.sns-connect-box.is-connected {
+  background: var(--accent, #5eaaff);
+  border-color: var(--accent, #5eaaff);
+  color: #fff;
+}
+.sns-check-icon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
 
 .sns-pcard-toggle {
   flex-shrink: 0;
   display: flex;
   align-items: center;
+}
+
+/* 사용 토글 — 연결 안 된 상태에서는 비활성 처리 */
+.sns-toggle.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.sns-toggle.is-disabled .sns-toggle-track {
+  background: var(--bg-2, #d0d0d0);
 }
 
 /* ── iOS 스타일 토글 스위치 ──────────── */

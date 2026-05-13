@@ -2163,9 +2163,22 @@
             var hasDraft = !!(caption || String(draft.hashtags || '').trim());
             var draftBadge = isEn ? (hasDraft ? 'Draft ready' : 'No draft') : (hasDraft ? '초안 완료' : '초안 없음');
             var icon = _platformIcons[formatId] || '';
-            var isConnected = !!(snsStates[formatId] && snsStates[formatId].connected);
-            var connectLabel = isEn ? (isConnected ? 'Connected' : 'Not connected') : (isConnected ? '연결됨' : '연결 안됨');
-            var connectCls = isConnected ? 'is-connected' : 'is-disconnected';
+            var snsRow = snsStates[formatId] || {};
+            var isConnected = !!snsRow.connected;
+            // enabled 미정의 + connected:true → 하위호환으로 사용 중으로 간주
+            var isEnabled = isConnected && (snsRow.enabled !== false);
+            var connectLabel;
+            var connectCls;
+            if (!isConnected) {
+              connectLabel = isEn ? 'Not connected' : '연결 안됨';
+              connectCls = 'is-disconnected';
+            } else if (isEnabled) {
+              connectLabel = isEn ? 'In use' : '사용 중';
+              connectCls = 'is-connected';
+            } else {
+              connectLabel = isEn ? 'Paused' : '사용 안 함';
+              connectCls = 'is-paused';
+            }
             var perCardPicker = buildDtPickerHtml(null, null, '', 'bsf-deploy-dt-' + formatId);
             return (
               '<div class="bsf-deploy-format-row">' +
@@ -2188,7 +2201,9 @@
                   var isDeploying = !!_deployingFormats[formatId];
                   var btnCls = 'bsf-deploy-one-btn btn-primary' + (isDeploying ? ' is-deploying' : '');
                   var btnContent = isDeploying ? '<span class="bsf-deploy-btn-spinner"></span>' : (isEn ? 'Deploy' : '배포');
-                  return '<button type="button" class="' + btnCls + '" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (isConnected && !isDeploying ? '' : ' disabled') + '>' + btnContent + '</button>';
+                  // 연결되어 있고 '사용 중'인 플랫폼만 배포 가능
+                  var canDeploy = isEnabled && !isDeploying;
+                  return '<button type="button" class="' + btnCls + '" data-action="brand-deploy-one-format" data-deploy-format="' + escapeHtml(formatId) + '"' + (canDeploy ? '' : ' disabled') + '>' + btnContent + '</button>';
                 })() +
               '</div>'
             );
@@ -3492,7 +3507,18 @@
         if (!selectedFormats.length || !NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
         var publishInputEl = root.querySelector('#brand-publish-datetime');
         var scheduledAt = publishInputEl ? String(publishInputEl.value || '').trim() : '';
-        var allFmtIds = selectedFormats.slice();
+        // '사용 중'인 플랫폼만 배포 (사용 안 함으로 꺼둔 채널은 skip)
+        var _snsStatesAll = _readSnsStates();
+        var allFmtIds = selectedFormats.filter(function (fid) {
+          var row = _snsStatesAll[fid] || {};
+          return !!row.connected && (row.enabled !== false);
+        });
+        if (!allFmtIds.length) {
+          alert(isEn
+            ? 'No active channels selected. Enable usage in SNS Settings or pick connected channels.'
+            : '사용 중으로 설정된 채널이 없습니다. SNS 설정에서 사용을 켜거나 연결된 채널을 선택해 주세요.');
+          return;
+        }
         allFmtIds.forEach(function (fmtId) { _deployingFormats[fmtId] = true; });
         btn.disabled = true;
         btn.classList.add('is-deploying');

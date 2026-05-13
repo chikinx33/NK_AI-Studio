@@ -55,9 +55,12 @@
       comingSoon:    '준비 중',
       notConnected:  '미연결',
       connected:     '연결됨',
+      paused:        '사용 안 함',
+      inUse:         '사용 중',
       disconnect:    '연결 해제',
       connect:       '연결하기',
-      disconnectConfirm: function (p) { return p + ' 연결을 해제할까요?'; },
+      useToggleAria: '사용 여부',
+      disconnectConfirm: function (p) { return p + ' 연결을 해제할까요? (재연결 시 다시 인증이 필요합니다)'; },
       oauthFail:     'OAuth 시작 실패',
       serverErr:     '서버 오류',
       connectOk:     function (p, u) { return p + ' 연결 완료! @' + u; },
@@ -77,9 +80,12 @@
       comingSoon:    'Coming Soon',
       notConnected:  'Not connected',
       connected:     'Connected',
+      paused:        'Paused',
+      inUse:         'Active',
       disconnect:    'Disconnect',
       connect:       'Connect',
-      disconnectConfirm: function (p) { return 'Disconnect ' + p + '?'; },
+      useToggleAria: 'Use this channel',
+      disconnectConfirm: function (p) { return 'Disconnect ' + p + '? (You will need to re-authenticate to use it again)'; },
       oauthFail:     'OAuth failed',
       serverErr:     'Server error',
       connectOk:     function (p, u) { return p + ' connected! @' + u; },
@@ -160,15 +166,22 @@
     Object.keys(allKeys).forEach(function (p) {
       var srv = (serverSns && serverSns[p]) || null;
       var cch = (cachedSns && cachedSns[p]) || null;
+      var merged;
       if (cch && cch.connected && (!srv || !srv.connected)) {
-        out[p] = Object.assign({}, srv || {}, cch);
+        merged = Object.assign({}, srv || {}, cch);
       } else if (srv) {
-        out[p] = srv;
+        merged = srv;
       } else if (cch) {
-        out[p] = cch;
+        merged = cch;
       } else {
-        out[p] = { connected: false };
+        merged = { connected: false };
       }
+      // 하위 호환: enabled 필드가 없던 기존 데이터는 connected 값으로 채움
+      // (예전엔 연결 = 사용을 의미했으므로 그대로 사용 중으로 간주)
+      if (merged.connected && typeof merged.enabled !== 'boolean') {
+        merged = Object.assign({}, merged, { enabled: true });
+      }
+      out[p] = merged;
     });
     return out;
   }
@@ -216,17 +229,20 @@
     if (_saving) return Promise.resolve();
     _saving = true;
     setStatus(t('saving'), 'pending');
-    var payload = {
-      sns: {
-        instagram: {
-          connected: !!(_settings.sns.instagram && _settings.sns.instagram.connected),
-          igUserId: (_settings.sns.instagram && _settings.sns.instagram.igUserId) || '',
-          username: (_settings.sns.instagram && _settings.sns.instagram.username) || '',
-        },
-        youtube: { connected: false },
-        tiktok: { connected: false },
-      },
-    };
+    // 모든 알려진 플랫폼의 connected/enabled/igUserId/username만 전송.
+    // accessToken 등 민감 필드는 서버측 read-modify-write 머지로 보존됨.
+    var snsOut = {};
+    var allSns = (_settings && _settings.sns) || {};
+    Object.keys(allSns).forEach(function (pid) {
+      var s = allSns[pid] || {};
+      snsOut[pid] = {
+        connected: !!s.connected,
+        enabled: !!s.enabled,
+        igUserId: s.igUserId || '',
+        username: s.username || ''
+      };
+    });
+    var payload = { sns: snsOut };
     return apiPost('/api/userdata/sns/save', payload)
       .then(function (res) {
         if (res && res.ok) {
@@ -266,6 +282,7 @@
       _settings.sns = _settings.sns || {};
       _settings.sns[platform] = Object.assign({}, _settings.sns[platform], {
         connected: true,
+        enabled: true, // 첫 연결 시 기본 사용 ON
         username: result.username || '',
       });
       _writeCache(_settings.sns); // 새로고침 후 복원용 캐시 저장
@@ -286,26 +303,43 @@
   }
 
   function onAction(e) {
-    // 토글 클릭
-    var toggleLabel = e.target.closest('.sns-toggle[data-platform]');
-    if (toggleLabel) {
+    var btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    var action = btn.dataset.action;
+
+    // 좌측 연결 체크박스: 연결 안 됐으면 OAuth 진행, 연결됐으면 해제 확인
+    if (action === 'sns-connect-toggle') {
       e.preventDefault();
-      var platform = toggleLabel.dataset.platform;
-      var connected = !!((_settings && _settings.sns && _settings.sns[platform]) && _settings.sns[platform].connected);
-      if (connected) {
-        if (!confirm(T[_lang()].disconnectConfirm(platform))) return;
-        _settings.sns[platform] = { connected: false };
-        _writeCache(_settings.sns); // 해제 상태도 캐시 반영
+      var pid = btn.dataset.platform;
+      var s = (_settings && _settings.sns && _settings.sns[pid]) || {};
+      if (s.connected) {
+        if (!confirm(T[_lang()].disconnectConfirm(pid))) return;
+        _settings.sns[pid] = { connected: false, enabled: false };
+        _writeCache(_settings.sns);
         saveSettings().then(function () { render(); });
       } else {
-        startOAuth(platform);
+        startOAuth(pid);
       }
       return;
     }
 
-    var btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    var action = btn.dataset.action;
+    // 우측 사용 토글: 연결된 상태에서만 enabled 플립
+    if (action === 'sns-usage-toggle') {
+      e.preventDefault();
+      var upid = btn.dataset.platform;
+      var us = (_settings && _settings.sns && _settings.sns[upid]) || {};
+      if (!us.connected) {
+        // 연결 안 된 상태에서 사용 토글 → 연결 먼저 안내
+        alert(_lang() === 'en'
+          ? 'Connect this channel first.'
+          : '먼저 채널을 연결해 주세요.');
+        return;
+      }
+      _settings.sns[upid] = Object.assign({}, us, { enabled: !us.enabled });
+      _writeCache(_settings.sns);
+      saveSettings().then(function () { render(); });
+      return;
+    }
 
     if (action === 'sns-save') {
       saveSettings();
@@ -315,27 +349,52 @@
   function buildPlatformCard(platform) {
     var snsState = (_settings && _settings.sns && _settings.sns[platform.id]) || {};
     var connected = !!snsState.connected;
+    var enabled = !!snsState.enabled;
     var username = snsState.username || '';
     var comingSoon = !!platform.comingSoon;
     var icon = _platformIcons[platform.id] || '';
 
-    var statusText = comingSoon ? t('comingSoon') : (connected ? (username ? '@' + escapeHtml(username) : t('connected')) : t('notConnected'));
+    var statusText;
+    if (comingSoon) statusText = t('comingSoon');
+    else if (!connected) statusText = t('notConnected');
+    else if (enabled) statusText = username ? '@' + username : t('inUse');
+    else statusText = username ? '@' + username + ' · ' + t('paused') : t('paused');
 
-    var toggleHtml = comingSoon
-      ? '<span class="sns-soon-label">' + t('comingSoon') + '</span>'
-      : '<label class="sns-toggle" data-platform="' + platform.id + '" title="' + (connected ? t('disconnect') : t('connect')) + '">' +
-          '<input type="checkbox" ' + (connected ? 'checked' : '') + ' />' +
+    // 연결 체크박스 (좌측 액션): 연결됐으면 V 표시, 안 됐으면 빈칸. 클릭으로 연결/해제.
+    var checkSvg = '<svg class="sns-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
+    var connectBoxHtml = comingSoon
+      ? ''
+      : '<button type="button" class="sns-connect-box' + (connected ? ' is-connected' : '') + '" ' +
+          'data-action="sns-connect-toggle" data-platform="' + platform.id + '" ' +
+          'title="' + (connected ? t('disconnect') : t('connect')) + '" ' +
+          'aria-label="' + (connected ? t('disconnect') : t('connect')) + '" ' +
+          'aria-pressed="' + (connected ? 'true' : 'false') + '">' + checkSvg + '</button>';
+
+    // 사용 토글 (우측): 연결됐을 때만 활성. 연결 안 됐으면 비활성 처리(클릭 시 OAuth 안내).
+    var usageToggleHtml;
+    if (comingSoon) {
+      usageToggleHtml = '<span class="sns-soon-label">' + t('comingSoon') + '</span>';
+    } else {
+      usageToggleHtml =
+        '<label class="sns-toggle' + (connected ? '' : ' is-disabled') + '" ' +
+            'data-action="sns-usage-toggle" data-platform="' + platform.id + '" ' +
+            'title="' + t('useToggleAria') + '" aria-label="' + t('useToggleAria') + '">' +
+          '<input type="checkbox" ' + (connected && enabled ? 'checked' : '') + (connected ? '' : ' disabled') + ' />' +
           '<span class="sns-toggle-track"></span>' +
         '</label>';
+    }
 
     return [
-      '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
+      '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
         '<div class="sns-pcard-icon">', icon, '</div>',
         '<div class="sns-pcard-body">',
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
           '<div class="sns-pcard-status">', statusText, '</div>',
         '</div>',
-        '<div class="sns-pcard-toggle">', toggleHtml, '</div>',
+        '<div class="sns-pcard-actions">',
+          connectBoxHtml,
+          '<div class="sns-pcard-toggle">', usageToggleHtml, '</div>',
+        '</div>',
       '</div>',
     ].join('');
   }
