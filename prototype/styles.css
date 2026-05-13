@@ -11740,6 +11740,43 @@ body {
   border-radius: 50%;
   animation: bsf-spin 0.75s linear infinite;
 }
+.bsf-save-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 12, 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 9999;
+  animation: bsfSaveOverlayIn 0.18s ease both;
+}
+.bsf-save-overlay-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #fff;
+}
+.bsf-save-overlay-ring {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: bsf-spin 0.75s linear infinite;
+}
+.bsf-save-overlay-label {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+@keyframes bsfSaveOverlayIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 
 /* ── 콘텐츠 등장 — translateY 없이 opacity 페이드만 (레이아웃 이동 0) ─── */
 .brand-studio-page {

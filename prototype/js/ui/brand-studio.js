@@ -848,6 +848,7 @@
         'band': '팬 커뮤니티·소모임 중심 운영 채널'
       },
       alertSaveFormatFail: function (e) { return '포맷 선택 저장 실패: ' + e; },
+      savingLabel: '저장 중…',
       alertDraftSaved: '초안을 저장했습니다.',
       alertDraftSaveFail: function (e) { return '초안 저장 실패: ' + e; },
       alertDraftGenFail: function (e) { return '초안 생성 실패: ' + e; },
@@ -903,6 +904,7 @@
         'band': 'Fan community & interest group channel'
       },
       alertSaveFormatFail: function (e) { return 'Failed to save format: ' + e; },
+      savingLabel: 'Saving…',
       alertDraftSaved: 'Draft saved.',
       alertDraftSaveFail: function (e) { return 'Failed to save draft: ' + e; },
       alertDraftGenFail: function (e) { return 'Failed to generate draft: ' + e; },
@@ -2321,6 +2323,23 @@
       var sb = root.querySelector('[data-action="brand-save-format-draft"]');
       if (sb) sb.disabled = false;
     }
+    function showSaveOverlay(label) {
+      var existing = document.getElementById('bsf-save-overlay');
+      if (existing) return existing;
+      var ov = document.createElement('div');
+      ov.id = 'bsf-save-overlay';
+      ov.className = 'bsf-save-overlay';
+      ov.innerHTML = '<div class="bsf-save-overlay-box">' +
+        '<div class="bsf-save-overlay-ring"></div>' +
+        '<div class="bsf-save-overlay-label">' + escapeHtml(label || T.savingLabel || '저장 중…') + '</div>' +
+        '</div>';
+      document.body.appendChild(ov);
+      return ov;
+    }
+    function hideSaveOverlay() {
+      var ov = document.getElementById('bsf-save-overlay');
+      if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    }
     // ── 포맷 카드 3단계 상태 판정 ─────────────────────────────────────────────
     // returns 'recommended' | 'available' | 'unavailable'
     function getFormatCardState(formatId, selected) {
@@ -3244,12 +3263,14 @@
         var nextFormatDrafts = Object.assign({}, formatDrafts || {});
         nextFormatDrafts[currentFmtId] = nextFmtDraft;
         btn.disabled = true;
+        showSaveOverlay();
         NK.service.project.updatePayload(projectId, { brandStudioFormatDrafts: nextFormatDrafts })
           .then(function (result) {
             if (result && result.draft) { renderNext(result.draft); } else { setSaveBtnEnabled(false); }
             alert(T.alertDraftSaved);
           })
-          .catch(function (err) { alert(T.alertDraftSaveFail(err && err.message ? err.message : err)); btn.disabled = false; });
+          .catch(function (err) { alert(T.alertDraftSaveFail(err && err.message ? err.message : err)); btn.disabled = false; })
+          .finally(function () { hideSaveOverlay(); });
         return;
       }
       if (action === 'brand-generate-all-drafts') {
