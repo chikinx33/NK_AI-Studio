@@ -213,6 +213,10 @@
       if (Object.prototype.hasOwnProperty.call(patch, 'musicUrl')) {
         nextPayload.musicUrl = patch.musicUrl;
       }
+      // AI 생성 BGM 메타데이터 — 클립 클릭 시 토스트로 어떤 프롬프트·엔진으로 만들었는지 표시.
+      if (Object.prototype.hasOwnProperty.call(patch, 'musicMeta')) {
+        nextPayload.musicMeta = patch.musicMeta;
+      }
       var next = Object.assign({}, target, { payload: nextPayload });
       if (Object.prototype.hasOwnProperty.call(patch, 'postTimelineEdits')) {
         next.postTimelineEdits = patch.postTimelineEdits;
@@ -222,6 +226,9 @@
       }
       if (Object.prototype.hasOwnProperty.call(patch, 'musicUrl')) {
         next.musicUrl = patch.musicUrl;
+      }
+      if (Object.prototype.hasOwnProperty.call(patch, 'musicMeta')) {
+        next.musicMeta = patch.musicMeta;
       }
       return next;
     });

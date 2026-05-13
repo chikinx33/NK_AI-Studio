@@ -934,12 +934,24 @@
       var data = await res.json().catch(function () { return {}; });
       if (!res.ok || !data.musicUrl) throw new Error(data.error || 'music_api_error');
 
+      // 음악 클립을 클릭했을 때 어떤 지시문·엔진으로 만들어진 BGM 인지 다시 확인할 수 있도록
+      // 메타데이터를 프로젝트에 영속화한다. 직접 업로드한 음악에는 musicMeta 가 없다.
+      var musicMeta = {
+        musicPrompt: String(data.musicPrompt || ''),
+        providerUsed: String(data.providerUsed || ''),
+        durationGenerated: Number(data.durationGenerated || 0),
+        analysis: data.analysis || null,
+        generatedAt: new Date().toISOString()
+      };
+
       // M1 트랙 클립으로 저장 (project.payload.musicUrl 업데이트 → buildTimelineModel이 반영)
       var proj2 = getProjectByStateId();
       if (proj2) {
         if (!proj2.payload) proj2.payload = {};
         proj2.payload.musicUrl = data.musicUrl;
+        proj2.payload.musicMeta = musicMeta;
         proj2.musicUrl = data.musicUrl;
+        proj2.musicMeta = musicMeta;
         // 이전에 music-0 클립을 삭제한 적 있으면 deleted 플래그를 제거해야 새 클립이 표시됨
         if (proj2.postTimelineEdits && proj2.postTimelineEdits['music-0']) {
           delete proj2.postTimelineEdits['music-0'];
@@ -951,12 +963,15 @@
       if (state.sessionEdits && state.sessionEdits['music-0']) {
         delete state.sessionEdits['music-0'];
       }
-      // CRITICAL: musicUrl을 storage에도 즉시 영구 반영
+      // CRITICAL: musicUrl/musicMeta 를 storage에도 즉시 영구 반영
       // (이후 다른 svc 호출이 storage를 다시 읽어 in-memory 변경을 덮어쓰는 것 방지)
       try {
         var svcMusic = getPostprodStateService();
         if (svcMusic && svcMusic.applySavedPostProductionPayload && state.projectId) {
-          svcMusic.applySavedPostProductionPayload(state.projectId, { musicUrl: data.musicUrl });
+          svcMusic.applySavedPostProductionPayload(state.projectId, {
+            musicUrl: data.musicUrl,
+            musicMeta: musicMeta
+          });
         }
       } catch (_) { }
       setDirty(true);
@@ -5735,6 +5750,49 @@
   function selectClip(clipId) {
     state.selectedClipId = clipId || '';
     updateSelectionUi();
+    // 음악 클립 선택 시: AI 생성 메타가 있으면 어떤 지시문/엔진으로 만들었는지 전역 토스트로 표시.
+    // 직접 업로드한 음악(메타 없음)에는 안내 문구만.
+    if (clipId === 'music-0') {
+      showMusicMetaToast();
+    }
+  }
+
+  // 저장된 musicMeta 를 읽어 토스트로 표시. project.payload 또는 top-level 양쪽 모두 확인.
+  function showMusicMetaToast() {
+    var lang = currentLang();
+    var proj = getProjectByStateId();
+    var meta = (proj && proj.musicMeta)
+      || (proj && proj.payload && proj.payload.musicMeta)
+      || null;
+    if (!meta || !meta.musicPrompt) {
+      // 직접 업로드한 음악
+      var hasUrl = !!(proj && (proj.musicUrl || (proj.payload && proj.payload.musicUrl)));
+      if (hasUrl) {
+        showPostprodToast(
+          lang === 'en' ? 'Uploaded music (no AI generation metadata)' : '직접 등록한 음악입니다 (AI 생성 메타 없음)',
+          3500
+        );
+      }
+      return;
+    }
+    var providerLabel = meta.providerUsed === 'lyria-3-pro-preview'
+      ? 'Lyria 3 Pro'
+      : (meta.providerUsed === 'elevenlabs' ? 'ElevenLabs' : (meta.providerUsed || 'engine'));
+    var durLabel = meta.durationGenerated
+      ? (' · ' + Math.round(Number(meta.durationGenerated)) + 's')
+      : '';
+    var genreLine = (meta.analysis && meta.analysis.musicGenre)
+      ? ('\nGenre: ' + meta.analysis.musicGenre)
+      : '';
+    var moodLine = (meta.analysis && (meta.analysis.mood || meta.analysis.pace || meta.analysis.intensity))
+      ? ('\nMood/Tempo/Intensity: ' + [meta.analysis.mood, meta.analysis.pace, meta.analysis.intensity].filter(Boolean).join(' · '))
+      : '';
+    var promptLine = '\nPrompt: ' + String(meta.musicPrompt || '').slice(0, 260);
+    var title = lang === 'en' ? 'AI Background Music' : 'AI 배경음악';
+    showPostprodToast(
+      '[' + providerLabel + durLabel + '] ' + title + genreLine + moodLine + promptLine,
+      9000
+    );
   }
 
   function clearClipSelection() {
