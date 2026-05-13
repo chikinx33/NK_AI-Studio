@@ -75,23 +75,6 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     return send({ error: "Invalid JSON" }, 400);
   }
 
-  const settings = {
-    sns: {
-      instagram: {
-        connected: !!(body?.sns?.instagram?.connected),
-        igUserId: String(body?.sns?.instagram?.igUserId || ""),
-        username: String(body?.sns?.instagram?.username || ""),
-      },
-      youtube: {
-        connected: !!(body?.sns?.youtube?.connected),
-      },
-      tiktok: {
-        connected: !!(body?.sns?.tiktok?.connected),
-      },
-    },
-    updatedAt: new Date().toISOString(),
-  };
-
   const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
   const bucket = outParsed.bucket;
   const basePrefix = outParsed.object.replace(/\/$/, "");
@@ -105,6 +88,31 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       scope: "https://www.googleapis.com/auth/cloud-platform",
     });
 
+    // Read-modify-write: 클라이언트가 보낸 필드만 머지로 적용.
+    // OAuth 콜백이 저장한 accessToken/tokenExpiresAt 및 클라가 안 보낸
+    // 다른 플랫폼 상태가 통째 덮어쓰기로 사라지는 cross-device 동기화 버그 방지.
+    let existing: any = { sns: {}, deployDefaults: {} };
+    const readRes = await fetch(
+      `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (readRes.ok) {
+      try { existing = await readRes.json(); } catch { /* keep default */ }
+    }
+    existing = existing || {};
+    existing.sns = existing.sns || {};
+
+    const incomingSns: any = body?.sns || {};
+    Object.keys(incomingSns).forEach((platform) => {
+      const incoming = incomingSns[platform] || {};
+      const prev = existing.sns[platform] || {};
+      existing.sns[platform] = Object.assign({}, prev, incoming);
+    });
+    existing.deployDefaults = body?.deployDefaults
+      ? Object.assign({}, existing.deployDefaults || {}, body.deployDefaults)
+      : (existing.deployDefaults || {});
+    existing.updatedAt = new Date().toISOString();
+
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=media&name=${encodedName}`;
     const upRes = await fetch(uploadUrl, {
       method: "POST",
@@ -112,7 +120,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(settings),
+      body: JSON.stringify(existing),
     });
 
     if (!upRes.ok) {
@@ -120,7 +128,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       throw new Error(`GCS upload error: ${upRes.status} ${errText}`);
     }
 
-    return send({ ok: true, settings });
+    return send({ ok: true, settings: existing });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return send({ ok: false, error: msg }, 500);

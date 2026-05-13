@@ -175,19 +175,37 @@
 
   function loadSettings() {
     var cached = _readCache();
-    return apiGet('/api/userdata/sns/get').then(function (res) {
+    // cross-device 동기화 원칙: 동일 계정이면 어느 디바이스에서든 동일한 연결 상태가 보여야 한다.
+    // 일시적 네트워크/서버 글리치로 잘못된 "미연결" 표시를 피하기 위해 최대 1회 재시도(800ms 백오프) 후 폴백.
+    function attempt(retriesLeft) {
+      return apiGet('/api/userdata/sns/get').then(function (res) {
+        if (res && res.ok && res.settings) return res;
+        if (retriesLeft > 0) {
+          return new Promise(function (resolve) { setTimeout(resolve, 800); })
+            .then(function () { return attempt(retriesLeft - 1); });
+        }
+        return res;
+      }).catch(function (err) {
+        if (retriesLeft > 0) {
+          return new Promise(function (resolve) { setTimeout(resolve, 800); })
+            .then(function () { return attempt(retriesLeft - 1); });
+        }
+        throw err;
+      });
+    }
+    return attempt(1).then(function (res) {
       if (res && res.ok && res.settings) {
         _settings = res.settings;
         _settings.sns = _mergeSnsState(_settings.sns, cached);
         _writeCache(_settings.sns); // 머지 결과로 캐시 갱신
       } else {
-        // 서버 오류 → 캐시 폴백
+        // 재시도까지 실패한 서버 오류 → 캐시 폴백
         console.warn('[SNS] loadSettings server error:', res && res.error);
         _settings = _defaultSettings(cached);
       }
       return _settings;
     }).catch(function (err) {
-      // 네트워크/502 오류 → 캐시 폴백
+      // 재시도까지 실패한 네트워크/502 오류 → 캐시 폴백
       console.warn('[SNS] loadSettings fetch error:', err && err.message || err);
       _settings = _defaultSettings(cached);
       return _settings;
