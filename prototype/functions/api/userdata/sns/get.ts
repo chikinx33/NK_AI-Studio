@@ -72,7 +72,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const bucket = outParsed.bucket;
   const basePrefix = outParsed.object.replace(/\/$/, "");
   const objectName = buildUserDataObject(basePrefix, userId, "sns-settings.json");
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("%2F");
+  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
   console.log("[sns/get] bucket:", bucket, "objectName:", objectName, "userId:", userId);
 
   try {

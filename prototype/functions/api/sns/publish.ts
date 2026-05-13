@@ -139,7 +139,7 @@ async function loadSnsSettings(
   objectName: string,
   googleToken: string
 ): Promise<any> {
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("%2F");
+  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
   const res = await fetch(
     `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
     { headers: { Authorization: `Bearer ${googleToken}` } }
@@ -195,7 +195,7 @@ async function saveTikTokTokenPatch(opts: {
   googleToken: string;
   patch: Record<string, unknown>;
 }): Promise<void> {
-  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("%2F");
+  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("/");
   const readRes = await fetch(
     `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${encodedName}?alt=media`,
     { headers: { Authorization: `Bearer ${opts.googleToken}` } }
@@ -207,7 +207,7 @@ async function saveTikTokTokenPatch(opts: {
   existing.sns = existing.sns || {};
   existing.sns.tiktok = Object.assign({}, existing.sns.tiktok, opts.patch);
   existing.updatedAt = new Date().toISOString();
-  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${opts.objectName.split("/").map(encodeURIComponent).join("%2F")}`;
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${opts.objectName.split("/").map(encodeURIComponent).join("/")}`;
   const upRes = await fetch(uploadUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${opts.googleToken}`, "Content-Type": "application/json" },

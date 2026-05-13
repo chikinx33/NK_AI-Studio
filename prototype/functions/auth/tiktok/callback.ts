@@ -61,15 +61,12 @@ async function saveTokenToGcs(opts: {
   patch: Record<string, unknown>;
   googleToken: string;
 }): Promise<void> {
-  // %2F-encode slashes in the URL path component (GCS REST API spec)
-  const pathEncoded = opts.objectName.split("/").map(encodeURIComponent).join("%2F");
-  // For the query-parameter `name`, GCS also accepts %2F-encoded slashes
-  const nameEncoded = opts.objectName.split("/").map(encodeURIComponent).join("%2F");
+  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("/");
 
   console.log("[tiktok callback] saveTokenToGcs bucket:", opts.bucket, "objectName:", opts.objectName);
 
   const readRes = await fetch(
-    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${pathEncoded}?alt=media`,
+    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${encodedName}?alt=media`,
     { headers: { Authorization: `Bearer ${opts.googleToken}` } }
   );
   console.log("[tiktok callback] GCS read status:", readRes.status);
@@ -86,7 +83,7 @@ async function saveTokenToGcs(opts: {
   existing.sns.tiktok = Object.assign({}, existing.sns.tiktok, opts.patch);
   existing.updatedAt = new Date().toISOString();
 
-  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${nameEncoded}`;
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${encodedName}`;
   const upRes = await fetch(uploadUrl, {
     method: "POST",
     headers: {
@@ -101,9 +98,9 @@ async function saveTokenToGcs(opts: {
   }
   console.log("[tiktok callback] GCS write OK:", upRes.status);
 
-  // Verify the file is readable after write (catches silent failures)
+  // Verify the file is readable after write
   const verifyRes = await fetch(
-    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${pathEncoded}?alt=media`,
+    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${encodedName}?alt=media`,
     { headers: { Authorization: `Bearer ${opts.googleToken}` } }
   );
   console.log("[tiktok callback] GCS verify read status:", verifyRes.status);
