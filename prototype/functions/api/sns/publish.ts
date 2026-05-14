@@ -244,7 +244,7 @@ async function waitForTikTokStatus(
  * 심사 미통과(unaudited) 앱은 보통 ["SELF_ONLY"]만 허용되며, 허용되지 않는
  * privacy_level로 init을 호출하면 "integration guidelines" 에러가 난다.
  */
-async function getTikTokPrivacyLevel(accessToken: string): Promise<string> {
+async function getTikTokCreatorInfo(accessToken: string): Promise<{ level: string; raw: any }> {
   try {
     const res = await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/", {
       method: "POST",
@@ -254,18 +254,16 @@ async function getTikTokPrivacyLevel(accessToken: string): Promise<string> {
       data?: { privacy_level_options?: string[] };
       error?: { code?: string; message?: string };
     };
+    console.log(`[tiktok] creator_info 응답 (${res.status}):`, JSON.stringify(d));
     const options = d.data?.privacy_level_options || [];
-    console.log(`[tiktok] creator_info privacy_level_options:`, JSON.stringify(options));
-    if (!options.length) {
-      // 조회 실패 시 안전하게 본인만 보기로 폴백
-      return "SELF_ONLY";
+    let level = "SELF_ONLY";
+    if (options.length) {
+      level = options.includes("PUBLIC_TO_EVERYONE") ? "PUBLIC_TO_EVERYONE" : options[0];
     }
-    // 공개 게시가 허용되면 우선 사용, 아니면 첫 허용 옵션
-    if (options.includes("PUBLIC_TO_EVERYONE")) return "PUBLIC_TO_EVERYONE";
-    return options[0];
+    return { level, raw: { httpStatus: res.status, ...d } };
   } catch (err) {
     console.log(`[tiktok] creator_info 조회 실패, SELF_ONLY로 폴백:`, err);
-    return "SELF_ONLY";
+    return { level: "SELF_ONLY", raw: { fetchError: String(err) } };
   }
 }
 
@@ -288,7 +286,8 @@ async function publishTikTokVideo(opts: {
   console.log(`[tiktok] 영상 크기: ${Math.round(videoSize / 1024)}KB`);
 
   // Step 1.5: 허용된 privacy level 조회 (심사 미통과 앱은 SELF_ONLY만 가능)
-  const privacyLevel = await getTikTokPrivacyLevel(accessToken);
+  const creatorInfo = await getTikTokCreatorInfo(accessToken);
+  const privacyLevel = creatorInfo.level;
   console.log(`[tiktok] 사용할 privacy_level: ${privacyLevel}`);
 
   // Step 2: TikTok 발행 초기화 (FILE_UPLOAD)
@@ -316,10 +315,18 @@ async function publishTikTokVideo(opts: {
     data?: { publish_id?: string; upload_url?: string };
     error?: { code?: string; message?: string };
   };
+  console.log(`[tiktok] video/init 응답 (${initRes.status}):`, JSON.stringify(initData));
   const publishId = initData.data?.publish_id;
   const uploadUrl = initData.data?.upload_url;
   if (!publishId || !uploadUrl) {
-    throw new Error(`TikTok 영상 발행 초기화 실패: ${initData.error?.message || JSON.stringify(initData)}`);
+    const detail = [
+      `httpStatus=${initRes.status}`,
+      `code=${initData.error?.code || "?"}`,
+      `msg=${initData.error?.message || "?"}`,
+      `privacyLevel=${privacyLevel}`,
+      `creatorInfo=${JSON.stringify(creatorInfo.raw)}`,
+    ].join(" | ");
+    throw new Error(`TikTok 영상 발행 초기화 실패: ${detail}`);
   }
   console.log(`[tiktok] 발행 초기화 완료, publish_id: ${publishId}`);
 
@@ -354,7 +361,8 @@ async function publishTikTokPhoto(opts: {
 }): Promise<{ publishId: string }> {
   const { accessToken, caption, photoUrls } = opts;
   console.log(`[tiktok] 이미지 발행 시작 (${photoUrls.length}장, photo_mode)`);
-  const privacyLevel = await getTikTokPrivacyLevel(accessToken);
+  const creatorInfo = await getTikTokCreatorInfo(accessToken);
+  const privacyLevel = creatorInfo.level;
   console.log(`[tiktok] 사용할 privacy_level: ${privacyLevel}`);
   const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
     method: "POST",
@@ -375,8 +383,16 @@ async function publishTikTokPhoto(opts: {
     }),
   });
   const data = (await res.json()) as { data?: { publish_id?: string }; error?: { code?: string; message?: string } };
+  console.log(`[tiktok] content/init 응답 (${res.status}):`, JSON.stringify(data));
   if (!data.data?.publish_id || data.error?.code !== "ok") {
-    throw new Error(`TikTok 이미지 발행 초기화 실패: ${data.error?.message || JSON.stringify(data)}`);
+    const detail = [
+      `httpStatus=${res.status}`,
+      `code=${data.error?.code || "?"}`,
+      `msg=${data.error?.message || "?"}`,
+      `privacyLevel=${privacyLevel}`,
+      `creatorInfo=${JSON.stringify(creatorInfo.raw)}`,
+    ].join(" | ");
+    throw new Error(`TikTok 이미지 발행 초기화 실패: ${detail}`);
   }
   const publishId = data.data.publish_id;
   console.log(`[tiktok] 이미지 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
