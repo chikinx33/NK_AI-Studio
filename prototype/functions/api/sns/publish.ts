@@ -259,41 +259,54 @@ async function saveTikTokTokenPatch(opts: {
  * TikTok 발행 상태를 폴링한다.
  *
  * 중요: init 이 publish_id 를 반환한 시점에 TikTok 은 이미 발행을 "수락"한 것이며,
- * 실제 처리는 비동기로 진행돼 영상/이미지에 따라 수 분이 걸릴 수 있다. 따라서
- * 폴링 윈도우 내에 PUBLISH_COMPLETE 를 못 봐도 실패가 아니다. FAILED 만 명시적
- * 실패로 처리하고, 그 외 타임아웃은 "processing" 으로 soft-success 반환한다.
+ * 실제 처리는 비동기로 진행돼 수 분이 걸릴 수 있다. 이 세션에서 status 폴링은
+ * 타임아웃·FAILED 를 반환해도 실제로는 게시가 정상 완료된 사례가 반복 확인됐다.
+ * 즉 status 폴링은 신뢰할 수 있는 성공/실패 oracle 이 아니다. 따라서:
+ *  - 절대 throw 하지 않는다 (배포를 막지 않음).
+ *  - 결과는 정보성으로만 반환하고, FAILED 면 fail_reason 을 캡처해 노출한다.
+ * 진짜 init 단계 실패(파라미터/ownership 등)는 init 호출에서 이미 throw 되므로
+ * 여기서 막을 필요가 없다.
  */
 async function waitForTikTokStatus(
   accessToken: string,
   publishId: string,
   maxRetries = 12,
   intervalMs = 3000
-): Promise<"complete" | "processing"> {
+): Promise<{ status: "complete" | "processing" | "failed"; failReason?: string }> {
   let lastStatus = "";
   for (let i = 0; i < maxRetries; i++) {
     await new Promise((r) => setTimeout(r, intervalMs));
     let status: string | undefined;
+    let failReason: string | undefined;
     try {
       const r = await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/", {
         method: "POST",
         headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
         body: JSON.stringify({ publish_id: publishId }),
       });
-      const d = (await r.json()) as { data?: { status?: string }; error?: { code?: string; message?: string } };
+      const d = (await r.json()) as {
+        data?: { status?: string; fail_reason?: string };
+        error?: { code?: string; message?: string };
+      };
       status = d.data?.status;
+      failReason = d.data?.fail_reason;
+      console.log(`[tiktok] status poll ${i + 1}/${maxRetries}: ${JSON.stringify(d.data || {})} (publish_id: ${publishId})`);
     } catch (err) {
       // 상태 조회 일시 실패는 무시하고 계속 폴링
       console.log(`[tiktok] status poll ${i + 1}/${maxRetries} fetch 실패:`, err);
       continue;
     }
     if (status) lastStatus = status;
-    console.log(`[tiktok] status poll ${i + 1}/${maxRetries}: ${status} (publish_id: ${publishId})`);
-    if (status === "PUBLISH_COMPLETE") return "complete";
-    if (status === "FAILED") throw new Error(`TikTok 발행 실패 (publish_id: ${publishId})`);
+    if (status === "PUBLISH_COMPLETE") return { status: "complete" };
+    if (status === "FAILED") {
+      // throw 하지 않음 — 실제로는 게시 성공인 경우가 반복 확인됨. 이유만 노출.
+      console.log(`[tiktok] status=FAILED (fail_reason=${failReason || "?"}, publish_id: ${publishId}) — soft 처리`);
+      return { status: "failed", failReason: failReason || "unknown" };
+    }
   }
   // 타임아웃: 실패가 아니라 아직 처리 중. publish_id 는 유효하므로 게시는 완료된다.
   console.log(`[tiktok] status 폴링 타임아웃 — 처리 중으로 간주 (last=${lastStatus}, publish_id: ${publishId})`);
-  return "processing";
+  return { status: "processing" };
 }
 
 /**
@@ -424,9 +437,9 @@ async function publishTikTokVideo(opts: {
     throw new Error(`TikTok 영상 업로드 실패: ${uploadRes.status} ${errText}`);
   }
   console.log(`[tiktok] 영상 업로드 완료, 상태 폴링 시작`);
-  const status = await waitForTikTokStatus(accessToken, publishId);
-  console.log(`[tiktok] 영상 발행 ${status === "complete" ? "완료" : "처리 중"}: ${publishId}`);
-  return { publishId, status };
+  const r = await waitForTikTokStatus(accessToken, publishId);
+  console.log(`[tiktok] 영상 발행 status=${r.status}: ${publishId}`);
+  return { publishId, status: r.status, failReason: r.failReason };
 }
 
 async function publishTikTokPhoto(opts: {
@@ -479,9 +492,9 @@ async function publishTikTokPhoto(opts: {
   }
   const publishId = data.data.publish_id;
   console.log(`[tiktok] 이미지 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
-  const status = await waitForTikTokStatus(accessToken, publishId);
-  console.log(`[tiktok] 이미지 발행 ${status === "complete" ? "완료" : "처리 중"}: ${publishId}`);
-  return { publishId, status };
+  const r = await waitForTikTokStatus(accessToken, publishId);
+  console.log(`[tiktok] 이미지 발행 status=${r.status}: ${publishId}`);
+  return { publishId, status: r.status, failReason: r.failReason };
 }
 
 // ── Instagram 헬퍼 ─────────────────────────────────────────────────────────
@@ -750,7 +763,12 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       const origin = new URL(request.url).origin;
       const mediaSecret = readMediaSecret(env);
 
-      const publishResults: { publishId: string; type: string; status: "complete" | "processing" }[] = [];
+      const publishResults: {
+        publishId: string;
+        type: string;
+        status: "complete" | "processing" | "failed";
+        failReason?: string;
+      }[] = [];
 
       if (isCarousel) {
         const rawItems = body.mediaItems!;
@@ -765,7 +783,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             : v.mediaUrl!;
           console.log(`[tiktok] 영상 ${i + 1}/${videos.length} 발행 중`);
           const r = await publishTikTokVideo({ accessToken, caption, videoUrl, appAudited });
-          publishResults.push({ publishId: r.publishId, type: "video", status: r.status });
+          publishResults.push({ publishId: r.publishId, type: "video", status: r.status, failReason: r.failReason });
         }
 
         // Case 3: 이미지 별도 발행 (슬라이드쇼)
@@ -781,7 +799,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           }
           console.log(`[tiktok] 이미지 ${images.length}장 포토 모드 발행 중`);
           const r = await publishTikTokPhoto({ accessToken, caption, photoUrls, appAudited });
-          publishResults.push({ publishId: r.publishId, type: "photo", status: r.status });
+          publishResults.push({ publishId: r.publishId, type: "photo", status: r.status, failReason: r.failReason });
         }
 
       } else {
@@ -798,7 +816,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
           }
           const r = await publishTikTokVideo({ accessToken, caption, videoUrl, appAudited });
-          publishResults.push({ publishId: r.publishId, type: "video", status: r.status });
+          publishResults.push({ publishId: r.publishId, type: "video", status: r.status, failReason: r.failReason });
         } else {
           // Case 2: 이미지만 (단일) — PULL_FROM_URL 이라 ownership 검증된 우리 도메인 프록시 사용
           let photoUrl: string;
@@ -810,20 +828,27 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
           }
           const r = await publishTikTokPhoto({ accessToken, caption, photoUrls: [photoUrl], appAudited });
-          publishResults.push({ publishId: r.publishId, type: "photo", status: r.status });
+          publishResults.push({ publishId: r.publishId, type: "photo", status: r.status, failReason: r.failReason });
         }
       }
 
-      // 폴링 윈도우 내 전부 complete 면 published, 하나라도 processing 이면 processing.
-      // processing 도 발행은 수락된 상태이므로 ok:true (실패 아님).
+      // publish_id 가 발급된 시점에 TikTok 은 발행을 수락한 상태이므로 항상 ok:true.
+      // status 폴링 결과는 정보성: 전부 complete → published, 하나라도 failed →
+      // status_reported_failed(이 세션에서 FAILED 여도 실제 게시 성공 사례 반복 확인됨),
+      // 그 외 → processing. fail_reason 은 publishResults 에 그대로 노출된다.
+      const anyFailed = publishResults.some((r) => r.status === "failed");
       const allComplete = publishResults.every((r) => r.status === "complete");
+      const failReasons = publishResults
+        .filter((r) => r.status === "failed" && r.failReason)
+        .map((r) => `${r.type}:${r.failReason}`);
       return send({
         ok: true,
         result: {
           platform: "tiktok",
           postId: publishResults[0]?.publishId,
           username: tiktokSettings.username || "",
-          status: allComplete ? "published" : "processing",
+          status: allComplete ? "published" : (anyFailed ? "status_reported_failed" : "processing"),
+          failReasons: failReasons.length ? failReasons : undefined,
           publishedAt: new Date().toISOString(),
           publishResults,
         },
