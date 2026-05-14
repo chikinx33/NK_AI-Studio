@@ -88,6 +88,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const objectName = buildUserDataObject(basePrefix, auth.userId, "sns-settings.json");
   const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
 
+  // v3.802 시절 잘못된 이중 인코딩 키 (users%2Fowner%2F...)
+  const doubleEncodedName = encodeURIComponent(objectName);
+
   const pathInfo = {
     VIDEO_OUTPUT_GCS_URI: env.VIDEO_OUTPUT_GCS_URI || "(unset)",
     bucket,
@@ -95,6 +98,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     userId: auth.userId || "(empty→owner)",
     objectName,
     encodedName,
+    doubleEncodedName,
     readUrl: `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
   };
 
@@ -111,7 +115,23 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     );
 
     if (gcsRes.status === 404) {
-      return send({ ok: true, exists: false, pathInfo });
+      // v3.802 버그로 생성된 이중 인코딩 키도 확인
+      const legacyRes = await fetch(
+        `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${doubleEncodedName}?alt=media`,
+        { headers: { Authorization: `Bearer ${googleToken}` } }
+      );
+      if (legacyRes.ok) {
+        const legacyRaw = await legacyRes.json();
+        return send({
+          ok: true,
+          exists: false,
+          legacyKeyExists: true,
+          note: "v3.802 버그로 잘못된 키에 저장됨. TikTok/Instagram 재연결 필요.",
+          pathInfo,
+          legacySettings: maskSettings(legacyRaw),
+        });
+      }
+      return send({ ok: true, exists: false, legacyKeyExists: false, pathInfo });
     }
     if (!gcsRes.ok) {
       return send({ ok: false, gcsStatus: gcsRes.status, pathInfo });
