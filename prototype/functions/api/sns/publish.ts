@@ -239,6 +239,36 @@ async function waitForTikTokStatus(
   throw new Error("TikTok 발행 상태 확인 시간 초과");
 }
 
+/**
+ * 게시 전 creator_info 조회로 해당 앱·계정이 허용하는 privacy level을 가져온다.
+ * 심사 미통과(unaudited) 앱은 보통 ["SELF_ONLY"]만 허용되며, 허용되지 않는
+ * privacy_level로 init을 호출하면 "integration guidelines" 에러가 난다.
+ */
+async function getTikTokPrivacyLevel(accessToken: string): Promise<string> {
+  try {
+    const res = await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+    });
+    const d = (await res.json()) as {
+      data?: { privacy_level_options?: string[] };
+      error?: { code?: string; message?: string };
+    };
+    const options = d.data?.privacy_level_options || [];
+    console.log(`[tiktok] creator_info privacy_level_options:`, JSON.stringify(options));
+    if (!options.length) {
+      // 조회 실패 시 안전하게 본인만 보기로 폴백
+      return "SELF_ONLY";
+    }
+    // 공개 게시가 허용되면 우선 사용, 아니면 첫 허용 옵션
+    if (options.includes("PUBLIC_TO_EVERYONE")) return "PUBLIC_TO_EVERYONE";
+    return options[0];
+  } catch (err) {
+    console.log(`[tiktok] creator_info 조회 실패, SELF_ONLY로 폴백:`, err);
+    return "SELF_ONLY";
+  }
+}
+
 async function publishTikTokVideo(opts: {
   accessToken: string;
   caption: string;
@@ -257,6 +287,10 @@ async function publishTikTokVideo(opts: {
   }
   console.log(`[tiktok] 영상 크기: ${Math.round(videoSize / 1024)}KB`);
 
+  // Step 1.5: 허용된 privacy level 조회 (심사 미통과 앱은 SELF_ONLY만 가능)
+  const privacyLevel = await getTikTokPrivacyLevel(accessToken);
+  console.log(`[tiktok] 사용할 privacy_level: ${privacyLevel}`);
+
   // Step 2: TikTok 발행 초기화 (FILE_UPLOAD)
   const initRes = await fetch("https://open.tiktokapis.com/v2/post/publish/video/init/", {
     method: "POST",
@@ -264,7 +298,7 @@ async function publishTikTokVideo(opts: {
     body: JSON.stringify({
       post_info: {
         title: caption.slice(0, 2200),
-        privacy_level: "PUBLIC_TO_EVERYONE",
+        privacy_level: privacyLevel,
         disable_duet: false,
         disable_comment: false,
         disable_stitch: false,
@@ -320,13 +354,15 @@ async function publishTikTokPhoto(opts: {
 }): Promise<{ publishId: string }> {
   const { accessToken, caption, photoUrls } = opts;
   console.log(`[tiktok] 이미지 발행 시작 (${photoUrls.length}장, photo_mode)`);
+  const privacyLevel = await getTikTokPrivacyLevel(accessToken);
+  console.log(`[tiktok] 사용할 privacy_level: ${privacyLevel}`);
   const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify({
       post_info: {
         title: caption,
-        privacy_level: "PUBLIC_TO_EVERYONE",
+        privacy_level: privacyLevel,
         disable_comment: false,
       },
       source_info: {
