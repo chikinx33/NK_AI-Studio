@@ -255,26 +255,45 @@ async function saveTikTokTokenPatch(opts: {
   if (!upRes.ok) throw new Error(`GCS save error: ${upRes.status}`);
 }
 
+/**
+ * TikTok 발행 상태를 폴링한다.
+ *
+ * 중요: init 이 publish_id 를 반환한 시점에 TikTok 은 이미 발행을 "수락"한 것이며,
+ * 실제 처리는 비동기로 진행돼 영상/이미지에 따라 수 분이 걸릴 수 있다. 따라서
+ * 폴링 윈도우 내에 PUBLISH_COMPLETE 를 못 봐도 실패가 아니다. FAILED 만 명시적
+ * 실패로 처리하고, 그 외 타임아웃은 "processing" 으로 soft-success 반환한다.
+ */
 async function waitForTikTokStatus(
   accessToken: string,
   publishId: string,
-  maxRetries = 10,
+  maxRetries = 12,
   intervalMs = 3000
-): Promise<void> {
+): Promise<"complete" | "processing"> {
+  let lastStatus = "";
   for (let i = 0; i < maxRetries; i++) {
     await new Promise((r) => setTimeout(r, intervalMs));
-    const r = await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
-      body: JSON.stringify({ publish_id: publishId }),
-    });
-    const d = (await r.json()) as { data?: { status?: string }; error?: { code?: string; message?: string } };
-    const status = d.data?.status;
+    let status: string | undefined;
+    try {
+      const r = await fetch("https://open.tiktokapis.com/v2/post/publish/status/fetch/", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+        body: JSON.stringify({ publish_id: publishId }),
+      });
+      const d = (await r.json()) as { data?: { status?: string }; error?: { code?: string; message?: string } };
+      status = d.data?.status;
+    } catch (err) {
+      // 상태 조회 일시 실패는 무시하고 계속 폴링
+      console.log(`[tiktok] status poll ${i + 1}/${maxRetries} fetch 실패:`, err);
+      continue;
+    }
+    if (status) lastStatus = status;
     console.log(`[tiktok] status poll ${i + 1}/${maxRetries}: ${status} (publish_id: ${publishId})`);
-    if (status === "PUBLISH_COMPLETE") return;
+    if (status === "PUBLISH_COMPLETE") return "complete";
     if (status === "FAILED") throw new Error(`TikTok 발행 실패 (publish_id: ${publishId})`);
   }
-  throw new Error("TikTok 발행 상태 확인 시간 초과");
+  // 타임아웃: 실패가 아니라 아직 처리 중. publish_id 는 유효하므로 게시는 완료된다.
+  console.log(`[tiktok] status 폴링 타임아웃 — 처리 중으로 간주 (last=${lastStatus}, publish_id: ${publishId})`);
+  return "processing";
 }
 
 /**
@@ -405,9 +424,9 @@ async function publishTikTokVideo(opts: {
     throw new Error(`TikTok 영상 업로드 실패: ${uploadRes.status} ${errText}`);
   }
   console.log(`[tiktok] 영상 업로드 완료, 상태 폴링 시작`);
-  await waitForTikTokStatus(accessToken, publishId);
-  console.log(`[tiktok] 영상 발행 완료: ${publishId}`);
-  return { publishId };
+  const status = await waitForTikTokStatus(accessToken, publishId);
+  console.log(`[tiktok] 영상 발행 ${status === "complete" ? "완료" : "처리 중"}: ${publishId}`);
+  return { publishId, status };
 }
 
 async function publishTikTokPhoto(opts: {
@@ -460,9 +479,9 @@ async function publishTikTokPhoto(opts: {
   }
   const publishId = data.data.publish_id;
   console.log(`[tiktok] 이미지 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
-  await waitForTikTokStatus(accessToken, publishId);
-  console.log(`[tiktok] 이미지 발행 완료: ${publishId}`);
-  return { publishId };
+  const status = await waitForTikTokStatus(accessToken, publishId);
+  console.log(`[tiktok] 이미지 발행 ${status === "complete" ? "완료" : "처리 중"}: ${publishId}`);
+  return { publishId, status };
 }
 
 // ── Instagram 헬퍼 ─────────────────────────────────────────────────────────
@@ -731,7 +750,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       const origin = new URL(request.url).origin;
       const mediaSecret = readMediaSecret(env);
 
-      const publishResults: { publishId: string; type: string }[] = [];
+      const publishResults: { publishId: string; type: string; status: "complete" | "processing" }[] = [];
 
       if (isCarousel) {
         const rawItems = body.mediaItems!;
@@ -746,7 +765,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             : v.mediaUrl!;
           console.log(`[tiktok] 영상 ${i + 1}/${videos.length} 발행 중`);
           const r = await publishTikTokVideo({ accessToken, caption, videoUrl, appAudited });
-          publishResults.push({ publishId: r.publishId, type: "video" });
+          publishResults.push({ publishId: r.publishId, type: "video", status: r.status });
         }
 
         // Case 3: 이미지 별도 발행 (슬라이드쇼)
@@ -762,7 +781,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           }
           console.log(`[tiktok] 이미지 ${images.length}장 포토 모드 발행 중`);
           const r = await publishTikTokPhoto({ accessToken, caption, photoUrls, appAudited });
-          publishResults.push({ publishId: r.publishId, type: "photo" });
+          publishResults.push({ publishId: r.publishId, type: "photo", status: r.status });
         }
 
       } else {
@@ -779,7 +798,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
           }
           const r = await publishTikTokVideo({ accessToken, caption, videoUrl, appAudited });
-          publishResults.push({ publishId: r.publishId, type: "video" });
+          publishResults.push({ publishId: r.publishId, type: "video", status: r.status });
         } else {
           // Case 2: 이미지만 (단일) — PULL_FROM_URL 이라 ownership 검증된 우리 도메인 프록시 사용
           let photoUrl: string;
@@ -791,17 +810,20 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
           }
           const r = await publishTikTokPhoto({ accessToken, caption, photoUrls: [photoUrl], appAudited });
-          publishResults.push({ publishId: r.publishId, type: "photo" });
+          publishResults.push({ publishId: r.publishId, type: "photo", status: r.status });
         }
       }
 
+      // 폴링 윈도우 내 전부 complete 면 published, 하나라도 processing 이면 processing.
+      // processing 도 발행은 수락된 상태이므로 ok:true (실패 아님).
+      const allComplete = publishResults.every((r) => r.status === "complete");
       return send({
         ok: true,
         result: {
           platform: "tiktok",
           postId: publishResults[0]?.publishId,
           username: tiktokSettings.username || "",
-          status: "published",
+          status: allComplete ? "published" : "processing",
           publishedAt: new Date().toISOString(),
           publishResults,
         },
