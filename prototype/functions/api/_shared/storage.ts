@@ -73,6 +73,16 @@ export function buildUserDataObject(basePrefix: string, userId: string, fileName
   return `${buildUserDataRoot(basePrefix, userId)}/${safeName}`;
 }
 
+/**
+ * GCS JSON API의 `o/{object}` 경로용 인코딩.
+ * 객체 이름은 단일 path segment 이므로 슬래시까지 모두 percent-encoding 해야 한다.
+ * (슬래시를 그대로 두면 GCS 라우터가 경로를 못 맞춰 404가 난다.)
+ * 읽기/삭제 등 `storage.googleapis.com/storage/v1/b/{bucket}/o/{...}` 호출에 사용.
+ */
+export function gcsObjectPath(objectName: string): string {
+  return encodeURIComponent(String(objectName || ""));
+}
+
 function normalizeBasePrefix(basePrefix: string): string {
   const raw = String(basePrefix || "").replace(/\/+$/, "");
   if (!raw) return "";

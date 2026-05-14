@@ -1,4 +1,4 @@
-import { buildUserDataObject } from "../_shared/storage";
+import { buildUserDataObject, gcsObjectPath } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 
 function send(body: unknown, status = 200) {
@@ -139,7 +139,7 @@ async function loadSnsSettings(
   objectName: string,
   googleToken: string
 ): Promise<any> {
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
+  const encodedName = gcsObjectPath(objectName);
   const res = await fetch(
     `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
     { headers: { Authorization: `Bearer ${googleToken}` } }
@@ -195,9 +195,10 @@ async function saveTikTokTokenPatch(opts: {
   googleToken: string;
   patch: Record<string, unknown>;
 }): Promise<void> {
-  const encodedName = opts.objectName.split("/").map(encodeURIComponent).join("/");
+  const readName = gcsObjectPath(opts.objectName);
+  const writeName = opts.objectName.split("/").map(encodeURIComponent).join("/");
   const readRes = await fetch(
-    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${encodedName}?alt=media`,
+    `https://storage.googleapis.com/storage/v1/b/${opts.bucket}/o/${readName}?alt=media`,
     { headers: { Authorization: `Bearer ${opts.googleToken}` } }
   );
   let existing: any = { sns: {}, deployDefaults: {} };
@@ -207,7 +208,7 @@ async function saveTikTokTokenPatch(opts: {
   existing.sns = existing.sns || {};
   existing.sns.tiktok = Object.assign({}, existing.sns.tiktok, opts.patch);
   existing.updatedAt = new Date().toISOString();
-  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${opts.objectName.split("/").map(encodeURIComponent).join("/")}`;
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${opts.bucket}/o?uploadType=media&name=${writeName}`;
   const upRes = await fetch(uploadUrl, {
     method: "POST",
     headers: { Authorization: `Bearer ${opts.googleToken}`, "Content-Type": "application/json" },

@@ -1,4 +1,4 @@
-import { buildUserDataObject } from "../../_shared/storage";
+import { buildUserDataObject, gcsObjectPath } from "../../_shared/storage";
 import { authorizeRequest } from "../../_shared/auth.js";
 
 function parseGcsUri(uri: string): { bucket: string; object: string } {
@@ -79,7 +79,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   const bucket = outParsed.bucket;
   const basePrefix = outParsed.object.replace(/\/$/, "");
   const objectName = buildUserDataObject(basePrefix, userId, "sns-settings.json");
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
+  // 읽기(o/{name})는 전체 percent-encoding, 쓰기(upload name=)는 슬래시 그대로
+  const readName = gcsObjectPath(objectName);
+  const writeName = objectName.split("/").map(encodeURIComponent).join("/");
   console.log("[sns/save] bucket:", bucket, "objectName:", objectName, "userId:", userId);
 
   try {
@@ -94,7 +96,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     // 다른 플랫폼 상태가 통째 덮어쓰기로 사라지는 cross-device 동기화 버그 방지.
     let existing: any = { sns: {}, deployDefaults: {} };
     const readRes = await fetch(
-      `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
+      `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${readName}?alt=media`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     if (readRes.ok) {
@@ -114,7 +116,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       : (existing.deployDefaults || {});
     existing.updatedAt = new Date().toISOString();
 
-    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=media&name=${encodedName}`;
+    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=media&name=${writeName}`;
     const upRes = await fetch(uploadUrl, {
       method: "POST",
       headers: {

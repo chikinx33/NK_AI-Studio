@@ -1,4 +1,4 @@
-import { buildUserDataObject } from "../../_shared/storage";
+import { buildUserDataObject, gcsObjectPath } from "../../_shared/storage";
 import { authorizeRequest } from "../../_shared/auth.js";
 
 function parseGcsUri(uri: string): { bucket: string; object: string } {
@@ -72,7 +72,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const bucket = outParsed.bucket;
   const basePrefix = outParsed.object.replace(/\/$/, "");
   const objectName = buildUserDataObject(basePrefix, userId, "sns-settings.json");
-  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
+  // 읽기는 GCS JSON API 규칙상 객체 이름 전체를 percent-encoding 해야 함(슬래시 포함)
+  const encodedName = gcsObjectPath(objectName);
   console.log("[sns/get] bucket:", bucket, "objectName:", objectName, "userId:", userId);
 
   try {
