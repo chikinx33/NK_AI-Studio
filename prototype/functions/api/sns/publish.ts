@@ -15,6 +15,44 @@ function parseGcsUri(uri: string): { bucket: string; object: string } {
   return { bucket: without.slice(0, slash), object: without.slice(slash + 1) };
 }
 
+// ── TikTok Photo 프록시 URL 서명 (api/sns/tiktok-media 와 공유하는 규칙) ──────
+function readMediaSecret(env: any): string {
+  return String(
+    (env && (env.AUTH_SESSION_SECRET || env.NK_AUTH_SESSION_SECRET)) ||
+    (env && (env.AUTH_PW || env.GOOGLE_PRIVATE_KEY || env.GOOGLE_PROJECT_ID)) ||
+    "nk_studio_legacy_session_secret_v1"
+  ).trim();
+}
+
+async function hmacSha256B64url(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  let bin = "";
+  new Uint8Array(sig).forEach((b) => (bin += String.fromCharCode(b)));
+  return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
+}
+
+/**
+ * GCS 객체를 우리 도메인 경로(/api/sns/tiktok-media)로 중계하는 서명된 URL 생성.
+ * TikTok PULL_FROM_URL 의 도메인 ownership 검증을 통과시키기 위함.
+ */
+async function buildTikTokProxyUrl(
+  origin: string,
+  objectName: string,
+  secret: string,
+  ttlSec = 3600
+): Promise<string> {
+  const exp = Math.floor(Date.now() / 1000) + ttlSec;
+  const sig = await hmacSha256B64url(secret, `${objectName}|${exp}`);
+  return `${origin}/api/sns/tiktok-media?o=${encodeURIComponent(objectName)}&e=${exp}&s=${encodeURIComponent(sig)}`;
+}
+
 async function getGoogleAccessToken(opts: {
   clientEmail: string;
   privateKeyPem: string;
@@ -689,6 +727,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       // 심사 통과 후 Cloudflare 환경변수 TIKTOK_APP_AUDITED="true" 설정 시 공개 게시 허용.
       const appAudited = String(env.TIKTOK_APP_AUDITED || "").toLowerCase() === "true";
 
+      // Photo PULL_FROM_URL 의 도메인 ownership 검증을 위해 우리 도메인 프록시 사용.
+      const origin = new URL(request.url).origin;
+      const mediaSecret = readMediaSecret(env);
+
       const publishResults: { publishId: string; type: string }[] = [];
 
       if (isCarousel) {
@@ -711,8 +753,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         if (images.length > 0) {
           const photoUrls: string[] = [];
           for (const img of images) {
+            // gcsPath 가 있으면 우리 도메인 프록시(ownership 검증 통과)로 제공.
+            // mediaUrl 만 있는 경우는 도메인 인증이 안 돼 실패할 수 있음.
             const url = img.gcsPath
-              ? await buildSignedUrl(bucket, img.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600)
+              ? await buildTikTokProxyUrl(origin, img.gcsPath, mediaSecret)
               : img.mediaUrl!;
             photoUrls.push(url);
           }
@@ -723,22 +767,30 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
       } else {
         const mediaType = body.mediaType!;
-        let mediaUrl: string;
-        if (body.mediaGcsPath) {
-          mediaUrl = await buildSignedUrl(bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
-        } else if (body.mediaDirectUrl) {
-          mediaUrl = body.mediaDirectUrl;
-        } else {
-          return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
-        }
 
         if (mediaType === "video") {
-          // Case 1: 영상만
-          const r = await publishTikTokVideo({ accessToken, caption, videoUrl: mediaUrl, appAudited });
+          // Case 1: 영상만 — FILE_UPLOAD 방식이라 서버가 직접 다운로드하므로 GCS signed URL 사용
+          let videoUrl: string;
+          if (body.mediaGcsPath) {
+            videoUrl = await buildSignedUrl(bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+          } else if (body.mediaDirectUrl) {
+            videoUrl = body.mediaDirectUrl;
+          } else {
+            return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+          }
+          const r = await publishTikTokVideo({ accessToken, caption, videoUrl, appAudited });
           publishResults.push({ publishId: r.publishId, type: "video" });
         } else {
-          // Case 2: 이미지만 (단일)
-          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls: [mediaUrl], appAudited });
+          // Case 2: 이미지만 (단일) — PULL_FROM_URL 이라 ownership 검증된 우리 도메인 프록시 사용
+          let photoUrl: string;
+          if (body.mediaGcsPath) {
+            photoUrl = await buildTikTokProxyUrl(origin, body.mediaGcsPath, mediaSecret);
+          } else if (body.mediaDirectUrl) {
+            photoUrl = body.mediaDirectUrl;
+          } else {
+            return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+          }
+          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls: [photoUrl], appAudited });
           publishResults.push({ publishId: r.publishId, type: "photo" });
         }
       }
