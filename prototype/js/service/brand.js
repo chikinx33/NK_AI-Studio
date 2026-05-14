@@ -940,15 +940,38 @@
     brand.getDisplayContext = function (options) {
         ensureMigrated(options);
         var currentBrand = brand.resolveCurrent(options);
-        var primaryProject = brand.getPrimaryProject(currentBrand);
-        if (!primaryProject) {
-            var svc = projectService();
-            var fallbackProject = svc && svc.resolveCurrent ? svc.resolveCurrent(options) : null;
-            if (fallbackProject && fallbackProject.id) {
-                primaryProject = fallbackProject;
-                if (!currentBrand) currentBrand = buildBrandSeedFromProject(fallbackProject);
+        var svc = projectService();
+        var selectedProject = svc && svc.resolveCurrent ? svc.resolveCurrent(options) : null;
+
+        var primaryProject = null;
+
+        // 1순위: 사용자가 명시적으로 선택한 프로젝트가 현재 브랜드 소속이면 그대로 사용.
+        // (브랜드 대시보드에서 특정 에피소드 카드를 클릭한 경우 — 그 에피소드를 열어야 한다.
+        //  기존엔 getPrimaryProject 가 무조건 시리즈 최신 에피소드를 반환해 클릭이 무시됐다.)
+        if (selectedProject && selectedProject.id) {
+            var selBrandId = String(
+                (selectedProject.payload && selectedProject.payload.brandId) ||
+                selectedProject.brandId || ''
+            ).trim();
+            if (!currentBrand) {
+                primaryProject = selectedProject;
+                currentBrand = buildBrandSeedFromProject(selectedProject);
+            } else if (selBrandId && selBrandId === String(currentBrand.brandId || '').trim()) {
+                primaryProject = selectedProject;
             }
         }
+
+        // 2순위: 브랜드의 대표(최신) 프로젝트
+        if (!primaryProject) {
+            primaryProject = brand.getPrimaryProject(currentBrand);
+        }
+
+        // 3순위: 그래도 없으면 명시적 선택 프로젝트로 폴백
+        if (!primaryProject && selectedProject && selectedProject.id) {
+            primaryProject = selectedProject;
+            if (!currentBrand) currentBrand = buildBrandSeedFromProject(selectedProject);
+        }
+
         return {
             brand: currentBrand,
             project: primaryProject

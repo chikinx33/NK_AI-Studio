@@ -146,7 +146,13 @@
         } catch (_) {}
 
         var now = Date.now();
-        if (url === __lastResolvedUrl || url === __pendingUrl) return;
+        // dashboard 메뉴는 항상 응답해야 한다. dashboard iframe 이 isIframe 분기로
+        // 자기 자신을 stage 페이지로 이동시킬 때 부모 창의 __lastResolvedUrl 은
+        // 갱신되지 않아 stale(=dashboard URL) 상태로 남는다. URL 일치만으로 막으면
+        // "대시보드 메뉴를 눌러도 반응 없음" 버그가 생기므로 dashboard 는 제외한다.
+        // (아래 80ms 디바운스가 중복 클릭은 별도로 막아 준다.)
+        if (url === __pendingUrl) return;
+        if (st !== 'dashboard' && url === __lastResolvedUrl) return;
         if (now - __lastAt < 80 && st === 'dashboard') return;
         __pendingUrl = url;
         __lastAt = now;
