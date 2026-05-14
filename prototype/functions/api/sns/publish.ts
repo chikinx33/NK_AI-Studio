@@ -244,7 +244,21 @@ async function waitForTikTokStatus(
  * 심사 미통과(unaudited) 앱은 보통 ["SELF_ONLY"]만 허용되며, 허용되지 않는
  * privacy_level로 init을 호출하면 "integration guidelines" 에러가 난다.
  */
-async function getTikTokCreatorInfo(accessToken: string): Promise<{ level: string; raw: any }> {
+/**
+ * creator_info 를 조회하고 사용할 privacy_level 을 결정한다.
+ *
+ * 중요: TikTok 앱이 심사(audit)를 통과하기 전에는 `unaudited_client_can_only_post_
+ * to_private_accounts` 에러로 SELF_ONLY 외 게시가 모두 거부된다. creator_info 가
+ * 돌려주는 privacy_level_options 는 "계정 설정" 기준이라 PUBLIC 이 포함돼 있어도
+ * 앱이 미심사면 못 쓴다. 따라서 기본값은 SELF_ONLY 로 강제하고, 앱 심사를 통과한
+ * 뒤에는 env.TIKTOK_APP_AUDITED="true" 로 공개 게시를 허용한다.
+ */
+async function getTikTokCreatorInfo(
+  accessToken: string,
+  appAudited: boolean
+): Promise<{ level: string; raw: any }> {
+  let raw: any = {};
+  let options: string[] = [];
   try {
     const res = await fetch("https://open.tiktokapis.com/v2/post/publish/creator_info/query/", {
       method: "POST",
@@ -255,24 +269,28 @@ async function getTikTokCreatorInfo(accessToken: string): Promise<{ level: strin
       error?: { code?: string; message?: string };
     };
     console.log(`[tiktok] creator_info 응답 (${res.status}):`, JSON.stringify(d));
-    const options = d.data?.privacy_level_options || [];
-    let level = "SELF_ONLY";
-    if (options.length) {
-      level = options.includes("PUBLIC_TO_EVERYONE") ? "PUBLIC_TO_EVERYONE" : options[0];
-    }
-    return { level, raw: { httpStatus: res.status, ...d } };
+    options = d.data?.privacy_level_options || [];
+    raw = { httpStatus: res.status, ...d };
   } catch (err) {
-    console.log(`[tiktok] creator_info 조회 실패, SELF_ONLY로 폴백:`, err);
-    return { level: "SELF_ONLY", raw: { fetchError: String(err) } };
+    console.log(`[tiktok] creator_info 조회 실패:`, err);
+    raw = { fetchError: String(err) };
   }
+
+  // 미심사 앱은 무조건 SELF_ONLY. 심사 통과 후에만 공개 게시 허용.
+  let level = "SELF_ONLY";
+  if (appAudited && options.includes("PUBLIC_TO_EVERYONE")) {
+    level = "PUBLIC_TO_EVERYONE";
+  }
+  return { level, raw: { ...raw, appAudited } };
 }
 
 async function publishTikTokVideo(opts: {
   accessToken: string;
   caption: string;
   videoUrl: string;
+  appAudited: boolean;
 }): Promise<{ publishId: string }> {
-  const { accessToken, caption, videoUrl } = opts;
+  const { accessToken, caption, videoUrl, appAudited } = opts;
   console.log(`[tiktok] 영상 발행 시작 (file_upload): ${videoUrl.slice(0, 80)}...`);
 
   // Step 1: 영상 크기 확인 (HEAD)
@@ -286,7 +304,7 @@ async function publishTikTokVideo(opts: {
   console.log(`[tiktok] 영상 크기: ${Math.round(videoSize / 1024)}KB`);
 
   // Step 1.5: 허용된 privacy level 조회 (심사 미통과 앱은 SELF_ONLY만 가능)
-  const creatorInfo = await getTikTokCreatorInfo(accessToken);
+  const creatorInfo = await getTikTokCreatorInfo(accessToken, appAudited);
   const privacyLevel = creatorInfo.level;
   console.log(`[tiktok] 사용할 privacy_level: ${privacyLevel}`);
 
@@ -358,10 +376,11 @@ async function publishTikTokPhoto(opts: {
   accessToken: string;
   caption: string;
   photoUrls: string[];
+  appAudited: boolean;
 }): Promise<{ publishId: string }> {
-  const { accessToken, caption, photoUrls } = opts;
+  const { accessToken, caption, photoUrls, appAudited } = opts;
   console.log(`[tiktok] 이미지 발행 시작 (${photoUrls.length}장, photo_mode)`);
-  const creatorInfo = await getTikTokCreatorInfo(accessToken);
+  const creatorInfo = await getTikTokCreatorInfo(accessToken, appAudited);
   const privacyLevel = creatorInfo.level;
   console.log(`[tiktok] 사용할 privacy_level: ${privacyLevel}`);
   const res = await fetch("https://open.tiktokapis.com/v2/post/publish/content/init/", {
@@ -659,6 +678,10 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         console.log(`[tiktok] 토큰 갱신 완료`);
       }
 
+      // TikTok 앱 심사 통과 여부. 미심사 앱은 SELF_ONLY 게시만 가능.
+      // 심사 통과 후 Cloudflare 환경변수 TIKTOK_APP_AUDITED="true" 설정 시 공개 게시 허용.
+      const appAudited = String(env.TIKTOK_APP_AUDITED || "").toLowerCase() === "true";
+
       const publishResults: { publishId: string; type: string }[] = [];
 
       if (isCarousel) {
@@ -673,7 +696,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             ? await buildSignedUrl(bucket, v.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600)
             : v.mediaUrl!;
           console.log(`[tiktok] 영상 ${i + 1}/${videos.length} 발행 중`);
-          const r = await publishTikTokVideo({ accessToken, caption, videoUrl });
+          const r = await publishTikTokVideo({ accessToken, caption, videoUrl, appAudited });
           publishResults.push({ publishId: r.publishId, type: "video" });
         }
 
@@ -687,7 +710,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
             photoUrls.push(url);
           }
           console.log(`[tiktok] 이미지 ${images.length}장 포토 모드 발행 중`);
-          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls });
+          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls, appAudited });
           publishResults.push({ publishId: r.publishId, type: "photo" });
         }
 
@@ -704,11 +727,11 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
         if (mediaType === "video") {
           // Case 1: 영상만
-          const r = await publishTikTokVideo({ accessToken, caption, videoUrl: mediaUrl });
+          const r = await publishTikTokVideo({ accessToken, caption, videoUrl: mediaUrl, appAudited });
           publishResults.push({ publishId: r.publishId, type: "video" });
         } else {
           // Case 2: 이미지만 (단일)
-          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls: [mediaUrl] });
+          const r = await publishTikTokPhoto({ accessToken, caption, photoUrls: [mediaUrl], appAudited });
           publishResults.push({ publishId: r.publishId, type: "photo" });
         }
       }
