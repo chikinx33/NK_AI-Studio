@@ -244,13 +244,25 @@ async function publishTikTokVideo(opts: {
   videoUrl: string;
 }): Promise<{ publishId: string }> {
   const { accessToken, caption, videoUrl } = opts;
-  console.log(`[tiktok] 영상 발행 시작 (pull_by_url): ${videoUrl.slice(0, 80)}...`);
-  const res = await fetch("https://open.tiktokapis.com/v2/post/publish/video/init/", {
+  console.log(`[tiktok] 영상 발행 시작 (file_upload): ${videoUrl.slice(0, 80)}...`);
+
+  // Step 1: 영상 크기 확인 (HEAD)
+  const headRes = await fetch(videoUrl, { method: "HEAD" });
+  if (!headRes.ok) throw new Error(`영상 메타데이터 조회 실패: ${headRes.status}`);
+  const videoSize = parseInt(headRes.headers.get("content-length") || "0");
+  if (!videoSize) throw new Error("영상 파일 크기를 확인할 수 없습니다");
+  if (videoSize > 100 * 1024 * 1024) {
+    throw new Error(`영상이 너무 큽니다 (${Math.round(videoSize / 1024 / 1024)}MB, 최대 100MB)`);
+  }
+  console.log(`[tiktok] 영상 크기: ${Math.round(videoSize / 1024)}KB`);
+
+  // Step 2: TikTok 발행 초기화 (FILE_UPLOAD)
+  const initRes = await fetch("https://open.tiktokapis.com/v2/post/publish/video/init/", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify({
       post_info: {
-        title: caption,
+        title: caption.slice(0, 2200),
         privacy_level: "PUBLIC_TO_EVERYONE",
         disable_duet: false,
         disable_comment: false,
@@ -258,17 +270,43 @@ async function publishTikTokVideo(opts: {
         video_cover_timestamp_ms: 1000,
       },
       source_info: {
-        source: "PULL_FROM_URL",
-        video_url: videoUrl,
+        source: "FILE_UPLOAD",
+        video_size: videoSize,
+        chunk_size: videoSize,
+        total_chunk_count: 1,
       },
     }),
   });
-  const data = (await res.json()) as { data?: { publish_id?: string }; error?: { code?: string; message?: string } };
-  if (!data.data?.publish_id || data.error?.code !== "ok") {
-    throw new Error(`TikTok 영상 발행 초기화 실패: ${data.error?.message || JSON.stringify(data)}`);
+  const initData = (await initRes.json()) as {
+    data?: { publish_id?: string; upload_url?: string };
+    error?: { code?: string; message?: string };
+  };
+  const publishId = initData.data?.publish_id;
+  const uploadUrl = initData.data?.upload_url;
+  if (!publishId || !uploadUrl) {
+    throw new Error(`TikTok 영상 발행 초기화 실패: ${initData.error?.message || JSON.stringify(initData)}`);
   }
-  const publishId = data.data.publish_id;
-  console.log(`[tiktok] 영상 발행 초기화 완료, publish_id: ${publishId}. 상태 폴링 시작.`);
+  console.log(`[tiktok] 발행 초기화 완료, publish_id: ${publishId}`);
+
+  // Step 3: GCS에서 영상 다운로드 후 TikTok에 직접 업로드
+  const videoRes = await fetch(videoUrl);
+  if (!videoRes.ok) throw new Error(`GCS 영상 다운로드 실패: ${videoRes.status}`);
+  const videoBuffer = await videoRes.arrayBuffer();
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "video/mp4",
+      "Content-Length": String(videoBuffer.byteLength),
+      "Content-Range": `bytes 0-${videoBuffer.byteLength - 1}/${videoBuffer.byteLength}`,
+    },
+    body: videoBuffer,
+  });
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text().catch(() => "");
+    throw new Error(`TikTok 영상 업로드 실패: ${uploadRes.status} ${errText}`);
+  }
+  console.log(`[tiktok] 영상 업로드 완료, 상태 폴링 시작`);
   await waitForTikTokStatus(accessToken, publishId);
   console.log(`[tiktok] 영상 발행 완료: ${publishId}`);
   return { publishId };
