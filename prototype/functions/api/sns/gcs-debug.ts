@@ -149,3 +149,72 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     return send({ ok: false, error: msg, pathInfo });
   }
 };
+
+/**
+ * POST: v3.802 버그로 잘못된 이중 인코딩 키에 저장된 sns-settings.json 을
+ * 올바른 키로 1회 복사하는 마이그레이션.
+ */
+export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
+  const auth = await authorizeRequest(request, env);
+  if (!auth.ok) return send({ error: auth.error }, auth.status);
+
+  const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
+  const bucket = outParsed.bucket;
+  const basePrefix = outParsed.object.replace(/\/$/, "");
+  const objectName = buildUserDataObject(basePrefix, auth.userId, "sns-settings.json");
+  const encodedName = objectName.split("/").map(encodeURIComponent).join("/");
+  const doubleEncodedName = encodeURIComponent(objectName);
+
+  try {
+    const googleToken = await getGoogleAccessToken({
+      clientEmail: env.GOOGLE_CLIENT_EMAIL,
+      privateKeyPem: env.GOOGLE_PRIVATE_KEY,
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+    });
+
+    // 올바른 키에 이미 파일이 있으면 마이그레이션 불필요
+    const correctRes = await fetch(
+      `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${encodedName}?alt=media`,
+      { headers: { Authorization: `Bearer ${googleToken}` } }
+    );
+    if (correctRes.ok) {
+      return send({ ok: true, migrated: false, note: "올바른 키에 이미 파일이 존재합니다." });
+    }
+
+    // 레거시 이중 인코딩 키 읽기
+    const legacyRes = await fetch(
+      `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${doubleEncodedName}?alt=media`,
+      { headers: { Authorization: `Bearer ${googleToken}` } }
+    );
+    if (!legacyRes.ok) {
+      return send({ ok: false, migrated: false, note: "레거시 키에도 파일이 없습니다.", legacyStatus: legacyRes.status }, 404);
+    }
+    const legacyData = await legacyRes.json();
+
+    // 올바른 키로 쓰기
+    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=media&name=${encodedName}`;
+    const upRes = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${googleToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(legacyData),
+    });
+    if (!upRes.ok) {
+      const errText = await upRes.text();
+      throw new Error(`GCS upload error: ${upRes.status} ${errText}`);
+    }
+
+    return send({
+      ok: true,
+      migrated: true,
+      note: "레거시 키 → 올바른 키 복사 완료. 이제 정상 동작합니다.",
+      objectName,
+      settings: maskSettings(legacyData),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return send({ ok: false, error: msg }, 500);
+  }
+};
