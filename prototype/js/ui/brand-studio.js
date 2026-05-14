@@ -899,6 +899,9 @@
       alertOneClickFail: function (e) { return '원클릭 초안 생성 실패: ' + e; },
       alertPublishSaved: function (n) { return n + '개 포맷에 배포 계획을 저장했습니다.'; },
       alertPublishFail: function (e) { return '배포 실패: ' + e; },
+      alertPublishSuccess: function (label) { return label + ' 배포 완료!'; },
+      alertPublishProcessing: function (label) { return label + ' 배포 요청 완료 — 채널에서 처리 중입니다. 잠시 후 계정에서 게시물을 확인하세요.'; },
+      alertPublishAllDone: function (n) { return n + '개 채널 배포 요청을 완료했습니다.'; },
       alertAssetSaveFail: function (e) { return '자산 선택 저장 실패: ' + e; },
       alertAssetResetFail: function (e) { return '선택 자산 초기화 실패: ' + e; }
     };
@@ -956,6 +959,9 @@
       alertOneClickFail: function (e) { return 'One-click draft failed: ' + e; },
       alertPublishSaved: function (n) { return 'Publish plan saved for ' + n + ' format' + (n === 1 ? '' : 's') + '.'; },
       alertPublishFail: function (e) { return 'Publish failed: ' + e; },
+      alertPublishSuccess: function (label) { return label + ' published!'; },
+      alertPublishProcessing: function (label) { return label + ' publish requested — the channel is still processing it. Check your account shortly.'; },
+      alertPublishAllDone: function (n) { return 'Publish requested for ' + n + ' channel' + (n === 1 ? '' : 's') + '.'; },
       alertAssetSaveFail: function (e) { return 'Failed to save asset selection: ' + e; },
       alertAssetResetFail: function (e) { return 'Failed to reset asset selection: ' + e; }
     };
@@ -3604,6 +3610,12 @@
             if (publishResult && publishResult.ok) {
               _deployedFormats[oneFmtId] = true;
               persistDeployedFormats();
+              var oneFmt = formatItems.find(function (f) { return f.id === oneFmtId; });
+              var oneLabel = oneFmt && oneFmt.title ? oneFmt.title : oneFmtId;
+              var oneStatus = publishResult.result && publishResult.result.status;
+              alert(oneStatus === 'published'
+                ? T.alertPublishSuccess(oneLabel)
+                : T.alertPublishProcessing(oneLabel));
             }
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
@@ -3632,6 +3644,7 @@
         btn.innerHTML = '<span class="bsf-deploy-btn-spinner"></span>';
         refreshDeploySummary();
         var deployPlan = { channels: allFmtIds, scheduledAt: scheduledAt, status: (scheduledAt && scheduledAt !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
+        var _allDeployedCount = 0;
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
@@ -3640,9 +3653,17 @@
                 var fmtPerCard = root.querySelector('#bsf-deploy-dt-' + fmtId);
                 var fmtScheduledAt = (fmtPerCard && String(fmtPerCard.value || '').trim()) || scheduledAt;
                 return snsPublishFormat(fmtId, formatDrafts, fmtScheduledAt)
-                  .then(function () { _deployedFormats[fmtId] = true; persistDeployedFormats(); delete _deployingFormats[fmtId]; refreshDeploySummary(); });
+                  .then(function (pubRes) {
+                    if (pubRes && pubRes.skipped) { delete _deployingFormats[fmtId]; refreshDeploySummary(); return; }
+                    _deployedFormats[fmtId] = true; persistDeployedFormats();
+                    _allDeployedCount += 1;
+                    delete _deployingFormats[fmtId]; refreshDeploySummary();
+                  });
               });
             }, Promise.resolve());
+          })
+          .then(function () {
+            if (_allDeployedCount > 0) alert(T.alertPublishAllDone(_allDeployedCount));
           })
           .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () {
