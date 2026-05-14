@@ -161,7 +161,22 @@
   };
 
   const getSelectedProjectId = () => {
-    // 1순위: pre/prod/post에서 가장 최근 작업한 프로젝트 (lastUsedAt)
+    // 1순위: 사용자가 명시적으로 선택한 런타임 currentProject.
+    // (카드 클릭 시 selectProject→setCurrent 가 여기에 반영됨. 명시적 선택은
+    //  항상 lastUsedAt 휴리스틱보다 우선해야 한다 — 안 그러면 어떤 카드를
+    //  눌러도 가장 최근 작업 프로젝트가 열리는 버그가 생긴다.)
+    const runtimeId = String(NK.state?.runtime?.currentProject?.id || '').trim();
+    if (runtimeId) return runtimeId;
+    // 2순위: 로컬 스토리지에 저장된 명시적 선택
+    try {
+      const key = (NK.config && NK.config.KEYS && NK.config.KEYS.CURRENT_PROJECT) || 'nk_current_project';
+      const raw = localStorage.getItem(key) || localStorage.getItem('nk_current_project');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.id) return String(parsed.id).trim();
+      }
+    } catch (_) {}
+    // 3순위(폴백): 명시적 선택이 없을 때만 — 가장 최근 작업한 프로젝트(lastUsedAt)
     try {
       const drafts = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts() : [];
       if (Array.isArray(drafts) && drafts.length) {
@@ -176,18 +191,6 @@
           }
         });
         if (recentId) return recentId;
-      }
-    } catch (_) {}
-    // 2순위: 런타임 currentProject
-    const runtimeId = String(NK.state?.runtime?.currentProject?.id || '').trim();
-    if (runtimeId) return runtimeId;
-    // 3순위: 로컬 스토리지
-    try {
-      const key = (NK.config && NK.config.KEYS && NK.config.KEYS.CURRENT_PROJECT) || 'nk_current_project';
-      const raw = localStorage.getItem(key) || localStorage.getItem('nk_current_project');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (parsed && parsed.id) return String(parsed.id).trim();
       }
     } catch (_) {}
     return '';
