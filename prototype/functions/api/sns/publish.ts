@@ -388,9 +388,16 @@ async function publishTikTokPhoto(opts: {
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
     body: JSON.stringify({
       post_info: {
-        title: caption,
+        // Photo title 은 최대 90 UTF-16 runes
+        title: caption.slice(0, 90),
+        // Photo description 은 최대 4000 runes
+        description: caption.slice(0, 4000),
         privacy_level: privacyLevel,
         disable_comment: false,
+        auto_add_music: true,
+        // TikTok Photo Post API 필수: 두 brand 토글은 항상 포함해야 함
+        brand_content_toggle: false,
+        brand_organic_toggle: false,
       },
       source_info: {
         source: "PULL_FROM_URL",
