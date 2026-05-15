@@ -276,10 +276,20 @@
     });
   }
 
+  var _oauthInflight = {};  // 동일 OAuth 결과 메시지 중복 처리 방지
   function onOAuthMessage(evt) {
     if (!evt.data || evt.data.type !== 'sns_oauth_result') return;
     var result = evt.data.result;
     var platform = evt.data.platform;
+    // 중복 방지: 같은 platform OAuth 결과가 짧은 시간 내 또 들어오면 무시
+    var dedupKey = platform + ':' + (result && result.ok ? 'ok' : 'err');
+    if (_oauthInflight[dedupKey]) {
+      console.warn('[SNS] duplicate OAuth message ignored:', dedupKey);
+      return;
+    }
+    _oauthInflight[dedupKey] = true;
+    setTimeout(function () { delete _oauthInflight[dedupKey]; }, 3000);
+
     if (result && result.ok) {
       // 즉시 로컬 상태 업데이트 → UI 바로 반영
       _settings = _settings || {};
@@ -302,13 +312,12 @@
       }
       _writeCache(_settings.sns);
       render();
-      console.log('[SNS] OAuth success — local state after merge:', platform, JSON.parse(JSON.stringify(_settings.sns[platform] || {})));
+      console.log('[SNS] OAuth local merge:', platform, JSON.stringify(_settings.sns[platform] || {}));
       alert(T[_lang()].connectOk(platform, result.username || ''));
-      // saveSettings() 제거: 콜백이 GCS에 accessToken 포함하여 이미 저장 완료.
-      // saveSettings() 호출 시 read-modify-write 타이밍에 따라 accessToken이
-      // 누락된 상태로 덮어쓸 수 있음. 백그라운드 loadSettings()로만 동기화.
       loadSettings().then(function (s) {
-        console.log('[SNS] loadSettings() after OAuth — server state for', platform, ':', JSON.parse(JSON.stringify((s && s.sns && s.sns[platform]) || {})));
+        var serverState = (s && s.sns && s.sns[platform]) || {};
+        console.log('[SNS] loadSettings() server state for', platform, ':', JSON.stringify(serverState));
+        console.log('[SNS] all sns keys from server:', s && s.sns ? Object.keys(s.sns).join(',') : '(none)');
         render();
       }).catch(function (err) { console.warn('[SNS] loadSettings after OAuth failed:', err); });
     } else {
