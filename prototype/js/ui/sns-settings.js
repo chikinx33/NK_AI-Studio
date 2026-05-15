@@ -302,11 +302,15 @@
       }
       _writeCache(_settings.sns);
       render();
+      console.log('[SNS] OAuth success — local state after merge:', platform, JSON.parse(JSON.stringify(_settings.sns[platform] || {})));
       alert(T[_lang()].connectOk(platform, result.username || ''));
       // saveSettings() 제거: 콜백이 GCS에 accessToken 포함하여 이미 저장 완료.
       // saveSettings() 호출 시 read-modify-write 타이밍에 따라 accessToken이
       // 누락된 상태로 덮어쓸 수 있음. 백그라운드 loadSettings()로만 동기화.
-      loadSettings().then(function () { render(); }).catch(function () {});
+      loadSettings().then(function (s) {
+        console.log('[SNS] loadSettings() after OAuth — server state for', platform, ':', JSON.parse(JSON.stringify((s && s.sns && s.sns[platform]) || {})));
+        render();
+      }).catch(function (err) { console.warn('[SNS] loadSettings after OAuth failed:', err); });
     } else {
       alert(T[_lang()].connectFail(platform, result && result.error ? result.error : t('unknownErr')));
     }
