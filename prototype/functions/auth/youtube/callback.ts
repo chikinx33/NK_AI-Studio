@@ -83,17 +83,19 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     // 사용자 채널 정보 조회 (표시용)
     let channelId = "";
     let channelTitle = "";
+    let channelHandle = "";
     try {
       const chRes = await fetch(
         "https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true",
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       const chData = (await chRes.json()) as {
-        items?: Array<{ id?: string; snippet?: { title?: string } }>;
+        items?: Array<{ id?: string; snippet?: { title?: string; customUrl?: string } }>;
       };
       const first = chData.items?.[0];
       channelId = first?.id || "";
       channelTitle = first?.snippet?.title || "";
+      channelHandle = first?.snippet?.customUrl || "";  // e.g. "@shapesU"
     } catch {
       // 채널 조회 실패는 치명적이지 않음 — 토큰만 저장
     }
@@ -112,6 +114,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
         enabled: true,
         channelId,
         channelTitle,
+        channelHandle,
         accessToken,
         refreshToken,
         tokenExpiresAt: expiresAt,

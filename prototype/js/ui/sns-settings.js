@@ -454,9 +454,13 @@
     if (connected && !comingSoon) {
       var _u = snsState.username || snsState.channelTitle || '';
       var _cid = snsState.channelId || '';
+      // channelHandle = snippet.customUrl (e.g. "@shapesU") — 실제 YouTube 핸들
+      var _handle = snsState.channelHandle || '';
+      // handle이 @로 시작하면 그대로, 아니면 @ 붙이기
+      var _ytPath = _handle ? (_handle.charAt(0) === '@' ? _handle : '@' + _handle) : '';
       if (platform.id === 'instagram')      profileUrl = _u ? 'https://www.instagram.com/' + _u + '/' : '';
-      else if (platform.id === 'youtube')   profileUrl = _u ? 'https://www.youtube.com/@' + _u : (_cid ? 'https://www.youtube.com/channel/' + _cid : '');
-      else if (platform.id === 'youtube-shorts') profileUrl = _u ? 'https://www.youtube.com/@' + _u + '/shorts' : (_cid ? 'https://www.youtube.com/channel/' + _cid + '/shorts' : '');
+      else if (platform.id === 'youtube')   profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath : (_cid ? 'https://www.youtube.com/channel/' + _cid : '');
+      else if (platform.id === 'youtube-shorts') profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath + '/shorts' : (_cid ? 'https://www.youtube.com/channel/' + _cid + '/shorts' : '');
       else if (platform.id === 'tiktok')    profileUrl = _u ? 'https://www.tiktok.com/@' + _u : '';
     }
     var linkBtnHtml = profileUrl

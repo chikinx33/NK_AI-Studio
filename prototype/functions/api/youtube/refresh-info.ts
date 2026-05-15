@@ -49,11 +49,12 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   }
 
   const data = (await chRes.json()) as {
-    items?: Array<{ id?: string; snippet?: { title?: string } }>;
+    items?: Array<{ id?: string; snippet?: { title?: string; customUrl?: string } }>;
   };
   const first = data.items?.[0];
   const channelId = first?.id || "";
   const channelTitle = first?.snippet?.title || "";
+  const channelHandle = first?.snippet?.customUrl || "";  // e.g. "@shapesU"
 
   if (!channelId && !channelTitle) {
     return send({ error: "no_channel_found" }, 404);
@@ -69,12 +70,12 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     const gcs = resolveGcsContextForUser(env, auth.userId);
     await writeYoutubeWithShortsMirror(
       { ...gcs, googleToken },
-      { channelId, channelTitle }
+      { channelId, channelTitle, channelHandle }
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return send({ error: msg }, 500);
   }
 
-  return send({ ok: true, channelId, channelTitle });
+  return send({ ok: true, channelId, channelTitle, channelHandle });
 };

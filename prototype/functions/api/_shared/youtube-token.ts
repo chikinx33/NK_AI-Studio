@@ -5,6 +5,7 @@ export interface YouTubeTokenData {
   enabled?: boolean;
   channelId?: string;
   channelTitle?: string;
+  channelHandle?: string;  // snippet.customUrl (e.g. "@shapesU")
   accessToken: string;
   refreshToken: string;
   tokenExpiresAt: string;
@@ -171,6 +172,7 @@ export async function writeYoutubeWithShortsMirror(
       mirrorOf: "youtube",
       channelId: ytPatch.channelId || prevShorts.channelId || "",
       channelTitle: ytPatch.channelTitle || prevShorts.channelTitle || "",
+      channelHandle: ytPatch.channelHandle || prevShorts.channelHandle || "",
     });
   }
 
