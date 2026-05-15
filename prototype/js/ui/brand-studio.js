@@ -3328,7 +3328,18 @@
         if (activePanel) {
           activePanel.querySelectorAll('[data-draft-field]').forEach(function (el) {
             var key = String(el.dataset.draftField || '').trim();
-            if (key) nextFmtDraft[key] = (el.innerText || el.textContent || '').trim();
+            if (!key) return;
+            if (el.getAttribute('contenteditable') === 'true' || el.isContentEditable) {
+              nextFmtDraft[key] = (el.innerText || el.textContent || '').trim();
+            } else if (el.tagName === 'SELECT') {
+              nextFmtDraft[key] = String(el.value || '').trim();
+            } else if (el.type === 'radio') {
+              if (el.checked) nextFmtDraft[key] = String(el.value || '').trim();
+            } else if (el.type === 'checkbox') {
+              nextFmtDraft[key] = el.checked;
+            } else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+              nextFmtDraft[key] = String(el.value || '').trim();
+            }
           });
         }
         // legacy textarea fallback
