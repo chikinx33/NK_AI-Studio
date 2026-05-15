@@ -1991,11 +1991,9 @@
       afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? "What's on your mind?" : '무슨 생각을 하고 계신가요?')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
       inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'auto', 'url') +
-      radioField(fmtId, 'privacy_status', isEn ? 'Privacy' : '공개 설정', [
-        { value: 'public',   label: isEn ? 'Everyone' : '전체공개' },
-        { value: 'friends',  label: isEn ? 'Friends' : '친구만' },
-        { value: 'private',  label: isEn ? 'Only me' : '비공개' },
-      ], draft.privacy_status || 'public', 'auto');
+      '<div class="bsf-field-note">' + escapeHtml(isEn
+        ? 'Facebook Page posts are always public.'
+        : 'Facebook 페이지 게시물은 항상 전체 공개입니다.') + '</div>';
     }
     function buildLinkedinPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
@@ -3568,6 +3566,7 @@
         var finalCaption = [draftCaption, draftHashtags].filter(Boolean).join('\n\n');
         if (!finalCaption) finalCaption = '';
         var firstComment = String(draft.first_comment || '').trim();
+        var draftLinkUrl = String(draft.link_url || '').trim();
         var token = localStorage.getItem('nk_auth_token') || '';
 
         // YouTube 전용 메타 (hasTitle 포맷). draft.title 없으면 에피소드 제목 폴백.
@@ -3620,6 +3619,7 @@
             caption: finalCaption,
             scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
             firstComment: firstComment || '',
+            linkUrl: draftLinkUrl || '',
           };
         } else {
           requestBody = {
@@ -3628,6 +3628,7 @@
             caption: finalCaption,
             scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
             firstComment: firstComment || '',
+            linkUrl: draftLinkUrl || '',
           };
         }
 

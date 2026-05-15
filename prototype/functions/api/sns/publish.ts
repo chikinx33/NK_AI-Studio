@@ -681,12 +681,19 @@ async function publishPhotoToFacebook(opts: {
   pageToken: string;
   mediaUrl: string;
   caption: string;
+  linkUrl?: string;
 }): Promise<{ postId: string }> {
-  const { pageId, pageToken, mediaUrl, caption } = opts;
+  const { pageId, pageToken, mediaUrl, caption, linkUrl } = opts;
+  const body: Record<string, unknown> = {
+    url: mediaUrl,
+    message: caption,
+    access_token: pageToken,
+  };
+  if (linkUrl) body.link = linkUrl;
   const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: mediaUrl, message: caption, access_token: pageToken }),
+    body: JSON.stringify(body),
   });
   const data = (await res.json()) as { post_id?: string; id?: string; error?: { message: string } };
   const postId = data.post_id || data.id;
@@ -699,12 +706,15 @@ async function publishVideoToFacebook(opts: {
   pageToken: string;
   mediaUrl: string;
   caption: string;
+  linkUrl?: string;
 }): Promise<{ postId: string }> {
-  const { pageId, pageToken, mediaUrl, caption } = opts;
+  const { pageId, pageToken, mediaUrl, caption, linkUrl } = opts;
+  // /videos 엔드포인트는 link 파라미터를 받지 않으므로 description 끝에 링크를 첨부한다.
+  const description = linkUrl ? `${caption}\n\n${linkUrl}` : caption;
   const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/videos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ file_url: mediaUrl, description: caption, access_token: pageToken }),
+    body: JSON.stringify({ file_url: mediaUrl, description, access_token: pageToken }),
   });
   const data = (await res.json()) as { id?: string; error?: { message: string } };
   if (!data.id) throw new Error(`Facebook 동영상 게시 실패: ${data.error?.message}`);
@@ -716,8 +726,9 @@ async function publishCarouselToFacebook(opts: {
   pageToken: string;
   imageUrls: string[];
   caption: string;
+  linkUrl?: string;
 }): Promise<{ postId: string }> {
-  const { pageId, pageToken, imageUrls, caption } = opts;
+  const { pageId, pageToken, imageUrls, caption, linkUrl } = opts;
 
   // Step 1: 각 이미지를 미발행(unpublished) 상태로 업로드
   const mediaFbids: string[] = [];
@@ -734,14 +745,35 @@ async function publishCarouselToFacebook(opts: {
 
   // Step 2: feed 포스트로 묶어서 게시
   const attached = mediaFbids.map((fbid) => ({ media_fbid: fbid }));
+  const feedBody: Record<string, unknown> = {
+    message: caption,
+    attached_media: attached,
+    access_token: pageToken,
+  };
+  if (linkUrl) feedBody.link = linkUrl;
   const feedRes = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: caption, attached_media: attached, access_token: pageToken }),
+    body: JSON.stringify(feedBody),
   });
   const feedData = (await feedRes.json()) as { id?: string; error?: { message: string } };
   if (!feedData.id) throw new Error(`Facebook 캐러셀 게시 실패: ${feedData.error?.message}`);
   return { postId: feedData.id };
+}
+
+async function postFacebookComment(opts: {
+  postId: string;
+  pageToken: string;
+  message: string;
+}): Promise<void> {
+  const { postId, pageToken, message } = opts;
+  const res = await fetch(`https://graph.facebook.com/v21.0/${postId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, access_token: pageToken }),
+  });
+  const data = (await res.json()) as { id?: string; error?: { message: string } };
+  if (!data.id) throw new Error(`Facebook 첫 댓글 게시 실패: ${data.error?.message}`);
 }
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
@@ -1242,13 +1274,37 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         if (imageUrls.length === 0) {
           return send({ error: "Facebook 캐러셀에 유효한 이미지가 없습니다." }, 400);
         }
+        const fbLinkUrl = String((body as any).linkUrl || "").trim();
+
+        let postId: string;
         if (imageUrls.length === 1) {
-          // 이미지 1장이면 단일 포스트
-          const { postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl: imageUrls[0], caption });
-          return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+          ({ postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl: imageUrls[0], caption, linkUrl: fbLinkUrl }));
+        } else {
+          ({ postId } = await publishCarouselToFacebook({ pageId, pageToken, imageUrls, caption, linkUrl: fbLinkUrl }));
         }
-        const { postId } = await publishCarouselToFacebook({ pageId, pageToken, imageUrls, caption });
-        return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+
+        // 첫 댓글: 실패해도 게시 자체는 성공으로 처리
+        let commentError: string | undefined;
+        if (firstComment && firstComment.trim()) {
+          try {
+            await postFacebookComment({ postId, pageToken, message: firstComment.trim() });
+          } catch (e) {
+            commentError = e instanceof Error ? e.message : String(e);
+            console.log("[facebook publish] first comment failed (post still ok):", commentError);
+          }
+        }
+
+        return send({
+          ok: true,
+          result: {
+            platform: "facebook",
+            postId,
+            username: pageName,
+            status: "published",
+            publishedAt: new Date().toISOString(),
+            commentError,
+          },
+        });
 
       } else {
         const mediaType = body.mediaType!;
@@ -1261,13 +1317,37 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
         }
 
+        const fbLinkUrl = String((body as any).linkUrl || "").trim();
+
+        let postId: string;
         if (mediaType === "video") {
-          const { postId } = await publishVideoToFacebook({ pageId, pageToken, mediaUrl, caption });
-          return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+          ({ postId } = await publishVideoToFacebook({ pageId, pageToken, mediaUrl, caption, linkUrl: fbLinkUrl }));
         } else {
-          const { postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl, caption });
-          return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+          ({ postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl, caption, linkUrl: fbLinkUrl }));
         }
+
+        // 첫 댓글: 실패해도 게시 자체는 성공으로 처리
+        let commentError: string | undefined;
+        if (firstComment && firstComment.trim()) {
+          try {
+            await postFacebookComment({ postId, pageToken, message: firstComment.trim() });
+          } catch (e) {
+            commentError = e instanceof Error ? e.message : String(e);
+            console.log("[facebook publish] first comment failed (post still ok):", commentError);
+          }
+        }
+
+        return send({
+          ok: true,
+          result: {
+            platform: "facebook",
+            postId,
+            username: pageName,
+            status: "published",
+            publishedAt: new Date().toISOString(),
+            commentError,
+          },
+        });
       }
     }
 
