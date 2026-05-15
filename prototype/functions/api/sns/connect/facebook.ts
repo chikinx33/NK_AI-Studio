@@ -26,7 +26,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
-    scope: "public_profile,pages_show_list,pages_manage_posts,pages_read_engagement",
+    scope: "public_profile,pages_show_list,pages_manage_posts,pages_read_engagement,business_management",
     response_type: "code",
     state,
   });
