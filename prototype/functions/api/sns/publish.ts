@@ -1,6 +1,7 @@
 import { buildUserDataObject, gcsObjectPath } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
 import { ensureFreshAccessToken } from "../_shared/youtube-token";
+import { getFacebookPageToken } from "../_shared/facebook-token";
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -673,6 +674,76 @@ async function publishToInstagram(opts: {
   return { postId: pData.id };
 }
 
+// ── Facebook 헬퍼 ───────────────────────────────────────────────────────────
+
+async function publishPhotoToFacebook(opts: {
+  pageId: string;
+  pageToken: string;
+  mediaUrl: string;
+  caption: string;
+}): Promise<{ postId: string }> {
+  const { pageId, pageToken, mediaUrl, caption } = opts;
+  const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: mediaUrl, message: caption, access_token: pageToken }),
+  });
+  const data = (await res.json()) as { post_id?: string; id?: string; error?: { message: string } };
+  const postId = data.post_id || data.id;
+  if (!postId) throw new Error(`Facebook 이미지 게시 실패: ${data.error?.message}`);
+  return { postId };
+}
+
+async function publishVideoToFacebook(opts: {
+  pageId: string;
+  pageToken: string;
+  mediaUrl: string;
+  caption: string;
+}): Promise<{ postId: string }> {
+  const { pageId, pageToken, mediaUrl, caption } = opts;
+  const res = await fetch(`https://graph.facebook.com/v21.0/${pageId}/videos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ file_url: mediaUrl, description: caption, access_token: pageToken }),
+  });
+  const data = (await res.json()) as { id?: string; error?: { message: string } };
+  if (!data.id) throw new Error(`Facebook 동영상 게시 실패: ${data.error?.message}`);
+  return { postId: data.id };
+}
+
+async function publishCarouselToFacebook(opts: {
+  pageId: string;
+  pageToken: string;
+  imageUrls: string[];
+  caption: string;
+}): Promise<{ postId: string }> {
+  const { pageId, pageToken, imageUrls, caption } = opts;
+
+  // Step 1: 각 이미지를 미발행(unpublished) 상태로 업로드
+  const mediaFbids: string[] = [];
+  for (let i = 0; i < imageUrls.length; i++) {
+    const r = await fetch(`https://graph.facebook.com/v21.0/${pageId}/photos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: imageUrls[i], published: false, access_token: pageToken }),
+    });
+    const d = (await r.json()) as { id?: string; error?: { message: string } };
+    if (!d.id) throw new Error(`Facebook 캐러셀 이미지 ${i + 1} 업로드 실패: ${d.error?.message}`);
+    mediaFbids.push(d.id);
+  }
+
+  // Step 2: feed 포스트로 묶어서 게시
+  const attached = mediaFbids.map((fbid) => ({ media_fbid: fbid }));
+  const feedRes = await fetch(`https://graph.facebook.com/v21.0/${pageId}/feed`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message: caption, attached_media: attached, access_token: pageToken }),
+  });
+  const feedData = (await feedRes.json()) as { id?: string; error?: { message: string } };
+  if (!feedData.id) throw new Error(`Facebook 캐러셀 게시 실패: ${feedData.error?.message}`);
+  return { postId: feedData.id };
+}
+
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
@@ -1134,6 +1205,69 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           scheduledPublish: !!publishAtIso,
           scheduledFor: publishAtIso || "",
         });
+      }
+    }
+
+    if (platform === "facebook") {
+      let fbPage: { pageToken: string; pageId: string; pageName: string };
+      try {
+        fbPage = await getFacebookPageToken(env, auth.userId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "facebook_not_connected") {
+          return send({ error: "Facebook 페이지가 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 412);
+        }
+        return send({ error: msg }, 500);
+      }
+
+      const { pageToken, pageId, pageName } = fbPage;
+
+      if (isCarousel) {
+        // 캐러셀: 이미지만 지원 (동영상 혼합 시 이미지만 필터링)
+        const rawItems = body.mediaItems!;
+        const imageUrls: string[] = [];
+        for (let i = 0; i < rawItems.length; i++) {
+          const item = rawItems[i];
+          if (item.mediaType === "video") continue; // Facebook 캐러셀은 이미지만
+          let mediaUrl: string;
+          if (item.gcsPath) {
+            mediaUrl = await buildSignedUrl(bucket, item.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+          } else if (item.mediaUrl) {
+            mediaUrl = item.mediaUrl;
+          } else {
+            continue;
+          }
+          imageUrls.push(mediaUrl);
+        }
+        if (imageUrls.length === 0) {
+          return send({ error: "Facebook 캐러셀에 유효한 이미지가 없습니다." }, 400);
+        }
+        if (imageUrls.length === 1) {
+          // 이미지 1장이면 단일 포스트
+          const { postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl: imageUrls[0], caption });
+          return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+        }
+        const { postId } = await publishCarouselToFacebook({ pageId, pageToken, imageUrls, caption });
+        return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+
+      } else {
+        const mediaType = body.mediaType!;
+        let mediaUrl: string;
+        if (body.mediaGcsPath) {
+          mediaUrl = await buildSignedUrl(bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+        } else if (body.mediaDirectUrl) {
+          mediaUrl = body.mediaDirectUrl;
+        } else {
+          return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+        }
+
+        if (mediaType === "video") {
+          const { postId } = await publishVideoToFacebook({ pageId, pageToken, mediaUrl, caption });
+          return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+        } else {
+          const { postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl, caption });
+          return send({ ok: true, result: { platform: "facebook", postId, username: pageName, status: "published", publishedAt: new Date().toISOString() } });
+        }
       }
     }
 
