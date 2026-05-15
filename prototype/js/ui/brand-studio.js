@@ -1745,6 +1745,7 @@
     var privacyOptions = function () { return [
       { value: 'public',    label: isEn ? 'Public' : '공개' },
       { value: 'unlisted',  label: isEn ? 'Unlisted' : '미공개' },
+      { value: 'private',   label: isEn ? 'Private' : '비공개' },
       { value: 'scheduled', label: isEn ? 'Scheduled' : '예약' },
     ]; };
 
