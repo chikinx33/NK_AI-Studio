@@ -136,11 +136,12 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       console.log("[facebook callback] /me/permissions HTTP status:", permsRes.status);
       console.log("[facebook callback] /me/permissions raw body:", permsText);
 
-      const apiErr = pagesData.error?.message;
-      const detail = apiErr
-        ? `API 오류: ${apiErr}`
-        : `data=${JSON.stringify(pagesData.data)}, /me=${meText.slice(0, 200)}, /me/permissions=${permsText.slice(0, 300)}`;
-      throw new Error(`관리 중인 Facebook 페이지가 없습니다. ${detail}`);
+      throw new Error(
+        `관리 중인 Facebook 페이지가 없습니다.\n` +
+        `\n[/me/accounts status=${pagesRes.status}]\n${pagesRawText}\n` +
+        `\n[/me status=${meRes.status}]\n${meText}\n` +
+        `\n[/me/permissions status=${permsRes.status}]\n${permsText}`
+      );
     }
 
     // 첫 번째 페이지 사용 (추후 UI에서 선택 가능하도록 확장 가능)
