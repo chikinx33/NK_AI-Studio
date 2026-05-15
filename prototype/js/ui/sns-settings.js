@@ -18,7 +18,7 @@
     { id: 'youtube',        label: 'YouTube' },
     { id: 'youtube-shorts', label: 'YouTube Shorts' },
     { id: 'tiktok',         label: 'TikTok' },
-    { id: 'facebook',       label: 'Facebook',       comingSoon: true },
+    { id: 'facebook',       label: 'Facebook' },
     { id: 'x-threads',      label: 'X / Threads',    comingSoon: true },
     { id: 'naver-blog',     label: '네이버 블로그',   comingSoon: true },
     { id: 'naver-post',     label: '네이버 포스트',   comingSoon: true },
@@ -462,6 +462,7 @@
       else if (platform.id === 'youtube')   profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath : (_cid ? 'https://www.youtube.com/channel/' + _cid : '');
       else if (platform.id === 'youtube-shorts') profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath + '/shorts' : (_cid ? 'https://www.youtube.com/channel/' + _cid + '/shorts' : '');
       else if (platform.id === 'tiktok')    profileUrl = _u ? 'https://www.tiktok.com/@' + _u : '';
+      else if (platform.id === 'facebook')  profileUrl = snsState.pageId ? 'https://www.facebook.com/' + snsState.pageId : '';
     }
     var linkBtnHtml = profileUrl
       ? '<a class="sns-profile-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener noreferrer" title="' + t('openProfile') + '">' + linkSvg + '</a>'
