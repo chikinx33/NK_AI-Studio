@@ -164,13 +164,15 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     }
 
     // Attempt 4: /me/businesses?fields=owned_pages{...} (Business Portfolio 소유 페이지)
+    // 비즈니스 목록은 attempt 5 (client_pages)에서 재사용하기 위해 보존
+    let businessIds: Array<{ id: string; name: string }> = [];
     if (pages.length === 0) {
       const text = await tryFetch(
         "/me/businesses?fields=owned_pages{...}",
         `https://graph.facebook.com/v21.0/me/businesses?` +
         new URLSearchParams({
           access_token: longToken,
-          fields: "id,name,owned_pages{id,name,access_token,tasks}",
+          fields: "id,name,owned_pages{id,name,access_token,tasks,instagram_business_account}",
         }).toString()
       );
       try {
@@ -179,33 +181,60 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
         };
         const collected: FbPage[] = [];
         (d.data || []).forEach((biz) => {
+          businessIds.push({ id: biz.id, name: biz.name || "" });
           (biz.owned_pages?.data || []).forEach((p) => collected.push(p));
         });
         if (collected.length > 0) pages = collected;
       } catch (e) { console.log("[facebook callback] attempt4 parse error:", e); }
-      console.log("[facebook callback] attempt4 page count:", pages.length);
+      console.log("[facebook callback] attempt4 page count:", pages.length, "business count:", businessIds.length);
+    }
+
+    // Attempt 5: 각 비즈니스의 /{business_id}/client_pages (위임받은 클라이언트 페이지)
+    if (pages.length === 0 && businessIds.length > 0) {
+      for (const biz of businessIds) {
+        const text = await tryFetch(
+          `/${biz.id}/client_pages (${biz.name})`,
+          `https://graph.facebook.com/v21.0/${biz.id}/client_pages?` +
+          new URLSearchParams({
+            access_token: longToken,
+            fields: "id,name,access_token,tasks",
+          }).toString()
+        );
+        try {
+          const d = JSON.parse(text) as { data?: FbPage[] };
+          (d.data || []).forEach((p) => pages.push(p));
+        } catch (e) { console.log("[facebook callback] attempt5 parse error for biz", biz.id, ":", e); }
+      }
+      console.log("[facebook callback] attempt5 page count:", pages.length);
     }
 
     // 모든 시도 실패 — 진단 정보(/me/permissions) 추가 후 에러 throw
     if (pages.length === 0) {
-      const permsText = await tryFetch(
+      await tryFetch(
         "/me/permissions",
         `https://graph.facebook.com/v21.0/me/permissions?` +
         new URLSearchParams({ access_token: longToken }).toString()
       );
       throw new Error(
-        `관리 중인 Facebook 페이지가 없습니다 (4단계 폴백 모두 빈 결과).\n\n` +
+        `관리 중인 Facebook 페이지가 없습니다 (5단계 폴백 모두 빈 결과).\n\n` +
         attemptLogs.join("\n\n")
       );
     }
 
-    // 첫 번째 페이지 사용 (추후 UI에서 선택 가능하도록 확장 가능)
-    const page = pages[0];
+    // 페이지 선택: FACEBOOK_PAGE_ID env 가 있으면 매칭, 없으면 첫 번째
+    const desiredPageId = String(env.FACEBOOK_PAGE_ID || "").trim();
+    const page = desiredPageId
+      ? (pages.find((p) => p.id === desiredPageId) || pages[0])
+      : pages[0];
     const pageId = page.id;
     const pageName = page.name;
     // 장기 사용자 토큰에서 파생된 페이지 토큰은 만료 없음
     const pageToken = page.access_token;
-    console.log("[facebook callback] selected page:", pageId, pageName, "(found via attempt — see logs above)");
+    console.log(
+      "[facebook callback] selected page:", pageId, pageName,
+      "from", pages.length, "candidate(s),",
+      desiredPageId ? `FACEBOOK_PAGE_ID=${desiredPageId} ${page.id === desiredPageId ? "matched" : "NOT matched, fell back to first"}` : "no FACEBOOK_PAGE_ID env"
+    );
 
     // Step 4: GCS 저장
     const googleToken = await getGoogleServiceAccountToken({
