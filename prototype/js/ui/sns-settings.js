@@ -69,6 +69,7 @@
       unknownErr:    '알 수 없는 오류',
       loadFail:      '설정 로드 실패',
       defaultProject: '프로젝트',
+      openProfile:   '프로필 열기',
     },
     en: {
       eyebrow:       'SNS Settings › Connect Channels',
@@ -95,6 +96,7 @@
       unknownErr:    'Unknown error',
       loadFail:      'Failed to load settings',
       defaultProject: 'Project',
+      openProfile:   'Open profile',
     },
   };
 
@@ -446,6 +448,21 @@
     var hideConnectBox = (platform.id === 'youtube-shorts');
     var finalConnectBoxHtml = hideConnectBox ? '' : connectBoxHtml;
 
+    // 프로필 링크 버튼: 연결됐을 때만 표시
+    var linkSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+    var profileUrl = '';
+    if (connected && !comingSoon) {
+      var _u = snsState.username || snsState.channelTitle || '';
+      var _cid = snsState.channelId || '';
+      if (platform.id === 'instagram')      profileUrl = _u ? 'https://www.instagram.com/' + _u + '/' : '';
+      else if (platform.id === 'youtube')   profileUrl = _u ? 'https://www.youtube.com/@' + _u : (_cid ? 'https://www.youtube.com/channel/' + _cid : '');
+      else if (platform.id === 'youtube-shorts') profileUrl = _u ? 'https://www.youtube.com/@' + _u + '/shorts' : (_cid ? 'https://www.youtube.com/channel/' + _cid + '/shorts' : '');
+      else if (platform.id === 'tiktok')    profileUrl = _u ? 'https://www.tiktok.com/@' + _u : '';
+    }
+    var linkBtnHtml = profileUrl
+      ? '<a class="sns-profile-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener noreferrer" title="' + t('openProfile') + '">' + linkSvg + '</a>'
+      : '';
+
     return [
       '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
         '<div class="sns-pcard-icon">', icon, '</div>',
@@ -454,6 +471,7 @@
           '<div class="sns-pcard-status">', statusText, '</div>',
         '</div>',
         '<div class="sns-pcard-actions">',
+          linkBtnHtml,
           finalConnectBoxHtml,
           '<div class="sns-pcard-toggle">', usageToggleHtml, '</div>',
         '</div>',

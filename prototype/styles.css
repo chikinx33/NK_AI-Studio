@@ -13961,6 +13961,30 @@ textarea.bsf-skeleton {
   gap: 12px;
 }
 
+/* 프로필 링크 버튼 — 연결됐을 때 connect-box 왼쪽에 표시 */
+.sns-profile-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  border-radius: 8px;
+  border: 2px solid var(--border);
+  background: transparent;
+  color: var(--muted, #888);
+  text-decoration: none;
+  transition: border-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.sns-profile-link:hover {
+  border-color: var(--accent, #5eaaff);
+  color: var(--accent, #5eaaff);
+}
+.sns-profile-link:active {
+  transform: scale(0.94);
+}
+
 /* 연결 체크박스 (V 표시) — 좌측 액션 */
 .sns-connect-box {
   display: inline-flex;
