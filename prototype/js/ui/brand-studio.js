@@ -1991,9 +1991,7 @@
       afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? "What's on your mind?" : '무슨 생각을 하고 계신가요?')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
       inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'auto', 'url') +
-      '<div class="bsf-field-note">' + escapeHtml(isEn
-        ? 'Facebook Page posts are always public.'
-        : 'Facebook 페이지 게시물은 항상 전체 공개입니다.') + '</div>';
+      inputField(fmtId, 'first_comment', isEn ? 'First comment' : '첫 댓글', isEn ? 'Auto-post as first comment (optional)' : '첫 댓글로 자동 게시 (선택)', draft.first_comment || '', 'auto', 'textarea');
     }
     function buildLinkedinPreview(fmtId, captionVal, hashtagVal, titleVal, draft) {
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
