@@ -244,6 +244,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     });
 
     const gcs = resolveGcsContextForUser(env, userId);
+    console.log("[facebook callback] writing GCS for userId:", userId, "bucket:", gcs.bucket, "objectName:", gcs.objectName);
     await writeFacebookPatch(
       { ...gcs, googleToken },
       {

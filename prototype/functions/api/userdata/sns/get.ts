@@ -59,7 +59,11 @@ async function getGoogleAccessToken(opts: {
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+      "Pragma": "no-cache",
+    },
   });
 }
 
@@ -99,6 +103,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
     if (!gcsRes.ok) throw new Error(`GCS read error: ${gcsRes.status}`);
     const settings = await gcsRes.json();
+    console.log("[sns/get] facebook key state:", JSON.stringify((settings as any)?.sns?.facebook || null));
     return send({ ok: true, settings });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

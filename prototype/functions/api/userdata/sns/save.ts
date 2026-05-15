@@ -106,11 +106,19 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     existing.sns = existing.sns || {};
 
     const incomingSns: any = body?.sns || {};
+    console.log("[sns/save] userId:", userId, "incoming sns keys:", Object.keys(incomingSns).join(","));
+    if (incomingSns.facebook) {
+      console.log("[sns/save] incoming facebook:", JSON.stringify(incomingSns.facebook));
+      console.log("[sns/save] existing facebook BEFORE merge:", JSON.stringify(existing?.sns?.facebook || null));
+    }
     Object.keys(incomingSns).forEach((platform) => {
       const incoming = incomingSns[platform] || {};
       const prev = existing.sns[platform] || {};
       existing.sns[platform] = Object.assign({}, prev, incoming);
     });
+    if (incomingSns.facebook) {
+      console.log("[sns/save] existing facebook AFTER merge:", JSON.stringify(existing.sns.facebook));
+    }
     existing.deployDefaults = body?.deployDefaults
       ? Object.assign({}, existing.deployDefaults || {}, body.deployDefaults)
       : (existing.deployDefaults || {});

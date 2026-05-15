@@ -37,22 +37,34 @@ export async function readFacebookRecord(ctx: GcsContext): Promise<FacebookToken
 
 export async function writeFacebookPatch(ctx: GcsContext, patch: Partial<FacebookTokenData>): Promise<void> {
   const readName = gcsObjectPath(ctx.objectName);
+  console.log("[writeFacebookPatch] bucket:", ctx.bucket, "objectName:", ctx.objectName);
+  console.log("[writeFacebookPatch] patch:", JSON.stringify(patch));
+
   const readRes = await fetch(
     `https://storage.googleapis.com/storage/v1/b/${ctx.bucket}/o/${readName}?alt=media`,
     { headers: { Authorization: `Bearer ${ctx.googleToken}` } }
   );
+  console.log("[writeFacebookPatch] existing read status:", readRes.status);
 
   let existing: any = {
     sns: { instagram: { connected: false }, youtube: { connected: false }, tiktok: { connected: false }, facebook: { connected: false } },
     deployDefaults: {},
   };
   if (readRes.ok) {
-    try { existing = await readRes.json(); } catch { /* keep default */ }
+    try {
+      existing = await readRes.json();
+      console.log("[writeFacebookPatch] existing.sns.facebook BEFORE merge:", JSON.stringify(existing?.sns?.facebook || null));
+    } catch (e) {
+      console.log("[writeFacebookPatch] existing JSON parse error:", e);
+    }
+  } else {
+    console.log("[writeFacebookPatch] existing not found, using default");
   }
 
   existing.sns = existing.sns || {};
   existing.sns.facebook = Object.assign({}, existing.sns.facebook, patch);
   existing.updatedAt = new Date().toISOString();
+  console.log("[writeFacebookPatch] existing.sns.facebook AFTER merge:", JSON.stringify(existing.sns.facebook));
 
   const writeName = ctx.objectName.split("/").map(encodeURIComponent).join("/");
   const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${ctx.bucket}/o?uploadType=media&name=${writeName}`;
@@ -61,9 +73,25 @@ export async function writeFacebookPatch(ctx: GcsContext, patch: Partial<Faceboo
     headers: { Authorization: `Bearer ${ctx.googleToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(existing),
   });
+  console.log("[writeFacebookPatch] upload status:", upRes.status);
+
   if (!upRes.ok) {
     const errText = await upRes.text();
     throw new Error(`GCS save error: ${upRes.status} ${errText}`);
+  }
+
+  // 즉시 재조회로 영속화 검증
+  const verifyRes = await fetch(
+    `https://storage.googleapis.com/storage/v1/b/${ctx.bucket}/o/${readName}?alt=media`,
+    { headers: { Authorization: `Bearer ${ctx.googleToken}` } }
+  );
+  if (verifyRes.ok) {
+    try {
+      const verified = await verifyRes.json();
+      console.log("[writeFacebookPatch] VERIFY read sns.facebook:", JSON.stringify(verified?.sns?.facebook || null));
+    } catch (e) { console.log("[writeFacebookPatch] verify parse error:", e); }
+  } else {
+    console.log("[writeFacebookPatch] VERIFY read failed status:", verifyRes.status);
   }
 }
 
