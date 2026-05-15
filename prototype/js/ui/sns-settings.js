@@ -242,7 +242,8 @@
         connected: !!s.connected,
         enabled: !!s.enabled,
         igUserId: s.igUserId || '',
-        username: s.username || ''
+        username: s.username || '',
+        ...(pid === 'facebook' && { pageName: s.pageName || '' })
       };
     });
     var payload = { sns: snsOut };
@@ -409,7 +410,7 @@
     }
     var connected = !!snsState.connected;
     var enabled = !!snsState.enabled;
-    var username = snsState.username || snsState.channelTitle || '';
+    var username = snsState.username || snsState.channelTitle || snsState.pageName || '';
     var comingSoon = !!platform.comingSoon;
     var icon = _platformIcons[platform.id] || '';
 
