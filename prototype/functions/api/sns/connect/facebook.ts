@@ -11,11 +11,11 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
 
-  const appId = env.FACEBOOK_APP_ID;
+  const appId = env.META_APP_ID;
   const redirectUri = env.FACEBOOK_REDIRECT_URI;
 
   if (!appId || !redirectUri) {
-    return send({ error: "FACEBOOK_APP_ID or FACEBOOK_REDIRECT_URI not configured" }, 500);
+    return send({ error: "META_APP_ID or FACEBOOK_REDIRECT_URI not configured" }, 500);
   }
 
   const state = btoa(JSON.stringify({

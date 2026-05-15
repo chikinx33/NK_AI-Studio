@@ -38,8 +38,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     return popupHtml({ ok: false, error: "Invalid state" });
   }
 
-  const appId = env.FACEBOOK_APP_ID;
-  const appSecret = env.FACEBOOK_APP_SECRET;
+  const appId = env.META_APP_ID;
+  const appSecret = env.META_APP_SECRET;
   const redirectUri = env.FACEBOOK_REDIRECT_URI;
 
   if (!appId || !appSecret || !redirectUri) {
