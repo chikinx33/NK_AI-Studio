@@ -97,59 +97,115 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       ? new Date(Date.now() + longData.expires_in * 1000).toISOString()
       : new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString();
 
-    // Step 3: 관리 중인 페이지 목록 조회 (첫 번째 페이지 선택)
-    const pagesRes = await fetch(
-      `https://graph.facebook.com/v21.0/me/accounts?` +
-      new URLSearchParams({ access_token: longToken, fields: "id,name,access_token,tasks" }).toString()
-    );
-    const pagesRawText = await pagesRes.text();
-    console.log("[facebook callback] /me/accounts HTTP status:", pagesRes.status);
-    console.log("[facebook callback] /me/accounts raw body:", pagesRawText);
+    // Step 3: 관리 중인 페이지 목록 조회 — NPE/Business 자산 케이스를 위해 4단계 폴백
+    type FbPage = { id: string; name: string; access_token: string; tasks?: string[] };
+    let pages: FbPage[] = [];
+    const attemptLogs: string[] = [];
 
-    let pagesData: {
-      data?: Array<{ id: string; name: string; access_token: string; tasks?: string[] }>;
-      paging?: { cursors?: { before?: string; after?: string }; next?: string };
-      error?: { message?: string; type?: string; code?: number; fbtrace_id?: string };
-    } = {};
-    try { pagesData = JSON.parse(pagesRawText); } catch (e) {
-      console.log("[facebook callback] /me/accounts JSON parse error:", e);
+    async function tryFetch(label: string, url: string): Promise<string> {
+      const res = await fetch(url);
+      const text = await res.text();
+      console.log(`[facebook callback] ${label} HTTP status:`, res.status);
+      console.log(`[facebook callback] ${label} raw body:`, text);
+      attemptLogs.push(`[${label} status=${res.status}]\n${text}`);
+      return text;
     }
-    console.log("[facebook callback] /me/accounts parsed:", JSON.stringify(pagesData));
-    console.log("[facebook callback] data array exists?", !!pagesData.data, "length:", pagesData.data?.length || 0);
 
-    // /me/accounts 가 비었으면 사용자 정보도 함께 조회해서 어떤 계정으로 로그인됐는지 확인
-    if (!pagesData.data || pagesData.data.length === 0) {
-      const meRes = await fetch(
-        `https://graph.facebook.com/v21.0/me?` +
-        new URLSearchParams({ access_token: longToken, fields: "id,name" }).toString()
+    // Attempt 1: /me/accounts (Classic Pages)
+    {
+      const text = await tryFetch(
+        "/me/accounts",
+        `https://graph.facebook.com/v21.0/me/accounts?` +
+        new URLSearchParams({ access_token: longToken, fields: "id,name,access_token,tasks" }).toString()
       );
-      const meText = await meRes.text();
-      console.log("[facebook callback] /me HTTP status:", meRes.status);
-      console.log("[facebook callback] /me raw body:", meText);
+      try {
+        const d = JSON.parse(text) as { data?: FbPage[] };
+        if (Array.isArray(d.data) && d.data.length > 0) pages = d.data;
+      } catch (e) { console.log("[facebook callback] attempt1 parse error:", e); }
+      console.log("[facebook callback] attempt1 page count:", pages.length);
+    }
 
-      // granular_scopes 확인 — 실제로 어떤 권한이 승인됐는지
-      const permsRes = await fetch(
+    // Attempt 2: /me?fields=id,name,accounts{...} (nested edge)
+    let userId = "";
+    if (pages.length === 0) {
+      const text = await tryFetch(
+        "/me?fields=id,name,accounts{...}",
+        `https://graph.facebook.com/v21.0/me?` +
+        new URLSearchParams({
+          access_token: longToken,
+          fields: "id,name,accounts{id,name,access_token,tasks,instagram_business_account}",
+        }).toString()
+      );
+      try {
+        const d = JSON.parse(text) as { id?: string; accounts?: { data?: FbPage[] } };
+        if (d.id) userId = d.id;
+        const arr = d.accounts?.data || [];
+        if (arr.length > 0) pages = arr;
+      } catch (e) { console.log("[facebook callback] attempt2 parse error:", e); }
+      console.log("[facebook callback] attempt2 page count:", pages.length, "userId:", userId);
+    }
+
+    // Attempt 3: /{user-id}/accounts?limit=100 (페이지 ID 직접 지정)
+    if (pages.length === 0 && userId) {
+      const text = await tryFetch(
+        `/${userId}/accounts?limit=100`,
+        `https://graph.facebook.com/v21.0/${userId}/accounts?` +
+        new URLSearchParams({
+          access_token: longToken,
+          fields: "id,name,access_token,tasks",
+          limit: "100",
+        }).toString()
+      );
+      try {
+        const d = JSON.parse(text) as { data?: FbPage[] };
+        if (Array.isArray(d.data) && d.data.length > 0) pages = d.data;
+      } catch (e) { console.log("[facebook callback] attempt3 parse error:", e); }
+      console.log("[facebook callback] attempt3 page count:", pages.length);
+    }
+
+    // Attempt 4: /me/businesses?fields=owned_pages{...} (Business Portfolio 소유 페이지)
+    if (pages.length === 0) {
+      const text = await tryFetch(
+        "/me/businesses?fields=owned_pages{...}",
+        `https://graph.facebook.com/v21.0/me/businesses?` +
+        new URLSearchParams({
+          access_token: longToken,
+          fields: "id,name,owned_pages{id,name,access_token,tasks}",
+        }).toString()
+      );
+      try {
+        const d = JSON.parse(text) as {
+          data?: Array<{ id: string; name?: string; owned_pages?: { data?: FbPage[] } }>;
+        };
+        const collected: FbPage[] = [];
+        (d.data || []).forEach((biz) => {
+          (biz.owned_pages?.data || []).forEach((p) => collected.push(p));
+        });
+        if (collected.length > 0) pages = collected;
+      } catch (e) { console.log("[facebook callback] attempt4 parse error:", e); }
+      console.log("[facebook callback] attempt4 page count:", pages.length);
+    }
+
+    // 모든 시도 실패 — 진단 정보(/me/permissions) 추가 후 에러 throw
+    if (pages.length === 0) {
+      const permsText = await tryFetch(
+        "/me/permissions",
         `https://graph.facebook.com/v21.0/me/permissions?` +
         new URLSearchParams({ access_token: longToken }).toString()
       );
-      const permsText = await permsRes.text();
-      console.log("[facebook callback] /me/permissions HTTP status:", permsRes.status);
-      console.log("[facebook callback] /me/permissions raw body:", permsText);
-
       throw new Error(
-        `관리 중인 Facebook 페이지가 없습니다.\n` +
-        `\n[/me/accounts status=${pagesRes.status}]\n${pagesRawText}\n` +
-        `\n[/me status=${meRes.status}]\n${meText}\n` +
-        `\n[/me/permissions status=${permsRes.status}]\n${permsText}`
+        `관리 중인 Facebook 페이지가 없습니다 (4단계 폴백 모두 빈 결과).\n\n` +
+        attemptLogs.join("\n\n")
       );
     }
 
     // 첫 번째 페이지 사용 (추후 UI에서 선택 가능하도록 확장 가능)
-    const page = pagesData.data[0];
+    const page = pages[0];
     const pageId = page.id;
     const pageName = page.name;
     // 장기 사용자 토큰에서 파생된 페이지 토큰은 만료 없음
     const pageToken = page.access_token;
+    console.log("[facebook callback] selected page:", pageId, pageName, "(found via attempt — see logs above)");
 
     // Step 4: GCS 저장
     const googleToken = await getGoogleServiceAccountToken({
