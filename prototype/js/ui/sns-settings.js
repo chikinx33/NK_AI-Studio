@@ -63,6 +63,7 @@
       disconnectConfirm: function (p) { return p + ' 연결을 해제할까요? (재연결 시 다시 인증이 필요합니다)'; },
       oauthFail:     'OAuth 시작 실패',
       serverErr:     '서버 오류',
+      reconnectHint: '재연결 필요',
       connectOk:     function (p, u) { return p + ' 연결 완료! @' + u; },
       connectFail:   function (p, e) { return p + ' 연결 실패: ' + e; },
       unknownErr:    '알 수 없는 오류',
@@ -88,6 +89,7 @@
       disconnectConfirm: function (p) { return 'Disconnect ' + p + '? (You will need to re-authenticate to use it again)'; },
       oauthFail:     'OAuth failed',
       serverErr:     'Server error',
+      reconnectHint: 'Reconnect required',
       connectOk:     function (p, u) { return p + ' connected! @' + u; },
       connectFail:   function (p, e) { return p + ' connection failed: ' + e; },
       unknownErr:    'Unknown error',
@@ -396,6 +398,7 @@
           connected: true,
           channelTitle: yt.channelTitle || snsState.channelTitle || '',
           username: yt.channelTitle || yt.username || snsState.username || '',
+          needsReconnect: !!yt.needsReconnect,
         });
       } else {
         // youtube 미연결 시 shorts 도 강제로 미연결
@@ -409,10 +412,11 @@
     var icon = _platformIcons[platform.id] || '';
 
     var statusText;
+    var needsReconnect = !!snsState.needsReconnect;
     if (comingSoon) statusText = t('comingSoon');
     else if (!connected) statusText = t('notConnected');
-    else if (enabled) statusText = username ? '@' + username : t('inUse');
-    else statusText = username ? '@' + username + ' · ' + t('paused') : t('paused');
+    else if (enabled) statusText = username ? '@' + username : (needsReconnect ? t('reconnectHint') : t('inUse'));
+    else statusText = username ? '@' + username + ' · ' + t('paused') : (needsReconnect ? t('reconnectHint') : t('paused'));
 
     // 연결 체크박스 (좌측 액션): 연결됐으면 V 표시, 안 됐으면 빈칸. 클릭으로 연결/해제.
     var checkSvg = '<svg class="sns-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -502,10 +506,38 @@
     }
   }
 
+  var _ytRefreshAttempted = false;
+  function maybeRefreshYoutubeInfo() {
+    if (_ytRefreshAttempted) return Promise.resolve();
+    _ytRefreshAttempted = true;
+    var yt = _settings && _settings.sns && _settings.sns.youtube;
+    if (!yt || !yt.connected) return Promise.resolve();
+    if (yt.channelTitle) return Promise.resolve();
+    return apiPost('/api/youtube/refresh-info', {})
+      .then(function (res) {
+        if (!_settings || !_settings.sns) return;
+        if (res && res.ok) {
+          _settings.sns.youtube = Object.assign({}, _settings.sns.youtube, {
+            channelId: res.channelId || '',
+            channelTitle: res.channelTitle || '',
+            needsReconnect: false,
+          });
+          _writeCache(_settings.sns);
+        } else if (res && res.needsReconnect) {
+          _settings.sns.youtube = Object.assign({}, _settings.sns.youtube, {
+            needsReconnect: true,
+          });
+        }
+      })
+      .catch(function () { /* 네트워크 오류는 무시 — 다음 로드에서 재시도 */ });
+  }
+
   function init() {
     if (!document.querySelector('.content')) return;
     window.addEventListener('message', onOAuthMessage);
     loadSettings()
+      .then(function () { render(); })
+      .then(function () { return maybeRefreshYoutubeInfo(); })
       .then(function () { render(); })
       .catch(function (err) {
         var root = document.querySelector('.content');

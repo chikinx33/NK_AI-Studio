@@ -27,7 +27,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: "https://www.googleapis.com/auth/youtube.upload",
+    scope: "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
     access_type: "offline",
     include_granted_scopes: "true",
     prompt: "consent",
