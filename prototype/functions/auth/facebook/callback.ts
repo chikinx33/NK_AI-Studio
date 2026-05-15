@@ -126,7 +126,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     }
 
     // Attempt 2: /me?fields=id,name,accounts{...} (nested edge)
-    let userId = "";
+    // 주의: fbUserId 는 Facebook user.id 이며, outer 의 NK userId(state 디코드값)와 별개.
+    // 이전에 동일한 이름(userId)을 써서 outer scope 를 shadow → GCS 가 다른 경로에 저장되던 버그.
+    let fbUserId = "";
     if (pages.length === 0) {
       const text = await tryFetch(
         "/me?fields=id,name,accounts{...}",
@@ -138,18 +140,18 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       );
       try {
         const d = JSON.parse(text) as { id?: string; accounts?: { data?: FbPage[] } };
-        if (d.id) userId = d.id;
+        if (d.id) fbUserId = d.id;
         const arr = d.accounts?.data || [];
         if (arr.length > 0) pages = arr;
       } catch (e) { console.log("[facebook callback] attempt2 parse error:", e); }
-      console.log("[facebook callback] attempt2 page count:", pages.length, "userId:", userId);
+      console.log("[facebook callback] attempt2 page count:", pages.length, "fbUserId:", fbUserId);
     }
 
-    // Attempt 3: /{user-id}/accounts?limit=100 (페이지 ID 직접 지정)
-    if (pages.length === 0 && userId) {
+    // Attempt 3: /{fb-user-id}/accounts?limit=100 (페이지 ID 직접 지정)
+    if (pages.length === 0 && fbUserId) {
       const text = await tryFetch(
-        `/${userId}/accounts?limit=100`,
-        `https://graph.facebook.com/v21.0/${userId}/accounts?` +
+        `/${fbUserId}/accounts?limit=100`,
+        `https://graph.facebook.com/v21.0/${fbUserId}/accounts?` +
         new URLSearchParams({
           access_token: longToken,
           fields: "id,name,access_token,tasks",
