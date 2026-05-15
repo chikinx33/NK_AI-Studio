@@ -691,7 +691,11 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     // YouTube 전용
     title?: string;
     tags?: string[];
-    privacyStatus?: "public" | "private" | "unlisted";
+    // 'scheduled' 는 publishAt 과 짝지어 보낸다 (백엔드가 private + publishAt 으로 변환).
+    privacyStatus?: "public" | "private" | "unlisted" | "scheduled";
+    publishAt?: string;
+    // UI 카테고리 키 (entertainment/education/gaming/music/etc) → 백엔드가 YouTube categoryId 로 매핑.
+    categoryKey?: string;
     isShorts?: boolean;
   };
   try {
@@ -1005,18 +1009,54 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         contentLength = SERVER_RELAY_THRESHOLD + 1;
       }
 
+      // ── UI 입력값 → YouTube API 매핑 ──────────────────────────
+      // 카테고리 키 → YouTube categoryId (videoCategories.list 표준 ID)
+      const CATEGORY_MAP: Record<string, string> = {
+        entertainment: "24",
+        education: "27",
+        gaming: "20",
+        music: "10",
+        etc: "22", // People & Blogs (기본)
+      };
+      const categoryId = CATEGORY_MAP[String(body.categoryKey || "").toLowerCase()] || "22";
+
+      // 공개 설정 — 'scheduled' 는 YouTube 규약상 privacyStatus=private + publishAt 으로 발행.
+      let apiPrivacyStatus: "public" | "private" | "unlisted" = "public";
+      let publishAtIso = "";
+      const uiPrivacy = String(body.privacyStatus || "public").toLowerCase();
+      if (uiPrivacy === "scheduled") {
+        const raw = String(body.publishAt || "").trim();
+        if (!raw) {
+          return send({ error: "예약 발행에는 publishAt(scheduled_at)이 필요합니다." }, 400);
+        }
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) {
+          return send({ error: `publishAt 형식 오류: ${raw}` }, 400);
+        }
+        if (d.getTime() <= Date.now()) {
+          return send({ error: "예약 시간은 현재보다 미래여야 합니다." }, 400);
+        }
+        apiPrivacyStatus = "private";
+        publishAtIso = d.toISOString();
+      } else if (uiPrivacy === "public" || uiPrivacy === "private" || uiPrivacy === "unlisted") {
+        apiPrivacyStatus = uiPrivacy;
+      }
+
       // YouTube resumable session 시작
+      const statusObj: Record<string, unknown> = {
+        privacyStatus: apiPrivacyStatus,
+        selfDeclaredMadeForKids: false,
+      };
+      if (publishAtIso) statusObj.publishAt = publishAtIso;
+
       const metadata = {
         snippet: {
           title: epTitleFallback.slice(0, 100),
           description: description.slice(0, 5000),
           tags,
-          categoryId: "22",
+          categoryId,
         },
-        status: {
-          privacyStatus: body.privacyStatus || "private",
-          selfDeclaredMadeForKids: false,
-        },
+        status: statusObj,
       };
 
       const initRes = await fetch(
@@ -1076,8 +1116,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           result: {
             platform,
             postId: result.id || "",
-            status: "published",
+            status: publishAtIso ? "scheduled" : "published",
             publishedAt: new Date().toISOString(),
+            scheduledFor: publishAtIso || "",
             url: result.id ? `https://youtu.be/${result.id}` : "",
           },
         });
@@ -1090,7 +1131,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           contentType,
           contentLength,
           platform,
-          // 프론트가 sourceUrl → blob → PUT(uploadUrl) 흐름으로 처리
+          scheduledPublish: !!publishAtIso,
+          scheduledFor: publishAtIso || "",
         });
       }
     }

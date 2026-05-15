@@ -3571,7 +3571,11 @@
           ytExtras = {
             title: draftTitle || epTitleBs || 'Untitled',
             tags: ytTags,
-            privacyStatus: 'private',
+            // draft UI 값을 그대로 전달 — 백엔드가 YouTube API 형식으로 변환한다.
+            // privacyStatus: 'public' | 'unlisted' | 'scheduled' ('scheduled' 는 publishAt 동반)
+            privacyStatus: String(draft.privacy_status || 'public'),
+            categoryKey: String(draft.category || 'entertainment'),
+            publishAt: String(draft.scheduled_at || '').trim(),
             isShorts: (formatId === 'youtube-shorts'),
           };
         }
@@ -3637,7 +3641,7 @@
 
             // 큰 영상 → 클라 직접 PUT (resumable session)
             if (res.uploadUrl && res.sourceUrl) {
-              return doYoutubeDirectPut(res.uploadUrl, res.sourceUrl, res.contentType, formatId);
+              return doYoutubeDirectPut(res.uploadUrl, res.sourceUrl, res.contentType, formatId, !!res.scheduledPublish, res.scheduledFor || '');
             }
             throw new Error('Unexpected publish response');
           });
@@ -3645,7 +3649,7 @@
 
       // YouTube resumable PUT (큰 영상 — XHR로 진행률 표시)
       // sourceUrl 은 백엔드가 발급한 GCS signed URL (또는 mediaDirectUrl).
-      function doYoutubeDirectPut(uploadUrl, sourceUrl, contentType, formatId) {
+      function doYoutubeDirectPut(uploadUrl, sourceUrl, contentType, formatId, scheduledPublish, scheduledFor) {
         return fetch(sourceUrl)
           .then(function (r) {
             if (!r.ok) throw new Error('source fetch failed: ' + r.status);
@@ -3671,8 +3675,9 @@
                     result: {
                       platform: formatId,
                       postId: parsed.id || '',
-                      status: 'published',
+                      status: scheduledPublish ? 'scheduled' : 'published',
                       publishedAt: new Date().toISOString(),
+                      scheduledFor: scheduledFor || '',
                       url: parsed.id ? 'https://youtu.be/' + parsed.id : '',
                     },
                   });
