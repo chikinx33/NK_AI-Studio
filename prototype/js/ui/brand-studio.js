@@ -3501,7 +3501,7 @@
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
       function snsPublishFormat(formatId, drafts, scheduledAt) {
-        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts'];
+        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts', 'facebook'];
         if (SNS_PLATFORMS.indexOf(formatId) === -1) {
           return Promise.resolve({ skipped: true });
         }
