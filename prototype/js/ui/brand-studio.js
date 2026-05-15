@@ -1970,6 +1970,22 @@
       inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'copy', 'url');
     }
     function buildFacebookPreview(fmtId, captionVal, hashtagVal, draft) {
+      // 선택된 자산의 타입 분석 — 이미지와 영상이 모두 있으면 라디오로 게시 타입 선택
+      var fbSelTypes = (assetItems || []).filter(function (i) {
+        var t = String(i.type || '').trim();
+        return (t === 'image' || t === 'video') &&
+          (selectedAssetIds || []).indexOf(String(i.id || '').trim()) >= 0;
+      }).map(function (i) { return String(i.type || '').trim(); });
+      var fbHasImg = fbSelTypes.indexOf('image') >= 0;
+      var fbHasVid = fbSelTypes.indexOf('video') >= 0;
+      var fbShowMediaPicker = fbHasImg && fbHasVid;
+      var fbMediaTypeVal = String(draft.media_type || 'video');
+      var fbMediaPickerHtml = fbShowMediaPicker
+        ? radioField(fmtId, 'media_type', isEn ? 'Asset to publish' : '게시할 자산 선택', [
+            { value: 'video', label: isEn ? 'Video' : '영상' },
+            { value: 'image', label: isEn ? 'Images' : '이미지' },
+          ], fbMediaTypeVal, 'auto')
+        : '';
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-fb">' +
         '<div class="bsf-mock-fb-hd">' +
@@ -1988,6 +2004,7 @@
           '<span class="bsf-mock-fb-action-btn bsf-mock-action-item">' + _svgShare18 + ' ' + (isEn ? 'Share' : '공유') + '</span>' +
         '</div>' +
         '</div>') +
+      fbMediaPickerHtml +
       afWrap(isEn ? 'Post text' : '게시 문구', ceDiv(fmtId, 'caption', captionVal, 5, isEn ? "What's on your mind?" : '무슨 생각을 하고 계신가요?')) +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 2, '#hashtag')) +
       inputField(fmtId, 'link_url', isEn ? 'Link URL' : '링크 URL', 'https://', draft.link_url || '', 'auto', 'url') +
@@ -3628,6 +3645,14 @@
             firstComment: firstComment || '',
             linkUrl: draftLinkUrl || '',
           };
+          // Facebook 한정: 이미지+영상 혼합 선택 시 사용자가 라디오로 고른 mediaType 을
+          // body 에 명시해 publish.ts 분기가 해당 타입만 게시하도록 한다.
+          if (formatId === 'facebook') {
+            var fbMediaTypeOverride = String(draft.media_type || '').trim().toLowerCase();
+            if (fbMediaTypeOverride === 'video' || fbMediaTypeOverride === 'image') {
+              requestBody.mediaType = fbMediaTypeOverride;
+            }
+          }
         }
 
         return fetch('/api/sns/publish', {

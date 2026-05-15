@@ -767,13 +767,20 @@ async function postFacebookComment(opts: {
   message: string;
 }): Promise<void> {
   const { postId, pageToken, message } = opts;
+  console.log(`[postFacebookComment] target post:`, postId, "message length:", message.length);
   const res = await fetch(`https://graph.facebook.com/v21.0/${postId}/comments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message, access_token: pageToken }),
   });
-  const data = (await res.json()) as { id?: string; error?: { message: string } };
-  if (!data.id) throw new Error(`Facebook 첫 댓글 게시 실패: ${data.error?.message}`);
+  const rawText = await res.text();
+  console.log(`[postFacebookComment] HTTP ${res.status} response:`, rawText);
+  let data: { id?: string; error?: { message?: string; type?: string; code?: number } } = {};
+  try { data = JSON.parse(rawText); } catch { /* keep empty */ }
+  if (!data.id) {
+    const err = data.error || {};
+    throw new Error(`Facebook 첫 댓글 게시 실패: status=${res.status} code=${err.code || "?"} type=${err.type || "?"} message=${err.message || rawText.slice(0, 200)}`);
+  }
 }
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
@@ -1255,32 +1262,51 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       const { pageToken, pageId, pageName } = fbPage;
 
       if (isCarousel) {
-        // 캐러셀: 이미지만 지원 (동영상 혼합 시 이미지만 필터링)
+        // 사용자가 명시적으로 'video' 를 선택한 경우 → 첫 영상 1개를 단일 영상 포스트로 처리
         const rawItems = body.mediaItems!;
-        const imageUrls: string[] = [];
-        for (let i = 0; i < rawItems.length; i++) {
-          const item = rawItems[i];
-          if (item.mediaType === "video") continue; // Facebook 캐러셀은 이미지만
-          let mediaUrl: string;
-          if (item.gcsPath) {
-            mediaUrl = await buildSignedUrl(bucket, item.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
-          } else if (item.mediaUrl) {
-            mediaUrl = item.mediaUrl;
-          } else {
-            continue;
-          }
-          imageUrls.push(mediaUrl);
-        }
-        if (imageUrls.length === 0) {
-          return send({ error: "Facebook 캐러셀에 유효한 이미지가 없습니다." }, 400);
-        }
         const fbLinkUrl = String((body as any).linkUrl || "").trim();
+        const fbMediaOverride = String((body as any).mediaType || "").trim().toLowerCase();
 
         let postId: string;
-        if (imageUrls.length === 1) {
-          ({ postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl: imageUrls[0], caption, linkUrl: fbLinkUrl }));
+
+        if (fbMediaOverride === "video") {
+          const firstVideo = rawItems.find((it) => it.mediaType === "video");
+          if (!firstVideo) {
+            return send({ error: "Facebook 영상 게시에 영상 자산이 없습니다." }, 400);
+          }
+          let videoUrl: string;
+          if (firstVideo.gcsPath) {
+            videoUrl = await buildSignedUrl(bucket, firstVideo.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+          } else if (firstVideo.mediaUrl) {
+            videoUrl = firstVideo.mediaUrl;
+          } else {
+            return send({ error: "Facebook 영상 자산 URL이 없습니다." }, 400);
+          }
+          ({ postId } = await publishVideoToFacebook({ pageId, pageToken, mediaUrl: videoUrl, caption, linkUrl: fbLinkUrl }));
         } else {
-          ({ postId } = await publishCarouselToFacebook({ pageId, pageToken, imageUrls, caption, linkUrl: fbLinkUrl }));
+          // 이미지만 (override='image' 이거나 미지정인 경우 모두 동일): 영상은 제외하고 이미지만
+          const imageUrls: string[] = [];
+          for (let i = 0; i < rawItems.length; i++) {
+            const item = rawItems[i];
+            if (item.mediaType === "video") continue;
+            let mediaUrl: string;
+            if (item.gcsPath) {
+              mediaUrl = await buildSignedUrl(bucket, item.gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+            } else if (item.mediaUrl) {
+              mediaUrl = item.mediaUrl;
+            } else {
+              continue;
+            }
+            imageUrls.push(mediaUrl);
+          }
+          if (imageUrls.length === 0) {
+            return send({ error: "Facebook 캐러셀에 유효한 이미지가 없습니다." }, 400);
+          }
+          if (imageUrls.length === 1) {
+            ({ postId } = await publishPhotoToFacebook({ pageId, pageToken, mediaUrl: imageUrls[0], caption, linkUrl: fbLinkUrl }));
+          } else {
+            ({ postId } = await publishCarouselToFacebook({ pageId, pageToken, imageUrls, caption, linkUrl: fbLinkUrl }));
+          }
         }
 
         // 첫 댓글: 실패해도 게시 자체는 성공으로 처리
