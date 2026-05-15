@@ -383,17 +383,6 @@
 
     if (action === 'sns-save') {
       saveSettings();
-      return;
-    }
-
-    if (action === 'youtube-upload') {
-      e.preventDefault();
-      var isShorts = btn.dataset.shorts === '1';
-      if (NK.ui && NK.ui.youtubeUpload && typeof NK.ui.youtubeUpload.open === 'function') {
-        NK.ui.youtubeUpload.open({ isShorts: isShorts });
-      } else {
-        alert(_lang() === 'en' ? 'Upload component is loading...' : '업로드 컴포넌트가 로드 중입니다...');
-      }
     }
   }
 
@@ -449,13 +438,9 @@
         '</label>';
     }
 
-    var isYtFamily = (platform.id === 'youtube' || platform.id === 'youtube-shorts');
-    var uploadBtnHtml = (isYtFamily && connected)
-      ? '<button type="button" class="sns-pcard-upload-btn" data-action="youtube-upload" data-shorts="' + (platform.id === 'youtube-shorts' ? '1' : '0') + '" title="' + (_lang() === 'en' ? 'Upload' : '업로드') + '">'
-        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
-        + '<span>' + (_lang() === 'en' ? 'Upload' : '업로드') + '</span>'
-        + '</button>'
-      : '';
+    // YouTube Shorts 는 YouTube 의 미러 — 별도 연결 버튼을 노출하지 않는다.
+    var hideConnectBox = (platform.id === 'youtube-shorts');
+    var finalConnectBoxHtml = hideConnectBox ? '' : connectBoxHtml;
 
     return [
       '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
@@ -463,10 +448,9 @@
         '<div class="sns-pcard-body">',
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
           '<div class="sns-pcard-status">', statusText, '</div>',
-          uploadBtnHtml,
         '</div>',
         '<div class="sns-pcard-actions">',
-          connectBoxHtml,
+          finalConnectBoxHtml,
           '<div class="sns-pcard-toggle">', usageToggleHtml, '</div>',
         '</div>',
       '</div>',

@@ -1,5 +1,6 @@
 import { buildUserDataObject, gcsObjectPath } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { ensureFreshAccessToken } from "../_shared/youtube-token";
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -687,6 +688,11 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     mediaDirectUrl?: string;
     // 캐러셀
     mediaItems?: Array<{ mediaType: "image" | "video"; gcsPath?: string; mediaUrl?: string }>;
+    // YouTube 전용
+    title?: string;
+    tags?: string[];
+    privacyStatus?: "public" | "private" | "unlisted";
+    isShorts?: boolean;
   };
   try {
     body = await request.json();
@@ -907,6 +913,185 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         }
 
         return send({ ok: true, result: { platform: "instagram", postId, username: igUserId, status: "published", publishedAt: new Date().toISOString() } });
+      }
+    }
+
+    if (platform === "youtube" || platform === "youtube-shorts") {
+      const isShorts = platform === "youtube-shorts" || !!body.isShorts;
+
+      // YouTube 는 영상만. 이미지 / 캐러셀 거부.
+      if (isCarousel) {
+        return send({ error: "YouTube는 단일 영상 업로드만 지원합니다." }, 400);
+      }
+      if (body.mediaType !== "video") {
+        return send({ error: "YouTube에는 영상 자산이 필요합니다." }, 400);
+      }
+      if (!body.mediaGcsPath && !body.mediaDirectUrl) {
+        return send({ error: "mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다." }, 400);
+      }
+
+      // 사용자 토큰 (자동 갱신)
+      let userAccessToken: string;
+      try {
+        userAccessToken = await ensureFreshAccessToken(env, auth.userId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "youtube_not_connected") {
+          return send({ error: "YouTube 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 412);
+        }
+        return send({ error: msg }, 500);
+      }
+
+      // 메타 구성: draft → YouTube 비디오 메타데이터
+      const epTitleFallback = String(body.title || "").trim() || "Untitled";
+      const captionText = String(body.caption || "").trim();
+      let description = captionText;
+      const tagSet = new Set<string>();
+      if (Array.isArray(body.tags)) {
+        body.tags.forEach((t) => {
+          const v = String(t || "").trim().replace(/^#/, "");
+          if (v) tagSet.add(v);
+        });
+      }
+      // caption 에 #해시태그가 포함되어 있다면 tags 로도 흡수 (#는 제거)
+      const inlineHashes = captionText.match(/#[A-Za-z0-9_가-힣]+/g) || [];
+      inlineHashes.forEach((h) => tagSet.add(h.replace(/^#/, "")));
+
+      if (isShorts) {
+        // Shorts 의도 신호: description 끝과 tags 양쪽
+        if (!/(^|\s)#Shorts(\s|$)/i.test(description)) {
+          description = description ? description + "\n\n#Shorts" : "#Shorts";
+        }
+        const hasShortsTag = Array.from(tagSet).some((t) => t.toLowerCase() === "shorts");
+        if (!hasShortsTag) tagSet.add("Shorts");
+      }
+      const tags = Array.from(tagSet);
+
+      // GCS 영상 크기 조회 → 하이브리드 분기 (50MB 임계값)
+      const SERVER_RELAY_THRESHOLD = 50 * 1024 * 1024;
+      let contentLength = 0;
+      let contentType = "video/mp4";
+      let videoSignedUrl = "";
+      if (body.mediaGcsPath) {
+        // GCS 객체 메타 조회
+        const objName = gcsObjectPath(body.mediaGcsPath);
+        const metaRes = await fetch(
+          `https://storage.googleapis.com/storage/v1/b/${bucket}/o/${objName}`,
+          { headers: { Authorization: `Bearer ${googleToken}` } }
+        );
+        if (!metaRes.ok) {
+          const errText = await metaRes.text();
+          return send({ error: `GCS 메타 조회 실패: ${metaRes.status} ${errText}` }, 502);
+        }
+        const meta = (await metaRes.json()) as { size?: string; contentType?: string };
+        contentLength = Number(meta.size || 0);
+        contentType = meta.contentType || "video/mp4";
+        if (contentLength <= SERVER_RELAY_THRESHOLD) {
+          videoSignedUrl = await buildSignedUrl(
+            bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600
+          );
+        }
+      } else if (body.mediaDirectUrl) {
+        // direct URL은 HEAD로 크기 확인
+        try {
+          const headRes = await fetch(body.mediaDirectUrl, { method: "HEAD" });
+          contentLength = Number(headRes.headers.get("content-length") || 0);
+          contentType = headRes.headers.get("content-type") || "video/mp4";
+        } catch { /* 크기 모르면 안전하게 클라 PUT 라우팅 */ }
+        videoSignedUrl = body.mediaDirectUrl;
+      }
+      if (!contentLength) {
+        // 크기를 모르면 클라이언트 PUT 강제
+        contentLength = SERVER_RELAY_THRESHOLD + 1;
+      }
+
+      // YouTube resumable session 시작
+      const metadata = {
+        snippet: {
+          title: epTitleFallback.slice(0, 100),
+          description: description.slice(0, 5000),
+          tags,
+          categoryId: "22",
+        },
+        status: {
+          privacyStatus: body.privacyStatus || "private",
+          selfDeclaredMadeForKids: false,
+        },
+      };
+
+      const initRes = await fetch(
+        "https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${userAccessToken}`,
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Upload-Content-Length": String(contentLength),
+            "X-Upload-Content-Type": contentType,
+          },
+          body: JSON.stringify(metadata),
+        }
+      );
+      if (!initRes.ok) {
+        const errText = await initRes.text();
+        return send({ error: `YouTube init 실패: ${initRes.status} ${errText}` }, 502);
+      }
+      const uploadUrl = initRes.headers.get("Location");
+      if (!uploadUrl) {
+        return send({ error: "YouTube upload URL 누락" }, 502);
+      }
+
+      // 큰 영상 분기에서도 클라가 GCS에서 직접 받아야 하므로 signed URL 보장
+      let clientSourceUrl = videoSignedUrl;
+      if (!clientSourceUrl && body.mediaGcsPath) {
+        clientSourceUrl = await buildSignedUrl(
+          bucket, body.mediaGcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600
+        );
+      } else if (!clientSourceUrl && body.mediaDirectUrl) {
+        clientSourceUrl = body.mediaDirectUrl;
+      }
+
+      // 하이브리드 분기 — 작은 영상은 서버 경유, 큰 영상은 클라 직접 PUT
+      if (contentLength <= SERVER_RELAY_THRESHOLD && videoSignedUrl) {
+        // 서버 경유: GCS에서 영상 fetch → YouTube로 PUT
+        const videoRes = await fetch(videoSignedUrl);
+        if (!videoRes.ok || !videoRes.body) {
+          return send({ error: `영상 fetch 실패: ${videoRes.status}` }, 502);
+        }
+        const putRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: {
+            "Content-Type": contentType,
+            "Content-Length": String(contentLength),
+          },
+          body: videoRes.body,
+        });
+        if (!putRes.ok) {
+          const errText = await putRes.text();
+          return send({ error: `YouTube PUT 실패: ${putRes.status} ${errText}` }, 502);
+        }
+        const result = (await putRes.json()) as { id?: string };
+        return send({
+          ok: true,
+          result: {
+            platform,
+            postId: result.id || "",
+            status: "published",
+            publishedAt: new Date().toISOString(),
+            url: result.id ? `https://youtu.be/${result.id}` : "",
+          },
+        });
+      } else {
+        // 클라 직접 PUT: uploadUrl + sourceUrl (GCS signed) 반환
+        return send({
+          ok: true,
+          uploadUrl,
+          sourceUrl: clientSourceUrl,
+          contentType,
+          contentLength,
+          platform,
+          // 프론트가 sourceUrl → blob → PUT(uploadUrl) 흐름으로 처리
+        });
       }
     }
 

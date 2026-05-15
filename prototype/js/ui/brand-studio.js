@@ -3489,10 +3489,11 @@
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
       function snsPublishFormat(formatId, drafts, scheduledAt) {
-        var SNS_PLATFORMS = ['instagram', 'tiktok'];
+        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts'];
         if (SNS_PLATFORMS.indexOf(formatId) === -1) {
           return Promise.resolve({ skipped: true });
         }
+        var isYoutubeFamily = (formatId === 'youtube' || formatId === 'youtube-shorts');
 
         // 선택된 이미지+영상 자산 수집 → 영상 먼저, 이미지 나중 정렬
         var selMediaItems = assetItems.filter(function (i) {
@@ -3557,8 +3558,43 @@
         var firstComment = String(draft.first_comment || '').trim();
         var token = localStorage.getItem('nk_auth_token') || '';
 
+        // YouTube 전용 메타 (hasTitle 포맷). draft.title 없으면 에피소드 제목 폴백.
+        var ytExtras = null;
+        if (isYoutubeFamily) {
+          var draftTitle = String(draft.title || '').trim();
+          var epTitleBs = '';
+          try { epTitleBs = String((project && project.title) || '').trim(); } catch (_) {}
+          var ytTags = draftHashtags
+            .split(/[\s,]+/)
+            .map(function (x) { return x.replace(/^#/, '').trim(); })
+            .filter(Boolean);
+          ytExtras = {
+            title: draftTitle || epTitleBs || 'Untitled',
+            tags: ytTags,
+            privacyStatus: 'private',
+            isShorts: (formatId === 'youtube-shorts'),
+          };
+        }
+
+        // YouTube는 영상만 — 단일 항목으로 강제, 첫 video 우선
         var requestBody;
-        if (resolvedItems.length === 1) {
+        if (isYoutubeFamily) {
+          var firstVideo = resolvedItems.find(function (it) { return it.mediaType === 'video'; }) || resolvedItems[0];
+          if (!firstVideo || firstVideo.mediaType !== 'video') {
+            alert(isEn
+              ? 'YouTube requires a video asset. Select a video first.'
+              : 'YouTube에는 영상 자산이 필요합니다. 영상을 먼저 선택해 주세요.');
+            return Promise.resolve({ skipped: true });
+          }
+          requestBody = Object.assign({
+            platform: formatId,
+            mediaType: 'video',
+            mediaGcsPath: firstVideo.gcsPath || '',
+            mediaDirectUrl: firstVideo.mediaUrl || '',
+            caption: finalCaption,
+            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
+          }, ytExtras);
+        } else if (resolvedItems.length === 1) {
           var single = resolvedItems[0];
           requestBody = {
             platform: formatId,
@@ -3584,10 +3620,69 @@
           headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
           body: JSON.stringify(requestBody),
         })
-          .then(function (r) { return r.json(); })
-          .then(function (res) {
-            if (!res.ok) throw new Error(res.error || 'SNS publish failed');
-            return res;
+          .then(function (r) { return r.json().then(function (j) { return { httpStatus: r.status, body: j }; }); })
+          .then(function (wrap) {
+            var res = wrap.body;
+            // YouTube 미연결 → 안내 후 skip
+            if (wrap.httpStatus === 412 || (res && res.error && /not connected|연결되지 않/i.test(res.error))) {
+              alert(isEn
+                ? 'YouTube is not connected. Connect it in SNS Settings first.'
+                : 'YouTube가 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요.');
+              return { skipped: true };
+            }
+            if (!res || !res.ok) throw new Error((res && res.error) || 'SNS publish failed');
+
+            // 하이브리드: 서버가 직접 PUT한 경우 result.postId 가 채워져 있음 → 그대로 반환
+            if (res.result) return res;
+
+            // 큰 영상 → 클라 직접 PUT (resumable session)
+            if (res.uploadUrl && res.sourceUrl) {
+              return doYoutubeDirectPut(res.uploadUrl, res.sourceUrl, res.contentType, formatId);
+            }
+            throw new Error('Unexpected publish response');
+          });
+      }
+
+      // YouTube resumable PUT (큰 영상 — XHR로 진행률 표시)
+      // sourceUrl 은 백엔드가 발급한 GCS signed URL (또는 mediaDirectUrl).
+      function doYoutubeDirectPut(uploadUrl, sourceUrl, contentType, formatId) {
+        return fetch(sourceUrl)
+          .then(function (r) {
+            if (!r.ok) throw new Error('source fetch failed: ' + r.status);
+            return r.blob();
+          })
+          .then(function (blob) {
+            return new Promise(function (resolve, reject) {
+              var xhr = new XMLHttpRequest();
+              xhr.open('PUT', uploadUrl, true);
+              xhr.setRequestHeader('Content-Type', contentType || blob.type || 'video/mp4');
+              xhr.upload.addEventListener('progress', function (evt) {
+                if (!evt.lengthComputable) return;
+                var pct = (evt.loaded / evt.total) * 100;
+                var fmtCard = document.querySelector('[data-deploy-format-card="' + formatId + '"] .bsf-deploy-status');
+                if (fmtCard) fmtCard.textContent = (isEn ? 'Uploading… ' : '업로드 중… ') + pct.toFixed(1) + '%';
+              });
+              xhr.addEventListener('load', function () {
+                if (xhr.status >= 200 && xhr.status < 300) {
+                  var parsed = {};
+                  try { parsed = JSON.parse(xhr.responseText || '{}'); } catch (e) {}
+                  resolve({
+                    ok: true,
+                    result: {
+                      platform: formatId,
+                      postId: parsed.id || '',
+                      status: 'published',
+                      publishedAt: new Date().toISOString(),
+                      url: parsed.id ? 'https://youtu.be/' + parsed.id : '',
+                    },
+                  });
+                } else {
+                  reject(new Error('YouTube PUT failed: HTTP ' + xhr.status));
+                }
+              });
+              xhr.addEventListener('error', function () { reject(new Error('YouTube PUT network error')); });
+              xhr.send(blob);
+            });
           });
       }
 
