@@ -1,7 +1,7 @@
 import {
   getGoogleServiceAccountToken,
   resolveGcsContextForUser,
-  writeYoutubePatch,
+  writeYoutubeWithShortsMirror,
 } from "../../api/_shared/youtube-token";
 
 function popupHtml(result: { ok: boolean; username?: string; error?: string }) {
@@ -105,7 +105,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     });
 
     const gcs = resolveGcsContextForUser(env, userId);
-    await writeYoutubePatch(
+    await writeYoutubeWithShortsMirror(
       { ...gcs, googleToken },
       {
         connected: true,

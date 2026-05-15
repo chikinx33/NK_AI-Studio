@@ -119,13 +119,9 @@ export async function readSnsSettings(ctx: GcsContext): Promise<any> {
   };
 }
 
-export async function writeYoutubePatch(ctx: GcsContext, patch: Partial<YoutubeTokenRecord>): Promise<void> {
+async function commitSnsSettings(ctx: GcsContext, existing: any): Promise<void> {
   const writeName = ctx.objectName.split("/").map(encodeURIComponent).join("/");
-  const existing = await readSnsSettings(ctx);
-  existing.sns = existing.sns || {};
-  existing.sns.youtube = Object.assign({}, existing.sns.youtube, patch);
   existing.updatedAt = new Date().toISOString();
-
   const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${ctx.bucket}/o?uploadType=media&name=${writeName}`;
   const res = await fetch(uploadUrl, {
     method: "POST",
@@ -139,6 +135,46 @@ export async function writeYoutubePatch(ctx: GcsContext, patch: Partial<YoutubeT
     const errText = await res.text();
     throw new Error(`GCS save error: ${res.status} ${errText}`);
   }
+}
+
+export async function writeYoutubePatch(ctx: GcsContext, patch: Partial<YouTubeTokenData>): Promise<void> {
+  const existing = await readSnsSettings(ctx);
+  existing.sns = existing.sns || {};
+  existing.sns.youtube = Object.assign({}, existing.sns.youtube, patch);
+  await commitSnsSettings(ctx, existing);
+}
+
+/**
+ * youtube 와 youtube-shorts 를 한 번의 GCS write 로 동시 미러링.
+ * shorts 는 토큰을 저장하지 않고 channelTitle/channelId/connected 만 mirror 한다.
+ * 업로드 시에는 youtube 의 토큰을 그대로 사용한다.
+ */
+export async function writeYoutubeWithShortsMirror(
+  ctx: GcsContext,
+  ytPatch: Partial<YouTubeTokenData>,
+  opts: { disconnect?: boolean } = {}
+): Promise<void> {
+  const existing = await readSnsSettings(ctx);
+  existing.sns = existing.sns || {};
+
+  if (opts.disconnect) {
+    existing.sns.youtube = { connected: false, enabled: false };
+    const prevShortsEnabled = !!(existing.sns["youtube-shorts"] && existing.sns["youtube-shorts"].enabled);
+    existing.sns["youtube-shorts"] = { connected: false, enabled: false, mirrorOf: "youtube", prevEnabled: prevShortsEnabled };
+  } else {
+    existing.sns.youtube = Object.assign({}, existing.sns.youtube, ytPatch);
+    const prevShorts = existing.sns["youtube-shorts"] || {};
+    existing.sns["youtube-shorts"] = Object.assign({}, prevShorts, {
+      connected: true,
+      // 최초 연결 시 enabled=true, 이후 사용자가 토글해둔 값 보존
+      enabled: typeof prevShorts.enabled === "boolean" ? prevShorts.enabled : true,
+      mirrorOf: "youtube",
+      channelId: ytPatch.channelId || prevShorts.channelId || "",
+      channelTitle: ytPatch.channelTitle || prevShorts.channelTitle || "",
+    });
+  }
+
+  await commitSnsSettings(ctx, existing);
 }
 
 export async function readYoutubeRecord(ctx: GcsContext): Promise<YouTubeTokenData | null> {

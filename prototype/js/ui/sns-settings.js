@@ -16,7 +16,7 @@
   var PLATFORMS = [
     { id: 'instagram',      label: 'Instagram' },
     { id: 'youtube',        label: 'YouTube' },
-    { id: 'youtube-shorts', label: 'YouTube Shorts', comingSoon: true },
+    { id: 'youtube-shorts', label: 'YouTube Shorts' },
     { id: 'tiktok',         label: 'TikTok' },
     { id: 'facebook',       label: 'Facebook',       comingSoon: true },
     { id: 'x-threads',      label: 'X / Threads',    comingSoon: true },
@@ -284,6 +284,17 @@
         enabled: true,
         username: result.username || '',
       });
+      // youtube 연결 시 shorts 도 즉시 미러링 (GCS 는 콜백이 이미 처리)
+      if (platform === 'youtube') {
+        var prevShorts = _settings.sns['youtube-shorts'] || {};
+        _settings.sns['youtube-shorts'] = Object.assign({}, prevShorts, {
+          connected: true,
+          enabled: typeof prevShorts.enabled === 'boolean' ? prevShorts.enabled : true,
+          mirrorOf: 'youtube',
+          channelTitle: result.username || prevShorts.channelTitle || '',
+          username: result.username || prevShorts.username || '',
+        });
+      }
       _writeCache(_settings.sns);
       render();
       alert(T[_lang()].connectOk(platform, result.username || ''));
@@ -312,10 +323,30 @@
     if (action === 'sns-connect-toggle') {
       e.preventDefault();
       var pid = btn.dataset.platform;
+
+      // YouTube Shorts 는 YouTube 의 미러 — 연결/해제 모두 youtube 키로 위임
+      if (pid === 'youtube-shorts') {
+        var ytNow = (_settings && _settings.sns && _settings.sns.youtube) || {};
+        if (ytNow.connected) {
+          alert(_lang() === 'en'
+            ? 'YouTube Shorts mirrors the YouTube connection. Disconnect from the YouTube card.'
+            : 'YouTube Shorts는 YouTube 연결을 따릅니다. YouTube 카드에서 해제해 주세요.');
+        } else {
+          alert(_lang() === 'en'
+            ? 'Connect the YouTube card first — Shorts will follow automatically.'
+            : 'YouTube 카드를 먼저 연결해 주세요. Shorts는 자동으로 연결됩니다.');
+        }
+        return;
+      }
+
       var s = (_settings && _settings.sns && _settings.sns[pid]) || {};
       if (s.connected) {
         if (!confirm(T[_lang()].disconnectConfirm(pid))) return;
         _settings.sns[pid] = { connected: false, enabled: false };
+        // YouTube 해제 시 Shorts 도 함께 비움
+        if (pid === 'youtube') {
+          _settings.sns['youtube-shorts'] = { connected: false, enabled: false };
+        }
         _writeCache(_settings.sns);
         saveSettings().then(function () { render(); });
       } else {
@@ -329,14 +360,22 @@
       e.preventDefault();
       var upid = btn.dataset.platform;
       var us = (_settings && _settings.sns && _settings.sns[upid]) || {};
-      if (!us.connected) {
-        // 연결 안 된 상태에서 사용 토글 → 연결 먼저 안내
+      // Shorts 는 youtube 의 연결 상태를 따른다
+      if (upid === 'youtube-shorts') {
+        var ytLink = (_settings && _settings.sns && _settings.sns.youtube) || {};
+        if (!ytLink.connected) {
+          alert(_lang() === 'en'
+            ? 'Connect YouTube first — Shorts will follow automatically.'
+            : 'YouTube를 먼저 연결해 주세요. Shorts는 자동으로 연결됩니다.');
+          return;
+        }
+      } else if (!us.connected) {
         alert(_lang() === 'en'
           ? 'Connect this channel first.'
           : '먼저 채널을 연결해 주세요.');
         return;
       }
-      _settings.sns[upid] = Object.assign({}, us, { enabled: !us.enabled });
+      _settings.sns[upid] = Object.assign({}, us, { connected: true, enabled: !us.enabled });
       _writeCache(_settings.sns);
       saveSettings().then(function () { render(); });
       return;
@@ -349,8 +388,9 @@
 
     if (action === 'youtube-upload') {
       e.preventDefault();
+      var isShorts = btn.dataset.shorts === '1';
       if (NK.ui && NK.ui.youtubeUpload && typeof NK.ui.youtubeUpload.open === 'function') {
-        NK.ui.youtubeUpload.open();
+        NK.ui.youtubeUpload.open({ isShorts: isShorts });
       } else {
         alert(_lang() === 'en' ? 'Upload component is loading...' : '업로드 컴포넌트가 로드 중입니다...');
       }
@@ -359,9 +399,23 @@
 
   function buildPlatformCard(platform) {
     var snsState = (_settings && _settings.sns && _settings.sns[platform.id]) || {};
+    // YouTube Shorts 는 YouTube 연결 상태를 미러링한다 (OAuth 는 YouTube 카드에서만).
+    if (platform.id === 'youtube-shorts') {
+      var yt = (_settings && _settings.sns && _settings.sns.youtube) || {};
+      if (yt.connected) {
+        snsState = Object.assign({}, snsState, {
+          connected: true,
+          channelTitle: yt.channelTitle || snsState.channelTitle || '',
+          username: yt.channelTitle || yt.username || snsState.username || '',
+        });
+      } else {
+        // youtube 미연결 시 shorts 도 강제로 미연결
+        snsState = Object.assign({}, snsState, { connected: false, enabled: false });
+      }
+    }
     var connected = !!snsState.connected;
     var enabled = !!snsState.enabled;
-    var username = snsState.username || '';
+    var username = snsState.username || snsState.channelTitle || '';
     var comingSoon = !!platform.comingSoon;
     var icon = _platformIcons[platform.id] || '';
 
@@ -395,8 +449,9 @@
         '</label>';
     }
 
-    var uploadBtnHtml = (platform.id === 'youtube' && connected)
-      ? '<button type="button" class="sns-pcard-upload-btn" data-action="youtube-upload" title="' + (_lang() === 'en' ? 'Upload to YouTube' : 'YouTube에 업로드') + '">'
+    var isYtFamily = (platform.id === 'youtube' || platform.id === 'youtube-shorts');
+    var uploadBtnHtml = (isYtFamily && connected)
+      ? '<button type="button" class="sns-pcard-upload-btn" data-action="youtube-upload" data-shorts="' + (platform.id === 'youtube-shorts' ? '1' : '0') + '" title="' + (_lang() === 'en' ? 'Upload' : '업로드') + '">'
         + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
         + '<span>' + (_lang() === 'en' ? 'Upload' : '업로드') + '</span>'
         + '</button>'

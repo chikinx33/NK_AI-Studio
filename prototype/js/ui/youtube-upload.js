@@ -35,6 +35,7 @@
     description: '',
     tags: '',
     privacyStatus: 'private',
+    isShorts: false,
     phase: 'idle', // idle | initializing | uploading | success | error
     progress: 0,
     error: '',
@@ -46,7 +47,9 @@
   var T = {
     ko: {
       title: 'YouTube 업로드',
+      titleShorts: 'YouTube Shorts 업로드',
       subtitle: '연결된 YouTube 채널로 영상을 업로드합니다.',
+      subtitleShorts: '연결된 YouTube 채널에 Shorts로 업로드합니다. #Shorts 태그가 자동 추가됩니다.',
       fieldTitle: '제목',
       fieldDesc: '설명',
       fieldTags: '태그 (쉼표로 구분)',
@@ -76,7 +79,9 @@
     },
     en: {
       title: 'Upload to YouTube',
+      titleShorts: 'Upload to YouTube Shorts',
       subtitle: 'Upload a video to your connected YouTube channel.',
+      subtitleShorts: 'Upload as a Short. The #Shorts tag is added automatically.',
       fieldTitle: 'Title',
       fieldDesc: 'Description',
       fieldTags: 'Tags (comma separated)',
@@ -223,7 +228,7 @@
       + '<div class="ytup-overlay" data-action="ytup-overlay">'
       + '<div class="ytup-modal" role="dialog" aria-modal="true">'
       + '<div class="ytup-head">'
-      + '<div><div class="ytup-title">' + t('title') + '</div><div class="ytup-sub">' + t('subtitle') + '</div></div>'
+      + '<div><div class="ytup-title">' + (s.isShorts ? t('titleShorts') : t('title')) + '</div><div class="ytup-sub">' + (s.isShorts ? t('subtitleShorts') : t('subtitle')) + '</div></div>'
       + '<button type="button" class="ytup-close" data-action="ytup-close" aria-label="Close">×</button>'
       + '</div>'
       + bannerHtml
@@ -278,6 +283,7 @@
       description: (opts.defaults && opts.defaults.description) || '',
       tags: (opts.defaults && (Array.isArray(opts.defaults.tags) ? opts.defaults.tags.join(', ') : opts.defaults.tags)) || '',
       privacyStatus: (opts.defaults && opts.defaults.privacyStatus) || 'private',
+      isShorts: !!opts.isShorts,
       phase: 'idle',
       progress: 0,
       error: '',
@@ -373,10 +379,19 @@
     render();
 
     var token = localStorage.getItem('nk_auth_token') || '';
+    var tagList = s.tags.split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (s.isShorts) {
+      // YouTube 태그는 # 접두사를 받지 않음 — 텍스트 "Shorts" 만 추가
+      var hasShorts = tagList.some(function (t) { return t.toLowerCase() === 'shorts'; });
+      if (!hasShorts) tagList.push('Shorts');
+    }
     var body = {
       title: s.title.trim(),
-      description: s.description,
-      tags: s.tags.split(',').map(function (x) { return x.trim(); }).filter(Boolean),
+      // Shorts 의도를 description 본문에도 #Shorts 로 명시 (YouTube 가 Shorts 로 분류하도록)
+      description: s.isShorts
+        ? (s.description ? s.description + '\n\n#Shorts' : '#Shorts')
+        : s.description,
+      tags: tagList,
       privacyStatus: s.privacyStatus,
       contentLength: s.file.size,
       contentType: s.file.type || 'video/mp4',
