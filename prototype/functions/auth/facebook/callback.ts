@@ -100,14 +100,47 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     // Step 3: 관리 중인 페이지 목록 조회 (첫 번째 페이지 선택)
     const pagesRes = await fetch(
       `https://graph.facebook.com/v21.0/me/accounts?` +
-      new URLSearchParams({ access_token: longToken, fields: "id,name,access_token" }).toString()
+      new URLSearchParams({ access_token: longToken, fields: "id,name,access_token,tasks" }).toString()
     );
-    const pagesData = (await pagesRes.json()) as {
-      data?: Array<{ id: string; name: string; access_token: string }>;
-      error?: { message?: string };
-    };
+    const pagesRawText = await pagesRes.text();
+    console.log("[facebook callback] /me/accounts HTTP status:", pagesRes.status);
+    console.log("[facebook callback] /me/accounts raw body:", pagesRawText);
+
+    let pagesData: {
+      data?: Array<{ id: string; name: string; access_token: string; tasks?: string[] }>;
+      paging?: { cursors?: { before?: string; after?: string }; next?: string };
+      error?: { message?: string; type?: string; code?: number; fbtrace_id?: string };
+    } = {};
+    try { pagesData = JSON.parse(pagesRawText); } catch (e) {
+      console.log("[facebook callback] /me/accounts JSON parse error:", e);
+    }
+    console.log("[facebook callback] /me/accounts parsed:", JSON.stringify(pagesData));
+    console.log("[facebook callback] data array exists?", !!pagesData.data, "length:", pagesData.data?.length || 0);
+
+    // /me/accounts 가 비었으면 사용자 정보도 함께 조회해서 어떤 계정으로 로그인됐는지 확인
     if (!pagesData.data || pagesData.data.length === 0) {
-      throw new Error("관리 중인 Facebook 페이지가 없습니다. Meta Business Suite에서 페이지를 먼저 생성해 주세요.");
+      const meRes = await fetch(
+        `https://graph.facebook.com/v21.0/me?` +
+        new URLSearchParams({ access_token: longToken, fields: "id,name" }).toString()
+      );
+      const meText = await meRes.text();
+      console.log("[facebook callback] /me HTTP status:", meRes.status);
+      console.log("[facebook callback] /me raw body:", meText);
+
+      // granular_scopes 확인 — 실제로 어떤 권한이 승인됐는지
+      const permsRes = await fetch(
+        `https://graph.facebook.com/v21.0/me/permissions?` +
+        new URLSearchParams({ access_token: longToken }).toString()
+      );
+      const permsText = await permsRes.text();
+      console.log("[facebook callback] /me/permissions HTTP status:", permsRes.status);
+      console.log("[facebook callback] /me/permissions raw body:", permsText);
+
+      const apiErr = pagesData.error?.message;
+      const detail = apiErr
+        ? `API 오류: ${apiErr}`
+        : `data=${JSON.stringify(pagesData.data)}, /me=${meText.slice(0, 200)}, /me/permissions=${permsText.slice(0, 300)}`;
+      throw new Error(`관리 중인 Facebook 페이지가 없습니다. ${detail}`);
     }
 
     // 첫 번째 페이지 사용 (추후 UI에서 선택 가능하도록 확장 가능)
