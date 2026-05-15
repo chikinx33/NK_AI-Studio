@@ -26,9 +26,14 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const code = url.searchParams.get("code");
   const stateRaw = url.searchParams.get("state");
   const error = url.searchParams.get("error");
+  const errorCode = url.searchParams.get("error_code");
+  const errorMsg = url.searchParams.get("error_message") || url.searchParams.get("error_description");
 
-  if (error) return popupHtml({ ok: false, error: "OAuth cancelled" });
-  if (!code || !stateRaw) return popupHtml({ ok: false, error: "Missing code or state" });
+  if (error || errorCode) {
+    const detail = errorMsg || error || `error_code=${errorCode}`;
+    return popupHtml({ ok: false, error: "OAuth cancelled: " + detail });
+  }
+  if (!code) return popupHtml({ ok: false, error: "Missing code — Facebook redirect did not include authorization code" });
 
   let userId = "owner";
   try {
