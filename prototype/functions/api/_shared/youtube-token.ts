@@ -1,6 +1,6 @@
 import { buildUserDataObject, gcsObjectPath } from "./storage";
 
-export interface YoutubeTokenRecord {
+export interface YouTubeTokenData {
   connected: boolean;
   enabled?: boolean;
   channelId?: string;
@@ -9,6 +9,26 @@ export interface YoutubeTokenRecord {
   refreshToken: string;
   tokenExpiresAt: string;
   scope?: string;
+}
+
+// 하위 호환 alias
+export type YoutubeTokenRecord = YouTubeTokenData;
+
+export interface YouTubeUploadInitRequest {
+  title: string;
+  description?: string;
+  tags?: string[] | string;
+  categoryId?: string;
+  privacyStatus?: "public" | "private" | "unlisted";
+  contentLength: number;
+  contentType?: string;
+}
+
+export interface YouTubeUploadInitResponse {
+  ok: true;
+  uploadUrl: string;
+  contentType: string;
+  contentLength: number;
 }
 
 interface GcsContext {
@@ -121,12 +141,12 @@ export async function writeYoutubePatch(ctx: GcsContext, patch: Partial<YoutubeT
   }
 }
 
-export async function readYoutubeRecord(ctx: GcsContext): Promise<YoutubeTokenRecord | null> {
+export async function readYoutubeRecord(ctx: GcsContext): Promise<YouTubeTokenData | null> {
   const settings = await readSnsSettings(ctx);
   const yt = settings?.sns?.youtube;
   if (!yt || !yt.connected) return null;
   if (!yt.accessToken || !yt.refreshToken) return null;
-  return yt as YoutubeTokenRecord;
+  return yt as YouTubeTokenData;
 }
 
 /**

@@ -15,7 +15,7 @@
 
   var PLATFORMS = [
     { id: 'instagram',      label: 'Instagram' },
-    { id: 'youtube',        label: 'YouTube',        comingSoon: true },
+    { id: 'youtube',        label: 'YouTube' },
     { id: 'youtube-shorts', label: 'YouTube Shorts', comingSoon: true },
     { id: 'tiktok',         label: 'TikTok' },
     { id: 'facebook',       label: 'Facebook',       comingSoon: true },
@@ -344,6 +344,16 @@
 
     if (action === 'sns-save') {
       saveSettings();
+      return;
+    }
+
+    if (action === 'youtube-upload') {
+      e.preventDefault();
+      if (NK.ui && NK.ui.youtubeUpload && typeof NK.ui.youtubeUpload.open === 'function') {
+        NK.ui.youtubeUpload.open();
+      } else {
+        alert(_lang() === 'en' ? 'Upload component is loading...' : '업로드 컴포넌트가 로드 중입니다...');
+      }
     }
   }
 
@@ -385,12 +395,20 @@
         '</label>';
     }
 
+    var uploadBtnHtml = (platform.id === 'youtube' && connected)
+      ? '<button type="button" class="sns-pcard-upload-btn" data-action="youtube-upload" title="' + (_lang() === 'en' ? 'Upload to YouTube' : 'YouTube에 업로드') + '">'
+        + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'
+        + '<span>' + (_lang() === 'en' ? 'Upload' : '업로드') + '</span>'
+        + '</button>'
+      : '';
+
     return [
       '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
         '<div class="sns-pcard-icon">', icon, '</div>',
         '<div class="sns-pcard-body">',
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',
           '<div class="sns-pcard-status">', statusText, '</div>',
+          uploadBtnHtml,
         '</div>',
         '<div class="sns-pcard-actions">',
           connectBoxHtml,

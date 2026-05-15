@@ -1,5 +1,8 @@
 import { authorizeRequest } from "../_shared/auth.js";
-import { ensureFreshAccessToken } from "../_shared/youtube-token";
+import {
+  ensureFreshAccessToken,
+  YouTubeUploadInitRequest,
+} from "../_shared/youtube-token";
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -8,15 +11,7 @@ function send(body: unknown, status = 200) {
   });
 }
 
-interface UploadInitBody {
-  title?: string;
-  description?: string;
-  tags?: string[] | string;
-  categoryId?: string;
-  privacyStatus?: "private" | "public" | "unlisted";
-  contentLength?: number;
-  contentType?: string;
-}
+type UploadInitBody = Partial<YouTubeUploadInitRequest>;
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
   const auth = await authorizeRequest(request, env);
