@@ -1062,6 +1062,16 @@ function buildSingleBeatSystemPromptKo() {
 - 등록된 캐릭터만 사용. 새 인물 추가 금지.
 - coversBeats 에는 받은 비트 ID 하나만.
 
+[캐릭터 일관성 규칙 — 절대 위반 금지]
+- visual 첫 문장에 등록된 @토큰을 최소 1개 반드시 포함한다.
+- 등록 캐릭터를 "노란 인형", "그 친구", "파란 사각형" 같은 일반 명사로만 지칭 금지.
+  색·모양 묘사를 쓸 때도 반드시 @토큰과 짝지어 표기: "파란 @네모", "노란 @동그라미가", "빨간 @세모를".
+- 비트의 주인공을 첫 문장에 @토큰으로 명시. 공동 등장 캐릭터는 두 번째 문장에 @토큰으로.
+- 이유: 다운스트림 이미지 생성기가 @토큰을 키로 캐릭터 자산(외형·색상·실루엣)을 매칭한다.
+  토큰이 없으면 캐릭터 자산이 매칭 안 되어 일반 인형/생물로 렌더되거나 의도 외 캐릭터가
+  함께 주입되어 캐릭터 일관성이 깨진다.
+- 이 규칙은 간결성·문장 자연스러움보다 우선한다. @토큰 표기는 선택이 아니라 필수다.
+
 [음성 모드 규칙 — 사용자 설정 직접 반영, 절대 위반 금지]
 사용자 메시지의 '음성 모드' 값을 그대로 따른다:
 - '없음': narration="" (빈 문자열) + dialogue=[] (빈 배열). 캐릭터 대사·내레이션 둘 다 금지. 시각 전달만.
@@ -1090,6 +1100,18 @@ function buildSingleBeatSystemPromptEn() {
 - sceneIntent: viewer's concrete reaction. Not "shows X". Use "viewer does X".
 - Only registered characters. No new characters.
 - coversBeats contains ONLY the one beat ID you received.
+
+[CHARACTER CONSISTENCY RULE — NEVER violate]
+- The first sentence of visual MUST include at least one registered @token.
+- NEVER refer to a registered character only by generic noun ("the yellow plush",
+  "the friend", "the blue square"). Always pair descriptive nouns with the @token:
+  "blue @square", "yellow @circle approaches", "red @triangle stays still".
+- The beat's primary subject goes in sentence 1 with its @token; co-appearing
+  characters in sentence 2 with their @tokens.
+- Reason: the downstream image generator matches character assets (appearance, color,
+  silhouette) by @token. Missing tokens cause generic/wrong character rendering or
+  unintended characters being injected, breaking consistency.
+- This rule overrides stylistic brevity and natural phrasing. @tokens are mandatory.
 
 [VOICE MODE RULE — direct reflection of user setting, NEVER violate]
 Follow the 'Voice mode' value from the user message exactly:
@@ -1181,6 +1203,49 @@ function buildSingleBeatUserPromptEn(input, ctx) {
 }
 
 /**
+ * v3.879: visual 에 등록 캐릭터의 @토큰이 하나라도 등장하는지 검증·보정.
+ * LLM 이 "파란 네모" 처럼 일반 명사화하거나 토큰을 누락하면, 다운스트림 이미지 생성기의
+ * forceActiveFallback 이 활성 캐릭터 전부 강제 주입해 의도 외 캐릭터까지 함께 렌더됨.
+ *
+ * 비트가 다루는 캐릭터(@토큰 기준)가 visual 에 토큰/이름 어느 형태로도 안 나타나면
+ * visual 첫 문장 앞에 "@토큰 등장. " 명시 추가 (최소 침습 보정).
+ *
+ * @returns {{visual:string, modified:boolean, addedTokens:string[]}}
+ */
+function enforceCharacterTokenInVisual(rawVisual, beat, input) {
+  const visual = String(rawVisual || "");
+  const characters = Array.isArray(input?.characters) ? input.characters : [];
+  if (!characters.length) return { visual, modified: false, addedTokens: [] };
+
+  // 비트가 다루는 캐릭터 추출 — beat.action 에 등장한 @토큰 + sceneIndex 가 0이면 모든 활성 캐릭터
+  const beatTokensRaw = String(beat?.action || "").match(/@[0-9A-Za-z가-힣_]{1,24}/g) || [];
+  const beatTokens = new Set(beatTokensRaw.map((t) => t.toLowerCase()));
+  // 등록 캐릭터 중 비트가 다루는 캐릭터 후보
+  const involved = characters.filter((c) => {
+    const tok = String(c.token || "").toLowerCase();
+    return tok && beatTokens.has(tok);
+  });
+  // 비트가 다루는 캐릭터 못 찾으면 보정 안 함 (오인 보정 방지)
+  if (!involved.length) return { visual, modified: false, addedTokens: [] };
+
+  // visual 에 각 캐릭터의 토큰 또는 displayName 이 등장하는지 확인
+  const missing = involved.filter((c) => {
+    const tok = String(c.token || "");
+    const name = String(c.displayName || "").trim();
+    if (tok && visual.includes(tok)) return false;
+    if (name && visual.includes(name)) return false;
+    return true;
+  });
+  if (!missing.length) return { visual, modified: false, addedTokens: [] };
+
+  // 누락된 캐릭터 토큰을 첫 문장 앞에 명시
+  const addedTokens = missing.map((c) => c.token).filter(Boolean);
+  if (!addedTokens.length) return { visual, modified: false, addedTokens: [] };
+  const prefix = `${addedTokens.join(", ")} 등장. `;
+  return { visual: prefix + visual, modified: true, addedTokens };
+}
+
+/**
  * 단일 비트 → 단일 씬 LLM 호출. 실패하면 throw.
  */
 async function requestSingleBeatScene(apiKey, input, ctx) {
@@ -1234,6 +1299,12 @@ async function requestSingleBeatScene(apiKey, input, ctx) {
   // dubbingEnabled=false → dialogue 빈 배열로 클리어
   if (!input?.narrationEnabled) scene.narration = "";
   if (!input?.dubbingEnabled)   scene.dialogue  = [];
+  // v3.879: visual 에 등록 캐릭터의 @토큰이 누락됐으면 코드로 강제 보정 (이미지 생성기 fallback 오작동 방지).
+  const visualFix = enforceCharacterTokenInVisual(scene.visual, beat, input);
+  if (visualFix.modified) {
+    scene.visual = visualFix.visual;
+    scene._autoTokenAdded = visualFix.addedTokens;
+  }
   // estSec 이 예산을 크게 벗어나면 강제 보정 (±50% 허용)
   const minSec = Math.max(2, beat.estSec * 0.5);
   const maxSec = Math.min(6, beat.estSec * 1.5);
