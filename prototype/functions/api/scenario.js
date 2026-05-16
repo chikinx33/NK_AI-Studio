@@ -691,12 +691,14 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
 앞에서부터 순서대로 씬을 길게 쓰다가 시간이 다 차서 뒷 비트를 누락하는 행동은
 이 시스템에서 가장 큰 실패다.
 
-[병렬 사건 규칙 - 매우 중요]
-이야기에서 다른 캐릭터가 각자 수행하는 비슷한 행동(병렬 시퀀스)은 반드시 별도 씬으로 다룬다.
-"@A가 숨고 @B가 숨는다", "@H가 @A를 찾고 @B를 찾는다" 같은 평행 구조를 LLM이 흔히
-"한 번만 묘사하면 다른 쪽은 암시된다" 라고 잘못 압축하는데, 이 시스템에서는 절대 금지다.
-beat ID별로 1:1 매핑된 씬이 반드시 존재해야 하고, 평행 구조라는 이유로 비트를 묶지 마라.
-예: 비트 [@세모 풀밭 거꾸로 섬], [@동그라미가 @세모를 찾음] 이 둘은 절대 한 씬으로 합치지 않는다.
+[비트 ↔ 씬 매핑 - 카메라 단위 기준]
+한 씬은 한 카메라 셋업에 자연스럽게 담기는 사건이다. 캐릭터 수와 무관.
+- 같은 공간에 동시 발생하는 사건들(시간 점프 없음, 카메라 이동 없음)은 한 씬에 모두 담아도 된다.
+  예: "@A가 셈하는 동안 @B·@C가 도망친다" → 한 와이드샷 1 씬 OK.
+  예: "@A가 풀밭에 거꾸로 서 있는데 @B가 다가와 @A를 발견한다" → 한 연속 씬 OK.
+- 시간이 흐르거나 카메라가 다른 장소로 이동해야 하면 별개 씬으로 분리한다.
+판단 기준: "단일 카메라 셋업으로 자연스럽게 보여줄 수 있는가?" 가능하면 한 씬에 합쳐도 됨.
+다만 받은 모든 beat ID 는 반드시 어딘가의 씬 coversBeats 에 매핑되어야 한다 (사건 누락 절대 금지).
 
 [씬 작성 핵심 원칙]
 1. 모든 씬은 보여주기로만 구성한다. 설명하지 않는다.
@@ -793,14 +795,17 @@ The blueprint (beat budget) is the user's intent. Your job is ONLY to fill scene
 within those allocations. Writing front beats in elaborate detail until time runs out
 and then dropping rear beats is the WORST failure mode in this system.
 
-[PARALLEL EVENT RULE - CRITICAL]
-Parallel sequences performed by different characters MUST each get their own scene(s).
-LLMs commonly compress "@A hides AND @B hides" or "@H finds @A AND @H finds @B" into a
-single scene thinking "showing one implies the other" — this is STRICTLY FORBIDDEN here.
-Every beat ID needs at least one scene with a matching coversBeats entry. Do NOT merge
-parallel sequences just because they share a structural shape.
-Example: beats [@triangle stands upside-down in grass] and [@circle finds @triangle] must
-NEVER be combined into one scene — each requires its own scene.
+[BEAT ↔ SCENE MAPPING - CAMERA UNIT]
+A scene is what fits naturally in ONE camera setup. Number of characters is irrelevant.
+- Events that happen simultaneously in the same space (no time jump, no camera relocation)
+  may all be captured in one scene.
+  Example: "@A counts while @B and @C run away" → one wide shot, 1 scene OK.
+  Example: "@A stands upside-down in grass while @B approaches and finds @A" → one
+  continuous shot, 1 scene OK.
+- Events separated by time flow or requiring camera relocation become separate scenes.
+The test: "Can a single camera setup show this naturally?" If yes, merging is fine.
+However, every received beat ID MUST be mapped to at least one scene's coversBeats
+(no event may ever be dropped).
 
 [Core Scene Writing Principles]
 1. Build every scene through visible evidence only. Do not explain.
