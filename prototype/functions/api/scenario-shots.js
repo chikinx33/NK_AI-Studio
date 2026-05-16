@@ -45,14 +45,53 @@ function extractTokensFromText(text) {
   return out;
 }
 
+// v3.883: Pass 2 decomposer LLM 이 컷별로 visual 을 재서술하면서 @토큰을
+// 일반 명사로 다시 풀어 쓰는 경향이 있어, 컷 단위로 enforce 를 한 번 더 적용.
+// Pass 1 visual 의 @토큰을 displayName 으로 역추출해 매핑 구성 (@네모 → 네모).
+const KOREAN_PARTICLES_GROUP_SHOTS = "(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로)";
+
+function buildDisplayNameToTokenMap(text) {
+  const map = new Map();
+  const re = /@([0-9A-Za-z가-힣_]{1,24})/g;
+  let m;
+  while ((m = re.exec(String(text || ""))) !== null) {
+    const token = "@" + m[1];
+    const name = m[1]; // displayName 추정 = 토큰의 @ 이후 부분
+    if (name && !map.has(name)) map.set(name, token);
+  }
+  return map;
+}
+
+function enforceTokensInText(text, tokenMap) {
+  if (!text || !tokenMap || tokenMap.size === 0) return { text, replacements: 0 };
+  let result = String(text);
+  let replacements = 0;
+  for (const [name, token] of tokenMap) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let re;
+    try {
+      re = new RegExp(`(?<![@0-9A-Za-z가-힣_])${escaped}${KOREAN_PARTICLES_GROUP_SHOTS}?(?![가-힣_])`, "g");
+    } catch (_) {
+      re = new RegExp(`${escaped}${KOREAN_PARTICLES_GROUP_SHOTS}?`, "g");
+    }
+    const before = result;
+    result = result.replace(re, (_match, particle) => `${token}${particle || ""}`);
+    if (result !== before) replacements += 1;
+  }
+  return { text: result, replacements };
+}
+
 function flattenScenesWithShots(parentScenes) {
   if (!Array.isArray(parentScenes)) return [];
   const flat = [];
   let nextId = 1;
+  let totalTokensEnforced = 0;
   for (const parent of parentScenes) {
     if (!parent || typeof parent !== "object") continue;
     const shots = Array.isArray(parent.shots) ? parent.shots : [];
     const parentTokens = extractTokensFromText(parent.visual || parent.shot || "");
+    // v3.883: parent visual 의 @토큰에서 displayName → token 매핑 도출
+    const tokenMap = buildDisplayNameToTokenMap(parent.visual || parent.shot || "");
     if (!shots.length) {
       // shots 가 없으면 부모 씬을 그대로 single 로 (visual 만 있는 legacy fallback)
       flat.push({
@@ -79,8 +118,12 @@ function flattenScenesWithShots(parentScenes) {
     shots.forEach((sh, j) => {
       if (!sh || typeof sh !== "object") return;
       const isFirst = j === 0;
-      const composition = String(sh.composition || "").trim();
-      const action = String(sh.action || "").trim();
+      // v3.883: composition/action 에 displayName 단독 등장하면 @토큰으로 자동 치환
+      const compRes = enforceTokensInText(String(sh.composition || "").trim(), tokenMap);
+      const actRes = enforceTokensInText(String(sh.action || "").trim(), tokenMap);
+      const composition = compRes.text;
+      const action = actRes.text;
+      totalTokensEnforced += (compRes.replacements + actRes.replacements);
       // 합성 visual: "[shotType] composition / action" — UI 가 visual 만 봐도 의미 전달
       const visualParts = [];
       if (composition) visualParts.push(composition);
@@ -117,7 +160,7 @@ function flattenScenesWithShots(parentScenes) {
       });
     });
   }
-  return flat;
+  return { flat, tokensEnforcedShots: totalTokensEnforced };
 }
 
 const corsHeaders = (origin) => ({
@@ -168,8 +211,17 @@ export async function onRequestPost(context) {
     const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };
     // 평탄화: 각 shot 을 top-level scene 으로
-    const flatScenes = flattenScenesWithShots(decomposed);
-    return new Response(JSON.stringify({ scenes: flatScenes, meta: { ...meta, flattened: true, flatCount: flatScenes.length } }), {
+    const { flat: flatScenes, tokensEnforcedShots } = flattenScenesWithShots(decomposed);
+    return new Response(JSON.stringify({
+      scenes: flatScenes,
+      meta: {
+        ...meta,
+        flattened: true,
+        flatCount: flatScenes.length,
+        // v3.883: Pass 2 컷 단위 @토큰 자동 보정 횟수
+        tokensEnforcedShots,
+      },
+    }), {
       status: 200,
       headers: corsHeaders(origin),
     });

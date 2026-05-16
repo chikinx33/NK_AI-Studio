@@ -2414,7 +2414,8 @@
       try {
         const res = await NK.api.scenario(payload);
         // v3.876: 생성 결과 진단 정보를 콘솔 + 화면 토스트에 노출.
-        // 사용자가 F12 Network 를 안 봐도 비트 처리 상황을 즉시 확인 가능.
+        // v3.883: Pass 2 메타까지 합쳐 표시할 수 있도록 lines 를 함수 스코프로 끌어올림.
+        let metaLines = null;
         try {
           const m = res?.meta || {};
           const beatsLabel = Array.isArray(m.beatIds) && m.beatIds.length
@@ -2456,19 +2457,19 @@
           const charsListPretty = Array.isArray(m.activeCharactersList) && m.activeCharactersList.length
             ? `\n등록 캐릭터: [${m.activeCharactersList.join(', ')}]`
             : '';
-          const lines = [
+          metaLines = [
             `클라이언트: ${clientVer} / 서버: ${serverVer} ${versionMatch}`,
             `생성 경로: ${m.generationPath || '단일 호출 (legacy)'}`,
             `수신 비트 수: ${m.beatsReceived || 0}${beatsLabel ? ' ' + beatsLabel : ''}`,
             `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
             `캐릭터 흐름: ${charsLine}${charsListPretty}`,
-            m.tokensEnforced ? `@토큰 자동 보정: ${m.tokensEnforced}회` : '@토큰 자동 보정: 0회',
+            m.tokensEnforced ? `@토큰 자동 보정 (Pass 1): ${m.tokensEnforced}회` : '@토큰 자동 보정 (Pass 1): 0회',
             m.scenesPadded ? `자동 패딩: ${m.scenesPadded}` : '',
             m.scenesSplit ? `균등 분할: ${m.scenesSplit}` : '',
             m.perBeatFailures ? `비트 실패: ${m.perBeatFailures} (fallback ${m.perBeatFallbacks || 0})` : '',
             m.elapsedMs ? `소요: ${(m.elapsedMs / 1000).toFixed(1)}s` : '',
           ].filter(Boolean);
-          showScenarioMetaToast(lines.join('\n'));
+          showScenarioMetaToast(metaLines.join('\n'));
         } catch (_) { /* 진단 표시 실패는 무시 */ }
         const headerText = (NK.service?.project?.buildVisualHeader)
           ? NK.service.project.buildVisualHeader(payload)
@@ -2488,6 +2489,25 @@
               if (shotsRes && Array.isArray(shotsRes.scenes) && shotsRes.meta?.flattened) {
                 flatScenes = shotsRes.scenes;
               }
+              // v3.883: Pass 2 컷 단위 @토큰 보정 횟수를 진단 패널에 추가 표시
+              try {
+                const shotsM = shotsRes?.meta || {};
+                if (Array.isArray(metaLines)) {
+                  const enforcedLine = (typeof shotsM.tokensEnforcedShots === 'number')
+                    ? `@토큰 자동 보정 (Pass 2 컷): ${shotsM.tokensEnforcedShots}회`
+                    : '@토큰 자동 보정 (Pass 2 컷): -';
+                  metaLines.push(enforcedLine);
+                  showScenarioMetaToast(metaLines.join('\n'));
+                  console.log('[scenario meta:pass2]', {
+                    tokensEnforcedShots: shotsM.tokensEnforcedShots,
+                    flatCount: shotsM.flatCount,
+                    total: shotsM.total,
+                    ok: shotsM.ok,
+                    failed: shotsM.failed,
+                    fallback: shotsM.fallback,
+                  });
+                }
+              } catch (_) { /* 패널 갱신 실패 무시 */ }
             }
           } catch (shotsErr) {
             console.warn('[scenario] scene 세분화 실패; Pass 1 결과 유지', shotsErr);
