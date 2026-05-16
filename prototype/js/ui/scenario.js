@@ -1990,6 +1990,37 @@
       }
     };
 
+    // v3.876: 시나리오 생성 결과 진단 패널 (화면 우상단 고정).
+    // F12 Network 를 안 봐도 비트 처리 상황을 즉시 확인 가능.
+    const showScenarioMetaToast = (text) => {
+      try {
+        const id = 'scenario-meta-diag';
+        let el = document.getElementById(id);
+        if (!el) {
+          el = document.createElement('div');
+          el.id = id;
+          el.style.cssText = [
+            'position:fixed', 'top:16px', 'right:16px', 'z-index:99999',
+            'max-width:380px', 'background:#1f2937', 'color:#e5e7eb',
+            'border:1px solid #374151', 'border-radius:8px',
+            'padding:12px 14px', 'font-size:12px', 'line-height:1.5',
+            'white-space:pre-wrap', 'font-family:ui-monospace,Menlo,Consolas,monospace',
+            'box-shadow:0 8px 24px rgba(0,0,0,0.35)',
+            'cursor:pointer',
+          ].join(';');
+          el.title = '클릭하면 닫힙니다';
+          el.addEventListener('click', () => el.remove());
+          document.body.appendChild(el);
+        }
+        const header = '[시나리오 생성 진단]';
+        const hint = '\n\n(이 패널을 클릭하면 닫힙니다)';
+        el.textContent = `${header}\n${text}${hint}`;
+        // 60초 후 자동 제거
+        clearTimeout(el._timer);
+        el._timer = setTimeout(() => { if (el && el.parentNode) el.remove(); }, 60000);
+      } catch (_) { /* 표시 실패는 무시 */ }
+    };
+
     const organizeStoryDraft = async (triggerBtn) => {
       const storyField = form.story || document.getElementById('scenario-story-input');
       if (!storyField) return;
@@ -2382,6 +2413,38 @@
       }
       try {
         const res = await NK.api.scenario(payload);
+        // v3.876: 생성 결과 진단 정보를 콘솔 + 화면 토스트에 노출.
+        // 사용자가 F12 Network 를 안 봐도 비트 처리 상황을 즉시 확인 가능.
+        try {
+          const m = res?.meta || {};
+          const beatsLabel = Array.isArray(m.beatIds) && m.beatIds.length
+            ? `[${m.beatIds.join(', ')}]`
+            : '';
+          // 콘솔 출력
+          console.log('[scenario meta]', {
+            generationPath: m.generationPath || '(단일 호출)',
+            beatsReceived: m.beatsReceived || 0,
+            beatIds: m.beatIds || [],
+            scenesGenerated: m.scenesGenerated || (res.scenes?.length || 0),
+            scenesPadded: m.scenesPadded || 0,
+            scenesSplit: m.scenesSplit || 0,
+            perBeatFailures: m.perBeatFailures || 0,
+            perBeatFallbacks: m.perBeatFallbacks || 0,
+            elapsedMs: m.elapsedMs || null,
+            ruleRetried: m.ruleRetried || false,
+          });
+          // 화면 토스트
+          const lines = [
+            `생성 경로: ${m.generationPath || '단일 호출 (legacy)'}`,
+            `수신 비트 수: ${m.beatsReceived || 0}${beatsLabel ? ' ' + beatsLabel : ''}`,
+            `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
+            m.scenesPadded ? `자동 패딩: ${m.scenesPadded}` : '',
+            m.scenesSplit ? `균등 분할: ${m.scenesSplit}` : '',
+            m.perBeatFailures ? `비트 실패: ${m.perBeatFailures} (fallback ${m.perBeatFallbacks || 0})` : '',
+            m.elapsedMs ? `소요: ${(m.elapsedMs / 1000).toFixed(1)}s` : '',
+          ].filter(Boolean);
+          showScenarioMetaToast(lines.join('\n'));
+        } catch (_) { /* 진단 표시 실패는 무시 */ }
         const headerText = (NK.service?.project?.buildVisualHeader)
           ? NK.service.project.buildVisualHeader(payload)
           : '';
