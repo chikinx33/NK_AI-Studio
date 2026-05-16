@@ -247,6 +247,80 @@ function beatMatchesSceneText(beat, sceneText) {
   return ratio >= 0.34 || hits >= 2;
 }
 
+function checkShotRhythm(scenes, spec, violations) {
+  if (!Array.isArray(scenes) || scenes.length < 3) return;
+  const secs = scenes.map((s) => Number(s?.estSec)).filter((n) => Number.isFinite(n) && n > 0);
+  if (secs.length < 3) return;
+
+  // 1) 동일 estSec 3개 이상 연속 — 균등 분배의 가장 명백한 신호
+  let run = 1;
+  let maxRun = 1;
+  let runValue = secs[0];
+  let maxRunValue = secs[0];
+  let maxRunStartIdx = 0;
+  let runStartIdx = 0;
+  for (let i = 1; i < secs.length; i++) {
+    if (Math.abs(secs[i] - runValue) < 0.01) {
+      run += 1;
+      if (run > maxRun) {
+        maxRun = run;
+        maxRunValue = runValue;
+        maxRunStartIdx = runStartIdx;
+      }
+    } else {
+      run = 1;
+      runValue = secs[i];
+      runStartIdx = i;
+    }
+  }
+  if (maxRun >= 3) {
+    violations.push({
+      key: "shotRhythm.uniformRun",
+      severity: "critical",
+      labelKo: "균등 시간 분배 — 동일 길이 씬이 연속",
+      labelEn: "Uniform pacing — consecutive identical-length scenes",
+      evidence: `${maxRun} scenes in a row at ${maxRunValue}s (starting at scene ${maxRunStartIdx + 1})`,
+      suggestionKo: `씬 ${maxRunStartIdx + 1}부터 동일 시간(${maxRunValue}초)이 ${maxRun}개 연속됩니다. 비트 강도(intensity)에 따라 차등 분배하세요. 차분한 비트는 길게(3~5초), 긴장·클라이맥스 비트는 짧게(1~2초) 분배하고 균등 분배(3·3·3·3·6·6·6 식)는 절대 금지입니다.`,
+      suggestionEn: `Scenes ${maxRunStartIdx + 1}+ stay at ${maxRunValue}s for ${maxRun} in a row. Allocate by beat intensity instead — calm beats long (3-5s), tense/climax beats short (1-2s). Never use uniform pacing like 3-3-3-3-6-6-6.`,
+    });
+  }
+
+  // 2) 전체 표준편차가 평균의 15% 미만 — 단조로움
+  const mean = secs.reduce((a, b) => a + b, 0) / secs.length;
+  const variance = secs.reduce((acc, n) => acc + (n - mean) * (n - mean), 0) / secs.length;
+  const stddev = Math.sqrt(variance);
+  if (mean > 0 && stddev / mean < 0.15 && secs.length >= 4) {
+    violations.push({
+      key: "shotRhythm.lowVariance",
+      severity: "critical",
+      labelKo: "씬 길이 단조로움 — 리듬감 없음",
+      labelEn: "Scene lengths too uniform — no rhythm",
+      evidence: `mean=${mean.toFixed(2)}s, stddev=${stddev.toFixed(2)}s (${((stddev / mean) * 100).toFixed(1)}% of mean)`,
+      suggestionKo: `전체 씬 길이가 평균(${mean.toFixed(1)}초) 대비 표준편차가 ${((stddev / mean) * 100).toFixed(1)}%로 너무 일정합니다. 강약 리듬을 만들기 위해 일부 씬은 1~2초, 일부는 4~5초로 차등 배분하세요.`,
+      suggestionEn: `Scene lengths are too uniform (stddev ${((stddev / mean) * 100).toFixed(1)}% of mean). Build rhythm by mixing 1-2s scenes with 4-5s scenes based on beat intensity.`,
+    });
+  }
+
+  // 3) 클라이맥스 비트가 spec.storyBeats에 있으면, 마지막 씬이 평균보다 짧고 컷 수가 많아야 함
+  const beats = Array.isArray(spec.storyBeats) ? spec.storyBeats : [];
+  const climaxBeat = beats.find((b) => b && b.isClimax);
+  if (climaxBeat && scenes.length >= 3) {
+    const lastSec = Number(scenes[scenes.length - 1]?.estSec) || 0;
+    // 클라이맥스 씬이 평균보다 1초 이상 길면 critical (긴장 페이오프 부족)
+    if (lastSec > mean + 1.0) {
+      violations.push({
+        key: "shotRhythm.climaxTooLong",
+        severity: "critical",
+        labelKo: "클라이맥스 씬이 너무 김 — 긴장 페이오프 부족",
+        labelEn: "Climax scene too long — weak payoff pacing",
+        evidence: `final scene ${lastSec}s > mean ${mean.toFixed(1)}s + 1s`,
+        suggestionKo: `마지막 클라이맥스 씬(${lastSec}초)이 평균(${mean.toFixed(1)}초)보다 깁니다. 클라이맥스는 짧고 빠른 컷(1~2초) 다수로 분해해 긴장의 페이오프를 만드세요.`,
+        suggestionEn: `Final climax scene (${lastSec}s) is longer than the mean (${mean.toFixed(1)}s). Decompose into many short cuts (1-2s) for tension payoff.`,
+      });
+    }
+  }
+}
+
 function checkStoryBeatCoverage(scenes, spec, violations) {
   const beats = Array.isArray(spec.storyBeats) ? spec.storyBeats : [];
   if (!beats.length || !Array.isArray(scenes) || !scenes.length) return;
@@ -318,6 +392,7 @@ export function validateScenes(scenes, spec, language = "ko") {
   checkShotLength(scenes, safeSpec, violations);
   checkRepetition(scenes, safeSpec, violations);
   checkStoryBeatCoverage(scenes, safeSpec, violations);
+  checkShotRhythm(scenes, safeSpec, violations);
 
   const byLevel = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const v of violations) {

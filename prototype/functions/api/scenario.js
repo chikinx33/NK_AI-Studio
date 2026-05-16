@@ -2365,6 +2365,8 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
   }, map[role] || map.develop);
 }
 
+const VALID_BEAT_INTENSITIES = new Set(["low", "medium", "high", "climax"]);
+
 function normalizeStoryBeatsInput(value) {
   if (!Array.isArray(value)) return [];
   const out = [];
@@ -2375,28 +2377,57 @@ function normalizeStoryBeatsInput(value) {
       : String(item?.action || item?.text || item?.beat || "");
     const trimmed = action.replace(/\s+/g, " ").trim();
     if (!trimmed) continue;
+    const isClimax = Boolean(item && typeof item === "object" && (item.isClimax === true || item.climax === true));
+    const rawIntensity = item && typeof item === "object" ? String(item.intensity || "").toLowerCase().trim() : "";
+    const intensity = VALID_BEAT_INTENSITIES.has(rawIntensity)
+      ? rawIntensity
+      : (isClimax ? "climax" : "medium");
     out.push({
       action: trimmed.length > 160 ? trimmed.slice(0, 160) : trimmed,
-      isClimax: Boolean(item && typeof item === "object" && (item.isClimax === true || item.climax === true)),
+      isClimax,
+      intensity: isClimax ? "climax" : intensity,
     });
   }
   if (out.length && !out.some((b) => b.isClimax)) {
     out[out.length - 1].isClimax = true;
+    out[out.length - 1].intensity = "climax";
   }
   return out;
 }
 
+// intensity 별 권장 컷 분배 가중치 — 평균 컷 시간(초)에 곱해 차등 분배 산출.
+const INTENSITY_CUT_PROFILE = {
+  low:     { cutCountHint: "1-2 컷, 컷당 3~5초", cutWeight: 1.4, varietyHint: "정적·롱테이크 1컷 또는 가벼운 카메라 무브" },
+  medium:  { cutCountHint: "2-3 컷, 컷당 2~3초", cutWeight: 1.0, varietyHint: "shotType 2종 이상, 1회 이상 cameraMove 변주" },
+  high:    { cutCountHint: "3-4 컷, 컷당 1.5~2초", cutWeight: 0.7, varietyHint: "shotType 3종 이상, push-in/whip/quick-pan 등 강한 무브 포함" },
+  climax:  { cutCountHint: "3-5 컷, 컷당 1~2초", cutWeight: 0.5, varietyHint: "ECU·CU 짧은 컷 다수, 무브 변주 필수, 정적 컷 금지" },
+};
+
+const INTENSITY_CUT_PROFILE_EN = {
+  low:     { cutCountHint: "1-2 cuts, 3-5s each", cutWeight: 1.4, varietyHint: "static long take or one gentle camera move" },
+  medium:  { cutCountHint: "2-3 cuts, 2-3s each", cutWeight: 1.0, varietyHint: ">=2 shotTypes, at least one cameraMove change" },
+  high:    { cutCountHint: "3-4 cuts, 1.5-2s each", cutWeight: 0.7, varietyHint: ">=3 shotTypes, include strong move (push-in/whip/quick-pan)" },
+  climax:  { cutCountHint: "3-5 cuts, 1-2s each", cutWeight: 0.5, varietyHint: "many ECU/CU short cuts, varied moves required, no static cut" },
+};
+
 function formatStoryBeatsForPrompt(beats, lang) {
   if (!Array.isArray(beats) || !beats.length) return "";
   const isEn = lang === "en";
+  const profile = isEn ? INTENSITY_CUT_PROFILE_EN : INTENSITY_CUT_PROFILE;
   const lines = beats.map((b, i) => {
-    const climaxMark = b.isClimax ? (isEn ? " [CLIMAX / RESOLUTION]" : " [클라이맥스/결말]") : "";
-    return `  ${i + 1}. ${b.action}${climaxMark}`;
+    const intensity = b.intensity || (b.isClimax ? "climax" : "medium");
+    const climaxMark = b.isClimax ? (isEn ? " [CLIMAX]" : " [클라이맥스]") : "";
+    const prof = profile[intensity] || profile.medium;
+    const intensityLabel = isEn ? `intensity=${intensity}` : `강도=${intensity}`;
+    return `  ${i + 1}. ${b.action}${climaxMark}\n     → ${intensityLabel}, ${prof.cutCountHint}, ${prof.varietyHint}`;
   });
   const header = isEn
-    ? "Story beats (MANDATORY COVERAGE — every beat below must be visibly represented across the generated scenes; the CLIMAX beat must appear in the final scene as a payoff, never omitted):"
-    : "이야기 비트(필수 커버리지 — 아래 모든 비트가 생성된 씬들 안에서 시각적으로 드러나야 한다. [클라이맥스/결말] 비트는 반드시 마지막 씬에서 페이오프로 보여야 하며 생략 금지):";
-  return `${header}\n${lines.join("\n")}\n\n`;
+    ? "Story beats with intensity-based cut allocation (MANDATORY COVERAGE — every beat below must be visibly represented; the CLIMAX beat must pay off in the final scene; DO NOT use uniform durations like 3-3-3-3-6-6-6, follow the per-beat cut hints below to create varied rhythm):"
+    : "이야기 비트 + 강도 기반 컷 분배(필수 커버리지 — 아래 모든 비트가 시각적으로 드러나야 한다. [클라이맥스] 비트는 반드시 마지막 씬에서 페이오프. 균등 분배(3·3·3·3·6·6·6 식) 금지 — 아래 비트별 컷 가이드를 따라 리듬감 있는 차등 분배로 작성하라):";
+  const rhythmRule = isEn
+    ? "\n[CUT RHYTHM RULES]\n- Forbidden: 3+ consecutive scenes with identical estSec.\n- Forbidden: all scenes within ±0.5s of each other (monotonous).\n- Climax beat's scene MUST have the most cuts (shortest avg).\n- Vary scene estSec following the per-beat hints above; use decimals (e.g. 1.5, 2.5, 4) when needed."
+    : "\n[컷 리듬 규칙]\n- 금지: 동일 estSec 씬이 3개 이상 연속.\n- 금지: 모든 씬의 estSec이 ±0.5초 이내로 균일 (단조로움).\n- 클라이맥스 비트의 씬은 반드시 가장 많은 컷 수(가장 짧은 평균)를 가진다.\n- 위 비트 가이드를 따라 씬 estSec을 다르게 배정하고, 필요하면 소수(예: 1.5, 2.5, 4)도 적극 사용한다.";
+  return `${header}\n${lines.join("\n")}${rhythmRule}\n\n`;
 }
 
 function formatScenarioSpecForPrompt(spec = {}) {

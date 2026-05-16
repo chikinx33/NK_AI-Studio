@@ -67,11 +67,13 @@ export const format15s = defineBlock({
     ko: `[포맷: 15초 숏폼]
 - 3~4씬, 컷 8~12개. Hook(3초) → Body(9초) → CTA(3초) 구조.
 - Hook 씬은 가장 짧고 강렬하게. Body 에 핵심 내용을 집중 배치.
-- CTA 씬은 마지막 1~2문장으로 시청 후 행동·감정을 명확히 찍는다.`,
+- CTA 씬은 마지막 1~2문장으로 시청 후 행동·감정을 명확히 찍는다.
+- [컷 리듬 필수] 동일 estSec 씬 3개 이상 연속 금지. Hook=1~2초, Body=각 씬 1.5~3초로 다양화, CTA=1~2초 짧은 컷 다수.`,
     en: `[Format: 15s Short]
 - 3~4 scenes, 8~12 cuts. Hook(3s) → Body(9s) → CTA(3s) structure.
 - Keep Hook short and striking. Concentrate core content in Body.
-- CTA scene nails the post-view action or emotion in 1~2 final lines.`,
+- CTA scene nails the post-view action or emotion in 1~2 final lines.
+- [RHYTHM REQUIRED] No 3+ consecutive scenes with identical estSec. Hook=1-2s, Body=1.5-3s varied, CTA=many short 1-2s cuts.`,
   },
 });
 
@@ -101,13 +103,19 @@ export const format30s = defineBlock({
 - 5단계 구조: Attention → Interest → Desire → Climax → Action.
 - 첫 2초 안에 시각적 훅. Climax 비트에는 감정 절정 또는 변화의 결정적 결과 샷이 반드시 들어간다.
 - 마지막 비트는 타이틀 카드(브랜드/슬로건 노출 1씬) + CTA 1씬으로 구성. CTA 는 단 하나의 행동만 요구.
-- 제품/주장이 있다면 Desire 구간에 구체 증거(체험/수치/비교) 를 반드시 배치.`,
+- 제품/주장이 있다면 Desire 구간에 구체 증거(체험/수치/비교) 를 반드시 배치.
+- [컷 리듬 필수 - 균등 분배 절대 금지] 동일 estSec 씬이 3개 이상 연속되면 안 된다. 단조로운 분배(예: 3·3·3·3·6·6·6) 절대 금지. 비트 강도별 차등:
+  · Attention(1~2초 짧은 컷), Interest(2~3초), Desire(2~4초 변주), Climax(1~2초 짧은 컷 다수), Action(2~3초).
+  · estSec 은 정수 외에 소수(1.5, 2.5)도 적극 사용하라.`,
     en: `[Format: 30s Ad]
 - 9-12 scenes (10 recommended), 15-24 cuts. No scene may exceed 6 seconds (AI video model limit). Average 2.5-3s per scene.
 - 5-beat structure: Attention → Interest → Desire → Climax → Action.
 - Visual shock within the first 2 seconds. The Climax beat must contain an emotional peak or a decisive payoff shot.
 - The final beat = a title card scene (brand/slogan reveal) + one CTA scene. The CTA requests exactly one action.
-- If a product/claim exists, place concrete evidence (demo/number/comparison) in the Desire block.`,
+- If a product/claim exists, place concrete evidence (demo/number/comparison) in the Desire block.
+- [RHYTHM REQUIRED - NO UNIFORM ALLOCATION] No 3+ consecutive scenes with identical estSec. Uniform patterns (e.g. 3-3-3-3-6-6-6) are strictly forbidden. By beat intensity:
+  · Attention(1-2s short cut), Interest(2-3s), Desire(2-4s varied), Climax(many 1-2s short cuts), Action(2-3s).
+  · Use decimals (1.5, 2.5) freely, not only integers.`,
   },
 });
 
@@ -135,11 +143,13 @@ export const format60s = defineBlock({
     ko: `[포맷: 60초 브랜드 필름]
 - 11~14씬(권장 12씬), 컷 30~45개. 한 씬은 절대 6초 초과 금지. Freytag 5막 간략 구조.
 - Exposition 은 빠르게, Rising 과 Climax 에 시간을 투자한다.
-- 한 편의 미니 스토리가 되어야 한다. 단순 정보 나열 금지.`,
+- 한 편의 미니 스토리가 되어야 한다. 단순 정보 나열 금지.
+- [컷 리듬 필수] 동일 estSec 씬 3개 이상 연속 금지. 강약 차등: Exposition(2~3초), Incident(1.5~2.5초 빠르게), Rising(컷 다수 1.5~2.5초), Climax(1~2초 짧고 빠른 컷들), Resolution(2.5~4초 여운).`,
     en: `[Format: 60s Brand Film]
 - 11-14 scenes (12 recommended), 30-45 cuts. No scene may exceed 6 seconds. Simplified Freytag 5-act structure.
 - Move through Exposition quickly; invest time in Rising and Climax.
-- Must read as one mini-story. No flat info list.`,
+- Must read as one mini-story. No flat info list.
+- [RHYTHM REQUIRED] No 3+ consecutive scenes with identical estSec. Vary intensities: Exposition(2-3s), Incident(1.5-2.5s fast), Rising(many 1.5-2.5s cuts), Climax(short 1-2s rapid cuts), Resolution(2.5-4s lingering).`,
   },
 });
 
@@ -165,11 +175,13 @@ export const format180s = defineBlock({
     ko: `[포맷: 3분 단편]
 - 15~25씬. 고전적 3막 구조 (Setup / Confrontation / Resolution).
 - Confrontation 에 전체 시간의 절반 이상 배정. 긴장 곡선을 유지한다.
-- 각 막의 마지막 씬은 다음 막으로 넘어갈 추진력을 남긴다.`,
+- 각 막의 마지막 씬은 다음 막으로 넘어갈 추진력을 남긴다.
+- [컷 리듬 필수] 동일 estSec 씬 3개 이상 연속 금지. Setup(긴 호흡 3~5초 + 짧은 인서트 1~2초 교차), Confrontation(긴장 고조 시 1.5~2.5초 빠른 컷 다수), Resolution(여운 4~5초 + 짧은 키 컷).`,
     en: `[Format: 3-min Short]
 - 15~25 scenes. Classic 3-act structure (Setup / Confrontation / Resolution).
 - Allocate over half the total time to Confrontation. Maintain tension curve.
-- Each act's final scene must carry momentum into the next.`,
+- Each act's final scene must carry momentum into the next.
+- [RHYTHM REQUIRED] No 3+ consecutive scenes with identical estSec. Setup(long 3-5s + short 1-2s inserts mixed), Confrontation(many 1.5-2.5s rapid cuts during tension peaks), Resolution(4-5s lingering + short key cut).`,
   },
 });
 

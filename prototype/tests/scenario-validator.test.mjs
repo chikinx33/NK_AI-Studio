@@ -97,9 +97,10 @@ test('validateScenes: 동요 repetitionMin — 반복 없으면 critical', () =>
 test('validateScenes: 위반 없으면 hasCritical=false, refinePrompt="" ', () => {
   const spec = makeAbcSpec();
   // 키즈 금칙 단어 없음, 나레이션 짧음, 같은 단어 3번 반복.
+  // estSec 은 균등 분배 금지(checkShotRhythm)에 걸리지 않도록 차등으로.
   const scenes = [
-    { visual: '놀이방의 장난감', narration: '사과 사과', estSec: 3 },
-    { visual: '놀이방의 블록', narration: '사과 사과', estSec: 3 },
+    { visual: '놀이방의 장난감', narration: '사과 사과', estSec: 2 },
+    { visual: '놀이방의 블록', narration: '사과 사과', estSec: 4 },
     { visual: '놀이방의 인형', narration: '사과 사과', estSec: 3 },
   ];
   const res = validateScenes(scenes, spec, 'ko');
@@ -110,14 +111,15 @@ test('validateScenes: 위반 없으면 hasCritical=false, refinePrompt="" ', () 
 
 test('runWithAutoRetry: critical 있으면 regenerate 1회 호출', async () => {
   const spec = makeAbcSpec();
+  // estSec 은 균등 분배 금지 검사와 무관하도록 차등으로.
   const bad = [
     { visual: '공연장 밴드 보컬', narration: '안녕', estSec: 5 },
-    { visual: '공연장 조명', narration: '안녕', estSec: 5 },
-    { visual: '공연장 관객', narration: '안녕', estSec: 5 },
+    { visual: '공연장 조명', narration: '안녕', estSec: 3 },
+    { visual: '공연장 관객', narration: '안녕', estSec: 4 },
   ];
   const good = [
-    { visual: '놀이방의 장난감', narration: '사과 사과', estSec: 3 },
-    { visual: '놀이방의 블록', narration: '사과 사과', estSec: 3 },
+    { visual: '놀이방의 장난감', narration: '사과 사과', estSec: 2 },
+    { visual: '놀이방의 블록', narration: '사과 사과', estSec: 4 },
     { visual: '놀이방의 인형', narration: '사과 사과', estSec: 3 },
   ];
   let calls = 0;
@@ -139,9 +141,10 @@ test('runWithAutoRetry: critical 있으면 regenerate 1회 호출', async () => 
 
 test('runWithAutoRetry: critical 없으면 regenerate 호출하지 않음', async () => {
   const spec = makeAbcSpec();
+  // estSec 은 균등 분배 금지 검사와 무관하도록 차등으로.
   const ok = [
-    { visual: '놀이방의 장난감', narration: '사과 사과', estSec: 3 },
-    { visual: '놀이방의 블록', narration: '사과 사과', estSec: 3 },
+    { visual: '놀이방의 장난감', narration: '사과 사과', estSec: 2 },
+    { visual: '놀이방의 블록', narration: '사과 사과', estSec: 4 },
     { visual: '놀이방의 인형', narration: '사과 사과', estSec: 3 },
   ];
   let calls = 0;

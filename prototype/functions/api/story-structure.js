@@ -140,8 +140,9 @@ function buildSystemPrompt(language) {
   if (language === "en") {
     return [
       "You reorganize a rough story draft into a short-form story skeleton that the next scenario generator can split into scenes immediately.",
-      '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"...","beats":[{"action":"...","isClimax":false},...]}. Never use markdown (```json, ```), explanations, comments, or backticks.',
+      '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. Never use markdown (```json, ```), explanations, comments, or backticks.',
       '[BEATS FIELD - MANDATORY] "beats" is an array (length 2-6) where each item is one action beat from "story". Each beat MUST be a single concrete physical action with an immediate visible reaction (one sentence, 60 chars max). The beats array MUST cover every story sentence — no story content may be left out of beats. Mark "isClimax":true ONLY on the final discovery/resolution/punchline beat that pays off the setup. Beats must follow story order. Preserve @character tokens inside beat actions exactly as in story.',
+      '[INTENSITY FIELD - MANDATORY] Each beat MUST have an "intensity" value: "low" = calm setup/explanation, "medium" = ongoing action, "high" = rising tension or surprise, "climax" = peak moment (discovery, payoff, twist, resolution). The "climax" intensity MUST appear on the beat with isClimax:true and may also appear on a key turning-point beat just before it. This intensity drives non-uniform cut allocation in the next stage — calm beats get longer fewer cuts, high/climax beats get short rapid cuts with varied camera moves.',
       "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific action and immediate reaction. Do not copy original sentences verbatim.",
       "Write 2-5 short sentences or one short paragraph. Each sentence should map to one simple beat for later scene generation.",
       "Write only visible actions, reactions, and immediate outcomes. Do not summarize with abstract planning language.",
@@ -160,8 +161,9 @@ function buildSystemPrompt(language) {
   }
   return [
     "너는 사용자가 적은 초안을 다음 단계의 시나리오 생성기가 바로 씬으로 쪼갤 수 있는 짧은 영상용 이야기 뼈대로 재정리하는 보조 AI다.",
-    '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"...","beats":[{"action":"...","isClimax":false},...]}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
+    '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
     '[beats 필드 - 필수] "beats"는 길이 2~6개 배열이며, 각 항목은 story 안의 행동 비트 하나에 1:1 매핑된다. 각 비트는 한 문장(60자 이내)으로 구체적 물리 행동과 즉각적 반응만 쓴다. beats 배열은 story의 모든 문장을 빠짐없이 커버해야 한다 — story에 나온 행동·반응 중 beats에 들어가지 않는 것이 있으면 안 된다. "isClimax":true는 setup을 마무리하는 마지막 발견/해결/펀치라인 비트 하나에만 표시한다. beats 순서는 story 순서와 동일해야 하며, @캐릭터 토큰은 story와 동일하게 유지한다.',
+    '[intensity 필드 - 필수] 각 비트는 intensity 값을 반드시 가진다: "low"=차분한 설정/설명, "medium"=일반 진행 액션, "high"=긴장 고조 또는 놀라움, "climax"=정점 순간(발견·페이오프·반전·해결). "climax" intensity는 isClimax:true인 비트에 반드시 표시하고, 그 직전 결정적 전환점 비트에도 추가로 표시할 수 있다. 이 intensity 값은 다음 단계에서 컷 시간 차등 분배의 근거가 된다 — 차분한 비트는 적고 긴 컷, 높은/클라이맥스 비트는 짧고 빠른 컷 + 다양한 카메라 무브로 분해된다.',
     "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 원문 문장을 그대로 복사하지 마라.",
     "출력은 2~5개의 짧은 문장 또는 하나의 짧은 단락으로 쓴다. 각 문장은 이후 시나리오의 한 비트로 바로 나눌 수 있어야 한다.",
     "추상적인 기획서 문장 대신 눈에 보이는 행동, 즉각적인 반응, 바로 이어지는 결과로 쓴다.",
@@ -553,6 +555,14 @@ function appendStyleHint(beats, _input) {
   return Array.isArray(beats) ? beats.slice() : [];
 }
 
+const VALID_INTENSITIES = new Set(["low", "medium", "high", "climax"]);
+
+function normalizeIntensity(value, fallback) {
+  const text = String(value || "").toLowerCase().trim();
+  if (VALID_INTENSITIES.has(text)) return text;
+  return fallback;
+}
+
 function normalizeBeats(rawBeats, storyText, input) {
   const list = Array.isArray(rawBeats) ? rawBeats : [];
   const cleaned = [];
@@ -565,16 +575,28 @@ function normalizeBeats(rawBeats, storyText, input) {
     const trimmed = action.length > 120 ? action.slice(0, 120) : action;
     const restored = restoreCharacterTokenHints(trimmed, input);
     if (!restored) continue;
+    const isClimax = Boolean(item && typeof item === "object" && (item.isClimax === true || item.climax === true));
+    const intensity = normalizeIntensity(
+      item && typeof item === "object" ? item.intensity : null,
+      isClimax ? "climax" : "medium"
+    );
     cleaned.push({
       action: restored,
-      isClimax: Boolean(item && typeof item === "object" && (item.isClimax === true || item.climax === true)),
+      isClimax,
+      intensity: isClimax ? "climax" : intensity,
     });
   }
   if (!cleaned.length && storyText) {
-    cleaned.push({ action: sanitizeStory(storyText).slice(0, 120), isClimax: true });
+    cleaned.push({
+      action: sanitizeStory(storyText).slice(0, 120),
+      isClimax: true,
+      intensity: "climax",
+    });
   }
   if (cleaned.length && !cleaned.some((b) => b.isClimax)) {
-    cleaned[cleaned.length - 1].isClimax = true;
+    const last = cleaned[cleaned.length - 1];
+    last.isClimax = true;
+    last.intensity = "climax";
   }
   return cleaned;
 }

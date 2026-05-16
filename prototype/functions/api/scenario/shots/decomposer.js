@@ -60,6 +60,12 @@ export function buildShotPromptKo() {
 8. action: 이 샷에서 일어나는 물리적 행동·움직임. 추상 표현 금지.
 9. shotType, cameraMove 는 아래 어휘 안에서만 선택. 다른 단어 절대 금지.
 
+[카메라 어휘 다양성 - 필수]
+10. 한 씬이 2샷 이상이면 shotType 은 최소 2종 이상 사용한다(예: CU + MS, WS + CU). 모든 샷이 같은 shotType 이면 안 된다.
+11. 한 씬이 3샷 이상이면 cameraMove 도 최소 2종 이상 사용한다(예: static + push-in, pan + tilt). 모두 static 으로만 채우는 것은 금지 — 정적 비트라도 최소 1샷은 가벼운 무브(slow-push, slow-pan)를 넣는다.
+12. 클라이맥스 씬(scene.sceneIntent 에 "발견·페이오프·정점·반전·결과" 같은 키워드가 있거나 마지막 씬)은 ECU/CU 짧은 컷 다수 + 강한 무브(push-in, whip-pan, quick-pan) 변주를 반드시 포함한다.
+13. 인접한 두 샷이 같은 shotType + 같은 cameraMove 면 안 된다. 둘 중 하나는 반드시 변주한다.
+
 ${buildVocabPromptKo()}
 
 [출력 형식 — JSON 만, 마크다운/설명 금지]
@@ -93,6 +99,12 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
      Shots within one beat may walk through different sub-locations.
 8. action: the physical motion happening in this specific shot. No abstract phrasing.
 9. shotType and cameraMove must be selected from the controlled vocabulary below — no other words allowed.
+
+[Camera Vocabulary Variety - REQUIRED]
+10. If a scene has 2+ shots, use at least 2 different shotTypes (e.g., CU + MS, WS + CU). Never make all shots in a scene the same shotType.
+11. If a scene has 3+ shots, also use at least 2 different cameraMoves (e.g., static + push-in, pan + tilt). All-static is forbidden — even for calm beats, at least one shot should use a gentle move (slow-push, slow-pan).
+12. Climax scenes (when sceneIntent contains keywords like "discovery / payoff / peak / twist / result", or the final scene) MUST include many short ECU/CU cuts + varied strong moves (push-in, whip-pan, quick-pan).
+13. Two adjacent shots must NOT share the same shotType AND the same cameraMove simultaneously. Vary at least one of them.
 
 ${buildVocabPromptEn()}
 
