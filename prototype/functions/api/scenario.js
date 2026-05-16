@@ -1060,11 +1060,17 @@ function buildSingleBeatSystemPromptKo() {
 - 인물의 물리적 행동, 프레임 안 사물, 카메라 앵글/무브를 구체적으로.
 - sceneIntent: 관객의 구체적 반응. "~을 보여준다" 금지. "관객이 ~한다" 허용.
 - 등록된 캐릭터만 사용. 새 인물 추가 금지.
-- 대사가 있으면 dialogue 배열에, 없으면 빈 배열.
 - coversBeats 에는 받은 비트 ID 하나만.
 
+[음성 모드 규칙 — 사용자 설정 직접 반영, 절대 위반 금지]
+사용자 메시지의 '음성 모드' 값을 그대로 따른다:
+- '없음': narration="" (빈 문자열) + dialogue=[] (빈 배열). 캐릭터 대사·내레이션 둘 다 금지. 시각 전달만.
+- '나레이션': narration에만 1~2문장 채움. dialogue=[]. 캐릭터는 입을 움직일 수 있으나 대사 텍스트는 절대 만들지 않음.
+- '더빙': dialogue에 [{"speaker":"@이름","line":"..."}] 채움. narration="". 캐릭터가 직접 말함.
+이는 사용자가 선택한 영상 형식이므로 LLM이 임의로 대사를 추가/제거하면 안 됨.
+
 [출력 JSON]
-{"id":<숫자>,"estSec":<숫자>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"...","dialogue":[],"coversBeats":["<beatId>"]}
+{"id":<숫자>,"estSec":<숫자>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"","dialogue":[],"coversBeats":["<beatId>"]}
 
 응답은 { 로 시작해 } 로 끝나는 JSON 한 개. 마크다운/설명/배열 wrap 금지.`;
 }
@@ -1083,13 +1089,31 @@ function buildSingleBeatSystemPromptEn() {
 - Concrete: physical actions, objects in frame, camera angle/move.
 - sceneIntent: viewer's concrete reaction. Not "shows X". Use "viewer does X".
 - Only registered characters. No new characters.
-- Dialogue goes in the dialogue array; empty array if none.
 - coversBeats contains ONLY the one beat ID you received.
 
+[VOICE MODE RULE — direct reflection of user setting, NEVER violate]
+Follow the 'Voice mode' value from the user message exactly:
+- 'none': narration="" (empty string) + dialogue=[] (empty array). NO character lines, NO narration. Convey through visuals only.
+- 'narration only': fill narration with 1-2 sentences. dialogue=[]. Characters may move mouths but produce no spoken lines.
+- 'dubbing': fill dialogue with [{"speaker":"@name","line":"..."}]. narration="". Characters speak directly.
+This is the user's chosen video format — never add or remove dialogue/narration on your own.
+
 [Output JSON]
-{"id":<number>,"estSec":<number>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"...","dialogue":[],"coversBeats":["<beatId>"]}
+{"id":<number>,"estSec":<number>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"","dialogue":[],"coversBeats":["<beatId>"]}
 
 The response must be ONE JSON object starting with { and ending with }. No markdown, no commentary, no array wrap.`;
+}
+
+function describeVoiceModeKo(input) {
+  if (input?.narrationEnabled) return "나레이션 (narration 한두 문장 채움, dialogue=[] 유지, 캐릭터는 입을 움직일 뿐 대사 없음)";
+  if (input?.dubbingEnabled)   return "더빙 (dialogue에 {speaker,line} 채움, narration=\"\" 유지, 캐릭터가 직접 말함)";
+  return "없음 (narration=\"\" 빈 문자열, dialogue=[] 빈 배열, 캐릭터 대사·내레이션 모두 금지, 시각으로만 전달)";
+}
+
+function describeVoiceModeEn(input) {
+  if (input?.narrationEnabled) return "narration only (fill narration with 1-2 sentences, dialogue=[], characters may move mouths but say no lines)";
+  if (input?.dubbingEnabled)   return "dubbing (fill dialogue with {speaker, line}, narration=\"\", characters speak directly)";
+  return "none (narration=\"\" empty string, dialogue=[] empty array, NO character lines, NO narration; convey through visuals only)";
 }
 
 function buildSingleBeatUserPromptKo(input, ctx) {
@@ -1112,12 +1136,14 @@ function buildSingleBeatUserPromptKo(input, ctx) {
     "[제작 컨텍스트]",
     `장르: ${input.purposeCategory || "(미지정)"} / 세부: ${input.purposeTags || "(미지정)"}`,
     `시청 타겟: ${input.target || "(미지정)"}`,
+    `시청 목적: ${input.needs || "(미지정)"}`,
     `톤: ${input.tones || input.toneText || "(미지정)"}`,
     `스타일: ${input.styles || input.styleText || "(미지정)"}`,
     `화면 비율: ${input.aspectRatio || "(미지정)"}`,
+    `음성 모드: ${describeVoiceModeKo(input)}`,
     `등록 캐릭터: ${chars}`,
     "",
-    `[출력] 위 비트 1개만 다루는 씬 1개를 JSON 으로. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"].`,
+    `[출력] 위 비트 1개만 다루는 씬 1개를 JSON 으로. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"]. 음성 모드 규칙 반드시 준수.`,
   ];
   return lines.join("\n");
 }
@@ -1142,12 +1168,14 @@ function buildSingleBeatUserPromptEn(input, ctx) {
     "[Production context]",
     `Genre: ${input.purposeCategory || "(none)"} / Sub: ${input.purposeTags || "(none)"}`,
     `Audience: ${input.target || "(none)"}`,
+    `Viewing purpose: ${input.needs || "(none)"}`,
     `Tone: ${input.tones || input.toneText || "(none)"}`,
     `Style: ${input.styles || input.styleText || "(none)"}`,
     `Aspect ratio: ${input.aspectRatio || "(none)"}`,
+    `Voice mode: ${describeVoiceModeEn(input)}`,
     `Characters: ${chars}`,
     "",
-    `[Output] One JSON scene covering ONLY this beat. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"].`,
+    `[Output] One JSON scene covering ONLY this beat. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"]. Voice-mode rule MUST be obeyed.`,
   ];
   return lines.join("\n");
 }
@@ -1201,6 +1229,11 @@ async function requestSingleBeatScene(apiKey, input, ctx) {
       ? parsed.coversBeats
       : [beat.id],
   };
+  // v3.878: 음성 모드 코드 레벨 강제 차단 — LLM 이 규칙 어겨도 사용자 설정이 반드시 이긴다.
+  // narrationEnabled=false → narration 빈 문자열로 클리어
+  // dubbingEnabled=false → dialogue 빈 배열로 클리어
+  if (!input?.narrationEnabled) scene.narration = "";
+  if (!input?.dubbingEnabled)   scene.dialogue  = [];
   // estSec 이 예산을 크게 벗어나면 강제 보정 (±50% 허용)
   const minSec = Math.max(2, beat.estSec * 0.5);
   const maxSec = Math.min(6, beat.estSec * 1.5);
@@ -1211,8 +1244,10 @@ async function requestSingleBeatScene(apiKey, input, ctx) {
 
 /**
  * 비트 실패 시 코드 레벨 fallback 씬. 최소한의 결과로 1:1 매핑 유지.
+ * v3.878: 음성 모드 자체 반영 — fallback도 사용자 설정 준수.
  */
-function buildBeatFallbackScene(beat, sceneIndex) {
+function buildBeatFallbackScene(beat, sceneIndex, input) {
+  const narration = input?.narrationEnabled ? String(beat?.action || "").trim() : "";
   return {
     id: sceneIndex + 1,
     title: `Scene ${sceneIndex + 1}`,
@@ -1220,7 +1255,7 @@ function buildBeatFallbackScene(beat, sceneIndex) {
     sceneIntent: `관객이 비트 ${beat.id} 의 행동을 본다`,
     sceneLocation: "",
     visual: `[자동 fallback 씬] ${beat.action}`,
-    narration: "",
+    narration,
     dialogue: [],
     coversBeats: [beat.id],
     _autoFallback: true,
@@ -1264,7 +1299,7 @@ async function generateScenesPerBeat(input, budgetedBeats) {
         scenes[ctx.sceneIndex] = res.value;
       } else {
         failures.push({ beatId: ctx.beat.id, error: res.reason?.message || String(res.reason) });
-        scenes[ctx.sceneIndex] = buildBeatFallbackScene(ctx.beat, ctx.sceneIndex);
+        scenes[ctx.sceneIndex] = buildBeatFallbackScene(ctx.beat, ctx.sceneIndex, input);
         fallbacks += 1;
       }
     });
@@ -1292,12 +1327,33 @@ async function generateScenarioScenesViaBeats(input) {
   const { scenes: rawScenes, failures, fallbacks } = await generateScenesPerBeat(input, budgeted);
 
   // 모든 슬롯이 채워졌는지 확인 (실패는 fallback 으로 이미 채워짐)
+  // v3.878: 각 씬을 shapeSceneByMode 로 통과 — 음성 모드별 narration/dialogue 제거 +
+  // videoSpeechPrompt / subtitleText / voiceScript 등 다운스트림 필드 채움.
+  const defaultSpeaker = (Array.isArray(input.characters) && input.characters[0]?.token)
+    ? input.characters[0].token
+    : "@narrator";
   let normalizedScenes = rawScenes
     .filter(Boolean)
-    .map((scene, idx) => Object.assign({}, scene, {
-      id: idx + 1,
-      title: scene.title || `Scene ${idx + 1}`,
-    }));
+    .map((scene, idx) => {
+      const shaped = shapeSceneByMode({
+        id: idx + 1,
+        title: scene.title || `Scene ${idx + 1}`,
+        estSec: scene.estSec,
+        sceneIntent: scene.sceneIntent,
+        sceneLocation: scene.sceneLocation,
+        visual: scene.visual,
+        narration: scene.narration,
+        dialogue: scene.dialogue,
+        narrationEnabled: !!input.narrationEnabled,
+        dubbingEnabled: !!input.dubbingEnabled,
+        defaultSpeaker,
+        lang: input.lang === "en" ? "en" : "ko",
+      });
+      // shapeSceneByMode 는 coversBeats / _autoFallback 을 출력에 포함하지 않음 → 보존 복원
+      if (Array.isArray(scene.coversBeats)) shaped.coversBeats = scene.coversBeats;
+      if (scene._autoFallback) shaped._autoFallback = true;
+      return shaped;
+    });
 
   // 후처리 — 기존 단일 경로와 동일한 안전망 재사용
   let scenesSplitCount = 0;
