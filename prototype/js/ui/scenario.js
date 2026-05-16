@@ -1706,6 +1706,23 @@
     if (form.topic) form.topic.value = overviewFields.topic || '';
     if (form.story) form.story.value = overviewFields.story || '';
     if (form.story) cacheStorySelection(form.story);
+    // payload에 저장된 storyBeats를 storyField.dataset으로 복원 — 저장→재개 후에도
+    // collectPayload()가 동일 비트를 다시 첨부할 수 있게 한다.
+    if (form.story) {
+      const restoredBeats = Array.isArray(p.storyBeats) ? p.storyBeats : null;
+      if (restoredBeats && restoredBeats.length) {
+        try {
+          form.story.dataset.aiBeats = JSON.stringify(restoredBeats);
+          form.story.dataset.aiBeatsStory = sanitizeText(overviewFields.story || '');
+        } catch (_) {
+          form.story.dataset.aiBeats = '';
+          form.story.dataset.aiBeatsStory = '';
+        }
+      } else {
+        form.story.dataset.aiBeats = '';
+        form.story.dataset.aiBeatsStory = '';
+      }
+    }
     renderOverviewSelects({
       purposeCategory: defaultCat,
       purposeTag: selectedPurposeTag,
