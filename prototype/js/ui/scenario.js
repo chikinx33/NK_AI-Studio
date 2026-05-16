@@ -1762,6 +1762,16 @@
       ['focus', 'click', 'keyup', 'select', 'input'].forEach((eventName) => {
         storyField.addEventListener(eventName, () => cacheStorySelection(storyField));
       });
+      // v3.871: 이야기 본문이 수정되면 캐시된 AI 비트는 자동 무효화.
+      // ensureFreshStoryBeats 가 시나리오 생성 시점에 재추출하므로 안전.
+      storyField.addEventListener('input', () => {
+        const cachedFor = sanitizeText(storyField.dataset.aiBeatsStory || '');
+        const current = sanitizeText(storyField.value || '');
+        if (cachedFor && cachedFor !== current) {
+          storyField.dataset.aiBeats = '';
+          storyField.dataset.aiBeatsStory = '';
+        }
+      });
       cacheStorySelection(storyField);
     }
     const knowledgeGroup = document.querySelector('.scenario-knowledge-group');
@@ -2296,13 +2306,47 @@
       }, 0);
     });
 
+    // v3.871: 시나리오 생성 시 비트가 stale/없으면 자동으로 story-structure 호출해 비트 확보.
+    // 사용자가 "AI로 정리" 버튼을 의식적으로 누르지 않아도 항상 최신 이야기로 비트가 보장됨.
+    // 반환값은 비트가 첨부된 새 payload.
+    const ensureFreshStoryBeats = async (payload) => {
+      const storyFieldEl = document.getElementById('scenario-story-input');
+      const currentStory = sanitizeText(payload?.story || '');
+      if (!storyFieldEl || !currentStory) return payload;
+      // 이미 최신 비트가 첨부된 경우 — 추가 호출 불필요
+      if (Array.isArray(payload.storyBeats) && payload.storyBeats.length) return payload;
+      // story-structure API 없으면 조용히 통과
+      if (!NK.api || !NK.api.storyStructure) return payload;
+      try {
+        const language = getRuntimeLang();
+        const beatPayload = Object.assign({}, payload, { language });
+        const storyResult = await NK.api.storyStructure(beatPayload);
+        const freshStory = sanitizeText(storyResult?.story || currentStory);
+        const beats = Array.isArray(storyResult?.beats) ? storyResult.beats : [];
+        if (beats.length) {
+          // dataset 캐시 갱신 — 이어지는 collectPayload 호출에서 재사용 가능
+          try {
+            storyFieldEl.dataset.aiBeats = JSON.stringify(beats);
+            storyFieldEl.dataset.aiBeatsStory = freshStory;
+          } catch (_) { /* dataset 쓰기 실패는 무시 */ }
+          return Object.assign({}, payload, { storyBeats: beats });
+        }
+      } catch (err) {
+        console.warn('[scenario] auto storyStructure 실패; 비트 없이 진행', err);
+      }
+      return payload;
+    };
+
     // 시나리오 생성
     form.onsubmit = async (e) => {
       e.preventDefault();
       const errEl = document.getElementById('scenario-error');
       if (errEl) errEl.classList.add('hidden');
-      NK.core.setLoading(true, '생성중...');
-      const payload = collectPayload();
+      const uiLangPre = getUiLang();
+      NK.core.setLoading(true, uiLangPre === 'en' ? 'Analyzing story…' : '이야기 분석 중...');
+      let payload = collectPayload();
+      // v3.871: 자동 비트 확보 (A안)
+      payload = await ensureFreshStoryBeats(payload);
       try {
         const brandId = (NK.service && NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
         const promptSeed = getScenarioPromptSeed(payload);
