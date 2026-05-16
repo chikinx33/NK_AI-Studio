@@ -155,17 +155,35 @@
     return rows.find(function (c) { return c.isActive && String(c.trigger).toLowerCase() === String(t).toLowerCase(); }) || null;
   };
 
+  // v3.874: 한국어 조사가 붙은 @-토큰을 캐릭터 매칭에 사용할 수 있도록 stripping.
+  // "@동그라미가", "@네모와", "@세모를" → "@동그라미", "@네모", "@세모"
+  // 안전 규칙: 조사 제거 후 본문이 2자 이상 남을 때만 적용 (1자 캐릭터 보호).
+  function stripKoreanParticleSuffix(token) {
+    var raw = String(token || '');
+    if (raw.charAt(0) !== '@') return raw;
+    var body = raw.slice(1);
+    if (!body) return raw;
+    var stripped = body.replace(/(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로)$/, '');
+    if (stripped.length < 2 || stripped === body) return raw;
+    return '@' + stripped;
+  }
+
   registry.parseCharacterTriggers = function (prompt) {
     var text = String(prompt || '');
     if (!text) return [];
     var re = /(^|[^@0-9A-Za-z가-힣_])(@[0-9A-Za-z가-힣_]{1,24})/g;
-    var out = new Set();
+    var seen = new Set();
+    var out = [];
     var m;
     while ((m = re.exec(text)) !== null) {
-      var tok = String(m[2] || '').trim();
-      if (tok) out.add(tok);
+      var raw = String(m[2] || '').trim();
+      if (!raw) continue;
+      // 조사 제거를 우선 시도 — 등록 캐릭터와 매칭률을 높임
+      var normalized = stripKoreanParticleSuffix(raw);
+      var key = normalized.toLowerCase();
+      if (!seen.has(key)) { seen.add(key); out.push(normalized); }
     }
-    return Array.from(out.values());
+    return out;
   };
 
   function escapeRegExp(value) {

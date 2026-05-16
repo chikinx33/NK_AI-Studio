@@ -142,6 +142,7 @@ function buildSystemPrompt(language) {
       "You enumerate every event in the user's story as one beat per event. You DO NOT compress, merge, or drop events. The user's story IS the source of truth.",
       '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. Never use markdown (```json, ```), explanations, comments, or backticks.',
       '[BEATS FIELD - MANDATORY] "beats" is an array where each item is one event from "story". CORE RULE: if the user wrote N events, output N beats. Do NOT merge two events into one beat. Do NOT skip ANY event. Each beat MUST be a single concrete physical action with an immediate visible reaction (one sentence, 60 chars max). Mark "isClimax":true ONLY on the final discovery/resolution/punchline beat that pays off the setup. Beats must follow story order. Preserve @character tokens inside beat actions exactly as in story. Physical safety cap: floor(duration / 2) beats (each beat needs at least 2 seconds of video). Only when the story exceeds this cap may you compress adjacent minor transitions — but the FINAL/ending beat (especially user-marked "끝" / "the end") is NEVER dropped.',
+      '[PARALLEL EVENT RULE - CRITICAL] Similar actions performed by DIFFERENT characters are SEPARATE beats. Do NOT condense them as "one repeated action". Examples — Story: "@A hides behind a tree and @B stands upside down in grass" → 2 beats: [@A tree hide, @B grass upside-down]. Story: "@H finds @A, then finds @B" → 2 beats: [@H finds @A, @H finds @B]. Story: "@A runs left while @B runs right" → 2 beats. Even when the structural pattern is parallel ("hide-and-find for each character"), each character × each action = its own beat. NEVER compress parallel sequences just because they share a structural shape.',
       '[INTENSITY FIELD - MANDATORY] Each beat MUST have an "intensity" value: "low" = calm setup/explanation, "medium" = ongoing action, "high" = rising tension or surprise, "climax" = peak moment (discovery, payoff, twist, resolution). The "climax" intensity MUST appear on the beat with isClimax:true and may also appear on a key turning-point beat just before it. This intensity drives non-uniform cut allocation in the next stage — calm beats get longer fewer cuts, high/climax beats get short rapid cuts with varied camera moves.',
       "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific concrete action and immediate reaction — but never as a way to REDUCE the number of beats. Do not copy original sentences verbatim; rewrite each event as action-first phrasing.",
       "Write only visible actions, reactions, and immediate outcomes. Do not summarize with abstract planning language.",
@@ -161,6 +162,7 @@ function buildSystemPrompt(language) {
     "너는 사용자가 적은 이야기에서 발생하는 모든 사건을 한 줄씩 비트로 enumerate하는 AI다. 사용자 이야기가 source of truth이고, 너는 압축·병합·생략하지 않는다.",
     '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
     '[beats 필드 - 필수] "beats"는 배열이며, 각 항목은 story 안의 사건 하나에 1:1 매핑된다. 핵심 규칙: 사용자가 N개 사건을 적으면 N개 비트를 출력한다. 두 사건을 한 비트로 병합하지 않는다. 어떤 사건도 누락하지 않는다. 각 비트는 한 문장(60자 이내)으로 구체적 물리 행동과 즉각적 반응만 쓴다. "isClimax":true는 setup을 마무리하는 마지막 발견/해결/펀치라인 비트 하나에만 표시한다. beats 순서는 story 순서와 동일해야 하며, @캐릭터 토큰은 story와 동일하게 유지한다. 물리적 안전 상한: floor(영상길이 / 2)개(비트당 최소 2초 필요). 이야기가 이 상한을 초과할 때만 인접한 사소한 전환을 압축할 수 있다 — 단, 마지막 결말 비트(특히 사용자가 "끝", "그리고 끝났다" 같은 명시적 결말 표지를 쓴 경우)는 절대 누락하지 않는다.',
+    '[병렬 사건 규칙 - 매우 중요] 다른 캐릭터가 각자 수행하는 비슷한 행동은 별도 비트다. "동일 행동의 반복"으로 한 비트에 묶지 마라. 예시 — 이야기: "@A는 나무 뒤에 숨고 @B는 풀밭에 거꾸로 선다" → 2 비트: [@A 나무 뒤 숨음, @B 풀밭 거꾸로 섬]. 이야기: "@H가 @A를 찾고 이어서 @B를 찾는다" → 2 비트: [@H가 @A 찾음, @H가 @B 찾음]. 이야기: "@A는 왼쪽으로 @B는 오른쪽으로 달려간다" → 2 비트. 구조 패턴이 평행해도(예: "캐릭터별 숨기-찾기 게임"), 캐릭터 × 행동 조합마다 별도 비트로 enumerate. 구조가 비슷하다고 평행 시퀀스를 압축하지 절대 마라.',
     '[intensity 필드 - 필수] 각 비트는 intensity 값을 반드시 가진다: "low"=차분한 설정/설명, "medium"=일반 진행 액션, "high"=긴장 고조 또는 놀라움, "climax"=정점 순간(발견·페이오프·반전·해결). "climax" intensity는 isClimax:true인 비트에 반드시 표시하고, 그 직전 결정적 전환점 비트에도 추가로 표시할 수 있다. 이 intensity 값은 다음 단계에서 컷 시간 차등 분배의 근거가 된다 — 차분한 비트는 적고 긴 컷, 높은/클라이맥스 비트는 짧고 빠른 컷 + 다양한 카메라 무브로 분해된다.',
     "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 단, 이는 비트 수를 줄이기 위한 압축 수단으로 쓰면 안 된다. 원문 문장을 그대로 복사하지는 말되, 각 사건을 행동 중심 표현으로 다시 적는다.",
     "추상적인 기획서 문장 대신 눈에 보이는 행동, 즉각적인 반응, 바로 이어지는 결과로 쓴다.",
@@ -293,10 +295,24 @@ function normalizeCharacters(list) {
     });
 }
 
+// v3.874: 한국어 조사가 붙은 @-토큰을 캐릭터 매칭에 사용할 수 있도록 stripping.
+// "@동그라미가", "@네모와", "@세모를" → "@동그라미", "@네모", "@세모"
+// 안전 규칙: 조사 제거 후 본문이 2자 이상 남을 때만 적용 (1자 캐릭터 보호).
+function stripKoreanParticleSuffix(token) {
+  const raw = String(token || "");
+  if (raw.charAt(0) !== "@") return raw;
+  const body = raw.slice(1);
+  if (!body) return raw;
+  const stripped = body.replace(/(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로)$/, "");
+  if (stripped.length < 2 || stripped === body) return raw;
+  return "@" + stripped;
+}
+
 function normalizeToken(value) {
   const rawText = sanitizeText(value).replace(/\s+/g, "");
   if (!rawText) return "";
-  const raw = rawText.startsWith("@") ? rawText : ("@" + rawText.replace(/^@+/, ""));
+  let raw = rawText.startsWith("@") ? rawText : ("@" + rawText.replace(/^@+/, ""));
+  raw = stripKoreanParticleSuffix(raw);
   return /^@[0-9A-Za-z가-힣_]{1,24}$/.test(raw) ? raw : "";
 }
 
