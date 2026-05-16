@@ -679,6 +679,18 @@ function buildSystemPromptKo(sceneCount, duration, spec = {}) {
   const required = (spec.requiredOutputsKo || []).map((item) => `- ${item}`).join("\n") || "- 개요의 핵심 의도를 직접 드러낸다.";
   const avoid = (spec.avoidOutputsKo || []).map((item) => `- ${item}`).join("\n") || "- 개요와 무관한 범용 장면 나열";
   return `너는 NK_Studio의 프리프로덕션 시나리오 작성 엔진이다.
+
+[STEP 0 — 설계도 먼저, 채우기 나중 (절대 위반 금지)]
+씬을 한 줄이라도 쓰기 전에 반드시 다음 두 단계를 머릿속으로 수행한다:
+  Step 0-A: user 메시지에 제공된 "이야기 비트 + 시간 예산표"를 끝까지 읽고,
+            모든 beat ID를 메모한다. 단 하나도 누락하지 않는다.
+  Step 0-B: 각 비트의 estSec 예산을 그대로 받아들인다. 비트 시간 예산의 합 ≈ 총 영상 시간이다.
+            너는 이 예산 분배를 다시 계산하지 않는다. 예산을 무시하고 앞쪽 비트에 시간을
+            몰아 쓰는 것은 금지다. 마지막 비트(특히 사용자가 "끝" 표기한 결말)는 절대 누락 금지.
+설계도(비트 예산)는 사용자의 의도다. 너의 역할은 그 예산 안에서 씬과 컷을 채우는 것뿐이다.
+앞에서부터 순서대로 씬을 길게 쓰다가 시간이 다 차서 뒷 비트를 누락하는 행동은
+이 시스템에서 가장 큰 실패다.
+
 [씬 작성 핵심 원칙]
 1. 모든 씬은 보여주기로만 구성한다. 설명하지 않는다.
 - 금지: "슬픈 분위기의 공간"
@@ -761,6 +773,19 @@ function buildSystemPromptEn(sceneCount, duration, spec = {}) {
   const required = (spec.requiredOutputsEn || []).map((item) => `- ${item}`).join("\n") || "- Make the overview intent explicit in the scene structure.";
   const avoid = (spec.avoidOutputsEn || []).map((item) => `- ${item}`).join("\n") || "- Generic scenes that only loosely mention the topic";
   return `You are NK_Studio's pre-production scenario engine.
+
+[STEP 0 — BLUEPRINT FIRST, FILL LATER (NEVER VIOLATE)]
+Before writing a single scene line, perform these two mandatory steps internally:
+  Step 0-A: Read the "Story beats + time budget" table in the user message to the end,
+            and memorize every beat ID. NEVER miss a single beat.
+  Step 0-B: Accept each beat's estSec budget AS IS. Sum of beat budgets ≈ total duration.
+            DO NOT recompute or override the allocation. DO NOT spend extra time on the
+            early beats at the expense of dropping later ones. The final beat
+            (especially when user wrote "the end" / "끝") MUST be included — no exceptions.
+The blueprint (beat budget) is the user's intent. Your job is ONLY to fill scenes/cuts
+within those allocations. Writing front beats in elaborate detail until time runs out
+and then dropping rear beats is the WORST failure mode in this system.
+
 [Core Scene Writing Principles]
 1. Build every scene through visible evidence only. Do not explain.
 - Forbidden: "a sad atmosphere"
@@ -909,7 +934,7 @@ function buildUserPrompt(input) {
   const specText = formatScenarioSpecForPrompt(input.spec);
   const blueprintText = formatBlueprintForPrompt(input.spec);
   const genreGuide = buildGenreProgressionGuide(input);
-  const beatsBlock = formatStoryBeatsForPrompt(input.storyBeats, input.lang);
+  const beatsBlock = formatStoryBeatsForPrompt(input.storyBeats, input.lang, input.duration);
   const characterModeInstruction = input.characterGenerationDisabled
     ? (input.lang === "en"
       ? "Character mode: disabled. Do not create characters, people, mascots, named speakers, or dialogue participants. Build scenes around environment, objects, motion, and narrator-only speech when voice is required."
@@ -2438,6 +2463,72 @@ function normalizeStoryBeatsInput(value) {
   return out;
 }
 
+// v3.872: 비트별 시간 예산 가중치 — climax 1.5x, high 1.2x, medium 1.0x, low 0.5x.
+// 사용자 지시: "총 시간 ÷ 비트 수 = 비트당 기준 시간, 클라이맥스 1.5배 / 전환 0.5배".
+const INTENSITY_TIME_WEIGHT = {
+  low: 0.5,
+  medium: 1.0,
+  high: 1.2,
+  climax: 1.5,
+};
+
+/**
+ * 각 비트에 영상 총 시간을 가중치 기반으로 배분한다.
+ * 결과는 sum === totalSec 으로 정규화되고, 각 비트에 estSec / 권장 컷 수가 부여된다.
+ *
+ * @param {Array} beats  storyBeats (intensity 포함)
+ * @param {number} totalSec
+ * @returns {Array<{id, action, intensity, isClimax, estSec, cutHint}>}
+ */
+function computeBeatTimeBudget(beats, totalSec) {
+  if (!Array.isArray(beats) || !beats.length) return [];
+  const total = Number(totalSec) || 0;
+  if (total <= 0) return beats.map((b) => Object.assign({}, b, { estSec: 0, cutHint: "" }));
+  const weights = beats.map((b) => {
+    const w = INTENSITY_TIME_WEIGHT[b.intensity];
+    return Number.isFinite(w) ? w : 1.0;
+  });
+  const sumW = weights.reduce((a, b) => a + b, 0) || beats.length;
+  const raw = weights.map((w) => (total * w) / sumW);
+  // 최소 2초 보장 후 잔여를 비례 재분배 (영상 모델 최소 컷 한계)
+  const MIN_SEC = 2;
+  const minTotal = MIN_SEC * beats.length;
+  let normalized;
+  if (total <= minTotal) {
+    // 너무 짧으면 모두 최소치 (사실상 산수 무리)
+    normalized = beats.map(() => total / beats.length);
+  } else {
+    const slack = total - minTotal;
+    const slackRatio = slack / total;
+    normalized = raw.map((r) => MIN_SEC + (r - MIN_SEC) * (raw.reduce((a, b) => a + b, 0) > 0 ? (slack / (raw.reduce((a, b) => a + b, 0) - minTotal || 1)) : 0));
+    // 단순화: 위 식이 복잡하니 raw + min 보정 후 재정규화로 대체
+    normalized = raw.map((r) => Math.max(MIN_SEC, r));
+    const cur = normalized.reduce((a, b) => a + b, 0);
+    const scale = total / cur;
+    normalized = normalized.map((n) => Math.max(MIN_SEC, n * scale));
+    // 미세 보정: 합을 total 에 정확히 맞춘다
+    const finalSum = normalized.reduce((a, b) => a + b, 0);
+    const diff = total - finalSum;
+    if (Math.abs(diff) > 0.01 && normalized.length) {
+      // 가장 긴 비트에 보정값을 흡수
+      let maxIdx = 0;
+      for (let i = 1; i < normalized.length; i++) if (normalized[i] > normalized[maxIdx]) maxIdx = i;
+      normalized[maxIdx] = Math.max(MIN_SEC, normalized[maxIdx] + diff);
+    }
+    // 1자리 소수로 라운드
+    normalized = normalized.map((n) => Math.round(n * 10) / 10);
+  }
+  return beats.map((b, i) => {
+    const sec = normalized[i];
+    let cutHint;
+    if (b.intensity === "climax") cutHint = sec >= 4 ? "3~4컷" : "2~3컷";
+    else if (b.intensity === "high") cutHint = sec >= 4 ? "2~3컷" : "1~2컷";
+    else if (b.intensity === "low") cutHint = "1컷";
+    else cutHint = sec >= 4 ? "2컷" : "1~2컷";
+    return Object.assign({}, b, { estSec: sec, cutHint });
+  });
+}
+
 // intensity 별 권장 컷 분배 가중치 — 평균 컷 시간(초)에 곱해 차등 분배 산출.
 const INTENSITY_CUT_PROFILE = {
   low:     { cutCountHint: "1-2 컷, 컷당 3~5초", cutWeight: 1.4, varietyHint: "정적·롱테이크 1컷 또는 가벼운 카메라 무브" },
@@ -2453,29 +2544,57 @@ const INTENSITY_CUT_PROFILE_EN = {
   climax:  { cutCountHint: "3-5 cuts, 1-2s each", cutWeight: 0.5, varietyHint: "many ECU/CU short cuts, varied moves required, no static cut" },
 };
 
-function formatStoryBeatsForPrompt(beats, lang) {
+function formatStoryBeatsForPrompt(beats, lang, totalSec) {
   if (!Array.isArray(beats) || !beats.length) return "";
   const isEn = lang === "en";
-  const profile = isEn ? INTENSITY_CUT_PROFILE_EN : INTENSITY_CUT_PROFILE;
-  const lines = beats.map((b, i) => {
+  // v3.872: 시간 예산을 사전 계산 — 사용자 지시 "설계도 먼저, 채우기 나중".
+  const budgeted = computeBeatTimeBudget(beats, Number(totalSec) || 0);
+  const totalBudget = budgeted.reduce((acc, b) => acc + (Number(b.estSec) || 0), 0);
+  const avgPerBeat = beats.length ? totalBudget / beats.length : 0;
+  const lines = budgeted.map((b, i) => {
     const intensity = b.intensity || (b.isClimax ? "climax" : "medium");
     const climaxMark = b.isClimax ? (isEn ? " [CLIMAX]" : " [클라이맥스]") : "";
-    const prof = profile[intensity] || profile.medium;
-    const intensityLabel = isEn ? `intensity=${intensity}` : `강도=${intensity}`;
     const beatId = b.id || `beat_${String(i + 1).padStart(2, "0")}`;
-    return `  [${beatId}] ${b.action}${climaxMark}\n     → ${intensityLabel}, ${prof.cutCountHint}, ${prof.varietyHint}`;
+    const weight = INTENSITY_TIME_WEIGHT[intensity] || 1.0;
+    const secLabel = isEn ? `${b.estSec}s` : `${b.estSec}초`;
+    const hint = isEn
+      ? `weight ${weight}× → ${secLabel} (${b.cutHint})`
+      : `가중치 ${weight}× → ${secLabel} (${b.cutHint})`;
+    return `  [${beatId}] ${b.action}${climaxMark}\n     → intensity=${intensity}, ${hint}`;
   });
   const idList = beats.map((b, i) => b.id || `beat_${String(i + 1).padStart(2, "0")}`).join(", ");
+
+  // [STEP 0-A · STEP 0-B] 설계도 강제 — 사용자 지시안의 핵심
+  const blueprintHeader = isEn
+    ? `===== STEP 0 — BLUEPRINT BEFORE WRITING (MANDATORY) =====
+You MUST allocate time per beat BEFORE writing any scene. The blueprint below has already been computed for you:
+  · Total duration: ${totalSec || "?"}s
+  · Beat count: ${beats.length}
+  · Average per beat: ${avgPerBeat.toFixed(1)}s
+  · Weights applied — climax=1.5×, high=1.2×, medium=1.0×, low=0.5×
+Each beat's "estSec" budget below is the HARD time ceiling for the scene(s) covering that beat.
+You may NOT spend more time on a beat than its budget. You may NOT skip any beat. You may NOT compress the final beat (especially when user marked "끝" / "the end").`
+    : `===== STEP 0 — 시나리오 작성 전 설계도 (필수) =====
+씬을 쓰기 전에 비트별 시간 예산을 먼저 확정한다. 아래 설계도는 이미 코드로 계산되어 제공된다:
+  · 총 영상 시간: ${totalSec || "?"}초
+  · 비트 수: ${beats.length}개
+  · 비트당 평균: ${avgPerBeat.toFixed(1)}초
+  · 가중치 적용 — 클라이맥스 1.5× / high 1.2× / medium 1.0× / low(전환) 0.5×
+아래 각 비트의 "estSec" 예산은 그 비트를 다루는 씬(들)의 합산 시간 상한이다.
+- 한 비트가 예산보다 더 많은 시간을 차지하면 안 된다.
+- 어떤 비트도 누락하면 안 된다.
+- 마지막 비트(특히 사용자가 "끝" 표시한 경우)는 절대 압축·생략 금지.`;
+
   const header = isEn
-    ? `Story beats with intensity-based cut allocation (MANDATORY COVERAGE — EVERY beat ID below MUST appear in at least one scene's "coversBeats" field; scenes.length MUST be >= ${beats.length}; the [CLIMAX] beat must pay off in the FINAL scene; DO NOT use uniform durations like 3-3-3-3-6-6-6, follow the per-beat cut hints below to create varied rhythm):`
-    : `이야기 비트 + 강도 기반 컷 분배(필수 커버리지 — 아래 모든 beat ID가 최소 1개 씬의 "coversBeats" 필드에 반드시 매핑되어야 한다. 씬 개수는 반드시 ${beats.length}개 이상. [클라이맥스] 비트는 반드시 마지막 씬에서 페이오프. 균등 분배(3·3·3·3·6·6·6 식) 금지 — 아래 비트별 컷 가이드를 따라 리듬감 있는 차등 분배로 작성하라):`;
+    ? `\n[Beat time budget — fill scenes within these allocations]:`
+    : `\n[비트별 시간 예산 — 각 비트는 이 시간 안에서만 씬을 채워라]:`;
   const coverageRule = isEn
-    ? `\n[BEAT COVERAGE FIELD - REQUIRED]\nEach scene object MUST include a "coversBeats" field: array of beat IDs from [${idList}]. Example: "coversBeats": ["beat_03"]. The union of all coversBeats across scenes MUST equal the full beat set.`
-    : `\n[비트 매핑 필드 - 필수]\n각 씬 객체는 "coversBeats" 필드를 반드시 포함한다: [${idList}] 중 해당 씬이 다루는 비트 ID 배열. 예: "coversBeats": ["beat_03"]. 모든 씬의 coversBeats 합집합이 전체 비트 집합과 같아야 한다.`;
+    ? `\n[COVERAGE FIELD - REQUIRED]\nEach scene object MUST include a "coversBeats" field: array of beat IDs from [${idList}]. Example: "coversBeats": ["beat_03"]. The union of all coversBeats across scenes MUST equal the full beat set. scenes.length MUST be >= ${beats.length}.`
+    : `\n[커버리지 필드 - 필수]\n각 씬은 "coversBeats" 필드를 반드시 포함한다: [${idList}] 중 그 씬이 다루는 비트 ID 배열. 예: "coversBeats": ["beat_03"]. 모든 씬의 coversBeats 합집합이 전체 비트 집합과 동일해야 하며, 씬 개수는 ${beats.length}개 이상.`;
   const rhythmRule = isEn
-    ? "\n[CUT RHYTHM RULES]\n- Forbidden: 3+ consecutive scenes with identical estSec.\n- Forbidden: all scenes within ±0.5s of each other (monotonous).\n- Climax beat's scene MUST have the most cuts (shortest avg).\n- Vary scene estSec following the per-beat hints above; use decimals (e.g. 1.5, 2.5, 4) when needed."
-    : "\n[컷 리듬 규칙]\n- 금지: 동일 estSec 씬이 3개 이상 연속.\n- 금지: 모든 씬의 estSec이 ±0.5초 이내로 균일 (단조로움).\n- 클라이맥스 비트의 씬은 반드시 가장 많은 컷 수(가장 짧은 평균)를 가진다.\n- 위 비트 가이드를 따라 씬 estSec을 다르게 배정하고, 필요하면 소수(예: 1.5, 2.5, 4)도 적극 사용한다.";
-  return `${header}\n${lines.join("\n")}${coverageRule}${rhythmRule}\n\n`;
+    ? `\n[CUT RHYTHM RULES]\n- Forbidden: 3+ consecutive scenes with identical estSec.\n- Climax beat's scene must have the most cuts (shortest avg).\n- Use decimals (1.5, 2.5) where needed.`
+    : `\n[컷 리듬 규칙]\n- 동일 estSec 씬 3개 이상 연속 금지.\n- 클라이맥스 비트 씬은 가장 많은 컷 수(가장 짧은 평균).\n- 소수(1.5, 2.5) 적극 사용.`;
+  return `${blueprintHeader}${header}\n${lines.join("\n")}${coverageRule}${rhythmRule}\n\n`;
 }
 
 function formatScenarioSpecForPrompt(spec = {}) {

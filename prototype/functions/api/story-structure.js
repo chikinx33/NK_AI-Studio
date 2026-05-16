@@ -141,7 +141,7 @@ function buildSystemPrompt(language) {
     return [
       "You reorganize a rough story draft into a short-form story skeleton that the next scenario generator can split into scenes immediately.",
       '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. Never use markdown (```json, ```), explanations, comments, or backticks.',
-      '[BEATS FIELD - MANDATORY] "beats" is an array (length 2-6) where each item is one action beat from "story". Each beat MUST be a single concrete physical action with an immediate visible reaction (one sentence, 60 chars max). The beats array MUST cover every story sentence — no story content may be left out of beats. Mark "isClimax":true ONLY on the final discovery/resolution/punchline beat that pays off the setup. Beats must follow story order. Preserve @character tokens inside beat actions exactly as in story.',
+      '[BEATS FIELD - MANDATORY] "beats" is an array where each item is one action beat from "story". Each beat MUST be a single concrete physical action with an immediate visible reaction (one sentence, 60 chars max). The beats array MUST cover every story sentence — no story content may be left out of beats. Mark "isClimax":true ONLY on the final discovery/resolution/punchline beat that pays off the setup. Beats must follow story order. Preserve @character tokens inside beat actions exactly as in story. Beat count cap by duration: ≤15s→4, ≤30s→6, ≤45s→8, ≤60s→10, ≤90s→12. If the story has more events than the cap, COMPRESS minor transitions but NEVER drop the final/ending beat (especially if user writes "끝" / "그리고 끝났다" / "the end").',
       '[INTENSITY FIELD - MANDATORY] Each beat MUST have an "intensity" value: "low" = calm setup/explanation, "medium" = ongoing action, "high" = rising tension or surprise, "climax" = peak moment (discovery, payoff, twist, resolution). The "climax" intensity MUST appear on the beat with isClimax:true and may also appear on a key turning-point beat just before it. This intensity drives non-uniform cut allocation in the next stage — calm beats get longer fewer cuts, high/climax beats get short rapid cuts with varied camera moves.',
       "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific action and immediate reaction. Do not copy original sentences verbatim.",
       "Write 2-5 short sentences or one short paragraph. Each sentence should map to one simple beat for later scene generation.",
@@ -162,7 +162,7 @@ function buildSystemPrompt(language) {
   return [
     "너는 사용자가 적은 초안을 다음 단계의 시나리오 생성기가 바로 씬으로 쪼갤 수 있는 짧은 영상용 이야기 뼈대로 재정리하는 보조 AI다.",
     '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
-    '[beats 필드 - 필수] "beats"는 길이 2~6개 배열이며, 각 항목은 story 안의 행동 비트 하나에 1:1 매핑된다. 각 비트는 한 문장(60자 이내)으로 구체적 물리 행동과 즉각적 반응만 쓴다. beats 배열은 story의 모든 문장을 빠짐없이 커버해야 한다 — story에 나온 행동·반응 중 beats에 들어가지 않는 것이 있으면 안 된다. "isClimax":true는 setup을 마무리하는 마지막 발견/해결/펀치라인 비트 하나에만 표시한다. beats 순서는 story 순서와 동일해야 하며, @캐릭터 토큰은 story와 동일하게 유지한다.',
+    '[beats 필드 - 필수] "beats"는 배열이며, 각 항목은 story 안의 행동 비트 하나에 1:1 매핑된다. 각 비트는 한 문장(60자 이내)으로 구체적 물리 행동과 즉각적 반응만 쓴다. beats 배열은 story의 모든 문장을 빠짐없이 커버해야 한다 — story에 나온 행동·반응 중 beats에 들어가지 않는 것이 있으면 안 된다. "isClimax":true는 setup을 마무리하는 마지막 발견/해결/펀치라인 비트 하나에만 표시한다. beats 순서는 story 순서와 동일해야 하며, @캐릭터 토큰은 story와 동일하게 유지한다. 영상 길이별 비트 수 상한: 15초 이하→4, 30초 이하→6, 45초 이하→8, 60초 이하→10, 90초 이하→12. 이야기에 이벤트가 상한보다 많으면 사소한 전환 비트는 압축하되, 마지막 결말 비트는 절대 누락 금지(특히 사용자가 "끝", "그리고 끝났다" 같은 명시적 결말 표지를 쓴 경우 반드시 마지막 비트로 보장).',
     '[intensity 필드 - 필수] 각 비트는 intensity 값을 반드시 가진다: "low"=차분한 설정/설명, "medium"=일반 진행 액션, "high"=긴장 고조 또는 놀라움, "climax"=정점 순간(발견·페이오프·반전·해결). "climax" intensity는 isClimax:true인 비트에 반드시 표시하고, 그 직전 결정적 전환점 비트에도 추가로 표시할 수 있다. 이 intensity 값은 다음 단계에서 컷 시간 차등 분배의 근거가 된다 — 차분한 비트는 적고 긴 컷, 높은/클라이맥스 비트는 짧고 빠른 컷 + 다양한 카메라 무브로 분해된다.',
     "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 원문 문장을 그대로 복사하지 마라.",
     "출력은 2~5개의 짧은 문장 또는 하나의 짧은 단락으로 쓴다. 각 문장은 이후 시나리오의 한 비트로 바로 나눌 수 있어야 한다.",
@@ -563,11 +563,24 @@ function normalizeIntensity(value, fallback) {
   return fallback;
 }
 
+// v3.872: 비트 cap 을 영상 길이 기반 동적으로 결정.
+// 30초까지는 비트당 5초 이상 확보, 짧은 영상은 비트 수 자체를 줄여 침묵 압축 방지.
+function resolveBeatCap(input) {
+  const sec = Number(input?.durationSeconds || 0);
+  if (!sec || sec <= 15) return 4;
+  if (sec <= 30) return 6;
+  if (sec <= 45) return 8;
+  if (sec <= 60) return 10;
+  if (sec <= 90) return 12;
+  return 14;
+}
+
 function normalizeBeats(rawBeats, storyText, input) {
   const list = Array.isArray(rawBeats) ? rawBeats : [];
   const cleaned = [];
+  const cap = resolveBeatCap(input);
   for (const item of list) {
-    if (cleaned.length >= 6) break;
+    if (cleaned.length >= cap) break;
     const action = typeof item === "string"
       ? sanitizeStory(item)
       : sanitizeStory(item?.action || item?.text || item?.beat || "");
