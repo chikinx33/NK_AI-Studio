@@ -139,16 +139,14 @@ function normalizeInput(body) {
 function buildSystemPrompt(language) {
   if (language === "en") {
     return [
-      "You reorganize a rough story draft into a short-form story skeleton that the next scenario generator can split into scenes immediately.",
+      "You enumerate every event in the user's story as one beat per event. You DO NOT compress, merge, or drop events. The user's story IS the source of truth.",
       '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. Never use markdown (```json, ```), explanations, comments, or backticks.',
-      '[BEATS FIELD - MANDATORY] "beats" is an array where each item is one action beat from "story". Each beat MUST be a single concrete physical action with an immediate visible reaction (one sentence, 60 chars max). The beats array MUST cover every story sentence — no story content may be left out of beats. Mark "isClimax":true ONLY on the final discovery/resolution/punchline beat that pays off the setup. Beats must follow story order. Preserve @character tokens inside beat actions exactly as in story. Beat count cap by duration: ≤15s→4, ≤30s→6, ≤45s→8, ≤60s→10, ≤90s→12. If the story has more events than the cap, COMPRESS minor transitions but NEVER drop the final/ending beat (especially if user writes "끝" / "그리고 끝났다" / "the end").',
+      '[BEATS FIELD - MANDATORY] "beats" is an array where each item is one event from "story". CORE RULE: if the user wrote N events, output N beats. Do NOT merge two events into one beat. Do NOT skip ANY event. Each beat MUST be a single concrete physical action with an immediate visible reaction (one sentence, 60 chars max). Mark "isClimax":true ONLY on the final discovery/resolution/punchline beat that pays off the setup. Beats must follow story order. Preserve @character tokens inside beat actions exactly as in story. Physical safety cap: floor(duration / 2) beats (each beat needs at least 2 seconds of video). Only when the story exceeds this cap may you compress adjacent minor transitions — but the FINAL/ending beat (especially user-marked "끝" / "the end") is NEVER dropped.',
       '[INTENSITY FIELD - MANDATORY] Each beat MUST have an "intensity" value: "low" = calm setup/explanation, "medium" = ongoing action, "high" = rising tension or surprise, "climax" = peak moment (discovery, payoff, twist, resolution). The "climax" intensity MUST appear on the beat with isClimax:true and may also appear on a key turning-point beat just before it. This intensity drives non-uniform cut allocation in the next stage — calm beats get longer fewer cuts, high/climax beats get short rapid cuts with varied camera moves.',
-      "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific action and immediate reaction. Do not copy original sentences verbatim.",
-      "Write 2-5 short sentences or one short paragraph. Each sentence should map to one simple beat for later scene generation.",
+      "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific concrete action and immediate reaction — but never as a way to REDUCE the number of beats. Do not copy original sentences verbatim; rewrite each event as action-first phrasing.",
       "Write only visible actions, reactions, and immediate outcomes. Do not summarize with abstract planning language.",
-      "Short video logic is mandatory. Around 15 seconds means one core situation, minimal location changes, and about 3-4 action beats.",
       "If the audience is infants, toddlers, or young kids, use very simple wording and concrete action-response phrasing only.",
-      "If the tone includes humor/comedy, include at least one specific funny mishap, mistake, reversal, or visual gag instead of saying it is humorous.",
+      "If the tone includes humor/comedy, make sure each comedic beat uses concrete mishap/mistake/reversal phrasing instead of saying it is humorous.",
       "If style or world-setting information exists, weave a brief visual hint naturally into the first sentence only. Do not insert it as a standalone sentence in the middle of the story.",
       "Forbidden abstract examples: deepens friendship, feels the joy of solving together, becomes emotional, enters a humorous situation, meaningful journey.",
       "Do not output scene numbers, markdown, bullet lists, or production instructions.",
@@ -160,16 +158,14 @@ function buildSystemPrompt(language) {
     ].join(" ");
   }
   return [
-    "너는 사용자가 적은 초안을 다음 단계의 시나리오 생성기가 바로 씬으로 쪼갤 수 있는 짧은 영상용 이야기 뼈대로 재정리하는 보조 AI다.",
+    "너는 사용자가 적은 이야기에서 발생하는 모든 사건을 한 줄씩 비트로 enumerate하는 AI다. 사용자 이야기가 source of truth이고, 너는 압축·병합·생략하지 않는다.",
     '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"...","beats":[{"action":"...","intensity":"low|medium|high|climax","isClimax":false},...]}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
-    '[beats 필드 - 필수] "beats"는 배열이며, 각 항목은 story 안의 행동 비트 하나에 1:1 매핑된다. 각 비트는 한 문장(60자 이내)으로 구체적 물리 행동과 즉각적 반응만 쓴다. beats 배열은 story의 모든 문장을 빠짐없이 커버해야 한다 — story에 나온 행동·반응 중 beats에 들어가지 않는 것이 있으면 안 된다. "isClimax":true는 setup을 마무리하는 마지막 발견/해결/펀치라인 비트 하나에만 표시한다. beats 순서는 story 순서와 동일해야 하며, @캐릭터 토큰은 story와 동일하게 유지한다. 영상 길이별 비트 수 상한: 15초 이하→4, 30초 이하→6, 45초 이하→8, 60초 이하→10, 90초 이하→12. 이야기에 이벤트가 상한보다 많으면 사소한 전환 비트는 압축하되, 마지막 결말 비트는 절대 누락 금지(특히 사용자가 "끝", "그리고 끝났다" 같은 명시적 결말 표지를 쓴 경우 반드시 마지막 비트로 보장).',
+    '[beats 필드 - 필수] "beats"는 배열이며, 각 항목은 story 안의 사건 하나에 1:1 매핑된다. 핵심 규칙: 사용자가 N개 사건을 적으면 N개 비트를 출력한다. 두 사건을 한 비트로 병합하지 않는다. 어떤 사건도 누락하지 않는다. 각 비트는 한 문장(60자 이내)으로 구체적 물리 행동과 즉각적 반응만 쓴다. "isClimax":true는 setup을 마무리하는 마지막 발견/해결/펀치라인 비트 하나에만 표시한다. beats 순서는 story 순서와 동일해야 하며, @캐릭터 토큰은 story와 동일하게 유지한다. 물리적 안전 상한: floor(영상길이 / 2)개(비트당 최소 2초 필요). 이야기가 이 상한을 초과할 때만 인접한 사소한 전환을 압축할 수 있다 — 단, 마지막 결말 비트(특히 사용자가 "끝", "그리고 끝났다" 같은 명시적 결말 표지를 쓴 경우)는 절대 누락하지 않는다.',
     '[intensity 필드 - 필수] 각 비트는 intensity 값을 반드시 가진다: "low"=차분한 설정/설명, "medium"=일반 진행 액션, "high"=긴장 고조 또는 놀라움, "climax"=정점 순간(발견·페이오프·반전·해결). "climax" intensity는 isClimax:true인 비트에 반드시 표시하고, 그 직전 결정적 전환점 비트에도 추가로 표시할 수 있다. 이 intensity 값은 다음 단계에서 컷 시간 차등 분배의 근거가 된다 — 차분한 비트는 적고 긴 컷, 높은/클라이맥스 비트는 짧고 빠른 컷 + 다양한 카메라 무브로 분해된다.',
-    "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 원문 문장을 그대로 복사하지 마라.",
-    "출력은 2~5개의 짧은 문장 또는 하나의 짧은 단락으로 쓴다. 각 문장은 이후 시나리오의 한 비트로 바로 나눌 수 있어야 한다.",
+    "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 단, 이는 비트 수를 줄이기 위한 압축 수단으로 쓰면 안 된다. 원문 문장을 그대로 복사하지는 말되, 각 사건을 행동 중심 표현으로 다시 적는다.",
     "추상적인 기획서 문장 대신 눈에 보이는 행동, 즉각적인 반응, 바로 이어지는 결과로 쓴다.",
-    "짧은 영상 길이를 반드시 반영한다. 15초 안팎이면 한 가지 핵심 상황만 다루고, 장소 이동을 최소화하며, 3~4개의 행동 비트 정도만 허용한다.",
     "시청 타겟이 영유아/어린이면 짧고 쉬운 말만 쓰고, 추상 감정 설명 대신 행동과 반응만 쓴다.",
-    "톤이 유머/코미디면 실제 코믹 상황 1개 이상을 구체적으로 쓴다. '유머러스한 상황에 처한다'처럼 설명으로 넘기지 마라.",
+    "톤이 유머/코미디면 각 코믹 비트를 구체적인 실수·착각·반전 묘사로 적는다. '유머러스한 상황에 처한다'처럼 설명으로 넘기지 마라.",
     "스타일이나 세계관 힌트가 필요하면 첫 번째 문장에만 자연스럽게 녹여 넣는다. 이야기 흐름 중간에 별도 문장으로 삽입하지 마라.",
     "금지 예시: 우정을 더욱 깊게 다진다, 문제를 함께 해결하는 즐거움을 느낀다, 감동을 준다, 유머러스한 상황에 처한다, 의미 있는 여정.",
     "씬 번호, 마크다운, 불릿, 제작 지시문은 쓰지 않는다.",
@@ -194,7 +190,7 @@ function buildUserPrompt(input) {
       `Topic: ${input.topic || "(none)"}`,
       `Story draft: ${input.story || "(none)"}`,
       `Target duration: ${input.duration || "(none)"}s`,
-      `Duration compression rule: ${durationRule.en}`,
+      `Event preservation rule: ${durationRule.en}`,
       `Registered characters: ${registeredCharacters || "(none)"}`,
       `Excluded characters: ${excludedCharacters || "(none)"}`,
       `Must preserve tokens exactly: ${tokenHintText}`,
@@ -210,14 +206,14 @@ function buildUserPrompt(input) {
       `World setting: ${input.worldSetting || "(none)"}`,
       `Brand rules: ${input.brandRules.join(", ") || "(none)"}`,
       `Banned expressions: ${input.bannedExpressions.join(", ") || "(none)"}`,
-      "Output goal: a compressed, action-first story skeleton that preserves the user's intent and direction, with all abstract phrases replaced by concrete action beats. Do not copy original sentences verbatim."
+      "Output goal: a faithful enumeration of every event in the user's story as separate beats — preserving the user's intent, direction, and event sequence. Replace abstract phrases with concrete action phrasing, but never merge or drop events."
     ].join("\n");
   }
   return [
     `주제: ${input.topic || "(없음)"}`,
     `이야기 초안: ${input.story || "(없음)"}`,
     `목표 길이: ${input.duration || "(없음)"}초`,
-    `길이 압축 규칙: ${durationRule.ko}`,
+    `사건 보존 규칙: ${durationRule.ko}`,
     `등록 캐릭터: ${registeredCharacters || "(없음)"}`,
     `등장 금지 캐릭터: ${excludedCharacters || "(없음)"}`,
     `반드시 유지할 캐릭터 토큰: ${input.tokenHints.length ? input.tokenHints.join(", ") : "(없음)"}`,
@@ -233,7 +229,7 @@ function buildUserPrompt(input) {
     `세계관/배경: ${input.worldSetting || "(없음)"}`,
     `브랜드 규칙: ${input.brandRules.join(", ") || "(없음)"}`,
     `금지 표현: ${input.bannedExpressions.join(", ") || "(없음)"}`,
-    "출력 목표: 사용자의 의도와 방향을 유지하면서, 추상적 표현은 구체적 행동 비트로 채운 압축형 이야기 뼈대를 만든다. 원문 문장 복사 금지."
+    "출력 목표: 사용자의 이야기에 등장한 모든 사건을 빠짐없이 비트로 enumerate한다. 의도·방향·사건 순서를 모두 보존하고, 추상 표현만 구체 행동으로 치환한다. 사건을 병합하거나 누락하지 않는다."
   ].join("\n");
 }
 
@@ -387,27 +383,13 @@ function cleanJsonResponse(text) {
 
 function describeDurationRule(input) {
   const sec = Number(input?.durationSeconds || 0);
-  if (sec && sec <= 15) {
-    return {
-      ko: "15초 안팎으로 보고 한 가지 핵심 상황만 유지한다. 장소 이동은 최소화하고 3~4개의 짧은 행동 비트만 남긴다.",
-      en: "Treat it as roughly a 15-second video. Keep one core situation, minimize location changes, and limit it to about 3-4 short beats."
-    };
-  }
-  if (sec && sec <= 30) {
-    return {
-      ko: "30초 안팎으로 보고 핵심 상황 1개와 짧은 확장 1개만 허용한다. 장소는 1~2곳 안에서 정리한다.",
-      en: "Treat it as roughly a 30-second video. Keep one core situation plus one short expansion, usually within 1-2 locations."
-    };
-  }
-  if (sec && sec <= 45) {
-    return {
-      ko: "45초 안팎으로 보고 설정, 진행, 짧은 전환, 마무리까지 허용한다. 그래도 불필요한 우회 전개는 줄인다.",
-      en: "Treat it as roughly a 45-second video. Allow setup, development, a short turn, and closure, while still avoiding unnecessary detours."
-    };
-  }
+  const physicalCap = sec > 0 ? Math.max(2, Math.floor(sec / 2)) : 0;
+  const capLabel = physicalCap ? `${physicalCap}` : "?";
+  // v3.873: 압축 지침을 전면 제거. Pass 0의 역할은 사용자 이야기의 사건을 enumerate하는 것이며,
+  // 시간 분배는 다음 단계(Pass 1의 computeBeatTimeBudget)가 처리한다. 여기서는 물리적 안전 상한만 안내.
   return {
-    ko: "목표 길이에 맞춰 사건 수를 압축한다. 짧을수록 설명보다 행동 비트를 우선한다.",
-    en: "Compress the number of events to fit the target duration. The shorter the video, the more you should favor action beats over explanation."
+    ko: `사용자 이야기의 모든 사건을 비트로 enumerate한다. 사용자가 N개 사건을 적으면 N개 비트를 출력. 압축·병합 금지. 물리적 안전 상한: 비트당 최소 2초가 필요하므로 ${sec || "?"}초 영상은 최대 ${capLabel}개 비트까지 허용. 사용자 이야기가 이 상한을 넘을 때만 인접한 사소한 전환을 묶되, 마지막 결말 비트는 절대 누락 금지.`,
+    en: `Enumerate every event in the user's story as a separate beat. If user wrote N events, output N beats. Do not compress or merge. Physical safety cap: each beat needs at least 2 seconds, so a ${sec || "?"}-second video allows up to ${capLabel} beats. Only when the story exceeds this cap may you fold adjacent minor transitions — and never drop the final/ending beat.`
   };
 }
 
@@ -483,12 +465,12 @@ function finalizeFallbackStory(beats) {
   return list.join(" ");
 }
 
+// v3.873: 폴백 경로(API 없을 때)도 압축이 아닌 물리적 안전 floor 기반으로 통일.
 function determineBeatLimit(durationSeconds) {
   const sec = Number(durationSeconds || 0);
-  if (sec && sec <= 15) return 4;
-  if (sec && sec <= 30) return 5;
-  if (sec && sec <= 45) return 6;
-  return 5;
+  if (!sec || sec <= 0) return 8;
+  const physical = Math.max(2, Math.floor(sec / 2));
+  return Math.min(32, physical);
 }
 
 function simplifyAbstractPhrase(text) {
@@ -563,16 +545,16 @@ function normalizeIntensity(value, fallback) {
   return fallback;
 }
 
-// v3.872: 비트 cap 을 영상 길이 기반 동적으로 결정.
-// 30초까지는 비트당 5초 이상 확보, 짧은 영상은 비트 수 자체를 줄여 침묵 압축 방지.
+// v3.873: cap 의 의미를 '압축 임계'에서 '물리적 안전 floor'로 전환.
+// 영상 모델 최소 컷 한계가 2초이므로, 비트당 최소 2초가 필요. 그래서 floor(duration / 2)가 진짜 한계.
+// 사용자가 그보다 적은 사건을 적었으면 cap은 발동하지 않음 (압축 없음).
+// 사용자가 더 많이 적었을 때만 cap이 발동해 마지막 N개로 자름 — 단 결말 비트는 보호 (시스템 프롬프트가 강제).
 function resolveBeatCap(input) {
   const sec = Number(input?.durationSeconds || 0);
-  if (!sec || sec <= 15) return 4;
-  if (sec <= 30) return 6;
-  if (sec <= 45) return 8;
-  if (sec <= 60) return 10;
-  if (sec <= 90) return 12;
-  return 14;
+  if (!sec || sec <= 0) return 16; // duration 미지정 시 넉넉히
+  const physical = Math.max(2, Math.floor(sec / 2));
+  // 최소 2개 보장 (1 비트는 의미 없음), 절대 상한 32 (UI/메모리 보호)
+  return Math.min(32, Math.max(2, physical));
 }
 
 function normalizeBeats(rawBeats, storyText, input) {

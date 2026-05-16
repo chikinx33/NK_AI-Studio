@@ -611,7 +611,7 @@ export async function onRequestPost(context) {
     const manualDirectives = String(body.manualDirectives || body.extraNotes || body.banned || "").trim();
     const aspectRatio = String(body.aspectRatio || "").trim();
     const lang = body.language === "en" ? "en" : "ko";
-    const storyBeats = normalizeStoryBeatsInput(body.storyBeats);
+    const storyBeats = normalizeStoryBeatsInput(body.storyBeats, Number(duration) || 0);
     const characters = normalizeCharacters(body.characters || []);
     const characterGenerationDisabled = isCharacterGenerationDisabled(body.charactersEnabled, characters);
     const knowledgeHub = normalizeKnowledgeHubInput(body, { characterGenerationDisabled });
@@ -2427,11 +2427,16 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
 
 const VALID_BEAT_INTENSITIES = new Set(["low", "medium", "high", "climax"]);
 
-function normalizeStoryBeatsInput(value) {
+function normalizeStoryBeatsInput(value, durationSec) {
   if (!Array.isArray(value)) return [];
+  // v3.873: cap 의미를 압축 임계에서 물리적 안전 floor로 전환.
+  // Pass 0가 이미 cap 처리했고 여기서는 안전 상한만 적용 (UI/메모리 보호).
+  const sec = Number(durationSec) || 0;
+  const physical = sec > 0 ? Math.max(2, Math.floor(sec / 2)) : 16;
+  const cap = Math.min(32, physical);
   const out = [];
   for (const item of value) {
-    if (out.length >= 6) break;
+    if (out.length >= cap) break;
     const action = typeof item === "string"
       ? item
       : String(item?.action || item?.text || item?.beat || "");

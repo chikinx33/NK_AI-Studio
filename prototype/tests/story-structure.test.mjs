@@ -95,7 +95,7 @@ test('story structure removes excluded and unselected character tokens from fall
   assert.doesNotMatch(filtered, /@네모|@동그라미|네모|동그라미/);
 });
 
-test('story structure prompt carries duration, young audience, humor, and style rules for short-form stories', () => {
+test('story structure prompt carries duration, audience, humor, and style rules with event-preservation philosophy', () => {
   const helpers = loadHelpers();
   const input = helpers.normalizeInput({
     topic: '숨바꼭질',
@@ -112,21 +112,29 @@ test('story structure prompt carries duration, young audience, humor, and style 
 
   const prompt = helpers.buildUserPrompt(input);
   assert.match(prompt, /목표 길이: 15초/);
-  assert.match(prompt, /15초 안팎으로 보고 한 가지 핵심 상황만 유지한다/);
+  // v3.873: 압축 지침 제거. 사용자 이야기의 모든 사건을 enumerate하는 보존 철학으로 전환.
+  assert.match(prompt, /사용자 이야기의 모든 사건을 비트로 enumerate한다/);
+  assert.match(prompt, /사건 보존 규칙/);
   assert.match(prompt, /아주 짧고 쉬운 문장/);
-  assert.match(prompt, /구체적 실수, 착각, 반전, 과장 반응/);
   assert.match(prompt, /스타일과 세계관은 이야기 흐름을 바꾸지 않는다/);
-  assert.match(prompt, /추상적 표현은 구체적 행동 비트로 채운 압축형 이야기 뼈대/);
+  // 압축 표현이 출력 목표에서 제거됐는지 검증
+  assert.doesNotMatch(prompt, /압축형 이야기 뼈대/);
+  assert.match(prompt, /사건을 병합하거나 누락하지 않는다/);
 });
 
-test('story structure system prompt forbids abstract planning prose and enforces short-video logic', () => {
+test('story structure system prompt enforces event enumeration (no compression) and forbids abstract prose', () => {
   const helpers = loadHelpers();
   const prompt = helpers.buildSystemPrompt('ko');
 
-  assert.match(prompt, /짧은 영상용 이야기 뼈대/);
-  assert.match(prompt, /15초 안팎이면 한 가지 핵심 상황만 다루고/);
-  assert.match(prompt, /실제 코믹 상황 1개 이상/);
-  assert.match(prompt, /우정을 더욱 깊게 다진다/);
+  // v3.873: 시스템 프롬프트는 enumerate 철학.
+  assert.match(prompt, /모든 사건을 한 줄씩 비트로 enumerate/);
+  assert.match(prompt, /사용자가 N개 사건을 적으면 N개 비트를 출력/);
+  assert.match(prompt, /두 사건을 한 비트로 병합하지 않는다/);
+  assert.match(prompt, /마지막 결말 비트.*절대 누락하지 않는다/);
+  assert.match(prompt, /우정을 더욱 깊게 다진다/); // 금지 예시 여전히 포함
+  // 압축을 강제하는 문구는 제거됨
+  assert.doesNotMatch(prompt, /짧은 영상용 이야기 뼈대로 재정리/);
+  assert.doesNotMatch(prompt, /2~5개의 짧은 문장/);
 });
 
 test('story structure fallback compresses abstract young-kids comedy into shorter action beats', () => {
