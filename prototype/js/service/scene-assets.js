@@ -144,8 +144,8 @@
       var scene = scenes[i] || {};
       if (isSceneMediaUrlStale(getSceneImageUrl(scene))) return true;
       var sceneVideoUrl = getSceneVideoUrl(scene);
-      if (!sceneVideoUrl) return true;
-      if (isSceneMediaUrlStale(sceneVideoUrl)) return true;
+      // videoUrl이 없는 씬은 이미지 전용으로 간주 — 자동 영상 주입하지 않음
+      if (sceneVideoUrl && isSceneMediaUrlStale(sceneVideoUrl)) return true;
     }
     return false;
   }
@@ -167,7 +167,8 @@
         var scene = scenes[i] || {};
         if (isSceneMediaUrlStale(getSceneImageUrl(scene))) needImg = true;
         var sceneVideoUrl = getSceneVideoUrl(scene);
-        if (!sceneVideoUrl || isSceneMediaUrlStale(sceneVideoUrl)) needVid = true;
+        // videoUrl이 있고 stale할 때만 갱신 — 없으면 이미지 전용 씬으로 유지
+        if (sceneVideoUrl && isSceneMediaUrlStale(sceneVideoUrl)) needVid = true;
       }
     }
     if (!needImg && !needVid) return false;
@@ -217,17 +218,6 @@
           next = Object.assign({}, next, {
             videoUrl: vidProxy,
             generatedVideoUrl: vidProxy,
-            videoStatus: 'done',
-            videoError: ''
-          });
-        }
-      } else if (needVid && !vidUrl) {
-        var vidFallback = findSceneVideoFromLibrary(next, vidItems);
-        if (vidFallback) {
-          changed = true;
-          next = Object.assign({}, next, {
-            videoUrl: (NK.api && NK.api.mediaProxyUrl) ? NK.api.mediaProxyUrl(vidFallback) : vidFallback,
-            generatedVideoUrl: (NK.api && NK.api.mediaProxyUrl) ? NK.api.mediaProxyUrl(vidFallback) : vidFallback,
             videoStatus: 'done',
             videoError: ''
           });

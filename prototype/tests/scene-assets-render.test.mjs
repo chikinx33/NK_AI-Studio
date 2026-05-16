@@ -87,7 +87,7 @@ function loadScript(ctx, relativePath) {
   vm.runInContext(source, ctx, { filename: fullPath });
 }
 
-test('sceneAssets.refreshProjectSceneAssets refreshes stale signed URLs and fills missing video', async () => {
+test('sceneAssets.refreshProjectSceneAssets refreshes stale image URLs', async () => {
   const project = {
     id: 'proj1',
     scenes: [
@@ -113,9 +113,7 @@ test('sceneAssets.refreshProjectSceneAssets refreshes stale signed URLs and fill
         items: [{ name: 'images/scene-1.png', signedUrl: 'https://cdn.example.com/scene-1.png?sig=1' }]
       };
     }
-    return {
-      items: [{ name: 'videos/project-scene-1-scene-1.mp4', signedUrl: 'https://cdn.example.com/scene-1.mp4?sig=2' }]
-    };
+    return { items: [] };
   };
 
   loadScript(ctx, 'prototype/js/service/scene-assets.js');
@@ -124,6 +122,39 @@ test('sceneAssets.refreshProjectSceneAssets refreshes stale signed URLs and fill
   const changed = await sceneAssets.refreshProjectSceneAssets(project);
   assert.equal(changed, true);
   assert.equal(updatedProject.scenes[0].imageDataUrl, 'https://cdn.example.com/scene-1.png?sig=1');
+  // videoUrl이 없는 씬은 이미지 전용으로 간주 — 자동 영상 주입 없음
+  assert.equal(updatedProject.scenes[0].videoUrl, '');
+});
+
+test('sceneAssets.refreshProjectSceneAssets refreshes stale video signed URLs', async () => {
+  const project = {
+    id: 'proj1b',
+    scenes: [
+      {
+        id: 'scene-1',
+        imageDataUrl: 'https://cdn.example.com/scene-1.png',
+        videoUrl: 'gs://bucket/videos/scene-1.mp4'
+      }
+    ]
+  };
+  const ctx = createContext({ initialDrafts: [project] });
+  let updatedProject = null;
+  ctx.NK.service.project.updateLocal = (projectId, updater) => {
+    updatedProject = updater(project);
+    return updatedProject;
+  };
+  ctx.NK.api.library = async (kind) => {
+    if (kind === 'video') {
+      return { items: [{ name: 'videos/scene-1.mp4', signedUrl: 'https://cdn.example.com/scene-1.mp4?sig=2' }] };
+    }
+    return { items: [] };
+  };
+
+  loadScript(ctx, 'prototype/js/service/scene-assets.js');
+  const sceneAssets = ctx.NK.service.sceneAssets;
+
+  const changed = await sceneAssets.refreshProjectSceneAssets(project);
+  assert.equal(changed, true);
   assert.equal(updatedProject.scenes[0].videoUrl, 'https://cdn.example.com/scene-1.mp4?sig=2');
   assert.equal(updatedProject.scenes[0].videoStatus, 'done');
 });

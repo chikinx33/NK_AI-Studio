@@ -54,7 +54,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const headers = {
       ...corsHeaders(origin),
       "Content-Type": type,
-      "Cache-Control": "public, max-age=3600"
+      "Cache-Control": "private, max-age=3600"
     };
     return new Response(buf, { status: 200, headers });
   } catch (e: any) {

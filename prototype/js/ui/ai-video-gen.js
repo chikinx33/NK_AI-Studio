@@ -285,6 +285,68 @@
     try { localStorage.setItem(DELETED_KEY, JSON.stringify(state.deletedSet)); } catch (_) {}
   }
 
+  // 삭제된 영상 objectName을 참조하는 프로젝트 씬/컷의 videoUrl을 모두 제거
+  function clearProjectVideoRef(projectId, objectName) {
+    if (!projectId || !objectName) return;
+    var fname = String(objectName).split('/').pop();
+    if (!fname) return;
+    var vidKeys = ['videoUrl', 'videoPlaybackUrl', 'generatedVideoUrl', 'videoPath'];
+    function urlMatchesFile(url) {
+      if (!url) return false;
+      var s = String(url);
+      return s.indexOf(fname) >= 0 || s.indexOf(encodeURIComponent(objectName)) >= 0;
+    }
+    function clearScene(scene) {
+      var next = scene;
+      var sc = false;
+      vidKeys.forEach(function(k) {
+        if (urlMatchesFile(next[k])) {
+          if (!sc) { sc = true; next = Object.assign({}, next, { videoStatus: '', videoJobId: '', videoError: '' }); }
+          next[k] = '';
+        }
+      });
+      if (Array.isArray(scene.shots)) {
+        var newShots = scene.shots.map(function(sh) {
+          var ns = sh; var shC = false;
+          vidKeys.forEach(function(k) {
+            if (urlMatchesFile(ns && ns[k])) {
+              if (!shC) { shC = true; ns = Object.assign({}, ns, { videoStatus: '', videoJobId: '', videoError: '' }); }
+              ns[k] = '';
+            }
+          });
+          return ns;
+        });
+        if (newShots.some(function(s, i) { return s !== scene.shots[i]; })) {
+          if (!sc) { sc = true; next = Object.assign({}, next); }
+          next.shots = newShots;
+        }
+      }
+      return next;
+    }
+    function applyUpdate(project) {
+      var scenes = Array.isArray(project && project.scenes) ? project.scenes : [];
+      var nextScenes = scenes.map(clearScene);
+      if (nextScenes.every(function(s, i) { return s === scenes[i]; })) return project;
+      return Object.assign({}, project, { scenes: nextScenes });
+    }
+    try {
+      var svc = NK.service && NK.service.project;
+      if (svc && svc.updateLocal) { svc.updateLocal(projectId, applyUpdate); return; }
+      var drafts = NK.store && NK.store.getDrafts ? NK.store.getDrafts() : null;
+      if (!Array.isArray(drafts)) return;
+      var idx = drafts.findIndex(function(d) { return String(d && d.id) === String(projectId); });
+      if (idx < 0) return;
+      var updated = applyUpdate(drafts[idx]);
+      if (updated === drafts[idx]) return;
+      drafts[idx] = updated;
+      NK.store.saveDrafts(drafts);
+      try {
+        var rt = NK.state && NK.state.runtime;
+        if (rt && rt.currentProject && String(rt.currentProject.id) === String(projectId)) rt.currentProject = updated;
+      } catch (_) {}
+    } catch (_) {}
+  }
+
   function syncServerHistory() {
     if (!NK.api || !NK.api.videoGenLibrary) return;
     state.historyLoading = true;
@@ -1103,6 +1165,8 @@
                 state.deletedSet[name] = true;
                 saveDeletedSet();
                 state.serverItems = state.serverItems.filter(function (s) { return s.name !== name; });
+                // 프로젝트 씬/컷에서 삭제된 영상 URL 참조 제거
+                if (state.projectId) clearProjectVideoRef(state.projectId, name);
                 render();
               })
               .catch(function (err) {
