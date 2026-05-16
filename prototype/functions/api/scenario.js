@@ -11,6 +11,11 @@ const RULE_RETRY_MIN_REMAINING_MS = 16000;
 // onRequestPost 시작 시각으로부터의 전체 예산(ms). CF 하드 리밋 30s 보다 짧게 잡는다.
 const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 
+// v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
+// 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
+// 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
+const SERVER_VERSION = "3.881";
+
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -1481,6 +1486,12 @@ async function generateScenarioScenesViaBeats(input) {
   const finalScenes = rebalanceEstSec(normalizedScenes, totalSec);
   const elapsedMs = Date.now() - runStartedAt;
 
+  // v3.881: enforceCharacterTokenInVisual 가 코드 레벨로 보정한 @토큰 횟수 집계
+  const tokensEnforcedTotal = normalizedScenes.reduce(
+    (acc, s) => acc + (Array.isArray(s._autoTokenAdded) ? s._autoTokenAdded.length : 0),
+    0,
+  );
+
   return {
     scenes: finalScenes,
     meta: {
@@ -1503,6 +1514,9 @@ async function generateScenarioScenesViaBeats(input) {
       perBeatFailures: failures.length,
       perBeatFallbacks: fallbacks,
       elapsedMs,
+      // v3.881: 빌드 추적
+      serverVersion: SERVER_VERSION,
+      tokensEnforced: tokensEnforcedTotal,
     },
   };
 }
@@ -1741,6 +1755,10 @@ async function generateScenarioScenes(input) {
       scenesGenerated: finalScenes.length,
       scenesPadded: scenesPaddedCount,
       scenesSplit: scenesSplitCount,
+      // v3.881: 빌드 추적 (legacy 경로)
+      serverVersion: SERVER_VERSION,
+      generationPath: "single-call",
+      tokensEnforced: 0, // single-call 은 enforce 함수 미사용
     },
   };
 }
