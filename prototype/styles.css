@@ -2700,6 +2700,65 @@ textarea::-webkit-scrollbar-corner {
   line-height: 1.5;
 }
 
+/* 시나리오 생성 진단 모달 */
+#scenario-diag-modal .scenario-diag-modal-box {
+  width: min(520px, 92vw);
+  max-height: 80vh;
+  overflow: auto;
+  padding: 20px 22px;
+  background: var(--card);
+  color: var(--text);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.scenario-diag-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+.scenario-diag-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1 1 auto;
+}
+.scenario-diag-close {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+.scenario-diag-close:hover { background: var(--layer-strong); }
+.scenario-diag-content {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+  background: var(--layer-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.scenario-diag-empty {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 24px 0;
+}
+
 /* 모든 씬에 공통으로 적용된 배경 (공통 prefix) 배지 — 시나리오 카드들 위 한 줄 */
 .scenario-common-prefix-badge {
   display: flex;

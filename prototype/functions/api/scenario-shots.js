@@ -45,10 +45,13 @@ function extractTokensFromText(text) {
   return out;
 }
 
-// v3.883: Pass 2 decomposer LLM 이 컷별로 visual 을 재서술하면서 @토큰을
+// v3.884: Pass 2 decomposer LLM 이 컷별로 visual 을 재서술하면서 @토큰을
 // 일반 명사로 다시 풀어 쓰는 경향이 있어, 컷 단위로 enforce 를 한 번 더 적용.
 // Pass 1 visual 의 @토큰을 displayName 으로 역추출해 매핑 구성 (@네모 → 네모).
 const KOREAN_PARTICLES_GROUP_SHOTS = "(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로)";
+// LLM 이 캐릭터를 "파란 네모", "노란 동그라미" 처럼 색+이름 으로 재서술할 때
+// 색상 접두사까지 함께 소비해 "@네모" 만 남기기 위한 패턴.
+const KOREAN_COLOR_PREFIX_SHOTS = "(?:파란|노란|빨간|초록|하얀|흰|검은|보라|주황|분홍|하늘|갈색|금색|은색)\\s+";
 
 function buildDisplayNameToTokenMap(text) {
   const map = new Map();
@@ -70,9 +73,9 @@ function enforceTokensInText(text, tokenMap) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     let re;
     try {
-      re = new RegExp(`(?<![@0-9A-Za-z가-힣_])${escaped}${KOREAN_PARTICLES_GROUP_SHOTS}?(?![가-힣_])`, "g");
+      re = new RegExp(`(?<![@0-9A-Za-z가-힣_])(?:${KOREAN_COLOR_PREFIX_SHOTS})?${escaped}${KOREAN_PARTICLES_GROUP_SHOTS}?(?![가-힣_])`, "g");
     } catch (_) {
-      re = new RegExp(`${escaped}${KOREAN_PARTICLES_GROUP_SHOTS}?`, "g");
+      re = new RegExp(`(?:${KOREAN_COLOR_PREFIX_SHOTS})?${escaped}${KOREAN_PARTICLES_GROUP_SHOTS}?`, "g");
     }
     const before = result;
     result = result.replace(re, (_match, particle) => `${token}${particle || ""}`);

@@ -1990,34 +1990,24 @@
       }
     };
 
-    // v3.876: 시나리오 생성 결과 진단 패널 (화면 우상단 고정).
-    // F12 Network 를 안 봐도 비트 처리 상황을 즉시 확인 가능.
+    // v3.884: 시나리오 생성 진단 — 전역 토스트 대신 모달 팝업 방식.
+    let _lastDiagText = '';
     const showScenarioMetaToast = (text) => {
       try {
-        const id = 'scenario-meta-diag';
-        let el = document.getElementById(id);
-        if (!el) {
-          el = document.createElement('div');
-          el.id = id;
-          el.style.cssText = [
-            'position:fixed', 'top:16px', 'right:16px', 'z-index:99999',
-            'max-width:380px', 'background:#1f2937', 'color:#e5e7eb',
-            'border:1px solid #374151', 'border-radius:8px',
-            'padding:12px 14px', 'font-size:12px', 'line-height:1.5',
-            'white-space:pre-wrap', 'font-family:ui-monospace,Menlo,Consolas,monospace',
-            'box-shadow:0 8px 24px rgba(0,0,0,0.35)',
-            'cursor:pointer',
-          ].join(';');
-          el.title = '클릭하면 닫힙니다';
-          el.addEventListener('click', () => el.remove());
-          document.body.appendChild(el);
-        }
-        const header = '[시나리오 생성 진단]';
-        const hint = '\n\n(이 패널을 클릭하면 닫힙니다)';
-        el.textContent = `${header}\n${text}${hint}`;
-        // 60초 후 자동 제거
-        clearTimeout(el._timer);
-        el._timer = setTimeout(() => { if (el && el.parentNode) el.remove(); }, 60000);
+        _lastDiagText = text || '';
+        const modal = document.getElementById('scenario-diag-modal');
+        const body = document.getElementById('scenario-diag-modal-body');
+        if (!modal || !body) return;
+        body.innerHTML = (
+          '<div class="scenario-diag-titlebar">' +
+          '<h2 class="scenario-diag-title">시나리오 생성 진단</h2>' +
+          '<button class="close-modal scenario-diag-close" data-close="scenario-diag-modal" aria-label="닫기">✕</button>' +
+          '</div>' +
+          (_lastDiagText
+            ? '<div class="scenario-diag-content">' + escapeHtml(_lastDiagText) + '</div>'
+            : '<p class="scenario-diag-empty">진단 정보가 없습니다.</p>')
+        );
+        modal.classList.remove('hidden');
       } catch (_) { /* 표시 실패는 무시 */ }
     };
 
@@ -2767,6 +2757,25 @@
         modal.classList.remove('hidden');
       });
     }
+    // 진단 버튼: 마지막 진단 내용 재표시
+    const scenarioDiagBtn = document.getElementById('scenario-diag-btn');
+    if (scenarioDiagBtn) {
+      scenarioDiagBtn.addEventListener('click', () => {
+        const modal = document.getElementById('scenario-diag-modal');
+        const body = document.getElementById('scenario-diag-modal-body');
+        if (!modal || !body) return;
+        body.innerHTML = (
+          '<div class="scenario-diag-titlebar">' +
+          '<h2 class="scenario-diag-title">시나리오 생성 진단</h2>' +
+          '<button class="close-modal scenario-diag-close" data-close="scenario-diag-modal" aria-label="닫기">✕</button>' +
+          '</div>' +
+          (_lastDiagText
+            ? '<div class="scenario-diag-content">' + escapeHtml(_lastDiagText) + '</div>'
+            : '<p class="scenario-diag-empty">시나리오를 먼저 생성해 주세요.</p>')
+        );
+        modal.classList.remove('hidden');
+      });
+    }
     // 모달 닫기 (data-close 패턴 공용)
     document.addEventListener('click', (e) => {
       const closeBtn = e.target && e.target.closest ? e.target.closest('[data-close]') : null;
@@ -2776,10 +2785,14 @@
         if (m) m.classList.add('hidden');
         return;
       }
-      // 배경 클릭 시 닫기 (camera-vocab-modal 만)
+      // 배경 클릭 시 닫기 (camera-vocab-modal, scenario-diag-modal)
       const camModal = document.getElementById('camera-vocab-modal');
       if (camModal && !camModal.classList.contains('hidden') && e.target === camModal) {
         camModal.classList.add('hidden');
+      }
+      const diagModal = document.getElementById('scenario-diag-modal');
+      if (diagModal && !diagModal.classList.contains('hidden') && e.target === diagModal) {
+        diagModal.classList.add('hidden');
       }
     });
 

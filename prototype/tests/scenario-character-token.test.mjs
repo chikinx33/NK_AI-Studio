@@ -32,19 +32,24 @@ const chars = [
   { token: '@세모', displayName: '세모' },
 ];
 
-test('enforceCharacterTokenInVisual: displayName + 조사를 @토큰 형태로 치환', () => {
+test('enforceCharacterTokenInVisual: displayName + 조사를 @토큰 형태로 치환 (색상 접두사 제거)', () => {
   const fn = loadEnforceFn();
   const out = fn('노란 동그라미가 두 손으로 얼굴을 가린 채 서 있다', { action: '@동그라미가 셈한다' }, { characters: chars });
   assert.equal(out.modified, true);
-  assert.match(out.visual, /노란 @동그라미가/);
+  // v3.884: "노란 동그라미가" → "@동그라미가" (색상 접두사 소비)
+  assert.match(out.visual, /@동그라미가/);
+  assert.doesNotMatch(out.visual, /노란 @동그라미가/);
 });
 
-test('enforceCharacterTokenInVisual: 여러 캐릭터 동시 치환', () => {
+test('enforceCharacterTokenInVisual: 여러 캐릭터 동시 치환 (색상 접두사 소비)', () => {
   const fn = loadEnforceFn();
   const out = fn('파란 네모가 왼쪽으로, 빨간 세모가 오른쪽으로 달려간다', { action: '@네모와 @세모가 도망친다' }, { characters: chars });
   assert.equal(out.modified, true);
-  assert.match(out.visual, /파란 @네모가/);
-  assert.match(out.visual, /빨간 @세모가/);
+  // v3.884: "파란 네모가" → "@네모가", "빨간 세모가" → "@세모가"
+  assert.match(out.visual, /@네모가/);
+  assert.match(out.visual, /@세모가/);
+  assert.doesNotMatch(out.visual, /파란 @네모가/);
+  assert.doesNotMatch(out.visual, /빨간 @세모가/);
 });
 
 test('enforceCharacterTokenInVisual: 이미 @토큰이 있으면 중복 치환 안 함', () => {

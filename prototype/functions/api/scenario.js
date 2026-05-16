@@ -1230,6 +1230,8 @@ function buildSingleBeatUserPromptEn(input, ctx) {
  * @returns {{visual:string, modified:boolean, addedTokens:string[]}}
  */
 const KOREAN_PARTICLES_GROUP = "(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로)";
+// v3.884: LLM 이 "파란 네모" 처럼 색상 접두사를 붙여 캐릭터를 서술할 때 함께 소비해 "@네모" 만 남김.
+const KOREAN_COLOR_PREFIX = "(?:파란|노란|빨간|초록|하얀|흰|검은|보라|주황|분홍|하늘|갈색|금색|은색)\\s+";
 
 // character-registry.js / story-structure.js 와 동일한 조사 제거 로직.
 // beat.action 의 @토큰("@네모가")이 등록 캐릭터의 @토큰("@네모")과 매칭되도록 정규화.
@@ -1259,10 +1261,9 @@ function enforceCharacterTokenInVisual(rawVisual, beat, input) {
     const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     let re;
     try {
-      re = new RegExp(`(?<![@0-9A-Za-z가-힣_])${escapedName}${KOREAN_PARTICLES_GROUP}?(?![가-힣_])`, "g");
+      re = new RegExp(`(?<![@0-9A-Za-z가-힣_])(?:${KOREAN_COLOR_PREFIX})?${escapedName}${KOREAN_PARTICLES_GROUP}?(?![가-힣_])`, "g");
     } catch (_) {
-      // lookbehind 미지원 환경 대비 (이론적으론 CF/Node 모두 지원)
-      re = new RegExp(`${escapedName}${KOREAN_PARTICLES_GROUP}?`, "g");
+      re = new RegExp(`(?:${KOREAN_COLOR_PREFIX})?${escapedName}${KOREAN_PARTICLES_GROUP}?`, "g");
     }
     const before = visual;
     visual = visual.replace(re, (_m, particle) => `${token}${particle || ""}`);
