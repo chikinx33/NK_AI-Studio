@@ -1203,46 +1203,82 @@ function buildSingleBeatUserPromptEn(input, ctx) {
 }
 
 /**
- * v3.879: visual 에 등록 캐릭터의 @토큰이 하나라도 등장하는지 검증·보정.
- * LLM 이 "파란 네모" 처럼 일반 명사화하거나 토큰을 누락하면, 다운스트림 이미지 생성기의
- * forceActiveFallback 이 활성 캐릭터 전부 강제 주입해 의도 외 캐릭터까지 함께 렌더됨.
+ * v3.880: visual 에 등록 캐릭터의 displayName 이 등장하면 자동으로 @토큰 형태로 치환.
+ * v3.879 의 오류 수정 — 이전 버전은 "displayName 이 있으면 OK" 로 판단해 보정을 건너뜀.
+ * 사용자 요구: visual 안에 반드시 @토큰 형태가 등장해야 함 (이미지 생성 정확도 + 가독성).
  *
- * 비트가 다루는 캐릭터(@토큰 기준)가 visual 에 토큰/이름 어느 형태로도 안 나타나면
- * visual 첫 문장 앞에 "@토큰 등장. " 명시 추가 (최소 침습 보정).
+ * 2단계 처리:
+ *   1) visual 에서 displayName 단독 등장(또는 한국어 조사 동반)을 @토큰으로 자동 치환.
+ *      예: "노란 동그라미가" → "노란 @동그라미가", "네모는" → "@네모는".
+ *      단, 이미 @동그라미 형태이거나 "네모난" 같이 다른 한글 단어 일부면 건드리지 않음.
+ *   2) 비트가 다루는 캐릭터 중 1단계 후에도 visual 에 @토큰이 없으면 prefix 보강.
  *
  * @returns {{visual:string, modified:boolean, addedTokens:string[]}}
  */
+const KOREAN_PARTICLES_GROUP = "(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로)";
+
+// character-registry.js / story-structure.js 와 동일한 조사 제거 로직.
+// beat.action 의 @토큰("@네모가")이 등록 캐릭터의 @토큰("@네모")과 매칭되도록 정규화.
+function stripKoreanParticleFromToken(token) {
+  const raw = String(token || "");
+  if (raw.charAt(0) !== "@") return raw;
+  const body = raw.slice(1);
+  if (!body) return raw;
+  const stripped = body.replace(/(이가|이|가|을|를|은|는|와|과|의|에서|에게|에|께|도|만|부터|까지|으로|로)$/, "");
+  if (stripped.length < 2 || stripped === body) return raw;
+  return "@" + stripped;
+}
+
 function enforceCharacterTokenInVisual(rawVisual, beat, input) {
-  const visual = String(rawVisual || "");
+  let visual = String(rawVisual || "");
   const characters = Array.isArray(input?.characters) ? input.characters : [];
   if (!characters.length) return { visual, modified: false, addedTokens: [] };
 
-  // 비트가 다루는 캐릭터 추출 — beat.action 에 등장한 @토큰 + sceneIndex 가 0이면 모든 활성 캐릭터
+  const replacements = new Set();
+
+  // 1단계: visual 안의 displayName 단독 등장을 @토큰 형태로 자동 치환
+  // lookbehind/lookahead 로 단어 경계 제어: 앞에 @ 또는 한글이 없고, 뒤에 한글 조사 또는 비-한글
+  for (const c of characters) {
+    const token = String(c.token || "").trim();
+    const name = String(c.displayName || "").trim();
+    if (!token || !name) continue;
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    let re;
+    try {
+      re = new RegExp(`(?<![@0-9A-Za-z가-힣_])${escapedName}${KOREAN_PARTICLES_GROUP}?(?![가-힣_])`, "g");
+    } catch (_) {
+      // lookbehind 미지원 환경 대비 (이론적으론 CF/Node 모두 지원)
+      re = new RegExp(`${escapedName}${KOREAN_PARTICLES_GROUP}?`, "g");
+    }
+    const before = visual;
+    visual = visual.replace(re, (_m, particle) => `${token}${particle || ""}`);
+    if (visual !== before) {
+      replacements.add(token);
+    }
+  }
+
+  // 2단계: 비트가 다루는 캐릭터 중 1단계 후에도 visual 에 @토큰 없으면 prefix 보강
+  // beat.action 의 @토큰 추출 시 한국어 조사 제거 ("@네모가" → "@네모") 후 등록 토큰과 매칭.
   const beatTokensRaw = String(beat?.action || "").match(/@[0-9A-Za-z가-힣_]{1,24}/g) || [];
-  const beatTokens = new Set(beatTokensRaw.map((t) => t.toLowerCase()));
-  // 등록 캐릭터 중 비트가 다루는 캐릭터 후보
+  const beatTokens = new Set(beatTokensRaw.map((t) => stripKoreanParticleFromToken(t).toLowerCase()));
   const involved = characters.filter((c) => {
     const tok = String(c.token || "").toLowerCase();
     return tok && beatTokens.has(tok);
   });
-  // 비트가 다루는 캐릭터 못 찾으면 보정 안 함 (오인 보정 방지)
-  if (!involved.length) return { visual, modified: false, addedTokens: [] };
+  if (involved.length) {
+    const missing = involved.filter((c) => !visual.includes(String(c.token || "")));
+    if (missing.length) {
+      const addedPrefix = missing.map((c) => c.token).join(", ") + " 등장. ";
+      visual = addedPrefix + visual;
+      missing.forEach((c) => replacements.add(c.token));
+    }
+  }
 
-  // visual 에 각 캐릭터의 토큰 또는 displayName 이 등장하는지 확인
-  const missing = involved.filter((c) => {
-    const tok = String(c.token || "");
-    const name = String(c.displayName || "").trim();
-    if (tok && visual.includes(tok)) return false;
-    if (name && visual.includes(name)) return false;
-    return true;
-  });
-  if (!missing.length) return { visual, modified: false, addedTokens: [] };
-
-  // 누락된 캐릭터 토큰을 첫 문장 앞에 명시
-  const addedTokens = missing.map((c) => c.token).filter(Boolean);
-  if (!addedTokens.length) return { visual, modified: false, addedTokens: [] };
-  const prefix = `${addedTokens.join(", ")} 등장. `;
-  return { visual: prefix + visual, modified: true, addedTokens };
+  return {
+    visual,
+    modified: replacements.size > 0,
+    addedTokens: Array.from(replacements),
+  };
 }
 
 /**
