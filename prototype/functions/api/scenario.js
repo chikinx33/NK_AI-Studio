@@ -14,7 +14,7 @@ const RULE_RETRY_TOTAL_BUDGET_MS = 26000;
 // v3.881: 서버 응답에 현재 빌드 버전을 명시. 사용자가 진단 패널에서 어느 버전이
 // 응답을 만들었는지 즉시 확인 가능 (Cloudflare Pages 배포 지연 디버그용).
 // 코드 변경 시 이 값을 prototype/js/config.js APP_VERSION 과 함께 갱신.
-const SERVER_VERSION = "3.881";
+const SERVER_VERSION = "3.882";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -667,6 +667,15 @@ export async function onRequestPost(context) {
       if (isCreditExhaustedError(err)) throw err;
       return jsonError(err?.message || "scenario_generation_failed", 500, origin);
     }
+
+    // v3.882: 클라이언트 raw body → 정규화 → activeCharacters 흐름 추적
+    generationMeta = Object.assign({}, generationMeta || {}, {
+      rawBodyCharactersCount: Array.isArray(body.characters) ? body.characters.length : 0,
+      rawBodyCharactersEnabled: body.charactersEnabled,
+      characterGenerationDisabled,
+      activeCharactersCount: activeCharacters.length,
+      activeCharactersList: activeCharacters.map((c) => `${c.token}(${c.displayName})`),
+    });
 
     return new Response(JSON.stringify({ scenes, meta: generationMeta }), {
       status: 200,
@@ -1487,10 +1496,13 @@ async function generateScenarioScenesViaBeats(input) {
   const elapsedMs = Date.now() - runStartedAt;
 
   // v3.881: enforceCharacterTokenInVisual 가 코드 레벨로 보정한 @토큰 횟수 집계
-  const tokensEnforcedTotal = normalizedScenes.reduce(
-    (acc, s) => acc + (Array.isArray(s._autoTokenAdded) ? s._autoTokenAdded.length : 0),
+  // v3.882: shapeSceneByMode 통과 후 _autoTokenAdded 가 사라지므로 rawScenes 에서 집계
+  const tokensEnforcedTotal = rawScenes.reduce(
+    (acc, s) => acc + (Array.isArray(s?._autoTokenAdded) ? s._autoTokenAdded.length : 0),
     0,
   );
+  // v3.882: 캐릭터가 enforce 까지 도달했는지 디버그 노출
+  const charactersDebug = (input.characters || []).map((c) => `${c.token || "?"}(${c.displayName || "?"})`);
 
   return {
     scenes: finalScenes,
@@ -1517,6 +1529,9 @@ async function generateScenarioScenesViaBeats(input) {
       // v3.881: 빌드 추적
       serverVersion: SERVER_VERSION,
       tokensEnforced: tokensEnforcedTotal,
+      // v3.882: 캐릭터 경로 디버그
+      charactersCount: (input.characters || []).length,
+      charactersList: charactersDebug,
     },
   };
 }

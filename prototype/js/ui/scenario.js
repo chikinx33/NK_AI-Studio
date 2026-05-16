@@ -2434,16 +2434,34 @@
             perBeatFallbacks: m.perBeatFallbacks || 0,
             elapsedMs: m.elapsedMs || null,
             ruleRetried: m.ruleRetried || false,
+            // v3.882: 캐릭터 경로 디버그
+            rawBodyCharactersCount: m.rawBodyCharactersCount,
+            rawBodyCharactersEnabled: m.rawBodyCharactersEnabled,
+            characterGenerationDisabled: m.characterGenerationDisabled,
+            activeCharactersCount: m.activeCharactersCount,
+            activeCharactersList: m.activeCharactersList,
+            charactersCount: m.charactersCount,
+            charactersList: m.charactersList,
           });
           // 화면 토스트
           const clientVer = (NK.config && NK.config.APP_VERSION) ? `v${NK.config.APP_VERSION}` : '(미지정)';
           const serverVer = m.serverVersion ? `v${m.serverVersion}` : '(미지정)';
           const versionMatch = clientVer === serverVer ? '✓ 일치' : '⚠ 불일치 (배포 진행 중일 수 있음)';
+          // v3.882: 캐릭터 흐름 한 줄 표시
+          const charsLine = [
+            `클라→서버: ${m.rawBodyCharactersCount ?? '?'}개 (enabled=${m.rawBodyCharactersEnabled})`,
+            `정규화 후: ${m.activeCharactersCount ?? '?'}개`,
+            `enforce 시점: ${m.charactersCount ?? '?'}개`,
+          ].join(' / ');
+          const charsListPretty = Array.isArray(m.activeCharactersList) && m.activeCharactersList.length
+            ? `\n등록 캐릭터: [${m.activeCharactersList.join(', ')}]`
+            : '';
           const lines = [
             `클라이언트: ${clientVer} / 서버: ${serverVer} ${versionMatch}`,
             `생성 경로: ${m.generationPath || '단일 호출 (legacy)'}`,
             `수신 비트 수: ${m.beatsReceived || 0}${beatsLabel ? ' ' + beatsLabel : ''}`,
             `생성 씬 수: ${m.scenesGenerated || (res.scenes?.length || 0)}`,
+            `캐릭터 흐름: ${charsLine}${charsListPretty}`,
             m.tokensEnforced ? `@토큰 자동 보정: ${m.tokensEnforced}회` : '@토큰 자동 보정: 0회',
             m.scenesPadded ? `자동 패딩: ${m.scenesPadded}` : '',
             m.scenesSplit ? `균등 분할: ${m.scenesSplit}` : '',
