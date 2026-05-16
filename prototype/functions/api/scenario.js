@@ -1028,8 +1028,328 @@ ${chunkGuide}
 ${genreGuide ? `${genreGuide}\n` : ""}${modeInstruction}`;
 }
 
+// ============================================================================
+// v3.875 — Per-Beat Scene Generation (Algorithmic 1:1 Enforcement)
+// ============================================================================
+// 기존 문제: 단일 LLM 호출에 비트 N개를 던지면 LLM이 앞 비트에 시간을 몰아 쓰고
+// 뒷 비트를 누락하는 자유 분배 문제. 프롬프트 규칙으로 못 막음.
+// 해결: 비트마다 독립 LLM 호출로 1 씬을 생성. LLM에게 "어느 비트를 다룰지" 결정권
+// 자체를 주지 않음. 100% 비트 커버리지가 알고리즘적으로 보장됨.
+// ============================================================================
+
+const SINGLE_BEAT_TIMEOUT_MS = 18000;
+const SINGLE_BEAT_MAX_TOKENS = 600;
+const SINGLE_BEAT_CONCURRENCY = 6; // CF Worker 동시 fetch 제한 고려
+
+function buildSingleBeatSystemPromptKo() {
+  return `너는 단일 씬 생성기다. 정확히 한 비트(beat)를 받아 정확히 한 씬을 생성한다.
+
+[절대 규칙]
+- 출력은 단일 씬 JSON 한 개. 여러 씬 금지.
+- 이 비트만 다룬다. 다른 비트(앞·뒤)는 절대 다루지 않는다.
+- 주어진 estSec 예산을 그대로 사용. 더 길거나 짧게 만들지 않는다.
+
+[씬 작성 원칙]
+- visual: 카메라에 실제 찍히는 것을 명사 중심으로 한 문단(3~5문장).
+- 추상 표현 금지("아름다운", "따뜻한", "감동적인", "분위기" 등).
+- 인물의 물리적 행동, 프레임 안 사물, 카메라 앵글/무브를 구체적으로.
+- sceneIntent: 관객의 구체적 반응. "~을 보여준다" 금지. "관객이 ~한다" 허용.
+- 등록된 캐릭터만 사용. 새 인물 추가 금지.
+- 대사가 있으면 dialogue 배열에, 없으면 빈 배열.
+- coversBeats 에는 받은 비트 ID 하나만.
+
+[출력 JSON]
+{"id":<숫자>,"estSec":<숫자>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"...","dialogue":[],"coversBeats":["<beatId>"]}
+
+응답은 { 로 시작해 } 로 끝나는 JSON 한 개. 마크다운/설명/배열 wrap 금지.`;
+}
+
+function buildSingleBeatSystemPromptEn() {
+  return `You are a single-scene generator. Given exactly one beat, produce exactly one scene.
+
+[ABSOLUTE RULES]
+- Output is ONE scene JSON. Never multiple scenes.
+- Cover ONLY this beat. Never touch other beats (before/after).
+- Use the given estSec budget exactly. Do not exceed or shorten.
+
+[Scene writing principles]
+- visual: noun-centric description of what the camera captures, one paragraph (3-5 sentences).
+- No abstract phrasing ("beautiful", "warm", "dramatic", "atmospheric").
+- Concrete: physical actions, objects in frame, camera angle/move.
+- sceneIntent: viewer's concrete reaction. Not "shows X". Use "viewer does X".
+- Only registered characters. No new characters.
+- Dialogue goes in the dialogue array; empty array if none.
+- coversBeats contains ONLY the one beat ID you received.
+
+[Output JSON]
+{"id":<number>,"estSec":<number>,"sceneIntent":"...","sceneLocation":"...","visual":"...","narration":"...","dialogue":[],"coversBeats":["<beatId>"]}
+
+The response must be ONE JSON object starting with { and ending with }. No markdown, no commentary, no array wrap.`;
+}
+
+function buildSingleBeatUserPromptKo(input, ctx) {
+  const beat = ctx.beat;
+  const prev = ctx.prevBeat;
+  const next = ctx.nextBeat;
+  const chars = Array.isArray(input.characters) && input.characters.length
+    ? input.characters.map((c) => `${c.token}(${c.displayName || ""}${c.personality ? `: ${c.personality}` : ""})`).join(", ")
+    : "(없음)";
+  const climaxNote = beat.isClimax ? " [★클라이맥스 — 짧고 빠른 컷, 시각적 정점]" : "";
+  const lines = [
+    `[다룰 비트] ${beat.id}: ${beat.action}${climaxNote}`,
+    `[강도] ${beat.intensity || "medium"}`,
+    `[시간 예산 (절대 준수)] estSec = ${beat.estSec}초`,
+    "",
+    `[이 씬은 전체 ${ctx.totalScenes}개 중 ${ctx.sceneIndex + 1}번째]`,
+    prev ? `직전 비트: ${prev.action}` : "(시작 씬)",
+    next ? `다음 비트: ${next.action}` : "(마지막 씬 — 결말 페이오프 필수)",
+    "",
+    "[제작 컨텍스트]",
+    `장르: ${input.purposeCategory || "(미지정)"} / 세부: ${input.purposeTags || "(미지정)"}`,
+    `시청 타겟: ${input.target || "(미지정)"}`,
+    `톤: ${input.tones || input.toneText || "(미지정)"}`,
+    `스타일: ${input.styles || input.styleText || "(미지정)"}`,
+    `화면 비율: ${input.aspectRatio || "(미지정)"}`,
+    `등록 캐릭터: ${chars}`,
+    "",
+    `[출력] 위 비트 1개만 다루는 씬 1개를 JSON 으로. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"].`,
+  ];
+  return lines.join("\n");
+}
+
+function buildSingleBeatUserPromptEn(input, ctx) {
+  const beat = ctx.beat;
+  const prev = ctx.prevBeat;
+  const next = ctx.nextBeat;
+  const chars = Array.isArray(input.characters) && input.characters.length
+    ? input.characters.map((c) => `${c.token}(${c.displayName || ""}${c.personality ? `: ${c.personality}` : ""})`).join(", ")
+    : "(none)";
+  const climaxNote = beat.isClimax ? " [★CLIMAX — short rapid cuts, visual peak]" : "";
+  const lines = [
+    `[Beat to cover] ${beat.id}: ${beat.action}${climaxNote}`,
+    `[Intensity] ${beat.intensity || "medium"}`,
+    `[Time budget (HARD CAP)] estSec = ${beat.estSec}s`,
+    "",
+    `[Scene ${ctx.sceneIndex + 1} of ${ctx.totalScenes}]`,
+    prev ? `Previous beat: ${prev.action}` : "(opening scene)",
+    next ? `Next beat: ${next.action}` : "(final scene — payoff required)",
+    "",
+    "[Production context]",
+    `Genre: ${input.purposeCategory || "(none)"} / Sub: ${input.purposeTags || "(none)"}`,
+    `Audience: ${input.target || "(none)"}`,
+    `Tone: ${input.tones || input.toneText || "(none)"}`,
+    `Style: ${input.styles || input.styleText || "(none)"}`,
+    `Aspect ratio: ${input.aspectRatio || "(none)"}`,
+    `Characters: ${chars}`,
+    "",
+    `[Output] One JSON scene covering ONLY this beat. id=${ctx.sceneIndex + 1}, estSec=${beat.estSec}, coversBeats=["${beat.id}"].`,
+  ];
+  return lines.join("\n");
+}
+
+/**
+ * 단일 비트 → 단일 씬 LLM 호출. 실패하면 throw.
+ */
+async function requestSingleBeatScene(apiKey, input, ctx) {
+  const lang = input.lang === "en" ? "en" : "ko";
+  const sys = lang === "en" ? buildSingleBeatSystemPromptEn() : buildSingleBeatSystemPromptKo();
+  const user = lang === "en" ? buildSingleBeatUserPromptEn(input, ctx) : buildSingleBeatUserPromptKo(input, ctx);
+  const { text } = await streamAnthropicText({
+    apiKey,
+    payload: {
+      model: "claude-sonnet-4-6",
+      max_tokens: SINGLE_BEAT_MAX_TOKENS,
+      system: sys,
+      messages: [{ role: "user", content: user }],
+      temperature: 0.4,
+      stream: true,
+    },
+    timeoutMs: SINGLE_BEAT_TIMEOUT_MS,
+  });
+  if (!text) throw new Error("single_beat_empty_response");
+  const cleaned = cleanJsonResponse(text);
+  let parsed;
+  try { parsed = JSON.parse(cleaned); }
+  catch (_) {
+    try { parsed = JSON.parse(repairJsonString(cleaned)); }
+    catch (e2) { throw new Error(`single_beat_parse_failed: ${e2?.message || "unknown"}`); }
+  }
+  // LLM 이 {scenes:[{...}]} 로 감싼 경우도 처리
+  if (parsed && Array.isArray(parsed.scenes) && parsed.scenes.length) {
+    parsed = parsed.scenes[0];
+  }
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("single_beat_invalid_shape");
+  }
+  // 필수 필드 검증·보정
+  const beat = ctx.beat;
+  const scene = {
+    id: ctx.sceneIndex + 1,
+    title: parsed.title || `Scene ${ctx.sceneIndex + 1}`,
+    estSec: Number(parsed.estSec) || beat.estSec || 3,
+    sceneIntent: String(parsed.sceneIntent || "").trim(),
+    sceneLocation: String(parsed.sceneLocation || "").trim(),
+    visual: String(parsed.visual || "").trim(),
+    narration: String(parsed.narration || "").trim(),
+    dialogue: Array.isArray(parsed.dialogue) ? parsed.dialogue : [],
+    coversBeats: Array.isArray(parsed.coversBeats) && parsed.coversBeats.length
+      ? parsed.coversBeats
+      : [beat.id],
+  };
+  // estSec 이 예산을 크게 벗어나면 강제 보정 (±50% 허용)
+  const minSec = Math.max(2, beat.estSec * 0.5);
+  const maxSec = Math.min(6, beat.estSec * 1.5);
+  if (scene.estSec < minSec) scene.estSec = minSec;
+  if (scene.estSec > maxSec) scene.estSec = maxSec;
+  return scene;
+}
+
+/**
+ * 비트 실패 시 코드 레벨 fallback 씬. 최소한의 결과로 1:1 매핑 유지.
+ */
+function buildBeatFallbackScene(beat, sceneIndex) {
+  return {
+    id: sceneIndex + 1,
+    title: `Scene ${sceneIndex + 1}`,
+    estSec: beat.estSec || 3,
+    sceneIntent: `관객이 비트 ${beat.id} 의 행동을 본다`,
+    sceneLocation: "",
+    visual: `[자동 fallback 씬] ${beat.action}`,
+    narration: "",
+    dialogue: [],
+    coversBeats: [beat.id],
+    _autoFallback: true,
+  };
+}
+
+/**
+ * v3.875 메인 — 비트별 병렬 LLM 호출.
+ * 비트마다 1 씬을 생성. 단일 호출이 비트를 누락하는 구조적 문제를 알고리즘으로 차단.
+ *
+ * @param {Object} input  generateScenarioScenes 의 input 객체
+ * @param {Array}  budgetedBeats  computeBeatTimeBudget 결과 (각 비트에 estSec 포함)
+ * @returns {Promise<{scenes:Array, failures:Array, fallbacks:number}>}
+ */
+async function generateScenesPerBeat(input, budgetedBeats) {
+  const apiKey = input.env.ANTHROPIC_API_KEY;
+  const beats = Array.isArray(budgetedBeats) ? budgetedBeats : [];
+  if (!beats.length) return { scenes: [], failures: [], fallbacks: 0 };
+
+  const contexts = beats.map((beat, idx) => ({
+    beat,
+    sceneIndex: idx,
+    totalScenes: beats.length,
+    prevBeat: idx > 0 ? beats[idx - 1] : null,
+    nextBeat: idx < beats.length - 1 ? beats[idx + 1] : null,
+  }));
+
+  const scenes = new Array(beats.length).fill(null);
+  const failures = [];
+  let fallbacks = 0;
+
+  // CF Worker 동시 fetch 제한(6)을 고려해 배치 처리
+  for (let i = 0; i < contexts.length; i += SINGLE_BEAT_CONCURRENCY) {
+    const batch = contexts.slice(i, i + SINGLE_BEAT_CONCURRENCY);
+    const results = await Promise.allSettled(
+      batch.map((ctx) => requestSingleBeatScene(apiKey, input, ctx)),
+    );
+    results.forEach((res, j) => {
+      const ctx = batch[j];
+      if (res.status === "fulfilled" && res.value) {
+        scenes[ctx.sceneIndex] = res.value;
+      } else {
+        failures.push({ beatId: ctx.beat.id, error: res.reason?.message || String(res.reason) });
+        scenes[ctx.sceneIndex] = buildBeatFallbackScene(ctx.beat, ctx.sceneIndex);
+        fallbacks += 1;
+      }
+    });
+  }
+
+  return { scenes, failures, fallbacks };
+}
+
+/**
+ * v3.875 — per-beat 경로 전용 시나리오 생성기.
+ * generateScenarioScenes 에서 storyBeats 가 있을 때 분기.
+ *
+ * 흐름:
+ *   1. computeBeatTimeBudget 으로 비트별 estSec 확정
+ *   2. generateScenesPerBeat 로 비트마다 독립 LLM 호출 (병렬)
+ *   3. 결과 정규화·rebalance·split 후처리 (기존 단일 경로와 동일)
+ *   4. meta 에 비트 추적 + per-beat 표식
+ */
+async function generateScenarioScenesViaBeats(input) {
+  const runStartedAt = Date.now();
+  const totalSec = Number(input.duration) || 0;
+  const beats = Array.isArray(input.storyBeats) ? input.storyBeats : [];
+  const budgeted = computeBeatTimeBudget(beats, totalSec);
+
+  const { scenes: rawScenes, failures, fallbacks } = await generateScenesPerBeat(input, budgeted);
+
+  // 모든 슬롯이 채워졌는지 확인 (실패는 fallback 으로 이미 채워짐)
+  let normalizedScenes = rawScenes
+    .filter(Boolean)
+    .map((scene, idx) => Object.assign({}, scene, {
+      id: idx + 1,
+      title: scene.title || `Scene ${idx + 1}`,
+    }));
+
+  // 후처리 — 기존 단일 경로와 동일한 안전망 재사용
+  let scenesSplitCount = 0;
+  try {
+    const language = input.lang === "en" ? "en" : "ko";
+    const preCheckSpec = { storyBeats: budgeted };
+    const preCheck = validateScenesDirect(normalizedScenes, preCheckSpec, language);
+    const hasUniformRun = preCheck.violations.some(
+      (v) => v.key === "shotRhythm.uniformRun" || v.key === "shotRhythm.lowVariance",
+    );
+    if (hasUniformRun) {
+      const splitRes = splitUniformRuns(normalizedScenes);
+      normalizedScenes = splitRes.scenes;
+      scenesSplitCount = splitRes.splits;
+    }
+  } catch (_) { /* 분석 실패 시 원본 유지 */ }
+
+  const finalScenes = rebalanceEstSec(normalizedScenes, totalSec);
+  const elapsedMs = Date.now() - runStartedAt;
+
+  return {
+    scenes: finalScenes,
+    meta: {
+      chunked: false,
+      chunkCount: 1,
+      sourceLength: String(input.topic || "").length,
+      failedChunks: 0,
+      partial: false,
+      refinedChunks: 0,
+      validationFallbackChunks: 0,
+      ruleRetried: false,
+      ruleCriticalRemaining: 0,
+      // v3.875 per-beat 추적
+      generationPath: "per-beat",
+      beatsReceived: beats.length,
+      beatIds: beats.map((b) => b.id || ""),
+      scenesGenerated: finalScenes.length,
+      scenesPadded: 0, // per-beat 는 구조적으로 패딩 불필요 (1:1 보장)
+      scenesSplit: scenesSplitCount,
+      perBeatFailures: failures.length,
+      perBeatFallbacks: fallbacks,
+      elapsedMs,
+    },
+  };
+}
+
 async function generateScenarioScenes(input) {
   if (!input?.env?.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
+
+  // v3.875: storyBeats 가 있고 단일 청크면 비트별 병렬 LLM 호출 경로 사용 (100% 비트 커버리지 보장).
+  // 비트가 없거나(=자유 생성) 다중 청크면 기존 단일 호출 경로 유지.
+  const hasUsableBeats = Array.isArray(input.storyBeats) && input.storyBeats.length >= 2;
+  const totalSecForBeats = Number(input.duration) || 0;
+  const beatsFitDuration = hasUsableBeats && totalSecForBeats >= input.storyBeats.length * 2;
+  if (beatsFitDuration) {
+    return generateScenarioScenesViaBeats(input);
+  }
 
   const fullTopic = String(input.topic || "").trim();
   const rawChunks = fullTopic.length > LONG_TOPIC_CHUNK_THRESHOLD
