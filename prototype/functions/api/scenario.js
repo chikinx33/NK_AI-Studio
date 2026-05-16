@@ -2,7 +2,8 @@
 // v2.684: 풀 systemPrompt 를 덧붙이면 CF 30s 리밋 근처에서 타임아웃 났던 문제 수정.
 // enforcement-only compact suffix 로 전환, 재시도는 시간 예산에 여유가 있을 때만.
 import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
-import { runWithAutoRetry as runSceneValidator } from "./scenario/validator.js";
+import { runWithAutoRetry as runSceneValidator, validateScenes as validateScenesDirect } from "./scenario/validator.js";
+import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
 // requestScenarioChunk 자체가 29s 타임아웃이므로 안전 마진 포함 16s.
@@ -1160,13 +1161,41 @@ async function generateScenarioScenes(input) {
     throw new Error(failedChunks[0]?.message || "Invalid scenes format from Claude");
   }
 
-  const normalizedScenes = merged.map((scene, index) => Object.assign({}, scene, {
+  let normalizedScenes = merged.map((scene, index) => Object.assign({}, scene, {
     id: index + 1,
     title: scene.title || `Scene ${index + 1}`,
   }));
 
+  // ---- P0/P1 결정적 후처리 파이프라인 ----
+  // LLM 의 retry 만으로 해결 못 한 구조적 문제를 코드 레이어에서 강제.
+  const beatsForPost = Array.isArray(input.storyBeats) ? input.storyBeats : [];
+  let scenesPaddedCount = 0;
+  let scenesSplitCount = 0;
+
+  // (1) 씬 수가 비트 수보다 적으면 누락 비트를 빈 슬롯으로 보충
+  if (beatsForPost.length && normalizedScenes.length < beatsForPost.length) {
+    const padRes = padScenesToBeatCount(normalizedScenes, beatsForPost);
+    normalizedScenes = padRes.scenes;
+    scenesPaddedCount = padRes.padded;
+  }
+
+  // (2) uniformRun 검출 시 코드로 직접 분할 — LLM retry 한 번 더 돌리는 대신 결정적 처리
+  try {
+    const language = input.lang === "en" ? "en" : "ko";
+    const preCheckSpec = Object.assign({}, ruleValidatorSpec || {}, { storyBeats: beatsForPost });
+    const preCheck = validateScenesDirect(normalizedScenes, preCheckSpec, language);
+    const hasUniformRun = preCheck.violations.some((v) => v.key === "shotRhythm.uniformRun" || v.key === "shotRhythm.lowVariance");
+    if (hasUniformRun) {
+      const splitRes = splitUniformRuns(normalizedScenes);
+      normalizedScenes = splitRes.scenes;
+      scenesSplitCount = splitRes.splits;
+    }
+  } catch (_) { /* 분석 실패 시 원본 유지 */ }
+
+  const finalScenes = rebalanceEstSec(normalizedScenes, Number(input.duration) || 0);
+
   return {
-    scenes: rebalanceEstSec(normalizedScenes, Number(input.duration) || 0),
+    scenes: finalScenes,
     meta: {
       chunked: chunks.length > 1,
       chunkCount: chunks.length,
@@ -1177,6 +1206,12 @@ async function generateScenarioScenes(input) {
       validationFallbackChunks,
       ruleRetried,
       ruleCriticalRemaining,
+      // [3-3] 비트 추적용 로깅
+      beatsReceived: beatsForPost.length,
+      beatIds: beatsForPost.map((b) => b.id || ""),
+      scenesGenerated: finalScenes.length,
+      scenesPadded: scenesPaddedCount,
+      scenesSplit: scenesSplitCount,
     },
   };
 }
@@ -2382,7 +2417,10 @@ function normalizeStoryBeatsInput(value) {
     const intensity = VALID_BEAT_INTENSITIES.has(rawIntensity)
       ? rawIntensity
       : (isClimax ? "climax" : "medium");
+    const beatId = item && typeof item === "object" && item.id ? String(item.id) : "";
     out.push({
+      id: beatId, // 빈 문자열이면 아래서 부여
+      seq: 0,
       action: trimmed.length > 160 ? trimmed.slice(0, 160) : trimmed,
       isClimax,
       intensity: isClimax ? "climax" : intensity,
@@ -2392,6 +2430,11 @@ function normalizeStoryBeatsInput(value) {
     out[out.length - 1].isClimax = true;
     out[out.length - 1].intensity = "climax";
   }
+  // id / seq 자동 부여 — story-structure 에서 이미 부여됐어도 정합성 보장
+  out.forEach((beat, idx) => {
+    beat.seq = idx + 1;
+    if (!beat.id) beat.id = `beat_${String(idx + 1).padStart(2, "0")}`;
+  });
   return out;
 }
 
@@ -2419,15 +2462,20 @@ function formatStoryBeatsForPrompt(beats, lang) {
     const climaxMark = b.isClimax ? (isEn ? " [CLIMAX]" : " [클라이맥스]") : "";
     const prof = profile[intensity] || profile.medium;
     const intensityLabel = isEn ? `intensity=${intensity}` : `강도=${intensity}`;
-    return `  ${i + 1}. ${b.action}${climaxMark}\n     → ${intensityLabel}, ${prof.cutCountHint}, ${prof.varietyHint}`;
+    const beatId = b.id || `beat_${String(i + 1).padStart(2, "0")}`;
+    return `  [${beatId}] ${b.action}${climaxMark}\n     → ${intensityLabel}, ${prof.cutCountHint}, ${prof.varietyHint}`;
   });
+  const idList = beats.map((b, i) => b.id || `beat_${String(i + 1).padStart(2, "0")}`).join(", ");
   const header = isEn
-    ? "Story beats with intensity-based cut allocation (MANDATORY COVERAGE — every beat below must be visibly represented; the CLIMAX beat must pay off in the final scene; DO NOT use uniform durations like 3-3-3-3-6-6-6, follow the per-beat cut hints below to create varied rhythm):"
-    : "이야기 비트 + 강도 기반 컷 분배(필수 커버리지 — 아래 모든 비트가 시각적으로 드러나야 한다. [클라이맥스] 비트는 반드시 마지막 씬에서 페이오프. 균등 분배(3·3·3·3·6·6·6 식) 금지 — 아래 비트별 컷 가이드를 따라 리듬감 있는 차등 분배로 작성하라):";
+    ? `Story beats with intensity-based cut allocation (MANDATORY COVERAGE — EVERY beat ID below MUST appear in at least one scene's "coversBeats" field; scenes.length MUST be >= ${beats.length}; the [CLIMAX] beat must pay off in the FINAL scene; DO NOT use uniform durations like 3-3-3-3-6-6-6, follow the per-beat cut hints below to create varied rhythm):`
+    : `이야기 비트 + 강도 기반 컷 분배(필수 커버리지 — 아래 모든 beat ID가 최소 1개 씬의 "coversBeats" 필드에 반드시 매핑되어야 한다. 씬 개수는 반드시 ${beats.length}개 이상. [클라이맥스] 비트는 반드시 마지막 씬에서 페이오프. 균등 분배(3·3·3·3·6·6·6 식) 금지 — 아래 비트별 컷 가이드를 따라 리듬감 있는 차등 분배로 작성하라):`;
+  const coverageRule = isEn
+    ? `\n[BEAT COVERAGE FIELD - REQUIRED]\nEach scene object MUST include a "coversBeats" field: array of beat IDs from [${idList}]. Example: "coversBeats": ["beat_03"]. The union of all coversBeats across scenes MUST equal the full beat set.`
+    : `\n[비트 매핑 필드 - 필수]\n각 씬 객체는 "coversBeats" 필드를 반드시 포함한다: [${idList}] 중 해당 씬이 다루는 비트 ID 배열. 예: "coversBeats": ["beat_03"]. 모든 씬의 coversBeats 합집합이 전체 비트 집합과 같아야 한다.`;
   const rhythmRule = isEn
     ? "\n[CUT RHYTHM RULES]\n- Forbidden: 3+ consecutive scenes with identical estSec.\n- Forbidden: all scenes within ±0.5s of each other (monotonous).\n- Climax beat's scene MUST have the most cuts (shortest avg).\n- Vary scene estSec following the per-beat hints above; use decimals (e.g. 1.5, 2.5, 4) when needed."
     : "\n[컷 리듬 규칙]\n- 금지: 동일 estSec 씬이 3개 이상 연속.\n- 금지: 모든 씬의 estSec이 ±0.5초 이내로 균일 (단조로움).\n- 클라이맥스 비트의 씬은 반드시 가장 많은 컷 수(가장 짧은 평균)를 가진다.\n- 위 비트 가이드를 따라 씬 estSec을 다르게 배정하고, 필요하면 소수(예: 1.5, 2.5, 4)도 적극 사용한다.";
-  return `${header}\n${lines.join("\n")}${rhythmRule}\n\n`;
+  return `${header}\n${lines.join("\n")}${coverageRule}${rhythmRule}\n\n`;
 }
 
 function formatScenarioSpecForPrompt(spec = {}) {

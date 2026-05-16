@@ -16,7 +16,9 @@ function loadScenarioHelpers() {
     .replace(/^import\s+.*from\s+["']\.\/scenario\/prompt-builder\.js["'];\s*$/m,
       'const buildEnforcementSuffix = () => ({ suffix: "", validatorSpec: null, progressLabel: null });')
     .replace(/^import\s+.*from\s+["']\.\/scenario\/validator\.js["'];\s*$/m,
-      'const runSceneValidator = async (args) => ({ scenes: args?.scenes || [], violations: [], hasCritical: false, retried: false });');
+      'const runSceneValidator = async (args) => ({ scenes: args?.scenes || [], violations: [], hasCritical: false, retried: false }); const validateScenesDirect = () => ({ violations: [], hasCritical: false });')
+    .replace(/^import\s+.*from\s+["']\.\/scenario\/rebalancer\.js["'];\s*$/m,
+      'const splitUniformRuns = (s) => ({ scenes: s, splits: 0 }); const padScenesToBeatCount = (s) => ({ scenes: s, padded: 0 });');
   source += '\nmodule.exports = { calculateSceneCountForDuration, normalizeKnowledgeHubInput, buildUserPrompt, buildSystemPromptKo, buildScenarioSpec, validateScenarioAgainstSpec, alignScenesToScenarioSpec, getSpeechCharLimit };';
   const context = vm.createContext({
     console,

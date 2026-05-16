@@ -66,10 +66,15 @@ export function buildShotPromptKo() {
 12. 클라이맥스 씬(scene.sceneIntent 에 "발견·페이오프·정점·반전·결과" 같은 키워드가 있거나 마지막 씬)은 ECU/CU 짧은 컷 다수 + 강한 무브(push-in, whip-pan, quick-pan) 변주를 반드시 포함한다.
 13. 인접한 두 샷이 같은 shotType + 같은 cameraMove 면 안 된다. 둘 중 하나는 반드시 변주한다.
 
+[대사 필드 분리 - 필수]
+14. dialogue 필드를 모든 샷에 반드시 포함한다. 대사가 있으면 문자열 또는 {"speaker":"@이름","line":"대사"} 객체, 없으면 null 로 명시한다 (필드 누락 금지).
+15. action 필드 안에 대사("하나, 둘, 셋!", "와!" 등)를 절대 섞지 마라. 대사는 dialogue 필드에만 두고, action 에는 입을 움직이는 물리 행동만 남긴다(예: '입을 크게 벌려 숫자를 외친다').
+16. 입력 scene 의 dialogue 정보가 있으면 적절한 샷의 dialogue 필드에 정확히 그대로 옮긴다.
+
 ${buildVocabPromptKo()}
 
 [출력 형식 — JSON 만, 마크다운/설명 금지]
-{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","composition":"<프레임 설명>","action":"<물리 행동>"}, ...]}
+{"shots":[{"id":"<sceneId>.1","duration":<숫자>,"shotType":"<위 어휘>","cameraMove":"<위 어휘>","composition":"<프레임 설명>","action":"<물리 행동, 대사 금지>","dialogue":null}, ...]}
 
 응답 첫 글자는 { 마지막 글자는 } 여야 한다.`;
 }
@@ -106,10 +111,15 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
 12. Climax scenes (when sceneIntent contains keywords like "discovery / payoff / peak / twist / result", or the final scene) MUST include many short ECU/CU cuts + varied strong moves (push-in, whip-pan, quick-pan).
 13. Two adjacent shots must NOT share the same shotType AND the same cameraMove simultaneously. Vary at least one of them.
 
+[Dialogue Field Separation - REQUIRED]
+14. Every shot MUST include a "dialogue" field. If there is dialogue, use a string or {"speaker":"@name","line":"text"} object; if none, set dialogue to null (NEVER omit the field).
+15. NEVER mix dialogue text ("one, two, three!", "wow!" etc.) inside the action field. Keep dialogue ONLY in the dialogue field; action contains only the physical mouth motion (e.g., 'opens mouth wide and shouts the count').
+16. If the input scene contains dialogue info, copy it exactly into the appropriate shot's dialogue field.
+
 ${buildVocabPromptEn()}
 
 [Output format — JSON only, no markdown or explanation]
-{"shots":[{"id":"<sceneId>.1","duration":<number>,"shotType":"<from vocab>","cameraMove":"<from vocab>","composition":"<frame description>","action":"<physical action>"}, ...]}
+{"shots":[{"id":"<sceneId>.1","duration":<number>,"shotType":"<from vocab>","cameraMove":"<from vocab>","composition":"<frame description>","action":"<physical action, no dialogue>","dialogue":null}, ...]}
 
 The first character must be { and the last must be }.`;
 }
@@ -192,7 +202,8 @@ export function parseShotResponse(text, scene) {
     const action = String(raw.action || "").trim();
     if (!composition && !action) return; // 둘 다 비면 의미 없는 샷
     const id = String(raw.id || `${sceneId}.${idx + 1}`).trim() || `${sceneId}.${idx + 1}`;
-    out.push({ id, duration, shotType, cameraMove, composition, action });
+    const dialogue = normalizeShotDialogue(raw.dialogue);
+    out.push({ id, duration, shotType, cameraMove, composition, action, dialogue });
   });
 
   if (!out.length) return null;
@@ -231,6 +242,9 @@ export function fallbackSingleShot(scene) {
   const estSec = Number(scene?.estSec) || 4;
   const duration = Math.min(MAX_SHOT_DURATION, Math.max(MIN_SHOT_DURATION, estSec));
   const visual = String(scene?.visual || "").trim();
+  const dialogue = normalizeShotDialogue(
+    Array.isArray(scene?.dialogue) ? scene.dialogue[0] : scene?.dialogue
+  );
   return [{
     id: `${id}.1`,
     duration,
@@ -238,7 +252,28 @@ export function fallbackSingleShot(scene) {
     cameraMove: "static",
     composition: visual.split(/[\n.]/)[0] || "프레임 중앙에 주요 피사체",
     action: visual || "씬 비트 그대로 진행",
+    dialogue,
   }];
+}
+
+/**
+ * dialogue 필드 정규화.
+ * 수용 형태: null | undefined | "string" | {speaker, line} | {line} | [무시]
+ * 출력 형태: null | "string" | {speaker, line}
+ */
+export function normalizeShotDialogue(raw) {
+  if (raw == null) return null;
+  if (typeof raw === "string") {
+    const t = raw.trim();
+    return t ? t : null;
+  }
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const speaker = String(raw.speaker || "").trim();
+    const line = String(raw.line || raw.text || "").trim();
+    if (!line) return null;
+    return speaker ? { speaker, line } : line;
+  }
+  return null;
 }
 
 export const __testables = {

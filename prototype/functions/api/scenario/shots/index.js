@@ -16,6 +16,7 @@ import {
   reconcileDurations,
   fallbackSingleShot,
 } from "./decomposer.js";
+import { diversifyShotCameraMoves } from "../rebalancer.js";
 
 const SHOT_TIMEOUT_MS = 22000;
 const SHOT_MAX_TOKENS = 900;
@@ -111,8 +112,11 @@ export async function decomposeScenes(apiKey, scenes, opts = {}) {
     }
   });
 
-  const out = await Promise.all(tasks);
-  return { scenes: out, meta };
+  const raw = await Promise.all(tasks);
+  // P2-3-5: 인접 동일 cameraMove 자동 치환 — LLM이 동일 무브를 반복해도 코드로 다양화 보장
+  const diversified = diversifyShotCameraMoves(raw);
+  meta.cameraSwaps = diversified.swaps;
+  return { scenes: diversified.scenes, meta };
 }
 
 export {

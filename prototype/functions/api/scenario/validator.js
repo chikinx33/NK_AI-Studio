@@ -321,6 +321,22 @@ function checkShotRhythm(scenes, spec, violations) {
   }
 }
 
+function checkSceneCountVsBeats(scenes, spec, violations) {
+  const beats = Array.isArray(spec.storyBeats) ? spec.storyBeats : [];
+  if (!beats.length) return;
+  const sceneCount = Array.isArray(scenes) ? scenes.length : 0;
+  if (sceneCount >= beats.length) return;
+  violations.push({
+    key: "sceneCount.vsBeats",
+    severity: "critical",
+    labelKo: "씬 수가 비트 수보다 적음 — 비트 압축/누락 구조적 발생",
+    labelEn: "Scene count below beat count — beats will be dropped",
+    evidence: `scenes=${sceneCount}, beats=${beats.length}`,
+    suggestionKo: `이야기 비트가 ${beats.length}개인데 씬은 ${sceneCount}개만 생성됐습니다. 비트 하나당 최소 1개 씬을 배정하도록 재생성하세요. 클라이맥스 비트(발견·페이오프)는 절대 다른 비트와 같은 씬에 묶지 마세요.`,
+    suggestionEn: `${beats.length} story beats but only ${sceneCount} scenes. Each beat needs at least one scene. Never merge a climax beat (discovery/payoff) into another beat's scene.`,
+  });
+}
+
 function checkStoryBeatCoverage(scenes, spec, violations) {
   const beats = Array.isArray(spec.storyBeats) ? spec.storyBeats : [];
   if (!beats.length || !Array.isArray(scenes) || !scenes.length) return;
@@ -391,6 +407,7 @@ export function validateScenes(scenes, spec, language = "ko") {
   checkNarrationLength(scenes, safeSpec, violations);
   checkShotLength(scenes, safeSpec, violations);
   checkRepetition(scenes, safeSpec, violations);
+  checkSceneCountVsBeats(scenes, safeSpec, violations);
   checkStoryBeatCoverage(scenes, safeSpec, violations);
   checkShotRhythm(scenes, safeSpec, violations);
 

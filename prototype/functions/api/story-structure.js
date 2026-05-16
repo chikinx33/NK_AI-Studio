@@ -598,5 +598,10 @@ function normalizeBeats(rawBeats, storyText, input) {
     last.isClimax = true;
     last.intensity = "climax";
   }
+  // seq + id 부여 — Pass 1/2에서 비트 추적·매핑에 사용
+  cleaned.forEach((beat, idx) => {
+    beat.seq = idx + 1;
+    beat.id = `beat_${String(idx + 1).padStart(2, "0")}`;
+  });
   return cleaned;
 }
