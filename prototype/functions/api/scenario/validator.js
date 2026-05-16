@@ -218,6 +218,79 @@ function checkRepetition(scenes, spec, violations) {
   }
 }
 
+const BEAT_STOPWORDS = new Set([
+  "그리고","그때","이후","그러다","바로","다시","그러면","그래서","그러나","하지만","또","또한",
+  "and","then","after","but","with","into","from","that","this","there","here","just","like",
+]);
+
+function tokenizeBeatAction(text) {
+  return String(text || "")
+    .toLowerCase()
+    .split(/[\s,.;:!?，。、・(){}\[\]"'`/\\\-—…]+/u)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2 && !BEAT_STOPWORDS.has(t));
+}
+
+function beatMatchesSceneText(beat, sceneText) {
+  const tokens = tokenizeBeatAction(beat?.action || "");
+  if (!tokens.length) return false;
+  const charTokens = tokens.filter((t) => t.startsWith("@"));
+  const wordTokens = tokens.filter((t) => !t.startsWith("@"));
+  const lowerScene = String(sceneText || "").toLowerCase();
+  if (charTokens.length) {
+    const charHit = charTokens.every((t) => lowerScene.includes(t));
+    if (!charHit) return false;
+  }
+  if (!wordTokens.length) return charTokens.length > 0;
+  const hits = wordTokens.filter((t) => lowerScene.includes(t)).length;
+  const ratio = hits / wordTokens.length;
+  return ratio >= 0.34 || hits >= 2;
+}
+
+function checkStoryBeatCoverage(scenes, spec, violations) {
+  const beats = Array.isArray(spec.storyBeats) ? spec.storyBeats : [];
+  if (!beats.length || !Array.isArray(scenes) || !scenes.length) return;
+  const sceneTexts = scenes.map((s) => textOfScene(s).toLowerCase());
+  const lastIdx = scenes.length - 1;
+  const lastSceneText = sceneTexts[lastIdx] || "";
+
+  beats.forEach((beat, beatIdx) => {
+    const matchedAny = sceneTexts.some((t) => beatMatchesSceneText(beat, t));
+    if (!matchedAny) {
+      const isClimax = Boolean(beat?.isClimax);
+      violations.push({
+        key: `storyBeat.uncovered:${beatIdx}`,
+        severity: isClimax ? "critical" : "high",
+        labelKo: isClimax
+          ? `이야기의 클라이맥스 비트가 시나리오에 없음 (비트 ${beatIdx + 1})`
+          : `이야기 비트가 시나리오에 반영되지 않음 (비트 ${beatIdx + 1})`,
+        labelEn: isClimax
+          ? `Story climax beat is missing from the scenario (beat ${beatIdx + 1})`
+          : `Story beat not represented in the scenario (beat ${beatIdx + 1})`,
+        evidence: `beat: "${String(beat?.action || "").slice(0, 120)}"`,
+        suggestionKo: isClimax
+          ? `마지막 씬에 다음 결말 비트를 반드시 시각적으로 포함하세요: "${beat.action}". 행동·반응·발견 순간을 visual 필드에 구체적으로 적습니다.`
+          : `다음 비트를 시나리오 어느 한 씬의 visual/action 에 시각적으로 포함하세요: "${beat.action}".`,
+        suggestionEn: isClimax
+          ? `Make sure the final scene visibly contains this resolution beat: "${beat.action}". Write the action, reaction, and discovery moment concretely in the visual field.`
+          : `Include this beat visibly in at least one scene's visual/action: "${beat.action}".`,
+      });
+      return;
+    }
+    if (beat?.isClimax && !beatMatchesSceneText(beat, lastSceneText)) {
+      violations.push({
+        key: `storyBeat.climaxNotInFinal:${beatIdx}`,
+        severity: "critical",
+        labelKo: "클라이맥스 비트가 마지막 씬에 없음",
+        labelEn: "Climax beat is not in the final scene",
+        evidence: `beat: "${String(beat?.action || "").slice(0, 120)}"`,
+        suggestionKo: `클라이맥스/결말 비트는 반드시 마지막 씬(${scenes.length}번)에 시각적으로 페이오프돼야 합니다. 마지막 씬을 이 비트의 결말 행동·반응으로 다시 작성하세요: "${beat.action}".`,
+        suggestionEn: `The climax/resolution beat must visually pay off in the FINAL scene (${scenes.length}). Rewrite the final scene around this beat's action and reaction: "${beat.action}".`,
+      });
+    }
+  });
+}
+
 // --- 메인 API ------------------------------------------------------------
 
 /**
@@ -244,6 +317,7 @@ export function validateScenes(scenes, spec, language = "ko") {
   checkNarrationLength(scenes, safeSpec, violations);
   checkShotLength(scenes, safeSpec, violations);
   checkRepetition(scenes, safeSpec, violations);
+  checkStoryBeatCoverage(scenes, safeSpec, violations);
 
   const byLevel = { critical: 0, high: 0, medium: 0, low: 0 };
   for (const v of violations) {

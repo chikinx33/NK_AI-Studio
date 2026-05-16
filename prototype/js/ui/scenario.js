@@ -1023,6 +1023,19 @@
     const knowledge = readKnowledgeHub(payload);
     payload.manualDirectives = extractManualDirectives(payload, knowledge);
     payload.knowledgeHub = Object.assign({}, knowledge);
+    // 이야기 비트 첨부 — AI 정리본과 현재 story 값이 동일할 때만 유효 (사용자가 수동 편집하면 무효화)
+    const storyFieldEl = document.getElementById('scenario-story-input');
+    if (storyFieldEl) {
+      const aiBeatsRaw = String(storyFieldEl.dataset.aiBeats || '').trim();
+      const aiBeatsStory = sanitizeText(storyFieldEl.dataset.aiBeatsStory || '');
+      const currentStory = sanitizeText(payload.story || '');
+      if (aiBeatsRaw && aiBeatsStory && currentStory && aiBeatsStory === currentStory) {
+        try {
+          const parsed = JSON.parse(aiBeatsRaw);
+          if (Array.isArray(parsed) && parsed.length) payload.storyBeats = parsed;
+        } catch (_) { /* ignore */ }
+      }
+    }
     return payload;
   };
 
@@ -1997,6 +2010,19 @@
           storyField.value = nextStory;
           cacheStorySelection(storyField);
           updateStoryToggleButtonUi('ai');
+        }
+        // 이야기 비트 보존 — 시나리오 생성 시 비트 커버리지 검증에 사용
+        if (Array.isArray(storyResult?.beats) && storyResult.beats.length) {
+          try {
+            storyField.dataset.aiBeats = JSON.stringify(storyResult.beats);
+            storyField.dataset.aiBeatsStory = nextStory;
+          } catch (_) {
+            storyField.dataset.aiBeats = '';
+            storyField.dataset.aiBeatsStory = '';
+          }
+        } else {
+          storyField.dataset.aiBeats = '';
+          storyField.dataset.aiBeatsStory = '';
         }
 
         // 3) 개요 자동 제안 반영 (이미 채워진 필드는 덮어쓰지 않음)

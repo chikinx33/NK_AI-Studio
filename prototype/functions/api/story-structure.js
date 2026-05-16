@@ -31,9 +31,15 @@ export async function onRequestPost(context) {
     return json({ error: input.language === "en" ? "story is required" : "이야기 입력이 필요합니다." }, 400, origin);
   }
 
-  const fallbackStory = buildFallbackStory(input);
+  const fallbackBeatList = buildFallbackBeats(input.story, input);
+  const fallbackStory = finalizeFallbackStory(fallbackBeatList);
+  const fallbackBeats = normalizeBeats(
+    fallbackBeatList.map((action, idx) => ({ action, isClimax: idx === fallbackBeatList.length - 1 })),
+    fallbackStory,
+    input
+  );
   if (!env.ANTHROPIC_API_KEY) {
-    return json({ story: fallbackStory, fallback: true, error: "ANTHROPIC_API_KEY missing" }, 200, origin);
+    return json({ story: fallbackStory, beats: fallbackBeats, fallback: true, error: "ANTHROPIC_API_KEY missing" }, 200, origin);
   }
 
   try {
@@ -51,7 +57,7 @@ export async function onRequestPost(context) {
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
-          max_tokens: 600,
+          max_tokens: 900,
           temperature: 0.5,
           system: buildSystemPrompt(input.language),
           messages: [
@@ -70,7 +76,7 @@ export async function onRequestPost(context) {
     if (!completion.ok) {
       const text = await completion.text();
       if (completion.status === 402 || /"billing_error"|credit_balance|insufficient.{0,10}credit/i.test(text)) {
-        return json({ story: fallbackStory, fallback: true, error: "CREDIT_EXHAUSTED" }, 402, origin);
+        return json({ story: fallbackStory, beats: fallbackBeats, fallback: true, error: "CREDIT_EXHAUSTED" }, 402, origin);
       }
       throw new Error(`Anthropic error: ${completion.status} ${text}`);
     }
@@ -80,14 +86,17 @@ export async function onRequestPost(context) {
     const parsed = JSON.parse(cleanJsonResponse(text));
     const structured = restoreCharacterTokenHints(sanitizeStory(parsed?.story), input);
     if (!structured) throw new Error("No structured story generated");
+    const beats = normalizeBeats(parsed?.beats, structured, input);
 
     return json({
       story: structured,
+      beats,
       fallback: false,
     }, 200, origin);
   } catch (err) {
     return json({
       story: fallbackStory,
+      beats: fallbackBeats,
       fallback: true,
       error: err?.message || "story_structure_failed",
     }, 200, origin);
@@ -131,7 +140,8 @@ function buildSystemPrompt(language) {
   if (language === "en") {
     return [
       "You reorganize a rough story draft into a short-form story skeleton that the next scenario generator can split into scenes immediately.",
-      '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"..."}. Never use markdown (```json, ```), explanations, comments, or backticks.',
+      '[JSON OUTPUT RULES - STRICTLY REQUIRED] Output ONLY valid JSON. First character MUST be { and last MUST be }. Exact format: {"story":"...","beats":[{"action":"...","isClimax":false},...]}. Never use markdown (```json, ```), explanations, comments, or backticks.',
+      '[BEATS FIELD - MANDATORY] "beats" is an array (length 2-6) where each item is one action beat from "story". Each beat MUST be a single concrete physical action with an immediate visible reaction (one sentence, 60 chars max). The beats array MUST cover every story sentence — no story content may be left out of beats. Mark "isClimax":true ONLY on the final discovery/resolution/punchline beat that pays off the setup. Beats must follow story order. Preserve @character tokens inside beat actions exactly as in story.',
       "Keep the user's intent, direction, audience, tone, and cast. Replace any abstract phrase like 'a funny situation' or 'emotional moment' with a specific action and immediate reaction. Do not copy original sentences verbatim.",
       "Write 2-5 short sentences or one short paragraph. Each sentence should map to one simple beat for later scene generation.",
       "Write only visible actions, reactions, and immediate outcomes. Do not summarize with abstract planning language.",
@@ -150,7 +160,8 @@ function buildSystemPrompt(language) {
   }
   return [
     "너는 사용자가 적은 초안을 다음 단계의 시나리오 생성기가 바로 씬으로 쪼갤 수 있는 짧은 영상용 이야기 뼈대로 재정리하는 보조 AI다.",
-    '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"..."}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
+    '[JSON 출력 규칙 - 반드시 준수] 반드시 유효한 JSON만 출력한다. 첫 글자는 { 마지막 글자는 }. 정확한 형식: {"story":"...","beats":[{"action":"...","isClimax":false},...]}. 마크다운(```json, ```), 설명, 주석, 백틱을 절대 포함하지 않는다.',
+    '[beats 필드 - 필수] "beats"는 길이 2~6개 배열이며, 각 항목은 story 안의 행동 비트 하나에 1:1 매핑된다. 각 비트는 한 문장(60자 이내)으로 구체적 물리 행동과 즉각적 반응만 쓴다. beats 배열은 story의 모든 문장을 빠짐없이 커버해야 한다 — story에 나온 행동·반응 중 beats에 들어가지 않는 것이 있으면 안 된다. "isClimax":true는 setup을 마무리하는 마지막 발견/해결/펀치라인 비트 하나에만 표시한다. beats 순서는 story 순서와 동일해야 하며, @캐릭터 토큰은 story와 동일하게 유지한다.',
     "사용자의 의도, 사건 방향, 타겟, 톤, 등장 캐릭터 범위를 반드시 유지한다. '웃긴 상황 연출'처럼 추상적으로 쓴 부분은 반드시 구체적인 행동과 즉각적인 반응으로 채워라. 원문 문장을 그대로 복사하지 마라.",
     "출력은 2~5개의 짧은 문장 또는 하나의 짧은 단락으로 쓴다. 각 문장은 이후 시나리오의 한 비트로 바로 나눌 수 있어야 한다.",
     "추상적인 기획서 문장 대신 눈에 보이는 행동, 즉각적인 반응, 바로 이어지는 결과로 쓴다.",
@@ -540,4 +551,30 @@ function resolveFallbackActor(input) {
 
 function appendStyleHint(beats, _input) {
   return Array.isArray(beats) ? beats.slice() : [];
+}
+
+function normalizeBeats(rawBeats, storyText, input) {
+  const list = Array.isArray(rawBeats) ? rawBeats : [];
+  const cleaned = [];
+  for (const item of list) {
+    if (cleaned.length >= 6) break;
+    const action = typeof item === "string"
+      ? sanitizeStory(item)
+      : sanitizeStory(item?.action || item?.text || item?.beat || "");
+    if (!action) continue;
+    const trimmed = action.length > 120 ? action.slice(0, 120) : action;
+    const restored = restoreCharacterTokenHints(trimmed, input);
+    if (!restored) continue;
+    cleaned.push({
+      action: restored,
+      isClimax: Boolean(item && typeof item === "object" && (item.isClimax === true || item.climax === true)),
+    });
+  }
+  if (!cleaned.length && storyText) {
+    cleaned.push({ action: sanitizeStory(storyText).slice(0, 120), isClimax: true });
+  }
+  if (cleaned.length && !cleaned.some((b) => b.isClimax)) {
+    cleaned[cleaned.length - 1].isClimax = true;
+  }
+  return cleaned;
 }

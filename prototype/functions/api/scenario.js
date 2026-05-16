@@ -610,6 +610,7 @@ export async function onRequestPost(context) {
     const manualDirectives = String(body.manualDirectives || body.extraNotes || body.banned || "").trim();
     const aspectRatio = String(body.aspectRatio || "").trim();
     const lang = body.language === "en" ? "en" : "ko";
+    const storyBeats = normalizeStoryBeatsInput(body.storyBeats);
     const characters = normalizeCharacters(body.characters || []);
     const characterGenerationDisabled = isCharacterGenerationDisabled(body.charactersEnabled, characters);
     const knowledgeHub = normalizeKnowledgeHubInput(body, { characterGenerationDisabled });
@@ -652,6 +653,7 @@ export async function onRequestPost(context) {
         dubbingEnabled,
         characters: activeCharacters,
         sceneCount,
+        storyBeats,
       });
       scenes = generated.scenes;
       generationMeta = generated.meta;
@@ -906,6 +908,7 @@ function buildUserPrompt(input) {
   const specText = formatScenarioSpecForPrompt(input.spec);
   const blueprintText = formatBlueprintForPrompt(input.spec);
   const genreGuide = buildGenreProgressionGuide(input);
+  const beatsBlock = formatStoryBeatsForPrompt(input.storyBeats, input.lang);
   const characterModeInstruction = input.characterGenerationDisabled
     ? (input.lang === "en"
       ? "Character mode: disabled. Do not create characters, people, mascots, named speakers, or dialogue participants. Build scenes around environment, objects, motion, and narrator-only speech when voice is required."
@@ -934,7 +937,7 @@ Past success cases: ${input.knowledgeHub.successCases.length ? input.knowledgeHu
 Aspect ratio: ${input.aspectRatio || "(not provided)"}
 Duration target: ${input.duration}s
 ${characterModeInstruction}
-Scenario spec:
+${beatsBlock}Scenario spec:
 ${specText}
 Scene blueprint:
 ${blueprintText}
@@ -975,7 +978,7 @@ IP 세계관(참고 배경 지식, 에피소드 장소 아님): ${input.knowledg
 화면비: ${input.aspectRatio || "(미입력)"}
 목표 길이: ${input.duration}초
 ${characterModeInstruction}
-시나리오 스펙:
+${beatsBlock}시나리오 스펙:
 ${specText}
 씬 블루프린트:
 ${blueprintText}
@@ -1079,6 +1082,7 @@ async function generateScenarioScenes(input) {
       dubbingEnabled: input.dubbingEnabled,
       characters: input.characters,
       spec,
+      storyBeats: chunks.length === 1 ? input.storyBeats : null,
       chunkGuide: buildChunkGuide({
         lang: input.lang,
         index: i,
@@ -1111,9 +1115,13 @@ async function generateScenarioScenes(input) {
       const remainingMs = RULE_RETRY_TOTAL_BUDGET_MS - elapsedMs;
       const hasTimeForRetry = remainingMs >= RULE_RETRY_MIN_REMAINING_MS;
       if (chunks.length === 1 && ruleValidatorSpec && hasTimeForRetry) {
+        // 이야기 비트(story-structure 결과)를 spec 에 합쳐, validator 가 비트 커버리지를 critical 검사할 수 있게 한다.
+        const validatorSpecWithBeats = Object.assign({}, ruleValidatorSpec, {
+          storyBeats: Array.isArray(input.storyBeats) ? input.storyBeats : [],
+        });
         const retryResult = await runSceneValidator({
           scenes: chunkScenes,
-          spec: ruleValidatorSpec,
+          spec: validatorSpecWithBeats,
           language: input.lang === "en" ? "en" : "ko",
           regenerate: async (refinePrompt) => {
             // 재시도에는 블록 규칙 enforcement suffix 를 같이 실어, LLM 이
@@ -2355,6 +2363,40 @@ function createBlueprintItem({ lang = "ko", role, idx, total, topicProfile, sign
     phaseLabel: phase.label || (lang === "en" ? "Rise" : "승"),
     phaseGoal: phase.goal || (lang === "en" ? "Advance the overall narrative arc." : "전체 전개 흐름을 다음 단계로 보낸다."),
   }, map[role] || map.develop);
+}
+
+function normalizeStoryBeatsInput(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (out.length >= 6) break;
+    const action = typeof item === "string"
+      ? item
+      : String(item?.action || item?.text || item?.beat || "");
+    const trimmed = action.replace(/\s+/g, " ").trim();
+    if (!trimmed) continue;
+    out.push({
+      action: trimmed.length > 160 ? trimmed.slice(0, 160) : trimmed,
+      isClimax: Boolean(item && typeof item === "object" && (item.isClimax === true || item.climax === true)),
+    });
+  }
+  if (out.length && !out.some((b) => b.isClimax)) {
+    out[out.length - 1].isClimax = true;
+  }
+  return out;
+}
+
+function formatStoryBeatsForPrompt(beats, lang) {
+  if (!Array.isArray(beats) || !beats.length) return "";
+  const isEn = lang === "en";
+  const lines = beats.map((b, i) => {
+    const climaxMark = b.isClimax ? (isEn ? " [CLIMAX / RESOLUTION]" : " [클라이맥스/결말]") : "";
+    return `  ${i + 1}. ${b.action}${climaxMark}`;
+  });
+  const header = isEn
+    ? "Story beats (MANDATORY COVERAGE — every beat below must be visibly represented across the generated scenes; the CLIMAX beat must appear in the final scene as a payoff, never omitted):"
+    : "이야기 비트(필수 커버리지 — 아래 모든 비트가 생성된 씬들 안에서 시각적으로 드러나야 한다. [클라이맥스/결말] 비트는 반드시 마지막 씬에서 페이오프로 보여야 하며 생략 금지):";
+  return `${header}\n${lines.join("\n")}\n\n`;
 }
 
 function formatScenarioSpecForPrompt(spec = {}) {
