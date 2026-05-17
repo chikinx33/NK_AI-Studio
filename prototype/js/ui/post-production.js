@@ -1602,14 +1602,14 @@
           return nextPayload;
         })();
 
+      // scenes/header/title 은 메인 프로덕션이 관리하므로 null 로 전달 → 서버 머지 모드가
+      // 기존값 보존. aspectRatio 만 post-production 이 변경할 수 있어 명시 전송.
       await NK.api.projectSave(
         state.projectId,
         payload,
-        Array.isArray(project.scenes) ? project.scenes : [],
+        null,
         {
-          header: project.header || '',
-          aspectRatio: project.aspectRatio || payload.aspectRatio || '',
-          title: project.title || ''
+          aspectRatio: project.aspectRatio || payload.aspectRatio || ''
         }
       );
 

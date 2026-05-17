@@ -887,17 +887,23 @@
   }
 
   api.projectSave = async function (projectId, payload, scenes, opts) {
-    var safeScenes = stripInlineDataUrls(Array.isArray(scenes) ? scenes : []);
-    var safePayload = stripPayloadDataUrls(payload);
-    var body = {
-      projectId: String(projectId || ''),
-      userId: resolveUserId(),
-      payload: safePayload,
-      scenes: safeScenes,
-      header: opts && opts.header ? opts.header : '',
-      aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',
-      title: (opts && opts.title) || ''
-    };
+    // 서버가 머지 모드로 동작하므로 보내지 않은 필드는 기존 값이 보존된다.
+    // 호출자가 책임지지 않는 필드는 undefined/null 로 넘기면 본문에서 제외 → 서버는 기존값 보존.
+    var body = { projectId: String(projectId || ''), userId: resolveUserId() };
+    var safeScenes = null;
+    var safePayload = null;
+    if (scenes !== undefined && scenes !== null) {
+      safeScenes = stripInlineDataUrls(Array.isArray(scenes) ? scenes : []);
+      body.scenes = safeScenes;
+    }
+    if (payload !== undefined && payload !== null) {
+      safePayload = stripPayloadDataUrls(payload);
+      body.payload = safePayload;
+    }
+    if (opts && typeof opts.header === 'string') body.header = opts.header;
+    var aspect = (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '';
+    if (aspect) body.aspectRatio = aspect;
+    if (opts && opts.title) body.title = opts.title;
     var bodyStr = JSON.stringify(body);
     var bodyKb = Math.round(bodyStr.length / 1024);
     // 200KB 초과부터 자동 breakdown 출력 — 30초 프로젝트가 이보다 크면 비정상.

@@ -105,10 +105,21 @@
 
   function buildSavePayload(project, options) {
     var opts = options || {};
-    var payload = Object.assign({}, (project && project.payload) || {});
+    // post-production 이 책임지는 필드만 화이트리스트로 전송.
+    // 서버가 머지 모드라 안 보낸 필드(scenarios, characters, knowledgeHub, brandStudio* 등)는
+    // 기존 GCS 값이 그대로 보존된다 → 시나리오/캐릭터/브랜드 데이터 손실 위험 없이 페이로드 축소.
+    var src = (project && project.payload) || {};
+    var payload = {};
     if (Object.prototype.hasOwnProperty.call(opts, 'postTimelineEdits')) {
       payload.postTimelineEdits = opts.postTimelineEdits || {};
+    } else if (Object.prototype.hasOwnProperty.call(src, 'postTimelineEdits')) {
+      payload.postTimelineEdits = src.postTimelineEdits || {};
     }
+    if (Array.isArray(src.overlayClips)) payload.overlayClips = src.overlayClips;
+    if (Array.isArray(src.editVersions)) payload.editVersions = src.editVersions;
+    if (src.activeVersionId != null) payload.activeVersionId = src.activeVersionId;
+    if (src.musicUrl != null) payload.musicUrl = src.musicUrl;
+    if (src.musicMeta != null) payload.musicMeta = src.musicMeta;
     payload.renderMeta = sanitizeRenderMetaForSave(mergeRenderMeta(project, opts.renderMeta));
     return payload;
   }

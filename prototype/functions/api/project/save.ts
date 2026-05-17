@@ -254,16 +254,48 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       };
     };
 
-    const scenes = Array.isArray(body.scenes) ? body.scenes.map(normalizeScene) : [];
+    // 머지 모드: 클라이언트가 자기 책임 필드만 보내도 다른 페이지 데이터가 보존되도록
+    // 기존 data.json 을 GET → shallow merge → PUT.
+    // - body.payload 가 있으면 기존 payload 위에 shallow merge (받지 않은 키는 보존)
+    // - body.scenes 가 있으면 통째로 대체, 없으면 기존 scenes 보존
+    // - title/header/aspectRatio 도 받은 경우에만 덮어씀
+    // GET 실패(신규 프로젝트, 권한 등)는 빈 객체로 fallback → 기존 통째 저장과 동일 동작
+    let existing: any = null;
+    try {
+      const getUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}?alt=media`;
+      const getRes = await fetch(getUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (getRes.ok) {
+        try { existing = await getRes.json(); } catch (_) { existing = null; }
+      }
+    } catch (_) { existing = null; }
+
+    // 빈 배열/객체는 "보내지 않은 것"으로 간주 → 기존 호출자가 `scenes || []` 패턴으로
+    // 신규 프로젝트나 미초기화 상태를 보내도 기존 데이터를 덮어쓰지 않게 보호.
+    // 명시적으로 전체 씬 삭제가 필요한 경우는 별도 액션으로 처리해야 함.
+    const hasScenes = Array.isArray(body.scenes) && body.scenes.length > 0;
+    const hasPayload = body.payload && typeof body.payload === "object" && Object.keys(body.payload).length > 0;
+    const hasHeader = Object.prototype.hasOwnProperty.call(body, "header") && body.header;
+    const hasAspect = Object.prototype.hasOwnProperty.call(body, "aspectRatio") && body.aspectRatio;
+    const hasTitle = Object.prototype.hasOwnProperty.call(body, "title") && body.title;
+
+    const mergedScenes = hasScenes
+      ? (body.scenes as any[]).map(normalizeScene)
+      : (Array.isArray(existing?.scenes) ? existing.scenes : []);
+    const mergedPayload = hasPayload
+      ? Object.assign({}, (existing?.payload || {}), normalizeClientPayload(body.payload))
+      : (existing?.payload || {});
+    const mergedHeader = hasHeader ? (body.header || "") : (existing?.header || "");
+    const mergedAspect = hasAspect ? body.aspectRatio : (existing?.aspectRatio || "");
+    const mergedTitle = hasTitle ? body.title : (existing?.title || "");
 
     const payload = {
       projectId,
       userId,
-      title: body.title || "",
-      payload: normalizeClientPayload(body.payload),
-      scenes,
-      header: body.header || "",
-      aspectRatio: body.aspectRatio || "",
+      title: mergedTitle,
+      payload: mergedPayload,
+      scenes: mergedScenes,
+      header: mergedHeader,
+      aspectRatio: mergedAspect,
       savedAt: new Date().toISOString(),
     };
 
@@ -276,7 +308,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const text = await res.text();
     if (!res.ok) return send({ error: text || "upload_error" }, res.status, origin);
 
-    return send({ ok: true, objectName }, 200, origin);
+    return send({ ok: true, objectName, merged: !!existing }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
   }
