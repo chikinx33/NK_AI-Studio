@@ -850,6 +850,7 @@
       '<button type="button" class="btn-icon-sm active" id="pipeline-focus-mode" title="부분 펼침" aria-label="부분 펼침" data-i18n-title="scene_focus_mode" data-i18n-aria-label="scene_focus_mode"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 4 18 10" stroke-width="3.2"/><polyline points="6 14 12 20 18 14" stroke-width="2.2"/></svg></button>' +
       '</div>' +
       '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
+      '<button class="btn-secondary" id="pipeline-remap-assets" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="저장소의 이미지·영상을 시간순으로 빈 씬에 다시 매핑">자동 매핑</button>' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" disabled>영상 일괄 생성</button>' +
@@ -994,6 +995,29 @@
     } else {
       pipelineScenes.classList.add('empty');
       pipelineScenes.innerHTML = '<div class="card video-stage-empty-card"><p class="muted">장면이 없습니다</p></div>';
+    }
+    var remapBtn = document.getElementById('pipeline-remap-assets');
+    if (remapBtn) {
+      remapBtn.onclick = async function () {
+        if (!confirm('기존 매핑을 모두 초기화하고 저장소의 이미지·영상을 시간순으로 다시 매핑합니다.\n(사용자가 직접 교체한 자산도 초기화됩니다.)\n계속하시겠습니까?')) return;
+        var st = ctx.getState();
+        if (!st || !Array.isArray(st.scenes)) return;
+        // 모든 씬의 미디어 URL 필드 초기화 — refreshAssets 폴백이 다시 동작하도록
+        st.scenes = st.scenes.map(function (s) {
+          return Object.assign({}, s, {
+            imageDataUrl: '', imagePath: '', generatedImageUrl: '', imageUrl: '',
+            videoUrl: '', videoPath: '', generatedVideoUrl: '', videoPlaybackUrl: '',
+            videoStatus: '', videoError: ''
+          });
+        });
+        // 폴백 가드 해제 (프로젝트당 1회 제한 풀기)
+        st.payload = Object.assign({}, st.payload || {}, { assetsBackfilled: false });
+        st._assetsRefreshed = false;
+        ctx.setState(st);
+        if (ctx.persistPipeline) ctx.persistPipeline();
+        try { await ui.refreshAssets(); } catch (_) {}
+        try { await NK.uiPipeline.render(); } catch (_) {}
+      };
     }
     var savePipelineBtn = document.getElementById('save-pipeline-btn');
     if (savePipelineBtn) {
