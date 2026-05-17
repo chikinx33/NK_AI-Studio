@@ -842,11 +842,16 @@
       aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',
       title: (opts && opts.title) || ''
     };
-    var res = await fetchWithTimeout(withBase('/api/project/save'), {
-      method: 'POST',
-      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(body)
-    }, 25000);
+    var bodyStr = JSON.stringify(body);
+    var saveReq = { method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }), body: bodyStr };
+    var res;
+    try {
+      res = await fetchWithTimeout(withBase('/api/project/save'), saveReq, 45000);
+    } catch (firstErr) {
+      if (String(firstErr && firstErr.message || '').indexOf('timeout') < 0) throw firstErr;
+      // 타임아웃 시 1회 재시도 (OAuth/GCS 지연 대응)
+      res = await fetchWithTimeout(withBase('/api/project/save'), { method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }), body: bodyStr }, 45000);
+    }
     var text = await readTextWithTimeout(res, 10000);
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
     if (res.ok) api.projectListInvalidate();

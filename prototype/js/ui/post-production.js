@@ -2147,6 +2147,44 @@
     vid.style.pointerEvents = 'none';
   }
 
+  // 프록시가 502를 반환하는(GCS 파일 없음) 영상 URL을 씬에서 자동 제거.
+  // video 엘리먼트 onerror 후 fetch로 502 여부를 재확인해 오탐 방지.
+  function clearBrokenProxyVideoRef(url) {
+    if (!url || url.indexOf('/api/media/proxy') < 0) return;
+    var objectName;
+    try {
+      var u = new URL(url, window.location.href);
+      objectName = (u.searchParams.get('objectName') || '').trim();
+    } catch (_) { return; }
+    if (!objectName) return;
+    if (!/\.(mp4|webm|mov|m4v)$/i.test(objectName)) return;
+    var bn = objectName.split('/').pop();
+    if (!bn) return;
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 6000);
+    var fetchOpts = ctrl ? { signal: ctrl.signal } : {};
+    fetch(url, fetchOpts).then(function (res) {
+      clearTimeout(timer);
+      if (ctrl) ctrl.abort();
+      if (res.status !== 502 && res.status !== 404) return;
+      var svc = NK.service && NK.service.project;
+      if (!svc || !svc.updateLocal || !state.projectId) return;
+      svc.updateLocal(state.projectId, function (project) {
+        var scenes = Array.isArray(project.scenes) ? project.scenes : [];
+        var changed = false;
+        var nextScenes = scenes.map(function (scene) {
+          var sceneAssets = NK.service && NK.service.sceneAssets;
+          var vid = sceneAssets ? sceneAssets.getSceneVideoUrl(scene) : (scene.videoUrl || '');
+          if (!vid || vid.indexOf(bn) < 0) return scene;
+          changed = true;
+          return Object.assign({}, scene, { videoUrl: '', generatedVideoUrl: '', videoStatus: '', videoError: '' });
+        });
+        if (!changed) return project;
+        return Object.assign({}, project, { scenes: nextScenes });
+      });
+    }).catch(function () { clearTimeout(timer); });
+  }
+
   function ensurePreviewVideoForUrl(playableUrl) {
     if (!playableUrl) return null;
     var host = getPreviewVideoHost();
@@ -2179,7 +2217,11 @@
     host.appendChild(video);
     var entry = { url: playableUrl, video: video, ready: false, failed: false };
     var onReady = function () { entry.ready = true; updatePreviewLoadingFromActiveVideo(); };
-    var onErr = function () { entry.failed = true; updatePreviewLoadingFromActiveVideo(); };
+    var onErr = function () {
+      entry.failed = true;
+      updatePreviewLoadingFromActiveVideo();
+      clearBrokenProxyVideoRef(playableUrl);
+    };
     try { video.addEventListener('loadedmetadata', onReady); } catch (_) {}
     try { video.addEventListener('canplay', onReady); } catch (_) {}
     try { video.addEventListener('canplaythrough', onReady); } catch (_) {}
