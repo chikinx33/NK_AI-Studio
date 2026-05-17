@@ -381,7 +381,22 @@
             header: data.header || (cur && cur.header) || '',
             aspectRatio: (data.aspectRatio || (data.payload && data.payload.aspectRatio) || (cur && cur.aspectRatio) || ''),
             payload: Object.assign({}, (cur && cur.payload) || {}, data.payload || {}),
-            scenes: Array.isArray(data.scenes) ? data.scenes : ((cur && cur.scenes) || [])
+            scenes: (function () {
+              var srvScenes = Array.isArray(data.scenes) ? data.scenes : [];
+              var curScenes = Array.isArray(cur && cur.scenes) ? cur.scenes : [];
+              if (!srvScenes.length) return curScenes;
+              var mediaFields = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
+                'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl',
+                'voiceUrl', 'videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
+              return srvScenes.map(function (srvScene) {
+                var curScene = curScenes.find(function (s) { return s && s.id === srvScene.id; }) || {};
+                var merged = Object.assign({}, srvScene);
+                mediaFields.forEach(function (field) {
+                  if (!merged[field] && curScene[field]) merged[field] = curScene[field];
+                });
+                return merged;
+              });
+            })()
           });
           // getTimelineEdits는 root.postTimelineEdits가 payload.postTimelineEdits를 덮어쓰므로,
           // 서버 리프레시 후 stale 로컬 root 값이 올바른 서버 edits를 무효화하지 않도록 동기화.
