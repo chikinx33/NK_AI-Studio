@@ -5,6 +5,11 @@
 
   // 렌더 저장소 캐시: projectId → [{name, size}]
   var _renderStorageCache = {};
+  // AI 시네마 자산 캐시: projectId → [{name, signedUrl?, contentType?, ...}]
+  // AI 영상 생성(ai-video-gen)과 AI 이미지 생성(ai-image)에서 만든 GCS 자산을
+  // 브랜드 스튜디오 "01 자산" 섹션에 노출하기 위함.
+  var _videoGenStorageCache = {};
+  var _aiImageStorageCache = {};
   var _dtDocListener = null;
 
   function escapeHtml(value) {
@@ -1200,6 +1205,46 @@
           id: rid, projectId: projectId, type: 'video',
           title: '렌더 ' + label, url: rUrl, status: 'ready',
           duration: storeDur
+        });
+      });
+    }
+
+    // AI 시네마 영상(ai-video-gen) 캐시 병합 — `/api/video/library?source=video-gen&projectId=...` 결과
+    var cachedVideoGen = _videoGenStorageCache[projectId] || [];
+    if (cachedVideoGen.length && _renderTokenValid) {
+      var existingIdsVg = contentItems.map(function (c) { return c.id; });
+      cachedVideoGen.forEach(function (item, idx) {
+        var vgObj = String(item && (item.name || item.objectName) || '').trim();
+        if (!vgObj) return;
+        var vgId = projectId + ':video:gen:' + (vgObj || idx);
+        if (existingIdsVg.indexOf(vgId) >= 0) return;
+        var vgUrl = NK.api && NK.api.mediaProxyObjectUrl ? NK.api.mediaProxyObjectUrl(vgObj) : '';
+        if (!vgUrl) return;
+        var vgBase = vgObj.split('/').pop().replace(/\.(webm|mp4|mov)$/i, '');
+        var vgDur = (item && (Number(item.durationSec) || Number(item.duration))) || null;
+        contentItems.push({
+          id: vgId, projectId: projectId, type: 'video',
+          title: 'AI 영상 ' + vgBase, url: vgUrl, status: 'ready',
+          duration: vgDur
+        });
+      });
+    }
+
+    // AI 시네마 이미지(ai-image) 캐시 병합 — `/api/ai-image/library?sessionId=...` 결과
+    var cachedAiImages = _aiImageStorageCache[projectId] || [];
+    if (cachedAiImages.length && _renderTokenValid) {
+      var existingIdsImg = contentItems.map(function (c) { return c.id; });
+      cachedAiImages.forEach(function (item, idx) {
+        var imgObj = String(item && (item.name || item.objectName) || '').trim();
+        if (!imgObj) return;
+        var imgId = projectId + ':image:gen:' + (imgObj || idx);
+        if (existingIdsImg.indexOf(imgId) >= 0) return;
+        var imgUrl = NK.api && NK.api.mediaProxyObjectUrl ? NK.api.mediaProxyObjectUrl(imgObj) : '';
+        if (!imgUrl) return;
+        var imgBase = imgObj.split('/').pop().replace(/\.(png|jpg|jpeg|webp)$/i, '');
+        contentItems.push({
+          id: imgId, projectId: projectId, type: 'image',
+          title: 'AI 이미지 ' + imgBase, url: imgUrl, status: 'ready'
         });
       });
     }
@@ -4248,6 +4293,48 @@
             }
           })
           .catch(function () {})
+      );
+    }
+
+    // AI 시네마 영상 라이브러리 비동기 로드 (ai-video-gen에서 생성한 GCS 영상)
+    // - 서버는 source=video-gen + projectId 기반으로 프로젝트 전용 prefix 조회
+    if (NK.api && NK.api.videoGenLibrary && initProjectId) {
+      promises.push(
+        NK.api.videoGenLibrary(initProjectId)
+          .then(function (data) {
+            var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
+            if (items.length && root.isConnected) {
+              _videoGenStorageCache[initProjectId] = items;
+            }
+          })
+          .catch(function () {})
+      );
+    }
+
+    // AI 이미지 라이브러리 비동기 로드 (ai-image에서 생성한 GCS 이미지)
+    // - sessionId 기반이므로 project.payload.aiImageSessionId 또는 현재 로컬 sessionId 사용
+    // - 서버 동기화(refreshProjectPromise) 이후 latestProject.payload에서 최신 sessionId 읽음
+    if (NK.api && NK.api.aiImageSessionLibrary && initProjectId) {
+      promises.push(
+        refreshProjectPromise.then(function () {
+          var _aiImgSid = '';
+          try {
+            var _pp = (latestProject && latestProject.payload) || (project && project.payload) || {};
+            _aiImgSid = String(_pp.aiImageSessionId || '').trim();
+            if (!_aiImgSid) {
+              try { _aiImgSid = String(localStorage.getItem('nk_ai_image_session_id') || '').trim(); } catch (_) {}
+            }
+          } catch (_) {}
+          if (!_aiImgSid) return;
+          return NK.api.aiImageSessionLibrary(_aiImgSid)
+            .then(function (data) {
+              var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
+              if (items.length && root.isConnected) {
+                _aiImageStorageCache[initProjectId] = items;
+              }
+            })
+            .catch(function () {});
+        })
       );
     }
 

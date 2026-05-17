@@ -3517,6 +3517,22 @@
     state.sessionId = ensureSessionId();
     state.currentProject = readCurrentProject();
     state.currentBrand = readCurrentBrand();
+    // Brand Studio 자산 발견용: 프로젝트 컨텍스트일 때 sessionId를 payload에 동기화.
+    // payload.aiImageSessionId가 이미 있으면 그 값을 권위로 삼아 localStorage도 맞춤
+    // (다른 브라우저/세션 재진입 시에도 같은 GCS 세션에 누적되도록).
+    try {
+      var _proj = state.currentProject;
+      var _pid = _proj && _proj.id ? String(_proj.id).trim() : '';
+      if (_pid && NK.service && NK.service.project && NK.service.project.updatePayload) {
+        var _existing = String((_proj.payload && _proj.payload.aiImageSessionId) || '').trim();
+        if (_existing && _existing !== state.sessionId) {
+          try { localStorage.setItem(STORAGE_SESSION_KEY, _existing); } catch (_) {}
+          state.sessionId = _existing;
+        } else if (!_existing && state.sessionId) {
+          NK.service.project.updatePayload(_pid, { aiImageSessionId: state.sessionId }).catch(function () {});
+        }
+      }
+    } catch (_) {}
     state.provider = readStoredProvider();
     loadHistory();
     try {
