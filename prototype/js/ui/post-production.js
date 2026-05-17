@@ -462,18 +462,24 @@
     if (!project) return;
     if (!project.payload) project.payload = {};
     project.payload.overlayClips = (state.overlayClips || []).map(function (c) {
-      return { id: c.id, label: c.label, url: c.url, start: c.start, end: c.end, baseDuration: c.baseDuration };
+      return { id: c.id, label: c.label, url: c.url, objectName: c.objectName || '', start: c.start, end: c.end, baseDuration: c.baseDuration };
     });
   }
 
   function loadOverlayClipsFromProject(project) {
     var payload = project && project.payload;
     var saved = payload && Array.isArray(payload.overlayClips) ? payload.overlayClips : [];
-    state.overlayClips = saved.filter(function (c) { return c && c.url; }).map(function (c) {
+    state.overlayClips = saved.filter(function (c) { return c && (c.url || c.objectName); }).map(function (c) {
+      // objectName이 있으면 현재 토큰으로 프록시 URL 재생성 (저장된 URL의 토큰 만료 대응)
+      var url = c.url || '';
+      if (c.objectName && NK.api && NK.api.mediaProxyObjectUrl) {
+        url = NK.api.mediaProxyObjectUrl(c.objectName) || url;
+      }
       return {
         id: c.id || ('overlay-' + Date.now()),
         label: c.label || 'Overlay',
-        url: c.url,
+        url: url,
+        objectName: c.objectName || '',
         start: Number(c.start) || 0,
         end: Number(c.end) || 5,
         baseDuration: Number(c.baseDuration) || 5
@@ -3016,11 +3022,15 @@
       var isCapturedOv = !!version._captured;
       targetOverlays = isCapturedOv ? (version.overlayClips || []).slice() : [];
     }
-    state.overlayClips = targetOverlays;
+    // objectName이 있는 클립은 현재 토큰으로 프록시 URL 재생성 (GCS 로드 후 토큰 만료 대응)
+    state.overlayClips = targetOverlays.map(function (c) {
+      if (!c || !c.objectName || !NK.api || !NK.api.mediaProxyObjectUrl) return c;
+      return Object.assign({}, c, { url: NK.api.mediaProxyObjectUrl(c.objectName) || c.url });
+    });
 
     // CRITICAL: overlayClips, musicUrl도 service patch에 포함시켜 storage에 영구 반영해야 함
     // (단순 in-memory mutation은 svc가 storage에서 재로드하며 덮어씀)
-    var svcPatch = { postTimelineEdits: targetEdits, overlayClips: targetOverlays.slice() };
+    var svcPatch = { postTimelineEdits: targetEdits, overlayClips: state.overlayClips.slice() };
     if (version.id !== 'v0') {
       // 렌더 버전: _captured 없으면 빈 음악, 있으면 저장된 musicUrl 복원
       svcPatch.musicUrl = (!!version._captured) ? (version.musicUrl || '') : '';
@@ -6961,14 +6971,32 @@
           overlayInput.onchange = function (e) {
             var file = e.target.files && e.target.files[0];
             if (!file) return;
-            var reader = new FileReader();
-            reader.onload = function (re) {
-              var dataUrl = re.target.result;
-              var duration = getTimelinePlaybackDuration(state.model) || 5;
+            overlayInput.value = '';
+            if (!NK.api || !NK.api.imageUpload) {
+              showPostprodToast(t('업로드 기능을 사용할 수 없습니다.'));
+              return;
+            }
+            if (!state.projectId) {
+              showPostprodToast(t('프로젝트를 찾을 수 없습니다.'));
+              return;
+            }
+            var clipId = 'overlay-' + Date.now();
+            var label = file.name.replace(/\.[^/.]+$/, '');
+            var duration = getTimelinePlaybackDuration(state.model) || 5;
+            showPostprodToast(label + ' ' + t('업로드 중...'));
+            NK.api.imageUpload(state.projectId, file).then(function (result) {
+              var proxyUrl = (NK.api.mediaProxyObjectUrl && result.objectName)
+                ? NK.api.mediaProxyObjectUrl(result.objectName)
+                : String(result.signedUrl || '');
+              if (!proxyUrl) {
+                showPostprodToast(t('업로드 완료했지만 URL을 가져올 수 없습니다.'));
+                return;
+              }
               state.overlayClips.push({
-                id: 'overlay-' + Date.now(),
-                label: file.name.replace(/\.[^/.]+$/, ''),
-                url: dataUrl,
+                id: clipId,
+                label: label,
+                url: proxyUrl,
+                objectName: result.objectName || '',
                 start: 0,
                 end: duration,
                 baseDuration: duration
@@ -6976,10 +7004,11 @@
               syncOverlayClipsToProject();
               setDirty(true);
               post.render();
-              showPostprodToast(file.name + ' ' + t('등록되었습니다.'));
-            };
-            reader.readAsDataURL(file);
-            overlayInput.value = '';
+              showPostprodToast(label + ' ' + t('등록되었습니다.'));
+            }).catch(function (err) {
+              var msg = err && err.message ? err.message : '';
+              showPostprodToast(t('업로드 실패') + (msg ? ': ' + msg : '.'));
+            });
           };
           overlayInput.click();
           return;
