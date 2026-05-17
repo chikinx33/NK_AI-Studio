@@ -1184,6 +1184,11 @@
       }
     }
 
+    // GCS 자산 자동 갱신 — 페이지 진입 시 만료/누락된 이미지·영상 URL을
+    // 서버 라이브러리에서 최신 프록시 URL로 교체. 내부에 state._assetsRefreshed
+    // 가드가 있어 매 render마다 호출돼도 실제 GCS 호출은 한 번만 실행됨.
+    try { ui.refreshAssets(); } catch (_) {}
+
     // DOM 렌더 완전 완료 후 스피너 해제 (최소 300ms 보장)
     if (__pipelineSpinnerAt > 0) {
       var _spinDelay = Math.max(0, 300 - (Date.now() - __pipelineSpinnerAt));
