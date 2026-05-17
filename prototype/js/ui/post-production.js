@@ -1564,7 +1564,7 @@
         if (!state.saveBusy) return;
         state.saveBusy = false;
         updateRenderPanelUi();
-      }, 40000);
+      }, 65000);
       if (saveBtn) {
         saveBtn.disabled = true;
         saveBtn.textContent = t('저장 중...');

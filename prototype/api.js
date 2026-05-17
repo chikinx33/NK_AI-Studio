@@ -853,26 +853,41 @@
 
   api.projectSave = async function (projectId, payload, scenes, opts) {
     var safeScenes = stripInlineDataUrls(Array.isArray(scenes) ? scenes : []);
+    var safePayload = stripPayloadDataUrls(payload);
     var body = {
       projectId: String(projectId || ''),
       userId: resolveUserId(),
-      payload: stripPayloadDataUrls(payload),
+      payload: safePayload,
       scenes: safeScenes,
       header: opts && opts.header ? opts.header : '',
       aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',
       title: (opts && opts.title) || ''
     };
     var bodyStr = JSON.stringify(body);
-    var saveReq = { method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }), body: bodyStr };
-    var res;
-    try {
-      res = await fetchWithTimeout(withBase('/api/project/save'), saveReq, 45000);
-    } catch (firstErr) {
-      if (String(firstErr && firstErr.message || '').indexOf('timeout') < 0) throw firstErr;
-      // 타임아웃 시 1회 재시도 (OAuth/GCS 지연 대응)
-      res = await fetchWithTimeout(withBase('/api/project/save'), { method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }), body: bodyStr }, 45000);
+    var bodyKb = Math.round(bodyStr.length / 1024);
+    // 페이로드 크기 진단: 1MB 초과 시 어디가 큰지 콘솔에 출력해 사용자가 원인을 파악할 수 있게 함.
+    if (bodyStr.length > 1024 * 1024) {
+      var sizes = {
+        total_KB: bodyKb,
+        scenes_KB: Math.round(JSON.stringify(safeScenes).length / 1024),
+        payload_KB: Math.round(JSON.stringify(safePayload).length / 1024)
+      };
+      try {
+        var pl = safePayload || {};
+        if (Array.isArray(pl.editVersions)) sizes.editVersions_KB = Math.round(JSON.stringify(pl.editVersions).length / 1024);
+        if (Array.isArray(pl.overlayClips)) sizes.overlayClips_KB = Math.round(JSON.stringify(pl.overlayClips).length / 1024);
+        if (pl.postTimelineEdits) sizes.postTimelineEdits_KB = Math.round(JSON.stringify(pl.postTimelineEdits).length / 1024);
+      } catch (_) {}
+      console.warn('[projectSave] large payload', sizes);
     }
-    var text = await readTextWithTimeout(res, 10000);
+    var saveReq = { method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }), body: bodyStr };
+    // 타임아웃 60s (이전 45s는 1MB+ 페이로드 + 느린 모바일 연결에서 부족).
+    // 자동 재시도 제거: 타임아웃 후 재시도는 사용자 대기를 2배로 늘리지만 동일 페이로드는 동일 시간 소요 → 실패율 동일.
+    // OAuth 토큰은 서버 캐시(3300s)되어 토큰 발급 지연도 더 이상 변수가 아님.
+    var t0 = Date.now();
+    var res = await fetchWithTimeout(withBase('/api/project/save'), saveReq, 60000);
+    var text = await readTextWithTimeout(res, 15000);
+    console.log('[projectSave] ' + bodyKb + 'KB in ' + (Date.now() - t0) + 'ms (status ' + res.status + ')');
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
     if (res.ok) api.projectListInvalidate();
     return j(text);
