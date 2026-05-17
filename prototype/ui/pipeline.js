@@ -721,19 +721,26 @@
             // stale 한 로컬 캐시(nk_pipeline_last) 만 보여주던 회귀를 막는다.
             var prev = ctx.getState ? ctx.getState() : state;
             var prevScenes = (prev && Array.isArray(prev.scenes)) ? prev.scenes : [];
-            // GCS 씬에 미디어 URL이 비어 있을 때(이미지 생성 전 저장된 경우) 로컬 캐시의 URL 보존
+            // GCS 씬에 미디어 URL이 비어 있을 때(이미지 생성 전 저장된 경우) 로컬 캐시의 URL 보존.
+            // buildStateFromData가 imagePath→imageDataUrl로 정규화하므로, 반드시 raw sd.scenes의
+            // 실제 필드 값(빈 문자열인지)을 확인해야 로컬 프록시 URL을 올바르게 보존할 수 있다.
             if (Array.isArray(freshState.scenes) && freshState.scenes.length && prevScenes.length) {
               var _mf = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
                 'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl',
                 'voiceUrl', 'videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
               var _prevById = {};
               prevScenes.forEach(function (s) { if (s) _prevById[String(s.id)] = s; });
+              // raw GCS scenes: buildStateFromData 정규화 이전 값으로 필드 공백 여부 판정
+              var _sdById = {};
+              (Array.isArray(sd.scenes) ? sd.scenes : []).forEach(function (s) { if (s) _sdById[String(s.id)] = s; });
               freshState = Object.assign({}, freshState, {
                 scenes: freshState.scenes.map(function (srv) {
                   var cur = _prevById[String(srv.id)] || {};
+                  var sdScene = _sdById[String(srv.id)] || {};
                   var merged = Object.assign({}, srv);
                   _mf.forEach(function (f) {
-                    if (!merged[f] && cur[f]) {
+                    var rawSrvVal = sdScene[f] || '';
+                    if (!rawSrvVal && cur[f]) {
                       var v = cur[f];
                       if (typeof v === 'string' && (v.slice(0, 5) === 'data:' || v.slice(0, 5) === 'blob:')) return;
                       merged[f] = v;
