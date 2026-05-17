@@ -831,12 +831,32 @@
     });
   }
 
+  // payload.overlayClips / editVersions[*].overlayClips 에 data:video 가 있으면
+  // JSON.stringify 결과가 수십 MB가 돼 업로드 타임아웃이 발생한다.
+  // 씬과 동일하게 전송 전 제거. 세션 내 in-memory state는 유지되므로 현재 재생에 영향 없음.
+  function stripPayloadDataUrls(p) {
+    if (!p || typeof p !== 'object') return p || {};
+    var out = Object.assign({}, p);
+    var drop = function (c) {
+      if (!c || typeof c.url !== 'string' || c.url.indexOf('data:') !== 0) return c;
+      return Object.assign({}, c, { url: '' });
+    };
+    if (Array.isArray(out.overlayClips)) out.overlayClips = out.overlayClips.map(drop);
+    if (Array.isArray(out.editVersions)) {
+      out.editVersions = out.editVersions.map(function (v) {
+        if (!v || !Array.isArray(v.overlayClips)) return v;
+        return Object.assign({}, v, { overlayClips: v.overlayClips.map(drop) });
+      });
+    }
+    return out;
+  }
+
   api.projectSave = async function (projectId, payload, scenes, opts) {
     var safeScenes = stripInlineDataUrls(Array.isArray(scenes) ? scenes : []);
     var body = {
       projectId: String(projectId || ''),
       userId: resolveUserId(),
-      payload: payload || {},
+      payload: stripPayloadDataUrls(payload),
       scenes: safeScenes,
       header: opts && opts.header ? opts.header : '',
       aspectRatio: (opts && opts.aspectRatio) || (payload && payload.aspectRatio) || '',

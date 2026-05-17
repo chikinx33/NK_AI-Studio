@@ -41,7 +41,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId);
     const objectName = `${projectPrefix}/reference/data.json`;
 
-    const token = await getGoogleAccessToken({
+    const token = await getGoogleAccessTokenCached({
       clientEmail,
       privateKeyPem: privateKeyRaw,
       scope: "https://www.googleapis.com/auth/cloud-platform",
@@ -260,7 +260,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       projectId,
       userId,
       title: body.title || "",
-      payload: body.payload || {},
+      payload: normalizeClientPayload(body.payload),
       scenes,
       header: body.header || "",
       aspectRatio: body.aspectRatio || "",
@@ -281,6 +281,57 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return send({ error: e?.message || "Unknown error" }, 500, request.headers.get("Origin"));
   }
 };
+
+// overlay clip url이 data:video/... base64인 경우 GCS에 그대로 저장하면
+// payload가 수십 MB가 되어 Worker CPU·업로드 시간을 초과한다.
+// 클라이언트에서 이미 제거하지만 구버전 클라이언트 방어 목적으로 서버에서도 정규화.
+function normalizeClientPayload(raw: any): any {
+  if (!raw || typeof raw !== "object") return raw ?? {};
+  const out: any = { ...raw };
+  const dropData = (c: any) => {
+    if (!c || typeof c.url !== "string" || !c.url.startsWith("data:")) return c;
+    return { ...c, url: "" };
+  };
+  if (Array.isArray(out.overlayClips)) out.overlayClips = out.overlayClips.map(dropData);
+  if (Array.isArray(out.editVersions)) {
+    out.editVersions = out.editVersions.map((v: any) => {
+      if (!v || !Array.isArray(v.overlayClips)) return v;
+      return { ...v, overlayClips: v.overlayClips.map(dropData) };
+    });
+  }
+  return out;
+}
+
+// Google OAuth 2.0 서비스 계정 토큰은 유효 기간 3600초.
+// 매 저장마다 새로 발급하면 RSA 서명 + Google OAuth HTTP 왕복 (~300-500ms) 이 발생한다.
+// Cloudflare Cache API(edge 데이터센터 공유 캐시)로 3300초 캐싱 → 두 번째 저장부터 <1ms.
+async function getGoogleAccessTokenCached(opts: Parameters<typeof getGoogleAccessToken>[0]): Promise<string> {
+  const cacheUrl = `https://nk-cache.internal/gcs-token/${encodeURIComponent(opts.clientEmail)}`;
+  let store: Cache | null = null;
+  try {
+    store = await caches.open("nk-gcs-token-v1");
+    const cached = await store.match(new Request(cacheUrl));
+    if (cached) {
+      const { token, exp } = await cached.json() as { token: string; exp: number };
+      if (token && Number(exp) > Date.now() + 120_000) return token;
+    }
+  } catch (_) { store = null; }
+
+  const token = await getGoogleAccessToken(opts);
+
+  if (store) {
+    try {
+      const exp = Date.now() + 55 * 60 * 1000;
+      await store.put(
+        new Request(cacheUrl),
+        new Response(JSON.stringify({ token, exp }), {
+          headers: { "Cache-Control": "max-age=3300", "Content-Type": "application/json" },
+        })
+      );
+    } catch (_) {}
+  }
+  return token;
+}
 
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri.startsWith("gs://")) return null;
