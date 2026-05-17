@@ -36,6 +36,101 @@
     }
   }
 
+  // 영속화 직전 데이터 URL 제거: data:/blob: 가 IndexedDB/localStorage 에 누적되면
+  // 페이지 진입 시 메모리에 수십 MB 가 로드돼 OOM 을 유발한다. 세션 메모리(memory.*)는
+  // 그대로 두므로 현재 화면 미리보기에는 영향 없음. 업로드 완료 후 GCS URL 로 자연 대체.
+  var DATA_URL_FIELDS = ['imageDataUrl', 'videoUrl'];
+  function isDataLike(v) {
+    return typeof v === 'string' && (v.indexOf('data:') === 0 || v.indexOf('blob:') === 0);
+  }
+  function stripScenesDataUrls(scenes) {
+    if (!Array.isArray(scenes)) return scenes;
+    return scenes.map(function (s) {
+      if (!s || typeof s !== 'object') return s;
+      var out = s;
+      DATA_URL_FIELDS.forEach(function (k) {
+        if (isDataLike(out[k])) {
+          if (out === s) out = Object.assign({}, s);
+          out[k] = '';
+        }
+      });
+      if (Array.isArray(s.shots)) {
+        var newShots = s.shots.map(function (sh) {
+          if (!sh || typeof sh !== 'object') return sh;
+          var shOut = sh;
+          DATA_URL_FIELDS.forEach(function (k) {
+            if (isDataLike(shOut[k])) {
+              if (shOut === sh) shOut = Object.assign({}, sh);
+              shOut[k] = '';
+            }
+          });
+          return shOut;
+        });
+        if (newShots.some(function (sh, i) { return sh !== s.shots[i]; })) {
+          if (out === s) out = Object.assign({}, s);
+          out.shots = newShots;
+        }
+      }
+      return out;
+    });
+  }
+  function stripOverlayClipsDataUrls(clips) {
+    if (!Array.isArray(clips)) return clips;
+    return clips.map(function (c) {
+      if (c && isDataLike(c.url)) return Object.assign({}, c, { url: '' });
+      return c;
+    });
+  }
+  function stripDraftDataUrls(draft) {
+    if (!draft || typeof draft !== 'object') return draft;
+    var changed = false;
+    var out = draft;
+    if (Array.isArray(draft.scenes)) {
+      var newScenes = stripScenesDataUrls(draft.scenes);
+      if (newScenes !== draft.scenes) { out = Object.assign({}, out); out.scenes = newScenes; changed = true; }
+    }
+    if (draft.payload && typeof draft.payload === 'object') {
+      var p = draft.payload;
+      var newP = p;
+      if (Array.isArray(p.overlayClips)) {
+        var oc = stripOverlayClipsDataUrls(p.overlayClips);
+        if (oc !== p.overlayClips) { newP = Object.assign({}, newP); newP.overlayClips = oc; }
+      }
+      if (Array.isArray(p.editVersions)) {
+        var ev = p.editVersions.map(function (v) {
+          if (!v || !Array.isArray(v.overlayClips)) return v;
+          var oc2 = stripOverlayClipsDataUrls(v.overlayClips);
+          return oc2 === v.overlayClips ? v : Object.assign({}, v, { overlayClips: oc2 });
+        });
+        if (ev.some(function (v, i) { return v !== p.editVersions[i]; })) {
+          newP = Object.assign({}, newP); newP.editVersions = ev;
+        }
+      }
+      if (newP !== p) { out = out === draft ? Object.assign({}, draft) : out; out.payload = newP; changed = true; }
+    }
+    return changed ? out : draft;
+  }
+  function stripDraftsDataUrls(drafts) {
+    if (!Array.isArray(drafts)) return drafts;
+    var changed = false;
+    var next = drafts.map(function (d) {
+      var nd = stripDraftDataUrls(d);
+      if (nd !== d) changed = true;
+      return nd;
+    });
+    return changed ? next : drafts;
+  }
+  function stripPipelineDataUrls(pipeline) {
+    if (!pipeline || typeof pipeline !== 'object') return pipeline;
+    if (Array.isArray(pipeline.scenes)) {
+      var ns = stripScenesDataUrls(pipeline.scenes);
+      if (ns !== pipeline.scenes) {
+        return Object.assign({}, pipeline, { scenes: ns });
+      }
+    }
+    return pipeline;
+  }
+
   function readJson(key, fallback) {
     try {
       var raw = localStorage.getItem(key);
@@ -174,8 +269,14 @@
         schedulePersist(CACHE_KEYS.header, memory.header);
       }
 
-      writeJsonMirror(DRAFT_KEY, memory.drafts);
-      writeJsonMirror(PIPELINE_KEY, memory.pipeline);
+      // 레거시 누적분 청소: IndexedDB 에서 가져온 값에 data:/blob: 가 있으면
+      // 영속 사본만 다시 쓰고(메모리는 그대로) 누적을 끊는다.
+      var cleanedDrafts = stripDraftsDataUrls(memory.drafts);
+      var cleanedPipeline = stripPipelineDataUrls(memory.pipeline);
+      writeJsonMirror(DRAFT_KEY, cleanedDrafts);
+      writeJsonMirror(PIPELINE_KEY, cleanedPipeline);
+      if (cleanedDrafts !== memory.drafts) schedulePersist(CACHE_KEYS.drafts, cleanedDrafts);
+      if (cleanedPipeline !== memory.pipeline) schedulePersist(CACHE_KEYS.pipeline, cleanedPipeline);
       try { localStorage.setItem(HEADER_KEY, memory.header || ''); } catch (_) { }
       return true;
     }).catch(function () {
@@ -196,8 +297,9 @@
   };
   store.saveDrafts = function (drafts) {
     memory.drafts = Array.isArray(drafts) ? deepClone(drafts) : [];
-    writeJsonMirror(DRAFT_KEY, memory.drafts);
-    schedulePersist(CACHE_KEYS.drafts, memory.drafts);
+    var persistable = stripDraftsDataUrls(memory.drafts);
+    writeJsonMirror(DRAFT_KEY, persistable);
+    schedulePersist(CACHE_KEYS.drafts, persistable);
   };
   store.migrateDrafts = function () {
     try {
@@ -225,8 +327,9 @@
   };
   store.savePipeline = function (data) {
     memory.pipeline = data && typeof data === 'object' ? deepClone(data) : null;
-    writeJsonMirror(PIPELINE_KEY, memory.pipeline);
-    schedulePersist(CACHE_KEYS.pipeline, memory.pipeline);
+    var persistable = stripPipelineDataUrls(memory.pipeline);
+    writeJsonMirror(PIPELINE_KEY, persistable);
+    schedulePersist(CACHE_KEYS.pipeline, persistable);
   };
 
   store.getHeader = function () {

@@ -44,23 +44,40 @@
         return NK.service.brand.listProjects(target);
     }
 
+    // data:/blob: URL은 렌더 src로 쓰면 OOM 유발(특히 base64 이미지/영상이 수 MB).
+    // 업로드 완료된 GCS/HTTP URL을 우선 선택하고, data:/blob:만 있으면 빈 문자열 반환.
+    function pickRenderableUrl(candidates) {
+        var src = Array.isArray(candidates) ? candidates : [];
+        var fallback = '';
+        for (var i = 0; i < src.length; i++) {
+            var v = String(src[i] || '').trim();
+            if (!v) continue;
+            if (v.indexOf('data:') === 0 || v.indexOf('blob:') === 0) {
+                if (!fallback) fallback = ''; // never use as render src
+                continue;
+            }
+            return v;
+        }
+        return fallback;
+    }
+
     function sceneImageUrl(scene) {
-        var raw = firstFilled([
-            scene && scene.imageDataUrl,
+        var raw = pickRenderableUrl([
             scene && scene.imagePath,
             scene && scene.generatedImageUrl,
-            scene && scene.imageUrl
+            scene && scene.imageUrl,
+            scene && scene.imageDataUrl
         ]);
         return raw ? toAssetUrl(raw) : raw;
     }
 
     function sceneVideoUrl(scene) {
-        var raw = firstFilled([
-            scene && scene.videoUrl,
+        var raw = pickRenderableUrl([
             scene && scene.videoPlaybackUrl,
             scene && scene.outputVideoUrl,
             scene && scene.generatedVideoUrl,
-            scene && scene.videoPath
+            scene && scene.videoPath,
+            scene && scene.videoUrl
         ]);
         return raw ? toAssetUrl(raw) : raw;
     }
@@ -337,9 +354,11 @@
     function toAssetUrl(raw) {
         var value = String(raw || '').trim();
         if (!value) return '';
-        // 이미 로드 가능한 URL
-        if (value.indexOf('data:') === 0 || value.indexOf('blob:') === 0 ||
-            value.indexOf('http://') === 0 || value.indexOf('https://') === 0) {
+        // data:/blob: URL은 렌더 src 로 쓰면 innerHTML 파싱 시 OOM 위험 → 빈 문자열로 대체
+        if (value.indexOf('data:') === 0 || value.indexOf('blob:') === 0) {
+            return '';
+        }
+        if (value.indexOf('http://') === 0 || value.indexOf('https://') === 0) {
             return value;
         }
         // gs:// → 프록시 URL
