@@ -94,8 +94,12 @@
     // 빈 씬이 하나라도 있으면 GCS 라이브러리를 fetch — 시간순 인덱스 매핑 폴백 후보.
     // (GCS objectName에 sceneId가 없어 정확한 1:1 매핑이 불가능 → 사용자가 씬 1→N 순서로
     //  생성했다는 합리적 가정 하에 시간순 정렬로 빈 씬에 채움.)
-    var hasEmptyImg = st.scenes.some(function (s) { return !getSceneImageRef(s); });
-    var hasEmptyVid = st.scenes.some(function (s) { return !getSceneVideoRef(s); });
+    //
+    // 폴백은 프로젝트당 단 한 번만 실행 — 이후엔 payload.assetsBackfilled=true 마크로
+    // 영구 스킵. 사용자가 자동 매핑 결과를 삭제/교체해도 다시 끼어들지 않음.
+    var alreadyBackfilled = !!(st.payload && st.payload.assetsBackfilled);
+    var hasEmptyImg = !alreadyBackfilled && st.scenes.some(function (s) { return !getSceneImageRef(s); });
+    var hasEmptyVid = !alreadyBackfilled && st.scenes.some(function (s) { return !getSceneVideoRef(s); });
     var doImg = needImg || hasEmptyImg;
     var doVid = needVid || hasEmptyVid;
     if (!doImg && !doVid) return;
@@ -189,11 +193,16 @@
         }
         return next;
       });
-      var nextState = Object.assign({}, latest, { scenes: nextScenes, _assetsRefreshed: true });
+      // 폴백 매핑이 한 번이라도 적용됐으면 payload.assetsBackfilled 마크 — 다음 진입부터 폴백 영구 스킵.
+      // ctx.persistPipeline이 payload 그대로 서버 저장하므로 마크가 영구화됨.
+      var nextPayload = (fallbackImgUsed || fallbackVidUsed)
+        ? Object.assign({}, latest.payload || {}, { assetsBackfilled: true })
+        : latest.payload;
+      var nextState = Object.assign({}, latest, { scenes: nextScenes, payload: nextPayload, _assetsRefreshed: true });
       ctx.setState(nextState);
       if (changed) {
         if (fallbackImgUsed || fallbackVidUsed) {
-          try { console.info('[pipeline-assets] 자동 매핑 완료 — 이미지 ' + fallbackImgUsed + '개, 영상 ' + fallbackVidUsed + '개. 어긋난 경우 씬 카드의 "저장소" 버튼으로 교체.'); } catch (_) {}
+          try { console.info('[pipeline-assets] 자동 매핑 완료 — 이미지 ' + fallbackImgUsed + '개, 영상 ' + fallbackVidUsed + '개. 어긋난 경우 씬 카드의 "저장소" 버튼으로 교체. 폴백은 이 프로젝트에서 다시 실행되지 않음.'); } catch (_) {}
         }
         if (opts.render) await opts.render();
         if (ctx.persistPipeline) ctx.persistPipeline();
