@@ -4162,7 +4162,13 @@
               return srvScenes.map(function (srvScene) {
                 var cur = _curById[String(srvScene.id)] || {};
                 var merged = Object.assign({}, srvScene);
-                _mf.forEach(function (f) { if (!merged[f] && cur[f]) merged[f] = cur[f]; });
+                _mf.forEach(function (f) {
+                  if (!merged[f] && cur[f]) {
+                    var v = cur[f];
+                    if (typeof v === 'string' && (v.slice(0, 5) === 'data:' || v.slice(0, 5) === 'blob:')) return;
+                    merged[f] = v;
+                  }
+                });
                 return merged;
               });
             })()

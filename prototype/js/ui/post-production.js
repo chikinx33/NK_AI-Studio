@@ -392,7 +392,11 @@
                 var curScene = curScenes.find(function (s) { return s && s.id === srvScene.id; }) || {};
                 var merged = Object.assign({}, srvScene);
                 mediaFields.forEach(function (field) {
-                  if (!merged[field] && curScene[field]) merged[field] = curScene[field];
+                  if (!merged[field] && curScene[field]) {
+                    var v = curScene[field];
+                    if (typeof v === 'string' && (v.slice(0, 5) === 'data:' || v.slice(0, 5) === 'blob:')) return;
+                    merged[field] = v;
+                  }
                 });
                 return merged;
               });

@@ -1914,7 +1914,13 @@
             return _srvSc.map(srvSc => {
               const cur = _curById[String(srvSc.id)] || {};
               const merged = Object.assign({}, srvSc);
-              _mf.forEach(f => { if (!merged[f] && cur[f]) merged[f] = cur[f]; });
+              _mf.forEach(f => {
+                if (!merged[f] && cur[f]) {
+                  const v = cur[f];
+                  if (typeof v === 'string' && (v.slice(0, 5) === 'data:' || v.slice(0, 5) === 'blob:')) return;
+                  merged[f] = v;
+                }
+              });
               return merged;
             });
           })(),
