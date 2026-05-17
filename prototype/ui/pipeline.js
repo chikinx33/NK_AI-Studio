@@ -721,30 +721,29 @@
             // stale 한 로컬 캐시(nk_pipeline_last) 만 보여주던 회귀를 막는다.
             var prev = ctx.getState ? ctx.getState() : state;
             var prevScenes = (prev && Array.isArray(prev.scenes)) ? prev.scenes : [];
-            // GCS 씬에 미디어 URL이 비어 있을 때(이미지 생성 전 저장된 경우) 로컬 캐시의 URL 보존.
-            // buildStateFromData가 imagePath→imageDataUrl로 정규화하므로, 반드시 raw sd.scenes의
-            // 실제 필드 값(빈 문자열인지)을 확인해야 로컬 프록시 URL을 올바르게 보존할 수 있다.
+            // 로컬 캐시의 미디어 URL을 항상 우선 보존. 서버 데이터의 imageDataUrl이 비어 있거나
+            // gs:// raw 경로이면 로컬 프록시 URL이 더 안전하다(초기 렌더에서 정상 동작 검증됨).
+            // ID 매칭 실패에 대비해 index 기반 fallback도 둔다(샷 평탄화 후 ID 재할당 케이스).
             if (Array.isArray(freshState.scenes) && freshState.scenes.length && prevScenes.length) {
-              var _mf = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
-                'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl',
-                'voiceUrl', 'videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
+              var _mediaUrlFields = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
+                'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl', 'voiceUrl'];
+              var _statusFields = ['videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
               var _prevById = {};
               prevScenes.forEach(function (s) { if (s) _prevById[String(s.id)] = s; });
-              // raw GCS scenes: buildStateFromData 정규화 이전 값으로 필드 공백 여부 판정
-              var _sdById = {};
-              (Array.isArray(sd.scenes) ? sd.scenes : []).forEach(function (s) { if (s) _sdById[String(s.id)] = s; });
               freshState = Object.assign({}, freshState, {
-                scenes: freshState.scenes.map(function (srv) {
-                  var cur = _prevById[String(srv.id)] || {};
-                  var sdScene = _sdById[String(srv.id)] || {};
+                scenes: freshState.scenes.map(function (srv, idx) {
+                  var cur = _prevById[String(srv.id)] || prevScenes[idx] || {};
                   var merged = Object.assign({}, srv);
-                  _mf.forEach(function (f) {
-                    var rawSrvVal = sdScene[f] || '';
-                    if (!rawSrvVal && cur[f]) {
-                      var v = cur[f];
-                      if (typeof v === 'string' && (v.slice(0, 5) === 'data:' || v.slice(0, 5) === 'blob:')) return;
-                      merged[f] = v;
-                    }
+                  // 미디어 URL: 로컬에 값이 있으면 무조건 우선(data:/blob: 제외)
+                  _mediaUrlFields.forEach(function (f) {
+                    var v = cur[f];
+                    if (!v || typeof v !== 'string') return;
+                    if (v.slice(0, 5) === 'data:' || v.slice(0, 5) === 'blob:') return;
+                    merged[f] = v;
+                  });
+                  // 상태 필드: 서버가 비었을 때만 로컬 사용
+                  _statusFields.forEach(function (f) {
+                    if (!merged[f] && cur[f]) merged[f] = cur[f];
                   });
                   return merged;
                 })
@@ -752,6 +751,9 @@
             }
             var nextScenes = Array.isArray(freshState.scenes) ? freshState.scenes : [];
             var changed = false;
+            // 미디어 URL(imageDataUrl/videoUrl) 차이는 재렌더 트리거에서 제외.
+            // 로컬 캐시 우선 정책으로 URL은 사실상 변하지 않으며, 변하더라도 placeholder가 잠시
+            // 보이는 회귀(이미지가 사라졌다 나타나는 깜빡임)를 만들지 않기 위함.
             if (prevScenes.length !== nextScenes.length) changed = true;
             if (!changed) {
               for (var i = 0; i < nextScenes.length; i++) {
@@ -760,8 +762,6 @@
                 var pShots = Array.isArray(ps.shots) ? ps.shots.length : 0;
                 var nShots = Array.isArray(ns.shots) ? ns.shots.length : 0;
                 if (pShots !== nShots) { changed = true; break; }
-                if ((ps.imageDataUrl || '') !== (ns.imageDataUrl || '')) { changed = true; break; }
-                if ((ps.videoUrl || '') !== (ns.videoUrl || '')) { changed = true; break; }
                 if (Number(ps.estSec || 0) !== Number(ns.estSec || 0)) { changed = true; break; }
                 if (String(ps.sceneLocation || '') !== String(ns.sceneLocation || '')) { changed = true; break; }
                 if (String(ps.composition || '') !== String(ns.composition || '')) { changed = true; break; }
