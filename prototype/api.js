@@ -812,19 +812,29 @@
     var dropDataUrl = function (v) {
       return (typeof v === 'string' && v.indexOf('data:') === 0) ? '' : v;
     };
+    // UI 동적 필드: 클라이언트가 매 렌더마다 재계산하므로 저장 가치 없음.
+    // 누적되면 promptText 만 수백 KB 가 될 수 있음(Common/Visual/Duration 헤더 + visual 텍스트).
+    var UI_ONLY_FIELDS = [
+      'promptText', 'displayLabel', 'displayLabelHtml',
+      'editingPrompt', 'editingPromptRaw',
+      'imgLoading', 'imgError', 'videoModelLabel'
+    ];
     return scenes.map(function (s) {
       if (!s || typeof s !== 'object') return s;
       var out = Object.assign({}, s, {
         imageDataUrl: dropDataUrl(s.imageDataUrl),
         videoUrl: dropDataUrl(s.videoUrl)
       });
+      UI_ONLY_FIELDS.forEach(function (k) { if (k in out) delete out[k]; });
       if (Array.isArray(s.shots)) {
         out.shots = s.shots.map(function (sh) {
           if (!sh || typeof sh !== 'object') return sh;
-          return Object.assign({}, sh, {
+          var sout = Object.assign({}, sh, {
             imageDataUrl: dropDataUrl(sh.imageDataUrl),
             videoUrl: dropDataUrl(sh.videoUrl)
           });
+          UI_ONLY_FIELDS.forEach(function (k) { if (k in sout) delete sout[k]; });
+          return sout;
         });
       }
       return out;
@@ -851,6 +861,31 @@
     return out;
   }
 
+  // 페이로드 상위 필드별 크기를 KB 단위로 분해. 무엇이 무거운지 사용자/개발자가 즉시 식별 가능.
+  function _sizeBreakdown(body, safePayload, safeScenes) {
+    var sizes = { total_KB: Math.round(JSON.stringify(body).length / 1024) };
+    try {
+      sizes.scenes_KB = Math.round(JSON.stringify(safeScenes || []).length / 1024);
+      var pl = safePayload || {};
+      sizes.payload_KB = Math.round(JSON.stringify(pl).length / 1024);
+      // 상위 필드를 큰 순으로 정렬해 의심 후보 노출.
+      var fieldSizes = [];
+      Object.keys(pl).forEach(function (k) {
+        try {
+          var v = pl[k];
+          if (v == null) return;
+          var s = JSON.stringify(v);
+          if (!s) return;
+          var kb = Math.round(s.length / 1024);
+          if (kb >= 5) fieldSizes.push([k, kb]);
+        } catch (_) {}
+      });
+      fieldSizes.sort(function (a, b) { return b[1] - a[1]; });
+      sizes.payload_top = fieldSizes.slice(0, 6).map(function (p) { return p[0] + ':' + p[1] + 'KB'; }).join(', ');
+    } catch (_) {}
+    return sizes;
+  }
+
   api.projectSave = async function (projectId, payload, scenes, opts) {
     var safeScenes = stripInlineDataUrls(Array.isArray(scenes) ? scenes : []);
     var safePayload = stripPayloadDataUrls(payload);
@@ -865,32 +900,34 @@
     };
     var bodyStr = JSON.stringify(body);
     var bodyKb = Math.round(bodyStr.length / 1024);
-    // 페이로드 크기 진단: 1MB 초과 시 어디가 큰지 콘솔에 출력해 사용자가 원인을 파악할 수 있게 함.
-    if (bodyStr.length > 1024 * 1024) {
-      var sizes = {
-        total_KB: bodyKb,
-        scenes_KB: Math.round(JSON.stringify(safeScenes).length / 1024),
-        payload_KB: Math.round(JSON.stringify(safePayload).length / 1024)
-      };
-      try {
-        var pl = safePayload || {};
-        if (Array.isArray(pl.editVersions)) sizes.editVersions_KB = Math.round(JSON.stringify(pl.editVersions).length / 1024);
-        if (Array.isArray(pl.overlayClips)) sizes.overlayClips_KB = Math.round(JSON.stringify(pl.overlayClips).length / 1024);
-        if (pl.postTimelineEdits) sizes.postTimelineEdits_KB = Math.round(JSON.stringify(pl.postTimelineEdits).length / 1024);
-      } catch (_) {}
-      console.warn('[projectSave] large payload', sizes);
-    }
+    // 200KB 초과부터 자동 breakdown 출력 — 30초 프로젝트가 이보다 크면 비정상.
+    var sizes = (bodyStr.length > 200 * 1024) ? _sizeBreakdown(body, safePayload, safeScenes) : null;
+    if (sizes) console.warn('[projectSave] payload breakdown', sizes);
     var saveReq = { method: 'POST', headers: buildAuthHeaders({ 'Content-Type': 'application/json' }), body: bodyStr };
-    // 타임아웃 60s (이전 45s는 1MB+ 페이로드 + 느린 모바일 연결에서 부족).
-    // 자동 재시도 제거: 타임아웃 후 재시도는 사용자 대기를 2배로 늘리지만 동일 페이로드는 동일 시간 소요 → 실패율 동일.
-    // OAuth 토큰은 서버 캐시(3300s)되어 토큰 발급 지연도 더 이상 변수가 아님.
+    // 타임아웃 60s. 자동 재시도 없음(동일 페이로드는 동일 시간 소요 → 사용자 대기만 2배).
     var t0 = Date.now();
-    var res = await fetchWithTimeout(withBase('/api/project/save'), saveReq, 60000);
-    var text = await readTextWithTimeout(res, 15000);
-    console.log('[projectSave] ' + bodyKb + 'KB in ' + (Date.now() - t0) + 'ms (status ' + res.status + ')');
-    if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'save_error')));
-    if (res.ok) api.projectListInvalidate();
-    return j(text);
+    try {
+      var res = await fetchWithTimeout(withBase('/api/project/save'), saveReq, 60000);
+      var text = await readTextWithTimeout(res, 15000);
+      console.log('[projectSave] ' + bodyKb + 'KB in ' + (Date.now() - t0) + 'ms (status ' + res.status + ')');
+      if (!res.ok) {
+        // 실패 시 콘솔 안 봐도 어디가 큰지 사용자가 알 수 있게 에러 메시지에 크기 정보 첨부.
+        var sizeNote = sizes && sizes.payload_top ? (' [payload ' + bodyKb + 'KB, top: ' + sizes.payload_top + ']') : (' [payload ' + bodyKb + 'KB]');
+        throw new Error((res.status + ' ' + (e(text) || 'save_error') + sizeNote));
+      }
+      api.projectListInvalidate();
+      return j(text);
+    } catch (err) {
+      if (err && /timeout/i.test(String(err.message || ''))) {
+        var ms = Date.now() - t0;
+        if (!sizes) sizes = _sizeBreakdown(body, safePayload, safeScenes);
+        var detail = ' [payload ' + bodyKb + 'KB after ' + Math.round(ms / 1000) + 's, top: ' + (sizes.payload_top || 'none') + ']';
+        var te = new Error('request_timeout' + detail);
+        te.code = 'timeout';
+        throw te;
+      }
+      throw err;
+    }
   };
 
   // projectList in-memory 캐시 (TTL 30초, 동일 사용자 기준)

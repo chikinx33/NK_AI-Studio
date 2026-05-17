@@ -1453,10 +1453,14 @@
 
   function getSaveErrorMessage(err) {
     var raw = String((err && err.message) || err || '');
+    // api.projectSave 가 [payload XXKb after Ns, top: ...] 같은 진단 첨부를 붙여 던지므로
+    // timeout 안내 뒤에 그대로 노출해 사용자가 콘솔 없이도 어떤 필드가 비대한지 확인 가능.
+    var detailMatch = raw.match(/\[payload[^\]]*\]/);
+    var detail = detailMatch ? ('\n' + detailMatch[0]) : '';
     if (/request_timeout|response_timeout|timeout|aborted/i.test(raw)) {
-      return '저장 요청이 시간 내 완료되지 않았습니다. 네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.';
+      return '저장 요청이 시간 내 완료되지 않았습니다. 네트워크 또는 서버 상태를 확인한 뒤 다시 시도해 주세요.' + detail;
     }
-    return raw || '알 수 없는 오류';
+    return (raw || '알 수 없는 오류');
   }
 
   function getRenderErrorMessage(err) {
