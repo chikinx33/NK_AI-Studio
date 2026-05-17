@@ -721,6 +721,22 @@
             // stale 한 로컬 캐시(nk_pipeline_last) 만 보여주던 회귀를 막는다.
             var prev = ctx.getState ? ctx.getState() : state;
             var prevScenes = (prev && Array.isArray(prev.scenes)) ? prev.scenes : [];
+            // GCS 씬에 미디어 URL이 비어 있을 때(이미지 생성 전 저장된 경우) 로컬 캐시의 URL 보존
+            if (Array.isArray(freshState.scenes) && freshState.scenes.length && prevScenes.length) {
+              var _mf = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
+                'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl',
+                'voiceUrl', 'videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
+              var _prevById = {};
+              prevScenes.forEach(function (s) { if (s) _prevById[String(s.id)] = s; });
+              freshState = Object.assign({}, freshState, {
+                scenes: freshState.scenes.map(function (srv) {
+                  var cur = _prevById[String(srv.id)] || {};
+                  var merged = Object.assign({}, srv);
+                  _mf.forEach(function (f) { if (!merged[f] && cur[f]) merged[f] = cur[f]; });
+                  return merged;
+                })
+              });
+            }
             var nextScenes = Array.isArray(freshState.scenes) ? freshState.scenes : [];
             var changed = false;
             if (prevScenes.length !== nextScenes.length) changed = true;

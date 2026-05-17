@@ -1902,7 +1902,22 @@
           id: pid,
           title: mergedTitle,
           payload: mergedPayload,
-          scenes: srv.data.scenes || draft?.scenes || [],
+          scenes: (() => {
+            const _srvSc = Array.isArray(srv.data.scenes) ? srv.data.scenes : [];
+            const _curSc = Array.isArray(draft?.scenes) ? draft.scenes : [];
+            if (!_srvSc.length) return _curSc.length ? _curSc : [];
+            const _mf = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
+              'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl',
+              'voiceUrl', 'videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
+            const _curById = {};
+            _curSc.forEach(s => { if (s) _curById[String(s.id)] = s; });
+            return _srvSc.map(srvSc => {
+              const cur = _curById[String(srvSc.id)] || {};
+              const merged = Object.assign({}, srvSc);
+              _mf.forEach(f => { if (!merged[f] && cur[f]) merged[f] = cur[f]; });
+              return merged;
+            });
+          })(),
           header: srv.data.header || draft?.header || ''
         };
         if (NK.service?.project?.upsertLocalDraft) {

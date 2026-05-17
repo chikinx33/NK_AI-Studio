@@ -4152,7 +4152,20 @@
             header: data.header || (cur && cur.header) || '',
             aspectRatio: (data.aspectRatio || (data.payload && data.payload.aspectRatio) || (cur && cur.aspectRatio) || ''),
             payload: Object.assign({}, (cur && cur.payload) || {}, data.payload || {}),
-            scenes: srvScenes.length ? srvScenes : curScenes
+            scenes: (function () {
+              if (!srvScenes.length) return curScenes;
+              var _mf = ['imageDataUrl', 'imagePath', 'generatedImageUrl', 'imageUrl',
+                'videoUrl', 'videoPath', 'generatedVideoUrl', 'videoPlaybackUrl',
+                'voiceUrl', 'videoStatus', 'videoJobId', 'videoMethod', 'videoError'];
+              var _curById = {};
+              curScenes.forEach(function (s) { if (s) _curById[String(s.id)] = s; });
+              return srvScenes.map(function (srvScene) {
+                var cur = _curById[String(srvScene.id)] || {};
+                var merged = Object.assign({}, srvScene);
+                _mf.forEach(function (f) { if (!merged[f] && cur[f]) merged[f] = cur[f]; });
+                return merged;
+              });
+            })()
           });
         }, { forceCurrent: true });
         if (updated && root.isConnected) {
