@@ -2530,25 +2530,10 @@
           draft.scenes = normalized;
           draft.header = headerText || draft.header || '';
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
-          if (NK.service?.project?.upsertLocalDraft) {
-            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
-          } else {
-            if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft);
-            NK.store.saveDrafts([draft]);
-          }
+          // 생성 결과는 메모리(draft)에만 유지한다. 사용자가 '저장' 버튼을 눌러야
+          // 로컬(localStorage/IndexedDB)·서버에 영속화된다. 자동 저장을 하면 새로고침·창
+          // 닫기 후 미저장 생성본이 복원되는 문제가 있어 제거했다.
           let saveWarning = '';
-          if (NK.api?.projectSave) {
-            try {
-              await NK.api.projectSave(draft.id, draft.payload, draft.scenes, { header: draft.header, aspectRatio: draft.payload?.aspectRatio, title: draft.title });
-            } catch (saveErr) {
-              if (isAuthErrorMessage(saveErr)) {
-                saveWarning = '로그인되지 않아 서버 저장은 건너뛰고 이 브라우저에만 저장했습니다.';
-                try { if (NK.auth?.logout) NK.auth.logout(); } catch (_) { }
-              } else {
-                throw saveErr;
-              }
-            }
-          }
           invalidatePipelineCache();
           if (NK.state) {
             if (NK.state.broadcast) NK.state.broadcast('update-project', { project: draft });
