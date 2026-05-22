@@ -1185,11 +1185,32 @@
         if (!window.confirm(t('confirm_delete_all'))) return;
         Object.values(state.polls).forEach(function (id) { clearInterval(id); });
         state.polls = {};
+
+        // 서버 항목을 실제로 삭제하고 deletedSet에 기록 (재로그인 후 재출현 방지)
+        var serverNames = state.serverItems
+          .map(function (s) { return s && s.name; })
+          .filter(Boolean);
+
         state.results = [];
         state.serverItems = [];
         state.selectedId = null;
         saveResults();
         render();
+
+        serverNames.forEach(function (name) {
+          state.deletedSet[name] = true;
+        });
+        saveDeletedSet();
+
+        if (NK.api && NK.api.videoDelete) {
+          serverNames.forEach(function (name) {
+            NK.api.videoDelete(name)
+              .then(function () {
+                if (state.projectId) clearProjectVideoRef(state.projectId, name);
+              })
+              .catch(function () { /* deletedSet으로 클라이언트에서 필터링됨 */ });
+          });
+        }
       });
     }
 
