@@ -1049,4 +1049,50 @@
     if (!res.ok) throw new Error(e(text) || 'login_error');
     return j(text);
   };
-})(); 
+
+  // ─── 회원 관리(어드민) ──────────────────────────────────────
+  // 모든 호출은 관리자 토큰을 요구한다(서버에서 requireAdmin 검증).
+
+  api.adminUsersList = async function () {
+    var res = await fetch(withBase('/api/admin/users'), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_users_list_error');
+    return j(text);
+  };
+
+  api.adminUserCreate = async function (user) {
+    var res = await fetch(withBase('/api/admin/users'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(user || {})
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_user_create_error');
+    return j(text);
+  };
+
+  api.adminUserUpdate = async function (user) {
+    var res = await fetch(withBase('/api/admin/users'), {
+      method: 'PATCH',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(user || {})
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_user_update_error');
+    return j(text);
+  };
+
+  api.adminUserDelete = async function (id, options) {
+    var opts = options && typeof options === 'object' ? options : {};
+    var body = { id: String(id || '') };
+    if (opts.soft) body.soft = true;
+    var res = await fetch(withBase('/api/admin/users'), {
+      method: 'DELETE',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body)
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'admin_user_delete_error');
+    return j(text);
+  };
+})();
