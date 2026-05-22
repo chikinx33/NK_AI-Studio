@@ -44,13 +44,24 @@
         } catch (_) { return false; }
     };
 
-    auth.setAuthed = function (val, user = '', token = '', permissions = []) {
+    auth.setAuthed = function (val, user = '', token = '', permissions = [], role = '') {
         try {
             localStorage.setItem(KEYS.AUTH, val ? 'true' : 'false');
             localStorage.setItem(KEYS.USER, val ? user : '');
             localStorage.setItem(KEYS.AUTH_TOKEN, val ? String(token || '') : '');
             localStorage.setItem(KEYS.PERMISSIONS, val ? JSON.stringify(Array.isArray(permissions) ? permissions : []) : '[]');
+            if (KEYS.ROLE) localStorage.setItem(KEYS.ROLE, val ? String(role || '') : '');
         } catch (_) { }
+    };
+
+    auth.getRole = function () {
+        try { return KEYS.ROLE ? (localStorage.getItem(KEYS.ROLE) || '') : ''; } catch (_) { return ''; }
+    };
+
+    // 어드민(전체 권한) 여부: role이 'admin' 이거나 권한 배열이 비어있으면 전체 권한으로 간주.
+    auth.isAdmin = function () {
+        if (String(auth.getRole() || '').toLowerCase() === 'admin') return true;
+        return auth.getPermissions().length === 0;
     };
 
     auth.getPermissions = function () {
@@ -80,7 +91,7 @@
             const res = await NK.api.login(id, pw);
             if (res && res.ok && res.token) {
                 lastError = '';
-                auth.setAuthed(true, res.user || id, res.token, res.permissions || []);
+                auth.setAuthed(true, res.user || id, res.token, res.permissions || [], res.role || '');
                 return true;
             }
             lastError = '로그인 응답이 올바르지 않습니다.';
