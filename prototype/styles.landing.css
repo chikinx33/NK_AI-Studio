@@ -106,21 +106,6 @@
   cursor: not-allowed;
 }
 
-/* 인라인 SVG 아이콘(회원 관리 등): img 슬롯과 동일한 크기로 맞춘다. */
-.login-icon-svg {
-  width: var(--login-icon-slot);
-  height: var(--login-icon-slot);
-  padding: calc((var(--login-icon-slot) - var(--login-icon-visual)) / 2);
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text);
-  transition: filter 0.24s ease;
-}
-.login-icon-svg svg { width: 100%; height: 100%; }
-.login-icon-link:hover .login-icon-svg,
-.login-icon-link:focus-visible .login-icon-svg { filter: brightness(1.32); }
 
 .login-icon-link.is-disabled {
   opacity: 0.22;

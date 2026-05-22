@@ -30,17 +30,19 @@ test("video endpoint enforces videogen/video permission by source", () => {
   assert.match(src, /permission_denied/);
 });
 
-test("index.html exposes admin-only member management link", () => {
+test("index.html exposes admin-only member management button in login card toolbar", () => {
   const src = read("prototype/index.html");
-  assert.match(src, /id="admin-link"/);
-  assert.match(src, /href="admin\.html"/);
-  assert.match(src, /admin-only hidden/);
+  assert.match(src, /id="admin-card-btn"/);
+  assert.match(src, /class="btn-ghost admin-card-btn hidden"/);
+  assert.match(src, /location\.href='admin\.html'/);
   assert.match(src, /회원 관리/);
+  // 상단 아이콘 행에는 더 이상 관리자 링크가 없어야 한다
+  assert.doesNotMatch(src, /id="admin-link"/);
 });
 
-test("setUI reveals admin link only for admins", () => {
+test("setUI reveals admin card button only for admins", () => {
   const src = read("prototype/script.js");
-  assert.match(src, /const adminLink = icons\.querySelector\('#admin-link'\)/);
+  assert.match(src, /const adminCardBtn = document\.getElementById\('admin-card-btn'\)/);
   assert.match(src, /NK\.auth\.isAdmin\(\)/);
-  assert.match(src, /adminLink\.classList\.toggle\('hidden', !showAdmin\)/);
+  assert.match(src, /adminCardBtn\.classList\.toggle\('hidden', !showAdmin\)/);
 });
