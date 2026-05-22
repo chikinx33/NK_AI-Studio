@@ -86,7 +86,8 @@
     if (!authed) { root.innerHTML = ''; return; } // auth-overlay가 처리
 
     if (NK.auth && NK.auth.isAdmin && !NK.auth.isAdmin()) {
-      root.innerHTML = '<div class="admin-page"><div class="bsf-detail-card"><div class="admin-error">관리자만 접근할 수 있는 페이지입니다.</div></div></div>';
+      root.innerHTML = '<div class="admin-page"><div class="bsf-detail-card"><div class="admin-error">관리자만 접근할 수 있는 페이지입니다.</div><div style="text-align:center;margin-top:14px;"><button type="button" class="admin-icon-btn" data-action="go-home">홈으로</button></div></div></div>';
+      root.querySelectorAll('[data-action="go-home"]').forEach(function (el) { el.addEventListener('click', onAction); });
       return;
     }
 
@@ -114,6 +115,10 @@
               '<p class="bsf-desc">회원 계정을 생성·수정·삭제하고 접근 권한을 설정합니다.</p>',
             '</div>',
             '<div class="bsf-flow-head-actions">',
+              '<button type="button" class="admin-icon-btn admin-home-btn" data-action="go-home" aria-label="홈으로" title="홈으로">',
+                '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>',
+                '<span>홈</span>',
+              '</button>',
               '<button type="button" class="bsf-head-btn btn-primary" data-action="new-user">+ 신규 회원</button>',
             '</div>',
           '</div>',
@@ -256,13 +261,21 @@
   function onAction(e) {
     var el = e.currentTarget;
     var action = el.getAttribute('data-action');
-    if (action === 'new-user') { openModal('create'); }
+    if (action === 'go-home') { goHome(); }
+    else if (action === 'new-user') { openModal('create'); }
     else if (action === 'reload') { loadUsers(); }
     else if (action === 'edit-user') { openModal('edit', el.getAttribute('data-id')); }
     else if (action === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
     else if (action === 'modal-cancel') { closeModal(); }
     else if (action === 'modal-backdrop') { if (e.target === el) closeModal(); }
     else if (action === 'modal-save') { saveModal(); }
+  }
+
+  function goHome() {
+    try {
+      if (window.top && window.top !== window) { window.top.location.href = 'index.html'; return; }
+    } catch (_) { }
+    window.location.href = 'index.html';
   }
 
   function openModal(mode, id) {

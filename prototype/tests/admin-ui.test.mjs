@@ -33,6 +33,10 @@ test("admin-users.js renders list, modal, and wires CRUD actions", () => {
   assert.match(src, /관리자만 접근할 수 있는/);
   // 저장(적용) 버튼
   assert.match(src, /저장\(적용\)/);
+  // 홈(뒤로가기) 버튼
+  assert.match(src, /data-action="go-home"/);
+  assert.match(src, /function goHome/);
+  assert.match(src, /window\.location\.href = 'index\.html'/);
 });
 
 test("admin-users.js maps server errors to friendly messages", () => {
