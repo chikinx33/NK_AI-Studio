@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark" class="layout-fixed preload-veiled">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NK_Studio · 회원 관리</title>
+  <style>
+    html.preload-veiled, body.preload-veiled { background:#0f172a; color:#cbd5e1; }
+    html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
+
+    /* 회원 관리 전용 스타일 (페이지 스코프) */
+    .admin-page { max-width:1080px; margin:0 auto; }
+    .admin-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:18px 0 14px; }
+    .admin-toolbar .admin-search { flex:1 1 220px; min-width:200px; }
+    .admin-toolbar input, .admin-toolbar select {
+      width:100%; padding:9px 12px; border-radius:10px; border:1px solid rgba(148,163,184,.25);
+      background:rgba(15,23,42,.6); color:#e2e8f0; font-size:14px;
+    }
+    .admin-table-wrap { overflow-x:auto; border:1px solid rgba(148,163,184,.16); border-radius:14px; }
+    table.admin-table { width:100%; border-collapse:collapse; font-size:14px; min-width:640px; }
+    table.admin-table th, table.admin-table td { padding:12px 14px; text-align:left; border-bottom:1px solid rgba(148,163,184,.12); }
+    table.admin-table th { font-weight:600; color:#94a3b8; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; }
+    table.admin-table tr:last-child td { border-bottom:none; }
+    table.admin-table tbody tr:hover { background:rgba(148,163,184,.06); }
+    .admin-badge { display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600; }
+    .admin-badge--admin { background:rgba(245,158,11,.16); color:#fbbf24; }
+    .admin-badge--member { background:rgba(96,165,250,.14); color:#93c5fd; }
+    .admin-badge--on { background:rgba(34,197,94,.16); color:#4ade80; }
+    .admin-badge--off { background:rgba(148,163,184,.16); color:#cbd5e1; }
+    .admin-perm-chip { display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; border-radius:8px; font-size:12px; background:rgba(148,163,184,.14); color:#cbd5e1; }
+    .admin-row-actions { display:flex; gap:8px; }
+    .admin-icon-btn {
+      border:1px solid rgba(148,163,184,.25); background:rgba(15,23,42,.5); color:#e2e8f0;
+      border-radius:8px; padding:6px 10px; cursor:pointer; font-size:13px; min-width:54px;
+    }
+    .admin-icon-btn:hover { background:rgba(148,163,184,.14); }
+    .admin-icon-btn--danger:hover { background:rgba(239,68,68,.18); color:#fca5a5; border-color:rgba(239,68,68,.4); }
+    .admin-empty, .admin-error { padding:28px; text-align:center; color:#94a3b8; }
+    .admin-error { color:#fca5a5; }
+
+    /* 모달 */
+    .admin-modal-backdrop {
+      position:fixed; inset:0; background:rgba(2,6,23,.66); backdrop-filter:blur(3px);
+      display:flex; align-items:center; justify-content:center; z-index:60; padding:20px;
+    }
+    .admin-modal {
+      width:100%; max-width:460px; background:#0f172a; border:1px solid rgba(148,163,184,.2);
+      border-radius:16px; padding:22px; box-shadow:0 20px 60px rgba(0,0,0,.45);
+    }
+    .admin-modal h3 { margin:0 0 16px; font-size:18px; }
+    .admin-field { margin-bottom:14px; }
+    .admin-field label { display:block; font-size:13px; color:#94a3b8; margin-bottom:6px; }
+    .admin-field input[type="text"], .admin-field input[type="password"] {
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(148,163,184,.25);
+      background:rgba(15,23,42,.6); color:#e2e8f0; font-size:14px; box-sizing:border-box;
+    }
+    .admin-field input:disabled { opacity:.55; cursor:not-allowed; }
+    .admin-perms { display:flex; flex-wrap:wrap; gap:10px; }
+    .admin-perms label { display:flex; align-items:center; gap:6px; font-size:14px; color:#e2e8f0; cursor:pointer; }
+    .admin-perms input[type="checkbox"] { width:16px; height:16px; }
+    .admin-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+    .admin-hint { font-size:12px; color:#64748b; margin-top:4px; }
+    .admin-modal-error { color:#fca5a5; font-size:13px; margin-top:10px; min-height:18px; }
+    .admin-status { font-size:13px; color:#4ade80; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.dashboard-cards.css" />
+  <script src="core.js" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/utils.js" defer></script>
+  <script src="store.js" defer></script>
+  <script src="api.js" defer></script>
+  <script src="js/state.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/navigation.js" defer></script>
+  <script src="js/ui/common.js" defer></script>
+  <script src="js/ui/admin-users.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+<body class="layout-fixed">
+  <div class="grain"></div>
+  <div class="app no-sidebar">
+    <div id="auth-overlay" class="auth-overlay hidden">
+      <div class="auth-card">
+        <p class="auth-title">로그인 하세요.</p>
+        <a class="btn-primary no-underline" href="index.html">로그인 하기</a>
+      </div>
+    </div>
+    <main class="main">
+      <div class="main-body">
+        <section class="content"></section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
