@@ -41,16 +41,37 @@ export function primaryAdminId(env: any): string {
   return sanitizeUserId((env && env.AUTH_ID) || LEGACY_AUTH_ID);
 }
 
-/** 레지스트리를 로드한다. 없으면 빈 레지스트리를 반환. */
-export async function loadRegistry(env: any): Promise<UsersRegistry> {
+function emptyRegistry(): UsersRegistry {
+  return { version: REGISTRY_VERSION, updatedAt: "", users: [] };
+}
+
+/**
+ * 레지스트리를 엄격하게 로드한다(읽기 실패 시 throw).
+ * 쓰기(생성/수정/삭제) 전에 사용 — 일시적 읽기 오류로 기존 데이터를 덮어쓰지 않도록 보호.
+ */
+export async function loadRegistryStrict(env: any): Promise<UsersRegistry> {
   const { found, data } = await readGcsJson(env, adminObjectName(env));
   if (!found || !data || !Array.isArray((data as any).users)) {
-    return { version: REGISTRY_VERSION, updatedAt: "", users: [] };
+    return emptyRegistry();
   }
   const reg = data as UsersRegistry;
   reg.users = reg.users.map(normalizeUser).filter((u) => !!u.id);
   if (typeof reg.version !== "number") reg.version = REGISTRY_VERSION;
   return reg;
+}
+
+/**
+ * 레지스트리를 로드한다(읽기 실패에 견딤 — 오류 시 빈 레지스트리).
+ * 조회(GET)·권한 판정 등 읽기 전용 경로에서 사용. 파일이 아직 없거나
+ * 일시적 GCS 오류여도 500 대신 빈 목록으로 동작하게 한다.
+ */
+export async function loadRegistry(env: any): Promise<UsersRegistry> {
+  try {
+    return await loadRegistryStrict(env);
+  } catch (e: any) {
+    try { console.error("[admin-users] loadRegistry read failed:", e?.message || e); } catch (_) { /* noop */ }
+    return emptyRegistry();
+  }
 }
 
 /** 레지스트리를 저장한다(updatedAt 갱신). */

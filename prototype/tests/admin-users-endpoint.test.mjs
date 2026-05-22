@@ -34,9 +34,19 @@ test("admin users endpoint enforces create/update/delete invariants", () => {
   assert.match(src, /user\.active = false/); // 소프트 삭제
 });
 
+test("admin users endpoint reads resiliently for GET but strictly for writes", () => {
+  const src = read("prototype/functions/api/admin/users.ts");
+  // GET: 읽기 실패에 견디는 loadRegistry
+  assert.match(src, /const reg = await loadRegistry\(env\);/);
+  // 쓰기(생성/수정/삭제): 기존 데이터 보호용 loadRegistryStrict
+  const strictCalls = src.match(/loadRegistryStrict\(env\)/g) || [];
+  assert.equal(strictCalls.length, 3);
+});
+
 test("admin-users shared module exposes registry + guard helpers", () => {
   const src = read("prototype/functions/api/_shared/admin-users.ts");
   assert.match(src, /export async function loadRegistry/);
+  assert.match(src, /export async function loadRegistryStrict/);
   assert.match(src, /export async function saveRegistry/);
   assert.match(src, /export async function requireAdmin/);
   assert.match(src, /export function findUser/);

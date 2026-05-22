@@ -8,6 +8,7 @@ import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { hashPassword } from "../_shared/password.js";
 import {
   loadRegistry,
+  loadRegistryStrict,
   saveRegistry,
   findUser,
   requireAdmin,
@@ -73,7 +74,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const pw = String(body.password || "");
     if (!pw) return send({ error: "password_required" }, 400, origin);
 
-    const reg = await loadRegistry(env);
+    const reg = await loadRegistryStrict(env);
     if (findUser(reg, id)) return send({ error: "user_exists" }, 409, origin);
 
     const record = await createUserRecord({
@@ -101,7 +102,7 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
     const id = sanitizeUserId(body.id || "");
     if (!id) return send({ error: "invalid_user_id" }, 400, origin);
 
-    const reg = await loadRegistry(env);
+    const reg = await loadRegistryStrict(env);
     const user = findUser(reg, id);
     if (!user) return send({ error: "user_not_found" }, 404, origin);
 
@@ -141,7 +142,7 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     // 1차(슈퍼) 관리자는 삭제 금지.
     if (id === primaryAdminId(env)) return send({ error: "cannot_delete_primary_admin" }, 400, origin);
 
-    const reg = await loadRegistry(env);
+    const reg = await loadRegistryStrict(env);
     const user = findUser(reg, id);
     if (!user) return send({ error: "user_not_found" }, 404, origin);
 
