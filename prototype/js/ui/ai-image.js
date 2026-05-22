@@ -784,8 +784,18 @@
     }
   }
 
+  // 로그인 계정별로 로컬 캐시 키를 분리한다. 같은 브라우저에서 계정을 전환해도
+  // (예: A 로그아웃 → B 로그인) 이전 계정의 생성 히스토리가 노출되지 않도록 한다.
+  function currentUserKey() {
+    try {
+      var raw = (NK.auth && NK.auth.getUser) ? String(NK.auth.getUser() || '') : '';
+      raw = raw.trim().toLowerCase().replace(/[^a-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+      return raw || 'anon';
+    } catch (_) { return 'anon'; }
+  }
+
   function getHistoryStorageKey() {
-    return STORAGE_HISTORY_PREFIX + String(state.sessionId || 'default');
+    return STORAGE_HISTORY_PREFIX + currentUserKey() + '_' + String(state.sessionId || 'default');
   }
 
   function loadHistory() {
@@ -1076,7 +1086,7 @@
   }
 
   function getDeletedStorageKey() {
-    return STORAGE_HISTORY_PREFIX + String(state.sessionId || 'default') + '_deleted';
+    return STORAGE_HISTORY_PREFIX + currentUserKey() + '_' + String(state.sessionId || 'default') + '_deleted';
   }
   function loadDeletedSet() {
     try {
