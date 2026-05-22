@@ -54,7 +54,9 @@
       })
       .catch(function (err) {
         state.loading = false;
-        state.error = (err && err.message) ? err.message : '목록을 불러오지 못했습니다.';
+        var msg = (err && err.message) ? err.message : '목록을 불러오지 못했습니다.';
+        try { console.error('[admin-users] 목록 조회 실패:', msg, err); } catch (_) { }
+        state.error = '목록을 불러오지 못했습니다: ' + msg;
         render();
       });
   }
