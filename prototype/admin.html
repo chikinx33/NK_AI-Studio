@@ -8,62 +8,85 @@
     html.preload-veiled, body.preload-veiled { background:#0f172a; color:#cbd5e1; }
     html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
 
-    /* 회원 관리 전용 스타일 (페이지 스코프) */
-    .admin-page { max-width:1080px; margin:0 auto; }
+    /* 회원 관리 전용 스타일 (페이지 스코프) — 테마 변수 사용으로 라이트/다크 모두 대응 */
+    .admin-page { max-width:1080px; margin:0 auto; padding:36px 16px 48px; }
     .admin-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:18px 0 14px; }
     .admin-toolbar .admin-search { flex:1 1 220px; min-width:200px; }
     .admin-toolbar input, .admin-toolbar select {
-      width:100%; padding:9px 12px; border-radius:10px; border:1px solid rgba(148,163,184,.25);
-      background:rgba(15,23,42,.6); color:#e2e8f0; font-size:14px;
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+      background:var(--studio-input-bg, var(--panel)); color:var(--text); font-size:14px;
     }
-    .admin-table-wrap { overflow-x:auto; border:1px solid rgba(148,163,184,.16); border-radius:14px; }
+    .admin-toolbar input::placeholder { color:var(--muted); }
+    .admin-toolbar select option { color:#111; background:#fff; }
+    .admin-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:14px; background:var(--panel); }
     table.admin-table { width:100%; border-collapse:collapse; font-size:14px; min-width:640px; }
-    table.admin-table th, table.admin-table td { padding:12px 14px; text-align:left; border-bottom:1px solid rgba(148,163,184,.12); }
-    table.admin-table th { font-weight:600; color:#94a3b8; font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; }
+    table.admin-table th, table.admin-table td { padding:12px 14px; text-align:left; border-bottom:1px solid var(--border); color:var(--text); }
+    table.admin-table th { font-weight:600; color:var(--muted); font-size:12.5px; text-transform:uppercase; letter-spacing:.04em; }
     table.admin-table tr:last-child td { border-bottom:none; }
-    table.admin-table tbody tr:hover { background:rgba(148,163,184,.06); }
+    table.admin-table tbody tr:hover { background:var(--layer-strong); }
+
     .admin-badge { display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:600; }
     .admin-badge--admin { background:rgba(245,158,11,.16); color:#fbbf24; }
-    .admin-badge--member { background:rgba(96,165,250,.14); color:#93c5fd; }
-    .admin-badge--on { background:rgba(34,197,94,.16); color:#4ade80; }
-    .admin-badge--off { background:rgba(148,163,184,.16); color:#cbd5e1; }
-    .admin-perm-chip { display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; border-radius:8px; font-size:12px; background:rgba(148,163,184,.14); color:#cbd5e1; }
+    .admin-badge--member { background:rgba(96,165,250,.16); color:#93c5fd; }
+    .admin-badge--on { background:rgba(34,197,94,.18); color:#4ade80; }
+    .admin-badge--off { background:rgba(148,163,184,.18); color:#cbd5e1; }
+    .admin-perm-chip { display:inline-block; margin:2px 4px 2px 0; padding:2px 8px; border-radius:8px; font-size:12px; background:rgba(148,163,184,.16); color:var(--text); }
+
+    /* 라이트 테마: 라벨/칩 가독성 보정 (어두운 글씨 + 적당한 배경) */
+    [data-theme="light"] .admin-badge--admin { background:rgba(245,158,11,.18); color:#b45309; }
+    [data-theme="light"] .admin-badge--member { background:rgba(37,99,235,.14); color:#1d4ed8; }
+    [data-theme="light"] .admin-badge--on { background:rgba(34,197,94,.16); color:#15803d; }
+    [data-theme="light"] .admin-badge--off { background:rgba(100,116,139,.16); color:#475569; }
+    [data-theme="light"] .admin-perm-chip { background:rgba(100,116,139,.14); color:#334155; }
+
     .admin-row-actions { display:flex; gap:8px; }
-    .admin-icon-btn {
-      border:1px solid rgba(148,163,184,.25); background:rgba(15,23,42,.5); color:#e2e8f0;
-      border-radius:8px; padding:6px 10px; cursor:pointer; font-size:13px; min-width:54px;
+
+    /* 정사각형 아이콘 버튼 (홈/신규/새로고침/행 액션 공용) */
+    .admin-sq-btn {
+      width:40px; height:40px; flex:0 0 40px; display:inline-flex; align-items:center; justify-content:center;
+      border:1px solid var(--border); background:var(--panel); color:var(--text);
+      border-radius:10px; cursor:pointer; padding:0; transition:background .18s ease, filter .18s ease;
     }
-    .admin-icon-btn:hover { background:rgba(148,163,184,.14); }
-    .admin-home-btn { display:inline-flex; align-items:center; gap:6px; }
-    .admin-home-btn svg { display:block; }
-    .admin-icon-btn--danger:hover { background:rgba(239,68,68,.18); color:#fca5a5; border-color:rgba(239,68,68,.4); }
-    .admin-empty, .admin-error { padding:28px; text-align:center; color:#94a3b8; }
-    .admin-error { color:#fca5a5; }
+    .admin-sq-btn svg { width:20px; height:20px; display:block; }
+    .admin-sq-btn:hover { background:var(--layer-strong); }
+    .admin-sq-btn--primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+    .admin-sq-btn--primary:hover { background:var(--accent); filter:brightness(1.08); }
+
+    /* 행 내 수정/삭제 버튼(텍스트형) */
+    .admin-icon-btn {
+      border:1px solid var(--border); background:var(--panel); color:var(--text);
+      border-radius:8px; padding:6px 12px; cursor:pointer; font-size:13px;
+    }
+    .admin-icon-btn:hover { background:var(--layer-strong); }
+    .admin-icon-btn--danger:hover { background:rgba(239,68,68,.18); color:#ef4444; border-color:rgba(239,68,68,.45); }
+    .admin-empty, .admin-error { padding:28px; text-align:center; color:var(--muted); }
+    .admin-error { color:#ef4444; }
 
     /* 모달 */
     .admin-modal-backdrop {
-      position:fixed; inset:0; background:rgba(2,6,23,.66); backdrop-filter:blur(3px);
+      position:fixed; inset:0; background:rgba(2,6,23,.5); backdrop-filter:blur(3px);
       display:flex; align-items:center; justify-content:center; z-index:60; padding:20px;
     }
     .admin-modal {
-      width:100%; max-width:460px; background:#0f172a; border:1px solid rgba(148,163,184,.2);
-      border-radius:16px; padding:22px; box-shadow:0 20px 60px rgba(0,0,0,.45);
+      width:100%; max-width:460px; background:var(--panel); border:1px solid var(--border);
+      color:var(--text); border-radius:16px; padding:22px; box-shadow:0 20px 60px rgba(0,0,0,.35);
     }
     .admin-modal h3 { margin:0 0 16px; font-size:18px; }
     .admin-field { margin-bottom:14px; }
-    .admin-field label { display:block; font-size:13px; color:#94a3b8; margin-bottom:6px; }
+    .admin-field label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
     .admin-field input[type="text"], .admin-field input[type="password"] {
-      width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(148,163,184,.25);
-      background:rgba(15,23,42,.6); color:#e2e8f0; font-size:14px; box-sizing:border-box;
+      width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
+      background:var(--studio-input-bg, var(--panel)); color:var(--text); font-size:14px; box-sizing:border-box;
     }
+    .admin-field input::placeholder { color:var(--muted); }
     .admin-field input:disabled { opacity:.55; cursor:not-allowed; }
     .admin-perms { display:flex; flex-wrap:wrap; gap:10px; }
-    .admin-perms label { display:flex; align-items:center; gap:6px; font-size:14px; color:#e2e8f0; cursor:pointer; }
+    .admin-perms label { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--text); cursor:pointer; }
     .admin-perms input[type="checkbox"] { width:16px; height:16px; }
     .admin-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
-    .admin-hint { font-size:12px; color:#64748b; margin-top:4px; }
-    .admin-modal-error { color:#fca5a5; font-size:13px; margin-top:10px; min-height:18px; }
-    .admin-status { font-size:13px; color:#4ade80; }
+    .admin-hint { font-size:12px; color:var(--muted); margin-top:4px; }
+    .admin-modal-error { color:#ef4444; font-size:13px; margin-top:10px; min-height:18px; }
+    .admin-status { font-size:13px; color:#16a34a; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
