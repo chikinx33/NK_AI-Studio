@@ -3,6 +3,7 @@ export const AI_VIDEO_GEN_SERVICE = "ai-video-gen";
 export const AI_IMAGE_SERVICE = "ai-image";
 export const DEFAULT_OWNER_USER_ID = "owner";
 export const USERDATA_FOLDER = "userdata";
+export const ADMIN_FOLDER = "admin";
 
 export function sanitizeUserId(raw: any): string {
   const value = String(raw || "").trim();
@@ -71,6 +72,23 @@ export function buildUserDataRoot(basePrefix: string, userId: string): string {
 export function buildUserDataObject(basePrefix: string, userId: string, fileName: string): string {
   const safeName = String(fileName || "").trim().replace(/^\/+/, "").replace(/[^a-zA-Z0-9._-]/g, "_") || "data.json";
   return `${buildUserDataRoot(basePrefix, userId)}/${safeName}`;
+}
+
+/**
+ * 관리자/회원 레지스트리 등 사용자 무관 전역 어드민 데이터의 GCS 루트.
+ * 예) `<basePrefix>/admin`
+ */
+export function buildAdminRoot(basePrefix: string): string {
+  const root = normalizeBasePrefix(basePrefix);
+  return root ? `${root}/${ADMIN_FOLDER}` : ADMIN_FOLDER;
+}
+
+/**
+ * 어드민 데이터 객체 경로. 예) `<basePrefix>/admin/users.json`
+ */
+export function buildAdminObject(basePrefix: string, fileName: string): string {
+  const safeName = String(fileName || "").trim().replace(/^\/+/, "").replace(/[^a-zA-Z0-9._-]/g, "_") || "data.json";
+  return `${buildAdminRoot(basePrefix)}/${safeName}`;
 }
 
 /**
