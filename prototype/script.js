@@ -2220,6 +2220,12 @@
           const allowed = !loggedIn || !_perms.length || !entry || _perms.indexOf(entry.perm) !== -1;
           a.classList.toggle('is-disabled', !allowed);
         });
+        // 회원 관리(어드민) 링크는 관리자에게만 노출
+        const adminLink = icons.querySelector('#admin-link');
+        if (adminLink) {
+          const showAdmin = !!loggedIn && !!(NK.auth && NK.auth.isAdmin && NK.auth.isAdmin());
+          adminLink.classList.toggle('hidden', !showAdmin);
+        }
       }
 
       if (loggedIn && user) {

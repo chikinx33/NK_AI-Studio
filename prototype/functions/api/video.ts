@@ -5,6 +5,7 @@
 // Ensure bundled helpers that might reference a `g` global have a defined value in Workers runtime.
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
+import { hasPagePermission } from "./_shared/admin-users";
 import {
   callKlingApi,
   klingEndpoints,
@@ -37,6 +38,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       videoModel = "veo"
     } = body || {};
     const isVideoGen = String(rawSource || "").trim().toLowerCase() === "video-gen";
+    // 권한 강제: video-gen 소스는 'videogen', 그 외(AI 시네마)는 'video' 권한 필요.
+    if (!(await hasPagePermission(env, auth.userId, isVideoGen ? "videogen" : "video"))) {
+      return json({ error: "permission_denied" }, 403);
+    }
     const aspectFinal = normalizeAspectRatio(aspectRatio);
     const narrationEnabled = toBool((body as any)?.narrationEnabled, false);
     const dubbingEnabled = toBool((body as any)?.dubbingEnabled, false);

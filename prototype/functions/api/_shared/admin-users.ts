@@ -87,6 +87,37 @@ export async function requireAdmin(env: any, userId: string): Promise<boolean> {
   }
 }
 
+/**
+ * 사용자의 페이지 권한 목록을 반환한다.
+ * null 반환 = 전체 접근(관리자 / 미등록(레거시) / 빈 권한 / 레지스트리 장애).
+ * 빈 배열 반환 = 권한 없음(비활성 계정).
+ * 이 규칙은 클라이언트의 hasPermission(빈 배열=전체 허용)과 동일하게 맞춰
+ * 기존 사용자가 잠기지 않도록 한다.
+ */
+export async function getUserPermissions(env: any, userId: string): Promise<string[] | null> {
+  const uid = sanitizeUserId(userId);
+  if (!uid) return null;
+  if (uid === primaryAdminId(env)) return null;
+  try {
+    const reg = await loadRegistry(env);
+    const user = findUser(reg, uid);
+    if (!user) return null;            // 미등록 → 전체 접근(현행 동작 유지)
+    if (user.role === "admin") return null;
+    if (!user.active) return [];       // 비활성 → 권한 없음
+    if (!user.permissions || user.permissions.length === 0) return null; // 빈 권한 = 전체
+    return user.permissions;
+  } catch (_) {
+    return null;                       // 레지스트리 장애 시 잠금 방지
+  }
+}
+
+/** 특정 페이지 권한 보유 여부. true면 허용. */
+export async function hasPagePermission(env: any, userId: string, page: string): Promise<boolean> {
+  const perms = await getUserPermissions(env, userId);
+  if (perms === null) return true;
+  return perms.indexOf(String(page || "")) !== -1;
+}
+
 /** 신규 회원 객체를 생성한다(비밀번호 해싱 포함). */
 export async function createUserRecord(input: {
   id: string;

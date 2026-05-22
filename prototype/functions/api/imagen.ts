@@ -1,6 +1,7 @@
 // prototype/functions/api/imagen.ts
 import { buildAiImageSessionPrefix, buildAiVideoProjectPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
+import { hasPagePermission } from "./_shared/admin-users";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -9,6 +10,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) {
       return json({ error: auth.error }, auth.status);
+    }
+    // 권한 강제: AI 이미지 생성 페이지 권한('image') 필요.
+    if (!(await hasPagePermission(env, auth.userId, "image"))) {
+      return json({ error: "permission_denied" }, 403);
     }
 
     const body = await request.json().catch(() => ({} as any));
