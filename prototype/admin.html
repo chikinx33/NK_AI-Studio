@@ -10,7 +10,9 @@
 
     /* 회원 관리 전용 스타일 (페이지 스코프) — 테마 변수 사용으로 라이트/다크 모두 대응 */
     .admin-page { max-width:1080px; margin:0 auto; padding:36px 16px 48px; }
-    .admin-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:18px 0 14px; }
+    /* 카드 내부 여백: 검색/카테고리/리스트가 박스 모서리에 붙지 않도록 */
+    .admin-list-card .admin-card-inner { padding:20px 22px 22px; }
+    .admin-toolbar { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:0 0 16px; }
     .admin-toolbar .admin-search { flex:1 1 220px; min-width:200px; }
     .admin-toolbar input, .admin-toolbar select {
       width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--border);
@@ -61,6 +63,7 @@
     .admin-icon-btn--danger:hover { background:rgba(239,68,68,.18); color:#ef4444; border-color:rgba(239,68,68,.45); }
     .admin-empty, .admin-error { padding:28px; text-align:center; color:var(--muted); }
     .admin-error { color:#ef4444; }
+    .admin-version { text-align:center; color:var(--muted); font-size:12px; opacity:.75; margin-top:18px; }
 
     /* 모달 */
     .admin-modal-backdrop {
