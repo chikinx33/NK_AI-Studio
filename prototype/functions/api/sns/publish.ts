@@ -1,5 +1,6 @@
 import { buildUserDataObject, gcsObjectPath } from "../_shared/storage";
-import { authorizeRequest } from "../_shared/auth.js";
+import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
+import { loadShares, getGrantRole } from "../_shared/shares";
 import { ensureFreshAccessToken } from "../_shared/youtube-token";
 import { getFacebookPageToken } from "../_shared/facebook-token";
 
@@ -807,6 +808,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     // UI 카테고리 키 (entertainment/education/gaming/music/etc) → 백엔드가 YouTube categoryId 로 매핑.
     categoryKey?: string;
     isShorts?: boolean;
+    // 공유받은 프로젝트를 소유자 자격증명으로 게시할 때 사용
+    projectId?: string;
+    ownerId?: string;
   };
   try {
     body = await request.json();
@@ -819,6 +823,19 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
 
   if (!platform || caption === undefined) {
     return send({ error: "필수 필드 누락: platform, caption" }, 400);
+  }
+
+  // 게시에 사용할 자격증명 소유자 결정. 기본은 요청자 본인.
+  // 공유받은 프로젝트(ownerId≠본인)면 editor 권한이 있어야 소유자 자격증명으로 게시한다.
+  let publishUserId = auth.userId;
+  const reqOwnerId = sanitizeUserId(body.ownerId || "");
+  const reqProjectId = String(body.projectId || "").trim();
+  if (reqOwnerId && reqOwnerId !== auth.userId) {
+    if (!reqProjectId) return send({ error: "projectId required for shared publish" }, 400);
+    const sharesReg = await loadShares(env);
+    const role = getGrantRole(sharesReg, reqOwnerId, reqProjectId, auth.userId);
+    if (role !== "editor") return send({ error: "forbidden: editor role required to publish" }, 403);
+    publishUserId = reqOwnerId;
   }
   if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl) {
     return send({ error: "단일 포스트에는 mediaType, mediaGcsPath 또는 mediaDirectUrl이 필요합니다." }, 400);
@@ -837,8 +854,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     if (platform === "tiktok") {
       // TikTok 토큰을 GCS 사용자 설정에서 로드
       const basePrefix = outParsed.object.replace(/\/$/, "");
-      const objectName = buildUserDataObject(basePrefix, auth.userId, "sns-settings.json");
-      console.log("[sns/publish] tiktok: bucket:", bucket, "objectName:", objectName, "userId:", auth.userId);
+      const objectName = buildUserDataObject(basePrefix, publishUserId, "sns-settings.json");
+      console.log("[sns/publish] tiktok: bucket:", bucket, "objectName:", objectName, "userId:", publishUserId);
       const settings = await loadSnsSettings(bucket, objectName, googleToken);
       const tiktokSettings = settings?.sns?.tiktok;
       console.log("[sns/publish] tiktokSettings found:", !!tiktokSettings, "connected:", tiktokSettings?.connected, "hasToken:", !!tiktokSettings?.accessToken);
@@ -1047,7 +1064,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
       // 사용자 토큰 (자동 갱신)
       let userAccessToken: string;
       try {
-        userAccessToken = await ensureFreshAccessToken(env, auth.userId);
+        userAccessToken = await ensureFreshAccessToken(env, publishUserId);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === "youtube_not_connected") {
@@ -1250,7 +1267,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     if (platform === "facebook") {
       let fbPage: { pageToken: string; pageId: string; pageName: string };
       try {
-        fbPage = await getFacebookPageToken(env, auth.userId);
+        fbPage = await getFacebookPageToken(env, publishUserId);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         if (msg === "facebook_not_connected") {

@@ -1,5 +1,26 @@
 import { buildUserDataObject, gcsObjectPath } from "../../_shared/storage";
-import { authorizeRequest } from "../../_shared/auth.js";
+import { authorizeRequest, sanitizeUserId } from "../../_shared/auth.js";
+import { loadShares, getGrantRole } from "../../_shared/shares";
+
+// 비소유자(공유 협업자)에게 반환할 때 노출해도 안전한 필드만 남긴다.
+// accessToken/refreshToken/tokenExpiresAt 등 자격증명은 절대 클라이언트로 보내지 않는다.
+const SAFE_SNS_FIELDS = ["connected", "enabled", "username", "pageName", "channelTitle", "igUserId", "needsReconnect"];
+function maskSnsSettings(settings: any) {
+  const sns = settings && typeof settings === "object" ? settings.sns : null;
+  if (!sns || typeof sns !== "object") return settings;
+  const maskedSns: Record<string, any> = {};
+  for (const key of Object.keys(sns)) {
+    const entry = sns[key];
+    if (!entry || typeof entry !== "object") { maskedSns[key] = entry; continue; }
+    const safe: Record<string, any> = {};
+    for (const f of SAFE_SNS_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(entry, f)) safe[f] = entry[f];
+    }
+    maskedSns[key] = safe;
+  }
+  // deployDefaults 등 비자격증명 메타는 유지, sns만 마스킹
+  return Object.assign({}, settings, { sns: maskedSns, shared: true });
+}
 
 function parseGcsUri(uri: string): { bucket: string; object: string } {
   const without = String(uri || "").replace(/^gs:\/\//, "");
@@ -70,7 +91,23 @@ function send(body: unknown, status = 200) {
 export const onRequestGet = async ({ request, env }: { request: Request; env: any }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
-  const userId = auth.userId;
+  const requesterId = auth.userId;
+  let userId = requesterId;
+
+  // 공유 접근: ownerId+projectId가 본인과 다르면 해당 프로젝트의 공유 권한(viewer/editor)이
+  // 있어야 소유자 SNS 설정을 읽을 수 있다. 비소유자에겐 토큰을 마스킹해서만 반환한다.
+  const url = new URL(request.url);
+  const ownerParam = sanitizeUserId(url.searchParams.get("ownerId") || "");
+  const projectId = String(url.searchParams.get("projectId") || "").trim();
+  let masked = false;
+  if (ownerParam && ownerParam !== requesterId) {
+    if (!projectId) return send({ error: "projectId required for shared access" }, 400);
+    const sharesReg = await loadShares(env);
+    const role = getGrantRole(sharesReg, ownerParam, projectId, requesterId);
+    if (!role) return send({ error: "forbidden" }, 403);
+    userId = ownerParam;
+    masked = true;
+  }
 
   const outParsed = parseGcsUri(env.VIDEO_OUTPUT_GCS_URI);
   const bucket = outParsed.bucket;
@@ -103,8 +140,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
     if (!gcsRes.ok) throw new Error(`GCS read error: ${gcsRes.status}`);
     const settings = await gcsRes.json();
-    console.log("[sns/get] facebook key state:", JSON.stringify((settings as any)?.sns?.facebook || null));
-    return send({ ok: true, settings });
+    // 비소유자에겐 자격증명을 제거한 마스킹 버전만 반환
+    const outSettings = masked ? maskSnsSettings(settings) : settings;
+    return send({ ok: true, settings: outSettings });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return send({ ok: false, error: msg }, 500);

@@ -5,6 +5,22 @@
   var _settings = null;
   var _saving = false;
   var _CACHE_KEY = 'nk_sns_states';
+  // 현재 프로젝트가 공유받은 것이면 소유자 id (그 경우 화면은 읽기 전용으로 소유자 연결 표시)
+  var _sharedOwnerId = '';
+
+  function _currentProjectId() {
+    try {
+      return (NK.service && NK.service.project && NK.service.project.getCurrentProjectId)
+        ? String(NK.service.project.getCurrentProjectId({ search: window.location.search }) || '') : '';
+    } catch (_) { return ''; }
+  }
+  function _resolveSharedOwner() {
+    try {
+      var pid = _currentProjectId();
+      if (!pid) return '';
+      return (NK.api && NK.api.getSharedOwner) ? String(NK.api.getSharedOwner(pid) || '') : '';
+    } catch (_) { return ''; }
+  }
 
   function _readCache() {
     try { return JSON.parse(localStorage.getItem(_CACHE_KEY) || '{}'); } catch (e) { return {}; }
@@ -184,10 +200,17 @@
 
   function loadSettings() {
     var cached = _readCache();
+    // 공유받은 프로젝트면 소유자 연결 상태를 조회(서버가 토큰 마스킹). 이 경우 본인 캐시와
+    // 머지하거나 캐시에 쓰지 않는다(소유자 상태가 본인 SNS 설정을 오염시키지 않도록).
+    _sharedOwnerId = _resolveSharedOwner();
+    var _q = '';
+    if (_sharedOwnerId) {
+      _q = '?ownerId=' + encodeURIComponent(_sharedOwnerId) + '&projectId=' + encodeURIComponent(_currentProjectId());
+    }
     // cross-device 동기화 원칙: 동일 계정이면 어느 디바이스에서든 동일한 연결 상태가 보여야 한다.
     // 일시적 네트워크/서버 글리치로 잘못된 "미연결" 표시를 피하기 위해 최대 1회 재시도(800ms 백오프) 후 폴백.
     function attempt(retriesLeft) {
-      return apiGet('/api/userdata/sns/get').then(function (res) {
+      return apiGet('/api/userdata/sns/get' + _q).then(function (res) {
         if (res && res.ok && res.settings) return res;
         if (retriesLeft > 0) {
           return new Promise(function (resolve) { setTimeout(resolve, 800); })
@@ -203,6 +226,13 @@
       });
     }
     return attempt(1).then(function (res) {
+      if (_sharedOwnerId) {
+        // 공유(소유자) 설정: 본인 캐시와 머지/저장하지 않고 그대로 사용(읽기 전용 표시)
+        if (res && res.ok && res.settings) _settings = res.settings;
+        else _settings = { sns: {}, deployDefaults: {} };
+        if (!_settings.sns) _settings.sns = {};
+        return _settings;
+      }
       if (res && res.ok && res.settings) {
         // 서버에 데이터 존재 → 권위 있는 값
         _settings = res.settings;
@@ -336,6 +366,15 @@
     var btn = e.target.closest('[data-action]');
     if (!btn) return;
     var action = btn.dataset.action;
+
+    // 공유받은 프로젝트: 연결 계정은 소유자의 것 → 읽기 전용. 변경 액션 차단.
+    if (_sharedOwnerId && (action === 'sns-connect-toggle' || action === 'sns-usage-toggle' || action === 'sns-save')) {
+      e.preventDefault();
+      alert(_lang() === 'en'
+        ? 'These channels belong to the project owner and can only be changed by the owner.'
+        : '연결 계정은 프로젝트 소유자의 것이라 소유자만 변경할 수 있습니다.');
+      return;
+    }
 
     // 좌측 연결 체크박스: 연결 안 됐으면 OAuth 진행, 연결됐으면 해제 확인
     if (action === 'sns-connect-toggle') {
@@ -504,7 +543,12 @@
 
     var ctx = resolveProjectContext();
     var heroTitle = ctx.brandTitle || t('defaultProject');
-    var heroDesc = t('heroDesc');
+    var _isShared = !!_sharedOwnerId;
+    var heroDesc = _isShared
+      ? (_lang() === 'en'
+          ? "Shared project — showing the owner's connected channels (read-only). Publishing uses the owner's accounts."
+          : '공유받은 프로젝트 — 소유자의 연결 채널을 표시합니다(읽기 전용). 배포는 소유자 계정으로 진행됩니다.')
+      : t('heroDesc');
 
     var cards = PLATFORMS.map(buildPlatformCard).join('');
 
@@ -521,7 +565,7 @@
             '</div>',
             '<div class="bsf-flow-head-actions">',
               '<span id="sns-save-status" class="sns-save-status"></span>',
-              '<button type="button" class="bsf-head-btn btn-primary" data-action="sns-save">' + t('saveBtn') + '</button>',
+              (_isShared ? '' : '<button type="button" class="bsf-head-btn btn-primary" data-action="sns-save">' + t('saveBtn') + '</button>'),
             '</div>',
           '</div>',
         '</div>',
@@ -546,6 +590,8 @@
   var _ytRefreshAttempted = false;
   function maybeRefreshYoutubeInfo() {
     if (_ytRefreshAttempted) return Promise.resolve();
+    // 공유(읽기전용) 모드에서는 본인 계정 기준 갱신을 시도하지 않는다.
+    if (_sharedOwnerId) return Promise.resolve();
     _ytRefreshAttempted = true;
     var yt = _settings && _settings.sns && _settings.sns.youtube;
     if (!yt || !yt.connected) return Promise.resolve();

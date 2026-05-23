@@ -10,6 +10,9 @@
   // 브랜드 스튜디오 "01 자산" 섹션에 노출하기 위함.
   var _videoGenStorageCache = {};
   var _aiImageStorageCache = {};
+  // 공유받은 프로젝트의 소유자 SNS 연결 상태(토큰 마스킹됨). projectId → { instagram:{...}, ... }
+  // 전역 nk_sns_states(사용자 본인 연결) 캐시를 오염시키지 않도록 분리 보관한다.
+  var _sharedSnsStatesCache = {};
   var _dtDocListener = null;
 
   function escapeHtml(value) {
@@ -2265,6 +2268,11 @@
       'band':           '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l7 4.5-7 4.5z"/></svg>'
     };
     function _readSnsStates() {
+      // 공유받은 프로젝트는 소유자의 연결 상태(마스킹된 캐시)를 우선 사용.
+      try {
+        var _so = (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '';
+        if (_so && _sharedSnsStatesCache[projectId]) return _sharedSnsStatesCache[projectId];
+      } catch (_) {}
       try { return JSON.parse(localStorage.getItem('nk_sns_states') || '{}'); } catch (e) { return {}; }
     }
     function buildDeploySummaryHtml() {
@@ -3700,6 +3708,13 @@
           }
         }
 
+        // 공유받은 프로젝트는 소유자 SNS 자격증명으로 게시(서버가 editor 권한 검증).
+        try {
+          requestBody.projectId = String(projectId || '');
+          var _snsOwner = (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(projectId) : '';
+          if (_snsOwner) requestBody.ownerId = String(_snsOwner);
+        } catch (_) {}
+
         return fetch('/api/sns/publish', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
@@ -4255,24 +4270,35 @@
     // SNS 연결 상태 cache 갱신: 다른 디바이스/세션에서 disconnect 됐을 경우
     // nk_sns_states localStorage 가 stale 상태로 남아 '사용 중' 으로 잘못 표시되는 문제 방지.
     // brand.html 에는 sns-settings.js 가 로드되지 않으므로 직접 fetch 한다.
-    promises.push((async function () {
+    promises.push(refreshProjectPromise.then(async function () {
       try {
         var token = localStorage.getItem('nk_auth_token') || '';
         if (!token) return;
-        var r = await fetch('/api/userdata/sns/get', {
+        // 공유받은 프로젝트면 소유자 연결 상태를 ownerId로 조회(서버가 토큰 마스킹).
+        var _snsOwner = (NK.api && NK.api.getSharedOwner) ? NK.api.getSharedOwner(initProjectId) : '';
+        var _snsUrl = '/api/userdata/sns/get';
+        if (_snsOwner) {
+          _snsUrl += '?ownerId=' + encodeURIComponent(String(_snsOwner)) + '&projectId=' + encodeURIComponent(String(initProjectId));
+        }
+        var r = await fetch(_snsUrl, {
           headers: { Authorization: 'Bearer ' + token },
           cache: 'no-store'
         });
         var res = await r.json();
         if (res && res.ok && res.settings && res.settings.sns) {
           try {
-            localStorage.setItem('nk_sns_states', JSON.stringify(res.settings.sns));
+            if (_snsOwner) {
+              // 소유자 상태는 전역 캐시를 오염시키지 않도록 분리 보관
+              _sharedSnsStatesCache[initProjectId] = res.settings.sns;
+            } else {
+              localStorage.setItem('nk_sns_states', JSON.stringify(res.settings.sns));
+            }
             if (initDone && root.isConnected) forceRerender();
           } catch (_) {}
         }
         // res.missing 인 경우 캐시 보존(덮어쓰지 않음). 서버 오류도 마찬가지.
       } catch (_) {}
-    })());
+    }));
 
     if (brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       promises.push(
