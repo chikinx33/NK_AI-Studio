@@ -6,6 +6,8 @@
   // 옛 씬으로 회귀하는 문제를 막기 위해, 시나리오 저장 시 파이프라인 임시 캐시를 무효화한다.
   const invalidatePipelineCache = () => {
     try {
+      // 계정별 스코프 캐시를 정확히 비우기 위해 store API 사용(전역 키 직접 삭제는 무효).
+      if (NK.store && NK.store.clearPipeline) { NK.store.clearPipeline(); return; }
       const key = (NK.config && NK.config.KEYS && NK.config.KEYS.PIPELINE) || 'nk_pipeline_last';
       localStorage.removeItem(key);
     } catch (_) {}

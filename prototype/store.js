@@ -27,6 +27,41 @@
 
   store.KEYS = { DRAFT_KEY: DRAFT_KEY, PIPELINE_KEY: PIPELINE_KEY, HEADER_KEY: HEADER_KEY, ASPECT_KEY: ASPECT_KEY };
 
+  // ─── 계정별 캐시 격리 ───────────────────────────────────────
+  // 프로젝트(드래프트)·파이프라인 캐시는 같은 브라우저에서 계정을 바꿔도
+  // 공유되면 안 된다(다른 계정 데이터 노출 방지). 로그인 사용자(userId)별로
+  // 저장 키를 분리하고, 사용자가 바뀌면 해당 계정의 캐시로 재로딩한다.
+  function sanitizeUid(raw) {
+    var v = String(raw == null ? '' : raw).trim().toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 64);
+    return v || 'anon';
+  }
+  function computeUid() {
+    try { return sanitizeUid(NK.auth && NK.auth.getUser ? NK.auth.getUser() : ''); } catch (_) { return 'anon'; }
+  }
+  var activeUid = computeUid();
+  function draftLsKey() { return DRAFT_KEY + '::' + activeUid; }
+  function pipelineLsKey() { return PIPELINE_KEY + '::' + activeUid; }
+  function draftDbKey() { return CACHE_KEYS.drafts + '::' + activeUid; }
+  function pipelineDbKey() { return CACHE_KEYS.pipeline + '::' + activeUid; }
+
+  // 레거시 전역 캐시(계정 무관, nk_scenario_drafts_v1 / nk_pipeline_last)는 더 이상
+  // 어디서도 '읽지' 않으므로 계정 간 누출이 차단된다. 데이터 손실 방지를 위해 즉시
+  // 삭제하지는 않고 비활성 상태로 둔다(필요 시 서버 userId별 동기화로 각 계정 복원).
+
+  // 현재 로그인 사용자 기준으로 캐시 네임스페이스를 맞춘다. 사용자가 바뀌었으면
+  // 메모리를 비우고 해당 계정의 로컬/IndexedDB 캐시로 다시 로딩한다.
+  function ensureUser() {
+    var uid = computeUid();
+    if (uid === activeUid) return;
+    activeUid = uid;
+    memory.drafts = [];
+    memory.pipeline = null;
+    readyPromise = null;
+    hydrateFromIndexedDb();
+  }
+  store.getActiveUser = function () { return activeUid; };
+
   function deepClone(value) {
     if (value == null) return value;
     try {
@@ -217,31 +252,28 @@
   }
 
   function bootMemoryFromLocal() {
-    memory.drafts = readJson(DRAFT_KEY, []);
-    memory.pipeline = readJson(PIPELINE_KEY, null);
+    // 계정별 스코프 키에서만 읽는다. (레거시 전역/후보 키는 계정 누출 위험 → 사용하지 않음)
+    memory.drafts = readJson(draftLsKey(), []);
+    memory.pipeline = readJson(pipelineLsKey(), null);
     try {
       memory.header = localStorage.getItem(HEADER_KEY) || '';
     } catch (_) {
       memory.header = '';
     }
-    if (!Array.isArray(memory.drafts) || !memory.drafts.length) {
-      var candidates = ['nk_scenario_drafts', 'nk_scenario_drafts_v0', 'nk_pipeline_drafts', 'nk_drafts'];
-      for (var i = 0; i < candidates.length; i++) {
-        var arr = readJson(candidates[i], null);
-        if (Array.isArray(arr) && arr.length) {
-          memory.drafts = arr;
-          break;
-        }
-      }
-    }
+    if (!Array.isArray(memory.drafts)) memory.drafts = [];
   }
 
   function hydrateFromIndexedDb() {
     if (readyPromise) return readyPromise;
     bootMemoryFromLocal();
+    // 하이드레이션 시작 시점의 네임스페이스를 고정(중간에 계정이 바뀌어도 교차 기록 방지)
+    var draftDb = draftDbKey();
+    var pipelineDb = pipelineDbKey();
+    var draftLs = draftLsKey();
+    var pipelineLs = pipelineLsKey();
     readyPromise = Promise.all([
-      dbGet(CACHE_KEYS.drafts),
-      dbGet(CACHE_KEYS.pipeline),
+      dbGet(draftDb),
+      dbGet(pipelineDb),
       dbGet(CACHE_KEYS.header)
     ]).then(function (rows) {
       var draftRow = rows[0];
@@ -254,13 +286,13 @@
       if (draftValue && draftValue.length) {
         memory.drafts = draftValue;
       } else if (Array.isArray(memory.drafts) && memory.drafts.length) {
-        schedulePersist(CACHE_KEYS.drafts, memory.drafts);
+        schedulePersist(draftDb, memory.drafts);
       }
 
       if (pipelineValue && typeof pipelineValue === 'object') {
         memory.pipeline = pipelineValue;
       } else if (memory.pipeline) {
-        schedulePersist(CACHE_KEYS.pipeline, memory.pipeline);
+        schedulePersist(pipelineDb, memory.pipeline);
       }
 
       if (typeof headerValue === 'string' && headerValue) {
@@ -273,10 +305,10 @@
       // 영속 사본만 다시 쓰고(메모리는 그대로) 누적을 끊는다.
       var cleanedDrafts = stripDraftsDataUrls(memory.drafts);
       var cleanedPipeline = stripPipelineDataUrls(memory.pipeline);
-      writeJsonMirror(DRAFT_KEY, cleanedDrafts);
-      writeJsonMirror(PIPELINE_KEY, cleanedPipeline);
-      if (cleanedDrafts !== memory.drafts) schedulePersist(CACHE_KEYS.drafts, cleanedDrafts);
-      if (cleanedPipeline !== memory.pipeline) schedulePersist(CACHE_KEYS.pipeline, cleanedPipeline);
+      writeJsonMirror(draftLs, cleanedDrafts);
+      writeJsonMirror(pipelineLs, cleanedPipeline);
+      if (cleanedDrafts !== memory.drafts) schedulePersist(draftDb, cleanedDrafts);
+      if (cleanedPipeline !== memory.pipeline) schedulePersist(pipelineDb, cleanedPipeline);
       try { localStorage.setItem(HEADER_KEY, memory.header || ''); } catch (_) { }
       return true;
     }).catch(function () {
@@ -286,50 +318,44 @@
   }
 
   store.ready = function () {
+    ensureUser();
     return hydrateFromIndexedDb();
   };
 
   store.getDrafts = function () {
+    ensureUser();
     // 얕은 복사: 배열 reference는 새로 만들어 push/splice 등 array mutation은 격리.
     // 객체 자체는 공유되므로 호출자는 객체 속성을 직접 mutate하면 안 됨.
     // saveDrafts() 호출 시 deepClone으로 격리됨.
     return Array.isArray(memory.drafts) ? memory.drafts.slice() : [];
   };
   store.saveDrafts = function (drafts) {
+    ensureUser();
     memory.drafts = Array.isArray(drafts) ? deepClone(drafts) : [];
     var persistable = stripDraftsDataUrls(memory.drafts);
-    writeJsonMirror(DRAFT_KEY, persistable);
-    schedulePersist(CACHE_KEYS.drafts, persistable);
+    writeJsonMirror(draftLsKey(), persistable);
+    schedulePersist(draftDbKey(), persistable);
   };
-  store.migrateDrafts = function () {
-    try {
-      var cur = store.getDrafts();
-      if (Array.isArray(cur) && cur.length) return;
-      var candidates = ['nk_scenario_drafts', 'nk_scenario_drafts_v0', 'nk_pipeline_drafts', 'nk_drafts'];
-      for (var i = 0; i < candidates.length; i++) {
-        var k = candidates[i];
-        try {
-          var txt = localStorage.getItem(k);
-          if (!txt) continue;
-          var arr = JSON.parse(txt);
-          if (Array.isArray(arr) && arr.length) {
-            store.saveDrafts(arr);
-            return;
-          }
-        } catch (_) { }
-      }
-    } catch (_) { }
-  };
+  // 레거시 전역 키 기반 마이그레이션은 계정 누출 위험이 있어 제거(이제 서버 동기화로 복원).
+  store.migrateDrafts = function () { /* no-op (계정별 캐시 + 서버 동기화로 대체) */ };
 
   store.getPipeline = function () {
+    ensureUser();
     // 호출자는 read-only로 사용해야 함. 변경이 필요하면 savePipeline() 호출.
     return memory.pipeline;
   };
   store.savePipeline = function (data) {
+    ensureUser();
     memory.pipeline = data && typeof data === 'object' ? deepClone(data) : null;
     var persistable = stripPipelineDataUrls(memory.pipeline);
-    writeJsonMirror(PIPELINE_KEY, persistable);
-    schedulePersist(CACHE_KEYS.pipeline, persistable);
+    writeJsonMirror(pipelineLsKey(), persistable);
+    schedulePersist(pipelineDbKey(), persistable);
+  };
+  store.clearPipeline = function () {
+    ensureUser();
+    memory.pipeline = null;
+    try { localStorage.removeItem(pipelineLsKey()); } catch (_) { }
+    schedulePersist(pipelineDbKey(), null);
   };
 
   store.getHeader = function () {

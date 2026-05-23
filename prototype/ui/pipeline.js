@@ -1037,8 +1037,8 @@
               aspectRatio: st.aspectRatio || '',
               title: getProjectTitle()
             });
-            // 서버 저장이 끝나면 임시 로컬 파이프라인 캐시를 지움
-            try { localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
+            // 서버 저장이 끝나면 임시 로컬 파이프라인 캐시를 지움(계정별 스코프 캐시)
+            try { if (NK.store && NK.store.clearPipeline) NK.store.clearPipeline(); else localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
             alert('저장되었습니다.');
           } catch (err) {
             alert('저장 실패: ' + (err && err.message ? err.message : err));
