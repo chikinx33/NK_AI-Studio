@@ -18,6 +18,8 @@ export interface ShareEntry {
   ownerId: string;
   projectId: string;
   title: string;
+  seriesId: string;
+  seriesTitle: string;
   grants: ShareGrant[];
   updatedAt: string;
 }
@@ -48,6 +50,8 @@ function normalizeEntry(raw: any): ShareEntry {
     ownerId: sanitizeUserId(src.ownerId),
     projectId: String(src.projectId || "").trim(),
     title: String(src.title || "").slice(0, 200),
+    seriesId: String(src.seriesId || "").slice(0, 120),
+    seriesTitle: String(src.seriesTitle || "").slice(0, 200),
     grants: grants
       .map((g: any) => ({
         userId: sanitizeUserId(g && g.userId),
@@ -104,6 +108,8 @@ export function upsertGrant(
   targetUserId: string,
   role: ShareRole,
   title?: string,
+  seriesId?: string,
+  seriesTitle?: string,
 ): void {
   const oid = sanitizeUserId(ownerId);
   const pid = String(projectId || "").trim();
@@ -111,10 +117,12 @@ export function upsertGrant(
   if (!oid || !pid || !tid) return;
   let entry = findEntry(reg, oid, pid);
   if (!entry) {
-    entry = { ownerId: oid, projectId: pid, title: String(title || "").slice(0, 200), grants: [], updatedAt: "" };
+    entry = { ownerId: oid, projectId: pid, title: String(title || "").slice(0, 200), seriesId: "", seriesTitle: "", grants: [], updatedAt: "" };
     reg.shares.push(entry);
   }
   if (typeof title === "string" && title) entry.title = title.slice(0, 200);
+  if (typeof seriesId === "string" && seriesId) entry.seriesId = seriesId.slice(0, 120);
+  if (typeof seriesTitle === "string" && seriesTitle) entry.seriesTitle = seriesTitle.slice(0, 200);
   const now = new Date().toISOString();
   const existing = entry.grants.find((g) => g.userId === tid);
   if (existing) {
@@ -145,12 +153,12 @@ export function getGrantRole(reg: SharesRegistry, ownerId: string, projectId: st
 }
 
 /** userId에게 공유된 프로젝트 목록(소유자/역할 포함). */
-export function listSharedWith(reg: SharesRegistry, userId: string): Array<{ ownerId: string; projectId: string; title: string; role: ShareRole }> {
+export function listSharedWith(reg: SharesRegistry, userId: string): Array<{ ownerId: string; projectId: string; title: string; seriesId: string; seriesTitle: string; role: ShareRole }> {
   const uid = sanitizeUserId(userId);
-  const out: Array<{ ownerId: string; projectId: string; title: string; role: ShareRole }> = [];
+  const out: Array<{ ownerId: string; projectId: string; title: string; seriesId: string; seriesTitle: string; role: ShareRole }> = [];
   for (const e of reg.shares) {
     const g = e.grants.find((x) => x.userId === uid);
-    if (g) out.push({ ownerId: e.ownerId, projectId: e.projectId, title: e.title, role: g.role });
+    if (g) out.push({ ownerId: e.ownerId, projectId: e.projectId, title: e.title, seriesId: e.seriesId, seriesTitle: e.seriesTitle, role: g.role });
   }
   return out;
 }

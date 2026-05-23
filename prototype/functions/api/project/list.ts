@@ -84,11 +84,11 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       .filter(Boolean)
       .slice(0, 200);
     // 나에게 공유된 프로젝트(소유자/역할 포함)도 함께 반환 → 대시보드에서 표시·접근.
-    let shared: Array<{ projectId: string; ownerId: string; role: string; title: string }> = [];
+    let shared: Array<{ projectId: string; ownerId: string; role: string; title: string; seriesId: string; seriesTitle: string }> = [];
     try {
       const sharesReg = await loadShares(env);
       shared = listSharedWith(sharesReg, auth.userId).map((s) => ({
-        projectId: s.projectId, ownerId: s.ownerId, role: s.role, title: s.title,
+        projectId: s.projectId, ownerId: s.ownerId, role: s.role, title: s.title, seriesId: s.seriesId, seriesTitle: s.seriesTitle,
       }));
     } catch (_) { shared = []; }
     return send({ ok: true, ids, shared }, 200, origin);

@@ -1131,11 +1131,12 @@
     return j(text);
   };
 
-  api.projectShareGrant = async function (projectId, targetUserId, role, title) {
+  api.projectShareGrant = async function (projectId, targetUserId, role, title, opts) {
+    var o = opts && typeof opts === 'object' ? opts : {};
     var res = await fetch(withBase('/api/project/share'), {
       method: 'POST',
       headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ projectId: String(projectId || ''), targetUserId: String(targetUserId || ''), role: role || 'viewer', title: title || '' })
+      body: JSON.stringify({ projectId: String(projectId || ''), targetUserId: String(targetUserId || ''), role: role || 'viewer', title: title || '', seriesId: String(o.seriesId || ''), seriesTitle: String(o.seriesTitle || '') })
     });
     var text = await res.text();
     if (!res.ok) throw new Error(e(text) || 'project_share_grant_error');

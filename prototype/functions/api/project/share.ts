@@ -60,13 +60,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const targetUserId = sanitizeUserId(body.targetUserId || "");
     const role: ShareRole = String(body.role || "").toLowerCase() === "editor" ? "editor" : "viewer";
     const title = typeof body.title === "string" ? body.title : "";
+    const seriesId = typeof body.seriesId === "string" ? body.seriesId : "";
+    const seriesTitle = typeof body.seriesTitle === "string" ? body.seriesTitle : "";
     if (!projectId || !/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "invalid_project_id" }, 400, origin);
     if (!targetUserId) return send({ error: "invalid_target_user" }, 400, origin);
     // 소유자만 공유 가능 — ownerId는 항상 요청자 본인.
     if (targetUserId === auth.userId) return send({ error: "cannot_share_with_self" }, 400, origin);
 
     const reg = await loadSharesStrict(env);
-    upsertGrant(reg, auth.userId, projectId, targetUserId, role, title);
+    upsertGrant(reg, auth.userId, projectId, targetUserId, role, title, seriesId, seriesTitle);
     await saveShares(env, reg);
     return send({ ok: true, projectId, targetUserId, role }, 200, origin);
   } catch (e: any) {
