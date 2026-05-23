@@ -263,6 +263,104 @@
 
   dashboard.triggerThumbnailUpload = triggerThumbnailUpload;
 
+  // ─── 프로젝트 공유 모달 (소유자가 다른 계정에 뷰어/에디터 권한 부여/회수) ───
+  function openShareModal(projectId, title) {
+    if (!projectId) return;
+    if (!(NK.api && NK.api.projectShareGrant)) { alert('공유 기능을 사용할 수 없습니다.'); return; }
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+    // 기존 모달 제거
+    const prev = document.getElementById('nk-share-modal');
+    if (prev) prev.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'nk-share-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
+    overlay.innerHTML = `
+      <div style="width:100%;max-width:460px;background:var(--panel,#0f172a);border:1px solid var(--border,#1b2845);color:var(--text,#e9edf7);border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
+        <h3 style="margin:0 0 4px;font-size:18px;">프로젝트 공유</h3>
+        <p style="margin:0 0 16px;font-size:13px;color:var(--muted,#8aa0c3);">${esc(title || projectId)}</p>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
+          <input id="nk-share-target" type="text" placeholder="공유할 계정 ID" style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid var(--border,#1b2845);background:var(--bg,#0b1222);color:var(--text,#e9edf7);font-size:14px;" />
+          <select id="nk-share-role" style="padding:9px 10px;border-radius:10px;border:1px solid var(--border,#1b2845);background:var(--bg,#0b1222);color:var(--text,#e9edf7);font-size:14px;">
+            <option value="viewer">뷰어(읽기)</option>
+            <option value="editor">에디터(편집)</option>
+          </select>
+          <button id="nk-share-add" type="button" class="btn-primary" style="padding:9px 14px;">공유</button>
+        </div>
+        <div id="nk-share-error" style="color:#ef4444;font-size:13px;min-height:18px;margin-bottom:8px;"></div>
+        <div style="font-size:12.5px;color:var(--muted,#8aa0c3);margin-bottom:6px;">현재 공유 대상</div>
+        <div id="nk-share-list" style="max-height:220px;overflow:auto;border:1px solid var(--border,#1b2845);border-radius:10px;"></div>
+        <div style="display:flex;justify-content:flex-end;margin-top:18px;">
+          <button id="nk-share-close" type="button" class="btn-secondary" style="padding:9px 16px;">닫기</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    const listEl = overlay.querySelector('#nk-share-list');
+    const errEl = overlay.querySelector('#nk-share-error');
+    const targetEl = overlay.querySelector('#nk-share-target');
+    const roleEl = overlay.querySelector('#nk-share-role');
+
+    const setErr = (m) => { if (errEl) errEl.textContent = m || ''; };
+    const close = () => { overlay.remove(); };
+
+    function renderGrants(grants) {
+      if (!listEl) return;
+      if (!grants || !grants.length) {
+        listEl.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted,#8aa0c3);font-size:13px;">아직 공유한 대상이 없습니다.</div>';
+        return;
+      }
+      listEl.innerHTML = grants.map((g) => `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border,#1b2845);">
+          <div><strong>${esc(g.userId)}</strong> <span style="font-size:12px;color:var(--muted,#8aa0c3);">· ${g.role === 'editor' ? '에디터' : '뷰어'}</span></div>
+          <button type="button" class="btn-secondary" data-revoke="${esc(g.userId)}" style="padding:4px 10px;font-size:12px;">회수</button>
+        </div>`).join('');
+      listEl.querySelectorAll('[data-revoke]').forEach((b) => {
+        b.addEventListener('click', async () => {
+          setErr('');
+          try {
+            await NK.api.projectShareRevoke(projectId, b.getAttribute('data-revoke'));
+            await refresh();
+          } catch (err) { setErr((err && err.message) ? err.message : '회수 실패'); }
+        });
+      });
+    }
+
+    async function refresh() {
+      try {
+        const res = await NK.api.projectShareList();
+        const mine = (res && Array.isArray(res.sharedByMe)) ? res.sharedByMe : [];
+        const entry = mine.find((e) => String(e.projectId) === String(projectId));
+        renderGrants(entry ? entry.grants : []);
+      } catch (err) {
+        renderGrants([]);
+        setErr((err && err.message) ? err.message : '공유 목록을 불러오지 못했습니다.');
+      }
+    }
+
+    overlay.querySelector('#nk-share-add').addEventListener('click', async () => {
+      setErr('');
+      const target = String(targetEl.value || '').trim();
+      const role = roleEl.value === 'editor' ? 'editor' : 'viewer';
+      if (!target) { setErr('공유할 계정 ID를 입력하세요.'); return; }
+      try {
+        await NK.api.projectShareGrant(projectId, target, role, title || '');
+        targetEl.value = '';
+        await refresh();
+      } catch (err) {
+        let m = (err && err.message) ? err.message : '공유 실패';
+        if (/cannot_share_with_self/.test(m)) m = '본인에게는 공유할 수 없습니다.';
+        else if (/invalid_target_user/.test(m)) m = '유효한 계정 ID를 입력하세요.';
+        setErr(m);
+      }
+    });
+    overlay.querySelector('#nk-share-close').addEventListener('click', close);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+
+    refresh();
+  }
+
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
@@ -502,8 +600,9 @@
 
       const editBtn = showTitleEdit ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
       const duplicateBtn = showDelete ? `<button class="copy-btn" data-action="draft-duplicate" data-id="${escapeHtml(d.id)}" aria-label="복제" title="복제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="15" x2="15" y1="12" y2="18"></line><line x1="12" x2="18" y1="15" y2="15"></line><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>` : '';
+      const shareBtn = showDelete ? `<button class="share-btn" data-action="share-project" data-id="${escapeHtml(d.id)}" data-title="${escapeHtml(d.title || '')}" aria-label="공유" title="공유"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg></button>` : '';
       const deleteBtn = showDelete ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
-      const thumbBtnsHtml = (editBtn || duplicateBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${deleteBtn}</div>` : '';
+      const thumbBtnsHtml = (editBtn || duplicateBtn || shareBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${shareBtn}${deleteBtn}</div>` : '';
 
       const isPending = !!d.__pending;
       return `
@@ -579,6 +678,11 @@
       const id = btn.dataset.id;
       const isIframe = window.self !== window.top;
       const isStandaloneStage = !isIframe && document.querySelector('.app.no-sidebar');
+
+      if (action === 'share-project') {
+        openShareModal(id, btn.dataset.title || '');
+        return;
+      }
 
       if (action === 'series-filter') {
         currentSeriesFilter = String(btn.dataset.seriesId || '__all__');
