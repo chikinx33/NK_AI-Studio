@@ -94,6 +94,28 @@
             </div>
             <div class="sidebar-version">ver</div>
           </div>
+          <script>
+            /* FOUC 방지: 이미 로그인 상태면 첫 페인트부터 로그인 카드를 로그인 상태로 선반영한다.
+               (init이 setUI 전에 await store.ready()를 하므로, 그 사이 베일 해제 시 로그아웃 폼이
+                잠깐 보이던 문제 해결. setUI가 이후 동일하게 재적용 → 깜빡임 없음) */
+            (function () {
+              try {
+                var authed = localStorage.getItem('nk_is_logged_in') === 'true' && !!localStorage.getItem('nk_auth_token');
+                if (!authed) return;
+                var lang = String(localStorage.getItem('nk_lang') || 'ko').toLowerCase();
+                var card = document.getElementById('login-card');
+                if (card) {
+                  card.querySelectorAll('.form-row').forEach(function (r) { r.style.display = 'none'; });
+                }
+                var btn = document.getElementById('opt-auth-btn');
+                if (btn) {
+                  btn.textContent = lang === 'en' ? 'Logout' : '로그아웃';
+                  btn.setAttribute('data-i18n-skip', '1');
+                  btn.dataset.state = 'logout';
+                }
+              } catch (_) { }
+            })();
+          </script>
 
           <section class="card option-card favorite-card is-locked" id="favorite-card" aria-live="polite">
             <div class="favorite-list empty" id="favorite-list" role="list"></div>
