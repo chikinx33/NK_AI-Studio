@@ -14049,14 +14049,27 @@ textarea.bsf-skeleton {
 .sns-pcard--paused .sns-pcard-status {
   color: var(--muted, #888);
 }
-/* 토큰 만료/취소 → 재연결 필요: 주황색으로 강조 */
+/* 토큰 만료/취소 → 재연결 필요:
+   주황 '채움(fill)' 대신 하늘색 '라인(outline)' 모드로 표현해 연결 해제 상태를 구분한다.
+   (Pre-Prod 같은 아웃라인 스타일 — 채움 없음, 연한 하늘색 테두리) */
 .sns-pcard--reconnect .sns-pcard-status {
-  color: #f59e0b;
+  color: #5db8e8;
   font-weight: 600;
 }
+/* 연결 체크박스: 주황 채움 제거 → 투명 배경 + 하늘색 라인 */
 .sns-pcard--reconnect .sns-connect-box.is-connected {
-  border-color: #f59e0b;
-  color: #f59e0b;
+  background: transparent;
+  border-color: #5db8e8;
+  color: #5db8e8;
+}
+/* 사용 토글(ON): 주황 채움 제거 → 투명 배경 + 하늘색 라인, 노브도 하늘색 */
+.sns-pcard--reconnect .sns-toggle input:checked + .sns-toggle-track {
+  background: transparent;
+  border-color: #5db8e8;
+}
+.sns-pcard--reconnect .sns-toggle input:checked + .sns-toggle-track::before {
+  background: #5db8e8;
+  box-shadow: none;
 }
 
 /* 카드 우측 액션 영역: 연결 체크박스 + 사용 토글 */
