@@ -4186,6 +4186,13 @@
         if (!NK.api || !NK.api.projectGet || !initProjectId) return;
         var prevPayloadJson = '';
         try { prevPayloadJson = JSON.stringify((latestProject && latestProject.payload) || {}); } catch (_) {}
+        // 공유받은 프로젝트는 로컬 store에 없어 projectGet이 ownerId 매핑(sessionStorage)을
+        // 통해 소유자 경로에 접근해야 한다. 로컬에 없고 매핑도 비어 있으면 먼저 목록을
+        // 동기화해 매핑을 채운다(projectList가 parsed.shared로 채움, 30초 캐시).
+        var inLocalStore = !!(NK.service.project.getDraftById && NK.service.project.getDraftById(initProjectId));
+        if (!inLocalStore && NK.api.projectList && NK.api.getSharedOwner && !NK.api.getSharedOwner(initProjectId)) {
+          try { await NK.api.projectList(); } catch (_) {}
+        }
         var res = await NK.api.projectGet(initProjectId);
         var data = (res && res.data) ? res.data : res;
         if (!data || (!data.scenes && !data.payload)) return;
@@ -4219,6 +4226,19 @@
             })()
           });
         }, { forceCurrent: true });
+        // 공유받은 프로젝트: 로컬 store에 없어 updateLocal이 no-op(null)을 반환한다.
+        // 소유자 서버 데이터로 새 드래프트를 생성(upsert)해 현재 프로젝트로 세팅한다.
+        // (이 폴백이 없으면 자산/포맷/초안/배포가 모두 빈 스텁으로 남는다.)
+        if (!updated && NK.service.project.upsertLocalDraft) {
+          var serverDraft = {
+            id: initProjectId,
+            title: data.title || (latestProject && latestProject.title) || '',
+            header: data.header || (latestProject && latestProject.header) || '',
+            payload: Object.assign({}, data.payload || {}),
+            scenes: Array.isArray(data.scenes) ? data.scenes : []
+          };
+          updated = NK.service.project.upsertLocalDraft(serverDraft, { setCurrent: true });
+        }
         if (updated && root.isConnected) {
           latestProject = updated;
           // safety 타임아웃이 먼저 발사되어 stale 렌더가 끝난 상태라면, 페이로드 변경 시 강제 리렌더

@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>마케팅 AI 에이전트 — 당신과 AI의 협업 가이드</title>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.9/static/pretendard.min.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    @page { size: A3 landscape; margin: 10mm; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Pretendard', 'Segoe UI', Arial, sans-serif; background: #F3F4F6; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    /* SIDEBAR */
+    .sidebar { width: 260px; background: #FFFFFF; border-right: 1px solid #E5E7EB; position: fixed; top: 0; left: 0; height: 100vh; overflow-y: auto; z-index: 1000; display: flex; flex-direction: column; box-shadow: 2px 0 16px rgba(0,0,0,0.05); }
+    .sidebar::-webkit-scrollbar { width: 4px; }
+    .sidebar::-webkit-scrollbar-thumb { background: #D1D5DB; border-radius: 4px; }
+    .sidebar-header { display: flex; align-items: center; gap: 12px; padding: 20px 18px 16px; border-bottom: 1px solid #E5E7EB; flex-shrink: 0; }
+    .sidebar-logo { width: 36px; height: 36px; background: linear-gradient(135deg, #60A5FA, #0066FF); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; }
+    .sidebar-title { font-size: 14px; font-weight: 700; color: #1E3A5F; line-height: 1.3; }
+    .sidebar-title small { font-size: 11px; font-weight: 500; color: #9CA3AF; display: block; margin-top: 2px; }
+    .progress-container { padding: 10px 18px 4px; flex-shrink: 0; }
+    .progress-label { font-size: 10px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.5px; display: flex; justify-content: space-between; margin-bottom: 4px; }
+    .progress-bar { height: 4px; background: #E5E7EB; border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #60A5FA, #0066FF); border-radius: 4px; transition: width 0.3s ease; width: 0%; }
+    .nav-section-label { font-size: 10px; font-weight: 700; color: #9CA3AF; text-transform: uppercase; letter-spacing: 1px; padding: 14px 18px 4px; }
+    .nav-list { list-style: none; padding: 0 10px; }
+    .nav-item { margin-bottom: 2px; }
+    .nav-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 8px; text-decoration: none; color: #4B5563; font-size: 13px; font-weight: 500; transition: all 0.15s ease; cursor: pointer; }
+    .nav-link:hover { background: #EFF6FF; color: #1F2937; }
+    .nav-link.active { background: linear-gradient(135deg, #0066FF, #3B82F6); color: white; font-weight: 600; box-shadow: 0 2px 8px rgba(0,102,255,0.3); }
+    .nav-link.human .nav-icon { color: #F59E0B; }
+    .nav-link.ai .nav-icon { color: #0066FF; }
+    .nav-link.active .nav-icon { color: white !important; }
+    .nav-icon { font-size: 15px; width: 22px; text-align: center; flex-shrink: 0; }
+    .nav-divider { height: 1px; background: #E5E7EB; margin: 6px 18px; }
+    .sidebar-footer { padding: 14px 18px; border-top: 1px solid #E5E7EB; background: #F9FAFB; margin-top: auto; flex-shrink: 0; }
+    .sidebar-footer .pj-label { font-size: 10px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.5px; }
+    .sidebar-footer .pj-name { font-size: 13px; font-weight: 700; color: #1F2937; margin-top: 2px; }
+    .sidebar-footer .pj-ver { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+
+    /* MAIN */
+    .main-content { margin-left: 260px; padding: 24px 32px; }
+    .slide { width: 400mm; min-height: 277mm; background: #FFFFFF; padding: 20mm 25mm 25mm 25mm; position: relative; display: flex; flex-direction: column; border: 1px solid #E5E7EB; page-break-after: always; margin-bottom: 24px; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,0.06); scroll-margin-top: 16px; padding-bottom: 50mm; }
+    .slide:last-child { page-break-after: auto; }
+
+    /* Title Slide */
+    .slide.title-slide { justify-content: center; align-items: center; text-align: center; border: 3px solid #0066FF; background: linear-gradient(135deg, #EFF6FF 0%, #FFFFFF 50%, #DBEAFE 100%); }
+    .slide.title-slide h1 { color: #1E3A5F; font-size: 64px; font-weight: 700; margin-bottom: 16px; line-height: 1.15; }
+    .slide.title-slide .subtitle { color: #0066FF; font-size: 30px; margin-bottom: 12px; font-weight: 600; }
+    .slide.title-slide .desc { color: #6B7280; font-size: 22px; margin-bottom: 40px; line-height: 1.6; }
+
+    /* Section/Step Badge */
+    .step-badge { display: inline-flex; align-items: center; gap: 8px; padding: 6px 16px; border-radius: 20px; font-weight: 700; font-size: 15px; margin-bottom: 14px; }
+    .step-badge.human { background: #FEF3C7; color: #92400E; border: 2px solid #F59E0B; }
+    .step-badge.ai { background: #DBEAFE; color: #1E40AF; border: 2px solid #0066FF; }
+    .step-badge.team { background: #DCFCE7; color: #166534; border: 2px solid #10B981; }
+
+    /* Headings */
+    h2 { color: #1E3A5F; font-size: 36px; font-weight: 700; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 4px solid #0066FF; display: flex; align-items: center; gap: 12px; }
+    h2 .h2-marker { font-size: 32px; }
+    h3 { color: #1E3A5F; font-size: 22px; font-weight: 700; margin: 14px 0 10px 0; }
+    h4 { color: #1E3A5F; font-size: 18px; font-weight: 700; margin: 8px 0 6px 0; }
+    .content { flex: 1; display: flex; flex-direction: column; }
+    .purpose-line { font-size: 20px; color: #4B5563; margin-bottom: 18px; padding: 14px 20px; background: #EFF6FF; border-left: 5px solid #0066FF; border-radius: 0 8px 8px 0; line-height: 1.55; }
+    .two-column { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; flex: 1; }
+    .two-column.uneven { grid-template-columns: 1.4fr 1fr; }
+    .three-column { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+
+    /* Role Card (사람 vs AI) */
+    .role-card { padding: 24px; border-radius: 14px; height: 100%; }
+    .role-card.human { background: linear-gradient(135deg, #FEF3C7 0%, #FFFFFF 100%); border: 3px solid #F59E0B; }
+    .role-card.ai { background: linear-gradient(135deg, #DBEAFE 0%, #FFFFFF 100%); border: 3px solid #0066FF; }
+    .role-card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 2px dashed rgba(0,0,0,0.1); }
+    .role-card-icon { font-size: 48px; }
+    .role-card-title { font-size: 26px; font-weight: 800; }
+    .role-card.human .role-card-title { color: #92400E; }
+    .role-card.ai .role-card-title { color: #1E40AF; }
+    .role-card-subtitle { font-size: 13px; color: #6B7280; margin-top: 2px; font-weight: 500; }
+    .role-card-list { list-style: none; padding: 0; }
+    .role-card-list li { padding: 8px 0 8px 28px; position: relative; font-size: 17px; color: #1E3A5F; line-height: 1.5; border-bottom: 1px solid rgba(0,0,0,0.05); }
+    .role-card-list li:last-child { border-bottom: none; }
+    .role-card.human .role-card-list li::before { content: "✋"; position: absolute; left: 0; font-size: 18px; }
+    .role-card.ai .role-card-list li::before { content: "🤖"; position: absolute; left: 0; font-size: 18px; }
+
+    /* Prompt Box */
+    .prompt-box { background: #0F172A; border-radius: 10px; padding: 38px 20px 18px; margin: 12px 0; position: relative; border-left: 5px solid #0066FF; box-shadow: 0 4px 12px rgba(15,23,42,0.15); }
+    .prompt-box-label { position: absolute; top: 11px; left: 18px; font-size: 11px; font-weight: 700; color: #60A5FA; letter-spacing: 1.5px; text-transform: uppercase; }
+    .prompt-box-copy { position: absolute; top: 9px; right: 12px; background: #0066FF; color: white; border: none; padding: 5px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 700; transition: all 0.15s; }
+    .prompt-box-copy:hover { background: #0052CC; transform: translateY(-1px); }
+    .prompt-box-copy.copied { background: #10B981; }
+    .prompt-box-content { color: #E2E8F0; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 14px; line-height: 1.75; white-space: pre-wrap; word-wrap: break-word; }
+    .prompt-box-content .bracket { color: #FCD34D; font-weight: 600; }
+
+    /* Highlight / Tip / Warning Box */
+    .highlight-box { background: #EFF6FF; border: 3px solid #0066FF; border-radius: 8px; padding: 14px 18px; margin: 10px 0; }
+    .highlight-box-title { font-weight: 700; color: #0052CC; font-size: 18px; margin-bottom: 6px; }
+    .highlight-box-content { color: #1E3A5F; font-size: 16px; line-height: 1.55; }
+    .tip-box { background: #FFFBEB; border: 2px dashed #F59E0B; border-radius: 8px; padding: 12px 16px; margin: 10px 0; }
+    .tip-box-title { font-weight: 700; color: #B45309; font-size: 16px; margin-bottom: 4px; }
+    .tip-box-content { color: #78350F; font-size: 15px; line-height: 1.55; }
+    .warning-box { background: #FEF2F2; border: 2px solid #EF4444; border-radius: 8px; padding: 12px 16px; margin: 10px 0; }
+    .warning-box-title { font-weight: 700; color: #B91C1C; font-size: 16px; margin-bottom: 4px; }
+    .warning-box-content { color: #7F1D1D; font-size: 15px; line-height: 1.55; }
+
+    /* Checklist */
+    .checklist { background: #F9FAFB; border-radius: 10px; padding: 14px 10px; margin: 10px 0; border: 1px solid #E5E7EB; }
+    .checklist-title { font-weight: 700; color: #1E3A5F; font-size: 17px; padding: 0 8px 8px; border-bottom: 1px solid #E5E7EB; margin-bottom: 6px; }
+    .check-item { display: flex; align-items: flex-start; gap: 10px; padding: 7px 10px; border-radius: 6px; cursor: pointer; transition: background 0.15s; margin-bottom: 2px; }
+    .check-item:hover { background: #EFF6FF; }
+    .check-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; flex-shrink: 0; accent-color: #0066FF; margin-top: 2px; }
+    .check-item label { font-size: 16px; color: #374151; line-height: 1.55; cursor: pointer; flex: 1; }
+    .check-item input:checked + label { color: #9CA3AF; text-decoration: line-through; }
+
+    /* Flow steps */
+    .flow-steps { display: grid; grid-template-columns: repeat(6, 1fr) auto repeat(2, 1fr); gap: 8px; align-items: center; margin: 16px 0; }
+    .flow-step-card { padding: 14px 12px; border-radius: 10px; text-align: center; }
+    .flow-step-card.human { background: #FEF3C7; border: 2px solid #F59E0B; }
+    .flow-step-card.ai { background: #DBEAFE; border: 2px solid #0066FF; }
+    .flow-step-icon { font-size: 26px; margin-bottom: 4px; }
+    .flow-step-label { font-size: 12px; font-weight: 700; color: #1E3A5F; line-height: 1.3; }
+    .flow-step-sublabel { font-size: 10px; color: #6B7280; margin-top: 2px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .flow-arrow-h { color: #0066FF; font-size: 22px; text-align: center; font-weight: 700; }
+
+    /* List */
+    ul { list-style: none; padding-left: 0; }
+    ul li { position: relative; padding-left: 18px; margin-bottom: 5px; font-size: 17px; color: #374151; line-height: 1.55; }
+    ul li::before { content: "▸"; position: absolute; left: 0; color: #0066FF; font-size: 14px; }
+
+    /* Code Block */
+    .code-block { background: #0F172A; color: #E2E8F0; border-radius: 8px; padding: 12px 16px; font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 14px; line-height: 1.6; white-space: pre-wrap; margin: 8px 0; }
+
+    /* Inline code */
+    code { background: #F3F4F6; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-family: 'JetBrains Mono', 'Courier New', monospace; color: #0052CC; font-weight: 500; }
+
+    /* External Link */
+    a.ext { color: #0066FF; text-decoration: none; font-weight: 600; }
+    a.ext:hover { text-decoration: underline; }
+    a.ext::after { content: " ↗"; font-size: 12px; opacity: 0.7; }
+
+    /* Page Number */
+    .page-number { position: absolute; bottom: 10mm; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 600; color: #6B7280; background: #F3F4F6; padding: 4px 16px; border-radius: 14px; }
+
+    /* Q&A */
+    .qa-item { background: #FFFFFF; border-radius: 10px; padding: 14px 18px; margin-bottom: 10px; border: 1px solid #E5E7EB; border-left: 5px solid #0066FF; }
+    .qa-question { font-weight: 700; color: #1E3A5F; font-size: 17px; margin-bottom: 6px; display: flex; align-items: flex-start; gap: 8px; }
+    .qa-question .q-marker { background: #0066FF; color: white; padding: 2px 10px; border-radius: 6px; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+    .qa-answer { color: #4B5563; font-size: 15px; line-height: 1.65; }
+
+    /* Step Big Number */
+    .big-step { display: flex; align-items: baseline; gap: 14px; margin-bottom: 12px; }
+    .big-step-num { font-size: 72px; font-weight: 800; color: #0066FF; line-height: 1; letter-spacing: -3px; }
+    .big-step-title { font-size: 32px; font-weight: 700; color: #1E3A5F; }
+
+    /* Print */
+    @media print {
+      .sidebar { display: none !important; }
+      .main-content { margin-left: 0 !important; padding: 0 !important; }
+      .slide { margin-bottom: 0; border-radius: 0; box-shadow: none; scroll-margin-top: 0; }
+      body { background: white; }
+      .prompt-box-copy { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">🤝</div>
+    <div class="sidebar-title">
+      당신과 AI의<br>마케팅 협업 가이드
+      <small>How to use TASK_LIST.md</small>
+    </div>
+  </div>
+
+  <div class="progress-container">
+    <div class="progress-label">
+      <span>읽기 진행률</span>
+      <span id="progress-text">0%</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <div class="nav-section-label">Intro</div>
+  <ul class="nav-list">
+    <li class="nav-item"><a class="nav-link active" data-target="slide-1"><span class="nav-icon">🏠</span>표지</a></li>
+    <li class="nav-item"><a class="nav-link" data-target="slide-2"><span class="nav-icon">🤝</span>작동 원리</a></li>
+    <li class="nav-item"><a class="nav-link" data-target="slide-3"><span class="nav-icon">🗺️</span>전체 흐름</a></li>
+  </ul>
+  <div class="nav-divider"></div>
+
+  <div class="nav-section-label">✋ Human Steps</div>
+  <ul class="nav-list">
+    <li class="nav-item"><a class="nav-link human" data-target="slide-4"><span class="nav-icon">A</span>준비물 체크</a></li>
+    <li class="nav-item"><a class="nav-link human" data-target="slide-5"><span class="nav-icon">B</span>API 키 발급</a></li>
+    <li class="nav-item"><a class="nav-link human" data-target="slide-6"><span class="nav-icon">C</span>브랜드 정보 메모</a></li>
+  </ul>
+  <div class="nav-divider"></div>
+
+  <div class="nav-section-label">🤖 AI Steps</div>
+  <ul class="nav-list">
+    <li class="nav-item"><a class="nav-link ai" data-target="slide-7"><span class="nav-icon">D</span>셋업 한 번에 (1~4)</a></li>
+    <li class="nav-item"><a class="nav-link ai" data-target="slide-8"><span class="nav-icon">E</span>MCP 설치 (5)</a></li>
+    <li class="nav-item"><a class="nav-link ai" data-target="slide-9"><span class="nav-icon">F</span>에이전트 팀 (6)</a></li>
+  </ul>
+  <div class="nav-divider"></div>
+
+  <div class="nav-section-label">🎯 Main Event</div>
+  <ul class="nav-list">
+    <li class="nav-item"><a class="nav-link" data-target="slide-10"><span class="nav-icon">🚀</span>첫 콘텐츠 만들기</a></li>
+    <li class="nav-item"><a class="nav-link" data-target="slide-11"><span class="nav-icon">🔁</span>피드백 루프</a></li>
+    <li class="nav-item"><a class="nav-link" data-target="slide-12"><span class="nav-icon">📲</span>자동 배포</a></li>
+  </ul>
+  <div class="nav-divider"></div>
+
+  <div class="nav-section-label">Help</div>
+  <ul class="nav-list">
+    <li class="nav-item"><a class="nav-link" data-target="slide-13"><span class="nav-icon">🚨</span>트러블슈팅</a></li>
+    <li class="nav-item"><a class="nav-link" data-target="slide-14"><span class="nav-icon">🎉</span>완료</a></li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <div class="pj-label">REFERENCE</div>
+    <div class="pj-name">TASK_LIST.md</div>
+    <div class="pj-ver">상세 매뉴얼은 그쪽에</div>
+  </div>
+</nav>
+
+<!-- ═══════════════════ MAIN CONTENT ═══════════════════ -->
+<div class="main-content">
+
+<!-- ─────────── Slide 1: 표지 ─────────── -->
+<div class="slide title-slide" id="slide-1">
+  <div style="font-size: 80px; margin-bottom: 20px;">🤝</div>
+  <h1>당신과 AI의<br>마케팅 협업 가이드</h1>
+  <div class="subtitle">정보만 주세요. 작업은 AI가 합니다.</div>
+  <div class="desc">
+    <code>TASK_LIST.md</code>를 활용해서 본인 브랜드의 마케팅을 자동화하는 가이드.<br>
+    <strong>실제로 당신이 손으로 할 일은 몇 가지 안 됩니다.</strong>
+  </div>
+
+  <div style="display:flex; gap:32px; margin-top: 40px;">
+    <div style="text-align:center; padding: 20px 28px; background: #FEF3C7; border-radius: 16px; border: 2px solid #F59E0B;">
+      <div style="font-size: 36px;">✋</div>
+      <div style="font-size: 26px; font-weight: 800; color: #92400E; margin-top: 6px;">3 STEPS</div>
+      <div style="font-size: 13px; color: #78350F; margin-top: 4px; letter-spacing: 1px;">HUMAN ONLY</div>
+    </div>
+    <div style="text-align:center; padding: 20px 28px; background: #DBEAFE; border-radius: 16px; border: 2px solid #0066FF;">
+      <div style="font-size: 36px;">🤖</div>
+      <div style="font-size: 26px; font-weight: 800; color: #1E40AF; margin-top: 6px;">3 STEPS</div>
+      <div style="font-size: 13px; color: #1E3A8A; margin-top: 4px; letter-spacing: 1px;">AI AUTOMATED</div>
+    </div>
+    <div style="text-align:center; padding: 20px 28px; background: #DCFCE7; border-radius: 16px; border: 2px solid #10B981;">
+      <div style="font-size: 36px;">🎯</div>
+      <div style="font-size: 26px; font-weight: 800; color: #166534; margin-top: 6px;">MAIN</div>
+      <div style="font-size: 13px; color: #14532D; margin-top: 4px; letter-spacing: 1px;">COLLAB</div>
+    </div>
+  </div>
+
+  <div class="page-number">1 / 14</div>
+</div>
+
+<!-- ─────────── Slide 2: 작동 원리 (사람 vs AI 역할) ─────────── -->
+<div class="slide" id="slide-2">
+  <h2><span class="h2-marker">🤝</span>이 프로젝트 작동 원리 — 당신과 AI의 역할 분담</h2>
+  <div class="content">
+    <div class="purpose-line">
+      <strong>핵심 메시지:</strong> AI는 "글 쓰고 그림 그리는 작업자". 당신은 "정보를 주고 결정을 내리는 감독자". 작업 90%는 AI가 합니다.
+    </div>
+
+    <div class="two-column">
+      <div class="role-card human">
+        <div class="role-card-header">
+          <div class="role-card-icon">✋</div>
+          <div>
+            <div class="role-card-title">당신 (Human)</div>
+            <div class="role-card-subtitle">정보 제공 · 결정 · 외부 가입</div>
+          </div>
+        </div>
+        <ul class="role-card-list">
+          <li><strong>본인 브랜드 정보</strong> 메모해서 주기 (한 번만)</li>
+          <li><strong>외부 사이트 가입</strong> 및 API 키 발급 (Google AI Studio, Buffer)</li>
+          <li><strong>레퍼런스 이미지</strong> 모으기 (Pinterest 등)</li>
+          <li><strong>결제 카드</strong> 등록</li>
+          <li><strong>결과물 보고</strong> 피드백 ("이건 좋아 / 저건 별로야")</li>
+          <li><strong>방향 결정</strong> ("이번 주는 OO 주제로 가자")</li>
+        </ul>
+      </div>
+
+      <div class="role-card ai">
+        <div class="role-card-header">
+          <div class="role-card-icon">🤖</div>
+          <div>
+            <div class="role-card-title">Claude Code (AI)</div>
+            <div class="role-card-subtitle">실행 · 작성 · 생성</div>
+          </div>
+        </div>
+        <ul class="role-card-list">
+          <li><strong>폴더/파일 생성</strong> 모두 자동</li>
+          <li><strong>context/ MD 3종 작성</strong> (당신이 준 정보 기반)</li>
+          <li><strong>templates/ MD 4종 작성</strong> (디자인 규칙)</li>
+          <li><strong>CLAUDE.md</strong> SOP 자동 생성</li>
+          <li><strong>에이전트 4종</strong> 자동 생성 + 라우팅 룰</li>
+          <li><strong>카드뉴스/썸네일/PPT/뉴스레터</strong> 모두 자동 제작</li>
+          <li><strong>검수 + Buffer 예약 포스팅</strong>까지</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="highlight-box">
+      <div class="highlight-box-title">💡 영상의 핵심 통찰</div>
+      <div class="highlight-box-content">
+        "<strong>실행보다 사전 준비(컨텍스트)에 95%의 시간을 투자하라.</strong>"<br>
+        → 당신이 정보를 잘 정리해서 주면, 그 뒤는 AI가 알아서 합니다. 이 가이드는 그 "95%"를 효율적으로 채우는 방법입니다.
+      </div>
+    </div>
+  </div>
+  <div class="page-number">2 / 14</div>
+</div>
+
+<!-- ─────────── Slide 3: 전체 흐름 한눈에 ─────────── -->
+<div class="slide" id="slide-3">
+  <h2><span class="h2-marker">🗺️</span>전체 흐름 한눈에 — 실제 시청자 시나리오</h2>
+  <div class="content">
+    <div class="purpose-line">
+      이 가이드는 8단계로 진행됩니다. 노란색은 <strong>당신이 직접</strong>, 파란색은 <strong>AI에게 맡기는</strong> 단계입니다.
+    </div>
+
+    <div class="flow-steps">
+      <div class="flow-step-card human">
+        <div class="flow-step-icon">✋</div>
+        <div class="flow-step-label">A. 준비물<br>체크</div>
+        <div class="flow-step-sublabel">5분</div>
+      </div>
+      <div class="flow-arrow-h">→</div>
+      <div class="flow-step-card human">
+        <div class="flow-step-icon">🔑</div>
+        <div class="flow-step-label">B. API 키<br>발급</div>
+        <div class="flow-step-sublabel">15분</div>
+      </div>
+      <div class="flow-arrow-h">→</div>
+      <div class="flow-step-card human">
+        <div class="flow-step-icon">📝</div>
+        <div class="flow-step-label">C. 브랜드<br>정보 메모</div>
+        <div class="flow-step-sublabel">30분</div>
+      </div>
+      <div class="flow-arrow-h">→</div>
+      <div class="flow-step-card ai">
+        <div class="flow-step-icon">🤖</div>
+        <div class="flow-step-label">D. AI 셋업<br>(Phase 1~4)</div>
+        <div class="flow-step-sublabel">10분</div>
+      </div>
+    </div>
+
+    <div class="flow-steps" style="margin-top: 8px;">
+      <div class="flow-step-card ai">
+        <div class="flow-step-icon">🔌</div>
+        <div class="flow-step-label">E. MCP<br>설치</div>
+        <div class="flow-step-sublabel">10분</div>
+      </div>
+      <div class="flow-arrow-h">→</div>
+      <div class="flow-step-card ai">
+        <div class="flow-step-icon">👥</div>
+        <div class="flow-step-label">F. 에이전트<br>4종 생성</div>
+        <div class="flow-step-sublabel">5분</div>
+      </div>
+      <div class="flow-arrow-h">→</div>
+      <div class="flow-step-card" style="background: #DCFCE7; border: 2px solid #10B981;">
+        <div class="flow-step-icon">🚀</div>
+        <div class="flow-step-label" style="color: #14532D;">G. 첫 콘텐츠<br>만들기 ⭐</div>
+        <div class="flow-step-sublabel" style="color: #14532D;">15분</div>
+      </div>
+      <div class="flow-arrow-h">→</div>
+      <div class="flow-step-card human">
+        <div class="flow-step-icon">🔁</div>
+        <div class="flow-step-label">H. 피드백<br>+ 배포</div>
+        <div class="flow-step-sublabel">10분</div>
+      </div>
+    </div>
+
+    <div class="two-column" style="margin-top: 14px;">
+      <div class="tip-box">
+        <div class="tip-box-title">⏱️ 총 소요 시간</div>
+        <div class="tip-box-content"><strong>약 1시간 30분</strong> — 그 중 사람이 직접 하는 시간은 약 <strong>1시간</strong>, AI 실행 시간은 약 <strong>30분</strong>. 한 번에 다 안 해도 OK. 단계마다 끊어도 됩니다.</div>
+      </div>
+      <div class="highlight-box">
+        <div class="highlight-box-title">💡 시청자 슬로건</div>
+        <div class="highlight-box-content">"나는 <strong>5가지 정보</strong>만 정리하고, <strong>버튼만 누르면</strong> AI가 다 만든다." — 이 가이드의 핵심 약속입니다.</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">3 / 14</div>
+</div>
+
+<!-- ─────────── Slide 4: A. 준비물 체크 (Human) ─────────── -->
+<div class="slide" id="slide-4">
+  <h2><span class="step-badge human">✋ STEP A</span> 시작 전 준비물 체크</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">A</span>
+      <span class="big-step-title">한눈에 보는 준비물 (5분이면 OK)</span>
+    </div>
+    <div class="purpose-line">
+      본격 시작 전에 이 5가지가 다 있는지 확인하세요. 없는 게 있으면 다음 Step에서 채웁니다.
+    </div>
+
+    <div class="two-column">
+      <div class="checklist" style="margin:0;">
+        <div class="checklist-title">🧠 정보 (메모장에 미리 적어두세요)</div>
+        <div class="check-item"><input type="checkbox" id="cA-1"><label for="cA-1"><strong>브랜드명</strong> (회사명 또는 채널명)</label></div>
+        <div class="check-item"><input type="checkbox" id="cA-2"><label for="cA-2"><strong>한 줄 소개</strong> ("[누구]를 위한 [무엇]")</label></div>
+        <div class="check-item"><input type="checkbox" id="cA-3"><label for="cA-3"><strong>타겟 고객</strong> (구체적으로 1~3명)</label></div>
+        <div class="check-item"><input type="checkbox" id="cA-4"><label for="cA-4"><strong>주요 서비스/상품</strong></label></div>
+        <div class="check-item"><input type="checkbox" id="cA-5"><label for="cA-5"><strong>브랜드 컬러 HEX 코드</strong> (메인 1개 이상)</label></div>
+      </div>
+
+      <div class="checklist" style="margin:0;">
+        <div class="checklist-title">🔑 외부 계정 + 카드</div>
+        <div class="check-item"><input type="checkbox" id="cA-6"><label for="cA-6"><strong>Google 계정</strong> (AI Studio 가입용)</label></div>
+        <div class="check-item"><input type="checkbox" id="cA-7"><label for="cA-7"><strong>Buffer 계정</strong> (SNS 자동 포스팅, 선택)</label></div>
+        <div class="check-item"><input type="checkbox" id="cA-8"><label for="cA-8"><strong>결제 카드</strong> (이미지 생성 1장당 ~$0.04)</label></div>
+        <div class="check-item"><input type="checkbox" id="cA-9"><label for="cA-9"><strong>레퍼런스 이미지 2~3장</strong> (좋아하는 카드뉴스 디자인)</label></div>
+        <div class="check-item"><input type="checkbox" id="cA-10"><label for="cA-10"><strong>본인 로고 파일</strong> (PNG/SVG, 선택)</label></div>
+      </div>
+    </div>
+
+    <div class="highlight-box">
+      <div class="highlight-box-title">💡 가장 중요한 한 가지</div>
+      <div class="highlight-box-content">
+        <strong>"본인 웹사이트가 있다면 스크린샷 1~2장만 캡처해두세요."</strong><br>
+        다음 Step에서 Claude에게 "이 웹사이트 분석해서 context 파일 3개 자동으로 만들어줘"라고 하면 <strong>대부분 정보가 자동 추출됩니다.</strong> 메모 작업이 거의 사라집니다.
+      </div>
+    </div>
+
+    <div class="tip-box">
+      <div class="tip-box-title">📁 참고: 정석 매뉴얼</div>
+      <div class="tip-box-content">자세한 정보 종류는 <code>TASK_LIST.md</code>의 <strong>Phase 0</strong> 섹션에 정리되어 있어요. 이 슬라이드는 그걸 압축한 버전입니다.</div>
+    </div>
+  </div>
+  <div class="page-number">4 / 14</div>
+</div>
+
+<!-- ─────────── Slide 5: B. API 키 발급 (Human) ─────────── -->
+<div class="slide" id="slide-5">
+  <h2><span class="step-badge human">✋ STEP B</span> API 키 2개 발급 (외부 사이트)</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">B</span>
+      <span class="big-step-title">사람이 직접 가서 발급해야 하는 키 2개</span>
+    </div>
+    <div class="purpose-line">
+      이 단계는 AI가 대신 해줄 수 없어요. 외부 사이트에 가입하고 키를 받아 와야 합니다. <strong>약 15분 소요.</strong>
+    </div>
+
+    <div class="two-column">
+      <div class="role-card human" style="padding: 18px;">
+        <div class="role-card-header" style="margin-bottom: 12px; padding-bottom: 10px;">
+          <div class="role-card-icon" style="font-size: 36px;">🍌</div>
+          <div>
+            <div class="role-card-title" style="font-size: 22px;">Nano Banana (Gemini)</div>
+            <div class="role-card-subtitle">이미지 생성용 — 필수</div>
+          </div>
+        </div>
+        <ol style="padding-left: 22px; color: #78350F; font-size: 16px; line-height: 1.85;">
+          <li><a class="ext" href="https://aistudio.google.com/">aistudio.google.com</a> 접속</li>
+          <li>Google 계정 로그인</li>
+          <li>왼쪽 메뉴 → <strong>Get API Key</strong></li>
+          <li>"API 키 만들기" → 이름 입력 → 발급</li>
+          <li>키를 <strong>안전한 곳에 복사</strong></li>
+          <li><strong>결제 계정 연결</strong> (Google Cloud Console)</li>
+        </ol>
+        <div class="warning-box" style="margin-top: 10px;">
+          <div class="warning-box-title">⚠️ 결제 필수</div>
+          <div class="warning-box-content" style="font-size: 13px;">무료 등급은 품질 제한 있음. 카드뉴스 5장 ≈ 약 250원. 한도 설정 권장.</div>
+        </div>
+      </div>
+
+      <div class="role-card human" style="padding: 18px;">
+        <div class="role-card-header" style="margin-bottom: 12px; padding-bottom: 10px;">
+          <div class="role-card-icon" style="font-size: 36px;">📲</div>
+          <div>
+            <div class="role-card-title" style="font-size: 22px;">Buffer</div>
+            <div class="role-card-subtitle">SNS 자동 포스팅용 — 선택</div>
+          </div>
+        </div>
+        <ol style="padding-left: 22px; color: #78350F; font-size: 16px; line-height: 1.85;">
+          <li><a class="ext" href="https://buffer.com/">buffer.com</a> 가입 (무료 OK)</li>
+          <li>SNS 채널 연동 (인스타/링크드인 등)</li>
+          <li><a class="ext" href="https://developers.buffer.com/">developers.buffer.com</a> 접속</li>
+          <li>Access the Beta → <strong>Generate Key</strong></li>
+          <li>이름 입력 → API 키 발급</li>
+          <li>키를 <strong>즉시 복사</strong> (다시 못 볼 수도)</li>
+        </ol>
+        <div class="tip-box" style="margin-top: 10px;">
+          <div class="tip-box-title">💡 Phase 8에서 사용</div>
+          <div class="tip-box-content" style="font-size: 13px;">콘텐츠 자동 배포 단계에서 필요. 일단 만들기만 하고 나중에 써도 됨.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="warning-box">
+      <div class="warning-box-title">🔒 보안 5계명 (필독)</div>
+      <div class="warning-box-content">
+        1) GitHub에 절대 올리지 마세요 &nbsp;·&nbsp; 2) 메시지/이메일로 공유 금지 &nbsp;·&nbsp; 3) 스크린샷/영상 녹화 시 가리기 &nbsp;·&nbsp; 4) 노출 시 즉시 폐기 후 재발급 &nbsp;·&nbsp; 5) 사용 한도 설정 (예상치 못한 과금 방지)
+      </div>
+    </div>
+  </div>
+  <div class="page-number">5 / 14</div>
+</div>
+
+<!-- ─────────── Slide 6: C. 브랜드 정보 메모 (Human) ─────────── -->
+<div class="slide" id="slide-6">
+  <h2><span class="step-badge human">✋ STEP C</span> 브랜드 정보 메모 (한 번만!)</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">C</span>
+      <span class="big-step-title">5가지 카테고리 메모 — 그 외는 AI가 다 채워줍니다</span>
+    </div>
+    <div class="purpose-line">
+      이 정보를 메모장에 한 번만 정리해두면, 다음 Step에서 AI에게 한꺼번에 넘기면 됩니다. <strong>약 30분 소요.</strong>
+    </div>
+
+    <div class="two-column">
+      <div>
+        <div class="checklist" style="margin:0;">
+          <div class="checklist-title">1️⃣ 브랜드 기본 (5분)</div>
+          <div class="check-item"><input type="checkbox" id="cC-1-1"><label for="cC-1-1">브랜드명 + 한 줄 소개</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-1-2"><label for="cC-1-2">웹사이트/SNS URL</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-1-3"><label for="cC-1-3">왜 이걸 하는지 (미션)</label></div>
+        </div>
+
+        <div class="checklist" style="margin-top: 10px;">
+          <div class="checklist-title">2️⃣ 비즈니스 정보 (10분)</div>
+          <div class="check-item"><input type="checkbox" id="cC-2-1"><label for="cC-2-1">타겟 고객 1~3명 (구체적으로!)</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-2-2"><label for="cC-2-2">고객 페인포인트 3가지</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-2-3"><label for="cC-2-3">주요 서비스 + 차별점</label></div>
+        </div>
+
+        <div class="checklist" style="margin-top: 10px;">
+          <div class="checklist-title">3️⃣ 디자인 정보 (5분)</div>
+          <div class="check-item"><input type="checkbox" id="cC-3-1"><label for="cC-3-1">메인 컬러 HEX (예: #0066FF)</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-3-2"><label for="cC-3-2">한글 폰트 (예: Pretendard)</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-3-3"><label for="cC-3-3">디자인 스타일 (미니멀? 화려? 등)</label></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="checklist" style="margin:0;">
+          <div class="checklist-title">4️⃣ 톤 매뉴얼 (5분)</div>
+          <div class="check-item"><input type="checkbox" id="cC-4-1"><label for="cC-4-1">권장 표현 5개 (자주 쓰는 말투)</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-4-2"><label for="cC-4-2">금지 표현 5개 ("꿀팁" 같은 것)</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-4-3"><label for="cC-4-3">호칭 ("당신"? "여러분"?)</label></div>
+        </div>
+
+        <div class="checklist" style="margin-top: 10px;">
+          <div class="checklist-title">5️⃣ 레퍼런스 (5분)</div>
+          <div class="check-item"><input type="checkbox" id="cC-5-1"><label for="cC-5-1">좋아하는 카드뉴스 2~3장 캡처</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-5-2"><label for="cC-5-2">좋아하는 썸네일 1~2장 캡처</label></div>
+          <div class="check-item"><input type="checkbox" id="cC-5-3"><label for="cC-5-3">본인 웹사이트 스크린샷 (있다면)</label></div>
+        </div>
+
+        <div class="highlight-box" style="margin-top: 10px;">
+          <div class="highlight-box-title">🚀 시간 단축 비법</div>
+          <div class="highlight-box-content">
+            <strong>본인 웹사이트가 있다면:</strong> 위 정보 전부 안 적어도 됩니다. 다음 Step에서 <em>"이 웹사이트 분석해서 context 파일 만들어줘 [스크린샷 첨부]"</em>라고 하면 AI가 자동으로 추출합니다.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">6 / 14</div>
+</div>
+
+<!-- ─────────── Slide 7: D. AI 셋업 (Phase 1-4 한 번에) ─────────── -->
+<div class="slide" id="slide-7">
+  <h2><span class="step-badge ai">🤖 STEP D</span> AI 셋업 — 한 번의 명령으로 Phase 1~4 끝내기</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">D</span>
+      <span class="big-step-title">폴더 + Context + Templates + CLAUDE.md 모두 한 번에</span>
+    </div>
+    <div class="purpose-line">
+      여기서부터는 <strong>AI에게 명령만 던지면 됩니다.</strong> Step C에서 정리한 정보를 한 번에 넘기면 <strong>Phase 1, 2, 3, 4를 자동으로</strong> 처리합니다.
+    </div>
+
+    <div class="prompt-box">
+      <div class="prompt-box-label">📋 복붙용 프롬프트 — Claude Code 입력창에 그대로 붙여넣기</div>
+      <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+      <div class="prompt-box-content">마케팅 AI 에이전트 팀 프로젝트를 만들 거야.
+TASK_LIST.md를 참고해서 Phase 1부터 Phase 4까지 한 번에 진행해줘.
+
+[Step 1] 폴더 구조 만들기: context/, templates/, output/, .claude/agents/
+
+[Step 2] context/ 폴더 안에 다음 3개 MD 파일 작성:
+- brand-guideline.md
+- business-context.md
+- design-style-guide.md
+
+내 브랜드 정보:
+- 브랜드명: <span class="bracket">[Step C에서 정리한 브랜드명]</span>
+- 한 줄 소개: <span class="bracket">[한 줄 소개]</span>
+- 타겟 고객: <span class="bracket">[타겟 1~3명]</span>
+- 페인포인트: <span class="bracket">[3가지]</span>
+- 메인 컬러: <span class="bracket">[#HEX 코드]</span>
+- 폰트: <span class="bracket">[한글 폰트명]</span>
+- 톤: <span class="bracket">[브랜드 톤]</span>
+- 금지 표현: <span class="bracket">[지양 표현]</span>
+
+[Step 3] templates/ 폴더 안에 4개 MD 작성:
+- card-news-template.md, ppt-template.md
+- newsletter-template.md, thumbnail-template.md
+(첨부한 레퍼런스 이미지 패턴 분석해서 반영)
+
+[Step 4] 루트에 CLAUDE.md 작성 (전체 SOP).
+
+마지막에 생성된 파일 목록 보여줘.</div>
+    </div>
+
+    <div class="two-column" style="margin-top: 10px;">
+      <div class="highlight-box">
+        <div class="highlight-box-title">✨ 이거 한 번으로 끝나는 것들</div>
+        <div class="highlight-box-content" style="font-size:15px;">
+          ✓ 4개 폴더 생성<br>
+          ✓ context/ MD 3종 (브랜드 컨텍스트)<br>
+          ✓ templates/ MD 4종 (디자인 규칙)<br>
+          ✓ CLAUDE.md (SOP 매뉴얼)<br>
+          <strong>= 총 8개 파일 + 4개 폴더 자동 생성</strong>
+        </div>
+      </div>
+      <div class="tip-box">
+        <div class="tip-box-title">⏱️ 예상 소요</div>
+        <div class="tip-box-content">
+          <strong>AI 실행 시간: 약 5~10분</strong><br>
+          당신은 그동안 커피 한 잔 하세요 ☕<br><br>
+          완성된 파일들을 한 번 훑어보고 마음에 안 드는 부분은 다음 Step에서 수정 요청.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">7 / 14</div>
+</div>
+
+<!-- ─────────── Slide 8: E. MCP 설치 (Phase 5) ─────────── -->
+<div class="slide" id="slide-8">
+  <h2><span class="step-badge ai">🤖 STEP E</span> MCP 설치 — Nano Banana 연결</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">E</span>
+      <span class="big-step-title">이미지 생성을 위한 외부 도구 연결</span>
+    </div>
+    <div class="purpose-line">
+      Step B에서 발급받은 Gemini API 키를 사용해서 이미지 생성 도구를 연결합니다. Anthropic 공식 스킬도 함께 설치.
+    </div>
+
+    <div class="two-column">
+      <div>
+        <h3>🔌 1) Anthropic 공식 스킬 설치</h3>
+        <div class="prompt-box" style="margin: 8px 0;">
+          <div class="prompt-box-label">📋 복붙용 프롬프트</div>
+          <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+          <div class="prompt-box-content">Anthropic 공식 스킬 저장소를 플러그인 마켓플레이스에 추가하고
+document-skills를 설치해줘.
+URL: https://github.com/anthropics/skills</div>
+        </div>
+
+        <h3>🍌 2) .env 파일 만들기</h3>
+        <div class="prompt-box" style="margin: 8px 0;">
+          <div class="prompt-box-label">📋 복붙용 프롬프트</div>
+          <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+          <div class="prompt-box-content">프로젝트 루트에 .env 파일과 .env.example을 만들어줘.
+다음 변수 포함:
+GEMINI_API_KEY=
+BUFFER_API_KEY=
+
+.gitignore에 .env 추가해줘.</div>
+        </div>
+      </div>
+
+      <div>
+        <h3>🔑 3) API 키 입력 (당신이 직접)</h3>
+        <div class="warning-box" style="margin: 8px 0;">
+          <div class="warning-box-title">✋ 사람이 해야 함</div>
+          <div class="warning-box-content">
+            ① <code>.env</code> 파일 열기<br>
+            ② <code>GEMINI_API_KEY=</code> 뒤에 Step B에서 받은 키 붙여넣기<br>
+            ③ 저장
+          </div>
+        </div>
+
+        <h3>🔌 4) Nano Banana MCP 설치</h3>
+        <div class="prompt-box" style="margin: 8px 0;">
+          <div class="prompt-box-label">📋 복붙용 프롬프트</div>
+          <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+          <div class="prompt-box-content">Nano Banana MCP (Gemini 이미지 생성)를 설치해줘.
+.env의 GEMINI_API_KEY를 사용하도록 설정해줘.
+설치 후 /mcp 명령으로 정상 작동하는지 확인해줘.</div>
+        </div>
+
+        <div class="checklist" style="margin-top: 8px;">
+          <div class="checklist-title">✅ Step E 완료 체크</div>
+          <div class="check-item"><input type="checkbox" id="cE-1"><label for="cE-1">document-skills 설치됨</label></div>
+          <div class="check-item"><input type="checkbox" id="cE-2"><label for="cE-2">.env 파일에 API 키 입력 완료</label></div>
+          <div class="check-item"><input type="checkbox" id="cE-3"><label for="cE-3">Nano Banana MCP 정상 작동</label></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">8 / 14</div>
+</div>
+
+<!-- ─────────── Slide 9: F. 에이전트 팀 (Phase 6) ─────────── -->
+<div class="slide" id="slide-9">
+  <h2><span class="step-badge ai">🤖 STEP F</span> 에이전트 4종 자동 생성</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">F</span>
+      <span class="big-step-title">"리서치→콘텐츠→디자인→검수" 파이프라인 구축</span>
+    </div>
+    <div class="purpose-line">
+      마지막 셋업 단계. 4개 에이전트를 한 번에 만들고, CLAUDE.md에 라우팅 룰까지 자동 추가합니다.
+    </div>
+
+    <div class="prompt-box">
+      <div class="prompt-box-label">📋 복붙용 프롬프트</div>
+      <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+      <div class="prompt-box-content">클로드 코드의 공식 가이드라인에 따라 서브에이전트 4개를 만들어줘.
+리서치 → 콘텐츠 → 디자인 → 검수 4단계 파이프라인으로 구성하고
+.claude/agents/ 폴더에 다음 파일을 생성해줘:
+
+- research-agent.md (리서치, model: sonnet)
+- content-agent.md (카피 작성, model: sonnet)
+- design-agent.md (이미지/PPT 생성, model: sonnet)
+- review-agent.md (브랜드 톤 검수, model: sonnet)
+
+각 에이전트는 context/의 brand-guideline.md, business-context.md,
+design-style-guide.md를 참조하도록 설정하고
+templates/의 해당 템플릿도 참조하도록 해줘.
+
+마지막으로 CLAUDE.md에 에이전트 라우팅 규칙도 추가해줘.</div>
+    </div>
+
+    <div class="two-column" style="margin-top: 12px;">
+      <div class="role-card ai" style="padding: 16px;">
+        <h3 style="color: #1E40AF; margin-top: 0;">🎉 셋업 완료! 이제부터 본 게임</h3>
+        <p style="font-size: 16px; color: #1E3A5F; line-height: 1.6;">
+          여기까지가 <strong>"95%의 준비 시간"</strong>입니다. 영상의 빌더 조쉬가 말한 그 95%죠.<br><br>
+          앞으로는 한 줄 명령으로 카드뉴스/썸네일/PPT/뉴스레터를 다 만들 수 있습니다.
+        </p>
+      </div>
+      <div class="checklist" style="margin: 0;">
+        <div class="checklist-title">✅ 셋업 완료 체크 (Step A~F)</div>
+        <div class="check-item"><input type="checkbox" id="cF-1"><label for="cF-1">Step A: 준비물 정리</label></div>
+        <div class="check-item"><input type="checkbox" id="cF-2"><label for="cF-2">Step B: API 키 발급</label></div>
+        <div class="check-item"><input type="checkbox" id="cF-3"><label for="cF-3">Step C: 브랜드 정보 메모</label></div>
+        <div class="check-item"><input type="checkbox" id="cF-4"><label for="cF-4">Step D: AI 셋업 (폴더+context+templates+CLAUDE.md)</label></div>
+        <div class="check-item"><input type="checkbox" id="cF-5"><label for="cF-5">Step E: MCP 설치 + API 키 연결</label></div>
+        <div class="check-item"><input type="checkbox" id="cF-6"><label for="cF-6">Step F: 에이전트 4종 생성 + 라우팅</label></div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">9 / 14</div>
+</div>
+
+<!-- ─────────── Slide 10: G. 첫 콘텐츠 만들기 (메인!) ─────────── -->
+<div class="slide" id="slide-10">
+  <h2><span class="step-badge team">🎯 STEP G</span> 본 게임 — 첫 콘텐츠 만들기 ⭐</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">G</span>
+      <span class="big-step-title">한 줄 명령으로 마케팅 자료 4종 자동 생성</span>
+    </div>
+    <div class="purpose-line">
+      셋업이 끝나면 이제 정말 <strong>한 줄 명령</strong>으로 모든 마케팅 자료가 만들어집니다. 이게 이 프로젝트의 핵심 약속!
+    </div>
+
+    <h3>🧪 먼저 가볍게 — 카드뉴스 1세트 테스트</h3>
+    <div class="prompt-box">
+      <div class="prompt-box-label">📋 가벼운 시작 — 카드뉴스 5장만</div>
+      <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+      <div class="prompt-box-content"><span class="bracket">[다루고 싶은 주제]</span>에 대한 카드뉴스 5장 만들어줘.
+templates/card-news-template.md와 context/의 모든 파일을 참조하고
+Nano Banana MCP로 이미지 생성, output/card-news/에 저장해줘.</div>
+    </div>
+
+    <h3>🚀 메인 시나리오 — 전체 캠페인 자동 생성</h3>
+    <div class="prompt-box">
+      <div class="prompt-box-label">📋 모든 자료 한 번에 (영상의 메인 시연)</div>
+      <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+      <div class="prompt-box-content"><span class="bracket">[이번 주 캠페인 주제]</span> 마케팅 캠페인을 만들어줘.
+모든 자료(카드뉴스, 썸네일, PPT, 뉴스레터)를 만들어줘.
+모든 에이전트 팀(research → content → design → review)을 가동해서 진행하고
+결과물은 output 폴더에 종류별로 저장해줘.
+
+작업 순서:
+1. research-agent로 주제 리서치 (output/research/)
+2. content-agent로 카피 작성
+3. design-agent로 이미지/PPT 생성
+4. review-agent로 검수
+
+마지막에 모든 산출물 파일 경로 + 검수 보고서 요약 보여줘.</div>
+    </div>
+
+    <div class="two-column" style="margin-top: 10px;">
+      <div class="highlight-box">
+        <div class="highlight-box-title">⏱️ 예상 실행 시간</div>
+        <div class="highlight-box-content"><strong>약 10~15분</strong> — 그동안 사용자는 다른 일 하세요. 완료되면 output/ 폴더에 4종 산출물이 다 들어있습니다.</div>
+      </div>
+      <div class="tip-box">
+        <div class="tip-box-title">🎬 영상 시연 포인트</div>
+        <div class="tip-box-content">"한 줄 명령으로 카드뉴스/썸네일/PPT/뉴스레터가 다 나옵니다" — 이게 영상의 클라이맥스. 이 단계를 시청자에게 보여줄 때 가장 임팩트 있어요.</div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">10 / 14</div>
+</div>
+
+<!-- ─────────── Slide 11: H. 피드백 루프 (Human) ⭐ ─────────── -->
+<div class="slide" id="slide-11">
+  <h2><span class="step-badge human">✋ STEP H</span> 피드백 루프 — 결과물 마음에 안 들 때 ⭐</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">H</span>
+      <span class="big-step-title">"결과물을 고치지 말고, 컨텍스트를 고쳐라"</span>
+    </div>
+    <div class="purpose-line">
+      <strong>가장 중요한 슬라이드.</strong> 첫 결과물이 마음에 안 들 때, 어떻게 개선하느냐가 이 시스템의 성패를 가릅니다.
+    </div>
+
+    <div class="two-column">
+      <div>
+        <h3>❌ 잘못된 접근 (대부분이 하는 실수)</h3>
+        <div class="warning-box">
+          <div class="warning-box-title">매번 결과물만 수정</div>
+          <div class="warning-box-content">
+            "이 카드뉴스 톤이 별로야, 다시 만들어줘"<br>
+            → AI가 다시 만들지만 <strong>다음에도 같은 실수 반복.</strong><br>
+            매번 같은 피드백을 줘야 합니다. 비효율의 끝.
+          </div>
+        </div>
+
+        <h3>✅ 올바른 접근 (영상의 핵심 철학)</h3>
+        <div class="highlight-box">
+          <div class="highlight-box-title">컨텍스트(context/, templates/)를 수정</div>
+          <div class="highlight-box-content">
+            "이 부분이 별로야"라고 느낀 점을 <strong>context 파일에 영구히 기록</strong>합니다. 다음부터는 자동으로 적용됩니다.
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3>🔁 피드백 사이클 (3분 작업)</h3>
+        <div style="background:#F9FAFB;border-radius:10px;padding:14px;border:1px solid #E5E7EB;">
+          <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">
+            <div style="background:#0066FF;color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">1</div>
+            <div style="color:#1E3A5F;font-size:15px;line-height:1.5;">결과물에서 <strong>구체적으로 뭐가 별로인지</strong> 한 문장으로 적기</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">
+            <div style="background:#0066FF;color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">2</div>
+            <div style="color:#1E3A5F;font-size:15px;line-height:1.5;"><strong>어떤 컨텍스트 파일</strong>에 추가하면 좋을지 판단 (브랜드 톤? 디자인? 비즈니스?)</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;">
+            <div style="background:#0066FF;color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">3</div>
+            <div style="color:#1E3A5F;font-size:15px;line-height:1.5;">AI에게 명령 (아래 프롬프트 참조)</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="background:#0066FF;color:white;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">4</div>
+            <div style="color:#1E3A5F;font-size:15px;line-height:1.5;">재생성해서 확인 — 좋으면 끝, 안 좋으면 다시</div>
+          </div>
+        </div>
+
+        <div class="prompt-box" style="margin-top:10px;">
+          <div class="prompt-box-label">📋 피드백 프롬프트</div>
+          <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+          <div class="prompt-box-content">방금 만든 카드뉴스에서 <span class="bracket">[구체적 문제]</span> 부분이 별로야.
+다음에는 안 그러게 <span class="bracket">[브랜드 가이드 / 디자인 가이드]</span> 파일에 영구 규칙으로 추가해줘.
+그리고 그 규칙대로 다시 만들어줘.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">11 / 14</div>
+</div>
+
+<!-- ─────────── Slide 12: 자동 배포 (Buffer) ─────────── -->
+<div class="slide" id="slide-12">
+  <h2><span class="step-badge team">📲 STEP I</span> 자동 배포 — Buffer로 예약 포스팅 (선택)</h2>
+  <div class="content">
+    <div class="big-step">
+      <span class="big-step-num">I</span>
+      <span class="big-step-title">만든 콘텐츠를 SNS에 자동 예약</span>
+    </div>
+    <div class="purpose-line">
+      만든 콘텐츠를 인스타/링크드인/X/쓰레드에 한 번에 예약 포스팅. <strong>1번 명령 = 4번 수동 작업 = 0번 손가락 작업.</strong>
+    </div>
+
+    <h3>✋ 먼저 (한 번만): Buffer API 키 .env에 입력</h3>
+    <div class="warning-box">
+      <div class="warning-box-title">사람이 직접 — .env 파일 수정</div>
+      <div class="warning-box-content">
+        Step B에서 받은 Buffer API 키를 <code>.env</code> 파일의 <code>BUFFER_API_KEY=</code> 뒤에 붙여넣고 저장하세요.
+      </div>
+    </div>
+
+    <h3>🤖 그 다음: 한 줄 명령으로 예약 포스팅</h3>
+    <div class="prompt-box">
+      <div class="prompt-box-label">📋 단일 콘텐츠 예약</div>
+      <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+      <div class="prompt-box-content">Buffer API 키 .env에 저장해놨어.
+output/card-news/<span class="bracket">[파일명]</span>을 <span class="bracket">[YYYY-MM-DD HH:MM]</span>에
+링크드인과 쓰레드에 동시 예약 포스팅해줘.
+
+포스팅 본문은 브랜드 가이드라인 톤에 맞게 작성하고
+해시태그도 추천해줘.</div>
+    </div>
+
+    <div class="prompt-box">
+      <div class="prompt-box-label">📋 캠페인 전체 일정 배포</div>
+      <button class="prompt-box-copy" onclick="copyPrompt(this)">복사</button>
+      <div class="prompt-box-content">output/ 폴더의 이번 주 캠페인 콘텐츠를 다음 일정으로 배포해줘:
+
+월요일 오후 2시: 카드뉴스 (인스타 + 링크드인)
+화요일 오전 10시: 뉴스레터 발송
+수요일 오후 7시: X 짧은 인사이트
+목요일 오후 2시: 유튜브 영상 + 썸네일 알림 (모든 채널)
+금요일 오후 5시: 한 주 정리 카드뉴스
+
+해시태그와 본문은 브랜드 톤에 맞게 자동 작성.</div>
+    </div>
+  </div>
+  <div class="page-number">12 / 14</div>
+</div>
+
+<!-- ─────────── Slide 13: 트러블슈팅 ─────────── -->
+<div class="slide" id="slide-13">
+  <h2><span class="h2-marker">🚨</span>트러블슈팅 — 자주 막히는 5가지</h2>
+  <div class="content">
+    <div class="purpose-line">
+      대부분의 문제는 <strong>context 파일이 충분히 구체적이지 않아서</strong> 발생합니다. 결과물이 이상하면 항상 context부터 점검하세요.
+    </div>
+
+    <div class="two-column">
+      <div>
+        <div class="qa-item">
+          <div class="qa-question"><span class="q-marker">Q1</span>결과물 톤이 우리 브랜드와 다르게 나옵니다</div>
+          <div class="qa-answer">
+            → <code>context/brand-guideline.md</code>의 <strong>"권장 표현"</strong>과 <strong>"금지 표현"</strong>이 구체적인지 확인. Step H의 피드백 루프 활용.
+          </div>
+        </div>
+
+        <div class="qa-item">
+          <div class="qa-question"><span class="q-marker">Q2</span>디자인이 너무 화려하게 나옵니다</div>
+          <div class="qa-answer">
+            → <code>design-style-guide.md</code>의 <strong>"금지 사항"</strong> 섹션을 더 강하게. 프롬프트에 <code>minimalist, lots of whitespace</code> 추가.
+          </div>
+        </div>
+
+        <div class="qa-item">
+          <div class="qa-question"><span class="q-marker">Q3</span>MCP가 작동하지 않습니다</div>
+          <div class="qa-answer">
+            → <code>/mcp</code>로 상태 확인 → Claude Code 재시작 → API 키 확인 → 결제 계정 확인 순서.
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="qa-item">
+          <div class="qa-question"><span class="q-marker">Q4</span>API 키를 실수로 GitHub에 올렸어요</div>
+          <div class="qa-answer">
+            → <strong>즉시</strong> 발급 사이트에서 키 폐기 → 새 키 발급 → <code>.gitignore</code>에 <code>.env</code> 추가 확인.
+          </div>
+        </div>
+
+        <div class="qa-item">
+          <div class="qa-question"><span class="q-marker">Q5</span>한글 폰트가 적용 안 됩니다</div>
+          <div class="qa-answer">
+            → 시스템에 폰트 설치 필요. <a class="ext" href="https://github.com/orioncactus/pretendard">Pretendard</a> 추천. macOS: <code>~/Library/Fonts/</code>에 .otf 복사.
+          </div>
+        </div>
+
+        <div class="highlight-box">
+          <div class="highlight-box-title">💡 황금률</div>
+          <div class="highlight-box-content">
+            <strong>"결과물이 이상하면 → context 점검"</strong><br>
+            이 한 가지만 기억하면 90%의 문제는 해결됩니다.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="page-number">13 / 14</div>
+</div>
+
+<!-- ─────────── Slide 14: 완료 ─────────── -->
+<div class="slide title-slide" id="slide-14">
+  <div style="font-size: 96px; margin-bottom: 20px;">🎉</div>
+  <h1>당신은 감독,<br>AI는 작업자.</h1>
+  <div class="subtitle">이제 매주 콘텐츠를 한 줄 명령으로</div>
+  <div class="desc">
+    매주 새로운 마케팅 캠페인이 필요할 땐, 단 하나의 명령만 던지세요.<br>
+    리서치 → 콘텐츠 → 디자인 → 검수 → 배포가 자동으로 진행됩니다.
+  </div>
+
+  <div class="highlight-box" style="max-width:900px;margin:30px auto 0;text-align:left;border-width:3px;">
+    <div class="highlight-box-title">🚀 매주 던지는 한 줄 명령</div>
+    <div class="highlight-box-content" style="font-family:'JetBrains Mono',monospace;font-size:14px;line-height:1.8;background:#0F172A;color:#E2E8F0;padding:16px;border-radius:8px;margin-top:10px;">
+      이번 주 마케팅 캠페인 만들어줘.<br>
+      주제: <span style="color:#FCD34D;">[이번 주 주제]</span><br>
+      <br>
+      research → content → design → review → Buffer 예약까지<br>
+      모든 자료(카드뉴스 / 썸네일 / PPT / 뉴스레터) 만들고<br>
+      output/에 저장 + 다음 주 일정에 자동 예약 포스팅.
+    </div>
+  </div>
+
+  <div style="margin-top: 32px; color: #6B7280; font-size: 17px; font-style: italic;">
+    "도구가 아니라, 맥락(컨텍스트)이 결과를 결정한다."
+  </div>
+  <div class="page-number">14 / 14</div>
+</div>
+
+</div><!-- /main-content -->
+
+<!-- ═══════════════════ SCRIPTS ═══════════════════ -->
+<script>
+// 복사 기능
+function copyPrompt(btn) {
+  const promptBox = btn.closest('.prompt-box');
+  const content = promptBox.querySelector('.prompt-box-content').innerText;
+  navigator.clipboard.writeText(content).then(() => {
+    const originalText = btn.innerText;
+    btn.innerText = '✓ 복사됨';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.classList.remove('copied');
+    }, 1500);
+  }).catch(() => {
+    const textarea = document.createElement('textarea');
+    textarea.value = content;
+    document.body.appendChild(textarea);
+    textarea.select();
+    try {
+      document.execCommand('copy');
+      btn.innerText = '✓ 복사됨';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.innerText = '복사'; btn.classList.remove('copied'); }, 1500);
+    } catch(e) {
+      alert('복사 실패 — 직접 선택해서 복사해주세요');
+    }
+    document.body.removeChild(textarea);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const navLinks = document.querySelectorAll('.nav-link[data-target]');
+  const slides = document.querySelectorAll('.slide[id]');
+  const progressFill = document.getElementById('progress-fill');
+  const progressText = document.getElementById('progress-text');
+
+  navLinks.forEach(link => {
+    link.addEventListener('click', e => {
+      e.preventDefault();
+      const target = document.getElementById(link.dataset.target);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(l => l.classList.toggle('active', l.dataset.target === id));
+        const activeNav = document.querySelector('.nav-link.active');
+        if (activeNav) activeNav.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  }, { rootMargin: '-10% 0px -70% 0px', threshold: 0 });
+  slides.forEach(s => obs.observe(s));
+
+  window.addEventListener('scroll', () => {
+    const h = document.documentElement.scrollHeight - window.innerHeight;
+    const p = h > 0 ? Math.min(Math.round((window.scrollY / h) * 100), 100) : 0;
+    progressFill.style.width = p + '%';
+    progressText.textContent = p + '%';
+  });
+
+  // 체크박스 localStorage
+  const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+  checkboxes.forEach(cb => {
+    const saved = localStorage.getItem('guide-' + cb.id);
+    if (saved === 'true') cb.checked = true;
+    cb.addEventListener('change', () => {
+      localStorage.setItem('guide-' + cb.id, cb.checked);
+    });
+  });
+});
+</script>
+
+</body>
+</html>
