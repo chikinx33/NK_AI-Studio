@@ -39,6 +39,18 @@ test("admin-users.js renders list, modal, and wires CRUD actions", () => {
   assert.match(src, /window\.location\.href = 'index\.html'/);
 });
 
+test("admin-users.js surfaces a primary-admin password-set affordance", () => {
+  const ui = read("prototype/js/ui/admin-users.js");
+  assert.match(ui, /buildPrimaryAdminRowIfNeeded/);
+  assert.match(ui, /data-action="set-primary-pw"/);
+  assert.match(ui, /function openPrimaryPwModal/);
+  assert.match(ui, /최고 관리자 비밀번호 설정/);
+  assert.match(ui, /state\.primaryAdminId/);
+  // 서버 GET이 primaryAdminId를 내려준다
+  const ep = read("prototype/functions/api/admin/users.ts");
+  assert.match(ep, /primaryAdminId: primaryAdminId\(env\)/);
+});
+
 test("admin-users.js maps server errors to friendly messages", () => {
   const src = read("prototype/js/ui/admin-users.js");
   assert.match(src, /user_exists/);

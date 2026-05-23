@@ -14,6 +14,7 @@
     loading: false,
     error: '',
     users: [],
+    primaryAdminId: '',     // 최고(슈퍼) 관리자 ID — 서버 응답에서 받음
     search: '',
     filter: 'all',          // all | admin | member | active | inactive
     modalOpen: false,
@@ -49,6 +50,7 @@
     return NK.api.adminUsersList()
       .then(function (res) {
         state.users = (res && Array.isArray(res.users)) ? res.users : [];
+        state.primaryAdminId = (res && res.primaryAdminId) ? String(res.primaryAdminId) : '';
         state.loading = false;
         render();
       })
@@ -100,11 +102,10 @@
       rows = '<tr><td colspan="5"><div class="admin-error">' + escapeHtml(state.error) + '</div></td></tr>';
     } else {
       var list = visibleUsers();
-      if (!list.length) {
-        rows = '<tr><td colspan="5"><div class="admin-empty">표시할 회원이 없습니다.</div></td></tr>';
-      } else {
-        rows = list.map(buildRow).join('');
-      }
+      var primaryRow = buildPrimaryAdminRowIfNeeded();
+      var listRows = list.length ? list.map(buildRow).join('') : '';
+      rows = primaryRow + listRows;
+      if (!rows) rows = '<tr><td colspan="5"><div class="admin-empty">표시할 회원이 없습니다.</div></td></tr>';
     }
 
     root.innerHTML = [
@@ -160,6 +161,28 @@
     bindEvents(root);
   }
 
+  function isPrimaryRegistered() {
+    var pid = String(state.primaryAdminId || '');
+    if (!pid) return true; // 알 수 없으면 안내 행 미표시
+    return state.users.some(function (u) { return String(u.id) === pid; });
+  }
+
+  // 최고 관리자가 아직 레지스트리에 등록되지 않은 경우(=기본 비밀번호 사용 중),
+  // 비밀번호를 설정할 수 있도록 안내용 행을 목록 맨 위에 노출한다.
+  function buildPrimaryAdminRowIfNeeded() {
+    var pid = String(state.primaryAdminId || '');
+    if (!pid || isPrimaryRegistered()) return '';
+    return [
+      '<tr>',
+        '<td><strong>' + escapeHtml(pid) + '</strong></td>',
+        '<td>최고 관리자</td>',
+        '<td><span class="admin-badge admin-badge--admin">관리자</span> <span class="admin-perm-chip">전체 권한</span></td>',
+        '<td><span class="admin-badge admin-badge--off">기본 비밀번호</span></td>',
+        '<td><div class="admin-row-actions"><button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="set-primary-pw" style="min-width:auto;padding:6px 12px;">비밀번호 설정</button></div></td>',
+      '</tr>'
+    ].join('');
+  }
+
   function buildRow(u) {
     var admin = isAdminUser(u);
     var permHtml = admin
@@ -192,18 +215,21 @@
     var isEdit = state.modalMode === 'edit';
     var u = state.edit || { id: '', name: '', permissions: [], role: 'member', active: true };
     var admin = isAdminUser(u);
+    var lockId = isEdit || !!(u && u.__lockId);          // ID 잠금(수정 모드 또는 최고 관리자 설정)
+    var forceAdmin = !!(u && u.__forceAdmin);            // 관리자 강제(최고 관리자)
+    var title = (u && u.__lockId && !isEdit) ? '최고 관리자 비밀번호 설정' : (isEdit ? '회원 수정' : '신규 회원');
     var permChecks = PERMISSION_PAGES.map(function (p) {
       var checked = !admin && Array.isArray(u.permissions) && u.permissions.indexOf(p.key) !== -1;
-      return '<label><input type="checkbox" class="admin-perm-check" value="' + p.key + '"' + (checked ? ' checked' : '') + ' />' + escapeHtml(p.label) + '</label>';
+      return '<label><input type="checkbox" class="admin-perm-check" value="' + p.key + '"' + (checked ? ' checked' : '') + (forceAdmin ? ' disabled' : '') + ' />' + escapeHtml(p.label) + '</label>';
     }).join('');
 
     return [
       '<div class="admin-modal-backdrop" data-action="modal-backdrop">',
         '<div class="admin-modal" data-modal>',
-          '<h3>' + (isEdit ? '회원 수정' : '신규 회원') + '</h3>',
+          '<h3>' + title + '</h3>',
           '<div class="admin-field">',
             '<label>ID</label>',
-            '<input type="text" id="admin-f-id" value="' + escapeHtml(u.id) + '"' + (isEdit ? ' disabled' : '') + ' placeholder="영문 소문자/숫자/._-" />',
+            '<input type="text" id="admin-f-id" value="' + escapeHtml(u.id) + '"' + (lockId ? ' disabled' : '') + ' placeholder="영문 소문자/숫자/._-" />',
           '</div>',
           '<div class="admin-field">',
             '<label>이름</label>',
@@ -220,7 +246,7 @@
               permChecks,
             '</div>',
             '<label style="margin-top:10px;display:flex;align-items:center;gap:6px;color:#fbbf24;">',
-              '<input type="checkbox" id="admin-f-admin"' + (admin ? ' checked' : '') + ' /> 전체 권한(관리자)',
+              '<input type="checkbox" id="admin-f-admin"' + ((admin || forceAdmin) ? ' checked' : '') + (forceAdmin ? ' disabled' : '') + ' /> 전체 권한(관리자)',
             '</label>',
           '</div>',
           '<div class="admin-field">',
@@ -248,7 +274,9 @@
         var tbody = root.querySelector('table.admin-table tbody');
         if (tbody) {
           var list = visibleUsers();
-          tbody.innerHTML = list.length ? list.map(buildRow).join('') : '<tr><td colspan="5"><div class="admin-empty">표시할 회원이 없습니다.</div></td></tr>';
+          var primaryRow = buildPrimaryAdminRowIfNeeded();
+          var listRows = list.length ? list.map(buildRow).join('') : '';
+          tbody.innerHTML = (primaryRow + listRows) || '<tr><td colspan="5"><div class="admin-empty">표시할 회원이 없습니다.</div></td></tr>';
           bindRowActions(root);
         }
       });
@@ -262,7 +290,7 @@
   }
 
   function bindRowActions(root) {
-    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"]').forEach(function (el) {
+    root.querySelectorAll('[data-action="edit-user"], [data-action="delete-user"], [data-action="set-primary-pw"]').forEach(function (el) {
       el.addEventListener('click', onAction);
     });
   }
@@ -272,12 +300,24 @@
     var action = el.getAttribute('data-action');
     if (action === 'go-home') { goHome(); }
     else if (action === 'new-user') { openModal('create'); }
+    else if (action === 'set-primary-pw') { openPrimaryPwModal(); }
     else if (action === 'reload') { loadUsers(); }
     else if (action === 'edit-user') { openModal('edit', el.getAttribute('data-id')); }
     else if (action === 'delete-user') { deleteUser(el.getAttribute('data-id')); }
     else if (action === 'modal-cancel') { closeModal(); }
     else if (action === 'modal-backdrop') { if (e.target === el) closeModal(); }
     else if (action === 'modal-save') { saveModal(); }
+  }
+
+  // 최고 관리자 비밀번호 설정: ID 잠금 + 관리자 강제로 신규 등록 모달을 연다.
+  function openPrimaryPwModal() {
+    var pid = String(state.primaryAdminId || '');
+    if (!pid) return;
+    state.modalMode = 'create';
+    state.modalError = '';
+    state.edit = { id: pid, name: '최고 관리자', permissions: [], role: 'admin', active: true, __lockId: true, __forceAdmin: true };
+    state.modalOpen = true;
+    render();
   }
 
   function goHome() {

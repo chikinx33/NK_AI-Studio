@@ -53,6 +53,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         ok: true,
         version: reg.version || REGISTRY_VERSION,
         updatedAt: reg.updatedAt || "",
+        primaryAdminId: primaryAdminId(env),
         users: reg.users.map(publicUser),
       },
       200,
