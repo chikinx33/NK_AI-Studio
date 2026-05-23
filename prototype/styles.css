@@ -13144,8 +13144,14 @@ textarea.bsf-skeleton {
 .bsf-fmt-card-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
+}
+.bsf-fmt-card-icon {
+  flex-shrink: 0;
+  display: block;
+  color: var(--text);
+  opacity: 0.92;
 }
 .bsf-fmt-badge {
   font-size: 10px;
