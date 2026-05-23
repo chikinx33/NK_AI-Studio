@@ -150,7 +150,8 @@ export async function createUserRecord(input: {
 }): Promise<AdminUser> {
   const id = sanitizeUserId(input.id);
   if (!id) throw new Error("invalid_user_id");
-  const pw = String(input.password || "");
+  // 로그인 검증은 pw.trim()을 사용하므로, 해시 생성도 동일하게 trim하여 불일치를 방지한다.
+  const pw = String(input.password || "").trim();
   if (!pw) throw new Error("password_required");
   const now = new Date().toISOString();
   return {

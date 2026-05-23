@@ -22,6 +22,15 @@ test("login.ts keeps the primary admin un-lockable (active ignored, role forced)
   assert.match(src, /!isPrimary && !user\.active/);
   // 레지스트리 미등록(부트스트랩) 시 env 비번 허용
   assert.match(src, /if \(isPrimary && pw === envPw\)/);
+  // 레지스트리 비번 불일치여도 최고 관리자는 잠기지 않도록 env 부트스트랩으로 폴백
+  assert.match(src, /if \(!isPrimary\) return json\(\{ error: 'Invalid credentials' \}, 401/);
+});
+
+test("password hashing trims to match login's trimmed verification", () => {
+  const adminUsers = read("prototype/functions/api/_shared/admin-users.ts");
+  assert.match(adminUsers, /String\(input\.password \|\| ""\)\.trim\(\)/);
+  const endpoint = read("prototype/functions/api/admin/users.ts");
+  assert.match(endpoint, /hashPassword\(String\(body\.password\)\.trim\(\)\)/);
 });
 
 test("admin users endpoint forces primary admin to stay admin/active", () => {

@@ -56,11 +56,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         // 최고 관리자(env 1차 관리자)는 절대 잠기지 않도록 active 무시 + 항상 admin.
         if (!isPrimary && !user.active) return json({ error: 'account_disabled' }, 403, origin);
         const ok = await verifyPassword(pw, user.pwHash);
-        if (!ok) return json({ error: 'Invalid credentials' }, 401, origin);
-        const session = await issueSessionToken(id, env);
-        const role = isPrimary ? "admin" : (user.role || "member");
-        const permissions = isPrimary ? [] : (user.permissions || []);
-        return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions, role }, 200, origin);
+        if (ok) {
+          const session = await issueSessionToken(id, env);
+          const role = isPrimary ? "admin" : (user.role || "member");
+          const permissions = isPrimary ? [] : (user.permissions || []);
+          return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions, role }, 200, origin);
+        }
+        // 비밀번호 불일치: 일반 회원은 즉시 실패.
+        // 최고 관리자는 잠금 방지를 위해 아래 env 부트스트랩(기본/AUTH_PW)으로 폴백한다.
+        if (!isPrimary) return json({ error: 'Invalid credentials' }, 401, origin);
       }
     } catch (_) {
       // 레지스트리 로드 실패 → 아래 폴백 경로로 진행

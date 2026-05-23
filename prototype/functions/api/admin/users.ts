@@ -118,7 +118,7 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
     if (Array.isArray(body.permissions)) user.permissions = sanitizePermissions(body.permissions);
     if (body.role === "admin" || body.role === "member") user.role = body.role;
     if (typeof body.active === "boolean") user.active = body.active;
-    if (body.password) user.pwHash = await hashPassword(String(body.password));
+    if (body.password) user.pwHash = await hashPassword(String(body.password).trim());
     // 최고 관리자는 비밀번호만 변경 가능 — role/active 강제(잠금·권한박탈 방지).
     if (id === primaryAdminId(env)) {
       user.role = "admin";
