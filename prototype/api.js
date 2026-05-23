@@ -1095,4 +1095,34 @@
     if (!res.ok) throw new Error(e(text) || 'admin_user_delete_error');
     return j(text);
   };
+
+  // ─── 프로젝트 공유(협업) ────────────────────────────────────
+  api.projectShareList = async function () {
+    var res = await fetch(withBase('/api/project/share'), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'project_share_list_error');
+    return j(text);
+  };
+
+  api.projectShareGrant = async function (projectId, targetUserId, role, title) {
+    var res = await fetch(withBase('/api/project/share'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ projectId: String(projectId || ''), targetUserId: String(targetUserId || ''), role: role || 'viewer', title: title || '' })
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'project_share_grant_error');
+    return j(text);
+  };
+
+  api.projectShareRevoke = async function (projectId, targetUserId) {
+    var res = await fetch(withBase('/api/project/share'), {
+      method: 'DELETE',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ projectId: String(projectId || ''), targetUserId: String(targetUserId || '') })
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'project_share_revoke_error');
+    return j(text);
+  };
 })();
