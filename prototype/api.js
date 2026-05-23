@@ -623,11 +623,14 @@
     return api.projectDelete(projectId, String(objectName || ''));
   };
 
-  api.videoGenLibrary = async function (projectId) {
+  api.videoGenLibrary = async function (projectId, ownerId) {
     var uid = resolveUserId();
     var token = getAuthToken();
     var q = 'source=video-gen&userId=' + encodeURIComponent(uid);
     if (projectId) q += '&projectId=' + encodeURIComponent(projectId);
+    // 공유받은 프로젝트는 소유자 경로 조회를 위해 ownerId 자동 첨부.
+    var eff = ownerId || (projectId && api.getSharedOwner ? api.getSharedOwner(projectId) : '');
+    if (eff) q += '&ownerId=' + encodeURIComponent(String(eff));
     if (token) q += '&nk_token=' + encodeURIComponent(token);
     var res = await fetch(withBase('/api/video/library?' + q), { headers: buildAuthHeaders() });
     var text = await res.text();
@@ -648,12 +651,15 @@
     return j(text);
   };
 
-  api.library = async function (kind, projectId) {
+  api.library = async function (kind, projectId, ownerId) {
     var uid = resolveUserId();
     var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
+    // 공유받은 프로젝트는 소유자 경로에서 라이브러리를 조회해야 한다(ownerId 자동 첨부).
+    var eff = ownerId || (api.getSharedOwner ? api.getSharedOwner(projectId) : '');
+    var ownerQ = eff ? ('&ownerId=' + encodeURIComponent(String(eff))) : '';
     var base = kind === 'image'
-      ? '/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid)
-      : '/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid);
+      ? '/api/image/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid) + ownerQ
+      : '/api/video/library?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(uid) + ownerQ;
     var url = withBase(base + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
     var res = await fetch(url, { headers: buildAuthHeaders() });
     var text = await res.text();

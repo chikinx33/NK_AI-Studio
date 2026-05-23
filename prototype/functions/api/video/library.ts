@@ -2,7 +2,8 @@
 // List GCS videos from:
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/videos/
 import { buildAiVideoProjectPrefix, buildAiVideoGenPrefix, buildAiVideoGenProjectPrefix } from "../_shared/storage";
-import { authorizeRequest } from "../_shared/auth.js";
+import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
+import { loadShares, getGrantRole } from "../_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 const corsHeaders = (origin?: string | null) => ({
@@ -27,9 +28,18 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const projectId = (url.searchParams.get("projectId") || "").trim();
     const source = (url.searchParams.get("source") || "").trim();
     const isVideoGen = source === "video-gen";
-    const userId = auth.userId;
+    const requesterId = auth.userId;
+    let userId = requesterId;
     const sceneId = (url.searchParams.get("sceneId") || "").trim();
     if (!isVideoGen && !projectId) return send({ error: "projectId is required" }, 400, origin);
+    // 공유 접근: ownerId가 본인과 다르면 해당 프로젝트의 공유 권한이 있어야 소유자 경로를 조회할 수 있다.
+    const ownerParam = sanitizeUserId(url.searchParams.get("ownerId") || "");
+    if (ownerParam && ownerParam !== requesterId && projectId) {
+      const sharesReg = await loadShares(env);
+      const role = getGrantRole(sharesReg, ownerParam, projectId, requesterId);
+      if (!role) return send({ error: "forbidden" }, 403, origin);
+      userId = ownerParam;
+    }
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;

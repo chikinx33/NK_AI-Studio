@@ -4304,9 +4304,12 @@
     }
 
     // 렌더 저장소 전체 목록 비동기 로드 → 영상 카드에 표시
+    // 공유받은 프로젝트는 소유자 경로 조회에 ownerId 매핑이 필요하다. refreshProjectPromise가
+    // 로컬에 없는 경우 projectList를 동기화해 매핑을 채우므로, 그 이후에 호출한다.
     if (NK.api && NK.api.postprodRenderList && initProjectId) {
       promises.push(
-        NK.api.postprodRenderList(initProjectId)
+        refreshProjectPromise
+          .then(function () { return NK.api.postprodRenderList(initProjectId); })
           .then(function (renderList) {
             if (Array.isArray(renderList) && renderList.length && root.isConnected) {
               _renderStorageCache[initProjectId] = renderList;
@@ -4320,7 +4323,8 @@
     // - 서버는 source=video-gen + projectId 기반으로 프로젝트 전용 prefix 조회
     if (NK.api && NK.api.videoGenLibrary && initProjectId) {
       promises.push(
-        NK.api.videoGenLibrary(initProjectId)
+        refreshProjectPromise
+          .then(function () { return NK.api.videoGenLibrary(initProjectId); })
           .then(function (data) {
             var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
             if (items.length && root.isConnected) {
