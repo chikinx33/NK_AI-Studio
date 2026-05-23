@@ -550,14 +550,12 @@
       }
       if (!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed())) return;
 
-      // 안전망: projectList가 600ms 안에 응답 안 오면 그제야 로딩 오버레이 (빠른 응답에는 안 보임)
+      // 로컬에 표시할 카드가 없으면(새 계정/캐시 비움 등) 서버에서 실제 카드 데이터를
+      // 모두 받을 때까지 로딩 스피너를 유지한다. 로컬 카드가 있으면 즉시 보여주고 백그라운드 갱신.
       const hasLocalDrafts = Array.isArray(drafts) && drafts.length > 0;
       let loadingTimer = null;
       if (!hasLocalDrafts) {
-        loadingTimer = setTimeout(() => {
-          loadingTimer = null;
-          setDashLoading(true, DASHBOARD_LOADING_TEXT);
-        }, 600);
+        setDashLoading(true, DASHBOARD_LOADING_TEXT);
       }
       const clearLoading = () => {
         if (loadingTimer) { clearTimeout(loadingTimer); loadingTimer = null; }
@@ -607,14 +605,15 @@
           else NK.store.saveDrafts(persistList);
         };
 
-        // 1차 즉시 렌더 (placeholder 포함). 로딩 오버레이는 즉시 해제.
-        clearLoading();
-        // 메모리 store에 임시 반영 (renderDrafts가 store에서 읽음)
-        // pending 플래그 포함 - persist는 안 함
+        // 1차 렌더(placeholder 포함). 실제 카드 데이터가 도착할 때까지 로딩 스피너는 유지한다
+        // (여기서 clearLoading 하지 않음 → 빈 카드만 보이고 스피너가 사라지는 문제 방지).
+        // 메모리 store에 임시 반영 (renderDrafts가 store에서 읽음). pending 플래그 포함 - persist는 안 함.
         NK.store.saveDrafts(sortByOrder(nextMap));
         dashboard.renderDrafts();
 
+        // 받아올 항목이 없으면(모두 캐시에 있음) 스피너 해제 후 종료.
         if (!missingIds.length || !NK.api.projectGet) {
+          clearLoading();
           serverMerged = true;
           return;
         }
