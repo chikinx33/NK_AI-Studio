@@ -40,30 +40,39 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const pw = String(body.pw || '').trim();
     if (!id || !pw) return json({ error: 'ID and PW are required' }, 400, origin);
 
-    // (1) 1차(슈퍼) 관리자 — env로 재정의 가능. 항상 전체 권한 + admin role.
     const envId = sanitizeUserId(env.AUTH_ID || LEGACY_AUTH_ID);
     const envPw = String(env.AUTH_PW || LEGACY_AUTH_PW).trim();
-    if (id === envId && pw === envPw) {
-      const session = await issueSessionToken(id, env);
-      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: [], role: "admin" }, 200, origin);
-    }
+    const isPrimary = id === envId;
 
-    // (2) GCS 회원 레지스트리 조회. GCS 장애 시에도 레거시 폴백이 동작하도록 try/catch.
+    // (1) GCS 회원 레지스트리가 권위(authoritative). 레지스트리에 해당 ID가 있으면
+    //     레지스트리 비밀번호로만 검증한다(=어드민 페이지에서 비번 변경이 즉시 반영).
+    //     GCS 장애 시에도 잠기지 않도록 try/catch로 감싸 폴백 경로로 진행.
     let registryLoaded = false;
     try {
       const reg = await loadRegistry(env);
       registryLoaded = true;
       const user = findUser(reg, id);
       if (user) {
-        if (!user.active) return json({ error: 'account_disabled' }, 403, origin);
+        // 최고 관리자(env 1차 관리자)는 절대 잠기지 않도록 active 무시 + 항상 admin.
+        if (!isPrimary && !user.active) return json({ error: 'account_disabled' }, 403, origin);
         const ok = await verifyPassword(pw, user.pwHash);
         if (!ok) return json({ error: 'Invalid credentials' }, 401, origin);
         const session = await issueSessionToken(id, env);
-        return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: user.permissions || [], role: user.role || "member" }, 200, origin);
+        const role = isPrimary ? "admin" : (user.role || "member");
+        const permissions = isPrimary ? [] : (user.permissions || []);
+        return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions, role }, 200, origin);
       }
     } catch (_) {
-      // 레지스트리 로드 실패 → 레거시 폴백으로 진행
+      // 레지스트리 로드 실패 → 아래 폴백 경로로 진행
       registryLoaded = false;
+    }
+
+    // (2) 1차(슈퍼) 관리자 부트스트랩 — 레지스트리에 아직 등록 전이거나 GCS 장애 시.
+    //     env AUTH_PW(미설정 시 하드코딩 기본값)로 인증. 항상 전체 권한 + admin.
+    //     레지스트리에 limfactory를 등록하면 위 (1)이 우선하여 이 기본 비번은 더 이상 통하지 않는다.
+    if (isPrimary && pw === envPw) {
+      const session = await issueSessionToken(id, env);
+      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: [], role: "admin" }, 200, origin);
     }
 
     // (3) 레거시 하드코딩 회원: 평문 비교 후 성공 시 레지스트리에 1회 이관.

@@ -5,15 +5,30 @@ import path from "node:path";
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
-test("login.ts checks registry before legacy and verifies hashed passwords", () => {
+test("login.ts treats registry as authoritative and verifies hashed passwords", () => {
   const src = read("prototype/functions/api/login.ts");
   assert.match(src, /loadRegistry\(env\)/);
   assert.match(src, /verifyPassword\(pw, user\.pwHash\)/);
-  // 비활성 계정 차단
+  // 비활성 계정 차단(최고 관리자는 예외)
   assert.match(src, /account_disabled/);
-  // role을 응답에 포함
-  assert.match(src, /role: user\.role \|\| "member"/);
-  assert.match(src, /role: "admin"/);
+  // 응답 role 결정
+  assert.match(src, /isPrimary \? "admin" : \(user\.role \|\| "member"\)/);
+});
+
+test("login.ts keeps the primary admin un-lockable (active ignored, role forced)", () => {
+  const src = read("prototype/functions/api/login.ts");
+  assert.match(src, /const isPrimary = id === envId/);
+  // 최고 관리자는 active 무시
+  assert.match(src, /!isPrimary && !user\.active/);
+  // 레지스트리 미등록(부트스트랩) 시 env 비번 허용
+  assert.match(src, /if \(isPrimary && pw === envPw\)/);
+});
+
+test("admin users endpoint forces primary admin to stay admin/active", () => {
+  const src = read("prototype/functions/api/admin/users.ts");
+  assert.match(src, /primaryAdminId\(env\)/);
+  assert.match(src, /user\.role = "admin";/);
+  assert.match(src, /user\.active = true;/);
 });
 
 test("login.ts migrates legacy users into the registry on first login", () => {

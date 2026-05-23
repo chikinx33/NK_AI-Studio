@@ -77,13 +77,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const reg = await loadRegistryStrict(env);
     if (findUser(reg, id)) return send({ error: "user_exists" }, 409, origin);
 
+    // 최고 관리자 ID로 등록하는 경우 항상 admin/active로 강제(잠금 방지).
+    const isPrimaryTarget = id === primaryAdminId(env);
     const record = await createUserRecord({
       id,
       name: body.name,
       password: pw,
-      permissions: body.permissions,
-      role: body.role === "admin" ? "admin" : "member",
-      active: body.active !== false,
+      permissions: isPrimaryTarget ? [] : body.permissions,
+      role: isPrimaryTarget ? "admin" : (body.role === "admin" ? "admin" : "member"),
+      active: isPrimaryTarget ? true : (body.active !== false),
     });
     reg.users.push(record);
     await saveRegistry(env, reg);
@@ -116,6 +118,11 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
     if (body.role === "admin" || body.role === "member") user.role = body.role;
     if (typeof body.active === "boolean") user.active = body.active;
     if (body.password) user.pwHash = await hashPassword(String(body.password));
+    // 최고 관리자는 비밀번호만 변경 가능 — role/active 강제(잠금·권한박탈 방지).
+    if (id === primaryAdminId(env)) {
+      user.role = "admin";
+      user.active = true;
+    }
     user.updatedAt = new Date().toISOString();
 
     await saveRegistry(env, reg);
