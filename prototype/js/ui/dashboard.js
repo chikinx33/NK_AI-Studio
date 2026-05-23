@@ -4,6 +4,9 @@
   var dashboard = ui.dashboard || (ui.dashboard = {});
 
   var serverMerged = false;
+  var _sharedSettled = false;        // 공유받은 프로젝트 동기화 완료 여부
+  var _initialLoadDone = false;      // 최초 대시보드 로딩(소유+공유) 완료 여부
+  var _initialSpinnerActive = false; // 최초 로딩 스피너 표시 중 여부
   var currentSeriesFilter = '__all__';
   var DASHBOARD_LOADING_TEXT = '프로젝트 불러오는 중...';
 
@@ -98,6 +101,22 @@
   let _dashLoadingCount = 0;
   const dashLoadingShow = (text) => { _dashLoadingCount++; setDashLoading(true, text); };
   const dashLoadingHide = () => { _dashLoadingCount = Math.max(0, _dashLoadingCount - 1); if (_dashLoadingCount === 0) setDashLoading(false); };
+
+  // 대시보드 진입 즉시(카드 그리기 전) 스피너를 띄우고, 소유 + 공유 동기화가 모두 끝나면 해제한다.
+  const startInitialSpinner = () => {
+    var authed = !!(NK.auth && NK.auth.isAuthed && NK.auth.isAuthed());
+    if (authed && NK.api && NK.api.projectList && !_initialLoadDone && !_initialSpinnerActive) {
+      _initialSpinnerActive = true;
+      dashLoadingShow(DASHBOARD_LOADING_TEXT);
+    }
+  };
+  const finishInitialLoadIfReady = () => {
+    if (_initialSpinnerActive && serverMerged && _sharedSettled) {
+      _initialSpinnerActive = false;
+      _initialLoadDone = true;
+      dashLoadingHide();
+    }
+  };
 
   const normalizeSeriesId = (value) => String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '');
 
@@ -448,9 +467,10 @@
   }
 
   // 공유 목록을 서버에서 받아, 각 프로젝트 데이터(썸네일·메타)까지 가져와 카드에 반영.
+  // 로딩 스피너는 renderDrafts 진입 시 startInitialSpinner()가 담당하고, 여기서는
+  // 공유 동기화가 끝나면 _sharedSettled를 세워 초기 로딩 종료를 알린다.
   async function refreshSharedDrafts() {
-    if (!(NK.api && NK.api.projectList)) return;
-    var spinning = false;
+    if (!(NK.api && NK.api.projectList)) { _sharedSettled = true; finishInitialLoadIfReady(); return; }
     try {
       const list = await NK.api.projectList();
       const shared = (list && Array.isArray(list.shared)) ? list.shared : [];
@@ -459,8 +479,6 @@
       _sharedFetchedKey = key;
       var enriched;
       if (shared.length && NK.api.projectGet) {
-        // 공유받은 프로젝트(소유자 데이터 원격 fetch)가 아직 화면에 없으면 로딩 스피너 표시.
-        if (!_sharedDrafts.length) { spinning = true; dashLoadingShow(dt('share_loading')); }
         // 소유자 경로에서 각 공유 프로젝트의 payload(대표 이미지 포함)를 가져온다.
         enriched = await runTasksInBatches(shared, async (s) => {
           var data = {}, missing = false;
@@ -479,7 +497,7 @@
       buildSharedDrafts(enriched);
       dashboard.renderDrafts();
     } catch (_) { /* 무시 */ }
-    finally { if (spinning) { spinning = false; dashLoadingHide(); } }
+    finally { _sharedSettled = true; finishInitialLoadIfReady(); }
   }
 
   // 내가 '공유한(소유)' 프로젝트의 제목/대표이미지를 서버에서 다시 받아 로컬에 반영.
@@ -532,6 +550,10 @@
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
 
+    // 대시보드 진입 즉시(카드 그리기 전) 로딩 스피너를 띄운다. 이미 캐시된 카드가 있어도
+    // 소유 + 공유 동기화가 모두 끝날 때까지 스피너를 유지(중간에 카드가 먼저 보이는 현상 방지).
+    startInitialSpinner();
+
     if (!window.__nk_dashboard_global_click_bound) {
       window.__nk_dashboard_global_click_bound = true;
       document.addEventListener('click', (e) => {
@@ -562,16 +584,9 @@
 
       // 로컬에 표시할 카드가 없으면(새 계정/캐시 비움 등) 서버에서 실제 카드 데이터를
       // 모두 받을 때까지 로딩 스피너를 유지한다. 로컬 카드가 있으면 즉시 보여주고 백그라운드 갱신.
-      const hasLocalDrafts = Array.isArray(drafts) && drafts.length > 0;
-      let mergeShown = false;
-      if (!hasLocalDrafts) {
-        dashLoadingShow(DASHBOARD_LOADING_TEXT);
-        mergeShown = true;
-      }
-      const clearLoading = () => {
-        // show 1회당 hide 1회만(early-return + finally 중복 호출 대비).
-        if (mergeShown) { mergeShown = false; dashLoadingHide(); }
-      };
+      // 스피너 표시는 renderDrafts 진입 시 startInitialSpinner()가 담당.
+      // 여기서는 소유 동기화 완료 시 초기 로딩 종료 여부만 확인한다.
+      const clearLoading = () => { finishInitialLoadIfReady(); };
 
       try {
         // 부모 창에서 미리 시작한 prefetch 결과 재사용 (없으면 직접 호출)
