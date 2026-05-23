@@ -615,6 +615,19 @@
       </div>` : '';
 
     const showCreateButton = host === 'brand' || host === 'video';
+
+    const _rawSelectedId = getSelectedProjectId();
+    const selectedProjectId = _rawSelectedId ||
+      (filteredDrafts.length > 0 ? String(filteredDrafts[0].id) : '');
+
+    // 브랜드 스튜디오에서 카테고리(시리즈)를 선택했을 때, 신규 버튼 왼쪽에 공유 버튼 표시.
+    // 현재 선택된 프로젝트를 다른 계정에 공유한다.
+    const _selectedDraftObj = filteredDrafts.find((d) => String(d.id) === String(selectedProjectId));
+    const showShareButton = host === 'brand' && currentSeriesFilter !== '__all__' && !!selectedProjectId;
+    const shareBtnHtml = showShareButton
+      ? `<button class="btn-secondary series-share-btn" data-action="share-project" data-id="${escapeHtml(selectedProjectId)}" data-title="${escapeHtml(_selectedDraftObj?.title || '')}" aria-label="공유" title="공유"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg></button>`
+      : '';
+
     const filterBar = `
       <div class="series-filter-bar">
         <div class="series-filter-main">
@@ -633,14 +646,13 @@
             `).join('')}
           </div>
         </div>
-        ${showCreateButton ? `<button class="btn-primary series-create-btn" data-action="create-project">신규</button>` : ``}
+        <div class="series-filter-actions" style="display:flex;align-items:center;gap:8px;">
+          ${shareBtnHtml}
+          ${showCreateButton ? `<button class="btn-primary series-create-btn" data-action="create-project">신규</button>` : ``}
+        </div>
       </div>
       ${manageBarHtml}
     `;
-
-    const _rawSelectedId = getSelectedProjectId();
-    const selectedProjectId = _rawSelectedId ||
-      (filteredDrafts.length > 0 ? String(filteredDrafts[0].id) : '');
     const showStageButtons = host === 'video';
     const showTitleEdit = (host === 'video' || host === 'brand');
     const showDelete = (host === 'video' || host === 'brand');
@@ -664,9 +676,8 @@
 
       const editBtn = showTitleEdit ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
       const duplicateBtn = showDelete ? `<button class="copy-btn" data-action="draft-duplicate" data-id="${escapeHtml(d.id)}" aria-label="복제" title="복제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="15" x2="15" y1="12" y2="18"></line><line x1="12" x2="18" y1="15" y2="15"></line><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>` : '';
-      const shareBtn = showDelete ? `<button class="share-btn" data-action="share-project" data-id="${escapeHtml(d.id)}" data-title="${escapeHtml(d.title || '')}" aria-label="공유" title="공유"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg></button>` : '';
       const deleteBtn = showDelete ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
-      const thumbBtnsHtml = (editBtn || duplicateBtn || shareBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${shareBtn}${deleteBtn}</div>` : '';
+      const thumbBtnsHtml = (editBtn || duplicateBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${deleteBtn}</div>` : '';
 
       const isPending = !!d.__pending;
       return `

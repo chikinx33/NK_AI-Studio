@@ -5,11 +5,16 @@ import path from "node:path";
 
 const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
-test("dashboard renders a share button on owner cards and opens a share modal", () => {
+test("dashboard shows the share button in the brand category header (not on cards) and opens a share modal", () => {
   const src = read("prototype/js/ui/dashboard.js");
   assert.match(src, /data-action="share-project"/);
   assert.match(src, /function openShareModal/);
   assert.match(src, /if \(action === 'share-project'\)/);
+  // 브랜드 스튜디오에서 카테고리 선택 시 신규 버튼 옆 공유 버튼
+  assert.match(src, /series-share-btn/);
+  assert.match(src, /host === 'brand' && currentSeriesFilter !== '__all__'/);
+  // 카드의 공유 버튼은 제거됨(share-btn 클래스 더 이상 없음)
+  assert.doesNotMatch(src, /class="share-btn"/);
   // 모달이 grant/revoke/list API를 사용
   assert.match(src, /NK\.api\.projectShareGrant\(projectId, target, role/);
   assert.match(src, /NK\.api\.projectShareRevoke\(projectId/);
