@@ -20,13 +20,13 @@ test("dashboard share button shares the whole series (all episodes), not a singl
   assert.match(src, /host === 'brand' && currentSeriesFilter !== '__all__'/);
   // 카드의 공유 버튼은 제거됨
   assert.doesNotMatch(src, /class="share-btn"/);
-  // 모달이 list API + 역할 선택(뷰어/에디터) 사용
+  // 모달이 list API 사용 + 항상 에디터로 부여(역할 선택 없음)
   assert.match(src, /NK\.api\.projectShareList\(\)/);
-  assert.match(src, /value="viewer"/);
-  assert.match(src, /value="editor"/);
+  assert.match(src, /projectShareGrant\(pid, target, 'editor'/);
+  assert.doesNotMatch(src, /id="nk-share-role"/);
 });
 
-test("dashboard merges shared projects into categories with share+role icons (no separate section)", () => {
+test("dashboard merges shared projects into categories with a single share icon (no separate section, no role distinction)", () => {
   const src = read("prototype/js/ui/dashboard.js");
   // 별도 '공유받은 프로젝트' 섹션은 제거됨
   assert.doesNotMatch(src, /function appendSharedSection/);
@@ -35,15 +35,16 @@ test("dashboard merges shared projects into categories with share+role icons (no
   assert.match(src, /function buildSharedDrafts/);
   assert.match(src, /function getViewDrafts/);
   assert.match(src, /drafts = getViewDrafts\(\)/);
-  // 시리즈 칩 라벨 앞에 쉐어 + 역할 아이콘
+  // 시리즈 칩 라벨 앞에 쉐어 아이콘만(뷰어/에디터 구분 없음)
   assert.match(src, /function sharedLabelIcons/);
   assert.match(src, /_sharedMeta\.get\(s\.id\)/);
   assert.match(src, /ICON_SHARE/);
-  assert.match(src, /ICON_VIEWER/);
-  assert.match(src, /ICON_EDITOR/);
-  // 공유받은 카드는 수정/복제/삭제·재공유 불가
-  assert.match(src, /const isShared = !!d\.__shared/);
+  assert.doesNotMatch(src, /ICON_VIEWER/);
+  assert.doesNotMatch(src, /ICON_EDITOR/);
+  // 재공유 버튼은 소유 카테고리에서만
   assert.match(src, /!_sharedMeta\.has\(currentSeriesFilter\)/);
+  // 공유받은 카드도 일반 카드와 동일 마크업(특수 분기 제거)
+  assert.doesNotMatch(src, /const isShared = !!d\.__shared/);
 });
 
 test("api propagates ownerId for shared projects via session map", () => {

@@ -293,10 +293,6 @@
         <p style="margin:0 0 16px;font-size:13px;color:var(--muted,#8aa0c3);">${esc(title || '프로젝트')} · 에피소드 ${projectIds.length}개 전체 공유</p>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
           <input id="nk-share-target" type="text" placeholder="공유할 계정 ID" style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid var(--border,#1b2845);background:var(--bg,#0b1222);color:var(--text,#e9edf7);font-size:14px;" />
-          <select id="nk-share-role" style="padding:9px 10px;border-radius:10px;border:1px solid var(--border,#1b2845);background:var(--bg,#0b1222);color:var(--text,#e9edf7);font-size:14px;">
-            <option value="viewer">뷰어(읽기)</option>
-            <option value="editor">에디터(편집)</option>
-          </select>
           <button id="nk-share-add" type="button" class="btn-primary" style="padding:9px 14px;">공유</button>
         </div>
         <div id="nk-share-error" style="color:#ef4444;font-size:13px;min-height:18px;margin-bottom:8px;"></div>
@@ -311,7 +307,6 @@
     const listEl = overlay.querySelector('#nk-share-list');
     const errEl = overlay.querySelector('#nk-share-error');
     const targetEl = overlay.querySelector('#nk-share-target');
-    const roleEl = overlay.querySelector('#nk-share-role');
     const setErr = (m) => { if (errEl) errEl.textContent = m || ''; };
     const close = () => { overlay.remove(); };
     let busy = false;
@@ -325,7 +320,7 @@
       }
       listEl.innerHTML = arr.map((g) => `
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border,#1b2845);">
-          <div><strong>${esc(g.userId)}</strong> <span style="font-size:12px;color:var(--muted,#8aa0c3);">· ${g.role === 'editor' ? '에디터' : '뷰어'}</span></div>
+          <div><strong>${esc(g.userId)}</strong></div>
           <button type="button" class="btn-secondary" data-revoke="${esc(g.userId)}" style="padding:4px 10px;font-size:12px;">회수</button>
         </div>`).join('');
       listEl.querySelectorAll('[data-revoke]').forEach((b) => {
@@ -350,9 +345,7 @@
         const byUser = {};
         mine.forEach((e) => {
           if (!idSet.has(String(e.projectId))) return;
-          (e.grants || []).forEach((g) => {
-            if (byUser[g.userId] !== 'editor') byUser[g.userId] = g.role;
-          });
+          (e.grants || []).forEach((g) => { byUser[g.userId] = 'editor'; });
         });
         renderGrants(byUser);
       } catch (err) {
@@ -365,13 +358,12 @@
       if (busy) return;
       setErr('');
       const target = String(targetEl.value || '').trim();
-      const role = roleEl.value === 'editor' ? 'editor' : 'viewer';
       if (!target) { setErr('공유할 계정 ID를 입력하세요.'); return; }
       busy = true;
       try {
-        // 시리즈의 모든 에피소드에 동일 권한 부여(프로젝트 전체 공유)
+        // 시리즈의 모든 에피소드에 편집 권한 부여(프로젝트 전체 공유, 항상 에디터)
         for (const pid of projectIds) {
-          await NK.api.projectShareGrant(pid, target, role, title || '', { seriesId: seriesId, seriesTitle: seriesTitle || title });
+          await NK.api.projectShareGrant(pid, target, 'editor', title || '', { seriesId: seriesId, seriesTitle: seriesTitle || title });
         }
         targetEl.value = '';
         await refresh();
@@ -395,12 +387,10 @@
   var _sharedMeta = new Map();            // seriesId -> { role, ownerId }
   var _sharedFetchedKey = '';
 
-  // 공유 상태 아이콘 (lucide)
+  // 공유 상태 아이콘 (lucide share-2) — 뷰어/에디터 구분 없이 '공유받음' 표시만.
   var ICON_SHARE = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>';
-  var ICON_VIEWER = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
-  var ICON_EDITOR = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 12h8"/><path d="M10 11v2"/><path d="M8 17h8"/><path d="M14 16v2"/></svg>';
-  function sharedLabelIcons(role) {
-    return `<span class="nk-shared-label-icons" title="공유받음 (${role === 'editor' ? '에디터' : '뷰어'})" style="display:inline-flex;align-items:center;gap:3px;margin-right:5px;vertical-align:-2px;color:${role === 'editor' ? '#4ade80' : '#93c5fd'};">${ICON_SHARE}${role === 'editor' ? ICON_EDITOR : ICON_VIEWER}</span>`;
+  function sharedLabelIcons() {
+    return `<span class="nk-shared-label-icons" title="공유받음" style="display:inline-flex;align-items:center;margin-right:5px;vertical-align:-2px;color:#93c5fd;">${ICON_SHARE}</span>`;
   }
 
   // 공유받은 에피소드를 의사 드래프트로 변환(소유자 seriesId 기준으로 그룹핑).
@@ -695,22 +685,18 @@
       const needs = Array.isArray(d.payload?.needs) ? d.payload.needs.filter(Boolean).join(', ') : (d.payload?.needs || '');
       const genre = `${cat} ${tags}`.trim();
       const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
-      const isShared = !!d.__shared; // 공유받은 카드: 수정/복제/삭제·썸네일변경 불가(소유자만 관리)
       const thumbObj = String(d.payload?.thumbnailObjectName || '').trim();
       const thumbUrl = thumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
         ? NK.api.mediaProxyObjectUrl(thumbObj)
         : '';
-      const thumbHtml = isShared
-        ? (thumbUrl
-            ? `<div class="draft-thumb has-image"><img src="${escapeHtml(thumbUrl)}" alt="" /></div>`
-            : `<div class="draft-thumb empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></div>`)
-        : (thumbUrl
-            ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" alt="" /></button>`
-            : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`);
+      // 공유받은 카드도 일반 카드와 100% 동일한 마크업/스타일로 렌더한다.
+      const thumbHtml = thumbUrl
+        ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" alt="" /></button>`
+        : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
 
-      const editBtn = (showTitleEdit && !isShared) ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
-      const duplicateBtn = (showDelete && !isShared) ? `<button class="copy-btn" data-action="draft-duplicate" data-id="${escapeHtml(d.id)}" aria-label="복제" title="복제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="15" x2="15" y1="12" y2="18"></line><line x1="12" x2="18" y1="15" y2="15"></line><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>` : '';
-      const deleteBtn = (showDelete && !isShared) ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
+      const editBtn = showTitleEdit ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
+      const duplicateBtn = showDelete ? `<button class="copy-btn" data-action="draft-duplicate" data-id="${escapeHtml(d.id)}" aria-label="복제" title="복제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="15" x2="15" y1="12" y2="18"></line><line x1="12" x2="18" y1="15" y2="15"></line><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>` : '';
+      const deleteBtn = showDelete ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
       const thumbBtnsHtml = (editBtn || duplicateBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${deleteBtn}</div>` : '';
 
       const isPending = !!d.__pending;
