@@ -15,3 +15,16 @@ test("dashboard keeps the loading spinner until real project cards are loaded", 
   assert.match(src, /if \(!missingIds\.length \|\| !NK\.api\.projectGet\) \{\s*clearLoading\(\);/);
   assert.match(src, /finally \{\s*clearLoading\(\);\s*\}/);
 });
+
+test("loading overlay container is positioned so the spinner covers cards in all dashboards", () => {
+  const css = read("prototype/styles.css");
+  assert.match(css, /\.projects \{\s*position: relative;\s*\}/);
+});
+
+test("episode title (.draft-title) stays on a single line (no 2-line wrap)", () => {
+  const css = read("prototype/styles.dashboard-cards.css");
+  // 폰트 축소 + 1행 말줄임
+  assert.match(css, /\.draft-title \{[^}]*font-size: 14px;[^}]*white-space: nowrap;[^}]*text-overflow: ellipsis;/s);
+  // 편집 중에는 줄바꿈 허용
+  assert.match(css, /\.draft-title\.editing \{[^}]*white-space: normal;/s);
+});

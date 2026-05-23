@@ -471,11 +471,20 @@ body.page-shell-image .draft-card .trash-btn { display: none !important; }
 .draft-title {
   margin: 0;
   font-weight: 700;
-  font-size: 16px;
-  line-height: 28px;
-  /* 한글이 음절 단위로 어디서나 끊기는 것을 방지 (공백/구두점에서만 줄바꿈) */
-  word-break: keep-all;
-  overflow-wrap: break-word;
+  font-size: 14px;
+  line-height: 22px;
+  /* 에피소드 이름은 항상 1행으로 — 길면 말줄임(…) 처리하여 2행이 되지 않게 한다. */
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 제목 편집 중에는 잘리지 않도록 줄바꿈 허용 */
+.draft-title[contenteditable="true"],
+.draft-title.editing {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .draft-title-row {

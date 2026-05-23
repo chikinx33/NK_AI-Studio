@@ -2083,6 +2083,13 @@ textarea::-webkit-scrollbar-corner {
   text-align: center;
 }
 
+/* 로딩 오버레이(.loading-overlay)가 카드 영역을 정확히 덮도록 컨테이너를 기준으로 삼는다.
+   (position 규칙이 없으면 absolute 오버레이가 엉뚱한 조상 기준이 되어 일부 대시보드에서
+   스피너가 안 보였음 — 브랜드 스튜디오 등) */
+.projects {
+  position: relative;
+}
+
 .loading-overlay {
   position: absolute;
   inset: 0;
