@@ -546,21 +546,23 @@
     _ytRefreshAttempted = true;
     var yt = _settings && _settings.sns && _settings.sns.youtube;
     if (!yt || !yt.connected) return Promise.resolve();
-    if (yt.channelTitle) return Promise.resolve();
+    // channelTitle 유무와 무관하게 항상 토큰 유효성을 검증한다.
+    // (refresh-info 가 channels.list 를 호출 → 토큰 만료/취소 시 needsReconnect 반환)
     return apiPost('/api/youtube/refresh-info', {})
       .then(function (res) {
         if (!_settings || !_settings.sns) return;
+        var cur = _settings.sns.youtube || {};
         if (res && res.ok) {
-          _settings.sns.youtube = Object.assign({}, _settings.sns.youtube, {
-            channelId: res.channelId || '',
-            channelTitle: res.channelTitle || '',
+          _settings.sns.youtube = Object.assign({}, cur, {
+            channelId: res.channelId || cur.channelId || '',
+            channelTitle: res.channelTitle || cur.channelTitle || '',
+            channelHandle: res.channelHandle || cur.channelHandle || '',
             needsReconnect: false,
           });
           _writeCache(_settings.sns);
         } else if (res && res.needsReconnect) {
-          _settings.sns.youtube = Object.assign({}, _settings.sns.youtube, {
-            needsReconnect: true,
-          });
+          _settings.sns.youtube = Object.assign({}, cur, { needsReconnect: true });
+          _writeCache(_settings.sns);
         }
       })
       .catch(function () { /* 네트워크 오류는 무시 — 다음 로드에서 재시도 */ });

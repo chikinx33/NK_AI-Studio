@@ -4,7 +4,21 @@ import {
   getGoogleServiceAccountToken,
   resolveGcsContextForUser,
   writeYoutubeWithShortsMirror,
+  writeYoutubePatch,
 } from "../_shared/youtube-token";
+
+// 토큰 만료/취소를 GCS sns.youtube.needsReconnect=true 로 영속화(best-effort).
+async function persistNeedsReconnect(env: any, userId: string): Promise<void> {
+  try {
+    const googleToken = await getGoogleServiceAccountToken({
+      clientEmail: env.GOOGLE_CLIENT_EMAIL,
+      privateKeyPem: env.GOOGLE_PRIVATE_KEY,
+      scope: "https://www.googleapis.com/auth/cloud-platform",
+    });
+    const gcs = resolveGcsContextForUser(env, userId);
+    await writeYoutubePatch({ ...gcs, googleToken }, { needsReconnect: true });
+  } catch (_) { /* best-effort */ }
+}
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -30,6 +44,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (msg === "youtube_not_connected") return send({ error: msg, needsReconnect: true }, 412);
+    // 토큰 만료/취소 → ensureFreshAccessToken 이 이미 needsReconnect 를 저장함
+    if (msg === "youtube_reconnect_required") return send({ error: msg, needsReconnect: true }, 412);
     return send({ error: msg }, 500);
   }
 
@@ -39,6 +55,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
   );
 
   if (chRes.status === 401 || chRes.status === 403) {
+    await persistNeedsReconnect(env, auth.userId);
     return send(
       { error: "insufficient_scope", needsReconnect: true, detail: await chRes.text() },
       412
