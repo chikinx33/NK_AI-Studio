@@ -11,8 +11,8 @@ test("login.ts treats registry as authoritative and verifies hashed passwords", 
   assert.match(src, /verifyPassword\(pw, user\.pwHash\)/);
   // 비활성 계정 차단(최고 관리자는 예외)
   assert.match(src, /account_disabled/);
-  // 응답 role 결정
-  assert.match(src, /isPrimary \? "admin" : \(user\.role \|\| "member"\)/);
+  // 응답 role 결정 — 마스터만 master, 그 외 member
+  assert.match(src, /isPrimary \? "master" : "member"/);
 });
 
 test("login.ts keeps the primary admin un-lockable (active ignored, role forced)", () => {

@@ -4,7 +4,7 @@
 //   POST   /api/project/share        → 소유자가 대상 계정에 권한 부여/갱신 {projectId, targetUserId, role, title?}
 //   DELETE /api/project/share        → 소유자가 권한 회수 {projectId, targetUserId}
 import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
-import { requireAdmin } from "../_shared/admin-users";
+import { requireMaster } from "../_shared/admin-users";
 import {
   loadShares,
   loadSharesStrict,
@@ -42,8 +42,8 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       sharedByMe: listSharedByOwner(reg, me),
       sharedWithMe: listSharedWith(reg, me),
     };
-    // 관리자에게는 전체 현황(읽기 전용)을 함께 제공.
-    if (await requireAdmin(env, me)) result.all = reg.shares;
+    // 마스터에게는 전체 현황(읽기 전용)을 함께 제공.
+    if (requireMaster(env, me)) result.all = reg.shares;
     return send(result, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);

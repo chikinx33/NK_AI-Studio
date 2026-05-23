@@ -32,9 +32,9 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-  function isAdminUser(u) {
-    return (String(u.role || '').toLowerCase() === 'admin') ||
-           (Array.isArray(u.permissions) && u.permissions.length === 0);
+  // 마스터(유일 최고 관리자) 여부 — ID가 서버가 알려준 primaryAdminId와 같을 때만.
+  function isMasterUser(u) {
+    return !!u && !!state.primaryAdminId && String(u.id) === String(state.primaryAdminId);
   }
 
   function permLabel(key) {
@@ -72,8 +72,8 @@
         if (hay.indexOf(q) === -1) return false;
       }
       switch (state.filter) {
-        case 'admin':    return isAdminUser(u);
-        case 'member':   return !isAdminUser(u);
+        case 'admin':    return isMasterUser(u);
+        case 'member':   return !isMasterUser(u);
         case 'active':   return u.active !== false;
         case 'inactive': return u.active === false;
         default:         return true;
@@ -89,8 +89,8 @@
     var authed = NK.auth && NK.auth.isAuthed && NK.auth.isAuthed();
     if (!authed) { root.innerHTML = ''; return; } // auth-overlay가 처리
 
-    if (NK.auth && NK.auth.isAdmin && !NK.auth.isAdmin()) {
-      root.innerHTML = '<div class="admin-page"><div class="bsf-detail-card"><div class="admin-error">관리자만 접근할 수 있는 페이지입니다.</div><div style="text-align:center;margin-top:14px;"><button type="button" class="admin-icon-btn" data-action="go-home">홈으로</button></div></div></div>';
+    if (NK.auth && NK.auth.isMaster && !NK.auth.isMaster()) {
+      root.innerHTML = '<div class="admin-page"><div class="bsf-detail-card"><div class="admin-error">마스터(최고 관리자)만 접근할 수 있는 페이지입니다.</div><div style="text-align:center;margin-top:14px;"><button type="button" class="admin-icon-btn" data-action="go-home">홈으로</button></div></div></div>';
       root.querySelectorAll('[data-action="go-home"]').forEach(function (el) { el.addEventListener('click', onAction); });
       return;
     }
@@ -137,8 +137,8 @@
               '<div class="admin-search"><input type="text" id="admin-search" placeholder="ID 또는 이름 검색" value="' + escapeHtml(state.search) + '" /></div>',
               '<select id="admin-filter">',
                 '<option value="all"' + (state.filter === 'all' ? ' selected' : '') + '>전체</option>',
-                '<option value="admin"' + (state.filter === 'admin' ? ' selected' : '') + '>관리자</option>',
-                '<option value="member"' + (state.filter === 'member' ? ' selected' : '') + '>일반 회원</option>',
+                '<option value="admin"' + (state.filter === 'admin' ? ' selected' : '') + '>마스터</option>',
+                '<option value="member"' + (state.filter === 'member' ? ' selected' : '') + '>회원</option>',
                 '<option value="active"' + (state.filter === 'active' ? ' selected' : '') + '>활성</option>',
                 '<option value="inactive"' + (state.filter === 'inactive' ? ' selected' : '') + '>비활성</option>',
               '</select>',
@@ -175,8 +175,8 @@
     return [
       '<tr>',
         '<td><strong>' + escapeHtml(pid) + '</strong></td>',
-        '<td>최고 관리자</td>',
-        '<td><span class="admin-badge admin-badge--admin">관리자</span> <span class="admin-perm-chip">전체 권한</span></td>',
+        '<td>마스터</td>',
+        '<td><span class="admin-badge admin-badge--admin">마스터</span> <span class="admin-perm-chip">전체 권한</span></td>',
         '<td><span class="admin-badge admin-badge--off">기본 비밀번호</span></td>',
         '<td><div class="admin-row-actions"><button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="set-primary-pw" style="min-width:auto;padding:6px 12px;">비밀번호 설정</button></div></td>',
       '</tr>'
@@ -184,19 +184,21 @@
   }
 
   function buildRow(u) {
-    var admin = isAdminUser(u);
-    var permHtml = admin
+    var master = isMasterUser(u);
+    var permHtml = master
       ? '<span class="admin-perm-chip">전체 권한</span>'
       : (Array.isArray(u.permissions) && u.permissions.length
           ? u.permissions.map(function (p) { return '<span class="admin-perm-chip">' + escapeHtml(permLabel(p)) + '</span>'; }).join('')
           : '<span class="admin-perm-chip">권한 없음</span>');
-    var roleBadge = admin
-      ? '<span class="admin-badge admin-badge--admin">관리자</span>'
+    var roleBadge = master
+      ? '<span class="admin-badge admin-badge--admin">마스터</span>'
       : '<span class="admin-badge admin-badge--member">회원</span>';
     var stateBadge = (u.active === false)
       ? '<span class="admin-badge admin-badge--off">비활성</span>'
       : '<span class="admin-badge admin-badge--on">활성</span>';
     var id = escapeHtml(u.id);
+    // 마스터 행은 삭제 불가(유일 운영 계정), 비밀번호 등 수정만 가능.
+    var deleteBtn = master ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">삭제</button>';
     return [
       '<tr data-id="' + id + '">',
         '<td><strong>' + id + '</strong></td>',
@@ -205,7 +207,7 @@
         '<td>' + stateBadge + '</td>',
         '<td><div class="admin-row-actions">',
           '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">수정</button>',
-          '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">삭제</button>',
+          deleteBtn,
         '</div></td>',
       '</tr>'
     ].join('');
@@ -214,14 +216,20 @@
   function buildModal() {
     var isEdit = state.modalMode === 'edit';
     var u = state.edit || { id: '', name: '', permissions: [], role: 'member', active: true };
-    var admin = isAdminUser(u);
-    var lockId = isEdit || !!(u && u.__lockId);          // ID 잠금(수정 모드 또는 최고 관리자 설정)
-    var forceAdmin = !!(u && u.__forceAdmin);            // 관리자 강제(최고 관리자)
-    var title = (u && u.__lockId && !isEdit) ? '최고 관리자 비밀번호 설정' : (isEdit ? '회원 수정' : '신규 회원');
+    var isMasterTarget = !!(u && u.__lockId) || isMasterUser(u);  // 마스터 대상(비번 설정/수정)
+    var lockId = isEdit || !!(u && u.__lockId);                    // ID 잠금
+    var title = (u && u.__lockId && !isEdit) ? '마스터 비밀번호 설정' : (isEdit ? (isMasterTarget ? '마스터 수정' : '회원 수정') : '신규 회원');
     var permChecks = PERMISSION_PAGES.map(function (p) {
-      var checked = !admin && Array.isArray(u.permissions) && u.permissions.indexOf(p.key) !== -1;
-      return '<label><input type="checkbox" class="admin-perm-check" value="' + p.key + '"' + (checked ? ' checked' : '') + (forceAdmin ? ' disabled' : '') + ' />' + escapeHtml(p.label) + '</label>';
+      var checked = Array.isArray(u.permissions) && u.permissions.indexOf(p.key) !== -1;
+      return '<label><input type="checkbox" class="admin-perm-check" value="' + p.key + '"' + (checked ? ' checked' : '') + ' />' + escapeHtml(p.label) + '</label>';
     }).join('');
+    // 마스터: 모든 권한 보유 → 권한/활성 항목 숨기고 비밀번호만. 회원: 페이지 권한 선택.
+    var permSection = isMasterTarget
+      ? '<div class="admin-field"><p class="admin-hint">마스터는 모든 기능 권한을 가집니다.</p></div>'
+      : ('<div class="admin-field"><label>접근 권한</label><div class="admin-perms">' + permChecks + '</div></div>');
+    var activeSection = isMasterTarget
+      ? ''
+      : ('<div class="admin-field"><label style="display:flex;align-items:center;gap:6px;color:var(--text);"><input type="checkbox" id="admin-f-active"' + (u.active !== false ? ' checked' : '') + ' /> 활성 계정</label></div>');
 
     return [
       '<div class="admin-modal-backdrop" data-action="modal-backdrop">',
@@ -240,20 +248,8 @@
             '<input type="password" id="admin-f-pw" placeholder="' + (isEdit ? '변경 시에만 입력' : '비밀번호') + '" autocomplete="new-password" />',
             (isEdit ? '<p class="admin-hint">비워두면 기존 비밀번호가 유지됩니다.</p>' : ''),
           '</div>',
-          '<div class="admin-field">',
-            '<label>권한</label>',
-            '<div class="admin-perms">',
-              permChecks,
-            '</div>',
-            '<label style="margin-top:10px;display:flex;align-items:center;gap:6px;color:#fbbf24;">',
-              '<input type="checkbox" id="admin-f-admin"' + ((admin || forceAdmin) ? ' checked' : '') + (forceAdmin ? ' disabled' : '') + ' /> 전체 권한(관리자)',
-            '</label>',
-          '</div>',
-          '<div class="admin-field">',
-            '<label style="display:flex;align-items:center;gap:6px;color:#e2e8f0;">',
-              '<input type="checkbox" id="admin-f-active"' + (u.active !== false ? ' checked' : '') + ' /> 활성 계정',
-            '</label>',
-          '</div>',
+          permSection,
+          activeSection,
           '<div class="admin-modal-error" id="admin-modal-error">' + escapeHtml(state.modalError || '') + '</div>',
           '<div class="admin-modal-actions">',
             '<button type="button" class="admin-icon-btn" data-action="modal-cancel">취소</button>',
@@ -309,13 +305,13 @@
     else if (action === 'modal-save') { saveModal(); }
   }
 
-  // 최고 관리자 비밀번호 설정: ID 잠금 + 관리자 강제로 신규 등록 모달을 연다.
+  // 마스터 비밀번호 설정: ID 잠금으로 신규 등록 모달을 연다(권한은 서버가 전체로 강제).
   function openPrimaryPwModal() {
     var pid = String(state.primaryAdminId || '');
     if (!pid) return;
     state.modalMode = 'create';
     state.modalError = '';
-    state.edit = { id: pid, name: '최고 관리자', permissions: [], role: 'admin', active: true, __lockId: true, __forceAdmin: true };
+    state.edit = { id: pid, name: '마스터', permissions: [], role: 'master', active: true, __lockId: true };
     state.modalOpen = true;
     render();
   }
@@ -352,20 +348,16 @@
     var idEl = root.querySelector('#admin-f-id');
     var nameEl = root.querySelector('#admin-f-name');
     var pwEl = root.querySelector('#admin-f-pw');
-    var adminEl = root.querySelector('#admin-f-admin');
     var activeEl = root.querySelector('#admin-f-active');
-    var isAdmin = !!(adminEl && adminEl.checked);
     var perms = [];
-    if (!isAdmin) {
-      root.querySelectorAll('.admin-perm-check').forEach(function (c) { if (c.checked) perms.push(c.value); });
-    }
+    root.querySelectorAll('.admin-perm-check').forEach(function (c) { if (c.checked) perms.push(c.value); });
     return {
       id: idEl ? String(idEl.value || '').trim() : '',
       name: nameEl ? String(nameEl.value || '').trim() : '',
       password: pwEl ? String(pwEl.value || '') : '',
-      role: isAdmin ? 'admin' : 'member',
       permissions: perms,
-      active: !!(activeEl && activeEl.checked)
+      // 회원은 항상 member(서버에서도 강제). 활성 토글은 마스터 모달엔 없으므로 기본 true.
+      active: activeEl ? !!activeEl.checked : true
     };
   }
 
@@ -383,16 +375,17 @@
     state.saving = true;
     render();
 
+    // 역할은 보내지 않는다 — 서버가 마스터/회원을 강제(회원에게 관리자 역할 불가).
     var p;
     if (state.modalMode === 'create') {
       p = NK.api.adminUserCreate({
         id: form.id, name: form.name, password: form.password,
-        permissions: form.permissions, role: form.role, active: form.active
+        permissions: form.permissions, active: form.active
       });
     } else {
       var payload = {
         id: state.edit.id, name: form.name,
-        permissions: form.permissions, role: form.role, active: form.active,
+        permissions: form.permissions, active: form.active,
         expectedUpdatedAt: state.edit.updatedAt || ''
       };
       if (form.password) payload.password = form.password;
@@ -411,7 +404,7 @@
       else if (/conflict/.test(msg)) msg = '다른 곳에서 먼저 수정되었습니다. 새로고침 후 다시 시도하세요.';
       else if (/password_required/.test(msg)) msg = '비밀번호를 입력하세요.';
       else if (/invalid_user_id/.test(msg)) msg = '유효하지 않은 ID입니다.';
-      else if (/admin_required/.test(msg)) msg = '관리자 권한이 필요합니다.';
+      else if (/master_required|admin_required/.test(msg)) msg = '마스터만 회원을 관리할 수 있습니다.';
       state.modalError = msg;
       render();
     });
@@ -426,7 +419,7 @@
       .catch(function (err) {
         var msg = (err && err.message) ? err.message : '삭제 실패';
         if (/cannot_delete_primary_admin/.test(msg)) msg = '기본 관리자 계정은 삭제할 수 없습니다.';
-        else if (/admin_required/.test(msg)) msg = '관리자 권한이 필요합니다.';
+        else if (/master_required|admin_required/.test(msg)) msg = '마스터만 회원을 관리할 수 있습니다.';
         window.alert(msg);
       });
   }
@@ -442,7 +435,7 @@
     updateAuthState();
     var authed = NK.auth && NK.auth.isAuthed && NK.auth.isAuthed();
     if (!authed) { render(); return; }
-    if (NK.auth && NK.auth.isAdmin && !NK.auth.isAdmin()) { render(); return; }
+    if (NK.auth && NK.auth.isMaster && !NK.auth.isMaster()) { render(); return; }
     loadUsers();
   }
 

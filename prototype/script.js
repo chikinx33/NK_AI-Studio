@@ -2222,11 +2222,11 @@
         });
       }
 
-      // 회원 관리(어드민) 버튼은 로그인 카드 하단에 위치하며 관리자에게만 노출
+      // 회원 관리 버튼은 로그인 카드 하단에 위치하며 마스터(유일 최고 관리자)에게만 노출
       const adminCardBtn = document.getElementById('admin-card-btn');
       if (adminCardBtn) {
-        const showAdmin = !!loggedIn && !!(NK.auth && NK.auth.isAdmin && NK.auth.isAdmin());
-        adminCardBtn.classList.toggle('hidden', !showAdmin);
+        const showMaster = !!loggedIn && !!(NK.auth && NK.auth.isMaster && NK.auth.isMaster());
+        adminCardBtn.classList.toggle('hidden', !showMaster);
       }
 
       if (loggedIn && user) {

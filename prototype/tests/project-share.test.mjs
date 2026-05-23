@@ -29,8 +29,8 @@ test("share endpoint enforces owner-only grant/revoke", () => {
   assert.match(src, /removeGrant\(reg, auth\.userId, projectId, targetUserId\)/);
   // 본인에게 공유 금지
   assert.match(src, /cannot_share_with_self/);
-  // 관리자에게만 전체 현황 노출
-  assert.match(src, /if \(await requireAdmin\(env, me\)\) result\.all = reg\.shares/);
+  // 마스터에게만 전체 현황 노출
+  assert.match(src, /if \(requireMaster\(env, me\)\) result\.all = reg\.shares/);
   // 쓰기 경로는 strict 로딩(데이터 보호)
   assert.match(src, /loadSharesStrict\(env\)/);
 });

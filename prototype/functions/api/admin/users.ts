@@ -11,7 +11,7 @@ import {
   loadRegistryStrict,
   saveRegistry,
   findUser,
-  requireAdmin,
+  requireMaster,
   createUserRecord,
   sanitizePermissions,
   publicUser,
@@ -33,12 +33,11 @@ const corsHeaders = (origin: string | null) => ({
 const send = (data: any, status = 200, origin: string | null = null) =>
   new Response(JSON.stringify(data), { status, headers: corsHeaders(origin) });
 
-/** 인증 + 관리자 검증 공통 처리. 실패 시 Response, 성공 시 { userId } 반환. */
+/** 인증 + 마스터 검증 공통 처리. 회원 관리는 오직 마스터만 가능. */
 async function gate(request: Request, env: any, origin: string | null): Promise<Response | { userId: string }> {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
-  const isAdmin = await requireAdmin(env, auth.userId);
-  if (!isAdmin) return send({ error: "admin_required" }, 403, origin);
+  if (!requireMaster(env, auth.userId)) return send({ error: "master_required" }, 403, origin);
   return { userId: auth.userId };
 }
 
@@ -78,14 +77,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const reg = await loadRegistryStrict(env);
     if (findUser(reg, id)) return send({ error: "user_exists" }, 409, origin);
 
-    // 최고 관리자 ID로 등록하는 경우 항상 admin/active로 강제(잠금 방지).
+    // 마스터(=primaryAdminId)는 항상 전체권한/active. 그 외 회원은 항상 member 역할
+    // (회원에게는 '관리자' 역할을 줄 수 없음 — 마스터는 단 하나).
     const isPrimaryTarget = id === primaryAdminId(env);
     const record = await createUserRecord({
       id,
       name: body.name,
       password: pw,
       permissions: isPrimaryTarget ? [] : body.permissions,
-      role: isPrimaryTarget ? "admin" : (body.role === "admin" ? "admin" : "member"),
+      role: isPrimaryTarget ? "admin" : "member",
       active: isPrimaryTarget ? true : (body.active !== false),
     });
     reg.users.push(record);
@@ -116,13 +116,14 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
 
     if (typeof body.name === "string") user.name = body.name.slice(0, 80);
     if (Array.isArray(body.permissions)) user.permissions = sanitizePermissions(body.permissions);
-    if (body.role === "admin" || body.role === "member") user.role = body.role;
     if (typeof body.active === "boolean") user.active = body.active;
     if (body.password) user.pwHash = await hashPassword(String(body.password).trim());
-    // 최고 관리자는 비밀번호만 변경 가능 — role/active 강제(잠금·권한박탈 방지).
+    // 마스터는 항상 admin/active(잠금 방지). 그 외 회원은 항상 member(관리자 역할 불가).
     if (id === primaryAdminId(env)) {
       user.role = "admin";
       user.active = true;
+    } else {
+      user.role = "member";
     }
     user.updatedAt = new Date().toISOString();
 

@@ -40,9 +40,9 @@ test("index.html exposes admin-only member management button in login card toolb
   assert.doesNotMatch(src, /id="admin-link"/);
 });
 
-test("setUI reveals admin card button only for admins", () => {
+test("setUI reveals member-management button only for the master", () => {
   const src = read("prototype/script.js");
   assert.match(src, /const adminCardBtn = document\.getElementById\('admin-card-btn'\)/);
-  assert.match(src, /NK\.auth\.isAdmin\(\)/);
-  assert.match(src, /adminCardBtn\.classList\.toggle\('hidden', !showAdmin\)/);
+  assert.match(src, /NK\.auth\.isMaster\(\)/);
+  assert.match(src, /adminCardBtn\.classList\.toggle\('hidden', !showMaster\)/);
 });

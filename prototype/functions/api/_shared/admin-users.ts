@@ -91,21 +91,13 @@ export function findUser(registry: UsersRegistry, id: string): AdminUser | null 
 }
 
 /**
- * 주어진 userId가 관리자 권한을 갖는지 검증한다.
- * - env 1차 관리자이거나
- * - 레지스트리에서 active 하고 role==="admin" 인 회원
+ * 마스터(이 프로젝트를 운영하는 유일한 최고 관리자 = env 1차 관리자)인지 검증한다.
+ * 회원 관리(생성·삭제·권한설정) 등 운영 기능은 오직 마스터만 가능하다.
+ * 회원에게 어떤 권한을 줘도 마스터가 될 수 없다.
  */
-export async function requireAdmin(env: any, userId: string): Promise<boolean> {
+export function requireMaster(env: any, userId: string): boolean {
   const uid = sanitizeUserId(userId);
-  if (!uid) return false;
-  if (uid === primaryAdminId(env)) return true;
-  try {
-    const reg = await loadRegistry(env);
-    const user = findUser(reg, uid);
-    return !!(user && user.active && user.role === "admin");
-  } catch (_) {
-    return false;
-  }
+  return !!uid && uid === primaryAdminId(env);
 }
 
 /**

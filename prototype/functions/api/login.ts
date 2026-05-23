@@ -58,7 +58,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const ok = await verifyPassword(pw, user.pwHash);
         if (ok) {
           const session = await issueSessionToken(id, env);
-          const role = isPrimary ? "admin" : (user.role || "member");
+          // 마스터(1차 관리자)만 role="master". 그 외 회원은 항상 "member".
+          const role = isPrimary ? "master" : "member";
           const permissions = isPrimary ? [] : (user.permissions || []);
           return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions, role }, 200, origin);
         }
@@ -76,7 +77,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     //     레지스트리에 limfactory를 등록하면 위 (1)이 우선하여 이 기본 비번은 더 이상 통하지 않는다.
     if (isPrimary && pw === envPw) {
       const session = await issueSessionToken(id, env);
-      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: [], role: "admin" }, 200, origin);
+      return json({ ok: true, user: id, token: session.token, expiresAt: session.expiresAt, permissions: [], role: "master" }, 200, origin);
     }
 
     // (3) 레거시 하드코딩 회원: 평문 비교 후 성공 시 레지스트리에 1회 이관.

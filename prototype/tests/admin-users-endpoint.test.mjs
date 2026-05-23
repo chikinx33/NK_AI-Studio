@@ -7,11 +7,11 @@ const read = (rel) => fs.readFileSync(path.join(process.cwd(), rel), "utf8");
 
 test("admin users endpoint requires admin on every method", () => {
   const src = read("prototype/functions/api/admin/users.ts");
-  // 인증 + 관리자 검증 공통 게이트
+  // 인증 + 마스터 검증 공통 게이트 (회원관리는 마스터 전용)
   assert.match(src, /async function gate/);
   assert.match(src, /authorizeRequest\(request, env\)/);
-  assert.match(src, /requireAdmin\(env, auth\.userId\)/);
-  assert.match(src, /admin_required/);
+  assert.match(src, /requireMaster\(env, auth\.userId\)/);
+  assert.match(src, /master_required/);
   // 4개 메서드 핸들러 + OPTIONS 모두 노출
   assert.match(src, /export const onRequestGet/);
   assert.match(src, /export const onRequestPost/);
@@ -48,7 +48,7 @@ test("admin-users shared module exposes registry + guard helpers", () => {
   assert.match(src, /export async function loadRegistry/);
   assert.match(src, /export async function loadRegistryStrict/);
   assert.match(src, /export async function saveRegistry/);
-  assert.match(src, /export async function requireAdmin/);
+  assert.match(src, /export function requireMaster/);
   assert.match(src, /export function findUser/);
   assert.match(src, /export function sanitizePermissions/);
   assert.match(src, /export function publicUser/);

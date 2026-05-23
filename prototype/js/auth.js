@@ -58,10 +58,16 @@
         try { return KEYS.ROLE ? (localStorage.getItem(KEYS.ROLE) || '') : ''; } catch (_) { return ''; }
     };
 
-    // 어드민(전체 권한) 여부: role이 'admin' 이거나 권한 배열이 비어있으면 전체 권한으로 간주.
+    // 어드민(전체 권한) 여부: role이 'admin'/'master' 이거나 권한 배열이 비어있으면 전체 권한으로 간주.
     auth.isAdmin = function () {
-        if (String(auth.getRole() || '').toLowerCase() === 'admin') return true;
+        var r = String(auth.getRole() || '').toLowerCase();
+        if (r === 'admin' || r === 'master') return true;
         return auth.getPermissions().length === 0;
+    };
+
+    // 마스터(이 프로젝트의 유일한 최고 관리자) 여부 — 회원 관리 등 운영 기능 전용.
+    auth.isMaster = function () {
+        return String(auth.getRole() || '').toLowerCase() === 'master';
     };
 
     auth.getPermissions = function () {
