@@ -3821,11 +3821,13 @@
           .then(function (r) { return r.json().then(function (j) { return { httpStatus: r.status, body: j }; }); })
           .then(function (wrap) {
             var res = wrap.body;
-            // YouTube 미연결 → 안내 후 skip
-            if (wrap.httpStatus === 412 || (res && res.error && /not connected|연결되지 않/i.test(res.error))) {
-              alert(isEn
-                ? 'YouTube is not connected. Connect it in SNS Settings first.'
-                : 'YouTube가 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요.');
+            // YouTube 미연결/연결 만료 → 안내 후 skip (서버 메시지가 있으면 그대로 노출)
+            if (wrap.httpStatus === 412 || (res && res.error && /not connected|연결되지 않|만료|expired|revoked/i.test(res.error))) {
+              alert((res && res.error)
+                ? res.error
+                : (isEn
+                    ? 'YouTube is not connected. Connect it in SNS Settings first.'
+                    : 'YouTube가 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요.'));
               return { skipped: true };
             }
             if (!res || !res.ok) throw new Error((res && res.error) || 'SNS publish failed');

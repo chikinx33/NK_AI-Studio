@@ -10,6 +10,7 @@ export interface YouTubeTokenData {
   refreshToken: string;
   tokenExpiresAt: string;
   scope?: string;
+  needsReconnect?: boolean;  // refresh token 폐기/만료 시 true → SNS 설정에서 재연결 유도
 }
 
 // 하위 호환 alias
@@ -230,6 +231,13 @@ export async function ensureFreshAccessToken(env: any, userId: string): Promise<
     error_description?: string;
   };
   if (!data.access_token) {
+    // refresh token 폐기/만료(사용자가 Google 권한 해제, 비밀번호 변경, 미사용 만료 등)
+    // → 재연결 외엔 복구 불가. needsReconnect 플래그를 세우고 sentinel 오류를 던진다.
+    const errStr = `${data.error || ""} ${data.error_description || ""}`.toLowerCase();
+    if (data.error === "invalid_grant" || /expired or revoked|invalid_grant/.test(errStr)) {
+      try { await writeYoutubePatch(ctx, { needsReconnect: true }); } catch (_) { /* best-effort */ }
+      throw new Error("youtube_reconnect_required");
+    }
     throw new Error(data.error_description || data.error || "refresh_failed");
   }
 
@@ -238,6 +246,7 @@ export async function ensureFreshAccessToken(env: any, userId: string): Promise<
   await writeYoutubePatch(ctx, {
     accessToken: newAccessToken,
     tokenExpiresAt: newExpiresAt,
+    needsReconnect: false,
   });
   return newAccessToken;
 }

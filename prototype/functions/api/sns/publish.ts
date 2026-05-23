@@ -1140,6 +1140,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         if (msg === "youtube_not_connected") {
           return send({ error: "YouTube 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 412);
         }
+        if (msg === "youtube_reconnect_required") {
+          return send({ error: "YouTube 연결이 만료되었습니다. SNS 설정에서 YouTube를 다시 연결해 주세요." }, 412);
+        }
         return send({ error: msg }, 500);
       }
 
