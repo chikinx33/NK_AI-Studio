@@ -388,88 +388,65 @@
     refresh();
   }
 
-  // 공유받은 프로젝트 섹션을 렌더한다(소유 그리드와 분리). 클릭 시 소유자 프로젝트를 연다.
-  let _sharedSectionSeq = 0;
-  async function appendSharedSection(container) {
-    if (!container || !(NK.api && NK.api.projectList)) return;
-    const seq = ++_sharedSectionSeq;
-    let shared = [];
-    try {
-      const list = await NK.api.projectList();
-      shared = (list && Array.isArray(list.shared)) ? list.shared : [];
-    } catch (_) { shared = []; }
-    if (seq !== _sharedSectionSeq) return; // 더 최신 렌더가 진행 중이면 중단
-    const existing = document.getElementById('nk-shared-section');
-    if (existing) existing.remove();
-    if (!shared.length) return;
-    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    const section = document.createElement('div');
-    section.id = 'nk-shared-section';
-    section.style.cssText = 'margin-top:22px;';
+  // ─── 공유받은 프로젝트를 수신자의 카테고리(시리즈)로 통합 ───────────────
+  // 별도 섹션 대신, 공유받은 프로젝트를 일반 카테고리 칩으로 합쳐 보여주고,
+  // 칩 라벨 앞에 쉐어 아이콘 + 역할(뷰어/에디트) 아이콘을 붙인다.
+  var _sharedDrafts = [];                 // 공유받은 에피소드의 의사(pseudo) 드래프트
+  var _sharedMeta = new Map();            // seriesId -> { role, ownerId }
+  var _sharedFetchedKey = '';
 
-    // 시리즈(프로젝트) 단위로 그룹핑 — 에피소드 전체가 한 프로젝트 아래 묶여 보이도록.
-    const groups = new Map();
-    shared.forEach((s) => {
-      const key = (s.ownerId || '') + '::' + (s.seriesId || ('proj:' + s.projectId));
-      if (!groups.has(key)) {
-        groups.set(key, { ownerId: s.ownerId, seriesTitle: s.seriesTitle || s.title || s.projectId, items: [] });
-      }
-      groups.get(key).items.push(s);
-    });
-
-    const epCard = (s) => {
-      const roleLabel = s.role === 'editor' ? '에디터' : '뷰어';
-      const roleColor = s.role === 'editor' ? '#4ade80' : '#93c5fd';
-      return `
-        <article class="draft-card nk-shared-card" data-shared-id="${esc(s.projectId)}" data-owner="${esc(s.ownerId)}" data-role="${esc(s.role)}" style="cursor:pointer;">
-          <div class="draft-top">
-            <div class="draft-info">
-              <div class="draft-title-row"><h4 class="draft-title">${esc(s.title || s.projectId)}</h4></div>
-              <div class="draft-meta">
-                <div><span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(148,163,184,.16);color:${roleColor};">${roleLabel}</span></div>
-              </div>
-            </div>
-          </div>
-        </article>`;
-    };
-
-    let groupsHtml = '';
-    groups.forEach((g) => {
-      groupsHtml += `
-        <div class="nk-shared-group" style="margin-bottom:16px;">
-          <div style="font-size:13px;font-weight:600;margin:0 0 8px;color:var(--text,#e9edf7);">${esc(g.seriesTitle)} <span style="font-weight:400;color:var(--muted,#8aa0c3);">· 소유자 ${esc(g.ownerId)} · 에피소드 ${g.items.length}개</span></div>
-          <div class="draft-list nk-shared-list">${g.items.map(epCard).join('')}</div>
-        </div>`;
-    });
-
-    section.innerHTML = `
-      <div style="font-size:13px;font-weight:600;color:var(--muted,#8aa0c3);margin:0 0 10px;padding-top:14px;border-top:1px solid var(--border,#1b2845);">공유받은 프로젝트</div>
-      ${groupsHtml}`;
-    container.appendChild(section);
-
-    section.querySelectorAll('.nk-shared-card').forEach((card) => {
-      card.addEventListener('click', () => {
-        const pid = String(card.getAttribute('data-shared-id') || '').trim();
-        const ownerId = String(card.getAttribute('data-owner') || '').trim();
-        const role = String(card.getAttribute('data-role') || 'viewer').trim();
-        if (!pid) return;
-        openSharedProject(pid, ownerId, role, card.querySelector('.draft-title')?.textContent || '');
-      });
-    });
+  // 공유 상태 아이콘 (lucide)
+  var ICON_SHARE = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>';
+  var ICON_VIEWER = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
+  var ICON_EDITOR = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M8 12h8"/><path d="M10 11v2"/><path d="M8 17h8"/><path d="M14 16v2"/></svg>';
+  function sharedLabelIcons(role) {
+    return `<span class="nk-shared-label-icons" title="공유받음 (${role === 'editor' ? '에디터' : '뷰어'})" style="display:inline-flex;align-items:center;gap:3px;margin-right:5px;vertical-align:-2px;color:${role === 'editor' ? '#4ade80' : '#93c5fd'};">${ICON_SHARE}${role === 'editor' ? ICON_EDITOR : ICON_VIEWER}</span>`;
   }
 
-  function openSharedProject(projectId, ownerId, role, title) {
-    // ownerId 매핑은 projectList가 이미 sessionStorage에 기록함 → projectGet/Save가 자동 사용.
-    const draft = { id: String(projectId), title: title || String(projectId), ownerId: String(ownerId || ''), sharedRole: role || 'viewer', payload: {}, scenes: [] };
-    try { if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft); } catch (_) {}
-    try { sessionStorage.setItem('nk_force_dashboard_entry', '0'); } catch (_) {}
-    const host = getHostShell();
-    if (NK.navigation && NK.navigation.loadStage) {
-      if (host === 'brand') NK.navigation.loadStage('brand.html');
-      else if (host === 'image') { try { sessionStorage.setItem('nk_ai_image_selection_explicit', '1'); } catch (_) {} NK.navigation.loadStage('ai-image-stage.html'); }
-      else if (host === 'videogen') { try { sessionStorage.setItem('nk_ai_video_gen_selection_explicit', '1'); } catch (_) {} NK.navigation.loadStage('ai-video-gen-stage.html'); }
-      else NK.navigation.loadStage('scenario.html');
-    }
+  // 공유받은 에피소드를 의사 드래프트로 변환(소유자 seriesId 기준으로 그룹핑).
+  function buildSharedDrafts(shared) {
+    _sharedMeta = new Map();
+    const out = [];
+    (Array.isArray(shared) ? shared : []).forEach((s) => {
+      const role = s.role === 'editor' ? 'editor' : 'viewer';
+      const ownerId = String(s.ownerId || '');
+      const base = s.seriesId ? (ownerId + '_' + s.seriesId) : ('p_' + s.projectId);
+      const seriesId = normalizeSeriesId('shr_' + base) || ('shr' + s.projectId);
+      const seriesTitle = String(s.seriesTitle || s.title || s.projectId);
+      const nd = normalizeDraft({
+        id: String(s.projectId),
+        title: String(s.title || s.projectId),
+        payload: { seriesId: seriesId, seriesTitle: seriesTitle },
+        scenes: [],
+      });
+      if (!nd) return;
+      nd.__shared = true;
+      nd.__ownerId = ownerId;
+      nd.__role = role;
+      out.push(nd);
+      if (!_sharedMeta.has(nd.seriesId)) _sharedMeta.set(nd.seriesId, { role: role, ownerId: ownerId });
+    });
+    _sharedDrafts = out;
+  }
+
+  // 공유 목록을 서버에서 받아 의사 드래프트로 갱신하고, 변경 시 재렌더.
+  async function refreshSharedDrafts() {
+    if (!(NK.api && NK.api.projectList)) return;
+    try {
+      const list = await NK.api.projectList();
+      const shared = (list && Array.isArray(list.shared)) ? list.shared : [];
+      const key = JSON.stringify(shared.map((s) => [s.projectId, s.ownerId, s.role, s.seriesId]));
+      if (key === _sharedFetchedKey) return;
+      _sharedFetchedKey = key;
+      buildSharedDrafts(shared);
+      dashboard.renderDrafts();
+    } catch (_) { /* 무시 */ }
+  }
+
+  // 소유 드래프트 + 공유받은 의사 드래프트 합본(렌더·클릭 조회용)
+  function getViewDrafts() {
+    const owned = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts().map(normalizeDraft).filter(Boolean) : [];
+    return owned.concat(_sharedDrafts);
   }
 
   dashboard.renderDrafts = function () {
@@ -624,7 +601,9 @@
       mergeFromServer();
     }
 
-    drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+    // 공유받은 프로젝트 목록 갱신(비동기, 변경 시 재렌더). 소유 + 공유 합본으로 카테고리 구성.
+    refreshSharedDrafts();
+    drafts = getViewDrafts();
     const seriesList = listSeriesFromDrafts(drafts);
     if (currentSeriesFilter !== '__all__' && !seriesList.some((s) => s.id === currentSeriesFilter)) {
       currentSeriesFilter = '__all__';
@@ -669,7 +648,8 @@
 
     // 브랜드 스튜디오에서 카테고리(시리즈)를 선택했을 때, 신규 버튼 왼쪽에 공유 버튼 표시.
     // 선택된 시리즈(프로젝트) 전체 = 모든 에피소드를 다른 계정에 공유한다.
-    const showShareButton = host === 'brand' && currentSeriesFilter !== '__all__' && filteredDrafts.length > 0;
+    // 공유 버튼은 '내가 소유한' 카테고리에서만 표시(공유받은 카테고리는 재공유 불가).
+    const showShareButton = host === 'brand' && currentSeriesFilter !== '__all__' && filteredDrafts.length > 0 && !_sharedMeta.has(currentSeriesFilter);
     const shareBtnHtml = showShareButton
       ? `<button class="btn-primary series-share-btn" data-action="share-series" data-series-id="${escapeHtml(currentSeriesFilter)}" data-series-title="${escapeHtml((selectedSeries && selectedSeries.title) || categoryTitle || '')}" aria-label="공유" title="프로젝트 전체 공유"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg></button>`
       : '';
@@ -685,11 +665,14 @@
           </div>
           <div class="series-filter-chip-row">
             <button class="chip series-chip ${currentSeriesFilter === '__all__' ? 'active' : ''}" data-action="series-filter" data-series-id="__all__">전체</button>
-            ${seriesList.map((s) => `
-              <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}" data-action="series-filter" data-series-id="${escapeHtml(s.id)}">
-                ${escapeHtml(s.title)} (${s.count})
-              </button>
-            `).join('')}
+            ${seriesList.map((s) => {
+              const sm = _sharedMeta.get(s.id);
+              const iconPrefix = sm ? sharedLabelIcons(sm.role) : '';
+              return `
+              <button class="chip series-chip ${currentSeriesFilter === s.id ? 'active' : ''}${sm ? ' is-shared' : ''}" data-action="series-filter" data-series-id="${escapeHtml(s.id)}">
+                ${iconPrefix}${escapeHtml(s.title)} (${s.count})
+              </button>`;
+            }).join('')}
           </div>
         </div>
         <div class="series-filter-actions" style="display:flex;align-items:center;gap:8px;">
@@ -712,17 +695,22 @@
       const needs = Array.isArray(d.payload?.needs) ? d.payload.needs.filter(Boolean).join(', ') : (d.payload?.needs || '');
       const genre = `${cat} ${tags}`.trim();
       const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
+      const isShared = !!d.__shared; // 공유받은 카드: 수정/복제/삭제·썸네일변경 불가(소유자만 관리)
       const thumbObj = String(d.payload?.thumbnailObjectName || '').trim();
       const thumbUrl = thumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
         ? NK.api.mediaProxyObjectUrl(thumbObj)
         : '';
-      const thumbHtml = thumbUrl
-        ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" alt="" /></button>`
-        : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
+      const thumbHtml = isShared
+        ? (thumbUrl
+            ? `<div class="draft-thumb has-image"><img src="${escapeHtml(thumbUrl)}" alt="" /></div>`
+            : `<div class="draft-thumb empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></div>`)
+        : (thumbUrl
+            ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" alt="" /></button>`
+            : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`);
 
-      const editBtn = showTitleEdit ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
-      const duplicateBtn = showDelete ? `<button class="copy-btn" data-action="draft-duplicate" data-id="${escapeHtml(d.id)}" aria-label="복제" title="복제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="15" x2="15" y1="12" y2="18"></line><line x1="12" x2="18" y1="15" y2="15"></line><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>` : '';
-      const deleteBtn = showDelete ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
+      const editBtn = (showTitleEdit && !isShared) ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
+      const duplicateBtn = (showDelete && !isShared) ? `<button class="copy-btn" data-action="draft-duplicate" data-id="${escapeHtml(d.id)}" aria-label="복제" title="복제"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="15" x2="15" y1="12" y2="18"></line><line x1="12" x2="18" y1="15" y2="15"></line><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg></button>` : '';
+      const deleteBtn = (showDelete && !isShared) ? `<button class="trash-btn action-trash" data-action="draft-delete" data-id="${escapeHtml(d.id)}" aria-label="삭제">&#128465;</button>` : '';
       const thumbBtnsHtml = (editBtn || duplicateBtn || deleteBtn) ? `<div class="draft-thumb-btns">${editBtn}${duplicateBtn}${deleteBtn}</div>` : '';
 
       const isPending = !!d.__pending;
@@ -758,9 +746,6 @@
 
     container.innerHTML = filterBar + list;
 
-    // 공유받은 프로젝트 섹션(별도) — 소유 프로젝트 그리드와 분리해 표시
-    appendSharedSection(container);
-
     // 선택된 카드를 뷰포트 안으로 스크롤
     try {
       const selectedCard = container.querySelector('.draft-card.is-selected');
@@ -773,8 +758,8 @@
       if (!btn && card) {
         const cardId = String(card.getAttribute('data-draft-id') || '').trim();
         if (!cardId) return;
-        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
-        const draft = drafts.find(d => String(d.id) === cardId);
+        // 소유 + 공유받은(의사) 드래프트 합본에서 조회 → 공유 카드도 열 수 있게.
+        const draft = getViewDrafts().find(d => String(d.id) === cardId);
         if (!draft) return;
         selectProject(draft);
         container.querySelectorAll('.draft-card.is-selected').forEach(c => c.classList.remove('is-selected'));

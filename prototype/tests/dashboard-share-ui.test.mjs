@@ -26,12 +26,24 @@ test("dashboard share button shares the whole series (all episodes), not a singl
   assert.match(src, /value="editor"/);
 });
 
-test("dashboard renders a shared-with-me section and opens shared projects", () => {
+test("dashboard merges shared projects into categories with share+role icons (no separate section)", () => {
   const src = read("prototype/js/ui/dashboard.js");
-  assert.match(src, /function appendSharedSection/);
-  assert.match(src, /function openSharedProject/);
-  assert.match(src, /공유받은 프로젝트/);
-  assert.match(src, /list\.shared/);
+  // 별도 '공유받은 프로젝트' 섹션은 제거됨
+  assert.doesNotMatch(src, /function appendSharedSection/);
+  assert.doesNotMatch(src, /nk-shared-section/);
+  // 공유 프로젝트를 소유 드래프트와 합본으로 카테고리에 통합
+  assert.match(src, /function buildSharedDrafts/);
+  assert.match(src, /function getViewDrafts/);
+  assert.match(src, /drafts = getViewDrafts\(\)/);
+  // 시리즈 칩 라벨 앞에 쉐어 + 역할 아이콘
+  assert.match(src, /function sharedLabelIcons/);
+  assert.match(src, /_sharedMeta\.get\(s\.id\)/);
+  assert.match(src, /ICON_SHARE/);
+  assert.match(src, /ICON_VIEWER/);
+  assert.match(src, /ICON_EDITOR/);
+  // 공유받은 카드는 수정/복제/삭제·재공유 불가
+  assert.match(src, /const isShared = !!d\.__shared/);
+  assert.match(src, /!_sharedMeta\.has\(currentSeriesFilter\)/);
 });
 
 test("api propagates ownerId for shared projects via session map", () => {
