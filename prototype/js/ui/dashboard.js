@@ -454,13 +454,16 @@
       if (shared.length && NK.api.projectGet) {
         // 소유자 경로에서 각 공유 프로젝트의 payload(대표 이미지 포함)를 가져온다.
         enriched = await runTasksInBatches(shared, async (s) => {
-          var data = {};
+          var data = {}, missing = false;
           try {
             var res = await NK.api.projectGet(String(s.projectId), String(s.ownerId || ''));
+            // 소유자가 삭제한 프로젝트는 빈 응답(source:'empty', data 없음) → 목록에서 제외.
+            if (res && res.source === 'empty' && !res.data) missing = true;
             data = (res && res.data) || {};
           } catch (_) { data = {}; }
-          return { share: s, data: data };
+          return { share: s, data: data, missing: missing };
         }, 6);
+        enriched = enriched.filter(function (r) { return !r.missing; });
       } else {
         enriched = shared.map(function (s) { return { share: s, data: {} }; });
       }

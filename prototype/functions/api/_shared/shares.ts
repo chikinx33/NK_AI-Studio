@@ -134,6 +134,19 @@ export function upsertGrant(
   entry.updatedAt = now;
 }
 
+/** 특정 프로젝트의 모든 공유를 제거한다(프로젝트 삭제 시 정리). */
+export function removeProjectShares(reg: SharesRegistry, ownerId: string, projectId: string): void {
+  const oid = sanitizeUserId(ownerId);
+  const pid = String(projectId || "").trim();
+  reg.shares = reg.shares.filter((e) => !(e.ownerId === oid && e.projectId === pid));
+}
+
+/** 소유자의 모든 공유를 제거한다(전체 삭제 시 정리). */
+export function removeAllOwnerShares(reg: SharesRegistry, ownerId: string): void {
+  const oid = sanitizeUserId(ownerId);
+  reg.shares = reg.shares.filter((e) => e.ownerId !== oid);
+}
+
 /** 소유자가 대상 계정의 권한을 회수한다. */
 export function removeGrant(reg: SharesRegistry, ownerId: string, projectId: string, targetUserId: string): void {
   const entry = findEntry(reg, ownerId, projectId);

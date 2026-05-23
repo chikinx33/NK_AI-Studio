@@ -3,6 +3,7 @@
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/
 import { buildAiVideoProjectPrefix, buildAiVideoUserRoot } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { loadSharesStrict, saveShares, removeProjectShares, removeAllOwnerShares } from "../_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -127,6 +128,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
       pageToken = String((json as any)?.nextPageToken || "");
     } while (pageToken);
+
+    // 프로젝트(또는 전체) 삭제 시, 해당 프로젝트의 공유 grant도 정리한다.
+    // (남아있으면 공유받은 계정 화면에 유령 카드가 보임)
+    try {
+      const sreg = await loadSharesStrict(env);
+      if (deleteAll) removeAllOwnerShares(sreg, userId);
+      else removeProjectShares(sreg, userId, projectId);
+      await saveShares(env, sreg);
+    } catch (_) { /* 공유 정리 실패는 삭제 자체를 막지 않음 */ }
 
     return send({ deletedCount: results.filter(r => r.status === 204).length, listedCount, results, prefix, deleteAll }, 200, origin);
   } catch (e: any) {

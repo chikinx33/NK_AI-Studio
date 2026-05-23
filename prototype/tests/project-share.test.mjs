@@ -35,6 +35,20 @@ test("share endpoint enforces owner-only grant/revoke", () => {
   assert.match(src, /loadSharesStrict\(env\)/);
 });
 
+test("deleting a project cleans up its share grants (no phantom card)", () => {
+  const shares = read("prototype/functions/api/_shared/shares.ts");
+  assert.match(shares, /export function removeProjectShares/);
+  assert.match(shares, /export function removeAllOwnerShares/);
+  const del = read("prototype/functions/api/project/delete.ts");
+  assert.match(del, /removeProjectShares\(sreg, userId, projectId\)/);
+  assert.match(del, /removeAllOwnerShares\(sreg, userId\)/);
+  assert.match(del, /saveShares\(env, sreg\)/);
+  // 클라이언트: 삭제되어 빈 응답인 공유 프로젝트는 목록에서 제외
+  const dash = read("prototype/js/ui/dashboard.js");
+  assert.match(dash, /res\.source === 'empty' && !res\.data/);
+  assert.match(dash, /enriched\.filter\(function \(r\) \{ return !r\.missing; \}\)/);
+});
+
 test("client api exposes project share wrappers", () => {
   const src = read("prototype/api.js");
   assert.match(src, /api\.projectShareList = async function/);
