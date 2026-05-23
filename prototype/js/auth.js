@@ -67,7 +67,12 @@
 
     // 마스터(이 프로젝트의 유일한 최고 관리자) 여부 — 회원 관리 등 운영 기능 전용.
     auth.isMaster = function () {
-        return String(auth.getRole() || '').toLowerCase() === 'master';
+        var r = String(auth.getRole() || '').toLowerCase();
+        if (r === 'master') return true;
+        // 하위호환: 'master' 도입 이전 마스터 세션은 role='admin' + 빈 권한으로 저장돼 있음.
+        // (변경 후 일반 회원은 role='member'라 여기에 걸리지 않음)
+        if (r === 'admin' && auth.getPermissions().length === 0) return true;
+        return false;
     };
 
     auth.getPermissions = function () {
