@@ -716,7 +716,7 @@
       admin_master_all_perm: '마스터는 모든 기능 권한을 가집니다.',
       admin_active_account: '활성 계정',
       admin_cancel: '취소',
-      admin_save_apply: '저장(적용)',
+      admin_save_apply: '저장',
       admin_saving: '저장 중...',
       admin_ph_id: '영문 소문자/숫자/._-',
       admin_err_enter_id: 'ID를 입력하세요.',
