@@ -119,6 +119,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
         refreshToken,
         tokenExpiresAt: expiresAt,
         scope: tokenData.scope || "https://www.googleapis.com/auth/youtube.upload",
+        needsReconnect: false,  // 재연결 완료 → 만료 플래그 해제
       }
     );
 

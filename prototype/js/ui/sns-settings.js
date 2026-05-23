@@ -328,6 +328,7 @@
         connected: true,
         enabled: true,
         username: result.username || '',
+        needsReconnect: false,
       });
       _writeCache(_settings.sns);
       render();
@@ -371,6 +372,11 @@
       var pid = btn.dataset.platform;
 
       var s = (_settings && _settings.sns && _settings.sns[pid]) || {};
+      // 토큰 만료/취소(재연결 필요) 상태면 해제 확인 없이 바로 재인증 진행
+      if (s.connected && s.needsReconnect) {
+        startOAuth(pid);
+        return;
+      }
       if (s.connected) {
         if (!confirm(T[_lang()].disconnectConfirm(pid))) return;
         _settings.sns[pid] = { connected: false, enabled: false };
@@ -416,8 +422,9 @@
     var needsReconnect = !!snsState.needsReconnect;
     if (comingSoon) statusText = t('comingSoon');
     else if (!connected) statusText = t('notConnected');
-    else if (enabled) statusText = username ? '@' + username : (needsReconnect ? t('reconnectHint') : t('inUse'));
-    else statusText = username ? '@' + username + ' · ' + t('paused') : (needsReconnect ? t('reconnectHint') : t('paused'));
+    else if (needsReconnect) statusText = (username ? '@' + username + ' · ' : '') + t('reconnectHint');
+    else if (enabled) statusText = username ? '@' + username : t('inUse');
+    else statusText = username ? '@' + username + ' · ' + t('paused') : t('paused');
 
     // 연결 체크박스 (좌측 액션): 연결됐으면 V 표시, 안 됐으면 빈칸. 클릭으로 연결/해제.
     var checkSvg = '<svg class="sns-check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
@@ -466,7 +473,7 @@
       : '';
 
     return [
-      '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
+      '<div class="sns-pcard' + (connected ? ' sns-pcard--connected' : '') + (connected && !enabled ? ' sns-pcard--paused' : '') + (connected && needsReconnect ? ' sns-pcard--reconnect' : '') + (comingSoon ? ' sns-pcard--soon' : '') + '">',
         '<div class="sns-pcard-icon">', icon, '</div>',
         '<div class="sns-pcard-body">',
           '<div class="sns-pcard-name">', escapeHtml(platform.label), '</div>',

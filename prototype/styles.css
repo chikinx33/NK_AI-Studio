@@ -14049,6 +14049,15 @@ textarea.bsf-skeleton {
 .sns-pcard--paused .sns-pcard-status {
   color: var(--muted, #888);
 }
+/* 토큰 만료/취소 → 재연결 필요: 주황색으로 강조 */
+.sns-pcard--reconnect .sns-pcard-status {
+  color: #f59e0b;
+  font-weight: 600;
+}
+.sns-pcard--reconnect .sns-connect-box.is-connected {
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
 
 /* 카드 우측 액션 영역: 연결 체크박스 + 사용 토글 */
 .sns-pcard-actions {
