@@ -4339,7 +4339,9 @@
     }
 
     // AI 이미지 라이브러리 비동기 로드 (ai-image에서 생성한 GCS 이미지)
-    // - sessionId 기반이므로 project.payload.aiImageSessionId 또는 현재 로컬 sessionId 사용
+    // - 반드시 이 프로젝트 payload의 aiImageSessionId만 사용한다.
+    //   전역 localStorage 세션으로 폴백하면 다른 프로젝트에서 생성한 이미지까지
+    //   모두 끌어오는 교차 오염이 발생하므로 폴백하지 않는다.
     // - 서버 동기화(refreshProjectPromise) 이후 latestProject.payload에서 최신 sessionId 읽음
     if (NK.api && NK.api.aiImageSessionLibrary && initProjectId) {
       promises.push(
@@ -4348,9 +4350,6 @@
           try {
             var _pp = (latestProject && latestProject.payload) || (project && project.payload) || {};
             _aiImgSid = String(_pp.aiImageSessionId || '').trim();
-            if (!_aiImgSid) {
-              try { _aiImgSid = String(localStorage.getItem('nk_ai_image_session_id') || '').trim(); } catch (_) {}
-            }
           } catch (_) {}
           if (!_aiImgSid) return;
           return NK.api.aiImageSessionLibrary(_aiImgSid)
