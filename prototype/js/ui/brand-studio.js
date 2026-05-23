@@ -1986,6 +1986,19 @@
       var cLen = captionVal.length;
       var cCls = 'bsf-charcount' + (cLen > limit - 10 ? ' over' : cLen > limit - 60 ? ' warn' : '');
       var bodyClip = isThreads ? 260 : 140;
+      // 첨부 미디어 미리보기 (영상 우선, 없으면 이미지 최대 4장 그리드).
+      // 실제 발행 시 선택된 이미지·영상·캐러셀이 그대로 Threads 로 전송된다.
+      var xtMediaHtml = '';
+      if (draftFirstVidUrl) {
+        xtMediaHtml = '<div class="bsf-mock-x-media"><video class="bsf-mock-x-media-el" src="' + escapeHtml(draftFirstVidUrl) + '" preload="auto" muted playsinline></video></div>';
+      } else if (draftSelImgs.length) {
+        var xtImgs = draftSelImgs.slice(0, 4);
+        xtMediaHtml = '<div class="bsf-mock-x-media bsf-mock-x-media--' + xtImgs.length + '">' +
+          xtImgs.map(function (img) {
+            return '<img class="bsf-mock-x-media-el" src="' + escapeHtml(String(img.url || '')) + '" alt="" />';
+          }).join('') +
+        '</div>';
+      }
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-x">' +
         '<div class="bsf-mock-x-hd">' +
@@ -1996,6 +2009,7 @@
           '</div>' +
         '</div>' +
         '<div class="bsf-mock-x-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((captionVal || '').slice(0, bodyClip)) + (captionVal.length > bodyClip ? '…' : '') + '</div>' +
+        xtMediaHtml +
         '<div class="bsf-mock-x-actions">' +
           '<span class="bsf-mock-x-action">' + _svgMsg18 + ' 12</span>' +
           '<span class="bsf-mock-x-action">' + _svgRepeat18 + ' 48</span>' +
