@@ -361,6 +361,70 @@
     refresh();
   }
 
+  // 공유받은 프로젝트 섹션을 렌더한다(소유 그리드와 분리). 클릭 시 소유자 프로젝트를 연다.
+  let _sharedSectionSeq = 0;
+  async function appendSharedSection(container) {
+    if (!container || !(NK.api && NK.api.projectList)) return;
+    const seq = ++_sharedSectionSeq;
+    let shared = [];
+    try {
+      const list = await NK.api.projectList();
+      shared = (list && Array.isArray(list.shared)) ? list.shared : [];
+    } catch (_) { shared = []; }
+    if (seq !== _sharedSectionSeq) return; // 더 최신 렌더가 진행 중이면 중단
+    const existing = document.getElementById('nk-shared-section');
+    if (existing) existing.remove();
+    if (!shared.length) return;
+    const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    const section = document.createElement('div');
+    section.id = 'nk-shared-section';
+    section.style.cssText = 'margin-top:22px;';
+    const cards = shared.map((s) => {
+      const roleLabel = s.role === 'editor' ? '에디터' : '뷰어';
+      const roleColor = s.role === 'editor' ? '#4ade80' : '#93c5fd';
+      return `
+        <article class="draft-card nk-shared-card" data-shared-id="${esc(s.projectId)}" data-owner="${esc(s.ownerId)}" data-role="${esc(s.role)}" style="cursor:pointer;">
+          <div class="draft-top">
+            <div class="draft-info">
+              <div class="draft-title-row"><h4 class="draft-title">${esc(s.title || s.projectId)}</h4></div>
+              <div class="draft-meta">
+                <div class="draft-meta-project">소유자: ${esc(s.ownerId)}</div>
+                <div><span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(148,163,184,.16);color:${roleColor};">${roleLabel}</span></div>
+              </div>
+            </div>
+          </div>
+        </article>`;
+    }).join('');
+    section.innerHTML = `
+      <div style="font-size:13px;font-weight:600;color:var(--muted,#8aa0c3);margin:0 0 10px;padding-top:14px;border-top:1px solid var(--border,#1b2845);">공유받은 프로젝트</div>
+      <div class="draft-list nk-shared-list">${cards}</div>`;
+    container.appendChild(section);
+
+    section.querySelectorAll('.nk-shared-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const pid = String(card.getAttribute('data-shared-id') || '').trim();
+        const ownerId = String(card.getAttribute('data-owner') || '').trim();
+        const role = String(card.getAttribute('data-role') || 'viewer').trim();
+        if (!pid) return;
+        openSharedProject(pid, ownerId, role, card.querySelector('.draft-title')?.textContent || '');
+      });
+    });
+  }
+
+  function openSharedProject(projectId, ownerId, role, title) {
+    // ownerId 매핑은 projectList가 이미 sessionStorage에 기록함 → projectGet/Save가 자동 사용.
+    const draft = { id: String(projectId), title: title || String(projectId), ownerId: String(ownerId || ''), sharedRole: role || 'viewer', payload: {}, scenes: [] };
+    try { if (NK.service?.project?.setCurrent) NK.service.project.setCurrent(draft); } catch (_) {}
+    try { sessionStorage.setItem('nk_force_dashboard_entry', '0'); } catch (_) {}
+    const host = getHostShell();
+    if (NK.navigation && NK.navigation.loadStage) {
+      if (host === 'brand') NK.navigation.loadStage('brand.html');
+      else if (host === 'image') { try { sessionStorage.setItem('nk_ai_image_selection_explicit', '1'); } catch (_) {} NK.navigation.loadStage('ai-image-stage.html'); }
+      else if (host === 'videogen') { try { sessionStorage.setItem('nk_ai_video_gen_selection_explicit', '1'); } catch (_) {} NK.navigation.loadStage('ai-video-gen-stage.html'); }
+      else NK.navigation.loadStage('scenario.html');
+    }
+  }
+
   dashboard.renderDrafts = function () {
     const container = document.getElementById('dashboard-drafts');
     if (!container) return;
@@ -636,6 +700,9 @@
     }).join('');
 
     container.innerHTML = filterBar + list;
+
+    // 공유받은 프로젝트 섹션(별도) — 소유 프로젝트 그리드와 분리해 표시
+    appendSharedSection(container);
 
     // 선택된 카드를 뷰포트 안으로 스크롤
     try {

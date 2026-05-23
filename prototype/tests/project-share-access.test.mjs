@@ -34,5 +34,7 @@ test("client projectGet/projectSave forward ownerId", () => {
   const src = read("prototype/api.js");
   assert.match(src, /api\.projectGet = async function \(projectId, ownerId\)/);
   assert.match(src, /&ownerId=' \+ encodeURIComponent/);
-  assert.match(src, /if \(opts && opts\.ownerId\) body\.ownerId = String\(opts\.ownerId\)/);
+  // ownerId는 명시 인자 또는 공유 매핑에서 해석
+  assert.match(src, /var eff = ownerId \|\| api\.getSharedOwner\(projectId\)/);
+  assert.match(src, /var effOwner = \(opts && opts\.ownerId\) \|\| api\.getSharedOwner\(projectId\)/);
 });

@@ -793,9 +793,24 @@
     return { ok: ok, data: data, status: res.status };
   };
 
+  // 공유받은(소유자가 다른) 프로젝트의 projectId→ownerId 매핑. projectList가 채우고
+  // projectGet/projectSave가 자동으로 ownerId를 붙여 소유자 경로에 접근하게 한다.
+  // (스테이지 페이지를 개별 수정하지 않아도 공유 프로젝트 load/save가 동작)
+  var SHARED_OWNERS_KEY = 'nk_shared_owner_map';
+  function readSharedOwners() {
+    try { return JSON.parse(sessionStorage.getItem(SHARED_OWNERS_KEY) || '{}') || {}; } catch (_) { return {}; }
+  }
+  function writeSharedOwners(map) {
+    try { sessionStorage.setItem(SHARED_OWNERS_KEY, JSON.stringify(map || {})); } catch (_) { }
+  }
+  api.getSharedOwner = function (projectId) {
+    try { return readSharedOwners()[String(projectId || '')] || ''; } catch (_) { return ''; }
+  };
+
   api.projectGet = async function (projectId, ownerId) {
     var token = getAuthToken();
-    var ownerQ = ownerId ? ('&ownerId=' + encodeURIComponent(String(ownerId))) : '';
+    var eff = ownerId || api.getSharedOwner(projectId);
+    var ownerQ = eff ? ('&ownerId=' + encodeURIComponent(String(eff))) : '';
     var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(resolveUserId()) + ownerQ + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
     var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
     var text = await res.text();
@@ -892,7 +907,8 @@
     // 호출자가 책임지지 않는 필드는 undefined/null 로 넘기면 본문에서 제외 → 서버는 기존값 보존.
     var body = { projectId: String(projectId || ''), userId: resolveUserId() };
     // 공유받은(소유자가 다른) 프로젝트를 저장할 때는 ownerId를 함께 보낸다(에디터 권한 검증).
-    if (opts && opts.ownerId) body.ownerId = String(opts.ownerId);
+    var effOwner = (opts && opts.ownerId) || api.getSharedOwner(projectId);
+    if (effOwner) body.ownerId = String(effOwner);
     var safeScenes = null;
     var safePayload = null;
     if (scenes !== undefined && scenes !== null) {
@@ -966,6 +982,14 @@
       var text = await res.text();
       if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'list_error')));
       var parsed = j(text);
+      // 공유받은 프로젝트의 ownerId 매핑 갱신 → projectGet/Save가 자동으로 소유자 경로 사용
+      try {
+        if (parsed && Array.isArray(parsed.shared)) {
+          var m = readSharedOwners();
+          parsed.shared.forEach(function (s) { if (s && s.projectId && s.ownerId) m[String(s.projectId)] = String(s.ownerId); });
+          writeSharedOwners(m);
+        }
+      } catch (_) { }
       _projectListCache = { value: parsed, at: Date.now(), key: key, inflight: null };
       return parsed;
     })();
