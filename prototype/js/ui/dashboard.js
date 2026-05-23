@@ -93,6 +93,12 @@
     if (blurTarget) blurTarget.classList.toggle('blur-active', !!show);
   };
 
+  // 여러 비동기 로딩(소유 동기화 + 공유 동기화)이 겹쳐도 스피너가 모두 끝날 때까지
+  // 유지되도록 참조 카운트로 관리한다.
+  let _dashLoadingCount = 0;
+  const dashLoadingShow = (text) => { _dashLoadingCount++; setDashLoading(true, text); };
+  const dashLoadingHide = () => { _dashLoadingCount = Math.max(0, _dashLoadingCount - 1); if (_dashLoadingCount === 0) setDashLoading(false); };
+
   const normalizeSeriesId = (value) => String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '');
 
   const normalizeDraft = (draft) => {
@@ -444,6 +450,7 @@
   // 공유 목록을 서버에서 받아, 각 프로젝트 데이터(썸네일·메타)까지 가져와 카드에 반영.
   async function refreshSharedDrafts() {
     if (!(NK.api && NK.api.projectList)) return;
+    var spinning = false;
     try {
       const list = await NK.api.projectList();
       const shared = (list && Array.isArray(list.shared)) ? list.shared : [];
@@ -452,6 +459,8 @@
       _sharedFetchedKey = key;
       var enriched;
       if (shared.length && NK.api.projectGet) {
+        // 공유받은 프로젝트(소유자 데이터 원격 fetch)가 아직 화면에 없으면 로딩 스피너 표시.
+        if (!_sharedDrafts.length) { spinning = true; dashLoadingShow(dt('share_loading')); }
         // 소유자 경로에서 각 공유 프로젝트의 payload(대표 이미지 포함)를 가져온다.
         enriched = await runTasksInBatches(shared, async (s) => {
           var data = {}, missing = false;
@@ -470,6 +479,7 @@
       buildSharedDrafts(enriched);
       dashboard.renderDrafts();
     } catch (_) { /* 무시 */ }
+    finally { if (spinning) { spinning = false; dashLoadingHide(); } }
   }
 
   // 내가 '공유한(소유)' 프로젝트의 제목/대표이미지를 서버에서 다시 받아 로컬에 반영.
@@ -553,13 +563,14 @@
       // 로컬에 표시할 카드가 없으면(새 계정/캐시 비움 등) 서버에서 실제 카드 데이터를
       // 모두 받을 때까지 로딩 스피너를 유지한다. 로컬 카드가 있으면 즉시 보여주고 백그라운드 갱신.
       const hasLocalDrafts = Array.isArray(drafts) && drafts.length > 0;
-      let loadingTimer = null;
+      let mergeShown = false;
       if (!hasLocalDrafts) {
-        setDashLoading(true, DASHBOARD_LOADING_TEXT);
+        dashLoadingShow(DASHBOARD_LOADING_TEXT);
+        mergeShown = true;
       }
       const clearLoading = () => {
-        if (loadingTimer) { clearTimeout(loadingTimer); loadingTimer = null; }
-        if (!hasLocalDrafts) setDashLoading(false);
+        // show 1회당 hide 1회만(early-return + finally 중복 호출 대비).
+        if (mergeShown) { mergeShown = false; dashLoadingHide(); }
       };
 
       try {
