@@ -32,10 +32,10 @@
   var PLATFORMS = [
     { id: 'instagram',      label: 'Instagram' },
     { id: 'youtube',        label: 'YouTube' },
-    { id: 'youtube-shorts', label: 'YouTube Shorts' },
     { id: 'tiktok',         label: 'TikTok' },
     { id: 'facebook',       label: 'Facebook' },
-    { id: 'x-threads',      label: 'X / Threads',    comingSoon: true },
+    { id: 'threads',        label: 'Threads' },
+    { id: 'x',              label: 'X',              comingSoon: true },
     { id: 'naver-blog',     label: '네이버 블로그',   comingSoon: true },
     { id: 'naver-post',     label: '네이버 포스트',   comingSoon: true },
     { id: 'kakao',          label: '카카오',          comingSoon: true },
@@ -47,10 +47,10 @@
   var _platformIcons = {
     'instagram':      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
     'youtube':        '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>',
-    'youtube-shorts': '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-.3C16.8 4 12 4 12 4s-4.8 0-6.8.1c-.6-.1-1.9.1-3 1.2C1.3 6.2 1 8 1 8S.7 10 .7 12v1.9c0 2 .3 4 .3 4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22 12 22 12 22s4.8 0 6.8-.1c.6.1 1.9-.1 3-1.2.9-.8 1.2-2.8 1.2-2.8s.3-2 .3-4v-1.9C23.3 10 23 8 23 7zm-13.5 7.4V9.6l5.6 2.4-5.6 2.4z"/></svg>',
     'tiktok':         '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.78a4.85 4.85 0 0 1-1.01-.09z"/></svg>',
     'facebook':       '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
-    'x-threads':      '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+    'threads':        '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.358-.218-3.255-.801-1.06-.69-1.68-1.738-1.75-2.95-.137-2.395 1.787-4.057 4.785-4.23.95-.054 1.842-.013 2.66.123-.108-.671-.331-1.205-.667-1.594-.461-.535-1.176-.81-2.124-.818h-.029c-.762 0-1.795.21-2.456 1.198l-1.667-1.118c.886-1.319 2.325-2.044 4.123-2.044h.044c3.005.019 4.794 1.86 4.97 5.034.101.043.2.087.297.132 1.39.65 2.4 1.658 2.928 2.916.736 1.756.793 4.638-1.557 6.95-1.79 1.766-3.969 2.583-6.871 2.604zm-1.51-12.252c-.117 0-.236.003-.356.01-2.022.114-3.018.886-2.97 2.04.034.59.443 1.054 1.108 1.293.622.224 1.41.265 2.198.116 1.244-.236 2.07-1.087 2.346-2.41-.74-.165-1.534-.246-2.326-.139z"/></svg>',
+    'x':              '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
     'naver-blog':     '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z"/></svg>',
     'naver-post':     '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h12v2H3zm0 4h8v2H3z"/></svg>',
     'kakao':          '<svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.7 5.1 4.2 6.6L5.1 21l4.4-2.9c.8.1 1.7.2 2.5.2 5.523 0 10-3.477 10-7.5S17.523 3 12 3z"/></svg>',
@@ -179,8 +179,8 @@
     // 과거 'cache가 connected인데 server가 disconnected면 cache 우선' 룰은
     // cross-device 동기화를 깨뜨리는 원인이라 제거함.
     var out = {};
-    var keys = ['instagram', 'youtube', 'tiktok', 'facebook', 'x-threads',
-                'youtube-shorts', 'naver-blog', 'naver-post', 'kakao', 'band', 'linkedin', 'pinterest'];
+    var keys = ['instagram', 'youtube', 'tiktok', 'facebook', 'threads', 'x',
+                'naver-blog', 'naver-post', 'kakao', 'band', 'linkedin', 'pinterest'];
     var allKeys = {};
     keys.forEach(function (k) { allKeys[k] = true; });
     Object.keys(serverSns || {}).forEach(function (k) { allKeys[k] = true; });
@@ -329,17 +329,6 @@
         enabled: true,
         username: result.username || '',
       });
-      // youtube 연결 시 shorts 도 즉시 미러링 (GCS 는 콜백이 이미 처리)
-      if (platform === 'youtube') {
-        var prevShorts = _settings.sns['youtube-shorts'] || {};
-        _settings.sns['youtube-shorts'] = Object.assign({}, prevShorts, {
-          connected: true,
-          enabled: typeof prevShorts.enabled === 'boolean' ? prevShorts.enabled : true,
-          mirrorOf: 'youtube',
-          channelTitle: result.username || prevShorts.channelTitle || '',
-          username: result.username || prevShorts.username || '',
-        });
-      }
       _writeCache(_settings.sns);
       render();
       console.log('[SNS] OAuth local merge:', platform, JSON.stringify(_settings.sns[platform] || {}));
@@ -381,29 +370,10 @@
       e.preventDefault();
       var pid = btn.dataset.platform;
 
-      // YouTube Shorts 는 YouTube 의 미러 — 연결/해제 모두 youtube 키로 위임
-      if (pid === 'youtube-shorts') {
-        var ytNow = (_settings && _settings.sns && _settings.sns.youtube) || {};
-        if (ytNow.connected) {
-          alert(_lang() === 'en'
-            ? 'YouTube Shorts mirrors the YouTube connection. Disconnect from the YouTube card.'
-            : 'YouTube Shorts는 YouTube 연결을 따릅니다. YouTube 카드에서 해제해 주세요.');
-        } else {
-          alert(_lang() === 'en'
-            ? 'Connect the YouTube card first — Shorts will follow automatically.'
-            : 'YouTube 카드를 먼저 연결해 주세요. Shorts는 자동으로 연결됩니다.');
-        }
-        return;
-      }
-
       var s = (_settings && _settings.sns && _settings.sns[pid]) || {};
       if (s.connected) {
         if (!confirm(T[_lang()].disconnectConfirm(pid))) return;
         _settings.sns[pid] = { connected: false, enabled: false };
-        // YouTube 해제 시 Shorts 도 함께 비움
-        if (pid === 'youtube') {
-          _settings.sns['youtube-shorts'] = { connected: false, enabled: false };
-        }
         _writeCache(_settings.sns);
         saveSettings().then(function () { render(); });
       } else {
@@ -417,16 +387,7 @@
       e.preventDefault();
       var upid = btn.dataset.platform;
       var us = (_settings && _settings.sns && _settings.sns[upid]) || {};
-      // Shorts 는 youtube 의 연결 상태를 따른다
-      if (upid === 'youtube-shorts') {
-        var ytLink = (_settings && _settings.sns && _settings.sns.youtube) || {};
-        if (!ytLink.connected) {
-          alert(_lang() === 'en'
-            ? 'Connect YouTube first — Shorts will follow automatically.'
-            : 'YouTube를 먼저 연결해 주세요. Shorts는 자동으로 연결됩니다.');
-          return;
-        }
-      } else if (!us.connected) {
+      if (!us.connected) {
         alert(_lang() === 'en'
           ? 'Connect this channel first.'
           : '먼저 채널을 연결해 주세요.');
@@ -445,21 +406,6 @@
 
   function buildPlatformCard(platform) {
     var snsState = (_settings && _settings.sns && _settings.sns[platform.id]) || {};
-    // YouTube Shorts 는 YouTube 연결 상태를 미러링한다 (OAuth 는 YouTube 카드에서만).
-    if (platform.id === 'youtube-shorts') {
-      var yt = (_settings && _settings.sns && _settings.sns.youtube) || {};
-      if (yt.connected) {
-        snsState = Object.assign({}, snsState, {
-          connected: true,
-          channelTitle: yt.channelTitle || snsState.channelTitle || '',
-          username: yt.channelTitle || yt.username || snsState.username || '',
-          needsReconnect: !!yt.needsReconnect,
-        });
-      } else {
-        // youtube 미연결 시 shorts 도 강제로 미연결
-        snsState = Object.assign({}, snsState, { connected: false, enabled: false });
-      }
-    }
     var connected = !!snsState.connected;
     var enabled = !!snsState.enabled;
     var username = snsState.username || snsState.channelTitle || snsState.pageName || '';
@@ -497,9 +443,7 @@
         '</label>';
     }
 
-    // YouTube Shorts 는 YouTube 의 미러 — 별도 연결 버튼을 노출하지 않는다.
-    var hideConnectBox = (platform.id === 'youtube-shorts');
-    var finalConnectBoxHtml = hideConnectBox ? '' : connectBoxHtml;
+    var finalConnectBoxHtml = connectBoxHtml;
 
     // 프로필 링크 버튼: 연결됐을 때만 표시
     var linkSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
@@ -513,9 +457,9 @@
       var _ytPath = _handle ? (_handle.charAt(0) === '@' ? _handle : '@' + _handle) : '';
       if (platform.id === 'instagram')      profileUrl = _u ? 'https://www.instagram.com/' + _u + '/' : '';
       else if (platform.id === 'youtube')   profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath : (_cid ? 'https://www.youtube.com/channel/' + _cid : '');
-      else if (platform.id === 'youtube-shorts') profileUrl = _ytPath ? 'https://www.youtube.com/' + _ytPath + '/shorts' : (_cid ? 'https://www.youtube.com/channel/' + _cid + '/shorts' : '');
       else if (platform.id === 'tiktok')    profileUrl = _u ? 'https://www.tiktok.com/@' + _u : '';
       else if (platform.id === 'facebook')  profileUrl = snsState.pageId ? 'https://www.facebook.com/' + snsState.pageId : '';
+      else if (platform.id === 'threads')   profileUrl = _u ? 'https://www.threads.net/@' + _u : '';
     }
     var linkBtnHtml = profileUrl
       ? '<a class="sns-profile-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener noreferrer" title="' + t('openProfile') + '">' + linkSvg + '</a>'

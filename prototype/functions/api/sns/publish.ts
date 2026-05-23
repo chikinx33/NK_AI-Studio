@@ -3,6 +3,7 @@ import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
 import { loadShares, getGrantRole } from "../_shared/shares";
 import { ensureFreshAccessToken } from "../_shared/youtube-token";
 import { getFacebookPageToken } from "../_shared/facebook-token";
+import { getThreadsToken } from "../_shared/threads-token";
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -784,6 +785,74 @@ async function postFacebookComment(opts: {
   }
 }
 
+// ── Threads(메타) 헬퍼 ─────────────────────────────────────────────────────
+
+const THREADS_API = "https://graph.threads.net/v1.0";
+
+/**
+ * Threads 미디어 컨테이너 생성. media_type 에 따라 image_url/video_url/children 을 받는다.
+ * 캐러셀 자식은 is_carousel_item=true 로 만든다. creation id 를 반환.
+ */
+async function createThreadsContainer(opts: {
+  threadsUserId: string;
+  accessToken: string;
+  params: Record<string, string>;
+}): Promise<string> {
+  const { threadsUserId, accessToken, params } = opts;
+  const body = new URLSearchParams({ ...params, access_token: accessToken });
+  const res = await fetch(`${THREADS_API}/${threadsUserId}/threads`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+  const data = (await res.json()) as { id?: string; error?: { message?: string } };
+  if (!data.id) throw new Error(`Threads 컨테이너 생성 실패: ${data.error?.message || res.status}`);
+  return data.id;
+}
+
+/**
+ * 컨테이너가 게시 가능(FINISHED) 상태가 될 때까지 대기.
+ * 영상/캐러셀은 비동기 처리되므로 publish 전에 반드시 FINISHED 여야 한다.
+ */
+async function waitForThreadsContainer(
+  accessToken: string,
+  containerId: string,
+  maxMs = 180000
+): Promise<void> {
+  const start = Date.now();
+  let nextDelay = 2000;
+  while (Date.now() - start < maxMs) {
+    const r = await fetch(
+      `${THREADS_API}/${containerId}?` +
+      new URLSearchParams({ fields: "status,error_message", access_token: accessToken }).toString()
+    );
+    const d = (await r.json()) as { status?: string; error_message?: string };
+    if (d.status === "FINISHED") return;
+    if (d.status === "ERROR" || d.status === "EXPIRED") {
+      throw new Error(`Threads 미디어 처리 실패: ${d.error_message || d.status}`);
+    }
+    await new Promise((res) => setTimeout(res, nextDelay));
+    nextDelay = 5000;
+  }
+  throw new Error("Threads 미디어 처리 시간 초과");
+}
+
+async function publishThreadsContainer(opts: {
+  threadsUserId: string;
+  accessToken: string;
+  creationId: string;
+}): Promise<{ postId: string }> {
+  const { threadsUserId, accessToken, creationId } = opts;
+  const res = await fetch(`${THREADS_API}/${threadsUserId}/threads_publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ creation_id: creationId, access_token: accessToken }).toString(),
+  });
+  const data = (await res.json()) as { id?: string; error?: { message?: string } };
+  if (!data.id) throw new Error(`Threads 게시 실패: ${data.error?.message || res.status}`);
+  return { postId: data.id };
+}
+
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
@@ -1392,6 +1461,88 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           },
         });
       }
+    }
+
+    if (platform === "threads") {
+      let th: { accessToken: string; threadsUserId: string; username: string };
+      try {
+        th = await getThreadsToken(env, publishUserId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "threads_not_connected") {
+          return send({ error: "Threads 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 412);
+        }
+        return send({ error: msg }, 500);
+      }
+      const { accessToken, threadsUserId, username } = th;
+      const text = caption.slice(0, 500);
+
+      // GCS 경로는 Threads 가 직접 fetch 할 수 있는 signed URL 로 변환.
+      async function resolveUrl(gcsPath?: string, directUrl?: string): Promise<string> {
+        if (gcsPath) return buildSignedUrl(bucket, gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+        if (directUrl) return directUrl;
+        throw new Error("mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다.");
+      }
+
+      let creationId: string;
+
+      if (isCarousel) {
+        const rawItems = body.mediaItems!;
+        if (rawItems.length === 1) {
+          // 단일 아이템 캐러셀은 그냥 단일 게시로 처리
+          const it = rawItems[0];
+          const url = await resolveUrl(it.gcsPath, it.mediaUrl);
+          const p: Record<string, string> = it.mediaType === "video"
+            ? { media_type: "VIDEO", video_url: url, text }
+            : { media_type: "IMAGE", image_url: url, text };
+          creationId = await createThreadsContainer({ threadsUserId, accessToken, params: p });
+          await waitForThreadsContainer(accessToken, creationId);
+        } else {
+          // 캐러셀(2~20장): 자식 컨테이너 생성 → CAROUSEL 컨테이너로 묶기
+          const childIds: string[] = [];
+          for (const it of rawItems) {
+            const url = await resolveUrl(it.gcsPath, it.mediaUrl);
+            const childParams: Record<string, string> = it.mediaType === "video"
+              ? { media_type: "VIDEO", video_url: url, is_carousel_item: "true" }
+              : { media_type: "IMAGE", image_url: url, is_carousel_item: "true" };
+            const childId = await createThreadsContainer({ threadsUserId, accessToken, params: childParams });
+            await waitForThreadsContainer(accessToken, childId);
+            childIds.push(childId);
+          }
+          creationId = await createThreadsContainer({
+            threadsUserId, accessToken,
+            params: { media_type: "CAROUSEL", children: childIds.join(","), text },
+          });
+          await waitForThreadsContainer(accessToken, creationId);
+        }
+      } else if (body.mediaType === "video" || body.mediaType === "image") {
+        const url = await resolveUrl(body.mediaGcsPath, body.mediaDirectUrl);
+        const p: Record<string, string> = body.mediaType === "video"
+          ? { media_type: "VIDEO", video_url: url, text }
+          : { media_type: "IMAGE", image_url: url, text };
+        creationId = await createThreadsContainer({ threadsUserId, accessToken, params: p });
+        await waitForThreadsContainer(accessToken, creationId);
+      } else {
+        // 텍스트 전용 게시
+        if (!text.trim()) return send({ error: "Threads 텍스트 게시에는 캡션이 필요합니다." }, 400);
+        creationId = await createThreadsContainer({
+          threadsUserId, accessToken,
+          params: { media_type: "TEXT", text },
+        });
+      }
+
+      const { postId } = await publishThreadsContainer({ threadsUserId, accessToken, creationId });
+
+      return send({
+        ok: true,
+        result: {
+          platform: "threads",
+          postId,
+          username,
+          status: "published",
+          publishedAt: new Date().toISOString(),
+        },
+      });
     }
 
     return send({ error: `'${platform}' 플랫폼은 아직 지원되지 않습니다.` }, 400);
