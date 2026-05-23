@@ -2418,7 +2418,10 @@
     initIgSlider();
     initMockVideoThumbs();
     // 초기 렌더 시 stale한 selectedFormats(이전 세션에서 저장된 unavailable 포맷) 즉시 제거
-    pruneUnavailableSelectedFormats();
+    // 단, 영상/이미지 자산 URL이 아직 비동기 하이드레이션 중이면 prune을 건너뛴다.
+    // (로그인 직후 영상 URL 도착 전에 렌더되면 hasVideo=false로 영상 포맷이 잘못 제거+저장되어
+    //  배포 탭에 영상 포맷 카드가 누락되는 레이스 방지)
+    if (!hasUnhydratedSelectedMedia()) pruneUnavailableSelectedFormats();
 
     // contenteditable 자동 저장 (즉시 목업 반영 + 디바운스 800ms 서버 저장)
     var _draftSaveTimer = null;
@@ -2605,6 +2608,19 @@
     function refreshDeploySummary() {
       var summaryEl = root.querySelector('.bsf-deploy-summary');
       if (summaryEl) summaryEl.innerHTML = buildDeploySummaryHtml();
+    }
+    // 선택된 자산 중 아직 URL이 채워지지 않은(비동기 하이드레이션 중) 미디어가 있는지 판단.
+    // 선택 id가 assetItems에 아직 없거나, image/video인데 url이 비어 있으면 로딩 중으로 간주.
+    function hasUnhydratedSelectedMedia() {
+      return selectedAssetIds.some(function (id) {
+        var aid = String(id || '').trim();
+        if (!aid || aid === storyVirtualId) return false;
+        var item = assetItems.find(function (a) { return String(a.id || '').trim() === aid; });
+        if (!item) return true; // 선택됐지만 아직 로드 안 됨
+        var type = String(item.type || '').trim();
+        if ((type === 'video' || type === 'image') && !item.url) return true;
+        return false;
+      });
     }
     // selectedFormats에서 unavailable 상태인 포맷을 제거하고 UI/저장까지 동기화
     function pruneUnavailableSelectedFormats() {
