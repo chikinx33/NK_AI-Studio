@@ -183,9 +183,25 @@ first_comment 값의 줄바꿈은 반드시 \n 으로 표현.
 {"title":"...","caption":"...","hashtags":"#태그1 #태그2 ..."}
 `.trim(),
 
-  'x-threads': `
-당신은 X(트위터)·Threads 콘텐츠 전문 카피라이터입니다.
-아래 브랜드 컨텍스트와 스토리를 바탕으로 게시물을 작성합니다.
+  threads: `
+당신은 Threads 콘텐츠 전문 카피라이터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 Threads 게시물을 작성합니다.
+
+[작성 규칙]
+- 전체 텍스트: 반드시 500자 이내
+- 첫 문장: 즉각적 공감 또는 강한 주장으로 시선 끌기
+- 대화하듯 친근하고 자연스러운 어조, 2~4문장으로 호흡 있게
+- 해시태그: 1~3개만 (끝에 배치, Threads는 토픽 태그 위주)
+- 금칙어 절대 사용 금지
+
+[출력 형식]
+반드시 아래 JSON만 반환. 설명·마크다운 없이.
+{"caption":"...","hashtags":"#태그1 #태그2"}
+`.trim(),
+
+  x: `
+당신은 X(트위터) 콘텐츠 전문 카피라이터입니다.
+아래 브랜드 컨텍스트와 스토리를 바탕으로 X 게시물을 작성합니다.
 
 [작성 규칙]
 - 전체 텍스트: 반드시 280자 이내
@@ -288,7 +304,8 @@ export async function onRequestPost(context) {
     return json({ error: "Invalid JSON body" }, 400, origin);
   }
 
-  const platformId       = String(body?.platformId || "").trim();
+  // 레거시 통합 id 'x-threads' → 'threads'(분리 후 활성 채널)로 정규화
+  const platformId       = (function (v) { return v === "x-threads" ? "threads" : v; })(String(body?.platformId || "").trim());
   const story            = String(body?.story || "").trim().slice(0, 3000);
   const brandContext     = String(body?.brandContext || "").trim().slice(0, 3000);
   const userInstruction  = String(body?.userInstruction || "").trim().slice(0, 500);
@@ -395,7 +412,8 @@ export async function onRequestPost(context) {
       tiktok:           { privacy_level: "public", allow_comment: true, allow_duet: false },
       facebook:         { privacy_status: "public" },
       linkedin:         { visibility: "public" },
-      "x-threads":      { reply_setting: "public" },
+      threads:          { reply_setting: "public" },
+      x:                { reply_setting: "public" },
       kakao:            { button_label: "자세히 보기" },
       band:             { category: "general" },
     };

@@ -313,18 +313,33 @@
     return String(payload && payload.brandStudioHashtagDraft || '').trim();
   }
 
+  // 레거시 포맷 id 마이그레이션: 통합 'x-threads' → 'threads'(활성 발행 채널).
+  // 기존 프로젝트에 저장된 선택/초안이 분리 후에도 유실되지 않도록 한다.
+  function _migrateFormatId(id) {
+    return id === 'x-threads' ? 'threads' : id;
+  }
+
   function readSelectedFormats(payload) {
     var src = payload && Array.isArray(payload.brandStudioSelectedFormats)
       ? payload.brandStudioSelectedFormats
       : [];
-    return src.map(function (item) { return String(item || '').trim(); }).filter(Boolean);
+    var out = [];
+    src.forEach(function (item) {
+      var id = _migrateFormatId(String(item || '').trim());
+      if (id && out.indexOf(id) === -1) out.push(id);
+    });
+    return out;
   }
 
   function readFormatDrafts(payload) {
     var src = payload && payload.brandStudioFormatDrafts && typeof payload.brandStudioFormatDrafts === 'object'
       ? payload.brandStudioFormatDrafts
       : {};
-    return Object.assign({}, src);
+    var out = {};
+    Object.keys(src).forEach(function (k) {
+      out[_migrateFormatId(k)] = src[k];
+    });
+    return out;
   }
 
   function readDeployedFormats(payload, projectId) {
@@ -347,7 +362,7 @@
   }
 
   function readActiveDraftTab(payload) {
-    return String(payload && payload.brandStudioActiveDraftTab || '').trim();
+    return _migrateFormatId(String(payload && payload.brandStudioActiveDraftTab || '').trim());
   }
 
   function readSelectedAssetIds(payload) {
@@ -712,8 +727,12 @@
         else if (coreMsg) parts.push(coreMsg);
         break;
 
-      case 'x-threads':
-        parts.push(compactSentence(storyText || coreMsg, 200));
+      case 'threads':
+        parts.push(compactSentence(storyText || coreMsg, 450));
+        break;
+
+      case 'x':
+        parts.push(compactSentence(storyText || coreMsg, 250));
         break;
 
       case 'naver-post':
@@ -766,7 +785,8 @@
       'facebook':        4,
       'linkedin':        4,
       'pinterest':       8,
-      'x-threads':       3,
+      'threads':         5,
+      'x':               3,
       'naver-post':      6,
       'kakao':           4,
       'band':            4,
@@ -834,7 +854,7 @@
 
   function buildAutoSetupPayload(project, brandView, selectedFormats, sourceTexts, knowledge, selectedAssetIds, autoSelectedAssetIds) {
     var formats = channelFormats();
-    var targetFormats = (selectedFormats && selectedFormats.length) ? selectedFormats : ['instagram', 'x-threads'];
+    var targetFormats = (selectedFormats && selectedFormats.length) ? selectedFormats : ['instagram', 'threads'];
     var formatDrafts = {};
     targetFormats.forEach(function (formatId) {
       var fmt = formats.find(function (f) { return f.id === formatId; }) || null;
@@ -888,7 +908,8 @@
         'instagram': '피드·릴스·스토리 중심 이미지·영상 SNS',
         'youtube-shorts': '세로형 쇼츠·영상 업로드 및 설명 운영',
         'tiktok': '짧은 영상 중심 빠른 확산 채널',
-        'x-threads': '짧은 글·링크 중심 실시간 확산 채널',
+        'threads': '짧은 글 중심 실시간 대화형 채널 (최대 500자)',
+        'x': '짧은 글·링크 중심 실시간 확산 채널 (최대 280자)',
         'naver-blog': '검색 노출 기반 블로그 콘텐츠 채널',
         'kakao': '카카오채널·카카오스토리 운영',
         'facebook': '피드·릴스·그룹·페이지 브랜드 운영 채널',
@@ -948,7 +969,8 @@
         'instagram': 'Feed, Reels & Stories — image & video SNS',
         'youtube-shorts': 'Vertical shorts, video uploads & descriptions',
         'tiktok': 'Short-video channel for rapid viral growth',
-        'x-threads': 'Short text & link real-time distribution',
+        'threads': 'Short-text conversational channel (up to 500 chars)',
+        'x': 'Short text & link real-time distribution (up to 280 chars)',
         'naver-blog': 'Search-optimized blog content channel',
         'kakao': 'KakaoChannel & KakaoStory management',
         'facebook': 'Feed, Reels, Groups & Pages brand channel',
@@ -1029,7 +1051,8 @@
       { id: 'instagram', title: 'Instagram', desc: '피드·릴스·스토리 중심 이미지·영상 SNS', hasTitle: false },
       { id: 'youtube-shorts', title: 'YouTube Shorts', desc: '세로형 쇼츠·영상 업로드 및 설명 운영', hasTitle: true },
       { id: 'tiktok', title: 'TikTok', desc: '짧은 영상 중심 빠른 확산 채널', hasTitle: false },
-      { id: 'x-threads', title: 'X · Threads', desc: '짧은 글·링크 중심 실시간 확산 채널', hasTitle: false },
+      { id: 'threads', title: 'Threads', desc: '짧은 글 중심 실시간 대화형 채널', hasTitle: false },
+      { id: 'x', title: 'X', desc: '짧은 글·링크 중심 실시간 확산 채널', hasTitle: false },
       { id: 'naver-blog', title: 'Naver Blog', desc: '검색 노출 기반 블로그 콘텐츠 채널', hasTitle: true },
       { id: 'kakao', title: 'Kakao', desc: '카카오채널·카카오스토리 운영', hasTitle: false },
       { id: 'facebook', title: 'Facebook', desc: '피드·릴스·그룹·페이지 브랜드 운영 채널', hasTitle: false },
@@ -1046,7 +1069,8 @@
       case 'instagram':    return hasImage || hasVideo;
       case 'youtube-shorts': return hasVideo;
       case 'tiktok':       return hasVideo;
-      case 'x-threads':    return hasStory || hasImage || hasVideo;
+      case 'threads':      return hasStory || hasImage || hasVideo;
+      case 'x':            return hasStory || hasImage || hasVideo;
       case 'naver-blog':   return hasStory || hasImage;
       case 'kakao':        return hasImage || hasStory || hasVideo;
       case 'facebook':     return hasImage || hasVideo || hasStory;
@@ -1930,8 +1954,11 @@
       toggleField(fmtId, 'allow_duet',    isEn ? 'Allow duet' : '듀엣 허용',    draft.allow_duet === true, 'auto');
     }
     function buildXThreadsPreview(fmtId, captionVal, hashtagVal, draft) {
+      var isThreads = (fmtId === 'threads');
+      var limit = isThreads ? 500 : 280;
       var cLen = captionVal.length;
-      var cCls = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
+      var cCls = 'bsf-charcount' + (cLen > limit - 10 ? ' over' : cLen > limit - 60 ? ' warn' : '');
+      var bodyClip = isThreads ? 260 : 140;
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-x">' +
         '<div class="bsf-mock-x-hd">' +
@@ -1941,20 +1968,20 @@
             '<span class="bsf-mock-x-handle"> · @brand · ' + (isEn ? 'now' : '방금') + '</span>' +
           '</div>' +
         '</div>' +
-        '<div class="bsf-mock-x-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((captionVal || '').slice(0, 140)) + (captionVal.length > 140 ? '…' : '') + '</div>' +
+        '<div class="bsf-mock-x-body" data-mock-mirror="' + fmtId + '" data-mock-field="caption">' + escapeHtml((captionVal || '').slice(0, bodyClip)) + (captionVal.length > bodyClip ? '…' : '') + '</div>' +
         '<div class="bsf-mock-x-actions">' +
           '<span class="bsf-mock-x-action">' + _svgMsg18 + ' 12</span>' +
           '<span class="bsf-mock-x-action">' + _svgRepeat18 + ' 48</span>' +
           '<span class="bsf-mock-x-action">' + _svgHeart18 + ' 128</span>' +
-          '<span class="bsf-mock-x-action">' + _svgChart18 + '</span>' +
+          (isThreads ? '' : '<span class="bsf-mock-x-action">' + _svgChart18 + '</span>') +
           '<span class="bsf-mock-x-action">' + _svgBookmark18 + '</span>' +
           '<span class="bsf-mock-x-action">' + _svgUpload18 + '</span>' +
         '</div>' +
-        '<div class="bsf-mock-x-counter"><span class="' + cCls + '">' + cLen + ' / 280</span></div>' +
+        '<div class="bsf-mock-x-counter"><span class="' + cCls + '">' + cLen + ' / ' + limit + '</span></div>' +
         '</div>') +
       afWrap(isEn ? 'Post text' : '게시 문구',
         ceDiv(fmtId, 'caption', captionVal, 4, isEn ? "What's happening?" : '무슨 일이 있나요?') +
-        '<div class="bsf-charcount-row"><span class="' + cCls + '">' + cLen + ' / 280</span></div>') +
+        '<div class="bsf-charcount-row"><span class="' + cCls + '">' + cLen + ' / ' + limit + '</span></div>') +
       afWrap(isEn ? 'Hashtags' : '해시태그', ceDiv(fmtId, 'hashtags', hashtagVal, 1, '#hashtag')) +
       radioField(fmtId, 'reply_setting', isEn ? 'Who can reply' : '답글 허용', [
         { value: 'public',    label: isEn ? 'Everyone' : '전체' },
@@ -2209,7 +2236,8 @@
         case 'instagram':      bodyHtml = buildInstagramPreview(formatId, captionVal, hashtagVal, draft); break;
         case 'youtube-shorts': bodyHtml = buildYoutubeShortsPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'tiktok':         bodyHtml = buildTiktokPreview(formatId, captionVal, hashtagVal, draft); break;
-        case 'x-threads':      bodyHtml = buildXThreadsPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'threads':        bodyHtml = buildXThreadsPreview(formatId, captionVal, hashtagVal, draft); break;
+        case 'x':              bodyHtml = buildXThreadsPreview(formatId, captionVal, hashtagVal, draft); break;
         case 'naver-blog':     bodyHtml = buildNaverBlogPreview(formatId, captionVal, hashtagVal, titleVal, draft); break;
         case 'kakao':          bodyHtml = buildKakaoPreview(formatId, captionVal, hashtagVal, draft); break;
         case 'facebook':       bodyHtml = buildFacebookPreview(formatId, captionVal, hashtagVal, draft); break;
@@ -2257,7 +2285,8 @@
       'instagram':      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="5"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>',
       'youtube-shorts': '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M23 7s-.3-2-1.2-2.8c-1.1-1.2-2.4-1.2-3-.3C16.8 4 12 4 12 4s-4.8 0-6.8.1c-.6-.1-1.9.1-3 1.2C1.3 6.2 1 8 1 8S.7 10 .7 12v1.9c0 2 .3 4 .3 4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22 12 22 12 22s4.8 0 6.8-.1c.6.1 1.9-.1 3-1.2.9-.8 1.2-2.8 1.2-2.8s.3-2 .3-4v-1.9C23.3 10 23 8 23 7zm-13.5 7.4V9.6l5.6 2.4-5.6 2.4z"/></svg>',
       'tiktok':         '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.27 6.27 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.18 8.18 0 0 0 4.78 1.52V6.78a4.85 4.85 0 0 1-1.01-.09z"/></svg>',
-      'x-threads':      '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
+      'threads':        '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12.186 24h-.007c-3.581-.024-6.334-1.205-8.184-3.509C2.35 18.44 1.5 15.586 1.472 12.01v-.017c.03-3.579.879-6.43 2.525-8.482C5.845 1.205 8.6.024 12.18 0h.014c2.746.02 5.043.725 6.826 2.098 1.677 1.29 2.858 3.13 3.509 5.467l-2.04.569c-1.104-3.96-3.898-5.984-8.304-6.015-2.91.022-5.11.936-6.54 2.717C4.307 6.504 3.616 8.914 3.589 12c.027 3.086.718 5.496 2.057 7.164 1.43 1.783 3.631 2.698 6.54 2.717 2.623-.02 4.358-.631 5.8-2.045 1.647-1.613 1.618-3.593 1.09-4.798-.31-.71-.873-1.3-1.634-1.75-.192 1.352-.622 2.446-1.284 3.272-.886 1.102-2.14 1.704-3.73 1.79-1.202.065-2.358-.218-3.255-.801-1.06-.69-1.68-1.738-1.75-2.95-.137-2.395 1.787-4.057 4.785-4.23.95-.054 1.842-.013 2.66.123-.108-.671-.331-1.205-.667-1.594-.461-.535-1.176-.81-2.124-.818h-.029c-.762 0-1.795.21-2.456 1.198l-1.667-1.118c.886-1.319 2.325-2.044 4.123-2.044h.044c3.005.019 4.794 1.86 4.97 5.034.101.043.2.087.297.132 1.39.65 2.4 1.658 2.928 2.916.736 1.756.793 4.638-1.557 6.95-1.79 1.766-3.969 2.583-6.871 2.604zm-1.51-12.252c-.117 0-.236.003-.356.01-2.022.114-3.018.886-2.97 2.04.034.59.443 1.054 1.108 1.293.622.224 1.41.265 2.198.116 1.244-.236 2.07-1.087 2.346-2.41-.74-.165-1.534-.246-2.326-.139z"/></svg>',
+      'x':              '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>',
       'naver-blog':     '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16.273 12.845L7.376 0H0v24h7.727V11.155L16.624 24H24V0h-7.727z"/></svg>',
       'kakao':          '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3C6.477 3 2 6.477 2 10.8c0 2.7 1.7 5.1 4.2 6.6L5.1 21l4.4-2.9c.8.1 1.7.2 2.5.2 5.523 0 10-3.477 10-7.5S17.523 3 12 3z"/></svg>',
       'facebook':       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>',
@@ -2504,7 +2533,8 @@
           if (!hasImage && !hasVideo) return 'unavailable';
           if (hasVideo && !DURATION_UNKNOWN && OVER_600) return 'unavailable';
           return 'recommended';
-        case 'x-threads':
+        case 'threads':
+        case 'x':
           if (!hasStory && !hasImage && !hasVideo) return 'unavailable';
           return 'recommended';
         case 'tiktok':
@@ -3081,13 +3111,14 @@
         for (var mi = 0; mi < mirrors.length; mi++) {
           mirrors[mi].textContent = mirrorText;
         }
-        // X/Threads 글자수 즉시 업데이트
-        if (fieldKey === 'caption' && fmtId === 'x-threads') {
+        // X/Threads 글자수 즉시 업데이트 (Threads 500자, X 280자)
+        if (fieldKey === 'caption' && (fmtId === 'threads' || fmtId === 'x')) {
+          var xtLimit = (fmtId === 'threads') ? 500 : 280;
           var countEl = ce.parentElement && ce.parentElement.querySelector('.bsf-charcount');
           if (countEl) {
             var cLen = newText.length;
-            countEl.textContent = cLen + ' / 280';
-            countEl.className = 'bsf-charcount' + (cLen > 270 ? ' over' : cLen > 220 ? ' warn' : '');
+            countEl.textContent = cLen + ' / ' + xtLimit;
+            countEl.className = 'bsf-charcount' + (cLen > xtLimit - 10 ? ' over' : cLen > xtLimit - 60 ? ' warn' : '');
           }
         }
         // Naver Blog SEO 설명 글자수 즉시 업데이트
@@ -3546,7 +3577,7 @@
           window.__bsfOneClickInProgress = false;
           hideSaveOverlay();
         }, 90000);
-        var defaultFormats = selectedFormats.length ? selectedFormats.slice() : ['instagram', 'x-threads'];
+        var defaultFormats = selectedFormats.length ? selectedFormats.slice() : ['instagram', 'threads'];
         var oneClickPayload = {
           brandStudioSelectedAssetIds: selectedAssetIds.length ? selectedAssetIds.slice() : autoSelectedAssetIds.slice(),
           brandStudioSelectedFormats: defaultFormats,
@@ -4054,7 +4085,8 @@
           {
             title: isEn ? 'Any Asset' : '자유 조합',
             items: [
-              { name: 'X · Threads', conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
+              { name: 'Threads', conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
+              { name: 'X',       conds: isEn ? ['Story, image, or video — any one'] : ['스토리·이미지·영상 중 하나 이상'] },
             ]
           },
         ];
