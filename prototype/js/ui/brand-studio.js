@@ -3641,11 +3641,13 @@
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
       function snsPublishFormat(formatId, drafts, scheduledAt) {
-        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts', 'facebook'];
+        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts', 'facebook', 'threads'];
         if (SNS_PLATFORMS.indexOf(formatId) === -1) {
           return Promise.resolve({ skipped: true });
         }
         var isYoutubeFamily = (formatId === 'youtube' || formatId === 'youtube-shorts');
+        // Threads 는 텍스트 전용 게시 허용 (이미지·영상 없이 캡션만으로 발행 가능)
+        var isTextCapable = (formatId === 'threads');
 
         // 선택된 이미지+영상 자산 수집 → 영상 먼저, 이미지 나중 정렬
         var selMediaItems = assetItems.filter(function (i) {
@@ -3686,7 +3688,7 @@
         var resolvedItems = selMediaItems.map(resolveMediaItem).filter(Boolean);
 
         // 선택된 자산 없으면 렌더 캐시 첫 항목으로 폴백 (기존 동작)
-        if (!resolvedItems.length) {
+        if (!resolvedItems.length && !isTextCapable) {
           var renders = _renderStorageCache[projectId] || [];
           if (!renders.length) {
             alert(isEn
@@ -3751,6 +3753,14 @@
             caption: finalCaption,
             scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
           }, ytExtras);
+        } else if (!resolvedItems.length) {
+          // 텍스트 전용 게시 (Threads) — 미디어 없이 캡션만 전송
+          requestBody = {
+            platform: formatId,
+            caption: finalCaption,
+            scheduledAt: (scheduledAt && scheduledAt !== 'now') ? scheduledAt : '',
+            firstComment: firstComment || '',
+          };
         } else if (resolvedItems.length === 1) {
           var single = resolvedItems[0];
           requestBody = {

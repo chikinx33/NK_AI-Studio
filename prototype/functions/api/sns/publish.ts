@@ -906,7 +906,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     if (role !== "editor") return send({ error: "forbidden: editor role required to publish" }, 403);
     publishUserId = reqOwnerId;
   }
-  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl) {
+  // Threads 는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
+  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads") {
     return send({ error: "단일 포스트에는 mediaType, mediaGcsPath 또는 mediaDirectUrl이 필요합니다." }, 400);
   }
 
