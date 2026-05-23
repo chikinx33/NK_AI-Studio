@@ -2588,14 +2588,7 @@
             }
             return;
           }
-          // Auto-redirect restricted users to their allowed page
-          const _loginPerms = (NK.auth.getPermissions) ? NK.auth.getPermissions() : [];
-          if (_loginPerms.length) {
-            const _loginRedirectMap = { videogen: 'ai-video-gen.html', image: 'ai-image.html', video: 'ai-video.html', brand: 'brand-studio.html' };
-            const _dest = _loginRedirectMap[_loginPerms[0]] || 'index.html';
-            window.location.replace(_dest);
-            return;
-          }
+          // 로그인 후 자동 이동하지 않고 랜딩 페이지에 그대로 남는다.
           alert(translateUiText('로그인 성공'));
         } else {
           const reason = (NK.auth && NK.auth.getLastError) ? NK.auth.getLastError() : '';
