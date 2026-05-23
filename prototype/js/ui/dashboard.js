@@ -786,6 +786,8 @@
         selectProject(draft);
         container.querySelectorAll('.draft-card.is-selected').forEach(c => c.classList.remove('is-selected'));
         card.classList.add('is-selected');
+        // 공유받은 프로젝트는 소유자 데이터를 원격에서 불러오므로 로딩 스피너(배경 흐림)를 띄운다.
+        if (draft.__shared) { try { setDashLoading(true, dt('share_loading')); } catch (_) {} }
         const host = getHostShell();
         if (host === 'brand') {
           if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('brand.html');
