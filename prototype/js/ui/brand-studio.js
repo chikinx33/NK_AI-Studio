@@ -4313,6 +4313,8 @@
           .then(function (renderList) {
             if (Array.isArray(renderList) && renderList.length && root.isConnected) {
               _renderStorageCache[initProjectId] = renderList;
+              // 안전 타이머가 먼저 발사돼 이미 렌더된 경우(initDone) 늦게 도착한 영상 반영
+              if (initDone) forceRerender();
             }
           })
           .catch(function () {})
@@ -4329,6 +4331,7 @@
             var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
             if (items.length && root.isConnected) {
               _videoGenStorageCache[initProjectId] = items;
+              if (initDone) forceRerender();
             }
           })
           .catch(function () {})
@@ -4355,6 +4358,7 @@
               var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
               if (items.length && root.isConnected) {
                 _aiImageStorageCache[initProjectId] = items;
+                if (initDone) forceRerender();
               }
             })
             .catch(function () {});
