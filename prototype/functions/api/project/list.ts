@@ -3,6 +3,7 @@
 // {basePrefix}/users/{userId}/ai-video/projects{projectId}/
 import { buildAiVideoUserRoot, resolveUserId } from "../_shared/storage";
 import { authorizeRequest } from "../_shared/auth.js";
+import { loadShares, listSharedWith } from "../_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -82,7 +83,15 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       .map((p) => p.replace(prefix, "").replace(/^\/+/, "").replace(/\/$/, ""))
       .filter(Boolean)
       .slice(0, 200);
-    return send({ ok: true, ids }, 200, origin);
+    // 나에게 공유된 프로젝트(소유자/역할 포함)도 함께 반환 → 대시보드에서 표시·접근.
+    let shared: Array<{ projectId: string; ownerId: string; role: string; title: string }> = [];
+    try {
+      const sharesReg = await loadShares(env);
+      shared = listSharedWith(sharesReg, auth.userId).map((s) => ({
+        projectId: s.projectId, ownerId: s.ownerId, role: s.role, title: s.title,
+      }));
+    } catch (_) { shared = []; }
+    return send({ ok: true, ids, shared }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }

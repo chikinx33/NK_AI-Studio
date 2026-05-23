@@ -1,7 +1,8 @@
 ﻿// prototype/functions/api/project/get.ts
 // Fetch project data.json from GCS reference folder
 import { buildAiVideoProjectPrefix } from "../_shared/storage";
-import { authorizeRequest } from "../_shared/auth.js";
+import { authorizeRequest, sanitizeUserId } from "../_shared/auth.js";
+import { loadShares, getGrantRole } from "../_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -27,7 +28,16 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const projectId = String(url.searchParams.get("projectId") || "").trim();
     if (!projectId) return send({ error: "projectId is required" }, 400, origin);
     if (!/^[a-zA-Z0-9._-]+$/.test(projectId)) return send({ error: "Invalid projectId format" }, 400, origin);
-    const userId = auth.userId;
+    const requesterId = auth.userId;
+    // 공유 접근: ownerId가 본인과 다르면 뷰어/에디터 권한이 있어야 소유자 경로를 읽을 수 있다.
+    const ownerParam = sanitizeUserId(url.searchParams.get("ownerId") || "");
+    let userId = requesterId;
+    if (ownerParam && ownerParam !== requesterId) {
+      const sharesReg = await loadShares(env);
+      const role = getGrantRole(sharesReg, ownerParam, projectId, requesterId);
+      if (!role) return send({ error: "forbidden" }, 403, origin);
+      userId = ownerParam;
+    }
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;

@@ -793,9 +793,10 @@
     return { ok: ok, data: data, status: res.status };
   };
 
-  api.projectGet = async function (projectId) {
+  api.projectGet = async function (projectId, ownerId) {
     var token = getAuthToken();
-    var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(resolveUserId()) + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
+    var ownerQ = ownerId ? ('&ownerId=' + encodeURIComponent(String(ownerId))) : '';
+    var url = withBase('/api/project/get?projectId=' + encodeURIComponent(String(projectId || '')) + '&userId=' + encodeURIComponent(resolveUserId()) + ownerQ + (token ? ('&nk_token=' + encodeURIComponent(token)) : ''));
     var res = await fetch(url, { method: 'GET', headers: buildAuthHeaders() });
     var text = await res.text();
     if (!res.ok) throw new Error((res.status + ' ' + (e(text) || 'get_error')));
@@ -890,6 +891,8 @@
     // 서버가 머지 모드로 동작하므로 보내지 않은 필드는 기존 값이 보존된다.
     // 호출자가 책임지지 않는 필드는 undefined/null 로 넘기면 본문에서 제외 → 서버는 기존값 보존.
     var body = { projectId: String(projectId || ''), userId: resolveUserId() };
+    // 공유받은(소유자가 다른) 프로젝트를 저장할 때는 ownerId를 함께 보낸다(에디터 권한 검증).
+    if (opts && opts.ownerId) body.ownerId = String(opts.ownerId);
     var safeScenes = null;
     var safePayload = null;
     if (scenes !== undefined && scenes !== null) {
