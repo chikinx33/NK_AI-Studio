@@ -469,6 +469,46 @@
     } catch (_) { /* 무시 */ }
   }
 
+  // 내가 '공유한(소유)' 프로젝트의 제목/대표이미지를 서버에서 다시 받아 로컬에 반영.
+  // 공유받은 협업자가 변경한 내용을 소유자 대시보드에도 보이게 한다(협업 동기화).
+  var _ownedSharedKey = '';
+  async function refreshOwnedSharedTitles() {
+    if (!(NK.api && NK.api.projectShareList && NK.api.projectGet && NK.store)) return;
+    try {
+      const res = await NK.api.projectShareList();
+      const mine = (res && Array.isArray(res.sharedByMe)) ? res.sharedByMe : [];
+      const key = JSON.stringify(mine.map(function (e) { return e.projectId; }));
+      if (!mine.length) { _ownedSharedKey = key; return; }
+      if (key === _ownedSharedKey) return;
+      _ownedSharedKey = key;
+      const enriched = await runTasksInBatches(mine, async (e) => {
+        try { const r = await NK.api.projectGet(String(e.projectId)); return { id: String(e.projectId), data: (r && r.data) || {} }; }
+        catch (_) { return null; }
+      }, 6);
+      let drafts = NK.store.getDrafts();
+      let changed = false;
+      enriched.filter(Boolean).forEach(function (row) {
+        const idx = drafts.findIndex(function (d) { return String(d.id) === row.id; });
+        if (idx < 0) return;
+        const d = drafts[idx];
+        const sTitle = String((row.data && row.data.title) || '').trim();
+        const sThumb = String((row.data && row.data.payload && row.data.payload.thumbnailObjectName) || '').trim();
+        const lThumb = String((d.payload && d.payload.thumbnailObjectName) || '').trim();
+        let nd = d;
+        if (sTitle && sTitle !== String(d.title || '')) {
+          nd = Object.assign({}, nd, { title: sTitle, payload: Object.assign({}, nd.payload || {}, { episodeTitle: sTitle, topic: sTitle }) });
+          changed = true;
+        }
+        if (sThumb && sThumb !== lThumb) {
+          nd = Object.assign({}, nd, { payload: Object.assign({}, nd.payload || {}, { thumbnailObjectName: sThumb }) });
+          changed = true;
+        }
+        if (nd !== d) drafts[idx] = nd;
+      });
+      if (changed) { NK.store.saveDrafts(drafts); dashboard.renderDrafts(); }
+    } catch (_) { /* 무시 */ }
+  }
+
   // 소유 드래프트 + 공유받은 의사 드래프트 합본(렌더·클릭 조회용)
   function getViewDrafts() {
     const owned = (NK.store && NK.store.getDrafts) ? NK.store.getDrafts().map(normalizeDraft).filter(Boolean) : [];
@@ -629,6 +669,8 @@
 
     // 공유받은 프로젝트 목록 갱신(비동기, 변경 시 재렌더). 소유 + 공유 합본으로 카테고리 구성.
     refreshSharedDrafts();
+    // 내가 공유한 프로젝트는 협업자 변경(제목/대표이미지)을 서버에서 다시 받아 반영.
+    refreshOwnedSharedTitles();
     drafts = getViewDrafts();
     const seriesList = listSeriesFromDrafts(drafts);
     if (currentSeriesFilter !== '__all__' && !seriesList.some((s) => s.id === currentSeriesFilter)) {
@@ -895,20 +937,40 @@
         const commit = async () => {
           if (committed) return;
           committed = true;
-          const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
-          const draft = drafts.find(d => String(d.id) === String(id));
+          // 소유 + 공유 합본에서 조회(공유 프로젝트도 제목 수정 가능).
+          const draft = getViewDrafts().find(d => String(d.id) === String(id));
           if (!draft) return;
           const newTitle = (titleEl.textContent || '').trim() || '제목없음';
+
+          // 공유받은 프로젝트: 로컬 스토어가 아니라 소유자 서버 데이터에 저장(ownerId 자동 첨부).
+          // payload는 제목 관련 키만 보내 다른 필드(seriesId 등)를 덮어쓰지 않게 한다(서버 머지).
+          if (draft.__shared) {
+            titleEl.textContent = newTitle;
+            titleEl.contentEditable = 'false';
+            titleEl.classList.remove('editing');
+            if (NK.api && NK.api.projectSave) {
+              try {
+                await NK.api.projectSave(String(draft.id), { episodeTitle: newTitle, topic: newTitle }, [], { title: newTitle });
+              } catch (_) { /* 저장 실패 시 다음 새로고침에 복원됨 */ }
+            }
+            _sharedFetchedKey = '';
+            try { refreshSharedDrafts(); } catch (_) {}
+            alert('제목을 수정했습니다.');
+            return;
+          }
+
+          const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+          const ownedDraft = drafts.find(d => String(d.id) === String(id)) || draft;
           // Update title, episodeTitle AND topic together. Otherwise any sync
           // path that re-derives title from payload.topic (scenario save,
           // generate, etc.) can "undo" the rename on the next reload.
-          const nextDraft = Object.assign({}, draft, {
+          const nextDraft = Object.assign({}, ownedDraft, {
             title: newTitle,
-            payload: Object.assign({}, draft.payload || {}, { episodeTitle: newTitle, topic: newTitle })
+            payload: Object.assign({}, ownedDraft.payload || {}, { episodeTitle: newTitle, topic: newTitle })
           });
           const savedDraft = NK.service?.project?.updateLocal
             ? NK.service.project.updateLocal(id, nextDraft, { forceCurrent: String(NK.service?.project?.getCurrentProjectId?.() || '') === String(id) })
-            : (draft.title = newTitle, draft.payload = Object.assign({}, draft.payload || {}, { episodeTitle: newTitle, topic: newTitle }), NK.store.saveDrafts(drafts), draft);
+            : (ownedDraft.title = newTitle, ownedDraft.payload = Object.assign({}, ownedDraft.payload || {}, { episodeTitle: newTitle, topic: newTitle }), NK.store.saveDrafts(drafts), ownedDraft);
           titleEl.textContent = newTitle;
           titleEl.contentEditable = 'false';
           titleEl.classList.remove('editing');

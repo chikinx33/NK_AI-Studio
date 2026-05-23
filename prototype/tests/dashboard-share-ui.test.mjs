@@ -47,6 +47,18 @@ test("dashboard merges shared projects into categories with a single share icon 
   assert.doesNotMatch(src, /const isShared = !!d\.__shared/);
 });
 
+test("shared project edits propagate both ways (collaboration sync)", () => {
+  const src = read("prototype/js/ui/dashboard.js");
+  // 제목 수정 시 공유 프로젝트는 합본에서 조회하고 소유자 서버에 저장(로컬 스토어 미사용)
+  assert.match(src, /const draft = getViewDrafts\(\)\.find\(d => String\(d\.id\) === String\(id\)\)/);
+  assert.match(src, /if \(draft\.__shared\) \{/);
+  assert.match(src, /NK\.api\.projectSave\(String\(draft\.id\), \{ episodeTitle: newTitle, topic: newTitle \}, \[\], \{ title: newTitle \}\)/);
+  // 소유자 측: 내가 공유한 프로젝트의 제목/대표이미지를 서버에서 다시 받아 반영
+  assert.match(src, /function refreshOwnedSharedTitles/);
+  assert.match(src, /res\.sharedByMe/);
+  assert.match(src, /refreshOwnedSharedTitles\(\);/);
+});
+
 test("api propagates ownerId for shared projects via session map", () => {
   const src = read("prototype/api.js");
   assert.match(src, /SHARED_OWNERS_KEY = 'nk_shared_owner_map'/);
