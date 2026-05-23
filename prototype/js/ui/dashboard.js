@@ -410,19 +410,25 @@
   }
 
   // 공유받은 에피소드를 의사 드래프트로 변환(소유자 seriesId 기준으로 그룹핑).
-  function buildSharedDrafts(shared) {
+  // enriched: [{ share, data }] — data는 소유자 프로젝트 payload(썸네일/메타) 포함.
+  function buildSharedDrafts(enriched) {
     _sharedMeta = new Map();
     const out = [];
-    (Array.isArray(shared) ? shared : []).forEach((s) => {
+    (Array.isArray(enriched) ? enriched : []).forEach((row) => {
+      const s = row.share || row;
+      const data = row.data || {};
       const role = s.role === 'editor' ? 'editor' : 'viewer';
       const ownerId = String(s.ownerId || '');
       const base = s.seriesId ? (ownerId + '_' + s.seriesId) : ('p_' + s.projectId);
       const seriesId = normalizeSeriesId('shr_' + base) || ('shr' + s.projectId);
       const seriesTitle = String(s.seriesTitle || s.title || s.projectId);
+      // 소유자 payload(대표 이미지·장르·타겟·길이 등)를 합치고, 그룹핑용 seriesId/seriesTitle을 덮어쓴다.
+      const ownerPayload = (data && data.payload && typeof data.payload === 'object') ? data.payload : {};
+      const payload = Object.assign({}, ownerPayload, { seriesId: seriesId, seriesTitle: seriesTitle });
       const nd = normalizeDraft({
         id: String(s.projectId),
-        title: String(s.title || s.projectId),
-        payload: { seriesId: seriesId, seriesTitle: seriesTitle },
+        title: String((data && data.title) || s.title || s.projectId),
+        payload: payload,
         scenes: [],
       });
       if (!nd) return;
@@ -435,7 +441,7 @@
     _sharedDrafts = out;
   }
 
-  // 공유 목록을 서버에서 받아 의사 드래프트로 갱신하고, 변경 시 재렌더.
+  // 공유 목록을 서버에서 받아, 각 프로젝트 데이터(썸네일·메타)까지 가져와 카드에 반영.
   async function refreshSharedDrafts() {
     if (!(NK.api && NK.api.projectList)) return;
     try {
@@ -444,7 +450,21 @@
       const key = JSON.stringify(shared.map((s) => [s.projectId, s.ownerId, s.role, s.seriesId]));
       if (key === _sharedFetchedKey) return;
       _sharedFetchedKey = key;
-      buildSharedDrafts(shared);
+      var enriched;
+      if (shared.length && NK.api.projectGet) {
+        // 소유자 경로에서 각 공유 프로젝트의 payload(대표 이미지 포함)를 가져온다.
+        enriched = await runTasksInBatches(shared, async (s) => {
+          var data = {};
+          try {
+            var res = await NK.api.projectGet(String(s.projectId), String(s.ownerId || ''));
+            data = (res && res.data) || {};
+          } catch (_) { data = {}; }
+          return { share: s, data: data };
+        }, 6);
+      } else {
+        enriched = shared.map(function (s) { return { share: s, data: {} }; });
+      }
+      buildSharedDrafts(enriched);
       dashboard.renderDrafts();
     } catch (_) { /* 무시 */ }
   }
