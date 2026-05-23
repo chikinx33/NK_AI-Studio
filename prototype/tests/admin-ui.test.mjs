@@ -28,11 +28,11 @@ test("admin-users.js renders list, modal, and wires CRUD actions", () => {
   assert.match(src, /key: 'image'/);
   assert.match(src, /key: 'video'/);
   assert.match(src, /key: 'brand'/);
-  // 마스터 전용 게이트
+  // 마스터 전용 게이트 (문구는 중앙 i18n 사전 키로 참조)
   assert.match(src, /NK\.auth\.isMaster/);
-  assert.match(src, /마스터\(최고 관리자\)만 접근할 수 있는/);
-  // 저장(적용) 버튼
-  assert.match(src, /저장\(적용\)/);
+  assert.match(src, /t\('admin_no_access'\)/);
+  // 저장(적용) 버튼 (i18n 키)
+  assert.match(src, /t\('admin_save_apply'\)/);
   // 홈(뒤로가기) 버튼
   assert.match(src, /data-action="go-home"/);
   assert.match(src, /function goHome/);
@@ -44,7 +44,7 @@ test("admin-users.js surfaces a primary-admin password-set affordance", () => {
   assert.match(ui, /buildPrimaryAdminRowIfNeeded/);
   assert.match(ui, /data-action="set-primary-pw"/);
   assert.match(ui, /function openPrimaryPwModal/);
-  assert.match(ui, /마스터 비밀번호 설정/);
+  assert.match(ui, /t\('admin_m_set_master_pw'\)/);
   assert.match(ui, /state\.primaryAdminId/);
   // 서버 GET이 primaryAdminId를 내려준다
   const ep = read("prototype/functions/api/admin/users.ts");

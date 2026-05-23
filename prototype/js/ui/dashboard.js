@@ -263,6 +263,22 @@
 
   dashboard.triggerThumbnailUpload = triggerThumbnailUpload;
 
+  // 공유 UI 다국어 — 기존 중앙 사전(NK.core.translations) 재사용.
+  function dlang() {
+    try {
+      var rt = NK.state && NK.state.runtime && NK.state.runtime.lang;
+      if (rt === 'en' || rt === 'ko') return rt;
+      var k = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
+      return String(localStorage.getItem(k) || '').trim().toLowerCase() === 'en' ? 'en' : 'ko';
+    } catch (_) { return 'ko'; }
+  }
+  function dt(key) {
+    var d = (NK.core && NK.core.translations && NK.core.translations[dlang()]) || {};
+    if (key in d) return d[key];
+    var ko = (NK.core && NK.core.translations && NK.core.translations.ko) || {};
+    return (key in ko) ? ko[key] : key;
+  }
+
   // ─── 프로젝트(시리즈) 공유 모달 — 소유자가 다른 계정에 권한 부여/회수 ───
   // arg: { projectIds:[...에피소드 전체], title, seriesId, seriesTitle } 또는 단일 projectId 문자열
   function openShareModal(arg, maybeTitle) {
@@ -276,8 +292,8 @@
       projectIds = arg ? [String(arg)] : [];
       title = maybeTitle || '';
     }
-    if (!projectIds.length) { alert('공유할 에피소드가 없습니다.'); return; }
-    if (!(NK.api && NK.api.projectShareGrant)) { alert('공유 기능을 사용할 수 없습니다.'); return; }
+    if (!projectIds.length) { alert(dt('share_no_episodes')); return; }
+    if (!(NK.api && NK.api.projectShareGrant)) { alert(dt('share_unavailable')); return; }
     const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     const idSet = new Set(projectIds.map(String));
 
@@ -289,17 +305,17 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,23,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px;';
     overlay.innerHTML = `
       <div style="width:100%;max-width:460px;background:var(--panel,#0f172a);border:1px solid var(--border,#1b2845);color:var(--text,#e9edf7);border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.4);">
-        <h3 style="margin:0 0 4px;font-size:18px;">프로젝트 공유</h3>
-        <p style="margin:0 0 16px;font-size:13px;color:var(--muted,#8aa0c3);">${esc(title || '프로젝트')} · 에피소드 ${projectIds.length}개 전체 공유</p>
+        <h3 style="margin:0 0 4px;font-size:18px;">${esc(dt('share_project'))}</h3>
+        <p style="margin:0 0 16px;font-size:13px;color:var(--muted,#8aa0c3);">${esc(title || '')} · ${esc(dt('share_episodes_all').replace('{n}', projectIds.length))}</p>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;">
-          <input id="nk-share-target" type="text" placeholder="공유할 계정 ID" style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid var(--border,#1b2845);background:var(--bg,#0b1222);color:var(--text,#e9edf7);font-size:14px;" />
-          <button id="nk-share-add" type="button" class="btn-primary" style="padding:9px 14px;">공유</button>
+          <input id="nk-share-target" type="text" placeholder="${esc(dt('share_account_ph'))}" style="flex:1;padding:9px 12px;border-radius:10px;border:1px solid var(--border,#1b2845);background:var(--bg,#0b1222);color:var(--text,#e9edf7);font-size:14px;" />
+          <button id="nk-share-add" type="button" class="btn-primary" style="padding:9px 14px;">${esc(dt('share_btn'))}</button>
         </div>
         <div id="nk-share-error" style="color:#ef4444;font-size:13px;min-height:18px;margin-bottom:8px;"></div>
-        <div style="font-size:12.5px;color:var(--muted,#8aa0c3);margin-bottom:6px;">현재 공유 대상</div>
+        <div style="font-size:12.5px;color:var(--muted,#8aa0c3);margin-bottom:6px;">${esc(dt('share_current_targets'))}</div>
         <div id="nk-share-list" style="max-height:220px;overflow:auto;border:1px solid var(--border,#1b2845);border-radius:10px;"></div>
         <div style="display:flex;justify-content:flex-end;margin-top:18px;">
-          <button id="nk-share-close" type="button" class="btn-secondary" style="padding:9px 16px;">닫기</button>
+          <button id="nk-share-close" type="button" class="btn-secondary" style="padding:9px 16px;">${esc(dt('share_close'))}</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
@@ -315,13 +331,13 @@
       if (!listEl) return;
       const arr = Object.keys(grants).map((u) => ({ userId: u, role: grants[u] }));
       if (!arr.length) {
-        listEl.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted,#8aa0c3);font-size:13px;">아직 공유한 대상이 없습니다.</div>';
+        listEl.innerHTML = '<div style="padding:14px;text-align:center;color:var(--muted,#8aa0c3);font-size:13px;">' + esc(dt('share_none')) + '</div>';
         return;
       }
       listEl.innerHTML = arr.map((g) => `
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border,#1b2845);">
           <div><strong>${esc(g.userId)}</strong></div>
-          <button type="button" class="btn-secondary" data-revoke="${esc(g.userId)}" style="padding:4px 10px;font-size:12px;">회수</button>
+          <button type="button" class="btn-secondary" data-revoke="${esc(g.userId)}" style="padding:4px 10px;font-size:12px;">${esc(dt('share_revoke'))}</button>
         </div>`).join('');
       listEl.querySelectorAll('[data-revoke]').forEach((b) => {
         b.addEventListener('click', async () => {
@@ -331,7 +347,7 @@
             // 시리즈 전체 에피소드에서 회수
             for (const pid of projectIds) { await NK.api.projectShareRevoke(pid, u); }
             await refresh();
-          } catch (err) { setErr((err && err.message) ? err.message : '회수 실패'); }
+          } catch (err) { setErr((err && err.message) ? err.message : dt('share_revoke_fail')); }
           finally { busy = false; }
         });
       });
@@ -350,7 +366,7 @@
         renderGrants(byUser);
       } catch (err) {
         renderGrants({});
-        setErr((err && err.message) ? err.message : '공유 목록을 불러오지 못했습니다.');
+        setErr((err && err.message) ? err.message : dt('share_list_fail'));
       }
     }
 
@@ -358,7 +374,7 @@
       if (busy) return;
       setErr('');
       const target = String(targetEl.value || '').trim();
-      if (!target) { setErr('공유할 계정 ID를 입력하세요.'); return; }
+      if (!target) { setErr(dt('share_enter_account')); return; }
       busy = true;
       try {
         // 시리즈의 모든 에피소드에 편집 권한 부여(프로젝트 전체 공유, 항상 에디터)
@@ -368,9 +384,9 @@
         targetEl.value = '';
         await refresh();
       } catch (err) {
-        let m = (err && err.message) ? err.message : '공유 실패';
-        if (/cannot_share_with_self/.test(m)) m = '본인에게는 공유할 수 없습니다.';
-        else if (/invalid_target_user/.test(m)) m = '유효한 계정 ID를 입력하세요.';
+        let m = (err && err.message) ? err.message : dt('share_fail');
+        if (/cannot_share_with_self/.test(m)) m = dt('share_self_forbidden');
+        else if (/invalid_target_user/.test(m)) m = dt('share_invalid_target');
         setErr(m);
       } finally { busy = false; }
     });
@@ -390,7 +406,7 @@
   // 공유 상태 아이콘 (lucide share-2) — 뷰어/에디터 구분 없이 '공유받음' 표시만.
   var ICON_SHARE = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>';
   function sharedLabelIcons() {
-    return `<span class="nk-shared-label-icons" title="공유받음" style="display:inline-flex;align-items:center;margin-right:5px;vertical-align:-2px;color:#93c5fd;">${ICON_SHARE}</span>`;
+    return `<span class="nk-shared-label-icons" title="${dt('share_received')}" style="display:inline-flex;align-items:center;margin-right:5px;vertical-align:-2px;color:#93c5fd;">${ICON_SHARE}</span>`;
   }
 
   // 공유받은 에피소드를 의사 드래프트로 변환(소유자 seriesId 기준으로 그룹핑).
@@ -641,7 +657,7 @@
     // 공유 버튼은 '내가 소유한' 카테고리에서만 표시(공유받은 카테고리는 재공유 불가).
     const showShareButton = host === 'brand' && currentSeriesFilter !== '__all__' && filteredDrafts.length > 0 && !_sharedMeta.has(currentSeriesFilter);
     const shareBtnHtml = showShareButton
-      ? `<button class="btn-primary series-share-btn" data-action="share-series" data-series-id="${escapeHtml(currentSeriesFilter)}" data-series-title="${escapeHtml((selectedSeries && selectedSeries.title) || categoryTitle || '')}" aria-label="공유" title="프로젝트 전체 공유"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg></button>`
+      ? `<button class="btn-primary series-share-btn" data-action="share-series" data-series-id="${escapeHtml(currentSeriesFilter)}" data-series-title="${escapeHtml((selectedSeries && selectedSeries.title) || categoryTitle || '')}" aria-label="${escapeHtml(dt('share_btn'))}" title="${escapeHtml(dt('share_whole_project'))}"><svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"></line><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"></line></svg></button>`
       : '';
 
     const filterBar = `

@@ -4,10 +4,10 @@
 
   // 권한 키 정의(서버 admin-users.ts의 PERMISSION_PAGES와 동기화).
   var PERMISSION_PAGES = [
-    { key: 'videogen', label: 'AI 영상 생성' },
-    { key: 'image',    label: 'AI 이미지' },
-    { key: 'video',    label: 'AI 영상' },
-    { key: 'brand',    label: '브랜드 스튜디오' }
+    { key: 'videogen', label: { ko: 'AI 영상 생성', en: 'AI Video Gen' } },
+    { key: 'image',    label: { ko: 'AI 이미지', en: 'AI Image' } },
+    { key: 'video',    label: { ko: 'AI 영상', en: 'AI Video' } },
+    { key: 'brand',    label: { ko: '브랜드 스튜디오', en: 'Brand Studio' } }
   ];
 
   var state = {
@@ -24,7 +24,22 @@
     edit: null              // 편집 중 사용자(편집 모드) 또는 null
   };
 
-  function t(ko) { return ko; } // 현재 한국어 우선. (다국어 확장 지점)
+  // ─── 다국어(한/영) — 기존 중앙 사전(NK.core.translations) 재사용 ───
+  function curLang() {
+    try {
+      var rt = NK.state && NK.state.runtime && NK.state.runtime.lang;
+      if (rt === 'en' || rt === 'ko') return rt;
+      var key = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
+      var v = String(localStorage.getItem(key) || '').trim().toLowerCase();
+      return v === 'en' ? 'en' : 'ko';
+    } catch (_) { return 'ko'; }
+  }
+  function t(key) {
+    var dict = (NK.core && NK.core.translations && NK.core.translations[curLang()]) || {};
+    if (key in dict) return dict[key];
+    var ko = (NK.core && NK.core.translations && NK.core.translations.ko) || {};
+    return (key in ko) ? ko[key] : key;
+  }
 
   function escapeHtml(s) {
     return String(s == null ? '' : s)
@@ -39,7 +54,7 @@
 
   function permLabel(key) {
     var found = PERMISSION_PAGES.find(function (p) { return p.key === key; });
-    return found ? found.label : key;
+    return found ? t('admin_perm_' + key) : key;
   }
 
   // ─── 데이터 로드 ────────────────────────────────────────────
@@ -56,9 +71,9 @@
       })
       .catch(function (err) {
         state.loading = false;
-        var msg = (err && err.message) ? err.message : '목록을 불러오지 못했습니다.';
-        try { console.error('[admin-users] 목록 조회 실패:', msg, err); } catch (_) { }
-        state.error = '목록을 불러오지 못했습니다: ' + msg;
+        var msg = (err && err.message) ? err.message : t('admin_list_fail');
+        try { console.error('[admin-users] list load failed:', msg, err); } catch (_) { }
+        state.error = t('admin_list_fail') + ': ' + msg;
         render();
       });
   }
@@ -90,14 +105,14 @@
     if (!authed) { root.innerHTML = ''; return; } // auth-overlay가 처리
 
     if (NK.auth && NK.auth.isMaster && !NK.auth.isMaster()) {
-      root.innerHTML = '<div class="admin-page"><div class="bsf-detail-card"><div class="admin-error">마스터(최고 관리자)만 접근할 수 있는 페이지입니다.</div><div style="text-align:center;margin-top:14px;"><button type="button" class="admin-icon-btn" data-action="go-home">홈으로</button></div></div></div>';
+      root.innerHTML = '<div class="admin-page"><div class="bsf-detail-card"><div class="admin-error">' + escapeHtml(t('admin_no_access')) + '</div><div style="text-align:center;margin-top:14px;"><button type="button" class="admin-icon-btn" data-action="go-home">' + escapeHtml(t('admin_home')) + '</button></div></div></div>';
       root.querySelectorAll('[data-action="go-home"]').forEach(function (el) { el.addEventListener('click', onAction); });
       return;
     }
 
     var rows;
     if (state.loading) {
-      rows = '<tr><td colspan="5"><div class="admin-empty">불러오는 중...</div></td></tr>';
+      rows = '<tr><td colspan="5"><div class="admin-empty">' + escapeHtml(t('admin_loading')) + '</div></td></tr>';
     } else if (state.error) {
       rows = '<tr><td colspan="5"><div class="admin-error">' + escapeHtml(state.error) + '</div></td></tr>';
     } else {
@@ -105,7 +120,7 @@
       var primaryRow = buildPrimaryAdminRowIfNeeded();
       var listRows = list.length ? list.map(buildRow).join('') : '';
       rows = primaryRow + listRows;
-      if (!rows) rows = '<tr><td colspan="5"><div class="admin-empty">표시할 회원이 없습니다.</div></td></tr>';
+      if (!rows) rows = '<tr><td colspan="5"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
     }
 
     root.innerHTML = [
@@ -113,18 +128,18 @@
         '<div class="bsf-flow-card">',
           '<div class="bsf-flow-head">',
             '<div class="bsf-flow-title-group">',
-              '<p class="brand-studio-eyebrow">관리자 › 회원 관리</p>',
-              '<h2 class="bsf-title">회원 관리</h2>',
-              '<p class="bsf-desc">회원 계정을 생성·수정·삭제하고 접근 권한을 설정합니다.</p>',
+              '<p class="brand-studio-eyebrow">' + escapeHtml(t('admin_eyebrow')) + '</p>',
+              '<h2 class="bsf-title">' + escapeHtml(t('admin_title')) + '</h2>',
+              '<p class="bsf-desc">' + escapeHtml(t('admin_desc')) + '</p>',
             '</div>',
             '<div class="bsf-flow-head-actions">',
-              '<button type="button" class="admin-sq-btn" data-action="go-home" aria-label="홈으로" title="홈으로">',
+              '<button type="button" class="admin-sq-btn" data-action="go-home" aria-label="' + escapeHtml(t('admin_home')) + '" title="' + escapeHtml(t('admin_home')) + '">',
                 '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
               '</button>',
-              '<button type="button" class="admin-sq-btn" data-action="reload" aria-label="새로고침" title="새로고침">',
+              '<button type="button" class="admin-sq-btn" data-action="reload" aria-label="' + escapeHtml(t('admin_reload')) + '" title="' + escapeHtml(t('admin_reload')) + '">',
                 '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
               '</button>',
-              '<button type="button" class="admin-sq-btn admin-sq-btn--primary" data-action="new-user" aria-label="신규 회원" title="신규 회원">',
+              '<button type="button" class="admin-sq-btn admin-sq-btn--primary" data-action="new-user" aria-label="' + escapeHtml(t('admin_new_user')) + '" title="' + escapeHtml(t('admin_new_user')) + '">',
                 '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 21a8 8 0 0 1 13.292-6"/><circle cx="10" cy="8" r="5"/><path d="M19 16v6"/><path d="M22 19h-6"/></svg>',
               '</button>',
             '</div>',
@@ -134,18 +149,18 @@
         '<div class="bsf-detail-card admin-list-card">',
           '<div class="admin-card-inner">',
             '<div class="admin-toolbar">',
-              '<div class="admin-search"><input type="text" id="admin-search" placeholder="ID 또는 이름 검색" value="' + escapeHtml(state.search) + '" /></div>',
+              '<div class="admin-search"><input type="text" id="admin-search" placeholder="' + escapeHtml(t('admin_search_ph')) + '" value="' + escapeHtml(state.search) + '" /></div>',
               '<select id="admin-filter">',
-                '<option value="all"' + (state.filter === 'all' ? ' selected' : '') + '>전체</option>',
-                '<option value="admin"' + (state.filter === 'admin' ? ' selected' : '') + '>마스터</option>',
-                '<option value="member"' + (state.filter === 'member' ? ' selected' : '') + '>회원</option>',
-                '<option value="active"' + (state.filter === 'active' ? ' selected' : '') + '>활성</option>',
-                '<option value="inactive"' + (state.filter === 'inactive' ? ' selected' : '') + '>비활성</option>',
+                '<option value="all"' + (state.filter === 'all' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_all')) + '</option>',
+                '<option value="admin"' + (state.filter === 'admin' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_master')) + '</option>',
+                '<option value="member"' + (state.filter === 'member' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_member')) + '</option>',
+                '<option value="active"' + (state.filter === 'active' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_active')) + '</option>',
+                '<option value="inactive"' + (state.filter === 'inactive' ? ' selected' : '') + '>' + escapeHtml(t('admin_f_inactive')) + '</option>',
               '</select>',
             '</div>',
             '<div class="admin-table-wrap">',
               '<table class="admin-table">',
-                '<thead><tr><th>ID</th><th>이름</th><th>권한</th><th>상태</th><th>관리</th></tr></thead>',
+                '<thead><tr><th>ID</th><th>' + escapeHtml(t('admin_th_name')) + '</th><th>' + escapeHtml(t('admin_th_perm')) + '</th><th>' + escapeHtml(t('admin_th_status')) + '</th><th>' + escapeHtml(t('admin_th_manage')) + '</th></tr></thead>',
                 '<tbody>', rows, '</tbody>',
               '</table>',
             '</div>',
@@ -175,10 +190,10 @@
     return [
       '<tr>',
         '<td><strong>' + escapeHtml(pid) + '</strong></td>',
-        '<td>마스터</td>',
-        '<td><span class="admin-badge admin-badge--admin">마스터</span> <span class="admin-perm-chip">전체 권한</span></td>',
-        '<td><span class="admin-badge admin-badge--off">기본 비밀번호</span></td>',
-        '<td><div class="admin-row-actions"><button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="set-primary-pw" style="min-width:auto;padding:6px 12px;">비밀번호 설정</button></div></td>',
+        '<td>' + escapeHtml(t('admin_master')) + '</td>',
+        '<td><span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span> <span class="admin-perm-chip">' + escapeHtml(t('admin_full_perm')) + '</span></td>',
+        '<td><span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_default_pw')) + '</span></td>',
+        '<td><div class="admin-row-actions"><button type="button" class="admin-icon-btn admin-sq-btn--primary" data-action="set-primary-pw" style="min-width:auto;padding:6px 12px;">' + escapeHtml(t('admin_set_pw')) + '</button></div></td>',
       '</tr>'
     ].join('');
   }
@@ -186,19 +201,19 @@
   function buildRow(u) {
     var master = isMasterUser(u);
     var permHtml = master
-      ? '<span class="admin-perm-chip">전체 권한</span>'
+      ? '<span class="admin-perm-chip">' + escapeHtml(t('admin_full_perm')) + '</span>'
       : (Array.isArray(u.permissions) && u.permissions.length
           ? u.permissions.map(function (p) { return '<span class="admin-perm-chip">' + escapeHtml(permLabel(p)) + '</span>'; }).join('')
-          : '<span class="admin-perm-chip">권한 없음</span>');
+          : '<span class="admin-perm-chip">' + escapeHtml(t('admin_no_perm')) + '</span>');
     var roleBadge = master
-      ? '<span class="admin-badge admin-badge--admin">마스터</span>'
-      : '<span class="admin-badge admin-badge--member">회원</span>';
+      ? '<span class="admin-badge admin-badge--admin">' + escapeHtml(t('admin_master')) + '</span>'
+      : '<span class="admin-badge admin-badge--member">' + escapeHtml(t('admin_member')) + '</span>';
     var stateBadge = (u.active === false)
-      ? '<span class="admin-badge admin-badge--off">비활성</span>'
-      : '<span class="admin-badge admin-badge--on">활성</span>';
+      ? '<span class="admin-badge admin-badge--off">' + escapeHtml(t('admin_inactive')) + '</span>'
+      : '<span class="admin-badge admin-badge--on">' + escapeHtml(t('admin_active')) + '</span>';
     var id = escapeHtml(u.id);
     // 마스터 행은 삭제 불가(유일 운영 계정), 비밀번호 등 수정만 가능.
-    var deleteBtn = master ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">삭제</button>';
+    var deleteBtn = master ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
     return [
       '<tr data-id="' + id + '">',
         '<td><strong>' + id + '</strong></td>',
@@ -206,7 +221,7 @@
         '<td>' + roleBadge + ' ' + permHtml + '</td>',
         '<td>' + stateBadge + '</td>',
         '<td><div class="admin-row-actions">',
-          '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">수정</button>',
+          '<button type="button" class="admin-icon-btn" data-action="edit-user" data-id="' + id + '">' + escapeHtml(t('admin_edit')) + '</button>',
           deleteBtn,
         '</div></td>',
       '</tr>'
@@ -218,42 +233,42 @@
     var u = state.edit || { id: '', name: '', permissions: [], role: 'member', active: true };
     var isMasterTarget = !!(u && u.__lockId) || isMasterUser(u);  // 마스터 대상(비번 설정/수정)
     var lockId = isEdit || !!(u && u.__lockId);                    // ID 잠금
-    var title = (u && u.__lockId && !isEdit) ? '마스터 비밀번호 설정' : (isEdit ? (isMasterTarget ? '마스터 수정' : '회원 수정') : '신규 회원');
+    var title = (u && u.__lockId && !isEdit) ? t('admin_m_set_master_pw') : (isEdit ? (isMasterTarget ? t('admin_m_edit_master') : t('admin_m_edit_member')) : t('admin_m_new'));
     var permChecks = PERMISSION_PAGES.map(function (p) {
       var checked = Array.isArray(u.permissions) && u.permissions.indexOf(p.key) !== -1;
-      return '<label><input type="checkbox" class="admin-perm-check" value="' + p.key + '"' + (checked ? ' checked' : '') + ' />' + escapeHtml(p.label) + '</label>';
+      return '<label><input type="checkbox" class="admin-perm-check" value="' + p.key + '"' + (checked ? ' checked' : '') + ' />' + escapeHtml(permLabel(p.key)) + '</label>';
     }).join('');
     // 마스터: 모든 권한 보유 → 권한/활성 항목 숨기고 비밀번호만. 회원: 페이지 권한 선택.
     var permSection = isMasterTarget
-      ? '<div class="admin-field"><p class="admin-hint">마스터는 모든 기능 권한을 가집니다.</p></div>'
-      : ('<div class="admin-field"><label>접근 권한</label><div class="admin-perms">' + permChecks + '</div></div>');
+      ? '<div class="admin-field"><p class="admin-hint">' + escapeHtml(t('admin_master_all_perm')) + '</p></div>'
+      : ('<div class="admin-field"><label>' + escapeHtml(t('admin_lbl_access')) + '</label><div class="admin-perms">' + permChecks + '</div></div>');
     var activeSection = isMasterTarget
       ? ''
-      : ('<div class="admin-field"><label style="display:flex;align-items:center;gap:6px;color:var(--text);"><input type="checkbox" id="admin-f-active"' + (u.active !== false ? ' checked' : '') + ' /> 활성 계정</label></div>');
+      : ('<div class="admin-field"><label style="display:flex;align-items:center;gap:6px;color:var(--text);"><input type="checkbox" id="admin-f-active"' + (u.active !== false ? ' checked' : '') + ' /> ' + escapeHtml(t('admin_active_account')) + '</label></div>');
 
     return [
       '<div class="admin-modal-backdrop" data-action="modal-backdrop">',
         '<div class="admin-modal" data-modal>',
-          '<h3>' + title + '</h3>',
+          '<h3>' + escapeHtml(title) + '</h3>',
           '<div class="admin-field">',
             '<label>ID</label>',
-            '<input type="text" id="admin-f-id" value="' + escapeHtml(u.id) + '"' + (lockId ? ' disabled' : '') + ' placeholder="영문 소문자/숫자/._-" />',
+            '<input type="text" id="admin-f-id" value="' + escapeHtml(u.id) + '"' + (lockId ? ' disabled' : '') + ' placeholder="' + escapeHtml(t('admin_ph_id')) + '" />',
           '</div>',
           '<div class="admin-field">',
-            '<label>이름</label>',
-            '<input type="text" id="admin-f-name" value="' + escapeHtml(u.name || '') + '" placeholder="표시 이름(선택)" />',
+            '<label>' + escapeHtml(t('admin_lbl_name')) + '</label>',
+            '<input type="text" id="admin-f-name" value="' + escapeHtml(u.name || '') + '" placeholder="' + escapeHtml(t('admin_ph_name')) + '" />',
           '</div>',
           '<div class="admin-field">',
-            '<label>비밀번호</label>',
-            '<input type="password" id="admin-f-pw" placeholder="' + (isEdit ? '변경 시에만 입력' : '비밀번호') + '" autocomplete="new-password" />',
-            (isEdit ? '<p class="admin-hint">비워두면 기존 비밀번호가 유지됩니다.</p>' : ''),
+            '<label>' + escapeHtml(t('admin_lbl_pw')) + '</label>',
+            '<input type="password" id="admin-f-pw" placeholder="' + escapeHtml(isEdit ? t('admin_ph_pw_edit') : t('admin_ph_pw')) + '" autocomplete="new-password" />',
+            (isEdit ? '<p class="admin-hint">' + escapeHtml(t('admin_hint_pw_keep')) + '</p>' : ''),
           '</div>',
           permSection,
           activeSection,
           '<div class="admin-modal-error" id="admin-modal-error">' + escapeHtml(state.modalError || '') + '</div>',
           '<div class="admin-modal-actions">',
-            '<button type="button" class="admin-icon-btn" data-action="modal-cancel">취소</button>',
-            '<button type="button" class="bsf-head-btn btn-primary" data-action="modal-save"' + (state.saving ? ' disabled' : '') + '>' + (state.saving ? '저장 중...' : '저장(적용)') + '</button>',
+            '<button type="button" class="admin-icon-btn" data-action="modal-cancel">' + escapeHtml(t('admin_cancel')) + '</button>',
+            '<button type="button" class="bsf-head-btn btn-primary" data-action="modal-save"' + (state.saving ? ' disabled' : '') + '>' + escapeHtml(state.saving ? t('admin_saving') : t('admin_save_apply')) + '</button>',
           '</div>',
         '</div>',
       '</div>'
@@ -272,7 +287,7 @@
           var list = visibleUsers();
           var primaryRow = buildPrimaryAdminRowIfNeeded();
           var listRows = list.length ? list.map(buildRow).join('') : '';
-          tbody.innerHTML = (primaryRow + listRows) || '<tr><td colspan="5"><div class="admin-empty">표시할 회원이 없습니다.</div></td></tr>';
+          tbody.innerHTML = (primaryRow + listRows) || '<tr><td colspan="5"><div class="admin-empty">' + escapeHtml(t('admin_empty')) + '</div></td></tr>';
           bindRowActions(root);
         }
       });
@@ -311,7 +326,7 @@
     if (!pid) return;
     state.modalMode = 'create';
     state.modalError = '';
-    state.edit = { id: pid, name: '마스터', permissions: [], role: 'master', active: true, __lockId: true };
+    state.edit = { id: pid, name: t('admin_master'), permissions: [], role: 'master', active: true, __lockId: true };
     state.modalOpen = true;
     render();
   }
@@ -368,8 +383,8 @@
     state.modalError = '';
 
     if (state.modalMode === 'create') {
-      if (!form.id) { state.modalError = 'ID를 입력하세요.'; render(); return; }
-      if (!form.password) { state.modalError = '비밀번호를 입력하세요.'; render(); return; }
+      if (!form.id) { state.modalError = t('admin_err_enter_id'); render(); return; }
+      if (!form.password) { state.modalError = t('admin_err_enter_pw'); render(); return; }
     }
 
     state.saving = true;
@@ -399,12 +414,12 @@
       return loadUsers();
     }).catch(function (err) {
       state.saving = false;
-      var msg = (err && err.message) ? err.message : '저장 실패';
-      if (/user_exists/.test(msg)) msg = '이미 존재하는 ID입니다.';
-      else if (/conflict/.test(msg)) msg = '다른 곳에서 먼저 수정되었습니다. 새로고침 후 다시 시도하세요.';
-      else if (/password_required/.test(msg)) msg = '비밀번호를 입력하세요.';
-      else if (/invalid_user_id/.test(msg)) msg = '유효하지 않은 ID입니다.';
-      else if (/master_required|admin_required/.test(msg)) msg = '마스터만 회원을 관리할 수 있습니다.';
+      var msg = (err && err.message) ? err.message : t('admin_err_save_fail');
+      if (/user_exists/.test(msg)) msg = t('admin_err_exists');
+      else if (/conflict/.test(msg)) msg = t('admin_err_conflict');
+      else if (/password_required/.test(msg)) msg = t('admin_err_enter_pw');
+      else if (/invalid_user_id/.test(msg)) msg = t('admin_err_invalid_id');
+      else if (/master_required|admin_required/.test(msg)) msg = t('admin_err_master_only');
       state.modalError = msg;
       render();
     });
@@ -413,13 +428,13 @@
   function deleteUser(id) {
     var u = state.users.find(function (x) { return String(x.id) === String(id); });
     if (!u) return;
-    if (!window.confirm('회원 "' + (u.name || u.id) + '"을(를) 삭제할까요?')) return;
+    if (!window.confirm(t('admin_confirm_delete') + ' (' + (u.name || u.id) + ')')) return;
     NK.api.adminUserDelete(id)
       .then(function () { return loadUsers(); })
       .catch(function (err) {
-        var msg = (err && err.message) ? err.message : '삭제 실패';
-        if (/cannot_delete_primary_admin/.test(msg)) msg = '기본 관리자 계정은 삭제할 수 없습니다.';
-        else if (/master_required|admin_required/.test(msg)) msg = '마스터만 회원을 관리할 수 있습니다.';
+        var msg = (err && err.message) ? err.message : t('admin_err_del_fail');
+        if (/cannot_delete_primary_admin/.test(msg)) msg = t('admin_err_cannot_delete_primary');
+        else if (/master_required|admin_required/.test(msg)) msg = t('admin_err_master_only');
         window.alert(msg);
       });
   }
