@@ -289,18 +289,18 @@
       var sourceUrl = curUrl();
       // 비율은 프로젝트/에피소드 개요에 지정된 값(resolveEffectiveAspectRatio)을 사용.
       var aspect = S.aspectRatio;
-      // 지시문에 @캐릭터 가 포함되면 등록 캐릭터 자산(레퍼런스 이미지)을 해석해 첨부
+      // 캐릭터 자산은 "사용자가 지시문에 직접 언급한 경우"에만 첨부한다.
+      // 씬 대본/내레이션 맥락은 넣지 않는다 — 안 그러면 지시와 무관하게 그 씬에
+      // 등장하는 캐릭터(예: 세모)가 참조로 붙어 빈 영역에 그려지는 문제가 생긴다.
       var charRefs = [];
       var subjects = [];
       var negativeText = '';
       if (instruction && NK.uiPipelineImage && NK.uiPipelineImage.resolveCharacterReferencesForText) {
         try {
-          var st0 = (opts.ctx && opts.ctx.getState) ? opts.ctx.getState() : null;
-          var sceneForRes = (st0 && Array.isArray(st0.scenes)) ? st0.scenes[S.idx] : null;
           var resolved = await NK.uiPipelineImage.resolveCharacterReferencesForText({
             ctx: opts.ctx,
             projectId: projectId,
-            scene: sceneForRes || {},
+            scene: {},
             text: instruction
           });
           if (resolved) {
