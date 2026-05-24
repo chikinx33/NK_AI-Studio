@@ -111,8 +111,8 @@
       '</div>',
       '<div class="img-edit-side">',
       '<div class="img-edit-engine">',
-      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="gemini" checked> Gemini <span class="img-edit-engine-hint">' + L('· 일반 채팅 수정', '· General chat edit') + '</span></label>',
-      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="openai"> GPT <span class="img-edit-engine-hint">' + L('· 마스크/인페인팅 권장', '· Mask / inpainting (recommended)') + '</span></label>',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="gemini"> Gemini <span class="img-edit-engine-hint">' + L('· 일반 채팅 수정', '· General chat edit') + '</span></label>',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="openai" checked> GPT <span class="img-edit-engine-hint">' + L('· 마스크/인페인팅 권장', '· Mask / inpainting (recommended)') + '</span></label>',
       '</div>',
       '<div class="img-edit-tools">',
       '<label>' + L('인페인팅', 'Inpainting') + '</label>',
@@ -521,9 +521,9 @@
     var canvas = el('.img-edit-mask');
     if (canvas) canvas.classList.remove('off');
     if (toggle) toggle.textContent = L('브러시 ON', 'Brush ON');
-    // 엔진 기본값: Gemini (편집/인페인팅 안정적)
-    var gem = el('input[name="img-edit-engine"][value="gemini"]');
-    if (gem) gem.checked = true;
+    // 엔진 기본값: GPT (마스크/인페인팅에 안정적)
+    var def = el('input[name="img-edit-engine"][value="openai"]');
+    if (def) def.checked = true;
     setStatus('');
 
     var m = document.getElementById('img-edit-modal');
