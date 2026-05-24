@@ -883,6 +883,30 @@
     return out;
   }
 
+  // 필드별 제거기(stripInlineDataUrls/stripPayloadDataUrls)는 imageDataUrl·videoUrl·overlayClips 등
+  // 알려진 필드만 처리한다. 그러나 voiceUrl(data:audio TTS), imageUrl/generatedImageUrl(data:image),
+  // payload.audioDataUrl 등 다른 필드에 base64 가 인라인되면 수 MB~수십 MB 로 부풀어 업로드가 느려진다.
+  // 전송 전 객체 전체를 재귀 순회하며 data:/blob: 문자열을 비워 영속화 비용을 막는다.
+  // (data: URL 은 GCS 경로가 source of truth 이므로 영속화 가치 없음. in-memory state 는 건드리지 않음.)
+  function stripAllDataUrlsDeep(node, depth) {
+    depth = depth || 0;
+    if (depth > 16) return node; // 순환/과도한 깊이 안전장치
+    if (typeof node === 'string') {
+      return (node.indexOf('data:') === 0 || node.indexOf('blob:') === 0) ? '' : node;
+    }
+    if (Array.isArray(node)) {
+      return node.map(function (v) { return stripAllDataUrlsDeep(v, depth + 1); });
+    }
+    if (node && typeof node === 'object') {
+      var out = {};
+      Object.keys(node).forEach(function (k) {
+        out[k] = stripAllDataUrlsDeep(node[k], depth + 1);
+      });
+      return out;
+    }
+    return node;
+  }
+
   // 페이로드 상위 필드별 크기를 KB 단위로 분해. 무엇이 무거운지 사용자/개발자가 즉시 식별 가능.
   function _sizeBreakdown(body, safePayload, safeScenes) {
     var sizes = { total_KB: Math.round(JSON.stringify(body).length / 1024) };
@@ -918,11 +942,11 @@
     var safeScenes = null;
     var safePayload = null;
     if (scenes !== undefined && scenes !== null) {
-      safeScenes = stripInlineDataUrls(Array.isArray(scenes) ? scenes : []);
+      safeScenes = stripAllDataUrlsDeep(stripInlineDataUrls(Array.isArray(scenes) ? scenes : []));
       body.scenes = safeScenes;
     }
     if (payload !== undefined && payload !== null) {
-      safePayload = stripPayloadDataUrls(payload);
+      safePayload = stripAllDataUrlsDeep(stripPayloadDataUrls(payload));
       body.payload = safePayload;
     }
     if (opts && typeof opts.header === 'string') body.header = opts.header;
