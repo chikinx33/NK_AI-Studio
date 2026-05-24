@@ -14,6 +14,13 @@ function b64url(bytes: Uint8Array): string {
   return btoa(bin).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
 }
 
+// PKCE S256: code_challenge = base64url(SHA-256(code_verifier))
+// Cloudflare Workers 환경 → Node crypto 불가, Web Crypto(crypto.subtle) 사용.
+async function sha256Base64url(input: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  return b64url(new Uint8Array(digest));
+}
+
 export const onRequestGet = async ({ request, env }: { request: Request; env: any }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status);
@@ -26,11 +33,12 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   }
 
   // PKCE: code_verifier 를 생성해 state 에 담아 콜백으로 전달(서버 세션 저장소 없이 stateless 유지).
-  // plain 방식: code_challenge == code_verifier. verifier 가 state(평문) 안에 들어가므로
-  // S256 으로 해시해도 추가 보안 이득이 없어 plain 을 사용한다.
+  // X API 는 plain 을 지원하지 않으므로 S256 방식 사용:
+  // code_challenge = base64url(SHA-256(code_verifier)). 콜백에서는 state 의 raw verifier 를 그대로 전송.
   const verifierBytes = new Uint8Array(48);
   crypto.getRandomValues(verifierBytes);
   const codeVerifier = b64url(verifierBytes);
+  const codeChallenge = await sha256Base64url(codeVerifier);
 
   const state = btoa(JSON.stringify({
     userId: auth.userId,
@@ -44,8 +52,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     redirect_uri: redirectUri,
     scope: "tweet.read tweet.write users.read offline.access",
     state,
-    code_challenge: codeVerifier,
-    code_challenge_method: "plain",
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
 
   const oauthUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
