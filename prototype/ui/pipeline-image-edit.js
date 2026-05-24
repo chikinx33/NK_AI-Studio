@@ -10,14 +10,21 @@
     opts: null,
     idx: -1,
     aspectRatio: '16:9',
-    originalImageUrl: '',   // 모달 열 때의 씬 이미지 (적용 시 이력으로 보존)
-    workingImageUrl: '',    // 현재 미리보기 이미지 (아직 미적용)
-    editStack: [],          // 모달 내 되돌리기용 이전 workingImageUrl 목록
-    conversation: [],       // {prompt, imageDataUrl, mode}
+    versions: [],           // [{url, prompt}] — index 0 = 원본, 이후 생성 결과 누적
+    cur: 0,                 // 현재 선택된 버전 인덱스
     busy: false,
     hasStrokes: false,
     drawing: false
   };
+
+  function curUrl() {
+    var v = S.versions[S.cur];
+    return v ? v.url : '';
+  }
+  function originalUrl() {
+    var v = S.versions[0];
+    return v ? v.url : '';
+  }
 
   function getProvider() {
     try {
@@ -218,16 +225,16 @@
     var img = el('.img-edit-base');
     if (!img) return;
     img.onload = function () { sizeMaskCanvas(); clearMask(); };
-    img.src = toPlayable(S.workingImageUrl);
+    img.src = toPlayable(curUrl());
   }
 
   function renderHistory() {
     var box = el('.img-edit-history');
     if (!box) return;
-    var urls = S.editStack.concat([S.workingImageUrl]);
-    box.innerHTML = urls.map(function (u, i) {
-      var cur = (i === urls.length - 1) ? ' cur' : '';
-      return '<img class="thumb' + cur + '" data-edit-idx="' + i + '" src="' + toPlayable(u) + '" alt="ver ' + (i + 1) + '" title="버전 ' + (i + 1) + '" />';
+    box.innerHTML = S.versions.map(function (v, i) {
+      var cur = (i === S.cur) ? ' cur' : '';
+      var label = (i === 0) ? '원본' : ('수정 ' + i);
+      return '<img class="thumb' + cur + '" data-edit-idx="' + i + '" src="' + toPlayable(v.url) + '" alt="' + label + '" title="' + label + '" />';
     }).join('');
   }
 
@@ -257,22 +264,58 @@
     setStatus('수정 생성 중...');
 
     try {
+      var sourceUrl = curUrl();
+      // 지시문에 @캐릭터 가 포함되면 등록 캐릭터 자산(레퍼런스 이미지)을 해석해 첨부
+      var promptText = instruction || '마스크로 표시한 영역을 자연스럽게 다듬어 주세요.';
+      var charRefs = [];
+      if (instruction && NK.uiPipelineImage && NK.uiPipelineImage.resolveCharacterReferencesForText) {
+        try {
+          var st0 = (opts.ctx && opts.ctx.getState) ? opts.ctx.getState() : null;
+          var sceneForRes = (st0 && Array.isArray(st0.scenes)) ? st0.scenes[S.idx] : null;
+          var resolved = await NK.uiPipelineImage.resolveCharacterReferencesForText({
+            ctx: opts.ctx,
+            projectId: projectId,
+            scene: sceneForRes || {},
+            text: instruction
+          });
+          if (resolved) {
+            if (resolved.promptText) promptText = resolved.promptText;
+            if (resolved.negativePromptText) promptText += '\nDo not include: ' + resolved.negativePromptText;
+            if (Array.isArray(resolved.referenceImages)) charRefs = resolved.referenceImages;
+          }
+        } catch (_) {}
+      }
+
+      // 소스 이미지(편집 대상)를 ref 1 로, 캐릭터 자산을 보조 ref 로 (최대 4개)
+      var referenceImages = [{
+        referenceId: 1,
+        referenceType: 'REFERENCE_TYPE_SUBJECT',
+        imageDataUrl: sourceUrl,
+        subjectDescription: 'Current scene image to edit. Preserve subject identity, composition, framing, and lighting unless the instruction explicitly changes them.',
+        subjectType: 'SUBJECT_TYPE_DEFAULT'
+      }];
+      charRefs.forEach(function (r) {
+        if (referenceImages.length >= 4 || !r || !r.imageDataUrl) return;
+        referenceImages.push(Object.assign({}, r, { referenceId: referenceImages.length + 1 }));
+      });
+
+      // 현재 선택 버전까지의 수정 이력을 대화 맥락으로 전달 (연속 지시 지원)
+      var convo = [];
+      for (var ci = 1; ci <= S.cur; ci++) {
+        var vv = S.versions[ci];
+        if (vv && vv.url && vv.prompt) convo.push({ prompt: vv.prompt, imageDataUrl: vv.url, mode: 'image-to-image' });
+      }
+
       var body = {
-        prompt: instruction || '마스크로 표시한 영역을 자연스럽게 다듬어 주세요.',
+        prompt: promptText,
         aspectRatio: S.aspectRatio,
         projectId: projectId,
         provider: provider,
         generationMode: 'image-to-image',
         generationStyle: 'conversation',
         cameraTargetMode: 'subject',
-        referenceImages: [{
-          referenceId: 1,
-          referenceType: 'REFERENCE_TYPE_SUBJECT',
-          imageDataUrl: S.workingImageUrl,
-          subjectDescription: 'Current scene image to edit. Preserve subject identity, composition, framing, and lighting unless the instruction explicitly changes them.',
-          subjectType: 'SUBJECT_TYPE_DEFAULT'
-        }],
-        conversationHistory: S.conversation.slice(-3)
+        referenceImages: referenceImages,
+        conversationHistory: convo.slice(-3)
       };
       if (maskDataUrl) body.maskDataUrl = maskDataUrl;
 
@@ -287,14 +330,13 @@
           if (normalized && normalized.url) imageRef = normalized.url;
         } catch (_) {}
       }
-      // 이전 이미지를 되돌리기 스택과 대화 이력에 보존
-      S.editStack.push(S.workingImageUrl);
-      S.conversation.push({ prompt: instruction || 'masked refinement', imageDataUrl: imageRef, mode: 'image-to-image' });
-      S.workingImageUrl = imageRef;
+      // 새 버전 추가 (기존 버전은 모두 유지) 후 현재 선택을 새 버전으로 이동
+      S.versions.push({ url: imageRef, prompt: instruction || 'masked refinement' });
+      S.cur = S.versions.length - 1;
       if (ta) ta.value = '';
       S.hasStrokes = false;
       refreshView();
-      setStatus('수정 완료 — 결과를 확인하고 "적용"을 누르면 저장돼요.');
+      setStatus('수정 완료 — 썸네일에서 원본/수정본을 비교하고 "적용"을 누르면 저장돼요.');
     } catch (err) {
       var msg = (err && err.message) ? String(err.message) : '수정 생성 실패';
       var detail = '';
@@ -312,11 +354,11 @@
   }
 
   function undo() {
-    if (S.busy || !S.editStack.length) return;
-    S.workingImageUrl = S.editStack.pop();
-    if (S.conversation.length) S.conversation.pop();
+    if (S.busy || S.cur <= 0) return;
+    // 버전은 모두 유지하고 선택만 이전으로 이동
+    S.cur -= 1;
     refreshView();
-    setStatus('이전 버전으로 되돌렸어요.');
+    setStatus('이전 버전을 선택했어요. (생성본은 썸네일에 그대로 남아 있어요)');
   }
 
   function applyToScene() {
@@ -327,15 +369,17 @@
     var st = ctx.getState();
     if (!st || !Array.isArray(st.scenes) || S.idx < 0 || S.idx >= st.scenes.length) { close(); return; }
     var scene = st.scenes[S.idx];
-    if (String(S.workingImageUrl || '') === String(S.originalImageUrl || '')) { close(); return; }
+    var chosen = curUrl();
+    var original = originalUrl();
+    if (String(chosen || '') === String(original || '')) { close(); return; }
     // 적용 전 원본을 버전 이력에 보존
     var history = Array.isArray(scene.imageHistory) ? scene.imageHistory.slice() : [];
-    if (S.originalImageUrl) {
-      history.push(S.originalImageUrl);
+    if (original) {
+      history.push(original);
       if (history.length > MAX_SCENE_HISTORY) history = history.slice(history.length - MAX_SCENE_HISTORY);
     }
     st.scenes[S.idx] = Object.assign({}, scene, {
-      imageDataUrl: S.workingImageUrl,
+      imageDataUrl: chosen,
       imageHistory: history,
       imgError: '',
       imgLoading: false
@@ -369,14 +413,11 @@
       var thumb = e.target.closest('.thumb[data-edit-idx]');
       if (thumb) {
         var i = Number(thumb.dataset.editIdx);
-        var urls = S.editStack.concat([S.workingImageUrl]);
-        if (i >= 0 && i < urls.length && urls[i] !== S.workingImageUrl) {
-          // 선택한 버전으로 이동: 그 이후 편집은 스택에서 제거
-          S.workingImageUrl = urls[i];
-          S.editStack = urls.slice(0, i);
-          S.conversation = S.conversation.slice(0, i);
+        // 선택만 이동 — 어떤 버전도 삭제하지 않는다 (원본/수정본 자유 비교)
+        if (i >= 0 && i < S.versions.length && i !== S.cur) {
+          S.cur = i;
           refreshView();
-          setStatus('버전 ' + (i + 1) + ' 선택됨.');
+          setStatus(i === 0 ? '원본을 선택했어요.' : ('수정 ' + i + ' 버전을 선택했어요.'));
         }
         return;
       }
@@ -409,8 +450,8 @@
     if (m) m.classList.add('hidden');
     S.opts = null;
     S.idx = -1;
-    S.editStack = [];
-    S.conversation = [];
+    S.versions = [];
+    S.cur = 0;
     S.busy = false;
     S.hasStrokes = false;
     S.drawing = false;
@@ -434,10 +475,8 @@
     S.aspectRatio = (typeof opts.resolveEffectiveAspectRatio === 'function')
       ? opts.resolveEffectiveAspectRatio(st, ctx)
       : (st.aspectRatio || '16:9');
-    S.originalImageUrl = imageUrl;
-    S.workingImageUrl = imageUrl;
-    S.editStack = [];
-    S.conversation = [];
+    S.versions = [{ url: imageUrl, prompt: '' }];
+    S.cur = 0;
     S.busy = false;
     S.hasStrokes = false;
 

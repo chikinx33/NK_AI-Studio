@@ -972,6 +972,81 @@
     }
   };
 
+  /**
+   * 임의의 텍스트(예: 이미지 수정 지시문)에서 @캐릭터 토큰을 해석해
+   * 등록 캐릭터 자산(레퍼런스 이미지)과 신원 유지 프롬프트를 돌려준다.
+   * generateImageForIdx 의 레퍼런스 해결 체인을 수정 모달에서 재사용하기 위함.
+   * 명시적으로 언급된 캐릭터만 첨부하도록 forceActiveFallback 은 끈다.
+   * 반환: { referenceImages, promptText, negativePromptText }
+   */
+  image.resolveCharacterReferencesForText = async function (opts) {
+    var o = opts || {};
+    var ctx = o.ctx;
+    var projectId = o.projectId || '';
+    var scene = o.scene || {};
+    var text = String(o.text || '');
+    var out = { referenceImages: [], promptText: text, negativePromptText: '' };
+    try {
+      if (!ctx || !ctx.getState) return out;
+      var st = ctx.getState();
+      if (!st || !(NK.service && NK.service.characterRegistry)) return out;
+      var payload0 = st.payload || {};
+      var enabled = (function (v, f) {
+        if (typeof v === 'boolean') return v;
+        if (typeof v === 'string') return /^(true|1|yes|on)$/i.test(v.trim());
+        return !!f;
+      })(payload0.charactersEnabled, Array.isArray(payload0.characters) && payload0.characters.length);
+      if (!enabled) return out;
+
+      var liveDraft = (NK.service.project && NK.service.project.getDraftById)
+        ? NK.service.project.getDraftById(projectId) : null;
+      var payload = (liveDraft && liveDraft.payload && typeof liveDraft.payload === 'object') ? liveDraft.payload : payload0;
+      var brandId = (NK.service.project && NK.service.project.getBrandId)
+        ? NK.service.project.getBrandId(payload) : (payload.brandId || '');
+      var hydratedBrand = null;
+      if (brandId && NK.service.brand && NK.service.brand.hydrateFromServer) {
+        try { hydratedBrand = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 }); } catch (_) {}
+      }
+      var resolutionText = buildCharacterResolutionPrompt(scene, text);
+      var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, resolutionText, { allowNameFallback: true, forceActiveFallback: false, payload: payload });
+      if (!res || !Array.isArray(res.characters) || !res.characters.length) return out;
+      var built = NK.service.characterRegistry.buildResolvedPrompt({
+        rawPrompt: text,
+        characters: res.characters,
+        brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
+        bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
+      });
+      var resolvedText = (built && built.resolvedPrompt) || text;
+      out.negativePromptText = (built && built.negativePromptText) || '';
+
+      var referencePayload = buildReferenceBundle(payload, res.characters, { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
+      if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && projectId && NK.api && NK.api.projectGet) {
+        try {
+          var remoteResp = await NK.api.projectGet(projectId);
+          var remoteDraft = extractRemoteProjectRecord(projectId, remoteResp);
+          if (remoteDraft && remoteDraft.payload) {
+            referencePayload = buildReferenceBundle(remoteDraft.payload, res.characters, { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
+          }
+        } catch (_) {}
+      }
+      if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && brandId && NK.api && NK.api.libraryIP) {
+        try {
+          var listing = await NK.api.libraryIP('', { brandId: brandId });
+          var ipFallback = buildIpLibraryFallback(listing, res.characters);
+          if (ipFallback && ipFallback.referenceImages && ipFallback.referenceImages.length) referencePayload = ipFallback;
+        } catch (_) {}
+      }
+
+      if (referencePayload && referencePayload.referenceImages && referencePayload.referenceImages.length) {
+        resolvedText = buildInlineReferencePrompt(resolvedText, referencePayload.referenceSubjects || []);
+        resolvedText = [referencePayload.promptPrefix || '', resolvedText, referencePayload.promptSuffix || ''].filter(Boolean).join('\n');
+        out.referenceImages = referencePayload.referenceImages.slice(0, MAX_REFERENCE_IMAGES);
+      }
+      out.promptText = resolvedText;
+    } catch (_) {}
+    return out;
+  };
+
   image.buildCharacterResolutionPrompt = buildCharacterResolutionPrompt;
   image.buildInlineReferencePrompt = buildInlineReferencePrompt;
   image.buildShotImagePrompt = buildShotImagePrompt;
