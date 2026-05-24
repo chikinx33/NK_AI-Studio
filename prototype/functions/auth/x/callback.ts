@@ -1,23 +1,20 @@
 import { getGoogleServiceAccountToken, resolveGcsContextForUser } from "../../api/_shared/youtube-token";
 import { writeXPatch } from "../../api/_shared/x-token";
 
-function popupHtml(result: { ok: boolean; username?: string; error?: string }) {
-  const payload = JSON.stringify(result);
-  return new Response(
-    `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>연결 중...</title></head>
-<body>
-<script>
-  try {
-    if (window.opener) {
-      window.opener.postMessage({ type: 'sns_oauth_result', platform: 'x', result: ${payload} }, '*');
-    }
-  } catch(e) {}
-  window.close();
-<\/script>
-<p>잠시 후 자동으로 닫힙니다...</p>
-</body></html>`,
-    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
-  );
+// X 는 팝업 환경에서 로그인 세션을 인식하지 못해 authorize 단계에서 400 이 나므로,
+// 다른 SNS 의 popup+postMessage 와 달리 현재 탭 리다이렉트 방식으로 처리한다.
+// 결과는 SNS 설정 페이지로 302 리다이렉트하며 sns=x & connected/error 쿼리로 전달한다.
+function redirectResult(returnTo: string, params: Record<string, string>) {
+  // returnTo 는 connect 단계에서 검증된 같은 사이트 절대경로. 비어있으면 기본 페이지로.
+  const base = returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+    ? returnTo
+    : "/sns-settings.html";
+  const qs = new URLSearchParams(Object.assign({ sns: "x" }, params)).toString();
+  const sep = base.includes("?") ? "&" : "?";
+  return new Response(null, {
+    status: 302,
+    headers: { Location: base + sep + qs },
+  });
 }
 
 export const onRequestGet = async ({ request, env }: { request: Request; env: any }) => {
@@ -27,28 +24,33 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const error = url.searchParams.get("error");
   const errorDesc = url.searchParams.get("error_description");
 
-  if (error) {
-    return popupHtml({ ok: false, error: "OAuth cancelled: " + (errorDesc || error) });
-  }
-  if (!code || !stateRaw) return popupHtml({ ok: false, error: "Missing code or state" });
-
+  // state 를 먼저 디코드해 returnTo 를 확보(에러 리다이렉트에도 사용).
   let userId = "owner";
   let codeVerifier = "";
-  try {
-    const decoded = JSON.parse(atob(stateRaw));
-    userId = String(decoded.userId || "owner");
-    codeVerifier = String(decoded.v || "");
-  } catch {
-    return popupHtml({ ok: false, error: "Invalid state" });
+  let returnTo = "";
+  if (stateRaw) {
+    try {
+      const decoded = JSON.parse(atob(stateRaw));
+      userId = String(decoded.userId || "owner");
+      codeVerifier = String(decoded.v || "");
+      returnTo = String(decoded.r || "");
+    } catch {
+      return redirectResult("", { error: "Invalid state" });
+    }
   }
-  if (!codeVerifier) return popupHtml({ ok: false, error: "Missing PKCE verifier" });
+
+  if (error) {
+    return redirectResult(returnTo, { error: "OAuth cancelled: " + (errorDesc || error) });
+  }
+  if (!code || !stateRaw) return redirectResult(returnTo, { error: "Missing code or state" });
+  if (!codeVerifier) return redirectResult(returnTo, { error: "Missing PKCE verifier" });
 
   const clientId = env.X_CLIENT_ID;
   const clientSecret = env.X_CLIENT_SECRET;
   const redirectUri = env.X_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/x/callback";
 
   if (!clientId || !clientSecret) {
-    return popupHtml({ ok: false, error: "Server config missing" });
+    return redirectResult(returnTo, { error: "Server config missing" });
   }
 
   try {
@@ -77,10 +79,10 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       error_description?: string;
     };
     if (!tokenData.access_token) {
-      throw new Error(tokenData.error_description || tokenData.error || "Token exchange failed");
+      return redirectResult(returnTo, { error: tokenData.error_description || tokenData.error || "Token exchange failed" });
     }
     if (!tokenData.refresh_token) {
-      throw new Error("refresh_token missing — offline.access 스코프가 필요합니다");
+      return redirectResult(returnTo, { error: "refresh_token missing — offline.access 스코프가 필요합니다" });
     }
 
     const accessToken = tokenData.access_token;
@@ -129,10 +131,10 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       }
     );
 
-    return popupHtml({ ok: true, username: username || name || xUserId });
+    return redirectResult(returnTo, { connected: "true", username: username || name || xUserId });
 
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    return popupHtml({ ok: false, error: msg });
+    return redirectResult(returnTo, { error: msg });
   }
 };
