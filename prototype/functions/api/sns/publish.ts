@@ -1580,40 +1580,58 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return { bytes: await r.arrayBuffer(), contentType: ct };
       }
 
-      // 이미지: v1.1 단순 업로드. media_id_string 반환.
+      // X 미디어 업로드는 OAuth2(media.write) 호환 v2 엔드포인트 사용.
+      // 레거시 upload.twitter.com/1.1 은 OAuth1.0a 전용이라 Bearer 토큰을 거부함.
+      const X_MEDIA_UPLOAD = "https://api.twitter.com/2/media/upload";
+      type XMediaResp = {
+        data?: { id?: string; media_id_string?: string; processing_info?: XProcInfo };
+        media_id_string?: string;
+        processing_info?: XProcInfo;
+      };
+      type XProcInfo = { state: string; check_after_secs?: number; error?: unknown };
+      function pickMediaId(j: XMediaResp): string | undefined {
+        return j.data?.id || j.data?.media_id_string || j.media_id_string;
+      }
+      function pickProcInfo(j: XMediaResp): XProcInfo | undefined {
+        return j.data?.processing_info || j.processing_info;
+      }
+
+      // 이미지: v2 단순 업로드(multipart). data.id 반환.
       async function xUploadSimple(bytes: ArrayBuffer, contentType: string): Promise<string> {
         const form = new FormData();
         form.append("media", new Blob([bytes], { type: contentType }));
-        const r = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+        form.append("media_category", "tweet_image");
+        const r = await fetch(X_MEDIA_UPLOAD, {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` },
           body: form,
         });
-        const j = (await r.json()) as { media_id_string?: string };
-        if (!r.ok || !j.media_id_string) {
+        const j = (await r.json()) as XMediaResp;
+        const id = pickMediaId(j);
+        if (!r.ok || !id) {
           throw new Error(`X 이미지 업로드 실패: ${r.status} ${JSON.stringify(j)}`);
         }
-        return j.media_id_string;
+        return id;
       }
 
-      // 영상: v1.1 청크 업로드(INIT→APPEND→FINALIZE) + 처리 상태 폴링.
+      // 영상: v2 청크 업로드(INIT→APPEND→FINALIZE) + 처리 상태 폴링.
       async function xUploadChunked(bytes: ArrayBuffer, contentType: string): Promise<string> {
         const total = bytes.byteLength;
-        const initRes = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+        const initForm = new FormData();
+        initForm.append("command", "INIT");
+        initForm.append("total_bytes", String(total));
+        initForm.append("media_type", contentType);
+        initForm.append("media_category", "tweet_video");
+        const initRes = await fetch(X_MEDIA_UPLOAD, {
           method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({
-            command: "INIT",
-            total_bytes: String(total),
-            media_type: contentType,
-            media_category: "tweet_video",
-          }).toString(),
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: initForm,
         });
-        const initJson = (await initRes.json()) as { media_id_string?: string };
-        if (!initRes.ok || !initJson.media_id_string) {
+        const initJson = (await initRes.json()) as XMediaResp;
+        const mediaId = pickMediaId(initJson);
+        if (!initRes.ok || !mediaId) {
           throw new Error(`X 동영상 INIT 실패: ${initRes.status} ${JSON.stringify(initJson)}`);
         }
-        const mediaId = initJson.media_id_string;
         const CHUNK = 4 * 1024 * 1024;
         let seg = 0;
         for (let off = 0; off < total; off += CHUNK) {
@@ -1623,7 +1641,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           form.append("media_id", mediaId);
           form.append("segment_index", String(seg));
           form.append("media", new Blob([slice], { type: contentType }));
-          const apRes = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+          const apRes = await fetch(X_MEDIA_UPLOAD, {
             method: "POST",
             headers: { Authorization: `Bearer ${accessToken}` },
             body: form,
@@ -1633,16 +1651,19 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           }
           seg++;
         }
-        const finRes = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+        const finForm = new FormData();
+        finForm.append("command", "FINALIZE");
+        finForm.append("media_id", mediaId);
+        const finRes = await fetch(X_MEDIA_UPLOAD, {
           method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ command: "FINALIZE", media_id: mediaId }).toString(),
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: finForm,
         });
-        const finJson = (await finRes.json()) as { media_id_string?: string; processing_info?: { state: string; check_after_secs?: number; error?: unknown } };
-        if (!finRes.ok || !finJson.media_id_string) {
+        const finJson = (await finRes.json()) as XMediaResp;
+        if (!finRes.ok || !pickMediaId(finJson)) {
           throw new Error(`X 동영상 FINALIZE 실패: ${finRes.status} ${JSON.stringify(finJson)}`);
         }
-        let info = finJson.processing_info;
+        let info = pickProcInfo(finJson);
         let waited = 0;
         while (info && (info.state === "pending" || info.state === "in_progress")) {
           if (waited > 90000) throw new Error("X 동영상 처리 시간 초과");
@@ -1650,11 +1671,11 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           await new Promise((res) => setTimeout(res, waitMs));
           waited += waitMs;
           const stRes = await fetch(
-            `https://upload.twitter.com/1.1/media/upload.json?command=STATUS&media_id=${mediaId}`,
+            `${X_MEDIA_UPLOAD}?command=STATUS&media_id=${mediaId}`,
             { headers: { Authorization: `Bearer ${accessToken}` } }
           );
-          const stJson = (await stRes.json()) as { processing_info?: { state: string; check_after_secs?: number; error?: unknown } };
-          info = stJson.processing_info;
+          const stJson = (await stRes.json()) as XMediaResp;
+          info = pickProcInfo(stJson);
         }
         if (info && info.state === "failed") {
           throw new Error(`X 동영상 처리 실패: ${JSON.stringify(info.error || info)}`);
