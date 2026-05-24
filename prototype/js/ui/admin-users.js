@@ -429,6 +429,7 @@
     var u = state.users.find(function (x) { return String(x.id) === String(id); });
     if (!u) return;
     if (!window.confirm(t('admin_confirm_delete') + ' (' + (u.name || u.id) + ')')) return;
+    if (NK.core && NK.core.setLoading) NK.core.setLoading(true, t('admin_deleting'));
     NK.api.adminUserDelete(id)
       .then(function () { return loadUsers(); })
       .catch(function (err) {
@@ -436,7 +437,8 @@
         if (/cannot_delete_primary_admin/.test(msg)) msg = t('admin_err_cannot_delete_primary');
         else if (/master_required|admin_required/.test(msg)) msg = t('admin_err_master_only');
         window.alert(msg);
-      });
+      })
+      .then(function () { if (NK.core && NK.core.setLoading) NK.core.setLoading(false); });
   }
 
   function updateAuthState() {
