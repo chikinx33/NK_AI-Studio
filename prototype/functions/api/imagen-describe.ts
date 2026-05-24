@@ -16,7 +16,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "imageUrl is required" }, 400);
     }
 
-    const apiKey = String(env.GOOGLE_API_KEY || "").trim();
+    const apiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
     const clientEmail = String(env.GOOGLE_CLIENT_EMAIL || "").trim();
     const privateKeyRaw = String(env.GOOGLE_PRIVATE_KEY || "").trim();
     const geminiModel = String(
@@ -24,7 +24,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     ).trim();
 
     if (!apiKey) {
-      return json({ error: "Missing GOOGLE_API_KEY" }, 500);
+      return json({ error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY" }, 500);
     }
     if (!clientEmail || !privateKeyRaw) {
       return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);

@@ -39,7 +39,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
 
     const provider = normalizeProvider(body?.provider || env.AI_IMAGE_PROVIDER);
-    const apiKey = String(env.GOOGLE_API_KEY || "").trim();
+    // generativelanguage(AI Studio) 키는 GEMINI_API_KEY 우선, 없으면 GOOGLE_API_KEY 폴백.
+    // music.ts / sfx.ts 와 동일 규칙. (GOOGLE_API_KEY 가 Cloud 용이라 image 엔드포인트에서
+    // INVALID_ARGUMENT 가 나던 문제 대응)
+    const apiKey = String(env.GEMINI_API_KEY || env.GOOGLE_API_KEY || "").trim();
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
@@ -56,7 +59,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
     } else {
       if (!apiKey) {
-        return json({ error: "Missing GOOGLE_API_KEY" }, 500);
+        return json({ error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY" }, 500);
       }
       if (!clientEmail || !privateKeyRaw) {
         return json({ error: "Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY" }, 500);
