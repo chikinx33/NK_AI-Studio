@@ -56,7 +56,10 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     code_challenge_method: "S256",
   });
 
-  const oauthUrl = `https://twitter.com/i/oauth2/authorize?${params.toString()}`;
+  // 로그인 세션 쿠키는 x.com 도메인에 저장되므로, authorize 도 x.com 으로 호출해야
+  // 세션을 인식한다. twitter.com 으로 호출하면 쿠키를 못 읽어 "Redirect is requested"(로그인
+  // 플로우로 리다이렉트) invalid_request 400 이 발생한다.
+  const oauthUrl = `https://x.com/i/oauth2/authorize?${params.toString()}`;
 
   return send({ ok: true, oauthUrl });
 };
