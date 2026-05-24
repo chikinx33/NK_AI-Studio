@@ -844,14 +844,39 @@ async function publishThreadsContainer(opts: {
   creationId: string;
 }): Promise<{ postId: string }> {
   const { threadsUserId, accessToken, creationId } = opts;
-  const res = await fetch(`${THREADS_API}/${threadsUserId}/threads_publish`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ creation_id: creationId, access_token: accessToken }).toString(),
-  });
-  const data = (await res.json()) as { id?: string; error?: { message?: string } };
-  if (!data.id) throw new Error(`Threads 게시 실패: ${data.error?.message || res.status}`);
-  return { postId: data.id };
+  const url = `${THREADS_API}/${threadsUserId}/threads_publish`;
+  const bodyStr = new URLSearchParams({ creation_id: creationId, access_token: accessToken }).toString();
+  // Meta 의 "An unexpected error has occurred. Please retry your request later." 는 일시적 서버 오류로,
+  // 실제로는 게시가 처리됐는데 응답만 에러로 오는 경우가 있다(글은 올라갔는데 실패로 표시되는 원인).
+  // creation_id 는 1회만 게시 가능하므로 같은 id 재시도는 중복 게시를 만들지 않는다 →
+  // 일시 오류면 재시도하고, "이미 게시됨" 응답이면 성공으로 간주한다.
+  let lastMsg = "";
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: bodyStr,
+      });
+    } catch (e) {
+      lastMsg = e instanceof Error ? e.message : String(e);
+      continue;
+    }
+    const data = (await res.json()) as { id?: string; error?: { message?: string } };
+    if (data.id) return { postId: data.id };
+    lastMsg = data.error?.message || String(res.status);
+    // 이미 게시된 컨테이너 → 게시 성공으로 간주 (직전 시도가 서버측에서 성공한 경우)
+    if (/already.*publish|has already been published|already exists/i.test(lastMsg)) {
+      return { postId: "" };
+    }
+    // 일시적 오류가 아니면(영구 오류) 즉시 실패. 일시 오류면 루프가 재시도.
+    if (!/unexpected error|please retry|temporarily|try again later|rate ?limit|reduce the amount|internal/i.test(lastMsg)) {
+      throw new Error(`Threads 게시 실패: ${lastMsg}`);
+    }
+  }
+  throw new Error(`Threads 게시 실패: ${lastMsg}`);
 }
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: any }) => {
