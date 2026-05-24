@@ -236,6 +236,60 @@
     try { return out.toDataURL('image/png'); } catch (_) { return ''; }
   }
 
+  function loadImageEl(url) {
+    return new Promise(function (resolve, reject) {
+      var im = new Image();
+      im.crossOrigin = 'anonymous';
+      im.onload = function () { resolve(im); };
+      im.onerror = function () { reject(new Error('img_load_failed')); };
+      im.src = url;
+    });
+  }
+
+  // 부분 수정(인페인팅) 합성: 원본을 그대로 둔 캔버스 위에 모델 결과에서
+  // "칠한 마스크 영역"만 오려 덮는다. → 출력 크기/비율은 원본과 동일, 마스크 밖
+  // 픽셀은 원본 그대로 보존. 실패(예: 원본 CORS 오염) 시 '' 반환 → 호출부 폴백.
+  async function compositeMaskedEdit(originalUrl, resultUrl) {
+    try {
+      var maskCanvas = el('.img-edit-mask');
+      if (!maskCanvas || !resultUrl) return '';
+      var orig = await loadImageEl(toPlayable(originalUrl));
+      var W = orig.naturalWidth || orig.width;
+      var H = orig.naturalHeight || orig.height;
+      if (!W || !H) return '';
+
+      var base = document.createElement('canvas');
+      base.width = W; base.height = H;
+      var bx = base.getContext('2d');
+      bx.drawImage(orig, 0, 0, W, H);
+
+      var resImg = await loadImageEl(resultUrl);
+      var layer = document.createElement('canvas');
+      layer.width = W; layer.height = H;
+      var lx = layer.getContext('2d');
+      lx.drawImage(resImg, 0, 0, W, H);
+
+      // 칠한 마스크의 알파를 원본 크기로 옮기되, 경계를 살짝 흐려 자연스럽게 블렌딩
+      var m = document.createElement('canvas');
+      m.width = W; m.height = H;
+      var mx = m.getContext('2d');
+      try { mx.filter = 'blur(' + Math.max(1, Math.round(Math.min(W, H) / 300)) + 'px)'; } catch (_) {}
+      mx.drawImage(maskCanvas, 0, 0, W, H);
+      try { mx.filter = 'none'; } catch (_) {}
+
+      // 결과 레이어에서 마스크 영역만 남기고
+      lx.globalCompositeOperation = 'destination-in';
+      lx.drawImage(m, 0, 0);
+      lx.globalCompositeOperation = 'source-over';
+
+      // 원본 위에 마스크 영역 결과를 덮는다
+      bx.drawImage(layer, 0, 0);
+      return base.toDataURL('image/png');
+    } catch (_) {
+      return '';
+    }
+  }
+
   // ── 미리보기/이력 렌더 ─────────────────────────────────────
   function renderBase() {
     var img = el('.img-edit-base');
@@ -350,11 +404,30 @@
       if (maskDataUrl) body.maskDataUrl = maskDataUrl;
 
       var json = await NK.api.imagen(body);
-      var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
+      var dataUrl = json.dataUrl || (json.bytesBase64Encoded ? ('data:image/png;base64,' + json.bytesBase64Encoded) : '');
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
-      // 편집 결과는 원본 프레이밍을 보존해야 하므로 강제 종횡비 보정을 하지 않는다.
+
+      if (maskDataUrl) {
+        // 부분 수정: 원본 위에 마스크 영역만 합성 → 크기/비율 동일, 마스크 밖 보존.
+        var composited = await compositeMaskedEdit(sourceUrl, dataUrl || imageRef);
+        if (composited) {
+          imageRef = composited;
+        } else if (typeof opts.enforceImageAspectRatio === 'function') {
+          // 합성 실패(원본 CORS 등) 폴백: 비율만이라도 원본에 맞춤
+          try {
+            var nf = await opts.enforceImageAspectRatio(imageRef, aspect);
+            if (nf && nf.url) imageRef = nf.url;
+          } catch (_) {}
+        }
+      } else if (typeof opts.enforceImageAspectRatio === 'function') {
+        // 채팅 전체 수정: 결과 비율을 소스 비율로 맞춤(기존 동작 유지)
+        try {
+          var normalized = await opts.enforceImageAspectRatio(imageRef, aspect);
+          if (normalized && normalized.url) imageRef = normalized.url;
+        } catch (_) {}
+      }
       // 새 버전 추가 (기존 버전은 모두 유지) 후 현재 선택을 새 버전으로 이동
       S.versions.push({ url: imageRef, prompt: instruction || 'masked refinement' });
       S.cur = S.versions.length - 1;
