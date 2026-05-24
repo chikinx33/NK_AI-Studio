@@ -3678,13 +3678,13 @@
       }
       // ── SNS 배포 헬퍼 ─────────────────────────────────
       function snsPublishFormat(formatId, drafts, scheduledAt) {
-        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts', 'facebook', 'threads'];
+        var SNS_PLATFORMS = ['instagram', 'tiktok', 'youtube', 'youtube-shorts', 'facebook', 'threads', 'x'];
         if (SNS_PLATFORMS.indexOf(formatId) === -1) {
           return Promise.resolve({ skipped: true });
         }
         var isYoutubeFamily = (formatId === 'youtube' || formatId === 'youtube-shorts');
-        // Threads 는 텍스트 전용 게시 허용 (이미지·영상 없이 캡션만으로 발행 가능)
-        var isTextCapable = (formatId === 'threads');
+        // Threads·X 는 텍스트 전용 게시 허용 (이미지·영상 없이 캡션만으로 발행 가능)
+        var isTextCapable = (formatId === 'threads' || formatId === 'x');
 
         // 선택된 이미지+영상 자산 수집 → 영상 먼저, 이미지 나중 정렬
         var selMediaItems = assetItems.filter(function (i) {
