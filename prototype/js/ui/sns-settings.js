@@ -35,7 +35,7 @@
     { id: 'tiktok',         label: 'TikTok' },
     { id: 'facebook',       label: 'Facebook' },
     { id: 'threads',        label: 'Threads' },
-    { id: 'x',              label: 'X',              comingSoon: true },
+    { id: 'x',              label: 'X' },
     { id: 'naver-blog',     label: '네이버 블로그',   comingSoon: true },
     { id: 'naver-post',     label: '네이버 포스트',   comingSoon: true },
     { id: 'kakao',          label: '카카오',          comingSoon: true },
@@ -467,6 +467,7 @@
       else if (platform.id === 'tiktok')    profileUrl = _u ? 'https://www.tiktok.com/@' + _u : '';
       else if (platform.id === 'facebook')  profileUrl = snsState.pageId ? 'https://www.facebook.com/' + snsState.pageId : '';
       else if (platform.id === 'threads')   profileUrl = _u ? 'https://www.threads.net/@' + _u : '';
+      else if (platform.id === 'x')         profileUrl = _u ? 'https://x.com/' + _u : '';
     }
     var linkBtnHtml = profileUrl
       ? '<a class="sns-profile-link" href="' + escapeHtml(profileUrl) + '" target="_blank" rel="noopener noreferrer" title="' + t('openProfile') + '">' + linkSvg + '</a>'
