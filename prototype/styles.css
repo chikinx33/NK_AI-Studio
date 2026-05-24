@@ -12959,6 +12959,15 @@ textarea.bsf-skeleton {
 .bsf-mock-x-actions { display: flex; gap: 20px; padding-left: 50px; font-size: 13px; color: #536471; margin-bottom: 6px; align-items: center; }
 .bsf-mock-x-action { display: inline-flex; align-items: center; gap: 4px; }
 .bsf-mock-x-counter { font-size: 11px; color: #536471; text-align: right; padding-top: 6px; border-top: 1px solid #eff3f4; }
+/* Threads 이미지 캐러셀 */
+.bsf-mock-x-carousel { margin: 0 0 10px 50px; }
+.bsf-mock-x-slider { border: 1px solid #cfd9de; border-radius: 16px; overflow: hidden; position: relative; cursor: grab; user-select: none; height: 280px; background: #000; }
+.bsf-mock-x-slider:active { cursor: grabbing; }
+.bsf-mock-x-slides { display: flex; height: 100%; transition: transform 0.3s ease; will-change: transform; }
+.bsf-mock-x-slide { width: 100%; flex-shrink: 0; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.bsf-mock-x-dots-row { display: flex; justify-content: center; gap: 4px; padding: 6px 0 2px; }
+.bsf-mock-x-dot { width: 5px; height: 5px; border-radius: 50%; background: #cfd9de; flex-shrink: 0; cursor: pointer; transition: background 0.2s; }
+.bsf-mock-x-dot.active { background: #1d9bf0; }
 
 /* Facebook */
 .bsf-mock-fb { background: #fff; }

@@ -1990,14 +1990,35 @@
       // 실제 발행 시 선택된 이미지·영상·캐러셀이 그대로 Threads 로 전송된다.
       var xtMediaHtml = '';
       if (draftFirstVidUrl) {
-        xtMediaHtml = '<div class="bsf-mock-x-media"><video class="bsf-mock-x-media-el" src="' + escapeHtml(draftFirstVidUrl) + '" preload="auto" muted playsinline></video></div>';
+        // 영상: 단일 플레이어. #t=0.001 + preload=metadata 로 검은 첫 프레임 대신 시작 프레임 표시.
+        xtMediaHtml = '<div class="bsf-mock-x-media bsf-mock-x-media--1"><video class="bsf-mock-x-media-el" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video></div>';
       } else if (draftSelImgs.length) {
-        var xtImgs = draftSelImgs.slice(0, 4);
-        xtMediaHtml = '<div class="bsf-mock-x-media bsf-mock-x-media--' + xtImgs.length + '">' +
-          xtImgs.map(function (img) {
-            return '<img class="bsf-mock-x-media-el" src="' + escapeHtml(String(img.url || '')) + '" alt="" />';
-          }).join('') +
-        '</div>';
+        if (isThreads) {
+          // Threads: 1장 단일(전체 너비), 여러 장이면 스와이프 캐러셀(점 인디케이터).
+          if (draftSelImgs.length === 1) {
+            xtMediaHtml = '<div class="bsf-mock-x-media bsf-mock-x-media--1"><img class="bsf-mock-x-media-el" src="' + escapeHtml(String(draftSelImgs[0].url || '')) + '" alt="" /></div>';
+          } else {
+            var thSlides = draftSelImgs.map(function (img) {
+              return '<img class="bsf-mock-x-slide" src="' + escapeHtml(String(img.url || '')) + '" alt="" />';
+            }).join('');
+            var thDots = '';
+            for (var thi = 0; thi < draftSelImgs.length; thi++) {
+              thDots += '<div class="bsf-mock-x-dot' + (thi === 0 ? ' active' : '') + '" data-dot-idx="' + thi + '"></div>';
+            }
+            xtMediaHtml = '<div class="bsf-mock-x-carousel">' +
+              '<div class="bsf-mock-x-slider" data-ig-slider><div class="bsf-mock-x-slides" data-ig-slides>' + thSlides + '</div></div>' +
+              '<div class="bsf-mock-x-dots-row">' + thDots + '</div>' +
+            '</div>';
+          }
+        } else {
+          // X: 1장 전체 / 2장 50:50 / 3장 좌1+우2 / 4장 2×2 (CSS bsf-mock-x-media--N 그리드).
+          var xtImgs = draftSelImgs.slice(0, 4);
+          xtMediaHtml = '<div class="bsf-mock-x-media bsf-mock-x-media--' + xtImgs.length + '">' +
+            xtImgs.map(function (img) {
+              return '<img class="bsf-mock-x-media-el" src="' + escapeHtml(String(img.url || '')) + '" alt="" />';
+            }).join('') +
+          '</div>';
+        }
       }
       return pvWrap(isEn ? 'Post preview' : '게시물 미리보기',
         '<div class="bsf-mockup bsf-mock-x">' +
@@ -2934,7 +2955,7 @@
         slider.dataset.igSliderInit = '1';
         var slides = slider.querySelector('[data-ig-slides]');
         if (!slides || slides.children.length <= 1) return;
-        var mockIg = slider.closest('.bsf-mock-ig');
+        var mockIg = slider.closest('.bsf-mockup');
         var total = slides.children.length;
         var current = 0;
         function goTo(idx) {
@@ -2959,7 +2980,7 @@
         document.addEventListener('click', function (e) {
           var dot = e.target && e.target.closest ? e.target.closest('[data-dot-idx]') : null;
           if (!dot) return;
-          var mockIg = dot.closest('.bsf-mock-ig');
+          var mockIg = dot.closest('.bsf-mockup');
           if (!mockIg) return;
           var slides = mockIg.querySelector('[data-ig-slides]');
           if (!slides) return;
