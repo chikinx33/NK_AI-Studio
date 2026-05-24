@@ -24,67 +24,14 @@
       .replace(/'/g, '&#39;');
   }
 
-  function _bsfClipboardCopy(text) {
-    var msg = String(text == null ? '' : text);
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      return navigator.clipboard.writeText(msg).catch(function () { _bsfExecCopy(msg); });
-    }
-    _bsfExecCopy(msg);
-    return Promise.resolve();
-  }
-  function _bsfExecCopy(text) {
-    try {
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-    } catch (_) {}
-  }
-  // 복사 버튼이 달린 커스텀 알림. window.alert 대체용(네이티브 alert 는 버튼 추가 불가).
+  // 복사 버튼이 달린 알림. 기존 테마 다이얼로그(NK.ui.dialog)를 그대로 사용하되 copy 옵션만 켠다.
   function bsfNotify(message) {
-    var msg = String(message == null ? '' : message);
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:20px;';
-    var box = document.createElement('div');
-    box.style.cssText = 'background:#fff;color:#111;border-radius:12px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.3);overflow:hidden;';
-    var body = document.createElement('div');
-    body.style.cssText = 'padding:20px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.5;';
-    body.textContent = msg;
-    var footer = document.createElement('div');
-    footer.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #eee;';
-    var copyBtn = document.createElement('button');
-    copyBtn.type = 'button';
-    copyBtn.textContent = '복사';
-    copyBtn.style.cssText = 'padding:8px 16px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#111;cursor:pointer;font-size:13px;min-width:64px;';
-    var okBtn = document.createElement('button');
-    okBtn.type = 'button';
-    okBtn.textContent = '확인';
-    okBtn.style.cssText = 'padding:8px 16px;border:none;border-radius:8px;background:#1d9bf0;color:#fff;cursor:pointer;font-size:13px;min-width:64px;';
-    function close() {
-      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
-      document.removeEventListener('keydown', onKey);
-    }
-    function onKey(e) { if (e.key === 'Escape') close(); }
-    copyBtn.addEventListener('click', function () {
-      _bsfClipboardCopy(msg).then(function () {
-        copyBtn.textContent = '복사됨';
-        setTimeout(function () { copyBtn.textContent = '복사'; }, 1500);
-      });
-    });
-    okBtn.addEventListener('click', close);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
-    document.addEventListener('keydown', onKey);
-    footer.appendChild(copyBtn);
-    footer.appendChild(okBtn);
-    box.appendChild(body);
-    box.appendChild(footer);
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-    okBtn.focus();
+    try {
+      if (NK.ui && NK.ui.dialog && NK.ui.dialog.alert) {
+        return NK.ui.dialog.alert(message, { title: '알림', copy: true });
+      }
+    } catch (_) {}
+    alert(String(message == null ? '' : message));
   }
 
   // 프록시 URL / GCS URL / gs:// URI에서 GCS 오브젝트 경로를 추출
@@ -3984,7 +3931,9 @@
         var deployPlanOne = { channels: [oneFmtId], scheduledAt: scheduledAtOne, status: (scheduledAtOne && scheduledAtOne !== 'now') ? 'scheduled' : 'deploying', formatDrafts: Object.assign({}, formatDrafts || {}) };
         syncBrandAndProject({ brandStudioPublishPlan: deployPlanOne }, { brandStudioPublishPlan: deployPlanOne })
           .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
+            // 배포 플랜 저장은 초안 내용을 바꾸지 않으므로 전체 재렌더(renderNext) 대신
+            // 배포 요약만 갱신해 깜박임을 막는다.
+            refreshDeploySummary();
             return snsPublishFormat(oneFmtId, formatDrafts, scheduledAtOne);
           })
           .then(function (publishResult) {
@@ -4029,7 +3978,9 @@
         var _allDeployedCount = 0;
         syncBrandAndProject({ brandStudioPublishPlan: deployPlan }, { brandStudioPublishPlan: deployPlan })
           .then(function (result) {
-            if (result && result.draft) renderNext(result.draft);
+            // 배포 플랜 저장은 초안 내용을 바꾸지 않으므로 전체 재렌더(renderNext) 대신
+            // 배포 요약만 갱신해 깜박임을 막는다.
+            refreshDeploySummary();
             return allFmtIds.reduce(function (chain, fmtId) {
               return chain.then(function () {
                 var fmtPerCard = root.querySelector('#bsf-deploy-dt-' + fmtId);
@@ -4370,12 +4321,20 @@
     }
     // 최초 렌더 후 fresh 데이터가 도착했을 때 강제 리렌더
     // (느린 네트워크에서 safety 타임아웃이 먼저 발사되어 stale 데이터로 그려진 경우 대비)
+    // 여러 비동기 하이드레이션(projectGet·SNS·렌더목록·영상·이미지)이 제각각 도착할 때마다
+    // 전체 DOM 을 다시 그리면 2~3번 깜박인다. trailing 디바운스로 마지막 도착 후 한 번만 렌더한다.
+    var _forceRerenderTimer = null;
     function forceRerender() {
       if (!initDone || !root.isConnected) return;
-      try {
-        var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || latestProject;
-        renderProject(root, freshProject, latestBrand);
-      } catch (_) {}
+      if (_forceRerenderTimer) clearTimeout(_forceRerenderTimer);
+      _forceRerenderTimer = setTimeout(function () {
+        _forceRerenderTimer = null;
+        if (!initDone || !root.isConnected) return;
+        try {
+          var freshProject = (NK.state && NK.state.runtime && NK.state.runtime.currentProject) || latestProject;
+          renderProject(root, freshProject, latestBrand);
+        } catch (_) {}
+      }, 350);
     }
 
     // ② 비동기 작업 병렬 실행 — 결과만 수집, 렌더는 완료 후 딱 한 번
