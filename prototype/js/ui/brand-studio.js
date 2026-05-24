@@ -1990,8 +1990,8 @@
       // 실제 발행 시 선택된 이미지·영상·캐러셀이 그대로 Threads 로 전송된다.
       var xtMediaHtml = '';
       if (draftFirstVidUrl) {
-        // 영상: 단일 플레이어. #t=0.001 + preload=metadata 로 검은 첫 프레임 대신 시작 프레임 표시.
-        xtMediaHtml = '<div class="bsf-mock-x-media bsf-mock-x-media--1"><video class="bsf-mock-x-media-el" src="' + escapeHtml(draftFirstVidUrl) + '#t=0.001" preload="metadata" muted playsinline></video></div>';
+        // 영상: 단일 플레이어. initMockVideoThumbs 가 10% 지점(최소 0.5s)으로 시크해 페이드인 검은 프레임 회피.
+        xtMediaHtml = '<div class="bsf-mock-x-media bsf-mock-x-media--1"><video class="bsf-mock-x-media-el" src="' + escapeHtml(draftFirstVidUrl) + '" preload="metadata" muted playsinline></video></div>';
       } else if (draftSelImgs.length) {
         if (isThreads) {
           // Threads: 1장 단일(전체 너비), 여러 장이면 스와이프 캐러셀(점 인디케이터).
@@ -2932,7 +2932,7 @@
     }
     // 초안 미리보기 영상(Shorts·TikTok 목업) 시크 초기화 — 검은 첫 프레임 회피
     function initMockVideoThumbs() {
-      root.querySelectorAll('.bsf-mock-shorts-vid, .bsf-mock-tiktok-vid').forEach(function (v) {
+      root.querySelectorAll('.bsf-mock-shorts-vid, .bsf-mock-tiktok-vid, video.bsf-mock-x-media-el').forEach(function (v) {
         if (v.dataset.mockVidInit) return;
         v.dataset.mockVidInit = '1';
         function trySeekMock() {
