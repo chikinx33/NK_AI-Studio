@@ -73,8 +73,8 @@
     const kindLabel = kind === 'video' ? '영상' : '이미지';
     if (!box) return;
 
-    let currentItems = Array.isArray(items) ? items.slice() : [];
-    let selectionMode = false;
+    // 최신 항목이 앞에 오도록 정렬을 역순으로 표시
+    let currentItems = (Array.isArray(items) ? items.slice() : []).reverse();
     let selectedNames = new Set();
     let deleting = false;
 
@@ -89,23 +89,19 @@
       const singleSelected = selectedItems.length === 1 ? selectedItems[0] : null;
       const useBtn = box.querySelector('#lib-use-btn');
       const deleteBtn = box.querySelector('#lib-delete-btn');
-      const selectBtn = box.querySelector('#lib-select-btn');
       const countEl = box.querySelector('#lib-selection-count');
-      const canUse = !selectionMode && !!(singleSelected && singleSelected.name);
+      // 사용: 정확히 1개 선택 시에만(다중 선택이면 비활성). 삭제: 1개 이상.
+      const canUse = !deleting && !!(singleSelected && singleSelected.name);
       const canDelete = !deleting && selectedItems.length > 0;
 
       if (useBtn) {
-        useBtn.disabled = !canUse || deleting;
+        useBtn.disabled = !canUse;
         useBtn.classList.toggle('disabled', useBtn.disabled);
       }
       if (deleteBtn) {
         deleteBtn.disabled = !canDelete;
         deleteBtn.classList.toggle('disabled', !canDelete);
         deleteBtn.textContent = deleting ? '삭제 중...' : '삭제';
-      }
-      if (selectBtn) {
-        selectBtn.classList.toggle('active', selectionMode);
-        selectBtn.setAttribute('aria-pressed', selectionMode ? 'true' : 'false');
       }
       if (countEl) {
         countEl.textContent = selectedItems.length ? ('선택 ' + selectedItems.length + '개') : '';
@@ -121,14 +117,9 @@
           const target = (idx >= 0 && idx < currentItems.length) ? currentItems[idx] : null;
           const name = String(target && target.name || '');
           if (!name) return;
-          if (selectionMode) {
-            if (selectedNames.has(name)) selectedNames.delete(name);
-            else selectedNames.add(name);
-          } else {
-            const next = new Set();
-            if (!selectedNames.has(name) || selectedNames.size !== 1) next.add(name);
-            selectedNames = next;
-          }
+          // 항상 다중 선택: 클릭하면 토글
+          if (selectedNames.has(name)) selectedNames.delete(name);
+          else selectedNames.add(name);
           renderGridState();
           syncActionState();
         };
@@ -143,7 +134,7 @@
         const active = !!(target && selectedNames.has(String(target.name || '')));
         itemEl.classList.toggle('lib-selected', active);
         itemEl.classList.toggle('selected', active);
-        itemEl.classList.toggle('lib-multi-select', selectionMode);
+        itemEl.classList.add('lib-multi-select');
       });
     }
 
@@ -168,7 +159,6 @@
         '<span class="lib-selection-count muted" id="lib-selection-count"></span>' +
         '<div class="lib-header-spacer"></div>' +
         '<div class="lib-toolbar">' +
-        '<button class="btn-ghost" id="lib-select-btn"' + (hasItems ? '' : ' disabled') + '>선택</button>' +
         '<button class="btn-primary" id="lib-use-btn"' + (hasItems ? '' : ' disabled') + '>사용</button>' +
         '<button class="btn-ghost" id="lib-delete-btn" disabled>삭제</button>' +
         '<button class="btn-secondary lib-close-btn" id="lib-close">닫기</button>' +
@@ -179,22 +169,10 @@
           : '<div class="lib-empty"><p class="muted">항목이 없습니다.</p></div>');
 
       const closeBtn = box.querySelector('#lib-close');
-      const selectBtn = box.querySelector('#lib-select-btn');
       const useBtn = box.querySelector('#lib-use-btn');
       const deleteBtn = box.querySelector('#lib-delete-btn');
 
       if (closeBtn) closeBtn.onclick = function () { closeModals(); };
-      if (selectBtn) {
-        selectBtn.onclick = function () {
-          if (!currentItems.length || deleting) return;
-          selectionMode = !selectionMode;
-          if (!selectionMode && selectedNames.size > 1) {
-            selectedNames = new Set();
-          }
-          renderGridState();
-          syncActionState();
-        };
-      }
       if (useBtn) {
         useBtn.onclick = function () {
           const selectedItems = getSelectedItems();
@@ -239,7 +217,6 @@
               return !deletedSet.has(String(it && it.name || ''));
             });
             selectedNames = new Set();
-            if (!currentItems.length) selectionMode = false;
             render();
             if (deletedSet.size !== names.length) {
               alert(kindLabel + ' 일부만 삭제되었습니다.');
