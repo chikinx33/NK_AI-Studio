@@ -3946,9 +3946,13 @@
               var oneFmt = formatItems.find(function (f) { return f.id === oneFmtId; });
               var oneLabel = oneFmt && oneFmt.title ? oneFmt.title : oneFmtId;
               var oneStatus = publishResult.result && publishResult.result.status;
-              bsfNotify(oneStatus === 'published'
+              var oneUrl = (publishResult.result && publishResult.result.url) ? String(publishResult.result.url) : '';
+              var oneMsg = (oneStatus === 'published'
                 ? T.alertPublishSuccess(oneLabel)
                 : T.alertPublishProcessing(oneLabel));
+              // 게시 결과 URL 노출 — 영상이 실제로 어디에 올라갔는지(쇼츠/일반영상·공개여부) 바로 확인 가능.
+              if (oneUrl) oneMsg += '\n\n' + oneUrl;
+              bsfNotify(oneMsg);
             }
           })
           .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); })
