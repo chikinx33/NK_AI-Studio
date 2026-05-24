@@ -106,8 +106,8 @@
       '</div>',
       '<div class="img-edit-side">',
       '<div class="img-edit-engine">',
-      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="gemini" checked> Gemini <span class="img-edit-engine-hint">· 마스크/인페인팅 권장</span></label>',
-      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="openai"> GPT <span class="img-edit-engine-hint">· 일반 채팅 수정</span></label>',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="gemini" checked> Gemini <span class="img-edit-engine-hint">· 일반 채팅 수정</span></label>',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="openai"> GPT <span class="img-edit-engine-hint">· 마스크/인페인팅 권장</span></label>',
       '</div>',
       '<div class="img-edit-tools">',
       '<label>인페인팅</label>',
@@ -236,67 +236,6 @@
     try { return out.toDataURL('image/png'); } catch (_) { return ''; }
   }
 
-  function loadImageEl(url) {
-    return new Promise(function (resolve, reject) {
-      var im = new Image();
-      im.crossOrigin = 'anonymous';
-      im.onload = function () { resolve(im); };
-      im.onerror = function () { reject(new Error('img_load_failed')); };
-      im.src = url;
-    });
-  }
-
-  // 부분 수정(인페인팅) 합성: 원본을 그대로 둔 캔버스 위에 모델 결과에서
-  // "칠한 마스크 영역"만 오려 덮는다. → 출력 크기/비율은 원본과 동일, 마스크 밖
-  // 픽셀은 원본 그대로 보존. 실패(예: 원본 CORS 오염) 시 '' 반환 → 호출부 폴백.
-  async function compositeMaskedEdit(originalUrl, resultUrl) {
-    try {
-      var maskCanvas = el('.img-edit-mask');
-      if (!maskCanvas || !resultUrl) return '';
-      var orig = await loadImageEl(toPlayable(originalUrl));
-      var W = orig.naturalWidth || orig.width;
-      var H = orig.naturalHeight || orig.height;
-      if (!W || !H) return '';
-
-      var base = document.createElement('canvas');
-      base.width = W; base.height = H;
-      var bx = base.getContext('2d');
-      bx.drawImage(orig, 0, 0, W, H);
-
-      var resImg = await loadImageEl(resultUrl);
-      var layer = document.createElement('canvas');
-      layer.width = W; layer.height = H;
-      var lx = layer.getContext('2d');
-      // 모델이 원본 비율을 안 지키면 강제로 W×H 에 늘릴 때 형태가 찌그러진다(정원→타원).
-      // 비율을 유지하며 프레임을 덮도록(cover-fit) 중앙 정렬로 그린다.
-      var rw = resImg.naturalWidth || resImg.width || W;
-      var rh = resImg.naturalHeight || resImg.height || H;
-      var coverScale = Math.max(W / rw, H / rh);
-      var dw = rw * coverScale;
-      var dh = rh * coverScale;
-      lx.drawImage(resImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
-
-      // 칠한 마스크의 알파를 원본 크기로 옮기되, 경계를 살짝 흐려 자연스럽게 블렌딩
-      var m = document.createElement('canvas');
-      m.width = W; m.height = H;
-      var mx = m.getContext('2d');
-      try { mx.filter = 'blur(' + Math.max(1, Math.round(Math.min(W, H) / 300)) + 'px)'; } catch (_) {}
-      mx.drawImage(maskCanvas, 0, 0, W, H);
-      try { mx.filter = 'none'; } catch (_) {}
-
-      // 결과 레이어에서 마스크 영역만 남기고
-      lx.globalCompositeOperation = 'destination-in';
-      lx.drawImage(m, 0, 0);
-      lx.globalCompositeOperation = 'source-over';
-
-      // 원본 위에 마스크 영역 결과를 덮는다
-      bx.drawImage(layer, 0, 0);
-      return base.toDataURL('image/png');
-    } catch (_) {
-      return '';
-    }
-  }
-
   // ── 미리보기/이력 렌더 ─────────────────────────────────────
   function renderBase() {
     var img = el('.img-edit-base');
@@ -416,20 +355,8 @@
       var imageRef = signedUrl || dataUrl;
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
 
-      if (maskDataUrl) {
-        // 부분 수정: 원본 위에 마스크 영역만 합성 → 크기/비율 동일, 마스크 밖 보존.
-        var composited = await compositeMaskedEdit(sourceUrl, dataUrl || imageRef);
-        if (composited) {
-          imageRef = composited;
-        } else if (typeof opts.enforceImageAspectRatio === 'function') {
-          // 합성 실패(원본 CORS 등) 폴백: 비율만이라도 원본에 맞춤
-          try {
-            var nf = await opts.enforceImageAspectRatio(imageRef, aspect);
-            if (nf && nf.url) imageRef = nf.url;
-          } catch (_) {}
-        }
-      } else if (typeof opts.enforceImageAspectRatio === 'function') {
-        // 채팅 전체 수정: 결과 비율을 소스 비율로 맞춤(기존 동작 유지)
+      // 결과 비율을 소스 비율로 맞춘다(가운데 크롭). 합성은 사용하지 않는다.
+      if (typeof opts.enforceImageAspectRatio === 'function') {
         try {
           var normalized = await opts.enforceImageAspectRatio(imageRef, aspect);
           if (normalized && normalized.url) imageRef = normalized.url;
