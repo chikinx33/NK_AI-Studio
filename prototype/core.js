@@ -733,7 +733,7 @@
       admin_err_del_fail: '삭제 실패',
       admin_err_cannot_delete_primary: '기본 관리자 계정은 삭제할 수 없습니다.',
       admin_confirm_delete: '회원을 삭제할까요?',
-      admin_perm_videogen: 'AI 영상 생성',
+      admin_perm_videogen: 'AI 시네마',
       admin_perm_image: 'AI 이미지',
       admin_perm_video: 'AI 영상',
       admin_perm_brand: '브랜드 스튜디오',
