@@ -293,16 +293,26 @@
   }
 
   function startOAuth(platform) {
-    // X 는 팝업 환경에서 X 로그인 세션을 인식하지 못해 authorize 단계에서 400 이 발생한다.
-    // → 팝업 대신 현재 탭에서 리다이렉트. 콜백은 returnTo 경로로 다시 돌아온다.
+    // X 는 팝업/iframe 환경에서 인증이 막힌다(X-Frame-Options: deny).
+    // → 팝업·iframe 이 아닌 최상위 창(window.top)을 직접 X 로 이동시킨다.
+    //   복귀 경로(returnTo)에서는 embed=1 을 제거해 sns-settings 가 최상위 페이지로 열리게 한다.
     if (platform === 'x') {
-      var returnTo = window.location.pathname + window.location.search;
+      var topWin = window.top || window;
+      var returnTo;
+      try {
+        var u = new URL(window.location.href);
+        u.searchParams.delete('embed');
+        returnTo = u.pathname + (u.search || '');
+      } catch (e) {
+        returnTo = window.location.pathname;
+      }
       apiGet('/api/sns/connect/x?returnTo=' + encodeURIComponent(returnTo)).then(function (res) {
         if (!res || !res.ok || !res.oauthUrl) {
           alert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
           return;
         }
-        window.location.href = res.oauthUrl;
+        try { topWin.location.href = res.oauthUrl; }
+        catch (e) { window.location.href = res.oauthUrl; }  // 교차출처 등으로 top 접근 불가 시 폴백
       });
       return;
     }
