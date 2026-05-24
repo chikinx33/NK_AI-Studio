@@ -404,6 +404,8 @@
       '<div class="scene-cell actions">' +
       '<div class="action-buttons grid">' +
       '<button class="btn-secondary compact span2" data-action="regen-image" data-id="' + scene.id + '">' + (scene.imgLoading ? '생성중(취소)' : '이미지 생성') + '</button>' +
+      '<button class="btn-secondary compact" data-action="edit-image" data-id="' + scene.id + '"' + (scene.imageDataUrl ? '' : ' disabled') + ' title="채팅·인페인팅으로 수정">수정</button>' +
+      '<button class="btn-secondary compact" data-action="revert-image" data-id="' + scene.id + '"' + ((Array.isArray(scene.imageHistory) && scene.imageHistory.length) ? '' : ' disabled') + ' title="이전 버전으로 되돌리기">되돌리기</button>' +
       '<button class="btn-secondary compact" data-action="delete-image" data-id="' + scene.id + '"' + (scene.imageDataUrl ? '' : ' disabled') + '>삭제</button>' +
       '<button class="btn-secondary compact" data-action="upload-image" data-id="' + scene.id + '">업로드</button>' +
       '<button class="btn-secondary compact" data-action="library-image" data-id="' + scene.id + '">저장소</button>' +

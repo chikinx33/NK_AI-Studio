@@ -778,8 +778,16 @@
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
       var normalized = await opts.enforceImageAspectRatio(imageRef, aspectRatio);
       if (normalized && normalized.url) imageRef = normalized.url;
+      // 재생성 전 이미지를 버전 이력에 보존 (되돌리기용)
+      var prevImg = String(scene.imageDataUrl || '').trim();
+      var imgHistory = Array.isArray(scene.imageHistory) ? scene.imageHistory.slice() : [];
+      if (prevImg && prevImg !== imageRef) {
+        imgHistory.push(prevImg);
+        if (imgHistory.length > 10) imgHistory = imgHistory.slice(imgHistory.length - 10);
+      }
       st.scenes[opts.idx] = Object.assign({}, scene, {
         imageDataUrl: imageRef,
+        imageHistory: imgHistory,
         imgLoading: false,
         imgError: '',
         promptText: scene.promptText

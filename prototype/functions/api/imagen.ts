@@ -70,18 +70,29 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         })
       : "";
 
+    const authHeader = String(request.headers.get("Authorization") || "").trim();
     const referenceImages = await normalizeReferenceImages({
       items: incomingReferenceImages,
       accessToken,
       requestUrl: request.url,
-      authHeader: String(request.headers.get("Authorization") || "").trim(),
+      authHeader,
     });
     const conversationHistory = await normalizeConversationHistory({
       items: incomingConversationHistory,
       accessToken,
       requestUrl: request.url,
-      authHeader: String(request.headers.get("Authorization") || "").trim(),
+      authHeader,
     });
+    // 인페인팅 마스크: image-to-image 일 때만 의미가 있다.
+    // 프론트엔드가 흰색=수정영역(Gemini용) 또는 알파 투명=수정영역(OpenAI native mask용) PNG 를 보낸다.
+    const incomingMaskDataUrl = String(body?.maskDataUrl || body?.mask || "").trim();
+    let maskImage: { base64: string; mimeType: string } | null = null;
+    if (incomingMaskDataUrl && generationMode === "image-to-image") {
+      const parsedMask = await resolveImageBytes(incomingMaskDataUrl, accessToken, request.url, authHeader);
+      if (parsedMask && parsedMask.base64) {
+        maskImage = { base64: parsedMask.base64, mimeType: parsedMask.mimeType || "image/png" };
+      }
+    }
     if (generationMode === "image-to-image" && incomingReferenceImages.length > 0 && !referenceImages.length) {
       return json({
         error: "소스 이미지를 서버에서 읽지 못했습니다. 만료된 URL이거나 인증되지 않은 프록시 URL일 수 있습니다.",
@@ -96,7 +107,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       generationMode,
       generationStyle,
       conversationHistory.length,
-      cameraTargetMode
+      cameraTargetMode,
+      !!maskImage
     );
 
     let imageOutput: { data: string; mimeType: string } | null = null;
@@ -111,6 +123,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         qualityHint: geminiImageSize,
         referenceImages,
         conversationHistory,
+        maskImage,
       });
       if (openaiResult.error) {
         return json(openaiResult.error, openaiResult.status || 500);
@@ -120,7 +133,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     } else {
       const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
       const requestPayload = {
-        contents: buildGeminiContents(conversationHistory, referenceImages, finalPrompt),
+        contents: buildGeminiContents(conversationHistory, referenceImages, finalPrompt, maskImage),
         generationConfig: buildGeminiGenerationConfig(geminiModel, aspectFinal, geminiImageSize),
       };
       let geminiRes: Response | null = null;
@@ -212,6 +225,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
+      maskApplied: !!maskImage,
       conversationTurnCount: conversationHistory.length,
       storageService,
       generationMode,
@@ -258,7 +272,8 @@ function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: s
 function buildGeminiContents(
   conversationHistory: ConversationHistoryTurn[],
   referenceImages: NormalizedReferenceImage[],
-  prompt: string
+  prompt: string,
+  maskImage?: { base64: string; mimeType: string } | null
 ) {
   const contents: Array<Record<string, unknown>> = [];
   conversationHistory.forEach((turn) => {
@@ -278,9 +293,18 @@ function buildGeminiContents(
       }],
     });
   });
+  const parts = buildGeminiParts(referenceImages, prompt);
+  if (maskImage && maskImage.base64) {
+    parts.push({
+      inlineData: {
+        mimeType: maskImage.mimeType || "image/png",
+        data: maskImage.base64,
+      }
+    });
+  }
   contents.push({
     role: "user",
-    parts: buildGeminiParts(referenceImages, prompt),
+    parts,
   });
   return contents;
 }
@@ -312,7 +336,8 @@ function buildGeminiImagePrompt(
   generationMode: "text-to-image" | "image-to-image",
   generationStyle: "single" | "conversation",
   conversationTurnCount: number,
-  cameraTargetMode: "scene" | "subject"
+  cameraTargetMode: "scene" | "subject",
+  hasMask?: boolean
 ) {
   const base = normalizePrompt(prompt);
   const conversationLines = generationStyle === "conversation" && conversationTurnCount > 0
@@ -321,8 +346,17 @@ function buildGeminiImagePrompt(
       "Preserve the existing subject identity, styling, and composition language unless this prompt explicitly changes them."
     ]
     : [];
+  // 인페인팅 마스크 지시문: 마지막에 제공된 마스크 이미지의 흰색 영역만 수정한다.
+  const maskLines = hasMask
+    ? [
+      "An additional binary MASK image is provided as the LAST image in this request.",
+      "Edit ONLY the regions that are WHITE in the mask. Keep every BLACK-region pixel identical to the source image (same content, color, lighting, and detail).",
+      "Apply the requested change strictly inside the white masked region and blend the edited area seamlessly with the untouched surroundings.",
+      "Do not regenerate or restyle the whole frame."
+    ]
+    : [];
   if (!referenceImages.length) {
-    return [base].concat(conversationLines).filter(Boolean).join("\n");
+    return [base].concat(conversationLines).concat(maskLines).filter(Boolean).join("\n");
   }
   if (generationMode === "image-to-image") {
     const targetLines = cameraTargetMode === "subject"
@@ -347,6 +381,7 @@ function buildGeminiImagePrompt(
     return [
       base,
       ...conversationLines,
+      ...maskLines,
       referenceImages.length > 1
         ? "Use the uploaded source image set as a coordinated multi-reference pack."
         : "Use the uploaded source image as the base reference.",
@@ -440,13 +475,21 @@ async function callOpenAIImage(opts: {
   qualityHint: string;
   referenceImages: NormalizedReferenceImage[];
   conversationHistory: ConversationHistoryTurn[];
+  maskImage?: { base64: string; mimeType: string } | null;
 }): Promise<{ b64?: string; error?: any; status?: number }> {
   const size = mapAspectToOpenAISize(opts.aspectRatio);
   const quality = mapImageSizeToOpenAIQuality(opts.qualityHint);
-  const allRefs: Array<{ base64: string; mimeType: string }> = [
-    ...opts.conversationHistory.map((t) => ({ base64: t.imageBase64, mimeType: t.imageMimeType })),
-    ...opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
-  ];
+  // 마스크가 있으면 마스크가 정렬되는 기준 이미지(첫 번째)가 소스 이미지여야 하므로
+  // referenceImages 를 먼저 배치한다.
+  const allRefs: Array<{ base64: string; mimeType: string }> = opts.maskImage
+    ? [
+      ...opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
+      ...opts.conversationHistory.map((t) => ({ base64: t.imageBase64, mimeType: t.imageMimeType })),
+    ]
+    : [
+      ...opts.conversationHistory.map((t) => ({ base64: t.imageBase64, mimeType: t.imageMimeType })),
+      ...opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
+    ];
 
   const isEdit = allRefs.length > 0;
   const url = isEdit
@@ -458,7 +501,7 @@ async function callOpenAIImage(opts: {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const init: RequestInit = isEdit
-        ? buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey)
+        ? buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey, opts.maskImage)
         : buildOpenAIGenerationsRequest(opts.model, opts.prompt, size, quality, opts.apiKey);
       res = await fetch(url, init);
       bodyText = await res.text();
@@ -526,7 +569,8 @@ function buildOpenAIEditsRequest(
   size: string,
   quality: string,
   refs: Array<{ base64: string; mimeType: string }>,
-  apiKey: string
+  apiKey: string,
+  maskImage?: { base64: string; mimeType: string } | null
 ): RequestInit {
   const fd = new FormData();
   fd.append("model", model);
@@ -541,6 +585,13 @@ function buildOpenAIEditsRequest(
     const blob = new Blob([bytes], { type: mime });
     fd.append("image[]", blob, `ref-${i}.${ext}`);
   });
+  // OpenAI images/edits native mask: 투명(알파=0) 영역이 수정 대상.
+  // 프론트엔드가 provider=openai 일 때 알파 마스크 PNG 를 보낸다.
+  if (maskImage && maskImage.base64) {
+    const maskBytes = base64ToUint8(maskImage.base64);
+    const maskBlob = new Blob([maskBytes], { type: "image/png" });
+    fd.append("mask", maskBlob, "mask.png");
+  }
   return {
     method: "POST",
     headers: {

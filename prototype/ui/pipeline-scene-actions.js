@@ -2,6 +2,17 @@
   var NK = window.NK || (window.NK = {});
   var actions = NK.uiPipelineSceneActions || (NK.uiPipelineSceneActions = {});
 
+  // 이미지를 newUrl 로 교체하면서 이전 이미지를 버전 이력에 보존한 patch 객체 반환.
+  function pushImageHistory(scene, newUrl) {
+    var prev = String((scene && scene.imageDataUrl) || '').trim();
+    var hist = Array.isArray(scene && scene.imageHistory) ? scene.imageHistory.slice() : [];
+    if (prev && prev !== String(newUrl || '').trim()) {
+      hist.push(prev);
+      if (hist.length > 10) hist = hist.slice(hist.length - 10);
+    }
+    return { imageDataUrl: newUrl, imageHistory: hist, imgError: '', imgLoading: false };
+  }
+
   function readPromptDraft(rootEl, sceneId, scene, strictCommon) {
     var commonEl = rootEl.querySelector('.prompt-common[data-id="' + sceneId + '"]');
     var visualEl = rootEl.querySelector('.prompt-visual[data-id="' + sceneId + '"]');
@@ -278,6 +289,26 @@
           await ui.generateImageForIdx(idx);
           return;
         }
+        if (action === 'edit-image') {
+          if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
+          if (!scene.imageDataUrl) { alert('먼저 이미지를 생성하거나 등록한 뒤 수정할 수 있어요.'); return; }
+          if (ui && ui.openImageEditModal) ui.openImageEditModal(idx);
+          return;
+        }
+        if (action === 'revert-image') {
+          var hist = Array.isArray(scene.imageHistory) ? scene.imageHistory.slice() : [];
+          if (!hist.length) return;
+          var prev = hist.pop();
+          st.scenes[idx] = Object.assign({}, scene, {
+            imageDataUrl: prev,
+            imageHistory: hist,
+            imgError: '',
+            imgLoading: false
+          });
+          // 되돌리기 버튼의 활성/비활성 상태가 바뀌므로 행 전체를 재구성한다.
+          refreshAndPersist(true);
+          return;
+        }
         if (action === 'toggle-cut-ref') {
           st.scenes[idx] = Object.assign({}, scene, { cutRefEnabled: !scene.cutRefEnabled });
           refreshAndPersist(true, 'image');
@@ -300,7 +331,7 @@
               var resp = await NK.api.imageUpload(projectId, file);
               var url = resp.signedUrl || resp.url || resp.dataUrl || '';
               if (url) {
-                st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
+                st.scenes[idx] = Object.assign({}, scene, pushImageHistory(scene, url));
                 refreshAndPersist(true);
               } else {
                 alert('업로드 응답에 이미지 URL이 없습니다.');
@@ -326,8 +357,8 @@
               return;
             }
             opts.openLibraryModal(items, 'image', function (url) {
-              st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: url, imgError: '', imgLoading: false });
-              refreshAndPersist(true, 'image');
+              st.scenes[idx] = Object.assign({}, scene, pushImageHistory(scene, url));
+              refreshAndPersist(true);
             }, projectId);
           } catch (err) {
             alert('라이브러리 불러오기 실패: ' + (err && err.message ? err.message : err));

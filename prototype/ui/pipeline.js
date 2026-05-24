@@ -662,6 +662,7 @@
               action: String(s.action || ''),
               promptText: (s.promptText || ['Common', hClean, 'Visual', (s.shot || '')].join('\n')),
               imageDataUrl: imageRef,
+              imageHistory: Array.isArray(s.imageHistory) ? s.imageHistory.filter(Boolean) : [],
               imgLoading: false,
               imgError: '',
               videoUrl: videoRef,
@@ -745,6 +746,10 @@
                   _statusFields.forEach(function (f) {
                     if (!merged[f] && cur[f]) merged[f] = cur[f];
                   });
+                  // 버전 이력: 서버가 아직 저장하지 않았을 수 있으니 로컬 이력이 더 많으면 보존
+                  var srvHist = Array.isArray(merged.imageHistory) ? merged.imageHistory : [];
+                  var locHist = Array.isArray(cur.imageHistory) ? cur.imageHistory : [];
+                  if (locHist.length > srvHist.length) merged.imageHistory = locHist.slice();
                   return merged;
                 })
               });
@@ -1349,6 +1354,24 @@
     st.scenes[idx] = Object.assign({}, scene, { imgLoading: false, imgError: '' });
     ctx.setState(st);
     updateSceneRow(idx, st.header || '', 'image');
+  };
+  // 이미지 수정 모달 (채팅형 + 인페인팅 + 버전 이력)
+  ui.openImageEditModal = function (idx) {
+    if (!(window.NK && NK.uiPipelineImageEdit && NK.uiPipelineImageEdit.open)) {
+      alert('이미지 수정 모듈을 불러오지 못했습니다.');
+      return;
+    }
+    NK.uiPipelineImageEdit.open({
+      idx: idx,
+      ctx: ctx,
+      getProjectId: getProjectId,
+      resolveEffectiveAspectRatio: resolveEffectiveAspectRatio,
+      ensureStateAspectRatio: ensureStateAspectRatio,
+      enforceImageAspectRatio: enforceImageAspectRatio,
+      updateSceneRow: updateSceneRow,
+      toPlayableMediaUrl: toPlayableMediaUrl,
+      cleanHeader: cleanHeader
+    });
   };
 
   // ── 컷(shot) 단위 영상 생성 ──
