@@ -369,7 +369,7 @@
       admin_err_del_fail: 'Delete failed',
       admin_err_cannot_delete_primary: 'The default admin account cannot be deleted.',
       admin_confirm_delete: 'Delete this member?',
-      admin_perm_videogen: 'AI Video Gen',
+      admin_perm_videogen: 'AI Cinema',
       admin_perm_image: 'AI Image',
       admin_perm_video: 'AI Video',
       admin_perm_brand: 'Brand Studio',

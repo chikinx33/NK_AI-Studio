@@ -48,6 +48,7 @@
         '카테고리': 'Category',
         '생성': 'Create',
         '생성 중...': 'Creating...',
+        '로딩중...': 'Loading...',
         '프로젝트 생성 중...': 'Creating project...',
         '대기': 'Idle',
         '대시보드': 'Dashboard',

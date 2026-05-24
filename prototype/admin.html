@@ -86,6 +86,20 @@
     .admin-perms { display:flex; flex-wrap:wrap; gap:10px; }
     .admin-perms label { display:flex; align-items:center; gap:6px; font-size:14px; color:var(--text); cursor:pointer; }
     .admin-perms input[type="checkbox"] { width:16px; height:16px; }
+    /* 활성 계정 토글: 동그란 체크박스 + 체크 시 초록 */
+    .admin-check-round {
+      appearance:none; -webkit-appearance:none; -moz-appearance:none;
+      width:22px; height:22px; flex:0 0 22px; border-radius:50%;
+      border:2px solid var(--border); background:var(--panel);
+      cursor:pointer; position:relative; transition:background .15s ease, border-color .15s ease;
+    }
+    .admin-check-round:checked { background:#22c55e; border-color:#22c55e; }
+    .admin-check-round:checked::after {
+      content:''; position:absolute; left:6px; top:2px;
+      width:5px; height:10px; border:solid #fff; border-width:0 2px 2px 0;
+      transform:rotate(45deg);
+    }
+    .admin-check-round:focus-visible { outline:2px solid #22c55e; outline-offset:2px; }
     .admin-modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
     .admin-hint { font-size:12px; color:var(--muted); margin-top:4px; }
     .admin-modal-error { color:#ef4444; font-size:13px; margin-top:10px; min-height:18px; }
