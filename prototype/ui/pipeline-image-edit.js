@@ -33,6 +33,20 @@
     return (checked && checked.value === 'openai') ? 'openai' : 'gemini';
   }
 
+  // 현재 언어. 영문 모드면 모달을 영문으로 직접 렌더해 전역 로케일 치환과 충돌하지 않게 한다.
+  function currentLang() {
+    try {
+      if (NK.state && NK.state.runtime && NK.state.runtime.lang) {
+        return NK.state.runtime.lang === 'en' ? 'en' : 'ko';
+      }
+      var k = (NK.config && NK.config.KEYS && NK.config.KEYS.LANG) || 'nk_lang';
+      return String(localStorage.getItem(k) || '').toLowerCase() === 'en' ? 'en' : 'ko';
+    } catch (_) { return 'ko'; }
+  }
+  function L(ko, en) {
+    return currentLang() === 'en' ? en : ko;
+  }
+
   function toPlayable(url) {
     if (S.opts && typeof S.opts.toPlayableMediaUrl === 'function') return S.opts.toPlayableMediaUrl(url);
     return String(url || '').trim();
@@ -64,9 +78,9 @@
       '.img-edit-instruction{width:100%;min-height:88px;resize:vertical;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.14);background:#0a1322;color:#e8f1ff;font-size:13px;line-height:1.5;}',
       '.img-edit-status{min-height:18px;font-size:12px;color:#8fb7ff;}',
       '.img-edit-status.error{color:#ff8585;}',
-      '.img-edit-history{display:flex;gap:6px;flex-wrap:wrap;max-height:120px;overflow:auto;}',
-      '.img-edit-history .thumb{width:54px;height:54px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);object-fit:cover;cursor:pointer;}',
-      '.img-edit-history .thumb.cur{outline:2px solid var(--accent,#7bd7ff);}',
+      '.img-edit-history{display:flex;gap:8px;flex-wrap:wrap;max-height:120px;overflow:auto;padding:4px;}',
+      '.img-edit-history .thumb{width:54px;height:54px;border-radius:6px;border:1px solid rgba(255,255,255,0.14);object-fit:cover;cursor:pointer;box-sizing:border-box;}',
+      '.img-edit-history .thumb.cur{outline:3px solid var(--accent,#7bd7ff);outline-offset:-3px;}',
       '.img-edit-foot{margin-top:auto;display:flex;gap:8px;justify-content:flex-end;padding-top:8px;border-top:1px solid rgba(255,255,255,0.08);}',
       '.img-edit-hint{font-size:11px;color:rgba(255,255,255,0.5);}'
     ].join('');
@@ -75,7 +89,11 @@
 
   function ensureModal() {
     var existing = document.getElementById('img-edit-modal');
-    if (existing) return existing;
+    if (existing) {
+      // 언어가 바뀌었으면 현재 언어로 다시 렌더
+      if (existing.dataset.lang === currentLang()) return existing;
+      try { existing.parentNode && existing.parentNode.removeChild(existing); } catch (_) {}
+    }
     injectStyleOnce();
     var m = document.createElement('div');
     m.id = 'img-edit-modal';
@@ -83,8 +101,8 @@
     m.innerHTML = [
       '<div class="img-edit-dialog">',
       '<div class="img-edit-head">',
-      '<span class="img-edit-title">이미지 수정</span>',
-      '<button class="btn-secondary compact" data-edit="close">닫기</button>',
+      '<span class="img-edit-title">' + L('이미지 수정', 'Edit image') + '</span>',
+      '<button class="btn-secondary compact" data-edit="close">' + L('닫기', 'Close') + '</button>',
       '</div>',
       '<div class="img-edit-body">',
       '<div class="img-edit-canvas-wrap">',
@@ -93,31 +111,32 @@
       '</div>',
       '<div class="img-edit-side">',
       '<div class="img-edit-engine">',
-      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="gemini" checked> Gemini <span class="img-edit-engine-hint">· 일반 채팅 수정</span></label>',
-      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="openai"> GPT <span class="img-edit-engine-hint">· 마스크/인페인팅 권장</span></label>',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="gemini" checked> Gemini <span class="img-edit-engine-hint">' + L('· 일반 채팅 수정', '· General chat edit') + '</span></label>',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="openai"> GPT <span class="img-edit-engine-hint">' + L('· 마스크/인페인팅 권장', '· Mask / inpainting (recommended)') + '</span></label>',
       '</div>',
       '<div class="img-edit-tools">',
-      '<label>인페인팅</label>',
-      '<button class="btn-secondary compact" data-edit="mask-toggle" style="min-width:78px;">브러시 ON</button>',
+      '<label>' + L('인페인팅', 'Inpainting') + '</label>',
+      '<button class="btn-secondary compact" data-edit="mask-toggle" style="min-width:78px;">' + L('브러시 ON', 'Brush ON') + '</button>',
       '<input type="range" class="img-edit-brush" min="6" max="140" value="44" />',
-      '<button class="btn-ghost compact" data-edit="mask-clear">마스크 지우기</button>',
+      '<button class="btn-ghost compact" data-edit="mask-clear">' + L('마스크 지우기', 'Clear mask') + '</button>',
       '</div>',
-      '<p class="img-edit-hint">수정할 영역을 칠하면 그 부분만 바뀌어요. 칠하지 않으면 지시문만으로 전체를 수정해요.</p>',
-      '<textarea class="img-edit-instruction" placeholder="예) 왼쪽 인물의 머리색을 검정으로 / 배경 조명을 노을빛으로 / 표정만 미소로"></textarea>',
+      '<p class="img-edit-hint">' + L('수정할 영역을 칠하면 그 부분만 바뀌어요. 칠하지 않으면 지시문만으로 전체를 수정해요.', 'Paint a region to edit only that area. Without painting, the whole image is edited from the instruction.') + '</p>',
+      '<textarea class="img-edit-instruction" placeholder="' + L('예) 왼쪽 인물의 머리색을 검정으로 / 배경 조명을 노을빛으로 / 표정만 미소로', 'e.g. Make the left character\'s hair black / warm sunset lighting / just a smiling expression') + '"></textarea>',
       '<div style="display:flex;gap:8px;">',
-      '<button class="btn-primary compact" data-edit="generate" style="flex:1;">수정 생성</button>',
-      '<button class="btn-secondary compact" data-edit="undo">되돌리기</button>',
+      '<button class="btn-primary compact" data-edit="generate" style="flex:1;">' + L('수정 생성', 'Generate edit') + '</button>',
+      '<button class="btn-secondary compact" data-edit="undo">' + L('되돌리기', 'Undo') + '</button>',
       '</div>',
       '<div class="img-edit-status"></div>',
       '<div class="img-edit-history"></div>',
       '<div class="img-edit-foot">',
-      '<button class="btn-ghost compact" data-edit="cancel">취소</button>',
-      '<button class="btn-primary compact" data-edit="apply">적용</button>',
+      '<button class="btn-ghost compact" data-edit="cancel">' + L('취소', 'Cancel') + '</button>',
+      '<button class="btn-primary compact" data-edit="apply">' + L('적용', 'Apply') + '</button>',
       '</div>',
       '</div>',
       '</div>',
       '</div>'
     ].join('');
+    m.dataset.lang = currentLang();
     document.body.appendChild(m);
     bindModal(m);
     return m;
@@ -236,7 +255,7 @@
     if (!box) return;
     box.innerHTML = S.versions.map(function (v, i) {
       var cur = (i === S.cur) ? ' cur' : '';
-      var label = (i === 0) ? '원본' : ('수정 ' + i);
+      var label = (i === 0) ? L('원본', 'Original') : L('수정 ' + i, 'Edit ' + i);
       return '<img class="thumb' + cur + '" data-edit-idx="' + i + '" src="' + toPlayable(v.url) + '" alt="' + label + '" title="' + label + '" />';
     }).join('');
   }
@@ -252,19 +271,19 @@
     var ta = el('.img-edit-instruction');
     var instruction = ta ? String(ta.value || '').trim() : '';
     if (!instruction && !S.hasStrokes) {
-      setStatus('수정 지시문을 입력하거나 영역을 칠해주세요.', true);
+      setStatus(L('수정 지시문을 입력하거나 영역을 칠해주세요.', 'Enter an instruction or paint a region.'), true);
       return;
     }
     var opts = S.opts || {};
     var projectId = (opts.getProjectId ? opts.getProjectId() : '') || '';
-    if (!projectId) { setStatus('프로젝트가 선택되지 않았습니다.', true); return; }
+    if (!projectId) { setStatus(L('프로젝트가 선택되지 않았습니다.', 'No project selected.'), true); return; }
     var provider = getProvider();
     var maskDataUrl = S.hasStrokes ? exportMask(provider) : '';
 
     S.busy = true;
     var genBtn = el('[data-edit="generate"]');
     if (genBtn) genBtn.disabled = true;
-    setStatus('수정 생성 중...');
+    setStatus(L('수정 생성 중...', 'Generating edit...'));
 
     try {
       var sourceUrl = curUrl();
@@ -294,7 +313,7 @@
 
       // 편집 의도를 명확히: 소스를 그대로 두고 지시한 부분만 수정. 백엔드 editInPlace
       // 가 보존 지시문을 추가하므로 여기서는 지시문 + 캐릭터 신원 고정만 덧붙인다.
-      var promptText = instruction || '마스크로 표시한 영역을 자연스럽게 다듬어 주세요.';
+      var promptText = instruction || 'Naturally refine the area marked by the mask.';
       if (subjects.length) {
         promptText += '\nKeep ' + subjects.join(', ') + ' on-model using the additional reference images (same face, silhouette, colors, costume, and proportions). Do not change any other character.';
       }
@@ -341,17 +360,17 @@
       var dataUrl = json.dataUrl || (json.bytesBase64Encoded ? ('data:image/png;base64,' + json.bytesBase64Encoded) : '');
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;
-      if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
+      if (!imageRef) throw new Error(L('이미지 데이터가 비었습니다.', 'No image data returned.'));
       // 결과물은 일절 후처리하지 않는다. 비율은 요청 시 보낸 규격(aspect)으로만 유지.
       // 새 버전 추가 (기존 버전은 모두 유지) 후 현재 선택을 새 버전으로 이동
       S.versions.push({ url: imageRef, prompt: instruction || 'masked refinement' });
       S.cur = S.versions.length - 1;
-      if (ta) ta.value = '';
+      // 입력 텍스트는 유지한다(어떤 내용을 보완할지 확인 가능하도록).
       S.hasStrokes = false;
       refreshView();
-      setStatus('수정 완료 — 썸네일에서 원본/수정본을 비교하고 "적용"을 누르면 저장돼요.');
+      setStatus(L('수정 완료 — 썸네일에서 원본/수정본을 비교하고 "적용"을 누르면 저장돼요.', 'Done — compare original/edits in the thumbnails, then press "Apply" to save.'));
     } catch (err) {
-      var msg = (err && err.message) ? String(err.message) : '수정 생성 실패';
+      var msg = (err && err.message) ? String(err.message) : L('수정 생성 실패', 'Edit generation failed');
       var detail = '';
       try {
         if (err && err.detail) {
@@ -374,7 +393,7 @@
     // 버전은 모두 유지하고 선택만 이전으로 이동
     S.cur -= 1;
     refreshView();
-    setStatus('이전 버전을 선택했어요. (생성본은 썸네일에 그대로 남아 있어요)');
+    setStatus(L('이전 버전을 선택했어요. (생성본은 썸네일에 그대로 남아 있어요)', 'Selected the previous version. (Generated versions remain in the thumbnails.)'));
   }
 
   function applyToScene() {
@@ -421,7 +440,7 @@
           var canvas = el('.img-edit-mask');
           if (canvas) {
             var off = canvas.classList.toggle('off');
-            btn.textContent = off ? '브러시 OFF' : '브러시 ON';
+            btn.textContent = off ? L('브러시 OFF', 'Brush OFF') : L('브러시 ON', 'Brush ON');
           }
           return;
         }
@@ -433,7 +452,7 @@
         if (i >= 0 && i < S.versions.length && i !== S.cur) {
           S.cur = i;
           refreshView();
-          setStatus(i === 0 ? '원본을 선택했어요.' : ('수정 ' + i + ' 버전을 선택했어요.'));
+          setStatus(i === 0 ? L('원본을 선택했어요.', 'Selected the original.') : L('수정 ' + i + ' 버전을 선택했어요.', 'Selected edit ' + i + '.'));
         }
         return;
       }
@@ -483,7 +502,7 @@
     var scene = st.scenes[idx];
     if (!scene) return;
     var imageUrl = String(scene.imageDataUrl || '').trim();
-    if (!imageUrl) { alert('먼저 이미지를 생성하거나 등록한 뒤 수정할 수 있어요.'); return; }
+    if (!imageUrl) { alert(L('먼저 이미지를 생성하거나 등록한 뒤 수정할 수 있어요.', 'Generate or add an image first, then you can edit it.')); return; }
 
     ensureModal();
     S.opts = opts;
@@ -501,7 +520,7 @@
     var toggle = el('[data-edit="mask-toggle"]');
     var canvas = el('.img-edit-mask');
     if (canvas) canvas.classList.remove('off');
-    if (toggle) toggle.textContent = '브러시 ON';
+    if (toggle) toggle.textContent = L('브러시 ON', 'Brush ON');
     // 엔진 기본값: Gemini (편집/인페인팅 안정적)
     var gem = el('input[name="img-edit-engine"][value="gemini"]');
     if (gem) gem.checked = true;
