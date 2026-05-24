@@ -18,6 +18,9 @@ import {
   primaryAdminId,
   REGISTRY_VERSION,
 } from "../_shared/admin-users";
+import { resolveGcsEnv, deleteGcsPrefix } from "../_shared/gcs.js";
+import { buildUserRoot } from "../_shared/storage";
+import { loadSharesStrict, saveShares, removeAllOwnerShares, removeAllGrantsToUser } from "../_shared/shares";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -159,11 +162,35 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
     if (soft) {
       user.active = false;
       user.updatedAt = new Date().toISOString();
-    } else {
-      reg.users = reg.users.filter((u) => sanitizeUserId(u.id) !== id);
+      await saveRegistry(env, reg);
+      return send({ ok: true, id, soft }, 200, origin);
     }
+
+    // 하드 삭제: 회원의 GCS 폴더 전체 + 공유 레지스트리까지 연쇄 정리.
+    // 순서가 중요 — 데이터(폴더) 삭제를 먼저 시도하고, 실패하면 throw 되어
+    // 회원이 레지스트리에 남으므로 관리자가 재시도할 수 있다(고아 데이터 방지).
+
+    // 1) 이 회원이 소유한 모든 데이터가 들어있는 폴더(users/{id}/) 통째 삭제.
+    const { basePrefix } = resolveGcsEnv(env);
+    const userRoot = buildUserRoot(basePrefix, id);
+    const deletedObjects = await deleteGcsPrefix(env, `${userRoot}/`);
+
+    // 2) 공유 레지스트리 정리.
+    //    - 이 회원이 '소유자'인 공유 항목 제거(데이터는 위에서 이미 삭제됨).
+    //    - 이 회원이 '공유받은 자'인 grant만 회수 — 소유자의 프로젝트/수정본은 보존.
+    try {
+      const sharesReg = await loadSharesStrict(env);
+      removeAllOwnerShares(sharesReg, id);
+      removeAllGrantsToUser(sharesReg, id);
+      await saveShares(env, sharesReg);
+    } catch (e: any) {
+      try { console.error("[admin/users] share cleanup failed:", e?.message || e); } catch (_) { /* noop */ }
+    }
+
+    // 3) 마지막으로 회원 레지스트리에서 제거.
+    reg.users = reg.users.filter((u) => sanitizeUserId(u.id) !== id);
     await saveRegistry(env, reg);
-    return send({ ok: true, id, soft }, 200, origin);
+    return send({ ok: true, id, soft, deletedObjects }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }

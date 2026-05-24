@@ -132,6 +132,84 @@ export async function deleteGcsObject(env, objectName) {
   return true;
 }
 
+/**
+ * 지정한 prefix 아래의 모든 객체 이름을 나열한다(페이지네이션 포함).
+ * @returns {Promise<string[]>} 객체 이름 배열.
+ */
+export async function listGcsObjects(env, prefix) {
+  const ctx = resolveGcsEnv(env);
+  const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
+  const names = [];
+  let pageToken = "";
+  do {
+    const listOnce = async (useUserProject) => {
+      const params = new URLSearchParams();
+      params.set("prefix", String(prefix || ""));
+      if (pageToken) params.set("pageToken", pageToken);
+      if (useUserProject && ctx.userProject) params.set("userProject", ctx.userProject);
+      const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o?${params.toString()}`;
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(useUserProject && ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}),
+        },
+      });
+      const text = await res.text();
+      return { res, text };
+    };
+    let { res, text } = await listOnce(true);
+    if (!res.ok && ctx.userProject && (res.status === 400 || res.status === 403)) {
+      ({ res, text } = await listOnce(false));
+    }
+    if (!res.ok) throw new Error(text || "gcs_list_failed");
+    let data;
+    try { data = JSON.parse(text); } catch (_) { data = {}; }
+    for (const item of (Array.isArray(data.items) ? data.items : [])) {
+      if (item && typeof item.name === "string") names.push(item.name);
+    }
+    pageToken = String(data.nextPageToken || "");
+  } while (pageToken);
+  return names;
+}
+
+/**
+ * 지정한 prefix 아래의 모든 객체를 삭제한다(사용자 폴더 통째 삭제용).
+ * 토큰을 한 번만 발급해 나열된 객체를 순차 삭제한다.
+ * @returns {Promise<number>} 삭제한 객체 수.
+ */
+export async function deleteGcsPrefix(env, prefix) {
+  const ctx = resolveGcsEnv(env);
+  const names = await listGcsObjects(env, prefix);
+  if (names.length === 0) return 0;
+  const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
+  const delOne = async (objectName) => {
+    const delOnce = async (useUserProject) => {
+      const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}${useUserProject && ctx.userProject ? `?userProject=${encodeURIComponent(ctx.userProject)}` : ""}`;
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(useUserProject && ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}),
+        },
+      });
+      const text = await res.text();
+      return { res, text };
+    };
+    let { res, text } = await delOnce(true);
+    if (!res.ok && ctx.userProject && (res.status === 400 || res.status === 403)) {
+      ({ res, text } = await delOnce(false));
+    }
+    if (res.status === 404) return;
+    if (!res.ok) throw new Error(text || "gcs_delete_failed");
+  };
+  let deleted = 0;
+  for (const name of names) {
+    await delOne(name);
+    deleted += 1;
+  }
+  return deleted;
+}
+
 // ─── OAuth (서비스 계정 JWT → access token) ──────────────────────────
 
 export async function getGoogleAccessToken(opts) {

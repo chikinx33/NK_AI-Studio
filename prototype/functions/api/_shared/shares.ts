@@ -147,6 +147,18 @@ export function removeAllOwnerShares(reg: SharesRegistry, ownerId: string): void
   reg.shares = reg.shares.filter((e) => e.ownerId !== oid);
 }
 
+/**
+ * 대상 회원이 '공유받은 자'로 등록된 모든 grant를 회수한다(회원 삭제 시 정리).
+ * 프로젝트 항목 자체와 소유자의 데이터는 건드리지 않는다 — 공유받은 자가 수정한
+ * 결과물도 소유자 폴더에 저장되므로 이 호출로 삭제되지 않는다.
+ */
+export function removeAllGrantsToUser(reg: SharesRegistry, userId: string): void {
+  const uid = sanitizeUserId(userId);
+  for (const e of reg.shares) {
+    e.grants = e.grants.filter((g) => g.userId !== uid);
+  }
+}
+
 /** 소유자가 대상 계정의 권한을 회수한다. */
 export function removeGrant(reg: SharesRegistry, ownerId: string, projectId: string, targetUserId: string): void {
   const entry = findEntry(reg, ownerId, projectId);
