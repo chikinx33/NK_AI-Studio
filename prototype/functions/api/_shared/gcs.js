@@ -58,7 +58,11 @@ export async function readGcsJson(env, objectName) {
   const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
   const fetchOnce = async (useUserProject) => {
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}?alt=media${useUserProject && ctx.userProject ? `&userProject=${encodeURIComponent(ctx.userProject)}` : ""}`;
+    // 캐시 우회 필수: 동일 객체 URL을 Cloudflare 엣지가 캐시하면, 쓰기(삭제/수정) 직후
+    // 읽기가 옛 JSON을 돌려줘 회원 목록 등이 한참 뒤에야 반영된다(즉시 일관성 보장).
     const res = await fetch(url, {
+      cache: "no-store",
+      cf: { cacheTtl: 0, cacheEverything: false },
       headers: {
         Authorization: `Bearer ${token}`,
         ...(useUserProject && ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}),

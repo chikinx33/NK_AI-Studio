@@ -26,6 +26,7 @@ type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 const corsHeaders = (origin: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
+  "Cache-Control": "no-store, no-cache, must-revalidate",
   "Access-Control-Allow-Origin": origin || "*",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
