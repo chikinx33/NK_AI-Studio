@@ -58,11 +58,7 @@ export async function readGcsJson(env, objectName) {
   const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
   const fetchOnce = async (useUserProject) => {
     const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}?alt=media${useUserProject && ctx.userProject ? `&userProject=${encodeURIComponent(ctx.userProject)}` : ""}`;
-    // 캐시 우회 필수: 동일 객체 URL을 Cloudflare 엣지가 캐시하면, 쓰기(삭제/수정) 직후
-    // 읽기가 옛 JSON을 돌려줘 회원 목록 등이 한참 뒤에야 반영된다(즉시 일관성 보장).
     const res = await fetch(url, {
-      cache: "no-store",
-      cf: { cacheTtl: 0, cacheEverything: false },
       headers: {
         Authorization: `Bearer ${token}`,
         ...(useUserProject && ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}),
@@ -206,10 +202,14 @@ export async function deleteGcsPrefix(env, prefix) {
     if (res.status === 404) return;
     if (!res.ok) throw new Error(text || "gcs_delete_failed");
   };
+  // 순차 삭제는 파일이 많은 회원일수록 오래 걸려, 호출부에서 레지스트리 갱신이
+  // 한참 뒤로 밀린다(목록 반영 지연). 청크 단위 병렬 삭제로 대기 시간을 줄인다.
+  const CHUNK = 16;
   let deleted = 0;
-  for (const name of names) {
-    await delOne(name);
-    deleted += 1;
+  for (let i = 0; i < names.length; i += CHUNK) {
+    const chunk = names.slice(i, i + CHUNK);
+    await Promise.all(chunk.map(delOne));
+    deleted += chunk.length;
   }
   return deleted;
 }
