@@ -267,7 +267,14 @@
       var layer = document.createElement('canvas');
       layer.width = W; layer.height = H;
       var lx = layer.getContext('2d');
-      lx.drawImage(resImg, 0, 0, W, H);
+      // 모델이 원본 비율을 안 지키면 강제로 W×H 에 늘릴 때 형태가 찌그러진다(정원→타원).
+      // 비율을 유지하며 프레임을 덮도록(cover-fit) 중앙 정렬로 그린다.
+      var rw = resImg.naturalWidth || resImg.width || W;
+      var rh = resImg.naturalHeight || resImg.height || H;
+      var coverScale = Math.max(W / rw, H / rh);
+      var dw = rw * coverScale;
+      var dh = rh * coverScale;
+      lx.drawImage(resImg, (W - dw) / 2, (H - dh) / 2, dw, dh);
 
       // 칠한 마스크의 알파를 원본 크기로 옮기되, 경계를 살짝 흐려 자연스럽게 블렌딩
       var m = document.createElement('canvas');
