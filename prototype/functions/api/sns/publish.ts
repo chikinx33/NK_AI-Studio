@@ -1614,18 +1614,21 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         return id;
       }
 
-      // 영상: v2 청크 업로드(INIT→APPEND→FINALIZE) + 처리 상태 폴링.
+      // 영상: v2 청크 업로드. 단순 업로드 엔드포인트는 command/total_bytes/tweet_video 를
+      // 받지 않으므로(이미지 전용 스키마), 전용 하위 엔드포인트를 사용해야 한다.
+      //   INIT: POST /2/media/upload/initialize (JSON)
+      //   APPEND: POST /2/media/upload/{id}/append (multipart)
+      //   FINALIZE: POST /2/media/upload/{id}/finalize
       async function xUploadChunked(bytes: ArrayBuffer, contentType: string): Promise<string> {
         const total = bytes.byteLength;
-        const initForm = new FormData();
-        initForm.append("command", "INIT");
-        initForm.append("total_bytes", String(total));
-        initForm.append("media_type", contentType);
-        initForm.append("media_category", "tweet_video");
-        const initRes = await fetch(X_MEDIA_UPLOAD, {
+        const initRes = await fetch(`${X_MEDIA_UPLOAD}/initialize`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}` },
-          body: initForm,
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            media_category: "tweet_video",
+            media_type: contentType,
+            total_bytes: total,
+          }),
         });
         const initJson = (await initRes.json()) as XMediaResp;
         const mediaId = pickMediaId(initJson);
@@ -1637,11 +1640,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         for (let off = 0; off < total; off += CHUNK) {
           const slice = bytes.slice(off, Math.min(off + CHUNK, total));
           const form = new FormData();
-          form.append("command", "APPEND");
-          form.append("media_id", mediaId);
           form.append("segment_index", String(seg));
           form.append("media", new Blob([slice], { type: contentType }));
-          const apRes = await fetch(X_MEDIA_UPLOAD, {
+          const apRes = await fetch(`${X_MEDIA_UPLOAD}/${mediaId}/append`, {
             method: "POST",
             headers: { Authorization: `Bearer ${accessToken}` },
             body: form,
@@ -1651,13 +1652,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
           }
           seg++;
         }
-        const finForm = new FormData();
-        finForm.append("command", "FINALIZE");
-        finForm.append("media_id", mediaId);
-        const finRes = await fetch(X_MEDIA_UPLOAD, {
+        const finRes = await fetch(`${X_MEDIA_UPLOAD}/${mediaId}/finalize`, {
           method: "POST",
           headers: { Authorization: `Bearer ${accessToken}` },
-          body: finForm,
         });
         const finJson = (await finRes.json()) as XMediaResp;
         if (!finRes.ok || !pickMediaId(finJson)) {

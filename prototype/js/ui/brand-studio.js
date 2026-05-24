@@ -24,6 +24,69 @@
       .replace(/'/g, '&#39;');
   }
 
+  function _bsfClipboardCopy(text) {
+    var msg = String(text == null ? '' : text);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(msg).catch(function () { _bsfExecCopy(msg); });
+    }
+    _bsfExecCopy(msg);
+    return Promise.resolve();
+  }
+  function _bsfExecCopy(text) {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (_) {}
+  }
+  // 복사 버튼이 달린 커스텀 알림. window.alert 대체용(네이티브 alert 는 버튼 추가 불가).
+  function bsfNotify(message) {
+    var msg = String(message == null ? '' : message);
+    var overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fff;color:#111;border-radius:12px;max-width:520px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.3);overflow:hidden;';
+    var body = document.createElement('div');
+    body.style.cssText = 'padding:20px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:13px;line-height:1.5;';
+    body.textContent = msg;
+    var footer = document.createElement('div');
+    footer.style.cssText = 'display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid #eee;';
+    var copyBtn = document.createElement('button');
+    copyBtn.type = 'button';
+    copyBtn.textContent = '복사';
+    copyBtn.style.cssText = 'padding:8px 16px;border:1px solid #ccc;border-radius:8px;background:#f5f5f5;color:#111;cursor:pointer;font-size:13px;min-width:64px;';
+    var okBtn = document.createElement('button');
+    okBtn.type = 'button';
+    okBtn.textContent = '확인';
+    okBtn.style.cssText = 'padding:8px 16px;border:none;border-radius:8px;background:#1d9bf0;color:#fff;cursor:pointer;font-size:13px;min-width:64px;';
+    function close() {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    copyBtn.addEventListener('click', function () {
+      _bsfClipboardCopy(msg).then(function () {
+        copyBtn.textContent = '복사됨';
+        setTimeout(function () { copyBtn.textContent = '복사'; }, 1500);
+      });
+    });
+    okBtn.addEventListener('click', close);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+    document.addEventListener('keydown', onKey);
+    footer.appendChild(copyBtn);
+    footer.appendChild(okBtn);
+    box.appendChild(body);
+    box.appendChild(footer);
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    okBtn.focus();
+  }
+
   // 프록시 URL / GCS URL / gs:// URI에서 GCS 오브젝트 경로를 추출
   function extractGcsObjectName(url) {
     var u = String(url || '').trim();
@@ -3846,7 +3909,7 @@
             var res = wrap.body;
             // YouTube 미연결/연결 만료 → 안내 후 skip (서버 메시지가 있으면 그대로 노출)
             if (wrap.httpStatus === 412 || (res && res.error && /not connected|연결되지 않|만료|expired|revoked/i.test(res.error))) {
-              alert((res && res.error)
+              bsfNotify((res && res.error)
                 ? res.error
                 : (isEn
                     ? 'YouTube is not connected. Connect it in SNS Settings first.'
@@ -3932,12 +3995,12 @@
               var oneFmt = formatItems.find(function (f) { return f.id === oneFmtId; });
               var oneLabel = oneFmt && oneFmt.title ? oneFmt.title : oneFmtId;
               var oneStatus = publishResult.result && publishResult.result.status;
-              alert(oneStatus === 'published'
+              bsfNotify(oneStatus === 'published'
                 ? T.alertPublishSuccess(oneLabel)
                 : T.alertPublishProcessing(oneLabel));
             }
           })
-          .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
+          .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () { delete _deployingFormats[oneFmtId]; refreshDeploySummary(); });
         return;
       }
@@ -3952,7 +4015,7 @@
           return !!row.connected && (row.enabled !== false);
         });
         if (!allFmtIds.length) {
-          alert(isEn
+          bsfNotify(isEn
             ? 'No active channels selected. Enable usage in SNS Settings or pick connected channels.'
             : '사용 중으로 설정된 채널이 없습니다. SNS 설정에서 사용을 켜거나 연결된 채널을 선택해 주세요.');
           return;
@@ -3982,9 +4045,9 @@
             }, Promise.resolve());
           })
           .then(function () {
-            if (_allDeployedCount > 0) alert(T.alertPublishAllDone(_allDeployedCount));
+            if (_allDeployedCount > 0) bsfNotify(T.alertPublishAllDone(_allDeployedCount));
           })
-          .catch(function (err) { alert(T.alertPublishFail(err && err.message ? err.message : err)); })
+          .catch(function (err) { bsfNotify(T.alertPublishFail(err && err.message ? err.message : err)); })
           .finally(function () {
             allFmtIds.forEach(function (fmtId) { delete _deployingFormats[fmtId]; });
             btn.disabled = false;
