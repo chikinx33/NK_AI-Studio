@@ -173,8 +173,56 @@ export async function listGcsObjects(env, prefix) {
 }
 
 /**
+ * GCS JSON 배치 API로 여러 객체를 한 HTTP 요청(=서브요청 1건)으로 삭제한다.
+ * 객체 하나당 DELETE 한 건씩 보내면 파일 많은 회원 삭제 시 Cloudflare Worker의
+ * 서브요청 한도("Too many subrequests")를 초과하므로, 최대 100건씩 묶어 보낸다.
+ * @returns {Promise<{ deleted:number, failures:string[] }>}
+ */
+async function batchDeleteObjects(ctx, token, names, useUserProject) {
+  const boundary = `batch_nkstudio_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const up = useUserProject && ctx.userProject ? `?userProject=${encodeURIComponent(ctx.userProject)}` : "";
+  let body = "";
+  names.forEach((name, i) => {
+    const path = `/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(name)}${up}`;
+    body += `--${boundary}\r\n`;
+    body += `Content-Type: application/http\r\n`;
+    body += `Content-ID: <item-${i}>\r\n\r\n`;
+    body += `DELETE ${path} HTTP/1.1\r\n\r\n`;
+  });
+  body += `--${boundary}--\r\n`;
+
+  const res = await fetch("https://storage.googleapis.com/batch/storage/v1", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": `multipart/mixed; boundary=${boundary}`,
+      ...(useUserProject && ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}),
+    },
+    body,
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    const err = new Error(text || "gcs_batch_delete_failed");
+    err.status = res.status;
+    throw err;
+  }
+  // 각 파트의 내부 HTTP 상태를 파싱해 실패(404 제외)를 집계한다.
+  const statuses = [];
+  const re = /HTTP\/\d\.\d\s+(\d{3})/g;
+  let m;
+  while ((m = re.exec(text)) !== null) statuses.push(Number(m[1]));
+  let deleted = 0;
+  const failures = [];
+  statuses.forEach((code, i) => {
+    if (code === 204 || code === 200 || code === 404) deleted += 1; // 404 = 이미 없음(성공 취급)
+    else failures.push(`${names[i] || `#${i}`}:${code}`);
+  });
+  return { deleted, failures };
+}
+
+/**
  * 지정한 prefix 아래의 모든 객체를 삭제한다(사용자 폴더 통째 삭제용).
- * 토큰을 한 번만 발급해 나열된 객체를 순차 삭제한다.
+ * 배치 API로 100건씩 묶어 보내 서브요청 한도를 넘지 않게 한다.
  * @returns {Promise<number>} 삭제한 객체 수.
  */
 export async function deleteGcsPrefix(env, prefix) {
@@ -182,35 +230,28 @@ export async function deleteGcsPrefix(env, prefix) {
   const names = await listGcsObjects(env, prefix);
   if (names.length === 0) return 0;
   const token = await getGoogleAccessToken({ clientEmail: ctx.clientEmail, privateKeyPem: ctx.privateKeyRaw, scope: GCS_SCOPE });
-  const delOne = async (objectName) => {
-    const delOnce = async (useUserProject) => {
-      const url = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(ctx.bucket)}/o/${encodeURIComponent(objectName)}${useUserProject && ctx.userProject ? `?userProject=${encodeURIComponent(ctx.userProject)}` : ""}`;
-      const res = await fetch(url, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          ...(useUserProject && ctx.userProject ? { "X-Goog-User-Project": ctx.userProject } : {}),
-        },
-      });
-      const text = await res.text();
-      return { res, text };
-    };
-    let { res, text } = await delOnce(true);
-    if (!res.ok && ctx.userProject && (res.status === 400 || res.status === 403)) {
-      ({ res, text } = await delOnce(false));
-    }
-    if (res.status === 404) return;
-    if (!res.ok) throw new Error(text || "gcs_delete_failed");
-  };
-  // 순차 삭제는 파일이 많은 회원일수록 오래 걸려, 호출부에서 레지스트리 갱신이
-  // 한참 뒤로 밀린다(목록 반영 지연). 청크 단위 병렬 삭제로 대기 시간을 줄인다.
-  const CHUNK = 16;
+
+  const BATCH = 100;
   let deleted = 0;
-  for (let i = 0; i < names.length; i += CHUNK) {
-    const chunk = names.slice(i, i + CHUNK);
-    await Promise.all(chunk.map(delOne));
-    deleted += chunk.length;
+  const failures = [];
+  for (let i = 0; i < names.length; i += BATCH) {
+    const chunk = names.slice(i, i + BATCH);
+    let result;
+    try {
+      result = await batchDeleteObjects(ctx, token, chunk, true);
+    } catch (e) {
+      // requester-pays 등으로 userProject가 거부되면(400/403) userProject 없이 재시도.
+      if (ctx.userProject && (e.status === 400 || e.status === 403)) {
+        result = await batchDeleteObjects(ctx, token, chunk, false);
+      } else {
+        throw e;
+      }
+    }
+    deleted += result.deleted;
+    if (result.failures.length) failures.push(...result.failures);
   }
+  // 실패가 있으면 throw — 호출부(회원 삭제)가 레지스트리를 보존해 재시도할 수 있게 한다(고아 데이터 방지).
+  if (failures.length) throw new Error(`gcs_delete_failed: ${failures.slice(0, 10).join(", ")}`);
   return deleted;
 }
 
