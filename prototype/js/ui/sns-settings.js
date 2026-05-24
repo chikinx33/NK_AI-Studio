@@ -293,30 +293,6 @@
   }
 
   function startOAuth(platform) {
-    // X 는 팝업/iframe 환경에서 인증이 막힌다(X-Frame-Options: deny).
-    // → 팝업·iframe 이 아닌 최상위 창(window.top)을 직접 X 로 이동시킨다.
-    //   복귀 경로(returnTo)에서는 embed=1 을 제거해 sns-settings 가 최상위 페이지로 열리게 한다.
-    if (platform === 'x') {
-      var topWin = window.top || window;
-      var returnTo;
-      try {
-        var u = new URL(window.location.href);
-        u.searchParams.delete('embed');
-        returnTo = u.pathname + (u.search || '');
-      } catch (e) {
-        returnTo = window.location.pathname;
-      }
-      apiGet('/api/sns/connect/x?returnTo=' + encodeURIComponent(returnTo)).then(function (res) {
-        if (!res || !res.ok || !res.oauthUrl) {
-          alert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
-          return;
-        }
-        try { topWin.location.href = res.oauthUrl; }
-        catch (e) { window.location.href = res.oauthUrl; }  // 교차출처 등으로 top 접근 불가 시 폴백
-      });
-      return;
-    }
-
     apiGet('/api/sns/connect/' + platform).then(function (res) {
       if (!res || !res.ok || !res.oauthUrl) {
         alert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
@@ -593,46 +569,13 @@
       .catch(function () { /* 네트워크 오류는 무시 — 다음 로드에서 재시도 */ });
   }
 
-  // X 리다이렉트 방식 복귀 처리: ?sns=x&connected=true 또는 ?sns=x&error=... 를 읽어
-  // 결과를 안내하고 URL 에서 해당 파라미터를 제거(projectId 등 다른 쿼리는 보존).
-  function _consumeRedirectResult() {
-    try {
-      var params = new URLSearchParams(window.location.search);
-      var snsParam = params.get('sns');
-      if (!snsParam) return null;
-      var result = {
-        platform: snsParam,
-        ok: params.get('connected') === 'true',
-        error: params.get('error') || '',
-      };
-      params.delete('sns');
-      params.delete('connected');
-      params.delete('error');
-      params.delete('username');
-      var qs = params.toString();
-      var newUrl = window.location.pathname + (qs ? '?' + qs : '') + window.location.hash;
-      window.history.replaceState(null, '', newUrl);
-      return result;
-    } catch (e) { return null; }
-  }
-
   function init() {
     if (!document.querySelector('.content')) return;
     window.addEventListener('message', onOAuthMessage);
-    var redirectResult = _consumeRedirectResult();
     loadSettings()
       .then(function () { render(); })
       .then(function () { return maybeRefreshYoutubeInfo(); })
       .then(function () { render(); })
-      .then(function () {
-        if (!redirectResult) return;
-        if (redirectResult.ok) {
-          var sx = (_settings && _settings.sns && _settings.sns[redirectResult.platform]) || {};
-          alert(T[_lang()].connectOk(redirectResult.platform, sx.username || ''));
-        } else {
-          alert(T[_lang()].connectFail(redirectResult.platform, redirectResult.error || t('unknownErr')));
-        }
-      })
       .catch(function (err) {
         var root = document.querySelector('.content');
         if (root) root.innerHTML = '<div class="brand-asset-empty">' + t('loadFail') + ': ' + (err && err.message ? err.message : err) + '</div>';

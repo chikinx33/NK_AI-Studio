@@ -32,10 +32,6 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     return send({ error: "X_CLIENT_ID not configured" }, 500);
   }
 
-  // 콜백이 돌아갈 페이지 경로. 오픈 리다이렉트 방지를 위해 같은 사이트 절대경로(/...)만 허용.
-  let returnTo = new URL(request.url).searchParams.get("returnTo") || "";
-  if (!returnTo.startsWith("/") || returnTo.startsWith("//")) returnTo = "";
-
   // PKCE: code_verifier 를 생성해 state 에 담아 콜백으로 전달(서버 세션 저장소 없이 stateless 유지).
   // X API 는 plain 을 지원하지 않으므로 S256 방식 사용:
   // code_challenge = base64url(SHA-256(code_verifier)). 콜백에서는 state 의 raw verifier 를 그대로 전송.
@@ -47,7 +43,6 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const state = btoa(JSON.stringify({
     userId: auth.userId,
     v: codeVerifier,
-    r: returnTo,
     ts: Date.now(),
   }));
 
