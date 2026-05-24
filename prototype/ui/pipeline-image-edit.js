@@ -33,19 +33,6 @@
     return (checked && checked.value === 'openai') ? 'openai' : 'gemini';
   }
 
-  // 편집은 원본 프레이밍을 보존해야 하므로 씬 설정값이 아니라
-  // 현재 이미지의 실제 픽셀 비율에서 가장 가까운 허용 종횡비를 쓴다.
-  function sourceAspect() {
-    var img = el('.img-edit-base');
-    var w = img && img.naturalWidth ? img.naturalWidth : 0;
-    var h = img && img.naturalHeight ? img.naturalHeight : 0;
-    if (!w || !h) return S.aspectRatio || '16:9';
-    var r = w / h;
-    var cands = [['16:9', 16 / 9], ['9:16', 9 / 16], ['1:1', 1]];
-    cands.sort(function (a, b) { return Math.abs(a[1] - r) - Math.abs(b[1] - r); });
-    return cands[0][0];
-  }
-
   function toPlayable(url) {
     if (S.opts && typeof S.opts.toPlayableMediaUrl === 'function') return S.opts.toPlayableMediaUrl(url);
     return String(url || '').trim();
@@ -281,7 +268,8 @@
 
     try {
       var sourceUrl = curUrl();
-      var aspect = sourceAspect();
+      // 비율은 프로젝트/에피소드 개요에 지정된 값(resolveEffectiveAspectRatio)을 사용.
+      var aspect = S.aspectRatio;
       // 지시문에 @캐릭터 가 포함되면 등록 캐릭터 자산(레퍼런스 이미지)을 해석해 첨부
       var charRefs = [];
       var subjects = [];
@@ -354,14 +342,7 @@
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
-
-      // 결과 비율을 소스 비율로 맞춘다(가운데 크롭). 합성은 사용하지 않는다.
-      if (typeof opts.enforceImageAspectRatio === 'function') {
-        try {
-          var normalized = await opts.enforceImageAspectRatio(imageRef, aspect);
-          if (normalized && normalized.url) imageRef = normalized.url;
-        } catch (_) {}
-      }
+      // 결과물은 일절 후처리하지 않는다. 비율은 요청 시 보낸 규격(aspect)으로만 유지.
       // 새 버전 추가 (기존 버전은 모두 유지) 후 현재 선택을 새 버전으로 이동
       S.versions.push({ url: imageRef, prompt: instruction || 'masked refinement' });
       S.cur = S.versions.length - 1;
