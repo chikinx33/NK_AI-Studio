@@ -2382,7 +2382,7 @@
                     '<span class="brand-channel-badge bsf-deploy-status-badge">' + draftBadge + '</span>' +
                     (function () {
                       var checkSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>';
-                      var connectIcon = isEnabled ? checkSvg : '';
+                      var connectIcon = connectCls === 'is-connected' ? checkSvg : '';
                       var isDone = !!_deployedFormats[formatId];
                       var connectBadge = '<span class="bsf-deploy-connect-badge ' + connectCls + '">' + connectIcon + connectLabel + '</span>';
                       var doneBadge = '<span class="bsf-deploy-done-badge' + (isDone ? ' is-done' : '') + '" data-action="toggle-deploy-done" data-deploy-format="' + escapeHtml(formatId) + '">' + (isDone ? checkSvg : '') + (isEn ? 'Published' : '배포 완료') + '</span>';
