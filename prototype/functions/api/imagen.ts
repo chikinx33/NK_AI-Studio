@@ -479,13 +479,10 @@ async function callOpenAIImage(opts: {
 }): Promise<{ b64?: string; error?: any; status?: number }> {
   const size = mapAspectToOpenAISize(opts.aspectRatio);
   const quality = mapImageSizeToOpenAIQuality(opts.qualityHint);
-  // 마스크가 있으면 마스크가 정렬되는 기준 이미지(첫 번째)가 소스 이미지여야 하므로
-  // referenceImages 를 먼저 배치한다.
+  // 마스크가 있으면 native mask 가 첫 번째 이미지와 픽셀 크기로 정렬되어야 하므로
+  // 소스(referenceImages)만 보낸다. 크기가 다를 수 있는 대화 이력 이미지는 제외.
   const allRefs: Array<{ base64: string; mimeType: string }> = opts.maskImage
-    ? [
-      ...opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
-      ...opts.conversationHistory.map((t) => ({ base64: t.imageBase64, mimeType: t.imageMimeType })),
-    ]
+    ? opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType }))
     : [
       ...opts.conversationHistory.map((t) => ({ base64: t.imageBase64, mimeType: t.imageMimeType })),
       ...opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
@@ -498,13 +495,20 @@ async function callOpenAIImage(opts: {
 
   let res: Response | null = null;
   let bodyText = "";
+  let useMask = opts.maskImage || null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const init: RequestInit = isEdit
-        ? buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey, opts.maskImage)
+        ? buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey, useMask)
         : buildOpenAIGenerationsRequest(opts.model, opts.prompt, size, quality, opts.apiKey);
       res = await fetch(url, init);
       bodyText = await res.text();
+      // 마스크가 붙은 편집이 400(파라미터 거부)이면, 마스크 없이 1회 재시도해
+      // 지시문 기반 전체 수정으로라도 진행되게 한다(인페인팅 정밀도는 Gemini 권장).
+      if (res.status === 400 && useMask) {
+        useMask = null;
+        continue;
+      }
       if (res.ok || (res.status >= 400 && res.status < 500)) break;
     } catch (_) {}
     await sleep(400 * Math.pow(2, attempt));

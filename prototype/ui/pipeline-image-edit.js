@@ -177,27 +177,37 @@
   function exportMask(provider) {
     var src = el('.img-edit-mask');
     if (!src || !S.hasStrokes) return '';
+    // OpenAI native mask 는 소스 이미지와 픽셀 크기가 정확히 일치해야 한다.
+    // 따라서 OpenAI 일 때는 베이스 이미지의 natural 크기로 마스크를 렌더한다.
+    var img = el('.img-edit-base');
+    var outW = src.width;
+    var outH = src.height;
+    if (provider === 'openai' && img && img.naturalWidth && img.naturalHeight) {
+      outW = img.naturalWidth;
+      outH = img.naturalHeight;
+    }
     var out = document.createElement('canvas');
-    out.width = src.width;
-    out.height = src.height;
+    out.width = outW;
+    out.height = outH;
     var ox = out.getContext('2d');
     if (provider === 'openai') {
+      // 칠한 영역 = 투명(알파 0) = 수정 대상, 나머지 = 불투명 흰색 = 보존.
       ox.fillStyle = '#ffffff';
-      ox.fillRect(0, 0, out.width, out.height);
+      ox.fillRect(0, 0, outW, outH);
       ox.globalCompositeOperation = 'destination-out';
-      ox.drawImage(src, 0, 0);
+      ox.drawImage(src, 0, 0, outW, outH);
       ox.globalCompositeOperation = 'source-over';
     } else {
+      // Gemini: 흑배경 + 칠한 영역을 흰색으로.
       ox.fillStyle = '#000000';
-      ox.fillRect(0, 0, out.width, out.height);
-      // 칠한 픽셀을 흰색으로: 임시 캔버스에서 알파 마스크를 흰색으로 변환
+      ox.fillRect(0, 0, outW, outH);
       var tmp = document.createElement('canvas');
-      tmp.width = src.width; tmp.height = src.height;
+      tmp.width = outW; tmp.height = outH;
       var tx = tmp.getContext('2d');
       tx.fillStyle = '#ffffff';
-      tx.fillRect(0, 0, tmp.width, tmp.height);
+      tx.fillRect(0, 0, outW, outH);
       tx.globalCompositeOperation = 'destination-in';
-      tx.drawImage(src, 0, 0);
+      tx.drawImage(src, 0, 0, outW, outH);
       ox.drawImage(tmp, 0, 0);
     }
     try { return out.toDataURL('image/png'); } catch (_) { return ''; }
