@@ -13421,6 +13421,14 @@ textarea.bsf-skeleton {
   font-size: 11px;
   white-space: nowrap;
   gap: 4px;
+  justify-content: center;
+  line-height: 1;
+}
+.bsf-deploy-connect-badge svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }
 .bsf-deploy-connect-badge.is-connected {
   color: #fff;
