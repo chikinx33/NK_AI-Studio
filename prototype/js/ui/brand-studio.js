@@ -14,6 +14,9 @@
   // 전역 nk_sns_states(사용자 본인 연결) 캐시를 오염시키지 않도록 분리 보관한다.
   var _sharedSnsStatesCache = {};
   var _dtDocListener = null;
+  // 배포 진행 중 상태(formatId→true). renderProject 가 재실행돼도 스피너가 유지되도록
+  // 모듈 스코프에 둔다(렌더 내부 지역변수였을 때는 재렌더 시 초기화돼 스피너가 꺼졌음).
+  var _deployingFormats = {};
 
   function escapeHtml(value) {
     return String(value == null ? '' : value)
@@ -2436,7 +2439,6 @@
         : '<div class="brand-asset-empty">' + T.hintNoFormat + '</div>';
     }
     var _deployedFormats = persistedDeployedFormats;
-    var _deployingFormats = {};
     var deployFormatSummary = buildDeploySummaryHtml();
     function makeCtrlBarHtml(step) {
       if (step === 1) {
