@@ -293,6 +293,20 @@
   }
 
   function startOAuth(platform) {
+    // X 는 팝업/iframe 환경에서 FedCM·X-Frame-Options 충돌이 나므로 현재 탭 리다이렉트로 처리.
+    // sns-settings 는 brand-studio 안 iframe 으로 실행되므로 최상위 창(window.top)을 이동시킨다.
+    if (platform === 'x') {
+      apiGet('/api/sns/connect/x').then(function (res) {
+        if (!res || !res.ok || !res.oauthUrl) {
+          alert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));
+          return;
+        }
+        try { (window.top || window).location.href = res.oauthUrl; }
+        catch (e) { window.location.href = res.oauthUrl; }
+      });
+      return;
+    }
+
     apiGet('/api/sns/connect/' + platform).then(function (res) {
       if (!res || !res.ok || !res.oauthUrl) {
         alert(t('oauthFail') + ': ' + (res && res.error ? res.error : t('serverErr')));

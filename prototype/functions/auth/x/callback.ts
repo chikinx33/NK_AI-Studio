@@ -1,23 +1,13 @@
 import { getGoogleServiceAccountToken, resolveGcsContextForUser } from "../../api/_shared/youtube-token";
 import { writeXPatch } from "../../api/_shared/x-token";
 
-function popupHtml(result: { ok: boolean; username?: string; error?: string }) {
-  const payload = JSON.stringify(result);
-  return new Response(
-    `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>연결 중...</title></head>
-<body>
-<script>
-  try {
-    if (window.opener) {
-      window.opener.postMessage({ type: 'sns_oauth_result', platform: 'x', result: ${payload} }, '*');
-    }
-  } catch(e) {}
-  window.close();
-<\/script>
-<p>잠시 후 자동으로 닫힙니다...</p>
-</body></html>`,
-    { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } }
-  );
+// X 는 팝업/iframe 환경에서 FedCM·X-Frame-Options 충돌이 나므로 현재 탭 리다이렉트 방식으로 처리한다.
+// 결과는 brand-studio 의 SNS 탭으로 302 리다이렉트하며 x_connected/x_error 쿼리로 전달한다.
+const REDIRECT_SUCCESS = "/brand-studio?tab=sns&x_connected=true";
+const REDIRECT_ERROR = "/brand-studio?tab=sns&x_error=true";
+
+function redirectTo(location: string) {
+  return new Response(null, { status: 302, headers: { Location: location } });
 }
 
 export const onRequestGet = async ({ request, env }: { request: Request; env: any }) => {
@@ -27,10 +17,8 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   const error = url.searchParams.get("error");
   const errorDesc = url.searchParams.get("error_description");
 
-  if (error) {
-    return popupHtml({ ok: false, error: "OAuth cancelled: " + (errorDesc || error) });
-  }
-  if (!code || !stateRaw) return popupHtml({ ok: false, error: "Missing code or state" });
+  if (error) return redirectTo(REDIRECT_ERROR);
+  if (!code || !stateRaw) return redirectTo(REDIRECT_ERROR);
 
   let userId = "owner";
   let codeVerifier = "";
@@ -39,16 +27,16 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     userId = String(decoded.userId || "owner");
     codeVerifier = String(decoded.v || "");
   } catch {
-    return popupHtml({ ok: false, error: "Invalid state" });
+    return redirectTo(REDIRECT_ERROR);
   }
-  if (!codeVerifier) return popupHtml({ ok: false, error: "Missing PKCE verifier" });
+  if (!codeVerifier) return redirectTo(REDIRECT_ERROR);
 
   const clientId = env.X_CLIENT_ID;
   const clientSecret = env.X_CLIENT_SECRET;
   const redirectUri = env.X_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/x/callback";
 
   if (!clientId || !clientSecret) {
-    return popupHtml({ ok: false, error: "Server config missing" });
+    return redirectTo(REDIRECT_ERROR);
   }
 
   try {
@@ -129,10 +117,9 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
       }
     );
 
-    return popupHtml({ ok: true, username: username || name || xUserId });
+    return redirectTo(REDIRECT_SUCCESS);
 
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return popupHtml({ ok: false, error: msg });
+    return redirectTo(REDIRECT_ERROR);
   }
 };
