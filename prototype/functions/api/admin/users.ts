@@ -22,7 +22,7 @@ import { resolveGcsEnv, deleteGcsPrefix } from "../_shared/gcs.js";
 import { buildUserRoot } from "../_shared/storage";
 import { loadSharesStrict, saveShares, removeAllOwnerShares, removeAllGrantsToUser } from "../_shared/shares";
 
-type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
+type PagesFunction = (ctx: { request: Request; env: any; waitUntil?: (p: Promise<any>) => void }) => Promise<Response>;
 
 const corsHeaders = (origin: string | null) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -138,7 +138,7 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
   }
 };
 
-export const onRequestDelete: PagesFunction = async ({ request, env }) => {
+export const onRequestDelete: PagesFunction = async ({ request, env, waitUntil }) => {
   const origin = request.headers.get("Origin");
   try {
     const g = await gate(request, env, origin);
@@ -167,31 +167,39 @@ export const onRequestDelete: PagesFunction = async ({ request, env }) => {
       return send({ ok: true, id, soft }, 200, origin);
     }
 
-    // 하드 삭제: 회원의 GCS 폴더 전체 + 공유 레지스트리까지 연쇄 정리.
-    // 순서가 중요 — 데이터(폴더) 삭제를 먼저 시도하고, 실패하면 throw 되어
-    // 회원이 레지스트리에 남으므로 관리자가 재시도할 수 있다(고아 데이터 방지).
-
-    // 1) 이 회원이 소유한 모든 데이터가 들어있는 폴더(users/{id}/) 통째 삭제.
-    const { basePrefix } = resolveGcsEnv(env);
-    const userRoot = buildUserRoot(basePrefix, id);
-    const deletedObjects = await deleteGcsPrefix(env, `${userRoot}/`);
-
-    // 2) 공유 레지스트리 정리.
-    //    - 이 회원이 '소유자'인 공유 항목 제거(데이터는 위에서 이미 삭제됨).
-    //    - 이 회원이 '공유받은 자'인 grant만 회수 — 소유자의 프로젝트/수정본은 보존.
-    try {
-      const sharesReg = await loadSharesStrict(env);
-      removeAllOwnerShares(sharesReg, id);
-      removeAllGrantsToUser(sharesReg, id);
-      await saveShares(env, sharesReg);
-    } catch (e: any) {
-      try { console.error("[admin/users] share cleanup failed:", e?.message || e); } catch (_) { /* noop */ }
-    }
-
-    // 3) 마지막으로 회원 레지스트리에서 제거.
+    // 하드 삭제: 웹 목록에 즉시 반영되도록 레지스트리에서 '먼저' 제거하고 응답한다.
+    // GCS 파일 폴더와 공유 레지스트리 정리는 시간이 오래 걸릴 수 있으므로
+    // 백그라운드(waitUntil)에서 best-effort 로 수행한다(실패해도 UI엔 영향 없음).
     reg.users = reg.users.filter((u) => sanitizeUserId(u.id) !== id);
     await saveRegistry(env, reg);
-    return send({ ok: true, id, soft, deletedObjects }, 200, origin);
+
+    const cleanup = (async () => {
+      // 1) 이 회원이 소유한 모든 데이터 폴더(users/{id}/) 통째 삭제(배치).
+      try {
+        const { basePrefix } = resolveGcsEnv(env);
+        const userRoot = buildUserRoot(basePrefix, id);
+        await deleteGcsPrefix(env, `${userRoot}/`);
+      } catch (e: any) {
+        try { console.error("[admin/users] gcs cleanup failed:", e?.message || e); } catch (_) { /* noop */ }
+      }
+      // 2) 공유 레지스트리 정리: 소유 공유 제거 + 이 회원에게 부여된 grant 회수.
+      try {
+        const sharesReg = await loadSharesStrict(env);
+        removeAllOwnerShares(sharesReg, id);
+        removeAllGrantsToUser(sharesReg, id);
+        await saveShares(env, sharesReg);
+      } catch (e: any) {
+        try { console.error("[admin/users] share cleanup failed:", e?.message || e); } catch (_) { /* noop */ }
+      }
+    })();
+
+    if (typeof waitUntil === "function") {
+      waitUntil(cleanup); // 응답 후에도 런타임이 정리 작업을 끝까지 실행하도록 등록
+    } else {
+      await cleanup; // waitUntil 미지원 환경(로컬 등) 폴백 — 정리를 마친 뒤 응답
+    }
+
+    return send({ ok: true, id, soft }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "Unknown error" }, 500, origin);
   }
