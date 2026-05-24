@@ -93,6 +93,9 @@
         case 'inactive': return u.active === false;
         default:         return true;
       }
+    }).sort(function (a, b) {
+      // 마스터 계정은 항상 맨 위 고정. 나머지는 기존(레지스트리) 순서 유지.
+      return (isMasterUser(b) ? 1 : 0) - (isMasterUser(a) ? 1 : 0);
     });
   }
 
