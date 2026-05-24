@@ -113,7 +113,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       conversationHistory.length,
       cameraTargetMode,
       !!maskImage,
-      editInPlace
+      editInPlace,
+      aspectFinal
     );
 
     let imageOutput: { data: string; mimeType: string } | null = null;
@@ -343,9 +344,13 @@ function buildGeminiImagePrompt(
   conversationTurnCount: number,
   cameraTargetMode: "scene" | "subject",
   hasMask?: boolean,
-  editInPlace?: boolean
+  editInPlace?: boolean,
+  targetAspect?: string
 ) {
   const base = normalizePrompt(prompt);
+  const aspectLine = targetAspect
+    ? `The output image MUST use aspect ratio exactly ${targetAspect}, identical to the source. Do not change the canvas shape or proportions.`
+    : "";
   const conversationLines = generationStyle === "conversation" && conversationTurnCount > 0
     ? [
       "Build on the established visual continuity from the previous conversation turns.",
@@ -380,6 +385,7 @@ function buildGeminiImagePrompt(
       "Keep everything else identical to the source image: all other characters, their positions, poses, expressions, and sizes; the background, props, ground, sky, lighting, colors, motion effects, and the overall composition and framing.",
       "Do NOT re-pose, re-render, restyle, move, resize, or recolor anything the instruction does not target.",
       "Preserve the exact same image dimensions, aspect ratio, and crop as the source image.",
+      aspectLine,
       ...editGuideLines,
       "Return the same scene with only the requested local edit applied."
     ].filter(Boolean).join("\n");
