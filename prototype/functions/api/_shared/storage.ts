@@ -101,11 +101,16 @@ export function gcsObjectPath(objectName: string): string {
   return encodeURIComponent(String(objectName || ""));
 }
 
+// 출력 GCS URI 끝에 서비스 폴더명이 붙어 있으면(예: AUDIO_OUTPUT_GCS_URI=gs://bucket/sfx)
+// 그대로 두면 `sfx/users/{uid}/...` 처럼 사용자 루트가 서비스 폴더 안에 중첩되어 버린다.
+// basePrefix 는 버킷 루트(또는 진짜 베이스 prefix)여야 하므로 알려진 서비스 세그먼트는 떼어낸다.
+const STRIPPABLE_TAIL_SEGMENTS = new Set(["videos", "sfx", "tts", "music", "audio"]);
+
 function normalizeBasePrefix(basePrefix: string): string {
   const raw = String(basePrefix || "").replace(/\/+$/, "");
   if (!raw) return "";
   const parts = raw.split("/").filter(Boolean);
-  if (parts.length && parts[parts.length - 1].toLowerCase() === "videos") {
+  while (parts.length && STRIPPABLE_TAIL_SEGMENTS.has(parts[parts.length - 1].toLowerCase())) {
     parts.pop();
   }
   return parts.join("/");
