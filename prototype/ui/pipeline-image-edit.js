@@ -312,7 +312,8 @@
       }
       if (negativeText) promptText += '\nDo not include: ' + negativeText;
 
-      // 소스 이미지(편집 대상)를 ref 1 로, 캐릭터 자산을 보조 ref 로 (최대 4개)
+      // 소스 이미지(편집 대상)를 ref 1 로 둔다. 캐릭터 자산은 신원 가이드로 1장만
+      // 첨부한다(이미지 과다 시 Gemini 가 요청을 거부할 수 있어 최소화).
       var referenceImages = [{
         referenceId: 1,
         referenceType: 'REFERENCE_TYPE_SUBJECT',
@@ -320,10 +321,10 @@
         subjectDescription: 'SOURCE image to edit in place.',
         subjectType: 'SUBJECT_TYPE_DEFAULT'
       }];
-      charRefs.forEach(function (r) {
-        if (referenceImages.length >= 4 || !r || !r.imageDataUrl) return;
-        referenceImages.push(Object.assign({}, r, { referenceId: referenceImages.length + 1 }));
-      });
+      var primaryRef = (charRefs || []).find(function (r) { return r && r.imageDataUrl; });
+      if (primaryRef) {
+        referenceImages.push(Object.assign({}, primaryRef, { referenceId: 2 }));
+      }
 
       // 현재 선택 버전까지의 수정 이력을 대화 맥락으로 전달 (연속 지시 지원).
       // 단, 마스크/캐릭터 참조가 있으면 맥락 이미지가 혼선을 줄 수 있어 생략.
@@ -367,9 +368,12 @@
       try {
         if (err && err.detail) {
           var dj = JSON.parse(err.detail);
-          detail = (dj && (dj.hint || (dj.error && dj.error.message))) || '';
+          // 모델이 돌려준 실제 사유를 우선 노출 (일반 안내 hint 보다 구체적)
+          var deep = dj && dj.detail && dj.detail.error && dj.detail.error.message;
+          detail = String((dj && dj.message) || deep || (dj && dj.error && dj.error.message) || (dj && dj.hint) || '');
         }
       } catch (_) {}
+      console.error('이미지 수정 실패:', msg, err && err.detail);
       setStatus(msg + (detail ? ' · ' + detail : ''), true);
     } finally {
       S.busy = false;
