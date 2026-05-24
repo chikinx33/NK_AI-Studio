@@ -32,6 +32,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       ? "subject"
       : cameraTargetModeNorm;
     const sessionId = String(body?.sessionId || body?.session || "default").trim();
+    const editInPlace = body?.editInPlace === true || body?.editInPlace === "true";
 
     if (!prompt) {
       return json({ error: "prompt is required" }, 400);
@@ -108,7 +109,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       generationStyle,
       conversationHistory.length,
       cameraTargetMode,
-      !!maskImage
+      !!maskImage,
+      editInPlace
     );
 
     let imageOutput: { data: string; mimeType: string } | null = null;
@@ -337,7 +339,8 @@ function buildGeminiImagePrompt(
   generationStyle: "single" | "conversation",
   conversationTurnCount: number,
   cameraTargetMode: "scene" | "subject",
-  hasMask?: boolean
+  hasMask?: boolean,
+  editInPlace?: boolean
 ) {
   const base = normalizePrompt(prompt);
   const conversationLines = generationStyle === "conversation" && conversationTurnCount > 0
@@ -357,6 +360,26 @@ function buildGeminiImagePrompt(
     : [];
   if (!referenceImages.length) {
     return [base].concat(conversationLines).concat(maskLines).filter(Boolean).join("\n");
+  }
+  if (generationMode === "image-to-image" && editInPlace) {
+    // 제자리 편집 모드: 카메라 재구성/리포즈 지시문을 쓰지 않고, 소스 이미지를
+    // 그대로 둔 채 지시문이 요청한 것만 바꾸도록 강하게 보존을 지시한다.
+    const editGuideLines = referenceImages.slice(1).map((item, i) => {
+      const label = String(item.subjectDescription || `reference ${i + 2}`).trim() || `reference ${i + 2}`;
+      return `Reference image ${i + 2} (${label}) is ONLY an identity guide to keep that specific character on-model; do not copy its pose, crop, or background.`;
+    });
+    return [
+      base,
+      ...conversationLines,
+      ...maskLines,
+      "Reference image 1 is the SOURCE image. Edit it in place.",
+      "Apply ONLY the change explicitly described above.",
+      "Keep everything else identical to the source image: all other characters, their positions, poses, expressions, and sizes; the background, props, ground, sky, lighting, colors, motion effects, and the overall composition and framing.",
+      "Do NOT re-pose, re-render, restyle, move, resize, or recolor anything the instruction does not target.",
+      "Preserve the exact same image dimensions, aspect ratio, and crop as the source image.",
+      ...editGuideLines,
+      "Return the same scene with only the requested local edit applied."
+    ].filter(Boolean).join("\n");
   }
   if (generationMode === "image-to-image") {
     const targetLines = cameraTargetMode === "subject"

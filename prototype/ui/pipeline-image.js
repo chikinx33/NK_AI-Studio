@@ -985,7 +985,7 @@
     var projectId = o.projectId || '';
     var scene = o.scene || {};
     var text = String(o.text || '');
-    var out = { referenceImages: [], promptText: text, negativePromptText: '' };
+    var out = { referenceImages: [], subjects: [], negativePromptText: '' };
     try {
       if (!ctx || !ctx.getState) return out;
       var st = ctx.getState();
@@ -1016,7 +1016,6 @@
         brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
         bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
       });
-      var resolvedText = (built && built.resolvedPrompt) || text;
       out.negativePromptText = (built && built.negativePromptText) || '';
 
       var referencePayload = buildReferenceBundle(payload, res.characters, { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
@@ -1038,11 +1037,16 @@
       }
 
       if (referencePayload && referencePayload.referenceImages && referencePayload.referenceImages.length) {
-        resolvedText = buildInlineReferencePrompt(resolvedText, referencePayload.referenceSubjects || []);
-        resolvedText = [referencePayload.promptPrefix || '', resolvedText, referencePayload.promptSuffix || ''].filter(Boolean).join('\n');
         out.referenceImages = referencePayload.referenceImages.slice(0, MAX_REFERENCE_IMAGES);
+        var subjects = Array.isArray(referencePayload.referenceSubjects) ? referencePayload.referenceSubjects : [];
+        var names = [];
+        var seen = {};
+        subjects.forEach(function (s) {
+          var nm = normalizeText(s && (s.displayName || s.token));
+          if (nm && !seen[nm.toLowerCase()]) { seen[nm.toLowerCase()] = 1; names.push(nm); }
+        });
+        out.subjects = names;
       }
-      out.promptText = resolvedText;
     } catch (_) {}
     return out;
   };

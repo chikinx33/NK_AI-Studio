@@ -38,6 +38,19 @@
     } catch (_) { return 'gemini'; }
   }
 
+  // 편집은 원본 프레이밍을 보존해야 하므로 씬 설정값이 아니라
+  // 현재 이미지의 실제 픽셀 비율에서 가장 가까운 허용 종횡비를 쓴다.
+  function sourceAspect() {
+    var img = el('.img-edit-base');
+    var w = img && img.naturalWidth ? img.naturalWidth : 0;
+    var h = img && img.naturalHeight ? img.naturalHeight : 0;
+    if (!w || !h) return S.aspectRatio || '16:9';
+    var r = w / h;
+    var cands = [['16:9', 16 / 9], ['9:16', 9 / 16], ['1:1', 1]];
+    cands.sort(function (a, b) { return Math.abs(a[1] - r) - Math.abs(b[1] - r); });
+    return cands[0][0];
+  }
+
   function toPlayable(url) {
     if (S.opts && typeof S.opts.toPlayableMediaUrl === 'function') return S.opts.toPlayableMediaUrl(url);
     return String(url || '').trim();
@@ -265,9 +278,11 @@
 
     try {
       var sourceUrl = curUrl();
+      var aspect = sourceAspect();
       // 지시문에 @캐릭터 가 포함되면 등록 캐릭터 자산(레퍼런스 이미지)을 해석해 첨부
-      var promptText = instruction || '마스크로 표시한 영역을 자연스럽게 다듬어 주세요.';
       var charRefs = [];
+      var subjects = [];
+      var negativeText = '';
       if (instruction && NK.uiPipelineImage && NK.uiPipelineImage.resolveCharacterReferencesForText) {
         try {
           var st0 = (opts.ctx && opts.ctx.getState) ? opts.ctx.getState() : null;
@@ -279,19 +294,27 @@
             text: instruction
           });
           if (resolved) {
-            if (resolved.promptText) promptText = resolved.promptText;
-            if (resolved.negativePromptText) promptText += '\nDo not include: ' + resolved.negativePromptText;
             if (Array.isArray(resolved.referenceImages)) charRefs = resolved.referenceImages;
+            if (Array.isArray(resolved.subjects)) subjects = resolved.subjects;
+            negativeText = resolved.negativePromptText || '';
           }
         } catch (_) {}
       }
+
+      // 편집 의도를 명확히: 소스를 그대로 두고 지시한 부분만 수정. 백엔드 editInPlace
+      // 가 보존 지시문을 추가하므로 여기서는 지시문 + 캐릭터 신원 고정만 덧붙인다.
+      var promptText = instruction || '마스크로 표시한 영역을 자연스럽게 다듬어 주세요.';
+      if (subjects.length) {
+        promptText += '\nKeep ' + subjects.join(', ') + ' on-model using the additional reference images (same face, silhouette, colors, costume, and proportions). Do not change any other character.';
+      }
+      if (negativeText) promptText += '\nDo not include: ' + negativeText;
 
       // 소스 이미지(편집 대상)를 ref 1 로, 캐릭터 자산을 보조 ref 로 (최대 4개)
       var referenceImages = [{
         referenceId: 1,
         referenceType: 'REFERENCE_TYPE_SUBJECT',
         imageDataUrl: sourceUrl,
-        subjectDescription: 'Current scene image to edit. Preserve subject identity, composition, framing, and lighting unless the instruction explicitly changes them.',
+        subjectDescription: 'SOURCE image to edit in place.',
         subjectType: 'SUBJECT_TYPE_DEFAULT'
       }];
       charRefs.forEach(function (r) {
@@ -299,21 +322,24 @@
         referenceImages.push(Object.assign({}, r, { referenceId: referenceImages.length + 1 }));
       });
 
-      // 현재 선택 버전까지의 수정 이력을 대화 맥락으로 전달 (연속 지시 지원)
+      // 현재 선택 버전까지의 수정 이력을 대화 맥락으로 전달 (연속 지시 지원).
+      // 단, 마스크/캐릭터 참조가 있으면 맥락 이미지가 혼선을 줄 수 있어 생략.
       var convo = [];
-      for (var ci = 1; ci <= S.cur; ci++) {
-        var vv = S.versions[ci];
-        if (vv && vv.url && vv.prompt) convo.push({ prompt: vv.prompt, imageDataUrl: vv.url, mode: 'image-to-image' });
+      if (!maskDataUrl && !charRefs.length) {
+        for (var ci = 1; ci <= S.cur; ci++) {
+          var vv = S.versions[ci];
+          if (vv && vv.url && vv.prompt) convo.push({ prompt: vv.prompt, imageDataUrl: vv.url, mode: 'image-to-image' });
+        }
       }
 
       var body = {
         prompt: promptText,
-        aspectRatio: S.aspectRatio,
+        aspectRatio: aspect,
         projectId: projectId,
         provider: provider,
         generationMode: 'image-to-image',
-        generationStyle: 'conversation',
-        cameraTargetMode: 'subject',
+        generationStyle: convo.length ? 'conversation' : 'single',
+        editInPlace: true,
         referenceImages: referenceImages,
         conversationHistory: convo.slice(-3)
       };
@@ -324,12 +350,7 @@
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
-      if (typeof opts.enforceImageAspectRatio === 'function') {
-        try {
-          var normalized = await opts.enforceImageAspectRatio(imageRef, S.aspectRatio);
-          if (normalized && normalized.url) imageRef = normalized.url;
-        } catch (_) {}
-      }
+      // 편집 결과는 원본 프레이밍을 보존해야 하므로 강제 종횡비 보정을 하지 않는다.
       // 새 버전 추가 (기존 버전은 모두 유지) 후 현재 선택을 새 버전으로 이동
       S.versions.push({ url: imageRef, prompt: instruction || 'masked refinement' });
       S.cur = S.versions.length - 1;
