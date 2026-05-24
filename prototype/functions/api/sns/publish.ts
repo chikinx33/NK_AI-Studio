@@ -4,6 +4,7 @@ import { loadShares, getGrantRole } from "../_shared/shares";
 import { ensureFreshAccessToken } from "../_shared/youtube-token";
 import { getFacebookPageToken } from "../_shared/facebook-token";
 import { getThreadsToken } from "../_shared/threads-token";
+import { getXToken } from "../_shared/x-token";
 
 function send(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -906,8 +907,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
     if (role !== "editor") return send({ error: "forbidden: editor role required to publish" }, 403);
     publishUserId = reqOwnerId;
   }
-  // Threads 는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
-  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads") {
+  // Threads·X 는 텍스트 전용 게시를 허용하므로 미디어 필수 가드에서 제외한다.
+  if (!isCarousel && !body.mediaType && !body.mediaGcsPath && !body.mediaDirectUrl && platform !== "threads" && platform !== "x") {
     return send({ error: "단일 포스트에는 mediaType, mediaGcsPath 또는 mediaDirectUrl이 필요합니다." }, 400);
   }
 
@@ -1542,6 +1543,170 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: a
         result: {
           platform: "threads",
           postId,
+          username,
+          status: "published",
+          publishedAt: new Date().toISOString(),
+        },
+      });
+    }
+
+    if (platform === "x") {
+      let xt: { accessToken: string; xUserId: string; username: string };
+      try {
+        xt = await getXToken(env, publishUserId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg === "x_not_connected") {
+          return send({ error: "X 계정이 연결되지 않았습니다. SNS 설정에서 먼저 연결해 주세요." }, 412);
+        }
+        return send({ error: msg }, 500);
+      }
+      const { accessToken, username } = xt;
+      const text = caption.slice(0, 280);
+
+      // GCS 경로/직접 URL 에서 미디어 바이트를 받아온다 (X 는 바이트 업로드 방식).
+      async function fetchMediaBytes(gcsPath?: string, directUrl?: string): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+        let url: string;
+        if (gcsPath) {
+          url = await buildSignedUrl(bucket, gcsPath, env.GOOGLE_CLIENT_EMAIL, env.GOOGLE_PRIVATE_KEY, 3600);
+        } else if (directUrl) {
+          url = directUrl;
+        } else {
+          throw new Error("mediaGcsPath 또는 mediaDirectUrl 중 하나가 필요합니다.");
+        }
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`미디어 다운로드 실패: ${r.status}`);
+        const ct = r.headers.get("content-type") || "application/octet-stream";
+        return { bytes: await r.arrayBuffer(), contentType: ct };
+      }
+
+      // 이미지: v1.1 단순 업로드. media_id_string 반환.
+      async function xUploadSimple(bytes: ArrayBuffer, contentType: string): Promise<string> {
+        const form = new FormData();
+        form.append("media", new Blob([bytes], { type: contentType }));
+        const r = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: form,
+        });
+        const j = (await r.json()) as { media_id_string?: string };
+        if (!r.ok || !j.media_id_string) {
+          throw new Error(`X 이미지 업로드 실패: ${r.status} ${JSON.stringify(j)}`);
+        }
+        return j.media_id_string;
+      }
+
+      // 영상: v1.1 청크 업로드(INIT→APPEND→FINALIZE) + 처리 상태 폴링.
+      async function xUploadChunked(bytes: ArrayBuffer, contentType: string): Promise<string> {
+        const total = bytes.byteLength;
+        const initRes = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            command: "INIT",
+            total_bytes: String(total),
+            media_type: contentType,
+            media_category: "tweet_video",
+          }).toString(),
+        });
+        const initJson = (await initRes.json()) as { media_id_string?: string };
+        if (!initRes.ok || !initJson.media_id_string) {
+          throw new Error(`X 동영상 INIT 실패: ${initRes.status} ${JSON.stringify(initJson)}`);
+        }
+        const mediaId = initJson.media_id_string;
+        const CHUNK = 4 * 1024 * 1024;
+        let seg = 0;
+        for (let off = 0; off < total; off += CHUNK) {
+          const slice = bytes.slice(off, Math.min(off + CHUNK, total));
+          const form = new FormData();
+          form.append("command", "APPEND");
+          form.append("media_id", mediaId);
+          form.append("segment_index", String(seg));
+          form.append("media", new Blob([slice], { type: contentType }));
+          const apRes = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: form,
+          });
+          if (!apRes.ok) {
+            throw new Error(`X 동영상 APPEND 실패(seg ${seg}): ${apRes.status} ${await apRes.text()}`);
+          }
+          seg++;
+        }
+        const finRes = await fetch("https://upload.twitter.com/1.1/media/upload.json", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ command: "FINALIZE", media_id: mediaId }).toString(),
+        });
+        const finJson = (await finRes.json()) as { media_id_string?: string; processing_info?: { state: string; check_after_secs?: number; error?: unknown } };
+        if (!finRes.ok || !finJson.media_id_string) {
+          throw new Error(`X 동영상 FINALIZE 실패: ${finRes.status} ${JSON.stringify(finJson)}`);
+        }
+        let info = finJson.processing_info;
+        let waited = 0;
+        while (info && (info.state === "pending" || info.state === "in_progress")) {
+          if (waited > 90000) throw new Error("X 동영상 처리 시간 초과");
+          const waitMs = Math.min(info.check_after_secs || 1, 10) * 1000;
+          await new Promise((res) => setTimeout(res, waitMs));
+          waited += waitMs;
+          const stRes = await fetch(
+            `https://upload.twitter.com/1.1/media/upload.json?command=STATUS&media_id=${mediaId}`,
+            { headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          const stJson = (await stRes.json()) as { processing_info?: { state: string; check_after_secs?: number; error?: unknown } };
+          info = stJson.processing_info;
+        }
+        if (info && info.state === "failed") {
+          throw new Error(`X 동영상 처리 실패: ${JSON.stringify(info.error || info)}`);
+        }
+        return mediaId;
+      }
+
+      // 게시할 미디어 수집. X 는 이미지 최대 4장 또는 영상 1개(혼합 불가).
+      const mediaIds: string[] = [];
+      if (isCarousel) {
+        const items = body.mediaItems!;
+        const vid = items.find((i) => i.mediaType === "video");
+        if (vid) {
+          const { bytes, contentType } = await fetchMediaBytes(vid.gcsPath, vid.mediaUrl);
+          mediaIds.push(await xUploadChunked(bytes, contentType));
+        } else {
+          for (const it of items.slice(0, 4)) {
+            const { bytes, contentType } = await fetchMediaBytes(it.gcsPath, it.mediaUrl);
+            mediaIds.push(await xUploadSimple(bytes, contentType));
+          }
+        }
+      } else if (body.mediaType === "video") {
+        const { bytes, contentType } = await fetchMediaBytes(body.mediaGcsPath, body.mediaDirectUrl);
+        mediaIds.push(await xUploadChunked(bytes, contentType));
+      } else if (body.mediaType === "image") {
+        const { bytes, contentType } = await fetchMediaBytes(body.mediaGcsPath, body.mediaDirectUrl);
+        mediaIds.push(await xUploadSimple(bytes, contentType));
+      }
+
+      if (!text.trim() && mediaIds.length === 0) {
+        return send({ error: "X 게시에는 텍스트 또는 미디어가 필요합니다." }, 400);
+      }
+
+      const tweetBody: { text?: string; media?: { media_ids: string[] } } = {};
+      if (text.trim()) tweetBody.text = text;
+      if (mediaIds.length) tweetBody.media = { media_ids: mediaIds };
+
+      const tweetRes = await fetch("https://api.twitter.com/2/tweets", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(tweetBody),
+      });
+      const tweetJson = (await tweetRes.json()) as { data?: { id?: string }; detail?: string; title?: string };
+      if (!tweetRes.ok || !tweetJson.data?.id) {
+        return send({ error: `X 게시 실패: ${tweetRes.status} ${tweetJson.detail || tweetJson.title || JSON.stringify(tweetJson)}` }, 502);
+      }
+
+      return send({
+        ok: true,
+        result: {
+          platform: "x",
+          postId: tweetJson.data.id,
           username,
           status: "published",
           publishedAt: new Date().toISOString(),
