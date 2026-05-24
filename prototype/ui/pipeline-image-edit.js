@@ -26,16 +26,11 @@
     return v ? v.url : '';
   }
 
+  // 편집창 자체의 엔진 토글이 진실의 원천이다 (상단 페이지 선택과 독립).
   function getProvider() {
-    try {
-      var sel = document.getElementById('image-provider-select');
-      if (sel && sel.value) {
-        return String(sel.value).trim().toLowerCase() === 'openai' ? 'openai' : 'gemini';
-      }
-      var key = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
-      var raw = String(localStorage.getItem(key) || '').trim().toLowerCase();
-      return raw === 'openai' ? 'openai' : 'gemini';
-    } catch (_) { return 'gemini'; }
+    var m = document.getElementById('img-edit-modal');
+    var checked = m ? m.querySelector('input[name="img-edit-engine"]:checked') : null;
+    return (checked && checked.value === 'openai') ? 'openai' : 'gemini';
   }
 
   // 편집은 원본 프레이밍을 보존해야 하므로 씬 설정값이 아니라
@@ -72,6 +67,10 @@
       '.img-edit-mask{position:absolute;top:0;left:0;cursor:crosshair;opacity:0.5;touch-action:none;}',
       '.img-edit-mask.off{pointer-events:none;}',
       '.img-edit-side{flex:1 1 40%;min-width:260px;display:flex;flex-direction:column;gap:10px;}',
+      '.img-edit-engine{display:flex;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid rgba(255,255,255,0.12);border-radius:8px;background:#0a1322;}',
+      '.img-edit-engine-opt{display:flex;align-items:center;gap:5px;font-size:13px;color:#e8f1ff;cursor:pointer;}',
+      '.img-edit-engine-opt input{accent-color:var(--accent,#7bd7ff);}',
+      '.img-edit-engine-hint{font-size:11px;color:rgba(255,255,255,0.55);}',
       '.img-edit-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}',
       '.img-edit-tools label{font-size:12px;color:rgba(255,255,255,0.7);}',
       '.img-edit-brush{flex:1;min-width:90px;}',
@@ -106,6 +105,10 @@
       '<canvas class="img-edit-mask"></canvas>',
       '</div>',
       '<div class="img-edit-side">',
+      '<div class="img-edit-engine">',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="gemini" checked> Gemini <span class="img-edit-engine-hint">· 마스크/인페인팅 권장</span></label>',
+      '<label class="img-edit-engine-opt"><input type="radio" name="img-edit-engine" value="openai"> GPT <span class="img-edit-engine-hint">· 일반 채팅 수정</span></label>',
+      '</div>',
       '<div class="img-edit-tools">',
       '<label>인페인팅</label>',
       '<button class="btn-secondary compact" data-edit="mask-toggle" style="min-width:78px;">브러시 ON</button>',
@@ -507,6 +510,9 @@
     var canvas = el('.img-edit-mask');
     if (canvas) canvas.classList.remove('off');
     if (toggle) toggle.textContent = '브러시 ON';
+    // 엔진 기본값: Gemini (편집/인페인팅 안정적)
+    var gem = el('input[name="img-edit-engine"][value="gemini"]');
+    if (gem) gem.checked = true;
     setStatus('');
 
     var m = document.getElementById('img-edit-modal');
