@@ -73,10 +73,46 @@
     const kindLabel = kind === 'video' ? '영상' : '이미지';
     if (!box) return;
 
-    // 최신 항목이 앞에 오도록 정렬을 역순으로 표시
-    let currentItems = (Array.isArray(items) ? items.slice() : []).reverse();
+    if (!document.getElementById('lib-dnd-style')) {
+      var __libStyle = document.createElement('style');
+      __libStyle.id = 'lib-dnd-style';
+      __libStyle.textContent = '.lib-item.lib-dragging{opacity:.4;} .lib-item.lib-drop-target{outline:2px dashed var(--accent,#7bd7ff);outline-offset:2px;border-radius:8px;}';
+      document.head.appendChild(__libStyle);
+    }
+
     let selectedNames = new Set();
     let deleting = false;
+
+    // 사용자가 드래그로 정한 순서를 프로젝트·종류별로 저장(저장소 보기 전용).
+    function orderKey() {
+      return 'nk_lib_order_' + String(kind || 'image') + '_' + String(projectId || 'default');
+    }
+    function loadOrder() {
+      try {
+        var v = JSON.parse(localStorage.getItem(orderKey()) || '[]');
+        return Array.isArray(v) ? v : [];
+      } catch (_) { return []; }
+    }
+    function saveOrder() {
+      try {
+        localStorage.setItem(orderKey(), JSON.stringify(currentItems.map(function (it) { return String(it && it.name || ''); })));
+      } catch (_) {}
+    }
+    // 저장된 순서가 있으면 그대로, 없으면 최신 항목이 앞에 오도록 역순.
+    function applyInitialOrder(arr) {
+      var base = (Array.isArray(arr) ? arr.slice() : []).reverse();
+      var saved = loadOrder();
+      if (!saved.length) return base;
+      var pos = {};
+      saved.forEach(function (n, i) { pos[n] = i; });
+      return base.sort(function (a, b) {
+        var ai = Object.prototype.hasOwnProperty.call(pos, String(a && a.name || '')) ? pos[String(a.name)] : Infinity;
+        var bi = Object.prototype.hasOwnProperty.call(pos, String(b && b.name || '')) ? pos[String(b.name)] : Infinity;
+        return ai - bi;
+      });
+    }
+
+    let currentItems = applyInitialOrder(items);
 
     function getSelectedItems() {
       return currentItems.filter(function (it) {
@@ -108,11 +144,15 @@
       }
     }
 
+    let dragFromIdx = -1;
+    let didReorder = false;
+
     function bindGridEvents() {
       const itemEls = box.querySelectorAll('.lib-item');
       itemEls.forEach(function (itemEl) {
         itemEl.onclick = function () {
           if (deleting) return;
+          if (didReorder) { didReorder = false; return; } // 드래그 직후의 클릭은 무시
           const idx = Number(itemEl.dataset.idx || -1);
           const target = (idx >= 0 && idx < currentItems.length) ? currentItems[idx] : null;
           const name = String(target && target.name || '');
@@ -122,6 +162,40 @@
           else selectedNames.add(name);
           renderGridState();
           syncActionState();
+        };
+
+        // ── 드래그&드롭 재정렬 ──
+        itemEl.ondragstart = function (e) {
+          if (deleting) { e.preventDefault(); return; }
+          dragFromIdx = Number(itemEl.dataset.idx || -1);
+          didReorder = false;
+          itemEl.classList.add('lib-dragging');
+          try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(dragFromIdx)); } catch (_) {}
+        };
+        itemEl.ondragover = function (e) {
+          e.preventDefault();
+          try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+          itemEl.classList.add('lib-drop-target');
+        };
+        itemEl.ondragleave = function () {
+          itemEl.classList.remove('lib-drop-target');
+        };
+        itemEl.ondrop = function (e) {
+          e.preventDefault();
+          itemEl.classList.remove('lib-drop-target');
+          const toIdx = Number(itemEl.dataset.idx || -1);
+          if (dragFromIdx < 0 || toIdx < 0 || dragFromIdx === toIdx) return;
+          if (dragFromIdx >= currentItems.length || toIdx >= currentItems.length) return;
+          const moved = currentItems.splice(dragFromIdx, 1)[0];
+          currentItems.splice(toIdx, 0, moved);
+          didReorder = true;
+          saveOrder();
+          render();
+        };
+        itemEl.ondragend = function () {
+          itemEl.classList.remove('lib-dragging');
+          box.querySelectorAll('.lib-drop-target').forEach(function (el) { el.classList.remove('lib-drop-target'); });
+          dragFromIdx = -1;
         };
       });
     }
@@ -147,7 +221,7 @@
           ? '<img class="lib-thumb" src="' + url + '" alt="" />'
           : '<video class="lib-thumb" src="' + url + '" muted playsinline preload="metadata"></video>';
         return (
-          '<div class="lib-item" data-idx="' + idx + '" style="background:none;box-shadow:none;">' +
+          '<div class="lib-item" data-idx="' + idx + '" draggable="true" style="background:none;box-shadow:none;cursor:move;">' +
           thumb +
           '</div>'
         );
