@@ -118,6 +118,7 @@
       scenario_copy_success: '시나리오를 복사했습니다.',
       scenario_copy_fail: '복사에 실패했습니다.',
       scenario_copy_error_prefix: '복사 실패: ',
+      scenario_inject_success: '수정한 시나리오를 카드에 반영했습니다.',
       saveConfirmProductionReset: '시나리오가 변경되었습니다.\n기존 프로덕션에서 생성한 이미지·영상이 초기화됩니다.\n저장하시겠습니까?',
       scenario_story_toggle_title: '원본/AI 전환',
       scenario_story_toggle_view_ai: 'AI 글 보기',
@@ -180,6 +181,7 @@
       scenario_copy_success: 'Scenario copied.',
       scenario_copy_fail: 'Copy failed.',
       scenario_copy_error_prefix: 'Copy failed: ',
+      scenario_inject_success: 'Applied the edited scenario to the cards.',
       saveConfirmProductionReset: 'The scenario has been modified.\nExisting images and videos from Production will be reset.\nDo you want to save?',
       scenario_story_toggle_title: 'Toggle original/AI text',
       scenario_story_toggle_view_ai: 'View AI text',
@@ -2820,10 +2822,19 @@
             const lines = [];
             lines.push(`${label} · ${fmtEst(s.estSec)}`);
             if (s.sceneLocation || s.location) lines.push(`장소: ${s.sceneLocation || s.location}`);
-            if (s.shot || s.visual) lines.push(`시각화: ${s.shot || s.visual}`);
-            if (s.narrationText || s.narration) lines.push(`나레이션: ${s.narrationText || s.narration}`);
+            // 카드 UI 와 동일하게: 구조화 씬은 화면/행동, 일반 씬은 시각화 라벨을 사용한다.
+            const comp = String(s.composition || '').trim();
+            const act = String(s.action || '').trim();
+            if (comp || act) {
+              if (comp) lines.push(`화면: ${comp}`);
+              if (act) lines.push(`행동: ${act}`);
+            } else if (s.shot || s.visual) {
+              lines.push(`시각화: ${s.shot || s.visual}`);
+            }
+            if (s.narrationText || s.narration) lines.push(`나레이션: ${String(s.narrationText || s.narration).replace(/\r?\n+/g, ' · ')}`);
             const dlg = s.dialogueText || dialogueToText(s.dialogue || []);
-            if (dlg) lines.push(`대사:\n${dlg}`);
+            // 카드 UI 의 대사 표시와 동일하게 한 줄(여러 대사는 ' · ' 구분)로 출력 → 재주입 시 동일 파싱.
+            if (dlg) lines.push(`대사: ${String(dlg).replace(/\r?\n+/g, ' · ')}`);
             return lines.filter(Boolean).join('\n');
           };
           const text = scenes.map((s, i) => makeBlock(s, i)).join('\n\n');
@@ -2842,6 +2853,105 @@
           alert(ok ? (t.scenario_copy_success || '시나리오를 복사했습니다.') : (t.scenario_copy_fail || '복사에 실패했습니다.'));
         } catch (err) {
           alert('복사 실패: ' + (err?.message || err));
+        }
+      });
+    }
+
+    // ---------- 시나리오 주입(붙여넣기 → 카드 재편성) ----------
+    // 복사 버튼이 만든 라벨 형식(Scene / 장소 / 화면 / 행동 / 시각화 / 나레이션 / 대사)을 역파싱한다.
+    const parseInjectedScenario = (text) => {
+      const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+      const headerRe = /^\s*Scene\s+\d+(?:\s+cut\s*\d+)?\s*(?:[·•]\s*([0-9.]+)\s*s)?/i;
+      const fieldRe = /^\s*(장소|화면|행동|시각화|나레이션|대사)\s*[:：]\s*([\s\S]*)$/;
+      const labelMap = { '장소': 'location', '화면': 'composition', '행동': 'action', '시각화': 'shot', '나레이션': 'narration', '대사': 'dialogue' };
+      const out = [];
+      let cur = null;
+      let curField = null;
+      for (const raw of lines) {
+        const headerMatch = raw.match(headerRe);
+        if (headerMatch) {
+          cur = { estSec: headerMatch[1] ? parseEst(headerMatch[1]) : 0, location: '', composition: '', action: '', shot: '', narration: '', dialogue: '' };
+          out.push(cur);
+          curField = null;
+          continue;
+        }
+        if (!cur) continue;
+        // 빈 줄 / 구분선('-' 등)은 필드 연결을 끊는다 (다음 줄이 이전 필드에 붙지 않도록).
+        if (!raw.trim() || /^\s*[-–—_=]+\s*$/.test(raw)) { curField = null; continue; }
+        const fm = raw.match(fieldRe);
+        if (fm) {
+          curField = labelMap[fm[1]];
+          cur[curField] = fm[2].trim();
+          continue;
+        }
+        // 라벨 없는 줄은 직전 필드의 다음 줄로 이어붙인다 (여러 줄 화면/행동 대응).
+        if (curField) cur[curField] += (cur[curField] ? '\n' : '') + raw.trim();
+      }
+      return out;
+    };
+
+    const buildScenesFromParsed = (parsed) => parsed.map((p, i) => {
+      const comp = String(p.composition || '').trim();
+      const act = String(p.action || '').trim();
+      const hasStructured = !!(comp || act);
+      const visual = hasStructured ? [comp, act].filter(Boolean).join('\n') : String(p.shot || '').trim();
+      const dialogueText = String(p.dialogue || '').replace(/\s*·\s*/g, '\n').trim();
+      const dialogue = normalizeDialogue(dialogueText, currentCharacters);
+      const narration = String(p.narration || '').trim();
+      return {
+        id: i + 1,
+        sceneLocation: String(p.location || '').trim(),
+        composition: hasStructured ? comp : '',
+        action: hasStructured ? act : '',
+        shot: visual,
+        visual,
+        narration,
+        narrationText: narration,
+        dialogue,
+        dialogueText,
+        estSec: p.estSec && p.estSec > 0 ? p.estSec : 2
+      };
+    });
+
+    const injectModal = document.getElementById('scenario-inject-modal');
+    const injectBtn = document.getElementById('scenario-inject-btn');
+    const injectText = document.getElementById('scenario-inject-text');
+    const injectCancel = document.getElementById('scenario-inject-cancel');
+    const injectApply = document.getElementById('scenario-inject-apply');
+    const closeInjectModal = () => { if (injectModal) injectModal.classList.add('hidden'); };
+    if (injectBtn && injectModal) {
+      injectBtn.addEventListener('click', () => {
+        injectModal.classList.remove('hidden');
+        if (injectText) { setTimeout(() => { injectText.focus(); }, 0); }
+      });
+    }
+    if (injectCancel) injectCancel.addEventListener('click', closeInjectModal);
+    if (injectModal) {
+      injectModal.addEventListener('click', (e) => { if (e.target === injectModal) closeInjectModal(); });
+    }
+    if (injectApply) {
+      injectApply.addEventListener('click', () => {
+        try {
+          const raw = injectText ? injectText.value : '';
+          const parsed = parseInjectedScenario(raw);
+          if (!parsed.length) {
+            alert('인식된 씬이 없습니다. 복사한 형식 그대로(Scene / 장소 / 화면 / 행동 / 대사) 붙여넣어 주세요.');
+            return;
+          }
+          const built = buildScenesFromParsed(parsed);
+          const merged = mergeSceneSnapshots(draft?.scenes || [], built);
+          const finalScenes = normalizeScenes(merged.length ? merged : built);
+          draft = draft || { id: Date.now(), title: '주입된 시나리오' };
+          draft.scenes = finalScenes;
+          if (NK.service?.project?.upsertLocalDraft) {
+            draft = NK.service.project.upsertLocalDraft(draft, { setCurrent: true }) || draft;
+          }
+          scenario.renderScenes(draft.scenes || finalScenes);
+          closeInjectModal();
+          const t = getScenarioUiText();
+          alert((t.scenario_inject_success) || (parsed.length + '개 씬을 반영했습니다.'));
+        } catch (err) {
+          alert('반영 실패: ' + (err?.message || err));
         }
       });
     }

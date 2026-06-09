@@ -156,6 +156,7 @@
                 <button type="button" class="btn-icon-sm" id="scenario-copy-btn" title="시나리오 복사" aria-label="시나리오 복사" data-i18n-title="scenario_copy" data-i18n-aria-label="scenario_copy"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
                 <button type="button" class="btn-icon-sm" id="camera-vocab-btn" title="카메라 용어 안내" aria-label="카메라 용어 안내"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></svg></button>
                 <button type="button" class="btn-icon-sm" id="scenario-diag-btn" title="생성 진단" aria-label="생성 진단"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></button>
+                <button type="button" class="btn-icon-sm" id="scenario-inject-btn" title="시나리오 주입(붙여넣기 반영)" aria-label="시나리오 주입"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M8 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-4"/></svg></button>
               </div>
               <div class="caption-fold-mode">
                 <button type="button" class="btn-icon-sm" id="scene-expand-all" title="전체 펼침" aria-label="전체 펼침" data-i18n-title="scene_expand_all" data-i18n-aria-label="scene_expand_all"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 4 18 10"/><polyline points="6 14 12 20 18 14"/></svg></button>
@@ -192,6 +193,17 @@
   <div id="scenario-diag-modal" class="img-modal hidden">
     <div class="img-modal__inner scenario-diag-modal-box">
       <div id="scenario-diag-modal-body"></div>
+    </div>
+  </div>
+  <div id="scenario-inject-modal" class="img-modal hidden">
+    <div class="img-modal__inner scenario-inject-modal-box">
+      <h4 class="scenario-inject-title">시나리오 주입</h4>
+      <p class="muted small scenario-inject-help">복사 버튼으로 받은 시나리오를 원하는 대로 수정한 뒤 아래에 붙여넣고 “반영”을 누르면 카드 내용이 그대로 재편성됩니다. <strong>Scene / 장소 / 화면 / 행동 / 대사</strong> 라벨 형식을 유지해 주세요.</p>
+      <textarea id="scenario-inject-text" class="scenario-inject-textarea" spellcheck="false" placeholder="Scene 1 cut1 · 2s&#10;장소: 2D 애니메이션 법정 — 높은 판사석&#10;화면: 로우앵글, 판사석 하단에서 위로 틸트…&#10;행동: @판사가 서류 더미를 내려다보며 눈살을 찌푸린다&#10;대사: @판사: 오늘부터 세 명씩 들어오라고 해!"></textarea>
+      <div class="scenario-inject-actions">
+        <button type="button" class="btn-ghost" id="scenario-inject-cancel">취소</button>
+        <button type="button" class="btn-primary" id="scenario-inject-apply">반영</button>
+      </div>
     </div>
   </div>
   <script>

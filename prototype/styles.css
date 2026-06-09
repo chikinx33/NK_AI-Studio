@@ -2800,6 +2800,48 @@ textarea::-webkit-scrollbar-corner {
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
 }
+#scenario-inject-modal .scenario-inject-modal-box {
+  width: min(680px, 94vw);
+  max-height: 86vh;
+  overflow: auto;
+  padding: 20px 22px;
+  background: var(--card);
+  color: var(--text);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.scenario-inject-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+.scenario-inject-help {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.scenario-inject-textarea {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+}
+.scenario-inject-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
 .scenario-diag-titlebar {
   display: flex;
   align-items: center;
