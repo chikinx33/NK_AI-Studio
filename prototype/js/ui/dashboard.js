@@ -235,10 +235,12 @@
     if (/\bpage-shell-videogen\b/.test(cls)) return 'videogen';
     if (/\bpage-shell-video\b/.test(cls)) return 'video';
     if (/\bpage-shell-image\b/.test(cls)) return 'image';
+    if (/\bpage-shell-ai-sound\b/.test(cls)) return 'sound';
     try {
       const url = String(window.location && window.location.href || '').toLowerCase();
       if (/brand-dashboard\.html|brand-studio\.html|brand\.html|knowledge\.html|analytics\.html/.test(url)) return 'brand';
       if (/video-gen-dashboard\.html|ai-video-gen\.html|ai-video-gen-stage\.html/.test(url)) return 'videogen';
+      if (/ai-sound\.html/.test(url)) return 'sound';
       if (/video-dashboard\.html|ai-video\.html/.test(url)) return 'video';
       if (/image-dashboard\.html|ai-image\.html|ai-image-stage\.html/.test(url)) return 'image';
     } catch (_) { }
@@ -246,13 +248,14 @@
       const ref = String(document.referrer || '').toLowerCase();
       if (/brand-dashboard\.html|brand-studio\.html|brand\.html|knowledge\.html|analytics\.html/.test(ref)) return 'brand';
       if (/video-gen-dashboard\.html|ai-video-gen\.html|ai-video-gen-stage\.html/.test(ref)) return 'videogen';
+      if (/ai-sound\.html/.test(ref)) return 'sound';
       if (/video-dashboard\.html|ai-video\.html/.test(ref)) return 'video';
       if (/image-dashboard\.html|ai-image\.html|ai-image-stage\.html/.test(ref)) return 'image';
     } catch (_) { }
     try {
       const qp = new URLSearchParams(String(window.location.search || ''));
       const h = String(qp.get('host') || '').toLowerCase();
-      if (h === 'brand' || h === 'video' || h === 'image' || h === 'videogen') return h;
+      if (h === 'brand' || h === 'video' || h === 'image' || h === 'videogen' || h === 'sound') return h;
     } catch (_) { }
     return 'video';
   };
@@ -902,6 +905,11 @@
         if (host === 'videogen') {
           try { sessionStorage.setItem('nk_ai_video_gen_selection_explicit', '1'); } catch (_) {}
           if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('ai-video-gen-stage.html');
+          return;
+        }
+        if (host === 'sound') {
+          // 자체 완결형 페이지: iframe 스테이지 대신 사운드 스튜디오 뷰로 직접 전환
+          if (NK.uiSound && NK.uiSound.enterProject) NK.uiSound.enterProject(draft);
           return;
         }
         return;

@@ -288,133 +288,42 @@
     syncSidebarNav();
   }
 
-  // ── Dashboard view (프로젝트/에피소드 선택 허브 — 다른 앱 대시보드와 동일 규격) ──
-  function fmtDuration(sec) {
-    var n = Number(sec) || 0;
-    if (n >= 3600 && n % 3600 === 0) return (n / 3600) + 'h';
-    if (n >= 60 && n % 60 === 0) return (n / 60) + 'm';
-    return n + 's';
-  }
-  function dashLabels() {
-    return state.lang === 'en'
-      ? { genre: 'Genre', target: 'Target', purpose: 'Purpose', duration: 'Duration', aspect: 'Aspect ratio' }
-      : { genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율' };
-  }
-  // 시리즈(카테고리) 그룹 + 개수
-  function buildSeriesList() {
-    var map = [];
-    var index = {};
-    (state.drafts || []).forEach(function (d) {
-      var sid = d.seriesId != null ? String(d.seriesId) : '';
-      var stitle = d.seriesTitle || d.brandTitle || '기타';
-      var key = sid || stitle;
-      if (index[key] == null) { index[key] = map.length; map.push({ id: key, title: stitle, count: 0 }); }
-      map[index[key]].count++;
-    });
-    return map;
-  }
-  function filteredDashDrafts() {
-    var f = state.dashFilter || '__all__';
-    if (f === '__all__') return state.drafts || [];
-    return (state.drafts || []).filter(function (d) {
-      var sid = d.seriesId != null ? String(d.seriesId) : '';
-      var key = sid || (d.seriesTitle || d.brandTitle || '기타');
-      return key === f;
-    });
-  }
-
+  // ── Dashboard view ──
+  // 다른 앱과 100% 동일한 방식: 공용 dashboard.js(NK.ui.dashboard)가 서버에서 프로젝트를
+  // 불러오고(로딩 스피너+블러), 카드(브랜드 로고 썸네일 SSOT 포함)를 #dashboard-drafts에 렌더한다.
+  // 호스트 판별은 page-shell-ai-sound → 'sound'. 카드 클릭은 dashboard.js의 'sound' 분기가
+  // NK.uiSound.enterProject(draft)를 호출한다.
   function renderDashboard() {
+    // 다른 대시보드 페이지와 동일한 스캐폴드 DOM (.projects > #dashboard-drafts.draft-card-grid + 로딩 오버레이)
     var scroll = el('div', 'snd-dash-scroll');
     var projects = el('div', 'projects');
-    var grid = el('div', 'draft-card-grid');
-
-    // 필터 바 (DASHBOARD / 카테고리 / 시리즈 칩) — 그리드 첫 행(grid-column:1/-1)
-    grid.appendChild(renderFilterBar());
-
-    var list = filteredDashDrafts();
-    if (!list.length) {
-      var empty = el('div', 'snd-empty');
-      empty.style.gridColumn = '1 / -1';
-      empty.textContent = t('dash_empty');
-      grid.appendChild(empty);
-    } else {
-      list.forEach(function (d) { grid.appendChild(renderProjectCard(d)); });
-    }
-    projects.appendChild(grid);
+    projects.appendChild(el('div', 'draft-card-grid', { id: 'dashboard-drafts' }));
+    var loading = el('div', 'loading-overlay hidden', { id: 'dashboard-loading' });
+    loading.appendChild(el('div', 'spinner'));
+    loading.appendChild(el('p', '', { textContent: state.lang === 'en' ? 'Loading projects...' : '프로젝트 불러오는 중...' }));
+    projects.appendChild(loading);
     scroll.appendChild(projects);
     root.appendChild(scroll);
-  }
 
-  function renderFilterBar() {
-    var bar = el('div', 'series-filter-bar');
-    var main = el('div', 'series-filter-main');
-    var head = el('div', 'series-filter-header');
-    var titleBlock = el('div', 'series-filter-title-block');
-    titleBlock.appendChild(el('p', 'series-filter-eyebrow', { textContent: 'Dashboard' }));
-    titleBlock.appendChild(el('strong', 'series-filter-title', { textContent: state.lang === 'en' ? 'Category' : '카테고리' }));
-    head.appendChild(titleBlock);
-    main.appendChild(head);
-
-    var chipRow = el('div', 'series-filter-chip-row');
-    var cur = state.dashFilter || '__all__';
-    var allChip = el('button', 'chip series-chip' + (cur === '__all__' ? ' active' : ''), { type: 'button', textContent: state.lang === 'en' ? 'All' : '전체' });
-    allChip.addEventListener('click', function () { state.dashFilter = '__all__'; render(); });
-    chipRow.appendChild(allChip);
-    buildSeriesList().forEach(function (s) {
-      var chip = el('button', 'chip series-chip' + (cur === s.id ? ' active' : ''), { type: 'button', textContent: s.title + ' (' + s.count + ')' });
-      chip.addEventListener('click', function () { state.dashFilter = s.id; render(); });
-      chipRow.appendChild(chip);
-    });
-    main.appendChild(chipRow);
-    bar.appendChild(main);
-    return bar;
-  }
-
-  function renderProjectCard(d) {
-    var labels = dashLabels();
-    var p = d.payload || {};
-    var ar = p.aspectRatio || '16:9';
-    var dur = fmtDuration(p.duration || 0);
-    var cat = p.purposeCategory || '';
-    var tags = Array.isArray(p.purposeTags) ? p.purposeTags.join(', ') : '';
-    var genre = (cat + ' ' + tags).trim();
-    var tgt = p.target || '';
-    var needs = Array.isArray(p.needs) ? p.needs.filter(Boolean).join(', ') : (p.needs || '');
-
-    var card = el('article', 'draft-card');
-    card.setAttribute('data-draft-id', String(d.id || ''));
-    var top = el('div', 'draft-top');
-    var thumbCol = el('div', 'draft-thumb-col');
-    var thumbObj = String(p.thumbnailObjectName || '').trim();
-    var thumbUrl = (thumbObj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(thumbObj) : '';
-    if (thumbUrl) {
-      var tb = el('div', 'draft-thumb has-image');
-      tb.appendChild(el('img', '', { src: thumbUrl, alt: '' }));
-      thumbCol.appendChild(tb);
+    // 공용 대시보드 렌더(서버 동기화 + 스피너 + 카드). dashboard.js 미로드 시 안내만 표시.
+    if (NK.ui && NK.ui.dashboard && NK.ui.dashboard.renderDrafts) {
+      try { NK.ui.dashboard.renderDrafts(); } catch (_) {}
     } else {
-      thumbCol.appendChild(el('div', 'draft-thumb empty', { innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>' }));
+      var empty = el('div', 'snd-empty');
+      empty.style.gridColumn = '1 / -1';
+      empty.textContent = state.lang === 'en' ? 'Dashboard module unavailable.' : '대시보드 모듈을 불러오지 못했어요.';
+      projects.querySelector('#dashboard-drafts').appendChild(empty);
     }
-    top.appendChild(thumbCol);
-
-    var info = el('div', 'draft-info');
-    var titleRow = el('div', 'draft-title-row');
-    titleRow.appendChild(el('h4', 'draft-title', { textContent: d.title || '제목없음', title: d.title || '제목없음' }));
-    info.appendChild(titleRow);
-    var meta = el('div', 'draft-meta');
-    meta.appendChild(el('div', 'draft-meta-project', { textContent: d.seriesTitle || d.brandTitle || '-' }));
-    meta.appendChild(el('div', 'draft-meta-genre', { textContent: labels.genre + ' : ' + (genre || '-') }));
-    meta.appendChild(el('div', '', { textContent: labels.target + ' : ' + (tgt || '-') }));
-    meta.appendChild(el('div', '', { textContent: labels.purpose + ' : ' + (needs || '-') }));
-    meta.appendChild(el('div', '', { textContent: labels.duration + ' : ' + dur + ' · ' + labels.aspect + ' : ' + ar }));
-    info.appendChild(meta);
-    top.appendChild(info);
-    card.appendChild(top);
-    card.addEventListener('click', function () { openStudioProject(d); });
-    return card;
   }
+
+  // dashboard.js 'sound' 카드 클릭 진입점 (전역 노출)
+  snd.enterProject = function (d) {
+    if (!d) return;
+    openStudioProject(d);
+  };
 
   // ── View switching ──
-  function openDashboard() { state.view = 'dashboard'; loadDrafts(); render(); }
+  function openDashboard() { state.view = 'dashboard'; render(); }
   function openStudioInstance(tab) {
     // 단독(인스턴스) 모드 — 전역 프로젝트 컨텍스트는 건드리지 않고 로컬만 분리
     state.projectId = '';
@@ -427,23 +336,16 @@
     loadAssets();
   }
   function openStudioProject(d) {
+    // selectProject(setCurrent)는 dashboard.js 카드 클릭에서 이미 수행됨. 여기선 컨텍스트를 읽어 스튜디오로 전환.
     try { if (NK.service && NK.service.project && NK.service.project.setCurrent) NK.service.project.setCurrent(d); } catch (_) {}
     state.projectId = String(d.id || '');
-    state.currentProject = d;
-    state.currentBrand = readCurrentBrand() || { id: d.brandId || '', brandTitle: d.brandTitle || '' };
+    state.currentProject = (NK.service && NK.service.project && NK.service.project.normalizeDraft) ? NK.service.project.normalizeDraft(d) : d;
+    state.currentBrand = readCurrentBrand() || { id: d.brandId || '', brandTitle: d.brandTitle || d.seriesTitle || '' };
     state.view = 'studio';
     state.tab = 'voice';
     render();
     loadVoices();
     loadAssets();
-  }
-
-  function loadDrafts() {
-    try {
-      var raw = (NK.store && NK.store.getDrafts) ? (NK.store.getDrafts() || []) : [];
-      var norm = (NK.service && NK.service.project && NK.service.project.normalizeDraft) ? NK.service.project.normalizeDraft : function (x) { return x; };
-      state.drafts = raw.map(norm).filter(Boolean);
-    } catch (_) { state.drafts = []; }
   }
 
   // 사이드바 nav(대시보드/VOICE/SFX) ↔ 현재 뷰 동기화
@@ -1095,7 +997,6 @@
     detectLang();
     loadSegments();
     if (!state.segments.length) state.segments = [{ id: genId(), voiceId: '', providerVoiceId: '', voiceName: '', voiceInitial: '?', text: '' }];
-    loadDrafts();
 
     // 초기 뷰 결정(다른 앱과 동일 — 파라미터 없이 진입하면 무조건 대시보드가 첫 화면):
     //  ?projectId → 프로젝트 스튜디오 / ?detached·?tab → 단독 스튜디오 / 그 외 → 대시보드
@@ -1114,17 +1015,6 @@
     render();
     loadVoices();
     loadAssets();
-
-    // store는 사용자 스코프 IndexedDB 하이드레이션이 비동기라, 첫 mount 시 캐시가 비어 있을 수 있다.
-    // ready() 후 드래프트를 다시 읽어 대시보드를 갱신한다(첫 진입에 카드가 안 보이던 문제 해결).
-    try {
-      if (NK.store && NK.store.ready) {
-        NK.store.ready().then(function () {
-          loadDrafts();
-          if (state.view === 'dashboard') render();
-        }).catch(function () {});
-      }
-    } catch (_) {}
 
     // 사이드바 nav(대시보드/VOICE/SFX) → 뷰 전환
     try {
