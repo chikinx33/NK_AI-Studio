@@ -368,6 +368,206 @@
     };
   }
 
+  // ── 배경·소품(환경) 자산 레퍼런스 ──────────────────────────────
+  // 브랜드 허브의 배경·소품 자산을, 씬의 장소/소품 텍스트와 이름이 일치할 때만
+  // 레퍼런스 이미지로 첨부해 장소·소품 일관성을 유지한다. 캐릭터 자산과 독립적으로 동작.
+  function normalizeEnvironmentItems(value) {
+    return (Array.isArray(value) ? value : []).map(function (sheet, idx) {
+      var row = sheet && typeof sheet === 'object' ? sheet : {};
+      var imageDataUrl = normalizeText(row.imageDataUrl || row.imageUrl || row.url || row.src);
+      if (!imageDataUrl) return null;
+      return {
+        sheetId: normalizeText(row.sheetId || row.id) || ('sheet_' + String(idx + 1).padStart(3, '0')),
+        imageDataUrl: imageDataUrl,
+        isPrimary: row.isPrimary === true
+      };
+    }).filter(Boolean);
+  }
+
+  function normalizeEnvironmentAssets(value) {
+    var src = Array.isArray(value) ? value : [];
+    var map = new Map();
+    src.forEach(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : { displayName: item };
+      var displayName = normalizeText(raw.displayName || raw.name || raw.token || raw.trigger).replace(/^@+/, '').replace(/\s+/g, ' ').trim();
+      if (!displayName) return;
+      var token = '@' + displayName.replace(/\s+/g, '');
+      var key = token.toLowerCase();
+      if (map.has(key)) return;
+      map.set(key, {
+        assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
+        displayName: displayName,
+        token: token,
+        kind: String(raw.kind || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background',
+        items: normalizeEnvironmentItems(raw.items)
+      });
+    });
+    return Array.from(map.values());
+  }
+
+  function mergeEnvironmentAssetSources(sources) {
+    var merged = [];
+    (Array.isArray(sources) ? sources : []).forEach(function (source) {
+      if (Array.isArray(source) && source.length) merged = merged.concat(source);
+    });
+    return normalizeEnvironmentAssets(merged);
+  }
+
+  function collectEnvironmentAssets(payload, options) {
+    var opts = options || {};
+    var safePayload = payload && typeof payload === 'object' ? payload : {};
+    var projectRecord = opts.projectRecord && typeof opts.projectRecord === 'object' ? opts.projectRecord : null;
+    var hydratedBrand = opts.hydratedBrand && typeof opts.hydratedBrand === 'object' ? opts.hydratedBrand : null;
+    var brandId = normalizeText(safePayload.brandId || safePayload.brandRef && safePayload.brandRef.id || '');
+    var brandRecord = hydratedBrand || (brandId && NK.service && NK.service.brand && NK.service.brand.getById
+      ? NK.service.brand.getById(brandId)
+      : null);
+    var projectKnowledge = (projectRecord && NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
+      ? NK.service.project.getKnowledgeHub(projectRecord)
+      : ((NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
+        ? NK.service.project.getKnowledgeHub(safePayload)
+        : null);
+    var brandKnowledge = (brandRecord && NK.service && NK.service.project && NK.service.project.getKnowledgeHub)
+      ? NK.service.project.getKnowledgeHub(brandRecord)
+      : null;
+    return mergeEnvironmentAssetSources([
+      brandKnowledge && brandKnowledge.environmentAssets,
+      brandRecord && brandRecord.environmentAssets,
+      brandRecord && brandRecord.knowledgeEnvironmentAssets,
+      projectKnowledge && projectKnowledge.environmentAssets,
+      safePayload.environmentAssets,
+      safePayload.knowledgeEnvironmentAssets
+    ]);
+  }
+
+  function buildEnvironmentResolutionText(scene, promptText) {
+    var row = scene && typeof scene === 'object' ? scene : {};
+    var parts = [];
+    function push(value) {
+      var text = normalizeText(value);
+      if (text) parts.push(text);
+    }
+    push(promptText);
+    push(row.sceneLocation);
+    push(row.location);
+    push(row.title);
+    push(row.shot || row.visual);
+    push(row.action);
+    push(row.composition);
+    push(row.narrationText);
+    push(row.narration);
+    push(row.lines);
+    push(row.subtitleText);
+    push(row.dialogueText);
+    normalizeDialogueEntries(row.dialogue || row.dialogues).forEach(function (item) {
+      push((item.speaker ? (item.speaker + ': ') : '') + (item.line || ''));
+    });
+    push(row.script);
+    return parts.join('\n');
+  }
+
+  function matchEnvironmentAssets(assets, text, limit) {
+    var hay = String(text || '').toLowerCase();
+    var max = Math.max(0, Number(limit) || 0);
+    if (!hay || !max) return [];
+    var out = [];
+    (Array.isArray(assets) ? assets : []).forEach(function (asset) {
+      if (out.length >= max) return;
+      if (!asset || !Array.isArray(asset.items) || !asset.items.length) return;
+      var name = normalizeText(asset.displayName).toLowerCase();
+      var compact = name.replace(/\s+/g, '');
+      var token = normalizeToken(asset.token || ('@' + asset.displayName)).toLowerCase();
+      var matched = (name && name.length >= 2 && hay.indexOf(name) >= 0)
+        || (compact && compact.length >= 2 && hay.indexOf(compact) >= 0)
+        || (token && token.length >= 3 && hay.indexOf(token) >= 0);
+      if (matched) out.push(asset);
+    });
+    return out;
+  }
+
+  // 씬 텍스트와 일치하는 배경·소품 자산을 레퍼런스 이미지로 만든다.
+  // startReferenceId 이후의 referenceId 를 사용하고, maxCount 만큼만 채운다.
+  function buildEnvironmentReferenceBundle(payload, scene, promptText, options, startReferenceId, maxCount) {
+    var max = Math.max(0, Number(maxCount) || 0);
+    if (!max) return { referenceImages: [], promptLines: [] };
+    var assets = collectEnvironmentAssets(payload, options);
+    if (!assets.length) return { referenceImages: [], promptLines: [] };
+    var text = buildEnvironmentResolutionText(scene, promptText);
+    var matched = matchEnvironmentAssets(assets, text, max);
+    if (!matched.length) {
+      try {
+        console.log('Environment asset lookup (image):', {
+          known: assets.map(function (a) { return a.displayName; }),
+          matched: []
+        });
+      } catch (_) {}
+      return { referenceImages: [], promptLines: [] };
+    }
+    var referenceImages = [];
+    var promptLines = [];
+    var refId = Math.max(1, Number(startReferenceId) || 1);
+    matched.forEach(function (asset) {
+      if (referenceImages.length >= max) return;
+      var picked = pickReferenceSheets(asset.items, 1);
+      if (!picked.length) return;
+      var displayName = asset.displayName || String(asset.token || '').replace(/^@/, '');
+      var kindLabel = asset.kind === 'prop' ? 'prop' : 'background location';
+      var subjectDescription = 'the "' + displayName + '" ' + kindLabel;
+      referenceImages.push({
+        referenceId: refId,
+        referenceType: 'REFERENCE_TYPE_STYLE',
+        referenceKind: 'environment',
+        imageDataUrl: picked[0].imageDataUrl,
+        subjectDescription: subjectDescription,
+        subjectType: 'SUBJECT_TYPE_DEFAULT'
+      });
+      promptLines.push(
+        'Use the provided registered reference image for ' + subjectDescription + ' and keep the same layout, architecture, props, materials, colors, and lighting. Do not redesign this ' + (asset.kind === 'prop' ? 'prop' : 'location') + '.'
+      );
+      refId += 1;
+    });
+    try {
+      console.log('Environment asset lookup (image):', {
+        known: assets.map(function (a) { return a.displayName; }),
+        matched: matched.map(function (a) { return a.displayName; }),
+        attached: referenceImages.length
+      });
+    } catch (_) {}
+    return { referenceImages: referenceImages, promptLines: promptLines };
+  }
+
+  // referencePayload 에 환경 레퍼런스를 합친다(총 MAX_REFERENCE_IMAGES 이내).
+  // 반환: { referencePayload, finalPrompt }
+  function mergeEnvironmentReferences(args) {
+    var referencePayload = args.referencePayload || null;
+    var finalPrompt = String(args.finalPrompt || '');
+    var usedRefs = referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.length : 0;
+    var reserve = Math.max(0, Number(args.reserveSlots) || 0);
+    var remaining = Math.max(0, MAX_REFERENCE_IMAGES - usedRefs - reserve);
+    if (!remaining) return { referencePayload: referencePayload, finalPrompt: finalPrompt };
+    var maxRefId = 0;
+    ((referencePayload && referencePayload.referenceImages) || []).forEach(function (r) {
+      maxRefId = Math.max(maxRefId, Number(r && r.referenceId) || 0);
+    });
+    var bundle = buildEnvironmentReferenceBundle(
+      args.payload,
+      args.scene,
+      finalPrompt,
+      { projectRecord: args.projectRecord, hydratedBrand: args.hydratedBrand },
+      maxRefId + 1,
+      Math.min(remaining, 2)
+    );
+    if (!bundle.referenceImages.length) return { referencePayload: referencePayload, finalPrompt: finalPrompt };
+    var baseImgs = (referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages.slice() : [])
+      .concat(bundle.referenceImages)
+      .slice(0, MAX_REFERENCE_IMAGES);
+    var nextPayload = referencePayload
+      ? Object.assign({}, referencePayload, { referenceImages: baseImgs })
+      : { referenceImages: baseImgs, promptPrefix: 'Create an image that matches the scene description below.', promptSuffix: '', referenceMeta: [] };
+    if (bundle.promptLines.length) finalPrompt = finalPrompt + '\n' + bundle.promptLines.join('\n');
+    return { referencePayload: nextPayload, finalPrompt: finalPrompt };
+  }
+
   // sceneLocation 에서 Common 헤더(common) 와 중복되는 시작 부분을 잘라낸다.
   // 예: common="...배경: 중세 판타지 전장. ...", sceneLocation="중세 판타지 전장 — 광활한 평원"
   //     → "광활한 평원" 만 남김 (중세 판타지 전장 은 Common 에 이미 있음)
@@ -732,6 +932,32 @@
         scene = st.scenes[opts.idx];
       }
     } catch (_) { }
+    // ── 배경·소품(환경) 레퍼런스: 캐릭터 활성화 여부와 무관하게 항상 시도 ──
+    try {
+      var envLiveDraft = (NK.service && NK.service.project && NK.service.project.getDraftById)
+        ? NK.service.project.getDraftById(projectId)
+        : null;
+      var envPayload = envLiveDraft && envLiveDraft.payload && typeof envLiveDraft.payload === 'object'
+        ? envLiveDraft.payload
+        : (st.payload || {});
+      var envBrandId = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(envPayload) : (envPayload.brandId || '');
+      var envHydratedBrand = null;
+      if (envBrandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+        try { envHydratedBrand = await NK.service.brand.hydrateFromServer(envBrandId, { ttlMs: 0 }); } catch (_) {}
+      }
+      var reserveForCutRef = (scene.cutRefEnabled && scene.cutRefId) ? 1 : 0;
+      var envMerged = mergeEnvironmentReferences({
+        referencePayload: referencePayload,
+        finalPrompt: finalPrompt,
+        payload: envPayload,
+        scene: scene,
+        projectRecord: envLiveDraft,
+        hydratedBrand: envHydratedBrand,
+        reserveSlots: reserveForCutRef
+      });
+      referencePayload = envMerged.referencePayload;
+      finalPrompt = envMerged.finalPrompt;
+    } catch (_) { }
     if (scene.cutRefEnabled && scene.cutRefId) {
       var stCutRef = ctx.getState();
       var refCutIdx = stCutRef.scenes.findIndex(function (s) { return String(s && s.id) === String(scene.cutRefId); });
@@ -902,6 +1128,32 @@
       }
     } catch (_) { }
 
+    // ── 배경·소품(환경) 레퍼런스: 캐릭터 활성화 여부와 무관하게 항상 시도 ──
+    try {
+      var envLiveDraftShot = (NK.service && NK.service.project && NK.service.project.getDraftById)
+        ? NK.service.project.getDraftById(projectId)
+        : null;
+      var envPayloadShot = envLiveDraftShot && envLiveDraftShot.payload && typeof envLiveDraftShot.payload === 'object'
+        ? envLiveDraftShot.payload
+        : (st.payload || {});
+      var envBrandIdShot = (NK.service.project && NK.service.project.getBrandId) ? NK.service.project.getBrandId(envPayloadShot) : (envPayloadShot.brandId || '');
+      var envHydratedBrandShot = null;
+      if (envBrandIdShot && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+        try { envHydratedBrandShot = await NK.service.brand.hydrateFromServer(envBrandIdShot, { ttlMs: 0 }); } catch (_) {}
+      }
+      var envMergedShot = mergeEnvironmentReferences({
+        referencePayload: referencePayload,
+        finalPrompt: finalPrompt,
+        payload: envPayloadShot,
+        scene: Object.assign({}, scene, { shot: shot && (shot.composition || shot.action) ? [shot.composition, shot.action].filter(Boolean).join(' ') : scene.shot }),
+        projectRecord: envLiveDraftShot,
+        hydratedBrand: envHydratedBrandShot,
+        reserveSlots: 0
+      });
+      referencePayload = envMergedShot.referencePayload;
+      finalPrompt = envMergedShot.finalPrompt;
+    } catch (_) { }
+
     if (imageCharacterNegativePrompt) {
       finalPrompt = finalPrompt + '\nDo not include: ' + imageCharacterNegativePrompt;
     }
@@ -1057,6 +1309,9 @@
   // 영상 생성(Kling)에서 동일 레퍼런스 해결 체인을 재사용하기 위해 노출
   image._helpers = {
     buildReferenceBundle: buildReferenceBundle,
+    buildEnvironmentReferenceBundle: buildEnvironmentReferenceBundle,
+    mergeEnvironmentReferences: mergeEnvironmentReferences,
+    collectEnvironmentAssets: collectEnvironmentAssets,
     buildIpLibraryFallback: buildIpLibraryFallback,
     extractRemoteProjectRecord: extractRemoteProjectRecord,
     extractRemoteBrandRecord: extractRemoteBrandRecord,

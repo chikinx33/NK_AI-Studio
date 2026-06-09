@@ -53,6 +53,8 @@
         'knowledgeWorld',
         'knowledgeCharacters',
         'knowledgeCharacterSheets',
+        'environmentAssets',
+        'knowledgeEnvironmentAssets',
         'knowledgeHub'
     ];
     var BRAND_SYNC_FIELDS = [
@@ -245,6 +247,27 @@
         });
     }
 
+    function normalizeEnvironmentAssets(value) {
+        var src = Array.isArray(value) ? value : [];
+        var map = new Map();
+        src.forEach(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : { displayName: item };
+            var displayName = normalizeText(raw.displayName || raw.name || raw.token || raw.trigger).replace(/^@+/, '').replace(/\s+/g, ' ').trim();
+            if (!displayName) return;
+            var token = '@' + displayName.replace(/\s+/g, '');
+            var key = token.toLowerCase();
+            if (map.has(key)) return;
+            map.set(key, {
+                assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
+                displayName: displayName,
+                token: token,
+                kind: String(raw.kind || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background',
+                items: normalizeCharacterSheetItems(raw.items)
+            });
+        });
+        return Array.from(map.values());
+    }
+
     function normalizeNumber(value) {
         var n = Number(value);
         if (!isFinite(n) || n < 0) return 0;
@@ -396,6 +419,13 @@
             topLevelSheets.concat(nestedSheets.length ? nestedSheets : []),
             knowledgeCharacters
         );
+        var topLevelEnvironment = []
+            .concat(Array.isArray(source && source.knowledgeEnvironmentAssets) ? source.knowledgeEnvironmentAssets : [])
+            .concat(Array.isArray(source && source.environmentAssets) ? source.environmentAssets : []);
+        var nestedEnvironment = Array.isArray(nested.environmentAssets) ? nested.environmentAssets : [];
+        var environmentAssets = normalizeEnvironmentAssets(
+            (nestedEnvironment.length ? nestedEnvironment : []).concat(topLevelEnvironment)
+        );
         if (!referenceContents.length && referenceEntries.length) {
             referenceContents = referenceEntries.map(function (item) {
                 return [item.type, item.title, item.note].filter(Boolean).join(' ');
@@ -410,6 +440,7 @@
             bannedExpressions: normalizeTextList(raw.bannedExpressions || legacyBanned),
             characters: knowledgeCharacters,
             characterSheets: characterSheets,
+            environmentAssets: environmentAssets,
             referenceContents: referenceContents,
             referenceItems: referenceEntries,
             successCases: normalizeTextList(raw.successCases)
@@ -516,6 +547,7 @@
             brandRules: normalizeTextList(src.brandRules),
             knowledgeCharacters: normalizeCharacterEntries(src.knowledgeCharacters, src.brandCharacter),
             knowledgeCharacterSheets: normalizeCharacterSheets(src.knowledgeCharacterSheets || src.characterSheets, src.knowledgeCharacters || src.brandCharacter),
+            knowledgeEnvironmentAssets: normalizeEnvironmentAssets(src.knowledgeEnvironmentAssets || src.environmentAssets),
             connectedChannels: (Array.isArray(src.connectedChannels) ? src.connectedChannels : []).map(function (item) {
                 return normalizeText(item && item.channelType || item);
             }).filter(Boolean),
@@ -558,6 +590,8 @@
         nextPayload.knowledgeCharacters = cloneJson(knowledge.characters, []);
         nextPayload.knowledgeCharacterSheets = cloneJson(knowledge.characterSheets, []);
         nextPayload.characterSheets = cloneJson(knowledge.characterSheets, []);
+        nextPayload.environmentAssets = cloneJson(knowledge.environmentAssets, []);
+        nextPayload.knowledgeEnvironmentAssets = cloneJson(knowledge.environmentAssets, []);
         nextPayload.brandSummary = normalizeText(merged.brandSummary || inheritedBrand.brandSummary);
         nextPayload.coreMessage = normalizeText(merged.coreMessage || inheritedBrand.coreMessage);
         nextPayload.brandVoice = knowledge.brandVoice;
@@ -1136,6 +1170,8 @@
         'knowledgeWorld',
         'knowledgeCharacters',
         'knowledgeCharacterSheets',
+        'environmentAssets',
+        'knowledgeEnvironmentAssets',
         'knowledgeHub',
         // Card visual (thumbnail) — referenced by object name, safe to share
         'thumbnailObjectName'

@@ -108,16 +108,24 @@ async function normalizeBrandPayload(
   const normalized = JSON.parse(JSON.stringify(brand || {}));
   normalized.brandId = brandId;
   const previousSheets = (ctx.existingBrand && (ctx.existingBrand.characterSheets || ctx.existingBrand.knowledgeCharacterSheets)) || [];
+  const previousEnv = (ctx.existingBrand && (ctx.existingBrand.environmentAssets || ctx.existingBrand.knowledgeEnvironmentAssets)) || [];
   normalized.characterSheets = await normalizeCharacterSheets(normalized.characterSheets, ctx);
   normalized.knowledgeCharacterSheets = JSON.parse(JSON.stringify(normalized.characterSheets || []));
+  normalized.environmentAssets = await normalizeEnvironmentAssets(normalized.environmentAssets || normalized.knowledgeEnvironmentAssets, ctx);
+  normalized.knowledgeEnvironmentAssets = JSON.parse(JSON.stringify(normalized.environmentAssets || []));
   normalized.updatedAt = new Date().toISOString();
   if (!normalized.createdAt) normalized.createdAt = normalized.updatedAt;
+  const staleCharacterObjects = diffManagedSheetObjectNames(
+    collectManagedSheetObjectNames(previousSheets, ctx.bucket, ctx.brandPrefix, "ip"),
+    collectManagedSheetObjectNames(normalized.characterSheets, ctx.bucket, ctx.brandPrefix, "ip")
+  );
+  const staleEnvObjects = diffManagedSheetObjectNames(
+    collectManagedSheetObjectNames(previousEnv, ctx.bucket, ctx.brandPrefix, "env"),
+    collectManagedSheetObjectNames(normalized.environmentAssets, ctx.bucket, ctx.brandPrefix, "env")
+  );
   return {
     brand: normalized,
-    staleSheetObjects: diffManagedSheetObjectNames(
-      collectManagedSheetObjectNames(previousSheets, ctx.bucket, ctx.brandPrefix),
-      collectManagedSheetObjectNames(normalized.characterSheets, ctx.bucket, ctx.brandPrefix)
-    ),
+    staleSheetObjects: staleCharacterObjects.concat(staleEnvObjects),
   };
 }
 
@@ -139,7 +147,27 @@ async function normalizeCharacterSheets(value: any, ctx: { bucket: string; brand
   return out;
 }
 
-async function normalizeSheetItems(token: string, value: any, ctx: { bucket: string; brandPrefix: string; accessToken: string; userProject?: string; existingBrand?: Record<string, any> | null; }): Promise<SheetItem[]> {
+async function normalizeEnvironmentAssets(value: any, ctx: { bucket: string; brandPrefix: string; accessToken: string; userProject?: string; existingBrand?: Record<string, any> | null; }) {
+  const src = Array.isArray(value) ? value : [];
+  const out = [];
+  for (let i = 0; i < src.length; i++) {
+    const raw = src[i] && typeof src[i] === "object" ? src[i] : {};
+    const displayName = normalizeText(raw.displayName || raw.name || raw.token || raw.trigger).replace(/^@+/, "").replace(/\s+/g, " ").trim();
+    if (!displayName) continue;
+    const token = "@" + displayName.replace(/\s+/g, "");
+    const items = await normalizeSheetItems(token, raw.items, ctx, "env");
+    out.push({
+      assetId: normalizeText(raw.assetId || raw.id) || `env_${String(i + 1).padStart(3, "0")}`,
+      displayName,
+      token,
+      kind: String(raw.kind || "").trim().toLowerCase() === "prop" ? "prop" : "background",
+      items,
+    });
+  }
+  return out;
+}
+
+async function normalizeSheetItems(token: string, value: any, ctx: { bucket: string; brandPrefix: string; accessToken: string; userProject?: string; existingBrand?: Record<string, any> | null; }, kind: string = "ip"): Promise<SheetItem[]> {
   const src = Array.isArray(value) ? value : [];
   const out: SheetItem[] = [];
   let primarySeen = false;
@@ -157,6 +185,7 @@ async function normalizeSheetItems(token: string, value: any, ctx: { bucket: str
         sheetId,
         imageDataUrl,
         accessToken: ctx.accessToken,
+        kind,
       });
     } else if (imageDataUrl.startsWith("gs://")) {
       storedPath = await repairLegacySheetPath({
@@ -167,6 +196,7 @@ async function normalizeSheetItems(token: string, value: any, ctx: { bucket: str
         imageDataUrl,
         accessToken: ctx.accessToken,
         userProject: ctx.userProject,
+        kind,
       }).catch(() => imageDataUrl);
     }
     const isPrimary = raw.isPrimary === true || (!primarySeen && i === 0);
@@ -190,6 +220,7 @@ async function uploadDataUrlToGcs(args: {
   sheetId: string;
   imageDataUrl: string;
   accessToken: string;
+  kind?: string;
 }) {
   const parsed = parseDataUrl(args.imageDataUrl);
   if (!parsed) throw new Error("invalid_sheet_data_url");
@@ -199,6 +230,7 @@ async function uploadDataUrlToGcs(args: {
     token: args.token,
     sheetId: args.sheetId,
     ext,
+    kind: args.kind,
   });
   const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(args.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
   const res = await fetch(uploadUrl, {
@@ -216,10 +248,12 @@ function buildSheetObjectName(args: {
   token: string;
   sheetId: string;
   ext: string;
+  kind?: string;
 }) {
   const safeToken = sanitizeSegment(args.token.replace(/^@+/, "")) || "character";
   const safeSheetId = sanitizeSegment(args.sheetId || "sheet") || "sheet";
-  return `${args.brandPrefix}/ip/${safeToken}/${safeSheetId}.${args.ext}`;
+  const kindSegment = args.kind === "env" ? "env" : "ip";
+  return `${args.brandPrefix}/${kindSegment}/${safeToken}/${safeSheetId}.${args.ext}`;
 }
 
 async function repairLegacySheetPath(args: {
@@ -230,18 +264,21 @@ async function repairLegacySheetPath(args: {
   imageDataUrl: string;
   accessToken: string;
   userProject?: string;
+  kind?: string;
 }) {
   const parsed = parseGcsUri(args.imageDataUrl);
   if (!parsed || parsed.bucket !== args.bucket) return args.imageDataUrl;
   const ext = extensionFromObjectName(parsed.object);
+  const kindSegment = args.kind === "env" ? "env" : "ip";
   const desiredObject = buildSheetObjectName({
     brandPrefix: args.brandPrefix,
     token: args.token,
     sheetId: args.sheetId,
     ext,
+    kind: args.kind,
   });
   if (parsed.object === desiredObject) return args.imageDataUrl;
-  if (parsed.object.indexOf(`${args.brandPrefix}/ip/`) < 0) return args.imageDataUrl;
+  if (parsed.object.indexOf(`${args.brandPrefix}/${kindSegment}/`) < 0) return args.imageDataUrl;
   const billingQuery = args.userProject ? `&userProject=${encodeURIComponent(args.userProject)}` : "";
   const billingHeader = args.userProject ? { "X-Goog-User-Project": args.userProject } : {};
   const downloadUrl = `https://storage.googleapis.com/storage/v1/b/${encodeURIComponent(parsed.bucket)}/o/${encodeURIComponent(parsed.object)}?alt=media${billingQuery}`;
@@ -287,9 +324,10 @@ function sanitizeSegment(value: string) {
     || "item";
 }
 
-function collectManagedSheetObjectNames(value: any, bucket: string, brandPrefix: string) {
+function collectManagedSheetObjectNames(value: any, bucket: string, brandPrefix: string, kind: string = "ip") {
   const src = Array.isArray(value) ? value : [];
   const out = new Set<string>();
+  const kindSegment = kind === "env" ? "env" : "ip";
   for (let i = 0; i < src.length; i++) {
     const entry = src[i] && typeof src[i] === "object" ? src[i] : {};
     const items = Array.isArray(entry.items) ? entry.items : [];
@@ -297,7 +335,7 @@ function collectManagedSheetObjectNames(value: any, bucket: string, brandPrefix:
       const row = items[j] && typeof items[j] === "object" ? items[j] : {};
       const parsed = parseGcsUri(String(row.imageDataUrl || row.imageUrl || row.url || row.src || "").trim());
       if (!parsed || parsed.bucket !== bucket) continue;
-      if (parsed.object.indexOf(`${brandPrefix}/ip/`) !== 0) continue;
+      if (parsed.object.indexOf(`${brandPrefix}/${kindSegment}/`) !== 0) continue;
       out.add(parsed.object);
     }
   }

@@ -385,6 +385,108 @@
     });
   }
 
+  var MAX_ENVIRONMENT_ASSETS = 16;
+
+  function getEnvironmentUiText() {
+    return getRuntimeLang() === 'en'
+      ? {
+        background: 'Background',
+        prop: 'Prop',
+        empty: 'No registered background/prop assets.',
+        addPlaceholder: 'Enter a background/prop name and press Enter (e.g. Cafe interior)',
+        upload: 'Add image',
+        toBackground: 'Mark as background',
+        toProp: 'Mark as prop',
+        removeAsset: 'Delete asset',
+        removeImage: 'Delete image',
+        help: 'When a scene\'s location or prop name matches, AI Cinema reuses the registered image for consistency.'
+      }
+      : {
+        background: '배경',
+        prop: '소품',
+        empty: '등록된 배경·소품 자산이 없습니다.',
+        addPlaceholder: '배경·소품 이름 입력 후 Enter (예: 카페 내부, 빨간 우산)',
+        upload: '이미지 추가',
+        toBackground: '배경으로',
+        toProp: '소품으로',
+        removeAsset: '자산 삭제',
+        removeImage: '이미지 삭제',
+        help: '시나리오의 장소·소품 이름과 일치하면 AI 시네마가 해당 이미지를 참고해 일관성을 유지합니다.'
+      };
+  }
+
+  function normalizeEnvironmentKind(value) {
+    return String(value || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background';
+  }
+
+  function normalizeEnvironmentName(value) {
+    return normalizeText(value).replace(/^@+/, '').replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeEnvironmentAssets(value) {
+    var src = Array.isArray(value) ? value : [];
+    var out = [];
+    var seen = {};
+    src.forEach(function (item, index) {
+      var raw = item && typeof item === 'object' ? item : { displayName: item };
+      var displayName = normalizeEnvironmentName(raw.displayName || raw.name || raw.token || raw.trigger);
+      if (!displayName) return;
+      var token = '@' + displayName.replace(/\s+/g, '');
+      var key = token.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      out.push({
+        assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
+        displayName: displayName,
+        token: token,
+        kind: normalizeEnvironmentKind(raw.kind),
+        items: normalizeCharacterSheetItems(raw.items)
+      });
+    });
+    return out.slice(0, MAX_ENVIRONMENT_ASSETS);
+  }
+
+  function renderEnvironmentCards(list) {
+    var uiText = getEnvironmentUiText();
+    var normalized = normalizeEnvironmentAssets(list);
+    if (!normalized.length) {
+      return '<p class="scenario-character-empty">' + escapeHtml(uiText.empty) + '</p>';
+    }
+    return normalized.map(function (asset) {
+      var kindLabel = asset.kind === 'prop' ? uiText.prop : uiText.background;
+      var toggleLabel = asset.kind === 'prop' ? uiText.toBackground : uiText.toProp;
+      var items = normalizeCharacterSheetItems(asset.items);
+      var thumbs = items.map(function (sheet) {
+        return (
+          '<div class="knowledge-environment-thumb">' +
+          '<img src="' + escapeHtml(resolveSheetPreviewUrl(sheet.imageDataUrl)) + '" alt="' + escapeHtml(asset.displayName) + '" />' +
+          '<button type="button" class="knowledge-environment-thumb-remove" data-action="knowledge-environment-remove-image" data-asset-id="' + escapeHtml(asset.assetId) + '" data-sheet-id="' + escapeHtml(sheet.sheetId) + '" aria-label="' + escapeHtml(uiText.removeImage) + '">×</button>' +
+          '</div>'
+        );
+      }).join('');
+      var canUpload = items.length < MAX_CHARACTER_SHEETS_PER_CHARACTER;
+      var uploadSlot = canUpload
+        ? (
+          '<label class="knowledge-environment-thumb knowledge-environment-thumb-upload">' +
+          '<input type="file" accept="image/*" multiple data-action="knowledge-environment-upload" data-asset-id="' + escapeHtml(asset.assetId) + '" />' +
+          '<span>＋</span>' +
+          '</label>'
+        )
+        : '';
+      return (
+        '<article class="knowledge-environment-card" data-asset-id="' + escapeHtml(asset.assetId) + '">' +
+        '<div class="knowledge-environment-card-head">' +
+        '<span class="knowledge-environment-kind-badge" data-kind="' + escapeHtml(asset.kind) + '">' + escapeHtml(kindLabel) + '</span>' +
+        '<strong class="knowledge-environment-name">' + escapeHtml(asset.displayName) + '</strong>' +
+        '<button type="button" class="btn-secondary compact knowledge-environment-kind-toggle" data-action="knowledge-environment-toggle-kind" data-asset-id="' + escapeHtml(asset.assetId) + '">' + escapeHtml(toggleLabel) + '</button>' +
+        '<button type="button" class="knowledge-environment-remove" data-action="knowledge-environment-remove" data-asset-id="' + escapeHtml(asset.assetId) + '" aria-label="' + escapeHtml(uiText.removeAsset) + '">×</button>' +
+        '</div>' +
+        '<div class="knowledge-environment-thumbs">' + thumbs + uploadSlot + '</div>' +
+        '</article>'
+      );
+    }).join('');
+  }
+
   function episodeLabel(project) {
     return String(project && (project.title || project.payload && project.payload.episodeTitle || project.seriesTitle || project.id) || '').trim() || '미지정 에피소드';
   }
@@ -397,6 +499,7 @@
         brandCharacter: String(project.brandCharacter || '').trim(),
         characters: normalizeCharacters(project.knowledgeCharacters, project.brandCharacter),
         characterSheets: normalizeCharacterSheets(project.characterSheets || project.knowledgeCharacterSheets, project.knowledgeCharacters || project.brandCharacter),
+        environmentAssets: normalizeEnvironmentAssets(project.environmentAssets || project.knowledgeEnvironmentAssets),
         worldSetting: String(project.worldSetting || project.knowledgeWorld || '').trim(),
         brandRules: Array.isArray(project.brandRules) ? project.brandRules.slice() : [],
         bannedExpressions: Array.isArray(project.bannedExpressions) ? project.bannedExpressions.slice() : [],
@@ -414,6 +517,7 @@
       brandCharacter: '',
       characters: [],
       characterSheets: [],
+      environmentAssets: [],
       worldSetting: '',
       brandRules: [],
       bannedExpressions: [],
@@ -435,12 +539,15 @@
       (Array.isArray(base.characterSheets) ? base.characterSheets : []).concat(Array.isArray(extra.characterSheets) ? extra.characterSheets : []),
       characters
     );
+    var baseEnvironment = normalizeEnvironmentAssets(base.environmentAssets);
+    var environmentAssets = baseEnvironment.length ? baseEnvironment : normalizeEnvironmentAssets(extra.environmentAssets);
     return {
       brandVoice: String(base.brandVoice || extra.brandVoice || '').trim(),
       brandStory: String(base.brandStory || extra.brandStory || '').trim(),
       brandCharacter: brandCharacter,
       characters: characters,
       characterSheets: characterSheets,
+      environmentAssets: environmentAssets,
       worldSetting: String(base.worldSetting || extra.worldSetting || '').trim(),
       brandRules: (Array.isArray(base.brandRules) && base.brandRules.length ? base.brandRules : (Array.isArray(extra.brandRules) ? extra.brandRules : [])).slice(),
       bannedExpressions: (Array.isArray(base.bannedExpressions) && base.bannedExpressions.length ? base.bannedExpressions : (Array.isArray(extra.bannedExpressions) ? extra.bannedExpressions : [])).slice(),
@@ -477,10 +584,11 @@
     return (knowledge.referenceItems || []).concat([nextItem]);
   }
 
-  function readKnowledgeDraft(root, referenceItems, characters, characterExtras, characterSheets) {
+  function readKnowledgeDraft(root, referenceItems, characters, characterExtras, characterSheets, environmentAssets) {
     var items = Array.isArray(referenceItems) ? referenceItems.slice() : [];
     var normalizedCharacters = normalizeCharacters(characters);
     var normalizedSheets = normalizeCharacterSheets(characterSheets, normalizedCharacters);
+    var normalizedEnvironment = normalizeEnvironmentAssets(environmentAssets);
     var characterDescription = [serializeCharacterNotes(normalizedCharacters), String(characterExtras || '').trim()].filter(Boolean).join('\n');
     return {
       brandVoice: String((root.querySelector('#knowledge-brand-voice') || {}).value || '').trim(),
@@ -490,6 +598,8 @@
       knowledgeCharacters: normalizedCharacters,
       characterSheets: normalizedSheets,
       knowledgeCharacterSheets: normalizedSheets,
+      environmentAssets: normalizedEnvironment,
+      knowledgeEnvironmentAssets: normalizedEnvironment,
       worldSetting: String((root.querySelector('#knowledge-world-setting') || {}).value || '').trim(),
       brandRules: splitLines((root.querySelector('#knowledge-brand-rules') || {}).value || ''),
       bannedExpressions: splitLines((root.querySelector('#knowledge-banned') || {}).value || ''),
@@ -522,6 +632,7 @@
       '사용자가 바로 이해할 수 있는 문장으로 정리한다.'
     ];
     next.characterSheets = normalizeCharacterSheets(next.characterSheets, next.characters);
+    next.environmentAssets = normalizeEnvironmentAssets(next.environmentAssets);
     next.bannedExpressions = next.bannedExpressions && next.bannedExpressions.length ? next.bannedExpressions : [];
     next.successCases = next.successCases && next.successCases.length ? next.successCases : [];
     return next;
@@ -617,6 +728,8 @@
           brandCharacter: nextKnowledge.brandCharacter,
           knowledgeCharacters: nextKnowledge.characters,
           characterSheets: nextKnowledge.characterSheets,
+          environmentAssets: nextKnowledge.environmentAssets,
+          knowledgeEnvironmentAssets: nextKnowledge.environmentAssets,
           worldSetting: nextKnowledge.worldSetting,
           brandRules: nextKnowledge.brandRules,
           bannedExpressions: nextKnowledge.bannedExpressions,
@@ -636,6 +749,7 @@
         var persistedKnowledge = mergeKnowledge(nextKnowledge, null);
         persistedKnowledge.characters = normalizeCharacters(persistedKnowledge.characters, persistedKnowledge.brandCharacter);
         persistedKnowledge.characterSheets = normalizeCharacterSheets(persistedKnowledge.characterSheets, persistedKnowledge.characters);
+        persistedKnowledge.environmentAssets = normalizeEnvironmentAssets(persistedKnowledge.environmentAssets);
 
         var nextDraft = null;
         if (NK.service && NK.service.project && NK.service.project.updatePayload) {
@@ -644,6 +758,8 @@
             knowledgeCharacters: persistedKnowledge.characters,
             knowledgeCharacterSheets: persistedKnowledge.characterSheets,
             characterSheets: persistedKnowledge.characterSheets,
+            environmentAssets: persistedKnowledge.environmentAssets,
+            knowledgeEnvironmentAssets: persistedKnowledge.environmentAssets,
             brandVoice: persistedKnowledge.brandVoice,
             brandStory: persistedKnowledge.brandStory,
             brandCharacter: persistedKnowledge.brandCharacter,
@@ -795,6 +911,23 @@
       '</div>' +
       '<div class="knowledge-hub-side">' +
       '<details class="knowledge-hub-disclosure">' +
+      '<summary><div><strong>배경·소품 자산</strong><span>장소·소품 일관성용 레퍼런스</span></div><span class="knowledge-hub-disclosure-meta" data-environment-count>' + escapeHtml(String(knowledge.environmentAssets.length) + '개') + '</span></summary>' +
+      '<div class="knowledge-hub-disclosure-body">' +
+      '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
+      '<div class="knowledge-hub-field knowledge-environment-field"><span>배경·소품</span>' +
+      '<div class="knowledge-environment-input-row">' +
+      '<input id="knowledge-environment-input" class="knowledge-character-input" placeholder="' + escapeHtml(getEnvironmentUiText().addPlaceholder) + '" />' +
+      '<select id="knowledge-environment-kind" class="knowledge-reference-input knowledge-environment-kind-select">' +
+      '<option value="background">' + escapeHtml(getEnvironmentUiText().background) + '</option>' +
+      '<option value="prop">' + escapeHtml(getEnvironmentUiText().prop) + '</option>' +
+      '</select>' +
+      '</div>' +
+      '<div id="knowledge-environment-cards" class="knowledge-environment-cards">' + renderEnvironmentCards(knowledge.environmentAssets) + '</div>' +
+      '<p class="knowledge-character-help">' + escapeHtml(getEnvironmentUiText().help) + '</p></div>' +
+      '</section>' +
+      '</div>' +
+      '</details>' +
+      '<details class="knowledge-hub-disclosure">' +
       '<summary><div><strong>브랜드 규칙</strong><span>반드시 지켜야 할 운영 기준</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(rulesCount + bannedCount) + '개 항목</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
@@ -843,6 +976,7 @@
 
     var currentCharacters = normalizeCharacters(knowledge.characters, knowledge.brandCharacter);
     var characterSheetDraft = normalizeCharacterSheets(knowledge.characterSheets, currentCharacters);
+    var environmentAssetDraft = normalizeEnvironmentAssets(knowledge.environmentAssets);
     var modalCharacterSheetDraft = null;
     var modalBrandCharsDraft = null;
     var modalSaveInFlight = false;
@@ -905,6 +1039,63 @@
         personality: ''
       });
       syncCharacterUi();
+      return true;
+    }
+
+    function syncEnvironmentUi() {
+      environmentAssetDraft = normalizeEnvironmentAssets(environmentAssetDraft);
+      var box = root.querySelector('#knowledge-environment-cards');
+      if (box) box.innerHTML = renderEnvironmentCards(environmentAssetDraft);
+      var countEl = root.querySelector('[data-environment-count]');
+      if (countEl) countEl.textContent = String(environmentAssetDraft.length) + '개';
+    }
+
+    function persistEnvironmentDraft() {
+      if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+      syncBrandAndProject(
+        readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft)
+      ).then(function () {
+        knowledge.environmentAssets = normalizeEnvironmentAssets(environmentAssetDraft);
+      }).catch(function () {});
+    }
+
+    function findEnvironmentAsset(assetId) {
+      var target = String(assetId || '').trim();
+      if (!target) return null;
+      return environmentAssetDraft.find(function (asset) {
+        return String(asset.assetId || '') === target;
+      }) || null;
+    }
+
+    function updateEnvironmentAsset(assetId, updater) {
+      var target = String(assetId || '').trim();
+      environmentAssetDraft = normalizeEnvironmentAssets(environmentAssetDraft.map(function (asset) {
+        if (String(asset.assetId || '') !== target) return asset;
+        var next = typeof updater === 'function' ? updater(Object.assign({}, asset, {
+          items: normalizeCharacterSheetItems(asset.items)
+        })) : asset;
+        return Object.assign({}, next, {
+          items: normalizeCharacterSheetItems(next && next.items)
+        });
+      }));
+    }
+
+    function addEnvironmentAsset(name, kind) {
+      var displayName = normalizeEnvironmentName(name);
+      if (!displayName) return false;
+      var token = '@' + displayName.replace(/\s+/g, '');
+      var exists = environmentAssetDraft.some(function (asset) {
+        return String(asset.token || '').toLowerCase() === token.toLowerCase();
+      });
+      if (exists) return false;
+      environmentAssetDraft = normalizeEnvironmentAssets(environmentAssetDraft.concat([{
+        assetId: 'env_' + String(Date.now()),
+        displayName: displayName,
+        token: token,
+        kind: normalizeEnvironmentKind(kind),
+        items: []
+      }]));
+      syncEnvironmentUi();
       return true;
     }
 
@@ -1190,7 +1381,7 @@
           });
           renderCharacterManagerModal();
           try {
-            var nextDraft = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft);
+            var nextDraft = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft, environmentAssetDraft);
             syncBrandAndProject(nextDraft)
               .then(function (result) {
                 characterSheetDraft = cloneCharacterSheetDraft(modalCharacterSheetDraft);
@@ -1235,7 +1426,7 @@
               return null;
             })
             .then(function () {
-              return syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft));
+              return syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, modalCharacterSheetDraft, environmentAssetDraft));
             })
             .then(function (result) {
               characterSheetDraft = cloneCharacterSheetDraft(modalCharacterSheetDraft);
@@ -1333,7 +1524,7 @@
       }
       else if (action === 'knowledge-apply-starter') {
         btn.disabled = true;
-        syncBrandAndProject(buildStarterKnowledge(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft), project, brandTitle, brandSummary))
+        syncBrandAndProject(buildStarterKnowledge(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft), project, brandTitle, brandSummary))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -1348,7 +1539,7 @@
       else if (action === 'knowledge-save-and-open-brand') {
         btn.disabled = true;
         if (NK.core && NK.core.setLoading) NK.core.setLoading(true, '저장중...');
-        syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft))
+        syncBrandAndProject(readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
             var nextTarget = buildStageUrl('brand.html', projectId, brandId);
@@ -1370,7 +1561,7 @@
       // 캐릭터 카드 제거에 따라 비활성화 토글 버튼도 제거됨
       else if (action === 'knowledge-save') {
         if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
-        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft);
+        var nextKnowledge = readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft);
         btn.disabled = true;
         if (NK.core && NK.core.setLoading) NK.core.setLoading(true, '저장중...');
         syncBrandAndProject(nextKnowledge)
@@ -1395,7 +1586,7 @@
           return;
         }
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, nextItems, currentCharacters, characterExtras, characterSheetDraft))
+        syncBrandAndProject(readKnowledgeDraft(root, nextItems, currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -1414,7 +1605,7 @@
           return String(item.id || '') !== removeId;
         });
         btn.disabled = true;
-        syncBrandAndProject(readKnowledgeDraft(root, remaining, currentCharacters, characterExtras, characterSheetDraft))
+        syncBrandAndProject(readKnowledgeDraft(root, remaining, currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft))
           .then(function (result) {
             if (result && result.draft) renderNext(result.draft);
           })
@@ -1438,6 +1629,41 @@
         syncCharacterUi();
         return;
       }
+      if (action === 'knowledge-environment-remove') {
+        var envRemoveId = String(btn.dataset.assetId || '').trim();
+        if (!envRemoveId) return;
+        environmentAssetDraft = normalizeEnvironmentAssets(environmentAssetDraft.filter(function (asset) {
+          return String(asset.assetId || '') !== envRemoveId;
+        }));
+        syncEnvironmentUi();
+        persistEnvironmentDraft();
+        return;
+      }
+      if (action === 'knowledge-environment-toggle-kind') {
+        var toggleId = String(btn.dataset.assetId || '').trim();
+        if (!toggleId) return;
+        updateEnvironmentAsset(toggleId, function (asset) {
+          asset.kind = asset.kind === 'prop' ? 'background' : 'prop';
+          return asset;
+        });
+        syncEnvironmentUi();
+        persistEnvironmentDraft();
+        return;
+      }
+      if (action === 'knowledge-environment-remove-image') {
+        var imgAssetId = String(btn.dataset.assetId || '').trim();
+        var imgSheetId = String(btn.dataset.sheetId || '').trim();
+        if (!imgAssetId || !imgSheetId) return;
+        updateEnvironmentAsset(imgAssetId, function (asset) {
+          asset.items = normalizeCharacterSheetItems(asset.items).filter(function (sheet) {
+            return String(sheet.sheetId) !== imgSheetId;
+          });
+          return asset;
+        });
+        syncEnvironmentUi();
+        persistEnvironmentDraft();
+        return;
+      }
 
       if (!target) return;
       if (window.self !== window.top && window.parent) {
@@ -1459,8 +1685,19 @@
       targetEl.value = '';
       if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
       syncBrandAndProject(
-        readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft)
+        readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft, environmentAssetDraft)
       ).catch(function () {});
+    }
+
+    // 배경·소품 이름을 추가한다(캐릭터 입력과 동일한 낙관적 갱신 + 영속화 패턴).
+    function commitEnvironmentInput(targetEl) {
+      if (!targetEl) return;
+      var raw = String(targetEl.value || '');
+      var kindEl = root.querySelector('#knowledge-environment-kind');
+      var kind = kindEl ? kindEl.value : 'background';
+      if (!addEnvironmentAsset(raw, kind)) return;
+      targetEl.value = '';
+      persistEnvironmentDraft();
     }
 
     function isEnterKey(evt) {
@@ -1473,17 +1710,26 @@
     // (입력값이 비워지거나 동일 캐릭터면 addCharacter가 false라 중복 호출은 무해)
     root.onkeydown = function (evt) {
       var targetEl = evt.target;
-      if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
+      if (!targetEl) return;
       if (evt.isComposing || evt.keyCode === 229 || !isEnterKey(evt)) return;
-      evt.preventDefault();
-      commitCharacterInput(targetEl);
+      if (targetEl.id === 'knowledge-character-input') {
+        evt.preventDefault();
+        commitCharacterInput(targetEl);
+      } else if (targetEl.id === 'knowledge-environment-input') {
+        evt.preventDefault();
+        commitEnvironmentInput(targetEl);
+      }
     };
 
     root.onkeyup = function (evt) {
       var targetEl = evt.target;
-      if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
+      if (!targetEl) return;
       if (evt.isComposing || evt.keyCode === 229 || !isEnterKey(evt)) return;
-      commitCharacterInput(targetEl);
+      if (targetEl.id === 'knowledge-character-input') {
+        commitCharacterInput(targetEl);
+      } else if (targetEl.id === 'knowledge-environment-input') {
+        commitEnvironmentInput(targetEl);
+      }
     };
 
     root.oninput = function (evt) {
@@ -1496,6 +1742,50 @@
           personality: normalizeCharacterPersonality(targetEl.value || '')
         });
       });
+    };
+
+    // 배경·소품 자산 이미지 업로드(인라인 카드의 파일 입력).
+    root.onchange = function (evt) {
+      var input = evt.target;
+      if (!input || !input.matches || !input.matches('input[type="file"][data-action="knowledge-environment-upload"]')) return;
+      var assetId = String(input.dataset.assetId || '').trim();
+      var files = Array.prototype.slice.call(input.files || []);
+      if (!assetId || !files.length) return;
+      var asset = findEnvironmentAsset(assetId);
+      var existingCount = asset && Array.isArray(asset.items) ? asset.items.length : 0;
+      var remainingSlots = Math.max(0, MAX_CHARACTER_SHEETS_PER_CHARACTER - existingCount);
+      if (!remainingSlots) {
+        alert('이미지는 자산당 최대 ' + MAX_CHARACTER_SHEETS_PER_CHARACTER + '장까지 등록할 수 있습니다.');
+        input.value = '';
+        return;
+      }
+      var uploadFiles = files.slice(0, remainingSlots);
+      Promise.all(uploadFiles.map(function (file, index) {
+        return readFileAsDataUrl(file).then(function (dataUrl) {
+          return {
+            sheetId: 'sheet_' + Date.now() + '_' + index,
+            imageDataUrl: dataUrl,
+            isPrimary: false
+          };
+        });
+      }))
+        .then(function (items) {
+          updateEnvironmentAsset(assetId, function (entry) {
+            var existingItems = normalizeCharacterSheetItems(entry.items);
+            entry.items = existingItems.concat(items.map(function (sheet, index) {
+              return Object.assign({}, sheet, { isPrimary: !existingItems.length && index === 0 });
+            }));
+            return entry;
+          });
+          syncEnvironmentUi();
+          persistEnvironmentDraft();
+        })
+        .catch(function (err) {
+          alert('이미지 업로드 실패: ' + (err && err.message ? err.message : err));
+        })
+        .finally(function () {
+          input.value = '';
+        });
     };
 
     bindDisclosureScroll(root);

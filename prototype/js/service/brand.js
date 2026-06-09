@@ -317,6 +317,65 @@
         return Array.from(map.values());
     }
 
+    function normalizeEnvironmentKind(value) {
+        return String(value || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background';
+    }
+
+    function normalizeEnvironmentName(value) {
+        return normalizeText(value).replace(/^@+/, '').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalizeEnvironmentAssets(value) {
+        var src = Array.isArray(value) ? value : [];
+        var map = new Map();
+        src.forEach(function (item, index) {
+            var raw = item && typeof item === 'object' ? item : { displayName: item };
+            var displayName = normalizeEnvironmentName(raw.displayName || raw.name || raw.token || raw.trigger);
+            if (!displayName) return;
+            var token = '@' + displayName.replace(/\s+/g, '');
+            var key = token.toLowerCase();
+            if (map.has(key)) return;
+            map.set(key, {
+                assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
+                displayName: displayName,
+                token: token,
+                kind: normalizeEnvironmentKind(raw.kind),
+                items: normalizeCharacterSheetItems(raw.items)
+            });
+        });
+        return Array.from(map.values());
+    }
+
+    function mergeEnvironmentAssets(currentValue, incomingValue) {
+        var current = normalizeEnvironmentAssets(currentValue);
+        var incoming = normalizeEnvironmentAssets(incomingValue);
+        var map = new Map();
+        current.forEach(function (item) { map.set(String(item.token || '').toLowerCase(), item); });
+        incoming.forEach(function (item) {
+            var key = String(item.token || '').toLowerCase();
+            if (!map.has(key)) {
+                map.set(key, item);
+                return;
+            }
+            var existing = map.get(key);
+            var itemMap = new Map();
+            normalizeCharacterSheetItems(existing.items).forEach(function (sheet) {
+                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
+            });
+            normalizeCharacterSheetItems(item.items).forEach(function (sheet) {
+                itemMap.set(String(sheet.sheetId || '').toLowerCase(), sheet);
+            });
+            map.set(key, {
+                assetId: existing.assetId || item.assetId,
+                displayName: existing.displayName || item.displayName,
+                token: existing.token || item.token,
+                kind: item.kind || existing.kind,
+                items: normalizeCharacterSheetItems(Array.from(itemMap.values()))
+            });
+        });
+        return Array.from(map.values());
+    }
+
     function storageKeys() {
         var keys = NK.config && NK.config.KEYS ? NK.config.KEYS : {};
         return {
@@ -395,6 +454,7 @@
             brandCharacter: normalizeText(raw.brandCharacter),
             knowledgeCharacters: normalizeCharacterEntries(raw.knowledgeCharacters, raw.brandCharacter),
             characterSheets: normalizeCharacterSheets(raw.characterSheets || raw.knowledgeCharacterSheets, raw.knowledgeCharacters || raw.brandCharacter),
+            environmentAssets: normalizeEnvironmentAssets(raw.environmentAssets || raw.knowledgeEnvironmentAssets),
             worldSetting: normalizeText(raw.worldSetting || raw.knowledgeWorld || raw.brandWorld),
             brandRules: normalizeTextList(raw.brandRules),
             bannedExpressions: normalizeTextList(raw.bannedExpressions),
@@ -560,6 +620,7 @@
             brandCharacter: pickText(current.brandCharacter, incoming.brandCharacter, preferIncoming),
             knowledgeCharacters: mergeCharacterEntries(current.knowledgeCharacters, incoming.knowledgeCharacters),
             characterSheets: mergeCharacterSheets(current.characterSheets, incoming.characterSheets, mergeCharacterEntries(current.knowledgeCharacters, incoming.knowledgeCharacters)),
+            environmentAssets: mergeEnvironmentAssets(current.environmentAssets, incoming.environmentAssets),
             worldSetting: pickText(current.worldSetting, incoming.worldSetting, preferIncoming),
             brandRules: mergeTextList(current.brandRules, incoming.brandRules),
             bannedExpressions: mergeTextList(current.bannedExpressions, incoming.bannedExpressions),
@@ -680,6 +741,7 @@
             brandCharacter: knowledge.brandCharacter || payload.brandCharacter,
             knowledgeCharacters: knowledge.characters || payload.knowledgeCharacters,
             characterSheets: knowledge.characterSheets || payload.knowledgeCharacterSheets || payload.characterSheets,
+            environmentAssets: knowledge.environmentAssets || payload.knowledgeEnvironmentAssets || payload.environmentAssets,
             worldSetting: knowledge.worldSetting || payload.worldSetting || payload.knowledgeWorld,
             brandRules: knowledge.brandRules || payload.brandRules,
             bannedExpressions: knowledge.bannedExpressions || payload.bannedExpressions,

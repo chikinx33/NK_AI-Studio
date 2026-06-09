@@ -438,12 +438,18 @@ function buildGeminiImagePrompt(
   });
   const consistencyLines = Array.from(grouped.values()).map((item) => {
     const subject = String(item.subjectDescription || "registered character").trim() || "registered character";
+    if (item.referenceKind === "environment") {
+      return `Use the provided registered reference image for ${subject} and keep the exact same layout, architecture, props, materials, colors, and lighting. Do not redesign this background or prop.`;
+    }
     return `Use the provided registered reference image set for ${subject} and keep the exact same character design, face, silhouette, colors, costume, and proportions.`;
   });
+  const hasCharacterRef = Array.from(grouped.values()).some((item) => item.referenceKind !== "environment");
   return [
     base,
     ...conversationLines,
-    "The uploaded reference images define the official registered character design.",
+    hasCharacterRef
+      ? "The uploaded reference images define the official registered character and background/prop designs."
+      : "The uploaded reference images define the official registered background/prop designs.",
   ].concat(consistencyLines).filter(Boolean).join("\n");
 }
 
@@ -663,6 +669,7 @@ type NormalizedReferenceImage = {
   mimeType: string;
   subjectDescription: string;
   subjectType: string;
+  referenceKind: string;
 };
 
 type ConversationHistoryTurn = {
@@ -709,12 +716,14 @@ async function normalizeReferenceImages(args: {
     const referenceId = Number(raw.referenceId || (i + 1)) || (i + 1);
     const subjectDescription = String(raw.subjectDescription || `registered character ${referenceId}`).trim() || `registered character ${referenceId}`;
     const subjectType = normalizeSubjectType(raw.subjectType);
+    const referenceKind = String(raw.referenceKind || "").trim().toLowerCase() === "environment" ? "environment" : "character";
     out.push({
       referenceId,
       base64: parsed.base64,
       mimeType: parsed.mimeType || "image/png",
       subjectDescription,
       subjectType,
+      referenceKind,
     });
   }
   return out;
