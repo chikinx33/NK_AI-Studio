@@ -422,3 +422,39 @@
     min-height: 0;
   }
 }
+
+/* =========================================================================
+   브랜드 허브 · 성과 분석 → 브랜드 스튜디오 카드 스타일 통일
+   페이지 스코프(.knowledge-hub-page / .analytics-page)로 한정해 브랜드
+   스튜디오 페이지 자체에는 영향이 없고, 명시도(0,2,0)+파일 최후미라 기존
+   규칙을 안정적으로 덮는다.
+   ========================================================================= */
+
+/* 헤더(hero): 브랜드 스튜디오 .bsf-flow-card 와 동일한 앰버 글로우 + 20px 라운드 */
+.knowledge-hub-page .knowledge-hub-hero,
+.analytics-page .analytics-hero {
+  border: 1px solid color-mix(in srgb, rgba(255, 140, 0, 0.42) 68%, var(--border) 32%);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 152, 59, 0.2), transparent 34%),
+    radial-gradient(circle at bottom left, rgba(94, 170, 255, 0.08), transparent 30%),
+    var(--studio-hero-bg);
+  box-shadow:
+    0 18px 36px rgba(255, 140, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* 본문 섹션 카드: 브랜드 스튜디오 .bsf-detail-card 와 동일한 크롬
+   (외곽 보더 없음 + 안쪽 흰 1px 라인 + 평면 bg-2 + 20px 라운드).
+   disclosure 내부의 임베디드 패널은 투명 래퍼이므로 제외한다. */
+.knowledge-hub-page .knowledge-hub-disclosure,
+.knowledge-hub-page .brand-studio-disclosure,
+.analytics-page .brand-studio-disclosure,
+.analytics-page .analytics-panel:not(.analytics-panel-embedded) {
+  border: none;
+  border-radius: 20px;
+  background: var(--bg-2);
+  box-shadow:
+    var(--shadow-1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
