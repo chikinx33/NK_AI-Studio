@@ -964,14 +964,17 @@ a.sidebar-launcher-item:hover {
   pointer-events: none;
 }
 
-/* 홈(옵션) 버튼 — 사이드바 상단 우측 모서리에 작게 고정. 가로=세로 정사각형. */
-.sidebar-home-btn {
+/* 홈(옵션) 버튼 — 사이드바 상단 우측 모서리에 작게 고정. 가로=세로 정사각형.
+   파일 뒤쪽 .btn-ghost(min-height/padding) 규칙을 확실히 덮기 위해 .sidebar로 명시도를 올린다. */
+.sidebar .sidebar-home-btn {
   position: absolute;
   top: 12px;
   right: 12px;
   width: 28px;
   height: 28px;
-  min-width: 0;
+  min-width: 28px;
+  min-height: 28px;
+  max-height: 28px;
   padding: 0;
   border-radius: 8px;
   display: inline-flex;
@@ -981,13 +984,13 @@ a.sidebar-launcher-item:hover {
   z-index: 5;
 }
 
-.sidebar-home-btn svg {
+.sidebar .sidebar-home-btn svg {
   width: 17px;
   height: 17px;
   display: block;
 }
 
-.sidebar-home-btn:hover {
+.sidebar .sidebar-home-btn:hover {
   color: var(--text);
 }
 
