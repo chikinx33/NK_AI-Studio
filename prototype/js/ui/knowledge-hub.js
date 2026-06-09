@@ -1447,44 +1447,59 @@
       }
     };
 
+    // 입력값으로 캐릭터를 추가한다(로컬 드래프트 + 브랜드 영속).
+    function commitCharacterInput(targetEl) {
+      if (!targetEl) return;
+      var raw = String(targetEl.value || '');
+      if (!addCharacter(raw)) return;
+      targetEl.value = '';
+      var nameOnly = normalizeCharacterName(raw);
+      var trig = nameOnly ? ('@' + nameOnly) : '';
+      if (!nameOnly || !trig) return;
+      var exists = (Array.isArray(characters) ? characters : []).some(function (c) { return String(c.trigger || '').toLowerCase() === trig.toLowerCase(); });
+      if (exists || !brandId || !NK.service || !NK.service.brand || !NK.service.brand.update) return;
+      var nextList = (Array.isArray(characters) ? characters.slice() : []);
+      nextList.unshift({
+        id: 'char_' + Date.now(),
+        trigger: trig,
+        name: nameOnly,
+        aliases: [],
+        mainAssetId: '',
+        referenceAssetIds: [],
+        description: '',
+        fixedTraits: [],
+        bannedTraits: [],
+        defaultPromptPrefix: 'Keep character identity consistent.',
+        styleGuide: '',
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      Promise.resolve().then(function () {
+        return NK.service.brand.update(brandId, { brandCharacters: nextList });
+      }).then(function () {
+        renderNext(project);
+      }).catch(function () {});
+    }
+
+    // 한글 등 IME 조합 중 Enter는 '조합 확정'에 소비되어 keydown 단계에서 key가 'Enter'가
+    // 아니라 'Process'(keyCode 229)로 들어온다. 그래서 조합 중 Enter로는 추가가 안 되고
+    // 두 번 눌러야 했다. 실제 Enter는 조합이 끝난 뒤 keyup에서 잡히므로, 추가 처리는
+    // keyup의 Enter에서 수행해 단일 Enter로도 동작하게 한다.
     root.onkeydown = function (evt) {
       var targetEl = evt.target;
       if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
       if (evt.key !== 'Enter') return;
+      if (evt.isComposing || evt.keyCode === 229) return; // 조합 중엔 기본동작을 막지 않아 IME 확정을 보장
       evt.preventDefault();
-      var raw = String(targetEl.value || '');
-      if (addCharacter(raw)) {
-        targetEl.value = '';
-        var nameOnly = normalizeCharacterName(raw);
-        var trig = nameOnly ? ('@' + nameOnly) : '';
-        if (nameOnly && trig) {
-          var exists = (Array.isArray(characters) ? characters : []).some(function (c) { return String(c.trigger || '').toLowerCase() === trig.toLowerCase(); });
-          if (!exists && brandId && NK.service && NK.service.brand && NK.service.brand.update) {
-            var nextList = (Array.isArray(characters) ? characters.slice() : []);
-            nextList.unshift({
-              id: 'char_' + Date.now(),
-              trigger: trig,
-              name: nameOnly,
-              aliases: [],
-              mainAssetId: '',
-              referenceAssetIds: [],
-              description: '',
-              fixedTraits: [],
-              bannedTraits: [],
-              defaultPromptPrefix: 'Keep character identity consistent.',
-              styleGuide: '',
-              isActive: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString()
-            });
-            Promise.resolve().then(function () {
-              return NK.service.brand.update(brandId, { brandCharacters: nextList });
-            }).then(function () {
-              renderNext(project);
-            }).catch(function () {});
-          }
-        }
-      }
+    };
+
+    root.onkeyup = function (evt) {
+      var targetEl = evt.target;
+      if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
+      if (evt.isComposing || evt.keyCode === 229) return;
+      if (evt.key !== 'Enter' && evt.keyCode !== 13) return;
+      commitCharacterInput(targetEl);
     };
 
     root.oninput = function (evt) {
