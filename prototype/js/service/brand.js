@@ -384,6 +384,8 @@
             brandId: brandId,
             brandTitle: normalizeText(raw.brandTitle || raw.title || nestedRef.title) || '새 브랜드',
             brandSlug: normalizeId(raw.brandSlug || raw.slug || brandId, 'brand'),
+            // IP(브랜드) 대표 로고. 시리즈/IP 단위 단일 출처(SSOT)로, 프로젝트별 썸네일과 별개.
+            brandLogoObjectName: normalizeText(raw.brandLogoObjectName || raw.logoObjectName),
             brandSummary: normalizeText(raw.brandSummary),
             coreMessage: normalizeText(raw.coreMessage),
             targetAudience: normalizeText(raw.targetAudience || raw.target),
@@ -548,6 +550,7 @@
             brandId: current.brandId || incoming.brandId,
             brandTitle: pickText(current.brandTitle, incoming.brandTitle, preferIncoming),
             brandSlug: pickText(current.brandSlug, incoming.brandSlug, preferIncoming),
+            brandLogoObjectName: pickText(current.brandLogoObjectName, incoming.brandLogoObjectName, preferIncoming),
             brandSummary: pickText(current.brandSummary, incoming.brandSummary, preferIncoming),
             coreMessage: pickText(current.coreMessage, incoming.coreMessage, preferIncoming),
             targetAudience: pickText(current.targetAudience, incoming.targetAudience, preferIncoming),
@@ -666,6 +669,8 @@
         return normalizeBrand({
             brandId: deriveBrandIdFromProject(project),
             brandTitle: deriveBrandTitleFromProject(project),
+            // 레거시 마이그레이션: 프로젝트별로 복사돼 있던 썸네일을 IP 로고 출처로 승격.
+            brandLogoObjectName: payload.brandLogoObjectName || payload.thumbnailObjectName,
             brandSummary: payload.brandSummary,
             coreMessage: payload.coreMessage,
             targetAudience: payload.targetAudience || payload.target,
@@ -910,6 +915,36 @@
                 title: targetBrand.brandTitle
             }
         });
+    };
+    // 프로젝트가 속한 IP(브랜드)의 대표 로고를 설정한다(로컬 즉시 + 서버 동기화).
+    // current-brand 포인터는 바꾸지 않아 영상 대시보드 등에서 부작용이 없다.
+    brand.setLogoForProject = async function (projectOrId, objectName) {
+        var project = getProject(projectOrId);
+        if (!project) throw new Error('project_not_found');
+        var obj = normalizeText(objectName);
+        var brandId = deriveBrandIdFromProject(project);
+        var existing = brand.getById(brandId);
+        var base = existing || buildBrandSeedFromProject(project) || { brandId: brandId };
+        var nextBrand = normalizeBrand(Object.assign({}, base, {
+            brandId: brandId,
+            brandLogoObjectName: obj,
+            createdAt: existing && existing.createdAt
+        }));
+        upsertBrandLocal(nextBrand, { skipCurrent: true });
+        if (!NK.api || !NK.api.brandSave) return nextBrand;
+        try {
+            var resp = await NK.api.brandSave(brandId, nextBrand);
+            var saved = resp && resp.brand ? normalizeBrand(resp.brand) : nextBrand;
+            return upsertBrandLocal(saved, { skipCurrent: true });
+        } catch (_) {
+            // 서버 저장 실패 시에도 로컬 반영은 유지(다음 동기화에 복구).
+            return nextBrand;
+        }
+    };
+    // 시리즈(IP) 단위 대표 로고 objectName을 조회한다(없으면 빈 문자열).
+    brand.getLogoBySeriesId = function (seriesId) {
+        var target = brand.getBySeriesId(seriesId);
+        return target ? normalizeText(target.brandLogoObjectName) : '';
     };
     brand.listProjects = function (brandOrId) {
         ensureMigrated();

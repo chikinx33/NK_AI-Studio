@@ -55,13 +55,19 @@
         const resp = await NK.api.imageUpload(id, file);
         const objectName = String(resp && resp.objectName || '').trim();
         if (!objectName) throw new Error('objectName_missing');
-        const allDrafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
-        const thisDraft = allDrafts.find(d => String(d.id) === id);
-        const seriesId = thisDraft && thisDraft.seriesId;
-        const targets = seriesId
-          ? allDrafts.filter(d => String(d.seriesId) === String(seriesId))
-          : allDrafts.filter(d => String(d.id) === id);
-        await Promise.all(targets.map(d => NK.service.project.updatePayload(d.id, { thumbnailObjectName: objectName })));
+        // 로고는 IP(브랜드) 엔티티의 단일 출처에 저장한다(SSOT). 더 이상 형제 프로젝트마다
+        // thumbnailObjectName으로 복제하지 않으므로, 시리즈에 나중에 추가된 프로젝트도 자동 반영된다.
+        let savedToBrand = false;
+        if (NK.service.brand && typeof NK.service.brand.setLogoForProject === 'function') {
+          try {
+            await NK.service.brand.setLogoForProject(id, objectName);
+            savedToBrand = true;
+          } catch (_) { savedToBrand = false; }
+        }
+        // 브랜드 저장 경로가 없거나 실패하면 레거시 방식(현재 프로젝트 썸네일)으로라도 보존.
+        if (!savedToBrand) {
+          await NK.service.project.updatePayload(id, { thumbnailObjectName: objectName });
+        }
         if (NK.ui && NK.ui.dashboard && typeof NK.ui.dashboard.renderDrafts === 'function') {
           NK.ui.dashboard.renderDrafts();
         }
@@ -717,16 +723,25 @@
       : drafts.filter((d) => d.seriesId === currentSeriesFilter)
     ).sort(sortByRecency);
 
-    // 시리즈(IP) 단위 대표 로고 폴백 맵.
-    // 썸네일은 프로젝트별 thumbnailObjectName에 복사되는 구조라, 업로드 이후 시리즈에
-    // 추가된 프로젝트는 로고를 잃는다. 같은 시리즈에 썸네일을 가진 형제가 하나라도 있으면
-    // 그 값을 공통 로고로 사용해 빈 카드가 생기지 않게 한다.
+    // 로고(대표 이미지) 해석 맵 두 가지.
+    // (1) brandLogoBySeriesId: IP(브랜드) 엔티티에 저장된 단일 출처(SSOT) 로고. 최우선.
+    //     같은 IP면 어느 프로젝트든 동일 로고를 보장하고, 나중에 추가된 프로젝트도 자동 반영된다.
+    // (2) seriesThumbBySeriesId: 브랜드 로고가 아직 없는(미마이그레이션) IP를 위한 레거시 안전망.
+    //     같은 시리즈 형제의 프로젝트별 thumbnailObjectName을 폴백으로 쓴다.
+    const brandSvc = NK.service && NK.service.brand;
+    const brandLogoBySeriesId = new Map();
     const seriesThumbBySeriesId = new Map();
     for (const d of drafts) {
       const sid = d && d.seriesId != null ? String(d.seriesId) : '';
-      if (!sid || seriesThumbBySeriesId.has(sid)) continue;
-      const obj = String(d.payload?.thumbnailObjectName || '').trim();
-      if (obj) seriesThumbBySeriesId.set(sid, obj);
+      if (!sid) continue;
+      if (brandSvc && typeof brandSvc.getLogoBySeriesId === 'function' && !brandLogoBySeriesId.has(sid)) {
+        try { brandLogoBySeriesId.set(sid, String(brandSvc.getLogoBySeriesId(sid) || '').trim()); }
+        catch (_) { brandLogoBySeriesId.set(sid, ''); }
+      }
+      if (!seriesThumbBySeriesId.has(sid)) {
+        const obj = String(d.payload?.thumbnailObjectName || '').trim();
+        if (obj) seriesThumbBySeriesId.set(sid, obj);
+      }
     }
 
     const fmtDuration = (sec) => {
@@ -803,8 +818,11 @@
       const needs = Array.isArray(d.payload?.needs) ? d.payload.needs.filter(Boolean).join(', ') : (d.payload?.needs || '');
       const genre = `${cat} ${tags}`.trim();
       const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
-      const thumbObj = String(d.payload?.thumbnailObjectName || '').trim()
-        || (d.seriesId != null ? (seriesThumbBySeriesId.get(String(d.seriesId)) || '') : '');
+      const sid = d.seriesId != null ? String(d.seriesId) : '';
+      // 해석 우선순위: IP 브랜드 로고(SSOT) → 프로젝트 자체 썸네일 → 형제 폴백(레거시).
+      const thumbObj = (sid ? (brandLogoBySeriesId.get(sid) || '') : '')
+        || String(d.payload?.thumbnailObjectName || '').trim()
+        || (sid ? (seriesThumbBySeriesId.get(sid) || '') : '');
       const thumbUrl = thumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
         ? NK.api.mediaProxyObjectUrl(thumbObj)
         : '';
@@ -1193,15 +1211,19 @@
       `${labels.duration} : ${dur}`
     ].join('\n');
 
-    // 자체 썸네일이 없으면 같은 시리즈(IP) 형제 프로젝트의 대표 로고로 폴백한다.
-    let sidebarThumbObj = String(normalized.payload?.thumbnailObjectName || '').trim();
-    if (!sidebarThumbObj && normalized.seriesId != null && NK.store && typeof NK.store.getDrafts === 'function') {
-      const sid = String(normalized.seriesId);
+    // 해석 우선순위: IP 브랜드 로고(SSOT) → 프로젝트 자체 썸네일 → 형제 폴백(레거시).
+    const sidebarSeriesId = normalized.seriesId != null ? String(normalized.seriesId) : '';
+    let sidebarThumbObj = '';
+    if (sidebarSeriesId && NK.service && NK.service.brand && typeof NK.service.brand.getLogoBySeriesId === 'function') {
+      try { sidebarThumbObj = String(NK.service.brand.getLogoBySeriesId(sidebarSeriesId) || '').trim(); } catch (_) { sidebarThumbObj = ''; }
+    }
+    if (!sidebarThumbObj) sidebarThumbObj = String(normalized.payload?.thumbnailObjectName || '').trim();
+    if (!sidebarThumbObj && sidebarSeriesId && NK.store && typeof NK.store.getDrafts === 'function') {
       try {
         const sibling = NK.store.getDrafts()
           .map(normalizeDraft)
           .filter(Boolean)
-          .find(d => d.seriesId != null && String(d.seriesId) === sid && String(d.payload?.thumbnailObjectName || '').trim());
+          .find(d => d.seriesId != null && String(d.seriesId) === sidebarSeriesId && String(d.payload?.thumbnailObjectName || '').trim());
         if (sibling) sidebarThumbObj = String(sibling.payload.thumbnailObjectName).trim();
       } catch (_) { }
     }

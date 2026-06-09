@@ -307,6 +307,8 @@
     return {
       brandId: String(src.brandId || payload.brandId || '').trim(),
       title: String(src.brandTitle || payload.brandTitle || project && (project.seriesTitle || project.title) || '브랜드').trim(),
+      // IP 대표 로고: 브랜드 엔티티 우선, 없으면 레거시 프로젝트 썸네일.
+      logoObjectName: String(src.brandLogoObjectName || payload.thumbnailObjectName || '').trim(),
       summary: String(src.brandSummary || payload.brandSummary || '').trim(),
       coreMessage: String(src.coreMessage || payload.coreMessage || '').trim(),
       targetAudience: String(src.targetAudience || payload.targetAudience || payload.target || '').trim(),
@@ -1827,7 +1829,7 @@
     // 목업 공통 파트
     var mockBrandName = escapeHtml((brandView.title || 'Brand').slice(0, 14));
     var mockAvatarUrl = (function () {
-      var objName = String(payload.thumbnailObjectName || '').trim();
+      var objName = String(brandView.logoObjectName || payload.thumbnailObjectName || '').trim();
       if (!objName) return '';
       try { return (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(objName) : ''; } catch (_) { return ''; }
     })();
