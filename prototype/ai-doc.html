@@ -32,6 +32,7 @@
   <div class="grain"></div>
   <div class="app">
     <aside class="sidebar">
+      <button type="button" class="btn-ghost sidebar-home-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
       <div class="brand">
         <div class="brand-mark"></div>
         <div class="brand-text">
@@ -79,12 +80,6 @@
         </a>
       </nav>
       <div class="sidebar-footer">
-        <div class="sidebar-actions">
-          <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면" data-i18n-aria-label="screen_to_full" data-i18n-title="screen_to_full"></button>
-          <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('global')"></button>
-          <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang()">EN</button>
-          <button type="button" class="btn-ghost icon-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()">⚙️</button>
-        </div>
         <nav class="sidebar-launcher" aria-label="앱 바로가기">
           <a class="sidebar-launcher-item" href="brand-studio.html" title="Brand Studio" aria-label="Brand Studio"><img src="images/icon-ai-branding.png" alt="Brand Studio" /></a>
           <a class="sidebar-launcher-item" href="ai-video.html?stage=dashboard" title="AI Video" aria-label="AI Video"><img src="images/icon-ai-cinema.png" alt="AI Video" /></a>
