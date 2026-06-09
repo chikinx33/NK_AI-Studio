@@ -531,8 +531,9 @@
     const isBrandShellPath = /(^|\/)brand-studio(\.html)?\/?$/i.test(loweredPath);
     const isAiImageShellPath = /(^|\/)ai-image(\.html)?\/?$/i.test(loweredPath);
     const isAiVideoGenShellPath = /(^|\/)ai-video-gen(\.html)?\/?$/i.test(loweredPath);
-    // 자체 콘텐츠를 직접 렌더하는 단독 페이지(예: ai-doc)는 셸 자동 로드 대상에서 제외한다.
-    const isSelfContainedPage = document.documentElement.classList.contains('page-shell-ai-doc');
+    // 자체 콘텐츠를 직접 렌더하는 단독 페이지(예: ai-doc, ai-sound)는 셸 자동 로드 대상에서 제외한다.
+    const isSelfContainedPage = document.documentElement.classList.contains('page-shell-ai-doc')
+      || document.documentElement.classList.contains('page-shell-ai-sound');
     const isShellPage = !isIframe && !!document.querySelector('.sidebar') && !!document.querySelector('.content') && !document.getElementById('dashboard-drafts') && !isSelfContainedPage;
     const isKnownShellPath = isAiVideoShellPath || isBrandShellPath || isAiImageShellPath || isAiVideoGenShellPath;
 

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="dark" class="layout-fixed preload-veiled">
+<html lang="ko" data-theme="dark" class="layout-fixed page-shell-ai-sound preload-veiled">
 
 <head>
   <meta charset="UTF-8" />
@@ -187,9 +187,36 @@
   <script src="script.js" defer></script>
 </head>
 
-<body class="layout-fixed page-sound">
+<body class="layout-fixed page-sound page-shell-ai-sound">
   <div class="grain"></div>
-  <div class="app no-sidebar">
+  <div class="app">
+    <aside class="sidebar">
+      <button type="button" class="btn-ghost sidebar-home-btn" aria-label="옵션" title="옵션" data-action="open-options" onclick="openOptionsStage()"><svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div class="brand-text">
+          <span class="title" data-i18n="brand_title">NK_Studio</span>
+          <span class="subtitle" data-i18n="ai_sound_studio_subtitle">AI 사운드 스튜디오</span>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="nav-item active" href="#" data-snd-tab="voice"><span>VOICE</span></a>
+        <a class="nav-item" href="#" data-snd-tab="sfx"><span>SFX</span></a>
+      </nav>
+      <div id="sidebar-project-card" class="sidebar-project-card" style="display: none;"></div>
+      <div class="sidebar-footer">
+        <nav class="sidebar-launcher" aria-label="앱 바로가기">
+          <a class="sidebar-launcher-item" href="brand-studio.html" title="Brand Studio" aria-label="Brand Studio"><img src="images/icon-ai-branding.png" alt="Brand Studio" /></a>
+          <a class="sidebar-launcher-item" href="ai-video.html?stage=dashboard" title="AI Video" aria-label="AI Video"><img src="images/icon-ai-cinema.png" alt="AI Video" /></a>
+          <a class="sidebar-launcher-item" href="ai-video-gen.html" title="AI Video Gen" aria-label="AI Video Gen"><img src="images/icon-ai-video.png" alt="AI Video Gen" /></a>
+          <a class="sidebar-launcher-item" href="ai-image.html?stage=dashboard" title="AI Image" aria-label="AI Image"><img src="images/icon-ai-image.png" alt="AI Image" /></a>
+          <a class="sidebar-launcher-item" href="ai-doc.html" title="AI 문서" aria-label="AI 문서"><img src="images/icon-ai-doc.png" alt="AI 문서" /></a>
+          <a class="sidebar-launcher-item is-active" aria-current="page" href="ai-sound.html" title="AI 사운드" aria-label="AI 사운드"><img src="images/icon-ai-sound.png" alt="AI 사운드" /></a>
+        </nav>
+        <div class="sidebar-version">ver</div>
+      </div>
+    </aside>
+
     <div id="auth-overlay" class="auth-overlay hidden">
       <div class="auth-card">
         <p class="auth-title">로그인 하세요.</p>
@@ -197,7 +224,7 @@
       </div>
     </div>
 
-    <main class="main">
+    <main class="main blur-target">
       <div class="main-body">
         <section class="content snd-mount"></section>
       </div>

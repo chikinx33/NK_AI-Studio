@@ -263,7 +263,22 @@
     root.appendChild(wrap);
 
     if (state.modalOpen) renderVoiceModal();
+    syncSidebarNav();
   }
+
+  // 사이드바 nav(VOICE/SFX) ↔ 인페이지 탭 동기화
+  function syncSidebarNav() {
+    try {
+      document.querySelectorAll('.sidebar [data-snd-tab]').forEach(function (a) {
+        a.classList.toggle('active', a.getAttribute('data-snd-tab') === state.tab);
+      });
+    } catch (_) {}
+  }
+  snd.setTab = function (tab) {
+    if (tab !== 'voice' && tab !== 'sfx') return;
+    state.tab = tab;
+    render();
+  };
 
   function makeTab(id, label, disabled) {
     var b = el('button', 'snd-tab' + (state.tab === id ? ' is-active' : '') + (disabled ? ' is-disabled' : ''), { type: 'button', textContent: label });
@@ -852,6 +867,13 @@
     render();
     loadVoices();
     loadAssets();
+
+    // 사이드바 nav(VOICE/SFX) → 인페이지 탭 전환
+    try {
+      document.querySelectorAll('.sidebar [data-snd-tab]').forEach(function (a) {
+        a.addEventListener('click', function (e) { e.preventDefault(); snd.setTab(a.getAttribute('data-snd-tab')); });
+      });
+    } catch (_) {}
 
     window.addEventListener('message', function (evt) {
       try {
