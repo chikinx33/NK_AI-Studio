@@ -1447,58 +1447,42 @@
       }
     };
 
-    // 입력값으로 캐릭터를 추가한다(로컬 드래프트 + 브랜드 영속).
+    // 입력값으로 캐릭터를 추가한다.
+    // addCharacter가 currentCharacters + 칩 UI를 즉시 갱신(낙관적)하고, 저장 버튼과 동일한
+    // syncBrandAndProject(knowledgeCharacters) 경로로 배경 영속화한다. 재렌더(renderNext)는
+    // 하지 않는다 — 과거엔 별개 필드(brandCharacters)만 갱신 후 renderNext로 전체 재렌더해
+    // knowledge.characters 기준으로 다시 그릴 때 방금 추가한 칩이 사라지는 버그가 있었다.
     function commitCharacterInput(targetEl) {
       if (!targetEl) return;
       var raw = String(targetEl.value || '');
-      if (!addCharacter(raw)) return;
+      if (!addCharacter(raw)) return; // 빈 값/중복이면 false → 무해한 no-op
       targetEl.value = '';
-      var nameOnly = normalizeCharacterName(raw);
-      var trig = nameOnly ? ('@' + nameOnly) : '';
-      if (!nameOnly || !trig) return;
-      var exists = (Array.isArray(characters) ? characters : []).some(function (c) { return String(c.trigger || '').toLowerCase() === trig.toLowerCase(); });
-      if (exists || !brandId || !NK.service || !NK.service.brand || !NK.service.brand.update) return;
-      var nextList = (Array.isArray(characters) ? characters.slice() : []);
-      nextList.unshift({
-        id: 'char_' + Date.now(),
-        trigger: trig,
-        name: nameOnly,
-        aliases: [],
-        mainAssetId: '',
-        referenceAssetIds: [],
-        description: '',
-        fixedTraits: [],
-        bannedTraits: [],
-        defaultPromptPrefix: 'Keep character identity consistent.',
-        styleGuide: '',
-        isActive: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      });
-      Promise.resolve().then(function () {
-        return NK.service.brand.update(brandId, { brandCharacters: nextList });
-      }).then(function () {
-        renderNext(project);
-      }).catch(function () {});
+      if (!NK.service || !NK.service.project || !NK.service.project.updatePayload) return;
+      syncBrandAndProject(
+        readKnowledgeDraft(root, knowledge.referenceItems || [], currentCharacters, characterExtras, characterSheetDraft)
+      ).catch(function () {});
     }
 
-    // 한글 등 IME 조합 중 Enter는 '조합 확정'에 소비되어 keydown 단계에서 key가 'Enter'가
-    // 아니라 'Process'(keyCode 229)로 들어온다. 그래서 조합 중 Enter로는 추가가 안 되고
-    // 두 번 눌러야 했다. 실제 Enter는 조합이 끝난 뒤 keyup에서 잡히므로, 추가 처리는
-    // keyup의 Enter에서 수행해 단일 Enter로도 동작하게 한다.
+    function isEnterKey(evt) {
+      return evt.key === 'Enter' || evt.keyCode === 13;
+    }
+
+    // 한글 등 IME 조합 중 Enter는 '조합 확정'에 소비되어 keydown에서 key가 'Enter'가 아니라
+    // 'Process'(keyCode 229)로 들어온다. 그래서 keydown만으로는 단일 Enter가 먹지 않는다.
+    // 비조합 상태면 keydown에서, 조합 확정 직후엔 keyup에서 처리해 단일 Enter로 동작시킨다.
+    // (입력값이 비워지거나 동일 캐릭터면 addCharacter가 false라 중복 호출은 무해)
     root.onkeydown = function (evt) {
       var targetEl = evt.target;
       if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
-      if (evt.key !== 'Enter') return;
-      if (evt.isComposing || evt.keyCode === 229) return; // 조합 중엔 기본동작을 막지 않아 IME 확정을 보장
+      if (evt.isComposing || evt.keyCode === 229 || !isEnterKey(evt)) return;
       evt.preventDefault();
+      commitCharacterInput(targetEl);
     };
 
     root.onkeyup = function (evt) {
       var targetEl = evt.target;
       if (!targetEl || targetEl.id !== 'knowledge-character-input') return;
-      if (evt.isComposing || evt.keyCode === 229) return;
-      if (evt.key !== 'Enter' && evt.keyCode !== 13) return;
+      if (evt.isComposing || evt.keyCode === 229 || !isEnterKey(evt)) return;
       commitCharacterInput(targetEl);
     };
 
