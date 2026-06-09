@@ -651,6 +651,89 @@
     return j(text);
   };
 
+  // ─── AI 사운드 ─────────────────────────────────────────────
+  var withToken = function (path) {
+    var token = getAuthToken();
+    return withBase(path + (token ? ((path.indexOf('?') >= 0 ? '&' : '?') + 'nk_token=' + encodeURIComponent(token)) : ''));
+  };
+
+  api.voicesList = async function (query) {
+    var q = new URLSearchParams();
+    if (query) {
+      if (query.scope) q.set('scope', String(query.scope));
+      if (query.brandId) q.set('brand_id', String(query.brandId));
+      if (query.gender) q.set('gender', String(query.gender));
+      if (query.q) q.set('q', String(query.q));
+    }
+    var qs = q.toString();
+    var res = await fetch(withToken('/api/voices' + (qs ? ('?' + qs) : '')), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'voices_list_error');
+    return j(text);
+  };
+
+  api.voiceUpsert = async function (body) {
+    var res = await fetch(withToken('/api/voices'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body || {})
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'voice_upsert_error');
+    return j(text);
+  };
+
+  api.voicePatch = async function (id, body) {
+    var res = await fetch(withToken('/api/voices/' + encodeURIComponent(String(id))), {
+      method: 'PATCH',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body || {})
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'voice_patch_error');
+    return j(text);
+  };
+
+  api.soundVoiceGenerate = async function (body, opts) {
+    var res = await fetchWithTimeout(withToken('/api/sound/voice-generate'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body || {}),
+      signal: opts && opts.signal
+    }, 180000);
+    var text = await readTextWithTimeout(res, 180000);
+    if (!res.ok) { var err = new Error(e(text) || 'voice_generate_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
+  api.soundSfxGenerate = async function (body, opts) {
+    var res = await fetchWithTimeout(withToken('/api/sound/sfx-generate'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body || {}),
+      signal: opts && opts.signal
+    }, 120000);
+    var text = await readTextWithTimeout(res, 120000);
+    if (!res.ok) { var err = new Error(e(text) || 'sfx_generate_error'); err.status = res.status; err.detail = text; throw err; }
+    return j(text);
+  };
+
+  api.soundAssets = async function (query) {
+    var q = new URLSearchParams();
+    if (query) {
+      if (query.scope) q.set('scope', String(query.scope));
+      if (query.brandId) q.set('brand_id', String(query.brandId));
+      if (query.episodeId) q.set('episode_id', String(query.episodeId));
+      if (query.sessionId) q.set('session_id', String(query.sessionId));
+      if (query.type) q.set('type', String(query.type));
+    }
+    var qs = q.toString();
+    var res = await fetch(withToken('/api/sound/assets' + (qs ? ('?' + qs) : '')), { headers: buildAuthHeaders() });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'sound_assets_error');
+    return j(text);
+  };
+
   api.library = async function (kind, projectId, ownerId) {
     var uid = resolveUserId();
     var token = (function(){ try { return localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.AUTH_TOKEN) || 'nk_auth_token') || ''; } catch(_){ return ''; } })();
