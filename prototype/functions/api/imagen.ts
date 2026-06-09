@@ -555,8 +555,11 @@ async function callOpenAIImage(opts: {
   if (!res.ok) {
     const detail = safeJson(bodyText);
     const message = String((detail as any)?.error?.message || (detail as any)?.message || "").trim();
+    const code = String((detail as any)?.error?.code || (detail as any)?.error?.type || "").trim();
+    const isBilling = /billing|hard limit|insufficient[_ ]?quota|exceeded your current quota|credit balance|payment/i.test(message + " " + code);
     let hint = "";
-    if (res.status === 401) hint = "OPENAI_API_KEY가 유효하지 않거나 권한이 없습니다.";
+    if (isBilling) hint = "OpenAI 계정의 크레딧 잔액이 부족하거나 결제 한도에 도달했어요. platform.openai.com → Billing에서 크레딧을 충전하거나 한도를 올리세요.";
+    else if (res.status === 401) hint = "OPENAI_API_KEY가 유효하지 않거나 권한이 없습니다.";
     else if (res.status === 403) hint = "OpenAI 계정 권한 또는 결제 상태를 확인하세요.";
     else if (res.status === 429) hint = "OpenAI 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.";
     else if (res.status === 400) hint = "요청 파라미터가 잘못되었을 수 있습니다. 프롬프트/사이즈/레퍼런스 이미지를 확인하세요.";
