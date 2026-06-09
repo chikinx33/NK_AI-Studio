@@ -22,7 +22,14 @@
 
   var i18n = {
     ko: {
-      title: 'AI 사운드 생성',
+      title: 'AI 오디오 생성',
+      nav_dashboard: '대시보드',
+      dash_title: 'AI 오디오',
+      dash_hint: '프로젝트(에피소드)를 선택하면 해당 브랜드·에피소드와 연동돼요.\n프로젝트 없이 좌측 VOICE·SFX를 누르면 단독 모드로 열려요.',
+      dash_empty: '연동할 프로젝트가 아직 없어요.\n좌측 VOICE·SFX로 단독 생성을 시작할 수 있어요.',
+      dash_standalone: '단독으로 시작',
+      dash_open_voice: 'VOICE 단독', dash_open_sfx: 'SFX 단독',
+      mode_label: '모드', mode_project: '프로젝트', mode_instance: '단독',
       tab_voice: 'VOICE', tab_music: 'MUSIC', tab_sfx: 'SFX', music_badge: '준비중',
       segments_title: '대화 세그먼트', add_segment: '＋ 세그먼트', seg_placeholder: '대사 텍스트 입력…  (감정 태그: [calm] [warmly])',
       scene_import: '씬 대사 불러오기',
@@ -42,7 +49,15 @@
       confirm_clear: '생성된 사운드 자산을 전체 삭제할까요?'
     },
     en: {
-      title: 'AI Sound', tab_voice: 'VOICE', tab_music: 'MUSIC', tab_sfx: 'SFX', music_badge: 'Soon',
+      title: 'AI Audio',
+      nav_dashboard: 'Dashboard',
+      dash_title: 'AI Audio',
+      dash_hint: 'Pick a project (episode) to bind its brand & episode.\nOpen VOICE·SFX on the left without a project for standalone mode.',
+      dash_empty: 'No projects to bind yet.\nUse VOICE·SFX on the left to start standalone.',
+      dash_standalone: 'Start standalone',
+      dash_open_voice: 'VOICE solo', dash_open_sfx: 'SFX solo',
+      mode_label: 'Mode', mode_project: 'Project', mode_instance: 'Standalone',
+      tab_voice: 'VOICE', tab_music: 'MUSIC', tab_sfx: 'SFX', music_badge: 'Soon',
       segments_title: 'Dialogue Segments', add_segment: '+ Segment', seg_placeholder: 'Enter dialogue…  (emotion tags: [calm] [warmly])',
       scene_import: 'Import scene lines',
       settings_title: 'Settings', voice_label: 'Voice', voice_pick: 'Select voice', voice_none: 'Please select a voice',
@@ -64,8 +79,10 @@
 
   // ─── State ────────────────────────────────────────────────
   var state = {
+    view: 'dashboard',     // 'dashboard' | 'studio'
     tab: 'voice',
     lang: 'ko',
+    drafts: [],
     segments: [],          // [{ id, voiceId, voiceName, voiceInitial, text }]
     defaultVoice: null,    // { id, name, ... }
     model: 'eleven_v3',
@@ -225,6 +242,8 @@
   function render() {
     if (!root) return;
     root.innerHTML = '';
+    if (state.view === 'dashboard') { renderDashboard(); syncSidebarNav(); return; }
+
     var wrap = el('div', 'snd-wrap');
 
     // Header
@@ -234,6 +253,7 @@
     header.appendChild(titleWrap);
     var detached = !isProjectMode();
     var pills = el('div', 'snd-status-pills');
+    pills.appendChild(makePill(t('mode_label'), t(detached ? 'mode_instance' : 'mode_project')));
     pills.appendChild(makePill(t('sessionLabel'), state.sessionId || t('noneLabel')));
     pills.appendChild(makePill(t('projectLabel'), detached ? t('noneLabel') : ((state.currentProject && state.currentProject.title) || t('noProject'))));
     pills.appendChild(makePill(t('brandLabel'), detached ? t('noBrand') : ((state.currentBrand && state.currentBrand.brandTitle) || t('noBrand'))));
@@ -266,16 +286,115 @@
     syncSidebarNav();
   }
 
-  // 사이드바 nav(VOICE/SFX) ↔ 인페이지 탭 동기화
+  // ── Dashboard view (프로젝트/에피소드 선택 허브) ──
+  function renderDashboard() {
+    var wrap = el('div', 'snd-wrap');
+    var header = el('div', 'snd-header');
+    var titleWrap = el('div');
+    titleWrap.appendChild(el('h2', 'snd-title', { textContent: t('dash_title') }));
+    titleWrap.appendChild(el('p', 'snd-dash-hint', { textContent: t('dash_hint') }));
+    header.appendChild(titleWrap);
+    var acts = el('div', 'snd-status-pills');
+    var voiceBtn = el('button', 'snd-add-btn', { type: 'button', textContent: t('dash_open_voice') });
+    voiceBtn.addEventListener('click', function () { openStudioInstance('voice'); });
+    var sfxBtn = el('button', 'snd-add-btn', { type: 'button', textContent: t('dash_open_sfx') });
+    sfxBtn.addEventListener('click', function () { openStudioInstance('sfx'); });
+    acts.appendChild(voiceBtn);
+    acts.appendChild(sfxBtn);
+    header.appendChild(acts);
+    wrap.appendChild(header);
+
+    var scroll = el('div', 'snd-dash-scroll');
+    var drafts = state.drafts || [];
+    if (!drafts.length) {
+      scroll.appendChild(el('div', 'snd-empty', { textContent: t('dash_empty') }));
+    } else {
+      var grid = el('div', 'draft-card-grid');
+      drafts.forEach(function (d) { grid.appendChild(renderProjectCard(d)); });
+      scroll.appendChild(grid);
+    }
+    wrap.appendChild(scroll);
+    root.appendChild(wrap);
+  }
+
+  function renderProjectCard(d) {
+    var card = el('article', 'draft-card');
+    card.setAttribute('data-draft-id', String(d.id || ''));
+    var top = el('div', 'draft-top');
+    var thumbCol = el('div', 'draft-thumb-col');
+    var thumbObj = String((d.payload && d.payload.thumbnailObjectName) || '').trim();
+    var thumbUrl = (thumbObj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(thumbObj) : '';
+    if (thumbUrl) {
+      var tb = el('div', 'draft-thumb has-image');
+      tb.appendChild(el('img', '', { src: thumbUrl, alt: '' }));
+      thumbCol.appendChild(tb);
+    } else {
+      thumbCol.appendChild(el('div', 'draft-thumb empty', { innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>' }));
+    }
+    top.appendChild(thumbCol);
+    var info = el('div', 'draft-info');
+    var titleRow = el('div', 'draft-title-row');
+    titleRow.appendChild(el('h4', 'draft-title', { textContent: d.title || '제목없음', title: d.title || '제목없음' }));
+    info.appendChild(titleRow);
+    var meta = el('div', 'draft-meta');
+    meta.appendChild(el('div', 'draft-meta-project', { textContent: d.brandTitle || d.seriesTitle || '-' }));
+    info.appendChild(meta);
+    top.appendChild(info);
+    card.appendChild(top);
+    card.addEventListener('click', function () { openStudioProject(d); });
+    return card;
+  }
+
+  // ── View switching ──
+  function openDashboard() { state.view = 'dashboard'; loadDrafts(); render(); }
+  function openStudioInstance(tab) {
+    // 단독(인스턴스) 모드 — 전역 프로젝트 컨텍스트는 건드리지 않고 로컬만 분리
+    state.projectId = '';
+    state.currentProject = null;
+    state.currentBrand = null;
+    state.view = 'studio';
+    state.tab = (tab === 'sfx') ? 'sfx' : 'voice';
+    render();
+    loadVoices();
+    loadAssets();
+  }
+  function openStudioProject(d) {
+    try { if (NK.service && NK.service.project && NK.service.project.setCurrent) NK.service.project.setCurrent(d); } catch (_) {}
+    state.projectId = String(d.id || '');
+    state.currentProject = d;
+    state.currentBrand = readCurrentBrand() || { id: d.brandId || '', brandTitle: d.brandTitle || '' };
+    state.view = 'studio';
+    state.tab = 'voice';
+    render();
+    loadVoices();
+    loadAssets();
+  }
+
+  function loadDrafts() {
+    try {
+      var raw = (NK.store && NK.store.getDrafts) ? (NK.store.getDrafts() || []) : [];
+      var norm = (NK.service && NK.service.project && NK.service.project.normalizeDraft) ? NK.service.project.normalizeDraft : function (x) { return x; };
+      state.drafts = raw.map(norm).filter(Boolean);
+    } catch (_) { state.drafts = []; }
+  }
+
+  // 사이드바 nav(대시보드/VOICE/SFX) ↔ 현재 뷰 동기화
   function syncSidebarNav() {
     try {
-      document.querySelectorAll('.sidebar [data-snd-tab]').forEach(function (a) {
-        a.classList.toggle('active', a.getAttribute('data-snd-tab') === state.tab);
+      document.querySelectorAll('.sidebar [data-snd-view]').forEach(function (a) {
+        var v = a.getAttribute('data-snd-view');
+        var active = (state.view === 'dashboard') ? (v === 'dashboard') : (v === state.tab);
+        a.classList.toggle('active', active);
       });
     } catch (_) {}
   }
+  snd.setView = function (v) {
+    if (v === 'dashboard') { openDashboard(); return; }
+    if (v === 'voice' || v === 'sfx') { openStudioInstance(v); return; }
+  };
   snd.setTab = function (tab) {
     if (tab !== 'voice' && tab !== 'sfx') return;
+    state.view = 'studio';
     state.tab = tab;
     render();
   };
@@ -852,10 +971,12 @@
   // ─── Mount ────────────────────────────────────────────────
   snd.mount = function (container) {
     root = container;
+    var det = false, pid = '', tabParam = '';
     try {
       var urlParams = new URLSearchParams(window.location.search);
-      var pid = (urlParams.get('projectId') || '').trim();
-      var det = urlParams.get('detached') === '1';
+      pid = (urlParams.get('projectId') || '').trim();
+      det = urlParams.get('detached') === '1';
+      tabParam = String(urlParams.get('tab') || '').trim().toLowerCase();
       state.projectId = (pid && !det) ? pid : '';
     } catch (_) {}
     state.sessionId = ensureSessionId();
@@ -864,14 +985,30 @@
     detectLang();
     loadSegments();
     if (!state.segments.length) state.segments = [{ id: genId(), voiceId: '', providerVoiceId: '', voiceName: '', voiceInitial: '?', text: '' }];
+    loadDrafts();
+
+    // 초기 뷰 결정(다른 앱과 동일 — 파라미터 없이 진입하면 무조건 대시보드가 첫 화면):
+    //  ?projectId → 프로젝트 스튜디오 / ?detached·?tab → 단독 스튜디오 / 그 외 → 대시보드
+    if (state.projectId) {
+      state.view = 'studio';
+      state.tab = (tabParam === 'sfx') ? 'sfx' : 'voice';
+    } else if (det || tabParam) {
+      state.view = 'studio';
+      state.tab = (tabParam === 'sfx') ? 'sfx' : 'voice';
+      state.currentProject = null; state.currentBrand = null;
+    } else {
+      state.view = 'dashboard';
+      state.currentProject = null; state.currentBrand = null;
+    }
+
     render();
     loadVoices();
     loadAssets();
 
-    // 사이드바 nav(VOICE/SFX) → 인페이지 탭 전환
+    // 사이드바 nav(대시보드/VOICE/SFX) → 뷰 전환
     try {
-      document.querySelectorAll('.sidebar [data-snd-tab]').forEach(function (a) {
-        a.addEventListener('click', function (e) { e.preventDefault(); snd.setTab(a.getAttribute('data-snd-tab')); });
+      document.querySelectorAll('.sidebar [data-snd-view]').forEach(function (a) {
+        a.addEventListener('click', function (e) { e.preventDefault(); snd.setView(a.getAttribute('data-snd-view')); });
       });
     } catch (_) {}
 
