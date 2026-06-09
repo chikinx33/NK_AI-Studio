@@ -717,6 +717,18 @@
       : drafts.filter((d) => d.seriesId === currentSeriesFilter)
     ).sort(sortByRecency);
 
+    // 시리즈(IP) 단위 대표 로고 폴백 맵.
+    // 썸네일은 프로젝트별 thumbnailObjectName에 복사되는 구조라, 업로드 이후 시리즈에
+    // 추가된 프로젝트는 로고를 잃는다. 같은 시리즈에 썸네일을 가진 형제가 하나라도 있으면
+    // 그 값을 공통 로고로 사용해 빈 카드가 생기지 않게 한다.
+    const seriesThumbBySeriesId = new Map();
+    for (const d of drafts) {
+      const sid = d && d.seriesId != null ? String(d.seriesId) : '';
+      if (!sid || seriesThumbBySeriesId.has(sid)) continue;
+      const obj = String(d.payload?.thumbnailObjectName || '').trim();
+      if (obj) seriesThumbBySeriesId.set(sid, obj);
+    }
+
     const fmtDuration = (sec) => {
       const n = Number(sec) || 0;
       if (n >= 3600 && n % 3600 === 0) return `${n / 3600}h`;
@@ -791,7 +803,8 @@
       const needs = Array.isArray(d.payload?.needs) ? d.payload.needs.filter(Boolean).join(', ') : (d.payload?.needs || '');
       const genre = `${cat} ${tags}`.trim();
       const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
-      const thumbObj = String(d.payload?.thumbnailObjectName || '').trim();
+      const thumbObj = String(d.payload?.thumbnailObjectName || '').trim()
+        || (d.seriesId != null ? (seriesThumbBySeriesId.get(String(d.seriesId)) || '') : '');
       const thumbUrl = thumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
         ? NK.api.mediaProxyObjectUrl(thumbObj)
         : '';
@@ -1180,7 +1193,18 @@
       `${labels.duration} : ${dur}`
     ].join('\n');
 
-    const sidebarThumbObj = String(normalized.payload?.thumbnailObjectName || '').trim();
+    // 자체 썸네일이 없으면 같은 시리즈(IP) 형제 프로젝트의 대표 로고로 폴백한다.
+    let sidebarThumbObj = String(normalized.payload?.thumbnailObjectName || '').trim();
+    if (!sidebarThumbObj && normalized.seriesId != null && NK.store && typeof NK.store.getDrafts === 'function') {
+      const sid = String(normalized.seriesId);
+      try {
+        const sibling = NK.store.getDrafts()
+          .map(normalizeDraft)
+          .filter(Boolean)
+          .find(d => d.seriesId != null && String(d.seriesId) === sid && String(d.payload?.thumbnailObjectName || '').trim());
+        if (sibling) sidebarThumbObj = String(sibling.payload.thumbnailObjectName).trim();
+      } catch (_) { }
+    }
     const sidebarThumbUrl = sidebarThumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
       ? NK.api.mediaProxyObjectUrl(sidebarThumbObj)
       : '';
