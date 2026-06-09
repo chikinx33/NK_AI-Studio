@@ -119,9 +119,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     }
     if (!outputUrl) outputUrl = bytesToDataUrl(merged); // 업로드 실패/미구성 폴백
 
-    // sound_assets 레코드
+    // sound_assets 레코드 (preview 샘플은 히스토리에 남기지 않음)
+    const isPreview = !!body.preview;
     let recordId = assetId;
-    if (sql) {
+    if (sql && !isPreview) {
       try {
         const textContent = segIn.map((s) => s.text).join("\n").slice(0, 4000);
         const rows = await sql(

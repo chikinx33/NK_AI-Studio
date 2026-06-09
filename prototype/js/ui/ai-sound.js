@@ -83,6 +83,8 @@
     tab: 'voice',
     lang: 'ko',
     drafts: [],
+    dashFilter: '__all__',
+    previewBusyId: '',     // 미리듣기 생성 중인 voice id
     segments: [],          // [{ id, voiceId, voiceName, voiceInitial, text }]
     defaultVoice: null,    // { id, name, ... }
     model: 'eleven_v3',
@@ -286,43 +288,104 @@
     syncSidebarNav();
   }
 
-  // ── Dashboard view (프로젝트/에피소드 선택 허브) ──
-  function renderDashboard() {
-    var wrap = el('div', 'snd-wrap');
-    var header = el('div', 'snd-header');
-    var titleWrap = el('div');
-    titleWrap.appendChild(el('h2', 'snd-title', { textContent: t('dash_title') }));
-    titleWrap.appendChild(el('p', 'snd-dash-hint', { textContent: t('dash_hint') }));
-    header.appendChild(titleWrap);
-    var acts = el('div', 'snd-status-pills');
-    var voiceBtn = el('button', 'snd-add-btn', { type: 'button', textContent: t('dash_open_voice') });
-    voiceBtn.addEventListener('click', function () { openStudioInstance('voice'); });
-    var sfxBtn = el('button', 'snd-add-btn', { type: 'button', textContent: t('dash_open_sfx') });
-    sfxBtn.addEventListener('click', function () { openStudioInstance('sfx'); });
-    acts.appendChild(voiceBtn);
-    acts.appendChild(sfxBtn);
-    header.appendChild(acts);
-    wrap.appendChild(header);
+  // ── Dashboard view (프로젝트/에피소드 선택 허브 — 다른 앱 대시보드와 동일 규격) ──
+  function fmtDuration(sec) {
+    var n = Number(sec) || 0;
+    if (n >= 3600 && n % 3600 === 0) return (n / 3600) + 'h';
+    if (n >= 60 && n % 60 === 0) return (n / 60) + 'm';
+    return n + 's';
+  }
+  function dashLabels() {
+    return state.lang === 'en'
+      ? { genre: 'Genre', target: 'Target', purpose: 'Purpose', duration: 'Duration', aspect: 'Aspect ratio' }
+      : { genre: '장르', target: '타겟', purpose: '시청목적', duration: '길이', aspect: '비율' };
+  }
+  // 시리즈(카테고리) 그룹 + 개수
+  function buildSeriesList() {
+    var map = [];
+    var index = {};
+    (state.drafts || []).forEach(function (d) {
+      var sid = d.seriesId != null ? String(d.seriesId) : '';
+      var stitle = d.seriesTitle || d.brandTitle || '기타';
+      var key = sid || stitle;
+      if (index[key] == null) { index[key] = map.length; map.push({ id: key, title: stitle, count: 0 }); }
+      map[index[key]].count++;
+    });
+    return map;
+  }
+  function filteredDashDrafts() {
+    var f = state.dashFilter || '__all__';
+    if (f === '__all__') return state.drafts || [];
+    return (state.drafts || []).filter(function (d) {
+      var sid = d.seriesId != null ? String(d.seriesId) : '';
+      var key = sid || (d.seriesTitle || d.brandTitle || '기타');
+      return key === f;
+    });
+  }
 
+  function renderDashboard() {
     var scroll = el('div', 'snd-dash-scroll');
-    var drafts = state.drafts || [];
-    if (!drafts.length) {
-      scroll.appendChild(el('div', 'snd-empty', { textContent: t('dash_empty') }));
+    var projects = el('div', 'projects');
+    var grid = el('div', 'draft-card-grid');
+
+    // 필터 바 (DASHBOARD / 카테고리 / 시리즈 칩) — 그리드 첫 행(grid-column:1/-1)
+    grid.appendChild(renderFilterBar());
+
+    var list = filteredDashDrafts();
+    if (!list.length) {
+      var empty = el('div', 'snd-empty');
+      empty.style.gridColumn = '1 / -1';
+      empty.textContent = t('dash_empty');
+      grid.appendChild(empty);
     } else {
-      var grid = el('div', 'draft-card-grid');
-      drafts.forEach(function (d) { grid.appendChild(renderProjectCard(d)); });
-      scroll.appendChild(grid);
+      list.forEach(function (d) { grid.appendChild(renderProjectCard(d)); });
     }
-    wrap.appendChild(scroll);
-    root.appendChild(wrap);
+    projects.appendChild(grid);
+    scroll.appendChild(projects);
+    root.appendChild(scroll);
+  }
+
+  function renderFilterBar() {
+    var bar = el('div', 'series-filter-bar');
+    var main = el('div', 'series-filter-main');
+    var head = el('div', 'series-filter-header');
+    var titleBlock = el('div', 'series-filter-title-block');
+    titleBlock.appendChild(el('p', 'series-filter-eyebrow', { textContent: 'Dashboard' }));
+    titleBlock.appendChild(el('strong', 'series-filter-title', { textContent: state.lang === 'en' ? 'Category' : '카테고리' }));
+    head.appendChild(titleBlock);
+    main.appendChild(head);
+
+    var chipRow = el('div', 'series-filter-chip-row');
+    var cur = state.dashFilter || '__all__';
+    var allChip = el('button', 'chip series-chip' + (cur === '__all__' ? ' active' : ''), { type: 'button', textContent: state.lang === 'en' ? 'All' : '전체' });
+    allChip.addEventListener('click', function () { state.dashFilter = '__all__'; render(); });
+    chipRow.appendChild(allChip);
+    buildSeriesList().forEach(function (s) {
+      var chip = el('button', 'chip series-chip' + (cur === s.id ? ' active' : ''), { type: 'button', textContent: s.title + ' (' + s.count + ')' });
+      chip.addEventListener('click', function () { state.dashFilter = s.id; render(); });
+      chipRow.appendChild(chip);
+    });
+    main.appendChild(chipRow);
+    bar.appendChild(main);
+    return bar;
   }
 
   function renderProjectCard(d) {
+    var labels = dashLabels();
+    var p = d.payload || {};
+    var ar = p.aspectRatio || '16:9';
+    var dur = fmtDuration(p.duration || 0);
+    var cat = p.purposeCategory || '';
+    var tags = Array.isArray(p.purposeTags) ? p.purposeTags.join(', ') : '';
+    var genre = (cat + ' ' + tags).trim();
+    var tgt = p.target || '';
+    var needs = Array.isArray(p.needs) ? p.needs.filter(Boolean).join(', ') : (p.needs || '');
+
     var card = el('article', 'draft-card');
     card.setAttribute('data-draft-id', String(d.id || ''));
     var top = el('div', 'draft-top');
     var thumbCol = el('div', 'draft-thumb-col');
-    var thumbObj = String((d.payload && d.payload.thumbnailObjectName) || '').trim();
+    var thumbObj = String(p.thumbnailObjectName || '').trim();
     var thumbUrl = (thumbObj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(thumbObj) : '';
     if (thumbUrl) {
       var tb = el('div', 'draft-thumb has-image');
@@ -332,12 +395,17 @@
       thumbCol.appendChild(el('div', 'draft-thumb empty', { innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>' }));
     }
     top.appendChild(thumbCol);
+
     var info = el('div', 'draft-info');
     var titleRow = el('div', 'draft-title-row');
     titleRow.appendChild(el('h4', 'draft-title', { textContent: d.title || '제목없음', title: d.title || '제목없음' }));
     info.appendChild(titleRow);
     var meta = el('div', 'draft-meta');
-    meta.appendChild(el('div', 'draft-meta-project', { textContent: d.brandTitle || d.seriesTitle || '-' }));
+    meta.appendChild(el('div', 'draft-meta-project', { textContent: d.seriesTitle || d.brandTitle || '-' }));
+    meta.appendChild(el('div', 'draft-meta-genre', { textContent: labels.genre + ' : ' + (genre || '-') }));
+    meta.appendChild(el('div', '', { textContent: labels.target + ' : ' + (tgt || '-') }));
+    meta.appendChild(el('div', '', { textContent: labels.purpose + ' : ' + (needs || '-') }));
+    meta.appendChild(el('div', '', { textContent: labels.duration + ' : ' + dur + ' · ' + labels.aspect + ' : ' + ar }));
     info.appendChild(meta);
     top.appendChild(info);
     card.appendChild(top);
@@ -811,12 +879,19 @@
       card.appendChild(tags);
     }
     var foot = el('div', 'snd-vc-foot');
-    if (v.previewUrl) {
-      var pv = el('button', 'snd-vc-preview', { type: 'button', innerHTML: '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>' });
+    // 미리듣기 — 항상 노출. previewUrl이 있으면 그걸, 없으면 짧은 TTS 샘플을 즉석 생성해 재생.
+    var busy = state.previewBusyId === String(v.id);
+    var pv = el('button', 'snd-vc-preview', { type: 'button' });
+    if (busy) {
+      pv.appendChild(el('span', 'snd-spinner'));
+      pv.appendChild(document.createTextNode(state.lang === 'en' ? 'Loading' : '생성 중'));
+      pv.disabled = true;
+    } else {
+      pv.innerHTML = '<svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>';
       pv.appendChild(document.createTextNode(t('preview')));
-      pv.addEventListener('click', function (e) { e.stopPropagation(); playPreview(v.previewUrl); });
-      foot.appendChild(pv);
+      pv.addEventListener('click', function (e) { e.stopPropagation(); previewVoice(v); });
     }
+    foot.appendChild(pv);
     // Phase 2 R2V status badge (brand voices)
     if (v.scope === 'brand') {
       var rk = v.r2vReferenceStatus || 'none';
@@ -831,6 +906,41 @@
   function playPreview(url) {
     stopPreview();
     try { var a = new Audio(url); state._previewAudio = a; a.play(); } catch (_) {}
+  }
+
+  var PREVIEW_SAMPLE = '안녕하세요, 반가워요. 이 목소리로 들려드릴게요.';
+  // 보이스 미리듣기: previewUrl 우선, 없으면 짧은 샘플을 ElevenLabs TTS로 즉석 생성·캐시 후 재생.
+  function previewVoice(v) {
+    if (!v) return;
+    if (v.previewUrl) { playPreview(v.previewUrl); return; }
+    if (v._previewUrl) { playPreview(v._previewUrl); return; }
+    if (state.previewBusyId) return; // 동시 1건만
+    if (!NK.api || !NK.api.soundVoiceGenerate) return;
+    state.previewBusyId = String(v.id);
+    refreshModalIfOpen();
+    NK.api.soundVoiceGenerate({
+      mode: 'instance',
+      sessionId: state.sessionId,
+      preview: true,
+      model: 'eleven_multilingual_v2',
+      format: 'mp3_44100_128',
+      stability: 0.5,
+      segments: [{ voiceId: (String(v.id).indexOf('seed-') === 0 ? '' : v.id), providerVoiceId: v.providerVoiceId || '', text: PREVIEW_SAMPLE }]
+    }).then(function (res) {
+      state.previewBusyId = '';
+      if (res && res.outputUrl) { v._previewUrl = res.outputUrl; playPreview(res.outputUrl); }
+      refreshModalIfOpen();
+    }).catch(function (err) {
+      state.previewBusyId = '';
+      refreshModalIfOpen();
+      alert((state.lang === 'en' ? 'Preview failed: ' : '미리듣기 실패: ') + ((err && err.message) || 'error'));
+    });
+  }
+  // 모달이 열려 있으면 보이스 그리드만 다시 그린다(전체 render는 모달을 닫으므로 사용 안 함).
+  function refreshModalIfOpen() {
+    if (!state.modalOpen || !root) return;
+    var modal = root.querySelector('.snd-modal');
+    if (modal) refreshModalBody(modal);
   }
   function toggleFavorite(v, btn) {
     var next = !v.favorite;
@@ -1004,6 +1114,17 @@
     render();
     loadVoices();
     loadAssets();
+
+    // store는 사용자 스코프 IndexedDB 하이드레이션이 비동기라, 첫 mount 시 캐시가 비어 있을 수 있다.
+    // ready() 후 드래프트를 다시 읽어 대시보드를 갱신한다(첫 진입에 카드가 안 보이던 문제 해결).
+    try {
+      if (NK.store && NK.store.ready) {
+        NK.store.ready().then(function () {
+          loadDrafts();
+          if (state.view === 'dashboard') render();
+        }).catch(function () {});
+      }
+    } catch (_) {}
 
     // 사이드바 nav(대시보드/VOICE/SFX) → 뷰 전환
     try {
