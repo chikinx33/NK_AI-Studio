@@ -964,21 +964,31 @@ a.sidebar-launcher-item:hover {
   pointer-events: none;
 }
 
-/* 홈(옵션) 버튼 — 사이드바 상단 우측 모서리에 작게 고정 */
+/* 홈(옵션) 버튼 — 사이드바 상단 우측 모서리에 작게 고정. 가로=세로 정사각형. */
 .sidebar-home-btn {
   position: absolute;
   top: 12px;
   right: 12px;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   min-width: 0;
   padding: 0;
-  font-size: 12px;
-  line-height: 1;
+  border-radius: 8px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: var(--muted);
   z-index: 5;
+}
+
+.sidebar-home-btn svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+.sidebar-home-btn:hover {
+  color: var(--text);
 }
 
 .search input {
