@@ -503,6 +503,14 @@ body.page-shell-videogen .brand-mark {
   background-image: url('./images/icon-ai-video.png');
 }
 
+body.page-shell-ai-doc .brand-mark {
+  background-image: url('./images/icon-ai-doc.png');
+}
+
+body.page-shell-ai-sound .brand-mark {
+  background-image: url('./images/icon-ai-sound.png');
+}
+
 .brand-text .title {
   display: block;
   font-weight: 700;
