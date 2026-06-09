@@ -256,7 +256,8 @@
     var detached = !isProjectMode();
     var pills = el('div', 'snd-status-pills');
     pills.appendChild(makePill(t('mode_label'), t(detached ? 'mode_instance' : 'mode_project')));
-    pills.appendChild(makePill(t('sessionLabel'), state.sessionId || t('noneLabel')));
+    // 영상생성 페이지와 동일: 단독(detached) 모드에서는 세션 ID를 노출하지 않고 '없음'으로 표기.
+    pills.appendChild(makePill(t('sessionLabel'), detached ? t('noneLabel') : (state.sessionId || t('noneLabel'))));
     pills.appendChild(makePill(t('projectLabel'), detached ? t('noneLabel') : ((state.currentProject && state.currentProject.title) || t('noProject'))));
     pills.appendChild(makePill(t('brandLabel'), detached ? t('noBrand') : ((state.currentBrand && state.currentBrand.brandTitle) || t('noBrand'))));
     header.appendChild(pills);
