@@ -31,6 +31,22 @@ test('gemini request sends the edit instruction text part before inline referenc
   assert.match(source, /const parts: Array<Record<string, unknown>> = \[\{ text: prompt \}\];/);
 });
 
+test('gemini interleaves a per-character label immediately before each reference image (multi-character binding)', () => {
+  const source = readImagenSource();
+  // buildGeminiParts 가 라벨 플래그를 받고, 라벨일 때 이미지 앞에 subjectDescription 텍스트를 push
+  assert.match(source, /function buildGeminiParts\(referenceImages: NormalizedReferenceImage\[\], prompt: string, labelImages\?: boolean\)/);
+  assert.match(source, /if \(labelImages\) \{/);
+  assert.match(source, /Reference image \$\{index \+ 1\} \(immediately below\) is the registered/);
+  // 텍스트→이미지 + 레퍼런스 2장 이상일 때만 라벨링 활성화
+  assert.match(source, /generationMode === "text-to-image" && referenceImages\.length > 1/);
+});
+
+test('text-to-image prompt enforces rendering every distinct registered character (no merge/drop)', () => {
+  const source = readImagenSource();
+  assert.match(source, /different registered characters, each provided with its OWN labeled reference image/);
+  assert.match(source, /do not merge, swap, duplicate, or omit any character/);
+});
+
 test('imagen source builds multi-turn conversational contents from prior prompts and generated images', () => {
   const source = readImagenSource();
   assert.match(source, /function buildGeminiContents/);
