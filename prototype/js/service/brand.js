@@ -317,10 +317,6 @@
         return Array.from(map.values());
     }
 
-    function normalizeEnvironmentKind(value) {
-        return String(value || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background';
-    }
-
     function normalizeEnvironmentName(value) {
         return normalizeText(value).replace(/^@+/, '').replace(/\s+/g, ' ').trim();
     }
@@ -339,7 +335,7 @@
                 assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
                 displayName: displayName,
                 token: token,
-                kind: normalizeEnvironmentKind(raw.kind),
+                description: normalizeText(raw.description || raw.personality || raw.note || ''),
                 items: normalizeCharacterSheetItems(raw.items)
             });
         });
@@ -369,7 +365,7 @@
                 assetId: existing.assetId || item.assetId,
                 displayName: existing.displayName || item.displayName,
                 token: existing.token || item.token,
-                kind: item.kind || existing.kind,
+                description: item.description || existing.description || '',
                 items: normalizeCharacterSheetItems(Array.from(itemMap.values()))
             });
         });

@@ -261,7 +261,7 @@
                 assetId: normalizeText(raw.assetId || raw.id) || ('env_' + String(index + 1).padStart(3, '0')),
                 displayName: displayName,
                 token: token,
-                kind: String(raw.kind || '').trim().toLowerCase() === 'prop' ? 'prop' : 'background',
+                description: normalizeText(raw.description || raw.personality || raw.note || ''),
                 items: normalizeCharacterSheetItems(raw.items)
             });
         });
