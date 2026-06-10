@@ -76,8 +76,8 @@
     try {
       Promise.resolve(NK.api.projectGet(projectId))
         .then(function (res) {
-          var data = res && (res.data || res);
-          projectEnvCache[projectId] = (data && (data.payload || data)) || null;
+          // 구조를 가정하지 않고 응답 전체를 캐시 → 깊은 스캔으로 environmentAssets 추출.
+          projectEnvCache[projectId] = res || null;
         })
         .catch(function () { projectEnvCache[projectId] = null; })
         .then(function () {
@@ -130,60 +130,71 @@
     // 배경·소품(environmentAssets)은 payload·brand 양쪽에 여러 키로 저장될 수 있고
     // 브랜드 캐시엔 비어 있을 수 있으므로 가능한 모든 소스를 모은다.
     try {
-      var collectEnvs = function (obj) {
-        if (!obj || typeof obj !== 'object') return [];
+      // 구조를 가정하지 않는 깊은 스캔: 어떤 객체든 키 이름에 'environment' 가 포함된 배열을
+      // 재귀로 찾아 자산 후보를 수집한다(서버 응답/브랜드/payload 중첩 구조 차이에 무관).
+      var deepCollectEnvs = function (root) {
         var acc = [];
-        var keys = ['environmentAssets', 'knowledgeEnvironmentAssets'];
-        keys.forEach(function (k) { if (Array.isArray(obj[k])) acc = acc.concat(obj[k]); });
-        if (obj.knowledgeHub && typeof obj.knowledgeHub === 'object') {
-          keys.forEach(function (k) { if (Array.isArray(obj.knowledgeHub[k])) acc = acc.concat(obj.knowledgeHub[k]); });
+        if (!root || typeof root !== 'object') return acc;
+        var stack = [{ o: root, d: 0 }];
+        var visited = 0;
+        while (stack.length && visited < 6000) {
+          var cur = stack.pop(); visited++;
+          var o = cur.o, d = cur.d;
+          if (!o || typeof o !== 'object' || d > 7) continue;
+          if (Array.isArray(o)) {
+            for (var ai = 0; ai < o.length; ai++) {
+              if (o[ai] && typeof o[ai] === 'object') stack.push({ o: o[ai], d: d + 1 });
+            }
+            continue;
+          }
+          for (var k in o) {
+            if (!Object.prototype.hasOwnProperty.call(o, k)) continue;
+            var v = o[k];
+            if (/environment/i.test(k) && Array.isArray(v)) {
+              v.forEach(function (e) { acc.push(e); });
+            } else if (v && typeof v === 'object') {
+              stack.push({ o: v, d: d + 1 });
+            }
+          }
         }
         return acc;
       };
-      var brand = null;
-      if (NK.service && NK.service.brand) {
-        if (brandId && NK.service.brand.getById) brand = NK.service.brand.getById(brandId);
-        // brandId 가 비었거나 캐시에 환경 자산이 없으면 현재 프로젝트 기준으로 강하게 해석.
-        if ((!brand || !collectEnvs(brand).length) && NK.service.brand.resolveCurrent) {
-          var rc = null;
-          try { rc = NK.service.brand.resolveCurrent({ payload: st && st.payload }); } catch (_) { }
-          if (rc && (!brand || collectEnvs(rc).length > collectEnvs(brand).length)) brand = rc;
-        }
-        if (!brand && NK.service.brand.getCurrent) brand = NK.service.brand.getCurrent();
-      }
-      // 프로젝트 draft(브랜드 허브가 updatePayload 로 environmentAssets 를 저장하는 곳)도 소스로.
+      var brand = (brandId && NK.service && NK.service.brand && NK.service.brand.getById)
+        ? NK.service.brand.getById(brandId) : null;
       var draftPayload = null;
       try {
-        var pid = (st && st.draftId) ||
-          (NK.service && NK.service.project && NK.service.project.getCurrentProjectId && NK.service.project.getCurrentProjectId());
-        if (pid && NK.service && NK.service.project && NK.service.project.getDraftById) {
-          var d = NK.service.project.getDraftById(pid);
-          draftPayload = d ? (d.payload || d) : null;
+        if (projectId && NK.service && NK.service.project && NK.service.project.getDraftById) {
+          var d = NK.service.project.getDraftById(projectId);
+          draftPayload = d || null;
         }
       } catch (_) { }
       var brandProjectId2 = (brandId && brandId.indexOf('projects') === 0) ? brandId.slice('projects'.length) : '';
       var serverPayload = projectId ? projectEnvCache[projectId] : null;
       var brandProjectPayload = brandProjectId2 ? projectEnvCache[brandProjectId2] : null;
+      // 로컬 브랜드 전체도 스캔(브랜드 스튜디오가 저장한 자산이 어느 브랜드에 있든 잡히도록).
+      var allBrands = [];
+      try { allBrands = (NK.service && NK.service.brand && NK.service.brand.list) ? (NK.service.brand.list() || []) : []; } catch (_) { }
       var envs = [].concat(
-        collectEnvs(st && st.payload),
-        collectEnvs(draftPayload),
-        collectEnvs(brand),
-        collectEnvs(brandId && hydratedBrandCache[brandId]),
-        collectEnvs(serverPayload),
-        collectEnvs(brandProjectPayload)
+        deepCollectEnvs(st && st.payload),
+        deepCollectEnvs(draftPayload),
+        deepCollectEnvs(brand),
+        deepCollectEnvs(brandId && hydratedBrandCache[brandId]),
+        deepCollectEnvs(serverPayload),
+        deepCollectEnvs(brandProjectPayload),
+        deepCollectEnvs(allBrands)
       );
       try {
         if (window.console && console.debug) {
           console.debug('[mention] env sources', {
-            brandId: brandId,
-            projectId: projectId,
-            brandProjectId: brandProjectId2,
-            payload: collectEnvs(st && st.payload).length,
-            draft: collectEnvs(draftPayload).length,
-            brand: collectEnvs(brand).length,
-            hydrated: collectEnvs(brandId && hydratedBrandCache[brandId]).length,
-            server: collectEnvs(serverPayload).length,
-            brandProject: collectEnvs(brandProjectPayload).length
+            brandId: brandId, projectId: projectId, brandProjectId: brandProjectId2,
+            payload: deepCollectEnvs(st && st.payload).length,
+            draft: deepCollectEnvs(draftPayload).length,
+            brand: deepCollectEnvs(brand).length,
+            hydrated: deepCollectEnvs(brandId && hydratedBrandCache[brandId]).length,
+            server: deepCollectEnvs(serverPayload).length,
+            brandProject: deepCollectEnvs(brandProjectPayload).length,
+            allBrands: deepCollectEnvs(allBrands).length,
+            brandListIds: allBrands.map(function (b) { return b && b.brandId; })
           });
         }
       } catch (_) { }
