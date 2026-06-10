@@ -8,6 +8,7 @@
   var state = {
     lang: 'ko',
     sessionId: '',
+    legacySessionIds: [],
     mode: 'text-to-image',
     generationStyle: 'single',
     prompt: '',
@@ -788,6 +789,52 @@
     } catch (_) {
       return 'img_' + Date.now();
     }
+  }
+
+  function sanitizeSessionToken(value) {
+    return String(value || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 80);
+  }
+
+  // 생성 히스토리는 서버(GCS)에 userId/sessionId 경로로 저장된다(api.js aiImageSessionLibrary).
+  // sessionId 를 (계정, 프로젝트) 기준으로 '결정적'으로 만들면, 같은 프로젝트는 어느 기기에서
+  // 접속하든 동일한 sessionId → 동일한 서버 라이브러리를 조회한다(=계정 귀속 + 기기 무관).
+  // 프로젝트가 없으면(인스턴스) 계정별 단일 버킷을 쓴다.
+  //   - 프로젝트:  'imgp_' + projectId
+  //   - 인스턴스:  'imgi_' + userKey
+  function deterministicSessionId() {
+    var proj = state.currentProject;
+    var pid = proj && proj.id ? sanitizeSessionToken(proj.id) : '';
+    if (pid) return 'imgp_' + pid;
+    return 'imgi_' + sanitizeSessionToken(currentUserKey());
+  }
+
+  // 결정적 sessionId 를 확정하고, 과거(랜덤) 세션 id 는 legacy 목록으로 보존해 기존 이미지도 계속 표시.
+  // 프로젝트 payload 의 aiImageSessionId 를 canonical 로 마이그레이션(브랜드 스튜디오 자산 탐색과 동기화).
+  function resolveSessionScope() {
+    var canonical = deterministicSessionId();
+    var legacy = [];
+    var pushLegacy = function (sid) {
+      var s = String(sid || '').trim();
+      if (s && s !== canonical && legacy.indexOf(s) < 0) legacy.push(s);
+    };
+    var proj = state.currentProject;
+    var pid = proj && proj.id ? String(proj.id).trim() : '';
+    if (pid) {
+      var payload = (proj && proj.payload) || {};
+      var prevSid = String(payload.aiImageSessionId || '').trim();
+      (Array.isArray(payload.aiImageLegacySessionIds) ? payload.aiImageLegacySessionIds : []).forEach(pushLegacy);
+      pushLegacy(prevSid);
+      // canonical 로 고정 + 과거 세션 보존 (변경이 있을 때만 서버에 1회 기록).
+      var migrated = (prevSid !== canonical) || (JSON.stringify(Array.isArray(payload.aiImageLegacySessionIds) ? payload.aiImageLegacySessionIds : []) !== JSON.stringify(legacy));
+      if (migrated && NK.service && NK.service.project && NK.service.project.updatePayload) {
+        try { NK.service.project.updatePayload(pid, { aiImageSessionId: canonical, aiImageLegacySessionIds: legacy }).catch(function () {}); } catch (_) {}
+      }
+    } else {
+      // 인스턴스: 과거 기기-로컬 랜덤 세션을 legacy 로 병합(현재 기기의 기존 이력 표시용).
+      try { pushLegacy(String(localStorage.getItem(STORAGE_SESSION_KEY) || '').trim()); } catch (_) {}
+    }
+    state.sessionId = canonical;
+    state.legacySessionIds = legacy;
   }
 
   // 로그인 계정별로 로컬 캐시 키를 분리한다. 같은 브라우저에서 계정을 전환해도
@@ -2712,13 +2759,28 @@
     state.historyLoading = true;
     state.historyLoadError = '';
     updateHistoryPanelUI();
+    // canonical 세션 + 과거(legacy) 세션을 모두 조회해 병합(objectName 기준 dedupe).
+    var ids = [state.sessionId];
+    (Array.isArray(state.legacySessionIds) ? state.legacySessionIds : []).forEach(function (s) {
+      s = String(s || '').trim();
+      if (s && ids.indexOf(s) < 0) ids.push(s);
+    });
     try {
-      var res = await NK.api.aiImageSessionLibrary(state.sessionId);
-      mergeServerResults(Array.isArray(res && res.items) ? res.items : []);
+      var merged = [];
+      for (var i = 0; i < ids.length; i++) {
+        try {
+          var res = await NK.api.aiImageSessionLibrary(ids[i]);
+          if (res && Array.isArray(res.items)) merged = merged.concat(res.items);
+        } catch (innerErr) {
+          // 첫(canonical) 세션의 실패만 오류로 표시(404=빈 세션은 정상).
+          if (i === 0 && !(innerErr && innerErr.status === 404)) {
+            state.historyLoadError = '1';
+            console.warn('AI image session history sync failed', innerErr);
+          }
+        }
+      }
+      mergeServerResults(merged);
       persistHistory();
-    } catch (err) {
-      console.warn('AI image session history sync failed', err);
-      state.historyLoadError = (err && err.status === 404) ? '' : '1';
     } finally {
       state.historyLoading = false;
       updatePreviewPanelUI();
@@ -3586,25 +3648,11 @@
   function init() {
     if (!document.getElementById('ai-image-root')) return;
     state.lang = readLang();
-    state.sessionId = ensureSessionId();
     state.currentProject = readCurrentProject();
     state.currentBrand = readCurrentBrand();
-    // Brand Studio 자산 발견용: 프로젝트 컨텍스트일 때 sessionId를 payload에 동기화.
-    // payload.aiImageSessionId가 이미 있으면 그 값을 권위로 삼아 localStorage도 맞춤
-    // (다른 브라우저/세션 재진입 시에도 같은 GCS 세션에 누적되도록).
-    try {
-      var _proj = state.currentProject;
-      var _pid = _proj && _proj.id ? String(_proj.id).trim() : '';
-      if (_pid && NK.service && NK.service.project && NK.service.project.updatePayload) {
-        var _existing = String((_proj.payload && _proj.payload.aiImageSessionId) || '').trim();
-        if (_existing && _existing !== state.sessionId) {
-          try { localStorage.setItem(STORAGE_SESSION_KEY, _existing); } catch (_) {}
-          state.sessionId = _existing;
-        } else if (!_existing && state.sessionId) {
-          NK.service.project.updatePayload(_pid, { aiImageSessionId: state.sessionId }).catch(function () {});
-        }
-      }
-    } catch (_) {}
+    // 생성 히스토리를 (계정, 프로젝트) 기준 결정적 sessionId 로 묶는다 → 어느 기기에서든 동일 버킷,
+    // 프로젝트/인스턴스별 분리. 과거 랜덤 세션은 legacy 로 보존해 기존 이미지도 계속 표시.
+    resolveSessionScope();
     state.provider = readStoredProvider();
     loadHistory();
     try {

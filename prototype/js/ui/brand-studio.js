@@ -4531,10 +4531,31 @@
             var _pp = (latestProject && latestProject.payload) || (project && project.payload) || {};
             _aiImgSid = String(_pp.aiImageSessionId || '').trim();
           } catch (_) {}
-          if (!_aiImgSid) return;
-          return NK.api.aiImageSessionLibrary(_aiImgSid)
-            .then(function (data) {
-              var items = Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []);
+          // canonical 세션 + 과거(legacy) 세션을 모두 조회해 병합(이전에 다른 세션 id로 생성된 이미지도 포함).
+          var _legacy = [];
+          try {
+            var _pp2 = (latestProject && latestProject.payload) || (project && project.payload) || {};
+            _legacy = Array.isArray(_pp2.aiImageLegacySessionIds) ? _pp2.aiImageLegacySessionIds : [];
+          } catch (_) {}
+          var _sids = [_aiImgSid];
+          _legacy.forEach(function (s) { s = String(s || '').trim(); if (s && _sids.indexOf(s) < 0) _sids.push(s); });
+          if (!_aiImgSid && !_sids.filter(Boolean).length) return;
+          return Promise.all(_sids.filter(Boolean).map(function (sid) {
+            return NK.api.aiImageSessionLibrary(sid)
+              .then(function (data) { return Array.isArray(data) ? data : (Array.isArray(data && data.items) ? data.items : []); })
+              .catch(function () { return []; });
+          }))
+            .then(function (lists) {
+              var seen = {};
+              var items = [];
+              lists.forEach(function (list) {
+                (list || []).forEach(function (it) {
+                  var name = String(it && (it.name || it.objectName) || '').trim();
+                  if (!name || seen[name]) return;
+                  seen[name] = true;
+                  items.push(it);
+                });
+              });
               if (items.length && root.isConnected) {
                 _aiImageStorageCache[initProjectId] = items;
                 if (initDone) forceRerender();
