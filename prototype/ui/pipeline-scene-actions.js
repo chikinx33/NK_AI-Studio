@@ -626,29 +626,98 @@
       if (ctx.updateDraftFromPipeline) ctx.updateDraftFromPipeline();
     };
 
+    // ── 프롬프트(Common/화면/행동/Visual/Duration) 인라인 편집 ──
+    // 편집/저장/취소 버튼 없이 클릭→타이핑→Enter 적용. 변경분만 state 반영 + 영속화.
+    var commitPromptEdit = function (sceneId) {
+      var ctx = opts.ctx;
+      if (!ctx || !ctx.getState || !ctx.setState || !sceneId) return;
+      var st = ctx.getState();
+      if (!st || !Array.isArray(st.scenes)) return;
+      var idx = st.scenes.findIndex(function (s) { return String(s.id) === String(sceneId); });
+      if (idx < 0) return;
+      var scene = st.scenes[idx];
+      var draft = readPromptDraft(rootEl, sceneId, scene, true);
+      // 사용자가 직접 입력한 duration 을 모델 최대값에 맞춰 클램프.
+      try {
+        var modelEl = document.getElementById('video-model-select');
+        var curModel = modelEl ? modelEl.value : '';
+        var videoMod = NK.uiPipelineVideo;
+        if (videoMod && videoMod.getModelMaxDuration) {
+          var modelMax = videoMod.getModelMaxDuration(curModel);
+          if (Number(draft.estSec) > modelMax) draft.estSec = modelMax;
+        }
+      } catch (_) { }
+      // COMMON 은 전 씬 공통(st.header). 변경됐으면 header 를 갱신하고 다른 행 표시도 동기화한다.
+      // (이미지/영상 생성은 st.header 를 공통 프롬프트로 사용하므로 반드시 여기에 반영해야 함)
+      var commonEl = rootEl.querySelector('.prompt-common[data-id="' + sceneId + '"]');
+      var commonText = commonEl
+        ? String(commonEl.innerText || commonEl.textContent || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim()
+        : null;
+      var headerChanged = commonText !== null && commonText !== String(st.header || '').trim();
+      // 씬 단위(화면/행동/Visual/Duration) 변경 여부
+      var perSceneSame = Number(scene.estSec || 0) === Number(draft.estSec || 0) &&
+        String(scene.shot || '') === String(draft.shot || '') &&
+        (draft.composition == null || String(scene.composition || '') === String(draft.composition)) &&
+        (draft.action == null || String(scene.action || '') === String(draft.action));
+      if (!headerChanged && perSceneSame) return;
+      if (!perSceneSame) st.scenes[idx] = Object.assign({}, scene, draft, { editingPrompt: false });
+      if (headerChanged) st.header = commonText;
+      ctx.setState(st);
+      if (headerChanged) {
+        // 전체 재렌더 없이 모든 행의 COMMON 표시만 동기화(편집 중 포커스/레이아웃 방해 최소화).
+        var commons = rootEl.querySelectorAll('.prompt-common[data-id]');
+        for (var ci = 0; ci < commons.length; ci++) {
+          if (commons[ci] !== commonEl && String(commons[ci].textContent || '') !== commonText) {
+            commons[ci].textContent = commonText;
+          }
+        }
+      }
+      // Duration 표시를 "Ns." 형식으로 재포맷(편집 후 일관성).
+      var durEl = rootEl.querySelector('.prompt-duration[data-id="' + sceneId + '"]');
+      if (durEl) durEl.textContent = (Math.max(Number(draft.estSec) || 0, 1)) + 's.';
+      if (ctx.persistPipeline) ctx.persistPipeline();
+      try { if (ctx.updateDraftFromPipeline) ctx.updateDraftFromPipeline(); } catch (_) { }
+      try {
+        var pid = st.draftId || (opts.getProjectId ? opts.getProjectId() : '');
+        if (pid && NK.api && NK.api.projectSave) {
+          var title = (typeof opts.getProjectTitle === 'function') ? (opts.getProjectTitle() || '') : '';
+          NK.api.projectSave(pid, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '', title: title }).catch(function () { });
+        }
+      } catch (_) { }
+    };
+
+    // 더빙·프롬프트 공통 인라인 편집 대상 탐색 및 커밋 디스패치
+    var findInlineEditable = function (target) {
+      return (target && target.closest) ? target.closest('[data-dub-edit],[data-prompt-edit]') : null;
+    };
+    var commitInline = function (el) {
+      if (!el) return;
+      if (el.getAttribute('data-prompt-edit')) commitPromptEdit(el.dataset.id);
+      else commitDubEdit(el);
+    };
+
     // 한글 IME: Enter 는 keydown 에서 조합 확정에 쓰이므로, 줄바꿈만 막고 적용은 keyup 의 실제 Enter 에서 처리.
     rootEl.addEventListener('keydown', function (e) {
-      var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
-      if (!el) return;
+      if (!findInlineEditable(e.target)) return;
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) e.preventDefault();
     });
     rootEl.addEventListener('keyup', function (e) {
-      var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
+      var el = findInlineEditable(e.target);
       if (!el) return;
       if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-        commitDubEdit(el);
-        try { el.blur(); } catch (_) {}
+        commitInline(el);
+        try { el.blur(); } catch (_) { }
       }
     });
-    // 포커스 진입 시점의 표시 내용을 baseline 으로 기록(실제 변경 여부 판정용).
+    // 포커스 진입 시점의 표시 내용을 baseline 으로 기록(더빙: 실제 변경 여부 판정용).
     rootEl.addEventListener('focusin', function (e) {
       var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
       if (el) el.dataset.dubBaseline = String(el.innerText || el.textContent || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
     });
     // 포커스가 벗어나면(다른 곳 클릭·저장 버튼 클릭 등) 최신 내용을 state 에 반영.
     rootEl.addEventListener('focusout', function (e) {
-      var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
-      if (el) commitDubEdit(el);
+      var el = findInlineEditable(e.target);
+      if (el) commitInline(el);
     });
   };
 })();

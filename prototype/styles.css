@@ -4841,6 +4841,20 @@ textarea::-webkit-scrollbar-corner {
   border-radius: 4px;
 }
 
+/* 프롬프트 인라인 편집 어포던스 (레이아웃 시프트 없이 hover/focus 만 표시) */
+#pipeline-scenes .scene-cell.prompt p[data-prompt-edit] {
+  cursor: text;
+  border-radius: 4px;
+  transition: background 0.12s, box-shadow 0.12s;
+}
+#pipeline-scenes .scene-cell.prompt p[data-prompt-edit]:hover {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+#pipeline-scenes .scene-cell.prompt p[data-prompt-edit]:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent 70%);
+}
+
 .favorite-card {
   position: relative;
   display: flex;

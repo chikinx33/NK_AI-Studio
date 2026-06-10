@@ -385,27 +385,22 @@
       })() +
       '</div>' +
       '</div>' +
+      // 프롬프트도 더빙처럼 인라인 편집: 별도 편집/저장/취소 버튼 없이 클릭→타이핑→Enter 적용.
       '<div class="scene-cell prompt">' +
       '<p class="eyebrow">Common</p>' +
-      '<p class="prompt-common" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + header + '</p>' +
+      '<p class="prompt-common is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true" title="클릭해 수정 · Enter로 적용 (Shift+Enter 줄바꿈)">' + header + '</p>' +
       // composition/action 이 있으면 화면/행동을 별도 라인으로 (Visual 라인은 숨김 — 중복 방지).
       // 둘 다 없으면 기존 Visual 사용.
       ((scene.composition || scene.action)
         ? ('<p class="eyebrow">화면</p>' +
-           '<p class="prompt-composition" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + escapeText(scene.composition || '') + '</p>' +
+           '<p class="prompt-composition is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true">' + escapeText(scene.composition || '') + '</p>' +
            '<p class="eyebrow">행동</p>' +
-           '<p class="prompt-action" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + escapeText(scene.action || '') + '</p>')
+           '<p class="prompt-action is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true">' + escapeText(scene.action || '') + '</p>')
         : ('<p class="eyebrow">Visual</p>' +
-           '<p class="prompt-visual" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (scene.shot || '') + '</p>')
+           '<p class="prompt-visual is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true">' + (scene.shot || '') + '</p>')
       ) +
       '<p class="eyebrow">Duration</p>' +
-      '<p class="prompt-duration" data-id="' + scene.id + '"' + (scene.editingPrompt ? ' contenteditable="true"' : '') + '>' + (Math.max(Number(scene.estSec) || 0, 1)) + 's.</p>' +
-      '' +
-      '<div class="cell-actions br">' +
-      (scene.editingPrompt
-        ? '<button class="btn-secondary compact" data-action="save-prompt" data-id="' + scene.id + '">저장</button><button class="btn-ghost compact" data-action="cancel-prompt" data-id="' + scene.id + '">취소</button>'
-        : '<button class="btn-ghost compact" data-action="edit-prompt" data-id="' + scene.id + '">편집</button>') +
-      '</div>' +
+      '<p class="prompt-duration is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true">' + (Math.max(Number(scene.estSec) || 0, 1)) + 's.</p>' +
       '</div>' +
       '<div class="scene-cell image"><div class="scene-media-stack"><div class="image-slot">' + img + '</div><div class="video-slot">' + videoCard + '</div></div></div>' +
       '<div class="scene-cell actions">' +
