@@ -103,10 +103,13 @@
       savedProject: '프로젝트 저장소 등록 완료',
       saveDisabled: '프로젝트가 선택되지 않아 등록할 수 없습니다.',
       saveBrandDisabled: '브랜드와 캐릭터가 선택되어야 등록할 수 있습니다.',
-      saveBrandNoCharacters: '현재 브랜드에 등록된 캐릭터가 없어 IP로 등록할 수 없습니다.',
-      saveBrandChooseCharacter: '등록할 캐릭터를 먼저 선택해 주세요.',
-      saveBrandSelectLabel: '브랜드 캐릭터',
-      saveBrandSelectPlaceholder: '캐릭터 선택',
+      saveBrandNoCharacters: '현재 브랜드에 등록된 캐릭터·배경·소품이 없어 IP로 등록할 수 없습니다.',
+      saveBrandChooseCharacter: '등록할 캐릭터 또는 배경·소품을 먼저 선택해 주세요.',
+      saveBrandSelectLabel: '브랜드 캐릭터/배경·소품',
+      saveBrandSelectPlaceholder: '캐릭터·배경·소품 선택',
+      saveBrandGroupCharacter: '캐릭터',
+      saveBrandGroupEnvironment: '배경·소품',
+      savedBrandEnvironment: '배경·소품 자산에 이미지를 등록했습니다.',
       openVideo: 'AI Video로 이동',
       loginRequired: '로그인이 필요합니다.',
       loginAction: '로그인 하기',
@@ -250,10 +253,13 @@
       savedProject: 'Saved to project library',
       saveDisabled: 'A selected project is required to save this result.',
       saveBrandDisabled: 'A selected brand and character are required to save this result.',
-      saveBrandNoCharacters: 'No registered characters are available in the current brand.',
-      saveBrandChooseCharacter: 'Choose a character before saving to brand IP.',
-      saveBrandSelectLabel: 'Brand character',
-      saveBrandSelectPlaceholder: 'Select a character',
+      saveBrandNoCharacters: 'No registered characters/backgrounds/props are available in the current brand.',
+      saveBrandChooseCharacter: 'Choose a character or background/prop before saving to brand IP.',
+      saveBrandSelectLabel: 'Brand character / background·prop',
+      saveBrandSelectPlaceholder: 'Select character / background·prop',
+      saveBrandGroupCharacter: 'Characters',
+      saveBrandGroupEnvironment: 'Backgrounds/Props',
+      savedBrandEnvironment: 'Image registered to background/prop assets.',
       openVideo: 'Open AI Video',
       loginRequired: 'Sign-in is required.',
       loginAction: 'Sign in',
@@ -906,9 +912,12 @@
   }
 
   function brandCharacterSignature() {
-    return brandCharacterOptions().map(function (item) {
-      return String(item && item.token || '') + ':' + String(item && item.label || '');
-    }).join('|');
+    var sig = function (list, prefix) {
+      return (Array.isArray(list) ? list : []).map(function (item) {
+        return prefix + String(item && item.token || '') + ':' + String(item && item.label || '');
+      }).join('|');
+    };
+    return sig(brandCharacterOptions(), 'c') + '#' + sig(brandEnvironmentOptions(), 'e');
   }
 
   function historyPanelSignature() {
@@ -1621,6 +1630,7 @@
     var preview = selectedPreview && typeof selectedPreview === 'object' ? selectedPreview : null;
     var selectedResult = preview && preview.type === 'result' ? preview.result : null;
     var brandCharacterList = brandCharacterOptions();
+    var brandEnvironmentList = brandEnvironmentOptions();
     var selectedBrandToken = selectedBrandCharacterToken(selectedResult);
     var selectedCameraControls = preview && preview.cameraControls
       ? normalizeCameraControls(preview.cameraControls)
@@ -1659,12 +1669,19 @@
               '<label class="ai-image-brand-select-wrap" aria-label="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
               '<select id="ai-image-brand-target" title="' + escapeHtml(t('saveBrandSelectLabel')) + '">' +
               '<option value="">' + escapeHtml(t('saveBrandSelectPlaceholder')) + '</option>' +
-              brandCharacterList.map(function (item) {
-                return '<option value="' + escapeHtml(item.token) + '"' + (String(item.token) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
-              }).join('') +
+              (brandCharacterList.length ? ('<optgroup label="' + escapeHtml(t('saveBrandGroupCharacter')) + '">' +
+                brandCharacterList.map(function (item) {
+                  var val = makeBrandTargetValue('character', item.token);
+                  return '<option value="' + escapeHtml(val) + '"' + (String(val) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+                }).join('') + '</optgroup>') : '') +
+              (brandEnvironmentList.length ? ('<optgroup label="' + escapeHtml(t('saveBrandGroupEnvironment')) + '">' +
+                brandEnvironmentList.map(function (item) {
+                  var val = makeBrandTargetValue('environment', item.token);
+                  return '<option value="' + escapeHtml(val) + '"' + (String(val) === String(selectedBrandToken) ? ' selected' : '') + '>' + escapeHtml(item.label) + '</option>';
+                }).join('') + '</optgroup>') : '') +
               '</select>' +
               '</label>' +
-              '<button type="button" class="btn-secondary compact ai-image-action-icon ai-image-action-save" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveBrand')) + '" title="' + escapeHtml(t('saveBrand')) + '"' + ((brand && brand.brandId && brandCharacterList.length) ? '' : ' disabled') + '>' + brandSaveIconSvg() + '</button>' +
+              '<button type="button" class="btn-secondary compact ai-image-action-icon ai-image-action-save" data-action="save-result-brand" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveBrand')) + '" title="' + escapeHtml(t('saveBrand')) + '"' + ((brand && brand.brandId && (brandCharacterList.length || brandEnvironmentList.length)) ? '' : ' disabled') + '>' + brandSaveIconSvg() + '</button>' +
               '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-action-save" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveProject')) + '" title="' + escapeHtml(t('saveProject')) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + projectSaveIconSvg() + '</button>' +
               '</div></div>') +
               '</div>'
@@ -1760,12 +1777,47 @@
     return options;
   }
 
+  // 배경·소품(환경) 자산을 캐릭터와 동일한 방식으로 등록 대상에 노출.
+  function brandEnvironmentOptions() {
+    var brand = state.currentBrand && typeof state.currentBrand === 'object' ? state.currentBrand : {};
+    var assets = Array.isArray(brand.environmentAssets)
+      ? brand.environmentAssets
+      : (Array.isArray(brand.knowledgeEnvironmentAssets) ? brand.knowledgeEnvironmentAssets : []);
+    var options = [];
+    var seen = {};
+    assets.forEach(function (entry, index) {
+      var token = normalizeCharacterToken(entry && (entry.token || entry.displayName || entry.name));
+      if (!token || seen[token]) return;
+      seen[token] = true;
+      options.push({
+        token: token,
+        label: normalizeCharacterName(entry && (entry.displayName || entry.name || token)) || ('Asset ' + (index + 1))
+      });
+    });
+    return options;
+  }
+
+  // 등록 대상 select 의 option value 는 "kind::token" 형태로 종류를 함께 인코딩한다.
+  function makeBrandTargetValue(kind, token) {
+    return String(kind || 'character') + '::' + String(token || '');
+  }
+  function parseBrandTargetValue(value) {
+    var raw = String(value || '').trim();
+    if (!raw) return { kind: '', token: '' };
+    var idx = raw.indexOf('::');
+    if (idx < 0) return { kind: 'character', token: normalizeCharacterToken(raw) }; // 레거시(토큰만 저장)
+    return { kind: raw.slice(0, idx) === 'environment' ? 'environment' : 'character', token: raw.slice(idx + 2) };
+  }
+
   function selectedBrandCharacterToken(result) {
     var row = result && typeof result === 'object' ? result : {};
     var saved = String(row.selectedBrandCharacterToken || '').trim();
-    if (saved) return saved;
-    var options = brandCharacterOptions();
-    return options[0] ? String(options[0].token || '').trim() : '';
+    if (saved) return saved.indexOf('::') >= 0 ? saved : makeBrandTargetValue('character', normalizeCharacterToken(saved));
+    var chars = brandCharacterOptions();
+    if (chars[0]) return makeBrandTargetValue('character', chars[0].token);
+    var envs = brandEnvironmentOptions();
+    if (envs[0]) return makeBrandTargetValue('environment', envs[0].token);
+    return '';
   }
 
   function isImageLibraryItem(item) {
@@ -2565,27 +2617,33 @@
     });
     if (!result) return;
     var selectEl = document.getElementById('ai-image-brand-target');
-    var selectedToken = normalizeCharacterToken(selectEl && selectEl.value);
+    var rawValue = String(selectEl && selectEl.value || '').trim();
+    var parsedTarget = parseBrandTargetValue(rawValue);
+    var selectedKind = parsedTarget.kind;
+    var selectedToken = normalizeCharacterToken(parsedTarget.token);
     if (!selectedToken) {
-      var available = brandCharacterOptions();
-      if (!available.length) {
+      var available = brandCharacterOptions().length + brandEnvironmentOptions().length;
+      if (!available) {
         alert(t('saveBrandNoCharacters'));
         return;
       }
       alert(t('saveBrandChooseCharacter'));
       return;
     }
+    var targetValue = makeBrandTargetValue(selectedKind, selectedToken);
     setGlobalLoading(true, t('saveBrand'));
     try {
-      var savedBrand = await registerImageToBrand(state.currentBrand.brandId, selectedToken, result);
+      var savedBrand = selectedKind === 'environment'
+        ? await registerImageToEnvironmentBrand(state.currentBrand.brandId, selectedToken, result)
+        : await registerImageToBrand(state.currentBrand.brandId, selectedToken, result);
       state.currentBrand = savedBrand || state.currentBrand;
       result.savedBrandTargets = Array.isArray(result.savedBrandTargets) ? result.savedBrandTargets : [];
-      if (result.savedBrandTargets.indexOf(selectedToken) < 0) result.savedBrandTargets.push(selectedToken);
-      result.selectedBrandCharacterToken = selectedToken;
+      if (result.savedBrandTargets.indexOf(targetValue) < 0) result.savedBrandTargets.push(targetValue);
+      result.selectedBrandCharacterToken = targetValue;
       persistHistory();
       updateHeaderUI();
       updatePreviewPanelUI();
-      alert(t('savedBrand'));
+      alert(selectedKind === 'environment' ? t('savedBrandEnvironment') : t('savedBrand'));
     } catch (err) {
       alert(t('brandSaveFailed') + (err && err.message ? err.message : err));
     } finally {
@@ -3466,7 +3524,11 @@
       if (target.id === 'ai-image-brand-target') {
         var result = currentResult();
         if (!result) return;
-        result.selectedBrandCharacterToken = normalizeCharacterToken(target.value);
+        // value 는 "kind::token" 조합값 — 그대로 보존해 재선택/등록 라우팅에 사용.
+        var rawVal = String(target.value || '').trim();
+        result.selectedBrandCharacterToken = rawVal
+          ? (rawVal.indexOf('::') >= 0 ? rawVal : makeBrandTargetValue('character', normalizeCharacterToken(rawVal)))
+          : '';
         persistHistory();
         return;
       }
@@ -3630,6 +3692,54 @@
       });
     } else if (NK.api && NK.api.brandSave) {
       var nextBrandPayload = Object.assign({}, cloneJson(brandRecord || {}, {}), { characterSheets: currentSheets });
+      var response = await NK.api.brandSave(state.currentBrand.brandId, nextBrandPayload);
+      savedBrand = response && response.brand ? response.brand : nextBrandPayload;
+    } else {
+      throw new Error('brand_save_unavailable');
+    }
+    return savedBrand;
+  }
+  // 캐릭터 등록과 동일한 방식으로, 생성 이미지를 브랜드의 배경·소품 자산(environmentAssets) 레퍼런스로 등록.
+  // 프로덕션 이미지 생성 시 collectEnvironmentAssets 가 이 items 를 참조한다.
+  async function registerImageToEnvironmentBrand(brandId, selectedToken, result) {
+    var brandRecord = state.currentBrand;
+    if (NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+      brandRecord = await NK.service.brand.hydrateFromServer(state.currentBrand.brandId, { force: true, ttlMs: 0 }) || brandRecord;
+    }
+    var currentAssets = cloneJson((brandRecord && (brandRecord.environmentAssets || brandRecord.knowledgeEnvironmentAssets)) || [], []);
+    var entry = currentAssets.find(function (item) {
+      return String(normalizeCharacterToken(item && (item.token || item.displayName || item.name))) === String(selectedToken);
+    });
+    if (!entry) {
+      var displayName = normalizeCharacterName(selectedToken);
+      entry = {
+        assetId: 'env_' + Date.now(),
+        displayName: displayName,
+        token: selectedToken,
+        description: '',
+        items: []
+      };
+      currentAssets.push(entry);
+    }
+    entry.displayName = entry.displayName || normalizeCharacterName(selectedToken);
+    entry.token = entry.token || selectedToken;
+    entry.items = Array.isArray(entry.items) ? entry.items.slice() : [];
+    entry.items.unshift({
+      sheetId: 'sheet_' + Date.now(),
+      imageDataUrl: await resultToDataUrl(result),
+      isPrimary: entry.items.length ? false : true
+    });
+    entry.items = entry.items.slice(0, 4);
+    if (!entry.items.some(function (item) { return item && item.isPrimary; }) && entry.items[0]) {
+      entry.items[0].isPrimary = true;
+    }
+    var savedBrand = null;
+    if (NK.service && NK.service.brand && NK.service.brand.persistShared) {
+      savedBrand = await NK.service.brand.persistShared(state.currentBrand.brandId, {
+        environmentAssets: currentAssets
+      });
+    } else if (NK.api && NK.api.brandSave) {
+      var nextBrandPayload = Object.assign({}, cloneJson(brandRecord || {}, {}), { environmentAssets: currentAssets });
       var response = await NK.api.brandSave(state.currentBrand.brandId, nextBrandPayload);
       savedBrand = response && response.brand ? response.brand : nextBrandPayload;
     } else {
