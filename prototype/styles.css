@@ -4780,6 +4780,45 @@ textarea::-webkit-scrollbar-corner {
   border-radius: 4px;
 }
 
+/* @ 멘션 자동완성 드롭다운 (브랜드 허브 자산 선택) */
+.mention-pop {
+  position: absolute;
+  z-index: 10050;
+  min-width: 168px;
+  max-width: 280px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+  padding: 4px;
+  display: none;
+  scrollbar-width: none;
+}
+.mention-pop::-webkit-scrollbar { width: 0; height: 0; }
+.mention-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.2;
+}
+.mention-item.is-active {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+.mention-token { font-weight: 600; white-space: nowrap; }
+.mention-kind {
+  font-size: 11px;
+  color: var(--text-3);
+  flex-shrink: 0;
+}
+
 /* 더빙 대본 인라인 편집: 클릭 가능함을 알리는 어포던스 */
 #pipeline-scenes .story-lines.is-editable {
   cursor: text;
