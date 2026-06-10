@@ -393,6 +393,11 @@ function buildGeminiImagePrompt(
     // 그대로 둔 채 지시문이 요청한 것만 바꾸도록 강하게 보존을 지시한다.
     const editGuideLines = referenceImages.slice(1).map((item, i) => {
       const label = String(item.subjectDescription || `reference ${i + 2}`).trim() || `reference ${i + 2}`;
+      if (item.referenceKind === "environment") {
+        // 배경·소품 레퍼런스: 캐릭터 신원 가이드와 반대로, 해당 배경/소품을 그릴 때
+        // 그 레이아웃·구조·재질·색·조명을 그대로 재현하도록 지시한다.
+        return `Reference image ${i + 2} (${label}) is the registered look of that background/prop. When the instruction adds or changes that location or prop, reproduce its layout, architecture, materials, colors, and lighting; do not copy its characters or framing.`;
+      }
       return `Reference image ${i + 2} (${label}) is ONLY an identity guide to keep that specific character on-model; do not copy its pose, crop, or background.`;
     });
     return [

@@ -295,6 +295,7 @@
       var charRefs = [];
       var subjects = [];
       var negativeText = '';
+      var envPromptLines = [];
       if (instruction && NK.uiPipelineImage && NK.uiPipelineImage.resolveCharacterReferencesForText) {
         try {
           var resolved = await NK.uiPipelineImage.resolveCharacterReferencesForText({
@@ -306,6 +307,7 @@
           if (resolved) {
             if (Array.isArray(resolved.referenceImages)) charRefs = resolved.referenceImages;
             if (Array.isArray(resolved.subjects)) subjects = resolved.subjects;
+            if (Array.isArray(resolved.promptLines)) envPromptLines = resolved.promptLines;
             negativeText = resolved.negativePromptText || '';
           }
         } catch (_) {}
@@ -317,10 +319,16 @@
       if (subjects.length) {
         promptText += '\nKeep ' + subjects.join(', ') + ' on-model using the additional reference images (same face, silhouette, colors, costume, and proportions). Do not change any other character.';
       }
+      // 배경·소품(@) 레퍼런스에 대한 보존 지시문을 덧붙인다.
+      if (envPromptLines.length) {
+        promptText += '\n' + envPromptLines.join('\n');
+      }
       if (negativeText) promptText += '\nDo not include: ' + negativeText;
 
-      // 소스 이미지(편집 대상)를 ref 1 로 둔다. 캐릭터 자산은 신원 가이드로 1장만
-      // 첨부한다(이미지 과다 시 Gemini 가 요청을 거부할 수 있어 최소화).
+      // 소스 이미지(편집 대상)를 ref 1 로 둔다. 지시문에서 "@"로 직접 언급한
+      // 캐릭터 + 배경/소품 자산을 신원/배경 가이드로 첨부한다(총 4장 이내로 제한 —
+      // 이미지 과다 시 모델이 요청을 거부할 수 있어 상한을 둔다).
+      var MAX_EDIT_REFS = 4;
       var referenceImages = [{
         referenceId: 1,
         referenceType: 'REFERENCE_TYPE_SUBJECT',
@@ -328,10 +336,12 @@
         subjectDescription: 'SOURCE image to edit in place.',
         subjectType: 'SUBJECT_TYPE_DEFAULT'
       }];
-      var primaryRef = (charRefs || []).find(function (r) { return r && r.imageDataUrl; });
-      if (primaryRef) {
-        referenceImages.push(Object.assign({}, primaryRef, { referenceId: 2 }));
-      }
+      var nextRefId = 2;
+      (charRefs || []).forEach(function (r) {
+        if (!r || !r.imageDataUrl) return;
+        if (referenceImages.length >= MAX_EDIT_REFS) return;
+        referenceImages.push(Object.assign({}, r, { referenceId: nextRefId++ }));
+      });
 
       // 현재 선택 버전까지의 수정 이력을 대화 맥락으로 전달 (연속 지시 지원).
       // 단, 마스크/캐릭터 참조가 있으면 맥락 이미지가 혼선을 줄 수 있어 생략.

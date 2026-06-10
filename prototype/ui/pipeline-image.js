@@ -1272,18 +1272,13 @@
     var projectId = o.projectId || '';
     var scene = o.scene || {};
     var text = String(o.text || '');
-    var out = { referenceImages: [], subjects: [], negativePromptText: '' };
+    // promptLines: 배경/소품 레퍼런스에 대한 보존 지시문(캐릭터의 subjects 와 별개)
+    var out = { referenceImages: [], subjects: [], negativePromptText: '', promptLines: [] };
     try {
       if (!ctx || !ctx.getState) return out;
       var st = ctx.getState();
       if (!st || !(NK.service && NK.service.characterRegistry)) return out;
       var payload0 = st.payload || {};
-      var enabled = (function (v, f) {
-        if (typeof v === 'boolean') return v;
-        if (typeof v === 'string') return /^(true|1|yes|on)$/i.test(v.trim());
-        return !!f;
-      })(payload0.charactersEnabled, Array.isArray(payload0.characters) && payload0.characters.length);
-      if (!enabled) return out;
 
       var liveDraft = (NK.service.project && NK.service.project.getDraftById)
         ? NK.service.project.getDraftById(projectId) : null;
@@ -1294,45 +1289,93 @@
       if (brandId && NK.service.brand && NK.service.brand.hydrateFromServer) {
         try { hydratedBrand = await NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 }); } catch (_) {}
       }
-      var resolutionText = buildCharacterResolutionPrompt(scene, text);
-      var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, resolutionText, { allowNameFallback: true, forceActiveFallback: false, payload: payload });
-      if (!res || !Array.isArray(res.characters) || !res.characters.length) return out;
-      var built = NK.service.characterRegistry.buildResolvedPrompt({
-        rawPrompt: text,
-        characters: res.characters,
-        brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
-        bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
-      });
-      out.negativePromptText = (built && built.negativePromptText) || '';
+      // 캐릭터 해결을 위해 원격 프로젝트를 한 번 받아왔다면 환경 해결에서도 재사용한다.
+      var remoteDraft = null;
 
-      var referencePayload = buildReferenceBundle(payload, res.characters, { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
-      if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && projectId && NK.api && NK.api.projectGet) {
-        try {
-          var remoteResp = await NK.api.projectGet(projectId);
-          var remoteDraft = extractRemoteProjectRecord(projectId, remoteResp);
-          if (remoteDraft && remoteDraft.payload) {
-            referencePayload = buildReferenceBundle(remoteDraft.payload, res.characters, { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
+      // ── 1) 캐릭터(@) 레퍼런스 ── charactersEnabled 일 때만 동작
+      var enabled = (function (v, f) {
+        if (typeof v === 'boolean') return v;
+        if (typeof v === 'string') return /^(true|1|yes|on)$/i.test(v.trim());
+        return !!f;
+      })(payload0.charactersEnabled, Array.isArray(payload0.characters) && payload0.characters.length);
+      if (enabled) {
+        var resolutionText = buildCharacterResolutionPrompt(scene, text);
+        var res = NK.service.characterRegistry.resolveCharactersFromPrompt(brandId, resolutionText, { allowNameFallback: true, forceActiveFallback: false, payload: payload });
+        if (res && Array.isArray(res.characters) && res.characters.length) {
+          var built = NK.service.characterRegistry.buildResolvedPrompt({
+            rawPrompt: text,
+            characters: res.characters,
+            brandRules: Array.isArray(payload.brandRules) ? payload.brandRules : [],
+            bannedExpressions: Array.isArray(payload.bannedExpressions) ? payload.bannedExpressions : []
+          });
+          out.negativePromptText = (built && built.negativePromptText) || '';
+
+          var referencePayload = buildReferenceBundle(payload, res.characters, { projectRecord: liveDraft, hydratedBrand: hydratedBrand });
+          if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && projectId && NK.api && NK.api.projectGet) {
+            try {
+              var remoteResp = await NK.api.projectGet(projectId);
+              remoteDraft = extractRemoteProjectRecord(projectId, remoteResp);
+              if (remoteDraft && remoteDraft.payload) {
+                referencePayload = buildReferenceBundle(remoteDraft.payload, res.characters, { projectRecord: remoteDraft, hydratedBrand: hydratedBrand });
+              }
+            } catch (_) {}
           }
-        } catch (_) {}
-      }
-      if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && brandId && NK.api && NK.api.libraryIP) {
-        try {
-          var listing = await NK.api.libraryIP('', { brandId: brandId });
-          var ipFallback = buildIpLibraryFallback(listing, res.characters);
-          if (ipFallback && ipFallback.referenceImages && ipFallback.referenceImages.length) referencePayload = ipFallback;
-        } catch (_) {}
+          if ((!referencePayload || !referencePayload.referenceImages || !referencePayload.referenceImages.length) && brandId && NK.api && NK.api.libraryIP) {
+            try {
+              var listing = await NK.api.libraryIP('', { brandId: brandId });
+              var ipFallback = buildIpLibraryFallback(listing, res.characters);
+              if (ipFallback && ipFallback.referenceImages && ipFallback.referenceImages.length) referencePayload = ipFallback;
+            } catch (_) {}
+          }
+
+          if (referencePayload && referencePayload.referenceImages && referencePayload.referenceImages.length) {
+            out.referenceImages = referencePayload.referenceImages.slice(0, MAX_REFERENCE_IMAGES);
+            var subjects = Array.isArray(referencePayload.referenceSubjects) ? referencePayload.referenceSubjects : [];
+            var names = [];
+            var seen = {};
+            subjects.forEach(function (s) {
+              var nm = normalizeText(s && (s.displayName || s.token));
+              if (nm && !seen[nm.toLowerCase()]) { seen[nm.toLowerCase()] = 1; names.push(nm); }
+            });
+            out.subjects = names;
+          }
+        }
       }
 
-      if (referencePayload && referencePayload.referenceImages && referencePayload.referenceImages.length) {
-        out.referenceImages = referencePayload.referenceImages.slice(0, MAX_REFERENCE_IMAGES);
-        var subjects = Array.isArray(referencePayload.referenceSubjects) ? referencePayload.referenceSubjects : [];
-        var names = [];
-        var seen = {};
-        subjects.forEach(function (s) {
-          var nm = normalizeText(s && (s.displayName || s.token));
-          if (nm && !seen[nm.toLowerCase()]) { seen[nm.toLowerCase()] = 1; names.push(nm); }
-        });
-        out.subjects = names;
+      // ── 2) 배경·소품(@) 환경 레퍼런스 ── 캐릭터 활성화와 무관하게 동작.
+      // 지시문에 직접 언급한 @배경/@소품 자산만 매칭해 레퍼런스로 첨부한다.
+      var usedRefs = out.referenceImages.length;
+      var remaining = Math.max(0, MAX_REFERENCE_IMAGES - usedRefs);
+      if (remaining > 0) {
+        var maxRefId = 0;
+        out.referenceImages.forEach(function (r) { maxRefId = Math.max(maxRefId, Number(r && r.referenceId) || 0); });
+        var envBundle = buildEnvironmentReferenceBundle(
+          payload, scene, text,
+          { projectRecord: liveDraft || remoteDraft, hydratedBrand: hydratedBrand },
+          maxRefId + 1, Math.min(remaining, 2)
+        );
+        // 로컬 페이로드에 환경 자산이 없으면 원격 프로젝트 레코드로 한 번 더 시도
+        if ((!envBundle || !envBundle.referenceImages.length) && projectId && NK.api && NK.api.projectGet) {
+          try {
+            if (!remoteDraft) {
+              var remoteResp2 = await NK.api.projectGet(projectId);
+              remoteDraft = extractRemoteProjectRecord(projectId, remoteResp2);
+            }
+            if (remoteDraft && remoteDraft.payload) {
+              envBundle = buildEnvironmentReferenceBundle(
+                remoteDraft.payload, scene, text,
+                { projectRecord: remoteDraft, hydratedBrand: hydratedBrand },
+                maxRefId + 1, Math.min(remaining, 2)
+              );
+            }
+          } catch (_) {}
+        }
+        if (envBundle && envBundle.referenceImages.length) {
+          out.referenceImages = out.referenceImages.concat(envBundle.referenceImages).slice(0, MAX_REFERENCE_IMAGES);
+          if (Array.isArray(envBundle.promptLines) && envBundle.promptLines.length) {
+            out.promptLines = out.promptLines.concat(envBundle.promptLines);
+          }
+        }
       }
     } catch (_) {}
     return out;
