@@ -45,6 +45,10 @@ test("store no longer reads legacy global cache keys (no cross-account leak)", (
 test("pipeline cache invalidation goes through scoped store API", () => {
   const scenario = read("prototype/js/ui/scenario.js");
   assert.match(scenario, /NK\.store\.clearPipeline\(\)/);
+  // pipeline.js는 명시적 "저장" 후 확정한 미디어 배치를 스코프 캐시에 그대로 보존한다
+  // (저장 시 캐시를 비우지 않음 — 새로고침 시 확정 배치를 그대로 복원하기 위함).
+  // 다만 파이프라인 캐시를 다룰 때 raw localStorage 키를 직접 제거하는 일은 없어야 한다
+  // (계정 격리: 캐시 정리는 반드시 스코프 store API(clearPipeline)로만).
   const pipeline = read("prototype/ui/pipeline.js");
-  assert.match(pipeline, /NK\.store\.clearPipeline\(\)/);
+  assert.doesNotMatch(pipeline, /localStorage\.removeItem\(['"]nk_pipeline_last['"]\)/);
 });

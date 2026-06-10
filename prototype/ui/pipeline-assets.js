@@ -121,7 +121,7 @@
         } catch (_) { vidItems = []; }
       }
 
-      // 시간순 오름차순 정렬 (가장 오래된 → 최신) — 폴백 인덱스 매핑용
+      // 시간순 오름차순 정렬 (가장 오래된 → 최신) — 폴백 인덱스 매핑 기본값
       function sortAsc(items) {
         return (items || []).slice().sort(function (a, b) {
           var ta = new Date((a && (a.timeCreated || a.updated)) || 0).getTime();
@@ -129,8 +129,32 @@
           return ta - tb;
         });
       }
-      var imgAsc = sortAsc(imgItems);
-      var vidAsc = sortAsc(vidItems);
+      // 저장소(라이브러리) 그리드에서 사용자가 드래그로 정한 순서를 우선 사용.
+      // openLibraryModal 이 'nk_lib_order_<kind>_<projectId>' 에 name 배열로 저장한다.
+      // 그리드 순서가 있으면 그 순서대로 빈 컷에 배정 → "저장소에서 순서를 바꾸면 그 순서대로
+      // 컷에 정렬" 요구를 충족. 그리드에 없는 항목은 시간순으로 뒤에 붙인다.
+      function loadGridOrder(kind) {
+        try {
+          var raw = localStorage.getItem('nk_lib_order_' + String(kind || 'image') + '_' + String(projectId || 'default'));
+          var v = raw ? JSON.parse(raw) : [];
+          return Array.isArray(v) ? v : [];
+        } catch (_) { return []; }
+      }
+      function orderForFallback(items, kind) {
+        var asc = sortAsc(items);
+        var saved = loadGridOrder(kind);
+        if (!saved.length) return asc;
+        var pos = {};
+        saved.forEach(function (n, i) { pos[String(n)] = i; });
+        return asc.slice().sort(function (a, b) {
+          var ai = Object.prototype.hasOwnProperty.call(pos, String(a && a.name || '')) ? pos[String(a.name)] : Infinity;
+          var bi = Object.prototype.hasOwnProperty.call(pos, String(b && b.name || '')) ? pos[String(b.name)] : Infinity;
+          if (ai === bi) return 0; // 둘 다 미저장 → sortAsc(시간순) 유지
+          return ai - bi;
+        });
+      }
+      var imgAsc = orderForFallback(imgItems, 'image');
+      var vidAsc = orderForFallback(vidItems, 'video');
 
       var extractObjectNameFromMediaRef = opts.extractObjectNameFromMediaRef || function () { return ''; };
       var imgIndex = buildAssetIndex(imgItems, extractObjectNameFromMediaRef);

@@ -1085,6 +1085,12 @@
         setPipelineLoading(true);
         var st = ctx.getState();
         if (!st) return;
+        // 사용자가 명시적으로 "저장" = 현재 이미지·영상 배치를 "확정"으로 간주.
+        // 이후 페이지 진입 시 자동 매핑(refreshAssets 의 시간순 폴백)이 확정 배치를
+        // 덮어쓰거나 삭제한 컷을 다시 채우지 않도록 마크한다.
+        // (다시 시간순 자동 매핑을 원하면 '자동 매핑' 버튼으로 초기화 → assetsBackfilled=false)
+        st = Object.assign({}, st, { payload: Object.assign({}, st.payload || {}, { assetsBackfilled: true }) });
+        ctx.setState(st);
         ctx.savePipeline(st.payload, st.scenes, st.header);
         if (updateDraftFromPipeline) updateDraftFromPipeline();
         if (projectId && NK.api && NK.api.projectSave) {
@@ -1094,8 +1100,11 @@
               aspectRatio: st.aspectRatio || '',
               title: getProjectTitle()
             });
-            // 서버 저장이 끝나면 임시 로컬 파이프라인 캐시를 지움(계정별 스코프 캐시)
-            try { if (NK.store && NK.store.clearPipeline) NK.store.clearPipeline(); else localStorage.removeItem('nk_pipeline_last'); } catch (_) { }
+            // 로컬 파이프라인 캐시는 지우지 않는다 — 사용자가 확정·저장한 미디어 배치를
+            // 새로고침 후에도 그대로 복원하기 위한 source of truth 로 보존(계정별 스코프 캐시).
+            // 직전엔 clearPipeline 으로 캐시를 비워 서버 왕복 + 시간순 자동매핑에만 의존시켰는데,
+            // 그 과정에서 확정 배치가 어긋나거나 컷 이미지가 사라지는 회귀가 있었다.
+            // 저장 직후 캐시는 방금 확정한 st 와 동일하므로 stale 위험 없음.
             alert('저장되었습니다.');
           } catch (err) {
             alert('저장 실패: ' + (err && err.message ? err.message : err));
