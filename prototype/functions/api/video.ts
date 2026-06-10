@@ -390,27 +390,32 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         aspect_ratio: aspectFinal,
         resolution: "720p",
       };
-      // 씬 이미지: grok(I2V) / grok-r2v(I2V + 허브 레퍼런스) 모두 시작 프레임 전달
-      const startImageResolved = imageDataUrl
-        ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); })
-        : "";
-      if (startImageResolved) {
-        const imgObj = { url: startImageResolved };
-        grokBody.image_url = imgObj;
-        grokBody.image = imgObj;
-        grokBody.prompt = "Animate this image. " + safePromptText;
-      }
-      // grok / grok-r2v 모두 허브 레퍼런스 이미지를 전달해 캐릭터 일관성 유지.
-      // (동일 모델 grok-imagine-video·동일 엔드포인트 — 레퍼런스가 있으면 시작 이미지와 함께 주입)
-      if (referenceImages.length > 0) {
-        const refResolved: { url: string }[] = [];
+      // xAI Grok 제약: 'image'(I2V)와 'reference_images'(R2V)는 동시 사용 불가(400 invalid-argument).
+      // → 상호 배타로 처리한다. grok-r2v + 레퍼런스 있으면 R2V(레퍼런스만), 그 외엔 I2V(시작 프레임만).
+      const isR2V = videoModel === "grok-r2v";
+      const grokRefs: { url: string }[] = [];
+      if (isR2V && referenceImages.length > 0) {
         for (let i = 0; i < referenceImages.length; i++) {
           const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
-          if (r) refResolved.push({ url: r });
+          if (r) grokRefs.push({ url: r });
         }
-        if (refResolved.length > 0) grokBody.reference_images = refResolved;
       }
-      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration, model: videoModel, hasStartImage: !!startImageResolved, refCount: referenceImages.length });
+      if (grokRefs.length > 0) {
+        // R2V: 캐릭터 레퍼런스로만 생성 (시작 이미지 미사용)
+        grokBody.reference_images = grokRefs;
+      } else {
+        // I2V: 씬 시작 프레임으로 생성
+        const startImageResolved = imageDataUrl
+          ? await toAtlasImageUrl(imageDataUrl, `start-${sceneId}`).catch((e: any) => { throw new Error("image_upload_error: " + (e?.message || e)); })
+          : "";
+        if (startImageResolved) {
+          const imgObj = { url: startImageResolved };
+          grokBody.image_url = imgObj;
+          grokBody.image = imgObj;
+          grokBody.prompt = "Animate this image. " + safePromptText;
+        }
+      }
+      log('grok_request', { sceneId, aspect: aspectFinal, duration: snapDuration, model: videoModel, mode: grokRefs.length ? 'r2v' : 'i2v', refCount: grokRefs.length });
       const grokRes = await fetch("https://api.x.ai/v1/videos/generations", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${xaiKey}` },

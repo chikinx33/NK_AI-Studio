@@ -357,7 +357,9 @@
       // (kling-final, wan, seedance-r2v, vidu-q3, grok-r2v — @캐릭터명 태그로 레퍼런스 주입)
       // 백엔드가 레퍼런스를 실제로 주입하는 모델만 포함. kling-final(v2.6 Pro i2v)은
       // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
-      var REFS_MODELS = ['grok', 'grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
+      // grok(I2V)은 시작 이미지만 사용 → 레퍼런스 미주입(grok은 image+reference_images 동시 불가).
+      // 레퍼런스 일관성이 필요하면 grok-r2v(R2V) 사용.
+      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {
@@ -593,7 +595,9 @@
 
       // 백엔드가 레퍼런스를 실제로 주입하는 모델만 포함. kling-final(v2.6 Pro i2v)은
       // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
-      var REFS_MODELS = ['grok', 'grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
+      // grok(I2V)은 시작 이미지만 사용 → 레퍼런스 미주입(grok은 image+reference_images 동시 불가).
+      // 레퍼런스 일관성이 필요하면 grok-r2v(R2V) 사용.
+      var REFS_MODELS = ['grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {
