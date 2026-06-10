@@ -202,23 +202,6 @@
         deepCollectEnvs(allBrands),
         deepCollectEnvs(brandRaw)
       );
-      try {
-        if (window.console && console.debug) {
-          console.debug('[mention] env sources', {
-            brandId: brandId, projectId: projectId, brandProjectId: brandProjectId2,
-            payload: deepCollectEnvs(st && st.payload).length,
-            draft: deepCollectEnvs(draftPayload).length,
-            brand: deepCollectEnvs(brand).length,
-            hydrated: deepCollectEnvs(brandId && hydratedBrandCache[brandId]).length,
-            server: deepCollectEnvs(serverPayload).length,
-            brandProject: deepCollectEnvs(brandProjectPayload).length,
-            allBrands: deepCollectEnvs(allBrands).length,
-            brandRaw: deepCollectEnvs(brandRaw).length,
-            brandRawType: brandRaw ? (typeof brandRaw) : null,
-            brandRawKeys: (brandRaw && typeof brandRaw === 'object') ? Object.keys(brandRaw) : null
-          });
-        }
-      } catch (_) { }
       envs.forEach(function (e) {
         if (!e) return;
         var raw = (typeof e === 'object') ? e : { displayName: e };
@@ -304,12 +287,45 @@
       }
     } catch (_) { }
     if (!rect || (!rect.left && !rect.top && !rect.bottom)) {
-      rect = state.fieldEl ? state.fieldEl.getBoundingClientRect() : { left: 20, bottom: 60 };
+      var fr = state.fieldEl ? state.fieldEl.getBoundingClientRect() : null;
+      rect = fr || { left: 20, top: 40, bottom: 60 };
     }
-    var top = rect.bottom + window.scrollY + 4;
-    var left = rect.left + window.scrollX;
-    var maxLeft = window.scrollX + document.documentElement.clientWidth - pop.offsetWidth - 8;
-    if (left > maxLeft) left = Math.max(window.scrollX + 8, maxLeft);
+    var vpH = document.documentElement.clientHeight || window.innerHeight || 600;
+    var vpW = document.documentElement.clientWidth || window.innerWidth || 800;
+    var sx = window.scrollX || window.pageXOffset || 0;
+    var sy = window.scrollY || window.pageYOffset || 0;
+    var GAP = 4, MARGIN = 8, MAXH = 240;
+
+    var spaceBelow = vpH - rect.bottom;
+    var spaceAbove = rect.top;
+    var placeAbove = spaceBelow < 160 && spaceAbove > spaceBelow;
+
+    // 배치 방향에 따라 가용 높이로 max-height 를 제한해 화면 밖으로 잘리지 않게 한다.
+    var avail = placeAbove ? (spaceAbove - GAP - MARGIN) : (spaceBelow - GAP - MARGIN);
+    var maxH = Math.max(96, Math.min(MAXH, avail));
+    pop.style.maxHeight = maxH + 'px';
+
+    // 크기 측정(표시 상태여야 정확)
+    pop.style.display = 'block';
+    var popH = pop.offsetHeight;
+    var popW = pop.offsetWidth;
+
+    var top, left = rect.left + sx;
+    if (placeAbove) {
+      top = rect.top + sy - popH - GAP;
+    } else {
+      top = rect.bottom + sy + GAP;
+    }
+    // 가로 클램프
+    var maxLeft = sx + vpW - popW - MARGIN;
+    if (left > maxLeft) left = maxLeft;
+    if (left < sx + MARGIN) left = sx + MARGIN;
+    // 세로 클램프(뷰포트 안)
+    var minTop = sy + MARGIN;
+    var maxTop = sy + vpH - popH - MARGIN;
+    if (top > maxTop) top = maxTop;
+    if (top < minTop) top = minTop;
+
     pop.style.top = top + 'px';
     pop.style.left = left + 'px';
   }
