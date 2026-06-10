@@ -355,7 +355,9 @@
       }
       // 레퍼런스 이미지: refs cap 보유 모델에서 브랜드 허브 기반 자동 수집
       // (kling-final, wan, seedance-r2v, vidu-q3, grok-r2v — @캐릭터명 태그로 레퍼런스 주입)
-      var REFS_MODELS = ['grok', 'grok-r2v', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
+      // 백엔드가 레퍼런스를 실제로 주입하는 모델만 포함. kling-final(v2.6 Pro i2v)은
+      // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
+      var REFS_MODELS = ['grok', 'grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {
@@ -588,7 +590,9 @@
       var isKling = opts.videoModel === 'kling-final';
       var klingQuality = isKling ? 'final' : '';
 
-      var REFS_MODELS = ['grok', 'grok-r2v', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
+      // 백엔드가 레퍼런스를 실제로 주입하는 모델만 포함. kling-final(v2.6 Pro i2v)은
+      // 멀티 레퍼런스를 지원하지 않아 제외(시작 이미지·끝 프레임만 사용).
+      var REFS_MODELS = ['grok', 'grok-r2v', 'wan', 'seedance-r2v', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {

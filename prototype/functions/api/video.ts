@@ -400,8 +400,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         grokBody.image = imgObj;
         grokBody.prompt = "Animate this image. " + safePromptText;
       }
-      // grok-r2v: 추가로 허브 레퍼런스 이미지 전달 (xAI API 동시 지원 여부는 응답으로 확인)
-      if (videoModel === "grok-r2v" && referenceImages.length > 0) {
+      // grok / grok-r2v 모두 허브 레퍼런스 이미지를 전달해 캐릭터 일관성 유지.
+      // (동일 모델 grok-imagine-video·동일 엔드포인트 — 레퍼런스가 있으면 시작 이미지와 함께 주입)
+      if (referenceImages.length > 0) {
         const refResolved: { url: string }[] = [];
         for (let i = 0; i < referenceImages.length; i++) {
           const r = await toAtlasImageUrl(referenceImages[i], `ref-${sceneId}-${i}`).catch(() => "");
