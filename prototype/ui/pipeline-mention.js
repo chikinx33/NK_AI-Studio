@@ -100,14 +100,42 @@
       };
       var brand = null;
       if (NK.service && NK.service.brand) {
-        brand = (brandId && NK.service.brand.getById) ? NK.service.brand.getById(brandId) : null;
+        if (brandId && NK.service.brand.getById) brand = NK.service.brand.getById(brandId);
+        // brandId 가 비었거나 캐시에 환경 자산이 없으면 현재 프로젝트 기준으로 강하게 해석.
+        if ((!brand || !collectEnvs(brand).length) && NK.service.brand.resolveCurrent) {
+          var rc = null;
+          try { rc = NK.service.brand.resolveCurrent({ payload: st && st.payload }); } catch (_) { }
+          if (rc && (!brand || collectEnvs(rc).length > collectEnvs(brand).length)) brand = rc;
+        }
         if (!brand && NK.service.brand.getCurrent) brand = NK.service.brand.getCurrent();
       }
+      // 프로젝트 draft(브랜드 허브가 updatePayload 로 environmentAssets 를 저장하는 곳)도 소스로.
+      var draftPayload = null;
+      try {
+        var pid = (st && st.draftId) ||
+          (NK.service && NK.service.project && NK.service.project.getCurrentProjectId && NK.service.project.getCurrentProjectId());
+        if (pid && NK.service && NK.service.project && NK.service.project.getDraftById) {
+          var d = NK.service.project.getDraftById(pid);
+          draftPayload = d ? (d.payload || d) : null;
+        }
+      } catch (_) { }
       var envs = [].concat(
         collectEnvs(st && st.payload),
+        collectEnvs(draftPayload),
         collectEnvs(brand),
         collectEnvs(brandId && hydratedBrandCache[brandId])
       );
+      try {
+        if (window.console && console.debug) {
+          console.debug('[mention] env sources', {
+            brandId: brandId,
+            payload: collectEnvs(st && st.payload).length,
+            draft: collectEnvs(draftPayload).length,
+            brand: collectEnvs(brand).length,
+            hydrated: collectEnvs(brandId && hydratedBrandCache[brandId]).length
+          });
+        }
+      } catch (_) { }
       envs.forEach(function (e) {
         if (!e) return;
         var raw = (typeof e === 'object') ? e : { displayName: e };
