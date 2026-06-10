@@ -83,6 +83,66 @@
     let selectedNames = new Set();
     let deleting = false;
 
+    // 라이브러리(저장소)에서 미디어를 삭제하면, 그 객체를 참조하던 씬/컷의 미디어 필드도 비운다.
+    // 안 그러면 GCS 에서 지워졌는데도 컷에는 삭제된 영상/이미지가 계속 표시되는 회귀가 생긴다.
+    function purgeDeletedMediaFromScenes(deletedSet) {
+      try {
+        if (!ctx || !ctx.getState || !ctx.setState || !deletedSet || !deletedSet.size) return;
+        var st = ctx.getState();
+        if (!st || !Array.isArray(st.scenes)) return;
+        var isVideo = (kind === 'video');
+        var refMatches = function (ref) {
+          if (!ref || typeof ref !== 'string') return false;
+          if (deletedSet.has(ref)) return true;
+          var on = extractObjectNameFromMediaRef(ref);
+          return !!on && deletedSet.has(on);
+        };
+        var hit = function (o) {
+          var refs = isVideo
+            ? [o.videoUrl, o.videoPath, o.videoPlaybackUrl, o.generatedVideoUrl]
+            : [o.imageDataUrl, o.imagePath, o.generatedImageUrl, o.imageUrl];
+          return refs.some(refMatches);
+        };
+        var clearFn = function (o) {
+          return isVideo
+            ? Object.assign({}, o, {
+                videoUrl: '', videoPath: '', videoPlaybackUrl: '', generatedVideoUrl: '',
+                videoStatus: '', videoError: '', videoJobId: '', videoMethod: '',
+                lastFrameDataUrl: '', videoModelLabel: ''
+              })
+            : Object.assign({}, o, { imageDataUrl: '', imagePath: '', generatedImageUrl: '', imageUrl: '' });
+        };
+        var changed = false;
+        var newScenes = st.scenes.map(function (s) {
+          if (!s || typeof s !== 'object') return s;
+          var ns = hit(s) ? (changed = true, clearFn(s)) : s;
+          if (Array.isArray(s.shots) && s.shots.length) {
+            var shotsChanged = false;
+            var newShots = s.shots.map(function (sh) {
+              if (sh && typeof sh === 'object' && hit(sh)) { shotsChanged = true; return clearFn(sh); }
+              return sh;
+            });
+            if (shotsChanged) { ns = Object.assign({}, ns, { shots: newShots }); changed = true; }
+          }
+          return ns;
+        });
+        if (!changed) return;
+        st.scenes = newScenes;
+        ctx.setState(st);
+        if (NK.uiPipeline && NK.uiPipeline.render) NK.uiPipeline.render();
+        if (ctx.persistPipeline) ctx.persistPipeline();
+        if (ctx.updateDraftFromPipeline) ctx.updateDraftFromPipeline();
+        try {
+          var pid = st.draftId || projectId;
+          if (pid && NK.api && NK.api.projectSave) {
+            NK.api.projectSave(pid, st.payload || {}, st.scenes || [], {
+              header: st.header || '', aspectRatio: st.aspectRatio || ''
+            }).catch(function () {});
+          }
+        } catch (_) {}
+      } catch (_) {}
+    }
+
     // 사용자가 드래그로 정한 순서를 프로젝트·종류별로 저장(저장소 보기 전용).
     function orderKey() {
       return 'nk_lib_order_' + String(kind || 'image') + '_' + String(projectId || 'default');
@@ -291,6 +351,8 @@
               return !deletedSet.has(String(it && it.name || ''));
             });
             selectedNames = new Set();
+            // 삭제된 미디어를 참조하던 씬/컷의 미디어 필드도 비워 표시 잔존을 막는다.
+            purgeDeletedMediaFromScenes(deletedSet);
             render();
             if (deletedSet.size !== names.length) {
               alert(kindLabel + ' 일부만 삭제되었습니다.');
