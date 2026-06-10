@@ -911,6 +911,17 @@
       '</div>' +
       '<div class="knowledge-hub-side">' +
       '<details class="knowledge-hub-disclosure">' +
+      '<summary><div><strong>브랜드 규칙</strong><span>반드시 지켜야 할 운영 기준</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(rulesCount + bannedCount) + '개 항목</span></summary>' +
+      '<div class="knowledge-hub-disclosure-body">' +
+      '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
+      '<div class="knowledge-hub-form-grid">' +
+      '<label class="knowledge-hub-field"><span>브랜드 규칙</span><textarea id="knowledge-brand-rules" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 캐릭터 말투는 존댓말을 유지한다.">' + escapeHtml(joinLines(knowledge.brandRules)) + '</textarea></label>' +
+      '<label class="knowledge-hub-field"><span>금지 표현</span><textarea id="knowledge-banned" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 선정적 표현 금지">' + escapeHtml(joinLines(knowledge.bannedExpressions)) + '</textarea></label>' +
+      '</div>' +
+      '</section>' +
+      '</div>' +
+      '</details>' +
+      '<details class="knowledge-hub-disclosure">' +
       '<summary><div><strong>배경·소품 자산</strong><span>장소·소품 일관성용 레퍼런스</span></div><span class="knowledge-hub-disclosure-meta" data-environment-count>' + escapeHtml(String(knowledge.environmentAssets.length) + '개') + '</span></summary>' +
       '<div class="knowledge-hub-disclosure-body">' +
       '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
@@ -924,17 +935,6 @@
       '</div>' +
       '<div id="knowledge-environment-cards" class="knowledge-environment-cards">' + renderEnvironmentCards(knowledge.environmentAssets) + '</div>' +
       '<p class="knowledge-character-help">' + escapeHtml(getEnvironmentUiText().help) + '</p></div>' +
-      '</section>' +
-      '</div>' +
-      '</details>' +
-      '<details class="knowledge-hub-disclosure">' +
-      '<summary><div><strong>브랜드 규칙</strong><span>반드시 지켜야 할 운영 기준</span></div><span class="knowledge-hub-disclosure-meta">' + escapeHtml(rulesCount + bannedCount) + '개 항목</span></summary>' +
-      '<div class="knowledge-hub-disclosure-body">' +
-      '<section class="knowledge-hub-panel knowledge-hub-panel-embedded">' +
-      '<div class="knowledge-hub-form-grid">' +
-      '<label class="knowledge-hub-field"><span>브랜드 규칙</span><textarea id="knowledge-brand-rules" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 캐릭터 말투는 존댓말을 유지한다.">' + escapeHtml(joinLines(knowledge.brandRules)) + '</textarea></label>' +
-      '<label class="knowledge-hub-field"><span>금지 표현</span><textarea id="knowledge-banned" placeholder="한 줄에 하나씩 입력해 주세요.&#10;예: 선정적 표현 금지">' + escapeHtml(joinLines(knowledge.bannedExpressions)) + '</textarea></label>' +
-      '</div>' +
       '</section>' +
       '</div>' +
       '</details>' +
