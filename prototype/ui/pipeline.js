@@ -907,7 +907,6 @@
       '</div>' +
       '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
       '<button class="btn-secondary" id="common-prompt-batch-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="모든 씬에 공통 적용되는 프롬프트(스타일·분위기·배경/세계관·대상)를 한 번에 일괄 편집">공통 프롬프트 일괄 편집</button>' +
-      '<button class="btn-secondary" id="pipeline-remap-assets" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="저장소의 이미지·영상을 시간순으로 빈 씬에 다시 매핑">자동 매핑</button>' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" disabled>영상 일괄 생성</button>' +
@@ -1053,29 +1052,8 @@
       pipelineScenes.classList.add('empty');
       pipelineScenes.innerHTML = '<div class="card video-stage-empty-card"><p class="muted">장면이 없습니다</p></div>';
     }
-    var remapBtn = document.getElementById('pipeline-remap-assets');
-    if (remapBtn) {
-      remapBtn.onclick = async function () {
-        if (!confirm('기존 매핑을 모두 초기화하고 저장소의 이미지·영상을 시간순으로 다시 매핑합니다.\n(사용자가 직접 교체한 자산도 초기화됩니다.)\n계속하시겠습니까?')) return;
-        var st = ctx.getState();
-        if (!st || !Array.isArray(st.scenes)) return;
-        // 모든 씬의 미디어 URL 필드 초기화 — refreshAssets 폴백이 다시 동작하도록
-        st.scenes = st.scenes.map(function (s) {
-          return Object.assign({}, s, {
-            imageDataUrl: '', imagePath: '', generatedImageUrl: '', imageUrl: '',
-            videoUrl: '', videoPath: '', generatedVideoUrl: '', videoPlaybackUrl: '',
-            videoStatus: '', videoError: ''
-          });
-        });
-        // 폴백 가드 해제 (프로젝트당 1회 제한 풀기)
-        st.payload = Object.assign({}, st.payload || {}, { assetsBackfilled: false });
-        st._assetsRefreshed = false;
-        ctx.setState(st);
-        if (ctx.persistPipeline) ctx.persistPipeline();
-        try { await ui.refreshAssets(); } catch (_) {}
-        try { await NK.uiPipeline.render(); } catch (_) {}
-      };
-    }
+    // [자동 매핑 제거] 저장소 이미지를 빈 컷에 시간순으로 다시 매핑하던 '자동 매핑' 버튼/핸들러
+    // 는 삭제됨. 컷 상태는 오직 ① 생성 ② 저장소 선택·사용 ③ 삭제 후 빈 칸 유지로만 결정된다.
     var savePipelineBtn = document.getElementById('save-pipeline-btn');
     if (savePipelineBtn) {
       savePipelineBtn.onclick = async function () {
@@ -1085,12 +1063,8 @@
         setPipelineLoading(true);
         var st = ctx.getState();
         if (!st) return;
-        // 사용자가 명시적으로 "저장" = 현재 이미지·영상 배치를 "확정"으로 간주.
-        // 이후 페이지 진입 시 자동 매핑(refreshAssets 의 시간순 폴백)이 확정 배치를
-        // 덮어쓰거나 삭제한 컷을 다시 채우지 않도록 마크한다.
-        // (다시 시간순 자동 매핑을 원하면 '자동 매핑' 버튼으로 초기화 → assetsBackfilled=false)
-        st = Object.assign({}, st, { payload: Object.assign({}, st.payload || {}, { assetsBackfilled: true }) });
-        ctx.setState(st);
+        // 저장 = 현재 화면의 이미지·영상 배치를 그대로 확정. 자동 매핑이 제거되어
+        // 빈 컷은 빈 채로, 채워진 컷은 그 이미지 그대로 저장된다(별도 마킹 불필요).
         ctx.savePipeline(st.payload, st.scenes, st.header);
         if (updateDraftFromPipeline) updateDraftFromPipeline();
         if (projectId && NK.api && NK.api.projectSave) {
