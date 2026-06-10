@@ -1850,6 +1850,35 @@ function syncImageDependentControls(row, scene) {
   }
 }
 
+// part='video' 부분 갱신은 비디오 슬롯만 교체하므로, 영상 유무에 의존하는 액션 버튼
+// (삭제/다운로드)과 VID 칩, 영상 생성 버튼 라벨이 stale 로 남는다.
+// → "영상 생성했는데 다운로드 버튼이 비활성" 버그. 비디오 슬롯 갱신 시 함께 동기화한다.
+function syncVideoDependentControls(row, scene) {
+  if (!row || !scene) return;
+  // 표시(buildVideoCard)와 다운로드 핸들러 모두 scene.videoUrl 기준이므로 동일 기준으로 맞춘다.
+  var hasVideo = !!scene.videoUrl;
+  var srMod = (window.NK && NK.uiPipelineSceneRow) || {};
+  var videoBusy = srMod.isSceneVideoProcessing
+    ? srMod.isSceneVideoProcessing(scene)
+    : (String(scene.videoStatus || '').toLowerCase() === 'processing');
+  var byAction = function (action) {
+    return row.querySelector('[data-action="' + action + '"][data-id="' + scene.id + '"]');
+  };
+  [['delete-video', !hasVideo], ['download-video', !hasVideo]]
+    .forEach(function (pair) { var btn = byAction(pair[0]); if (btn) btn.disabled = !!pair[1]; });
+  var vidBtn = byAction('video');
+  if (vidBtn) vidBtn.textContent = videoBusy ? '생성중(취소)' : '영상 생성';
+  var chips = row.querySelector('.scene-row-chips');
+  if (chips) {
+    var vidChip = chips.querySelector('.chip-video');
+    if (hasVideo && !vidChip) {
+      chips.insertAdjacentHTML('beforeend', '<span class="scene-row-chip chip-video">VID</span>');
+    } else if (!hasVideo && vidChip) {
+      vidChip.remove();
+    }
+  }
+}
+
 function updateSceneRow(idx, headerText, partHint) {
   // ctx는 IIFE 내부 변수라 외부 헬퍼에서 접근할 수 있도록 ui.__ctx를 참조
   var ctxRef = (typeof ctx !== 'undefined' && ctx) || (window.NK && NK.uiPipeline && NK.uiPipeline.__ctx) || null;
@@ -1912,6 +1941,8 @@ function updateSceneRow(idx, headerText, partHint) {
       var vidHtml = helpers.buildVideoCard(scene, toPlayableMediaUrl);
       if (vidSlot) vidSlot.innerHTML = vidHtml;
       else stack2.insertAdjacentHTML('beforeend', '<div class="video-slot">' + vidHtml + '</div>');
+      // 비디오 슬롯만 바꾸면 삭제/다운로드 버튼·VID 칩이 stale 상태로 남으므로 함께 동기화
+      syncVideoDependentControls(row, scene);
       return;
     }
   }
