@@ -63,6 +63,22 @@
     } catch (_) { hydratingBrand[brandId] = false; }
   }
 
+  // iframe 의 로컬 브랜드 저장소가 비어 있을 수 있으므로(브랜드 스튜디오와 분리), 브랜드 API 를
+  // 직접 호출해 원본 응답을 캐시하고 깊은 스캔으로 environmentAssets 를 추출한다.
+  var brandRawCache = {};
+  var brandRawLoading = {};
+  function ensureBrandRawHydrated(brandId, onDone) {
+    if (!brandId || brandRawCache[brandId] !== undefined || brandRawLoading[brandId]) return;
+    if (!(NK.api && NK.api.brandGet)) return;
+    brandRawLoading[brandId] = true;
+    try {
+      Promise.resolve(NK.api.brandGet(brandId))
+        .then(function (res) { brandRawCache[brandId] = res || null; })
+        .catch(function () { brandRawCache[brandId] = null; })
+        .then(function () { brandRawLoading[brandId] = false; if (typeof onDone === 'function') { try { onDone(); } catch (_) { } } });
+    } catch (_) { brandRawLoading[brandId] = false; }
+  }
+
   // 파이프라인(scenes) 컨텍스트엔 environmentAssets 가 안 실릴 수 있어, 서버에서 프로젝트를
   // 직접 받아 payload(브랜드 허브가 저장하는 곳)를 캐시한다. 이게 가장 권위 있는 소스.
   var projectEnvCache = {};
@@ -105,6 +121,7 @@
     // 브랜드ID 가 'projects<projectId>' 형태이면 접두사를 떼어 그 프로젝트도 받는다.
     var brandProjectId = (brandId && brandId.indexOf('projects') === 0) ? brandId.slice('projects'.length) : '';
     ensureBrandHydrated(brandId, refreshOpenPop); // 다음 호출 때 환경 자산이 채워지도록 미리 받아둠
+    ensureBrandRawHydrated(brandId, refreshOpenPop); // 브랜드 API 원본 응답 직접 스캔
     ensureProjectEnvHydrated(projectId, refreshOpenPop); // 서버 로딩 완료 시 드롭다운 자동 갱신
     if (brandProjectId && brandProjectId !== projectId) ensureProjectEnvHydrated(brandProjectId, refreshOpenPop);
     var out = [];
@@ -174,6 +191,7 @@
       // 로컬 브랜드 전체도 스캔(브랜드 스튜디오가 저장한 자산이 어느 브랜드에 있든 잡히도록).
       var allBrands = [];
       try { allBrands = (NK.service && NK.service.brand && NK.service.brand.list) ? (NK.service.brand.list() || []) : []; } catch (_) { }
+      var brandRaw = brandId ? brandRawCache[brandId] : null;
       var envs = [].concat(
         deepCollectEnvs(st && st.payload),
         deepCollectEnvs(draftPayload),
@@ -181,7 +199,8 @@
         deepCollectEnvs(brandId && hydratedBrandCache[brandId]),
         deepCollectEnvs(serverPayload),
         deepCollectEnvs(brandProjectPayload),
-        deepCollectEnvs(allBrands)
+        deepCollectEnvs(allBrands),
+        deepCollectEnvs(brandRaw)
       );
       try {
         if (window.console && console.debug) {
@@ -194,7 +213,9 @@
             server: deepCollectEnvs(serverPayload).length,
             brandProject: deepCollectEnvs(brandProjectPayload).length,
             allBrands: deepCollectEnvs(allBrands).length,
-            brandListIds: allBrands.map(function (b) { return b && b.brandId; })
+            brandRaw: deepCollectEnvs(brandRaw).length,
+            brandRawType: brandRaw ? (typeof brandRaw) : null,
+            brandRawKeys: (brandRaw && typeof brandRaw === 'object') ? Object.keys(brandRaw) : null
           });
         }
       } catch (_) { }
@@ -350,7 +371,9 @@
     if (!isEditableMentionField(e.target)) return;
     try {
       var st = getCtxState();
-      ensureBrandHydrated(resolveBrandId(st));
+      var bId = resolveBrandId(st);
+      ensureBrandHydrated(bId);
+      ensureBrandRawHydrated(bId);
       ensureProjectEnvHydrated(resolveProjectId(st));
     } catch (_) { }
   }, true);
