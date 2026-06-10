@@ -854,6 +854,8 @@
     var savedAt = state.savedAt;
     var header = state.header;
     var videoModel = state.videoModel || localStorage.getItem((NK.config && NK.config.KEYS && NK.config.KEYS.VIDEO_MODEL) || 'nk_video_model') || 'grok';
+    // Kling Draft(v1.6) 제거됨 — 구버전 저장값은 Kling Final로 자동 전환
+    if (videoModel === 'kling-draft') videoModel = 'kling-final';
     var imageProvider = (function () {
       try {
         var key = (NK.config && NK.config.KEYS && NK.config.KEYS.IMAGE_PROVIDER) || 'nk_ai_image_provider';
@@ -866,7 +868,6 @@
       'veo-full':     ['16:9', '9:16'],
       'grok':         ['16:9', '9:16'],
       'grok-r2v':     ['16:9', '9:16'],
-      'kling-draft':  ['16:9', '9:16', '1:1'],
       'kling-final':  ['16:9', '9:16', '1:1'],
       'seedance':     ['16:9', '9:16', '1:1'],
       'seedance-r2v': ['16:9', '9:16', '1:1'],
@@ -892,7 +893,6 @@
       __mopt('veo-full',     'Veo 3.1 Full',              videoModel, aspectRatio) +
       __mopt('grok',         'Grok Imagine',              videoModel, aspectRatio) +
       __mopt('grok-r2v',     'Grok R2V',                  videoModel, aspectRatio) +
-      __mopt('kling-draft',  'Kling Draft (v1.6)',        videoModel, aspectRatio) +
       __mopt('kling-final',  'Kling Final (v2.6 Pro · FHD)', videoModel, aspectRatio) +
       __mopt('seedance',     'Seedance 2.0',              videoModel, aspectRatio) +
       __mopt('seedance-r2v', 'Seedance 2.0 Reference',   videoModel, aspectRatio) +

@@ -5,7 +5,7 @@
   var VIDEO_MODEL_LABELS = {
     'veo': 'Veo 3.1 Fast', 'veo-full': 'Veo 3.1 Full',
     'grok': 'Grok Imagine', 'grok-r2v': 'Grok R2V',
-    'kling-draft': 'Kling Draft (v1.6)', 'kling-final': 'Kling Final (v2.6 Pro)',
+    'kling-final': 'Kling Final (v2.6 Pro)',
     'seedance': 'Seedance 2.0', 'seedance-r2v': 'Seedance 2.0 Reference',
     'wan': 'Wan 2.7',
     'vidu-q3': 'Vidu Q3-Mix'
@@ -16,7 +16,7 @@
   var MODEL_MAX_DURATION = {
     'veo': 8, 'veo-full': 8,
     'grok': 6, 'grok-r2v': 6,
-    'kling-draft': 10, 'kling-final': 10,
+    'kling-final': 10,
     'seedance': 15, 'seedance-r2v': 15,
     'wan': 5,
     'vidu-q3': 8
@@ -291,6 +291,20 @@
       if (!/no\s*speech|lip\s*sync|voice-?over/i.test(finalPrompt)) {
         finalPrompt = finalPrompt + '\n' + noVoiceDirective;
       }
+    } else {
+      // 더빙/나레이션 ON: 대본을 프롬프트에 주입해 캐릭터가 해당 대사를 화면 안에서 말하며
+      // 입 모양(립싱크)을 정확히 맞추도록 유도한다. 백엔드는 promptText만 모델에 전달하므로
+      // 별도 script 필드만으로는 모델이 대사를 알 수 없어 립싱크가 되지 않는다.
+      // (모델이 생성한 음성은 매 생성마다 달라 즉시 쓰지 않더라도, 입 모양이 대사와 맞아야
+      //  추후 별도 제작한 더빙 음원을 영상에 합성·립싱크할 수 있다.)
+      try {
+        var dubScript = String(opts.buildVoiceScriptForVideo(scene, statePayload) || '').trim();
+        if (dubScript && finalPrompt.indexOf(dubScript) === -1) {
+          finalPrompt = finalPrompt +
+            '\n\n[대사/립싱크] The character(s) speak the following lines on camera with accurate lip-sync. ' +
+            'Match mouth movements precisely to the spoken words:\n' + dubScript;
+        }
+      } catch (_) { }
     }
 
     var imageUrl = scene.imageDataUrl || '';
@@ -329,8 +343,8 @@
       var durationSeconds = isSeedanceFamily
         ? Math.min(cap, Math.max(4, Math.round(capped)))
         : snapVideoDuration(capped);
-      var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
-      var klingQuality = opts.videoModel === 'kling-final' ? 'final' : (opts.videoModel === 'kling-draft' ? 'draft' : '');
+      var isKling = opts.videoModel === 'kling-final';
+      var klingQuality = isKling ? 'final' : '';
       // 이전 씬의 마지막 프레임을 이번 씬의 끝 프레임(image_tail)으로 자동 연결 (Kling 전용)
       var endImageDataUrl = '';
       if (isKling && opts.idx > 0) {
@@ -340,8 +354,8 @@
         } catch (_) { endImageDataUrl = ''; }
       }
       // 레퍼런스 이미지: refs cap 보유 모델에서 브랜드 허브 기반 자동 수집
-      // (kling-draft, wan, seedance-r2v, vidu-q3, grok-r2v — @캐릭터명 태그로 레퍼런스 주입)
-      var REFS_MODELS = ['grok', 'grok-r2v', 'kling-draft', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
+      // (kling-final, wan, seedance-r2v, vidu-q3, grok-r2v — @캐릭터명 태그로 레퍼런스 주입)
+      var REFS_MODELS = ['grok', 'grok-r2v', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {
@@ -571,10 +585,10 @@
       var shotCap = Math.min(DEFAULT_DURATION_CAP, getModelMaxDuration(opts.videoModel));
       var shotDur = Math.max(1, Math.min(shotCap, Math.round(Number(shot.duration) || 4)));
       var durationSeconds = isSeedanceFamily ? shotDur : snapVideoDuration(shotDur);
-      var isKling = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
-      var klingQuality = opts.videoModel === 'kling-final' ? 'final' : (opts.videoModel === 'kling-draft' ? 'draft' : '');
+      var isKling = opts.videoModel === 'kling-final';
+      var klingQuality = isKling ? 'final' : '';
 
-      var REFS_MODELS = ['grok', 'grok-r2v', 'kling-draft', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
+      var REFS_MODELS = ['grok', 'grok-r2v', 'kling-final', 'wan', 'seedance-r2v', 'vidu-q3'];
       var isRefsModel = REFS_MODELS.indexOf(opts.videoModel) !== -1;
       var referenceImages = [];
       if (isRefsModel) {
@@ -786,7 +800,7 @@
         }
         // Kling 전용: 다음 씬의 image_tail 연결을 위해 마지막 프레임 추출
         var lastFrameDataUrl = '';
-        var isKlingModel = opts.videoModel === 'kling-draft' || opts.videoModel === 'kling-final';
+        var isKlingModel = opts.videoModel === 'kling-final';
         try {
           if (isKlingModel && NK.util && NK.util.extractLastFrame) {
             lastFrameDataUrl = await NK.util.extractLastFrame(playback, { timeoutMs: 12000 });
