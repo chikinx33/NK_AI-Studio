@@ -60,11 +60,46 @@
     } catch (_) { hydratingBrand[brandId] = false; }
   }
 
+  // 파이프라인(scenes) 컨텍스트엔 environmentAssets 가 안 실릴 수 있어, 서버에서 프로젝트를
+  // 직접 받아 payload(브랜드 허브가 저장하는 곳)를 캐시한다. 이게 가장 권위 있는 소스.
+  var projectEnvCache = {};
+  var projectEnvLoading = {};
+  function ensureProjectEnvHydrated(projectId, onDone) {
+    if (!projectId) return;
+    if (projectEnvCache[projectId] !== undefined) return;
+    if (projectEnvLoading[projectId]) return;
+    if (!(NK.api && NK.api.projectGet)) return;
+    projectEnvLoading[projectId] = true;
+    try {
+      Promise.resolve(NK.api.projectGet(projectId))
+        .then(function (res) {
+          var data = res && (res.data || res);
+          projectEnvCache[projectId] = (data && (data.payload || data)) || null;
+        })
+        .catch(function () { projectEnvCache[projectId] = null; })
+        .then(function () {
+          projectEnvLoading[projectId] = false;
+          if (typeof onDone === 'function') { try { onDone(); } catch (_) { } }
+        });
+    } catch (_) { projectEnvLoading[projectId] = false; }
+  }
+
+  function resolveProjectId(st) {
+    try {
+      if (st && st.draftId) return String(st.draftId);
+      var proj = NK.service && NK.service.project;
+      if (proj && proj.getCurrentProjectId) return String(proj.getCurrentProjectId() || '');
+    } catch (_) { }
+    return '';
+  }
+
   // 브랜드 허브 자산 → 자동완성 후보 [{token, label, kind}]
   function buildSuggestions() {
     var st = getCtxState();
     var brandId = resolveBrandId(st);
+    var projectId = resolveProjectId(st);
     ensureBrandHydrated(brandId); // 다음 호출 때 환경 자산이 채워지도록 미리 받아둠
+    ensureProjectEnvHydrated(projectId, refreshOpenPop); // 서버 로딩 완료 시 드롭다운 자동 갱신
     var out = [];
     var seen = {};
     var push = function (token, label, kind) {
@@ -119,20 +154,24 @@
           draftPayload = d ? (d.payload || d) : null;
         }
       } catch (_) { }
+      var serverPayload = projectId ? projectEnvCache[projectId] : null;
       var envs = [].concat(
         collectEnvs(st && st.payload),
         collectEnvs(draftPayload),
         collectEnvs(brand),
-        collectEnvs(brandId && hydratedBrandCache[brandId])
+        collectEnvs(brandId && hydratedBrandCache[brandId]),
+        collectEnvs(serverPayload)
       );
       try {
         if (window.console && console.debug) {
           console.debug('[mention] env sources', {
             brandId: brandId,
+            projectId: projectId,
             payload: collectEnvs(st && st.payload).length,
             draft: collectEnvs(draftPayload).length,
             brand: collectEnvs(brand).length,
-            hydrated: collectEnvs(brandId && hydratedBrandCache[brandId]).length
+            hydrated: collectEnvs(brandId && hydratedBrandCache[brandId]).length,
+            server: collectEnvs(serverPayload).length
           });
         }
       } catch (_) { }
@@ -197,6 +236,15 @@
         '</div>';
     }).join('');
     pop.style.display = 'block';
+  }
+
+  // 서버 자산 로딩이 끝났을 때, 같은 필드에 포커스가 있고 캐럿이 @질의 위치면 드롭다운을 다시 연다.
+  function refreshOpenPop() {
+    try {
+      if (!state.fieldEl || document.activeElement !== state.fieldEl) return;
+      var info = caretMentionQuery();
+      if (info) openPop(state.fieldEl, info);
+    } catch (_) { }
   }
 
   function positionPop() {
@@ -277,7 +325,11 @@
   // ── 편집 필드 포커스 시 브랜드 자산 미리 하이드레이트(첫 @ 에서도 배경·소품이 뜨도록) ──
   document.addEventListener('focusin', function (e) {
     if (!isEditableMentionField(e.target)) return;
-    try { ensureBrandHydrated(resolveBrandId(getCtxState())); } catch (_) { }
+    try {
+      var st = getCtxState();
+      ensureBrandHydrated(resolveBrandId(st));
+      ensureProjectEnvHydrated(resolveProjectId(st));
+    } catch (_) { }
   }, true);
 
   // ── 입력 감지 ──
