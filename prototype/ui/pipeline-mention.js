@@ -46,7 +46,7 @@
   // 배경·소품이 브랜드 캐시에 비어 있고 서버에만 있을 때를 대비한 1회성 하이드레이션 캐시.
   var hydratedBrandCache = {};
   var hydratingBrand = {};
-  function ensureBrandHydrated(brandId) {
+  function ensureBrandHydrated(brandId, onDone) {
     if (!brandId || hydratedBrandCache[brandId] || hydratingBrand[brandId]) return;
     if (!(NK.service && NK.service.brand && NK.service.brand.hydrateFromServer)) return;
     hydratingBrand[brandId] = true;
@@ -56,7 +56,10 @@
           hydratedBrandCache[brandId] = b || (NK.service.brand.getById ? NK.service.brand.getById(brandId) : null) || null;
         })
         .catch(function () { })
-        .then(function () { hydratingBrand[brandId] = false; });
+        .then(function () {
+          hydratingBrand[brandId] = false;
+          if (typeof onDone === 'function') { try { onDone(); } catch (_) { } }
+        });
     } catch (_) { hydratingBrand[brandId] = false; }
   }
 
@@ -98,8 +101,12 @@
     var st = getCtxState();
     var brandId = resolveBrandId(st);
     var projectId = resolveProjectId(st);
-    ensureBrandHydrated(brandId); // 다음 호출 때 환경 자산이 채워지도록 미리 받아둠
+    // 배경·소품은 현재 에피소드가 아니라 "브랜드 본체 프로젝트"에 저장될 수 있다.
+    // 브랜드ID 가 'projects<projectId>' 형태이면 접두사를 떼어 그 프로젝트도 받는다.
+    var brandProjectId = (brandId && brandId.indexOf('projects') === 0) ? brandId.slice('projects'.length) : '';
+    ensureBrandHydrated(brandId, refreshOpenPop); // 다음 호출 때 환경 자산이 채워지도록 미리 받아둠
     ensureProjectEnvHydrated(projectId, refreshOpenPop); // 서버 로딩 완료 시 드롭다운 자동 갱신
+    if (brandProjectId && brandProjectId !== projectId) ensureProjectEnvHydrated(brandProjectId, refreshOpenPop);
     var out = [];
     var seen = {};
     var push = function (token, label, kind) {
@@ -154,24 +161,29 @@
           draftPayload = d ? (d.payload || d) : null;
         }
       } catch (_) { }
+      var brandProjectId2 = (brandId && brandId.indexOf('projects') === 0) ? brandId.slice('projects'.length) : '';
       var serverPayload = projectId ? projectEnvCache[projectId] : null;
+      var brandProjectPayload = brandProjectId2 ? projectEnvCache[brandProjectId2] : null;
       var envs = [].concat(
         collectEnvs(st && st.payload),
         collectEnvs(draftPayload),
         collectEnvs(brand),
         collectEnvs(brandId && hydratedBrandCache[brandId]),
-        collectEnvs(serverPayload)
+        collectEnvs(serverPayload),
+        collectEnvs(brandProjectPayload)
       );
       try {
         if (window.console && console.debug) {
           console.debug('[mention] env sources', {
             brandId: brandId,
             projectId: projectId,
+            brandProjectId: brandProjectId2,
             payload: collectEnvs(st && st.payload).length,
             draft: collectEnvs(draftPayload).length,
             brand: collectEnvs(brand).length,
             hydrated: collectEnvs(brandId && hydratedBrandCache[brandId]).length,
-            server: collectEnvs(serverPayload).length
+            server: collectEnvs(serverPayload).length,
+            brandProject: collectEnvs(brandProjectPayload).length
           });
         }
       } catch (_) { }
