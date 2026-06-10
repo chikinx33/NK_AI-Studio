@@ -817,21 +817,23 @@
       var s = String(sid || '').trim();
       if (s && s !== canonical && legacy.indexOf(s) < 0) legacy.push(s);
     };
+    // 이 기기에서 과거에 쓰던 로컬 세션 id 는 (프로젝트/인스턴스 구분 없이) 항상 병합 대상에 포함한다.
+    // 과거 코드는 기기-로컬 랜덤 세션에 이미지를 누적했고, 그 id 가 프로젝트 payload 에 정확히
+    // 반영되지 않은 경우가 많아(클로버 레이스) 프로젝트 진입 시 기존 이미지가 누락됐다.
+    try { pushLegacy(String(localStorage.getItem(STORAGE_SESSION_KEY) || '').trim()); } catch (_) {}
     var proj = state.currentProject;
     var pid = proj && proj.id ? String(proj.id).trim() : '';
     if (pid) {
       var payload = (proj && proj.payload) || {};
       var prevSid = String(payload.aiImageSessionId || '').trim();
-      (Array.isArray(payload.aiImageLegacySessionIds) ? payload.aiImageLegacySessionIds : []).forEach(pushLegacy);
+      var prevList = Array.isArray(payload.aiImageLegacySessionIds) ? payload.aiImageLegacySessionIds : [];
+      prevList.forEach(pushLegacy);
       pushLegacy(prevSid);
       // canonical 로 고정 + 과거 세션 보존 (변경이 있을 때만 서버에 1회 기록).
-      var migrated = (prevSid !== canonical) || (JSON.stringify(Array.isArray(payload.aiImageLegacySessionIds) ? payload.aiImageLegacySessionIds : []) !== JSON.stringify(legacy));
+      var migrated = (prevSid !== canonical) || (JSON.stringify(prevList) !== JSON.stringify(legacy));
       if (migrated && NK.service && NK.service.project && NK.service.project.updatePayload) {
         try { NK.service.project.updatePayload(pid, { aiImageSessionId: canonical, aiImageLegacySessionIds: legacy }).catch(function () {}); } catch (_) {}
       }
-    } else {
-      // 인스턴스: 과거 기기-로컬 랜덤 세션을 legacy 로 병합(현재 기기의 기존 이력 표시용).
-      try { pushLegacy(String(localStorage.getItem(STORAGE_SESSION_KEY) || '').trim()); } catch (_) {}
     }
     state.sessionId = canonical;
     state.legacySessionIds = legacy;
