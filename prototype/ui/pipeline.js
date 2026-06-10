@@ -1757,6 +1757,35 @@ function buildSceneRowHtml(s, header) {
   });
 }
 
+// 'image' 부분 업데이트는 이미지 슬롯만 교체하므로, 이미지 유무에 의존하는 액션 버튼
+// (수정/삭제/다운로드/되돌리기)과 헤더의 IMG 칩이 이전 상태로 남는다.
+// → "이미지 생성했는데 수정 버튼이 비활성" 버그(생성은 part='image' 로 갱신하기 때문).
+// 이미지 슬롯을 갱신할 때 이 컨트롤들을 현재 scene 상태로 함께 동기화한다.
+function syncImageDependentControls(row, scene) {
+  if (!row || !scene) return;
+  var hasImage = !!scene.imageDataUrl;
+  var hasHistory = Array.isArray(scene.imageHistory) && scene.imageHistory.length > 0;
+  var byAction = function (action) {
+    return row.querySelector('[data-action="' + action + '"][data-id="' + scene.id + '"]');
+  };
+  [['edit-image', !hasImage], ['delete-image', !hasImage], ['download-image', !hasImage], ['revert-image', !hasHistory]]
+    .forEach(function (pair) { var btn = byAction(pair[0]); if (btn) btn.disabled = !!pair[1]; });
+  var regenBtn = byAction('regen-image');
+  if (regenBtn) regenBtn.textContent = scene.imgLoading ? '생성중(취소)' : '이미지 생성';
+  var chips = row.querySelector('.scene-row-chips');
+  if (chips) {
+    var imgChip = chips.querySelector('.chip-image');
+    if (hasImage && !imgChip) {
+      var vidChip = chips.querySelector('.chip-video');
+      var chipHtml = '<span class="scene-row-chip chip-image">IMG</span>';
+      if (vidChip) vidChip.insertAdjacentHTML('beforebegin', chipHtml);
+      else chips.insertAdjacentHTML('beforeend', chipHtml);
+    } else if (!hasImage && imgChip) {
+      imgChip.remove();
+    }
+  }
+}
+
 function updateSceneRow(idx, headerText, partHint) {
   // ctx는 IIFE 내부 변수라 외부 헬퍼에서 접근할 수 있도록 ui.__ctx를 참조
   var ctxRef = (typeof ctx !== 'undefined' && ctx) || (window.NK && NK.uiPipeline && NK.uiPipeline.__ctx) || null;
@@ -1807,6 +1836,8 @@ function updateSceneRow(idx, headerText, partHint) {
       var imgHtml = helpers.buildImageCard(scene, toPlayableMediaUrl);
       if (imgSlot) imgSlot.innerHTML = imgHtml;
       else stack.insertAdjacentHTML('afterbegin', '<div class="image-slot">' + imgHtml + '</div>');
+      // 이미지 슬롯만 바꾸면 수정/삭제/다운로드/되돌리기 버튼과 IMG 칩이 stale 상태로 남으므로 함께 동기화
+      syncImageDependentControls(row, scene);
       return;
     }
   }

@@ -28,6 +28,18 @@ test('delete-image clears imagePath (and other refs) so the cut stays empty afte
   assert.match(head, /imageDataUrl: '', imagePath: '', generatedImageUrl: '', imageUrl: ''/);
 });
 
+// 'image' 부분 업데이트(생성/삭제 등) 시 이미지 의존 버튼(수정/삭제/다운로드/되돌리기)과
+// IMG 칩을 함께 동기화해야 한다. 그렇지 않으면 "이미지 생성했는데 수정 버튼이 비활성" 회귀.
+test('image partial update syncs image-dependent action buttons (edit/delete/download)', () => {
+  const src = read('prototype/ui/pipeline.js');
+  assert.match(src, /function syncImageDependentControls\(row, scene\)/);
+  // edit/delete/download/revert 버튼의 disabled 를 현재 scene 상태로 갱신
+  assert.match(src, /\['edit-image', !hasImage\], \['delete-image', !hasImage\], \['download-image', !hasImage\], \['revert-image', !hasHistory\]/);
+  // 'image' 분기에서 호출
+  const imgBranch = src.split("partHint === 'image'")[1] || '';
+  assert.match(imgBranch.slice(0, 600), /syncImageDependentControls\(row, scene\)/);
+});
+
 // 자동 매핑 폴백이 완전히 제거되었는지(빈 컷을 시간순/그리드순으로 채우지 않음).
 test('pipeline-assets no longer auto-fills empty cuts from the storage library', () => {
   const src = read('prototype/ui/pipeline-assets.js');
