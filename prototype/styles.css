@@ -4780,6 +4780,20 @@ textarea::-webkit-scrollbar-corner {
   border-radius: 4px;
 }
 
+/* 더빙 대본 인라인 편집: 클릭 가능함을 알리는 어포던스 */
+#pipeline-scenes .story-lines.is-editable {
+  cursor: text;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+#pipeline-scenes .story-lines.is-editable:hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--border) 50%);
+}
+#pipeline-scenes .story-lines.is-editable:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent 65%);
+}
+
 .prompt-common[contenteditable="true"],
 .prompt-aspect[contenteditable="true"],
 .prompt-visual[contenteditable="true"],

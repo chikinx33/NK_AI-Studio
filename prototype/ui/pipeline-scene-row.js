@@ -358,8 +358,13 @@
           return '<p class="eyebrow muted">대본 없음</p>';
         }
         var modeLabel = dubOn ? '더빙' : '나레이션';
+        // 사용자가 직접 수정한 대본(scene.script)이 있으면 그것을 최우선 표시·사용한다.
+        // (buildVoiceScriptForVideo·TTS·영상 프롬프트 주입 모두 scene.script 를 우선함)
+        var scriptOverride = String((scene && scene.script) || '').trim();
         var linesHtml = '';
-        if (dubOn && Array.isArray(scene.dialogue) && scene.dialogue.length) {
+        if (scriptOverride) {
+          linesHtml = escapeText(scriptOverride).replace(/\n/g, '<br>');
+        } else if (dubOn && Array.isArray(scene.dialogue) && scene.dialogue.length) {
           linesHtml = scene.dialogue.map(function (d) {
             var speaker = String((d && d.speaker) || '').trim();
             var line = String((d && d.line) || '').trim();
@@ -372,8 +377,10 @@
         } else {
           linesHtml = extractNarrationDisplay(scene.lines || '');
         }
+        // 별도 버튼 없이 텍스트 영역을 클릭하면 바로 편집. Enter 로 적용, 전역 "저장"으로 영속화.
         return '<p class="eyebrow">' + modeLabel + '</p>' +
-          '<p class="story-lines" data-id="' + scene.id + '">' + linesHtml + '</p>' +
+          '<p class="story-lines is-editable" data-id="' + scene.id + '" data-dub-edit="1" contenteditable="true" ' +
+          'title="클릭해 대본을 수정 · Enter로 적용 (Shift+Enter 줄바꿈)">' + linesHtml + '</p>' +
           voiceBlock;
       })() +
       '</div>' +

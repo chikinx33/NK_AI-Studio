@@ -599,5 +599,56 @@
       ctx.setState(st);
       if (ctx.persistPipeline) ctx.persistPipeline();
     });
+
+    // ── 더빙 대본 인라인 편집 ──
+    // 별도 버튼 없이 텍스트 영역을 클릭하면 바로 편집. Enter 로 적용, 전역 "저장"으로 영속화.
+    // 편집 내용은 scene.script 에 저장되어 영상 프롬프트 주입(립싱크)·TTS·새로고침 복원에 모두 사용됨.
+    var commitDubEdit = function (el) {
+      if (!el) return;
+      var sceneId = el.dataset.id;
+      var ctx = opts.ctx;
+      if (!ctx || !ctx.getState || !ctx.setState || !sceneId) return;
+      var st = ctx.getState();
+      if (!st || !Array.isArray(st.scenes)) return;
+      var idx = st.scenes.findIndex(function (s) { return String(s.id) === String(sceneId); });
+      if (idx < 0) return;
+      var text = String(el.innerText || el.textContent || '')
+        .replace(/ /g, ' ').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
+      // 사용자가 실제로 바꿨을 때만 저장한다. baseline(포커스 시점 표시 내용)과 같으면
+      // 단순 클릭만으로 자동 대사가 scene.script 에 고정되는 부작용을 막는다.
+      var baseline = (typeof el.dataset.dubBaseline === 'string') ? el.dataset.dubBaseline : null;
+      if (baseline !== null && baseline === text) return;
+      var prev = String((st.scenes[idx] && st.scenes[idx].script) || '');
+      if (prev === text) return; // 변경 없으면 저장/재렌더 skip
+      st.scenes[idx] = Object.assign({}, st.scenes[idx], { script: text });
+      ctx.setState(st);
+      if (ctx.persistPipeline) ctx.persistPipeline();
+      if (ctx.updateDraftFromPipeline) ctx.updateDraftFromPipeline();
+    };
+
+    // 한글 IME: Enter 는 keydown 에서 조합 확정에 쓰이므로, 줄바꿈만 막고 적용은 keyup 의 실제 Enter 에서 처리.
+    rootEl.addEventListener('keydown', function (e) {
+      var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
+      if (!el) return;
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) e.preventDefault();
+    });
+    rootEl.addEventListener('keyup', function (e) {
+      var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
+      if (!el) return;
+      if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+        commitDubEdit(el);
+        try { el.blur(); } catch (_) {}
+      }
+    });
+    // 포커스 진입 시점의 표시 내용을 baseline 으로 기록(실제 변경 여부 판정용).
+    rootEl.addEventListener('focusin', function (e) {
+      var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
+      if (el) el.dataset.dubBaseline = String(el.innerText || el.textContent || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim();
+    });
+    // 포커스가 벗어나면(다른 곳 클릭·저장 버튼 클릭 등) 최신 내용을 state 에 반영.
+    rootEl.addEventListener('focusout', function (e) {
+      var el = e.target && e.target.closest ? e.target.closest('[data-dub-edit]') : null;
+      if (el) commitDubEdit(el);
+    });
   };
 })();
