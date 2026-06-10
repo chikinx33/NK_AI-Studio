@@ -906,6 +906,7 @@
       '<button type="button" class="btn-icon-sm active" id="pipeline-focus-mode" title="부분 펼침" aria-label="부분 펼침" data-i18n-title="scene_focus_mode" data-i18n-aria-label="scene_focus_mode"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 4 18 10" stroke-width="3.2"/><polyline points="6 14 12 20 18 14" stroke-width="2.2"/></svg></button>' +
       '</div>' +
       '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
+      '<button class="btn-secondary" id="common-prompt-batch-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="모든 씬에 공통 적용되는 프롬프트(스타일·분위기·배경/세계관·대상)를 한 번에 일괄 편집">공통 프롬프트 일괄 편집</button>' +
       '<button class="btn-secondary" id="pipeline-remap-assets" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="저장소의 이미지·영상을 시간순으로 빈 씬에 다시 매핑">자동 매핑</button>' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
@@ -1112,6 +1113,41 @@
         alert('저장되었습니다.');
       };
     }
+    // 공통 프롬프트 일괄 편집: state.header(모든 씬 공유) 를 한 번에 수정 → 전체 씬 행 재렌더.
+    // 개별 씬의 화면/행동/Duration 편집(씬별 "편집" 버튼)과 공존한다.
+    var commonBatchBtn = document.getElementById('common-prompt-batch-btn');
+    if (commonBatchBtn) {
+      commonBatchBtn.onclick = function () {
+        var st = ctx.getState();
+        if (!st) return;
+        var currentCommon = cleanHeader(st.header || '');
+        openCommonPromptBatchModal(currentCommon, async function (newText) {
+          var st2 = ctx.getState();
+          if (!st2) return;
+          var cleaned = String(newText || '').trim();
+          // 종횡비 메타는 보존(표시는 cleanHeader 로 strip 되지만 데이터엔 유지).
+          st2.header = withAspectInHeader ? withAspectInHeader(cleaned, st2.aspectRatio) : cleaned;
+          ctx.setState(st2);
+          if (ctx.persistPipeline) ctx.persistPipeline();
+          if (updateDraftFromPipeline) updateDraftFromPipeline();
+          // 모든 씬 행을 새 공통 프롬프트로 즉시 재렌더 (full reload 없이).
+          (st2.scenes || []).forEach(function (_, i) {
+            try { updateSceneRow(i, st2.header || '', null); } catch (_) {}
+          });
+          // 서버에도 비동기 저장 (실패해도 로컬은 이미 반영됨).
+          if (projectId && NK.api && NK.api.projectSave) {
+            try {
+              await NK.api.projectSave(projectId, st2.payload || {}, st2.scenes || [], {
+                header: st2.header || '',
+                aspectRatio: st2.aspectRatio || '',
+                title: getProjectTitle()
+              });
+            } catch (_) { /* 백그라운드 저장 실패 무시 */ }
+          }
+        });
+      };
+    }
+
     var modelSelect = document.getElementById('video-model-select');
     if (modelSelect) {
       modelSelect.onchange = function () {
@@ -1690,6 +1726,40 @@ function buildVoiceScriptForVideo(scene, payload) {
   var helpers = getPipelineSceneRowHelpers();
   if (helpers.buildVoiceScriptForVideo) return helpers.buildVoiceScriptForVideo(scene, payload);
   return '';
+}
+
+// 공통 프롬프트 일괄 편집 모달 (동적 생성). currentText 를 채우고 일괄 적용 시 onApply(newText) 호출.
+function openCommonPromptBatchModal(currentText, onApply) {
+  var existing = document.getElementById('common-prompt-batch-modal');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'common-prompt-batch-modal';
+  overlay.className = 'cpbm-overlay';
+  overlay.innerHTML =
+    '<div class="cpbm-box">' +
+    '<h3 class="cpbm-title">공통 프롬프트 일괄 편집</h3>' +
+    '<p class="cpbm-help">모든 씬에 공통으로 들어가는 프롬프트(스타일·분위기·배경/세계관·대상)예요. 여기서 한 번 수정하면 <strong>모든 씬</strong>의 공통(Common) 영역에 일괄 적용돼요. 각 씬의 화면/행동/Duration 은 씬별 “편집”에서 따로 수정하세요.</p>' +
+    '<textarea id="cpbm-textarea" class="cpbm-textarea" spellcheck="false"></textarea>' +
+    '<div class="cpbm-actions">' +
+    '<button type="button" class="btn-ghost" id="cpbm-cancel">취소</button>' +
+    '<button type="button" class="btn-primary" id="cpbm-apply">일괄 적용</button>' +
+    '</div>' +
+    '</div>';
+  document.body.appendChild(overlay);
+  var ta = overlay.querySelector('#cpbm-textarea');
+  if (ta) ta.value = currentText || '';
+  var close = function () { try { overlay.remove(); } catch (_) {} };
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  var cancelBtn = overlay.querySelector('#cpbm-cancel');
+  if (cancelBtn) cancelBtn.onclick = close;
+  var applyBtn = overlay.querySelector('#cpbm-apply');
+  if (applyBtn) applyBtn.onclick = function () {
+    var val = ta ? ta.value : '';
+    close();
+    try { if (typeof onApply === 'function') onApply(val); }
+    catch (e) { alert('적용 실패: ' + (e && e.message ? e.message : e)); }
+  };
+  setTimeout(function () { if (ta) ta.focus(); }, 0);
 }
 
 function buildSceneRowHtml(s, header) {

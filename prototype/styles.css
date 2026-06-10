@@ -2842,6 +2842,58 @@ textarea::-webkit-scrollbar-corner {
   gap: 8px;
   margin-top: 14px;
 }
+/* 공통 프롬프트 일괄 편집 모달 */
+.cpbm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 20px;
+}
+.cpbm-box {
+  width: min(720px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  padding: 22px 24px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.cpbm-title {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+.cpbm-help {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted, #888);
+}
+.cpbm-textarea {
+  width: 100%;
+  min-height: 300px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.cpbm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
 .scenario-diag-titlebar {
   display: flex;
   align-items: center;
