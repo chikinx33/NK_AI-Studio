@@ -1020,10 +1020,15 @@
           ctx._cancelImage[String(scene.id)] = ctrl;
         }
       } catch (_) {}
+      // 씬/샷 이미지는 항상 "처음부터" 생성한다(편집할 소스 이미지가 없음). 레퍼런스가
+      // 있으면 백엔드가 기본값으로 image-to-image 로 간주해 레퍼런스 1번(첫 캐릭터)을
+      // 구도 앵커로만 쓰고 다중 캐릭터 라벨링을 건너뛴다 → 죄인1 한 명만 반영되는 회귀.
+      // generationMode 를 명시해 다중 캐릭터(각 이미지 인접 라벨) 바인딩 경로를 강제한다.
       var json = await NK.api.imagen({
         prompt: finalPrompt,
         aspectRatio: aspectRatio,
         projectId: projectId,
+        generationMode: 'text-to-image',
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
@@ -1208,10 +1213,15 @@
           ctx._cancelShotImage[String(scene.id) + '/' + String(shot.id)] = ctrl;
         }
       } catch (_) {}
+      // 씬/샷 이미지는 항상 "처음부터" 생성한다(편집할 소스 이미지가 없음). 레퍼런스가
+      // 있으면 백엔드가 기본값으로 image-to-image 로 간주해 레퍼런스 1번(첫 캐릭터)을
+      // 구도 앵커로만 쓰고 다중 캐릭터 라벨링을 건너뛴다 → 죄인1 한 명만 반영되는 회귀.
+      // generationMode 를 명시해 다중 캐릭터(각 이미지 인접 라벨) 바인딩 경로를 강제한다.
       var json = await NK.api.imagen({
         prompt: finalPrompt,
         aspectRatio: aspectRatio,
         projectId: projectId,
+        generationMode: 'text-to-image',
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
