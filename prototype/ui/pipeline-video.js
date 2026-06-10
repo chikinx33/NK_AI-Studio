@@ -324,10 +324,10 @@
     try {
       var normalizedImage = await opts.enforceImageAspectRatio(imageUrl, desiredAspectRatio);
       if (normalizedImage && normalizedImage.url && normalizedImage.url !== imageUrl) {
+        // 정규화된(크롭된) 이미지는 "영상 API 입력용"으로만 사용한다. 저장되는 scene.imageDataUrl에
+        // 덮어쓰면 비영속 data: URL이 되어, 저장 시 stripping → 새로고침 후 이미지가 사라진다
+        // (영상 생성한 컷만 이미지 누락되는 회귀). 따라서 로컬 imageUrl만 갱신하고 state는 건드리지 않는다.
         imageUrl = normalizedImage.url;
-        st.scenes[opts.idx] = Object.assign({}, st.scenes[opts.idx], { imageDataUrl: imageUrl });
-        ctx.setState(st);
-        scene = st.scenes[opts.idx];
       }
     } catch (aspectErr) {
       console.warn('image aspect normalize skipped:', aspectErr && aspectErr.message ? aspectErr.message : aspectErr);
@@ -576,8 +576,9 @@
     try {
       var normalizedImage = await opts.enforceImageAspectRatio(imageUrl, desiredAspectRatio);
       if (normalizedImage && normalizedImage.url && normalizedImage.url !== imageUrl) {
+        // 정규화된(크롭된) 이미지는 영상 API 입력용으로만 사용. shot.imageDataUrl에 덮어쓰면
+        // 비영속 data: URL이 되어 저장 시 stripping → 새로고침 후 컷 이미지 누락. state는 유지한다.
         imageUrl = normalizedImage.url;
-        applyShotPatch(ctx, opts.sceneIdx, shot.id, { imageDataUrl: imageUrl });
       }
     } catch (e) { console.warn('shot image aspect normalize skipped:', e && e.message); }
 
