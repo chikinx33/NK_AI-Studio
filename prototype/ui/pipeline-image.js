@@ -14,6 +14,30 @@
     return raw;
   }
 
+  // 캐릭터 레퍼런스 해석을 시도할 가치가 있는지 판단한다.
+  // [병목 수정] 기존 게이트는 payload.charactersEnabled / payload.characters 만 검사해서,
+  // 캐릭터가 브랜드 허브(brandCharacters)·knowledgeHub.characters·knowledgeCharacters 에만
+  // 등록된 경우(= "자산엔 있는데 payload.characters 는 비어있음") 레퍼런스 첨부 로직 자체를
+  // 통째로 건너뛰어 전혀 다른 캐릭터가 생성됐다. 등록 캐릭터가 어느 소스에든 있거나 브랜드가
+  // 연결돼 있으면(브랜드 IP/시트에서 해석 가능) 해석을 시도하도록 게이트를 넓힌다.
+  function hasResolvableCharacterContext(payload) {
+    var p = payload && typeof payload === 'object' ? payload : {};
+    var enabled = p.charactersEnabled;
+    if (enabled === true || enabled === 1 || enabled === 'true' || enabled === '1' || enabled === 'on' || enabled === 'yes') return true;
+    if (Array.isArray(p.characters) && p.characters.length) return true;
+    if (Array.isArray(p.knowledgeCharacters) && p.knowledgeCharacters.length) return true;
+    var hub = p.knowledgeHub && typeof p.knowledgeHub === 'object' ? p.knowledgeHub : null;
+    if (hub && Array.isArray(hub.characters) && hub.characters.length) return true;
+    if (hub && Array.isArray(hub.knowledgeCharacters) && hub.knowledgeCharacters.length) return true;
+    try {
+      var brandId = (NK.service && NK.service.project && NK.service.project.getBrandId)
+        ? NK.service.project.getBrandId(p)
+        : (p.brandId || (p.brandRef && p.brandRef.id) || '');
+      if (brandId) return true;
+    } catch (_) {}
+    return false;
+  }
+
   function normalizeKnowledgeCharacters(value) {
     var src = Array.isArray(value) ? value : [];
     return src.map(function (item, index) {
@@ -830,7 +854,11 @@
     var referencePayload = null;
     var imageCharacterNegativePrompt = '';
     try {
-      if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
+      var __charContextOk = hasResolvableCharacterContext(st.payload || {});
+      if (!__charContextOk) {
+        try { console.log('Character reference skipped (image): 등록된 캐릭터/브랜드 컨텍스트 없음', { sceneId: scene.id, payloadCharCount: Array.isArray((st.payload || {}).characters) ? (st.payload || {}).characters.length : 0, charactersEnabled: (st.payload || {}).charactersEnabled }); } catch (_) {}
+      }
+      if (NK.service && NK.service.characterRegistry && __charContextOk) {
         var liveDraft = (NK.service && NK.service.project && NK.service.project.getDraftById)
           ? NK.service.project.getDraftById(projectId)
           : null;
@@ -1088,7 +1116,7 @@
 
     // ── 캐릭터 레퍼런스 해결: scene 단위와 동일 체인을 그대로 사용 ──
     try {
-      if (NK.service && NK.service.characterRegistry && opts.toBool((st.payload || {}).charactersEnabled, Array.isArray((st.payload || {}).characters) && (st.payload || {}).characters.length)) {
+      if (NK.service && NK.service.characterRegistry && hasResolvableCharacterContext(st.payload || {})) {
         var liveDraft = (NK.service && NK.service.project && NK.service.project.getDraftById)
           ? NK.service.project.getDraftById(projectId)
           : null;

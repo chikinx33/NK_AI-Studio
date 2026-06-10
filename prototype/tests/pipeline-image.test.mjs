@@ -585,3 +585,55 @@ test('pipeline image generation caps fallback ip library references at four imag
   assert.equal(ctx.__imagenCalls[0].referenceImages.length, 4);
   assert.equal(ctx.__imagenCalls[0].referenceImages[3].imageDataUrl, 'https://example.com/back-quarter.png');
 });
+
+// [병목 회귀 테스트] 캐릭터가 payload.characters 가 아니라 브랜드(자산)에만 등록되고
+// charactersEnabled 플래그도 없을 때, 기존 게이트는 레퍼런스 첨부를 통째로 건너뛰어
+// 전혀 다른 캐릭터를 생성했다. 넓힌 게이트(hasResolvableCharacterContext)는 브랜드가
+// 연결돼 있으면 해석을 시도해 등록 캐릭터 레퍼런스를 첨부해야 한다.
+test('pipeline image attaches references when character is registered only in the brand (no charactersEnabled / no payload.characters)', async () => {
+  const ctx = createContext();
+  loadScript(ctx, 'prototype/js/service/character-registry.js');
+  loadScript(ctx, 'prototype/ui/pipeline-image.js');
+
+  let state = {
+    draftId: 'project-1',
+    header: '밝은 2D 키즈 애니메이션',
+    payload: {
+      brandId: 'shape-brand'
+      // charactersEnabled 미설정 + payload.characters 없음 — 캐릭터는 브랜드 자산에만 등록됨
+    },
+    scenes: [
+      {
+        id: 1,
+        shot: '밝은 숲속 장면',
+        composition: '@네모 상반신 클로즈업',
+        action: '@네모가 웃으며 손을 흔든다',
+        estSec: 4
+      }
+    ]
+  };
+  const ctxObj = {
+    getState() { return state; },
+    setState(next) { state = next; }
+  };
+
+  await ctx.NK.uiPipelineImage.generateImageForIdx({
+    idx: 0,
+    ctx: ctxObj,
+    cleanHeader(text) { return String(text || '').trim(); },
+    toBool(value, fallback) { return typeof value === 'boolean' ? value : !!fallback; },
+    resolveEffectiveAspectRatio() { return '16:9'; },
+    ensureStateAspectRatio(current) { return current; },
+    updateSceneRow() {},
+    retryImage() { throw new Error('retry should not be called'); },
+    async enforceImageAspectRatio() { return null; }
+  });
+
+  assert.equal(ctx.__imagenCalls.length, 1);
+  assert.ok(
+    Array.isArray(ctx.__imagenCalls[0].referenceImages) && ctx.__imagenCalls[0].referenceImages.length >= 1,
+    '브랜드에만 등록된 캐릭터도 레퍼런스로 첨부되어야 한다'
+  );
+  assert.equal(ctx.__imagenCalls[0].referenceImages[0].imageDataUrl, 'gs://bucket/front.png');
+  assert.match(String(ctx.__imagenCalls[0].prompt || ''), /네모/);
+});
