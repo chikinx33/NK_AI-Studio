@@ -445,6 +445,7 @@
   sceneRow.extractNarrationDisplay = extractNarrationDisplay;
   sceneRow.buildVoiceScriptForVideo = buildVoiceScriptForVideo;
   sceneRow.buildSceneRowHtml = buildSceneRowHtml;
+  sceneRow.buildCutRefOptions = buildCutRefOptions;
   sceneRow.togglePipelineSceneCollapsed = togglePipelineSceneCollapsed;
   sceneRow.setPipelineSceneCollapsed = setPipelineSceneCollapsed;
   sceneRow.isPipelineSceneCollapsed = isPipelineSceneCollapsed;

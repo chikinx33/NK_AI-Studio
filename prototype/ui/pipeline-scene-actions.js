@@ -130,6 +130,9 @@
         return;
       }
       var btn = e.target.closest('[data-action]');
+      // 체크박스(컷 기반 생성)는 change 리스너에서 처리한다. 여기서 preventDefault 하면
+      // 네이티브 토글이 취소돼 체크가 되지 않으므로 클릭 경로에서 제외한다.
+      if (btn && btn.tagName === 'INPUT' && btn.type === 'checkbox') btn = null;
       if (btn) {
         e.preventDefault();
         var action = btn.dataset.action || '';
@@ -307,11 +310,6 @@
           });
           // 되돌리기 버튼의 활성/비활성 상태가 바뀌므로 행 전체를 재구성한다.
           refreshAndPersist(true);
-          return;
-        }
-        if (action === 'toggle-cut-ref') {
-          st.scenes[idx] = Object.assign({}, scene, { cutRefEnabled: !scene.cutRefEnabled });
-          refreshAndPersist(true, 'image');
           return;
         }
         if (action === 'delete-image') {
@@ -562,6 +560,32 @@
     });
 
     rootEl.addEventListener('change', function (e) {
+      // ── 컷 기반 생성 체크박스 토글 ──
+      var chk = e.target.closest('[data-action="toggle-cut-ref"]');
+      if (chk) {
+        var ctxC = opts.ctx;
+        if (!ctxC || !ctxC.getState) return;
+        var stC = ctxC.getState();
+        if (!stC || !stC.scenes) return;
+        var chkId = chk.dataset.id;
+        var cidx = stC.scenes.findIndex(function (s) { return String(s.id) === String(chkId); });
+        if (cidx < 0) return;
+        var enabled = !!chk.checked;
+        stC.scenes[cidx] = Object.assign({}, stC.scenes[cidx], { cutRefEnabled: enabled });
+        ctxC.setState(stC);
+        // 같은 행의 드롭다운을 그 자리에서 활성/비활성 + 옵션 새로고침(다른 컷 최신 이미지 반영)
+        var rowC = chk.closest('.scene-row');
+        var selC = rowC ? rowC.querySelector('.cut-ref-select[data-id="' + chkId + '"]') : null;
+        if (selC) {
+          selC.disabled = !enabled;
+          var srMod = NK.uiPipelineSceneRow;
+          if (enabled && srMod && srMod.buildCutRefOptions) {
+            selC.innerHTML = srMod.buildCutRefOptions(stC.scenes, chkId, stC.scenes[cidx].cutRefId);
+          }
+        }
+        if (ctxC.persistPipeline) ctxC.persistPipeline();
+        return;
+      }
       var sel = e.target.closest('[data-action="change-cut-ref"]');
       if (!sel) return;
       var selSceneId = sel.dataset.id;
