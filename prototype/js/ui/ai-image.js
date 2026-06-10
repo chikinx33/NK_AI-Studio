@@ -31,6 +31,7 @@
     historyLoadError: '',
     selectedFileName: '',
     sourceSectionCollapsed: { brand: true, content: true, project: true },
+    sourceLibraryModal: '',
     imageModalUrl: '',
     previewTargetType: 'none',
     historyPanelMode: 'history',
@@ -1596,10 +1597,84 @@
         '</div>';
   }
 
+  function buildSourceLibraryOpenerMarkup(section, title, count) {
+    return '' +
+      '<div class="ai-image-source-library is-compact ai-image-source-opener">' +
+        '<div class="ai-image-source-library-title-row">' +
+          '<div class="ai-image-source-library-title">' + escapeHtml(title) + (count ? ' <span class="ai-image-source-opener-count">(' + escapeHtml(String(count)) + ')</span>' : '') + '</div>' +
+          '<button type="button" class="circle-toggle" data-action="open-source-library" data-section="' + escapeHtml(section) + '" aria-label="' + escapeHtml(title) + ' 열기">+</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function buildSourceLibraryModalMarkup() {
+    var section = String(state.sourceLibraryModal || '');
+    if (!section) return '';
+    var title = '';
+    var grid = '';
+    var loading = false;
+    var hasItems = false;
+    var loadingText = '';
+    var emptyText = '';
+    if (section === 'brand') {
+      title = t('sourceBrandTitle');
+      grid = buildBrandSourceLibraryMarkup();
+      loading = state.brandLibraryLoading;
+      hasItems = !!state.brandLibraryItems.length;
+      loadingText = t('sourceBrandLoading');
+      emptyText = t('sourceBrandEmpty');
+    } else if (section === 'content') {
+      title = t('sourceContentTitle');
+      grid = buildContentSourceLibraryMarkup();
+      loading = state.contentLibraryLoading;
+      hasItems = !!state.contentLibraryItems.length;
+      loadingText = t('sourceContentLoading');
+      emptyText = t('sourceContentEmpty');
+    } else {
+      title = t('sourceLibraryTitle');
+      grid = buildProjectSourceLibraryMarkup();
+      loading = state.libraryLoading;
+      hasItems = !!state.projectLibraryItems.length;
+      loadingText = t('sourceProjectLoading');
+      emptyText = t('sourceProjectEmpty');
+    }
+    var body;
+    if (loading) {
+      body = '<p class="muted small">' + escapeHtml(loadingText) + '</p>';
+    } else if (hasItems) {
+      body = '<div class="ai-image-source-grid ai-image-source-modal-grid">' + grid + '</div>';
+    } else {
+      body = '<p class="muted small">' + escapeHtml(emptyText) + '</p>';
+    }
+    return '' +
+      '<div class="img-modal ai-image-source-library-modal" data-action="close-source-library">' +
+        '<div class="ai-image-source-library-modal-box" data-action="source-library-modal-noop">' +
+          '<div class="ai-image-source-library-modal-head">' +
+            '<h3>' + escapeHtml(title) + '</h3>' +
+            '<span class="ai-image-source-limit">' + escapeHtml(String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES)) + '</span>' +
+            '<button type="button" class="circle-toggle" data-action="close-source-library" aria-label="닫기">×</button>' +
+          '</div>' +
+          '<div class="ai-image-source-library-modal-body">' + body + '</div>' +
+        '</div>' +
+      '</div>';
+  }
+
+  function renderSourceLibraryModal() {
+    try {
+      var root = document.getElementById('ai-image-root');
+      if (!root) return;
+      var existing = root.querySelector('.ai-image-source-library-modal');
+      if (existing && existing.parentNode) existing.parentNode.removeChild(existing);
+      var markup = buildSourceLibraryModalMarkup();
+      if (!markup) return;
+      var wrap = document.createElement('div');
+      wrap.innerHTML = markup;
+      var node = wrap.firstChild;
+      if (node) root.appendChild(node);
+    } catch (_) {}
+  }
+
   function buildSourceFieldMarkup(detached, project, sourceDisabled) {
-    var sourceLibrary = buildProjectSourceLibraryMarkup();
-    var brandSourceLibrary = buildBrandSourceLibraryMarkup();
-    var contentSourceLibrary = buildContentSourceLibraryMarkup();
     return '' +
       '<div class="ai-image-field source-field' + (sourceDisabled ? ' is-disabled' : '') + '">' +
         '<div class="ai-image-label-row ai-image-source-label-row">' +
@@ -1613,30 +1688,15 @@
         buildSelectedSourceMarkup() +
         '<input type="file" id="ai-image-source-file" class="hidden" accept="image/*" multiple' + (sourceDisabled ? ' disabled' : '') + ' />' +
         '</div>' +
-        ((!detached && state.brandLibraryItems.length)
-          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceBrandTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="brand" aria-label="브랜드 이미지 ' + (state.sourceSectionCollapsed.brand ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.brand ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.brand ? '' : '<div class="ai-image-source-grid compact collapsible-body">' + brandSourceLibrary + '</div>') + '</div>'
+        (!detached
+          ? buildSourceLibraryOpenerMarkup('brand', t('sourceBrandTitle'), state.brandLibraryItems.length)
           : '') +
         (!detached
-          ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceContentTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="content" aria-label="콘텐츠 저장소 ' + (state.sourceSectionCollapsed.content ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.content ? '+' : '−') + '</button></div>' + (state.sourceSectionCollapsed.content ? '' : (state.contentLibraryItems.length ? ('<div class="ai-image-source-grid compact collapsible-body">' + contentSourceLibrary + '</div>') : '<p class="muted small">' + escapeHtml(t('sourceContentEmpty')) + '</p>')) + '</div>'
+          ? buildSourceLibraryOpenerMarkup('content', t('sourceContentTitle'), state.contentLibraryItems.length)
           : '') +
-        (function () {
-          var projectBody = '';
-          if (!detached && !state.sourceSectionCollapsed.project) {
-            if (project && project.id) {
-              projectBody = state.projectLibraryItems.length
-                ? '<div class="ai-image-source-grid compact collapsible-body">' + sourceLibrary + '</div>'
-                : '<p class="muted small">' + escapeHtml(t('sourceProjectEmpty')) + '</p>';
-            } else {
-              projectBody = '';
-            }
-          }
-          return (!detached && (project && project.id))
-            ? '<div class="ai-image-source-library is-compact"><div class="ai-image-source-library-title-row"><div class="ai-image-source-library-title">' + escapeHtml(t('sourceLibraryTitle')) + '</div><button type="button" class="circle-toggle" data-action="toggle-source-section" data-section="project" aria-label="프로젝트 저장소 ' + (state.sourceSectionCollapsed.project ? '펼치기' : '접기') + '">' + (state.sourceSectionCollapsed.project ? '+' : '−') + '</button></div>' + projectBody + '</div>'
-            : '';
-        })() +
-        ((!detached && state.libraryLoading) ? '<p class="muted small">' + escapeHtml(t('sourceProjectLoading')) + '</p>' : '') +
-        ((!detached && state.brandLibraryLoading) ? '<p class="muted small">' + escapeHtml(t('sourceBrandLoading')) + '</p>' : '') +
-        ((!detached && state.contentLibraryLoading) ? '<p class="muted small">' + escapeHtml(t('sourceContentLoading')) + '</p>' : '') +
+        ((!detached && project && project.id)
+          ? buildSourceLibraryOpenerMarkup('project', t('sourceLibraryTitle'), state.projectLibraryItems.length)
+          : '') +
         '</div>';
   }
 
@@ -2148,6 +2208,7 @@
       buildHistoryPanelMarkup() +
       '</div>' +
       (state.imageModalUrl ? '<div class="img-modal" data-action="toggle-source-modal"><img src="' + escapeHtml(state.imageModalUrl) + '" alt="" /></div>' : '') +
+      buildSourceLibraryModalMarkup() +
       '</section>';
 
     if (preservePromptPanel) {
@@ -2257,6 +2318,7 @@
         nextSelectionNode.parentNode.replaceChild(existingSelectionNode, nextSelectionNode);
       }
       bindSourceFileInput();
+      renderSourceLibraryModal();
     } catch (_) {}
   }
 
@@ -2288,6 +2350,8 @@
 
       var limitEl = sourceField.querySelector('.ai-image-source-limit');
       if (limitEl) limitEl.textContent = String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES);
+      var modalLimitEl = root.querySelector('.ai-image-source-library-modal .ai-image-source-limit');
+      if (modalLimitEl) modalLimitEl.textContent = String(getSourceImages().length) + '/' + String(MAX_SOURCE_IMAGES);
 
       var uploadBtn = sourceBox.querySelector('.source-upload-fab');
       if (uploadBtn) uploadBtn.disabled = !!sourceDisabled;
@@ -3090,6 +3154,9 @@
             action === 'select-brand-source' ||
             action === 'select-content-source' ||
             action === 'toggle-source-section' ||
+            action === 'open-source-library' ||
+            action === 'close-source-library' ||
+            action === 'source-library-modal-noop' ||
             action === 'toggle-source-modal'
           )
         ) {
@@ -3213,6 +3280,29 @@
           updatePreviewPanelUI();
           updateResultSelectionUI();
           updateHistoryPanelUI();
+          return;
+        }
+        if (action === 'source-library-modal-noop') {
+          return;
+        }
+        if (action === 'open-source-library') {
+          var openSec = String(btn.getAttribute('data-section') || '').trim();
+          if (!openSec) return;
+          state.sourceLibraryModal = openSec;
+          if (openSec === 'brand' && !state.brandLibraryItems.length && !state.brandLibraryLoading && state.currentBrand && state.currentBrand.brandId) {
+            loadBrandLibrary();
+          } else if (openSec === 'content' && !state.contentLibraryItems.length && !state.contentLibraryLoading) {
+            loadContentLibrary();
+          } else if (openSec === 'project' && !state.projectLibraryItems.length && !state.libraryLoading && state.currentProject && state.currentProject.id) {
+            loadProjectLibrary();
+          }
+          renderSourceLibraryModal();
+          return;
+        }
+        if (action === 'close-source-library') {
+          state.sourceLibraryModal = '';
+          var openModal = root.querySelector('.ai-image-source-library-modal');
+          if (openModal && openModal.parentNode) openModal.parentNode.removeChild(openModal);
           return;
         }
         if (action === 'toggle-source-section') {

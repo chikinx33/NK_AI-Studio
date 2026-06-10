@@ -607,6 +607,69 @@ body.layout-fixed.page-shell-image .content {
   border-radius: 8px;
 }
 
+.ai-image-source-opener-count {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.ai-image-source-library-modal {
+  z-index: 120;
+  padding: 24px;
+}
+
+.ai-image-source-library-modal-box {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  width: min(92vw, 760px);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.ai-image-source-library-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.ai-image-source-library-modal-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  flex: 1 1 auto;
+}
+
+.ai-image-source-library-modal-body {
+  padding: 16px 18px;
+  overflow: auto;
+}
+
+.ai-image-source-grid.ai-image-source-modal-grid {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  max-height: none;
+  overflow: visible;
+}
+
+.ai-image-source-modal-grid .ai-image-source-card {
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.ai-image-source-modal-grid .ai-image-source-thumb {
+  max-width: 100%;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 .circle-toggle {
   width: 24px;
   height: 24px;
