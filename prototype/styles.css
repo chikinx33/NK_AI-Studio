@@ -683,6 +683,18 @@ body.page-shell-ai-sound .brand-mark {
   height: 0;
 }
 
+/* .card 의 overflow:hidden(뒤에 정의돼 우선됨)이 .lib-content 의 overflow:auto 를
+   덮어써 라이브러리가 스크롤되지 않던 문제 — 명시도를 높여 스크롤 복원(스크롤바는 숨김). */
+.card.lib-content {
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.card.lib-content::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
 .lib-content .card-top {
   position: sticky;
   top: 0;
