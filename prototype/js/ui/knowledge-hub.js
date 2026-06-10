@@ -511,6 +511,35 @@
     };
   }
 
+  // 프로젝트와 브랜드의 배경·소품 자산을 토큰 기준으로 합치고, 자산별 이미지(items)는 sheetId 합집합으로 병합.
+  // (캐릭터 시트가 project+brand 를 concat 해 합치는 것과 동일하게, 이미지 생성 페이지에서 브랜드에
+  //  등록한 배경·소품 이미지가 라이브러리에 표시되지 않던 문제 수정.)
+  function mergeEnvironmentAssetLists(baseValue, extraValue) {
+    var listBase = normalizeEnvironmentAssets(baseValue);
+    var listExtra = normalizeEnvironmentAssets(extraValue);
+    var map = new Map();
+    var put = function (asset) {
+      var key = String(asset.token || '').toLowerCase();
+      if (!key) return;
+      if (!map.has(key)) { map.set(key, asset); return; }
+      var existing = map.get(key);
+      var itemMap = new Map();
+      normalizeCharacterSheetItems(existing.items).forEach(function (s) { itemMap.set(String(s.sheetId || '').toLowerCase(), s); });
+      normalizeCharacterSheetItems(asset.items).forEach(function (s) {
+        var k = String(s.sheetId || '').toLowerCase();
+        if (!itemMap.has(k)) itemMap.set(k, s);
+      });
+      map.set(key, Object.assign({}, existing, {
+        displayName: existing.displayName || asset.displayName,
+        description: existing.description || asset.description || '',
+        items: normalizeCharacterSheetItems(Array.from(itemMap.values()))
+      }));
+    };
+    listBase.forEach(put);
+    listExtra.forEach(put);
+    return normalizeEnvironmentAssets(Array.from(map.values()));
+  }
+
   function mergeKnowledge(primary, fallback) {
     var base = primary || {};
     var extra = fallback || {};
@@ -523,8 +552,7 @@
       (Array.isArray(base.characterSheets) ? base.characterSheets : []).concat(Array.isArray(extra.characterSheets) ? extra.characterSheets : []),
       characters
     );
-    var baseEnvironment = normalizeEnvironmentAssets(base.environmentAssets);
-    var environmentAssets = baseEnvironment.length ? baseEnvironment : normalizeEnvironmentAssets(extra.environmentAssets);
+    var environmentAssets = mergeEnvironmentAssetLists(base.environmentAssets, extra.environmentAssets);
     return {
       brandVoice: String(base.brandVoice || extra.brandVoice || '').trim(),
       brandStory: String(base.brandStory || extra.brandStory || '').trim(),
