@@ -66,6 +66,8 @@
     var dubbingEnabled = toBool(p.dubbingEnabled, false);
     if (!narrationEnabled && !dubbingEnabled) return '';
 
+    // 사용자가 명시적으로 편집했으면(빈 값 포함) 그 값을 그대로 사용 — 자동 대사로 폴백하지 않음.
+    if (scene && scene.scriptEdited) return String(scene.script || '').trim();
     var existing = String((scene && scene.script) || '').trim();
     if (existing) return existing;
 
@@ -362,7 +364,10 @@
         // (buildVoiceScriptForVideo·TTS·영상 프롬프트 주입 모두 scene.script 를 우선함)
         var scriptOverride = String((scene && scene.script) || '').trim();
         var linesHtml = '';
-        if (scriptOverride) {
+        if (scene && scene.scriptEdited) {
+          // 명시적으로 편집한 대본(빈 값 포함)은 그대로 표시 — 자동 대사로 폴백하지 않음.
+          linesHtml = escapeText(scriptOverride).replace(/\n/g, '<br>');
+        } else if (scriptOverride) {
           linesHtml = escapeText(scriptOverride).replace(/\n/g, '<br>');
         } else if (dubOn && Array.isArray(scene.dialogue) && scene.dialogue.length) {
           linesHtml = scene.dialogue.map(function (d) {

@@ -767,6 +767,8 @@
               narration: s.narration || '',
               dialogue: s.dialogue || s.dialogues || [],
               script: s.script || '',
+              // 사용자가 더빙 대본을 명시적으로 편집/삭제했는지(빈 값 영속 보존용)
+              scriptEdited: !!s.scriptEdited,
               estSec: s.estSec,
               // 새 평탄화 모델: scene 자체에 카메라 셋업
               shotType: String(s.shotType || 'MS'),

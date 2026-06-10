@@ -43,10 +43,28 @@
     } catch (_) { return ''; }
   }
 
+  // 배경·소품이 브랜드 캐시에 비어 있고 서버에만 있을 때를 대비한 1회성 하이드레이션 캐시.
+  var hydratedBrandCache = {};
+  var hydratingBrand = {};
+  function ensureBrandHydrated(brandId) {
+    if (!brandId || hydratedBrandCache[brandId] || hydratingBrand[brandId]) return;
+    if (!(NK.service && NK.service.brand && NK.service.brand.hydrateFromServer)) return;
+    hydratingBrand[brandId] = true;
+    try {
+      Promise.resolve(NK.service.brand.hydrateFromServer(brandId, { ttlMs: 0 }))
+        .then(function (b) {
+          hydratedBrandCache[brandId] = b || (NK.service.brand.getById ? NK.service.brand.getById(brandId) : null) || null;
+        })
+        .catch(function () { })
+        .then(function () { hydratingBrand[brandId] = false; });
+    } catch (_) { hydratingBrand[brandId] = false; }
+  }
+
   // 브랜드 허브 자산 → 자동완성 후보 [{token, label, kind}]
   function buildSuggestions() {
     var st = getCtxState();
     var brandId = resolveBrandId(st);
+    ensureBrandHydrated(brandId); // 다음 호출 때 환경 자산이 채워지도록 미리 받아둠
     var out = [];
     var seen = {};
     var push = function (token, label, kind) {
@@ -67,15 +85,37 @@
         });
       }
     } catch (_) { }
+    // 배경·소품(environmentAssets)은 payload·brand 양쪽에 여러 키로 저장될 수 있고
+    // 브랜드 캐시엔 비어 있을 수 있으므로 가능한 모든 소스를 모은다.
     try {
+      var collectEnvs = function (obj) {
+        if (!obj || typeof obj !== 'object') return [];
+        var acc = [];
+        var keys = ['environmentAssets', 'knowledgeEnvironmentAssets'];
+        keys.forEach(function (k) { if (Array.isArray(obj[k])) acc = acc.concat(obj[k]); });
+        if (obj.knowledgeHub && typeof obj.knowledgeHub === 'object') {
+          keys.forEach(function (k) { if (Array.isArray(obj.knowledgeHub[k])) acc = acc.concat(obj.knowledgeHub[k]); });
+        }
+        return acc;
+      };
       var brand = null;
       if (NK.service && NK.service.brand) {
         brand = (brandId && NK.service.brand.getById) ? NK.service.brand.getById(brandId) : null;
         if (!brand && NK.service.brand.getCurrent) brand = NK.service.brand.getCurrent();
       }
-      var envs = brand && Array.isArray(brand.environmentAssets) ? brand.environmentAssets : [];
+      var envs = [].concat(
+        collectEnvs(st && st.payload),
+        collectEnvs(brand),
+        collectEnvs(brandId && hydratedBrandCache[brandId])
+      );
       envs.forEach(function (e) {
-        if (e) push(e.token || e.displayName, e.displayName || e.token, '배경·소품');
+        if (!e) return;
+        var raw = (typeof e === 'object') ? e : { displayName: e };
+        var name = String(raw.displayName || raw.name || raw.title || '').trim();
+        var token = String(raw.token || raw.trigger || '').trim();
+        if (!token && name) token = '@' + name.replace(/\s+/g, '');
+        if (!token) return;
+        push(token, name || token.replace(/^@/, ''), '배경·소품');
       });
     } catch (_) { }
     return out;
@@ -205,6 +245,12 @@
     // 필드가 변경을 인지하도록(상태 커밋 트리거 등) input 이벤트 발생
     try { state.fieldEl && state.fieldEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) { }
   }
+
+  // ── 편집 필드 포커스 시 브랜드 자산 미리 하이드레이트(첫 @ 에서도 배경·소품이 뜨도록) ──
+  document.addEventListener('focusin', function (e) {
+    if (!isEditableMentionField(e.target)) return;
+    try { ensureBrandHydrated(resolveBrandId(getCtxState())); } catch (_) { }
+  }, true);
 
   // ── 입력 감지 ──
   document.addEventListener('input', function (e) {

@@ -617,13 +617,25 @@
       // 사용자가 실제로 바꿨을 때만 저장한다. baseline(포커스 시점 표시 내용)과 같으면
       // 단순 클릭만으로 자동 대사가 scene.script 에 고정되는 부작용을 막는다.
       var baseline = (typeof el.dataset.dubBaseline === 'string') ? el.dataset.dubBaseline : null;
-      if (baseline !== null && baseline === text) return;
-      var prev = String((st.scenes[idx] && st.scenes[idx].script) || '');
-      if (prev === text) return; // 변경 없으면 저장/재렌더 skip
-      st.scenes[idx] = Object.assign({}, st.scenes[idx], { script: text });
+      if (baseline !== null) {
+        if (baseline === text) return; // 표시 내용과 동일 → 변경 없음
+      } else if (String((st.scenes[idx] && st.scenes[idx].script) || '') === text) {
+        return;
+      }
+      // scriptEdited=true 로 "사용자가 명시적으로 편집함" 을 표시한다. 내용을 비웠을 때(text='')도
+      // 빈 값이 영속되어, 새로고침 후 자동 대사(dialogue)로 되돌아가지 않게 한다.
+      st.scenes[idx] = Object.assign({}, st.scenes[idx], { script: text, scriptEdited: true });
       ctx.setState(st);
       if (ctx.persistPipeline) ctx.persistPipeline();
       if (ctx.updateDraftFromPipeline) ctx.updateDraftFromPipeline();
+      // 서버에도 비동기 저장 — 전역 "저장" 을 누르지 않아도 편집/삭제가 영속되도록.
+      try {
+        var pid = st.draftId || (opts.getProjectId ? opts.getProjectId() : '');
+        if (pid && NK.api && NK.api.projectSave) {
+          var dtitle = (typeof opts.getProjectTitle === 'function') ? (opts.getProjectTitle() || '') : '';
+          NK.api.projectSave(pid, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '', title: dtitle }).catch(function () { });
+        }
+      } catch (_) { }
     };
 
     // ── 프롬프트(Common/화면/행동/Visual/Duration) 인라인 편집 ──
