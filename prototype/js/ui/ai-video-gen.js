@@ -8,7 +8,6 @@
     { id: 'grok',         label: 'Grok Imagine',           t2v: true,  i2v: true,  caps: ['start'] },
     { id: 'grok-r2v',    label: 'Grok R2V',               t2v: false, i2v: true,  caps: ['refs'], maxRefs: 4 },
     { id: 'grok-extend',  label: 'Grok Extend',            t2v: false, i2v: true,  caps: ['video'] },
-    { id: 'kling-draft',  label: 'Kling Draft (v1.6)',     t2v: false, i2v: true,  caps: ['start', 'end', 'refs', 'camera'], maxRefs: 3 },
     { id: 'kling-final',  label: 'Kling Final (v2.6 Pro)', t2v: false, i2v: true,  caps: ['start', 'end', 'camera'] },
     { id: 'seedance',     label: 'Seedance 2.0',           t2v: false, i2v: true,  caps: ['start'] },
     { id: 'seedance-r2v', label: 'Seedance 2.0 Reference', t2v: false, i2v: true,  caps: ['refs', 'audio', 'video'] },
@@ -40,7 +39,6 @@
       'grok':         'xAI 모델. 창의적·스타일리시 영상. 텍스트/이미지 모두 지원, 720p.',
       'grok-r2v':     '레퍼런스 이미지 기반 영상 생성. 인물·스타일 일관성 유지. 시작 프레임 고정 없이 참조로만 영향. 720p.',
       'grok-extend':  'Grok 영상을 마지막 프레임에서 자연스럽게 연장. 기존 영상 업로드 → 이어지는 장면 생성. 720p.',
-      'kling-draft':  '시작+끝 프레임으로 장면 구간 고정. 레퍼런스로 캐릭터 일관성 유지. 카메라 무브먼트 지원.',
       'kling-final':  '1080p FHD 최고화질. 시작+끝 프레임, 카메라 무브먼트 지원.',
       'seedance':     'ByteDance 모델. 자연스러운 움직임, 최대 15초 영상 지원.',
       'wan':          '끝 프레임·레퍼런스 5장·오디오 입력 모두 지원. 가장 다양한 입력 방식. $0.085/초.',
@@ -53,7 +51,6 @@
       'grok':         'xAI model. Creative, stylized video. Supports text & image, 720p.',
       'grok-r2v':     'Reference-to-video. Maintains character/style consistency without locking the start frame. 720p.',
       'grok-extend':  'Extend a Grok video from its last frame. Upload an existing video → generate a seamless continuation. 720p.',
-      'kling-draft':  'Fix start & end frames. Reference images keep characters consistent. Camera movement supported.',
       'kling-final':  '1080p FHD top quality. Start+end frames, camera movement supported.',
       'seedance':     'ByteDance model. Smooth motion, up to 15-second video.',
       'wan':          'End frame, 5 reference images, and audio all supported. Most versatile input. $0.085/sec.',
@@ -230,7 +227,7 @@
   }
 
   function isKling() {
-    return state.model === 'kling-draft' || state.model === 'kling-final';
+    return state.model === 'kling-final';
   }
 
   function durations() {
@@ -1412,8 +1409,8 @@
         payload.videoDataUrl = state.videoUrl;
       }
       // kling quality
-      if (state.model === 'kling-draft' || state.model === 'kling-final') {
-        payload.quality = state.model === 'kling-final' ? 'final' : 'draft';
+      if (state.model === 'kling-final') {
+        payload.quality = 'final';
       }
 
       var startRes = await NK.api.videoStart(payload);
