@@ -2804,13 +2804,76 @@
     }
   }
 
+  // 브랜드 레코드(characterSheets + environmentAssets)에 등록된 모든 이미지를
+  // 라이브러리 아이템 형태로 평탄화한다. 캐릭터뿐 아니라 배경·소품 레퍼런스까지 포함.
+  function brandSheetCollectionItems() {
+    var brand = state.currentBrand && typeof state.currentBrand === 'object' ? state.currentBrand : {};
+    var groups = [];
+    if (Array.isArray(brand.characterSheets)) groups = groups.concat(brand.characterSheets);
+    var envs = Array.isArray(brand.environmentAssets)
+      ? brand.environmentAssets
+      : (Array.isArray(brand.knowledgeEnvironmentAssets) ? brand.knowledgeEnvironmentAssets : []);
+    groups = groups.concat(envs);
+    var out = [];
+    groups.forEach(function (group) {
+      var label = String((group && (group.displayName || group.name || group.token)) || '').trim();
+      var items = Array.isArray(group && group.items) ? group.items : [];
+      items.forEach(function (sheet) {
+        var raw = String((sheet && (sheet.imageDataUrl || sheet.imageUrl || sheet.url || sheet.src)) || '').trim();
+        if (!raw) return;
+        // data:/blob: URL은 렌더 src로 쓰면 OOM 위험 + 영속 URL이 아니므로 제외
+        if (raw.indexOf('data:') === 0 || raw.indexOf('blob:') === 0) return;
+        var renderable = raw;
+        if (/^gs:\/\//i.test(raw) && NK.api && NK.api.mediaProxyUrl) {
+          renderable = NK.api.mediaProxyUrl(raw);
+        } else if (raw.indexOf('http://') !== 0 && raw.indexOf('https://') !== 0 && NK.api && NK.api.mediaProxyObjectUrl) {
+          renderable = NK.api.mediaProxyObjectUrl(raw);
+        }
+        if (!renderable) return;
+        out.push({ name: label || raw, signedUrl: renderable });
+      });
+    });
+    return out;
+  }
+
+  // 서명 URL은 쿼리스트링이 매번 달라지므로, 오브젝트 파일명 기준으로 중복 제거한다.
+  function brandLibraryDedupKey(url) {
+    var u = String(url || '').split('?')[0];
+    var seg = u.substring(u.lastIndexOf('/') + 1);
+    return seg.toLowerCase();
+  }
+
   async function loadBrandLibrary() {
     if (!state.currentBrand || !state.currentBrand.brandId) return;
     state.brandLibraryLoading = true;
     updateSourceFieldUI();
     try {
-      var res = await NK.api.libraryIP('', { brandId: state.currentBrand.brandId });
-      state.brandLibraryItems = (Array.isArray(res && res.items) ? res.items : []).filter(isImageLibraryItem);
+      // 최신 캐릭터/배경·소품 자산을 확보하기 위해 브랜드 레코드를 강제 동기화
+      if (NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
+        try {
+          var hydrated = await NK.service.brand.hydrateFromServer(state.currentBrand.brandId, { force: true, ttlMs: 0 });
+          if (hydrated) state.currentBrand = hydrated;
+        } catch (_) {}
+      }
+      var sheetItems = brandSheetCollectionItems();
+      var gcsItems = [];
+      try {
+        var res = await NK.api.libraryIP('', { brandId: state.currentBrand.brandId });
+        gcsItems = (Array.isArray(res && res.items) ? res.items : []).filter(isImageLibraryItem);
+      } catch (_) {
+        // GCS 목록 조회가 실패해도 브랜드 레코드의 자산은 계속 노출한다.
+      }
+      var merged = [];
+      var seen = {};
+      sheetItems.concat(gcsItems).forEach(function (item) {
+        var url = resolveLibraryItemUrl(item);
+        if (!url) return;
+        var key = brandLibraryDedupKey(url);
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        merged.push(item);
+      });
+      state.brandLibraryItems = merged;
       if (!state.brandLibraryItems.length) {
         alert(t('sourceBrandEmpty'));
       }
