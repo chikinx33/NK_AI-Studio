@@ -13563,8 +13563,15 @@ textarea.bsf-skeleton {
 #brand-studio-root .brand-studio-page {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding-bottom: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+#brand-studio-root .brand-studio-page::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 #brand-studio-root .bsf-flow-card {
