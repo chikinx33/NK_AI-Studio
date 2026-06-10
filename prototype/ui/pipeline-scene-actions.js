@@ -315,7 +315,13 @@
           return;
         }
         if (action === 'delete-image') {
-          st.scenes[idx] = Object.assign({}, scene, { imageDataUrl: '', imgError: '', imgLoading: false });
+          // 모든 이미지 ref 필드를 비운다. imagePath(영속 GCS 앵커)를 남기면 저장·새로고침 시
+          // imageDataUrl 이 imagePath 로부터 복원돼 삭제가 무효화되므로 반드시 함께 비운다.
+          // (요구사항 ③: 삭제하고 저장하면 그 칸은 빈 화면 그대로 유지)
+          st.scenes[idx] = Object.assign({}, scene, {
+            imageDataUrl: '', imagePath: '', generatedImageUrl: '', imageUrl: '',
+            imgError: '', imgLoading: false
+          });
           refreshAndPersist(true, 'image');
           return;
         }

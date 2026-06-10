@@ -1028,6 +1028,10 @@
       }, { signal: ctrl ? ctrl.signal : undefined });
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
       var signedUrl = String(json.signedUrl || '').trim();
+      // 영속 GCS 앵커. 종횡비 보정으로 imageRef 가 잘린 data: URL 이 되면 저장 시 stripping 되어
+      // 사라지므로(자동 매핑 제거 후 노출된 회귀), objectName 을 imagePath 에 보존해 둔다.
+      // 저장 시 imageDataUrl(data:)이 비워져도 imagePath 가 남아 새로고침 후 그대로 복원된다.
+      var objectName = String(json.objectName || '').trim();
       var imageRef = signedUrl || dataUrl;
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
       var normalized = await opts.enforceImageAspectRatio(imageRef, aspectRatio);
@@ -1041,6 +1045,7 @@
       }
       st.scenes[opts.idx] = Object.assign({}, scene, {
         imageDataUrl: imageRef,
+        imagePath: objectName || scene.imagePath || '',
         imageHistory: imgHistory,
         imgLoading: false,
         imgError: '',
@@ -1211,6 +1216,8 @@
       }, { signal: ctrl ? ctrl.signal : undefined });
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
       var signedUrl = String(json.signedUrl || '').trim();
+      // 영속 GCS 앵커 — scene 생성부와 동일 이유로 imagePath 에 보존(잘린 data: URL 영속 보호).
+      var objectName = String(json.objectName || '').trim();
       var imageRef = signedUrl || dataUrl;
       if (!imageRef) throw new Error('이미지 데이터가 비었습니다.');
       var normalized = await opts.enforceImageAspectRatio(imageRef, aspectRatio);
@@ -1222,7 +1229,7 @@
       var shots2 = (scene2 && Array.isArray(scene2.shots)) ? scene2.shots.slice() : nextShots.slice();
       var sIdx2 = shots2.findIndex(function (sh) { return String(sh && sh.id) === String(shot.id); });
       if (sIdx2 < 0) sIdx2 = shotIdx;
-      shots2[sIdx2] = Object.assign({}, shots2[sIdx2] || shot, { imageDataUrl: imageRef, imgLoading: false, imgError: '' });
+      shots2[sIdx2] = Object.assign({}, shots2[sIdx2] || shot, { imageDataUrl: imageRef, imagePath: objectName || (shots2[sIdx2] && shots2[sIdx2].imagePath) || '', imgLoading: false, imgError: '' });
       st2.scenes[opts.sceneIdx] = Object.assign({}, scene2 || scene, { shots: shots2 });
       ctx.setState(st2);
       if (opts.updateSceneRow) opts.updateSceneRow(opts.sceneIdx, st2.header || '', 'shot:' + scene.id + ':' + shot.id);
