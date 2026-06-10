@@ -839,6 +839,31 @@
     state.legacySessionIds = legacy;
   }
 
+  // 서버의 권위 프로젝트 payload 를 받아 세션 스코프를 재계산한다.
+  // (다른 기기에서 기록한 aiImageSessionId/aiImageLegacySessionIds 를 외부 기기가 읽어
+  //  동일한 서버 라이브러리 버킷을 조회 → 어디서 접속하든 동일 이력 표시)
+  async function refreshSessionScopeFromServer() {
+    try {
+      var proj = state.currentProject;
+      var pid = proj && proj.id ? String(proj.id).trim() : '';
+      if (!pid || !NK.api || !NK.api.projectGet) return;
+      var res = await NK.api.projectGet(pid);
+      var data = (res && res.data) ? res.data : res;
+      var payload = (data && data.payload && typeof data.payload === 'object') ? data.payload : null;
+      if (!payload) return;
+      // 서버 payload 를 현재 프로젝트에 병합(로컬 우선 필드 보존 없이 세션 관련 필드만 권위 반영).
+      state.currentProject = Object.assign({}, proj, {
+        payload: Object.assign({}, proj.payload || {}, payload)
+      });
+      var before = JSON.stringify([state.sessionId].concat(state.legacySessionIds || []));
+      resolveSessionScope();
+      var after = JSON.stringify([state.sessionId].concat(state.legacySessionIds || []));
+      if (before !== after) {
+        await hydrateSessionHistory();
+      }
+    } catch (_) {}
+  }
+
   // 로그인 계정별로 로컬 캐시 키를 분리한다. 같은 브라우저에서 계정을 전환해도
   // (예: A 로그아웃 → B 로그인) 이전 계정의 생성 히스토리가 노출되지 않도록 한다.
   function currentUserKey() {
@@ -3673,6 +3698,9 @@
     bindStaticEvents();
     render();
     hydrateSessionHistory();
+    // 외부 기기 대응: 로컬 프로젝트가 stale 하면 legacy 세션 목록을 모른다. 서버 권위 payload 를
+    // 받아 세션 스코프를 재계산하고(다른 기기가 기록한 legacy 포함) 히스토리를 다시 불러온다.
+    refreshSessionScopeFromServer();
     if (state.currentBrand && state.currentBrand.brandId && NK.service && NK.service.brand && NK.service.brand.hydrateFromServer) {
       NK.service.brand.hydrateFromServer(state.currentBrand.brandId).then(function (brand) {
         if (!brand || !brand.brandId) return;
