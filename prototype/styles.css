@@ -5697,6 +5697,16 @@ html.page-shell-image #sidebar-project-card {
   align-self: stretch; /* 로그인 버튼과 같은 높이 */
 }
 
+/* 로그인 후: 구글 버튼이 숨겨지므로 들여쓰기를 풀고 로그아웃 버튼을 가운데 정렬. */
+#login-card .option-actions.is-authed {
+  padding-left: 0;
+}
+
+#login-card .option-actions.is-authed .btn-primary {
+  flex: 0 0 auto;
+  width: 160px;
+}
+
 #project-overlay .option-actions {
   justify-content: center;
   gap: 12px;

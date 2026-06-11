@@ -115,6 +115,8 @@
                   card.querySelectorAll('.form-row').forEach(function (r) { r.style.display = 'none'; });
                   var gBtn = card.querySelector('#google-login-btn');
                   if (gBtn) gBtn.style.display = 'none';
+                  var oa = card.querySelector('.option-actions');
+                  if (oa) oa.classList.add('is-authed');
                 }
                 var btn = document.getElementById('opt-auth-btn');
                 if (btn) {

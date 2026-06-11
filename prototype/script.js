@@ -1094,6 +1094,7 @@
     const loginIconFileInput = document.getElementById('login-icon-file');
     const formRows = document.querySelectorAll('#login-card .form-row');
     const googleLoginBtn = document.getElementById('google-login-btn');
+    const optionActions = document.querySelector('#login-card .option-actions');
     const favoriteCard = document.getElementById('favorite-card');
     const dashboardCard = document.getElementById('user-dashboard-card');
     const dashboardPanel = document.getElementById('user-dashboard-panel');
@@ -2193,6 +2194,8 @@
       }
       formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
       if (googleLoginBtn) googleLoginBtn.style.display = loggedIn ? 'none' : '';
+      // 로그인 후에는 구글 버튼이 숨겨지므로, 입력칸 정렬용 들여쓰기를 풀고 로그아웃 버튼을 가운데 정렬한다.
+      if (optionActions) optionActions.classList.toggle('is-authed', !!loggedIn);
       btn.setAttribute('data-i18n-skip', '1');
       btn.textContent = getAuthButtonText(loggedIn);
       btn.dataset.state = loggedIn ? 'logout' : 'login';
