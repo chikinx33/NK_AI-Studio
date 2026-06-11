@@ -282,3 +282,77 @@
   media.toPlayableMediaUrl = toPlayableMediaUrl;
   media.showCopyableError = showCopyableError;
 })();
+
+// ── 미디어 로딩 신뢰성 ──────────────────────────────────────────────────────
+// iOS Safari 등에서 씬/컷 이미지·영상이 일부만 로드되고 일부는 누락되는 문제 대응.
+// 원인: 네이티브 loading="lazy" 의 불안정성 + 동시 로딩/일시적 프록시 실패 시 재시도 부재.
+// 해결: ① 로드 실패 시 재시도(같은 URL 재요청), ② 주기 스윕으로 미로드/실패 이미지를
+//       점진적(틱당 제한)으로 강제 즉시 로드 → 어떤 환경에서든 결국 표시되도록 보장.
+(function () {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return;
+  var IMG_SEL = 'img.scene-img, img.shot-img';
+  var VID_SEL = 'video.scene-video';
+  var MAX_RETRY = 5;
+  var FORCE_PER_TICK = 6; // 틱당 강제 로드 수(동시 요청 폭주 방지)
+
+  function srcOf(img) {
+    return img.getAttribute('data-src') || img.getAttribute('data-ml-base') || img.getAttribute('src') || '';
+  }
+  function reloadImg(img, attempt) {
+    var base = srcOf(img);
+    if (!base) return;
+    img.setAttribute('data-ml-base', base);
+    try { img.removeAttribute('loading'); } catch (_) { } // lazy 해제 → 즉시 로드
+    try { img.removeAttribute('src'); } catch (_) { }       // 같은 URL 재요청 강제
+    var delay = Math.min(2000, 250 * attempt);
+    setTimeout(function () { try { img.setAttribute('src', base); } catch (_) { } }, delay);
+  }
+  function retryImg(img) {
+    var n = (Number(img.getAttribute('data-ml-retry')) || 0);
+    if (n >= MAX_RETRY) return;
+    n++; img.setAttribute('data-ml-retry', String(n));
+    reloadImg(img, n);
+  }
+
+  // ① 로드 실패 재시도 (error 이벤트는 버블되지 않으므로 capture 단계로 청취)
+  document.addEventListener('error', function (e) {
+    var el = e.target;
+    if (!el || !el.matches) return;
+    if (el.tagName === 'IMG' && el.matches(IMG_SEL)) { retryImg(el); return; }
+    var v = (el.tagName === 'SOURCE') ? el.parentElement : el;
+    if (v && v.tagName === 'VIDEO' && v.matches && v.matches(VID_SEL)) {
+      var n = (Number(v.getAttribute('data-ml-retry')) || 0);
+      if (n < MAX_RETRY) {
+        n++; v.setAttribute('data-ml-retry', String(n));
+        setTimeout(function () { try { v.load(); } catch (_) { } }, 500 * n);
+      }
+    }
+  }, true);
+
+  // ② 주기 스윕: 누락/실패 이미지를 점진적으로 강제 로드
+  function sweep() {
+    var imgs = document.querySelectorAll(IMG_SEL);
+    var forced = 0;
+    for (var i = 0; i < imgs.length; i++) {
+      var img = imgs[i];
+      if (img.getAttribute('data-ml-done') === '1') continue;
+      if (img.complete && img.naturalWidth > 0) { img.setAttribute('data-ml-done', '1'); continue; }
+      var ticks = (Number(img.getAttribute('data-ml-ticks')) || 0) + 1;
+      img.setAttribute('data-ml-ticks', String(ticks));
+      var failed = img.complete && img.naturalWidth === 0;
+      // 실패는 즉시, 아직 미로드는 2틱 유예 후(lazy 에 잠깐 기회) 강제
+      if ((failed || ticks >= 2)
+        && forced < FORCE_PER_TICK
+        && (Number(img.getAttribute('data-ml-retry')) || 0) < MAX_RETRY) {
+        retryImg(img);
+        forced++;
+      }
+    }
+  }
+  try { setInterval(sweep, 1000); } catch (_) { }
+  if (document.addEventListener) {
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden) { try { sweep(); } catch (_) { } }
+    });
+  }
+})();
