@@ -1093,7 +1093,6 @@
     const loginCardLogoEl = document.getElementById('login-card-logo');
     const loginIconFileInput = document.getElementById('login-icon-file');
     const formRows = document.querySelectorAll('#login-card .form-row');
-    const googleLoginRow = document.getElementById('google-login-row');
     const googleLoginBtn = document.getElementById('google-login-btn');
     const favoriteCard = document.getElementById('favorite-card');
     const dashboardCard = document.getElementById('user-dashboard-card');
@@ -2193,7 +2192,7 @@
         nameEl.classList.toggle('hidden', !loggedIn);
       }
       formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
-      if (googleLoginRow) googleLoginRow.style.display = loggedIn ? 'none' : '';
+      if (googleLoginBtn) googleLoginBtn.style.display = loggedIn ? 'none' : '';
       btn.setAttribute('data-i18n-skip', '1');
       btn.textContent = getAuthButtonText(loggedIn);
       btn.dataset.state = loggedIn ? 'logout' : 'login';

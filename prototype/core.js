@@ -564,7 +564,6 @@
       top_ai_video_gen_label: 'AI Video',
       top_ai_doc_label: 'AI Doc',
       top_ai_sound_label: 'AI Audio',
-      login_or: 'or',
       login_google: 'Sign in with Google',
       // AI Doc
       ai_doc_subtitle: 'AI Detail Page Wizard',
@@ -800,7 +799,6 @@
       top_ai_video_gen_label: 'AI 영상',
       top_ai_doc_label: 'AI 문서',
       top_ai_sound_label: 'AI 오디오',
-      login_or: '또는',
       login_google: 'Google로 로그인',
       btn_new_project: '새 파이프라인',
       project_label: '파이프라인',

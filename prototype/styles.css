@@ -1117,41 +1117,14 @@ a.btn-ghost {
   transform: none;
 }
 
-/* ─── 구글 로그인 버튼 ─────────────────────────────────────── */
-.google-login-row {
-  margin-top: 12px;
-}
-
-.login-divider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 6px 0 12px;
-  color: var(--muted, #8a8a8a);
-  font-size: 12px;
-}
-
-.login-divider::before,
-.login-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: var(--border, rgba(255, 255, 255, 0.12));
-}
-
+/* ─── 구글 로그인 버튼 (아이콘 전용, 로그인 버튼 우측) ─────────── */
 .btn-google {
-  width: 100%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 10px 16px;
+  padding: 0;
   border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.2;
   cursor: pointer;
-  color: #1f1f1f;
   background: #ffffff;
   border: 1px solid #dadce0;
   transition: background 0.15s ease, box-shadow 0.15s ease;
@@ -1170,6 +1143,8 @@ a.btn-ghost {
 
 .btn-google-icon {
   flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
 }
 
 .btn-secondary {
@@ -5696,6 +5671,28 @@ html.page-shell-image #sidebar-project-card {
 .option-actions .btn-primary,
 .option-actions .btn-secondary {
   width: 160px;
+}
+
+/* 로그인 카드: 로그인 버튼 + 구글 아이콘 버튼을 한 행에 두고,
+   전체 폭을 입력칸(.form-row, 300px)과 동일하게 맞춰 오른쪽 끝을 넘지 않게 한다. */
+#login-card .option-actions {
+  width: 300px;
+  margin: 6px auto 0;
+  gap: 8px;
+  justify-content: center;
+  align-items: stretch;
+}
+
+#login-card .option-actions .btn-primary {
+  width: auto;
+  flex: 1 1 auto; /* 남는 폭을 채움 — 로그인/로그아웃 텍스트가 바뀌어도 폭은 행 기준으로 고정 */
+  min-width: 0;
+}
+
+#login-card .option-actions .btn-google {
+  flex: 0 0 auto;
+  width: 46px;       /* 아이콘 전용 고정 폭 */
+  align-self: stretch; /* 로그인 버튼과 같은 높이 */
 }
 
 #project-overlay .option-actions {
