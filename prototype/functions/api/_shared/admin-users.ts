@@ -15,6 +15,7 @@ export type PermissionPage = (typeof PERMISSION_PAGES)[number];
 export interface AdminUser {
   id: string;
   name: string;
+  email: string; // 구글 로그인 매칭용(소문자 정규화). 빈 문자열이면 구글 로그인 불가.
   pwHash: string;
   permissions: string[]; // [] = 전체 권한
   role: "admin" | "member";
@@ -90,6 +91,21 @@ export function findUser(registry: UsersRegistry, id: string): AdminUser | null 
   return (registry.users || []).find((u) => sanitizeUserId(u.id) === uid) || null;
 }
 
+/** 이메일을 소문자/trim 으로 정규화한다(빈 문자열이면 ''). */
+export function normalizeEmail(raw: any): string {
+  const v = String(raw || "").trim().toLowerCase();
+  // 아주 단순한 형식 검증: 공백 없는 a@b 꼴만 허용. 부적합하면 '' 반환(저장 안 함).
+  if (!v || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) return "";
+  return v.slice(0, 120);
+}
+
+/** 이메일로 회원을 찾는다(승인된 구글 로그인 매칭용). 빈 이메일은 매칭 금지. */
+export function findUserByEmail(registry: UsersRegistry, email: string): AdminUser | null {
+  const target = normalizeEmail(email);
+  if (!target) return null;
+  return (registry.users || []).find((u) => normalizeEmail(u.email) === target) || null;
+}
+
 /**
  * 마스터(이 프로젝트를 운영하는 유일한 최고 관리자 = env 1차 관리자)인지 검증한다.
  * 회원 관리(생성·삭제·권한설정) 등 운영 기능은 오직 마스터만 가능하다.
@@ -135,6 +151,7 @@ export async function hasPagePermission(env: any, userId: string, page: string):
 export async function createUserRecord(input: {
   id: string;
   name?: string;
+  email?: string;
   password: string;
   permissions?: string[];
   role?: "admin" | "member";
@@ -149,6 +166,7 @@ export async function createUserRecord(input: {
   return {
     id,
     name: String(input.name || "").slice(0, 80),
+    email: normalizeEmail(input.email),
     pwHash: await hashPassword(pw),
     permissions: sanitizePermissions(input.permissions),
     role: input.role === "admin" ? "admin" : "member",
@@ -181,6 +199,7 @@ function normalizeUser(raw: any): AdminUser {
   return {
     id: sanitizeUserId(src.id),
     name: String(src.name || "").slice(0, 80),
+    email: normalizeEmail(src.email),
     pwHash: String(src.pwHash || ""),
     permissions: sanitizePermissions(src.permissions),
     role: src.role === "admin" ? "admin" : "member",

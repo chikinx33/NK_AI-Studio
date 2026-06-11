@@ -1190,6 +1190,17 @@
     return j(text);
   };
 
+  // 구글 로그인 시작 — authorize URL 을 받아 팝업으로 연다(콜백이 세션을 postMessage 로 전달).
+  api.googleLoginStart = async function () {
+    var res = await fetch(withBase('/api/auth/google/start'), {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    var text = await res.text();
+    if (!res.ok) throw new Error(e(text) || 'google_login_start_error');
+    return j(text);
+  };
+
   // ─── 회원 관리(어드민) ──────────────────────────────────────
   // 모든 호출은 관리자 토큰을 요구한다(서버에서 requireAdmin 검증).
 

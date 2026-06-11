@@ -217,10 +217,12 @@
     var id = escapeHtml(u.id);
     // 마스터 행은 삭제 불가(유일 운영 계정), 비밀번호 등 수정만 가능.
     var deleteBtn = master ? '' : '<button type="button" class="admin-icon-btn admin-icon-btn--danger" data-action="delete-user" data-id="' + id + '">' + escapeHtml(t('admin_delete')) + '</button>';
+    var nameCell = escapeHtml(u.name || '-')
+      + (u.email ? '<br><span class="admin-row-email">' + escapeHtml(u.email) + '</span>' : '');
     return [
       '<tr data-id="' + id + '">',
         '<td><strong>' + id + '</strong></td>',
-        '<td>' + escapeHtml(u.name || '-') + '</td>',
+        '<td>' + nameCell + '</td>',
         '<td>' + roleBadge + ' ' + permHtml + '</td>',
         '<td>' + stateBadge + '</td>',
         '<td><div class="admin-row-actions">',
@@ -260,6 +262,11 @@
           '<div class="admin-field">',
             '<label>' + escapeHtml(t('admin_lbl_name')) + '</label>',
             '<input type="text" id="admin-f-name" value="' + escapeHtml(u.name || '') + '" placeholder="' + escapeHtml(t('admin_ph_name')) + '" />',
+          '</div>',
+          '<div class="admin-field">',
+            '<label>' + escapeHtml(t('admin_lbl_email')) + '</label>',
+            '<input type="email" id="admin-f-email" value="' + escapeHtml(u.email || '') + '" placeholder="' + escapeHtml(t('admin_ph_email')) + '" autocomplete="off" />',
+            '<p class="admin-hint">' + escapeHtml(t('admin_hint_email')) + '</p>',
           '</div>',
           '<div class="admin-field">',
             '<label>' + escapeHtml(t('admin_lbl_pw')) + '</label>',
@@ -365,6 +372,7 @@
   function readModalForm(root) {
     var idEl = root.querySelector('#admin-f-id');
     var nameEl = root.querySelector('#admin-f-name');
+    var emailEl = root.querySelector('#admin-f-email');
     var pwEl = root.querySelector('#admin-f-pw');
     var activeEl = root.querySelector('#admin-f-active');
     var perms = [];
@@ -372,6 +380,7 @@
     return {
       id: idEl ? String(idEl.value || '').trim() : '',
       name: nameEl ? String(nameEl.value || '').trim() : '',
+      email: emailEl ? String(emailEl.value || '').trim().toLowerCase() : '',
       password: pwEl ? String(pwEl.value || '') : '',
       permissions: perms,
       // 회원은 항상 member(서버에서도 강제). 활성 토글은 마스터 모달엔 없으므로 기본 true.
@@ -397,12 +406,12 @@
     var p;
     if (state.modalMode === 'create') {
       p = NK.api.adminUserCreate({
-        id: form.id, name: form.name, password: form.password,
+        id: form.id, name: form.name, email: form.email, password: form.password,
         permissions: form.permissions, active: form.active
       });
     } else {
       var payload = {
-        id: state.edit.id, name: form.name,
+        id: state.edit.id, name: form.name, email: form.email,
         permissions: form.permissions, active: form.active,
         expectedUpdatedAt: state.edit.updatedAt || ''
       };
@@ -419,6 +428,7 @@
       state.saving = false;
       var msg = (err && err.message) ? err.message : t('admin_err_save_fail');
       if (/user_exists/.test(msg)) msg = t('admin_err_exists');
+      else if (/email_exists/.test(msg)) msg = t('admin_err_email_exists');
       else if (/conflict/.test(msg)) msg = t('admin_err_conflict');
       else if (/password_required/.test(msg)) msg = t('admin_err_enter_pw');
       else if (/invalid_user_id/.test(msg)) msg = t('admin_err_invalid_id');

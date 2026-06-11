@@ -11,6 +11,8 @@ import {
   loadRegistryStrict,
   saveRegistry,
   findUser,
+  findUserByEmail,
+  normalizeEmail,
   requireMaster,
   createUserRecord,
   sanitizePermissions,
@@ -81,12 +83,17 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const reg = await loadRegistryStrict(env);
     if (findUser(reg, id)) return send({ error: "user_exists" }, 409, origin);
 
+    // 이메일은 구글 로그인 매칭 키이므로 중복을 막는다(빈 값은 허용).
+    const newEmail = normalizeEmail(body.email);
+    if (newEmail && findUserByEmail(reg, newEmail)) return send({ error: "email_exists" }, 409, origin);
+
     // 마스터(=primaryAdminId)는 항상 전체권한/active. 그 외 회원은 항상 member 역할
     // (회원에게는 '관리자' 역할을 줄 수 없음 — 마스터는 단 하나).
     const isPrimaryTarget = id === primaryAdminId(env);
     const record = await createUserRecord({
       id,
       name: body.name,
+      email: body.email,
       password: pw,
       permissions: isPrimaryTarget ? [] : body.permissions,
       role: isPrimaryTarget ? "admin" : "member",
@@ -119,6 +126,15 @@ export const onRequestPatch: PagesFunction = async ({ request, env }) => {
     }
 
     if (typeof body.name === "string") user.name = body.name.slice(0, 80);
+    if (typeof body.email === "string") {
+      const nextEmail = normalizeEmail(body.email);
+      // 다른 회원이 이미 같은 이메일을 쓰면 거부(빈 값으로 지우는 건 항상 허용).
+      if (nextEmail) {
+        const owner = findUserByEmail(reg, nextEmail);
+        if (owner && sanitizeUserId(owner.id) !== id) return send({ error: "email_exists" }, 409, origin);
+      }
+      user.email = nextEmail;
+    }
     if (Array.isArray(body.permissions)) user.permissions = sanitizePermissions(body.permissions);
     if (typeof body.active === "boolean") user.active = body.active;
     if (body.password) user.pwHash = await hashPassword(String(body.password).trim());

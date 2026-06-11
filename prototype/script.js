@@ -1093,6 +1093,8 @@
     const loginCardLogoEl = document.getElementById('login-card-logo');
     const loginIconFileInput = document.getElementById('login-icon-file');
     const formRows = document.querySelectorAll('#login-card .form-row');
+    const googleLoginRow = document.getElementById('google-login-row');
+    const googleLoginBtn = document.getElementById('google-login-btn');
     const favoriteCard = document.getElementById('favorite-card');
     const dashboardCard = document.getElementById('user-dashboard-card');
     const dashboardPanel = document.getElementById('user-dashboard-panel');
@@ -2191,6 +2193,7 @@
         nameEl.classList.toggle('hidden', !loggedIn);
       }
       formRows.forEach(r => { r.style.display = loggedIn ? 'none' : 'grid'; });
+      if (googleLoginRow) googleLoginRow.style.display = loggedIn ? 'none' : '';
       btn.setAttribute('data-i18n-skip', '1');
       btn.textContent = getAuthButtonText(loggedIn);
       btn.dataset.state = loggedIn ? 'logout' : 'login';
@@ -2603,6 +2606,85 @@
         setUI(NK.auth.isAuthed(), NK.auth.getUser());
       }
     };
+
+    // ─── 구글 로그인 ──────────────────────────────────────────
+    // 팝업으로 OAuth 를 진행하고, 콜백이 postMessage(platform: 'google_login')로
+    // 세션을 전달하면 ID/PW 로그인과 동일하게 setAuthed → setUI 처리한다.
+    if (googleLoginBtn && !googleLoginBtn.dataset.nkBound) {
+      googleLoginBtn.dataset.nkBound = '1';
+
+      const googleErrorText = (code) => {
+        const en = currentLang === 'en';
+        switch (String(code || '')) {
+          case 'not_approved':
+            return en
+              ? 'This Google account is not approved. Ask the admin to register your email.'
+              : '승인되지 않은 구글 계정이에요. 관리자에게 이메일 등록을 요청해 주세요.';
+          case 'account_disabled':
+            return en ? 'This account is disabled.' : '비활성화된 계정이에요.';
+          case 'email_not_verified':
+            return en ? 'Your Google email is not verified.' : '구글 이메일이 인증되지 않았어요.';
+          default:
+            return en ? 'Google sign-in failed.' : '구글 로그인에 실패했어요.';
+        }
+      };
+
+      googleLoginBtn.addEventListener('click', async () => {
+        googleLoginBtn.disabled = true;
+        let popup = null;
+        let settled = false;
+        let onMsg = null;
+        let pollTimer = null;
+
+        const cleanup = () => {
+          if (onMsg) { window.removeEventListener('message', onMsg); onMsg = null; }
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          googleLoginBtn.disabled = false;
+        };
+
+        onMsg = (ev) => {
+          const data = ev && ev.data;
+          if (!data || data.type !== 'sns_oauth_result' || data.platform !== 'google_login') return;
+          settled = true;
+          cleanup();
+          try { if (popup && !popup.closed) popup.close(); } catch (_) {}
+          const r = data.result || {};
+          if (r.ok && r.token) {
+            NK.auth.setAuthed(true, r.user || '', r.token, r.permissions || [], r.role || '');
+            setUI(true, NK.auth.getUser());
+            const requestedReturnTarget = readRequestedLoginReturnTarget(new URLSearchParams(window.location.search));
+            if (requestedReturnTarget) {
+              try { window.top.location.replace(requestedReturnTarget); }
+              catch (_) { window.location.replace(requestedReturnTarget); }
+              return;
+            }
+            alert(translateUiText('로그인 성공'));
+          } else {
+            alert(googleErrorText(r.error));
+          }
+        };
+        window.addEventListener('message', onMsg);
+
+        try {
+          const res = await NK.api.googleLoginStart();
+          if (!res || !res.ok || !res.oauthUrl) throw new Error('start_failed');
+          popup = window.open(res.oauthUrl, 'nk_google_login', 'width=480,height=640,menubar=no,toolbar=no');
+          if (!popup) {
+            cleanup();
+            alert(currentLang === 'en' ? 'Popup was blocked. Please allow popups.' : '팝업이 차단됐어요. 팝업을 허용해 주세요.');
+            return;
+          }
+          // 사용자가 인증을 마치지 않고 팝업을 닫으면 버튼을 복구한다.
+          pollTimer = setInterval(() => {
+            if (settled) return;
+            if (popup && popup.closed) cleanup();
+          }, 600);
+        } catch (err) {
+          cleanup();
+          alert(currentLang === 'en' ? 'Could not start Google sign-in.' : '구글 로그인을 시작할 수 없어요.');
+        }
+      });
+    }
   };
 
   const setupProjectOverlay = () => {
