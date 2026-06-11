@@ -5677,6 +5677,8 @@ html.page-shell-image #sidebar-project-card {
    전체 폭을 입력칸(.form-row, 300px)과 동일하게 맞춰 오른쪽 끝을 넘지 않게 한다. */
 #login-card .option-actions {
   width: 300px;
+  box-sizing: border-box;
+  padding-left: 70px; /* .form-row 의 라벨(60px) + 간격(10px) = 입력칸 시작점에 맞춤 */
   margin: 6px auto 0;
   gap: 8px;
   justify-content: center;
