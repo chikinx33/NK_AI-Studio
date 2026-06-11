@@ -329,7 +329,18 @@
     }
   }, true);
 
-  // ② 주기 스윕: 누락/실패 이미지를 점진적으로 강제 로드
+  // 뷰포트 근처(약 1.5화면 이내)인지 — iOS 메모리 압박(액박)을 피하려고 먼 이미지는 강제하지 않는다.
+  function nearViewport(el) {
+    try {
+      var r = el.getBoundingClientRect();
+      if (!r || (!r.width && !r.height)) return false; // 숨김/미배치
+      var vh = window.innerHeight || document.documentElement.clientHeight || 800;
+      return r.bottom > -(vh * 0.5) && r.top < vh * 1.5;
+    } catch (_) { return true; }
+  }
+
+  // ② 주기 스윕: "뷰포트 근처"의 누락/실패 이미지만 점진적으로 로드/재시도.
+  // 먼 이미지는 네이티브 lazy 에 맡겨 동시 디코딩 수를 제한 → iOS 메모리 부족(액박) 방지.
   function sweep() {
     var imgs = document.querySelectorAll(IMG_SEL);
     var forced = 0;
@@ -337,11 +348,17 @@
       var img = imgs[i];
       if (img.getAttribute('data-ml-done') === '1') continue;
       if (img.complete && img.naturalWidth > 0) { img.setAttribute('data-ml-done', '1'); continue; }
+      if (!nearViewport(img)) {
+        // 멀어지면 카운터 초기화 → 다시 가까워질 때 새로 시도(스크롤 복귀 시 회복)
+        img.setAttribute('data-ml-ticks', '0');
+        img.setAttribute('data-ml-retry', '0');
+        continue;
+      }
+      var failed = img.complete && img.naturalWidth === 0;
       var ticks = (Number(img.getAttribute('data-ml-ticks')) || 0) + 1;
       img.setAttribute('data-ml-ticks', String(ticks));
-      var failed = img.complete && img.naturalWidth === 0;
-      // 실패는 즉시, 아직 미로드는 2틱 유예 후(lazy 에 잠깐 기회) 강제
-      if ((failed || ticks >= 2)
+      // 실패는 즉시 재시도, 미로드는 1틱 유예 후 강제(근처 이미지는 빨리 보이게)
+      if ((failed || ticks >= 1)
         && forced < FORCE_PER_TICK
         && (Number(img.getAttribute('data-ml-retry')) || 0) < MAX_RETRY) {
         retryImg(img);

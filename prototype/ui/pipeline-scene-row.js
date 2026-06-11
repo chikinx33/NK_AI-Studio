@@ -110,8 +110,12 @@
       var badge = scene.videoModelLabel
         ? '<div class="video-model-badge">' + scene.videoModelLabel.replace(/</g, '&lt;') + '</div>'
         : '';
+      // iOS(아이패드)는 poster 가 없으면 영상 첫 프레임을 렌더하지 않고 재생버튼만 보인다.
+      // 영상의 시작 이미지(scene.imageDataUrl)를 poster 로 지정해 어떤 환경에서도 첫 화면이 보이게 한다.
+      var posterSrc = mediaUrlResolver(scene.imageDataUrl || '');
+      var posterAttr = posterSrc ? ' poster="' + escapeAttr(posterSrc) + '"' : '';
       return '<div class="video-box">' +
-        '<video class="scene-video" controls muted playsinline preload="metadata"><source src="' + videoPlayableUrl + '" type="video/mp4" /></video>' +
+        '<video class="scene-video" controls muted playsinline webkit-playsinline preload="metadata"' + posterAttr + '><source src="' + videoPlayableUrl + '" type="video/mp4" /></video>' +
         badge + note +
         '</div>';
     }
