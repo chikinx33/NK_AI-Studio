@@ -1809,8 +1809,10 @@
     if (rerenderBtn) rerenderBtn.disabled = !canRerender;
     var mp4Btn = document.getElementById('postprod-download-mp4-btn');
     if (mp4Btn) mp4Btn.disabled = !(status === 'done' && hasVideo);
+    // SRT(자막)는 타임라인 자막 모델에서 바로 생성되므로 렌더링 완료와 무관하게,
+    // 자막이 하나라도 있으면 다운로드 가능해야 한다.
     var srtBtn = document.getElementById('postprod-download-srt-btn');
-    if (srtBtn) srtBtn.disabled = !(status === 'done' && hasSrt);
+    if (srtBtn) srtBtn.disabled = !hasSrt;
   }
 
   function setRenderMetaLocal(metaPatch) {
