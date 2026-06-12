@@ -1080,7 +1080,8 @@
         };
         titleEl.onblur = () => { commit(); titleEl.onblur = null; titleEl.onkeydown = null; };
       } else if (action === 'draft-edit') {
-        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        // 공유받은 프로젝트는 로컬 store에 없으므로 소유+공유 합본(getViewDrafts)에서 조회한다.
+        const drafts = getViewDrafts();
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
           selectProject(draft);
@@ -1092,7 +1093,7 @@
           }
         }
       } else if (action === 'draft-production') {
-        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        const drafts = getViewDrafts();
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
           selectProject(draft);
@@ -1104,7 +1105,7 @@
           }
         }
       } else if (action === 'draft-post') {
-        const drafts = NK.store.getDrafts().map(normalizeDraft).filter(Boolean);
+        const drafts = getViewDrafts();
         const draft = drafts.find(d => String(d.id) === String(id));
         if (draft) {
           selectProject(draft);
