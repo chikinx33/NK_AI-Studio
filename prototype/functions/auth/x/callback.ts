@@ -45,7 +45,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
   const clientId = env.X_CLIENT_ID;
   const clientSecret = env.X_CLIENT_SECRET;
-  const redirectUri = env.X_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/x/callback";
+  const redirectUri = env.X_REDIRECT_URI || `${url.origin}/auth/x/callback`;
 
   if (!clientId || !clientSecret) {
     return popupHtml({ ok: false, error: "Server config missing" });

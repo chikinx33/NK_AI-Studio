@@ -16,7 +16,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     return send({ error: "YOUTUBE_CLIENT_ID not configured" }, 500);
   }
 
-  const redirectUri = env.YOUTUBE_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/youtube/callback";
+  const redirectUri = env.YOUTUBE_REDIRECT_URI || `${new URL(request.url).origin}/auth/youtube/callback`;
 
   const state = btoa(JSON.stringify({
     userId: auth.userId,

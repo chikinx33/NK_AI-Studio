@@ -26,7 +26,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
   if (!auth.ok) return send({ error: auth.error }, auth.status);
 
   const clientId = env.X_CLIENT_ID;
-  const redirectUri = env.X_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/x/callback";
+  const redirectUri = env.X_REDIRECT_URI || `${new URL(request.url).origin}/auth/x/callback`;
 
   if (!clientId) {
     return send({ error: "X_CLIENT_ID not configured" }, 500);

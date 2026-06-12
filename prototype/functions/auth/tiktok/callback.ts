@@ -149,7 +149,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
   const clientKey = env.TIKTOK_CLIENT_KEY;
   const clientSecret = env.TIKTOK_CLIENT_SECRET;
-  const redirectUri = "https://nk-ai-studio.pages.dev/auth/tiktok/callback";
+  const redirectUri = env.TIKTOK_REDIRECT_URI || `${url.origin}/auth/tiktok/callback`;
 
   if (!clientKey || !clientSecret) {
     return popupHtml({ ok: false, error: "Server config missing" });

@@ -2,7 +2,7 @@
     var NK = window.NK || (window.NK = {});
     var config = NK.config || (NK.config = {});
 
-    config.APP_VERSION = '3.1087';
+    config.APP_VERSION = '3.1088';
 
     // Storage Keys
     config.KEYS = {
@@ -40,7 +40,7 @@
             if (window.NK_API_BASE) return window.NK_API_BASE;
             var host = window.location.hostname || '';
             if (window.location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1') {
-                return 'https://nk-ai-studio.pages.dev';
+                return 'https://nkstudio.org';
             }
         }
         return '';

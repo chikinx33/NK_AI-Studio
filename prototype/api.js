@@ -15,11 +15,11 @@
       if (typeof window !== 'undefined') {
         const host = window.location.hostname || '';
         if (window.location.protocol === 'file:' || host === 'localhost' || host === '127.0.0.1') {
-          return 'https://nk-ai-studio.pages.dev';
+          return 'https://nkstudio.org';
         }
       }
       return '';
-    } catch (_) { return NK.config.API_BASE || 'https://nk-ai-studio.pages.dev'; }
+    } catch (_) { return NK.config.API_BASE || 'https://nkstudio.org'; }
   })();
   const withBase = (path) => {
     if (!base) return path;

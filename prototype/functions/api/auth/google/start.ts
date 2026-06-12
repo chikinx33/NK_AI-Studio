@@ -28,7 +28,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
 
   const clientId = env.GOOGLE_LOGIN_CLIENT_ID || env.GOOGLE_CLIENT_ID;
   const redirectUri =
-    env.GOOGLE_LOGIN_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/google/callback";
+    env.GOOGLE_LOGIN_REDIRECT_URI || `${new URL(request.url).origin}/auth/google/callback`;
 
   if (!clientId) {
     return send({ error: "GOOGLE_LOGIN_CLIENT_ID not configured" }, 500, origin);

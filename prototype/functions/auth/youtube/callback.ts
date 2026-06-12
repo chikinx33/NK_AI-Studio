@@ -42,7 +42,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
 
   const clientId = env.YOUTUBE_CLIENT_ID;
   const clientSecret = env.YOUTUBE_CLIENT_SECRET;
-  const redirectUri = env.YOUTUBE_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/youtube/callback";
+  const redirectUri = env.YOUTUBE_REDIRECT_URI || `${url.origin}/auth/youtube/callback`;
 
   if (!clientId || !clientSecret) {
     return popupHtml({ ok: false, error: "Server config missing" });

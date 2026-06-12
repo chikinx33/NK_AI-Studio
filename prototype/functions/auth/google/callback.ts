@@ -66,7 +66,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const clientId = env.GOOGLE_LOGIN_CLIENT_ID || env.GOOGLE_CLIENT_ID;
   const clientSecret = env.GOOGLE_LOGIN_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET;
   const redirectUri =
-    env.GOOGLE_LOGIN_REDIRECT_URI || "https://nk-ai-studio.pages.dev/auth/google/callback";
+    env.GOOGLE_LOGIN_REDIRECT_URI || `${url.origin}/auth/google/callback`;
 
   if (!clientId || !clientSecret) {
     return popupHtml({ ok: false, error: "Server config missing" });

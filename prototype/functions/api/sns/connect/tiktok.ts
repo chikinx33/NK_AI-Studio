@@ -16,7 +16,7 @@ export const onRequestGet = async ({ request, env }: { request: Request; env: an
     return send({ error: "TIKTOK_CLIENT_KEY not configured" }, 500);
   }
 
-  const redirectUri = "https://nk-ai-studio.pages.dev/auth/tiktok/callback";
+  const redirectUri = env.TIKTOK_REDIRECT_URI || `${new URL(request.url).origin}/auth/tiktok/callback`;
 
   const state = btoa(JSON.stringify({
     userId: auth.userId,

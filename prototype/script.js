@@ -883,7 +883,7 @@
           sessionStorage.removeItem('nk_current_stage');
           localStorage.removeItem('nk_current_stage');
         } catch (_) { }
-        const target = isAiVideo ? 'https://nk-ai-studio.pages.dev/ai-video' : 'https://nk-ai-studio.pages.dev/ai-image';
+        const target = isAiVideo ? '/ai-video' : '/ai-image';
         try { window.top.location.href = target; } catch (_) { window.location.href = target; }
         return;
       }
@@ -963,8 +963,8 @@
       }
 
       // 최상위 페이지로 이동해야 하는 항목은 iframe 로딩을 막고 전체 페이지로 전환
-      const isAiVideoLink = !!href && (/\/ai-video(\.html)?(\?|$)/i.test(href) || href.indexOf('https://nk-ai-studio.pages.dev/ai-video') === 0);
-      const isAiImageLink = !!href && (/\/ai-image(\.html)?(\?|$)/i.test(href) || href.indexOf('https://nk-ai-studio.pages.dev/ai-image') === 0);
+      const isAiVideoLink = !!href && /\/ai-video(\.html)?(\?|$)/i.test(href);
+      const isAiImageLink = !!href && /\/ai-image(\.html)?(\?|$)/i.test(href);
       if (isAiVideoLink || isAiImageLink) {
         e.preventDefault();
         e.stopPropagation();
@@ -977,7 +977,7 @@
             sessionStorage.removeItem('nk_current_stage');
             localStorage.removeItem('nk_current_stage');
           } catch (_) { }
-          const abs = 'https://nk-ai-studio.pages.dev/ai-video';
+          const abs = '/ai-video';
           try { window.top.location.href = abs; } catch (_) { window.location.href = abs; }
           return;
         }
