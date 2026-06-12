@@ -35,7 +35,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.landing-page.css?v=3.1091" />
+  <link rel="stylesheet" href="styles.landing-page.css?v=3.1092" />
 
   <!-- ===== JSON-LD (Organization) ===== -->
   <script type="application/ld+json">
@@ -66,7 +66,6 @@
         <a href="#pipeline" data-i18n="nav.pipeline">파이프라인</a>
         <a href="#features" data-i18n="nav.features">기능</a>
         <a href="#how" data-i18n="nav.how">작동 방식</a>
-        <a href="#ip" data-i18n="nav.ip">IP 브랜드</a>
         <a href="#sns" data-i18n="nav.sns">SNS 연동</a>
       </nav>
       <div class="lp-nav-cta">
@@ -101,7 +100,7 @@
         <!-- Hero 비주얼: 제품 목업 -->
         <div class="lp-hero-visual lp-reveal">
           <div class="lp-mock" role="img" data-i18n-aria="hero.mockAria" aria-label="NK AI Studio 제작 화면 미리보기">
-            <div class="lp-mock-bar"><i></i><i></i><i></i><small>NK AI Studio · 프로젝트</small></div>
+            <div class="lp-mock-bar"><i></i><i></i><i></i><small>NK AI Studio · <span data-i18n="mock.project">프로젝트</span></small></div>
             <div class="lp-mock-body">
               <div class="lp-mock-row">
                 <div class="lp-mock-thumb">
@@ -256,77 +255,6 @@
       </div>
     </section>
 
-    <!-- ============ IP 쇼케이스 ============ -->
-    <section id="ip">
-      <div class="lp-wrap">
-        <div class="lp-head center lp-reveal">
-          <span class="lp-eyebrow" data-i18n="ip.eyebrow">자체 IP 브랜드</span>
-          <h2 class="lp-section-title" data-i18n="ip.title">NK Studio의 오리지널 캐릭터</h2>
-          <p class="lp-section-sub" data-i18n="ip.sub">플랫폼이 직접 키우는 IP 캐릭터들이 SNS 콘텐츠의 화자가 됩니다.</p>
-        </div>
-        <div class="lp-ip lp-reveal">
-          <article class="lp-ip-card">
-            <div class="lp-ip-avatar">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <ellipse cx="32" cy="34" rx="20" ry="22" fill="#7c5cff"/>
-                <path d="M20 18c-2-6 2-10 6-8M44 18c2-6-2-10-6-8" stroke="#7c5cff" stroke-width="3" fill="none" stroke-linecap="round"/>
-                <circle cx="20" cy="15" r="3" fill="#0bbfa5"/><circle cx="44" cy="15" r="3" fill="#0bbfa5"/>
-                <ellipse cx="25" cy="32" rx="5" ry="7" fill="#fff"/><ellipse cx="39" cy="32" rx="5" ry="7" fill="#fff"/>
-                <circle cx="25" cy="34" r="2.6" fill="#0b1020"/><circle cx="39" cy="34" r="2.6" fill="#0b1020"/>
-                <path d="M27 46q5 4 10 0" stroke="#0b1020" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>뚜뮤</h3>
-            <p class="lp-ip-role" data-i18n="ip.tumyu.role">SNS 화자 · 외계소녀</p>
-            <p data-i18n="ip.tumyu.desc">행성 투투투바에서 온 호기심 많고 엉뚱한 캐릭터. Threads·X 게시물의 목소리를 맡습니다.</p>
-          </article>
-          <article class="lp-ip-card">
-            <div class="lp-ip-avatar">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <rect x="14" y="14" width="36" height="36" rx="8" fill="#ff7a00"/>
-                <ellipse cx="26" cy="30" rx="4.5" ry="6" fill="#fff"/><ellipse cx="40" cy="30" rx="4.5" ry="6" fill="#fff"/>
-                <circle cx="26" cy="32" r="2.4" fill="#0b1020"/><circle cx="40" cy="32" r="2.4" fill="#0b1020"/>
-                <path d="M25 42h14" stroke="#0b1020" stroke-width="2.6" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>네모</h3>
-            <p class="lp-ip-role" data-i18n="ip.nemo.role">또렷하고 신뢰감 있는</p>
-            <p data-i18n="ip.nemo.desc">각진 만큼 단단하고 믿음직한 캐릭터. 안정적인 톤의 나레이션에 어울립니다.</p>
-            <span class="lp-todo" data-i18n="todo.char">⟨확정 필요: 캐릭터 설정⟩</span>
-          </article>
-          <article class="lp-ip-card">
-            <div class="lp-ip-avatar">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <path d="M32 12 54 50H10Z" fill="#0bbfa5"/>
-                <ellipse cx="26" cy="38" rx="4" ry="5.5" fill="#fff"/><ellipse cx="38" cy="38" rx="4" ry="5.5" fill="#fff"/>
-                <circle cx="26" cy="39.5" r="2.2" fill="#0b1020"/><circle cx="38" cy="39.5" r="2.2" fill="#0b1020"/>
-                <path d="M28 46q4 3 8 0" stroke="#0b1020" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-              </svg>
-            </div>
-            <h3>세모</h3>
-            <p class="lp-ip-role" data-i18n="ip.semo.role">톡톡 튀는 동료</p>
-            <p data-i18n="ip.semo.desc">뾰족한 호기심으로 분위기를 띄우는 캐릭터.</p>
-            <span class="lp-todo" data-i18n="todo.char">⟨확정 필요: 캐릭터 설정⟩</span>
-          </article>
-          <article class="lp-ip-card">
-            <div class="lp-ip-avatar">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <circle cx="32" cy="32" r="20" fill="#5c7cff"/>
-                <ellipse cx="25" cy="30" rx="4.5" ry="6" fill="#fff"/><ellipse cx="39" cy="30" rx="4.5" ry="6" fill="#fff"/>
-                <circle cx="25" cy="32" r="2.4" fill="#0b1020"/><circle cx="39" cy="32" r="2.4" fill="#0b1020"/>
-                <path d="M25 41q7 5 14 0" stroke="#0b1020" stroke-width="2.4" fill="none" stroke-linecap="round"/>
-                <circle cx="18" cy="38" r="3" fill="#ff7a00" opacity="0.5"/><circle cx="46" cy="38" r="3" fill="#ff7a00" opacity="0.5"/>
-              </svg>
-            </div>
-            <h3>동그라미</h3>
-            <p class="lp-ip-role" data-i18n="ip.dong.role">둥글둥글 다정한</p>
-            <p data-i18n="ip.dong.desc">모난 데 없이 따뜻한 분위기의 캐릭터.</p>
-            <span class="lp-todo" data-i18n="todo.char">⟨확정 필요: 캐릭터 설정⟩</span>
-          </article>
-        </div>
-      </div>
-    </section>
-
     <!-- ============ SNS 연동 밴드 ============ -->
     <section id="sns">
       <div class="lp-wrap">
@@ -372,7 +300,6 @@
           <ul>
             <li><a href="#pipeline" data-i18n="footer.link.pipeline">제작 파이프라인</a></li>
             <li><a href="#features" data-i18n="footer.link.features">핵심 기능</a></li>
-            <li><a href="#ip" data-i18n="footer.link.ip">IP 브랜드</a></li>
             <li><a href="#sns" data-i18n="footer.link.sns">SNS 연동</a></li>
             <li><a href="app.html" data-cta-login data-i18n="cta.start">시작하기</a></li>
           </ul>
@@ -397,7 +324,7 @@
     </div>
   </footer>
 
-  <script src="js/landing.js?v=3.1091" defer></script>
+  <script src="js/landing.js?v=3.1092" defer></script>
 </body>
 
 </html>
