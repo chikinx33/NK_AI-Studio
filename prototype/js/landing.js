@@ -285,7 +285,7 @@
 
     document.documentElement.setAttribute('lang', lang === 'en' ? 'en' : 'ko');
     var btn = document.querySelector('[data-lang-toggle]');
-    if (btn) btn.textContent = lang === 'en' ? '한국어' : 'EN';
+    if (btn) btn.textContent = lang === 'en' ? 'EN' : 'KR';
   }
 
   function setLang(lang) {
