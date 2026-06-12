@@ -272,7 +272,7 @@
             if (['scenario', 'scenes', 'ai-image-stage', 'ai-video-gen-stage', 'library', 'brand', 'knowledge', 'analytics', 'media', 'publish', 'dashboard', 'options', 'ai-video', 'sns-settings'].includes(name)) {
                 return name === 'ai-video' ? 'dashboard' : name;
             }
-            if (name === 'index' || name === '') return 'options';
+            if (name === 'index' || name === 'app' || name === '') return 'options';
             return '';
         } catch (_) { return ''; }
     };

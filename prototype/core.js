@@ -45,6 +45,9 @@
       return base.replace(/\.html?$/, '') || 'index';
     };
     var current = normalize(window.location.pathname);
+    // 로그인 런처는 app.html로 이동했지만, 기존 'index' 페이지 키에 묶인 레이아웃/네비 로직을
+    // 그대로 재사용하도록 동일 키로 정규화한다. (공개 랜딩 index.html은 core.js를 로드하지 않음)
+    if (current === 'app') current = 'index';
     if (current === 'ai-video') current = 'dashboard';
     try {
       document.documentElement.setAttribute('data-page', current || 'index');

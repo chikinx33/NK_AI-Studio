@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark" class="layout-fixed preload-veiled">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="google-site-verification" content="itLr3RDEB6ijSnZcT7tKWU93kWrVv8oVYNyJWFYdDQw" />
+  <title>NK AI Studio</title>
+  <style>
+    html.preload-veiled, body.preload-veiled { background:#0f172a; color:#cbd5e1; }
+    html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.landing.css" />
+  <script src="core.js" defer></script>
+  <script src="js/config.js" defer></script>
+  <script src="js/utils.js" defer></script>
+  <script src="js/util/last-frame.js" defer></script>
+  <script src="store.js" defer></script>
+  <script src="api.js" defer></script>
+  <script src="js/state.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <script src="js/navigation.js" defer></script>
+  <script src="js/service/media.js" defer></script>
+  <script src="js/service/project.js" defer></script>
+  <script src="js/service/content-library.js" defer></script>
+  <script src="js/ui/common.js" defer></script>
+  <script src="js/ui/dashboard.js" defer></script>
+  <script src="js/ui/scenario.js" defer></script>
+  <script src="js/ui/production.js" defer></script>
+  <script src="script.js" defer></script>
+</head>
+
+<body class="layout-fixed">
+  <div class="grain"></div>
+  <div class="app no-sidebar">
+    <main class="main">
+      <div class="main-body option-body">
+        <div class="login-icons" id="login-icons" aria-hidden="true">
+          <a href="brand-studio.html" class="login-icon-link">
+            <img src="images/icon-ai-branding.png" alt="브랜드 스튜디오로 이동" />
+            <span class="login-icon-label" data-i18n="top_brand_label">Brand Studio</span>
+          </a>
+          <a href="ai-video.html?stage=dashboard" class="login-icon-link">
+            <img src="images/icon-ai-cinema.png" alt="영상 제작 메인으로 이동" />
+            <span class="login-icon-label" data-i18n="top_ai_video_label">AI Video</span>
+          </a>
+          <a href="ai-video-gen.html" class="login-icon-link">
+            <img src="images/icon-ai-video.png" alt="AI 영상생성으로 이동" />
+            <span class="login-icon-label" data-i18n="top_ai_video_gen_label">AI Video Gen</span>
+          </a>
+          <a href="ai-image.html?stage=dashboard" class="login-icon-link">
+            <img src="images/icon-ai-image.png" alt="이미지 생성 메인으로 이동" />
+            <span class="login-icon-label" data-i18n="top_ai_image_label">AI Image</span>
+          </a>
+          <a href="ai-doc.html" class="login-icon-link">
+            <img src="images/icon-ai-doc.png" alt="AI 문서로 이동" />
+            <span class="login-icon-label" data-i18n="top_ai_doc_label">AI 문서</span>
+          </a>
+          <a href="ai-sound.html" class="login-icon-link">
+            <img src="images/icon-ai-sound.png" alt="AI 오디오로 이동" />
+            <span class="login-icon-label" data-i18n="top_ai_sound_label">AI 오디오</span>
+          </a>
+        </div>
+
+        <div class="option-card-grid">
+          <div class="card option-card" id="login-card">
+            <h3 class="option-title" id="login-card-title">NK AI STUDIO</h3>
+            <div class="logo-box">
+              <img src="images/logo(500500).png" alt="logo" class="logo-img" id="login-card-logo" />
+              <input type="file" id="login-icon-file" class="login-brand-file-input" accept="image/*" />
+            </div>
+            <form id="opt-login-form" onsubmit="return false;" autocomplete="on" novalidate>
+              <div class="form-row">
+                <label for="opt-id">ID</label>
+                <input type="text" id="opt-id" placeholder="아이디" autocomplete="username" />
+              </div>
+              <div class="form-row">
+                <label for="opt-pw">PASS</label>
+                <input type="password" id="opt-pw" placeholder="비밀번호" autocomplete="current-password" />
+              </div>
+              <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
+              <div class="option-actions">
+                <button class="btn-primary" id="opt-auth-btn" data-i18n-skip="1">로그인</button>
+                <button type="button" class="btn-google" id="google-login-btn" data-i18n-skip="1" data-i18n-title="login_google" data-i18n-aria-label="login_google" aria-label="Google로 로그인" title="Google로 로그인">
+                  <svg class="btn-google-icon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/></svg>
+                </button>
+              </div>
+            </form>
+            <div class="sidebar-actions option-card-toolbar">
+              <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
+              <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang('local')" aria-label="언어 전환">KO</button>
+              <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('local')" aria-label="테마 전환"></button>
+              <button class="btn-ghost admin-card-btn hidden" id="admin-card-btn" data-i18n-skip="1" aria-label="회원 관리" title="회원 관리" onclick="location.href='admin.html'">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.051 12.616a1 1 0 0 1 1.909.024l.737 1.452a1 1 0 0 0 .737.535l1.634.256a1 1 0 0 1 .588 1.806l-1.172 1.168a1 1 0 0 0-.282.866l.259 1.613a1 1 0 0 1-1.541 1.134l-1.465-.75a1 1 0 0 0-.912 0l-1.465.75a1 1 0 0 1-1.539-1.133l.258-1.613a1 1 0 0 0-.282-.866l-1.156-1.153a1 1 0 0 1 .572-1.822l1.633-.256a1 1 0 0 0 .737-.535z"/><path d="M8 15H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/></svg>
+              </button>
+            </div>
+            <div class="sidebar-version">ver</div>
+          </div>
+          <script>
+            /* FOUC 방지: 이미 로그인 상태면 첫 페인트부터 로그인 카드를 로그인 상태로 선반영한다.
+               (init이 setUI 전에 await store.ready()를 하므로, 그 사이 베일 해제 시 로그아웃 폼이
+                잠깐 보이던 문제 해결. setUI가 이후 동일하게 재적용 → 깜빡임 없음) */
+            (function () {
+              try {
+                var authed = localStorage.getItem('nk_is_logged_in') === 'true' && !!localStorage.getItem('nk_auth_token');
+                if (!authed) return;
+                var lang = String(localStorage.getItem('nk_lang') || 'ko').toLowerCase();
+                var card = document.getElementById('login-card');
+                if (card) {
+                  card.querySelectorAll('.form-row').forEach(function (r) { r.style.display = 'none'; });
+                  var gBtn = card.querySelector('#google-login-btn');
+                  if (gBtn) gBtn.style.display = 'none';
+                  var oa = card.querySelector('.option-actions');
+                  if (oa) oa.classList.add('is-authed');
+                }
+                var btn = document.getElementById('opt-auth-btn');
+                if (btn) {
+                  btn.textContent = lang === 'en' ? 'Logout' : '로그아웃';
+                  btn.setAttribute('data-i18n-skip', '1');
+                  btn.dataset.state = 'logout';
+                }
+              } catch (_) { }
+            })();
+          </script>
+
+          <section class="card option-card favorite-card is-locked" id="favorite-card" aria-live="polite">
+            <div class="favorite-list empty" id="favorite-list" role="list"></div>
+            <div class="favorite-pagination hidden" id="favorite-pagination" aria-label="즐겨찾기 페이지 이동"></div>
+            <div class="favorite-transfer-box hidden" id="favorite-transfer-box" aria-label="다른 페이지로 이동" title="다른 페이지 빈 칸으로 이동"></div>
+          </section>
+
+          <section class="card option-card user-dashboard-card is-locked" id="user-dashboard-card" aria-live="polite">
+
+            <section class="user-dashboard-panel hidden" id="user-dashboard-panel">
+              <article class="user-widget subscription-widget is-collapsed" id="subscription-widget">
+                <div class="user-widget-head">
+                  <h4>구독 현황</h4>
+                  <button type="button" class="subscription-toggle" id="subscription-toggle" aria-expanded="false" aria-label="구독 현황 펼치기"></button>
+                </div>
+                <div class="subscription-body">
+                  <div class="subscription-grid">
+                    <div class="subscription-item">
+                      <span class="muted">플랜</span>
+                      <strong id="subscription-plan">Free</strong>
+                    </div>
+                    <div class="subscription-item">
+                      <span class="muted">상태</span>
+                      <strong id="subscription-status">미연결</strong>
+                    </div>
+                    <div class="subscription-item">
+                      <span class="muted">갱신일</span>
+                      <strong id="subscription-renew">-</strong>
+                    </div>
+                  </div>
+                  <p class="muted user-widget-help">결제 연동 전 단계라 현재는 UI만 표시됩니다.</p>
+                  <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
+                </div>
+              </article>
+
+              <form class="user-widget favorite-widget favorite-form is-collapsed hidden" id="favorite-form">
+                <div class="user-widget-head">
+                  <h4>즐겨찾기 등록</h4>
+                  <button type="button" class="favorite-form-toggle" id="favorite-form-toggle" aria-expanded="false" aria-label="즐겨찾기 등록 펼치기"></button>
+                </div>
+                <div class="favorite-form-body">
+                  <div class="fav-form-row">
+                    <label for="favorite-title">메뉴 이름</label>
+                    <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
+                  </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-category-select">카테고리</label>
+                    <select id="favorite-category-select"></select>
+                  </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-link">링크 주소</label>
+                    <input type="url" id="favorite-link" placeholder="https://example.com" required />
+                  </div>
+                  <div class="fav-form-row">
+                    <label for="favorite-icon">아이콘</label>
+                    <div class="favorite-file-picker">
+                      <button type="button" class="btn-secondary favorite-file-trigger" id="favorite-icon-trigger" data-i18n="파일 선택">파일 선택</button>
+                      <span class="favorite-file-name" id="favorite-icon-name">선택된 파일 없음</span>
+                      <input type="file" id="favorite-icon" class="favorite-file-input" accept="image/*" />
+                    </div>
+                  </div>
+                  <div class="favorite-form-actions">
+                    <button type="submit" class="btn-primary">등록</button>
+                    <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
+                  </div>
+                </div>
+              </form>
+
+              <section class="user-widget theme-preset-widget is-collapsed hidden" id="theme-preset-widget">
+                <div class="user-widget-head">
+                  <h4 data-i18n="테마 선택">테마 선택</h4>
+                  <button type="button" class="theme-preset-toggle" id="theme-preset-toggle" aria-expanded="false" aria-label="테마 선택 펼치기"></button>
+                </div>
+                <div class="theme-preset-body">
+                  <section class="theme-preset-group">
+                    <p class="theme-preset-label" data-i18n="다크">다크</p>
+                    <div class="theme-preset-options" id="theme-dark-options"></div>
+                  </section>
+                  <section class="theme-preset-group">
+                    <p class="theme-preset-label" data-i18n="라이트">라이트</p>
+                    <div class="theme-preset-options" id="theme-light-options"></div>
+                  </section>
+                  <p class="theme-preset-help" data-i18n="우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.">우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.</p>
+                </div>
+              </section>
+            </section>
+          </section>
+
+        </div>
+      </div>
+    </main>
+    <footer class="landing-footer" aria-label="Site footer">
+      <div class="copyright">© 2026 NK Studio. All rights reserved.</div>
+      <div class="footer-links">
+        <a href="privacy" title="Privacy Policy">Privacy Policy</a>
+        <span>|</span>
+        <a href="terms" title="Terms">Terms</a>
+        <span>|</span>
+        <a href="mailto:chikinx1@gmail.com" title="Contact">Contact</a>
+      </div>
+    </footer>
+  </div>
+</body>
+
+</html>

@@ -1,234 +1,401 @@
 <!DOCTYPE html>
-<html lang="ko" data-theme="dark" class="layout-fixed preload-veiled">
+<html lang="ko">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="google-site-verification" content="itLr3RDEB6ijSnZcT7tKWU93kWrVv8oVYNyJWFYdDQw" />
-  <title>NK AI Studio</title>
-  <style>
-    html.preload-veiled, body.preload-veiled { background:#0f172a; color:#cbd5e1; }
-    html.preload-veiled .app, html.preload-veiled .main { visibility:hidden; }
-  </style>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg">
-  <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="styles.landing.css" />
-  <script src="core.js" defer></script>
-  <script src="js/config.js" defer></script>
-  <script src="js/utils.js" defer></script>
-  <script src="js/util/last-frame.js" defer></script>
-  <script src="store.js" defer></script>
-  <script src="api.js" defer></script>
-  <script src="js/state.js" defer></script>
-  <script src="js/auth.js" defer></script>
-  <script src="js/navigation.js" defer></script>
-  <script src="js/service/media.js" defer></script>
-  <script src="js/service/project.js" defer></script>
-  <script src="js/service/content-library.js" defer></script>
-  <script src="js/ui/common.js" defer></script>
-  <script src="js/ui/dashboard.js" defer></script>
-  <script src="js/ui/scenario.js" defer></script>
-  <script src="js/ui/production.js" defer></script>
-  <script src="script.js" defer></script>
+
+  <!-- ===== SEO ===== -->
+  <title>NK AI Studio — 기획부터 SNS 배포까지, 한 흐름의 AI 영상 스튜디오</title>
+  <meta name="description" content="시나리오 기획, 글·이미지·영상·사운드 생성, 편집, 그리고 YouTube·Instagram·TikTok·Facebook·Threads·X 자동 배포까지. NK AI Studio는 콘텐츠 제작의 전 과정을 하나의 흐름으로 잇는 AI 영상 제작·IP 브랜드·SNS 자동화 플랫폼입니다." />
+  <meta name="keywords" content="AI 영상 제작, AI 이미지 생성, AI 시나리오, SNS 자동 배포, 숏폼 자동화, IP 브랜드, NK Studio" />
+  <meta name="robots" content="index, follow" />
+  <meta name="theme-color" content="#0b1020" />
+  <link rel="canonical" href="https://nk-ai-studio.pages.dev/" />
+
+  <!-- ===== Open Graph ===== -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="NK AI Studio" />
+  <meta property="og:title" content="NK AI Studio — 한 흐름의 AI 영상 스튜디오" />
+  <meta property="og:description" content="기획·생성·편집·SNS 자동 배포를 하나로. 시나리오부터 6개 채널 배포까지 AI로 완성하세요." />
+  <meta property="og:url" content="https://nk-ai-studio.pages.dev/" />
+  <meta property="og:image" content="https://nk-ai-studio.pages.dev/images/og-landing.svg" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:locale" content="ko_KR" />
+
+  <!-- ===== Twitter Card ===== -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="NK AI Studio — 한 흐름의 AI 영상 스튜디오" />
+  <meta name="twitter:description" content="기획·생성·편집·SNS 자동 배포를 하나로. AI로 콘텐츠 전 과정을 완성하세요." />
+  <meta name="twitter:image" content="https://nk-ai-studio.pages.dev/images/og-landing.svg" />
+
+  <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.landing-page.css" />
+
+  <!-- ===== JSON-LD (Organization) ===== -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "NK AI Studio",
+    "url": "https://nk-ai-studio.pages.dev/",
+    "logo": "https://nk-ai-studio.pages.dev/images/logo.png",
+    "description": "AI 영상 제작 · IP 브랜드 관리 · SNS 자동화 플랫폼",
+    "email": "chikinx1@gmail.com",
+    "sameAs": []
+  }
+  </script>
 </head>
 
-<body class="layout-fixed">
-  <div class="grain"></div>
-  <div class="app no-sidebar">
-    <main class="main">
-      <div class="main-body option-body">
-        <div class="login-icons" id="login-icons" aria-hidden="true">
-          <a href="brand-studio.html" class="login-icon-link">
-            <img src="images/icon-ai-branding.png" alt="브랜드 스튜디오로 이동" />
-            <span class="login-icon-label" data-i18n="top_brand_label">Brand Studio</span>
-          </a>
-          <a href="ai-video.html?stage=dashboard" class="login-icon-link">
-            <img src="images/icon-ai-cinema.png" alt="영상 제작 메인으로 이동" />
-            <span class="login-icon-label" data-i18n="top_ai_video_label">AI Video</span>
-          </a>
-          <a href="ai-video-gen.html" class="login-icon-link">
-            <img src="images/icon-ai-video.png" alt="AI 영상생성으로 이동" />
-            <span class="login-icon-label" data-i18n="top_ai_video_gen_label">AI Video Gen</span>
-          </a>
-          <a href="ai-image.html?stage=dashboard" class="login-icon-link">
-            <img src="images/icon-ai-image.png" alt="이미지 생성 메인으로 이동" />
-            <span class="login-icon-label" data-i18n="top_ai_image_label">AI Image</span>
-          </a>
-          <a href="ai-doc.html" class="login-icon-link">
-            <img src="images/icon-ai-doc.png" alt="AI 문서로 이동" />
-            <span class="login-icon-label" data-i18n="top_ai_doc_label">AI 문서</span>
-          </a>
-          <a href="ai-sound.html" class="login-icon-link">
-            <img src="images/icon-ai-sound.png" alt="AI 오디오로 이동" />
-            <span class="login-icon-label" data-i18n="top_ai_sound_label">AI 오디오</span>
-          </a>
-        </div>
+<body class="lp">
+  <div class="lp-aura" aria-hidden="true"></div>
 
-        <div class="option-card-grid">
-          <div class="card option-card" id="login-card">
-            <h3 class="option-title" id="login-card-title">NK AI STUDIO</h3>
-            <div class="logo-box">
-              <img src="images/logo(500500).png" alt="logo" class="logo-img" id="login-card-logo" />
-              <input type="file" id="login-icon-file" class="login-brand-file-input" accept="image/*" />
-            </div>
-            <form id="opt-login-form" onsubmit="return false;" autocomplete="on" novalidate>
-              <div class="form-row">
-                <label for="opt-id">ID</label>
-                <input type="text" id="opt-id" placeholder="아이디" autocomplete="username" />
-              </div>
-              <div class="form-row">
-                <label for="opt-pw">PASS</label>
-                <input type="password" id="opt-pw" placeholder="비밀번호" autocomplete="current-password" />
-              </div>
-              <p class="muted hidden" id="opt-username" style="text-align:center;"></p>
-              <div class="option-actions">
-                <button class="btn-primary" id="opt-auth-btn" data-i18n-skip="1">로그인</button>
-                <button type="button" class="btn-google" id="google-login-btn" data-i18n-skip="1" data-i18n-title="login_google" data-i18n-aria-label="login_google" aria-label="Google로 로그인" title="Google로 로그인">
-                  <svg class="btn-google-icon" width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.167 6.656 3.58 9 3.58z"/></svg>
-                </button>
-              </div>
-            </form>
-            <div class="sidebar-actions option-card-toolbar">
-              <button class="btn-ghost screen-toggle" data-screen-toggle onclick="toggleScreenMode()" aria-label="전체 화면" title="전체 화면"></button>
-              <button class="btn-ghost lang-toggle" data-lang-toggle onclick="toggleLang('local')" aria-label="언어 전환">KO</button>
-              <button class="btn-ghost theme-toggle" data-theme-toggle onclick="toggleTheme('local')" aria-label="테마 전환"></button>
-              <button class="btn-ghost admin-card-btn hidden" id="admin-card-btn" data-i18n-skip="1" aria-label="회원 관리" title="회원 관리" onclick="location.href='admin.html'">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.051 12.616a1 1 0 0 1 1.909.024l.737 1.452a1 1 0 0 0 .737.535l1.634.256a1 1 0 0 1 .588 1.806l-1.172 1.168a1 1 0 0 0-.282.866l.259 1.613a1 1 0 0 1-1.541 1.134l-1.465-.75a1 1 0 0 0-.912 0l-1.465.75a1 1 0 0 1-1.539-1.133l.258-1.613a1 1 0 0 0-.282-.866l-1.156-1.153a1 1 0 0 1 .572-1.822l1.633-.256a1 1 0 0 0 .737-.535z"/><path d="M8 15H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/></svg>
-              </button>
-            </div>
-            <div class="sidebar-version">ver</div>
+  <!-- ============ 헤더 ============ -->
+  <header class="lp-header">
+    <div class="lp-wrap lp-nav">
+      <a class="lp-brand" href="#top" aria-label="NK AI Studio 홈">
+        <img src="images/logo.png" alt="NK AI Studio 로고" />
+        <b>NK AI Studio</b>
+      </a>
+      <nav class="lp-nav-links" aria-label="섹션 내비게이션">
+        <a href="#pipeline">파이프라인</a>
+        <a href="#features">기능</a>
+        <a href="#how">작동 방식</a>
+        <a href="#ip">IP 브랜드</a>
+        <a href="#sns">SNS 연동</a>
+      </nav>
+      <div class="lp-nav-cta">
+        <a class="lp-btn lp-btn-primary" href="app.html" data-cta-login data-cta-authed="스튜디오 입장">시작하기</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="top">
+
+    <!-- ============ Hero ============ -->
+    <section class="lp-hero">
+      <div class="lp-wrap lp-hero-grid">
+        <div class="lp-hero-copy">
+          <span class="lp-eyebrow">AI 영상 · IP 브랜드 · SNS 자동화</span>
+          <h1>기획부터 SNS 배포까지,<br /><span class="lp-grad-text">한 흐름의 AI 스튜디오</span></h1>
+          <p class="lp-lead">
+            시나리오 기획, 글·이미지·영상·사운드 생성, 편집, 그리고 6개 채널 자동 배포까지.
+            흩어진 도구를 오가지 않고 하나의 흐름으로 콘텐츠를 완성하세요.
+          </p>
+          <div class="lp-hero-actions">
+            <a class="lp-btn lp-btn-primary lp-btn-lg" href="app.html" data-cta-login data-cta-authed="스튜디오 입장">무료로 시작하기</a>
+            <a class="lp-btn lp-btn-ghost lp-btn-lg" href="#pipeline">제작 흐름 보기</a>
           </div>
-          <script>
-            /* FOUC 방지: 이미 로그인 상태면 첫 페인트부터 로그인 카드를 로그인 상태로 선반영한다.
-               (init이 setUI 전에 await store.ready()를 하므로, 그 사이 베일 해제 시 로그아웃 폼이
-                잠깐 보이던 문제 해결. setUI가 이후 동일하게 재적용 → 깜빡임 없음) */
-            (function () {
-              try {
-                var authed = localStorage.getItem('nk_is_logged_in') === 'true' && !!localStorage.getItem('nk_auth_token');
-                if (!authed) return;
-                var lang = String(localStorage.getItem('nk_lang') || 'ko').toLowerCase();
-                var card = document.getElementById('login-card');
-                if (card) {
-                  card.querySelectorAll('.form-row').forEach(function (r) { r.style.display = 'none'; });
-                  var gBtn = card.querySelector('#google-login-btn');
-                  if (gBtn) gBtn.style.display = 'none';
-                  var oa = card.querySelector('.option-actions');
-                  if (oa) oa.classList.add('is-authed');
-                }
-                var btn = document.getElementById('opt-auth-btn');
-                if (btn) {
-                  btn.textContent = lang === 'en' ? 'Logout' : '로그아웃';
-                  btn.setAttribute('data-i18n-skip', '1');
-                  btn.dataset.state = 'logout';
-                }
-              } catch (_) { }
-            })();
-          </script>
+          <div class="lp-hero-trust">
+            <span><i class="lp-dot"></i> 시나리오 → 영상 → 배포 원스톱</span>
+            <span><i class="lp-dot"></i> 6개 SNS 채널 자동 게시</span>
+          </div>
+        </div>
 
-          <section class="card option-card favorite-card is-locked" id="favorite-card" aria-live="polite">
-            <div class="favorite-list empty" id="favorite-list" role="list"></div>
-            <div class="favorite-pagination hidden" id="favorite-pagination" aria-label="즐겨찾기 페이지 이동"></div>
-            <div class="favorite-transfer-box hidden" id="favorite-transfer-box" aria-label="다른 페이지로 이동" title="다른 페이지 빈 칸으로 이동"></div>
-          </section>
-
-          <section class="card option-card user-dashboard-card is-locked" id="user-dashboard-card" aria-live="polite">
-
-            <section class="user-dashboard-panel hidden" id="user-dashboard-panel">
-              <article class="user-widget subscription-widget is-collapsed" id="subscription-widget">
-                <div class="user-widget-head">
-                  <h4>구독 현황</h4>
-                  <button type="button" class="subscription-toggle" id="subscription-toggle" aria-expanded="false" aria-label="구독 현황 펼치기"></button>
+        <!-- Hero 비주얼: 제품 목업 -->
+        <div class="lp-hero-visual lp-reveal">
+          <div class="lp-mock" role="img" aria-label="NK AI Studio 제작 화면 미리보기">
+            <div class="lp-mock-bar"><i></i><i></i><i></i><small>NK AI Studio · 프로젝트</small></div>
+            <div class="lp-mock-body">
+              <div class="lp-mock-row">
+                <div class="lp-mock-thumb">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#ff7a00" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2"/></svg>
                 </div>
-                <div class="subscription-body">
-                  <div class="subscription-grid">
-                    <div class="subscription-item">
-                      <span class="muted">플랜</span>
-                      <strong id="subscription-plan">Free</strong>
-                    </div>
-                    <div class="subscription-item">
-                      <span class="muted">상태</span>
-                      <strong id="subscription-status">미연결</strong>
-                    </div>
-                    <div class="subscription-item">
-                      <span class="muted">갱신일</span>
-                      <strong id="subscription-renew">-</strong>
-                    </div>
-                  </div>
-                  <p class="muted user-widget-help">결제 연동 전 단계라 현재는 UI만 표시됩니다.</p>
-                  <button type="button" class="btn-secondary" id="subscription-manage-btn">구독 관리(준비중)</button>
+                <div class="lp-mock-lines"><span></span><span></span><span class="accent"></span></div>
+              </div>
+              <div class="lp-mock-row">
+                <div class="lp-mock-thumb">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#0bbfa5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
                 </div>
-              </article>
-
-              <form class="user-widget favorite-widget favorite-form is-collapsed hidden" id="favorite-form">
-                <div class="user-widget-head">
-                  <h4>즐겨찾기 등록</h4>
-                  <button type="button" class="favorite-form-toggle" id="favorite-form-toggle" aria-expanded="false" aria-label="즐겨찾기 등록 펼치기"></button>
+                <div class="lp-mock-lines"><span></span><span></span></div>
+              </div>
+              <div class="lp-mock-row">
+                <div class="lp-mock-thumb">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="#5c7cff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
                 </div>
-                <div class="favorite-form-body">
-                  <div class="fav-form-row">
-                    <label for="favorite-title">메뉴 이름</label>
-                    <input type="text" id="favorite-title" placeholder="아이콘 아래 표시될 이름" maxlength="40" required />
-                  </div>
-                  <div class="fav-form-row">
-                    <label for="favorite-category-select">카테고리</label>
-                    <select id="favorite-category-select"></select>
-                  </div>
-                  <div class="fav-form-row">
-                    <label for="favorite-link">링크 주소</label>
-                    <input type="url" id="favorite-link" placeholder="https://example.com" required />
-                  </div>
-                  <div class="fav-form-row">
-                    <label for="favorite-icon">아이콘</label>
-                    <div class="favorite-file-picker">
-                      <button type="button" class="btn-secondary favorite-file-trigger" id="favorite-icon-trigger" data-i18n="파일 선택">파일 선택</button>
-                      <span class="favorite-file-name" id="favorite-icon-name">선택된 파일 없음</span>
-                      <input type="file" id="favorite-icon" class="favorite-file-input" accept="image/*" />
-                    </div>
-                  </div>
-                  <div class="favorite-form-actions">
-                    <button type="submit" class="btn-primary">등록</button>
-                    <button type="button" class="btn-secondary" id="favorite-cancel-form">취소</button>
-                  </div>
-                </div>
-              </form>
-
-              <section class="user-widget theme-preset-widget is-collapsed hidden" id="theme-preset-widget">
-                <div class="user-widget-head">
-                  <h4 data-i18n="테마 선택">테마 선택</h4>
-                  <button type="button" class="theme-preset-toggle" id="theme-preset-toggle" aria-expanded="false" aria-label="테마 선택 펼치기"></button>
-                </div>
-                <div class="theme-preset-body">
-                  <section class="theme-preset-group">
-                    <p class="theme-preset-label" data-i18n="다크">다크</p>
-                    <div class="theme-preset-options" id="theme-dark-options"></div>
-                  </section>
-                  <section class="theme-preset-group">
-                    <p class="theme-preset-label" data-i18n="라이트">라이트</p>
-                    <div class="theme-preset-options" id="theme-light-options"></div>
-                  </section>
-                  <p class="theme-preset-help" data-i18n="우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.">우측 상단 테마 버튼을 누르면 여기서 선택한 다크/밝은 테마가 적용됩니다.</p>
-                </div>
-              </section>
-            </section>
-          </section>
-
+                <div class="lp-mock-lines"><span></span><span class="accent"></span></div>
+              </div>
+            </div>
+            <div class="lp-mock-foot">
+              <span class="lp-chip">기획</span><span class="lp-chip">생성</span><span class="lp-chip">편집</span><span class="lp-chip">배포</span>
+            </div>
+          </div>
+          <div class="lp-float one">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            영상 생성 완료
+          </div>
+          <div class="lp-float two">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4Z"/></svg>
+            6개 채널 배포 중
+          </div>
         </div>
       </div>
-    </main>
-    <footer class="landing-footer" aria-label="Site footer">
-      <div class="copyright">© 2026 NK Studio. All rights reserved.</div>
-      <div class="footer-links">
-        <a href="privacy" title="Privacy Policy">Privacy Policy</a>
-        <span>|</span>
-        <a href="terms" title="Terms">Terms</a>
-        <span>|</span>
-        <a href="mailto:chikinx1@gmail.com" title="Contact">Contact</a>
+    </section>
+
+    <!-- ============ 파이프라인 ============ -->
+    <section id="pipeline">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow">제작 파이프라인</span>
+          <h2 class="lp-section-title">하나의 흐름, 네 단계로 완성</h2>
+          <p class="lp-section-sub">아이디어가 게시물이 되기까지, 도구를 바꾸지 않아도 됩니다.</p>
+        </div>
+        <div class="lp-pipe lp-reveal">
+          <div class="lp-pipe-step">
+            <span class="lp-step-no">STEP 01</span>
+            <h3>기획</h3>
+            <p>주제·브랜드만 입력하면 AI가 스토리 비트와 숏 단위 시나리오로 분해합니다.</p>
+            <div class="lp-pipe-tags"><span class="lp-tag">시나리오</span><span class="lp-tag">숏 분해</span></div>
+            <div class="lp-pipe-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+          </div>
+          <div class="lp-pipe-step">
+            <span class="lp-step-no">STEP 02</span>
+            <h3>생성</h3>
+            <p>글·이미지·영상·사운드를 한 자리에서 생성합니다. 장면마다 필요한 소재를 즉시 만들어요.</p>
+            <div class="lp-pipe-tags"><span class="lp-tag">글</span><span class="lp-tag">이미지</span><span class="lp-tag">영상</span><span class="lp-tag">사운드</span></div>
+            <div class="lp-pipe-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+          </div>
+          <div class="lp-pipe-step">
+            <span class="lp-step-no">STEP 03</span>
+            <h3>편집</h3>
+            <p>씬을 배열하고 나레이션·음악·효과음을 입혀 완성본으로 다듬습니다.</p>
+            <div class="lp-pipe-tags"><span class="lp-tag">씬 편집</span><span class="lp-tag">사운드 믹스</span></div>
+            <div class="lp-pipe-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+          </div>
+          <div class="lp-pipe-step">
+            <span class="lp-step-no">STEP 04</span>
+            <h3>SNS 배포</h3>
+            <p>채널별 캡션·해시태그를 자동 정리해 6개 SNS에 한 번에 게시합니다.</p>
+            <div class="lp-pipe-tags"><span class="lp-tag">자동 캡션</span><span class="lp-tag">동시 배포</span></div>
+          </div>
+        </div>
       </div>
-    </footer>
-  </div>
+    </section>
+
+    <!-- ============ 기능 그리드 ============ -->
+    <section id="features">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow">핵심 기능</span>
+          <h2 class="lp-section-title">제작에 필요한 모든 AI, 한 곳에</h2>
+          <p class="lp-section-sub">각 단계는 검증된 최신 생성 모델로 구동됩니다.</p>
+        </div>
+        <div class="lp-features lp-reveal">
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-doc.png" alt="" aria-hidden="true" /></div>
+            <h3>기획 · 시나리오</h3>
+            <p>주제와 스토리를 입력하면 장르·톤·길이에 맞춰 비트와 숏으로 자동 구조화합니다.</p>
+            <div class="lp-models"><span class="lp-tag">Claude</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-doc.png" alt="" aria-hidden="true" /></div>
+            <h3>글 · 문서 생성</h3>
+            <p>상세페이지, SNS 카피, 해시태그를 채널 성격에 맞춰 자동으로 작성합니다.</p>
+            <div class="lp-models"><span class="lp-tag">Claude</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-image.png" alt="" aria-hidden="true" /></div>
+            <h3>이미지 생성</h3>
+            <p>텍스트·이미지로 비주얼을 생성하고, 인페인팅으로 원하는 부분만 다시 그립니다.</p>
+            <div class="lp-models"><span class="lp-tag">Gemini Image</span><span class="lp-tag">OpenAI</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-video.png" alt="" aria-hidden="true" /></div>
+            <h3>영상 생성</h3>
+            <p>이미지와 프롬프트로 장면을 영상으로 만듭니다. 여러 영상 모델을 골라 쓸 수 있어요.</p>
+            <div class="lp-models"><span class="lp-tag">Kling</span><span class="lp-tag">Veo</span><span class="lp-tag">Grok</span><span class="lp-tag">Seedance</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-cinema.png" alt="" aria-hidden="true" /></div>
+            <h3>영상 편집 · 후반</h3>
+            <p>씬을 배열하고 트랜스코드·믹싱으로 채널 규격에 맞는 완성본을 만듭니다.</p>
+            <div class="lp-models"><span class="lp-tag">씬 편집</span><span class="lp-tag">트랜스코드</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-sound.png" alt="" aria-hidden="true" /></div>
+            <h3>사운드 · 음성</h3>
+            <p>나레이션 TTS, 배경음악, 효과음, 캐릭터 보이스북까지 한 화면에서 만듭니다.</p>
+            <div class="lp-models"><span class="lp-tag">ElevenLabs</span><span class="lp-tag">Google Cloud TTS</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-branding.png" alt="" aria-hidden="true" /></div>
+            <h3>IP 브랜드 관리</h3>
+            <p>캐릭터·세계관·말투 규칙을 브랜드 허브에 정의해 일관된 콘텐츠를 만듭니다.</p>
+            <div class="lp-models"><span class="lp-tag">브랜드 허브</span><span class="lp-tag">캐릭터</span></div>
+          </article>
+          <article class="lp-feature">
+            <div class="lp-feature-ico"><img src="images/icon-ai-branding.png" alt="" aria-hidden="true" /></div>
+            <h3>SNS 자동 배포</h3>
+            <p>완성한 콘텐츠를 6개 채널에 동시에 게시하고 채널별 메타데이터를 자동 정리합니다.</p>
+            <div class="lp-models"><span class="lp-tag">6개 채널</span><span class="lp-tag">동시 게시</span></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 작동 방식 ============ -->
+    <section id="how">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow">작동 방식</span>
+          <h2 class="lp-section-title">네 단계면 충분합니다</h2>
+          <p class="lp-section-sub">전문 편집 경험이 없어도, 흐름을 따라가기만 하면 됩니다.</p>
+        </div>
+        <div class="lp-steps lp-reveal">
+          <div class="lp-step"><h3>주제 · 브랜드 입력</h3><p>만들고 싶은 주제와 브랜드를 선택하면 준비가 끝납니다.</p></div>
+          <div class="lp-step"><h3>AI가 콘텐츠 생성</h3><p>시나리오에 맞춰 글·이미지·영상·사운드를 자동으로 만들어요.</p></div>
+          <div class="lp-step"><h3>편집 · 사운드 마무리</h3><p>장면을 다듬고 음성·음악을 입혀 완성본으로 정리합니다.</p></div>
+          <div class="lp-step"><h3>채널 자동 배포</h3><p>게시할 SNS를 고르면 캡션까지 정리해 한 번에 올립니다.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ IP 쇼케이스 ============ -->
+    <section id="ip">
+      <div class="lp-wrap">
+        <div class="lp-head center lp-reveal">
+          <span class="lp-eyebrow">자체 IP 브랜드</span>
+          <h2 class="lp-section-title">NK Studio의 오리지널 캐릭터</h2>
+          <p class="lp-section-sub">플랫폼이 직접 키우는 IP 캐릭터들이 SNS 콘텐츠의 화자가 됩니다.</p>
+        </div>
+        <div class="lp-ip lp-reveal">
+          <article class="lp-ip-card">
+            <div class="lp-ip-avatar">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <ellipse cx="32" cy="34" rx="20" ry="22" fill="#7c5cff"/>
+                <path d="M20 18c-2-6 2-10 6-8M44 18c2-6-2-10-6-8" stroke="#7c5cff" stroke-width="3" fill="none" stroke-linecap="round"/>
+                <circle cx="20" cy="15" r="3" fill="#0bbfa5"/><circle cx="44" cy="15" r="3" fill="#0bbfa5"/>
+                <ellipse cx="25" cy="32" rx="5" ry="7" fill="#fff"/><ellipse cx="39" cy="32" rx="5" ry="7" fill="#fff"/>
+                <circle cx="25" cy="34" r="2.6" fill="#0b1020"/><circle cx="39" cy="34" r="2.6" fill="#0b1020"/>
+                <path d="M27 46q5 4 10 0" stroke="#0b1020" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>뚜뮤</h3>
+            <p class="lp-ip-role">SNS 화자 · 외계소녀</p>
+            <p>행성 투투투바에서 온 호기심 많고 엉뚱한 캐릭터. Threads·X 게시물의 목소리를 맡습니다.</p>
+          </article>
+          <article class="lp-ip-card">
+            <div class="lp-ip-avatar">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <rect x="14" y="14" width="36" height="36" rx="8" fill="#ff7a00"/>
+                <ellipse cx="26" cy="30" rx="4.5" ry="6" fill="#fff"/><ellipse cx="40" cy="30" rx="4.5" ry="6" fill="#fff"/>
+                <circle cx="26" cy="32" r="2.4" fill="#0b1020"/><circle cx="40" cy="32" r="2.4" fill="#0b1020"/>
+                <path d="M25 42h14" stroke="#0b1020" stroke-width="2.6" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>네모</h3>
+            <p class="lp-ip-role">또렷하고 신뢰감 있는</p>
+            <p>각진 만큼 단단하고 믿음직한 캐릭터. 안정적인 톤의 나레이션에 어울립니다.</p>
+            <span class="lp-todo">⟨확정 필요: 캐릭터 설정⟩</span>
+          </article>
+          <article class="lp-ip-card">
+            <div class="lp-ip-avatar">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <path d="M32 12 54 50H10Z" fill="#0bbfa5"/>
+                <ellipse cx="26" cy="38" rx="4" ry="5.5" fill="#fff"/><ellipse cx="38" cy="38" rx="4" ry="5.5" fill="#fff"/>
+                <circle cx="26" cy="39.5" r="2.2" fill="#0b1020"/><circle cx="38" cy="39.5" r="2.2" fill="#0b1020"/>
+                <path d="M28 46q4 3 8 0" stroke="#0b1020" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h3>세모</h3>
+            <p class="lp-ip-role">톡톡 튀는 동료</p>
+            <p>뾰족한 호기심으로 분위기를 띄우는 캐릭터.</p>
+            <span class="lp-todo">⟨확정 필요: 캐릭터 설정⟩</span>
+          </article>
+          <article class="lp-ip-card">
+            <div class="lp-ip-avatar">
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <circle cx="32" cy="32" r="20" fill="#5c7cff"/>
+                <ellipse cx="25" cy="30" rx="4.5" ry="6" fill="#fff"/><ellipse cx="39" cy="30" rx="4.5" ry="6" fill="#fff"/>
+                <circle cx="25" cy="32" r="2.4" fill="#0b1020"/><circle cx="39" cy="32" r="2.4" fill="#0b1020"/>
+                <path d="M25 41q7 5 14 0" stroke="#0b1020" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+                <circle cx="18" cy="38" r="3" fill="#ff7a00" opacity="0.5"/><circle cx="46" cy="38" r="3" fill="#ff7a00" opacity="0.5"/>
+              </svg>
+            </div>
+            <h3>동그라미</h3>
+            <p class="lp-ip-role">둥글둥글 다정한</p>
+            <p>모난 데 없이 따뜻한 분위기의 캐릭터.</p>
+            <span class="lp-todo">⟨확정 필요: 캐릭터 설정⟩</span>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SNS 연동 밴드 ============ -->
+    <section id="sns">
+      <div class="lp-wrap">
+        <div class="lp-sns-band lp-reveal">
+          <span class="lp-eyebrow">SNS 연동</span>
+          <h2 class="lp-section-title">한 번 만들고, 여섯 채널에 동시에</h2>
+          <p class="lp-section-sub" style="margin-inline:auto;">계정을 연결해 두면 완성한 콘텐츠를 채널별 형식에 맞춰 자동으로 게시합니다.</p>
+          <div class="lp-sns-logos">
+            <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="#FF0000" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4l6.3 3.6-6.3 3.6Z"/></svg> YouTube</span>
+            <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="6" stroke="#E1306C" stroke-width="2"/><circle cx="12" cy="12" r="4.5" stroke="#E1306C" stroke-width="2"/><circle cx="17.5" cy="6.5" r="1.4" fill="#E1306C"/></svg> Instagram</span>
+            <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.5 3c.3 2.3 1.7 4 4 4.3v3c-1.5 0-2.9-.4-4-1.2v6.4a6.3 6.3 0 1 1-6.3-6.3c.3 0 .6 0 .9.1v3.1a3.3 3.3 0 1 0 2.3 3.1V3h3.1Z"/></svg> TikTok</span>
+            <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="#1877F2" aria-hidden="true"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7H7.9V12h2.5V9.8c0-2.5 1.5-3.9 3.8-3.9 1.1 0 2.2.2 2.2.2v2.5h-1.2c-1.2 0-1.6.8-1.6 1.6V12h2.7l-.4 2.9h-2.3v7A10 10 0 0 0 22 12Z"/></svg> Facebook</span>
+            <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12.2 21c-5 0-8.2-2.9-8.2-8.9C4 6 7.3 3 12.3 3c3.4 0 5.9 1.5 7 4.2l-2.2.9c-.8-1.9-2.4-2.9-4.8-2.9-3.6 0-5.8 2.2-5.8 6.9s2.1 6.7 5.7 6.7c2.7 0 4.3-1.3 4.7-3.6h-4.3v-2.2H19c.5 4.9-2.1 8.1-6.8 8.1Z"/></svg> Threads</span>
+            <span class="lp-sns-pill"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.5 3h3.3l-7.2 8.3L22 21h-6.6l-5.2-6.8L4.3 21H1l7.7-8.8L2 3h6.8l4.7 6.2L17.5 3Zm-1.2 16h1.8L7.8 4.9H5.9L16.3 19Z"/></svg> X</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CTA 밴드 ============ -->
+    <section>
+      <div class="lp-wrap">
+        <div class="lp-cta lp-reveal">
+          <h2>아이디어를 콘텐츠로,<br /><span class="lp-grad-text">지금 시작하세요</span></h2>
+          <p>기획부터 배포까지 한 흐름으로. NK AI Studio에서 첫 영상을 만들어 보세요.</p>
+          <a class="lp-btn lp-btn-primary lp-btn-lg" href="app.html" data-cta-login data-cta-authed="스튜디오 입장">무료로 시작하기</a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ============ 푸터 ============ -->
+  <footer class="lp-footer">
+    <div class="lp-wrap">
+      <div class="lp-footer-grid">
+        <div>
+          <div class="lp-footer-brand"><img src="images/logo.png" alt="NK AI Studio 로고" /><b>NK AI Studio</b></div>
+          <p>AI 영상 제작 · IP 브랜드 관리 · SNS 자동화 플랫폼.<br />기획부터 배포까지 콘텐츠 제작의 전 과정을 하나로 잇습니다.</p>
+        </div>
+        <div>
+          <h4>서비스</h4>
+          <ul>
+            <li><a href="#pipeline">제작 파이프라인</a></li>
+            <li><a href="#features">핵심 기능</a></li>
+            <li><a href="#ip">IP 브랜드</a></li>
+            <li><a href="#sns">SNS 연동</a></li>
+            <li><a href="app.html" data-cta-login data-cta-authed="스튜디오 입장">시작하기</a></li>
+          </ul>
+        </div>
+        <div>
+          <h4>약관 · 문의</h4>
+          <ul>
+            <li><a href="terms">이용약관 (Terms of Service)</a></li>
+            <li><a href="privacy">개인정보처리방침 (Privacy Policy)</a></li>
+            <li><a href="mailto:chikinx1@gmail.com">문의: chikinx1@gmail.com</a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="lp-footer-bottom">
+        <div>© 2026 NK Studio. All rights reserved. · 운영자: NK Studio <span class="lp-todo">⟨확정 필요: 사업자/대표자 정보⟩</span></div>
+        <div class="links">
+          <a href="terms">Terms</a>
+          <a href="privacy">Privacy</a>
+          <a href="mailto:chikinx1@gmail.com">Contact</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script src="js/landing.js" defer></script>
 </body>
 
 </html>

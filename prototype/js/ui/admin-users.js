@@ -343,9 +343,9 @@
 
   function goHome() {
     try {
-      if (window.top && window.top !== window) { window.top.location.href = 'index.html'; return; }
+      if (window.top && window.top !== window) { window.top.location.href = 'app.html'; return; }
     } catch (_) { }
-    window.location.href = 'index.html';
+    window.location.href = 'app.html';
   }
 
   function openModal(mode, id) {

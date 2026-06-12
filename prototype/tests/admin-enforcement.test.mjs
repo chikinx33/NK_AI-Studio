@@ -30,8 +30,9 @@ test("video endpoint enforces videogen/video permission by source", () => {
   assert.match(src, /permission_denied/);
 });
 
-test("index.html exposes admin-only member management button in login card toolbar", () => {
-  const src = read("prototype/index.html");
+test("app.html exposes admin-only member management button in login card toolbar", () => {
+  // 로그인 런처는 app.html로 이동(루트 / 는 공개 랜딩 index.html)
+  const src = read("prototype/app.html");
   assert.match(src, /id="admin-card-btn"/);
   assert.match(src, /class="btn-ghost admin-card-btn hidden"/);
   assert.match(src, /location\.href='admin\.html'/);

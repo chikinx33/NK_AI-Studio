@@ -36,7 +36,7 @@ test("admin-users.js renders list, modal, and wires CRUD actions", () => {
   // 홈(뒤로가기) 버튼
   assert.match(src, /data-action="go-home"/);
   assert.match(src, /function goHome/);
-  assert.match(src, /window\.location\.href = 'index\.html'/);
+  assert.match(src, /window\.location\.href = 'app\.html'/);
 });
 
 test("admin-users.js surfaces a primary-admin password-set affordance", () => {

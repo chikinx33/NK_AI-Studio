@@ -44,7 +44,7 @@
       '</div>';
     document.body.appendChild(overlay);
     overlay.querySelector('.nk-logout-confirm').addEventListener('click', function () {
-      try { window.top.location.href = 'index.html'; } catch (_) { window.location.href = 'index.html'; }
+      try { window.top.location.href = 'app.html'; } catch (_) { window.location.href = 'app.html'; }
     });
   }
   NK.showLogoutPopup = showLogoutPopup;
@@ -73,8 +73,9 @@
   let storageSyncBound = false;
 
   const isIndexPagePath = (pathname) => {
+    // 로그인 런처 페이지(app.html) 판별. 공개 랜딩(/ → index.html)은 로그인 페이지가 아니다.
     const raw = String(typeof pathname === 'string' ? pathname : (window.location.pathname || '')).trim().toLowerCase();
-    return /(^|\/)(index\.html?)?$/.test(raw);
+    return /(^|\/)app\.html?$/.test(raw);
   };
 
   const toSameOriginAppHref = (rawUrl) => {
@@ -115,12 +116,12 @@
 
   const buildLoginPageHref = () => {
     try {
-      const loginUrl = new URL('index.html', window.location.href);
+      const loginUrl = new URL('app.html', window.location.href);
       const returnTarget = buildLoginReturnTarget();
       if (returnTarget) loginUrl.searchParams.set(LOGIN_RETURN_PARAM, returnTarget);
       return loginUrl.toString();
     } catch (_) {
-      return 'index.html';
+      return 'app.html';
     }
   };
 
@@ -551,7 +552,7 @@
         if (currentEntry && _guardPerms.indexOf(currentEntry.perm) === -1) {
           const fallbackHref = (function () {
             const redirectMap = { videogen: 'ai-video-gen.html', image: 'ai-image.html', video: 'ai-video.html', brand: 'brand-studio.html' };
-            return redirectMap[_guardPerms[0]] || 'index.html';
+            return redirectMap[_guardPerms[0]] || 'app.html';
           })();
           window.location.replace(fallbackHref);
           return;
@@ -3450,11 +3451,11 @@
     } catch (_) { }
     try {
       if (window.top && window.top !== window) {
-        window.top.location.href = 'index.html';
+        window.top.location.href = 'app.html';
         return;
       }
     } catch (_) { }
-    window.location.href = 'index.html';
+    window.location.href = 'app.html';
   };
 
   document.addEventListener('DOMContentLoaded', init);

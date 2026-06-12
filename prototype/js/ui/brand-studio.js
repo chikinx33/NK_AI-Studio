@@ -4262,7 +4262,7 @@
         '<p style="margin-top:8px;color:var(--text-3);">' +
           (_initIsEn ? 'Your login session has expired. Please log in again.' : '로그인 세션이 만료되었습니다. 다시 로그인해 주세요.') +
         '</p>' +
-        '<a href="index.html" class="btn-primary" style="margin-top:20px;display:inline-block;text-decoration:none;">' +
+        '<a href="app.html" class="btn-primary" style="margin-top:20px;display:inline-block;text-decoration:none;">' +
           (_initIsEn ? 'Log In' : '로그인 하기') +
         '</a>' +
         '</div></div>';
