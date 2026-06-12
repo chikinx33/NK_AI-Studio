@@ -890,9 +890,14 @@
         selectProject(draft);
         container.querySelectorAll('.draft-card.is-selected').forEach(c => c.classList.remove('is-selected'));
         card.classList.add('is-selected');
-        // 공유받은 프로젝트는 소유자 데이터를 원격에서 불러오므로 로딩 스피너(배경 흐림)를 띄운다.
-        if (draft.__shared) { try { setDashLoading(true, dt('share_loading')); } catch (_) {} }
         const host = getHostShell();
+        // 공유받은 프로젝트는 소유자 데이터를 원격에서 불러오므로 로딩 스피너(배경 흐림)를 띄운다.
+        // 단, 다른 스테이지로 '이동'하는 셸(brand/image/videogen)에서만 띄운다 — 이동 시
+        // 대시보드가 통째로 교체되며 오버레이가 함께 사라지기 때문. video(시네마)/sound 셸은
+        // 화면 전환 없이 제자리에서 로드되어 오버레이를 꺼줄 시점이 없으므로, 띄우면 무한로딩처럼
+        // 멈춘다. 따라서 이동형 셸에서만 스피너를 표시한다.
+        const navigatesAway = (host === 'brand' || host === 'image' || host === 'videogen');
+        if (draft.__shared && navigatesAway) { try { setDashLoading(true, dt('share_loading')); } catch (_) {} }
         if (host === 'brand') {
           if (NK.navigation && NK.navigation.loadStage) NK.navigation.loadStage('brand.html');
           return;
