@@ -4,14 +4,17 @@
  * TikTok Content Posting API 의 PULL_FROM_URL 방식은 photo_images URL 의
  * 도메인이 TikTok Developer Portal 에서 "URL ownership verified" 되어 있어야 한다.
  * GCS(storage.googleapis.com) 는 우리 소유 도메인이 아니라 인증할 수 없으므로,
- * 우리 자신의 도메인(nk-ai-studio.pages.dev) 경로로 이미지를 중계한다.
+ * 우리 자신의 도메인(요청 origin) 경로로 이미지를 중계한다.
+ * 프록시 URL 은 publish.ts 에서 new URL(request.url).origin 기준으로 생성되므로
+ * 서비스 도메인(nkstudio.org / nk-ai-studio.pages.dev)에 자동으로 맞춰진다.
  *
  * 인증되지 않은 임의 GCS 객체 접근을 막기 위해 publish.ts 가 HMAC-SHA256 으로
  * 서명한 단기 토큰(o, e, s 쿼리)을 검증한 뒤에만 바이트를 스트리밍한다.
  *
- * 포털 설정: TikTok Developer Portal > URL properties 에
- *   https://nk-ai-studio.pages.dev/api/sns/tiktok-media
+ * 포털 설정: TikTok Developer Portal > URL properties 에 실제 서비스 도메인의
+ *   https://nkstudio.org/api/sns/tiktok-media
  * 를 URL prefix 로 등록하고 ownership 인증을 1회 완료해야 한다.
+ * (전환 기간엔 기존 nk-ai-studio.pages.dev prefix 도 함께 등록해 둘 수 있다.)
  */
 
 function parseGcsUri(uri: string): { bucket: string; object: string } {
