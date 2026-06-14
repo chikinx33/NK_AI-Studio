@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getKnowledgeGraph, type GraphEdge, type GraphNode } from "../lib/api";
+import { getKnowledgeGraph, getSkills, type GraphEdge, type GraphNode } from "../lib/api";
 
 interface PNode extends GraphNode {
   x: number;
@@ -13,6 +13,7 @@ const TYPE_COLOR: Record<string, string> = {
   원칙: "#a78bfa", // 규칙/지침
   사실: "#22c55e", // 지식/데이터
   결정: "#f59e0b", // 확정된 선택
+  스킬: "#22d3ee", // 절차적 기억(재사용 워크플로)
 };
 function colorOf(type?: string): string {
   return TYPE_COLOR[type ?? "사실"] ?? "#22c55e";
@@ -109,11 +110,23 @@ export default function GraphView({
       setEdges(g.edges);
       setLoading(false);
     };
-    getKnowledgeGraph().then((g) => mounted && apply(g)).catch(() => setLoading(false));
-    // 그래프가 열려 있는 동안 지식이 삭제/추가되면(노드 변화) 실시간으로 다시 그린다.
+    // 지식 그래프 + 스킬(절차적 기억)을 합쳐서 한 그래프로. 스킬은 임베딩 엣지 없이 고립 노드.
+    const loadMerged = async () => {
+      const [g, skRes] = await Promise.all([
+        getKnowledgeGraph(),
+        getSkills().then((d) => d.active ?? []).catch(() => []),
+      ]);
+      const base = g.nodes.length;
+      const skillNodes: GraphNode[] = skRes.map((s, i) => ({
+        id: 100000 + base + i, text: s.name, type: "스킬", origin: "스킬", degree: 0,
+      } as unknown as GraphNode));
+      return { nodes: [...g.nodes, ...skillNodes], edges: g.edges };
+    };
+    loadMerged().then((g) => mounted && apply(g)).catch(() => setLoading(false));
+    // 그래프가 열려 있는 동안 지식·스킬이 삭제/추가되면(노드 변화) 실시간으로 다시 그린다.
     const t = setInterval(async () => {
       try {
-        const g = await getKnowledgeGraph();
+        const g = await loadMerged();
         if (mounted && sig(g.nodes) !== sig(nodesRef.current)) apply(g);
       } catch {
         /* 무시 */
@@ -235,7 +248,7 @@ export default function GraphView({
       </svg>
       {hover && (
         <div className="absolute left-1/2 top-16 z-10 max-w-[80%] -translate-x-1/2 rounded-lg border border-edge bg-panel/95 px-3 py-2 text-center text-xs text-gray-200 backdrop-blur">
-          <span style={{ color: colorOf(hover.type) }}>● {hover.type === "원칙" ? "규칙" : hover.type}</span>
+          <span style={{ color: colorOf(hover.type) }}>● {hover.type === "원칙" ? "규칙" : hover.type === "사실" ? "지식" : hover.type}</span>
           <span className="text-gray-500"> · [{hover.origin}]</span> {hover.text}
         </div>
       )}
@@ -245,6 +258,7 @@ export default function GraphView({
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR["원칙"] }} /> 규칙(원칙·지침)</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR["사실"] }} /> 지식(사실·데이터)</span>
         <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR["결정"] }} /> 결정(확정)</span>
+        <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR["스킬"] }} /> 스킬(절차)</span>
       </div>
     </div>
   );
