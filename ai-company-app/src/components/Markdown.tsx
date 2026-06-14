@@ -8,7 +8,7 @@ import remarkGfm from "remark-gfm";
  */
 export default function Markdown({ text }: { text: string }) {
   return (
-    <div className="space-y-1.5 leading-relaxed [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+    <div className="space-y-1 leading-snug [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

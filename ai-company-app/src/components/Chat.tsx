@@ -332,7 +332,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3 relative">
+      <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-2 relative">
         {turns.length === 0 && (
           <div className="absolute inset-0 flex items-center justify-center p-5">
             <div className="text-center text-gray-500">
@@ -366,7 +366,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                   <RepeatIcon className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <div className="max-w-[78%] rounded-2xl rounded-br-sm px-4 py-2.5 bg-emerald-700 text-white text-sm whitespace-pre-wrap">
+              <div className="max-w-[78%] rounded-2xl rounded-br-sm px-4 py-2 bg-emerald-700 text-white text-sm whitespace-pre-wrap">
                 {t.text}
               </div>
             </div>
@@ -375,7 +375,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
               <ChatAvatar turn={t} />
               <div className="max-w-[78%]">
                 <div className="text-xs text-gray-400 mb-0.5">{t.name}</div>
-                <div className="group relative rounded-2xl rounded-tl-sm px-4 py-2.5 pb-7 bg-panel border border-edge text-sm whitespace-pre-wrap">
+                <div className="group relative rounded-2xl rounded-tl-sm px-4 py-2 pb-6 bg-panel border border-edge text-sm whitespace-pre-wrap">
                   {t.agentId === "_tool" && t.text.startsWith("🔐") ? (
                     <span className="inline-flex items-baseline gap-1.5">
                       <ListTodoIcon className="h-4 w-4 shrink-0 translate-y-0.5 text-amber-300" />
@@ -447,6 +447,18 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
               </div>
             </div>
           )
+        )}
+        {busy && !turns[turns.length - 1]?.streaming && (
+          <div className="flex items-start justify-start gap-2">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-edge bg-panel text-base">💬</div>
+            <div className="rounded-2xl rounded-tl-sm border border-edge bg-panel px-4 py-3">
+              <span className="flex gap-1">
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
+                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
+              </span>
+            </div>
+          </div>
         )}
         <div ref={endRef} />
       </div>

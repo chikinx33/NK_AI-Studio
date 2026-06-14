@@ -531,12 +531,14 @@ export async function streamChat(
     return;
   }
 
-  // 새 에이전트 발언을 폴링해 SSE 이벤트로 합성. 메시지 수가 6초간 안정되면 종료.
+  // 새 에이전트 발언을 1.5초마다 폴링해 SSE 이벤트로 합성.
+  // 코어가 위임하면 직원이 일하는 동안 메시지가 잠시 안 늘어나므로(이때 종료하면 위임 답변을
+  // 놓침) 안정 판정을 넉넉히 18초(12×1.5s)로 둔다. 최대 약 3분(120×1.5s).
   let emitted = before;
   let lastLen = -1, stable = 0;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 120; i++) {
     if (opts.signal?.aborted) break;
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 1500));
     let msgs: any[];
     try { msgs = await fetchMsgs(); } catch { continue; }
     for (let j = emitted; j < msgs.length; j++) {
@@ -547,7 +549,7 @@ export async function streamChat(
       }
     }
     emitted = msgs.length;
-    if (msgs.length === lastLen) { if (++stable >= 3) break; } else { stable = 0; lastLen = msgs.length; }
+    if (msgs.length === lastLen) { if (++stable >= 12) break; } else { stable = 0; lastLen = msgs.length; }
   }
   onEvent("done", {});
 }

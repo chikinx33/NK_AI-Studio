@@ -241,6 +241,10 @@ function AgentTile({
                   : "ring-1 ring-edge hover:ring-emerald-500/40"
       }`}
     >
+      {/* 활동 중: 테두리가 은은하게 깜박이는 레이어 (이미지는 그대로) */}
+      {active && (
+        <div className="pointer-events-none absolute inset-0 z-20 rounded-xl ring-2 ring-emerald-400/90 animate-pulse" />
+      )}
       {/* 메인: 아바타 클릭 시 입력창에 @멘션 */}
       <button
         onClick={() => onPick(agent.name)}

@@ -167,6 +167,8 @@ export default function App() {
     const userTurn: Turn = { role: "user", text };
     commit([...turnsRef.current, userTurn]);
     setBusy(true);
+    // 보내는 즉시 코어를 '활동 중'으로 — 사이드바 아바타가 깜박이며 반응을 보여준다.
+    setWorkingIds(new Set<string>(focusAgentId ? [focusAgentId] : ["core"]));
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -182,6 +184,12 @@ export default function App() {
         (event, data) => {
           switch (event) {
             case "turn_start":
+              // 발언을 시작한 직원을 활동 중으로 — 아바타 깜박임 유지
+              setWorkingIds((prev) => {
+                const next = new Set(prev);
+                if (data.agentId) next.add(data.agentId);
+                return next;
+              });
               commit([
                 ...turnsRef.current,
                 {
