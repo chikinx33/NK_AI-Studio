@@ -196,11 +196,11 @@ export interface ToolIntegration {
   configured: boolean;
 }
 export async function getIntegrations(): Promise<ToolIntegration[]> {
-  return (await fetch("/api/integrations")).json();
+  return (await fetch("/api/agent/integrations")).json();
 }
 export async function saveIntegration(agentId: string, tool: string, values: Record<string, string>) {
   return (
-    await fetch("/api/integrations", {
+    await fetch("/api/agent/integrations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agentId, tool, values }),
@@ -220,13 +220,14 @@ export interface SkillReadiness {
   missing: { tool: string; keys: string[] }[];
 }
 export async function getSkillReadiness(): Promise<SkillReadiness[]> {
-  return (await fetch("/api/skills/readiness")).json();
+  // NK: 라비오크식 스킬 파일이 없으므로 준비도 목록은 비움(연동 상태는 getIntegrations 로 표시).
+  return [];
 }
 
-// 연동 "연결 테스트" — 안전 모드 1회 실행 결과
+// 연동 "연결 테스트" — NK 키 설정 여부 확인
 export async function testIntegration(agentId: string, tool: string): Promise<{ ok: boolean; message: string }> {
   return (
-    await fetch("/api/integrations/test", {
+    await fetch("/api/agent/integration-test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ agentId, tool }),
