@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI 회사 (Phase 0) — NK Studio</title>
+  <!-- 인증·설정은 기존 NK 네임스페이스 재사용 (config → auth 순서) -->
+  <script src="js/config.js" defer></script>
+  <script src="js/auth.js" defer></script>
+  <style>
+    :root {
+      --bg: #0e0f13; --panel: #171922; --panel2: #1f2230; --line: #2a2e3e;
+      --text: #e7e9f0; --muted: #9aa0b4; --accent: #7f77dd; --accent2: #1d9e75;
+      --danger: #e24b4a; --amber: #ef9f27;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+    header.top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    header.top h1 { font-size: 20px; font-weight: 600; margin: 0; }
+    .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line);
+      padding: 2px 8px; border-radius: 999px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 2px 0 20px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+      padding: 16px; margin-bottom: 16px; }
+    label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
+    textarea, select { width: 100%; background: var(--panel2); color: var(--text);
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+    textarea { min-height: 80px; resize: vertical; }
+    select option { color: #111; background: #fff; }
+    .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+    .row > .grow { flex: 1; min-width: 220px; }
+    button { cursor: pointer; border: none; border-radius: 10px; font-size: 14px;
+      padding: 10px 16px; font-weight: 600; min-width: 120px; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-approve { background: var(--accent2); color: #fff; }
+    .btn-revise { background: transparent; color: var(--amber); border: 1px solid var(--amber); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .agent { display: flex; align-items: center; gap: 8px; }
+    .avatar { width: 36px; height: 36px; border-radius: 9px; background: var(--accent);
+      display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 14px; }
+    .agent .nm { font-weight: 600; font-size: 14px; }
+    .agent .ro { font-size: 12px; color: var(--muted); }
+    .status { font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); }
+    .st-working { color: var(--amber); border-color: var(--amber); }
+    .st-review { color: var(--accent); border-color: var(--accent); }
+    .st-approved { color: var(--accent2); border-color: var(--accent2); }
+    .st-revise { color: var(--amber); border-color: var(--amber); }
+    .st-error { color: var(--danger); border-color: var(--danger); }
+    .result-img { width: 100%; border-radius: 10px; border: 1px solid var(--line); margin-top: 12px; display: block; }
+    .job-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .job-prompt { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+    .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .note-box { display: none; margin-top: 10px; }
+    .note-box.show { display: block; }
+    .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px; }
+    .gate { background: rgba(127,119,221,.08); border: 1px solid var(--line); border-radius: 10px;
+      padding: 10px 12px; font-size: 12px; color: var(--muted); margin-top: 12px; }
+    .err { color: var(--danger); font-size: 13px; margin-top: 8px; }
+    h2.sec { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <h1>AI 회사</h1>
+      <span class="badge">Phase 0 · 픽셀 → 이미지 → 검수</span>
+    </header>
+    <p class="sub">지시 → 에이전트 비동기 제작 → 검수(승인/재검토) 루프를 검증하는 최소 화면이에요.</p>
+
+    <div id="auth-gate" class="card" style="display:none;">
+      <div class="empty">로그인이 필요해요. <a href="app.html">로그인하러 가기 →</a></div>
+    </div>
+
+    <div id="app" style="display:none;">
+      <div class="card">
+        <div class="agent" style="margin-bottom:14px;">
+          <div class="avatar">픽</div>
+          <div><div class="nm">픽셀</div><div class="ro">디자인 · 이미지 생성</div></div>
+        </div>
+        <label for="prompt">픽셀에게 지시</label>
+        <textarea id="prompt" placeholder="예: 비 내리는 밤 도시, 네온 간판, 시네마틱 와이드샷"></textarea>
+        <div class="row" style="margin-top:12px;">
+          <div>
+            <label for="aspect">화면비</label>
+            <select id="aspect">
+              <option value="16:9">16:9 (가로)</option>
+              <option value="9:16">9:16 (세로)</option>
+              <option value="1:1">1:1 (정사각)</option>
+            </select>
+          </div>
+          <div class="grow"></div>
+          <button id="run" class="btn-primary">픽셀에게 시키기</button>
+        </div>
+        <div class="gate">🔒 생성물은 자동 제작 후 <b>검수 게이트</b>로 와요. 사람이 승인해야 "사용 확정"돼요.
+          (삭제·배포·발송·게시는 자율도 무관 항상 승인 필요)</div>
+        <div id="run-err" class="err"></div>
+      </div>
+
+      <h2 class="sec">검수 대기 · 작업 내역</h2>
+      <div id="jobs"><div class="empty">아직 작업이 없어요.</div></div>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      var NK = window.NK || {};
+      var API_BASE = (NK.config && NK.config.API_BASE) || '';
+      function token() { try { return (NK.auth && NK.auth.getToken && NK.auth.getToken()) || ''; } catch (e) { return ''; } }
+
+      if (!token()) { document.getElementById('auth-gate').style.display = 'block'; return; }
+      document.getElementById('app').style.display = 'block';
+
+      function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+
+      async function api(path, opts) {
+        opts = opts || {};
+        var res = await fetch(API_BASE + path, {
+          method: opts.method || 'GET',
+          headers: Object.assign({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }, opts.headers || {}),
+          body: opts.body
+        });
+        var data = {};
+        try { data = await res.json(); } catch (e) {}
+        return { ok: res.ok, status: res.status, data: data };
+      }
+
+      var STATUS_LABEL = {
+        queued: '대기', working: '작업중', review_pending: '검수 대기',
+        approved: '사용 확정', revise: '재검토', error: '오류'
+      };
+      var STATUS_CLASS = {
+        working: 'st-working', queued: 'st-working', review_pending: 'st-review',
+        approved: 'st-approved', revise: 'st-revise', error: 'st-error'
+      };
+
+      function jobCard(job) {
+        var out = job.output || {};
+        var img = out.signedUrl || out.dataUrl || '';
+        var stCls = STATUS_CLASS[job.status] || '';
+        var canReview = job.status === 'review_pending';
+        var html = '' +
+          '<div class="card" data-id="' + esc(job.id) + '">' +
+            '<div class="job-head">' +
+              '<div class="agent"><div class="avatar">픽</div>' +
+                '<div><div class="nm">픽셀</div><div class="ro">디자인</div></div></div>' +
+              '<span class="status ' + stCls + '">' + (STATUS_LABEL[job.status] || job.status) + '</span>' +
+            '</div>' +
+            '<div class="job-prompt">' + esc((job.input && job.input.prompt) || '') + '</div>' +
+            (job.error ? '<div class="err">' + esc(job.error) + '</div>' : '') +
+            (img ? '<img class="result-img" src="' + esc(img) + '" alt="결과 이미지" />' : '') +
+            (canReview ?
+              '<div class="actions">' +
+                '<button class="btn-approve" data-act="approve">검수 승인</button>' +
+                '<button class="btn-revise" data-act="revise">재검토</button>' +
+              '</div>' +
+              '<div class="note-box"><textarea data-note placeholder="어떤 부분을 수정할까요? (선택)"></textarea>' +
+                '<div class="actions"><button class="btn-revise" data-act="revise-send">재검토 보내기</button></div></div>'
+              : (job.review_note ? '<div class="job-prompt">📝 ' + esc(job.review_note) + '</div>' : '')) +
+          '</div>';
+        return html;
+      }
+
+      var jobsEl = document.getElementById('jobs');
+
+      async function loadJobs() {
+        var r = await api('/api/agent/jobs?limit=30');
+        if (!r.ok) { jobsEl.innerHTML = '<div class="empty">목록을 불러오지 못했어요: ' + esc(r.data.error || r.status) + '</div>'; return; }
+        var items = r.data.items || [];
+        if (!items.length) { jobsEl.innerHTML = '<div class="empty">아직 작업이 없어요.</div>'; return; }
+        jobsEl.innerHTML = items.map(jobCard).join('');
+        // 진행중인 잡은 자동 폴링
+        items.forEach(function (j) {
+          if (j.status === 'queued' || j.status === 'working') pollJob(j.id);
+        });
+      }
+
+      async function pollJob(id) {
+        for (var i = 0; i < 60; i++) {
+          var r = await api('/api/agent/job?id=' + encodeURIComponent(id));
+          if (!r.ok) break;
+          var job = r.data.job;
+          replaceCard(id, job);
+          if (['review_pending', 'approved', 'revise', 'error'].indexOf(job.status) >= 0) break;
+          await sleep(2000);
+        }
+      }
+
+      function replaceCard(id, job) {
+        var el = jobsEl.querySelector('[data-id="' + cssEsc(id) + '"]');
+        if (!el) { loadJobs(); return; }
+        var tmp = document.createElement('div');
+        tmp.innerHTML = jobCard(job);
+        el.replaceWith(tmp.firstChild);
+      }
+      function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
+
+      // 이벤트 위임: 승인/재검토
+      jobsEl.addEventListener('click', async function (e) {
+        var btn = e.target.closest('button[data-act]');
+        if (!btn) return;
+        var card = btn.closest('.card');
+        var id = card && card.getAttribute('data-id');
+        if (!id) return;
+        var act = btn.getAttribute('data-act');
+        if (act === 'revise') { card.querySelector('.note-box').classList.add('show'); return; }
+        var decision = act === 'approve' ? 'approved' : 'revise';
+        var note = null;
+        if (act === 'revise-send') { var t = card.querySelector('[data-note]'); note = t ? t.value : ''; }
+        btn.disabled = true;
+        var r = await api('/api/agent/review', { method: 'POST', body: JSON.stringify({ id: id, decision: decision, note: note }) });
+        if (!r.ok) { alert('검수 실패: ' + (r.data.error || r.status)); btn.disabled = false; return; }
+        replaceCard(id, r.data.job);
+      });
+
+      // 지시 전송
+      var runBtn = document.getElementById('run');
+      runBtn.addEventListener('click', async function () {
+        var prompt = document.getElementById('prompt').value.trim();
+        var aspect = document.getElementById('aspect').value;
+        var errEl = document.getElementById('run-err');
+        errEl.textContent = '';
+        if (!prompt) { errEl.textContent = '지시 내용을 입력해 주세요.'; return; }
+        runBtn.disabled = true;
+        var r = await api('/api/agent/job', { method: 'POST', body: JSON.stringify({ type: 'image', input: { prompt: prompt, aspectRatio: aspect } }) });
+        runBtn.disabled = false;
+        if (!r.ok) { errEl.textContent = '생성 실패: ' + (r.data.error || r.status); return; }
+        document.getElementById('prompt').value = '';
+        await loadJobs();
+        pollJob(r.data.jobId);
+      });
+
+      loadJobs();
+    });
+  </script>
+</body>
+</html>

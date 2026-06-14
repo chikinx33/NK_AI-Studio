@@ -1,6 +1,7 @@
 sample/
 sample_aivideo/
 _external/
+Raviok AI/
 .claude/settings.local.json
 .claude/
 .claude/worktrees/
