@@ -10,6 +10,7 @@ import {
   ensureAgentSchema,
   addMessage,
   getRuntime,
+  listMessages,
 } from "./_shared";
 import { runGroupChat } from "./_orchestrator";
 
@@ -69,7 +70,12 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     }
 
     // 생성된 발언을 응답에 직접 실어 보낸다(프런트가 폴링 없이 즉시 표시 — 조회 의존 제거).
-    return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: produced }, 200, origin);
+    // [임시 진단] 저장 직후 이 대화의 메시지 총개수·conversation_id·userId 앞부분 — 새로고침 사라짐 원인 추적용.
+    const all = await listMessages(sql, auth.userId, conversationId).catch(() => []);
+    return send({
+      ok: true, conversationId, userMessageId: userMsg.id, messages: produced,
+      _debug: { conv: conversationId, total: all.length, uid: String(auth.userId).slice(0, 10) },
+    }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "대화 처리 중 오류" }, 500, origin);
   }

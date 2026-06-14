@@ -135,7 +135,9 @@ export async function renameConversation(id: string, title: string): Promise<Con
 }
 export async function getConversationMessages(id: string): Promise<HistoryTurn[]> {
   const d = await (await fetch(`/api/agent/messages?conversationId=${encodeURIComponent(id)}`)).json();
-  return ((d && d.items) || []).map((m: any) => ({
+  const items = (d && d.items) || [];
+  console.log("[load conv]", id, "→ items:", items.length); // [임시 진단] 새로고침 로드 확인
+  return items.map((m: any) => ({
     role: m.role, agentId: m.agent_id || undefined, name: m.name || undefined, text: m.text,
   }));
 }
@@ -560,6 +562,13 @@ export async function streamChat(
     return;
   }
 
+  // [임시 진단] 저장 상태를 화면에 한 줄로 — conversation_id·저장총개수·userId
+  if (chatBody?._debug) {
+    const d = chatBody._debug;
+    console.log("[chat debug]", d);
+    onEvent("turn_start", { agentId: "_dbg", name: "🔧 진단", emoji: "" });
+    onEvent("turn_end", { agentId: "_dbg", text: `conv=${d.conv} · 저장총=${d.total}개 · uid=${d.uid}` });
+  }
   // 동기 실행: chat 응답에 생성된 발언이 직접 실려 오면 폴링 없이 즉시 표시(조회 의존 제거).
   if (Array.isArray(chatBody?.messages) && chatBody.messages.length) {
     for (const m of chatBody.messages) {
