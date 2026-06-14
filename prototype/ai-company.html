@@ -4,7 +4,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>AI 회사 — NK Studio</title>
-  <!-- 인증·설정은 기존 NK 네임스페이스 재사용 (config → auth 순서) -->
   <script src="js/config.js" defer></script>
   <script src="js/auth.js" defer></script>
   <style>
@@ -16,107 +15,129 @@
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text);
       font-family: -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-    .wrap { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 22px 16px 64px; }
     header.top { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
     header.top h1 { font-size: 20px; font-weight: 600; margin: 0; }
     .badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 2px 8px; border-radius: 999px; }
-    .sub { color: var(--muted); font-size: 13px; margin: 2px 0 20px; }
+    .sub { color: var(--muted); font-size: 13px; margin: 2px 0 18px; }
+    .layout { display: flex; gap: 16px; align-items: flex-start; }
+    .sidebar { width: 198px; flex-shrink: 0; }
+    .main { flex: 1; min-width: 0; }
     .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+    .card.tight { padding: 12px; }
     label { display: block; font-size: 12px; color: var(--muted); margin: 0 0 6px; }
-    textarea, select { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+    textarea, select { width: 100%; background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 14px; font-family: inherit; }
     textarea { min-height: 80px; resize: vertical; }
     select option { color: #111; background: #fff; }
     .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-    .row > .grow { flex: 1; min-width: 220px; }
-    button { cursor: pointer; border: none; border-radius: 10px; font-size: 14px; padding: 10px 16px; font-weight: 600; min-width: 110px; }
+    .row > .grow { flex: 1; min-width: 200px; }
+    button { cursor: pointer; border: none; border-radius: 10px; font-size: 14px; padding: 10px 16px; font-weight: 600; min-width: 100px; }
     .btn-primary { background: var(--accent); color: #fff; }
     .btn-approve { background: var(--accent2); color: #fff; }
     .btn-revise { background: transparent; color: var(--amber); border: 1px solid var(--amber); }
     button:disabled { opacity: .5; cursor: not-allowed; }
+    /* 사이드바 로스터 */
+    .roster-title { font-size: 12px; color: var(--muted); margin: 0 0 10px; }
+    .roster { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .tile { position: relative; aspect-ratio: 1/1; border-radius: 12px; overflow: hidden; cursor: pointer; border: 2px solid transparent; background: var(--panel2); }
+    .tile.core { grid-column: 1 / 3; aspect-ratio: auto; height: 92px; }
+    .tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tile .label { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 6px 5px; background: linear-gradient(transparent, rgba(0,0,0,.82)); }
+    .tile .label .nm { color: #fff; font-size: 12px; font-weight: 600; }
+    .tile .label .ro { color: #cfd2de; font-size: 10px; }
+    .tile.on { border-color: var(--accent); }
+    .tile.busy::after { content: "⏳"; position: absolute; top: 4px; right: 6px; font-size: 13px; }
+    /* 단톡방 */
+    .chat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .chat-head img { width: 32px; height: 32px; border-radius: 8px; object-fit: cover; }
+    .chat-head .nm { font-weight: 600; font-size: 14px; }
+    .chat-head .ro { font-size: 12px; color: var(--muted); }
+    .chat-stream { display: flex; flex-direction: column; gap: 12px; max-height: 460px; overflow-y: auto; padding: 4px; }
+    .msg-row { display: flex; gap: 8px; align-items: flex-start; }
+    .msg-row.me { justify-content: flex-end; }
+    .msg-av { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; flex-shrink: 0; }
+    .bubble { max-width: 76%; padding: 9px 13px; border-radius: 14px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+    .bubble.me { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+    .bubble.agent-b { background: var(--panel2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+    .bubble .who { font-size: 11px; color: var(--accent2); font-weight: 600; margin-bottom: 3px; }
+    .typing { color: var(--muted); font-size: 13px; padding: 4px 0 0 42px; }
+    .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px; }
+    .gate { background: rgba(127,119,221,.08); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--muted); margin-top: 12px; }
+    .err { color: var(--danger); font-size: 13px; margin-top: 8px; }
+    h2.sec { font-size: 15px; font-weight: 600; margin: 26px 0 12px; }
+    a { color: var(--accent); }
     .agent { display: flex; align-items: center; gap: 8px; }
-    .avatar { width: 36px; height: 36px; border-radius: 9px; background: var(--accent); display: grid; place-items: center; font-weight: 700; color: #fff; font-size: 14px; }
-    .avatar.core { background: var(--accent2); }
-    .agent .nm { font-weight: 600; font-size: 14px; }
-    .agent .ro { font-size: 12px; color: var(--muted); }
+    .agent img { width: 34px; height: 34px; border-radius: 9px; object-fit: cover; }
+    .agent .nm { font-weight: 600; font-size: 14px; } .agent .ro { font-size: 12px; color: var(--muted); }
     .status { font-size: 12px; padding: 2px 10px; border-radius: 999px; border: 1px solid var(--line); }
-    .st-working { color: var(--amber); border-color: var(--amber); }
-    .st-review { color: var(--accent); border-color: var(--accent); }
-    .st-approved { color: var(--accent2); border-color: var(--accent2); }
-    .st-revise { color: var(--amber); border-color: var(--amber); }
-    .st-error { color: var(--danger); border-color: var(--danger); }
+    .st-working { color: var(--amber); border-color: var(--amber); } .st-review { color: var(--accent); border-color: var(--accent); }
+    .st-approved { color: var(--accent2); border-color: var(--accent2); } .st-revise { color: var(--amber); border-color: var(--amber); } .st-error { color: var(--danger); border-color: var(--danger); }
     .result-img { width: 100%; border-radius: 10px; border: 1px solid var(--line); margin-top: 12px; display: block; }
     .job-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
     .job-prompt { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
     .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
-    .note-box { display: none; margin-top: 10px; }
-    .note-box.show { display: block; }
-    .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 24px; }
-    .gate { background: rgba(127,119,221,.08); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 12px; color: var(--muted); margin-top: 12px; }
-    .err { color: var(--danger); font-size: 13px; margin-top: 8px; }
-    h2.sec { font-size: 15px; font-weight: 600; margin: 28px 0 12px; }
-    a { color: var(--accent); }
-    /* 단톡방 */
-    .chat-stream { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; padding: 4px; }
-    .bubble { max-width: 78%; padding: 9px 13px; border-radius: 14px; font-size: 14px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
-    .bubble.me { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
-    .bubble.agent-b { align-self: flex-start; background: var(--panel2); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
-    .bubble .who { font-size: 11px; color: var(--accent2); font-weight: 600; margin-bottom: 3px; }
-    .typing { align-self: flex-start; color: var(--muted); font-size: 13px; padding: 6px 4px; }
+    .note-box { display: none; margin-top: 10px; } .note-box.show { display: block; }
+    @media (max-width: 760px) { .layout { flex-direction: column; } .sidebar { width: 100%; } .roster { grid-template-columns: repeat(4, 1fr); } .tile.core { grid-column: 1 / 5; } }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header class="top">
       <h1>AI 회사</h1>
-      <span class="badge">Phase 1b · 코어 위임·통솔 + 픽셀 검수</span>
+      <span class="badge">코어 단톡방 · 위임·통솔 · 검수</span>
     </header>
-    <p class="sub">코어(팀장)에게 단톡방으로 지시하면 담당 직원을 불러 일을 시키고 종합해요. 산출물은 검수 패널에서 승인하세요.</p>
+    <p class="sub">코어(팀장)에게 단톡방으로 지시하면 담당 직원을 불러 일을 시키고 종합해요. 아바타를 누르면 @호출돼요.</p>
 
     <div id="auth-gate" class="card" style="display:none;">
       <div class="empty">로그인이 필요해요. <a href="app.html">로그인하러 가기 →</a></div>
     </div>
 
-    <div id="app" style="display:none;">
-      <!-- 단톡방 (코어) -->
-      <div class="card">
-        <div class="agent" style="margin-bottom:12px;">
-          <div class="avatar core">코</div>
-          <div><div class="nm">코어</div><div class="ro">총괄 오케스트레이터 · 단톡방</div></div>
+    <div id="app" class="layout" style="display:none;">
+      <!-- 좌: 11인 로스터 -->
+      <aside class="sidebar">
+        <div class="card tight">
+          <p class="roster-title">우리 직원 (11명)</p>
+          <div id="roster" class="roster"></div>
         </div>
-        <div id="chat-stream" class="chat-stream"><div class="empty">코어에게 첫 메시지를 보내보세요.</div></div>
-        <div class="row" style="margin-top:12px;">
-          <textarea id="chat-input" class="grow" placeholder="예: 새 캐릭터로 짧은 영상 하나 만들고 싶어. 어떻게 진행할까?" style="min-height:52px;"></textarea>
-          <button id="chat-send" class="btn-primary">보내기</button>
-        </div>
-        <div id="chat-err" class="err"></div>
-      </div>
+      </aside>
 
-      <!-- 픽셀 직접 지시 (Phase 0) -->
-      <div class="card">
-        <div class="agent" style="margin-bottom:14px;">
-          <div class="avatar">픽</div>
-          <div><div class="nm">픽셀</div><div class="ro">디자인 · 이미지 생성</div></div>
-        </div>
-        <label for="prompt">픽셀에게 직접 지시 (이미지)</label>
-        <textarea id="prompt" placeholder="예: 비 내리는 밤 도시, 네온 간판, 시네마틱 와이드샷"></textarea>
-        <div class="row" style="margin-top:12px;">
-          <div>
-            <label for="aspect">화면비</label>
-            <select id="aspect">
-              <option value="16:9">16:9 (가로)</option>
-              <option value="9:16">9:16 (세로)</option>
-              <option value="1:1">1:1 (정사각)</option>
-            </select>
+      <!-- 우: 단톡방 + 검수 -->
+      <div class="main">
+        <div class="card">
+          <div class="chat-head">
+            <img src="avatars/core.png" alt="코어" />
+            <div><div class="nm">단톡방</div><div class="ro">코어 + 직원 11명</div></div>
           </div>
-          <div class="grow"></div>
-          <button id="run" class="btn-primary">픽셀에게 시키기</button>
+          <div id="chat-stream" class="chat-stream"><div class="empty">코어에게 첫 메시지를 보내보세요. 예: "캐릭터 표지 이미지 하나 만들어줘"</div></div>
+          <div class="row" style="margin-top:12px;">
+            <textarea id="chat-input" class="grow" placeholder="코어에게 지시… (Ctrl/⌘+Enter 전송)" style="min-height:52px;"></textarea>
+            <button id="chat-send" class="btn-primary">보내기</button>
+          </div>
+          <div id="chat-err" class="err"></div>
         </div>
-        <div class="gate">🔒 생성물은 자동 제작 후 <b>검수 게이트</b>로 와요. 사람이 승인해야 "사용 확정"돼요.</div>
-        <div id="run-err" class="err"></div>
-      </div>
 
-      <h2 class="sec">검수 대기 · 작업 내역</h2>
-      <div id="jobs"><div class="empty">아직 작업이 없어요.</div></div>
+        <div class="card">
+          <div class="agent" style="margin-bottom:14px;">
+            <img src="avatars/pixel.png" alt="픽셀" />
+            <div><div class="nm">픽셀</div><div class="ro">디자인 · 이미지 직접 지시</div></div>
+          </div>
+          <label for="prompt">픽셀에게 직접 지시 (이미지)</label>
+          <textarea id="prompt" placeholder="예: 비 내리는 밤 도시, 네온 간판, 시네마틱 와이드샷"></textarea>
+          <div class="row" style="margin-top:12px;">
+            <div>
+              <label for="aspect">화면비</label>
+              <select id="aspect"><option value="16:9">16:9 (가로)</option><option value="9:16">9:16 (세로)</option><option value="1:1">1:1 (정사각)</option></select>
+            </div>
+            <div class="grow"></div>
+            <button id="run" class="btn-primary">픽셀에게 시키기</button>
+          </div>
+          <div class="gate">🔒 생성물은 자동 제작 후 <b>검수 게이트</b>로 와요. 사람이 승인해야 "사용 확정"돼요.</div>
+          <div id="run-err" class="err"></div>
+        </div>
+
+        <h2 class="sec">검수 대기 · 작업 내역</h2>
+        <div id="jobs"><div class="empty">아직 작업이 없어요.</div></div>
+      </div>
     </div>
   </div>
 
@@ -126,13 +147,22 @@
       var API_BASE = (NK.config && NK.config.API_BASE) || '';
       var CONV = 'main';
       function token() { try { return (NK.auth && NK.auth.getToken && NK.auth.getToken()) || ''; } catch (e) { return ''; } }
-
       if (!token()) { document.getElementById('auth-gate').style.display = 'block'; return; }
-      document.getElementById('app').style.display = 'block';
+      document.getElementById('app').style.display = 'flex';
+
+      var ROSTER = [
+        { id: 'core', name: '코어', role: '총괄' }, { id: 'edge', name: '엣지', role: '전략' },
+        { id: 'radar', name: '레이더', role: '리서치' }, { id: 'maki', name: '마키', role: '마케팅' },
+        { id: 'plot', name: '플롯', role: '기획' }, { id: 'ink', name: '잉크', role: '작가' },
+        { id: 'pixel', name: '픽셀', role: '디자인' }, { id: 'beat', name: '비트', role: '사운드' },
+        { id: 'engi', name: '엔지', role: '개발' }, { id: 'reach', name: '리치', role: '배포' },
+        { id: 'sync', name: '싱크', role: 'PM' }
+      ];
+      var META = {}; ROSTER.forEach(function (a) { META[a.id] = a; });
+      function ava(id) { return 'avatars/' + (META[id] ? id : 'core') + '.png'; }
 
       function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
-        return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
       function cssEsc(s) { return String(s).replace(/["\\]/g, '\\$&'); }
 
       async function api(path, opts) {
@@ -142,26 +172,44 @@
           headers: Object.assign({ 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }, opts.headers || {}),
           body: opts.body
         });
-        var data = {};
-        try { data = await res.json(); } catch (e) {}
+        var data = {}; try { data = await res.json(); } catch (e) {}
         return { ok: res.ok, status: res.status, data: data };
       }
 
-      // ===== 단톡방 (코어) =====
-      var chatStream = document.getElementById('chat-stream');
+      // ===== 사이드바 로스터 =====
+      var rosterEl = document.getElementById('roster');
       var chatInput = document.getElementById('chat-input');
+      rosterEl.innerHTML = ROSTER.map(function (a) {
+        return '<div class="tile ' + (a.id === 'core' ? 'core' : '') + '" data-id="' + a.id + '">' +
+          '<img src="' + ava(a.id) + '" alt="' + esc(a.name) + '" />' +
+          '<div class="label"><div class="nm">' + esc(a.name) + '</div><div class="ro">' + esc(a.role) + '</div></div></div>';
+      }).join('');
+      rosterEl.addEventListener('click', function (e) {
+        var tile = e.target.closest('.tile'); if (!tile) return;
+        var a = META[tile.getAttribute('data-id')]; if (!a) return;
+        var tag = '@' + a.name + ' ';
+        if (chatInput.value.indexOf(tag) >= 0) { chatInput.value = chatInput.value.replace(tag, ''); tile.classList.remove('on'); }
+        else { chatInput.value = (chatInput.value ? chatInput.value.replace(/\s*$/, ' ') : '') + tag; tile.classList.add('on'); }
+        chatInput.focus();
+      });
+
+      // ===== 단톡방 =====
+      var chatStream = document.getElementById('chat-stream');
       var chatSend = document.getElementById('chat-send');
       var chatErr = document.getElementById('chat-err');
 
       function bubble(m) {
-        var mine = m.role === 'user';
-        return '<div class="bubble ' + (mine ? 'me' : 'agent-b') + '">' +
-          (mine ? '' : '<div class="who">' + esc(m.name || '직원') + '</div>') +
-          '<div class="bd">' + esc(m.text) + '</div></div>';
+        if (m.role === 'user') {
+          return '<div class="msg-row me"><div class="bubble me">' + esc(m.text) + '</div></div>';
+        }
+        var id = m.agent_id || 'core';
+        var nm = (META[id] && META[id].name) || m.name || '직원';
+        return '<div class="msg-row"><img class="msg-av" src="' + ava(id) + '" alt="' + esc(nm) + '" />' +
+          '<div class="bubble agent-b"><div class="who">' + esc(nm) + '</div>' + esc(m.text) + '</div></div>';
       }
       function renderMsgs(items, typing) {
         if (!items.length) { chatStream.innerHTML = '<div class="empty">코어에게 첫 메시지를 보내보세요.</div>'; return; }
-        chatStream.innerHTML = items.map(bubble).join('') + (typing ? '<div class="typing">코어가 입력 중…</div>' : '');
+        chatStream.innerHTML = items.map(bubble).join('') + (typing ? '<div class="typing">직원들이 작업 중…</div>' : '');
         chatStream.scrollTop = chatStream.scrollHeight;
       }
       async function loadMsgs(typing) {
@@ -170,22 +218,20 @@
         return r.ok ? (r.data.items || []) : [];
       }
       async function sendChat() {
-        var msg = chatInput.value.trim();
-        chatErr.textContent = '';
+        var msg = chatInput.value.trim(); chatErr.textContent = '';
         if (!msg) return;
-        chatInput.value = '';
-        chatSend.disabled = true;
+        chatInput.value = ''; chatSend.disabled = true;
+        Array.prototype.forEach.call(rosterEl.querySelectorAll('.tile.on'), function (t) { t.classList.remove('on'); });
         var r = await api('/api/agent/chat', { method: 'POST', body: JSON.stringify({ message: msg, conversationId: CONV }) });
         if (!r.ok) { chatErr.textContent = '전송 실패: ' + (r.data.error || r.status); chatSend.disabled = false; return; }
-        // 위임 흐름은 여러 직원이 순차 보고 → 메시지 수가 안정될 때까지(6초 변화 없음) 폴링.
         var lastCount = -1, stable = 0;
         for (var i = 0; i < 45; i++) {
           await sleep(2000);
           var items = await loadMsgs(true);
-          if (items.length === lastCount) { if (++stable >= 3) break; }
-          else { stable = 0; lastCount = items.length; }
+          if (items.length === lastCount) { if (++stable >= 3) break; } else { stable = 0; lastCount = items.length; }
         }
         renderMsgs(await loadMsgs(false), false);
+        loadJobs();
         chatSend.disabled = false;
       }
       chatSend.addEventListener('click', sendChat);
@@ -196,28 +242,22 @@
       // ===== 픽셀 검수 (Phase 0) =====
       var STATUS_LABEL = { queued: '대기', working: '작업중', review_pending: '검수 대기', approved: '사용 확정', revise: '재검토', error: '오류' };
       var STATUS_CLASS = { working: 'st-working', queued: 'st-working', review_pending: 'st-review', approved: 'st-approved', revise: 'st-revise', error: 'st-error' };
-
       function jobCard(job) {
-        var out = job.output || {};
-        var img = out.signedUrl || out.dataUrl || '';
-        var stCls = STATUS_CLASS[job.status] || '';
+        var out = job.output || {}; var img = out.signedUrl || out.dataUrl || '';
         var canReview = job.status === 'review_pending';
-        return '' +
-          '<div class="card" data-id="' + esc(job.id) + '">' +
-            '<div class="job-head">' +
-              '<div class="agent"><div class="avatar">픽</div><div><div class="nm">픽셀</div><div class="ro">디자인</div></div></div>' +
-              '<span class="status ' + stCls + '">' + (STATUS_LABEL[job.status] || job.status) + '</span>' +
-            '</div>' +
-            '<div class="job-prompt">' + esc((job.input && job.input.prompt) || '') + '</div>' +
-            (job.error ? '<div class="err">' + esc(job.error) + '</div>' : '') +
-            (img ? '<img class="result-img" src="' + esc(img) + '" alt="결과 이미지" />' : '') +
-            (canReview ?
-              '<div class="actions"><button class="btn-approve" data-act="approve">검수 승인</button><button class="btn-revise" data-act="revise">재검토</button></div>' +
-              '<div class="note-box"><textarea data-note placeholder="어떤 부분을 수정할까요? (선택)"></textarea><div class="actions"><button class="btn-revise" data-act="revise-send">재검토 보내기</button></div></div>'
-              : (job.review_note ? '<div class="job-prompt">📝 ' + esc(job.review_note) + '</div>' : '')) +
+        var id = job.agent_id || 'pixel'; var nm = (META[id] && META[id].name) || '픽셀';
+        return '<div class="card" data-id="' + esc(job.id) + '">' +
+          '<div class="job-head"><div class="agent"><img src="' + ava(id) + '" /><div><div class="nm">' + esc(nm) + '</div><div class="ro">' + esc((META[id] && META[id].role) || '') + '</div></div></div>' +
+          '<span class="status ' + (STATUS_CLASS[job.status] || '') + '">' + (STATUS_LABEL[job.status] || job.status) + '</span></div>' +
+          '<div class="job-prompt">' + esc((job.input && job.input.prompt) || '') + '</div>' +
+          (job.error ? '<div class="err">' + esc(job.error) + '</div>' : '') +
+          (img ? '<img class="result-img" src="' + esc(img) + '" alt="결과" />' : '') +
+          (canReview ?
+            '<div class="actions"><button class="btn-approve" data-act="approve">검수 승인</button><button class="btn-revise" data-act="revise">재검토</button></div>' +
+            '<div class="note-box"><textarea data-note placeholder="어떤 부분을 수정할까요? (선택)"></textarea><div class="actions"><button class="btn-revise" data-act="revise-send">재검토 보내기</button></div></div>'
+            : (job.review_note ? '<div class="job-prompt">📝 ' + esc(job.review_note) + '</div>' : '')) +
           '</div>';
       }
-
       var jobsEl = document.getElementById('jobs');
       async function loadJobs() {
         var r = await api('/api/agent/jobs?limit=30');
@@ -231,25 +271,19 @@
         for (var i = 0; i < 60; i++) {
           var r = await api('/api/agent/job?id=' + encodeURIComponent(id));
           if (!r.ok) break;
-          var job = r.data.job;
-          replaceCard(id, job);
-          if (['review_pending', 'approved', 'revise', 'error'].indexOf(job.status) >= 0) break;
+          replaceCard(id, r.data.job);
+          if (['review_pending', 'approved', 'revise', 'error'].indexOf(r.data.job.status) >= 0) break;
           await sleep(2000);
         }
       }
       function replaceCard(id, job) {
         var el = jobsEl.querySelector('[data-id="' + cssEsc(id) + '"]');
         if (!el) { loadJobs(); return; }
-        var tmp = document.createElement('div');
-        tmp.innerHTML = jobCard(job);
-        el.replaceWith(tmp.firstChild);
+        var tmp = document.createElement('div'); tmp.innerHTML = jobCard(job); el.replaceWith(tmp.firstChild);
       }
       jobsEl.addEventListener('click', async function (e) {
-        var btn = e.target.closest('button[data-act]');
-        if (!btn) return;
-        var card = btn.closest('.card');
-        var id = card && card.getAttribute('data-id');
-        if (!id) return;
+        var btn = e.target.closest('button[data-act]'); if (!btn) return;
+        var card = btn.closest('.card'); var id = card && card.getAttribute('data-id'); if (!id) return;
         var act = btn.getAttribute('data-act');
         if (act === 'revise') { card.querySelector('.note-box').classList.add('show'); return; }
         var decision = act === 'approve' ? 'approved' : 'revise';
@@ -260,21 +294,18 @@
         if (!r.ok) { alert('검수 실패: ' + (r.data.error || r.status)); btn.disabled = false; return; }
         replaceCard(id, r.data.job);
       });
-
       var runBtn = document.getElementById('run');
       runBtn.addEventListener('click', async function () {
         var prompt = document.getElementById('prompt').value.trim();
         var aspect = document.getElementById('aspect').value;
-        var errEl = document.getElementById('run-err');
-        errEl.textContent = '';
+        var errEl = document.getElementById('run-err'); errEl.textContent = '';
         if (!prompt) { errEl.textContent = '지시 내용을 입력해 주세요.'; return; }
         runBtn.disabled = true;
         var r = await api('/api/agent/job', { method: 'POST', body: JSON.stringify({ type: 'image', input: { prompt: prompt, aspectRatio: aspect } }) });
         runBtn.disabled = false;
         if (!r.ok) { errEl.textContent = '생성 실패: ' + (r.data.error || r.status); return; }
         document.getElementById('prompt').value = '';
-        await loadJobs();
-        pollJob(r.data.jobId);
+        await loadJobs(); pollJob(r.data.jobId);
       });
 
       loadMsgs(false);
