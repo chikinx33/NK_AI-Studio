@@ -28,7 +28,7 @@ export interface AgentInfo {
 }
 
 export async function getStatus(): Promise<StatusInfo> {
-  return (await fetch("/api/status")).json();
+  return (await fetch("/api/agent/status")).json();
 }
 
 // 생존 신호 (브라우저가 열려 있는 동안 주기적으로 호출)
@@ -54,7 +54,7 @@ export async function getCompany() {
 }
 
 export async function getAgents(): Promise<AgentInfo[]> {
-  return (await fetch("/api/agents")).json();
+  return (await fetch("/api/agent/agents")).json();
 }
 
 // 직원 상세(페르소나) + 개인 지식·규칙 관리
@@ -112,7 +112,8 @@ export interface Conversation {
   updatedAt: string;
 }
 export async function getConversations(): Promise<Conversation[]> {
-  return (await fetch("/api/conversations")).json();
+  // NK: 단톡방 단계는 단일 스레드(날짜 기반). 목록은 비움.
+  return [];
 }
 export async function createConversation(title?: string, projectId?: string): Promise<Conversation> {
   return (
@@ -133,16 +134,14 @@ export async function renameConversation(id: string, title: string): Promise<Con
   ).json();
 }
 export async function getConversationMessages(id: string): Promise<HistoryTurn[]> {
-  return (await fetch(`/api/conversations/${encodeURIComponent(id)}/messages`)).json();
+  const d = await (await fetch(`/api/agent/messages?conversationId=${encodeURIComponent(id)}`)).json();
+  return ((d && d.items) || []).map((m: any) => ({
+    role: m.role, agentId: m.agent_id || undefined, name: m.name || undefined, text: m.text,
+  }));
 }
 export async function ensureDateConversation(date: string): Promise<Conversation> {
-  return (
-    await fetch("/api/conversations/date", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date }),
-    })
-  ).json();
+  // NK: 대화 id = 날짜 그대로. 서버 생성 불필요(메시지 첫 저장 시 생김).
+  return { id: date, title: date, createdAt: "", updatedAt: "" };
 }
 
 export async function getSettings() {
@@ -433,11 +432,13 @@ export interface LiveEvents {
   working: string[];
 }
 export async function getEvents(since: number): Promise<LiveEvents> {
-  return (await fetch(`/api/events?since=${since}`)).json();
+  // NK: 라이브 이벤트(백그라운드 보고) 폴링은 후속 포팅. 지금은 빈 이벤트.
+  return { seq: since, messages: [], working: [] };
 }
 
-export async function getApprovals() {
-  return (await fetch("/api/approvals")).json();
+export async function getApprovals(): Promise<{ pending: any[]; history: any[] }> {
+  // NK: 승인 큐는 검수(잡) 시스템으로 대체 예정. 지금은 빈 목록.
+  return { pending: [], history: [] };
 }
 
 export async function approveItem(id: string) {
@@ -459,6 +460,12 @@ export interface HistoryTurn {
   text: string;
 }
 
+/**
+ * NK 폴링 기반 채팅. 라비오크는 SSE(fetch+ReadableStream)였지만, 클라우드 30초 제약상
+ * 멀티에이전트 위임이 끊기므로: POST /api/agent/chat(즉시 응답, 백그라운드 오케스트레이션)
+ * + /api/agent/messages 폴링으로 새 에이전트 발언을 turn_start/turn_end 이벤트로 합성한다.
+ * Chat·VisualNovel 컴포넌트는 그대로 작동(타자기 토큰 대신 메시지 단위 표시).
+ */
 export async function streamChat(
   message: string,
   onEvent: SSEHandler,
@@ -466,50 +473,51 @@ export async function streamChat(
     apiKey?: string;
     history?: HistoryTurn[];
     focusAgent?: string;
-    conversationId?: string; // 활성 대화(스레드)
-    signal?: AbortSignal; // 중지 버튼용 — abort 시 스트림 즉시 종료
+    conversationId?: string;
+    signal?: AbortSignal;
   } = {}
 ): Promise<void> {
-  const { signal, ...body } = opts;
-  const res = await fetch("/api/chat", {
+  const convId = opts.conversationId || "main";
+  const fetchMsgs = async (): Promise<any[]> => {
+    const d = await (await fetch(`/api/agent/messages?conversationId=${encodeURIComponent(convId)}`)).json();
+    return (d && d.items) || [];
+  };
+
+  onEvent("status", { backend: "cloud", reason: "NK Claude" });
+  const before = (await fetchMsgs().catch(() => [])).length;
+
+  const res = await fetch("/api/agent/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, ...body }),
-    signal,
+    body: JSON.stringify({ message, conversationId: convId, focusAgent: opts.focusAgent }),
+    signal: opts.signal,
   });
-  if (!res.body) throw new Error("스트림 없음");
+  if (!res.ok) {
+    let err = "전송 실패";
+    try { const d = await res.json(); err = d.error || err; } catch { /* ignore */ }
+    onEvent("turn_start", { agentId: "core", name: "코어", emoji: "🧭" });
+    onEvent("turn_end", { agentId: "core", text: `⚠️ ${err}` });
+    onEvent("done", {});
+    return;
+  }
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const chunks = buffer.split("\n\n");
-      buffer = chunks.pop() ?? "";
-      for (const chunk of chunks) {
-        const lines = chunk.split("\n");
-        let event = "message";
-        let data = "";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) event = line.slice(7).trim();
-          else if (line.startsWith("data: ")) data += line.slice(6);
-        }
-        if (data) {
-          try {
-            onEvent(event, JSON.parse(data));
-          } catch {
-            /* ignore */
-          }
-        }
+  // 새 에이전트 발언을 폴링해 SSE 이벤트로 합성. 메시지 수가 6초간 안정되면 종료.
+  let emitted = before;
+  let lastLen = -1, stable = 0;
+  for (let i = 0; i < 60; i++) {
+    if (opts.signal?.aborted) break;
+    await new Promise((r) => setTimeout(r, 2000));
+    let msgs: any[];
+    try { msgs = await fetchMsgs(); } catch { continue; }
+    for (let j = emitted; j < msgs.length; j++) {
+      const m = msgs[j];
+      if (m.role === "agent") {
+        onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
+        onEvent("turn_end", { agentId: m.agent_id, text: m.text });
       }
     }
-  } catch (e) {
-    // 사용자가 중지(abort)했으면 정상 종료로 취급 — 오류 메시지 안 띄움
-    if (signal?.aborted || (e as Error)?.name === "AbortError") return;
-    throw e;
+    emitted = msgs.length;
+    if (msgs.length === lastLen) { if (++stable >= 3) break; } else { stable = 0; lastLen = msgs.length; }
   }
+  onEvent("done", {});
 }
