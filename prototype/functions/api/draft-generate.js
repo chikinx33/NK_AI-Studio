@@ -1,3 +1,5 @@
+import { anthropicMessagesUrl } from "./_shared/claude-auth.js";
+
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -364,7 +366,7 @@ export async function onRequestPost(context) {
       ].filter(Boolean).join("\n\n");
 
   try {
-    const completion = await fetch("https://api.anthropic.com/v1/messages", {
+    const completion = await fetch(anthropicMessagesUrl(env), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

@@ -22,12 +22,12 @@ const SHOT_TIMEOUT_MS = 22000;
 const SHOT_MAX_TOKENS = 900;
 const MODEL = "claude-sonnet-4-6";
 
-async function callAnthropicForShots({ apiKey, system, user, signal }) {
+async function callAnthropicForShots({ apiKey, system, user, signal, url }) {
   const controller = new AbortController();
   if (signal) signal.addEventListener("abort", () => controller.abort(signal.reason));
   const timer = setTimeout(() => controller.abort("shot_decompose_timeout"), SHOT_TIMEOUT_MS);
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(url || "https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -75,6 +75,7 @@ export async function decomposeScene(apiKey, scene, opts = {}) {
     system,
     user,
     signal: opts.signal,
+    url: opts.messagesUrl,
   });
   const shots = parseShotResponse(text, scene);
   if (!shots || !shots.length) throw new Error("shot_parse_failed");

@@ -19,6 +19,8 @@
  *   카탈로그는 core.js / scenario.js 드롭다운 옵션과 1:1 동기화한다.
  */
 
+import { anthropicMessagesUrl } from "./_shared/claude-auth.js";
+
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -91,7 +93,7 @@ export async function onRequestPost(context) {
     const timeoutId = setTimeout(() => controller.abort(), 20000);
     let completion;
     try {
-      completion = await fetch("https://api.anthropic.com/v1/messages", {
+      completion = await fetch(anthropicMessagesUrl(env), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

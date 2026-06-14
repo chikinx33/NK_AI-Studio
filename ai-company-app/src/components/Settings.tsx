@@ -456,6 +456,12 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
                     API 키: <span className="text-gray-200">{diag.apiKeySet ? diag.apiKeyKind : "없음"}</span> · 구독 토큰:{" "}
                     <span className="text-gray-200">{diag.oauthSet ? diag.oauthKind : "없음"}</span>
                   </div>
+                  <div className="text-gray-400">
+                    AI Gateway:{" "}
+                    <span className={diag.gateway ? "text-emerald-300" : "text-amber-400"}>
+                      {diag.gateway ? "경유 중 ✅" : "미설정 (직접 호출 → 403 위험)"}
+                    </span>
+                  </div>
                   {diag.test && (
                     <div className={diag.test.ok ? "text-emerald-400" : "text-red-400"}>
                       라이브 테스트: {diag.test.ok ? "✅ 성공 (200)" : `❌ 실패 (${diag.test.status}) — ${diag.test.detail}`}

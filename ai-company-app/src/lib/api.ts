@@ -268,6 +268,7 @@ export interface AuthDiag {
   apiKeySet: boolean;
   apiKeyKind: string;
   oauthKind: string;
+  gateway: boolean;
   test: { ok: boolean; status: number; detail: string } | null;
 }
 export async function authDiag(): Promise<{ ok: boolean; diag?: AuthDiag; error?: string }> {

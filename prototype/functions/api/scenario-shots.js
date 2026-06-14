@@ -19,6 +19,7 @@
  */
 
 import { decomposeScenes } from "./scenario/shots/index.js";
+import { anthropicMessagesUrl } from "./_shared/claude-auth.js";
 
 /**
  * 분해 결과를 평탄화. 부모 씬의 narration/dialogue 는 첫 sub-scene 에만 두고,
@@ -209,7 +210,7 @@ export async function onRequestPost(context) {
   }
 
   try {
-    const result = await decomposeScenes(env.ANTHROPIC_API_KEY, scenes, { lang });
+    const result = await decomposeScenes(env.ANTHROPIC_API_KEY, scenes, { lang, messagesUrl: anthropicMessagesUrl(env) });
     // decomposeScenes 의 정상 결과: { scenes, meta } 또는 array fallback
     const decomposed = Array.isArray(result) ? result : (Array.isArray(result?.scenes) ? result.scenes : []);
     const meta = (result && result.meta) ? result.meta : { total: decomposed.length, ok: 0, failed: 0, fallback: decomposed.length };

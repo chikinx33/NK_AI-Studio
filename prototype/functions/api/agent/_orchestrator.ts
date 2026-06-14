@@ -15,7 +15,7 @@ import {
   getAgentPersona,
   listAgentKnowledge,
 } from "./_shared";
-import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders } from "../_shared/claude-auth.js";
+import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
 
@@ -157,7 +157,7 @@ export async function callClaude(
   const auth = opts.sql && opts.userId
     ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
     : claudeAuthHeaders(env);
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const res = await fetch(anthropicMessagesUrl(env), {
     method: "POST",
     headers: auth.headers,
     body: JSON.stringify({

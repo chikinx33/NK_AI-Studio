@@ -141,6 +141,17 @@ export async function resolvedAuthHeaders(sql, userId, env) {
   return authHeadersFor(await resolveAuth(sql, userId, env));
 }
 
+// Cloudflare Workers→api.anthropic.com 직접 호출은 엣지 노드에 따라 봇차단(403 "Request not allowed")이 난다.
+// CF_AI_GATEWAY_URL(예: https://gateway.ai.cloudflare.com/v1/{acct}/{gw}/anthropic) 있으면 게이트웨이 경유.
+export function anthropicMessagesUrl(env) {
+  const gw = String((env && (env.CF_AI_GATEWAY_URL || env.ANTHROPIC_GATEWAY_BASE)) || "").trim().replace(/\/+$/, "");
+  if (gw) return `${gw}/v1/messages`;
+  return "https://api.anthropic.com/v1/messages";
+}
+export function usingGateway(env) {
+  return !!String((env && (env.CF_AI_GATEWAY_URL || env.ANTHROPIC_GATEWAY_BASE)) || "").trim();
+}
+
 // 비밀값 노출 없이 자격증명 '종류'만 식별 (디버깅용).
 function credKind(v) {
   const s = String(v || "");
@@ -161,12 +172,13 @@ export async function authDiagnose(sql, userId, env) {
     apiKeySet: !!r.apiKey,
     apiKeyKind: credKind(r.apiKey),
     oauthKind: credKind(r.oauthToken),
+    gateway: usingGateway(env), // AI Gateway 경유 여부
     test: null,
   };
   // 라이브 테스트 (최소 토큰). 어떤 에러가 나는지 그대로 보고.
   try {
     const auth = authHeadersFor(r);
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(anthropicMessagesUrl(env), {
       method: "POST",
       headers: auth.headers,
       body: JSON.stringify({

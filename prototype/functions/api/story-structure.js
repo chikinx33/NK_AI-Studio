@@ -1,4 +1,4 @@
-import { claudeAuthHeaders, buildClaudeSystem, anthropicConfigured } from "./_shared/claude-auth.js";
+import { claudeAuthHeaders, buildClaudeSystem, anthropicConfigured, anthropicMessagesUrl } from "./_shared/claude-auth.js";
 
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
@@ -51,7 +51,7 @@ export async function onRequestPost(context) {
 
     let completion;
     try {
-      completion = await fetch("https://api.anthropic.com/v1/messages", {
+      completion = await fetch(anthropicMessagesUrl(env), {
         method: "POST",
         headers: auth.headers,
         body: JSON.stringify({

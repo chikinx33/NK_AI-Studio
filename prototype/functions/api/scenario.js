@@ -4,7 +4,7 @@
 import { buildEnforcementSuffix } from "./scenario/prompt-builder.js";
 import { runWithAutoRetry as runSceneValidator, validateScenes as validateScenesDirect } from "./scenario/validator.js";
 import { splitUniformRuns, padScenesToBeatCount } from "./scenario/rebalancer.js";
-import { claudeAuthHeaders, buildClaudeSystem } from "./_shared/claude-auth.js";
+import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "./_shared/claude-auth.js";
 
 // 첫 호출 이후 남은 시간이 이 값보다 작으면 validator 재시도를 포기한다.
 // requestScenarioChunk 자체가 29s 타임아웃이므로 안전 마진 포함 16s.
@@ -2058,7 +2058,7 @@ async function streamAnthropicText({ apiKey, env, payload, signal, timeoutMs }) 
   }
 
   try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
+    const res = await fetch(anthropicMessagesUrl(env), {
       method: "POST",
       headers: reqHeaders,
       body: JSON.stringify(reqPayload),
