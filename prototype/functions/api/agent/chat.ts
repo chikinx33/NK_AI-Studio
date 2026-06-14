@@ -41,17 +41,18 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       userId: auth.userId, conversationId, role: "user", text: message,
     });
 
-    // 위임·통솔은 백그라운드(waitUntil)에서 멀티 호출. 프런트는 /api/agent/messages 폴링으로 받음.
+    // [진단] waitUntil 가설 검증: 동기 실행으로 전환(요청 컨텍스트에서 Claude 호출).
+    // 403 'Request not allowed' 가 사라지면 waitUntil 백그라운드 fetch 가 원인 → 잡 기반 재설계.
     const authHeader = String(request.headers.get("Authorization") || "");
     const toolCtx = { request, env, authHeader, userId: auth.userId };
-    waitUntil(
-      runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx }).catch(async (e: any) => {
-        await addMessage(sql, {
-          userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
-          text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
-        }).catch(() => {});
-      })
-    );
+    try {
+      await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx });
+    } catch (e: any) {
+      await addMessage(sql, {
+        userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
+        text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
+      }).catch(() => {});
+    }
 
     return send({ ok: true, conversationId, userMessageId: userMsg.id }, 200, origin);
   } catch (e: any) {
