@@ -63,6 +63,13 @@ const PowerIcon = (p: IconProps) => (
     <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
   </SVG>
 );
+const BackToStudioIcon = (p: IconProps) => (
+  <SVG {...p}>
+    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+    <polyline points="10 17 5 12 10 7" />
+    <line x1="5" x2="21" y1="12" y2="12" />
+  </SVG>
+);
 
 function IconBtn({
   active,
@@ -130,6 +137,9 @@ export default function RightMenu({
       <div className="ml-auto" />
       <IconBtn active={centerView === "settings"} title="옵션" onClick={onSettings}>
         <SettingsIcon className="h-4 w-4" />
+      </IconBtn>
+      <IconBtn title="스튜디오로 돌아가기" onClick={() => { window.location.href = "/app.html"; }}>
+        <BackToStudioIcon className="h-4 w-4" />
       </IconBtn>
       <IconBtn title="라비오크 종료" onClick={onShutdown} danger>
         <PowerIcon className="h-4 w-4" />

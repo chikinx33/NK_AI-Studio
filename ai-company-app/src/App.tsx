@@ -429,6 +429,9 @@ export default function App() {
             />
             {!status && <div className="text-xs text-gray-500">서버 연결 대기 중…</div>}
           </div>
+          <div className="shrink-0 pt-2 text-center text-[11px] text-gray-600">
+            {(window as any).NK?.config?.APP_VERSION ? `v${(window as any).NK.config.APP_VERSION}` : ""}
+          </div>
         </div>
       </div>
 
