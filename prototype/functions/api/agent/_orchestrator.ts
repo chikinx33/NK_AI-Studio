@@ -477,5 +477,23 @@ export async function runGroupChat(
     await applyKnows(wrap.knows, "코어");
     await applyProjects(wrap.projects);
   }
+
+  // 3) 자동 회고 (헤르메스 자기개선: 복잡 작업 뒤 새 교훈을 스스로 지식으로 축적 = persist durable knowledge).
+  //    위임이 한 번이라도 일어난 '복잡 작업'에서만 1회 회고한다. 회고 발언은 단톡방에 노출하지 않고(조용히)
+  //    KNOW 마커로 회사 지식만 늘린다. 중복은 add 단계에서 자동 차단됨.
+  if (!opts.autoTrigger && coreDelegateCount >= 1) {
+    try {
+      const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
+      const reviewTrigger =
+        "방금의 대화·작업을 회고하세요(이건 내부 회고 — 사용자에게 보이지 않습니다). " +
+        "회사가 앞으로 계속 기억하고 활용하면 좋을 '새로' 배운 규칙·사실·결정이 있으면 [[KNOW: add | 분류 | 내용]]로 저장하세요(분류=원칙·사실·결정). " +
+        "이미 등록된 회사 지식과 겹치면 저장하지 말고, 정말 새로 배운 핵심만 1~3개 이내로 간결하게. 확실하지 않은 건 저장하지 마세요. " +
+        "저장할 게 없으면 마커 없이 '없음'이라고만 답하세요.";
+      const review = await speak(env, "core", reviewTrigger, t, { address: addr, canDelegate: false, sql, userId });
+      await applyKnows(review.knows, "코어(회고)");
+      await applyProjects(review.projects);
+      // review.text(회고 내용)는 produced에 넣지 않음 — 사용자 화면에는 표시하지 않는다.
+    } catch { /* 회고 실패는 대화 흐름에 영향 없음 */ }
+  }
   return produced;
 }
