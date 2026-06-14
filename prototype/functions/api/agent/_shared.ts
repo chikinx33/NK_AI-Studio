@@ -124,7 +124,50 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   try {
     await sql("CREATE INDEX IF NOT EXISTS company_knowledge_user_idx ON company_knowledge (user_id)");
   } catch (_) {}
+  // 프로젝트 보드(Phase 3). data=jsonb{name,summary,status,goal,stages[],nextAction}. 멀티테넌시.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS company_projects (
+      id text NOT NULL,
+      user_id text NOT NULL,
+      data jsonb NOT NULL DEFAULT '{}'::jsonb,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, id)
+    )
+  `);
   agentSchemaReady = true;
+}
+
+// ── 프로젝트 보드 (전부 user_id 격리) ────────────────────────────────────────
+export interface BoardProject {
+  id: string; name: string; summary?: string; status: string;
+  goal?: string; stages: { title: string; status: string }[]; nextAction?: string; updatedAt: string;
+}
+export async function listProjects(sql: SqlFn, userId: string): Promise<BoardProject[]> {
+  const rows = await sql("SELECT id, data, updated_at FROM company_projects WHERE user_id = $1 ORDER BY updated_at DESC", [userId]);
+  return rows.map((r: any) => {
+    const data = typeof r.data === "string" ? (() => { try { return JSON.parse(r.data); } catch { return {}; } })() : (r.data || {});
+    return {
+      id: r.id, name: data.name || r.id, summary: data.summary, status: data.status || "active",
+      goal: data.goal, stages: Array.isArray(data.stages) ? data.stages : [], nextAction: data.nextAction,
+      updatedAt: r.updated_at,
+    };
+  });
+}
+export async function upsertProject(sql: SqlFn, userId: string, id: string, data: Record<string, unknown>): Promise<void> {
+  await sql(
+    `INSERT INTO company_projects (user_id, id, data) VALUES ($1, $2, $3::jsonb)
+     ON CONFLICT (user_id, id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
+    [userId, id, JSON.stringify(data)]
+  );
+}
+export async function setProjectStageDb(sql: SqlFn, userId: string, projectId: string, index: number, status: string): Promise<boolean> {
+  const rows = await sql("SELECT data FROM company_projects WHERE user_id = $1 AND id = $2", [userId, projectId]);
+  if (!rows[0]) return false;
+  const data = typeof rows[0].data === "string" ? JSON.parse(rows[0].data) : (rows[0].data || {});
+  if (!Array.isArray(data.stages) || !data.stages[index]) return false;
+  data.stages[index].status = status;
+  await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, projectId, JSON.stringify(data)]);
+  return true;
 }
 
 // ── 회사 지식 (전부 user_id 격리) ────────────────────────────────────────────

@@ -367,11 +367,11 @@ export interface Project {
   updatedAt: string;
 }
 export async function getProjects(): Promise<Project[]> {
-  return (await fetch("/api/projects")).json();
+  return (await fetch("/api/agent/projects")).json();
 }
 export async function setProjectStage(projectId: string, index: number, status: StageStatus) {
   return (
-    await fetch("/api/projects/stage", {
+    await fetch("/api/agent/project-stage", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projectId, index, status }),
