@@ -245,6 +245,13 @@ function BrainIcon({ className }: { className?: string }) {
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
 export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate }: Props) {
+  // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
+  const isExpired = (() => {
+    if (!convDate) return false;
+    const d = new Date();
+    const today = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+    return convDate !== today;
+  })();
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const didInitScroll = useRef(false);
@@ -478,6 +485,17 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
         <div ref={endRef} />
       </div>
 
+      {isExpired ? (
+        <div className="px-4 pb-4 pt-3 border-t border-edge text-center">
+          <p className="text-xs text-gray-500">🌙 본 대화창은 자정이 지나 종료되었습니다.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-1.5 text-xs font-medium text-emerald-400 transition hover:underline"
+          >
+            오늘 대화로 가기
+          </button>
+        </div>
+      ) : (
       <div className="px-4 pb-4 pt-2 border-t border-edge">
         <div className="flex items-end gap-2">
           <textarea
@@ -515,6 +533,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
