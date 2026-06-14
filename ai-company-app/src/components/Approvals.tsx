@@ -140,8 +140,7 @@ export default function Approvals({
     return () => clearInterval(t);
   }, []);
 
-  if (pending.length === 0 && history.length === 0 && knowledge.length === 0) return null;
-
+  // 승인 패널은 빈 상태여도 항상 표시(원본과 동일). 회사 지식 카드만 데이터 있을 때 표시.
   return (
     <>
       {/* 회사 지식 요약 — 전체/규칙/사실/결정. 승인 대기 카드와 분리된 별도 카드 */}
@@ -168,7 +167,6 @@ export default function Approvals({
         </div>
       )}
 
-      {(pending.length > 0 || history.length > 0) && (
     <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
       <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-amber-300">
         <ListTodoIcon className="h-4 w-4" /> 승인 ({pending.length})
@@ -266,7 +264,6 @@ export default function Approvals({
         </div>
       )}
     </div>
-      )}
     </>
   );
 }

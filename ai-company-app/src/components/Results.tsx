@@ -212,8 +212,7 @@ export default function Results({ onAgentSay }: { onAgentSay?: (m: AgentMessage)
   const pending = items.filter((it) => it.reviewStatus === "pending");
   const recent = items.filter((it) => it.reviewStatus !== "pending").slice(0, 5);
 
-  if (pending.length === 0 && recent.length === 0) return null;
-
+  // 보고 패널은 빈 상태여도 항상 표시(원본과 동일).
   return (
     <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
       <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-amber-300">

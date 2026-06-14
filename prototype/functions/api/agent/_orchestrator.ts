@@ -16,6 +16,7 @@ import {
   listAgentKnowledge,
 } from "./_shared";
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
+import { modelFor } from "../_shared/cloud-models.js";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
 
@@ -244,7 +245,7 @@ export async function speak(
   }
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
-  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId });
+  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId) });
   return extractMarkers(raw);
 }
 

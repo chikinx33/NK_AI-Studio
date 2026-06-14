@@ -7,6 +7,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql } from "./_shared";
 import { authStatus, authDiagnose, getSettingsRow, saveClaudeAuth, saveLlmMode } from "../_shared/claude-auth.js";
+import { CLOUD_MODELS } from "../_shared/cloud-models.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -29,7 +30,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         logRetentionDays: (row && row.log_retention_days) || 0,
         localModel: "auto",
       },
-      cloudModels: {},
+      cloudModels: CLOUD_MODELS,
       claudeAuth,
     },
     200,
