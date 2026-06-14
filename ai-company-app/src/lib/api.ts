@@ -364,9 +364,16 @@ export async function deleteKnowledge(text: string) {
   ).json();
 }
 
-// NK: 라비오크식 보드 스냅샷이 없어 정리 대상 없음(noop).
+// 회사 지식의 똑같은 중복 항목을 1개만 남기고 정리.
 export async function consolidateDecisions(): Promise<{ removed: number; keptSnapshots: number }> {
-  return { removed: 0, keptSnapshots: 0 };
+  const d = await (
+    await fetch("/api/agent/company-knowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "dedupe" }),
+    })
+  ).json();
+  return { removed: d?.removed ?? 0, keptSnapshots: 0 };
 }
 
 // 진행 중 프로젝트 보드 (홈)

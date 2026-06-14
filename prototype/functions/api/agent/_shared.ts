@@ -206,7 +206,24 @@ export async function listCompanyKnowledge(sql: SqlFn, userId: string): Promise<
   return rows as { text: string; source: string; type: string }[];
 }
 export async function addCompanyKnowledge(sql: SqlFn, userId: string, text: string, type: string, source = "수동"): Promise<void> {
-  await sql("INSERT INTO company_knowledge (user_id, text, type, source) VALUES ($1, $2, $3, $4)", [userId, text, type || "사실", source]);
+  // 같은 내용이 이미 있으면 추가하지 않는다(중복 방지).
+  await sql(
+    `INSERT INTO company_knowledge (user_id, text, type, source)
+     SELECT $1, $2, $3, $4
+     WHERE NOT EXISTS (SELECT 1 FROM company_knowledge WHERE user_id = $1 AND text = $2)`,
+    [userId, text, type || "사실", source]
+  );
+}
+/** 같은 내용이 여러 개면 1개만 남기고 삭제(기존 중복 정리). 삭제된 개수 반환. */
+export async function dedupeCompanyKnowledge(sql: SqlFn, userId: string): Promise<number> {
+  const rows = await sql(
+    `DELETE FROM company_knowledge
+     WHERE user_id = $1 AND ctid NOT IN (
+       SELECT MIN(ctid) FROM company_knowledge WHERE user_id = $1 GROUP BY text
+     ) RETURNING id`,
+    [userId]
+  );
+  return Array.isArray(rows) ? rows.length : 0;
 }
 export async function updateCompanyKnowledge(sql: SqlFn, userId: string, oldText: string, newText: string): Promise<void> {
   await sql("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND text = $2", [userId, oldText, newText]);

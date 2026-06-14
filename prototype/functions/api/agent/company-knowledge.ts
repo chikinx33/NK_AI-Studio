@@ -5,6 +5,7 @@ import { authorizeRequest } from "../_shared/auth.js";
 import {
   send, corsHeaders, getSql, ensureAgentSchema,
   listCompanyKnowledge, addCompanyKnowledge, updateCompanyKnowledge, deleteCompanyKnowledge,
+  dedupeCompanyKnowledge,
 } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -28,12 +29,19 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
   const body = await request.json().catch(() => ({} as any));
-  const text = String(body?.text || "").trim();
-  const type = String(body?.type || "사실").trim();
-  if (!text) return send({ error: "text required" }, 400, origin);
   const sql = getSql(env);
   if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
   await ensureAgentSchema(sql);
+
+  // 중복 정리: 같은 내용 1개만 남기고 제거
+  if (body?.action === "dedupe") {
+    const removed = await dedupeCompanyKnowledge(sql, auth.userId);
+    return send({ ok: true, removed }, 200, origin);
+  }
+
+  const text = String(body?.text || "").trim();
+  const type = String(body?.type || "사실").trim();
+  if (!text) return send({ error: "text required" }, 400, origin);
   await addCompanyKnowledge(sql, auth.userId, text, type);
   return send({ ok: true }, 200, origin);
 };
