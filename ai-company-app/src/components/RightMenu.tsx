@@ -57,12 +57,6 @@ const MessagesSquareIcon = (p: IconProps) => (
     <path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1" />
   </SVG>
 );
-const PowerIcon = (p: IconProps) => (
-  <SVG {...p}>
-    <path d="M12 2v10" />
-    <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
-  </SVG>
-);
 const BackToStudioIcon = (p: IconProps) => (
   <SVG {...p}>
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -108,7 +102,6 @@ interface Props {
   onKnowledge: () => void;
   onAgents: () => void;
   onSettings: () => void;
-  onShutdown: () => void;
 }
 
 export default function RightMenu({
@@ -118,7 +111,6 @@ export default function RightMenu({
   onKnowledge,
   onAgents,
   onSettings,
-  onShutdown,
 }: Props) {
   return (
     <div className="mb-3 flex items-center gap-1 rounded-xl border border-edge bg-panel p-1">
@@ -140,9 +132,6 @@ export default function RightMenu({
       </IconBtn>
       <IconBtn title="스튜디오로 돌아가기" onClick={() => { window.location.href = "/app.html"; }}>
         <BackToStudioIcon className="h-4 w-4" />
-      </IconBtn>
-      <IconBtn title="라비오크 종료" onClick={onShutdown} danger>
-        <PowerIcon className="h-4 w-4" />
       </IconBtn>
     </div>
   );

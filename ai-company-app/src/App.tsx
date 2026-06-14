@@ -17,7 +17,6 @@ import {
   streamChat,
   getEvents,
   getApprovals,
-  shutdownServer,
   type StatusInfo,
   type AgentInfo,
   type HistoryTurn,
@@ -31,7 +30,6 @@ export default function App() {
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
   const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents">("chat");
-  const [showShutdownConfirm, setShowShutdownConfirm] = useState(false);
   // 사이드바에서 숨길 에이전트 (코어 제외, localStorage 영속)
   const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(() => {
     try { return new Set<string>(JSON.parse(localStorage.getItem("hiddenAgents") || "[]")); } catch { return new Set(); }
@@ -412,7 +410,6 @@ export default function App() {
               onKnowledge={() => setCenterView("knowledge")}
               onAgents={() => setCenterView("agents")}
               onSettings={() => setCenterView("settings")}
-              onShutdown={() => setShowShutdownConfirm(true)}
             />
             <Approvals onPickCategory={openKnowledgeCategory} />
           </div>
@@ -435,39 +432,6 @@ export default function App() {
         </div>
       </div>
 
-      {showShutdownConfirm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
-          onClick={() => setShowShutdownConfirm(false)}
-        >
-          <div
-            className="w-[360px] max-w-[92vw] rounded-2xl border border-edge bg-panel p-5 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-base font-bold text-gray-100">라비오크 AI를 종료할까요?</h3>
-            <p className="mt-2 text-sm text-gray-400">
-              서버와 웹이 모두 꺼집니다. 다시 켜려면 바로가기를 실행하세요.
-            </p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                onClick={() => setShowShutdownConfirm(false)}
-                className="rounded-lg border border-edge px-4 py-2 text-sm text-gray-300 transition hover:bg-edge"
-              >
-                취소
-              </button>
-              <button
-                onClick={() => {
-                  setShowShutdownConfirm(false);
-                  shutdownServer();
-                }}
-                className="rounded-lg bg-red-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600"
-              >
-                종료
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
