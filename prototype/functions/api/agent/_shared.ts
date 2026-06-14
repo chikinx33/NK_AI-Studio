@@ -275,9 +275,42 @@ async function runSoundTool(input: any, ctx: ToolContext): Promise<any> {
   return { audioUrl: data.outputUrl || "", kind: "audio", model: "elevenlabs", promptEcho: prompt };
 }
 
+/** 픽셀 영상 도구: /api/video 제출(비동기) → /api/video/status 폴링 → 재생 URL. */
+async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
+  const promptText = String(input?.prompt || "").trim();
+  if (!promptText) throw new Error("prompt is required");
+  const sub = await fetch(internalUrl(ctx.request, "/api/video"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+    body: JSON.stringify({ promptText, imageUrl: input?.imageUrl, aspectRatio: input?.aspectRatio || "16:9" }),
+  });
+  const subText = await sub.text();
+  let subData: any = {};
+  try { subData = JSON.parse(subText); } catch { subData = { raw: subText }; }
+  if (!sub.ok) throw new Error(subData?.error || `video 제출 실패 (${sub.status})`);
+  const jobId = subData.job_id;
+  if (!jobId) throw new Error("video job_id 없음");
+  // 비동기 폴링(최대 약 3분). 영상 생성은 수십초~수분.
+  for (let i = 0; i < 36; i++) {
+    await new Promise((r) => setTimeout(r, 5000));
+    const st = await fetch(internalUrl(ctx.request, `/api/video/status?job_id=${encodeURIComponent(jobId)}`), {
+      headers: { Authorization: ctx.authHeader },
+    });
+    const stData: any = await st.json().catch(() => ({}));
+    if (stData.status === "error" || (stData.done && stData.error)) {
+      throw new Error(stData.error?.message || "video 생성 실패");
+    }
+    if (stData.done) {
+      return { videoUrl: stData.playback || stData.playbackUrl || "", kind: "video", model: "veo/kling", promptEcho: promptText };
+    }
+  }
+  throw new Error("video 생성 시간 초과");
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
+  video: { agentId: "pixel", kind: "external", run: runVideoTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */
