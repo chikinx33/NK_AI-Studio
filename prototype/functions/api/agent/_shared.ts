@@ -291,6 +291,25 @@ export async function patchSkill(sql: SqlFn, userId: string, name: string, oldSt
 export async function deleteSkill(sql: SqlFn, userId: string, name: string): Promise<void> {
   await sql("DELETE FROM company_skills WHERE user_id = $1 AND name = $2", [userId, name]);
 }
+/** 큐레이터: 오래 안 쓴 스킬(use_count 0, days일 이상 미수정, pinned 아님)을 아카이브. 보관 개수 반환. */
+export async function archiveStaleSkills(sql: SqlFn, userId: string, days = 30): Promise<number> {
+  const rows = await sql(
+    `UPDATE company_skills SET archived = true, updated_at = now()
+     WHERE user_id = $1 AND archived = false AND pinned = false AND use_count = 0
+       AND updated_at < now() - make_interval(days => $2::int)
+     RETURNING id`,
+    [userId, days]
+  );
+  return Array.isArray(rows) ? rows.length : 0;
+}
+/** 아카이브된 스킬 목록(복원·점검용). */
+export async function listArchivedSkills(sql: SqlFn, userId: string): Promise<{ name: string; category: string; description: string }[]> {
+  const rows = await sql(
+    "SELECT name, category, description FROM company_skills WHERE user_id = $1 AND archived = true ORDER BY updated_at DESC",
+    [userId]
+  );
+  return rows as { name: string; category: string; description: string }[];
+}
 
 // ── 직원 페르소나·지식 (전부 user_id 격리) ──────────────────────────────────
 export async function getAgentPersona(sql: SqlFn, userId: string, agentId: string): Promise<string | null> {
