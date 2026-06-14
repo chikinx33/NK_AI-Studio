@@ -391,8 +391,25 @@ export interface ResultItem {
   reviewStatus: "pending" | "approved" | "revise";
   createdAt: number;
 }
+// NK: 검수 결과 = 잡(agent_jobs) 중 산출물 있는 것. /api/agent/jobs 를 ResultItem 으로 변환.
+const NK_AGENT_NAMES: Record<string, string> = {
+  core: "코어", edge: "엣지", radar: "레이더", maki: "마키", plot: "플롯", ink: "잉크",
+  pixel: "픽셀", beat: "비트", engi: "엔지", reach: "리치", sync: "싱크",
+};
 export async function getResults(limit = 30): Promise<{ items: ResultItem[]; total: number }> {
-  return (await fetch(`/api/results?limit=${limit}`)).json();
+  const d = await (await fetch(`/api/agent/jobs?limit=${limit}`)).json();
+  const all = ((d && d.items) || []).filter((j: any) => j.output && (j.output.signedUrl || j.output.videoUrl || j.output.audioUrl || j.output.dataUrl));
+  const items: ResultItem[] = all.map((j: any) => {
+    const out = j.output || {};
+    return {
+      id: j.id, agentId: j.agent_id, agentName: NK_AGENT_NAMES[j.agent_id] || j.agent_id,
+      file: j.type, url: out.signedUrl || out.videoUrl || out.audioUrl || out.dataUrl || "",
+      prompt: (j.input && j.input.prompt) || "", provider: out.provider || out.model || "",
+      note: j.review_note || "", reviewStatus: j.review_status || "pending",
+      createdAt: Date.parse(j.created_at) || 0,
+    };
+  });
+  return { items, total: items.length };
 }
 export interface AgentMessage {
   role: "agent";
@@ -406,23 +423,19 @@ export async function reviewResult(
   action: "approve" | "revise",
   note?: string
 ): Promise<{ ok: boolean; reviewStatus?: string; message?: AgentMessage }> {
-  return (
-    await fetch("/api/results/review", {
+  const d = await (
+    await fetch("/api/agent/review", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action, note }),
+      body: JSON.stringify({ id, decision: action === "approve" ? "approved" : "revise", note }),
     })
   ).json();
+  return { ok: !!d.ok, reviewStatus: d.job?.review_status };
 }
 
-export async function openResultFolder(id: string) {
-  return (
-    await fetch("/api/results/open-folder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    })
-  ).json();
+export async function openResultFolder(_id: string) {
+  // NK: 클라우드 저장이라 로컬 폴더 열기는 미지원.
+  return { ok: false, message: "클라우드에서는 폴더 열기를 지원하지 않아요." };
 }
 
 // 서버 → 클라이언트 폴링: 백그라운드 보고 메시지 + 작업중 에이전트
