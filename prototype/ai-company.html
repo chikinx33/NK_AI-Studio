@@ -252,6 +252,7 @@
           '<div class="job-prompt">' + esc((job.input && job.input.prompt) || '') + '</div>' +
           (job.error ? '<div class="err">' + esc(job.error) + '</div>' : '') +
           (img ? '<img class="result-img" src="' + esc(img) + '" alt="결과" />' : '') +
+          (out.audioUrl ? '<audio controls src="' + esc(out.audioUrl) + '" style="width:100%;margin-top:12px;"></audio>' : '') +
           (canReview ?
             '<div class="actions"><button class="btn-approve" data-act="approve">검수 승인</button><button class="btn-revise" data-act="revise">재검토</button></div>' +
             '<div class="note-box"><textarea data-note placeholder="어떤 부분을 수정할까요? (선택)"></textarea><div class="actions"><button class="btn-revise" data-act="revise-send">재검토 보내기</button></div></div>'

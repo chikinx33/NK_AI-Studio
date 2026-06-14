@@ -259,8 +259,25 @@ async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+/** 비트 도구: /api/sound/sfx-generate 호출 어댑터(효과음·짧은 사운드). */
+async function runSoundTool(input: any, ctx: ToolContext): Promise<any> {
+  const prompt = String(input?.prompt || "").trim();
+  if (!prompt) throw new Error("prompt is required");
+  const res = await fetch(internalUrl(ctx.request, "/api/sound/sfx-generate"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+    body: JSON.stringify({ prompt, duration: Number(input?.duration) || 8 }),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || data?.message || `sound 호출 실패 (${res.status})`);
+  return { audioUrl: data.outputUrl || "", kind: "audio", model: "elevenlabs", promptEcho: prompt };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
+  sound: { agentId: "beat", kind: "external", run: runSoundTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */
@@ -284,6 +301,10 @@ export async function processJob(
 
 // 에이전트 표시 메타(아바타·이름·직책). Phase 0 최소.
 export const AGENT_META: Record<string, { name: string; role: string }> = {
-  pixel: { name: "픽셀", role: "디자인" },
-  core: { name: "코어", role: "총괄" },
+  core: { name: "코어", role: "총괄" }, edge: { name: "엣지", role: "전략" },
+  radar: { name: "레이더", role: "리서치" }, maki: { name: "마키", role: "마케팅" },
+  plot: { name: "플롯", role: "기획" }, ink: { name: "잉크", role: "작가" },
+  pixel: { name: "픽셀", role: "디자인" }, beat: { name: "비트", role: "사운드" },
+  engi: { name: "엔지", role: "개발" }, reach: { name: "리치", role: "배포" },
+  sync: { name: "싱크", role: "PM" },
 };
