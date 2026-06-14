@@ -542,6 +542,7 @@ export async function streamChat(
   // 코어가 위임하면 직원이 일하는 동안 메시지가 잠시 안 늘어나므로(이때 종료하면 위임 답변을
   // 놓침) 안정 판정을 넉넉히 18초(12×1.5s)로 둔다. 최대 약 3분(120×1.5s).
   let emitted = before;
+  let agentEmitted = 0; // 실제로 받은 에이전트 발언 수
   let lastLen = -1, stable = 0;
   for (let i = 0; i < 120; i++) {
     if (opts.signal?.aborted) break;
@@ -553,10 +554,19 @@ export async function streamChat(
       if (m.role === "agent") {
         onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
         onEvent("turn_end", { agentId: m.agent_id, text: m.text });
+        agentEmitted++;
       }
     }
     emitted = msgs.length;
     if (msgs.length === lastLen) { if (++stable >= 12) break; } else { stable = 0; lastLen = msgs.length; }
+  }
+  // 에이전트 발언을 하나도 못 받았으면(무응답) 원인을 보이게 안내.
+  if (agentEmitted === 0 && !opts.signal?.aborted) {
+    onEvent("turn_start", { agentId: "core", name: "코어", emoji: "" });
+    onEvent("turn_end", {
+      agentId: "core",
+      text: "⚠️ 응답을 받지 못했어요. 가능한 원인: ① 모두 퇴근(휴식) 상태 — 출근시켜 주세요. ② 인증 문제 — 설정 → 🔍 인증 진단을 확인해 주세요. ③ 서버 처리 지연 — 잠시 후 다시 시도해 주세요.",
+    });
   }
   onEvent("done", {});
 }

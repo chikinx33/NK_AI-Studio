@@ -448,26 +448,33 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
             </div>
           )
         )}
-        {busy && !turns[turns.length - 1]?.streaming && (
-          <div className="flex items-start justify-start gap-2">
-            <img
-              src={`${import.meta.env.BASE_URL}avatars/core.png`}
-              alt="코어"
-              className="h-8 w-8 shrink-0 rounded-lg object-cover"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
-            />
-            <div className="max-w-[78%]">
-              <div className="text-xs text-gray-400 mb-0.5">코어</div>
-              <div className="inline-block rounded-2xl rounded-tl-sm border border-edge bg-panel px-4 py-3">
-                <span className="flex gap-1">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
-                </span>
+        {busy && !turns[turns.length - 1]?.streaming && (() => {
+          // 입력에서 멘션한 직원이 있으면 그 직원, 없으면 코어가 '입력 중'으로 보이게
+          const lastUserText = [...turns].reverse().find((t) => t.role === "user")?.text ?? "";
+          const ta = agents?.find((a) => a.id !== "core" && lastUserText.includes(a.name));
+          const tid = ta?.id ?? "core";
+          const tname = ta?.name ?? "코어";
+          return (
+            <div className="flex items-start justify-start gap-2">
+              <img
+                src={`${import.meta.env.BASE_URL}avatars/${tid}.png`}
+                alt={tname}
+                className="h-8 w-8 shrink-0 rounded-lg object-cover"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+              />
+              <div className="max-w-[78%]">
+                <div className="text-xs text-gray-400 mb-0.5">{tname}</div>
+                <div className="inline-block rounded-2xl rounded-tl-sm border border-edge bg-panel px-4 py-3">
+                  <span className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
         <div ref={endRef} />
       </div>
 
