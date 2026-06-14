@@ -1,0 +1,515 @@
+export interface StatusInfo {
+  company: string;
+  llmMode: "auto" | "cloud" | "local";
+  workMode: "on" | "off";
+  autonomous: boolean;
+  resolvedBackend: "local" | "cloud";
+  reason: string;
+  localModel: string; // 전역 로컬 모델 설정 ("auto" 또는 모델명)
+  ollama: {
+    up: boolean;
+    models: string[];
+    chatModels: string[]; // 채팅 가능 모델(임베딩 전용 제외) — 선택 버튼용
+    loaded: string[];
+    autoModel: string | null; // auto 모드가 고를 모델
+  };
+  cloud: { configured: boolean };
+  ceoModel: string;
+  agentCount: number;
+}
+
+export interface AgentInfo {
+  id: string;
+  emoji: string;
+  name: string;
+  role: string;
+  hasTools: boolean;
+  tools: string[];
+}
+
+export async function getStatus(): Promise<StatusInfo> {
+  return (await fetch("/api/status")).json();
+}
+
+// 생존 신호 (브라우저가 열려 있는 동안 주기적으로 호출)
+export async function ping(): Promise<void> {
+  try {
+    await fetch("/api/ping");
+  } catch {
+    /* 서버 종료/미기동 — 무시 */
+  }
+}
+
+// 서버 종료 ('종료' 버튼)
+export async function shutdownServer(): Promise<void> {
+  try {
+    await fetch("/api/shutdown", { method: "POST" });
+  } catch {
+    /* 종료되면서 연결이 끊길 수 있음 — 무시 */
+  }
+}
+
+export async function getCompany() {
+  return (await fetch("/api/company")).json();
+}
+
+export async function getAgents(): Promise<AgentInfo[]> {
+  return (await fetch("/api/agents")).json();
+}
+
+// 직원 상세(페르소나) + 개인 지식·규칙 관리
+export interface AgentBrain {
+  meta: AgentInfo;
+  prompt: string;
+  memory: string;
+  goal: string;
+  tools: string[];
+}
+export async function getAgentDetail(id: string): Promise<AgentBrain> {
+  return (await fetch(`/api/agents/${id}`)).json();
+}
+export async function getAgentKnowledge(id: string): Promise<KnowledgeItem[]> {
+  return (await fetch(`/api/agents/${id}/knowledge`)).json();
+}
+export async function addAgentKnowledge(id: string, text: string, type: KnowledgeType) {
+  return (
+    await fetch(`/api/agents/${id}/knowledge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, type }),
+    })
+  ).json();
+}
+export async function deleteAgentKnowledge(id: string, text: string) {
+  return (
+    await fetch(`/api/agents/${id}/knowledge`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    })
+  ).json();
+}
+export async function saveAgentPersona(id: string, prompt: string) {
+  return (
+    await fetch(`/api/agents/${id}/persona`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt }),
+    })
+  ).json();
+}
+
+export async function getHistory(): Promise<HistoryTurn[]> {
+  return (await fetch("/api/history")).json();
+}
+
+// 대화(스레드)
+export interface Conversation {
+  id: string;
+  title: string;
+  projectId?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export async function getConversations(): Promise<Conversation[]> {
+  return (await fetch("/api/conversations")).json();
+}
+export async function createConversation(title?: string, projectId?: string): Promise<Conversation> {
+  return (
+    await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, projectId }),
+    })
+  ).json();
+}
+export async function renameConversation(id: string, title: string): Promise<Conversation> {
+  return (
+    await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title }),
+    })
+  ).json();
+}
+export async function getConversationMessages(id: string): Promise<HistoryTurn[]> {
+  return (await fetch(`/api/conversations/${encodeURIComponent(id)}/messages`)).json();
+}
+export async function ensureDateConversation(date: string): Promise<Conversation> {
+  return (
+    await fetch("/api/conversations/date", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date }),
+    })
+  ).json();
+}
+
+export async function getSettings() {
+  return (await fetch("/api/settings")).json();
+}
+
+export async function setMode(llmMode: string) {
+  return (
+    await fetch("/api/settings/mode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ llmMode }),
+    })
+  ).json();
+}
+
+export interface LogStats { dates: number; oldest: string | null; newest: string | null }
+export async function getLogStats(): Promise<LogStats> {
+  return (await fetch("/api/logs/stats")).json();
+}
+export async function setLogRetention(days: number) {
+  return (
+    await fetch("/api/settings/log-retention", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days }),
+    })
+  ).json();
+}
+export async function cleanupLogs() {
+  return (await fetch("/api/logs/cleanup", { method: "POST" })).json();
+}
+
+export interface IntegrationField {
+  key: string;
+  type: "text" | "password" | "number" | "select";
+  label: string;
+  hint?: string;
+  required: boolean;
+  options?: (string | number | { value: string | number; label: string })[];
+  widget?: "toggle";
+  secret: boolean;
+  hasValue: boolean;
+  value?: string | number;
+}
+export interface ToolIntegration {
+  agentId: string;
+  agentName: string;
+  emoji: string;
+  tool: string;
+  fields: IntegrationField[];
+  configured: boolean;
+}
+export async function getIntegrations(): Promise<ToolIntegration[]> {
+  return (await fetch("/api/integrations")).json();
+}
+export async function saveIntegration(agentId: string, tool: string, values: Record<string, string>) {
+  return (
+    await fetch("/api/integrations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId, tool, values }),
+    })
+  ).json();
+}
+
+// 스킬 연동 준비도 (비밀값 미포함 — 상태/누락 키 이름만)
+export type SkillStatus = "ready" | "needs_config" | "no_tool";
+export interface SkillReadiness {
+  agentId: string;
+  agentName: string;
+  skill: string;
+  file: string;
+  requiredTools: string[];
+  status: SkillStatus;
+  missing: { tool: string; keys: string[] }[];
+}
+export async function getSkillReadiness(): Promise<SkillReadiness[]> {
+  return (await fetch("/api/skills/readiness")).json();
+}
+
+// 연동 "연결 테스트" — 안전 모드 1회 실행 결과
+export async function testIntegration(agentId: string, tool: string): Promise<{ ok: boolean; message: string }> {
+  return (
+    await fetch("/api/integrations/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ agentId, tool }),
+    })
+  ).json();
+}
+
+export async function setLocalModel(localModel: string) {
+  return (
+    await fetch("/api/settings/local-model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ localModel }),
+    })
+  ).json();
+}
+
+export async function setApiKey(apiKey: string) {
+  return (
+    await fetch("/api/settings/apikey", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiKey }),
+    })
+  ).json();
+}
+
+export type ClaudeAuthMode = "subscription" | "api_key";
+export interface ClaudeAuthStatus {
+  mode: ClaudeAuthMode;
+  configured: boolean;
+  oauthSet: boolean;
+  apiKeySet: boolean;
+}
+// 인증 모드 설정 (+ 선택적으로 토큰/키 동시 저장)
+export async function setClaudeAuth(payload: {
+  authMode: ClaudeAuthMode;
+  oauthToken?: string;
+  apiKey?: string;
+}) {
+  return (
+    await fetch("/api/settings/claude-auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+  ).json();
+}
+
+export async function setAutonomous(enabled: boolean) {
+  return (
+    await fetch("/api/autonomous", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    })
+  ).json();
+}
+
+export async function autonomousStepNow() {
+  return (await fetch("/api/autonomous/step", { method: "POST" })).json();
+}
+
+export async function setWork(workMode: "on" | "off") {
+  return (
+    await fetch("/api/work", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workMode }),
+    })
+  ).json();
+}
+
+export interface KnowledgeItem {
+  text: string;
+  source: string;
+  type?: KnowledgeType;
+}
+
+export async function getKnowledge(): Promise<KnowledgeItem[]> {
+  return (await fetch("/api/knowledge")).json();
+}
+
+export type KnowledgeType = "원칙" | "사실" | "결정";
+export interface GraphNode { id: number; text: string; origin: string; type: KnowledgeType; degree: number; }
+export interface GraphEdge { source: number; target: number; weight: number; }
+export async function getKnowledgeGraph(): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
+  return (await fetch("/api/knowledge/graph")).json();
+}
+
+export async function addKnowledge(text: string, type?: KnowledgeType) {
+  return (
+    await fetch("/api/knowledge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(type ? { text, type } : { text }),
+    })
+  ).json();
+}
+
+export async function updateKnowledge(oldText: string, newText: string) {
+  return (
+    await fetch("/api/knowledge", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ oldText, newText }),
+    })
+  ).json();
+}
+
+export async function deleteKnowledge(text: string) {
+  return (
+    await fetch("/api/knowledge", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    })
+  ).json();
+}
+
+// 결정 지식 정리: 중복 보드 진행 스냅샷을 프로젝트별 최신 1건만 남기고 제거(감사로그 보존)
+export async function consolidateDecisions(): Promise<{ removed: number; keptSnapshots: number }> {
+  return (await fetch("/api/knowledge/consolidate", { method: "POST" })).json();
+}
+
+// 진행 중 프로젝트 보드 (홈)
+export type StageStatus = "todo" | "doing" | "done";
+export interface ProjectStage { title: string; status: StageStatus }
+export interface Project {
+  id: string;
+  name: string;
+  summary?: string;
+  status: "active" | "paused" | "done";
+  goal?: string;
+  stages: ProjectStage[];
+  nextAction?: string;
+  updatedAt: string;
+}
+export async function getProjects(): Promise<Project[]> {
+  return (await fetch("/api/projects")).json();
+}
+export async function setProjectStage(projectId: string, index: number, status: StageStatus) {
+  return (
+    await fetch("/api/projects/stage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, index, status }),
+    })
+  ).json();
+}
+
+// 결과(산출물) 리스트
+export interface ResultItem {
+  id: string;
+  agentId: string;
+  agentName: string;
+  file: string;
+  url: string;
+  prompt?: string;
+  provider?: string;
+  note?: string;
+  reviewStatus: "pending" | "approved" | "revise";
+  createdAt: number;
+}
+export async function getResults(limit = 30): Promise<{ items: ResultItem[]; total: number }> {
+  return (await fetch(`/api/results?limit=${limit}`)).json();
+}
+export interface AgentMessage {
+  role: "agent";
+  agentId?: string;
+  name?: string;
+  emoji?: string;
+  text: string;
+}
+export async function reviewResult(
+  id: string,
+  action: "approve" | "revise",
+  note?: string
+): Promise<{ ok: boolean; reviewStatus?: string; message?: AgentMessage }> {
+  return (
+    await fetch("/api/results/review", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action, note }),
+    })
+  ).json();
+}
+
+export async function openResultFolder(id: string) {
+  return (
+    await fetch("/api/results/open-folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
+  ).json();
+}
+
+// 서버 → 클라이언트 폴링: 백그라운드 보고 메시지 + 작업중 에이전트
+export interface LiveEvents {
+  seq: number;
+  messages: { seq: number; turn: HistoryTurn }[];
+  working: string[];
+}
+export async function getEvents(since: number): Promise<LiveEvents> {
+  return (await fetch(`/api/events?since=${since}`)).json();
+}
+
+export async function getApprovals() {
+  return (await fetch("/api/approvals")).json();
+}
+
+export async function approveItem(id: string) {
+  return (await fetch(`/api/approvals/${id}/approve`, { method: "POST" })).json();
+}
+
+export async function rejectItem(id: string) {
+  return (await fetch(`/api/approvals/${id}/reject`, { method: "POST" })).json();
+}
+
+export type SSEHandler = (event: string, data: any) => void;
+
+/** SSE 채팅 스트림. fetch + ReadableStream 으로 직접 파싱 (POST 본문 필요하므로 EventSource 불가) */
+export interface HistoryTurn {
+  role: "user" | "agent";
+  agentId?: string;
+  name?: string;
+  emoji?: string;
+  text: string;
+}
+
+export async function streamChat(
+  message: string,
+  onEvent: SSEHandler,
+  opts: {
+    apiKey?: string;
+    history?: HistoryTurn[];
+    focusAgent?: string;
+    conversationId?: string; // 활성 대화(스레드)
+    signal?: AbortSignal; // 중지 버튼용 — abort 시 스트림 즉시 종료
+  } = {}
+): Promise<void> {
+  const { signal, ...body } = opts;
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, ...body }),
+    signal,
+  });
+  if (!res.body) throw new Error("스트림 없음");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() ?? "";
+      for (const chunk of chunks) {
+        const lines = chunk.split("\n");
+        let event = "message";
+        let data = "";
+        for (const line of lines) {
+          if (line.startsWith("event: ")) event = line.slice(7).trim();
+          else if (line.startsWith("data: ")) data += line.slice(6);
+        }
+        if (data) {
+          try {
+            onEvent(event, JSON.parse(data));
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // 사용자가 중지(abort)했으면 정상 종료로 취급 — 오류 메시지 안 띄움
+    if (signal?.aborted || (e as Error)?.name === "AbortError") return;
+    throw e;
+  }
+}

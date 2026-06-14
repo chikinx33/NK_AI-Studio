@@ -8,3 +8,4 @@ Raviok AI/
 .env
 .env.local
 .env.*.local
+ai-company-app/node_modules/

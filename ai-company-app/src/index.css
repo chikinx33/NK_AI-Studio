@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+body {
+  background: #0e1116;
+  color: #e6edf3;
+  font-family: ui-sans-serif, system-ui, "Segoe UI", "Malgun Gothic", sans-serif;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2b3340; border-radius: 6px; }
+
+/* VN(비주얼노벨) 모드 애니메이션 */
+@keyframes vnIn {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+.vn-in { animation: vnIn 0.35s ease-out; }
+@keyframes vnCaret { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+.vn-caret { animation: vnCaret 1s step-end infinite; }
+
+/* 캐릭터 카드 모달 등장 */
+@keyframes ccPop {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+.cc-pop { animation: ccPop 0.22s ease-out; }

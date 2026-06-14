@@ -1,0 +1,272 @@
+import { useEffect, useState } from "react";
+import { getApprovals, approveItem, rejectItem, getKnowledge, type KnowledgeItem } from "../lib/api";
+
+// 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황)
+const KNOW_CHIPS = [
+  { key: null, label: "전체", c: "bg-gray-700/60 text-gray-200 border-gray-600" },
+  { key: "원칙", label: "규칙", c: "bg-violet-900/50 text-violet-300 border-violet-700/50" },
+  { key: "사실", label: "사실", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
+  { key: "결정", label: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
+] as const;
+
+function ListTodoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M13 5h8" />
+      <path d="M13 12h8" />
+      <path d="M13 19h8" />
+      <path d="m3 17 2 2 4-4" />
+      <rect x="3" y="4" width="6" height="6" rx="1" />
+    </svg>
+  );
+}
+
+function Spinner({ className }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className ?? ""}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function BrainIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M12 18V5" />
+      <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" />
+      <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" />
+      <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77" />
+      <path d="M18 18a4 4 0 0 0 2-7.464" />
+      <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" />
+      <path d="M6 18a4 4 0 0 1-2-7.464" />
+      <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77" />
+    </svg>
+  );
+}
+
+interface ApprovalItem {
+  id: string;
+  agentId: string;
+  agentName?: string;
+  title: string;
+  command: string;
+  tool?: string;
+  reason?: string;
+  kind?: string;
+  status: string;
+  result?: string;
+}
+
+export default function Approvals({
+  onPickCategory,
+}: {
+  onPickCategory?: (key: "원칙" | "사실" | "결정" | null) => void;
+} = {}) {
+  const [pending, setPending] = useState<ApprovalItem[]>([]);
+  const [history, setHistory] = useState<ApprovalItem[]>([]);
+  const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+  // 클릭한 항목 → 어떤 처리(승인/거절)인지 기록. 목록에서 사라질 때까지 버튼 잠금 유지(중복 클릭 방지)
+  const [acting, setActing] = useState<Record<string, "approve" | "reject">>({});
+
+  // 버튼 클릭 즉시 잠금 → 항목이 pending에서 사라지면 잠금 자동 해제(refresh에서 정리)
+  async function act(id: string, action: "approve" | "reject") {
+    if (acting[id]) return; // 이미 처리 중이면 무시
+    setActing((m) => ({ ...m, [id]: action }));
+    try {
+      await (action === "approve" ? approveItem(id) : rejectItem(id));
+      await refresh();
+    } catch {
+      // 실패 시에만 잠금 해제 → 다시 시도 가능
+      setActing((m) => {
+        const n = { ...m };
+        delete n[id];
+        return n;
+      });
+    }
+  }
+
+  async function refresh() {
+    const [data, know] = await Promise.all([
+      getApprovals(),
+      getKnowledge().catch(() => [] as KnowledgeItem[]),
+    ]);
+    const pend = data.pending ?? [];
+    setPending(pend);
+    setHistory((data.history ?? []).slice(-5).reverse());
+    setKnowledge(know);
+    // pending에서 빠진(=처리 완료된) 항목의 잠금 기록 정리
+    setActing((m) => {
+      const ids = Object.keys(m);
+      if (ids.length === 0) return m;
+      const live = new Set(pend.map((p: ApprovalItem) => p.id));
+      let changed = false;
+      const n = { ...m };
+      for (const id of ids) {
+        if (!live.has(id)) {
+          delete n[id];
+          changed = true;
+        }
+      }
+      return changed ? n : m;
+    });
+  }
+
+  useEffect(() => {
+    refresh();
+    const t = setInterval(refresh, 4000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (pending.length === 0 && history.length === 0 && knowledge.length === 0) return null;
+
+  return (
+    <>
+      {/* 회사 지식 요약 — 전체/규칙/사실/결정. 승인 대기 카드와 분리된 별도 카드 */}
+      {knowledge.length > 0 && (
+        <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
+            <BrainIcon className="h-3.5 w-3.5" /> 회사 지식
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {KNOW_CHIPS.map(({ key, label, c }) => {
+              const n = key === null ? knowledge.length : knowledge.filter((k) => (k.type ?? "사실") === key).length;
+              return (
+                <button
+                  key={label}
+                  onClick={() => onPickCategory?.(key)}
+                  title="지식 페이지에서 이 분류 보기"
+                  className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:brightness-125 ${c}`}
+                >
+                  {label} {n}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {(pending.length > 0 || history.length > 0) && (
+    <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
+      <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-amber-300">
+        <ListTodoIcon className="h-4 w-4" /> 승인 ({pending.length})
+      </div>
+      {pending.length === 0 && (
+        <div className="text-xs text-gray-500 mb-2">대기 중인 승인이 없어요.</div>
+      )}
+      <div className="space-y-2">
+        {pending.map((a) => (
+          <div key={a.id} className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
+            <div className="flex items-start gap-2">
+              <img
+                src={`/avatars/${a.agentId}.png`}
+                alt={a.agentName ?? a.agentId}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                className="h-8 w-8 shrink-0 rounded-lg object-cover ring-2 ring-amber-500/60"
+                title={`${a.agentName ?? a.agentId}이(가) 승인 요청`}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="font-medium flex items-center gap-1">
+                  <span className="text-amber-200">{a.agentName ?? a.agentId}</span>
+                  {a.kind && (
+                    <span
+                      className={`text-[10px] px-1 rounded ${
+                        a.kind === "external"
+                          ? "bg-red-900/60 text-red-300"
+                          : a.kind === "local"
+                            ? "bg-amber-900/60 text-amber-300"
+                            : "bg-sky-900/60 text-sky-300"
+                      }`}
+                    >
+                      {a.kind}
+                    </span>
+                  )}
+                </div>
+                <div className="text-gray-300">{a.title}</div>
+                <div className="text-gray-500 mt-0.5">
+                  <code>{a.tool ?? a.command}</code>
+                </div>
+              </div>
+            </div>
+            {a.reason && <div className="text-gray-400 mt-0.5">"{a.reason}"</div>}
+            <div className="mt-2 flex gap-2">
+              <button
+                disabled={!!acting[a.id]}
+                onClick={() => act(a.id, "approve")}
+                className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60"
+              >
+                {acting[a.id] === "approve" ? (
+                  <><Spinner className="h-3.5 w-3.5" /> 처리 중…</>
+                ) : (
+                  "승인 · 실행"
+                )}
+              </button>
+              <button
+                disabled={!!acting[a.id]}
+                onClick={() => act(a.id, "reject")}
+                className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600 disabled:cursor-wait disabled:opacity-60"
+              >
+                {acting[a.id] === "reject" ? (
+                  <><Spinner className="h-3.5 w-3.5" /> 처리 중…</>
+                ) : (
+                  "거절"
+                )}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {history.length > 0 && (
+        <div className="mt-3 pt-2 border-t border-edge">
+          <div className="text-[11px] text-gray-500 mb-1">최근 처리</div>
+          <div className="space-y-1">
+            {history.map((h) => (
+              <div key={h.id} className="text-[11px] text-gray-400 flex items-center gap-1">
+                <span
+                  className={
+                    h.status === "done"
+                      ? "text-emerald-400"
+                      : h.status === "error"
+                        ? "text-red-400"
+                        : h.status === "rejected"
+                          ? "text-gray-500"
+                          : "text-amber-400"
+                  }
+                >
+                  {h.status === "done" ? "✅" : h.status === "error" ? "⚠️" : h.status === "rejected" ? "✖" : "⏰"}
+                </span>
+                <code>{h.tool ?? h.command}</code>
+                <span className="text-gray-600">· {h.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+      )}
+    </>
+  );
+}
