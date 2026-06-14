@@ -450,13 +450,21 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
         )}
         {busy && !turns[turns.length - 1]?.streaming && (
           <div className="flex items-start justify-start gap-2">
-            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-edge bg-panel text-base">💬</div>
-            <div className="rounded-2xl rounded-tl-sm border border-edge bg-panel px-4 py-3">
-              <span className="flex gap-1">
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
-                <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
-              </span>
+            <img
+              src={`${import.meta.env.BASE_URL}avatars/core.png`}
+              alt="코어"
+              className="h-8 w-8 shrink-0 rounded-lg object-cover"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+            />
+            <div className="max-w-[78%]">
+              <div className="text-xs text-gray-400 mb-0.5">코어</div>
+              <div className="inline-block rounded-2xl rounded-tl-sm border border-edge bg-panel px-4 py-3">
+                <span className="flex gap-1">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-gray-400" />
+                </span>
+              </div>
             </div>
           </div>
         )}

@@ -16,6 +16,7 @@ import {
   listAgentKnowledge,
   addCompanyKnowledge,
   deleteCompanyKnowledge,
+  listCompanyKnowledge,
 } from "./_shared";
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
@@ -88,6 +89,7 @@ interface BuildSystemOpts {
   canDelegate?: boolean;   // 위임 권한(Phase 1b에서 실제 실행)
   personaOverride?: string; // 사용자가 직원관리에서 편집한 페르소나(우선)
   agentKnowledge?: string[]; // 이 직원의 개인 지식·규칙(항상 주입)
+  companyKnowledge?: string[]; // 전사 공용 회사 지식·규칙(모든 직원에 주입)
 }
 
 /** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
@@ -100,6 +102,10 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   const knowledgeBlock = knowledge.length
     ? `\n\n## 나의 개인 지식·운영 규칙 (반드시 따름)\n${knowledge.map((k) => `- ${k}`).join("\n")}`
     : "";
+  const companyKnow = opts.companyKnowledge || [];
+  const companyKnowBlock = companyKnow.length
+    ? `\n\n## 📋 현재 회사 지식·규칙 (전사 공용 · ${companyKnow.length}개, 반드시 인지·준수)\n${companyKnow.map((k) => `- ${k}`).join("\n")}\n새 규칙은 [[KNOW: add|분류|내용]]로 등록, 중복·폐기는 [[KNOW: del|내용]]로 정리한다.`
+    : "\n\n## 📋 현재 회사 지식·규칙 (전사 공용)\n(아직 등록된 회사 지식이 없습니다. 필요하면 [[KNOW: add|분류|내용]]로 등록하세요.)";
 
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
 ## 나의 정체성
@@ -124,7 +130,7 @@ ${addr ? `사용자의 호칭은 '${addr}'. 반드시 '${addr}'(으)로 부른�
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}
 
-${DEFAULT_COMPANY.goals}
+${DEFAULT_COMPANY.goals}${companyKnowBlock}
 
 당신은 이 회사의 ${meta.emoji} ${meta.name} 입니다. 역할: ${meta.role}.
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.
@@ -279,7 +285,13 @@ export async function speak(
       agentKnowledge = k.map((x) => x.text);
     }
   }
-  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge });
+  // 회사 지식·규칙을 모든 직원 두뇌에 주입 — 무엇이 몇 개 등록됐는지 인지하고 중복도 짚을 수 있게.
+  let companyKnowledge = opts.companyKnowledge;
+  if (companyKnowledge === undefined && opts.sql && opts.userId) {
+    const ck = await listCompanyKnowledge(opts.sql, opts.userId).catch(() => []);
+    companyKnowledge = ck.map((k) => `[${k.type || "사실"}] ${k.text}`);
+  }
+  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId) });
   return extractMarkers(raw);
