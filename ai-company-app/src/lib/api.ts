@@ -112,8 +112,8 @@ export interface Conversation {
   updatedAt: string;
 }
 export async function getConversations(): Promise<Conversation[]> {
-  // NK: 단톡방 단계는 단일 스레드(날짜 기반). 목록은 비움.
-  return [];
+  // 날짜별 대화 목록(메시지가 쌓인 날) — 캘린더 점·리스트용.
+  return (await fetch("/api/agent/conversations")).json();
 }
 export async function createConversation(title?: string, projectId?: string): Promise<Conversation> {
   return (

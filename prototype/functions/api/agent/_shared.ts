@@ -384,6 +384,26 @@ export async function listMessages(
   return rows as AgentMessage[];
 }
 
+/** 대화(날짜) 목록 — 캘린더 점·리스트용. conversation_id별 메시지 수·최신 시각. */
+export async function listConversations(
+  sql: SqlFn,
+  userId: string
+): Promise<{ id: string; title: string; count: number; createdAt: string; updatedAt: string }[]> {
+  const rows = await sql(
+    `SELECT conversation_id, COUNT(*)::int AS cnt, MIN(created_at) AS first, MAX(created_at) AS last
+     FROM agent_messages WHERE user_id = $1
+     GROUP BY conversation_id ORDER BY conversation_id DESC LIMIT 200`,
+    [userId]
+  );
+  return (rows as any[]).map((r) => ({
+    id: r.conversation_id,
+    title: r.conversation_id,
+    count: Number(r.cnt) || 0,
+    createdAt: r.first,
+    updatedAt: r.last,
+  }));
+}
+
 /** 최근 N턴을 라비오크 buildTranscript 형식의 트랜스크립트로. */
 export function buildTranscript(msgs: AgentMessage[], addr: string, maxTurns = 12): string {
   const recent = msgs.slice(-maxTurns);
