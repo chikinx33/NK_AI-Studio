@@ -9,7 +9,7 @@ export const ADMIN_USERS_FILE = "users.json";
 export const REGISTRY_VERSION = 1;
 
 // 권한 키(접근 가능 페이지) 단일 정의처. 새 페이지 추가 시 여기만 갱신.
-export const PERMISSION_PAGES = ["videogen", "image", "video", "brand", "admin"] as const;
+export const PERMISSION_PAGES = ["videogen", "image", "video", "brand", "ai_company", "admin"] as const;
 export type PermissionPage = (typeof PERMISSION_PAGES)[number];
 
 export interface AdminUser {

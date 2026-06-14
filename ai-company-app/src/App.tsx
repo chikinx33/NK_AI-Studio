@@ -344,6 +344,27 @@ export default function App() {
     return () => { stopped = true; clearInterval(t); };
   }, [autonomousOn]);
 
+  // AI 회사 이용 권한이 없는 계정(403) — 접근 안내 화면
+  if (status?.forbidden) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <div className="max-w-md rounded-2xl border border-edge bg-panel p-8 text-center">
+          <div className="mb-3 text-4xl">🔒</div>
+          <h2 className="text-lg font-bold text-gray-100">AI 회사 이용 권한이 없어요</h2>
+          <p className="mt-2 text-sm text-gray-400">
+            이 기능은 'AI 회사' 권한이 있는 계정만 사용할 수 있어요. 관리자에게 권한을 요청하세요.
+          </p>
+          <button
+            onClick={() => { window.location.href = "/app.html"; }}
+            className="mt-5 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-600"
+          >
+            스튜디오로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // 업무 중 = 발언(스트리밍) 중이거나 실제 업무(agent_busy/백그라운드 작업) 중
   const activeIds = new Set<string>([
     ...turns.filter((t) => t.streaming).map((t) => t.agentId!).filter(Boolean),

@@ -2236,6 +2236,13 @@
         adminCardBtn.classList.toggle('hidden', !showMaster);
       }
 
+      // AI 기업(회사) 버튼 — 'ai_company' 권한이 있는 로그인 사용자에게만 노출
+      const aiCompanyBtn = document.getElementById('ai-company-btn');
+      if (aiCompanyBtn) {
+        const canCompany = !!loggedIn && !!(NK.auth && NK.auth.hasPermission && NK.auth.hasPermission('ai_company'));
+        aiCompanyBtn.classList.toggle('hidden', !canCompany);
+      }
+
       if (loggedIn && user) {
         const brand = readLoginBrandLocal(user);
         applyLoginBrandToUi(brand);

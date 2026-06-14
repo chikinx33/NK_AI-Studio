@@ -4,6 +4,7 @@ import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql, ensureAgentSchema, getRuntime } from "./_shared";
 import { ROSTER } from "./_orchestrator";
 import { CLOUD_MODELS } from "../_shared/cloud-models.js";
+import { hasPagePermission } from "../_shared/admin-users.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -15,6 +16,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const origin = request.headers.get("Origin");
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
+  // AI 회사 이용 권한 가드 — 권한 없는 계정은 진입 불가.
+  if (!(await hasPagePermission(env, auth.userId, "ai_company"))) {
+    return send({ error: "forbidden", reason: "ai_company" }, 403, origin);
+  }
   const cloudReady = Boolean(String(env?.ANTHROPIC_API_KEY || "").trim());
   let workMode: "on" | "off" = "on";
   let autonomous = false;

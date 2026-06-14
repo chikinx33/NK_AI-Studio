@@ -3,6 +3,7 @@
 // 단톡방에 사용자 메시지 → 코어가 응답(Phase 1a: 코어 단일, waitUntil 백그라운드).
 // ★ 멀티테넌시: user_id 격리. 위임·통솔(멀티 호출)은 Phase 1b(Workflows).
 import { authorizeRequest } from "../_shared/auth.js";
+import { hasPagePermission } from "../_shared/admin-users.js";
 import {
   send,
   corsHeaders,
@@ -28,6 +29,9 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
   try {
     const auth = await authorizeRequest(request, env);
     if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
+    if (!(await hasPagePermission(env, auth.userId, "ai_company"))) {
+      return send({ error: "forbidden", reason: "ai_company" }, 403, origin);
+    }
 
     const sql = getSql(env);
     if (!sql) return send({ error: "DATABASE_URL 미설정 — 대화 저장소(Neon)를 사용할 수 없습니다." }, 503, origin);

@@ -380,6 +380,7 @@
       admin_perm_image: 'AI Image',
       admin_perm_video: 'AI Video',
       admin_perm_brand: 'Brand Studio',
+      admin_perm_ai_company: 'AI Company',
       // Project sharing
       share_project: 'Share project',
       share_episodes_all: 'Share all {n} episodes',
@@ -751,6 +752,7 @@
       admin_perm_image: 'AI 이미지',
       admin_perm_video: 'AI 영상',
       admin_perm_brand: '브랜드 스튜디오',
+      admin_perm_ai_company: 'AI 회사',
       // 프로젝트 공유
       share_project: '프로젝트 공유',
       share_episodes_all: '에피소드 {n}개 전체 공유',

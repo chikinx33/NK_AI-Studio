@@ -4,10 +4,11 @@
 
   // 권한 키 정의(서버 admin-users.ts의 PERMISSION_PAGES와 동기화).
   var PERMISSION_PAGES = [
-    { key: 'videogen', label: { ko: 'AI 시네마', en: 'AI Cinema' } },
-    { key: 'image',    label: { ko: 'AI 이미지', en: 'AI Image' } },
-    { key: 'video',    label: { ko: 'AI 영상', en: 'AI Video' } },
-    { key: 'brand',    label: { ko: '브랜드 스튜디오', en: 'Brand Studio' } }
+    { key: 'videogen',   label: { ko: 'AI 시네마', en: 'AI Cinema' } },
+    { key: 'image',      label: { ko: 'AI 이미지', en: 'AI Image' } },
+    { key: 'video',      label: { ko: 'AI 영상', en: 'AI Video' } },
+    { key: 'brand',      label: { ko: '브랜드 스튜디오', en: 'Brand Studio' } },
+    { key: 'ai_company', label: { ko: 'AI 회사', en: 'AI Company' } }
   ];
 
   var state = {

@@ -1,4 +1,5 @@
 export interface StatusInfo {
+  forbidden?: boolean; // AI 회사 이용 권한 없음(403)
   company: string;
   llmMode: "auto" | "cloud" | "local";
   workMode: "on" | "off";
@@ -28,7 +29,9 @@ export interface AgentInfo {
 }
 
 export async function getStatus(): Promise<StatusInfo> {
-  return (await fetch("/api/agent/status")).json();
+  const r = await fetch("/api/agent/status");
+  if (r.status === 403) return { forbidden: true } as unknown as StatusInfo; // AI 회사 권한 없음
+  return r.json();
 }
 
 // 생존 신호 (브라우저가 열려 있는 동안 주기적으로 호출)

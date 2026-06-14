@@ -55,7 +55,7 @@ test("admin-users shared module exposes registry + guard helpers", () => {
   // publicUser는 비밀번호 해시를 제거해야 한다
   assert.match(src, /const \{ pwHash, \.\.\.rest \} = user/);
   // 권한 화이트리스트
-  assert.match(src, /PERMISSION_PAGES = \["videogen", "image", "video", "brand", "admin"\]/);
+  assert.match(src, /PERMISSION_PAGES = \["videogen", "image", "video", "brand", "ai_company", "admin"\]/);
 });
 
 test("client api exposes admin user CRUD wrappers", () => {
