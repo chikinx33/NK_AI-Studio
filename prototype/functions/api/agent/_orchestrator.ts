@@ -105,8 +105,8 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     : "";
   const companyKnow = opts.companyKnowledge || [];
   const companyKnowBlock = companyKnow.length
-    ? `\n\n## 📋 현재 회사 지식·규칙 (전사 공용 · ${companyKnow.length}개, 반드시 인지·준수)\n${companyKnow.map((k) => `- ${k}`).join("\n")}\n새 규칙은 [[KNOW: add|분류|내용]]로 등록, 중복·폐기는 [[KNOW: del|내용]]로 정리한다.`
-    : "\n\n## 📋 현재 회사 지식·규칙 (전사 공용)\n(아직 등록된 회사 지식이 없습니다. 필요하면 [[KNOW: add|분류|내용]]로 등록하세요.)";
+    ? `\n\n## 🧠 회사 지식·규칙 (당신의 축적된 배경 지식 — ${companyKnow.length}개)\n아래는 회사에 쌓여 온 규칙·사실·결정입니다. **항상 적극 활용해** 더 똑똑하고 맥락에 맞게 판단·답변하세요 — 이 지식을 잘 쓰는 것이 당신이 점점 더 유능해지는 방식입니다. 단, 사용자가 회사 지식을 직접 묻는 게 아니라면 이 목록을 그대로 나열하지 말고, 답변과 판단 속에 자연스럽게 녹여 쓰세요.\n${companyKnow.map((k) => `- ${k}`).join("\n")}`
+    : "";
 
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
 ## 나의 정체성
