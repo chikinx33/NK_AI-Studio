@@ -14,6 +14,8 @@ import {
   processJob,
   getAgentPersona,
   listAgentKnowledge,
+  addCompanyKnowledge,
+  deleteCompanyKnowledge,
 } from "./_shared";
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
@@ -138,8 +140,15 @@ ${persona}${knowledgeBlock}
 - 일을 받으면 "~에게 시켰다"가 아니라 본인이 직접 한 결과물을 제시하세요.
 
 ## ⛔ 정직 규칙 (최고 우선)
-- 파일·메모리·규칙을 직접 쓰거나 고칠 수 없다. "반영했다/저장했다/✅완료"처럼 하지 않은 행동을 했다고 말하지 마라.
+- 회사 지식·규칙은 아래 'KNOW' 마커로만 실제로 등록/삭제된다. 마커 없이 "반영했다/저장했다/✅완료"라고 말하지 마라(거짓 보고 금지).
 - 사실은 실제로 아는 것만 말한다. 모르면 추측·날조 대신 "확인이 필요해요"라고 솔직히 말한다.
+
+## 🧠 회사 지식·규칙 관리 (당신은 권한이 있음)
+사용자가 "기억해 / 규칙으로 정해 / 회사 방침이야 / 이건 삭제해" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
+- 등록: [[KNOW: add | 분류 | 내용]]  (분류 = 원칙 · 사실 · 결정 중 하나)
+- 삭제: [[KNOW: del | 기존에 등록된 정확한 내용]]
+예) 사용자가 "나를 엔케라고 불러, 회사 규칙에 반영해" → 답 끝에 [[KNOW: add | 원칙 | 사용자의 호칭은 '엔케'(영문 NK)다]]
+이 마커를 쓰면 실제 회사 지식에 반영됩니다. "반영했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
 
 ## ⛔ 미루지 말 것
 - 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}`;
@@ -183,20 +192,33 @@ export async function callClaude(
   return stripThink(out);
 }
 
+export interface KnowOp { action: "add" | "del"; type?: string; text: string; }
 export interface SpeakResult {
   text: string;
   calls: { agentId: string; instruction: string }[];
   runs: { tool: string; reason: string }[];
+  knows: KnowOp[];
 }
 
 // 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
 const CALL_RE = /\[{1,2}\s*CALL\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
 const RUN_RE = /\[{1,2}\s*RUN\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
+// 회사 지식 관리 마커: [[KNOW: add | 분류 | 내용]] / [[KNOW: del | 내용]]
+const KNOW_RE = /\[{1,2}\s*KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
 
-/** 마커 추출 + 본문에서 숨김. (Phase 1b: CALL 위임 + RUN 도구. RULE/RETRACT 등은 후속) */
+// 분류 정규화 — 회사 지식 칩(원칙/사실/결정)과 일치시킨다.
+function normalizeKnowType(t: string): string {
+  const s = String(t || "").trim();
+  if (/규칙|원칙|rule|principle/i.test(s)) return "원칙";
+  if (/결정|decision/i.test(s)) return "결정";
+  return "사실";
+}
+
+/** 마커 추출 + 본문에서 숨김. (CALL 위임 · RUN 도구 · KNOW 회사지식 관리) */
 function extractMarkers(raw: string): SpeakResult {
   const calls: { agentId: string; instruction: string }[] = [];
   const runs: { tool: string; reason: string }[] = [];
+  const knows: KnowOp[] = [];
   let m: RegExpExecArray | null;
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(raw))) {
@@ -207,8 +229,22 @@ function extractMarkers(raw: string): SpeakResult {
   while ((m = RUN_RE.exec(raw))) {
     runs.push({ tool: String(m[1]).trim().toLowerCase(), reason: String(m[2]).trim() });
   }
-  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").trim();
-  return { text, calls, runs };
+  KNOW_RE.lastIndex = 0;
+  while ((m = KNOW_RE.exec(raw))) {
+    const parts = String(m[1]).split("|").map((s) => s.trim()).filter((s) => s.length > 0);
+    const action = (parts[0] || "").toLowerCase();
+    if (/^(add|remember|등록|추가)$/.test(action)) {
+      // add | 분류 | 내용  또는  add | 내용
+      const type = parts.length >= 3 ? normalizeKnowType(parts[1]) : "사실";
+      const text = parts.length >= 3 ? parts.slice(2).join(" | ") : parts.slice(1).join(" | ");
+      if (text) knows.push({ action: "add", type, text });
+    } else if (/^(del|delete|remove|삭제|제거)$/.test(action)) {
+      const text = parts.slice(1).join(" | ");
+      if (text) knows.push({ action: "del", text });
+    }
+  }
+  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").trim();
+  return { text, calls, runs, knows };
 }
 
 /** 느슨한 agentId 문자열에서 정식 id 복원 (라비오크 resolveAgentId 포팅). */
@@ -322,6 +358,16 @@ export async function runGroupChat(
     }
   };
 
+  // 에이전트가 찍은 KNOW 마커 → 회사 지식 등록/삭제 (에이전트가 직접 지식 관리).
+  const applyKnows = async (knows: KnowOp[] | undefined, who: string) => {
+    for (const k of knows || []) {
+      try {
+        if (k.action === "add") await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`);
+        else if (k.action === "del") await deleteCompanyKnowledge(sql, userId, k.text);
+      } catch { /* 지식 반영 실패는 대화 흐름을 막지 않음 */ }
+    }
+  };
+
   // 위임받은 직원이 실제로 일하고 단톡방에 보고.
   const runWorker = async (workerId: string, instruction: string) => {
     if (workerId === "core" || !getAgent(workerId)) return;
@@ -333,6 +379,7 @@ export async function runGroupChat(
     const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId });
     await addMessage(sql, { userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await runTools(res.runs, workerId);
+    await applyKnows(res.knows, meta.name);
   };
 
   // 1) 1차 응답자
@@ -347,6 +394,7 @@ export async function runGroupChat(
       : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId });
+    await applyKnows(res.knows, meta.name); // 지식 등록/삭제는 대기 여부와 무관하게 먼저 반영
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
     if (opts.autoTrigger && canDelegate && res.calls.length === 0) return;
     await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
@@ -368,5 +416,6 @@ export async function runGroupChat(
       `다음 액션 1줄을 제시하세요. "~할게요"로 끝내지 말고 실제 결론을 내세요.`;
     const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId });
     await addMessage(sql, { userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
+    await applyKnows(wrap.knows, "코어");
   }
 }
