@@ -260,6 +260,26 @@ export async function setClaudeAuth(payload: {
   ).json();
 }
 
+// 인증 진단 — 현재 키 종류 + 라이브 테스트 결과(비밀값 미노출)
+export interface AuthDiag {
+  mode: ClaudeAuthMode;
+  source: string;
+  oauthSet: boolean;
+  apiKeySet: boolean;
+  apiKeyKind: string;
+  oauthKind: string;
+  test: { ok: boolean; status: number; detail: string } | null;
+}
+export async function authDiag(): Promise<{ ok: boolean; diag?: AuthDiag; error?: string }> {
+  return (
+    await fetch("/api/agent/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "diag" }),
+    })
+  ).json();
+}
+
 export async function setAutonomous(enabled: boolean) {
   // 토글 상태 저장(영속). 실제 자율 스텝 실행은 Cloudflare Cron 후속.
   return (

@@ -4,6 +4,7 @@ import {
   setMode,
   setClaudeAuth,
   setLocalModel,
+  authDiag,
   getLogStats,
   setLogRetention,
   cleanupLogs,
@@ -16,6 +17,7 @@ import {
   type SkillReadiness,
   type ClaudeAuthMode,
   type ClaudeAuthStatus,
+  type AuthDiag,
 } from "../lib/api";
 import { JOB } from "../lib/jobs";
 import { ToolCard } from "./Integrations";
@@ -89,6 +91,8 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
   const [authStatus, setAuthStatus] = useState<ClaudeAuthStatus | null>(null);
   const [oauthInput, setOauthInput] = useState("");
   const [authMsg, setAuthMsg] = useState("");
+  const [diag, setDiag] = useState<AuthDiag | null>(null);
+  const [diagMsg, setDiagMsg] = useState("");
   const [tab, setTab] = useState<"basic" | "agents" | "logs">("basic");
   const [logRetention, setLogRetentionState] = useState<number>(0);
   const [logStats, setLogStats] = useState<LogStats | null>(null);
@@ -144,6 +148,21 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
       setAuthMsg(r.status?.configured ? `✅ 저장됨 — ${modeLabel(authMode)} 인증 활성` : `⚠️ ${r.detail ?? "자격증명 확인"}`);
       onChanged();
     } else setAuthMsg(`⚠️ ${r?.error ?? "실패"}`);
+  }
+
+  // 인증 진단 — 현재 키 종류 + 라이브 테스트
+  async function runDiag() {
+    setDiag(null);
+    setDiagMsg("진단 중… (Claude에 테스트 요청)");
+    try {
+      const r = await authDiag();
+      if (r?.ok && r.diag) {
+        setDiag(r.diag);
+        setDiagMsg("");
+      } else setDiagMsg(`⚠️ ${r?.error ?? "진단 실패"}`);
+    } catch (e) {
+      setDiagMsg(`⚠️ ${(e as Error)?.message ?? "진단 실패"}`);
+    }
   }
 
   async function chooseLocalModel(m: string) {
@@ -417,6 +436,39 @@ export default function Settings({ status, agents, hiddenAgents, onToggleAgent, 
               </div>
             )}
             {authMsg && <StatusText msg={authMsg} className="mt-1.5 text-xs text-gray-300" />}
+
+            {/* 진단 — 무엇이 들어있고 라이브에서 되는지 확인 */}
+            <div className="mt-3 border-t border-edge pt-3">
+              <button
+                onClick={runDiag}
+                className="rounded-lg border border-edge px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:bg-edge"
+              >
+                🔍 인증 진단 (라이브 테스트)
+              </button>
+              {diagMsg && <StatusText msg={diagMsg} className="mt-1.5 text-xs text-gray-300" />}
+              {diag && (
+                <div className="mt-2 space-y-1 rounded-lg border border-edge bg-ink px-3 py-2 text-xs">
+                  <div className="text-gray-400">
+                    모드: <span className="text-gray-200">{modeLabel(diag.mode)}</span> · 출처:{" "}
+                    <span className="text-gray-200">{diag.source}</span>
+                  </div>
+                  <div className="text-gray-400">
+                    API 키: <span className="text-gray-200">{diag.apiKeySet ? diag.apiKeyKind : "없음"}</span> · 구독 토큰:{" "}
+                    <span className="text-gray-200">{diag.oauthSet ? diag.oauthKind : "없음"}</span>
+                  </div>
+                  {diag.test && (
+                    <div className={diag.test.ok ? "text-emerald-400" : "text-red-400"}>
+                      라이브 테스트: {diag.test.ok ? "✅ 성공 (200)" : `❌ 실패 (${diag.test.status}) — ${diag.test.detail}`}
+                    </div>
+                  )}
+                  {diag.apiKeyKind === "oauth-token" && diag.mode === "api_key" && (
+                    <div className="text-amber-400">
+                      ⚠️ API 키 칸에 구독 토큰(sk-ant-oat)이 들어있어요. 콘솔 키(sk-ant-api)가 필요해요.
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </section>
 
           {/* 클라우드 모델 매핑 */}

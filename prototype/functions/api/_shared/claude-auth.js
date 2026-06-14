@@ -140,3 +140,55 @@ export async function authStatus(sql, userId, env) {
 export async function resolvedAuthHeaders(sql, userId, env) {
   return authHeadersFor(await resolveAuth(sql, userId, env));
 }
+
+// 비밀값 노출 없이 자격증명 '종류'만 식별 (디버깅용).
+function credKind(v) {
+  const s = String(v || "");
+  if (!s) return "none";
+  if (s.startsWith("sk-ant-api")) return "console-key"; // 콘솔 API 키 (정상 x-api-key용)
+  if (s.startsWith("sk-ant-oat")) return "oauth-token"; // 구독 OAuth 토큰 (Bearer용)
+  return "unknown";
+}
+
+/** 설정 UI '진단' 버튼용: 현재 해석된 인증 + 라이브 테스트 호출 결과. 비밀값 미노출. */
+export async function authDiagnose(sql, userId, env) {
+  const r = await resolveAuth(sql, userId, env);
+  const dbRow = sql && userId ? await getSettingsRow(sql, userId).catch(() => null) : null;
+  const out = {
+    mode: r.mode,
+    source: dbRow ? "db(설정)" : "env(환경변수)",
+    oauthSet: !!r.oauthToken,
+    apiKeySet: !!r.apiKey,
+    apiKeyKind: credKind(r.apiKey),
+    oauthKind: credKind(r.oauthToken),
+    test: null,
+  };
+  // 라이브 테스트 (최소 토큰). 어떤 에러가 나는지 그대로 보고.
+  try {
+    const auth = authHeadersFor(r);
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: auth.headers,
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 8,
+        system: buildClaudeSystem(auth.subscription, "ping"),
+        messages: [{ role: "user", content: "ping" }],
+      }),
+    });
+    let detail = "";
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      try {
+        const j = JSON.parse(t);
+        detail = j?.error?.message || j?.message || t.slice(0, 160);
+      } catch (_) {
+        detail = t.slice(0, 160);
+      }
+    }
+    out.test = { ok: res.ok, status: res.status, detail };
+  } catch (e) {
+    out.test = { ok: false, status: 0, detail: String((e && e.message) || e).slice(0, 160) };
+  }
+  return out;
+}

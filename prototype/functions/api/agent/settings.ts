@@ -6,7 +6,7 @@
 // 비밀값(토큰/키)은 Neon에 저장하되 응답엔 절대 노출하지 않음(oauthSet/apiKeySet boolean만).
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql } from "./_shared";
-import { authStatus, getSettingsRow, saveClaudeAuth, saveLlmMode } from "../_shared/claude-auth.js";
+import { authStatus, authDiagnose, getSettingsRow, saveClaudeAuth, saveLlmMode } from "../_shared/claude-auth.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -48,6 +48,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   if (body?.kind === "mode") {
     await saveLlmMode(sql, auth.userId, String(body.llmMode || "cloud"));
     return send({ ok: true }, 200, origin);
+  }
+
+  if (body?.kind === "diag") {
+    const diag = await authDiagnose(sql, auth.userId, env);
+    return send({ ok: true, diag }, 200, origin);
   }
 
   // 기본: Claude 인증 저장
