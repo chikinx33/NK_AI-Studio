@@ -56,7 +56,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const authHeader = String(request.headers.get("Authorization") || "");
     const toolCtx = { request, env, authHeader, userId: auth.userId };
     waitUntil(
-      runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx }).catch(async (e: any) => {
+      runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: message }).catch(async (e: any) => {
         await addMessage(sql, {
           userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
           text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,

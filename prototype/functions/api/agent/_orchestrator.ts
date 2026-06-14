@@ -345,6 +345,7 @@ export interface OrchestratorDeps {
   userId: string;
   conversationId: string;
   toolCtx: ToolContext; // 도구(RUN) 실행용 컨텍스트
+  firstMessage?: string; // 방금 저장한 사용자 메시지(조회 타이밍 의존 제거)
 }
 
 /**
@@ -366,7 +367,8 @@ export async function runGroupChat(
   } else {
     const msgs = await listMessages(sql, userId, conversationId);
     const lastUser = [...msgs].reverse().find((m) => m.role === "user");
-    message = lastUser?.text || "";
+    // 조회에서 못 찾으면(쓰기 직후 타이밍) chat이 넘겨준 방금 메시지로 폴백
+    message = lastUser?.text || deps.firstMessage || "";
   }
   if (!message) return;
 

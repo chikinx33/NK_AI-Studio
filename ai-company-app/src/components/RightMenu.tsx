@@ -57,11 +57,10 @@ const MessagesSquareIcon = (p: IconProps) => (
     <path d="M20 9a2 2 0 0 1 2 2v10.286a.71.71 0 0 1-1.212.502l-2.202-2.202A2 2 0 0 0 17.172 19H10a2 2 0 0 1-2-2v-1" />
   </SVG>
 );
-const BackToStudioIcon = (p: IconProps) => (
+const PowerIcon = (p: IconProps) => (
   <SVG {...p}>
-    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-    <polyline points="10 17 5 12 10 7" />
-    <line x1="5" x2="21" y1="12" y2="12" />
+    <path d="M12 2v10" />
+    <path d="M18.4 6.6a9 9 0 1 1-12.77.04" />
   </SVG>
 );
 
@@ -130,8 +129,8 @@ export default function RightMenu({
       <IconBtn active={centerView === "settings"} title="옵션" onClick={onSettings}>
         <SettingsIcon className="h-4 w-4" />
       </IconBtn>
-      <IconBtn title="스튜디오로 돌아가기" onClick={() => { window.location.href = "/app.html"; }}>
-        <BackToStudioIcon className="h-4 w-4" />
+      <IconBtn title="스튜디오로 돌아가기" onClick={() => { window.location.href = "/app.html"; }} danger>
+        <PowerIcon className="h-4 w-4" />
       </IconBtn>
     </div>
   );
