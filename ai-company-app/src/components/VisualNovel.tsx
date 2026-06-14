@@ -396,6 +396,7 @@ export default function VisualNovel({
         <div className="flex items-end gap-2">
           <textarea
             ref={taRef}
+            spellCheck={false}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {

@@ -218,6 +218,7 @@ export default function Knowledge({
 
           {/* 직접 추가 — 카테고리(규칙·사실·결정) 선택 시에만 가능 */}
           <input
+            spellCheck={false}
             value={input}
             disabled={filter === null}
             onChange={(e) => setInput(e.target.value)}
@@ -257,6 +258,7 @@ export default function Knowledge({
                 {editing === it.text ? (
                   <input
                     autoFocus
+                    spellCheck={false}
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     onKeyDown={(e) => {

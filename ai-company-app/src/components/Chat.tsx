@@ -475,6 +475,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
         <div className="flex items-end gap-2">
           <textarea
             ref={taRef}
+            spellCheck={false}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {

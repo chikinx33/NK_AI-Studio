@@ -17,6 +17,7 @@ import {
   addCompanyKnowledge,
   deleteCompanyKnowledge,
   listCompanyKnowledge,
+  upsertProject,
 } from "./_shared";
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
@@ -156,6 +157,12 @@ ${persona}${knowledgeBlock}
 예) 사용자가 "나를 엔케라고 불러, 회사 규칙에 반영해" → 답 끝에 [[KNOW: add | 원칙 | 사용자의 호칭은 '엔케'(영문 NK)다]]
 이 마커를 쓰면 실제 회사 지식에 반영됩니다. "반영했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
 
+## 📁 프로젝트 만들기 (코어·싱크 중심)
+사용자가 "프로젝트 만들어줘 / ~를 시작하자" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
+- [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]  (단계는 생략 가능)
+예) [[PROJECT: create | '우울의 숲' 소설 단독판매 | 11~12월 출시, 연내 마감 | 기획, 집필, 표지·PDF, 마케팅, 출시]]
+이 마커를 쓰면 실제로 프로젝트 보드에 생성됩니다. 코어는 프로젝트를 띄우고 PM 싱크가 단계·일정을 관리합니다. "만들었어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
+
 ## ⛔ 미루지 말 것
 - 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}`;
 }
@@ -199,11 +206,13 @@ export async function callClaude(
 }
 
 export interface KnowOp { action: "add" | "del"; type?: string; text: string; }
+export interface ProjectOp { action: "create"; name: string; goal?: string; stages: string[]; }
 export interface SpeakResult {
   text: string;
   calls: { agentId: string; instruction: string }[];
   runs: { tool: string; reason: string }[];
   knows: KnowOp[];
+  projects: ProjectOp[];
 }
 
 // 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
@@ -211,6 +220,8 @@ const CALL_RE = /\[{1,2}\s*CALL\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
 const RUN_RE = /\[{1,2}\s*RUN\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
 // 회사 지식 관리 마커: [[KNOW: add | 분류 | 내용]] / [[KNOW: del | 내용]]
 const KNOW_RE = /\[{1,2}\s*KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
+// 프로젝트 생성 마커: [[PROJECT: create | 이름 | 목표 | 단계1, 단계2, ...]]
+const PROJECT_RE = /\[{1,2}\s*PROJECT\s*:\s*([\s\S]+?)\]{1,2}/gi;
 
 // 분류 정규화 — 회사 지식 칩(원칙/사실/결정)과 일치시킨다.
 function normalizeKnowType(t: string): string {
@@ -225,6 +236,7 @@ function extractMarkers(raw: string): SpeakResult {
   const calls: { agentId: string; instruction: string }[] = [];
   const runs: { tool: string; reason: string }[] = [];
   const knows: KnowOp[] = [];
+  const projects: ProjectOp[] = [];
   let m: RegExpExecArray | null;
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(raw))) {
@@ -249,8 +261,19 @@ function extractMarkers(raw: string): SpeakResult {
       if (text) knows.push({ action: "del", text });
     }
   }
-  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").trim();
-  return { text, calls, runs, knows };
+  PROJECT_RE.lastIndex = 0;
+  while ((m = PROJECT_RE.exec(raw))) {
+    const parts = String(m[1]).split("|").map((s) => s.trim()).filter((s) => s.length > 0);
+    const action = (parts[0] || "").toLowerCase();
+    if (/^(create|new|만들|생성|시작)$/.test(action) && parts[1]) {
+      const name = parts[1];
+      const goal = parts[2] || "";
+      const stages = parts[3] ? parts[3].split(",").map((s) => s.trim()).filter(Boolean) : [];
+      projects.push({ action: "create", name, goal, stages });
+    }
+  }
+  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").trim();
+  return { text, calls, runs, knows, projects };
 }
 
 /** 느슨한 agentId 문자열에서 정식 id 복원 (라비오크 resolveAgentId 포팅). */
@@ -380,6 +403,21 @@ export async function runGroupChat(
     }
   };
 
+  // 에이전트가 찍은 PROJECT 마커 → 프로젝트 보드에 실제 생성.
+  const applyProjects = async (projects: ProjectOp[] | undefined) => {
+    for (const p of projects || []) {
+      try {
+        const id = (globalThis.crypto && globalThis.crypto.randomUUID)
+          ? globalThis.crypto.randomUUID()
+          : `proj_${Math.random().toString(36).slice(2, 10)}`;
+        const stages = (p.stages || []).map((title) => ({ title, status: "todo" }));
+        await upsertProject(sql, userId, id, {
+          name: p.name, goal: p.goal || "", summary: "", status: "active", stages, nextAction: "",
+        });
+      } catch { /* 프로젝트 생성 실패는 대화 흐름을 막지 않음 */ }
+    }
+  };
+
   // 위임받은 직원이 실제로 일하고 단톡방에 보고.
   const runWorker = async (workerId: string, instruction: string) => {
     if (workerId === "core" || !getAgent(workerId)) return;
@@ -392,6 +430,7 @@ export async function runGroupChat(
     await addMessage(sql, { userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await runTools(res.runs, workerId);
     await applyKnows(res.knows, meta.name);
+    await applyProjects(res.projects);
   };
 
   // 1) 1차 응답자
@@ -407,6 +446,7 @@ export async function runGroupChat(
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId });
     await applyKnows(res.knows, meta.name); // 지식 등록/삭제는 대기 여부와 무관하게 먼저 반영
+    await applyProjects(res.projects);
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
     if (opts.autoTrigger && canDelegate && res.calls.length === 0) return;
     await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
@@ -429,5 +469,6 @@ export async function runGroupChat(
     const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId });
     await addMessage(sql, { userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
     await applyKnows(wrap.knows, "코어");
+    await applyProjects(wrap.projects);
   }
 }

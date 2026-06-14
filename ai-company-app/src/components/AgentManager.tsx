@@ -147,6 +147,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
                   setPersonaDirty(true);
                 }}
                 rows={6}
+                spellCheck={false}
                 className="w-full resize-y rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600"
                 placeholder="이 직원의 성격·말투·일하는 방식…"
               />
@@ -177,6 +178,7 @@ export default function AgentManager({ agentId, agents }: { agentId: string | nu
                   <option value="결정">결정</option>
                 </select>
                 <input
+                  spellCheck={false}
                   value={newRule}
                   onChange={(e) => setNewRule(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && addRule()}
