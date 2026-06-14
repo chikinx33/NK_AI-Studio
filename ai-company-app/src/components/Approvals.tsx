@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getApprovals, approveItem, rejectItem, getKnowledge, type KnowledgeItem } from "../lib/api";
+import { getApprovals, approveItem, rejectItem, getKnowledge, getSkills, type KnowledgeItem, type AgentSkill } from "../lib/api";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황)
 const KNOW_CHIPS = [
@@ -82,12 +82,15 @@ interface ApprovalItem {
 
 export default function Approvals({
   onPickCategory,
+  onOpenSkills,
 }: {
   onPickCategory?: (key: "원칙" | "사실" | "결정" | null) => void;
+  onOpenSkills?: () => void;
 } = {}) {
   const [pending, setPending] = useState<ApprovalItem[]>([]);
   const [history, setHistory] = useState<ApprovalItem[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
+  const [skills, setSkills] = useState<AgentSkill[]>([]);
   // 클릭한 항목 → 어떤 처리(승인/거절)인지 기록. 목록에서 사라질 때까지 버튼 잠금 유지(중복 클릭 방지)
   const [acting, setActing] = useState<Record<string, "approve" | "reject">>({});
 
@@ -109,14 +112,16 @@ export default function Approvals({
   }
 
   async function refresh() {
-    const [data, know] = await Promise.all([
+    const [data, know, sk] = await Promise.all([
       getApprovals(),
       getKnowledge().catch(() => [] as KnowledgeItem[]),
+      getSkills().then((d) => d.active ?? []).catch(() => [] as AgentSkill[]),
     ]);
     const pend = data.pending ?? [];
     setPending(pend);
     setHistory((data.history ?? []).slice(-5).reverse());
     setKnowledge(know);
+    setSkills(sk);
     // pending에서 빠진(=처리 완료된) 항목의 잠금 기록 정리
     setActing((m) => {
       const ids = Object.keys(m);
@@ -143,8 +148,8 @@ export default function Approvals({
   // 승인 패널은 빈 상태여도 항상 표시(원본과 동일). 회사 지식 카드만 데이터 있을 때 표시.
   return (
     <>
-      {/* 회사 지식 요약 — 전체/규칙/사실/결정. 승인 대기 카드와 분리된 별도 카드 */}
-      {knowledge.length > 0 && (
+      {/* 회사 지식 요약 — 규칙·사실·결정·스킬 (한 우산 아래). 승인 대기 카드와 분리된 별도 카드 */}
+      {(knowledge.length > 0 || skills.length > 0) && (
         <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
           <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
             <BrainIcon className="h-3.5 w-3.5" /> 회사 지식
@@ -163,6 +168,14 @@ export default function Approvals({
                 </button>
               );
             })}
+            {/* 스킬도 회사 지식의 한 분류로 — 클릭 시 스킬 목록 */}
+            <button
+              onClick={() => onOpenSkills?.()}
+              title="보유 스킬 보기"
+              className="rounded-full border border-emerald-700/50 bg-emerald-900/50 px-2 py-0.5 text-[11px] font-medium text-emerald-300 transition hover:brightness-125"
+            >
+              스킬 {skills.length}
+            </button>
           </div>
         </div>
       )}
