@@ -110,7 +110,36 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   try {
     await sql("CREATE INDEX IF NOT EXISTS agent_knowledge_idx ON agent_knowledge (user_id, agent_id)");
   } catch (_) {}
+  // 회사 지식(Phase 3 그래프): 전사 공용 지식. 멀티테넌시(user_id).
+  await sql(`
+    CREATE TABLE IF NOT EXISTS company_knowledge (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      text text NOT NULL,
+      type text NOT NULL DEFAULT '사실',
+      source text NOT NULL DEFAULT '수동',
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try {
+    await sql("CREATE INDEX IF NOT EXISTS company_knowledge_user_idx ON company_knowledge (user_id)");
+  } catch (_) {}
   agentSchemaReady = true;
+}
+
+// ── 회사 지식 (전부 user_id 격리) ────────────────────────────────────────────
+export async function listCompanyKnowledge(sql: SqlFn, userId: string): Promise<{ text: string; source: string; type: string }[]> {
+  const rows = await sql("SELECT text, source, type FROM company_knowledge WHERE user_id = $1 ORDER BY created_at DESC", [userId]);
+  return rows as { text: string; source: string; type: string }[];
+}
+export async function addCompanyKnowledge(sql: SqlFn, userId: string, text: string, type: string, source = "수동"): Promise<void> {
+  await sql("INSERT INTO company_knowledge (user_id, text, type, source) VALUES ($1, $2, $3, $4)", [userId, text, type || "사실", source]);
+}
+export async function updateCompanyKnowledge(sql: SqlFn, userId: string, oldText: string, newText: string): Promise<void> {
+  await sql("UPDATE company_knowledge SET text = $3 WHERE user_id = $1 AND text = $2", [userId, oldText, newText]);
+}
+export async function deleteCompanyKnowledge(sql: SqlFn, userId: string, text: string): Promise<void> {
+  await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND text = $2", [userId, text]);
 }
 
 // ── 직원 페르소나·지식 (전부 user_id 격리) ──────────────────────────────────

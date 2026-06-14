@@ -308,19 +308,19 @@ export interface KnowledgeItem {
 }
 
 export async function getKnowledge(): Promise<KnowledgeItem[]> {
-  return (await fetch("/api/knowledge")).json();
+  return (await fetch("/api/agent/company-knowledge")).json();
 }
 
 export type KnowledgeType = "원칙" | "사실" | "결정";
 export interface GraphNode { id: number; text: string; origin: string; type: KnowledgeType; degree: number; }
 export interface GraphEdge { source: number; target: number; weight: number; }
 export async function getKnowledgeGraph(): Promise<{ nodes: GraphNode[]; edges: GraphEdge[] }> {
-  return (await fetch("/api/knowledge/graph")).json();
+  return (await fetch("/api/agent/knowledge-graph")).json();
 }
 
 export async function addKnowledge(text: string, type?: KnowledgeType) {
   return (
-    await fetch("/api/knowledge", {
+    await fetch("/api/agent/company-knowledge", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(type ? { text, type } : { text }),
@@ -330,7 +330,7 @@ export async function addKnowledge(text: string, type?: KnowledgeType) {
 
 export async function updateKnowledge(oldText: string, newText: string) {
   return (
-    await fetch("/api/knowledge", {
+    await fetch("/api/agent/company-knowledge", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ oldText, newText }),
@@ -340,7 +340,7 @@ export async function updateKnowledge(oldText: string, newText: string) {
 
 export async function deleteKnowledge(text: string) {
   return (
-    await fetch("/api/knowledge", {
+    await fetch("/api/agent/company-knowledge", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -348,9 +348,9 @@ export async function deleteKnowledge(text: string) {
   ).json();
 }
 
-// 결정 지식 정리: 중복 보드 진행 스냅샷을 프로젝트별 최신 1건만 남기고 제거(감사로그 보존)
+// NK: 라비오크식 보드 스냅샷이 없어 정리 대상 없음(noop).
 export async function consolidateDecisions(): Promise<{ removed: number; keptSnapshots: number }> {
-  return (await fetch("/api/knowledge/consolidate", { method: "POST" })).json();
+  return { removed: 0, keptSnapshots: 0 };
 }
 
 // 진행 중 프로젝트 보드 (홈)
