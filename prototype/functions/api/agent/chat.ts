@@ -45,11 +45,11 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     // 휴식(퇴근) 중에는 모든 에이전트가 활동을 멈춘다 — 코어가 짧게 안내만 하고 위임/통솔하지 않음.
     const rt = await getRuntime(sql, auth.userId).catch(() => ({ workMode: "on", autonomous: false }));
     if (rt.workMode === "off") {
-      await addMessage(sql, {
+      const restMsg = await addMessage(sql, {
         userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
         text: "지금은 모두 휴식 중이에요. 🌙 출근시키면 다시 일을 시작할게요.",
-      }).catch(() => {});
-      return send({ ok: true, conversationId, userMessageId: userMsg.id, resting: true }, 200, origin);
+      }).catch(() => null);
+      return send({ ok: true, conversationId, userMessageId: userMsg.id, resting: true, messages: restMsg ? [restMsg] : [] }, 200, origin);
     }
 
     // 오케스트레이션을 동기로 실행한다. (Pages Functions의 waitUntil 백그라운드가 불안정하면
@@ -57,16 +57,19 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     //  단순 대화는 수초 내 끝남. 멀티 위임이 길어지는 경우의 30초 한계는 후속(잡 워커)으로 분리.
     const authHeader = String(request.headers.get("Authorization") || "");
     const toolCtx = { request, env, authHeader, userId: auth.userId };
+    let produced: any[] = [];
     try {
-      await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: message });
+      produced = (await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: message })) || [];
     } catch (e: any) {
-      await addMessage(sql, {
+      const errMsg = await addMessage(sql, {
         userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
         text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
-      }).catch(() => {});
+      }).catch(() => null);
+      if (errMsg) produced = [errMsg];
     }
 
-    return send({ ok: true, conversationId, userMessageId: userMsg.id }, 200, origin);
+    // 생성된 발언을 응답에 직접 실어 보낸다(프런트가 폴링 없이 즉시 표시 — 조회 의존 제거).
+    return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: produced }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "대화 처리 중 오류" }, 500, origin);
   }

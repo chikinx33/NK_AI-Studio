@@ -529,11 +529,24 @@ export async function streamChat(
     body: JSON.stringify({ message, conversationId: convId, focusAgent: opts.focusAgent }),
     signal: opts.signal,
   });
+  let chatBody: any = {};
+  try { chatBody = await res.clone().json(); } catch { /* ignore */ }
   if (!res.ok) {
-    let err = "전송 실패";
-    try { const d = await res.json(); err = d.error || err; } catch { /* ignore */ }
+    const err = chatBody?.error || "전송 실패";
     onEvent("turn_start", { agentId: "core", name: "코어", emoji: "🧭" });
     onEvent("turn_end", { agentId: "core", text: `⚠️ ${err}` });
+    onEvent("done", {});
+    return;
+  }
+
+  // 동기 실행: chat 응답에 생성된 발언이 직접 실려 오면 폴링 없이 즉시 표시(조회 의존 제거).
+  if (Array.isArray(chatBody?.messages) && chatBody.messages.length) {
+    for (const m of chatBody.messages) {
+      if (m.role === "agent") {
+        onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
+        onEvent("turn_end", { agentId: m.agent_id, text: m.text });
+      }
+    }
     onEvent("done", {});
     return;
   }

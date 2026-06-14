@@ -356,9 +356,13 @@ export async function runGroupChat(
   env: any,
   deps: OrchestratorDeps,
   opts: { autoTrigger?: string } = {}
-): Promise<void> {
+): Promise<any[]> {
   const { sql, userId, conversationId, toolCtx } = deps;
   const addr = "사용자";
+
+  // 생성된 에이전트 발언을 모은다 — 동기 호출 시 chat 응답에 직접 실어 보내 조회 의존을 없앤다.
+  const produced: any[] = [];
+  const emit = async (msg: any) => { const r = await addMessage(sql, msg); produced.push(r); return r; };
 
   // 자율 근무: 사용자 메시지 대신 자율 트리거로 코어를 깨운다(자발적 프로젝트 진행).
   let message: string;
@@ -370,7 +374,7 @@ export async function runGroupChat(
     // 조회에서 못 찾으면(쓰기 직후 타이밍) chat이 넘겨준 방금 메시지로 폴백
     message = lastUser?.text || deps.firstMessage || "";
   }
-  if (!message) return;
+  if (!message) return produced;
 
   const mentions = parseMentions(message);
   const explicitCore = mentions.includes("core");
@@ -387,7 +391,7 @@ export async function runGroupChat(
       if (!tool || tool.agentId !== agentId) continue; // 본인 도구만
       const job = await createJob(sql, { userId, type: r.tool, agentId, input: { prompt: r.reason } });
       const meta = getAgent(agentId)!;
-      await addMessage(sql, {
+      await emit({
         userId, conversationId, role: "agent", agentId, name: meta.name,
         text: `🛠️ ${r.tool} 작업을 시작했어요. 검수 패널에서 결과를 확인하실 수 있어요.`,
       });
@@ -429,7 +433,7 @@ export async function runGroupChat(
       `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
       `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
     const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId });
-    await addMessage(sql, { userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
+    await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await runTools(res.runs, workerId);
     await applyKnows(res.knows, meta.name);
     await applyProjects(res.projects);
@@ -450,8 +454,8 @@ export async function runGroupChat(
     await applyKnows(res.knows, meta.name); // 지식 등록/삭제는 대기 여부와 무관하게 먼저 반영
     await applyProjects(res.projects);
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
-    if (opts.autoTrigger && canDelegate && res.calls.length === 0) return;
-    await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
+    if (opts.autoTrigger && canDelegate && res.calls.length === 0) return produced;
+    await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
     await runTools(res.runs, agentId);
 
     if (canDelegate) {
@@ -469,8 +473,9 @@ export async function runGroupChat(
       `${addr} 요청: "${message}"\n\n방금 직원들이 각자 보고했어요. 팀장(코어)으로서 종합해 결론을 내고, ` +
       `다음 액션 1줄을 제시하세요. "~할게요"로 끝내지 말고 실제 결론을 내세요.`;
     const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId });
-    await addMessage(sql, { userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
+    await emit({ userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
     await applyKnows(wrap.knows, "코어");
     await applyProjects(wrap.projects);
   }
+  return produced;
 }
