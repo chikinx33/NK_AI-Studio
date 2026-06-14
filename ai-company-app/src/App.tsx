@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Chat, { type Turn } from "./components/Chat";
 import Approvals from "./components/Approvals";
-import Skills from "./components/Skills";
 import Results from "./components/Results";
 import Settings from "./components/Settings";
 import VisualNovel from "./components/VisualNovel";
@@ -32,7 +31,6 @@ export default function App() {
   const [draft, setDraft] = useState("");
   // 중앙 패널 뷰(대화/대시보드/그래프/설정) + 우측 사이드바 뷰(지식/승인)
   const [centerView, setCenterView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents">("chat");
-  const [showSkills, setShowSkills] = useState(false);
   // 사이드바에서 숨길 에이전트 (코어 제외, localStorage 영속)
   const [hiddenAgents, setHiddenAgents] = useState<Set<string>>(() => {
     try { return new Set<string>(JSON.parse(localStorage.getItem("hiddenAgents") || "[]")); } catch { return new Set(); }
@@ -53,9 +51,9 @@ export default function App() {
   const [prevView, setPrevView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | null>(null);
   const [prevVn, setPrevVn] = useState(false);
   // 우측 사이드바 회사 지식 칩 → 지식 페이지로 이동하며 적용할 분류 필터(+nonce로 재클릭도 반영)
-  const [knowFilter, setKnowFilter] = useState<"원칙" | "사실" | "결정" | null>(null);
+  const [knowFilter, setKnowFilter] = useState<"원칙" | "사실" | "결정" | "스킬" | null>(null);
   const [knowFilterNonce, setKnowFilterNonce] = useState(0);
-  function openKnowledgeCategory(key: "원칙" | "사실" | "결정" | null) {
+  function openKnowledgeCategory(key: "원칙" | "사실" | "결정" | "스킬" | null) {
     setKnowFilter(key);
     setKnowFilterNonce((n) => n + 1);
     setCenterView("knowledge");
@@ -434,7 +432,7 @@ export default function App() {
               onAgents={() => setCenterView("agents")}
               onSettings={() => setCenterView("settings")}
             />
-            <Approvals onPickCategory={openKnowledgeCategory} onOpenSkills={() => setShowSkills(true)} />
+            <Approvals onPickCategory={openKnowledgeCategory} />
           </div>
           {/* 결과 목록만 스크롤 */}
           <div className="flex-1 min-h-0 overflow-y-auto">
@@ -455,17 +453,6 @@ export default function App() {
         </div>
       </div>
 
-      {showSkills && (
-        <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/60 p-8 backdrop-blur-sm" onClick={() => setShowSkills(false)}>
-          <div className="w-[440px] max-w-[94vw]" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold text-gray-200">🛠️ 보유 스킬</span>
-              <button onClick={() => setShowSkills(false)} className="grid h-7 w-7 place-items-center rounded-lg text-gray-400 transition hover:bg-edge hover:text-white">✕</button>
-            </div>
-            <Skills />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

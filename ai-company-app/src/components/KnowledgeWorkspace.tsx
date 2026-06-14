@@ -1,6 +1,7 @@
 import { useState } from "react";
 import GraphView from "./GraphView";
 import Knowledge from "./Knowledge";
+import Skills from "./Skills";
 
 /**
  * 회사 지식 통합 화면 — 좌측 그래프 뷰 + 우측 지식 리스트(이분할).
@@ -11,11 +12,22 @@ export default function KnowledgeWorkspace({
   filter,
   filterNonce,
 }: {
-  filter?: "원칙" | "사실" | "결정" | null;
+  filter?: "원칙" | "사실" | "결정" | "스킬" | null;
   filterNonce?: number;
 } = {}) {
   // 선택된 노드 텍스트 + nonce(같은 노드 재클릭도 다시 스크롤되게)
   const [sel, setSel] = useState<{ text: string; n: number } | null>(null);
+
+  // 스킬 분류: 그래프 대신 스킬 리스트 전용 화면(항목 클릭 시 상세는 Skills 내부 모달).
+  if (filter === "스킬") {
+    return (
+      <div className="flex-1 min-h-0 overflow-y-auto p-5">
+        <div className="mx-auto max-w-2xl">
+          <Skills />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex h-full min-h-0">

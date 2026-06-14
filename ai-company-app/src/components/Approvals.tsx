@@ -82,10 +82,8 @@ interface ApprovalItem {
 
 export default function Approvals({
   onPickCategory,
-  onOpenSkills,
 }: {
-  onPickCategory?: (key: "원칙" | "사실" | "결정" | null) => void;
-  onOpenSkills?: () => void;
+  onPickCategory?: (key: "원칙" | "사실" | "결정" | "스킬" | null) => void;
 } = {}) {
   const [pending, setPending] = useState<ApprovalItem[]>([]);
   const [history, setHistory] = useState<ApprovalItem[]>([]);
@@ -168,10 +166,10 @@ export default function Approvals({
                 </button>
               );
             })}
-            {/* 스킬도 회사 지식의 한 분류로 — 클릭 시 스킬 목록 */}
+            {/* 스킬도 회사 지식의 한 분류로 — 클릭 시 지식 페이지에서 스킬 목록 표시 */}
             <button
-              onClick={() => onOpenSkills?.()}
-              title="보유 스킬 보기"
+              onClick={() => onPickCategory?.("스킬")}
+              title="지식 페이지에서 스킬 목록 보기"
               className="rounded-full border border-emerald-700/50 bg-emerald-900/50 px-2 py-0.5 text-[11px] font-medium text-emerald-300 transition hover:brightness-125"
             >
               스킬 {skills.length}
