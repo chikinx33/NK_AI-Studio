@@ -5,14 +5,13 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import {
   AGENT_TOOLS,
-  type ToolContext,
   send,
   corsHeaders,
   getSql,
   ensureAgentSchema,
   createJob,
   getJob,
-  setJobStatus,
+  processJob,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -81,30 +80,3 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     return send({ error: e?.message || "잡 조회 중 오류" }, 500, origin);
   }
 };
-
-/** 도구 실행 파이프라인: working → (tool.run) → review_pending | error. */
-async function processJob(
-  ctx: ToolContext,
-  sql: ReturnType<typeof getSql>,
-  jobId: string,
-  type: string,
-  input: any
-): Promise<void> {
-  if (!sql) return;
-  try {
-    await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
-    const tool = AGENT_TOOLS[type];
-    const output = await tool.run(input, ctx);
-    // Phase 0: 부수효과 없는 생성물 → 자동 완료 후 사람 검수 게이트로.
-    await setJobStatus(sql, jobId, ctx.userId, {
-      status: "review_pending",
-      output,
-      reviewStatus: "pending",
-    });
-  } catch (e: any) {
-    await setJobStatus(sql, jobId, ctx.userId, {
-      status: "error",
-      error: String(e?.message || e || "tool_failed"),
-    });
-  }
-}

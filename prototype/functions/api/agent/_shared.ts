@@ -263,6 +263,25 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
 };
 
+/** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */
+export async function processJob(
+  ctx: ToolContext,
+  sql: SqlFn,
+  jobId: string,
+  type: string,
+  input: any
+): Promise<void> {
+  try {
+    await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
+    const tool = AGENT_TOOLS[type];
+    if (!tool) throw new Error(`unknown tool: ${type}`);
+    const output = await tool.run(input, ctx);
+    await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", output, reviewStatus: "pending" });
+  } catch (e: any) {
+    await setJobStatus(sql, jobId, ctx.userId, { status: "error", error: String(e?.message || e || "tool_failed") });
+  }
+}
+
 // 에이전트 표시 메타(아바타·이름·직책). Phase 0 최소.
 export const AGENT_META: Record<string, { name: string; role: string }> = {
   pixel: { name: "픽셀", role: "디자인" },

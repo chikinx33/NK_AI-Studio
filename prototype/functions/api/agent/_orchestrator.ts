@@ -2,7 +2,17 @@
 // 라비오크 두뇌 이식 (Phase 1). orchestrator/prompts.ts + converse.ts 의 NK 클라우드 판.
 // - LLM = NK Claude (api.anthropic.com/v1/messages, ANTHROPIC_API_KEY).
 // - 회사 정체성/목표/페르소나 = 공유 템플릿(시드). 사용자별 오버라이드는 후속.
-// - Phase 1a: 코어 단일 응답(speak). 위임·통솔(멀티 호출)은 Phase 1b(Workflows).
+// - Phase 1a: 코어 단일 응답(speak). Phase 1b: 위임·통솔(runGroupChat, waitUntil 멀티 호출).
+import {
+  type SqlFn,
+  type ToolContext,
+  AGENT_TOOLS,
+  addMessage,
+  listMessages,
+  buildTranscript,
+  createJob,
+  processJob,
+} from "./_shared";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
 
@@ -163,21 +173,44 @@ export async function callClaude(
   return stripThink(out);
 }
 
-export interface SpeakResult { text: string; calls: { agentId: string; instruction: string }[]; }
+export interface SpeakResult {
+  text: string;
+  calls: { agentId: string; instruction: string }[];
+  runs: { tool: string; reason: string }[];
+}
 
-const CALL_RE = /\[\[CALL:\s*([a-z]+)\s*\|\s*([^\]]+)\]\]/gi;
+// 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
+const CALL_RE = /\[{1,2}\s*CALL\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
+const RUN_RE = /\[{1,2}\s*RUN\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
 
-/** 마커 추출 + 본문에서 숨김. (Phase 1a: CALL. RUN/RULE 등은 Phase 1b/2) */
+/** 마커 추출 + 본문에서 숨김. (Phase 1b: CALL 위임 + RUN 도구. RULE/RETRACT 등은 후속) */
 function extractMarkers(raw: string): SpeakResult {
   const calls: { agentId: string; instruction: string }[] = [];
+  const runs: { tool: string; reason: string }[] = [];
   let m: RegExpExecArray | null;
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(raw))) {
-    const id = String(m[1]).toLowerCase();
-    if (getAgent(id) && id !== "core") calls.push({ agentId: id, instruction: String(m[2]).trim() });
+    const id = (resolveAgentId(String(m[1]).trim()) || "").toLowerCase();
+    if (id && id !== "core") calls.push({ agentId: id, instruction: String(m[2]).trim() });
   }
-  const text = raw.replace(CALL_RE, "").trim();
-  return { text, calls };
+  RUN_RE.lastIndex = 0;
+  while ((m = RUN_RE.exec(raw))) {
+    runs.push({ tool: String(m[1]).trim().toLowerCase(), reason: String(m[2]).trim() });
+  }
+  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").trim();
+  return { text, calls, runs };
+}
+
+/** 느슨한 agentId 문자열에서 정식 id 복원 (라비오크 resolveAgentId 포팅). */
+export function resolveAgentId(raw: string): string | undefined {
+  if (!raw) return undefined;
+  const s = raw.toLowerCase().trim();
+  const exact = ROSTER.find((a) => a.id === s);
+  if (exact) return exact.id;
+  const head = s.split(/[:：\s]/)[0];
+  const byHead = ROSTER.find((a) => a.id === head);
+  if (byHead) return byHead.id;
+  return ROSTER.find((a) => s.includes(a.id) || s.includes(a.name.toLowerCase()))?.id;
 }
 
 /** 한 에이전트가 단톡방에서 한 번 발화. transcript(이전 대화) + instruction → Claude. */
@@ -192,4 +225,112 @@ export async function speak(
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }]);
   return extractMarkers(raw);
+}
+
+// ── 멘션 라우팅 (라비오크 parseMentions 포팅 — 오탐 방지) ──────────────────────
+// 영문 id/이름은 @ 접두어 필요, 한글 이름은 단어경계+조사 허용(합성어 차단).
+const JOSA = "가|이|은|는|을|를|와|과|랑|이랑|에게|한테|께|아|야|이여|보고|더러|도|만|의|에";
+
+export function parseMentions(message: string): string[] {
+  const found: string[] = [];
+  const lower = message.toLowerCase();
+  for (const a of ROSTER) {
+    if (lower.includes(`@${a.id.toLowerCase()}`) || message.includes(`@${a.name}`)) { found.push(a.id); continue; }
+    if (a.emoji && message.includes(a.emoji)) { found.push(a.id); continue; }
+    const re = new RegExp(`(?:^|[^가-힣A-Za-z0-9])${a.name}(?:${JOSA}|(?![가-힣]))`);
+    if (re.test(message)) found.push(a.id);
+  }
+  return [...new Set(found)];
+}
+
+// 코어가 "종합/취합"을 예고했는지 — 통솔 마무리 턴 발동 신호.
+const SYNTH_CUE = /종합|취합|정리해서|합쳐서|모아서|모아|취합해|종합해|결론을/;
+
+// ── 오케스트레이션 (라비오크 runGroupChat 포팅, Phase 1b) ─────────────────────
+export interface OrchestratorDeps {
+  sql: SqlFn;
+  userId: string;
+  conversationId: string;
+  toolCtx: ToolContext; // 도구(RUN) 실행용 컨텍스트
+}
+
+/**
+ * 단톡방 한 턴 처리: 1차 응답 → 위임(CALL) → 직원 작업·보고(+RUN 도구) → 코어 통솔 마무리.
+ * waitUntil 백그라운드에서 멀티 Claude 호출(30초 응답 제약 회피). 각 발언은 agent_messages 로 영속.
+ */
+export async function runGroupChat(env: any, deps: OrchestratorDeps): Promise<void> {
+  const { sql, userId, conversationId, toolCtx } = deps;
+  const addr = "사용자";
+
+  const msgs = await listMessages(sql, userId, conversationId);
+  const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+  const message = lastUser?.text || "";
+  if (!message) return;
+
+  const mentions = parseMentions(message);
+  const explicitCore = mentions.includes("core");
+  const others = mentions.filter((id) => id !== "core");
+  const primary = others.length > 0 && !explicitCore ? others : ["core"];
+
+  let coreDelegateCount = 0;
+  let synthCue = false;
+
+  // 직원이 찍은 RUN 마커 → 본인 도구만 잡으로 실행(Phase 0 검수 게이트로 흐름).
+  const runTools = async (runs: { tool: string; reason: string }[], agentId: string) => {
+    for (const r of runs) {
+      const tool = AGENT_TOOLS[r.tool];
+      if (!tool || tool.agentId !== agentId) continue; // 본인 도구만
+      const job = await createJob(sql, { userId, type: r.tool, agentId, input: { prompt: r.reason } });
+      const meta = getAgent(agentId)!;
+      await addMessage(sql, {
+        userId, conversationId, role: "agent", agentId, name: meta.name,
+        text: `🛠️ ${r.tool} 작업을 시작했어요. 검수 패널에서 결과를 확인하실 수 있어요.`,
+      });
+      await processJob(toolCtx, sql, job.id, r.tool, { prompt: r.reason });
+    }
+  };
+
+  // 위임받은 직원이 실제로 일하고 단톡방에 보고.
+  const runWorker = async (workerId: string, instruction: string) => {
+    if (workerId === "core" || !getAgent(workerId)) return;
+    const meta = getAgent(workerId)!;
+    const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
+    const trigger =
+      `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
+      `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
+    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false });
+    await addMessage(sql, { userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
+    await runTools(res.runs, workerId);
+  };
+
+  // 1) 1차 응답자
+  for (const agentId of primary) {
+    const canDelegate = agentId === "core";
+    const meta = getAgent(agentId);
+    if (!meta) continue;
+    const instruction = canDelegate
+      ? "사용자의 마지막 메시지에 코어(팀장)로서 답하세요. 실제 작업이 필요하면 담당 직원을 [[CALL: id | 지시]]로 호출하세요. 간단한 대화면 호출하지 마세요."
+      : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
+    const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate });
+    await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
+    await runTools(res.runs, agentId);
+
+    if (canDelegate) {
+      const calls = res.calls.slice(0, 3);
+      coreDelegateCount += calls.length;
+      if (SYNTH_CUE.test(res.text)) synthCue = true;
+      for (const c of calls) await runWorker(c.agentId, c.instruction);
+    }
+  }
+
+  // 2) 코어 통솔 마무리 — 다수 위임(≥2)이거나 종합 예고 시 코어가 종합·결론.
+  if (primary.includes("core") && (coreDelegateCount >= 2 || (coreDelegateCount >= 1 && synthCue))) {
+    const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
+    const wrapTrigger =
+      `${addr} 요청: "${message}"\n\n방금 직원들이 각자 보고했어요. 팀장(코어)으로서 종합해 결론을 내고, ` +
+      `다음 액션 1줄을 제시하세요. "~할게요"로 끝내지 말고 실제 결론을 내세요.`;
+    const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false });
+    await addMessage(sql, { userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
+  }
 }

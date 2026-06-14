@@ -68,9 +68,9 @@
   <div class="wrap">
     <header class="top">
       <h1>AI 회사</h1>
-      <span class="badge">Phase 1a · 코어 단톡방 + 픽셀 검수</span>
+      <span class="badge">Phase 1b · 코어 위임·통솔 + 픽셀 검수</span>
     </header>
-    <p class="sub">코어(팀장)에게 단톡방으로 지시하고, 픽셀의 산출물을 검수하는 화면이에요. (위임·통솔은 다음 단계)</p>
+    <p class="sub">코어(팀장)에게 단톡방으로 지시하면 담당 직원을 불러 일을 시키고 종합해요. 산출물은 검수 패널에서 승인하세요.</p>
 
     <div id="auth-gate" class="card" style="display:none;">
       <div class="empty">로그인이 필요해요. <a href="app.html">로그인하러 가기 →</a></div>
@@ -177,12 +177,15 @@
         chatSend.disabled = true;
         var r = await api('/api/agent/chat', { method: 'POST', body: JSON.stringify({ message: msg, conversationId: CONV }) });
         if (!r.ok) { chatErr.textContent = '전송 실패: ' + (r.data.error || r.status); chatSend.disabled = false; return; }
-        var before = (await loadMsgs(true)).filter(function (m) { return m.role === 'agent'; }).length;
-        for (var i = 0; i < 30; i++) {
+        // 위임 흐름은 여러 직원이 순차 보고 → 메시지 수가 안정될 때까지(6초 변화 없음) 폴링.
+        var lastCount = -1, stable = 0;
+        for (var i = 0; i < 45; i++) {
           await sleep(2000);
           var items = await loadMsgs(true);
-          if (items.filter(function (m) { return m.role === 'agent'; }).length > before) { renderMsgs(items, false); break; }
+          if (items.length === lastCount) { if (++stable >= 3) break; }
+          else { stable = 0; lastCount = items.length; }
         }
+        renderMsgs(await loadMsgs(false), false);
         chatSend.disabled = false;
       }
       chatSend.addEventListener('click', sendChat);
