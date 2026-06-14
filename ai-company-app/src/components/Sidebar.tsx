@@ -521,14 +521,10 @@ export default function Sidebar({
 
       <div className="flex items-center justify-between gap-2 p-3">
         <div className="min-w-0 space-y-0.5 text-[11px] text-gray-500">
-          <div className="truncate">{`모델: ${status?.ceoModel ?? "?"}`}</div>
+          <div className="truncate">{`코어 모델: ${status?.ceoModel ?? "?"}`}</div>
           {status && (
-            <div className="truncate text-gray-600" title={status.ollama.loaded.join(", ")}>
-              {off
-                ? "모델 내림 · 자원 반납됨"
-                : status.ollama.loaded.length > 0
-                  ? `메모리 점유: ${status.ollama.loaded.join(", ")}`
-                  : "대기 중 · 모델 미적재"}
+            <div className="truncate text-gray-600">
+              {off ? "🌙 휴식 중 (전원 퇴근)" : "☁️ 클라우드 연결됨 (직원별 모델 자동 적용)"}
             </div>
           )}
         </div>

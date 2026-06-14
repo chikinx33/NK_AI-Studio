@@ -164,8 +164,29 @@ export default function Knowledge({
   }, [highlight, scrollNonce]);
 
   const learned = items.filter((i) => i.source !== "기반");
-  const visible = items.filter((it) => filter === null || (it.type ?? "사실") === filter);
+  // 지식 항목: 전체(null)·규칙·사실·결정에서 표시. "스킬"은 지식 type이 아니므로 자동 제외.
+  const visible = items.filter((it) => filter === null || filter === "스킬" ? filter === null : (it.type ?? "사실") === filter);
   const ordered = sortDir === "desc" ? [...visible].reverse() : visible;
+  // 스킬 목록을 함께 보일지: 전체(null) 또는 스킬 분류
+  const showSkills = filter === null || filter === "스킬";
+
+  const renderSkillItem = (s: AgentSkill) => (
+    <button
+      key={`sk_${s.name}`}
+      onClick={() => setOpenSkill(s.name)}
+      className="flex w-full items-start gap-1.5 rounded-lg border border-edge bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1 font-medium text-gray-200">
+          {s.pinned && <span className="text-amber-400">📌</span>}
+          <span className="truncate">{s.name}</span>
+          {s.category && <span className="shrink-0 text-[11px] text-gray-500">· {s.category}</span>}
+        </span>
+        <span className="mt-0.5 block text-[12px] text-gray-500">{s.description}</span>
+      </span>
+      <span className="shrink-0 rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
+    </button>
+  );
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-ink">
@@ -179,9 +200,9 @@ export default function Knowledge({
         <div className="mx-auto w-full max-w-2xl space-y-3">
           {/* 헤더 */}
           <div>
-            <h2 className="text-lg font-bold text-gray-100">회사 지식 ({items.length})</h2>
+            <h2 className="text-lg font-bold text-gray-100">회사 지식 ({items.length + skills.length})</h2>
             <p className="mt-0.5 text-xs text-gray-500">
-              대화로 학습한 것 {learned.length}개 · 기반 {items.length - learned.length}개. 쓸수록 늘어납니다.
+              대화로 학습한 것 {learned.length + skills.length}개 · 기반 {items.length - learned.length}개. 쓸수록 늘어납니다.
             </p>
             {tidyMsg && <p className="mt-1 text-xs text-amber-400">{tidyMsg}</p>}
           </div>
@@ -189,7 +210,7 @@ export default function Knowledge({
           {/* 유형 필터 + 정렬 토글 */}
           <div className="flex flex-wrap items-center gap-1">
             {([null, "원칙", "사실", "결정", "스킬"] as (TypeKey | null)[]).map((t) => {
-              const n = t === "스킬" ? skills.length : t === null ? items.length : items.filter((i) => (i.type ?? "사실") === t).length;
+              const n = t === "스킬" ? skills.length : t === null ? items.length + skills.length : items.filter((i) => (i.type ?? "사실") === t).length;
               const active = filter === t;
               const badge = t ? TYPE_BADGE[t] : null;
               // 오른쪽 사이드바 '회사 지식' 칩과 동일하게 항상 색상 표시(규칙=보라·사실=초록·결정=주황),
@@ -258,29 +279,8 @@ export default function Knowledge({
       <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6 pt-3">
         <div className="mx-auto w-full max-w-2xl">
           <div className="space-y-1.5">
-            {filter === "스킬" ? (
-              skills.length === 0 ? (
-                <div className="text-sm text-gray-500">아직 익힌 스킬이 없어요. 복잡한 작업을 하면 에이전트가 스스로 절차를 스킬로 저장해요.</div>
-              ) : (
-                skills.map((s) => (
-                  <button
-                    key={s.name}
-                    onClick={() => setOpenSkill(s.name)}
-                    className="flex w-full items-start gap-1.5 rounded-lg border border-edge bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60"
-                  >
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-center gap-1 font-medium text-gray-200">
-                        {s.pinned && <span className="text-amber-400">📌</span>}
-                        <span className="truncate">{s.name}</span>
-                        {s.category && <span className="shrink-0 text-[11px] text-gray-500">· {s.category}</span>}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] text-gray-500">{s.description}</span>
-                    </span>
-                    <span className="shrink-0 rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
-                  </button>
-                ))
-              )
-            ) : (
+            {/* 지식 항목 (전체·규칙·사실·결정) */}
+            {filter !== "스킬" &&
               ordered.map((it, i) => (
               <div
                 key={i}
@@ -344,10 +344,16 @@ export default function Knowledge({
                   ✕
                 </button>
               </div>
-              ))
-            )}
-            {filter !== "스킬" && items.length === 0 && (
-              <div className="text-sm text-gray-500">아직 지식이 없어요.</div>
+              ))}
+            {/* 스킬 항목 (전체·스킬 분류일 때 함께 표시) */}
+            {showSkills && skills.map(renderSkillItem)}
+            {/* 빈 안내 */}
+            {ordered.length === 0 && (!showSkills || skills.length === 0) && (
+              <div className="text-sm text-gray-500">
+                {filter === "스킬"
+                  ? "아직 익힌 스킬이 없어요. 복잡한 작업을 하면 에이전트가 스스로 절차를 스킬로 저장해요."
+                  : "아직 지식이 없어요."}
+              </div>
             )}
           </div>
         </div>

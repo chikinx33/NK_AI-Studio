@@ -3,6 +3,7 @@
 import { authorizeRequest } from "../_shared/auth.js";
 import { send, corsHeaders, getSql, ensureAgentSchema, getRuntime } from "./_shared";
 import { ROSTER } from "./_orchestrator";
+import { CLOUD_MODELS } from "../_shared/cloud-models.js";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -34,7 +35,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     localModel: "auto",
     ollama: { up: false, models: [], chatModels: [], loaded: [], autoModel: null },
     cloud: { configured: cloudReady },
-    ceoModel: "claude-sonnet-4-6",
+    ceoModel: CLOUD_MODELS.core, // 실제 코어(오케스트레이터) 모델 — 클라우드 모델 매핑과 일치
     agentCount: ROSTER.length,
   }, 200, origin);
 };
