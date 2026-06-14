@@ -15,7 +15,7 @@ import {
   getAgentPersona,
   listAgentKnowledge,
 } from "./_shared";
-import { claudeAuthHeaders, buildClaudeSystem, authDiag } from "../_shared/claude-auth.js";
+import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders } from "../_shared/claude-auth.js";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
 
@@ -151,10 +151,12 @@ export async function callClaude(
   env: any,
   system: string,
   messages: ClaudeMsg[],
-  opts: { model?: string; maxTokens?: number } = {}
+  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string } = {}
 ): Promise<string> {
-  // 구독(OAuth)/API키 2모드 공유 인증. subscription이면 Bearer+oauth beta+Claude Code system.
-  const auth = claudeAuthHeaders(env);
+  // 구독(OAuth)/API키 2모드 공유 인증. 설정 UI(app_settings) 우선, 없으면 env 폴백.
+  const auth = opts.sql && opts.userId
+    ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
+    : claudeAuthHeaders(env);
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: auth.headers,
@@ -172,7 +174,7 @@ export async function callClaude(
     const inner =
       detail?.error?.message || detail?.message ||
       (typeof detail === "string" ? detail.slice(0, 200) : JSON.stringify(detail).slice(0, 200));
-    throw new Error(`Claude API ${res.status} [${authDiag(env)}] — ${inner}`);
+    throw new Error(`Claude API ${res.status} [${auth.subscription ? "subscription" : "api_key"}] — ${inner}`);
   }
   const data = JSON.parse(text);
   const parts = Array.isArray(data?.content) ? data.content : [];
@@ -242,7 +244,7 @@ export async function speak(
   }
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
-  const raw = await callClaude(env, system, [{ role: "user", content: userContent }]);
+  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId });
   return extractMarkers(raw);
 }
 

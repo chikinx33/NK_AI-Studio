@@ -145,16 +145,18 @@ export async function ensureDateConversation(date: string): Promise<Conversation
 }
 
 export async function getSettings() {
-  // NK: 클라우드(Claude) 고정 환경. 모드/모델은 스튜디오가 관리.
-  return {
-    runtime: { llmMode: "cloud", logRetentionDays: 0, localModel: "auto" },
-    cloudModels: {},
-    claudeAuth: { mode: "subscription", configured: true, oauthSet: false, apiKeySet: true },
-  } as any;
+  // app_settings(user_id별) 기반. 구독↔API 인증 모드를 설정에서 전환.
+  return (await fetch("/api/agent/settings")).json();
 }
 
-export async function setMode(_llmMode: string) {
-  return { ok: true }; // NK: 클라우드 고정 — 전환 없음
+export async function setMode(llmMode: string) {
+  return (
+    await fetch("/api/agent/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "mode", llmMode }),
+    })
+  ).json();
 }
 
 export interface LogStats { dates: number; oldest: string | null; newest: string | null }
@@ -243,13 +245,19 @@ export interface ClaudeAuthStatus {
   oauthSet: boolean;
   apiKeySet: boolean;
 }
-// 인증 모드 설정 (+ 선택적으로 토큰/키 동시 저장)
-export async function setClaudeAuth(_payload: {
+// 인증 모드 설정 (+ 선택적으로 토큰/키 동시 저장). app_settings(user_id별)에 영속.
+export async function setClaudeAuth(payload: {
   authMode: ClaudeAuthMode;
   oauthToken?: string;
   apiKey?: string;
 }) {
-  return { ok: true, status: { mode: "subscription", configured: true, oauthSet: false, apiKeySet: true } } as any; // NK: 인증은 스튜디오 env 관리
+  return (
+    await fetch("/api/agent/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...payload }),
+    })
+  ).json();
 }
 
 export async function setAutonomous(enabled: boolean) {

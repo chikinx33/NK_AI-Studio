@@ -1,53 +1,97 @@
 // prototype/functions/api/_shared/claude-auth.js
-// Claude 인증 공유 헬퍼 (구독 OAuth / API 키 2모드). 스튜디오(scenario)·AI기업(callClaude) 공용.
-// 라비오크 llm/anthropic.ts 의 Cloudflare(fetch) 판 — SDK 없이 헤더/시스템만 구성.
+// Claude 인증 (구독 OAuth / API 키 2모드). 설정 UI에서 런타임 전환 가능하도록 DB(Neon) 우선.
+// 우선순위: app_settings(user_id별) → env 폴백. 스튜디오·AI기업 공용.
+import { getSql } from "../knowledge/_shared";
 
 const OAUTH_BETA = "oauth-2025-04-20";
-// 구독(OAuth) 토큰은 'Claude Code 요청'으로만 검증되므로 시스템 첫 블록에 이 정체성을 둔다(없으면 401/403).
+// 구독(OAuth) 토큰은 'Claude Code 요청'으로만 검증되므로 시스템 첫 블록에 이 정체성을 둔다.
 const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
 
-/** 인증 모드 (기본: 구독). CLAUDE_AUTH_MODE=api_key 면 API 키. */
-export function getAuthMode(env) {
-  const m = String((env && env.CLAUDE_AUTH_MODE) || "").toLowerCase().trim();
-  return m === "api_key" ? "api_key" : "subscription";
+let settingsSchemaReady = false;
+export async function ensureSettingsSchema(sql) {
+  if (settingsSchemaReady) return;
+  await sql(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      user_id text PRIMARY KEY,
+      llm_mode text NOT NULL DEFAULT 'cloud',
+      claude_auth_mode text NOT NULL DEFAULT 'subscription',
+      claude_oauth_token text,
+      claude_api_key text,
+      log_retention_days integer NOT NULL DEFAULT 0,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  settingsSchemaReady = true;
 }
 
-/** 현재 모드의 자격증명이 있는지 */
-export function anthropicConfigured(env) {
-  return getAuthMode(env) === "subscription"
-    ? !!String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "").trim()
-    : !!String((env && env.ANTHROPIC_API_KEY) || "").trim();
+export async function getSettingsRow(sql, userId) {
+  if (!sql) return null;
+  await ensureSettingsSchema(sql);
+  const rows = await sql("SELECT * FROM app_settings WHERE user_id = $1", [userId]);
+  return rows[0] || null;
 }
 
-/**
- * 모드에 맞는 fetch 헤더 + subscription 여부.
- * - subscription: Authorization: Bearer + anthropic-beta(oauth). x-api-key 미전송.
- * - api_key: x-api-key.
- */
-export function claudeAuthHeaders(env) {
-  const mode = getAuthMode(env);
-  if (mode === "subscription") {
-    const token = String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "").trim();
-    if (!token) throw new Error("구독 토큰(CLAUDE_CODE_OAUTH_TOKEN)이 설정되지 않았어요.");
+/** 인증 모드·자격증명 저장. 빈 값은 기존 보존(읽고-병합-쓰기). */
+export async function saveClaudeAuth(sql, userId, patch) {
+  await ensureSettingsSchema(sql);
+  const cur = (await getSettingsRow(sql, userId)) || {};
+  const mode = patch.authMode === "api_key" ? "api_key" : "subscription";
+  const oauth = (patch.oauthToken && patch.oauthToken.trim()) || cur.claude_oauth_token || null;
+  const key = (patch.apiKey && patch.apiKey.trim()) || cur.claude_api_key || null;
+  await sql(
+    `INSERT INTO app_settings (user_id, claude_auth_mode, claude_oauth_token, claude_api_key)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id) DO UPDATE SET claude_auth_mode = $2, claude_oauth_token = $3, claude_api_key = $4, updated_at = now()`,
+    [userId, mode, oauth, key]
+  );
+}
+
+export async function saveLlmMode(sql, userId, llmMode) {
+  await ensureSettingsSchema(sql);
+  const cur = (await getSettingsRow(sql, userId)) || {};
+  await sql(
+    `INSERT INTO app_settings (user_id, llm_mode, claude_auth_mode)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (user_id) DO UPDATE SET llm_mode = $2, updated_at = now()`,
+    [userId, String(llmMode || "cloud"), cur.claude_auth_mode || "subscription"]
+  );
+}
+
+/** DB 설정 우선, 없으면 env 폴백 → 해석된 인증 {mode, oauthToken, apiKey}. */
+export async function resolveAuth(sql, userId, env) {
+  let mode, oauth, key;
+  if (sql && userId) {
+    const row = await getSettingsRow(sql, userId).catch(() => null);
+    if (row) {
+      mode = row.claude_auth_mode;
+      oauth = row.claude_oauth_token;
+      key = row.claude_api_key;
+    }
+  }
+  if (!mode) mode = String((env && env.CLAUDE_AUTH_MODE) || "").toLowerCase() === "api_key" ? "api_key" : "subscription";
+  if (!oauth) oauth = String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "").trim() || null;
+  if (!key) key = String((env && env.ANTHROPIC_API_KEY) || "").trim() || null;
+  return { mode: mode === "api_key" ? "api_key" : "subscription", oauthToken: oauth, apiKey: key };
+}
+
+/** 해석된 인증 → fetch 헤더 + subscription 여부. */
+export function authHeadersFor(resolved) {
+  if (resolved.mode === "subscription") {
+    if (!resolved.oauthToken) throw new Error("구독 토큰(CLAUDE_CODE_OAUTH_TOKEN)이 설정되지 않았어요.");
     return {
       subscription: true,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${resolved.oauthToken}`,
         "anthropic-version": "2023-06-01",
         "anthropic-beta": OAUTH_BETA,
       },
     };
   }
-  const key = String((env && env.ANTHROPIC_API_KEY) || "").trim();
-  if (!key) throw new Error("ANTHROPIC_API_KEY 가 설정되지 않았어요.");
+  if (!resolved.apiKey) throw new Error("ANTHROPIC_API_KEY 가 설정되지 않았어요.");
   return {
     subscription: false,
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-    },
+    headers: { "Content-Type": "application/json", "x-api-key": resolved.apiKey, "anthropic-version": "2023-06-01" },
   };
 }
 
@@ -61,12 +105,38 @@ export function buildClaudeSystem(subscription, realSystem) {
   return realSystem || undefined;
 }
 
-/** 진단용: 현재 모드·자격증명 요약(비밀값 미포함). */
-export function authDiag(env) {
+// ── env 전용(동기) 폴백: DB 조회 없이 env만으로 (scenario 직접 호출 등 하위호환) ──
+export function getAuthMode(env) {
+  return String((env && env.CLAUDE_AUTH_MODE) || "").toLowerCase().trim() === "api_key" ? "api_key" : "subscription";
+}
+export function anthropicConfigured(env) {
+  return getAuthMode(env) === "subscription"
+    ? !!String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "").trim()
+    : !!String((env && env.ANTHROPIC_API_KEY) || "").trim();
+}
+export function claudeAuthHeaders(env) {
+  return authHeadersFor(resolveEnvOnly(env));
+}
+function resolveEnvOnly(env) {
   const mode = getAuthMode(env);
-  if (mode === "subscription") {
-    return `subscription/${String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "") ? "token-set" : "token-missing"}`;
-  }
-  const key = String((env && env.ANTHROPIC_API_KEY) || "");
-  return `api_key/${key ? (key.startsWith("sk-ant-api") ? "apikey-set" : "non-apikey") : "missing"}`;
+  return {
+    mode,
+    oauthToken: String((env && env.CLAUDE_CODE_OAUTH_TOKEN) || "").trim() || null,
+    apiKey: String((env && env.ANTHROPIC_API_KEY) || "").trim() || null,
+  };
+}
+
+/** 설정 UI용 상태(비밀값 미노출). */
+export async function authStatus(sql, userId, env) {
+  const r = await resolveAuth(sql, userId, env);
+  return {
+    mode: r.mode,
+    configured: r.mode === "subscription" ? !!r.oauthToken : !!r.apiKey,
+    oauthSet: !!r.oauthToken,
+    apiKeySet: !!r.apiKey,
+  };
+}
+
+export async function resolvedAuthHeaders(sql, userId, env) {
+  return authHeadersFor(await resolveAuth(sql, userId, env));
 }
