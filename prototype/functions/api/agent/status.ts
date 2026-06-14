@@ -1,7 +1,7 @@
 // prototype/functions/api/agent/status.ts
 // GET /api/agent/status — 라비오크 StatusInfo 계약(클라우드 고정). App 부팅용.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, getRuntime } from "./_shared";
 import { ROSTER } from "./_orchestrator";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -15,11 +15,20 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
   const cloudReady = Boolean(String(env?.ANTHROPIC_API_KEY || "").trim());
+  let workMode: "on" | "off" = "on";
+  let autonomous = false;
+  const sql = getSql(env);
+  if (sql) {
+    await ensureAgentSchema(sql);
+    const rt = await getRuntime(sql, auth.userId);
+    workMode = rt.workMode;
+    autonomous = rt.autonomous;
+  }
   return send({
     company: "AI 스튜디오",
     llmMode: "cloud",
-    workMode: "on",
-    autonomous: false,
+    workMode,
+    autonomous,
     resolvedBackend: "cloud",
     reason: cloudReady ? "NK Claude" : "ANTHROPIC_API_KEY 없음",
     localModel: "auto",

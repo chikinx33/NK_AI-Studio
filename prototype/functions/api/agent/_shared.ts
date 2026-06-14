@@ -134,7 +134,37 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
       PRIMARY KEY (user_id, id)
     )
   `);
+  // 런타임 상태: 출근(work_mode)·자율(autonomous). 사용자별.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS company_runtime (
+      user_id text PRIMARY KEY,
+      work_mode text NOT NULL DEFAULT 'on',
+      autonomous boolean NOT NULL DEFAULT false,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
   agentSchemaReady = true;
+}
+
+// ── 런타임(출근·자율) ────────────────────────────────────────────────────────
+export async function getRuntime(sql: SqlFn, userId: string): Promise<{ workMode: "on" | "off"; autonomous: boolean }> {
+  const rows = await sql("SELECT work_mode, autonomous FROM company_runtime WHERE user_id = $1", [userId]);
+  const r = rows[0];
+  return { workMode: r?.work_mode === "off" ? "off" : "on", autonomous: !!r?.autonomous };
+}
+export async function setWorkMode(sql: SqlFn, userId: string, workMode: "on" | "off"): Promise<void> {
+  await sql(
+    `INSERT INTO company_runtime (user_id, work_mode) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET work_mode = EXCLUDED.work_mode, updated_at = now()`,
+    [userId, workMode]
+  );
+}
+export async function setAutonomousMode(sql: SqlFn, userId: string, autonomous: boolean): Promise<void> {
+  await sql(
+    `INSERT INTO company_runtime (user_id, autonomous) VALUES ($1, $2)
+     ON CONFLICT (user_id) DO UPDATE SET autonomous = EXCLUDED.autonomous, updated_at = now()`,
+    [userId, autonomous]
+  );
 }
 
 // ── 프로젝트 보드 (전부 user_id 격리) ────────────────────────────────────────

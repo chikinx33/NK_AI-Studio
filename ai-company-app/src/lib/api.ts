@@ -252,18 +252,24 @@ export async function setClaudeAuth(_payload: {
   return { ok: true, status: { mode: "subscription", configured: true, oauthSet: false, apiKeySet: true } } as any; // NK: 인증은 스튜디오 env 관리
 }
 
-export async function setAutonomous(_enabled: boolean) {
-  // NK: 자율 근무 스케줄러는 Cloudflare Cron 기반으로 후속 지원 예정.
-  return { ok: true };
+export async function setAutonomous(enabled: boolean) {
+  // 토글 상태 저장(영속). 실제 자율 스텝 실행은 Cloudflare Cron 후속.
+  return (
+    await fetch("/api/agent/autonomous", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled }),
+    })
+  ).json();
 }
 
 export async function autonomousStepNow() {
-  return { ok: false, message: "자율 근무는 NK 클라우드에서 준비 중이에요." };
+  return { ok: false, message: "자율 근무 자동 실행은 NK 클라우드에서 준비 중이에요." };
 }
 
 export async function setWork(workMode: "on" | "off") {
   return (
-    await fetch("/api/work", {
+    await fetch("/api/agent/work", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ workMode }),

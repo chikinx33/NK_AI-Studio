@@ -248,7 +248,7 @@ function AgentTile({
         className="absolute inset-0 h-full w-full"
       >
         <img
-          src={avatarSrc ?? `/avatars/${agent.id}.png`}
+          src={avatarSrc ?? `${import.meta.env.BASE_URL}avatars/${agent.id}.png`}
           alt={agent.name}
           className="absolute inset-0 h-full w-full object-cover"
           style={{
@@ -441,7 +441,7 @@ export default function Sidebar({
     <aside className="w-80 shrink-0 bg-panel border-r border-edge flex flex-col h-full">
       <div className="p-4">
         <div className="flex justify-center">
-          <img src="/logo.png" alt="라비오크" className="h-12 w-auto object-contain" />
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="라비오크" className="h-12 w-auto object-contain" />
         </div>
         <div className="text-xs text-gray-400 mt-1 text-center">1인 기업 · AI 에이전트</div>
 
@@ -456,7 +456,7 @@ export default function Sidebar({
             <AgentTile
               key={a.id}
               agent={a}
-              avatarSrc={off ? "/avatars/Core_robot.png" : undefined}
+              avatarSrc={off ? `${import.meta.env.BASE_URL}avatars/Core_robot.png` : undefined}
               hideName={off}
               active={activeAgentIds.has(a.id)}
               awaitingApproval={approvalAgentIds.has(a.id)}
