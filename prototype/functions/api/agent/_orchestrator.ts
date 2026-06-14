@@ -110,7 +110,8 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     : "";
   const companyKnow = opts.companyKnowledge || [];
   const companyKnowBlock = companyKnow.length
-    ? `\n\n## 🧠 회사 지식·규칙 (당신의 축적된 배경 지식 — ${companyKnow.length}개)\n아래는 회사에 쌓여 온 규칙·사실·결정입니다. **항상 적극 활용해** 더 똑똑하고 맥락에 맞게 판단·답변하세요 — 이 지식을 잘 쓰는 것이 당신이 점점 더 유능해지는 방식입니다. 단, 사용자가 회사 지식을 직접 묻는 게 아니라면 이 목록을 그대로 나열하지 말고, 답변과 판단 속에 자연스럽게 녹여 쓰세요.\n${companyKnow.map((k) => `- ${k}`).join("\n")}`
+    ? `\n\n## 🧠 회사 지식·규칙 (당신의 축적된 배경 지식 — ${companyKnow.length}개)\n아래는 회사에 쌓여 온 규칙·사실·결정입니다. **항상 적극 활용해** 더 똑똑하고 맥락에 맞게 판단·답변하세요 — 이 지식을 잘 쓰는 것이 당신이 점점 더 유능해지는 방식입니다.\n` +
+      `⚠️ 그중 호칭·말투·금지사항 같은 '행동 규칙'(특히 [원칙] 분류)은 배경 참고가 아니라 **매 답변에서 예외 없이 반드시 지켜야 하는 지침**입니다. 예: 사용자에게 존댓말로 답하라는 규칙이 있으면 항상 존댓말을 쓰고, 정해진 호칭을 씁니다. 사실·결정 같은 정보성 지식만 자연스럽게 녹여 쓰고, 직접 묻지 않으면 목록을 그대로 나열하지 마세요.\n${companyKnow.map((k) => `- ${k}`).join("\n")}`
     : "";
   const skillsList = opts.companySkills || [];
   const skillsBlock = skillsList.length
