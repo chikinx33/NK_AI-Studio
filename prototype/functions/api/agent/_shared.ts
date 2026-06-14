@@ -87,7 +87,56 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   try {
     await sql("CREATE INDEX IF NOT EXISTS agent_messages_conv_idx ON agent_messages (user_id, conversation_id, created_at)");
   } catch (_) {}
+  // 직원 관리(Phase 3): 사용자별 페르소나 오버라이드 + 직원 개인 지식. 멀티테넌시.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_personas (
+      user_id text NOT NULL,
+      agent_id text NOT NULL,
+      prompt text NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, agent_id)
+    )
+  `);
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_knowledge (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      agent_id text NOT NULL,
+      text text NOT NULL,
+      type text NOT NULL DEFAULT '사실',
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try {
+    await sql("CREATE INDEX IF NOT EXISTS agent_knowledge_idx ON agent_knowledge (user_id, agent_id)");
+  } catch (_) {}
   agentSchemaReady = true;
+}
+
+// ── 직원 페르소나·지식 (전부 user_id 격리) ──────────────────────────────────
+export async function getAgentPersona(sql: SqlFn, userId: string, agentId: string): Promise<string | null> {
+  const rows = await sql("SELECT prompt FROM agent_personas WHERE user_id = $1 AND agent_id = $2", [userId, agentId]);
+  return rows[0]?.prompt ?? null;
+}
+export async function setAgentPersona(sql: SqlFn, userId: string, agentId: string, prompt: string): Promise<void> {
+  await sql(
+    `INSERT INTO agent_personas (user_id, agent_id, prompt) VALUES ($1, $2, $3)
+     ON CONFLICT (user_id, agent_id) DO UPDATE SET prompt = EXCLUDED.prompt, updated_at = now()`,
+    [userId, agentId, prompt]
+  );
+}
+export async function listAgentKnowledge(sql: SqlFn, userId: string, agentId: string): Promise<{ text: string; type: string }[]> {
+  const rows = await sql(
+    "SELECT text, type FROM agent_knowledge WHERE user_id = $1 AND agent_id = $2 ORDER BY created_at DESC",
+    [userId, agentId]
+  );
+  return rows as { text: string; type: string }[];
+}
+export async function addAgentKnowledgeRow(sql: SqlFn, userId: string, agentId: string, text: string, type: string): Promise<void> {
+  await sql("INSERT INTO agent_knowledge (user_id, agent_id, text, type) VALUES ($1, $2, $3, $4)", [userId, agentId, text, type || "사실"]);
+}
+export async function removeAgentKnowledgeRow(sql: SqlFn, userId: string, agentId: string, text: string): Promise<void> {
+  await sql("DELETE FROM agent_knowledge WHERE user_id = $1 AND agent_id = $2 AND text = $3", [userId, agentId, text]);
 }
 
 // ── 대화 메시지 (전부 user_id 격리) ──────────────────────────────────────────

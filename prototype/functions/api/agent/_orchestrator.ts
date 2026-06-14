@@ -12,6 +12,8 @@ import {
   buildTranscript,
   createJob,
   processJob,
+  getAgentPersona,
+  listAgentKnowledge,
 } from "./_shared";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
@@ -80,14 +82,20 @@ export function stripThink(s: string): string {
 interface BuildSystemOpts {
   address?: string;        // 사용자 호칭
   canDelegate?: boolean;   // 위임 권한(Phase 1b에서 실제 실행)
+  personaOverride?: string; // 사용자가 직원관리에서 편집한 페르소나(우선)
+  agentKnowledge?: string[]; // 이 직원의 개인 지식·규칙(항상 주입)
 }
 
-/** 라비오크 groupChatSystem 포팅(Phase 1a 핵심: 정체성·정직성·대화규칙). 위임 블록은 canDelegate 시. */
+/** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
 export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): string {
   const meta = getAgent(agentId);
   if (!meta) return "";
   const addr = opts.address;
-  const persona = AGENT_PERSONAS[agentId] || `(역할: ${meta.role}. 역할에 맞게 자연스럽게 응대.)`;
+  const persona = opts.personaOverride || AGENT_PERSONAS[agentId] || `(역할: ${meta.role}. 역할에 맞게 자연스럽게 응대.)`;
+  const knowledge = opts.agentKnowledge || [];
+  const knowledgeBlock = knowledge.length
+    ? `\n\n## 나의 개인 지식·운영 규칙 (반드시 따름)\n${knowledge.map((k) => `- ${k}`).join("\n")}`
+    : "";
 
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
 ## 나의 정체성
@@ -118,7 +126,7 @@ ${DEFAULT_COMPANY.goals}
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.
 
 ## 당신의 성격·말투
-${persona}
+${persona}${knowledgeBlock}
 
 ## 대화 규칙 (중요)
 - 메신저 채팅처럼 짧고 자연스럽게. 보고서 남발 금지. 보통 1~4문장.
@@ -219,9 +227,21 @@ export async function speak(
   agentId: string,
   instruction: string,
   transcript: string,
-  opts: BuildSystemOpts = {}
+  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string } = {}
 ): Promise<SpeakResult> {
-  const system = buildAgentSystem(agentId, opts);
+  // 사용자별 페르소나 오버라이드·개인 지식을 두뇌에 주입(직원관리 반영).
+  let personaOverride = opts.personaOverride;
+  let agentKnowledge = opts.agentKnowledge;
+  if (opts.sql && opts.userId) {
+    if (personaOverride === undefined) {
+      personaOverride = (await getAgentPersona(opts.sql, opts.userId, agentId).catch(() => null)) || undefined;
+    }
+    if (agentKnowledge === undefined) {
+      const k = await listAgentKnowledge(opts.sql, opts.userId, agentId).catch(() => []);
+      agentKnowledge = k.map((x) => x.text);
+    }
+  }
+  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }]);
   return extractMarkers(raw);
@@ -298,7 +318,7 @@ export async function runGroupChat(env: any, deps: OrchestratorDeps): Promise<vo
     const trigger =
       `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
       `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
-    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false });
+    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId });
     await addMessage(sql, { userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await runTools(res.runs, workerId);
   };
@@ -312,7 +332,7 @@ export async function runGroupChat(env: any, deps: OrchestratorDeps): Promise<vo
       ? "사용자의 마지막 메시지에 코어(팀장)로서 답하세요. 실제 작업이 필요하면 담당 직원을 [[CALL: id | 지시]]로 호출하세요. 간단한 대화면 호출하지 마세요."
       : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate });
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId });
     await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
     await runTools(res.runs, agentId);
 
@@ -330,7 +350,7 @@ export async function runGroupChat(env: any, deps: OrchestratorDeps): Promise<vo
     const wrapTrigger =
       `${addr} 요청: "${message}"\n\n방금 직원들이 각자 보고했어요. 팀장(코어)으로서 종합해 결론을 내고, ` +
       `다음 액션 1줄을 제시하세요. "~할게요"로 끝내지 말고 실제 결론을 내세요.`;
-    const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false });
+    const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId });
     await addMessage(sql, { userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
   }
 }

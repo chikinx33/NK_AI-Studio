@@ -66,35 +66,35 @@ export interface AgentBrain {
   tools: string[];
 }
 export async function getAgentDetail(id: string): Promise<AgentBrain> {
-  return (await fetch(`/api/agents/${id}`)).json();
+  return (await fetch(`/api/agent/detail?id=${encodeURIComponent(id)}`)).json();
 }
 export async function getAgentKnowledge(id: string): Promise<KnowledgeItem[]> {
-  return (await fetch(`/api/agents/${id}/knowledge`)).json();
+  return (await fetch(`/api/agent/knowledge?id=${encodeURIComponent(id)}`)).json();
 }
 export async function addAgentKnowledge(id: string, text: string, type: KnowledgeType) {
   return (
-    await fetch(`/api/agents/${id}/knowledge`, {
+    await fetch(`/api/agent/knowledge`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, type }),
+      body: JSON.stringify({ id, text, type }),
     })
   ).json();
 }
 export async function deleteAgentKnowledge(id: string, text: string) {
   return (
-    await fetch(`/api/agents/${id}/knowledge`, {
+    await fetch(`/api/agent/knowledge`, {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ id, text }),
     })
   ).json();
 }
 export async function saveAgentPersona(id: string, prompt: string) {
   return (
-    await fetch(`/api/agents/${id}/persona`, {
+    await fetch(`/api/agent/persona`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ id, prompt }),
     })
   ).json();
 }
