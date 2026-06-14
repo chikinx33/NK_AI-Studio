@@ -9,6 +9,7 @@ import {
   getSql,
   ensureAgentSchema,
   addMessage,
+  getRuntime,
 } from "./_shared";
 import { runGroupChat } from "./_orchestrator";
 
@@ -40,6 +41,16 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const userMsg = await addMessage(sql, {
       userId: auth.userId, conversationId, role: "user", text: message,
     });
+
+    // 휴식(퇴근) 중에는 모든 에이전트가 활동을 멈춘다 — 코어가 짧게 안내만 하고 위임/통솔하지 않음.
+    const rt = await getRuntime(sql, auth.userId).catch(() => ({ workMode: "on", autonomous: false }));
+    if (rt.workMode === "off") {
+      await addMessage(sql, {
+        userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
+        text: "지금은 모두 휴식 중이에요. 🌙 출근시키면 다시 일을 시작할게요.",
+      }).catch(() => {});
+      return send({ ok: true, conversationId, userMessageId: userMsg.id, resting: true }, 200, origin);
+    }
 
     // 위임·통솔은 백그라운드(waitUntil)에서 멀티 호출. 프런트는 /api/agent/messages 폴링으로 받음.
     const authHeader = String(request.headers.get("Authorization") || "");

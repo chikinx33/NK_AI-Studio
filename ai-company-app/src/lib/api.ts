@@ -282,12 +282,23 @@ export async function authDiag(): Promise<{ ok: boolean; diag?: AuthDiag; error?
 }
 
 export async function setAutonomous(enabled: boolean) {
-  // 토글 상태 저장(영속). 실제 자율 스텝 실행은 Cloudflare Cron 후속.
+  // 토글 상태 저장(영속). 실제 자율 스텝 실행은 autonomousStep 폴링이 담당.
   return (
     await fetch("/api/agent/autonomous", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled }),
+    })
+  ).json();
+}
+
+// 자율 근무 한 스텝 진행(출근+자율일 때만 서버가 실제 진행). 프런트가 주기 폴링으로 호출.
+export async function autonomousStep(conversationId: string) {
+  return (
+    await fetch("/api/agent/autonomous-step", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId }),
     })
   ).json();
 }

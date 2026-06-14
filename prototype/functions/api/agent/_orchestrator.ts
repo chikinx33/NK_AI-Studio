@@ -280,13 +280,23 @@ export interface OrchestratorDeps {
  * 단톡방 한 턴 처리: 1차 응답 → 위임(CALL) → 직원 작업·보고(+RUN 도구) → 코어 통솔 마무리.
  * waitUntil 백그라운드에서 멀티 Claude 호출(30초 응답 제약 회피). 각 발언은 agent_messages 로 영속.
  */
-export async function runGroupChat(env: any, deps: OrchestratorDeps): Promise<void> {
+export async function runGroupChat(
+  env: any,
+  deps: OrchestratorDeps,
+  opts: { autoTrigger?: string } = {}
+): Promise<void> {
   const { sql, userId, conversationId, toolCtx } = deps;
   const addr = "사용자";
 
-  const msgs = await listMessages(sql, userId, conversationId);
-  const lastUser = [...msgs].reverse().find((m) => m.role === "user");
-  const message = lastUser?.text || "";
+  // 자율 근무: 사용자 메시지 대신 자율 트리거로 코어를 깨운다(자발적 프로젝트 진행).
+  let message: string;
+  if (opts.autoTrigger) {
+    message = opts.autoTrigger;
+  } else {
+    const msgs = await listMessages(sql, userId, conversationId);
+    const lastUser = [...msgs].reverse().find((m) => m.role === "user");
+    message = lastUser?.text || "";
+  }
   if (!message) return;
 
   const mentions = parseMentions(message);
@@ -331,10 +341,14 @@ export async function runGroupChat(env: any, deps: OrchestratorDeps): Promise<vo
     const meta = getAgent(agentId);
     if (!meta) continue;
     const instruction = canDelegate
-      ? "사용자의 마지막 메시지에 코어(팀장)로서 답하세요. 실제 작업이 필요하면 담당 직원을 [[CALL: id | 지시]]로 호출하세요. 간단한 대화면 호출하지 마세요."
+      ? (opts.autoTrigger
+          ? opts.autoTrigger
+          : "사용자의 마지막 메시지에 코어(팀장)로서 답하세요. 실제 작업이 필요하면 담당 직원을 [[CALL: id | 지시]]로 호출하세요. 간단한 대화면 호출하지 마세요.")
       : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId });
+    // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
+    if (opts.autoTrigger && canDelegate && res.calls.length === 0) return;
     await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
     await runTools(res.runs, agentId);
 

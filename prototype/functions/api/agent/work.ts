@@ -1,7 +1,7 @@
 // prototype/functions/api/agent/work.ts
 // POST /api/agent/work { workMode: "on"|"off" } — 출근/퇴근. 끄면 status.workMode=off → 전원 퇴근 UI.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, getSql, ensureAgentSchema, setWorkMode } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, setWorkMode, setAutonomousMode } from "./_shared";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -19,5 +19,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   if (!sql) return send({ error: "DATABASE_URL 미설정" }, 503, origin);
   await ensureAgentSchema(sql);
   await setWorkMode(sql, auth.userId, workMode);
-  return send({ ok: true, workMode }, 200, origin);
+  // 퇴근(휴식)하면 자율 모드도 함께 종료 — 모든 에이전트가 활동을 멈춘다.
+  if (workMode === "off") await setAutonomousMode(sql, auth.userId, false);
+  return send({ ok: true, workMode, autonomous: workMode === "off" ? false : undefined }, 200, origin);
 };

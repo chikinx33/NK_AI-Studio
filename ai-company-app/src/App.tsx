@@ -17,6 +17,7 @@ import {
   streamChat,
   getEvents,
   getApprovals,
+  autonomousStep,
   type StatusInfo,
   type AgentInfo,
   type HistoryTurn,
@@ -322,6 +323,18 @@ export default function App() {
     const t = setInterval(poll, 4000);
     return () => { stopped = true; clearInterval(t); };
   }, []);
+
+  // 자율 근무 진행: 출근(workMode=on) + 자율(autonomous) 상태일 때만, 60초마다 한 스텝씩
+  // 코어가 프로젝트를 실제로 진행시킨다(브라우저가 열려 있는 동안). 보고는 events 폴링으로 화면에 반영.
+  const autonomousOn = status?.workMode === "on" && !!status?.autonomous;
+  useEffect(() => {
+    if (!autonomousOn) return;
+    let stopped = false;
+    const step = () => { if (!stopped) autonomousStep(activeConvRef.current).catch(() => {}); };
+    const t = setInterval(step, 60_000);
+    step(); // 켜자마자 1회
+    return () => { stopped = true; clearInterval(t); };
+  }, [autonomousOn]);
 
   // 업무 중 = 발언(스트리밍) 중이거나 실제 업무(agent_busy/백그라운드 작업) 중
   const activeIds = new Set<string>([
