@@ -172,8 +172,14 @@ export async function callClaude(
   if (!res.ok) {
     let detail: any = text;
     try { detail = JSON.parse(text); } catch (_) {}
-    const msg = detail?.error?.message || detail?.message || `Claude 호출 실패 (${res.status})`;
-    throw new Error(msg);
+    const inner =
+      detail?.error?.message || detail?.message ||
+      (typeof detail === "string" ? detail.slice(0, 200) : JSON.stringify(detail).slice(0, 200));
+    // 진단을 위해 HTTP 상태·인증 모드를 함께 노출 (Request not allowed 원인 추적)
+    const authHint = String(env?.ANTHROPIC_API_KEY || "").startsWith("sk-ant-api")
+      ? "api-key"
+      : (String(env?.ANTHROPIC_API_KEY || "") ? "non-apikey(OAuth?)" : "missing");
+    throw new Error(`Claude API ${res.status} [key:${authHint}] — ${inner}`);
   }
   const data = JSON.parse(text);
   const parts = Array.isArray(data?.content) ? data.content : [];
