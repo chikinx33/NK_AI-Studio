@@ -310,6 +310,14 @@ export async function listArchivedSkills(sql: SqlFn, userId: string): Promise<{ 
   );
   return rows as { name: string; category: string; description: string }[];
 }
+/** 스킬 고정/해제 — 고정된 스킬은 큐레이터가 자동 아카이브하지 않음(헤르메스 pinned 보호). */
+export async function setPinSkill(sql: SqlFn, userId: string, name: string, pinned: boolean): Promise<void> {
+  await sql("UPDATE company_skills SET pinned = $3, updated_at = now() WHERE user_id = $1 AND name = $2", [userId, name, pinned]);
+}
+/** 아카이브 해제(복원). */
+export async function restoreSkill(sql: SqlFn, userId: string, name: string): Promise<void> {
+  await sql("UPDATE company_skills SET archived = false, updated_at = now() WHERE user_id = $1 AND name = $2", [userId, name]);
+}
 
 // ── 직원 페르소나·지식 (전부 user_id 격리) ──────────────────────────────────
 export async function getAgentPersona(sql: SqlFn, userId: string, agentId: string): Promise<string | null> {

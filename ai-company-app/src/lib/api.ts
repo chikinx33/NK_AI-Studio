@@ -219,6 +219,27 @@ export async function getSkillReadiness(): Promise<SkillReadiness[]> {
   return [];
 }
 
+// ── 헤르메스 스킬(절차적 기억) — 에이전트가 축적한 재사용 절차 ──
+export interface AgentSkill { name: string; category: string; description: string; pinned?: boolean; }
+export interface AgentSkillDetail extends AgentSkill {
+  content: string; tags: string; useCount: number; updatedAt: string;
+}
+export async function getSkills(): Promise<{ active: AgentSkill[]; archived: AgentSkill[] }> {
+  return (await fetch("/api/agent/skills")).json();
+}
+export async function getSkillDetail(name: string): Promise<{ skill: AgentSkillDetail | null }> {
+  return (await fetch(`/api/agent/skills?name=${encodeURIComponent(name)}`)).json();
+}
+export async function skillAction(action: "delete" | "pin" | "unpin" | "restore", name: string) {
+  return (
+    await fetch("/api/agent/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, name }),
+    })
+  ).json();
+}
+
 // 연동 "연결 테스트" — NK 키 설정 여부 확인
 export async function testIntegration(agentId: string, tool: string): Promise<{ ok: boolean; message: string }> {
   return (

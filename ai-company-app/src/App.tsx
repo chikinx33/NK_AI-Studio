@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import Sidebar from "./components/Sidebar";
 import Chat, { type Turn } from "./components/Chat";
 import Approvals from "./components/Approvals";
+import Skills from "./components/Skills";
 import Results from "./components/Results";
 import Settings from "./components/Settings";
 import VisualNovel from "./components/VisualNovel";
@@ -434,8 +435,9 @@ export default function App() {
             />
             <Approvals onPickCategory={openKnowledgeCategory} />
           </div>
-          {/* 결과 목록만 스크롤 */}
+          {/* 보유 스킬 + 결과 목록 스크롤 */}
           <div className="flex-1 min-h-0 overflow-y-auto">
+            <Skills />
             <Results
               onAgentSay={(m) => {
                 commit([
