@@ -18,6 +18,10 @@ import {
   deleteCompanyKnowledge,
   listCompanyKnowledge,
   upsertProject,
+  listSkills,
+  createSkill,
+  patchSkill,
+  deleteSkill,
 } from "./_shared";
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
@@ -91,6 +95,7 @@ interface BuildSystemOpts {
   personaOverride?: string; // 사용자가 직원관리에서 편집한 페르소나(우선)
   agentKnowledge?: string[]; // 이 직원의 개인 지식·규칙(항상 주입)
   companyKnowledge?: string[]; // 전사 공용 회사 지식·규칙(모든 직원에 주입)
+  companySkills?: { name: string; category: string; description: string }[]; // 보유 스킬 목록(Level 0)
 }
 
 /** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
@@ -106,6 +111,10 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   const companyKnow = opts.companyKnowledge || [];
   const companyKnowBlock = companyKnow.length
     ? `\n\n## 🧠 회사 지식·규칙 (당신의 축적된 배경 지식 — ${companyKnow.length}개)\n아래는 회사에 쌓여 온 규칙·사실·결정입니다. **항상 적극 활용해** 더 똑똑하고 맥락에 맞게 판단·답변하세요 — 이 지식을 잘 쓰는 것이 당신이 점점 더 유능해지는 방식입니다. 단, 사용자가 회사 지식을 직접 묻는 게 아니라면 이 목록을 그대로 나열하지 말고, 답변과 판단 속에 자연스럽게 녹여 쓰세요.\n${companyKnow.map((k) => `- ${k}`).join("\n")}`
+    : "";
+  const skillsList = opts.companySkills || [];
+  const skillsBlock = skillsList.length
+    ? `\n\n## 🛠️ 보유 스킬 (재사용 절차 — 비슷한 일에 적극 활용해 더 빠르고 정확하게)\n${skillsList.map((s) => `- ${s.category ? `[${s.category}] ` : ""}${s.name}: ${s.description}`).join("\n")}\n비슷한 작업이면 이 스킬의 절차를 따르세요. 절차가 부족하면 [[SKILL: patch ...]]로 개선하세요.`
     : "";
 
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
@@ -131,7 +140,7 @@ ${addr ? `사용자의 호칭은 '${addr}'. 반드시 '${addr}'(으)로 부른�
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}
 
-${DEFAULT_COMPANY.goals}${companyKnowBlock}
+${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}
 
 당신은 이 회사의 ${meta.emoji} ${meta.name} 입니다. 역할: ${meta.role}.
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.
@@ -162,6 +171,12 @@ ${persona}${knowledgeBlock}
 - [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]  (단계는 생략 가능)
 예) [[PROJECT: create | '우울의 숲' 소설 단독판매 | 11~12월 출시, 연내 마감 | 기획, 집필, 표지·PDF, 마케팅, 출시]]
 이 마커를 쓰면 실제로 프로젝트 보드에 생성됩니다. 코어는 프로젝트를 띄우고 PM 싱크가 단계·일정을 관리합니다. "만들었어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
+
+## 🛠️ 스킬 만들기·개선 (절차적 기억 — 일하며 똑똑해지기)
+복잡한 작업(여러 단계·도구)을 끝냈거나, 막힌 걸 해결했거나, 사용자가 방식을 교정했거나, 재사용할 워크플로를 알아냈으면 그 절차를 스킬로 저장하세요(다음에 같은 일을 더 빠르고 정확하게 하기 위함):
+- 새 스킬: [[SKILL: create | 이름 | 분류 | 한 줄 설명 | When to Use / Procedure(단계) / Pitfalls / Verification]]
+- 개선: [[SKILL: patch | 이름 | 기존 문구 | 새 문구]]  ·  삭제: [[SKILL: delete | 이름]]
+보유 스킬에 비슷한 게 있으면 새로 만들지 말고 그걸 활용하거나 patch로 보강하세요.
 
 ## ⛔ 미루지 말 것
 - 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}`;
@@ -207,12 +222,14 @@ export async function callClaude(
 
 export interface KnowOp { action: "add" | "del"; type?: string; text: string; }
 export interface ProjectOp { action: "create"; name: string; goal?: string; stages: string[]; }
+export interface SkillOp { action: "create" | "patch" | "delete"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
 export interface SpeakResult {
   text: string;
   calls: { agentId: string; instruction: string }[];
   runs: { tool: string; reason: string }[];
   knows: KnowOp[];
   projects: ProjectOp[];
+  skills: SkillOp[];
 }
 
 // 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
@@ -222,6 +239,8 @@ const RUN_RE = /\[{1,2}\s*RUN\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
 const KNOW_RE = /\[{1,2}\s*KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
 // 프로젝트 생성 마커: [[PROJECT: create | 이름 | 목표 | 단계1, 단계2, ...]]
 const PROJECT_RE = /\[{1,2}\s*PROJECT\s*:\s*([\s\S]+?)\]{1,2}/gi;
+// 스킬(절차적 기억) 마커: [[SKILL: create | 이름 | 분류 | 한줄설명 | 상세절차]] / [[SKILL: patch | 이름 | 기존 | 새내용]] / [[SKILL: delete | 이름]]
+const SKILL_RE = /\[{1,2}\s*SKILL\s*:\s*([\s\S]+?)\]{1,2}/gi;
 
 // 분류 정규화 — 회사 지식 칩(원칙/사실/결정)과 일치시킨다.
 function normalizeKnowType(t: string): string {
@@ -237,6 +256,7 @@ function extractMarkers(raw: string): SpeakResult {
   const runs: { tool: string; reason: string }[] = [];
   const knows: KnowOp[] = [];
   const projects: ProjectOp[] = [];
+  const skills: SkillOp[] = [];
   let m: RegExpExecArray | null;
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(raw))) {
@@ -272,8 +292,22 @@ function extractMarkers(raw: string): SpeakResult {
       projects.push({ action: "create", name, goal, stages });
     }
   }
-  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").trim();
-  return { text, calls, runs, knows, projects };
+  SKILL_RE.lastIndex = 0;
+  while ((m = SKILL_RE.exec(raw))) {
+    const parts = String(m[1]).split("|").map((s) => s.trim());
+    const action = (parts[0] || "").toLowerCase();
+    const name = (parts[1] || "").trim();
+    if (!name) continue;
+    if (/^(create|new|만들|생성)$/.test(action)) {
+      skills.push({ action: "create", name, category: parts[2] || "", description: parts[3] || "", content: parts.slice(4).join(" | ").trim() });
+    } else if (/^(patch|edit|수정|개선)$/.test(action) && parts.length >= 4) {
+      skills.push({ action: "patch", name, oldStr: parts[2], newStr: parts.slice(3).join(" | ") });
+    } else if (/^(delete|remove|삭제|제거)$/.test(action)) {
+      skills.push({ action: "delete", name });
+    }
+  }
+  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").trim();
+  return { text, calls, runs, knows, projects, skills };
 }
 
 /** 느슨한 agentId 문자열에서 정식 id 복원 (라비오크 resolveAgentId 포팅). */
@@ -314,7 +348,12 @@ export async function speak(
     const ck = await listCompanyKnowledge(opts.sql, opts.userId).catch(() => []);
     companyKnowledge = ck.map((k) => `[${k.type || "사실"}] ${k.text}`);
   }
-  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge });
+  // 보유 스킬(절차적 기억) 목록 주입 — 비슷한 일에 재사용(progressive disclosure Level 0).
+  let companySkills = opts.companySkills;
+  if (companySkills === undefined && opts.sql && opts.userId) {
+    companySkills = await listSkills(opts.sql, opts.userId).catch(() => []);
+  }
+  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId) });
   return extractMarkers(raw);
@@ -409,6 +448,17 @@ export async function runGroupChat(
     }
   };
 
+  // 에이전트가 찍은 SKILL 마커 → 스킬(절차적 기억) 저장/개선/삭제.
+  const applySkills = async (skills: SkillOp[] | undefined) => {
+    for (const s of skills || []) {
+      try {
+        if (s.action === "create") await createSkill(sql, userId, { name: s.name, category: s.category, description: s.description, content: s.content });
+        else if (s.action === "patch") await patchSkill(sql, userId, s.name, s.oldStr || "", s.newStr || "");
+        else if (s.action === "delete") await deleteSkill(sql, userId, s.name);
+      } catch { /* 스킬 반영 실패는 대화 흐름에 영향 없음 */ }
+    }
+  };
+
   // 에이전트가 찍은 PROJECT 마커 → 프로젝트 보드에 실제 생성.
   const applyProjects = async (projects: ProjectOp[] | undefined) => {
     for (const p of projects || []) {
@@ -437,6 +487,7 @@ export async function runGroupChat(
     await runTools(res.runs, workerId);
     await applyKnows(res.knows, meta.name);
     await applyProjects(res.projects);
+    await applySkills(res.skills);
   };
 
   // 1) 1차 응답자
@@ -453,6 +504,7 @@ export async function runGroupChat(
     const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId });
     await applyKnows(res.knows, meta.name); // 지식 등록/삭제는 대기 여부와 무관하게 먼저 반영
     await applyProjects(res.projects);
+    await applySkills(res.skills);
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
     if (opts.autoTrigger && canDelegate && res.calls.length === 0) return produced;
     await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
@@ -476,6 +528,7 @@ export async function runGroupChat(
     await emit({ userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
     await applyKnows(wrap.knows, "코어");
     await applyProjects(wrap.projects);
+    await applySkills(wrap.skills);
   }
 
   // 3) 자동 회고 (헤르메스 자기개선: 복잡 작업 뒤 새 교훈을 스스로 지식으로 축적 = persist durable knowledge).
@@ -488,10 +541,12 @@ export async function runGroupChat(
         "방금의 대화·작업을 회고하세요(이건 내부 회고 — 사용자에게 보이지 않습니다). " +
         "회사가 앞으로 계속 기억하고 활용하면 좋을 '새로' 배운 규칙·사실·결정이 있으면 [[KNOW: add | 분류 | 내용]]로 저장하세요(분류=원칙·사실·결정). " +
         "이미 등록된 회사 지식과 겹치면 저장하지 말고, 정말 새로 배운 핵심만 1~3개 이내로 간결하게. 확실하지 않은 건 저장하지 마세요. " +
+        "또한 이번에 재사용할 만한 작업 절차(워크플로)를 익혔다면 [[SKILL: create | 이름 | 분류 | 한 줄 설명 | 단계별 절차]]로 저장하세요. 기존 스킬을 개선했으면 [[SKILL: patch | 이름 | 기존 | 새내용]]. " +
         "저장할 게 없으면 마커 없이 '없음'이라고만 답하세요.";
       const review = await speak(env, "core", reviewTrigger, t, { address: addr, canDelegate: false, sql, userId });
       await applyKnows(review.knows, "코어(회고)");
       await applyProjects(review.projects);
+      await applySkills(review.skills);
       // review.text(회고 내용)는 produced에 넣지 않음 — 사용자 화면에는 표시하지 않는다.
     } catch { /* 회고 실패는 대화 흐름에 영향 없음 */ }
   }

@@ -143,6 +143,24 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  // 헤르메스 스킬(절차적 기억): 에이전트가 재사용 절차를 저장·개선. content=SKILL.md 본문. 멀티테넌시.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS company_skills (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      name text NOT NULL,
+      category text NOT NULL DEFAULT '',
+      description text NOT NULL DEFAULT '',
+      content text NOT NULL DEFAULT '',
+      tags text NOT NULL DEFAULT '',
+      pinned boolean NOT NULL DEFAULT false,
+      archived boolean NOT NULL DEFAULT false,
+      use_count integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try { await sql("CREATE UNIQUE INDEX IF NOT EXISTS company_skills_user_name_idx ON company_skills (user_id, name)"); } catch (_) {}
   agentSchemaReady = true;
 }
 
@@ -230,6 +248,48 @@ export async function updateCompanyKnowledge(sql: SqlFn, userId: string, oldText
 }
 export async function deleteCompanyKnowledge(sql: SqlFn, userId: string, text: string): Promise<void> {
   await sql("DELETE FROM company_knowledge WHERE user_id = $1 AND text = $2", [userId, text]);
+}
+
+// ── 헤르메스 스킬(절차적 기억) — 전부 user_id 격리 ──────────────────────────
+export interface CompanySkill {
+  id: string; name: string; category: string; description: string;
+  content: string; tags: string; pinned: boolean; useCount: number; updatedAt: string;
+}
+/** Level 0(progressive disclosure) — 활성 스킬 요약 목록(name·category·description). content 제외. */
+export async function listSkills(sql: SqlFn, userId: string): Promise<{ name: string; category: string; description: string; pinned: boolean }[]> {
+  const rows = await sql(
+    "SELECT name, category, description, pinned FROM company_skills WHERE user_id = $1 AND archived = false ORDER BY pinned DESC, use_count DESC, updated_at DESC",
+    [userId]
+  );
+  return rows as { name: string; category: string; description: string; pinned: boolean }[];
+}
+/** Level 1 — 특정 스킬 전체(SKILL.md content). 조회 시 use_count++. */
+export async function getSkill(sql: SqlFn, userId: string, name: string): Promise<CompanySkill | null> {
+  const rows = await sql("SELECT * FROM company_skills WHERE user_id = $1 AND name = $2", [userId, name]);
+  const r = rows[0];
+  if (!r) return null;
+  await sql("UPDATE company_skills SET use_count = use_count + 1 WHERE user_id = $1 AND name = $2", [userId, name]).catch(() => {});
+  return { id: r.id, name: r.name, category: r.category, description: r.description, content: r.content, tags: r.tags, pinned: !!r.pinned, useCount: r.use_count, updatedAt: r.updated_at };
+}
+export async function createSkill(sql: SqlFn, userId: string, s: { name: string; category?: string; description?: string; content?: string; tags?: string }): Promise<void> {
+  await sql(
+    `INSERT INTO company_skills (user_id, name, category, description, content, tags)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, name) DO UPDATE SET category = EXCLUDED.category, description = EXCLUDED.description, content = EXCLUDED.content, tags = EXCLUDED.tags, updated_at = now()`,
+    [userId, s.name, s.category || "", s.description || "", s.content || "", s.tags || ""]
+  );
+}
+/** patch — content 내 old_string → new_string (토큰 효율, 헤르메스 권장). */
+export async function patchSkill(sql: SqlFn, userId: string, name: string, oldStr: string, newStr: string): Promise<boolean> {
+  const rows = await sql("SELECT content FROM company_skills WHERE user_id = $1 AND name = $2", [userId, name]);
+  const cur = rows[0]?.content;
+  if (cur == null || !cur.includes(oldStr)) return false;
+  const next = String(cur).split(oldStr).join(newStr);
+  await sql("UPDATE company_skills SET content = $3, updated_at = now() WHERE user_id = $1 AND name = $2", [userId, name, next]);
+  return true;
+}
+export async function deleteSkill(sql: SqlFn, userId: string, name: string): Promise<void> {
+  await sql("DELETE FROM company_skills WHERE user_id = $1 AND name = $2", [userId, name]);
 }
 
 // ── 직원 페르소나·지식 (전부 user_id 격리) ──────────────────────────────────
