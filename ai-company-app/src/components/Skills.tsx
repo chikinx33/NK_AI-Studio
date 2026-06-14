@@ -20,7 +20,7 @@ function PinIcon({ className }: { className?: string }) {
 }
 
 // 스킬 상세 팝업 (SKILL.md content = 마크다운)
-function SkillPopup({ name, onClose, onChanged }: { name: string; onClose: () => void; onChanged: () => void }) {
+export function SkillPopup({ name, onClose, onChanged }: { name: string; onClose: () => void; onChanged: () => void }) {
   const [skill, setSkill] = useState<AgentSkillDetail | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => { getSkillDetail(name).then((d) => setSkill(d.skill)).catch(() => {}); }, [name]);

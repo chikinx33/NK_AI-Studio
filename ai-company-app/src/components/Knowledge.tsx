@@ -5,9 +5,12 @@ import {
   updateKnowledge,
   deleteKnowledge,
   consolidateDecisions,
+  getSkills,
   type KnowledgeItem,
+  type AgentSkill,
 } from "../lib/api";
 import { SortAscIcon, SortDescIcon } from "./icons";
+import { SkillPopup } from "./Skills";
 
 function BrainIcon({ className }: { className?: string }) {
   return (
@@ -40,8 +43,9 @@ const TYPE_BADGE: Record<string, { t: string; c: string }> = {
   원칙: { t: "규칙", c: "bg-violet-900/50 text-violet-300 border-violet-700/50" },
   사실: { t: "사실", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
   결정: { t: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
+  스킬: { t: "스킬", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
 };
-type TypeKey = "원칙" | "사실" | "결정";
+type TypeKey = "원칙" | "사실" | "결정" | "스킬";
 
 export default function Knowledge({
   scrollToText,
@@ -55,6 +59,8 @@ export default function Knowledge({
   filterNonce?: number;
 } = {}) {
   const [items, setItems] = useState<KnowledgeItem[]>([]);
+  const [skills, setSkills] = useState<AgentSkill[]>([]);
+  const [openSkill, setOpenSkill] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [pendingDelete, setPendingDelete] = useState<KnowledgeItem | null>(null);
   const [filter, setFilter] = useState<TypeKey | null>(null);
@@ -89,7 +95,12 @@ export default function Knowledge({
   }
 
   async function refresh() {
-    setItems(await getKnowledge().catch(() => []));
+    const [k, s] = await Promise.all([
+      getKnowledge().catch(() => [] as KnowledgeItem[]),
+      getSkills().then((d) => d.active ?? []).catch(() => [] as AgentSkill[]),
+    ]);
+    setItems(k);
+    setSkills(s);
   }
   async function confirmDelete() {
     if (!pendingDelete) return;
@@ -117,7 +128,7 @@ export default function Knowledge({
   // 카테고리 선택 후 직접 추가 (전체 선택 시 추가 불가)
   async function addToCategory() {
     const text = input.trim();
-    if (!text || filter === null) return;
+    if (!text || filter === null || filter === "스킬") return; // 스킬은 에이전트가 자동 생성
     await addKnowledge(text, filter);
     setInput("");
     refresh();
@@ -177,8 +188,8 @@ export default function Knowledge({
 
           {/* 유형 필터 + 정렬 토글 */}
           <div className="flex flex-wrap items-center gap-1">
-            {([null, "원칙", "사실", "결정"] as (TypeKey | null)[]).map((t) => {
-              const n = t === null ? items.length : items.filter((i) => (i.type ?? "사실") === t).length;
+            {([null, "원칙", "사실", "결정", "스킬"] as (TypeKey | null)[]).map((t) => {
+              const n = t === "스킬" ? skills.length : t === null ? items.length : items.filter((i) => (i.type ?? "사실") === t).length;
               const active = filter === t;
               const badge = t ? TYPE_BADGE[t] : null;
               // 오른쪽 사이드바 '회사 지식' 칩과 동일하게 항상 색상 표시(규칙=보라·사실=초록·결정=주황),
@@ -196,15 +207,17 @@ export default function Knowledge({
                 </button>
               );
             })}
-            {/* 중복 결정 정리 — 보드 진행 스냅샷을 프로젝트별 최신 1건만 남기고 제거 */}
-            <button
-              onClick={tidyDecisions}
-              disabled={tidying}
-              title="중복된 보드 진행 스냅샷(결정)을 프로젝트별 최신 1건만 남기고 정리합니다. 단계완료·사용확정 같은 진짜 기록은 그대로 둡니다."
-              className="ml-auto shrink-0 rounded-full border border-amber-700/50 bg-amber-900/30 px-2.5 py-1 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-50"
-            >
-              {tidying ? "정리 중…" : "🧹 중복 정리"}
-            </button>
+            {/* 중복 결정 정리 — 보드 진행 스냅샷을 프로젝트별 최신 1건만 남기고 제거 (스킬 분류에선 숨김) */}
+            {filter !== "스킬" && (
+              <button
+                onClick={tidyDecisions}
+                disabled={tidying}
+                title="중복된 보드 진행 스냅샷(결정)을 프로젝트별 최신 1건만 남기고 정리합니다. 단계완료·사용확정 같은 진짜 기록은 그대로 둡니다."
+                className="ml-auto shrink-0 rounded-full border border-amber-700/50 bg-amber-900/30 px-2.5 py-1 text-xs font-medium text-amber-300 transition hover:bg-amber-900/50 disabled:opacity-50"
+              >
+                {tidying ? "정리 중…" : "🧹 중복 정리"}
+              </button>
+            )}
             {/* 정렬 방향 토글 (오름/내림차순) — 아이콘만 */}
             <button
               onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
@@ -220,7 +233,7 @@ export default function Knowledge({
           <input
             spellCheck={false}
             value={input}
-            disabled={filter === null}
+            disabled={filter === null || filter === "스킬"}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") addToCategory();
@@ -228,10 +241,12 @@ export default function Knowledge({
             placeholder={
               filter === null
                 ? "카테고리(규칙·사실·결정)를 선택하면 추가할 수 있어요"
-                : `‘${TYPE_BADGE[filter].t}’ 지식 추가… (Enter)`
+                : filter === "스킬"
+                  ? "스킬은 에이전트가 작업하며 스스로 만들어요 (직접 추가 불가)"
+                  : `‘${TYPE_BADGE[filter].t}’ 지식 추가… (Enter)`
             }
             className={`w-full rounded-lg border px-3 py-2 text-sm outline-none transition ${
-              filter === null
+              filter === null || filter === "스킬"
                 ? "cursor-not-allowed border-edge bg-ink/40 text-gray-600 placeholder:text-gray-600"
                 : "border-edge bg-panel focus:border-emerald-600"
             }`}
@@ -243,7 +258,30 @@ export default function Knowledge({
       <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6 pt-3">
         <div className="mx-auto w-full max-w-2xl">
           <div className="space-y-1.5">
-            {ordered.map((it, i) => (
+            {filter === "스킬" ? (
+              skills.length === 0 ? (
+                <div className="text-sm text-gray-500">아직 익힌 스킬이 없어요. 복잡한 작업을 하면 에이전트가 스스로 절차를 스킬로 저장해요.</div>
+              ) : (
+                skills.map((s) => (
+                  <button
+                    key={s.name}
+                    onClick={() => setOpenSkill(s.name)}
+                    className="flex w-full items-start gap-1.5 rounded-lg border border-edge bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1 font-medium text-gray-200">
+                        {s.pinned && <span className="text-amber-400">📌</span>}
+                        <span className="truncate">{s.name}</span>
+                        {s.category && <span className="shrink-0 text-[11px] text-gray-500">· {s.category}</span>}
+                      </span>
+                      <span className="mt-0.5 block text-[12px] text-gray-500">{s.description}</span>
+                    </span>
+                    <span className="shrink-0 rounded border border-emerald-700/50 bg-emerald-900/40 px-1 text-[10px] text-emerald-300">스킬</span>
+                  </button>
+                ))
+              )
+            ) : (
+              ordered.map((it, i) => (
               <div
                 key={i}
                 ref={(el) => {
@@ -306,13 +344,17 @@ export default function Knowledge({
                   ✕
                 </button>
               </div>
-            ))}
-            {items.length === 0 && (
+              ))
+            )}
+            {filter !== "스킬" && items.length === 0 && (
               <div className="text-sm text-gray-500">아직 지식이 없어요.</div>
             )}
           </div>
         </div>
       </div>
+
+      {/* 스킬 상세 팝업 — 절차(SKILL.md) + 고정·삭제 */}
+      {openSkill && <SkillPopup name={openSkill} onClose={() => setOpenSkill(null)} onChanged={refresh} />}
 
       {/* 삭제 확인 팝업 — 실수 방지 */}
       {pendingDelete && (
