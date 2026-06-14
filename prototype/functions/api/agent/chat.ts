@@ -52,17 +52,19 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       return send({ ok: true, conversationId, userMessageId: userMsg.id, resting: true }, 200, origin);
     }
 
-    // 위임·통솔은 백그라운드(waitUntil)에서 멀티 호출. 프런트는 /api/agent/messages 폴링으로 받음.
+    // 오케스트레이션을 동기로 실행한다. (Pages Functions의 waitUntil 백그라운드가 불안정하면
+    //  결과가 저장되지 않아 무응답이 됨 → 핸들러 내에서 await 하면 결과 저장·에러 노출이 보장됨.)
+    //  단순 대화는 수초 내 끝남. 멀티 위임이 길어지는 경우의 30초 한계는 후속(잡 워커)으로 분리.
     const authHeader = String(request.headers.get("Authorization") || "");
     const toolCtx = { request, env, authHeader, userId: auth.userId };
-    waitUntil(
-      runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: message }).catch(async (e: any) => {
-        await addMessage(sql, {
-          userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
-          text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
-        }).catch(() => {});
-      })
-    );
+    try {
+      await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: message });
+    } catch (e: any) {
+      await addMessage(sql, {
+        userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
+        text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
+      }).catch(() => {});
+    }
 
     return send({ ok: true, conversationId, userMessageId: userMsg.id }, 200, origin);
   } catch (e: any) {
