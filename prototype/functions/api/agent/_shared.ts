@@ -71,7 +71,71 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
   try {
     await sql("CREATE INDEX IF NOT EXISTS agent_jobs_user_created_idx ON agent_jobs (user_id, created_at DESC)");
   } catch (_) {}
+  // 단톡방 대화 메시지 (Phase 1). user_id + conversation_id 격리.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_messages (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      conversation_id text NOT NULL,
+      role text NOT NULL,
+      agent_id text,
+      name text,
+      text text NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try {
+    await sql("CREATE INDEX IF NOT EXISTS agent_messages_conv_idx ON agent_messages (user_id, conversation_id, created_at)");
+  } catch (_) {}
   agentSchemaReady = true;
+}
+
+// ── 대화 메시지 (전부 user_id 격리) ──────────────────────────────────────────
+export interface AgentMessage {
+  id: string;
+  user_id: string;
+  conversation_id: string;
+  role: "user" | "agent";
+  agent_id: string | null;
+  name: string | null;
+  text: string;
+  created_at: string;
+}
+
+export async function addMessage(
+  sql: SqlFn,
+  m: { userId: string; conversationId: string; role: "user" | "agent"; agentId?: string | null; name?: string | null; text: string }
+): Promise<AgentMessage> {
+  const rows = await sql(
+    `INSERT INTO agent_messages (user_id, conversation_id, role, agent_id, name, text)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [m.userId, m.conversationId, m.role, m.agentId ?? null, m.name ?? null, m.text]
+  );
+  return rows[0] as AgentMessage;
+}
+
+export async function listMessages(
+  sql: SqlFn,
+  userId: string,
+  conversationId: string,
+  limit = 100
+): Promise<AgentMessage[]> {
+  const safe = Math.min(Math.max(Number(limit) || 100, 1), 300);
+  const rows = await sql(
+    `SELECT * FROM agent_messages WHERE user_id = $1 AND conversation_id = $2
+     ORDER BY created_at ASC LIMIT $3`,
+    [userId, conversationId, safe]
+  );
+  return rows as AgentMessage[];
+}
+
+/** 최근 N턴을 라비오크 buildTranscript 형식의 트랜스크립트로. */
+export function buildTranscript(msgs: AgentMessage[], addr: string, maxTurns = 12): string {
+  const recent = msgs.slice(-maxTurns);
+  if (!recent.length) return "(대화 시작)";
+  return recent
+    .map((m) => (m.role === "user" ? `${addr}: ${m.text}` : `${m.name || "직원"}: ${m.text}`))
+    .join("\n");
 }
 
 // ── 잡 CRUD (전부 user_id 격리) ──────────────────────────────────────────────

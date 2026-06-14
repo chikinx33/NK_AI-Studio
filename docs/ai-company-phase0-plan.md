@@ -179,10 +179,42 @@ job = {
 
 ## 8. 이후 단계 (요약)
 
-- **Phase 1 — 두뇌 이식**: 코어 분해·라우팅·통솔을 Workflows로. 라비오크 안전장치(정직성·게이트) 이식.
+- **Phase 1 — 두뇌 이식**: 코어 분해·라우팅·통솔 + 라비오크 안전장치(정직성·게이트) 이식. (아래 §9 상세)
 - **Phase 1.5 — UI 마운트**: 라비오크 `app/web`(React/Vite)을 NK 빌드에 통합 → `ai-company.html`.
   `api.ts`를 `/api/agent/*`+Bearer로 재배선, NK 세션 인증 통합, 멀티테넌시(userId) 적용.
   단톡방·VN·아바타·검수 패널 경험을 클라우드에서 그대로.
+
+---
+
+## 9. Phase 1 설계 — 코어 두뇌 이식
+
+> 라비오크 `orchestrator/converse.ts`(`runGroupChat`) + `prompts.ts`(`groupChatSystem`)를 NK 클라우드로.
+> **두뇌의 본질 = 프롬프트(정체성·정직성·위임·안전장치) + 오케스트레이션 흐름 + 마커 처리.**
+> LLM = NK가 쓰는 Claude(`api.anthropic.com/v1/messages`, sonnet-4-6, `ANTHROPIC_API_KEY`)로 고정.
+
+### 라비오크 runGroupChat 흐름 (이식 대상)
+1. 컨텍스트(정체성·목표·지식·보드·현황·프로필) 주입 → 2. 라우팅(멘션/포커스) →
+3. 코어 1차 응답(`speak`) → 4. 위임(`[[CALL:id|지시]]`/추론/라우터) → 5. 직원 작업·보고(+도구 `[[RUN]]`) →
+6. 코어 통솔 마무리(종합·결론) → 7. 백그라운드 학습(캡처·요약·보드).
+안전장치 마커: `[[RULE]]`(규칙등록) `[[RETRACT]]`(철회) `[[CLEANUP]]`(정리) `[[AGENTRULE]]`(직원규칙). 정직성 가드(거짓 보고 금지).
+
+### ★ 30초 제약 → 단계 분리 (필수)
+멀티 Claude 호출(1차+위임N+통솔)은 한 요청에 불가. 그래서:
+- **Phase 1a — 대화 인프라 + 코어 단일 응답** (Claude 1회, `waitUntil` 안전). 단톡방에서 코어와 진짜 대화.
+- **Phase 1b — 위임·통솔** (멀티 호출 → Cloudflare Workflows durable 도입). 코어가 직원 부려 종합.
+
+### 멀티테넌시
+- 회사 정체성/목표/페르소나 = **공유 템플릿(코드 시드)**. 라비오크의 구체 정체성("우울의 숲" 등)은
+  엔케 개인 데이터라 포팅 금지 — 일반 "AI 콘텐츠 스튜디오" 템플릿. 사용자별 오버라이드는 후속(Neon `company_profile`).
+- 대화·메시지(`agent_messages`)는 `user_id` + `conversation_id` 격리. 모든 조회 `WHERE user_id`.
+
+### Phase 1a 구현 항목
+- [ ] `agent_messages` 스키마(Neon): id, user_id, conversation_id, role, agent_id, name, text, created_at. 인덱스 `(user_id, conversation_id, created_at)`.
+- [ ] `agent/_orchestrator.ts`: ROSTER(11인 포팅) + 회사 템플릿 + 코어 페르소나 + `callClaude`(NK Claude fetch) + `stripThink` + `buildAgentSystem`(groupChatSystem 포팅) + `speak`.
+- [ ] `POST /api/agent/chat { message, conversationId? }` → 사용자 메시지 저장 + 잡(type=chat) → `waitUntil`(코어 speak → 메시지 저장).
+- [ ] `GET /api/agent/messages?conversationId=` → 메시지 폴링(user_id 격리).
+- [ ] ai-company.html에 최소 단톡방 섹션(입력+메시지 스트림).
+- [ ] 검증: 코어가 페르소나대로 응답, B 사용자는 A 대화 안 보임(404/빈 목록).
 - **Phase 2 — 11인 도구 배선**: 잉크→/api/scenario, 비트→/api/sound, 리치→/api/sns/publish …
 - **Phase 3 — 회사 두뇌**: D1/R2 지식·학습·콘텐츠 라이브러리 + 성과 피드백.
 - **Phase 4 — 자율·스케줄**: 24시간 자율 근무, 정기 에피소드 파이프라인.
