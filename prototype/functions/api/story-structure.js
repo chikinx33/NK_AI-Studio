@@ -1,3 +1,5 @@
+import { claudeAuthHeaders, buildClaudeSystem, anthropicConfigured } from "./_shared/claude-auth.js";
+
 const corsHeaders = (origin) => ({
   "Content-Type": "application/json; charset=utf-8",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -38,9 +40,10 @@ export async function onRequestPost(context) {
     fallbackStory,
     input
   );
-  if (!env.ANTHROPIC_API_KEY) {
-    return json({ story: fallbackStory, beats: fallbackBeats, fallback: true, error: "ANTHROPIC_API_KEY missing" }, 200, origin);
+  if (!anthropicConfigured(env)) {
+    return json({ story: fallbackStory, beats: fallbackBeats, fallback: true, error: "Claude 자격증명 미설정" }, 200, origin);
   }
+  const auth = claudeAuthHeaders(env);
 
   try {
     const controller = new AbortController();
@@ -50,16 +53,12 @@ export async function onRequestPost(context) {
     try {
       completion = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": env.ANTHROPIC_API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
+        headers: auth.headers,
         body: JSON.stringify({
           model: "claude-sonnet-4-6",
           max_tokens: 900,
           temperature: 0.5,
-          system: buildSystemPrompt(input.language),
+          system: buildClaudeSystem(auth.subscription, buildSystemPrompt(input.language)),
           messages: [
             {
               role: "user",

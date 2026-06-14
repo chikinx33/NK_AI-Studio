@@ -9,7 +9,9 @@ function loadHelpers() {
   let source = fs.readFileSync(fullPath, 'utf8');
   source = source
     .replace('export async function onRequestOptions', 'async function onRequestOptions')
-    .replace('export async function onRequestPost', 'async function onRequestPost');
+    .replace('export async function onRequestPost', 'async function onRequestPost')
+    .replace(/^import\s+.*from\s+["']\.\/_shared\/claude-auth\.js["'];\s*$/m,
+      'const claudeAuthHeaders = () => ({ subscription: false, headers: {} }); const buildClaudeSystem = (s, sys) => sys; const anthropicConfigured = () => true;');
   source += '\nmodule.exports = { normalizeInput, buildSystemPrompt, buildUserPrompt, buildFallbackStory, restoreCharacterTokenHints, enforceCharacterScope };';
   const context = vm.createContext({
     console,

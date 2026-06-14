@@ -15,6 +15,7 @@ import {
   getAgentPersona,
   listAgentKnowledge,
 } from "./_shared";
+import { claudeAuthHeaders, buildClaudeSystem, authDiag } from "../_shared/claude-auth.js";
 
 export interface AgentMeta { id: string; emoji: string; name: string; role: string; hasTools: boolean; }
 
@@ -152,19 +153,15 @@ export async function callClaude(
   messages: ClaudeMsg[],
   opts: { model?: string; maxTokens?: number } = {}
 ): Promise<string> {
-  const apiKey = String(env?.ANTHROPIC_API_KEY || "").trim();
-  if (!apiKey) throw new Error("ANTHROPIC_API_KEY missing");
+  // 구독(OAuth)/API키 2모드 공유 인증. subscription이면 Bearer+oauth beta+Claude Code system.
+  const auth = claudeAuthHeaders(env);
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
+    headers: auth.headers,
     body: JSON.stringify({
       model: opts.model || "claude-sonnet-4-6",
       max_tokens: opts.maxTokens || 1500,
-      system,
+      system: buildClaudeSystem(auth.subscription, system),
       messages,
     }),
   });
@@ -175,11 +172,7 @@ export async function callClaude(
     const inner =
       detail?.error?.message || detail?.message ||
       (typeof detail === "string" ? detail.slice(0, 200) : JSON.stringify(detail).slice(0, 200));
-    // 진단을 위해 HTTP 상태·인증 모드를 함께 노출 (Request not allowed 원인 추적)
-    const authHint = String(env?.ANTHROPIC_API_KEY || "").startsWith("sk-ant-api")
-      ? "api-key"
-      : (String(env?.ANTHROPIC_API_KEY || "") ? "non-apikey(OAuth?)" : "missing");
-    throw new Error(`Claude API ${res.status} [key:${authHint}] — ${inner}`);
+    throw new Error(`Claude API ${res.status} [${authDiag(env)}] — ${inner}`);
   }
   const data = JSON.parse(text);
   const parts = Array.isArray(data?.content) ? data.content : [];
