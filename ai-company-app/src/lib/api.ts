@@ -145,34 +145,27 @@ export async function ensureDateConversation(date: string): Promise<Conversation
 }
 
 export async function getSettings() {
-  return (await fetch("/api/settings")).json();
+  // NK: 클라우드(Claude) 고정 환경. 모드/모델은 스튜디오가 관리.
+  return {
+    runtime: { llmMode: "cloud", logRetentionDays: 0, localModel: "auto" },
+    cloudModels: {},
+    claudeAuth: { mode: "subscription", configured: true, oauthSet: false, apiKeySet: true },
+  } as any;
 }
 
-export async function setMode(llmMode: string) {
-  return (
-    await fetch("/api/settings/mode", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ llmMode }),
-    })
-  ).json();
+export async function setMode(_llmMode: string) {
+  return { ok: true }; // NK: 클라우드 고정 — 전환 없음
 }
 
 export interface LogStats { dates: number; oldest: string | null; newest: string | null }
 export async function getLogStats(): Promise<LogStats> {
-  return (await fetch("/api/logs/stats")).json();
+  return { dates: 0, oldest: null, newest: null };
 }
-export async function setLogRetention(days: number) {
-  return (
-    await fetch("/api/settings/log-retention", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ days }),
-    })
-  ).json();
+export async function setLogRetention(_days: number) {
+  return { ok: true, deleted: 0 } as any;
 }
 export async function cleanupLogs() {
-  return (await fetch("/api/logs/cleanup", { method: "POST" })).json();
+  return { ok: true, deleted: 0 } as any;
 }
 
 export interface IntegrationField {
@@ -235,24 +228,12 @@ export async function testIntegration(agentId: string, tool: string): Promise<{ 
   ).json();
 }
 
-export async function setLocalModel(localModel: string) {
-  return (
-    await fetch("/api/settings/local-model", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ localModel }),
-    })
-  ).json();
+export async function setLocalModel(_localModel: string) {
+  return { ok: true }; // NK: 로컬 모델 미사용(클라우드 고정)
 }
 
-export async function setApiKey(apiKey: string) {
-  return (
-    await fetch("/api/settings/apikey", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ apiKey }),
-    })
-  ).json();
+export async function setApiKey(_apiKey: string) {
+  return { ok: true }; // NK: 키는 스튜디오 공용 env 관리
 }
 
 export type ClaudeAuthMode = "subscription" | "api_key";
@@ -263,32 +244,21 @@ export interface ClaudeAuthStatus {
   apiKeySet: boolean;
 }
 // 인증 모드 설정 (+ 선택적으로 토큰/키 동시 저장)
-export async function setClaudeAuth(payload: {
+export async function setClaudeAuth(_payload: {
   authMode: ClaudeAuthMode;
   oauthToken?: string;
   apiKey?: string;
 }) {
-  return (
-    await fetch("/api/settings/claude-auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-  ).json();
+  return { ok: true, status: { mode: "subscription", configured: true, oauthSet: false, apiKeySet: true } } as any; // NK: 인증은 스튜디오 env 관리
 }
 
-export async function setAutonomous(enabled: boolean) {
-  return (
-    await fetch("/api/autonomous", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ enabled }),
-    })
-  ).json();
+export async function setAutonomous(_enabled: boolean) {
+  // NK: 자율 근무 스케줄러는 Cloudflare Cron 기반으로 후속 지원 예정.
+  return { ok: true };
 }
 
 export async function autonomousStepNow() {
-  return (await fetch("/api/autonomous/step", { method: "POST" })).json();
+  return { ok: false, message: "자율 근무는 NK 클라우드에서 준비 중이에요." };
 }
 
 export async function setWork(workMode: "on" | "off") {
