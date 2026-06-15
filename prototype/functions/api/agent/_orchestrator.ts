@@ -21,10 +21,20 @@ import {
   listProjects,
   deleteProjectByName,
   updateProjectStageByName,
+  updateProjectStatus,
+  updateProjectField,
+  addProjectStage,
+  removeProjectStage,
+  updateCompanyKnowledge,
+  addAgentKnowledgeRow,
+  removeAgentKnowledgeRow,
   listSkills,
   createSkill,
   patchSkill,
   deleteSkill,
+  setPinSkill,
+  archiveSkillByName,
+  restoreSkill,
 } from "./_shared";
 import { claudeAuthHeaders, buildClaudeSystem, resolvedAuthHeaders, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 import { modelFor } from "../_shared/cloud-models.js";
@@ -171,32 +181,48 @@ ${persona}${knowledgeBlock}
 - 일을 받으면 "~에게 시켰다"가 아니라 본인이 직접 한 결과물을 제시하세요.
 
 ## ⛔ 정직 규칙 (최고 우선)
-- 회사 지식·규칙은 아래 'KNOW' 마커로만 실제로 등록/삭제된다. 마커 없이 "반영했다/저장했다/✅완료"라고 말하지 마라(거짓 보고 금지).
+- 회사 지식은 KNOW 마커, 프로젝트 변경은 PROJECT 마커, 스킬은 SKILL 마커, 나의 개인 지식은 SELF_KNOW 마커로만 실제로 DB에 반영된다. 마커 없이 "반영했다/완료했다/저장했다"라고 말하지 마라(거짓 보고 금지).
 - 사실은 실제로 아는 것만 말한다. 모르면 추측·날조 대신 "확인이 필요해요"라고 솔직히 말한다.
 
 ## 🧠 회사 지식·규칙 관리 (당신은 권한이 있음)
-사용자가 "기억해 / 규칙으로 정해 / 회사 방침이야 / 이건 삭제해" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
+사용자가 "기억해 / 규칙으로 정해 / 회사 방침이야 / 이건 삭제해 / 고쳐줘" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
 - 등록: [[KNOW: add | 분류 | 내용]]  (분류 = 원칙 · 사실 · 결정 중 하나)
 - 삭제: [[KNOW: del | 기존에 등록된 정확한 내용]]
-예) 사용자가 "나를 엔케라고 불러, 회사 규칙에 반영해" → 답 끝에 [[KNOW: add | 원칙 | 사용자의 호칭은 '엔케'(영문 NK)다]]
+- 수정: [[KNOW: edit | 기존내용 | 새내용]]
+예) [[KNOW: add | 원칙 | 사용자의 호칭은 '엔케'(영문 NK)다]]
+예) [[KNOW: edit | 회의는 월요일마다 | 회의는 화요일마다]]
 이 마커를 쓰면 실제 회사 지식에 반영됩니다. "반영했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
 
 ## 📁 프로젝트 관리 (코어·싱크 중심)
-사용자가 "프로젝트 만들어줘 / ~를 시작하자" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
-- 생성: [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]  (단계는 생략 가능)
-- 삭제: [[PROJECT: delete | 프로젝트명]]  (정확한 이름 사용 — 현재 프로젝트 현황 참조)
+프로젝트 관련 요청 시 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
+- 생성: [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]
+- 삭제: [[PROJECT: delete | 프로젝트명]]
 - 단계 상태 변경: [[PROJECT: stage | 프로젝트명 | 단계명 | 상태]]  (상태: todo=예정, in_progress=진행 중, done=완료)
-예) [[PROJECT: create | '우울의 숲' 소설 단독판매 | 11~12월 출시, 연내 마감 | 기획, 집필, 표지·PDF, 마케팅, 출시]]
-예) [[PROJECT: delete | '우울의 숲' 소설 단독판매]]
+- 단계 추가: [[PROJECT: add_stage | 프로젝트명 | 새단계명]]
+- 단계 삭제: [[PROJECT: remove_stage | 프로젝트명 | 단계명]]
+- 프로젝트 상태 변경: [[PROJECT: status | 프로젝트명 | 상태]]  (상태: active=진행 중, done=완료, paused=보류)
+- 필드 수정: [[PROJECT: edit | 프로젝트명 | 필드 | 새값]]  (필드: goal=목표, summary=요약, nextAction=다음액션)
 예) [[PROJECT: stage | '우울의 숲' 소설 단독판매 | 기획 | in_progress]]
-예) [[PROJECT: stage | '우울의 숲' 소설 단독판매 | 기획 | done]]
+예) [[PROJECT: status | '우울의 숲' 소설 단독판매 | done]]
+예) [[PROJECT: edit | '우울의 숲' 소설 단독판매 | goal | 10월 완성, 11~12월 출시]]
+예) [[PROJECT: add_stage | '우울의 숲' 소설 단독판매 | 교정·퇴고]]
 이 마커를 쓰면 실제로 프로젝트 보드에 반영됩니다. "변경했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
 
 ## 🛠️ 스킬 만들기·개선 (절차적 기억 — 일하며 똑똑해지기)
 복잡한 작업(여러 단계·도구)을 끝냈거나, 막힌 걸 해결했거나, 사용자가 방식을 교정했거나, 재사용할 워크플로를 알아냈으면 그 절차를 스킬로 저장하세요(다음에 같은 일을 더 빠르고 정확하게 하기 위함):
 - 새 스킬: [[SKILL: create | 이름 | 분류 | 한 줄 설명 | When to Use / Procedure(단계) / Pitfalls / Verification]]
-- 개선: [[SKILL: patch | 이름 | 기존 문구 | 새 문구]]  ·  삭제: [[SKILL: delete | 이름]]
+- 개선: [[SKILL: patch | 이름 | 기존 문구 | 새 문구]]
+- 삭제: [[SKILL: delete | 이름]]
+- 고정(자주 쓰는 스킬): [[SKILL: pin | 이름]]  /  고정 해제: [[SKILL: unpin | 이름]]
+- 아카이브(잘 안 쓰는 스킬 정리): [[SKILL: archive | 이름]]  /  복원: [[SKILL: restore | 이름]]
 보유 스킬에 비슷한 게 있으면 새로 만들지 말고 그걸 활용하거나 patch로 보강하세요.
+
+## 🔬 나의 개인 지식 관리 (나만 아는 규칙·메모)
+내 역할에만 해당하거나 나만 기억해야 할 규칙을 저장하세요(회사 전체 지식과는 별개):
+- 등록: [[SELF_KNOW: add | 분류 | 내용]]  (분류 = 원칙 · 사실 · 결정 중 하나)
+- 삭제: [[SELF_KNOW: del | 기존에 등록된 정확한 내용]]
+예) 픽셀이 "이미지는 항상 16:9로"라는 지시를 받으면 → [[SELF_KNOW: add | 원칙 | 이미지 생성 시 기본 비율은 16:9]]
+이 마커로 저장된 내용은 나만 볼 수 있는 개인 지식으로, 다음 대화에서 자동으로 주입됩니다.
 
 ## ⛔ 미루지 말 것
 - 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}`;
@@ -251,9 +277,9 @@ export async function callClaude(
   return stripThink(out);
 }
 
-export interface KnowOp { action: "add" | "del"; type?: string; text: string; }
-export interface ProjectOp { action: "create" | "delete" | "update_stage"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; }
-export interface SkillOp { action: "create" | "patch" | "delete"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
+export interface KnowOp { action: "add" | "del" | "edit"; type?: string; text: string; newText?: string; }
+export interface ProjectOp { action: "create" | "delete" | "update_stage" | "update_status" | "update_field" | "add_stage" | "remove_stage"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; field?: string; value?: string; }
+export interface SkillOp { action: "create" | "patch" | "delete" | "pin" | "unpin" | "archive" | "restore"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
 export interface SpeakResult {
   text: string;
   calls: { agentId: string; instruction: string }[];
@@ -272,6 +298,8 @@ const KNOW_RE = /\[{1,2}\s*KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
 const PROJECT_RE = /\[{1,2}\s*PROJECT\s*:\s*([\s\S]+?)\]{1,2}/gi;
 // 스킬(절차적 기억) 마커: [[SKILL: create | 이름 | 분류 | 한줄설명 | 상세절차]] / [[SKILL: patch | 이름 | 기존 | 새내용]] / [[SKILL: delete | 이름]]
 const SKILL_RE = /\[{1,2}\s*SKILL\s*:\s*([\s\S]+?)\]{1,2}/gi;
+// 직원 개인 지식 마커: [[SELF_KNOW: add | 분류 | 내용]] / [[SELF_KNOW: del | 내용]]
+const SELF_KNOW_RE = /\[{1,2}\s*SELF_KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
 
 // 분류 정규화 — 회사 지식 칩(원칙/사실/결정)과 일치시킨다.
 function normalizeKnowType(t: string): string {
@@ -310,6 +338,8 @@ function extractMarkers(raw: string): SpeakResult {
     } else if (/^(del|delete|remove|삭제|제거)$/.test(action)) {
       const text = parts.slice(1).join(" | ");
       if (text) knows.push({ action: "del", text });
+    } else if (/^(edit|update|수정|변경)$/.test(action) && parts[1] && parts[2]) {
+      knows.push({ action: "edit", text: parts[1], newText: parts.slice(2).join(" | ") });
     }
   }
   PROJECT_RE.lastIndex = 0;
@@ -329,6 +359,20 @@ function extractMarkers(raw: string): SpeakResult {
         : /^(in_progress|진행|진행중|진행 중)$/i.test(rawStatus) ? "in_progress"
         : "todo";
       projects.push({ action: "update_stage", name: parts[1], stages: [], stageTitle: parts[2], stageStatus });
+    } else if (/^(status|상태)$/.test(action) && parts[1] && parts[2]) {
+      const raw = parts[2].trim();
+      const status = /^(done|완료)$/i.test(raw) ? "done"
+        : /^(paused|보류|중단)$/i.test(raw) ? "paused"
+        : "active";
+      projects.push({ action: "update_status", name: parts[1], stages: [], value: status });
+    } else if (/^(edit|update|수정|변경)$/.test(action) && parts[1] && parts[2] && parts[3] !== undefined) {
+      const fieldMap: Record<string, string> = { goal: "goal", 목표: "goal", summary: "summary", 요약: "summary", nextaction: "nextAction", 다음액션: "nextAction" };
+      const field = fieldMap[parts[2].toLowerCase().replace(/\s/g, "")] || parts[2];
+      projects.push({ action: "update_field", name: parts[1], stages: [], field, value: parts.slice(3).join(" | ") });
+    } else if (/^(add_stage|단계추가)$/.test(action) && parts[1] && parts[2]) {
+      projects.push({ action: "add_stage", name: parts[1], stages: [], stageTitle: parts[2] });
+    } else if (/^(remove_stage|단계삭제)$/.test(action) && parts[1] && parts[2]) {
+      projects.push({ action: "remove_stage", name: parts[1], stages: [], stageTitle: parts[2] });
     }
   }
   SKILL_RE.lastIndex = 0;
@@ -343,9 +387,17 @@ function extractMarkers(raw: string): SpeakResult {
       skills.push({ action: "patch", name, oldStr: parts[2], newStr: parts.slice(3).join(" | ") });
     } else if (/^(delete|remove|삭제|제거)$/.test(action)) {
       skills.push({ action: "delete", name });
+    } else if (/^(pin|고정)$/.test(action)) {
+      skills.push({ action: "pin", name });
+    } else if (/^(unpin|고정해제)$/.test(action)) {
+      skills.push({ action: "unpin", name });
+    } else if (/^(archive|아카이브|보관)$/.test(action)) {
+      skills.push({ action: "archive", name });
+    } else if (/^(restore|복원|복구)$/.test(action)) {
+      skills.push({ action: "restore", name });
     }
   }
-  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").trim();
+  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").replace(SELF_KNOW_RE, "").trim();
   return { text, calls, runs, knows, projects, skills };
 }
 
@@ -400,6 +452,25 @@ export async function speak(
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId), imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType });
+  // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
+  if (opts.sql && opts.userId) {
+    SELF_KNOW_RE.lastIndex = 0;
+    let sm: RegExpExecArray | null;
+    while ((sm = SELF_KNOW_RE.exec(raw))) {
+      const parts = String(sm[1]).split("|").map((s) => s.trim()).filter((s) => s.length > 0);
+      const act = (parts[0] || "").toLowerCase();
+      try {
+        if (/^(add|remember|등록|추가)$/.test(act)) {
+          const type = parts.length >= 3 ? normalizeKnowType(parts[1]) : "사실";
+          const text = parts.length >= 3 ? parts.slice(2).join(" | ") : parts.slice(1).join(" | ");
+          if (text) await addAgentKnowledgeRow(opts.sql, opts.userId, agentId, text, type);
+        } else if (/^(del|delete|remove|삭제|제거)$/.test(act)) {
+          const text = parts.slice(1).join(" | ");
+          if (text) await removeAgentKnowledgeRow(opts.sql, opts.userId, agentId, text);
+        }
+      } catch { /* 개인 지식 반영 실패는 대화 흐름에 영향 없음 */ }
+    }
+  }
   return extractMarkers(raw);
 }
 
@@ -490,6 +561,7 @@ export async function runGroupChat(
       try {
         if (k.action === "add") await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`);
         else if (k.action === "del") await deleteCompanyKnowledge(sql, userId, k.text);
+        else if (k.action === "edit" && k.newText) await updateCompanyKnowledge(sql, userId, k.text, k.newText);
       } catch { /* 지식 반영 실패는 대화 흐름을 막지 않음 */ }
     }
   };
@@ -501,6 +573,10 @@ export async function runGroupChat(
         if (s.action === "create") await createSkill(sql, userId, { name: s.name, category: s.category, description: s.description, content: s.content });
         else if (s.action === "patch") await patchSkill(sql, userId, s.name, s.oldStr || "", s.newStr || "");
         else if (s.action === "delete") await deleteSkill(sql, userId, s.name);
+        else if (s.action === "pin") await setPinSkill(sql, userId, s.name, true);
+        else if (s.action === "unpin") await setPinSkill(sql, userId, s.name, false);
+        else if (s.action === "archive") await archiveSkillByName(sql, userId, s.name);
+        else if (s.action === "restore") await restoreSkill(sql, userId, s.name);
       } catch { /* 스킬 반영 실패는 대화 흐름에 영향 없음 */ }
     }
   };
@@ -519,6 +595,14 @@ export async function runGroupChat(
           if (p.stageTitle && p.stageStatus !== undefined) {
             await updateProjectStageByName(sql, userId, p.name, p.stageTitle, p.stageStatus);
           }
+        } else if (p.action === "update_status") {
+          if (p.value) await updateProjectStatus(sql, userId, p.name, p.value);
+        } else if (p.action === "update_field") {
+          if (p.field && p.value !== undefined) await updateProjectField(sql, userId, p.name, p.field, p.value);
+        } else if (p.action === "add_stage") {
+          if (p.stageTitle) await addProjectStage(sql, userId, p.name, p.stageTitle);
+        } else if (p.action === "remove_stage") {
+          if (p.stageTitle) await removeProjectStage(sql, userId, p.name, p.stageTitle);
         } else {
           if (existingNames.has(p.name)) continue; // 같은 이름 중복 생성 방지
           const id = (globalThis.crypto && globalThis.crypto.randomUUID)

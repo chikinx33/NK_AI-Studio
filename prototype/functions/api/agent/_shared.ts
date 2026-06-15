@@ -228,6 +228,52 @@ export async function updateProjectStageByName(sql: SqlFn, userId: string, proje
   await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
   return true;
 }
+export async function updateProjectStatus(sql: SqlFn, userId: string, projectName: string, status: string): Promise<boolean> {
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, projectName]);
+  if (!rows.length) return false;
+  const r = rows[0];
+  const data = typeof r.data === "string" ? JSON.parse(r.data) : (r.data || {});
+  data.status = status;
+  await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
+  return true;
+}
+export async function updateProjectField(sql: SqlFn, userId: string, projectName: string, field: string, value: string): Promise<boolean> {
+  const ALLOWED = new Set(["goal", "summary", "nextAction"]);
+  if (!ALLOWED.has(field)) return false;
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, projectName]);
+  if (!rows.length) return false;
+  const r = rows[0];
+  const data = typeof r.data === "string" ? JSON.parse(r.data) : (r.data || {});
+  data[field] = value;
+  await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
+  return true;
+}
+export async function addProjectStage(sql: SqlFn, userId: string, projectName: string, stageTitle: string): Promise<boolean> {
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, projectName]);
+  if (!rows.length) return false;
+  const r = rows[0];
+  const data = typeof r.data === "string" ? JSON.parse(r.data) : (r.data || {});
+  if (!Array.isArray(data.stages)) data.stages = [];
+  if (data.stages.some((s: any) => s.title === stageTitle)) return true;
+  data.stages.push({ title: stageTitle, status: "todo" });
+  await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
+  return true;
+}
+export async function removeProjectStage(sql: SqlFn, userId: string, projectName: string, stageTitle: string): Promise<boolean> {
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, projectName]);
+  if (!rows.length) return false;
+  const r = rows[0];
+  const data = typeof r.data === "string" ? JSON.parse(r.data) : (r.data || {});
+  if (!Array.isArray(data.stages)) return false;
+  const prev = data.stages.length;
+  data.stages = data.stages.filter((s: any) => s.title !== stageTitle);
+  if (data.stages.length === prev) return false;
+  await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
+  return true;
+}
+export async function archiveSkillByName(sql: SqlFn, userId: string, name: string): Promise<void> {
+  await sql("UPDATE company_skills SET archived = true, updated_at = now() WHERE user_id = $1 AND name = $2", [userId, name]);
+}
 export async function setProjectStageDb(sql: SqlFn, userId: string, projectId: string, index: number, status: string): Promise<boolean> {
   const rows = await sql("SELECT data FROM company_projects WHERE user_id = $1 AND id = $2", [userId, projectId]);
   if (!rows[0]) return false;
