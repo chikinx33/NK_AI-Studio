@@ -59,26 +59,22 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       return send({ ok: true, conversationId, userMessageId: userMsg.id, resting: true, messages: restMsg ? [restMsg] : [] }, 200, origin);
     }
 
-    // 오케스트레이션을 동기로 실행한다. (Pages Functions의 waitUntil 백그라운드가 불안정하면
-    //  결과가 저장되지 않아 무응답이 됨 → 핸들러 내에서 await 하면 결과 저장·에러 노출이 보장됨.)
-    //  단순 대화는 수초 내 끝남. 멀티 위임이 길어지는 경우의 30초 한계는 후속(잡 워커)으로 분리.
     const authHeader = String(request.headers.get("Authorization") || "");
     const toolCtx = { request, env, authHeader, userId: auth.userId };
 
-    // 오케스트레이션을 waitUntil 백그라운드로 실행.
-    // 여러 에이전트가 순차 발언(게임·회의·끝말잇기 등)할 때 CF 30초 한계 초과를 방지하며,
-    // 각 발언이 DB에 저장되는 즉시 프런트 폴링이 순차적으로 표시해 자연스러운 대화 흐름을 만든다.
-    waitUntil(
-      runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: displayText, imageBase64, imageMimeType })
-        .catch(async (e: any) => {
-          await addMessage(sql, {
-            userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
-            text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
-          }).catch(() => {});
-        })
-    );
-    // 즉시 응답 반환 — 에이전트 발언은 프런트 폴링으로 순차 수신.
-    return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: [] }, 200, origin);
+    // 오케스트레이션을 동기(await)로 실행 — waitUntil 백그라운드 불안정 문제 해결.
+    // Core(Sonnet, ~5s) + 직원×10(Haiku, ~0.5s/명) ≈ 10s → CF 30초 한도 내 안전하게 완주.
+    // 각 발언이 저장된 즉시 프런트 폴링이 순차적으로 표시해 자연스러운 대화 흐름을 만든다.
+    try {
+      const produced = await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: displayText, imageBase64, imageMimeType });
+      return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: produced }, 200, origin);
+    } catch (e: any) {
+      await addMessage(sql, {
+        userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
+        text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
+      }).catch(() => {});
+      return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: [] }, 200, origin);
+    }
   } catch (e: any) {
     return send({ error: e?.message || "대화 처리 중 오류" }, 500, origin);
   }
