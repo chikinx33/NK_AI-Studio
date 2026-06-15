@@ -565,8 +565,25 @@ export async function streamChat(
     return;
   }
 
+  // ── sync 응답 직접 처리 ──────────────────────────────────────────────────────
+  // runGroupChat(await)가 완료된 경우 응답 본문 messages[]에 에이전트 발언이 모두 담깁니다.
+  // 폴링에 의존하지 않고 본문을 바로 읽어 표시 — 신뢰성과 속도 모두 향상.
+  const syncMsgs = (chatBody && Array.isArray((chatBody as any).messages))
+    ? ((chatBody as any).messages as any[]).filter((m: any) => m && m.role === "agent")
+    : [];
+  if (syncMsgs.length > 0) {
+    for (let si = 0; si < syncMsgs.length; si++) {
+      const m = syncMsgs[si];
+      if (si > 0) await new Promise<void>((r) => setTimeout(r, 400));
+      onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
+      onEvent("turn_end", { agentId: m.agent_id, text: m.text });
+    }
+    onEvent("done", {});
+    return;
+  }
+
+  // ── 폴링 fallback (응답 본문이 비어 있을 때 — 백그라운드 처리 중이거나 오류) ──
   // 에이전트 발언을 폴링으로 순차 표시.
-  // waitUntil 백그라운드에서 에이전트가 순서대로 DB에 저장하므로, 폴링이 한 명씩 화면에 추가 → 자연스러운 대화 흐름.
   // 첫 폴링은 500ms(빠른 응답 대응), 이후 1.5초 간격. 안정 판정: 12×1.5s = 18초 무변화 시 종료.
   let emitted = before;
   let agentEmitted = 0;
