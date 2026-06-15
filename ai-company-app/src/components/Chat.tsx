@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, useCallback, type ReactNode } from "react";
 import { addKnowledge } from "../lib/api";
 import Markdown from "./Markdown";
 
@@ -9,6 +9,7 @@ export interface Turn {
   emoji?: string;
   text: string;
   streaming?: boolean;
+  imagePreview?: string; // 첨부 이미지 data URL (사용자 메시지 버블에 표시)
 }
 
 interface Props {
@@ -18,7 +19,7 @@ interface Props {
   onStop?: () => void;
   draft: string;
   setDraft: (s: string) => void;
-  onSend: (text: string) => void;
+  onSend: (text: string, image?: { base64: string; mimeType: string; name: string; preview: string }) => void;
   onToggleMode?: () => void;
   agents?: { id: string; name: string }[]; // 코어 제안에서 담당자 위임 버튼 감지용
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD) — 헤더 표기용
@@ -196,6 +197,14 @@ function PlayIcon({ className }: { className?: string }) {
   );
 }
 
+function PaperclipIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+    </svg>
+  );
+}
+
 function PauseIcon({ className }: { className?: string }) {
   return (
     <svg
@@ -254,7 +263,27 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
   })();
   const endRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const didInitScroll = useRef(false);
+
+  // 이미지/파일 첨부 state
+  const [imageAttachment, setImageAttachment] = useState<{
+    base64: string; mimeType: string; name: string; preview: string;
+  } | null>(null);
+
+  const ALLOWED_MIME = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+
+  const handleFile = useCallback(async (file: File) => {
+    if (!ALLOWED_MIME.includes(file.type)) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1];
+      const preview = file.type.startsWith("image/") ? dataUrl : "";
+      setImageAttachment({ base64, mimeType: file.type, name: file.name, preview });
+    };
+    reader.readAsDataURL(file);
+  }, []);
 
   // 입력칸 자동 높이 — 줄 수만큼 세로로 확장(최대치 넘으면 스크롤)
   useEffect(() => {
@@ -307,9 +336,19 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
 
   function submit() {
     const t = draft.trim();
-    if (!t || busy) return;
-    onSend(t);
+    if ((!t && !imageAttachment) || busy) return;
+    onSend(t, imageAttachment ?? undefined);
     setDraft("");
+    setImageAttachment(null);
+  }
+
+  async function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = Array.from(e.clipboardData.items);
+    const imgItem = items.find((item) => item.type.startsWith("image/"));
+    if (imgItem) {
+      const file = imgItem.getAsFile();
+      if (file) { e.preventDefault(); await handleFile(file); }
+    }
   }
 
   return (
@@ -374,7 +413,10 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                 </button>
               </div>
               <div className="max-w-[78%] rounded-2xl rounded-br-sm px-4 py-2 bg-emerald-700 text-white text-sm whitespace-pre-wrap">
-                {t.text}
+                {t.imagePreview && (
+                  <img src={t.imagePreview} alt="첨부 이미지" className="mb-2 max-h-48 w-auto rounded-lg object-contain" />
+                )}
+                {t.text && t.text !== "[이미지 첨부됨]" ? t.text : !t.imagePreview ? t.text : null}
               </div>
             </div>
           ) : (
@@ -497,7 +539,41 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
         </div>
       ) : (
       <div className="px-4 pb-4 pt-2 border-t border-edge">
+        {/* 첨부 이미지 미리보기 */}
+        {imageAttachment && (
+          <div className="mb-2 flex items-center gap-2">
+            {imageAttachment.preview ? (
+              <img src={imageAttachment.preview} alt="첨부 이미지" className="h-16 w-16 rounded-lg object-cover border border-edge" />
+            ) : (
+              <div className="flex items-center gap-1.5 rounded-lg border border-edge bg-ink px-2 py-1.5 text-xs text-gray-400">
+                📄 {imageAttachment.name}
+              </div>
+            )}
+            <button
+              onClick={() => setImageAttachment(null)}
+              className="text-gray-500 hover:text-gray-300 text-xs leading-none"
+              title="첨부 제거"
+            >✕</button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
+          {/* 숨김 파일 입력 */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ""; }}
+          />
+          {/* 파일 첨부 버튼 */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            title="이미지/파일 첨부"
+            className={`grid h-[42px] w-[42px] shrink-0 place-items-center rounded-xl border transition disabled:opacity-40 ${imageAttachment ? "border-emerald-600 bg-emerald-900/40 text-emerald-300" : "border-edge bg-ink text-gray-400 hover:bg-edge hover:text-white"}`}
+          >
+            <PaperclipIcon className="h-4 w-4" />
+          </button>
           <textarea
             ref={taRef}
             spellCheck={false}
@@ -509,6 +585,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                 submit();
               }
             }}
+            onPaste={handlePaste}
             rows={1}
             placeholder="메시지 입력 (Enter 전송, Shift+Enter 줄바꿈) · @이름으로 직원 지목"
             className="flex-1 resize-none overflow-y-auto bg-ink border border-edge rounded-xl px-3 py-2.5 text-sm outline-none focus:border-emerald-600"

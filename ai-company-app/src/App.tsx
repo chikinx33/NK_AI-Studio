@@ -163,8 +163,8 @@ export default function App() {
     abortRef.current?.abort();
   }
 
-  async function send(text: string) {
-    const userTurn: Turn = { role: "user", text };
+  async function send(text: string, image?: { base64: string; mimeType: string; name: string; preview: string }) {
+    const userTurn: Turn = { role: "user", text: text || (image ? "[이미지 첨부됨]" : ""), imagePreview: image?.preview };
     commit([...turnsRef.current, userTurn]);
     setBusy(true);
     // 보내는 즉시 코어를 '활동 중'으로 — 사이드바 아바타가 깜박이며 반응을 보여준다.
@@ -247,7 +247,7 @@ export default function App() {
             }
           }
         },
-        { history, focusAgent: focusAgentId ?? undefined, conversationId: activeConvId, signal: controller.signal }
+        { history, focusAgent: focusAgentId ?? undefined, conversationId: activeConvId, signal: controller.signal, imageBase64: image?.base64, imageMimeType: image?.mimeType }
       );
     } catch (e) {
       commit([

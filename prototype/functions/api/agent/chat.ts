@@ -40,10 +40,13 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const body = await request.json().catch(() => ({} as any));
     const message = String(body?.message || "").trim();
     const conversationId = String(body?.conversationId || "main").trim() || "main";
-    if (!message) return send({ error: "message is required" }, 400, origin);
+    const imageBase64 = typeof body?.imageBase64 === "string" && body.imageBase64 ? body.imageBase64 : undefined;
+    const imageMimeType = typeof body?.imageMimeType === "string" && body.imageMimeType ? body.imageMimeType : "image/jpeg";
+    if (!message && !imageBase64) return send({ error: "message is required" }, 400, origin);
 
+    const displayText = message + (imageBase64 ? (message ? "\n" : "") + "[이미지 첨부됨]" : "");
     const userMsg = await addMessage(sql, {
-      userId: auth.userId, conversationId, role: "user", text: message,
+      userId: auth.userId, conversationId, role: "user", text: displayText,
     });
 
     // 휴식(퇴근) 중에는 모든 에이전트가 활동을 멈춘다 — 코어가 짧게 안내만 하고 위임/통솔하지 않음.
@@ -63,7 +66,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const toolCtx = { request, env, authHeader, userId: auth.userId };
     let produced: any[] = [];
     try {
-      produced = (await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: message })) || [];
+      produced = (await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: displayText, imageBase64, imageMimeType })) || [];
     } catch (e: any) {
       const errMsg = await addMessage(sql, {
         userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",

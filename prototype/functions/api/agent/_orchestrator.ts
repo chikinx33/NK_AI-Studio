@@ -205,12 +205,23 @@ export async function callClaude(
   env: any,
   system: string,
   messages: ClaudeMsg[],
-  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string } = {}
+  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string } = {}
 ): Promise<string> {
   // 구독(OAuth)/API키 2모드 공유 인증. 설정 UI(app_settings) 우선, 없으면 env 폴백.
   const auth = opts.sql && opts.userId
     ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
     : claudeAuthHeaders(env);
+  // 이미지/파일 첨부 시 마지막 user 메시지를 멀티모달 content block으로 변환.
+  const builtMessages = messages.map((m, idx) => {
+    if (idx === messages.length - 1 && m.role === "user" && opts.imageBase64) {
+      const mtype = opts.imageMimeType || "image/jpeg";
+      const imageBlock = mtype === "application/pdf"
+        ? { type: "document", source: { type: "base64", media_type: mtype, data: opts.imageBase64 } }
+        : { type: "image", source: { type: "base64", media_type: mtype, data: opts.imageBase64 } };
+      return { role: m.role, content: [imageBlock, { type: "text", text: m.content }] };
+    }
+    return m;
+  });
   const res = await fetch(anthropicMessagesUrl(env), {
     method: "POST",
     headers: auth.headers,
@@ -218,7 +229,7 @@ export async function callClaude(
       model: opts.model || "claude-sonnet-4-6",
       max_tokens: opts.maxTokens || 1500,
       system: buildClaudeSystem(auth.subscription, system),
-      messages,
+      messages: builtMessages,
     }),
   });
   const text = await res.text();
@@ -346,7 +357,7 @@ export async function speak(
   agentId: string,
   instruction: string,
   transcript: string,
-  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string } = {}
+  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string } = {}
 ): Promise<SpeakResult> {
   // 사용자별 페르소나 오버라이드·개인 지식을 두뇌에 주입(직원관리 반영).
   let personaOverride = opts.personaOverride;
@@ -378,7 +389,7 @@ export async function speak(
   }
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
-  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId) });
+  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId), imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType });
   return extractMarkers(raw);
 }
 
@@ -408,6 +419,8 @@ export interface OrchestratorDeps {
   conversationId: string;
   toolCtx: ToolContext; // 도구(RUN) 실행용 컨텍스트
   firstMessage?: string; // 방금 저장한 사용자 메시지(조회 타이밍 의존 제거)
+  imageBase64?: string;  // 첨부 이미지 base64 (첫 번째 에이전트에게만 전달)
+  imageMimeType?: string;
 }
 
 /**
@@ -536,7 +549,8 @@ export async function runGroupChat(
             "단순 인사·잡담·1:1 질문이면 호출하지 마세요.")
       : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId });
+    // 이미지는 1차 응답자에게만 전달 (transcript에 포함 안 되므로 worker/wrap에는 미전달)
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, imageBase64: deps.imageBase64, imageMimeType: deps.imageMimeType });
     await applyKnows(res.knows, meta.name); // 지식 등록/삭제는 대기 여부와 무관하게 먼저 반영
     await applyProjects(res.projects);
     await applySkills(res.skills);

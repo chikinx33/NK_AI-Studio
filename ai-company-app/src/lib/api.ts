@@ -536,6 +536,8 @@ export async function streamChat(
     focusAgent?: string;
     conversationId?: string;
     signal?: AbortSignal;
+    imageBase64?: string;
+    imageMimeType?: string;
   } = {}
 ): Promise<void> {
   const convId = opts.conversationId || "main";
@@ -550,7 +552,7 @@ export async function streamChat(
   const res = await fetch("/api/agent/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, conversationId: convId, focusAgent: opts.focusAgent }),
+    body: JSON.stringify({ message, conversationId: convId, focusAgent: opts.focusAgent, imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType }),
     signal: opts.signal,
   });
   let chatBody: any = {};
