@@ -216,6 +216,18 @@ export async function deleteProjectByName(sql: SqlFn, userId: string, name: stri
   }
   return rows.length;
 }
+export async function updateProjectStageByName(sql: SqlFn, userId: string, projectName: string, stageTitle: string, stageStatus: string): Promise<boolean> {
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, projectName]);
+  if (!rows.length) return false;
+  const r = rows[0];
+  const data = typeof r.data === "string" ? JSON.parse(r.data) : (r.data || {});
+  if (!Array.isArray(data.stages)) return false;
+  const idx = data.stages.findIndex((s: any) => s.title === stageTitle);
+  if (idx < 0) return false;
+  data.stages[idx].status = stageStatus;
+  await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
+  return true;
+}
 export async function setProjectStageDb(sql: SqlFn, userId: string, projectId: string, index: number, status: string): Promise<boolean> {
   const rows = await sql("SELECT data FROM company_projects WHERE user_id = $1 AND id = $2", [userId, projectId]);
   if (!rows[0]) return false;

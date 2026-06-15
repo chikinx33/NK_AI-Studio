@@ -20,6 +20,7 @@ import {
   upsertProject,
   listProjects,
   deleteProjectByName,
+  updateProjectStageByName,
   listSkills,
   createSkill,
   patchSkill,
@@ -184,9 +185,12 @@ ${persona}${knowledgeBlock}
 사용자가 "프로젝트 만들어줘 / ~를 시작하자" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
 - 생성: [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]  (단계는 생략 가능)
 - 삭제: [[PROJECT: delete | 프로젝트명]]  (정확한 이름 사용 — 현재 프로젝트 현황 참조)
+- 단계 상태 변경: [[PROJECT: stage | 프로젝트명 | 단계명 | 상태]]  (상태: todo=예정, in_progress=진행 중, done=완료)
 예) [[PROJECT: create | '우울의 숲' 소설 단독판매 | 11~12월 출시, 연내 마감 | 기획, 집필, 표지·PDF, 마케팅, 출시]]
 예) [[PROJECT: delete | '우울의 숲' 소설 단독판매]]
-이 마커를 쓰면 실제로 프로젝트 보드에 반영됩니다. "삭제했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
+예) [[PROJECT: stage | '우울의 숲' 소설 단독판매 | 기획 | in_progress]]
+예) [[PROJECT: stage | '우울의 숲' 소설 단독판매 | 기획 | done]]
+이 마커를 쓰면 실제로 프로젝트 보드에 반영됩니다. "변경했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
 
 ## 🛠️ 스킬 만들기·개선 (절차적 기억 — 일하며 똑똑해지기)
 복잡한 작업(여러 단계·도구)을 끝냈거나, 막힌 걸 해결했거나, 사용자가 방식을 교정했거나, 재사용할 워크플로를 알아냈으면 그 절차를 스킬로 저장하세요(다음에 같은 일을 더 빠르고 정확하게 하기 위함):
@@ -248,7 +252,7 @@ export async function callClaude(
 }
 
 export interface KnowOp { action: "add" | "del"; type?: string; text: string; }
-export interface ProjectOp { action: "create" | "delete"; name: string; goal?: string; stages: string[]; }
+export interface ProjectOp { action: "create" | "delete" | "update_stage"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; }
 export interface SkillOp { action: "create" | "patch" | "delete"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
 export interface SpeakResult {
   text: string;
@@ -319,6 +323,12 @@ function extractMarkers(raw: string): SpeakResult {
       projects.push({ action: "create", name, goal, stages });
     } else if (/^(delete|del|remove|삭제|제거)$/.test(action) && parts[1]) {
       projects.push({ action: "delete", name: parts[1], stages: [] });
+    } else if (/^(stage|단계|update_stage)$/.test(action) && parts[1] && parts[2] && parts[3]) {
+      const rawStatus = parts[3].trim();
+      const stageStatus = /^(done|완료)$/i.test(rawStatus) ? "done"
+        : /^(in_progress|진행|진행중|진행 중)$/i.test(rawStatus) ? "in_progress"
+        : "todo";
+      projects.push({ action: "update_stage", name: parts[1], stages: [], stageTitle: parts[2], stageStatus });
     }
   }
   SKILL_RE.lastIndex = 0;
@@ -505,6 +515,10 @@ export async function runGroupChat(
         if (p.action === "delete") {
           await deleteProjectByName(sql, userId, p.name);
           existingNames.delete(p.name);
+        } else if (p.action === "update_stage") {
+          if (p.stageTitle && p.stageStatus !== undefined) {
+            await updateProjectStageByName(sql, userId, p.name, p.stageTitle, p.stageStatus);
+          }
         } else {
           if (existingNames.has(p.name)) continue; // 같은 이름 중복 생성 방지
           const id = (globalThis.crypto && globalThis.crypto.randomUUID)
