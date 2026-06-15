@@ -99,6 +99,12 @@ export default function Approvals({
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
   const [skills, setSkills] = useState<AgentSkill[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [sidebarHidden, setSidebarHidden] = useState<Set<string>>(() => {
+    try {
+      const s = localStorage.getItem("nk_project_sidebar_hidden");
+      return s ? new Set(JSON.parse(s)) : new Set();
+    } catch { return new Set(); }
+  });
   // 클릭한 항목 → 어떤 처리(승인/거절)인지 기록. 목록에서 사라질 때까지 버튼 잠금 유지(중복 클릭 방지)
   const [acting, setActing] = useState<Record<string, "approve" | "reject">>({});
 
@@ -132,6 +138,10 @@ export default function Approvals({
     setKnowledge(know);
     setSkills(sk);
     setProjects(proj);
+    try {
+      const s = localStorage.getItem("nk_project_sidebar_hidden");
+      setSidebarHidden(s ? new Set(JSON.parse(s)) : new Set());
+    } catch {}
     // pending에서 빠진(=처리 완료된) 항목의 잠금 기록 정리
     setActing((m) => {
       const ids = Object.keys(m);
@@ -190,23 +200,30 @@ export default function Approvals({
         </div>
       )}
 
-      {/* 프로젝트 — 진행 중인 프로젝트 목록 */}
-      {projects.filter((p) => p.status === "active").length > 0 && (
-        <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
-          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
-            <KanbanIcon className="h-3.5 w-3.5" /> 프로젝트 ({projects.filter((p) => p.status === "active").length})
+      {/* 프로젝트 — 진행 중이고 사이드바 표시 설정된 프로젝트 목록 */}
+      {(() => {
+        const visible = projects.filter((p) => p.status === "active" && !sidebarHidden.has(p.id));
+        if (visible.length === 0) return null;
+        return (
+          <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
+            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
+              <KanbanIcon className="h-3.5 w-3.5" /> 프로젝트 ({visible.length})
+            </div>
+            <div className="space-y-1">
+              {visible.map((p) => {
+                const done = p.stages.filter((s) => s.status === "done").length;
+                const pct = p.stages.length ? Math.round((done / p.stages.length) * 100) : 0;
+                return (
+                  <div key={p.id} className="flex items-center gap-1 min-w-0">
+                    <span className="truncate flex-1 text-[11px] text-gray-300 min-w-0" title={p.name}>{p.name}</span>
+                    <span className="shrink-0 text-[10px] text-gray-500 ml-1">{pct}%</span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="space-y-1">
-            {projects
-              .filter((p) => p.status === "active")
-              .map((p) => (
-                <div key={p.id} className="text-[11px] text-gray-300 truncate" title={p.name}>
-                  {p.name}
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
     <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
       <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-amber-300">

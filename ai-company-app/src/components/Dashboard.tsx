@@ -9,6 +9,8 @@ import {
   type Conversation,
 } from "../lib/api";
 
+const SIDEBAR_HIDDEN_KEY = "nk_project_sidebar_hidden";
+
 const NEXT: Record<StageStatus, StageStatus> = { todo: "doing", doing: "done", done: "todo" };
 const STAGE: Record<StageStatus, { icon: string; c: string; label: string }> = {
   todo: { icon: "⬜", c: "text-gray-500", label: "예정" },
@@ -205,6 +207,21 @@ export default function Dashboard({
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [sidebarHidden, setSidebarHidden] = useState<Set<string>>(() => {
+    try {
+      const s = localStorage.getItem(SIDEBAR_HIDDEN_KEY);
+      return s ? new Set(JSON.parse(s)) : new Set();
+    } catch { return new Set(); }
+  });
+
+  const toggleSidebar = (id: string) => {
+    setSidebarHidden((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      try { localStorage.setItem(SIDEBAR_HIDDEN_KEY, JSON.stringify([...next])); } catch {}
+      return next;
+    });
+  };
 
   const load = () => getProjects().then(setProjects).catch(() => setProjects([]));
   useEffect(() => {
@@ -252,20 +269,38 @@ export default function Dashboard({
               const isOpen = !collapsed.has(p.id);
               return (
                 <div key={p.id} className="overflow-hidden rounded-2xl border border-edge bg-panel">
-                  <button
-                    onClick={() => toggleCollapse(p.id)}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-edge/30"
-                  >
-                    <span className={`shrink-0 text-lg leading-none text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="truncate text-xl font-bold text-gray-50">{title}</h3>
-                        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ps.c}`}>{ps.t}</span>
+                  <div className="flex w-full items-center gap-3 px-4 py-3 transition hover:bg-edge/30">
+                    {/* 아코디언 토글 영역 (flex-1) */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => toggleCollapse(p.id)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") toggleCollapse(p.id); }}
+                      className="flex min-w-0 flex-1 cursor-pointer items-center gap-3"
+                    >
+                      <span className={`shrink-0 text-lg leading-none text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""}`}>▸</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="truncate text-xl font-bold text-gray-50">{title}</h3>
+                          <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${ps.c}`}>{ps.t}</span>
+                        </div>
+                        {sub && <div className="truncate text-sm text-gray-400">{sub}</div>}
                       </div>
-                      {sub && <div className="truncate text-sm text-gray-400">{sub}</div>}
+                      <span className="shrink-0 text-[11px] text-gray-500">{done}/{p.stages.length} · {pct}%</span>
                     </div>
-                    <span className="shrink-0 text-[11px] text-gray-500">{done}/{p.stages.length} · {pct}%</span>
-                  </button>
+                    {/* 사이드바 표시 토글 체크박스 */}
+                    <label
+                      title={sidebarHidden.has(p.id) ? "사이드바에 숨김" : "사이드바에 표시 중"}
+                      className="shrink-0 flex cursor-pointer items-center"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!sidebarHidden.has(p.id)}
+                        onChange={() => toggleSidebar(p.id)}
+                        className="h-3.5 w-3.5 cursor-pointer accent-emerald-500"
+                      />
+                    </label>
+                  </div>
 
                   {isOpen && (
                     <div className="border-t border-edge px-4 pb-4 pt-3">
