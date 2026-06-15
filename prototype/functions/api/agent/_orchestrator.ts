@@ -674,7 +674,8 @@ export async function runGroupChat(
       : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     // 이미지는 1차 응답자에게만 전달 (transcript에 포함 안 되므로 worker/wrap에는 미전달)
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, imageBase64: deps.imageBase64, imageMimeType: deps.imageMimeType });
+    // 코어 위임 계획은 Sonnet으로 충분 — Opus는 25s+ 걸릴 수 있어 waitUntil 30초를 초과함
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, imageBase64: deps.imageBase64, imageMimeType: deps.imageMimeType, model: canDelegate ? "claude-sonnet-4-6" : undefined });
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
