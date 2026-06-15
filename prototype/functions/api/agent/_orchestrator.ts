@@ -501,6 +501,82 @@ export function parseMentions(message: string): string[] {
 // 코어가 "종합/취합"을 예고했는지 — 통솔 마무리 턴 발동 신호.
 const SYNTH_CUE = /종합|취합|정리해서|합쳐서|모아서|모아|취합해|종합해|결론을/;
 
+// ── 마커 적용 — worker-step.ts에서도 재사용하므로 모듈 레벨로 추출 ─────────────────
+export async function applyKnows(sql: SqlFn, userId: string, knows: KnowOp[] | undefined, who: string) {
+  for (const k of knows || []) {
+    try {
+      if (k.action === "add") await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`);
+      else if (k.action === "del") await deleteCompanyKnowledge(sql, userId, k.text);
+      else if (k.action === "edit" && k.newText) await updateCompanyKnowledge(sql, userId, k.text, k.newText);
+    } catch {}
+  }
+}
+
+export async function applySkills(sql: SqlFn, userId: string, skills: SkillOp[] | undefined) {
+  for (const s of skills || []) {
+    try {
+      if (s.action === "create") await createSkill(sql, userId, { name: s.name, category: s.category, description: s.description, content: s.content });
+      else if (s.action === "patch") await patchSkill(sql, userId, s.name, s.oldStr || "", s.newStr || "");
+      else if (s.action === "delete") await deleteSkill(sql, userId, s.name);
+      else if (s.action === "pin") await setPinSkill(sql, userId, s.name, true);
+      else if (s.action === "unpin") await setPinSkill(sql, userId, s.name, false);
+      else if (s.action === "archive") await archiveSkillByName(sql, userId, s.name);
+      else if (s.action === "restore") await restoreSkill(sql, userId, s.name);
+    } catch {}
+  }
+}
+
+export async function applyProjects(sql: SqlFn, userId: string, projects: ProjectOp[] | undefined) {
+  if (!projects || projects.length === 0) return;
+  const existing = await listProjects(sql, userId).catch(() => []);
+  const existingNames = new Set(existing.map((e) => e.name));
+  for (const p of projects) {
+    try {
+      if (p.action === "delete") {
+        await deleteProjectByName(sql, userId, p.name);
+        existingNames.delete(p.name);
+      } else if (p.action === "update_stage") {
+        if (p.stageTitle && p.stageStatus !== undefined) await updateProjectStageByName(sql, userId, p.name, p.stageTitle, p.stageStatus);
+      } else if (p.action === "update_status") {
+        if (p.value) await updateProjectStatus(sql, userId, p.name, p.value);
+      } else if (p.action === "update_field") {
+        if (p.field && p.value !== undefined) await updateProjectField(sql, userId, p.name, p.field, p.value);
+      } else if (p.action === "add_stage") {
+        if (p.stageTitle) await addProjectStage(sql, userId, p.name, p.stageTitle);
+      } else if (p.action === "remove_stage") {
+        if (p.stageTitle) await removeProjectStage(sql, userId, p.name, p.stageTitle);
+      } else {
+        if (existingNames.has(p.name)) continue;
+        const id = globalThis.crypto?.randomUUID?.() || `proj_${Math.random().toString(36).slice(2, 10)}`;
+        const stages = (p.stages || []).map((title) => ({ title, status: "todo" }));
+        await upsertProject(sql, userId, id, { name: p.name, goal: p.goal || "", summary: "", status: "active", stages, nextAction: "" });
+        existingNames.add(p.name);
+      }
+    } catch {}
+  }
+}
+
+/**
+ * 직원 1명을 실행하고 발언·마커를 DB에 반영. worker-step.ts에서 각 CF invocation마다 호출.
+ */
+export async function runWorkerStep(
+  env: any,
+  opts: { sql: SqlFn; userId: string; conversationId: string; message: string; address: string; agentId: string; instruction: string }
+): Promise<void> {
+  const { sql, userId, conversationId, message, address: addr, agentId, instruction } = opts;
+  const meta = getAgent(agentId);
+  if (!meta || agentId === "core") return;
+  const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
+  const trigger =
+    `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
+    `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
+  const res = await speak(env, agentId, trigger, t, { address: addr, canDelegate: false, sql, userId });
+  await addMessage(sql, { userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
+  await applyKnows(sql, userId, res.knows, meta.name);
+  await applyProjects(sql, userId, res.projects);
+  await applySkills(sql, userId, res.skills);
+}
+
 // ── 오케스트레이션 (라비오크 runGroupChat 포팅, Phase 1b) ─────────────────────
 export interface OrchestratorDeps {
   sql: SqlFn;
@@ -563,68 +639,10 @@ export async function runGroupChat(
     }
   };
 
-  // 에이전트가 찍은 KNOW 마커 → 회사 지식 등록/삭제 (에이전트가 직접 지식 관리).
-  const applyKnows = async (knows: KnowOp[] | undefined, who: string) => {
-    for (const k of knows || []) {
-      try {
-        if (k.action === "add") await addCompanyKnowledge(sql, userId, k.text, k.type || "사실", `${who} 등록`);
-        else if (k.action === "del") await deleteCompanyKnowledge(sql, userId, k.text);
-        else if (k.action === "edit" && k.newText) await updateCompanyKnowledge(sql, userId, k.text, k.newText);
-      } catch { /* 지식 반영 실패는 대화 흐름을 막지 않음 */ }
-    }
-  };
-
-  // 에이전트가 찍은 SKILL 마커 → 스킬(절차적 기억) 저장/개선/삭제.
-  const applySkills = async (skills: SkillOp[] | undefined) => {
-    for (const s of skills || []) {
-      try {
-        if (s.action === "create") await createSkill(sql, userId, { name: s.name, category: s.category, description: s.description, content: s.content });
-        else if (s.action === "patch") await patchSkill(sql, userId, s.name, s.oldStr || "", s.newStr || "");
-        else if (s.action === "delete") await deleteSkill(sql, userId, s.name);
-        else if (s.action === "pin") await setPinSkill(sql, userId, s.name, true);
-        else if (s.action === "unpin") await setPinSkill(sql, userId, s.name, false);
-        else if (s.action === "archive") await archiveSkillByName(sql, userId, s.name);
-        else if (s.action === "restore") await restoreSkill(sql, userId, s.name);
-      } catch { /* 스킬 반영 실패는 대화 흐름에 영향 없음 */ }
-    }
-  };
-
-  // 에이전트가 찍은 PROJECT 마커 → 프로젝트 보드 생성/삭제.
-  const applyProjects = async (projects: ProjectOp[] | undefined) => {
-    if (!projects || projects.length === 0) return;
-    const existing = await listProjects(sql, userId).catch(() => []);
-    const existingNames = new Set(existing.map((e) => e.name));
-    for (const p of projects) {
-      try {
-        if (p.action === "delete") {
-          await deleteProjectByName(sql, userId, p.name);
-          existingNames.delete(p.name);
-        } else if (p.action === "update_stage") {
-          if (p.stageTitle && p.stageStatus !== undefined) {
-            await updateProjectStageByName(sql, userId, p.name, p.stageTitle, p.stageStatus);
-          }
-        } else if (p.action === "update_status") {
-          if (p.value) await updateProjectStatus(sql, userId, p.name, p.value);
-        } else if (p.action === "update_field") {
-          if (p.field && p.value !== undefined) await updateProjectField(sql, userId, p.name, p.field, p.value);
-        } else if (p.action === "add_stage") {
-          if (p.stageTitle) await addProjectStage(sql, userId, p.name, p.stageTitle);
-        } else if (p.action === "remove_stage") {
-          if (p.stageTitle) await removeProjectStage(sql, userId, p.name, p.stageTitle);
-        } else {
-          if (existingNames.has(p.name)) continue; // 같은 이름 중복 생성 방지
-          const id = (globalThis.crypto && globalThis.crypto.randomUUID)
-            ? globalThis.crypto.randomUUID()
-            : `proj_${Math.random().toString(36).slice(2, 10)}`;
-          const stages = (p.stages || []).map((title) => ({ title, status: "todo" }));
-          await upsertProject(sql, userId, id, {
-            name: p.name, goal: p.goal || "", summary: "", status: "active", stages, nextAction: "",
-          });
-          existingNames.add(p.name); // 같은 턴에서 중복 방지
-        }
-      } catch { /* 프로젝트 처리 실패는 대화 흐름을 막지 않음 */ }
-    }
-  };
+  // 마커 적용 — 모듈 레벨 함수에 sql/userId를 미리 바인딩한 단축 alias
+  const _applyKnows    = (knows: KnowOp[]    | undefined, who: string) => applyKnows   (sql, userId, knows,    who);
+  const _applySkills   = (skills: SkillOp[]  | undefined)              => applySkills  (sql, userId, skills       );
+  const _applyProjects = (projects: ProjectOp[]| undefined)            => applyProjects(sql, userId, projects    );
 
   // 위임받은 직원이 실제로 일하고 단톡방에 보고.
   const runWorker = async (workerId: string, instruction: string, workerModel?: string, workerMaxTokens?: number) => {
@@ -637,9 +655,9 @@ export async function runGroupChat(
     const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, model: workerModel, maxTokens: workerMaxTokens });
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await runTools(res.runs, workerId);
-    await applyKnows(res.knows, meta.name);
-    await applyProjects(res.projects);
-    await applySkills(res.skills);
+    await _applyKnows(res.knows, meta.name);
+    await _applyProjects(res.projects);
+    await _applySkills(res.skills);
   };
 
   // 1) 1차 응답자
@@ -657,9 +675,9 @@ export async function runGroupChat(
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     // 이미지는 1차 응답자에게만 전달 (transcript에 포함 안 되므로 worker/wrap에는 미전달)
     const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, imageBase64: deps.imageBase64, imageMimeType: deps.imageMimeType });
-    await applyKnows(res.knows, meta.name); // 지식 등록/삭제는 대기 여부와 무관하게 먼저 반영
-    await applyProjects(res.projects);
-    await applySkills(res.skills);
+    await _applyKnows(res.knows, meta.name);
+    await _applyProjects(res.projects);
+    await _applySkills(res.skills);
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
     if (opts.autoTrigger && canDelegate && res.calls.length === 0) return produced;
     await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
@@ -669,16 +687,27 @@ export async function runGroupChat(
       const calls = res.calls.slice(0, 10); // 전원 참여 활동(끝말잇기·게임·회의 등) — 최대 10명(전 직원)
       coreDelegateCount += calls.length;
       if (SYNTH_CUE.test(res.text)) synthCue = true;
-      // 대규모 그룹(5명+)은 게임·흐름 활동이므로 Haiku(빠름)로 전환 — CF 30s wall-clock 한계 내 전원 완주
-      const groupIsLarge = calls.length >= 5;
-      const groupModel = groupIsLarge ? "claude-haiku-4-5-20251001" : undefined;
-      const groupMaxTokens = groupIsLarge ? 400 : undefined;
-      for (let ci = 0; ci < calls.length; ci++) {
-        if (ci > 0) await new Promise((r) => setTimeout(r, 200)); // 연속 API 호출 간격
-        try {
-          await runWorker(calls[ci].agentId, calls[ci].instruction, groupModel, groupMaxTokens);
-        } catch {
-          /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 — 루프 유지 */
+
+      if (calls.length >= 5 && deps.toolCtx?.request) {
+        // ★ 체인 방식: 5명 이상이면 각 직원을 독립 HTTP 요청(worker-step)으로 실행.
+        //   각 요청이 새 CF invocation = 새 30s 윈도우를 받으므로 10명 전원 완주 가능.
+        //   worker-step이 직원 1명을 처리하고 waitUntil 안에서 다음 worker-step을 연쇄 호출.
+        const origin = new URL(deps.toolCtx.request.url).origin;
+        const authHeader = deps.toolCtx.authHeader || "";
+        await fetch(`${origin}/api/agent/worker-step`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": authHeader },
+          body: JSON.stringify({ userId, conversationId, message, address: addr, calls, callIndex: 0 }),
+        }).catch(() => {}); // fire-and-forget: chain handles the rest
+      } else {
+        // 소규모(4명 이하): 기존 인라인 실행 (오버헤드 없이 현재 invocation 안에서 처리)
+        for (let ci = 0; ci < calls.length; ci++) {
+          if (ci > 0) await new Promise((r) => setTimeout(r, 200));
+          try {
+            await runWorker(calls[ci].agentId, calls[ci].instruction);
+          } catch {
+            /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 */
+          }
         }
       }
     }
@@ -695,9 +724,9 @@ export async function runGroupChat(
       `다음 액션 1줄을 제시하세요. "~할게요"로 끝내지 말고 실제 결론을 내세요.`;
     const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId });
     await emit({ userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
-    await applyKnows(wrap.knows, "코어");
-    await applyProjects(wrap.projects);
-    await applySkills(wrap.skills);
+    await _applyKnows(wrap.knows, "코어");
+    await _applyProjects(wrap.projects);
+    await _applySkills(wrap.skills);
   }
 
   // 3) 자동 회고 (헤르메스 자기개선: 복잡 작업 뒤 새 교훈을 스스로 지식으로 축적 = persist durable knowledge).
@@ -714,9 +743,9 @@ export async function runGroupChat(
         "또한 이번에 재사용할 만한 작업 절차(워크플로)를 익혔다면 [[SKILL: create | 이름 | 분류 | 한 줄 설명 | 단계별 절차]]로 저장하세요. 기존 스킬을 개선했으면 [[SKILL: patch | 이름 | 기존 | 새내용]]. " +
         "저장할 게 없으면 마커 없이 '없음'이라고만 답하세요.";
       const review = await speak(env, "core", reviewTrigger, t, { address: addr, canDelegate: false, sql, userId });
-      await applyKnows(review.knows, "코어(회고)");
-      await applyProjects(review.projects);
-      await applySkills(review.skills);
+      await _applyKnows(review.knows, "코어(회고)");
+      await _applyProjects(review.projects);
+      await _applySkills(review.skills);
       // review.text(회고 내용)는 produced에 넣지 않음 — 사용자 화면에는 표시하지 않는다.
     } catch { /* 회고 실패는 대화 흐름에 영향 없음 */ }
   }
