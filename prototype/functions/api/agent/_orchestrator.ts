@@ -235,12 +235,12 @@ export async function callClaude(
   env: any,
   system: string,
   messages: ClaudeMsg[],
-  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string } = {}
+  opts: { model?: string; maxTokens?: number; sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string; resolvedAuth?: any } = {}
 ): Promise<string> {
-  // 구독(OAuth)/API키 2모드 공유 인증. 설정 UI(app_settings) 우선, 없으면 env 폴백.
-  const auth = opts.sql && opts.userId
+  // resolvedAuth가 이미 있으면 DB 재조회 없이 재사용 (runGroupChat 선취 캐시).
+  const auth = opts.resolvedAuth || (opts.sql && opts.userId
     ? await resolvedAuthHeaders(opts.sql, opts.userId, env)
-    : claudeAuthHeaders(env);
+    : claudeAuthHeaders(env));
   // 이미지/파일 첨부 시 마지막 user 메시지를 멀티모달 content block으로 변환.
   const builtMessages = messages.map((m, idx) => {
     if (idx === messages.length - 1 && m.role === "user" && opts.imageBase64) {
@@ -427,7 +427,7 @@ export async function speak(
   agentId: string,
   instruction: string,
   transcript: string,
-  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string; model?: string; maxTokens?: number } = {}
+  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string; model?: string; maxTokens?: number; resolvedAuth?: any } = {}
 ): Promise<SpeakResult> {
   // 사용자별 페르소나 오버라이드·개인 지식을 두뇌에 주입(직원관리 반영).
   let personaOverride = opts.personaOverride;
@@ -459,7 +459,7 @@ export async function speak(
   }
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
-  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: opts.maxTokens, imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType });
+  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: opts.maxTokens, imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType, resolvedAuth: opts.resolvedAuth });
   // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
   if (opts.sql && opts.userId) {
     SELF_KNOW_RE.lastIndex = 0;
@@ -601,6 +601,21 @@ export async function runGroupChat(
   const { sql, userId, conversationId, toolCtx } = deps;
   const addr = "사용자";
 
+  // DB 선취 캐시 — company knowledge·skills·projects·auth를 한 번만 읽고 전 직원이 공유.
+  // 직원당 4회 DB 왕복(×10명 = 40회) → 4회로 단축 → CF 30초 안에 10명 전원 완주.
+  const [cachedCompanyKnowledge, cachedSkills, cachedProjects] = await Promise.all([
+    listCompanyKnowledge(sql, userId).catch(() => []).then((ck: any[]) => ck.map((k) => `[${k.type || "사실"}] ${k.text}`)),
+    listSkills(sql, userId).catch(() => [] as any[]),
+    listProjects(sql, userId).catch(() => [] as any[]),
+  ]);
+  const cachedAuth = await resolvedAuthHeaders(sql, userId, env).catch(() => null);
+  const sharedOpts = {
+    companyKnowledge: cachedCompanyKnowledge as string[],
+    companySkills: cachedSkills as any[],
+    companyProjects: cachedProjects as any[],
+    resolvedAuth: cachedAuth || undefined,
+  };
+
   // 생성된 에이전트 발언을 모은다 — 동기 호출 시 chat 응답에 직접 실어 보내 조회 의존을 없앤다.
   const produced: any[] = [];
   const emit = async (msg: any) => {
@@ -658,7 +673,7 @@ export async function runGroupChat(
     const trigger =
       `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
       `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
-    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, model: workerModel, maxTokens: workerMaxTokens });
+    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, model: workerModel, maxTokens: workerMaxTokens, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await runTools(res.runs, workerId);
     await _applyKnows(res.knows, meta.name);
@@ -681,7 +696,7 @@ export async function runGroupChat(
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     // 이미지는 1차 응답자에게만 전달 (transcript에 포함 안 되므로 worker/wrap에는 미전달)
     // 코어 위임 계획은 Sonnet으로 충분 — Opus는 25s+ 걸릴 수 있어 waitUntil 30초를 초과함
-    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, imageBase64: deps.imageBase64, imageMimeType: deps.imageMimeType, model: canDelegate ? "claude-sonnet-4-6" : undefined });
+    const res = await speak(env, agentId, instruction, t, { address: addr, canDelegate, sql, userId, imageBase64: deps.imageBase64, imageMimeType: deps.imageMimeType, model: canDelegate ? "claude-sonnet-4-6" : undefined, ...sharedOpts });
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
@@ -699,7 +714,7 @@ export async function runGroupChat(
       const groupModel = groupIsLarge ? "claude-haiku-4-5-20251001" : undefined;
       const groupMaxTokens = groupIsLarge ? 400 : undefined;
       for (let ci = 0; ci < calls.length; ci++) {
-        if (ci > 0) await new Promise((r) => setTimeout(r, 200)); // 연속 API 호출 간격
+        if (ci > 0) await new Promise((r) => setTimeout(r, 50)); // 연속 API 호출 간격(캐시 덕에 단축)
         try {
           await runWorker(calls[ci].agentId, calls[ci].instruction, groupModel, groupMaxTokens);
         } catch {
@@ -718,7 +733,7 @@ export async function runGroupChat(
     const wrapTrigger =
       `${addr} 요청: "${message}"\n\n방금 직원들이 각자 보고했어요. 팀장(코어)으로서 종합해 결론을 내고, ` +
       `다음 액션 1줄을 제시하세요. "~할게요"로 끝내지 말고 실제 결론을 내세요.`;
-    const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId });
+    const wrap = await speak(env, "core", wrapTrigger, t, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
     await emit({ userId, conversationId, role: "agent", agentId: "core", name: "코어", text: wrap.text });
     await _applyKnows(wrap.knows, "코어");
     await _applyProjects(wrap.projects);
@@ -738,7 +753,7 @@ export async function runGroupChat(
         "이미 등록된 회사 지식과 겹치면 저장하지 말고, 정말 새로 배운 핵심만 1~3개 이내로 간결하게. 확실하지 않은 건 저장하지 마세요. " +
         "또한 이번에 재사용할 만한 작업 절차(워크플로)를 익혔다면 [[SKILL: create | 이름 | 분류 | 한 줄 설명 | 단계별 절차]]로 저장하세요. 기존 스킬을 개선했으면 [[SKILL: patch | 이름 | 기존 | 새내용]]. " +
         "저장할 게 없으면 마커 없이 '없음'이라고만 답하세요.";
-      const review = await speak(env, "core", reviewTrigger, t, { address: addr, canDelegate: false, sql, userId });
+      const review = await speak(env, "core", reviewTrigger, t, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
       await _applyKnows(review.knows, "코어(회고)");
       await _applyProjects(review.projects);
       await _applySkills(review.skills);
