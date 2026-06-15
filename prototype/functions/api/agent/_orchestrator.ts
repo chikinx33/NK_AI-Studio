@@ -19,6 +19,7 @@ import {
   listCompanyKnowledge,
   upsertProject,
   listProjects,
+  deleteProjectByName,
   listSkills,
   createSkill,
   patchSkill,
@@ -179,11 +180,13 @@ ${persona}${knowledgeBlock}
 예) 사용자가 "나를 엔케라고 불러, 회사 규칙에 반영해" → 답 끝에 [[KNOW: add | 원칙 | 사용자의 호칭은 '엔케'(영문 NK)다]]
 이 마커를 쓰면 실제 회사 지식에 반영됩니다. "반영했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
 
-## 📁 프로젝트 만들기 (코어·싱크 중심)
+## 📁 프로젝트 관리 (코어·싱크 중심)
 사용자가 "프로젝트 만들어줘 / ~를 시작하자" 등을 요청하면, 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
-- [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]  (단계는 생략 가능)
+- 생성: [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]  (단계는 생략 가능)
+- 삭제: [[PROJECT: delete | 프로젝트명]]  (정확한 이름 사용 — 현재 프로젝트 현황 참조)
 예) [[PROJECT: create | '우울의 숲' 소설 단독판매 | 11~12월 출시, 연내 마감 | 기획, 집필, 표지·PDF, 마케팅, 출시]]
-이 마커를 쓰면 실제로 프로젝트 보드에 생성됩니다. 코어는 프로젝트를 띄우고 PM 싱크가 단계·일정을 관리합니다. "만들었어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
+예) [[PROJECT: delete | '우울의 숲' 소설 단독판매]]
+이 마커를 쓰면 실제로 프로젝트 보드에 반영됩니다. "삭제했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
 
 ## 🛠️ 스킬 만들기·개선 (절차적 기억 — 일하며 똑똑해지기)
 복잡한 작업(여러 단계·도구)을 끝냈거나, 막힌 걸 해결했거나, 사용자가 방식을 교정했거나, 재사용할 워크플로를 알아냈으면 그 절차를 스킬로 저장하세요(다음에 같은 일을 더 빠르고 정확하게 하기 위함):
@@ -234,7 +237,7 @@ export async function callClaude(
 }
 
 export interface KnowOp { action: "add" | "del"; type?: string; text: string; }
-export interface ProjectOp { action: "create"; name: string; goal?: string; stages: string[]; }
+export interface ProjectOp { action: "create" | "delete"; name: string; goal?: string; stages: string[]; }
 export interface SkillOp { action: "create" | "patch" | "delete"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
 export interface SpeakResult {
   text: string;
@@ -303,6 +306,8 @@ function extractMarkers(raw: string): SpeakResult {
       const goal = parts[2] || "";
       const stages = parts[3] ? parts[3].split(",").map((s) => s.trim()).filter(Boolean) : [];
       projects.push({ action: "create", name, goal, stages });
+    } else if (/^(delete|del|remove|삭제|제거)$/.test(action) && parts[1]) {
+      projects.push({ action: "delete", name: parts[1], stages: [] });
     }
   }
   SKILL_RE.lastIndex = 0;
@@ -477,23 +482,28 @@ export async function runGroupChat(
     }
   };
 
-  // 에이전트가 찍은 PROJECT 마커 → 프로젝트 보드에 실제 생성(이름 중복 시 스킵).
+  // 에이전트가 찍은 PROJECT 마커 → 프로젝트 보드 생성/삭제.
   const applyProjects = async (projects: ProjectOp[] | undefined) => {
     if (!projects || projects.length === 0) return;
     const existing = await listProjects(sql, userId).catch(() => []);
     const existingNames = new Set(existing.map((e) => e.name));
     for (const p of projects) {
       try {
-        if (existingNames.has(p.name)) continue; // 같은 이름 중복 생성 방지
-        const id = (globalThis.crypto && globalThis.crypto.randomUUID)
-          ? globalThis.crypto.randomUUID()
-          : `proj_${Math.random().toString(36).slice(2, 10)}`;
-        const stages = (p.stages || []).map((title) => ({ title, status: "todo" }));
-        await upsertProject(sql, userId, id, {
-          name: p.name, goal: p.goal || "", summary: "", status: "active", stages, nextAction: "",
-        });
-        existingNames.add(p.name); // 같은 턴에서 중복 방지
-      } catch { /* 프로젝트 생성 실패는 대화 흐름을 막지 않음 */ }
+        if (p.action === "delete") {
+          await deleteProjectByName(sql, userId, p.name);
+          existingNames.delete(p.name);
+        } else {
+          if (existingNames.has(p.name)) continue; // 같은 이름 중복 생성 방지
+          const id = (globalThis.crypto && globalThis.crypto.randomUUID)
+            ? globalThis.crypto.randomUUID()
+            : `proj_${Math.random().toString(36).slice(2, 10)}`;
+          const stages = (p.stages || []).map((title) => ({ title, status: "todo" }));
+          await upsertProject(sql, userId, id, {
+            name: p.name, goal: p.goal || "", summary: "", status: "active", stages, nextAction: "",
+          });
+          existingNames.add(p.name); // 같은 턴에서 중복 방지
+        }
+      } catch { /* 프로젝트 처리 실패는 대화 흐름을 막지 않음 */ }
     }
   };
 

@@ -208,6 +208,14 @@ export async function upsertProject(sql: SqlFn, userId: string, id: string, data
     [userId, id, JSON.stringify(data)]
   );
 }
+export async function deleteProjectByName(sql: SqlFn, userId: string, name: string): Promise<number> {
+  const rows = await sql("SELECT id FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, name]);
+  if (!rows.length) return 0;
+  for (const r of rows) {
+    await sql("DELETE FROM company_projects WHERE user_id = $1 AND id = $2", [userId, r.id]);
+  }
+  return rows.length;
+}
 export async function setProjectStageDb(sql: SqlFn, userId: string, projectId: string, index: number, status: string): Promise<boolean> {
   const rows = await sql("SELECT data FROM company_projects WHERE user_id = $1 AND id = $2", [userId, projectId]);
   if (!rows[0]) return false;
