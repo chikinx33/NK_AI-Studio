@@ -687,27 +687,16 @@ export async function runGroupChat(
       const calls = res.calls.slice(0, 10); // 전원 참여 활동(끝말잇기·게임·회의 등) — 최대 10명(전 직원)
       coreDelegateCount += calls.length;
       if (SYNTH_CUE.test(res.text)) synthCue = true;
-
-      if (calls.length >= 5 && deps.toolCtx?.request) {
-        // ★ 체인 방식: 5명 이상이면 각 직원을 독립 HTTP 요청(worker-step)으로 실행.
-        //   각 요청이 새 CF invocation = 새 30s 윈도우를 받으므로 10명 전원 완주 가능.
-        //   worker-step이 직원 1명을 처리하고 waitUntil 안에서 다음 worker-step을 연쇄 호출.
-        const origin = new URL(deps.toolCtx.request.url).origin;
-        const authHeader = deps.toolCtx.authHeader || "";
-        await fetch(`${origin}/api/agent/worker-step`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": authHeader },
-          body: JSON.stringify({ userId, conversationId, message, address: addr, calls, callIndex: 0 }),
-        }).catch(() => {}); // fire-and-forget: chain handles the rest
-      } else {
-        // 소규모(4명 이하): 기존 인라인 실행 (오버헤드 없이 현재 invocation 안에서 처리)
-        for (let ci = 0; ci < calls.length; ci++) {
-          if (ci > 0) await new Promise((r) => setTimeout(r, 200));
-          try {
-            await runWorker(calls[ci].agentId, calls[ci].instruction);
-          } catch {
-            /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 */
-          }
+      // 대규모 그룹(5명+): Haiku(~0.5s/명)로 전환 → Core(10s) + 10명×0.5s = 15s → CF 30s 안에 전원 완주
+      const groupIsLarge = calls.length >= 5;
+      const groupModel = groupIsLarge ? "claude-haiku-4-5-20251001" : undefined;
+      const groupMaxTokens = groupIsLarge ? 400 : undefined;
+      for (let ci = 0; ci < calls.length; ci++) {
+        if (ci > 0) await new Promise((r) => setTimeout(r, 200)); // 연속 API 호출 간격
+        try {
+          await runWorker(calls[ci].agentId, calls[ci].instruction, groupModel, groupMaxTokens);
+        } catch {
+          /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 — 루프 유지 */
         }
       }
     }
