@@ -252,29 +252,37 @@ export async function callClaude(
     }
     return m;
   });
-  const res = await fetch(anthropicMessagesUrl(env), {
-    method: "POST",
-    headers: auth.headers,
-    body: JSON.stringify({
-      model: opts.model || "claude-sonnet-4-6",
-      max_tokens: opts.maxTokens || 1500,
-      system: buildClaudeSystem(auth.subscription, system),
-      messages: builtMessages,
-    }),
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    let detail: any = text;
-    try { detail = JSON.parse(text); } catch (_) {}
-    const inner =
-      detail?.error?.message || detail?.message ||
-      (typeof detail === "string" ? detail.slice(0, 200) : JSON.stringify(detail).slice(0, 200));
-    throw new Error(`Claude API ${res.status} [${auth.subscription ? "subscription" : "api_key"}] — ${inner}`);
+  // 429 레이트리밋 자동 재시도: 최대 2회(총 3회), 2s → 4s 지수 백오프
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    const res = await fetch(anthropicMessagesUrl(env), {
+      method: "POST",
+      headers: auth.headers,
+      body: JSON.stringify({
+        model: opts.model || "claude-sonnet-4-6",
+        max_tokens: opts.maxTokens || 1500,
+        system: buildClaudeSystem(auth.subscription, system),
+        messages: builtMessages,
+      }),
+    });
+    const text = await res.text();
+    if (res.status === 429 && attempt < 2) {
+      await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+      continue;
+    }
+    if (!res.ok) {
+      let detail: any = text;
+      try { detail = JSON.parse(text); } catch (_) {}
+      const inner =
+        detail?.error?.message || detail?.message ||
+        (typeof detail === "string" ? detail.slice(0, 200) : JSON.stringify(detail).slice(0, 200));
+      throw new Error(`Claude API ${res.status} [${auth.subscription ? "subscription" : "api_key"}] — ${inner}`);
+    }
+    const data = JSON.parse(text);
+    const parts = Array.isArray(data?.content) ? data.content : [];
+    const out = parts.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("");
+    return stripThink(out);
   }
-  const data = JSON.parse(text);
-  const parts = Array.isArray(data?.content) ? data.content : [];
-  const out = parts.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("");
-  return stripThink(out);
+  throw new Error("Claude API 최대 재시도 초과");
 }
 
 export interface KnowOp { action: "add" | "del" | "edit"; type?: string; text: string; newText?: string; }
@@ -661,12 +669,22 @@ export async function runGroupChat(
       const calls = res.calls.slice(0, 10); // 전원 참여 활동(끝말잇기·게임·회의 등) — 최대 10명(전 직원)
       coreDelegateCount += calls.length;
       if (SYNTH_CUE.test(res.text)) synthCue = true;
-      for (const c of calls) await runWorker(c.agentId, c.instruction);
+      for (let ci = 0; ci < calls.length; ci++) {
+        if (ci > 0) await new Promise((r) => setTimeout(r, 300)); // 연속 API 호출 레이트리밋 방지
+        try {
+          await runWorker(calls[ci].agentId, calls[ci].instruction);
+        } catch {
+          /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 — 루프 유지 */
+        }
+      }
     }
   }
 
   // 2) 코어 통솔 마무리 — 다수 위임(≥2)이거나 종합 예고 시 코어가 종합·결론.
-  if (primary.includes("core") && (coreDelegateCount >= 2 || (coreDelegateCount >= 1 && synthCue))) {
+  //    단, 대규모 그룹 활동(5명 이상 위임)은 게임·끝말잇기 등 흐름 활동이므로 wrap 불필요.
+  //    wrap·회고 Claude 호출을 아끼면 CF 백그라운드 시간을 남은 직원에게 더 줄 수 있다.
+  const isLargeGroup = coreDelegateCount >= 5;
+  if (!isLargeGroup && primary.includes("core") && (coreDelegateCount >= 2 || (coreDelegateCount >= 1 && synthCue))) {
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const wrapTrigger =
       `${addr} 요청: "${message}"\n\n방금 직원들이 각자 보고했어요. 팀장(코어)으로서 종합해 결론을 내고, ` +
@@ -681,7 +699,8 @@ export async function runGroupChat(
   // 3) 자동 회고 (헤르메스 자기개선: 복잡 작업 뒤 새 교훈을 스스로 지식으로 축적 = persist durable knowledge).
   //    위임이 한 번이라도 일어난 '복잡 작업'에서만 1회 회고한다. 회고 발언은 단톡방에 노출하지 않고(조용히)
   //    KNOW 마커로 회사 지식만 늘린다. 중복은 add 단계에서 자동 차단됨.
-  if (!opts.autoTrigger && coreDelegateCount >= 1) {
+  //    대규모 그룹 활동(끝말잇기·게임 등)은 배울 게 없으므로 회고도 생략한다.
+  if (!opts.autoTrigger && !isLargeGroup && coreDelegateCount >= 1) {
     try {
       const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
       const reviewTrigger =
