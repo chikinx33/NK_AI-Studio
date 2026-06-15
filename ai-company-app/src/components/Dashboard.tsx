@@ -23,12 +23,12 @@ const PROJ_STATUS: Record<string, { t: string; c: string }> = {
   done: { t: "완료", c: "bg-sky-900/40 text-sky-300 border-sky-700/50" },
 };
 
-function HouseIcon({ className }: { className?: string }) {
+function ProjectIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8" />
-      <path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+      <path d="m6 14 1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/>
+      <circle cx="14" cy="15" r="1"/>
     </svg>
   );
 }
@@ -250,7 +250,7 @@ export default function Dashboard({
     <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden bg-ink">
       {/* 아이콘 전용 행 — 콘텐츠와 분리 (지식·채팅 뷰와 동일 방식) */}
       <div className="flex shrink-0 justify-center border-b border-edge pt-3 pb-3 text-gray-400">
-        <HouseIcon className="h-10 w-10" />
+        <ProjectIcon className="h-10 w-10" />
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-6 pt-4">
