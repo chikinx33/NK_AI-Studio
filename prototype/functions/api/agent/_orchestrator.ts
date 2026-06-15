@@ -427,7 +427,7 @@ export async function speak(
   agentId: string,
   instruction: string,
   transcript: string,
-  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string } = {}
+  opts: BuildSystemOpts & { sql?: SqlFn; userId?: string; imageBase64?: string; imageMimeType?: string; model?: string; maxTokens?: number } = {}
 ): Promise<SpeakResult> {
   // 사용자별 페르소나 오버라이드·개인 지식을 두뇌에 주입(직원관리 반영).
   let personaOverride = opts.personaOverride;
@@ -459,7 +459,7 @@ export async function speak(
   }
   const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
-  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId), imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType });
+  const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: opts.maxTokens, imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType });
   // SELF_KNOW: agentId 컨텍스트가 있는 speak() 안에서만 처리 (extractMarkers에는 agentId 없음)
   if (opts.sql && opts.userId) {
     SELF_KNOW_RE.lastIndex = 0;
@@ -627,14 +627,14 @@ export async function runGroupChat(
   };
 
   // 위임받은 직원이 실제로 일하고 단톡방에 보고.
-  const runWorker = async (workerId: string, instruction: string) => {
+  const runWorker = async (workerId: string, instruction: string, workerModel?: string, workerMaxTokens?: number) => {
     if (workerId === "core" || !getAgent(workerId)) return;
     const meta = getAgent(workerId)!;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const trigger =
       `${addr} 원문: "${message}"\n당신(${meta.name})이 직접 처리할 일: ${instruction}\n\n` +
       `⚠️ 당신이 직접 결과물을 만들어 보여주세요. "~에게 시켰다" 같은 3인칭 전달 보고 금지. 길면 핵심부터.`;
-    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId });
+    const res = await speak(env, workerId, trigger, t, { address: addr, canDelegate: false, sql, userId, model: workerModel, maxTokens: workerMaxTokens });
     await emit({ userId, conversationId, role: "agent", agentId: workerId, name: meta.name, text: res.text });
     await runTools(res.runs, workerId);
     await applyKnows(res.knows, meta.name);
@@ -669,10 +669,14 @@ export async function runGroupChat(
       const calls = res.calls.slice(0, 10); // 전원 참여 활동(끝말잇기·게임·회의 등) — 최대 10명(전 직원)
       coreDelegateCount += calls.length;
       if (SYNTH_CUE.test(res.text)) synthCue = true;
+      // 대규모 그룹(5명+)은 게임·흐름 활동이므로 Haiku(빠름)로 전환 — CF 30s wall-clock 한계 내 전원 완주
+      const groupIsLarge = calls.length >= 5;
+      const groupModel = groupIsLarge ? "claude-haiku-4-5-20251001" : undefined;
+      const groupMaxTokens = groupIsLarge ? 400 : undefined;
       for (let ci = 0; ci < calls.length; ci++) {
-        if (ci > 0) await new Promise((r) => setTimeout(r, 300)); // 연속 API 호출 레이트리밋 방지
+        if (ci > 0) await new Promise((r) => setTimeout(r, 200)); // 연속 API 호출 간격
         try {
-          await runWorker(calls[ci].agentId, calls[ci].instruction);
+          await runWorker(calls[ci].agentId, calls[ci].instruction, groupModel, groupMaxTokens);
         } catch {
           /* 개별 직원 응답 실패 시 조용히 다음으로 이어감 — 루프 유지 */
         }
