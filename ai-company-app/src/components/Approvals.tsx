@@ -1,9 +1,8 @@
 import { useEffect, useState } from "react";
-import { getApprovals, approveItem, rejectItem, getKnowledge, getSkills, type KnowledgeItem, type AgentSkill } from "../lib/api";
+import { getApprovals, approveItem, rejectItem, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project } from "../lib/api";
 
-// 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황)
+// 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
-  { key: null, label: "전체", c: "bg-gray-700/60 text-gray-200 border-gray-600" },
   { key: "원칙", label: "규칙", c: "bg-violet-900/50 text-violet-300 border-violet-700/50" },
   { key: "사실", label: "사실", c: "bg-emerald-900/50 text-emerald-300 border-emerald-700/50" },
   { key: "결정", label: "결정", c: "bg-amber-900/50 text-amber-300 border-amber-700/50" },
@@ -37,6 +36,16 @@ function Spinner({ className }: { className?: string }) {
     <svg className={`animate-spin ${className ?? ""}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" strokeOpacity="0.25" />
       <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function KanbanIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M6 5v11"/>
+      <path d="M12 5v6"/>
+      <path d="M18 5v14"/>
     </svg>
   );
 }
@@ -89,6 +98,7 @@ export default function Approvals({
   const [history, setHistory] = useState<ApprovalItem[]>([]);
   const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
   const [skills, setSkills] = useState<AgentSkill[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   // 클릭한 항목 → 어떤 처리(승인/거절)인지 기록. 목록에서 사라질 때까지 버튼 잠금 유지(중복 클릭 방지)
   const [acting, setActing] = useState<Record<string, "approve" | "reject">>({});
 
@@ -110,16 +120,18 @@ export default function Approvals({
   }
 
   async function refresh() {
-    const [data, know, sk] = await Promise.all([
+    const [data, know, sk, proj] = await Promise.all([
       getApprovals(),
       getKnowledge().catch(() => [] as KnowledgeItem[]),
       getSkills().then((d) => d.active ?? []).catch(() => [] as AgentSkill[]),
+      getProjects().catch(() => [] as Project[]),
     ]);
     const pend = data.pending ?? [];
     setPending(pend);
     setHistory((data.history ?? []).slice(-5).reverse());
     setKnowledge(know);
     setSkills(sk);
+    setProjects(proj);
     // pending에서 빠진(=처리 완료된) 항목의 잠금 기록 정리
     setActing((m) => {
       const ids = Object.keys(m);
@@ -150,11 +162,11 @@ export default function Approvals({
       {(knowledge.length > 0 || skills.length > 0) && (
         <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
           <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
-            <BrainIcon className="h-3.5 w-3.5" /> 회사 지식
+            <BrainIcon className="h-3.5 w-3.5" /> 회사 지식 ({knowledge.length})
           </div>
           <div className="flex flex-wrap items-center gap-1">
             {KNOW_CHIPS.map(({ key, label, c }) => {
-              const n = key === null ? knowledge.length : knowledge.filter((k) => (k.type ?? "사실") === key).length;
+              const n = knowledge.filter((k) => (k.type ?? "사실") === key).length;
               return (
                 <button
                   key={label}
@@ -174,6 +186,24 @@ export default function Approvals({
             >
               스킬 {skills.length}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 프로젝트 — 진행 중인 프로젝트 목록 */}
+      {projects.filter((p) => p.status === "active").length > 0 && (
+        <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
+          <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
+            <KanbanIcon className="h-3.5 w-3.5" /> 프로젝트 ({projects.filter((p) => p.status === "active").length})
+          </div>
+          <div className="space-y-1">
+            {projects
+              .filter((p) => p.status === "active")
+              .map((p) => (
+                <div key={p.id} className="text-[11px] text-gray-300 truncate" title={p.name}>
+                  {p.name}
+                </div>
+              ))}
           </div>
         </div>
       )}
