@@ -586,6 +586,7 @@ export interface OrchestratorDeps {
   firstMessage?: string; // 방금 저장한 사용자 메시지(조회 타이밍 의존 제거)
   imageBase64?: string;  // 첨부 이미지 base64 (첫 번째 에이전트에게만 전달)
   imageMimeType?: string;
+  onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
 }
 
 /**
@@ -602,7 +603,12 @@ export async function runGroupChat(
 
   // 생성된 에이전트 발언을 모은다 — 동기 호출 시 chat 응답에 직접 실어 보내 조회 의존을 없앤다.
   const produced: any[] = [];
-  const emit = async (msg: any) => { const r = await addMessage(sql, msg); produced.push(r); return r; };
+  const emit = async (msg: any) => {
+    const r = await addMessage(sql, msg);
+    produced.push(r);
+    if (deps.onMessage) { try { await deps.onMessage(r); } catch {} }
+    return r;
+  };
 
   // 자율 근무: 사용자 메시지 대신 자율 트리거로 코어를 깨운다(자발적 프로젝트 진행).
   let message: string;

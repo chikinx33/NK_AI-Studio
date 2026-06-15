@@ -1,7 +1,6 @@
 // prototype/functions/api/agent/chat.ts
 // POST /api/agent/chat { message, conversationId? }
-// 단톡방에 사용자 메시지 → 코어가 응답(Phase 1a: 코어 단일, waitUntil 백그라운드).
-// ★ 멀티테넌시: user_id 격리. 위임·통솔(멀티 호출)은 Phase 1b(Workflows).
+// SSE 스트리밍: 에이전트가 발언을 완료하는 즉시 클라이언트에 전송 → 실시간 순차 대화.
 import { authorizeRequest } from "../_shared/auth.js";
 import { hasPagePermission } from "../_shared/admin-users.js";
 import {
@@ -19,6 +18,14 @@ type PagesFunction = (ctx: {
   env: any;
   waitUntil: (p: Promise<any>) => void;
 }) => Promise<Response>;
+
+const sseHeaders = (origin: string | null) => ({
+  "Content-Type": "text/event-stream; charset=utf-8",
+  "Cache-Control": "no-cache",
+  "Access-Control-Allow-Origin": origin || "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  Vary: "Origin",
+});
 
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
@@ -49,32 +56,55 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       userId: auth.userId, conversationId, role: "user", text: displayText,
     });
 
-    // 휴식(퇴근) 중에는 모든 에이전트가 활동을 멈춘다 — 코어가 짧게 안내만 하고 위임/통솔하지 않음.
     const rt = await getRuntime(sql, auth.userId).catch(() => ({ workMode: "on", autonomous: false }));
     if (rt.workMode === "off") {
       const restMsg = await addMessage(sql, {
         userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
         text: "지금은 모두 휴식 중이에요. 🌙 출근시키면 다시 일을 시작할게요.",
       }).catch(() => null);
-      return send({ ok: true, conversationId, userMessageId: userMsg.id, resting: true, messages: restMsg ? [restMsg] : [] }, 200, origin);
+      const sseBody = [
+        restMsg ? `data: ${JSON.stringify({ type: "msg", msg: restMsg })}\n\n` : "",
+        `data: ${JSON.stringify({ type: "done", conversationId, resting: true })}\n\n`,
+      ].join("");
+      return new Response(sseBody, { headers: sseHeaders(origin) });
     }
 
     const authHeader = String(request.headers.get("Authorization") || "");
     const toolCtx = { request, env, authHeader, userId: auth.userId };
 
-    // 오케스트레이션을 동기(await)로 실행 — waitUntil 백그라운드 불안정 문제 해결.
-    // Core(Sonnet, ~5s) + 직원×10(Haiku, ~0.5s/명) ≈ 10s → CF 30초 한도 내 안전하게 완주.
-    // 각 발언이 저장된 즉시 프런트 폴링이 순차적으로 표시해 자연스러운 대화 흐름을 만든다.
-    try {
-      const produced = await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: displayText, imageBase64, imageMimeType });
-      return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: produced }, 200, origin);
-    } catch (e: any) {
-      await addMessage(sql, {
-        userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
-        text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
-      }).catch(() => {});
-      return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: [] }, 200, origin);
-    }
+    // TransformStream: SSE 이벤트를 writer에 쓰고 readable을 Response body로 반환.
+    // 에이전트가 발언을 완료할 때마다 onMessage 콜백 → SSE 즉시 전송 → 실시간 순차 대화.
+    const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+    const writer = writable.getWriter();
+    const enc = new TextEncoder();
+    const sse = async (data: any) => {
+      try { await writer.write(enc.encode(`data: ${JSON.stringify(data)}\n\n`)); } catch {}
+    };
+
+    const streamWork = (async () => {
+      try {
+        await runGroupChat(env, {
+          sql, userId: auth.userId, conversationId, toolCtx,
+          firstMessage: displayText, imageBase64, imageMimeType,
+          onMessage: (msg: any) => sse({ type: "msg", msg }),
+        });
+        await sse({ type: "done", conversationId, userMessageId: userMsg.id });
+      } catch (e: any) {
+        const errMsg = await addMessage(sql, {
+          userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
+          text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
+        }).catch(() => null);
+        if (errMsg) await sse({ type: "msg", msg: errMsg });
+        await sse({ type: "done", conversationId, userMessageId: userMsg.id });
+      } finally {
+        try { writer.close(); } catch {}
+      }
+    })();
+
+    // readable 스트림이 연결을 유지하고, waitUntil이 CF 함수 수명도 연장한다.
+    waitUntil(streamWork);
+
+    return new Response(readable, { headers: sseHeaders(origin) });
   } catch (e: any) {
     return send({ error: e?.message || "대화 처리 중 오류" }, 500, origin);
   }

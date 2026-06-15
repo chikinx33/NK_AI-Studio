@@ -226,6 +226,12 @@ export default function App() {
                 }
               }
               commit(next);
+              // 발언 완료 → 해당 직원 working 해제 (아바타 스피너 즉시 제거)
+              setWorkingIds((prev) => {
+                const nextSet = new Set(prev);
+                nextSet.delete(data.agentId);
+                return nextSet;
+              });
               break;
             }
             case "agent_busy": {

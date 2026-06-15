@@ -522,10 +522,9 @@ export interface HistoryTurn {
 }
 
 /**
- * NK 폴링 기반 채팅. 라비오크는 SSE(fetch+ReadableStream)였지만, 클라우드 30초 제약상
- * 멀티에이전트 위임이 끊기므로: POST /api/agent/chat(즉시 응답, 백그라운드 오케스트레이션)
- * + /api/agent/messages 폴링으로 새 에이전트 발언을 turn_start/turn_end 이벤트로 합성한다.
- * Chat·VisualNovel 컴포넌트는 그대로 작동(타자기 토큰 대신 메시지 단위 표시).
+ * NK SSE 채팅. POST /api/agent/chat → text/event-stream 응답.
+ * 에이전트가 발언을 완료하는 즉시 SSE 이벤트를 수신 → 실시간 순차 대화(진짜 티키타카).
+ * Chat·VisualNovel 컴포넌트는 그대로 작동(turn_start/turn_end 이벤트 동일).
  */
 export async function streamChat(
   message: string,
@@ -541,75 +540,75 @@ export async function streamChat(
   } = {}
 ): Promise<void> {
   const convId = opts.conversationId || "main";
-  const fetchMsgs = async (): Promise<any[]> => {
-    const d = await (await fetch(`/api/agent/messages?conversationId=${encodeURIComponent(convId)}`)).json();
-    return (d && d.items) || [];
-  };
 
   onEvent("status", { backend: "cloud", reason: "NK Claude" });
-  const before = (await fetchMsgs().catch(() => [])).length;
 
   const res = await fetch("/api/agent/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, conversationId: convId, focusAgent: opts.focusAgent, imageBase64: opts.imageBase64, imageMimeType: opts.imageMimeType }),
+    body: JSON.stringify({
+      message,
+      conversationId: convId,
+      focusAgent: opts.focusAgent,
+      imageBase64: opts.imageBase64,
+      imageMimeType: opts.imageMimeType,
+    }),
     signal: opts.signal,
   });
-  let chatBody: any = {};
-  try { chatBody = await res.clone().json(); } catch { /* ignore */ }
+
   if (!res.ok) {
-    const err = chatBody?.error || "전송 실패";
+    let errBody: any = {};
+    try { errBody = await res.json(); } catch {}
+    const err = errBody?.error || "전송 실패";
     onEvent("turn_start", { agentId: "core", name: "코어", emoji: "🧭" });
     onEvent("turn_end", { agentId: "core", text: `⚠️ ${err}` });
     onEvent("done", {});
     return;
   }
 
-  // ── sync 응답 직접 처리 ──────────────────────────────────────────────────────
-  // runGroupChat(await)가 완료된 경우 응답 본문 messages[]에 에이전트 발언이 모두 담깁니다.
-  // 폴링에 의존하지 않고 본문을 바로 읽어 표시 — 신뢰성과 속도 모두 향상.
-  const syncMsgs = (chatBody && Array.isArray((chatBody as any).messages))
-    ? ((chatBody as any).messages as any[]).filter((m: any) => m && m.role === "agent")
-    : [];
-  if (syncMsgs.length > 0) {
-    for (let si = 0; si < syncMsgs.length; si++) {
-      const m = syncMsgs[si];
-      if (si > 0) await new Promise<void>((r) => setTimeout(r, 400));
-      onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
-      onEvent("turn_end", { agentId: m.agent_id, text: m.text });
-    }
+  // SSE 스트림 읽기 — 에이전트 발언이 완료될 때마다 즉시 수신해 표시.
+  const reader = res.body?.getReader();
+  if (!reader) {
+    onEvent("turn_start", { agentId: "core", name: "코어", emoji: "" });
+    onEvent("turn_end", { agentId: "core", text: "⚠️ 스트림 연결에 실패했어요." });
     onEvent("done", {});
     return;
   }
 
-  // ── 폴링 fallback (응답 본문이 비어 있을 때 — 백그라운드 처리 중이거나 오류) ──
-  // 에이전트 발언을 폴링으로 순차 표시.
-  // 첫 폴링은 500ms(빠른 응답 대응), 이후 1.5초 간격. 안정 판정: 12×1.5s = 18초 무변화 시 종료.
-  let emitted = before;
+  const decoder = new TextDecoder();
+  let buffer = "";
   let agentEmitted = 0;
-  let lastLen = -1, stable = 0;
-  for (let i = 0; i < 120; i++) {
-    if (opts.signal?.aborted) break;
-    await new Promise((r) => setTimeout(r, i === 0 ? 500 : 1500));
-    let msgs: any[];
-    try { msgs = await fetchMsgs(); } catch { continue; }
-    for (let j = emitted; j < msgs.length; j++) {
-      const m = msgs[j];
-      if (m.role === "agent") {
-        // 같은 폴에서 여러 발언이 한꺼번에 도착한 경우, 400ms 간격을 두어 한 명씩 순차 표시
-        if (agentEmitted > 0 && j > emitted) await new Promise((r) => setTimeout(r, 400));
-        onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
-        onEvent("turn_end", { agentId: m.agent_id, text: m.text });
-        agentEmitted++;
+
+  try {
+    outer: while (true) {
+      if (opts.signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop() ?? "";
+
+      for (const part of parts) {
+        const dataLine = part.split("\n").find((l) => l.startsWith("data: "));
+        if (!dataLine) continue;
+        let event: any;
+        try { event = JSON.parse(dataLine.slice(6)); } catch { continue; }
+
+        if (event.type === "msg" && event.msg?.role === "agent") {
+          const m = event.msg;
+          onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
+          onEvent("turn_end", { agentId: m.agent_id, text: m.text });
+          agentEmitted++;
+        } else if (event.type === "done") {
+          break outer;
+        }
       }
     }
-    emitted = msgs.length;
-    // 첫 응답 전엔 30회(45s)까지 기다림 — Opus 4.8이 20-30s 걸릴 수 있음.
-    // 첫 응답 도착 후엔 12회(18s) 안정 판정 유지.
-    const stableLimit = agentEmitted === 0 ? 30 : 12;
-    if (msgs.length === lastLen) { if (++stable >= stableLimit) break; } else { stable = 0; lastLen = msgs.length; }
+  } finally {
+    try { reader.cancel(); } catch {}
   }
-  // 에이전트 발언을 하나도 못 받았으면(무응답) 원인을 보이게 안내.
+
   if (agentEmitted === 0 && !opts.signal?.aborted) {
     onEvent("turn_start", { agentId: "core", name: "코어", emoji: "" });
     onEvent("turn_end", {
