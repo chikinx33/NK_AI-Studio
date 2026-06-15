@@ -18,6 +18,7 @@ import {
   deleteCompanyKnowledge,
   listCompanyKnowledge,
   upsertProject,
+  listProjects,
   listSkills,
   createSkill,
   patchSkill,
@@ -96,6 +97,7 @@ interface BuildSystemOpts {
   agentKnowledge?: string[]; // 이 직원의 개인 지식·규칙(항상 주입)
   companyKnowledge?: string[]; // 전사 공용 회사 지식·규칙(모든 직원에 주입)
   companySkills?: { name: string; category: string; description: string }[]; // 보유 스킬 목록(Level 0)
+  companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[] }[]; // 현재 프로젝트 목록
 }
 
 /** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
@@ -117,6 +119,16 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   const skillsBlock = skillsList.length
     ? `\n\n## 🛠️ 보유 스킬 (재사용 절차 — 비슷한 일에 적극 활용해 더 빠르고 정확하게)\n${skillsList.map((s) => `- ${s.category ? `[${s.category}] ` : ""}${s.name}: ${s.description}`).join("\n")}\n비슷한 작업이면 이 스킬의 절차를 따르세요. 절차가 부족하면 [[SKILL: patch ...]]로 개선하세요.`
     : "";
+  const projectsList = opts.companyProjects || [];
+  const projectsBlock = `\n\n## 📁 현재 프로젝트 현황 (${projectsList.length}개)\n` + (projectsList.length
+    ? projectsList.map((p) => {
+        const done = p.stages.filter((s) => s.status === "done").length;
+        const total = p.stages.length;
+        const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        const stageList = total > 0 ? ` | 단계: ${p.stages.map((s) => `${s.title}(${s.status === "done" ? "완료" : s.status === "in_progress" ? "진행" : "대기"})`).join(" → ")}` : "";
+        return `- **${p.name}** [${p.status === "active" ? "진행 중" : p.status === "done" ? "완료" : p.status}] ${total > 0 ? `${done}/${total}단계 (${pct}%)` : ""}${p.goal ? ` | 목표: ${p.goal}` : ""}${stageList}`;
+      }).join("\n")
+    : "- 등록된 프로젝트 없음. 사용자가 프로젝트를 시작하면 [[PROJECT: create ...]]로 만드세요.");
 
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
 ## 나의 정체성
@@ -141,7 +153,7 @@ ${addr ? `사용자의 호칭은 '${addr}'. 반드시 '${addr}'(으)로 부른�
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}
 
-${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}
+${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}${projectsBlock}
 
 당신은 이 회사의 ${meta.emoji} ${meta.name} 입니다. 역할: ${meta.role}.
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.
@@ -354,7 +366,12 @@ export async function speak(
   if (companySkills === undefined && opts.sql && opts.userId) {
     companySkills = await listSkills(opts.sql, opts.userId).catch(() => []);
   }
-  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills });
+  // 현재 프로젝트 목록 주입 — 에이전트가 진행 현황을 실제로 파악하고 답할 수 있게.
+  let companyProjects = opts.companyProjects;
+  if (companyProjects === undefined && opts.sql && opts.userId) {
+    companyProjects = await listProjects(opts.sql, opts.userId).catch(() => []);
+  }
+  const system = buildAgentSystem(agentId, { ...opts, personaOverride, agentKnowledge, companyKnowledge, companySkills, companyProjects });
   const userContent = `# 지금까지의 단톡방 대화\n${transcript}\n\n# 당신 차례\n${instruction}`;
   const raw = await callClaude(env, system, [{ role: "user", content: userContent }], { sql: opts.sql, userId: opts.userId, model: modelFor(agentId) });
   return extractMarkers(raw);
@@ -460,10 +477,14 @@ export async function runGroupChat(
     }
   };
 
-  // 에이전트가 찍은 PROJECT 마커 → 프로젝트 보드에 실제 생성.
+  // 에이전트가 찍은 PROJECT 마커 → 프로젝트 보드에 실제 생성(이름 중복 시 스킵).
   const applyProjects = async (projects: ProjectOp[] | undefined) => {
-    for (const p of projects || []) {
+    if (!projects || projects.length === 0) return;
+    const existing = await listProjects(sql, userId).catch(() => []);
+    const existingNames = new Set(existing.map((e) => e.name));
+    for (const p of projects) {
       try {
+        if (existingNames.has(p.name)) continue; // 같은 이름 중복 생성 방지
         const id = (globalThis.crypto && globalThis.crypto.randomUUID)
           ? globalThis.crypto.randomUUID()
           : `proj_${Math.random().toString(36).slice(2, 10)}`;
@@ -471,6 +492,7 @@ export async function runGroupChat(
         await upsertProject(sql, userId, id, {
           name: p.name, goal: p.goal || "", summary: "", status: "active", stages, nextAction: "",
         });
+        existingNames.add(p.name); // 같은 턴에서 중복 방지
       } catch { /* 프로젝트 생성 실패는 대화 흐름을 막지 않음 */ }
     }
   };
