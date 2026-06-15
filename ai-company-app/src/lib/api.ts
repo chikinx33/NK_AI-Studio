@@ -565,32 +565,22 @@ export async function streamChat(
     return;
   }
 
-  // 동기 실행: chat 응답에 생성된 발언이 직접 실려 오면 폴링 없이 즉시 표시(조회 의존 제거).
-  if (Array.isArray(chatBody?.messages) && chatBody.messages.length) {
-    for (const m of chatBody.messages) {
-      if (m.role === "agent") {
-        onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
-        onEvent("turn_end", { agentId: m.agent_id, text: m.text });
-      }
-    }
-    onEvent("done", {});
-    return;
-  }
-
-  // 새 에이전트 발언을 1.5초마다 폴링해 SSE 이벤트로 합성.
-  // 코어가 위임하면 직원이 일하는 동안 메시지가 잠시 안 늘어나므로(이때 종료하면 위임 답변을
-  // 놓침) 안정 판정을 넉넉히 18초(12×1.5s)로 둔다. 최대 약 3분(120×1.5s).
+  // 에이전트 발언을 폴링으로 순차 표시.
+  // waitUntil 백그라운드에서 에이전트가 순서대로 DB에 저장하므로, 폴링이 한 명씩 화면에 추가 → 자연스러운 대화 흐름.
+  // 첫 폴링은 500ms(빠른 응답 대응), 이후 1.5초 간격. 안정 판정: 12×1.5s = 18초 무변화 시 종료.
   let emitted = before;
-  let agentEmitted = 0; // 실제로 받은 에이전트 발언 수
+  let agentEmitted = 0;
   let lastLen = -1, stable = 0;
   for (let i = 0; i < 120; i++) {
     if (opts.signal?.aborted) break;
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, i === 0 ? 500 : 1500));
     let msgs: any[];
     try { msgs = await fetchMsgs(); } catch { continue; }
     for (let j = emitted; j < msgs.length; j++) {
       const m = msgs[j];
       if (m.role === "agent") {
+        // 같은 폴에서 여러 발언이 한꺼번에 도착한 경우, 400ms 간격을 두어 한 명씩 순차 표시
+        if (agentEmitted > 0 && j > emitted) await new Promise((r) => setTimeout(r, 400));
         onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
         onEvent("turn_end", { agentId: m.agent_id, text: m.text });
         agentEmitted++;

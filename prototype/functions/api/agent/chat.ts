@@ -64,19 +64,21 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     //  단순 대화는 수초 내 끝남. 멀티 위임이 길어지는 경우의 30초 한계는 후속(잡 워커)으로 분리.
     const authHeader = String(request.headers.get("Authorization") || "");
     const toolCtx = { request, env, authHeader, userId: auth.userId };
-    let produced: any[] = [];
-    try {
-      produced = (await runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: displayText, imageBase64, imageMimeType })) || [];
-    } catch (e: any) {
-      const errMsg = await addMessage(sql, {
-        userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
-        text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
-      }).catch(() => null);
-      if (errMsg) produced = [errMsg];
-    }
 
-    // 생성된 발언을 응답에 직접 실어 보낸다(프런트가 폴링 없이 즉시 표시 — 조회 의존 제거).
-    return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: produced }, 200, origin);
+    // 오케스트레이션을 waitUntil 백그라운드로 실행.
+    // 여러 에이전트가 순차 발언(게임·회의·끝말잇기 등)할 때 CF 30초 한계 초과를 방지하며,
+    // 각 발언이 DB에 저장되는 즉시 프런트 폴링이 순차적으로 표시해 자연스러운 대화 흐름을 만든다.
+    waitUntil(
+      runGroupChat(env, { sql, userId: auth.userId, conversationId, toolCtx, firstMessage: displayText, imageBase64, imageMimeType })
+        .catch(async (e: any) => {
+          await addMessage(sql, {
+            userId: auth.userId, conversationId, role: "agent", agentId: "core", name: "코어",
+            text: `⚠️ 응답 생성 중 문제가 생겼어요: ${String(e?.message || e)}`,
+          }).catch(() => {});
+        })
+    );
+    // 즉시 응답 반환 — 에이전트 발언은 프런트 폴링으로 순차 수신.
+    return send({ ok: true, conversationId, userMessageId: userMsg.id, messages: [] }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "대화 처리 중 오류" }, 500, origin);
   }

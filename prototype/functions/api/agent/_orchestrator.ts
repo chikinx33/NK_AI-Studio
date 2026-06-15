@@ -643,7 +643,7 @@ export async function runGroupChat(
       ? (opts.autoTrigger
           ? opts.autoTrigger
           : "사용자의 마지막 메시지에 코어(팀장)로서 답하세요. 실제 작업이 필요하면 담당 직원을 [[CALL: id | 지시]]로 호출하세요.\n" +
-            "★ 특히 사용자가 '전원/다같이/모두/같이' 또는 게임·회의·브레인스토밍·끝말잇기처럼 여러 명이 함께하는 걸 시키면, 관련 직원 3~5명을 각각 [[CALL: id | 그 직원이 지금 할 구체적 행동(규칙·맥락 포함)]]로 불러 직접 참여시키세요. 끝말잇기라면 각 직원에게 '앞 사람 단어의 끝 글자로 시작하는 단어를 말하라'처럼 규칙을 함께 전달하세요. 당신 혼자 답하고 끝내지 말고 동료들을 실제로 끌어들이세요.\n" +
+            "★ 특히 사용자가 '전원/다같이/모두/같이' 또는 게임·회의·브레인스토밍·끝말잇기처럼 여러 명이 함께하는 걸 시키면, 참여가 필요한 직원을 각각 [[CALL: id | 그 직원이 지금 할 구체적 행동(규칙·맥락 포함)]]로 불러 직접 참여시키세요. '전원 참여'·끝말잇기·라운드게임처럼 11명 모두가 한 명씩 차례로 해야 하는 경우엔 10명 전원(코어 제외: edge, radar, maki, plot, ink, pixel, beat, engi, reach, sync)을 모두 호출하세요. 끝말잇기라면 각 직원에게 '앞 사람 단어의 끝 글자로 시작하는 단어를 말하라'는 규칙을 함께 전달하세요. 당신 혼자 답하고 끝내지 말고 동료들을 실제로 끌어들이세요.\n" +
             "단순 인사·잡담·1:1 질문이면 호출하지 마세요.")
       : `사용자가 당신(${meta.name})을 불렀어요. 직접 처리해 결과물을 보여주세요.`;
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
@@ -658,7 +658,7 @@ export async function runGroupChat(
     await runTools(res.runs, agentId);
 
     if (canDelegate) {
-      const calls = res.calls.slice(0, 5); // 다같이 활동(게임·회의 등) 대응 — 최대 5명 참여
+      const calls = res.calls.slice(0, 10); // 전원 참여 활동(끝말잇기·게임·회의 등) — 최대 10명(전 직원)
       coreDelegateCount += calls.length;
       if (SYNTH_CUE.test(res.text)) synthCue = true;
       for (const c of calls) await runWorker(c.agentId, c.instruction);
