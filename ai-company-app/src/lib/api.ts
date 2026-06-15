@@ -587,7 +587,10 @@ export async function streamChat(
       }
     }
     emitted = msgs.length;
-    if (msgs.length === lastLen) { if (++stable >= 12) break; } else { stable = 0; lastLen = msgs.length; }
+    // 첫 응답 전엔 30회(45s)까지 기다림 — Opus 4.8이 20-30s 걸릴 수 있음.
+    // 첫 응답 도착 후엔 12회(18s) 안정 판정 유지.
+    const stableLimit = agentEmitted === 0 ? 30 : 12;
+    if (msgs.length === lastLen) { if (++stable >= stableLimit) break; } else { stable = 0; lastLen = msgs.length; }
   }
   // 에이전트 발언을 하나도 못 받았으면(무응답) 원인을 보이게 안내.
   if (agentEmitted === 0 && !opts.signal?.aborted) {
