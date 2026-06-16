@@ -7,6 +7,7 @@ import {
   type SqlFn,
   type ToolContext,
   AGENT_TOOLS,
+  parseToolInput,
   addMessage,
   listMessages,
   buildTranscript,
@@ -47,7 +48,7 @@ export const ROSTER: AgentMeta[] = [
   { id: "edge", emoji: "💼", name: "엣지", role: "전략·비즈니스 — 수익모델·가격·시장/경쟁·KPI(돈)", hasTools: true },
   { id: "radar", emoji: "🔍", name: "레이더", role: "리서치·인텔리전스 — 트렌드/경쟁사 분석·사실확인", hasTools: true },
   { id: "maki", emoji: "📈", name: "마키", role: "마케팅·그로스 리드 — 캠페인·퍼널·성장(수요)", hasTools: false },
-  { id: "plot", emoji: "🎬", name: "플롯", role: "콘텐츠 디렉터(PD) — 기획·포맷·후크·제작 브리프", hasTools: false },
+  { id: "plot", emoji: "🎬", name: "플롯", role: "콘텐츠 디렉터(PD) — 기획·포맷·후크·제작 브리프", hasTools: true },
   { id: "ink", emoji: "✍️", name: "잉크", role: "작가·카피 — 스크립트·캡션·블로그·후크", hasTools: false },
   { id: "pixel", emoji: "🎨", name: "픽셀", role: "디자인 — 브랜드·썸네일·비주얼 시스템", hasTools: true },
   { id: "beat", emoji: "🎵", name: "비트", role: "사운드·음악 — BGM 생성·영상-음악 합성", hasTools: true },
@@ -142,6 +143,20 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
       }).join("\n")
     : "- 등록된 프로젝트 없음. 사용자가 프로젝트를 시작하면 [[PROJECT: create ...]]로 만드세요.");
 
+  // 이 에이전트가 실행 가능한 도구 목록 (AGENT_TOOLS 기준)
+  const MY_TOOL_DESCRIPTIONS: Record<string, string> = {
+    image: `[[RUN: image | {"prompt": "이미지 설명 (구체적으로)", "aspectRatio": "16:9"}]]  → 이미지 생성 (Gemini/GPT-4o)`,
+    sound: `[[RUN: sound | {"prompt": "효과음 설명", "duration": 8}]]  → 효과음 생성 (ElevenLabs)`,
+    video: `[[RUN: video | {"prompt": "장면 설명", "imageUrl": "기존이미지URL(선택)", "aspectRatio": "16:9"}]]  → 영상 생성 (Kling/Veo · 수분 소요)`,
+    scenario: `[[RUN: scenario | {"topic": "에피소드 주제", "duration": 60, "tones": ["감동"], "styles": ["브이로그"]}]]  → 시나리오 생성 (씬분해·대사·카메라 지시)`,
+    music: `[[RUN: music | {"topic": "음악 컨셉·분위기", "genre": "ambient", "duration": 60}]]  → BGM 생성 (ElevenLabs)`,
+    publish: `[[RUN: publish | {"platforms": ["instagram"], "caption": "게시글 내용", "mediaUrl": "이미지/영상URL"}]]  → SNS 발행 ⚠️ 항상 사람 승인 필요`,
+  };
+  const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => t.agentId === agentId);
+  const toolsRunBlock = myTools.length > 0
+    ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.`
+    : "";
+
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
 ## 나의 정체성
 나는 ${meta.emoji} ${meta.name} (id:${meta.id}), 역할: ${meta.role}.
@@ -225,7 +240,7 @@ ${persona}${knowledgeBlock}
 이 마커로 저장된 내용은 나만 볼 수 있는 개인 지식으로, 다음 대화에서 자동으로 주입됩니다.
 
 ## ⛔ 미루지 말 것
-- 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}`;
+- 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}${toolsRunBlock}`;
 }
 
 // ── Claude 호출 (NK scenario.js 패턴 재사용) ────────────────────────────────
@@ -650,13 +665,14 @@ export async function runGroupChat(
     for (const r of runs) {
       const tool = AGENT_TOOLS[r.tool];
       if (!tool || tool.agentId !== agentId) continue; // 본인 도구만
-      const job = await createJob(sql, { userId, type: r.tool, agentId, input: { prompt: r.reason } });
+      const parsedInput = parseToolInput(r.reason); // JSON or { prompt: reason }
+      const job = await createJob(sql, { userId, type: r.tool, agentId, input: parsedInput });
       const meta = getAgent(agentId)!;
       await emit({
         userId, conversationId, role: "agent", agentId, name: meta.name,
         text: `🛠️ ${r.tool} 작업을 시작했어요. 검수 패널에서 결과를 확인하실 수 있어요.`,
       });
-      await processJob(toolCtx, sql, job.id, r.tool, { prompt: r.reason });
+      await processJob(toolCtx, sql, job.id, r.tool, parsedInput);
     }
   };
 

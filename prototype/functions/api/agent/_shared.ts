@@ -561,6 +561,15 @@ function internalUrl(request: Request, path: string): string {
   return new URL(path, request.url).toString();
 }
 
+/** RUN 마커 reason → tool input 파싱. JSON이면 파싱, 아니면 { prompt: reason }. */
+export function parseToolInput(reason: string): any {
+  const t = String(reason || "").trim();
+  if (t.startsWith("{")) {
+    try { return JSON.parse(t); } catch {}
+  }
+  return { prompt: t };
+}
+
 /** 픽셀 도구: /api/imagen 호출 어댑터. input.prompt 등을 그대로 전달. */
 async function runImagenTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || "").trim();
@@ -648,10 +657,98 @@ async function runVideoTool(input: any, ctx: ToolContext): Promise<any> {
   throw new Error("video 생성 시간 초과");
 }
 
+/** 플롯 시나리오 도구: /api/scenario 호출 어댑터. (씬 분해·대사·카메라 지시 생성) */
+async function runScenarioTool(input: any, ctx: ToolContext): Promise<any> {
+  const topic = String(input?.topic || input?.subject || input?.prompt || "").trim();
+  if (!topic) throw new Error("topic is required");
+  const body: any = {
+    topic,
+    story: topic,
+    duration: String(input?.duration || "60"),
+    purposeCategory: String(input?.purposeCategory || "스토리 · 서사"),
+    purposeTags: Array.isArray(input?.purposeTags) ? input.purposeTags : [],
+    tones: Array.isArray(input?.tones) ? input.tones : (input?.tones ? [input.tones] : []),
+    styles: Array.isArray(input?.styles) ? input.styles : (input?.styles ? [input.styles] : []),
+    needs: [],
+    narrationEnabled: false,
+    dubbingEnabled: false,
+    characters: input?.characters || [],
+    storyBeats: [],
+  };
+  const res = await fetch(internalUrl(ctx.request, "/api/scenario"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || `scenario 호출 실패 (${res.status})`);
+  const scenes: any[] = data.scenes || [];
+  return {
+    scenes,
+    sceneCount: scenes.length,
+    topic,
+    kind: "scenario",
+    summary: scenes.slice(0, 3).map((s: any) => s.title || s.beat || "").filter(Boolean).join(" → "),
+  };
+}
+
+/** 비트 음악 도구: /api/music 호출 어댑터. (BGM 생성) */
+async function runMusicTool(input: any, ctx: ToolContext): Promise<any> {
+  const topic = String(input?.topic || input?.prompt || "").trim();
+  const body: any = {
+    topic: topic || "배경음악",
+    story: topic,
+    genre: input?.genre || "",
+    tones: Array.isArray(input?.tones) ? input.tones : (input?.tones ? [input.tones] : []),
+    styles: Array.isArray(input?.styles) ? input.styles : (input?.styles ? [input.styles] : []),
+    durationSec: Number(input?.duration) || 60,
+  };
+  const res = await fetch(internalUrl(ctx.request, "/api/music"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || `music 호출 실패 (${res.status})`);
+  return { musicUrl: data.musicUrl || "", kind: "music", topic: topic || "배경음악", model: "elevenlabs" };
+}
+
+/** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요) */
+async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
+  const platforms = Array.isArray(input?.platforms)
+    ? input.platforms
+    : (input?.platform ? [input.platform] : ["instagram"]);
+  const caption = String(input?.caption || input?.prompt || "").trim();
+  if (!caption) throw new Error("caption is required");
+  const body: any = {
+    platforms,
+    caption,
+    mediaUrl: String(input?.mediaUrl || input?.imageUrl || input?.videoUrl || "").trim(),
+    hashtags: Array.isArray(input?.hashtags) ? input.hashtags : [],
+  };
+  const res = await fetch(internalUrl(ctx.request, "/api/sns/publish"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+    body: JSON.stringify(body),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || `publish 호출 실패 (${res.status})`);
+  return { published: data.published || [], kind: "publish", platforms, caption };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
   video: { agentId: "pixel", kind: "external", run: runVideoTool },
+  scenario: { agentId: "plot", kind: "external", run: runScenarioTool },
+  music: { agentId: "beat", kind: "external", run: runMusicTool },
+  publish: { agentId: "reach", kind: "external", run: runPublishTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */
