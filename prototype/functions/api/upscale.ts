@@ -40,18 +40,36 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     const body = await request.json().catch(() => ({} as any));
     const imageUrl = String(body?.imageUrl || "").trim();
+    const objectName = String(body?.objectName || "").trim();
     const sessionId = String(body?.sessionId || "default").trim() || "default";
     const storageService = String(body?.storageService || "ai-image").trim();
     const userId = String(auth.userId || "owner").trim() || "owner";
 
-    if (!imageUrl) return json({ error: "imageUrl is required" }, 400, origin);
+    if (!imageUrl && !objectName) return json({ error: "imageUrl 또는 objectName 필요" }, 400, origin);
 
-    // data: URL인 경우 GCS에 먼저 올려서 외부 접근 가능한 URL로 변환
-    let accessibleUrl = imageUrl;
-    if (imageUrl.startsWith("data:")) {
+    // Atlas Cloud는 외부에서 접근 가능한 HTTP URL이 필요.
+    // objectName → 서버에서 GCS 서명 URL 발급 (proxy URL·만료 URL 문제 해결)
+    // data: URL → GCS 임시 업로드 후 서명 URL
+    // 그 외 http URL → 그대로 전달
+    let accessibleUrl = "";
+
+    if (objectName && outParsed && clientEmail && privateKeyRaw) {
+      accessibleUrl = await signGcsUrl({
+        bucket: outParsed.bucket,
+        object: objectName,
+        clientEmail,
+        privateKeyPem: privateKeyRaw,
+        expiresInSec: 300,
+      }).catch(() => "");
+      if (!accessibleUrl) return json({ error: "GCS 서명 URL 발급 실패" }, 500, origin);
+    } else if (imageUrl.startsWith("data:")) {
       const uploaded = await uploadDataUrlToGcs(imageUrl, outParsed, userId, sessionId, clientEmail, privateKeyRaw);
       if (!uploaded) return json({ error: "소스 이미지 GCS 업로드 실패 (data URL)" }, 500, origin);
       accessibleUrl = uploaded;
+    } else if (imageUrl.startsWith("http")) {
+      accessibleUrl = imageUrl;
+    } else {
+      return json({ error: "지원하지 않는 이미지 URL 형식" }, 400, origin);
     }
 
     // Atlas Cloud image-upscaler 호출 (sync 모드)

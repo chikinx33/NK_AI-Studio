@@ -3693,11 +3693,11 @@
           });
           if (ru) {
             try {
-              var srcUrlRu = resolveResultUrl(ru);
-              if (!srcUrlRu) return;
+              var ruObjectName = String(ru.objectName || '').trim();
+              if (!ruObjectName) return;
               setGlobalLoading(true, t('generating'));
               NK.api.upscale({
-                imageUrl: srcUrlRu,
+                objectName: ruObjectName,
                 sessionId: state.sessionId,
                 storageService: 'ai-image'
               }).then(function (responseUpscale) {
@@ -3740,9 +3740,13 @@
           var srcUrl = String(btn.getAttribute('data-url') || '').trim();
           if (!srcUrl) return;
           try {
+            // proxy URL에서 objectName 추출, 없으면 imageUrl 그대로 전달 (data: URL 등)
+            var proxyMatchSrc = srcUrl.match(/[?&]objectName=([^&]+)/);
+            var srcObjectName = proxyMatchSrc ? decodeURIComponent(proxyMatchSrc[1]) : '';
             setGlobalLoading(true, t('generating'));
             NK.api.upscale({
-              imageUrl: srcUrl,
+              objectName: srcObjectName,
+              imageUrl: srcObjectName ? '' : srcUrl,
               sessionId: state.sessionId,
               storageService: 'ai-image'
             }).then(function (responseUpscaleSrc) {
