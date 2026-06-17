@@ -124,8 +124,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         Authorization: `Bearer ${atlasKey}`,
       },
       body: JSON.stringify({
-        model: "atlascloud/image-upscaler",
+        model: "atlascloud/real-esrgan",
         image: accessibleUrl,
+        scale: 2,
+        face_enhance: false,
       }),
     });
 
