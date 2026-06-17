@@ -72,8 +72,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "지원하지 않는 이미지 URL 형식" }, 400, origin);
     }
 
-    // Atlas Cloud image-upscaler 호출 (sync 모드)
-    const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateImage", {
+    // Atlas Cloud image-upscaler 호출 (비동기 → 폴링)
+    const atlasStartRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateImage", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -82,25 +82,49 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       body: JSON.stringify({
         model: "atlascloud/image-upscaler",
         image: accessibleUrl,
-        creativity: 0,
-        output_format: "png",
-        target_resolution: "2k",
-        enable_sync_mode: true,
       }),
     });
 
-    const atlasText = await atlasRes.text();
-    if (!atlasRes.ok) {
-      return json({ error: `Atlas 업스케일 오류 (${atlasRes.status})`, detail: atlasText }, 500, origin);
+    const atlasStartText = await atlasStartRes.text();
+    if (!atlasStartRes.ok) {
+      return json({ error: `Atlas 업스케일 시작 오류 (${atlasStartRes.status})`, detail: atlasStartText }, 500, origin);
     }
 
-    const atlasJson = safeJson(atlasText);
-    const resultUrl = String(
-      (Array.isArray(atlasJson?.outputs) && atlasJson.outputs[0]) || ""
+    const atlasStartJson = safeJson(atlasStartText);
+    const predictionId = String(
+      atlasStartJson?.data?.id || atlasStartJson?.id || atlasStartJson?.prediction_id || ""
+    ).trim();
+
+    if (!predictionId) {
+      return json({ error: "Atlas prediction ID 없음", raw: atlasStartJson }, 500, origin);
+    }
+
+    // 폴링: 최대 20회, 1.5초 간격 (~30초)
+    let resultUrl = String(
+      (Array.isArray(atlasStartJson?.outputs) && atlasStartJson.outputs[0]) || ""
     ).trim();
 
     if (!resultUrl) {
-      return json({ error: "업스케일 결과 URL 없음", raw: atlasJson }, 500, origin);
+      const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
+      for (let i = 0; i < 20 && !resultUrl; i++) {
+        await new Promise<void>((r) => setTimeout(r, 1500));
+        const statusRes = await fetch(statusUrl, {
+          headers: { Authorization: `Bearer ${atlasKey}` },
+        }).catch(() => null);
+        if (!statusRes?.ok) continue;
+        const statusJson = safeJson(await statusRes.text());
+        const st = String(statusJson?.status || "").toLowerCase();
+        if (st === "failed" || st === "error") {
+          return json({ error: "Atlas 업스케일 실패", detail: statusJson }, 500, origin);
+        }
+        resultUrl = String(
+          (Array.isArray(statusJson?.outputs) && statusJson.outputs[0]) || ""
+        ).trim();
+      }
+    }
+
+    if (!resultUrl) {
+      return json({ error: "업스케일 결과 URL 없음 (타임아웃)", predictionId }, 500, origin);
     }
 
     // 결과 이미지를 GCS에 저장
