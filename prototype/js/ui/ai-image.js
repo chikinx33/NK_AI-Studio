@@ -2666,12 +2666,31 @@
     return 'ai-image-' + String(result && result.id || Date.now()) + '.png';
   }
 
+  // JPEG/JFIF → PNG 변환: Gemini는 JPEG를 반환하므로 canvas로 PNG 재인코딩
+  function blobToPng(blob) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      var url = URL.createObjectURL(blob);
+      img.onload = function () {
+        var canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(function (pngBlob) { resolve(pngBlob || blob); }, 'image/png');
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('image_load_failed')); };
+      img.src = url;
+    });
+  }
+
   async function downloadResult(result) {
     try {
       var targetUrl = resolveResultUrl(result);
       if (!result || !targetUrl) return;
       var response = await fetch(targetUrl);
       var blob = await response.blob();
+      if (blob.type && blob.type !== 'image/png') blob = await blobToPng(blob);
       var objectUrl = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = objectUrl;
