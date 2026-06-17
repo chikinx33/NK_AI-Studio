@@ -1,7 +1,6 @@
 // prototype/functions/api/upscale.ts
-// POST /api/upscale { imageUrl, sessionId, storageService }
-// Atlas Cloud image-upscaler (atlascloud/image-upscaler) 를 이용해 이미지를 업스케일한다.
-// creativity:0 으로 내용 변화 없이 해상도만 향상. ATLASCLOUD_API_KEY 재사용.
+// POST /api/upscale { imageUrl | objectName, sessionId, storageService }
+// Vertex AI Imagen (imagen-3.0-capability-001) 업스케일 — GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY 재사용
 import { buildAiImageSessionPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
@@ -30,13 +29,21 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "permission_denied" }, 403, origin);
     }
 
-    const atlasKey = String(env.ATLASCLOUD_API_KEY || "").trim();
-    if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY 미설정" }, 500, origin);
-
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
+    const projectId = String(env.GOOGLE_CLOUD_PROJECT || env.GCS_PROJECT_ID || "").trim();
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
     const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
+
+    if (!clientEmail || !privateKeyRaw) {
+      return json({ error: "GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY 미설정" }, 500, origin);
+    }
+    if (!projectId) {
+      return json({ error: "GOOGLE_CLOUD_PROJECT 미설정" }, 500, origin);
+    }
+    if (!outParsed) {
+      return json({ error: "VIDEO_OUTPUT_GCS_URI 미설정" }, 500, origin);
+    }
 
     const body = await request.json().catch(() => ({} as any));
     const imageUrl = String(body?.imageUrl || "").trim();
@@ -47,186 +54,104 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     if (!imageUrl && !objectName) return json({ error: "imageUrl 또는 objectName 필요" }, 400, origin);
 
-    // Atlas Cloud는 외부에서 직접 fetch 가능한 https URL이 필요.
-    // video.ts toAtlasImageUrl 패턴과 동일하게:
-    //   objectName → GCS에서 bytes 다운로드 → 새 임시 경로에 재업로드 → 서명 URL
-    //   data: URL  → GCS 업로드 → 서명 URL
-    let accessibleUrl = "";
-
-    if (!outParsed || !clientEmail || !privateKeyRaw) {
-      return json({ error: "GCS 설정 누락 (VIDEO_OUTPUT_GCS_URI / GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY)" }, 500, origin);
-    }
-
-    const gcsToken = await getGoogleAccessToken({
+    // cloud-platform scope로 GCS + Vertex AI 모두 커버
+    const accessToken = await getGoogleAccessToken({
       clientEmail,
       privateKeyPem: privateKeyRaw,
-      scope: "https://www.googleapis.com/auth/devstorage.read_write",
+      scope: "https://www.googleapis.com/auth/cloud-platform",
     }).catch(() => null);
-    if (!gcsToken) return json({ error: "GCS 액세스 토큰 획득 실패" }, 500, origin);
+    if (!accessToken) return json({ error: "Google 액세스 토큰 획득 실패" }, 500, origin);
 
-    const basePrefix = outParsed.object.replace(/\/$/, "");
-    const stamp = Date.now();
-    const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
-    const tempObjName = `${sessionPrefix}/atlas/${stamp}-upscale-src.png`;
+    // 1) 소스 이미지 바이트 획득
+    let srcBytes: Uint8Array | null = null;
 
     if (objectName) {
-      // GCS에서 바이트 다운로드 (access token 사용) → 재업로드
       const dlUrl = `https://storage.googleapis.com/download/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o/${encodeURIComponent(objectName)}?alt=media`;
-      const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${gcsToken}` } }).catch(() => null);
+      const dlRes = await fetch(dlUrl, { headers: { Authorization: `Bearer ${accessToken}` } }).catch(() => null);
       if (!dlRes?.ok) return json({ error: `GCS 소스 다운로드 실패 (${dlRes?.status ?? "network"})` }, 500, origin);
-      const srcBytes = await dlRes.arrayBuffer();
-
-      const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(tempObjName)}`;
-      const upRes = await fetch(upUrl, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${gcsToken}`, "Content-Type": "image/png" },
-        body: new Uint8Array(srcBytes),
-      });
-      if (!upRes.ok) return json({ error: "GCS 임시 업로드 실패" }, 500, origin);
+      srcBytes = new Uint8Array(await dlRes.arrayBuffer());
 
     } else if (imageUrl.startsWith("data:")) {
-      const match = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+      const match = imageUrl.match(/^data:[^;]+;base64,(.+)$/);
       if (!match) return json({ error: "data URL 파싱 실패" }, 400, origin);
-      const mime = match[1] || "image/png";
-      const bytes = base64ToUint8(match[2]);
-      const upUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(tempObjName)}`;
-      const upRes = await fetch(upUrl, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${gcsToken}`, "Content-Type": mime },
-        body: bytes,
-      });
-      if (!upRes.ok) return json({ error: "GCS data URL 업로드 실패" }, 500, origin);
+      srcBytes = base64ToUint8(match[1]);
 
     } else if (imageUrl.startsWith("http")) {
-      // 직접 접근 가능한 URL — 재업로드 없이 바로 사용
-      accessibleUrl = imageUrl;
+      const fetchRes = await fetch(imageUrl).catch(() => null);
+      if (!fetchRes?.ok) return json({ error: "소스 이미지 fetch 실패" }, 500, origin);
+      srcBytes = new Uint8Array(await fetchRes.arrayBuffer());
+
     } else {
-      return json({ error: "지원하지 않는 이미지 URL 형식" }, 400, origin);
+      return json({ error: "지원하지 않는 이미지 소스 형식" }, 400, origin);
     }
 
-    // 임시 업로드한 경우 signed URL 발급
-    if (!accessibleUrl) {
-      accessibleUrl = await signGcsUrl({
-        bucket: outParsed.bucket,
-        object: tempObjName,
-        clientEmail,
-        privateKeyPem: privateKeyRaw,
-        expiresInSec: 3600,
-      }).catch(() => "");
-      if (!accessibleUrl) return json({ error: "GCS 서명 URL 발급 실패" }, 500, origin);
-    }
+    if (!srcBytes || srcBytes.length === 0) return json({ error: "소스 이미지 바이트 없음" }, 500, origin);
 
-    // Atlas Cloud image-upscaler 호출 (비동기 → 폴링)
-    const atlasStartRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateImage", {
+    // 2) Vertex AI Imagen 업스케일 (동기 응답, 바이트 직접 전달)
+    const b64Input = uint8ToBase64(srcBytes);
+    const vertexEndpoint = `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-capability-001:predict`;
+
+    const vertexRes = await fetch(vertexEndpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${atlasKey}`,
+        Authorization: `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
-        model: "atlascloud/real-esrgan",
-        image: accessibleUrl,
-        scale: 2,
-        face_enhance: false,
+        instances: [{ image: { bytesBase64Encoded: b64Input } }],
+        parameters: {
+          sampleCount: 1,
+          mode: "upscale",
+          upscaleConfig: { upscaleFactor: "x2" },
+        },
       }),
     });
 
-    const atlasStartText = await atlasStartRes.text();
-    if (!atlasStartRes.ok) {
-      const detail = atlasStartText.slice(0, 300);
-      return json({ error: `Atlas 업스케일 오류 (${atlasStartRes.status}): ${detail}` }, 500, origin);
+    const vertexText = await vertexRes.text();
+    if (!vertexRes.ok) {
+      return json({ error: `Vertex AI 업스케일 오류 (${vertexRes.status}): ${vertexText.slice(0, 400)}` }, 500, origin);
     }
 
-    const atlasStartJson = safeJson(atlasStartText);
-    const predictionId = String(
-      atlasStartJson?.data?.id || atlasStartJson?.id || atlasStartJson?.prediction_id || ""
-    ).trim();
-
-    if (!predictionId) {
-      return json({ error: "Atlas prediction ID 없음", raw: atlasStartJson }, 500, origin);
+    const vertexJson = safeJson(vertexText);
+    const b64Output = String(vertexJson?.predictions?.[0]?.bytesBase64Encoded || "").trim();
+    if (!b64Output) {
+      return json({ error: "Vertex AI 업스케일 결과 없음", raw: vertexJson }, 500, origin);
     }
 
-    // 폴링: 최대 20회, 1.5초 간격 (~30초)
-    let resultUrl = String(
-      (Array.isArray(atlasStartJson?.outputs) && atlasStartJson.outputs[0]) || ""
-    ).trim();
+    // 3) 결과 GCS 저장
+    const stamp = Date.now();
+    const basePrefix = outParsed.object.replace(/\/$/, "");
+    const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
+    const resultObjectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x.png`;
 
-    if (!resultUrl) {
-      const statusUrl = `https://api.atlascloud.ai/api/v1/model/prediction/${predictionId}`;
-      for (let i = 0; i < 20 && !resultUrl; i++) {
-        await new Promise<void>((r) => setTimeout(r, 1500));
-        const statusRes = await fetch(statusUrl, {
-          headers: { Authorization: `Bearer ${atlasKey}` },
-        }).catch(() => null);
-        if (!statusRes?.ok) continue;
-        const statusJson = safeJson(await statusRes.text());
-        const st = String(statusJson?.status || "").toLowerCase();
-        if (st === "failed" || st === "error") {
-          return json({ error: "Atlas 업스케일 실패", detail: statusJson }, 500, origin);
-        }
-        resultUrl = String(
-          (Array.isArray(statusJson?.outputs) && statusJson.outputs[0]) || ""
-        ).trim();
-      }
-    }
+    const resultBytes = base64ToUint8(b64Output);
+    const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(resultObjectName)}`;
+    const upRes = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
+      body: resultBytes,
+    });
+    if (!upRes.ok) return json({ error: "GCS 결과 업로드 실패" }, 500, origin);
 
-    if (!resultUrl) {
-      return json({ error: "업스케일 결과 URL 없음 (타임아웃)", predictionId }, 500, origin);
-    }
+    const signedUrl = await signGcsUrl({
+      bucket: outParsed.bucket,
+      object: resultObjectName,
+      clientEmail,
+      privateKeyPem: privateKeyRaw,
+      expiresInSec: 3600,
+    }).catch(() => `https://storage.googleapis.com/${outParsed.bucket}/${resultObjectName}`);
 
-    // 결과 이미지를 GCS에 저장
-    let signedUrl = "";
-    let resultObjectName = "";
-
-    if (outParsed && clientEmail && privateKeyRaw) {
-      const accessToken = await getGoogleAccessToken({
-        clientEmail,
-        privateKeyPem: privateKeyRaw,
-        scope: "https://www.googleapis.com/auth/devstorage.read_write",
-      }).catch(() => null);
-
-      if (accessToken) {
-        const resultRes = await fetch(resultUrl).catch(() => null);
-        if (resultRes && resultRes.ok) {
-          const pngBuf = await resultRes.arrayBuffer();
-          const basePrefix = outParsed.object.replace(/\/$/, "");
-          const stamp = Date.now();
-          const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
-          resultObjectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x.png`;
-
-          const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(resultObjectName)}`;
-          const upRes = await fetch(uploadUrl, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
-            body: new Uint8Array(pngBuf),
-          });
-
-          if (upRes.ok) {
-            signedUrl = await signGcsUrl({
-              bucket: outParsed.bucket,
-              object: resultObjectName,
-              clientEmail,
-              privateKeyPem: privateKeyRaw,
-              expiresInSec: 3600,
-            }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${resultObjectName}`));
-          } else {
-            resultObjectName = "";
-          }
-        }
-      }
-    }
-
-    // GCS 실패 시 Atlas 결과 URL 직접 반환 (임시 URL)
     return json({
-      signedUrl: signedUrl || resultUrl,
+      signedUrl,
       objectName: resultObjectName,
       dataUrl: "",
       imageSizeApplied: "2X",
-      model: "atlascloud/image-upscaler",
-      provider: "atlascloud",
+      model: "imagen-3.0-capability-001",
+      provider: "google",
       storageService,
       sessionId,
     }, 200, origin);
+
   } catch (e: any) {
     return json({ error: e?.message ?? "업스케일 처리 중 오류" }, 500, origin);
   }
@@ -247,14 +172,22 @@ function json(data: any, status = 200, origin?: string | null) {
   });
 }
 
-// ── GCS helpers ───────────────────────────────────────────────────────────────
+// ── 바이트 변환 ────────────────────────────────────────────────────────────────
 
-function base64ToUint8(b64: string) {
+function base64ToUint8(b64: string): Uint8Array {
   const bin = atob(b64);
   const arr = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
   return arr;
 }
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+// ── Google OAuth2 / JWT ────────────────────────────────────────────────────────
 
 async function getGoogleAccessToken(opts: {
   clientEmail: string;
@@ -315,19 +248,14 @@ function pemToArrayBuffer(pem: string) {
   return buf.buffer;
 }
 
+// ── GCS helpers ───────────────────────────────────────────────────────────────
+
 function parseGcsUri(uri: string): { bucket: string; object: string } | null {
   if (!uri || !uri.startsWith("gs://")) return null;
   const rest = uri.slice(5);
   const slash = rest.indexOf("/");
   if (slash === -1) return null;
   return { bucket: rest.slice(0, slash), object: rest.slice(slash + 1) };
-}
-
-function gcsToHttps(uri: string) {
-  if (!uri.startsWith("gs://")) return uri;
-  const parsed = parseGcsUri(uri);
-  if (!parsed) return uri;
-  return `https://storage.googleapis.com/${parsed.bucket}/${parsed.object}`;
 }
 
 async function sha256Hex(message: string) {
