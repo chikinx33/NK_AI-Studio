@@ -105,7 +105,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     // 결과 이미지를 GCS에 저장
     let signedUrl = "";
-    let objectName = "";
+    let resultObjectName = "";
 
     if (outParsed && clientEmail && privateKeyRaw) {
       const accessToken = await getGoogleAccessToken({
@@ -121,9 +121,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           const basePrefix = outParsed.object.replace(/\/$/, "");
           const stamp = Date.now();
           const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
-          objectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x.png`;
+          resultObjectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x.png`;
 
-          const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+          const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(resultObjectName)}`;
           const upRes = await fetch(uploadUrl, {
             method: "POST",
             headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
@@ -133,13 +133,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           if (upRes.ok) {
             signedUrl = await signGcsUrl({
               bucket: outParsed.bucket,
-              object: objectName,
+              object: resultObjectName,
               clientEmail,
               privateKeyPem: privateKeyRaw,
               expiresInSec: 3600,
-            }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
+            }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${resultObjectName}`));
           } else {
-            objectName = "";
+            resultObjectName = "";
           }
         }
       }
@@ -148,7 +148,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // GCS 실패 시 Atlas 결과 URL 직접 반환 (임시 URL)
     return json({
       signedUrl: signedUrl || resultUrl,
-      objectName,
+      objectName: resultObjectName,
       dataUrl: "",
       imageSizeApplied: "2X",
       model: "atlascloud/image-upscaler",
