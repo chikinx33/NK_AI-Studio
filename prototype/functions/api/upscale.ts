@@ -1,7 +1,7 @@
 // prototype/functions/api/upscale.ts
 // POST /api/upscale { imageUrl, sessionId, storageService }
-// ClipDrop Super Resolution API 를 이용해 이미지를 2× 업스케일한다.
-// 내용 변화 없음 (ESRGAN 기반). 결과 PNG를 GCS에 저장 후 서명 URL을 반환.
+// Atlas Cloud image-upscaler (atlascloud/image-upscaler) 를 이용해 이미지를 업스케일한다.
+// creativity:0 으로 내용 변화 없이 해상도만 향상. ATLASCLOUD_API_KEY 재사용.
 import { buildAiImageSessionPrefix } from "./_shared/storage";
 import { authorizeRequest } from "./_shared/auth.js";
 import { hasPagePermission } from "./_shared/admin-users";
@@ -30,12 +30,13 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       return json({ error: "permission_denied" }, 403, origin);
     }
 
-    const clipdropKey = String(env.CLIPDROP_API_KEY || "").trim();
-    if (!clipdropKey) return json({ error: "CLIPDROP_API_KEY 미설정" }, 500, origin);
+    const atlasKey = String(env.ATLASCLOUD_API_KEY || "").trim();
+    if (!atlasKey) return json({ error: "ATLASCLOUD_API_KEY 미설정" }, 500, origin);
 
     const clientEmail = env.GOOGLE_CLIENT_EMAIL as string | undefined;
     const privateKeyRaw = env.GOOGLE_PRIVATE_KEY as string | undefined;
     const baseOutput = env.VIDEO_OUTPUT_GCS_URI as string | undefined;
+    const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
 
     const body = await request.json().catch(() => ({} as any));
     const imageUrl = String(body?.imageUrl || "").trim();
@@ -45,37 +46,48 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     if (!imageUrl) return json({ error: "imageUrl is required" }, 400, origin);
 
-    // 원본 이미지 가져오기
-    const srcRes = await fetch(imageUrl);
-    if (!srcRes.ok) {
-      return json({ error: `소스 이미지 로드 실패 (${srcRes.status})` }, 400, origin);
+    // data: URL인 경우 GCS에 먼저 올려서 외부 접근 가능한 URL로 변환
+    let accessibleUrl = imageUrl;
+    if (imageUrl.startsWith("data:")) {
+      const uploaded = await uploadDataUrlToGcs(imageUrl, outParsed, userId, sessionId, clientEmail, privateKeyRaw);
+      if (!uploaded) return json({ error: "소스 이미지 GCS 업로드 실패 (data URL)" }, 500, origin);
+      accessibleUrl = uploaded;
     }
-    const srcBytes = await srcRes.arrayBuffer();
-    const srcMime = srcRes.headers.get("Content-Type") || "image/png";
 
-    // ClipDrop Super Resolution API 호출
-    const fd = new FormData();
-    const blob = new Blob([srcBytes], { type: srcMime });
-    fd.append("image_file", blob, "source.png");
-
-    const cdRes = await fetch("https://clipdrop-api.co/super-resolution/v1", {
+    // Atlas Cloud image-upscaler 호출 (sync 모드)
+    const atlasRes = await fetch("https://api.atlascloud.ai/api/v1/model/generateImage", {
       method: "POST",
-      headers: { "x-api-key": clipdropKey },
-      body: fd as unknown as BodyInit,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${atlasKey}`,
+      },
+      body: JSON.stringify({
+        model: "atlascloud/image-upscaler",
+        image: accessibleUrl,
+        creativity: 0,
+        output_format: "png",
+        target_resolution: "2k",
+        enable_sync_mode: true,
+      }),
     });
 
-    if (!cdRes.ok) {
-      const cdText = await cdRes.text().catch(() => "");
-      return json({ error: `ClipDrop API 오류 (${cdRes.status})`, detail: cdText }, 500, origin);
+    const atlasText = await atlasRes.text();
+    if (!atlasRes.ok) {
+      return json({ error: `Atlas 업스케일 오류 (${atlasRes.status})`, detail: atlasText }, 500, origin);
     }
 
-    const pngBuf = await cdRes.arrayBuffer();
-    const pngBytes = new Uint8Array(pngBuf);
+    const atlasJson = safeJson(atlasText);
+    const resultUrl = String(
+      (Array.isArray(atlasJson?.outputs) && atlasJson.outputs[0]) || ""
+    ).trim();
 
-    // GCS 업로드
+    if (!resultUrl) {
+      return json({ error: "업스케일 결과 URL 없음", raw: atlasJson }, 500, origin);
+    }
+
+    // 결과 이미지를 GCS에 저장
     let signedUrl = "";
     let objectName = "";
-    const outParsed = baseOutput ? parseGcsUri(baseOutput) : null;
 
     if (outParsed && clientEmail && privateKeyRaw) {
       const accessToken = await getGoogleAccessToken({
@@ -85,42 +97,44 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }).catch(() => null);
 
       if (accessToken) {
-        const basePrefix = outParsed.object.replace(/\/$/, "");
-        const stamp = Date.now();
-        const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
-        objectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x.png`;
+        const resultRes = await fetch(resultUrl).catch(() => null);
+        if (resultRes && resultRes.ok) {
+          const pngBuf = await resultRes.arrayBuffer();
+          const basePrefix = outParsed.object.replace(/\/$/, "");
+          const stamp = Date.now();
+          const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
+          objectName = `${sessionPrefix}/outputs/${stamp}-${crypto.randomUUID()}-2x.png`;
 
-        const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
-        const upRes = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
-          body: pngBytes,
-        });
+          const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+          const upRes = await fetch(uploadUrl, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "image/png" },
+            body: new Uint8Array(pngBuf),
+          });
 
-        if (upRes.ok) {
-          signedUrl = await signGcsUrl({
-            bucket: outParsed.bucket,
-            object: objectName,
-            clientEmail,
-            privateKeyPem: privateKeyRaw,
-            expiresInSec: 3600,
-          }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
-        } else {
-          objectName = "";
+          if (upRes.ok) {
+            signedUrl = await signGcsUrl({
+              bucket: outParsed.bucket,
+              object: objectName,
+              clientEmail,
+              privateKeyPem: privateKeyRaw,
+              expiresInSec: 3600,
+            }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objectName}`));
+          } else {
+            objectName = "";
+          }
         }
       }
     }
 
-    // GCS 실패 시 data URL로 fallback
-    const dataUrl = signedUrl ? "" : `data:image/png;base64,${arrayBufferToBase64(pngBuf)}`;
-
+    // GCS 실패 시 Atlas 결과 URL 직접 반환 (임시 URL)
     return json({
-      signedUrl,
+      signedUrl: signedUrl || resultUrl,
       objectName,
-      dataUrl,
+      dataUrl: "",
       imageSizeApplied: "2X",
-      model: "clipdrop-super-resolution",
-      provider: "clipdrop",
+      model: "atlascloud/image-upscaler",
+      provider: "atlascloud",
       storageService,
       sessionId,
     }, 200, origin);
@@ -128,6 +142,54 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     return json({ error: e?.message ?? "업스케일 처리 중 오류" }, 500, origin);
   }
 };
+
+// data: URL → GCS 업로드 → 공개 signed URL 반환
+async function uploadDataUrlToGcs(
+  dataUrl: string,
+  outParsed: { bucket: string; object: string } | null,
+  userId: string,
+  sessionId: string,
+  clientEmail: string | undefined,
+  privateKeyRaw: string | undefined
+): Promise<string | null> {
+  if (!outParsed || !clientEmail || !privateKeyRaw) return null;
+  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+  if (!match) return null;
+  const mime = match[1] || "image/png";
+  const bytes = base64ToUint8(match[2]);
+
+  const accessToken = await getGoogleAccessToken({
+    clientEmail,
+    privateKeyPem: privateKeyRaw,
+    scope: "https://www.googleapis.com/auth/devstorage.read_write",
+  }).catch(() => null);
+  if (!accessToken) return null;
+
+  const basePrefix = outParsed.object.replace(/\/$/, "");
+  const ext = (mime.split("/")[1] || "png").toLowerCase();
+  const sessionPrefix = buildAiImageSessionPrefix(basePrefix, userId, sessionId);
+  const objName = `${sessionPrefix}/inputs/${Date.now()}-${crypto.randomUUID()}-src.${ext}`;
+
+  const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objName)}`;
+  const upRes = await fetch(uploadUrl, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": mime },
+    body: bytes,
+  });
+  if (!upRes.ok) return null;
+
+  return await signGcsUrl({
+    bucket: outParsed.bucket,
+    object: objName,
+    clientEmail,
+    privateKeyPem: privateKeyRaw,
+    expiresInSec: 300,
+  }).catch(() => gcsToHttps(`gs://${outParsed.bucket}/${objName}`));
+}
+
+function safeJson(text: string): any {
+  try { return JSON.parse(text); } catch { return {}; }
+}
 
 function json(data: any, status = 200, origin?: string | null) {
   return new Response(JSON.stringify(data), {
@@ -140,7 +202,14 @@ function json(data: any, status = 200, origin?: string | null) {
   });
 }
 
-// ── GCS helpers (imagen.ts 와 동일 패턴) ───────────────────────────────────
+// ── GCS helpers ───────────────────────────────────────────────────────────────
+
+function base64ToUint8(b64: string) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
 
 async function getGoogleAccessToken(opts: {
   clientEmail: string;
@@ -214,16 +283,6 @@ function gcsToHttps(uri: string) {
   const parsed = parseGcsUri(uri);
   if (!parsed) return uri;
   return `https://storage.googleapis.com/${parsed.bucket}/${parsed.object}`;
-}
-
-function arrayBufferToBase64(buf: ArrayBuffer) {
-  const bytes = new Uint8Array(buf);
-  const CHUNK = 0x8000;
-  let bin = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + CHUNK, bytes.length)) as unknown as number[]);
-  }
-  return btoa(bin);
 }
 
 async function sha256Hex(message: string) {
