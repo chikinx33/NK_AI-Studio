@@ -155,6 +155,7 @@
       useAsSource: '소스 사용',
       regenerateVariation: '재생성',
       upscale2k: '업스케일 2K',
+      upscaleSource2x: '업스케일 (2×)',
       analyzePrompt: '이미지 분석',
       analyzing: '분석중',
       analyzeFailed: '이미지 분석 실패: ',
@@ -305,6 +306,7 @@
       useAsSource: 'Use as source',
       regenerateVariation: 'Generate variation',
       upscale2k: 'Upscale (2K)',
+      upscaleSource2x: 'Upscale (2×)',
       analyzePrompt: 'Analyze image',
       analyzing: 'Analyzing',
       analyzeFailed: 'Image analysis failed: ',
@@ -1819,7 +1821,11 @@
               '<button type="button" class="btn-primary compact ai-image-action-icon ai-image-action-save" data-action="save-result-project" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('saveProject')) + '" title="' + escapeHtml(t('saveProject')) + '"' + ((project && project.id) ? '' : ' disabled') + '>' + projectSaveIconSvg() + '</button>' +
               '</div></div>') +
               '</div>'
-              : '') +
+              : (preview && preview.type === 'source'
+                ? '<div class="ai-image-inline-actions"><div class="ai-image-inline-actions-left">' +
+                  '<button type="button" class="btn-primary compact ai-image-upscale-btn" data-action="upscale-source-2x" data-url="' + escapeHtml(previewUrl) + '" aria-label="' + escapeHtml(t('upscaleSource2x')) + '" title="' + escapeHtml(t('upscaleSource2x')) + '">' + upscaleIconSvg() + ' 2×</button>' +
+                  '</div></div>'
+                : '')) +
               '<div class="ai-image-preview-meta">' +
                 (selectedResult
                   ? '<p class="ai-image-preview-created"><button type="button" class="ai-image-analysis-btn" data-action="analyze-result-prompt" data-id="' + escapeHtml(selectedResult.id) + '" aria-label="' + escapeHtml(t('analyzePrompt')) + '" title="' + escapeHtml(t('analyzePrompt')) + '"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"></path><path d="M7 11.207a.5.5 0 0 1 .146-.353l2-2a.5.5 0 0 1 .708 0l3.292 3.292a.5.5 0 0 0 .708 0l4.292-4.292a.5.5 0 0 1 .854.353V16a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1z"></path></svg></button><span class="ai-image-meta-item"><strong>' + escapeHtml(t('createdAt')) + ':</strong> <span>' + escapeHtml(formatDate(selectedResult.createdAt)) + '</span></span><span class="ai-image-meta-sep" aria-hidden="true"></span><span class="ai-image-meta-item ai-image-meta-item-camera"><strong>' + escapeHtml(t('cameraMetaLabel')) + ':</strong> <span>' + escapeHtml(cameraSummary(selectedCameraControls, preview && preview.cameraTargetMode)) + '</span></span></p>'
@@ -3718,6 +3724,62 @@
             } catch (e) {
               alert(t('generationFailed') + (e && e.message ? String(e.message) : String(e)));
             }
+          }
+          return;
+        }
+        if (action === 'upscale-source-2x') {
+          var srcUrl = String(btn.getAttribute('data-url') || '').trim();
+          if (!srcUrl) return;
+          try {
+            var payloadUpscaleSrc = {
+              prompt: 'Upscale to 2K while preserving original content.',
+              aspectRatio: state.aspectRatio || '16:9',
+              storageService: 'ai-image',
+              sessionId: state.sessionId,
+              generationMode: 'image-to-image',
+              generationStyle: normalizeGenerationStyle('single'),
+              imageSize: '2K',
+              referenceImages: [{
+                referenceId: 1,
+                imageDataUrl: srcUrl,
+                subjectDescription: 'upscale source',
+                subjectType: 'SUBJECT_TYPE_DEFAULT'
+              }],
+              conversationHistory: []
+            };
+            setGlobalLoading(true, t('generating'));
+            NK.api.imagen(payloadUpscaleSrc).then(function (responseUpscaleSrc) {
+              var resultUS = {
+                id: 'res_' + Date.now(),
+                url: String(responseUpscaleSrc && (responseUpscaleSrc.signedUrl || responseUpscaleSrc.dataUrl) || '').trim(),
+                objectName: String(responseUpscaleSrc && responseUpscaleSrc.objectName || '').trim(),
+                imageSize: String(responseUpscaleSrc && responseUpscaleSrc.imageSizeApplied || '2K').trim(),
+                prompt: payloadUpscaleSrc.prompt,
+                resolvedPrompt: payloadUpscaleSrc.prompt,
+                mode: 'image-to-image',
+                generationStyle: 'single',
+                cameraControls: normalizeCameraControls(state.cameraControls),
+                conversationTurnCount: Number(responseUpscaleSrc && responseUpscaleSrc.conversationTurnCount || 0) || 0,
+                aspectRatio: payloadUpscaleSrc.aspectRatio,
+                createdAt: new Date().toISOString(),
+                savedToProject: false,
+                sessionId: state.sessionId
+              };
+              if (!resultUS.url) throw new Error('image_result_missing');
+              state.results.unshift(resultUS);
+              state.results = state.results.slice(0, 30);
+              state.currentResultId = resultUS.id;
+              state.previewTargetType = 'result';
+              persistHistory();
+              appendHistoryCardIfPossible(resultUS);
+              updateResultSelectionUI();
+            }).catch(function (err) {
+              alert(t('generationFailed') + (err && err.message ? String(err.message) : String(err)));
+            }).finally(function () {
+              setGlobalLoading(false);
+            });
+          } catch (e) {
+            alert(t('generationFailed') + (e && e.message ? String(e.message) : String(e)));
           }
           return;
         }
