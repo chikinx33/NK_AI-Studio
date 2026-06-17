@@ -330,6 +330,24 @@
     return j(text);
   };
 
+  api.upscale = async function (body, opts) {
+    var payload = Object.assign({}, body || {});
+    var res = await fetchWithTimeout(withBase('/api/upscale'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(payload),
+      signal: opts && opts.signal
+    }, 120000);
+    var text = await readTextWithTimeout(res, 120000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'upscale_error');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
   // ── AI 문서 / Knowledge RAG ──────────────────────────────
   api.knowledgeStats = async function (opts) {
     var res = await fetch(withBase('/api/knowledge/stats'), {

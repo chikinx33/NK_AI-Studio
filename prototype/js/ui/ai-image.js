@@ -3693,36 +3693,26 @@
           });
           if (ru) {
             try {
-              var payloadUpscale = {
-                prompt: String(ru.prompt || 'Upscale to 2K while preserving original content.'),
-                aspectRatio: ru.aspectRatio || state.aspectRatio,
-                storageService: 'ai-image',
-                sessionId: state.sessionId,
-                generationMode: 'image-to-image',
-                generationStyle: normalizeGenerationStyle('single'),
-                imageSize: '2K',
-                referenceImages: [{
-                  referenceId: 1,
-                  imageDataUrl: resolveResultUrl(ru),
-                  subjectDescription: 'upscale source',
-                  subjectType: 'SUBJECT_TYPE_DEFAULT'
-                }],
-                conversationHistory: []
-              };
+              var srcUrlRu = resolveResultUrl(ru);
+              if (!srcUrlRu) return;
               setGlobalLoading(true, t('generating'));
-              NK.api.imagen(payloadUpscale).then(function (responseUpscale) {
+              NK.api.upscale({
+                imageUrl: srcUrlRu,
+                sessionId: state.sessionId,
+                storageService: 'ai-image'
+              }).then(function (responseUpscale) {
                 var resultU = {
                   id: 'res_' + Date.now(),
                   url: String(responseUpscale && (responseUpscale.signedUrl || responseUpscale.dataUrl) || '').trim(),
                   objectName: String(responseUpscale && responseUpscale.objectName || '').trim(),
-                  imageSize: String(responseUpscale && responseUpscale.imageSizeApplied || '2K').trim(),
-                  prompt: String(payloadUpscale.prompt || ''),
-                  resolvedPrompt: String(payloadUpscale.prompt || ''),
+                  imageSize: String(responseUpscale && responseUpscale.imageSizeApplied || '2X').trim(),
+                  prompt: String(ru.prompt || ''),
+                  resolvedPrompt: String(ru.resolvedPrompt || ru.prompt || ''),
                   mode: 'image-to-image',
                   generationStyle: 'single',
                   cameraControls: normalizeCameraControls(ru.cameraControls),
-                  conversationTurnCount: Number(responseUpscale && responseUpscale.conversationTurnCount || 0) || 0,
-                  aspectRatio: payloadUpscale.aspectRatio,
+                  conversationTurnCount: 0,
+                  aspectRatio: ru.aspectRatio || state.aspectRatio,
                   createdAt: new Date().toISOString(),
                   savedToProject: false,
                   sessionId: state.sessionId
@@ -3750,36 +3740,24 @@
           var srcUrl = String(btn.getAttribute('data-url') || '').trim();
           if (!srcUrl) return;
           try {
-            var payloadUpscaleSrc = {
-              prompt: 'Upscale to 2K while preserving original content.',
-              aspectRatio: state.aspectRatio || '16:9',
-              storageService: 'ai-image',
-              sessionId: state.sessionId,
-              generationMode: 'image-to-image',
-              generationStyle: normalizeGenerationStyle('single'),
-              imageSize: '2K',
-              referenceImages: [{
-                referenceId: 1,
-                imageDataUrl: srcUrl,
-                subjectDescription: 'upscale source',
-                subjectType: 'SUBJECT_TYPE_DEFAULT'
-              }],
-              conversationHistory: []
-            };
             setGlobalLoading(true, t('generating'));
-            NK.api.imagen(payloadUpscaleSrc).then(function (responseUpscaleSrc) {
+            NK.api.upscale({
+              imageUrl: srcUrl,
+              sessionId: state.sessionId,
+              storageService: 'ai-image'
+            }).then(function (responseUpscaleSrc) {
               var resultUS = {
                 id: 'res_' + Date.now(),
                 url: String(responseUpscaleSrc && (responseUpscaleSrc.signedUrl || responseUpscaleSrc.dataUrl) || '').trim(),
                 objectName: String(responseUpscaleSrc && responseUpscaleSrc.objectName || '').trim(),
-                imageSize: String(responseUpscaleSrc && responseUpscaleSrc.imageSizeApplied || '2K').trim(),
-                prompt: payloadUpscaleSrc.prompt,
-                resolvedPrompt: payloadUpscaleSrc.prompt,
+                imageSize: String(responseUpscaleSrc && responseUpscaleSrc.imageSizeApplied || '2X').trim(),
+                prompt: '업스케일 (2×)',
+                resolvedPrompt: '업스케일 (2×)',
                 mode: 'image-to-image',
                 generationStyle: 'single',
                 cameraControls: normalizeCameraControls(state.cameraControls),
-                conversationTurnCount: Number(responseUpscaleSrc && responseUpscaleSrc.conversationTurnCount || 0) || 0,
-                aspectRatio: payloadUpscaleSrc.aspectRatio,
+                conversationTurnCount: 0,
+                aspectRatio: state.aspectRatio || '16:9',
                 createdAt: new Date().toISOString(),
                 savedToProject: false,
                 sessionId: state.sessionId
