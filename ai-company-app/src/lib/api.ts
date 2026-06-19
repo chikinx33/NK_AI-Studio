@@ -557,6 +557,36 @@ function hasDeliverableOutput(j: any): boolean {
   if (!o) return false;
   return !!(o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf");
 }
+// 승인 카드에 보여줄 작업 요약 만들기 — 잡 종류(type)+입력(input)으로 사람이 읽을 한 줄.
+const APPROVAL_TOOL_LABEL: Record<string, string> = {
+  calendar_create: "구글 캘린더 일정 추가", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
+  image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", music: "BGM 생성",
+  scenario: "시나리오 생성", ppt: "PPT 생성", pdf: "PDF 문서 생성",
+};
+// 외부에 영향을 주는(되돌리기 어려운) 도구 — 카드에 'external' 배지로 강조.
+const APPROVAL_EXTERNAL_TOOLS = new Set(["calendar_create", "gmail_trash", "publish"]);
+function fmtWhen(s?: string): string {
+  if (!s) return "";
+  const m = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(s));
+  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : String(s);
+}
+function summarizeApprovalJob(j: any) {
+  const input = j.input || {};
+  const label = APPROVAL_TOOL_LABEL[j.type] || j.type || "작업";
+  const detail = input.summary || input.title || input.prompt || input.topic || input.caption || input.query || "";
+  const when = fmtWhen(input.start);
+  const title = `${label}${detail ? `: ${String(detail).slice(0, 60)}` : ""}${when ? ` (${when})` : ""}`;
+  return {
+    id: j.id,
+    agentId: j.agent_id,
+    agentName: NK_AGENT_NAMES[j.agent_id] || j.agent_id,
+    title,
+    tool: j.type,
+    command: j.type,
+    kind: APPROVAL_EXTERNAL_TOOLS.has(j.type) ? "external" : undefined,
+    reason: input.description ? String(input.description).slice(0, 120) : undefined,
+  };
+}
 export async function getApprovals(): Promise<{ pending: any[]; history: any[] }> {
   // agent_jobs에서 review_pending 잡을 승인 대기 목록으로 반환.
   // 역할 분리: 산출물이 있는 잡은 '보고'에서 검토 → 여기선 제외해 중복 표시를 막는다.
@@ -566,19 +596,33 @@ export async function getApprovals(): Promise<{ pending: any[]; history: any[] }
     const jobs: any[] = d?.items ?? [];
     const pending = jobs
       .filter((j) => j.status === "review_pending" && j.review_status === "pending" && !hasDeliverableOutput(j))
-      .map((j) => ({ id: j.id, agentId: j.agent_id }));
+      .map(summarizeApprovalJob);
     return { pending, history: [] };
   } catch {
     return { pending: [], history: [] };
   }
 }
 
+// 승인 = 검수 게이트 통과(확정). 기존 검수 엔드포인트(/api/agent/review) 재사용.
 export async function approveItem(id: string) {
-  return (await fetch(`/api/approvals/${id}/approve`, { method: "POST" })).json();
+  return (
+    await fetch(`/api/agent/review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, decision: "approved" }),
+    })
+  ).json();
 }
 
+// 거절 = 작업 취소. 담당 직원이 취소 멘트 + 관련 지식 정리.
 export async function rejectItem(id: string) {
-  return (await fetch(`/api/approvals/${id}/reject`, { method: "POST" })).json();
+  return (
+    await fetch(`/api/agent/cancel-job`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
+  ).json();
 }
 
 const AGENT_EMOJI: Record<string, string> = {
