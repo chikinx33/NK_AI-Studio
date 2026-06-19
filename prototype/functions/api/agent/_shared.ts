@@ -717,6 +717,38 @@ async function runMusicTool(input: any, ctx: ToolContext): Promise<any> {
   return { musicUrl: data.musicUrl || "", kind: "music", topic: topic || "배경음악", model: "elevenlabs" };
 }
 
+/** 플롯 PPT 도구: /api/agent/generate-doc(type=ppt) 호출 → 슬라이드 JSON. 클라이언트에서 .pptx 생성. */
+async function runPptTool(input: any, ctx: ToolContext): Promise<any> {
+  const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
+  if (!prompt) throw new Error("prompt is required");
+  const res = await fetch(internalUrl(ctx.request, "/api/agent/generate-doc"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+    body: JSON.stringify({ type: "ppt", prompt, context: input?.context }),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || `PPT 생성 실패 (${res.status})`);
+  return { ...data, kind: "ppt", promptEcho: prompt };
+}
+
+/** 잉크 PDF 도구: /api/agent/generate-doc(type=pdf) 호출 → 섹션 JSON. 브라우저 프린트로 PDF 저장. */
+async function runPdfTool(input: any, ctx: ToolContext): Promise<any> {
+  const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
+  if (!prompt) throw new Error("prompt is required");
+  const res = await fetch(internalUrl(ctx.request, "/api/agent/generate-doc"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
+    body: JSON.stringify({ type: "pdf", prompt, context: input?.context }),
+  });
+  const text = await res.text();
+  let data: any = {};
+  try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  if (!res.ok) throw new Error(data?.error || `PDF 생성 실패 (${res.status})`);
+  return { ...data, kind: "pdf", promptEcho: prompt };
+}
+
 /** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요) */
 async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   const platforms = Array.isArray(input?.platforms)
@@ -749,6 +781,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   scenario: { agentId: "plot", kind: "external", run: runScenarioTool },
   music: { agentId: "beat", kind: "external", run: runMusicTool },
   publish: { agentId: "reach", kind: "external", run: runPublishTool },
+  ppt: { agentId: "plot", kind: "external", run: runPptTool },
+  pdf: { agentId: "ink", kind: "external", run: runPdfTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

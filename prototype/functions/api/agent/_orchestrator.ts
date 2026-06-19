@@ -49,7 +49,7 @@ export const ROSTER: AgentMeta[] = [
   { id: "radar", emoji: "🔍", name: "레이더", role: "리서치·인텔리전스 — 트렌드/경쟁사 분석·사실확인", hasTools: true },
   { id: "maki", emoji: "📈", name: "마키", role: "마케팅·그로스 리드 — 캠페인·퍼널·성장(수요)", hasTools: false },
   { id: "plot", emoji: "🎬", name: "플롯", role: "콘텐츠 디렉터(PD) — 기획·포맷·후크·제작 브리프", hasTools: true },
-  { id: "ink", emoji: "✍️", name: "잉크", role: "작가·카피 — 스크립트·캡션·블로그·후크", hasTools: false },
+  { id: "ink", emoji: "✍️", name: "잉크", role: "작가·카피 — 스크립트·캡션·블로그·후크·PDF 문서", hasTools: true },
   { id: "pixel", emoji: "🎨", name: "픽셀", role: "디자인 — 브랜드·썸네일·비주얼 시스템", hasTools: true },
   { id: "beat", emoji: "🎵", name: "비트", role: "사운드·음악 — BGM 생성·영상-음악 합성", hasTools: true },
   { id: "engi", emoji: "💻", name: "엔지", role: "엔지니어·개발 — 코드·자동화·API·웹/봇", hasTools: true },
@@ -151,6 +151,8 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     scenario: `[[RUN: scenario | {"topic": "에피소드 주제", "duration": 60, "tones": ["감동"], "styles": ["브이로그"]}]]  → 시나리오 생성 (씬분해·대사·카메라 지시)`,
     music: `[[RUN: music | {"topic": "음악 컨셉·분위기", "genre": "ambient", "duration": 60}]]  → BGM 생성 (ElevenLabs)`,
     publish: `[[RUN: publish | {"platforms": ["instagram"], "caption": "게시글 내용", "mediaUrl": "이미지/영상URL"}]]  → SNS 발행 ⚠️ 항상 사람 승인 필요`,
+    ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드)`,
+    pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → PDF 문서 생성 (브라우저 프린트로 저장)`,
   };
   const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => t.agentId === agentId);
   const toolsRunBlock = myTools.length > 0

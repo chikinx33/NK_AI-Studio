@@ -433,6 +433,8 @@ export interface ResultItem {
   agentName: string;
   file: string;
   url: string;
+  kind: "image" | "video" | "audio" | "ppt" | "pdf";
+  docData?: { title?: string; subtitle?: string; slides?: any[]; sections?: any[] };
   prompt?: string;
   provider?: string;
   note?: string;
@@ -446,13 +448,21 @@ const NK_AGENT_NAMES: Record<string, string> = {
 };
 export async function getResults(limit = 30): Promise<{ items: ResultItem[]; total: number }> {
   const d = await (await fetch(`/api/agent/jobs?limit=${limit}`)).json();
-  const all = ((d && d.items) || []).filter((j: any) => j.output && (j.output.signedUrl || j.output.videoUrl || j.output.audioUrl || j.output.dataUrl));
+  const all = ((d && d.items) || []).filter((j: any) => {
+    if (!j.output) return false;
+    const o = j.output;
+    return o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf";
+  });
   const items: ResultItem[] = all.map((j: any) => {
     const out = j.output || {};
+    const isDoc = out.kind === "ppt" || out.kind === "pdf";
     return {
       id: j.id, agentId: j.agent_id, agentName: NK_AGENT_NAMES[j.agent_id] || j.agent_id,
-      file: j.type, url: out.signedUrl || out.videoUrl || out.audioUrl || out.dataUrl || "",
-      prompt: (j.input && j.input.prompt) || "", provider: out.provider || out.model || "",
+      file: j.type,
+      url: out.signedUrl || out.videoUrl || out.audioUrl || out.dataUrl || "",
+      kind: (out.kind === "ppt" ? "ppt" : out.kind === "pdf" ? "pdf" : out.audioUrl ? "audio" : out.videoUrl ? "video" : "image") as ResultItem["kind"],
+      docData: isDoc ? { title: out.title, subtitle: out.subtitle, slides: out.slides, sections: out.sections } : undefined,
+      prompt: (j.input && j.input.prompt) || out.promptEcho || "", provider: out.provider || out.model || "",
       note: j.review_note || "", reviewStatus: j.review_status || "pending",
       createdAt: Date.parse(j.created_at) || 0,
     };

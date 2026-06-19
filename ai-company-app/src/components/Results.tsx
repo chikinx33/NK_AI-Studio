@@ -7,6 +7,7 @@ import {
   type AgentMessage,
 } from "../lib/api";
 import { JOB } from "../lib/jobs";
+import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
 function ListTodoIcon({ className }: { className?: string }) {
@@ -50,6 +51,37 @@ function FolderIcon({ className }: { className?: string }) {
   );
 }
 
+function PptIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M8 12h4" />
+      <path d="M8 16h4" />
+      <circle cx="14" cy="14" r="2" />
+      <path d="m14 12-1.5-1.5" />
+    </svg>
+  );
+}
+function PdfIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M10 10.3c.2-.4.5-.8.9-1a2.1 2.1 0 0 1 2.6.4c.3.4.5.8.5 1.3 0 1.3-2 2-2 2" />
+      <path d="M12 17h.01" />
+    </svg>
+  );
+}
+function DownloadIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" x2="12" y1="15" y2="3" />
+    </svg>
+  );
+}
 function Spinner({ className }: { className?: string }) {
   return (
     <svg className={`animate-spin ${className ?? ""}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -162,6 +194,86 @@ function ImagePopup({
   );
 }
 
+// ── 문서(PPT/PDF) 다운로드 ────────────────────────────────────────────────────
+async function handleDocDownload(it: ResultItem) {
+  const d = it.docData;
+  if (!d) return;
+  const docTitle = d.title || it.prompt || "문서";
+  if (it.kind === "ppt" && d.slides && d.slides.length > 0) {
+    await downloadPpt(docTitle, d.slides);
+  } else if (it.kind === "pdf" && d.sections && d.sections.length > 0) {
+    downloadPdfViaPrint(docTitle, d.subtitle, d.sections);
+  }
+}
+
+// ── 문서 카드 ─────────────────────────────────────────────────────────────────
+function DocCard({
+  it,
+  onReview,
+}: {
+  it: ResultItem;
+  onReview: (action: "approve" | "revise") => void;
+}) {
+  const [dlBusy, setDlBusy] = useState(false);
+  const isPpt = it.kind === "ppt";
+  const d = it.docData;
+  const slideCount = d?.slides?.length ?? 0;
+  const sectionCount = d?.sections?.length ?? 0;
+  const countLabel = isPpt ? `슬라이드 ${slideCount}장` : `섹션 ${sectionCount}개`;
+
+  async function onDownload() {
+    setDlBusy(true);
+    try { await handleDocDownload(it); } finally { setDlBusy(false); }
+  }
+
+  return (
+    <div className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
+      <div className="flex items-start gap-2">
+        <div className="h-11 w-11 shrink-0 rounded-lg ring-2 ring-amber-500/60 bg-amber-900/30 flex items-center justify-center">
+          {isPpt
+            ? <PptIcon className="h-6 w-6 text-amber-300" />
+            : <PdfIcon className="h-6 w-6 text-sky-300" />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">
+            <span className="text-amber-200">{it.agentName}</span>
+            <span className="ml-1 text-[10px] text-gray-500">{JOB[it.agentId] ?? "직원"}</span>
+            <span className={`ml-2 text-[10px] font-semibold ${isPpt ? "text-amber-400" : "text-sky-400"}`}>
+              {isPpt ? "PPT" : "PDF"}
+            </span>
+          </div>
+          <div className="truncate text-gray-300 font-medium" title={d?.title}>
+            {d?.title || it.prompt || "문서"}
+          </div>
+          <div className="text-gray-500">{countLabel}</div>
+        </div>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <button
+          disabled={dlBusy}
+          onClick={onDownload}
+          className="inline-flex items-center gap-1 rounded bg-indigo-700 px-2 py-1 transition hover:bg-indigo-600 disabled:opacity-60 text-white"
+        >
+          <DownloadIcon className="h-3.5 w-3.5" />
+          {dlBusy ? "생성 중…" : isPpt ? ".pptx 다운로드" : "PDF 프린트"}
+        </button>
+        <button
+          onClick={() => onReview("approve")}
+          className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 text-white"
+        >
+          검토 승인
+        </button>
+        <button
+          onClick={() => onReview("revise")}
+          className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
+        >
+          재검토
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Results({ onAgentSay }: { onAgentSay?: (m: AgentMessage) => void }) {
   const [items, setItems] = useState<ResultItem[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -223,51 +335,63 @@ export default function Results({ onAgentSay }: { onAgentSay?: (m: AgentMessage)
       )}
 
       <div className="space-y-2">
-        {pending.map((it) => (
-          <div key={it.id} className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
-            <div className="flex items-start gap-2">
-              <button
-                onClick={() => setOpenId(it.id)}
-                title="크게 보기"
-                className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-lg ring-2 ring-amber-500/60"
-              >
-                <img src={it.url} alt="" className="h-full w-full object-cover transition group-hover:opacity-80" loading="lazy" />
-              </button>
-              <div className="min-w-0 flex-1">
-                <div className="font-medium">
-                  <span className="text-amber-200">{it.agentName}</span>
-                  <span className="ml-1 text-[10px] text-gray-500">{JOB[it.agentId] ?? "직원"}</span>
-                </div>
-                <div className="line-clamp-2 text-gray-300" title={it.prompt}>
-                  {it.prompt || "이미지 생성을 완료했습니다."}
+        {pending.map((it) => {
+          const isDoc = it.kind === "ppt" || it.kind === "pdf";
+          if (isDoc) {
+            return (
+              <DocCard
+                key={it.id}
+                it={it}
+                onReview={(action) => reviewInline(it, action)}
+              />
+            );
+          }
+          return (
+            <div key={it.id} className="text-xs border border-amber-600/40 bg-amber-950/20 rounded-lg p-2">
+              <div className="flex items-start gap-2">
+                <button
+                  onClick={() => setOpenId(it.id)}
+                  title="크게 보기"
+                  className="group relative h-11 w-11 shrink-0 overflow-hidden rounded-lg ring-2 ring-amber-500/60"
+                >
+                  <img src={it.url} alt="" className="h-full w-full object-cover transition group-hover:opacity-80" loading="lazy" />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">
+                    <span className="text-amber-200">{it.agentName}</span>
+                    <span className="ml-1 text-[10px] text-gray-500">{JOB[it.agentId] ?? "직원"}</span>
+                  </div>
+                  <div className="line-clamp-2 text-gray-300" title={it.prompt}>
+                    {it.prompt || "이미지 생성을 완료했습니다."}
+                  </div>
                 </div>
               </div>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  disabled={busy === it.id}
+                  onClick={() => reviewInline(it, "approve")}
+                  className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {busy === it.id && busyAction === "approve" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "검토 승인"}
+                </button>
+                <button
+                  disabled={busy === it.id}
+                  onClick={() => reviewInline(it, "revise")}
+                  className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600 disabled:cursor-wait disabled:opacity-60"
+                >
+                  {busy === it.id && busyAction === "revise" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "재검토"}
+                </button>
+                <button
+                  onClick={() => openResultFolder(it.id)}
+                  title="폴더 열기"
+                  className="ml-auto inline-flex items-center gap-1 rounded border border-edge px-2 py-1 text-gray-300 transition hover:bg-edge hover:text-white"
+                >
+                  <FolderIcon className="h-3.5 w-3.5" /> 폴더
+                </button>
+              </div>
             </div>
-            <div className="mt-2 flex items-center gap-2">
-              <button
-                disabled={busy === it.id}
-                onClick={() => reviewInline(it, "approve")}
-                className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 disabled:cursor-wait disabled:opacity-60"
-              >
-                {busy === it.id && busyAction === "approve" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "검토 승인"}
-              </button>
-              <button
-                disabled={busy === it.id}
-                onClick={() => reviewInline(it, "revise")}
-                className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600 disabled:cursor-wait disabled:opacity-60"
-              >
-                {busy === it.id && busyAction === "revise" ? (<><Spinner className="h-3.5 w-3.5" /> 처리 중…</>) : "재검토"}
-              </button>
-              <button
-                onClick={() => openResultFolder(it.id)}
-                title="폴더 열기"
-                className="ml-auto inline-flex items-center gap-1 rounded border border-edge px-2 py-1 text-gray-300 transition hover:bg-edge hover:text-white"
-              >
-                <FolderIcon className="h-3.5 w-3.5" /> 폴더
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {recent.length > 0 && (
