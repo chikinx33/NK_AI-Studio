@@ -672,9 +672,21 @@ export async function runGroupChat(
       const meta = getAgent(agentId)!;
       await emit({
         userId, conversationId, role: "agent", agentId, name: meta.name,
-        text: `🛠️ ${r.tool} 작업을 시작했어요. 검수 패널에서 결과를 확인하실 수 있어요.`,
+        text: `🛠️ ${r.tool} 작업을 시작했어요. 잠시 기다려주세요…`,
       });
-      await processJob(toolCtx, sql, job.id, r.tool, parsedInput);
+      const result = await processJob(toolCtx, sql, job.id, r.tool, parsedInput);
+      if (result.ok) {
+        const doneText =
+          r.tool === "ppt" ? "✅ PPT 완성! 오른쪽 **검수 패널**에서 .pptx 다운로드 버튼을 눌러주세요."
+          : r.tool === "pdf" ? "✅ PDF 완성! 오른쪽 **검수 패널**에서 PDF 프린트 버튼을 눌러주세요."
+          : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.`;
+        await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: doneText });
+      } else {
+        await emit({
+          userId, conversationId, role: "agent", agentId, name: meta.name,
+          text: `❌ ${r.tool} 생성 중 오류가 발생했어요. 다시 요청해 주세요.`,
+        });
+      }
     }
   };
 

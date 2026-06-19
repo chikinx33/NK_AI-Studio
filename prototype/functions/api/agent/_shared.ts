@@ -4,6 +4,7 @@
 // - 도구 어댑터: 라비오크의 "도구=python spawn" 모델을 NK API fetch 로 전환.
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { getSql, type SqlFn } from "../knowledge/_shared";
+import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "../_shared/claude-auth.js";
 
 export { getSql };
 export type { SqlFn };
@@ -717,36 +718,95 @@ async function runMusicTool(input: any, ctx: ToolContext): Promise<any> {
   return { musicUrl: data.musicUrl || "", kind: "music", topic: topic || "배경음악", model: "elevenlabs" };
 }
 
-/** 플롯 PPT 도구: /api/agent/generate-doc(type=ppt) 호출 → 슬라이드 JSON. 클라이언트에서 .pptx 생성. */
+const PPT_SYSTEM = `당신은 프레젠테이션 전문가입니다. 요청을 받아 PowerPoint 슬라이드 구조를 순수 JSON으로 생성하세요.
+
+출력 형식 (마크다운 코드블록 없이 JSON만):
+{
+  "title": "프레젠테이션 제목",
+  "slides": [
+    {"title": "슬라이드 제목", "bullets": ["항목1", "항목2", "항목3"], "notes": "발표자 노트"}
+  ]
+}
+
+규칙:
+- 슬라이드 수: 8~12장 (표지 + 내용 + 마무리)
+- 첫 슬라이드: 표지 (title만, bullets=[])
+- 마지막 슬라이드: Q&A 또는 마무리
+- bullets: 슬라이드당 3~5개, 간결하게 (1줄 이내)
+- notes: 발표자가 구두로 할 말 (생략 가능)
+- 한국어 작성
+- JSON만 출력`;
+
+const PDF_SYSTEM = `당신은 문서 작성 전문가입니다. 요청을 받아 PDF 문서 구조를 순수 JSON으로 생성하세요.
+
+출력 형식 (마크다운 코드블록 없이 JSON만):
+{
+  "title": "문서 제목",
+  "subtitle": "부제목 또는 날짜 (선택)",
+  "sections": [
+    {"heading": "섹션 제목", "content": "본문 내용. 여러 문장 가능."}
+  ]
+}
+
+규칙:
+- 섹션 수: 4~8개
+- 각 섹션: heading + content (2~5문장 분량)
+- 한국어 작성
+- JSON만 출력`;
+
+/** Claude를 직접 호출해 JSON 응답을 파싱. HTTP 중간 홉 없이 _shared에서 바로 호출. */
+async function callClaudeForJson(env: any, system: string, userMsg: string): Promise<any> {
+  const auth = claudeAuthHeaders(env);
+  const res = await fetch(anthropicMessagesUrl(env), {
+    method: "POST",
+    headers: auth.headers,
+    body: JSON.stringify({
+      model: "claude-sonnet-4-6",
+      max_tokens: 4000,
+      system: buildClaudeSystem(auth.subscription, system),
+      messages: [{ role: "user", content: userMsg }],
+    }),
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let detail: any = text;
+    try { detail = JSON.parse(text); } catch {}
+    throw new Error(`Claude ${res.status} — ${detail?.error?.message || detail?.message || text.slice(0, 200)}`);
+  }
+  const data = JSON.parse(text);
+  const parts = Array.isArray(data?.content) ? data.content : [];
+  const raw = parts.map((p: any) => (typeof p?.text === "string" ? p.text : "")).join("").trim();
+  const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    const match = cleaned.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { parsed = JSON.parse(match[0]); } catch { throw new Error(`JSON 파싱 실패: ${cleaned.slice(0, 200)}`); }
+    } else {
+      throw new Error(`JSON 파싱 실패: ${cleaned.slice(0, 200)}`);
+    }
+  }
+  return parsed;
+}
+
+/** 플롯 PPT 도구: Claude 직접 호출 → 슬라이드 JSON. 클라이언트에서 .pptx 생성. */
 async function runPptTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
   if (!prompt) throw new Error("prompt is required");
-  const res = await fetch(internalUrl(ctx.request, "/api/agent/generate-doc"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
-    body: JSON.stringify({ type: "ppt", prompt, context: input?.context }),
-  });
-  const text = await res.text();
-  let data: any = {};
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data?.error || `PPT 생성 실패 (${res.status})`);
-  return { ...data, kind: "ppt", promptEcho: prompt };
+  const userMsg = input?.context ? `요청: ${prompt}\n\n참고 컨텍스트:\n${input.context}` : `요청: ${prompt}`;
+  const parsed = await callClaudeForJson(ctx.env, PPT_SYSTEM, userMsg);
+  return { ...parsed, kind: "ppt", promptEcho: prompt };
 }
 
-/** 잉크 PDF 도구: /api/agent/generate-doc(type=pdf) 호출 → 섹션 JSON. 브라우저 프린트로 PDF 저장. */
+/** 잉크 PDF 도구: Claude 직접 호출 → 섹션 JSON. 브라우저 프린트로 PDF 저장. */
 async function runPdfTool(input: any, ctx: ToolContext): Promise<any> {
   const prompt = String(input?.prompt || input?.topic || input?.subject || "").trim();
   if (!prompt) throw new Error("prompt is required");
-  const res = await fetch(internalUrl(ctx.request, "/api/agent/generate-doc"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: ctx.authHeader },
-    body: JSON.stringify({ type: "pdf", prompt, context: input?.context }),
-  });
-  const text = await res.text();
-  let data: any = {};
-  try { data = JSON.parse(text); } catch { data = { raw: text }; }
-  if (!res.ok) throw new Error(data?.error || `PDF 생성 실패 (${res.status})`);
-  return { ...data, kind: "pdf", promptEcho: prompt };
+  const userMsg = input?.context ? `요청: ${prompt}\n\n참고 컨텍스트:\n${input.context}` : `요청: ${prompt}`;
+  const parsed = await callClaudeForJson(ctx.env, PDF_SYSTEM, userMsg);
+  return { ...parsed, kind: "pdf", promptEcho: prompt };
 }
 
 /** 리치 발행 도구: /api/sns/publish 호출 어댑터. (ALWAYS_GATE — 항상 사람 승인 필요) */
@@ -792,15 +852,18 @@ export async function processJob(
   jobId: string,
   type: string,
   input: any
-): Promise<void> {
+): Promise<{ ok: boolean; error?: string }> {
   try {
     await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
     const tool = AGENT_TOOLS[type];
     if (!tool) throw new Error(`unknown tool: ${type}`);
     const output = await tool.run(input, ctx);
     await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", output, reviewStatus: "pending" });
+    return { ok: true };
   } catch (e: any) {
-    await setJobStatus(sql, jobId, ctx.userId, { status: "error", error: String(e?.message || e || "tool_failed") });
+    const error = String(e?.message || e || "tool_failed");
+    await setJobStatus(sql, jobId, ctx.userId, { status: "error", error });
+    return { ok: false, error };
   }
 }
 
