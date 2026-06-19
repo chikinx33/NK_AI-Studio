@@ -96,7 +96,11 @@ function ChatAvatar({ turn }: { turn: Turn }) {
   const isReal = turn.agentId && !turn.agentId.startsWith("_");
   // 도구(_tool) 메시지는 aibot 이미지 사용, 실제 직원은 본인 아바타
   const src =
-    turn.agentId === "_tool" ? "/avatars/aibot.png" : isReal ? `/avatars/${turn.agentId}.png` : null;
+    turn.agentId === "_tool"
+      ? `${import.meta.env.BASE_URL}avatars/aibot.png`
+      : isReal
+        ? `${import.meta.env.BASE_URL}avatars/${turn.agentId}.png`
+        : null;
   if (src && !failed) {
     return (
       <img

@@ -113,7 +113,7 @@ function Avatar({ turn, accent }: { turn: Turn; accent: string }) {
   if (isReal && !failed) {
     return (
       <img
-        src={`/avatars/${turn.agentId}.png`}
+        src={`${import.meta.env.BASE_URL}avatars/${turn.agentId}.png`}
         alt={turn.name}
         onError={() => setFailed(true)}
         className="max-h-full max-w-full object-contain drop-shadow-2xl"
@@ -323,7 +323,7 @@ export default function VisualNovel({
         {focusedStanding ? (
           <div key={`focus-${focusAgent!.id}`} className="vn-in h-[40vh] flex items-end justify-center pb-1">
             <img
-              src={`/avatars/${focusAgent!.id}.png`}
+              src={`${import.meta.env.BASE_URL}avatars/${focusAgent!.id}.png`}
               alt={focusAgent!.name}
               className="max-h-full max-w-full object-contain drop-shadow-2xl"
               style={{ filter: `drop-shadow(0 0 28px ${accentOf(focusAgent!.id)}55)` }}
