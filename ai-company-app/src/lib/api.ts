@@ -633,6 +633,8 @@ export async function streamChat(
           onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
           onEvent("turn_end", { agentId: m.agent_id, text: m.text });
           agentEmitted++;
+        } else if (event.type === "job_ready") {
+          onEvent("job_ready", {});
         } else if (event.type === "done") {
           break outer;
         }

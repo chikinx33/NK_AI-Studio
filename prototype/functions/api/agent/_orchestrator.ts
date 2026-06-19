@@ -604,6 +604,7 @@ export interface OrchestratorDeps {
   imageBase64?: string;  // 첨부 이미지 base64 (첫 번째 에이전트에게만 전달)
   imageMimeType?: string;
   onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
+  onJobReady?: () => void; // SSE 콜백: 도구 잡 완료 시 Results 패널 즉시 갱신
 }
 
 /**
@@ -681,6 +682,7 @@ export async function runGroupChat(
           : r.tool === "pdf" ? "✅ PDF 완성! 오른쪽 **검수 패널**에서 PDF 프린트 버튼을 눌러주세요."
           : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.`;
         await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: doneText });
+        try { deps.onJobReady?.(); } catch {}
       } else {
         await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name,

@@ -53,6 +53,7 @@ export default function App() {
   // 우측 사이드바 회사 지식 칩 → 지식 페이지로 이동하며 적용할 분류 필터(+nonce로 재클릭도 반영)
   const [knowFilter, setKnowFilter] = useState<"원칙" | "사실" | "결정" | "스킬" | null>(null);
   const [knowFilterNonce, setKnowFilterNonce] = useState(0);
+  const [resultsRefreshKey, setResultsRefreshKey] = useState(0);
   function openKnowledgeCategory(key: "원칙" | "사실" | "결정" | "스킬" | null) {
     setKnowFilter(key);
     setKnowFilterNonce((n) => n + 1);
@@ -230,6 +231,10 @@ export default function App() {
               });
               break;
             }
+            case "job_ready":
+              // 도구 잡 완료 → Results 패널 즉시 갱신 (4초 폴링 대기 불필요)
+              setResultsRefreshKey((k) => k + 1);
+              break;
             case "agent_busy": {
               // 발언이 아닌 실제 업무(도구 실행 등) 구간에도 '업무 중' 표시 유지
               setWorkingIds((prev) => {
@@ -263,6 +268,7 @@ export default function App() {
     commit(turnsRef.current.map((t) => ({ ...t, streaming: false })));
     setWorkingIds(new Set()); // 누락된 busy=false 대비 안전 정리
     setBusy(false);
+    setResultsRefreshKey((k) => k + 1); // 스트림 종료 시에도 결과 패널 갱신
     refreshStatus();
   }
 
@@ -461,6 +467,7 @@ export default function App() {
           {/* 결과 목록만 스크롤 */}
           <div className="flex-1 min-h-0 overflow-y-auto">
             <Results
+              refreshKey={resultsRefreshKey}
               onAgentSay={(m) => {
                 commit([
                   ...turnsRef.current,

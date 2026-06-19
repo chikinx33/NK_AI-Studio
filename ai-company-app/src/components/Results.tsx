@@ -274,7 +274,7 @@ function DocCard({
   );
 }
 
-export default function Results({ onAgentSay }: { onAgentSay?: (m: AgentMessage) => void }) {
+export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: AgentMessage) => void; refreshKey?: number }) {
   const [items, setItems] = useState<ResultItem[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -293,6 +293,10 @@ export default function Results({ onAgentSay }: { onAgentSay?: (m: AgentMessage)
     const t = setInterval(() => refresh(), 4000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    if (refreshKey) refresh();
+  }, [refreshKey]);
 
   const open = items.find((x) => x.id === openId) ?? null;
 

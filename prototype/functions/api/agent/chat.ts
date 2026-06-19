@@ -87,6 +87,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
           sql, userId: auth.userId, conversationId, toolCtx,
           firstMessage: displayText, imageBase64, imageMimeType,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
+          onJobReady: () => sse({ type: "job_ready" }),
         });
         await sse({ type: "done", conversationId, userMessageId: userMsg.id });
       } catch (e: any) {
