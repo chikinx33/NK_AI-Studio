@@ -5,6 +5,7 @@
 // - ★ 멀티테넌시: 모든 잡은 user_id 에 귀속. 모든 쿼리에 WHERE user_id 강제.
 import { getSql, type SqlFn } from "../knowledge/_shared";
 import { claudeAuthHeaders, buildClaudeSystem, anthropicMessagesUrl } from "../_shared/claude-auth.js";
+import { refreshAccessToken } from "./_google";
 
 export { getSql };
 export type { SqlFn };
@@ -162,7 +163,49 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
     )
   `);
   try { await sql("CREATE UNIQUE INDEX IF NOT EXISTS company_skills_user_name_idx ON company_skills (user_id, name)"); } catch (_) {}
+  // 싱크(비서) 구글 연동: 사용자별 Gmail·Calendar OAuth refresh_token. 한 번의 동의로 두 스코프 모두 저장.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_google_oauth (
+      user_id text PRIMARY KEY,
+      refresh_token text NOT NULL,
+      email text,
+      scopes text NOT NULL DEFAULT '',
+      connected_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
   agentSchemaReady = true;
+}
+
+// ── 싱크 구글 연동 토큰 (전부 user_id 격리) ──────────────────────────────────
+export interface GoogleOAuthRow { refresh_token: string; email: string | null; scopes: string; connected_at: string }
+export async function getGoogleOAuth(sql: SqlFn, userId: string): Promise<GoogleOAuthRow | null> {
+  const rows = await sql("SELECT refresh_token, email, scopes, connected_at FROM agent_google_oauth WHERE user_id = $1", [userId]);
+  return (rows[0] as GoogleOAuthRow) || null;
+}
+/** refresh_token 이 빈값이면(재동의 미발급) 기존 토큰 보존하고 email/scopes 만 갱신. */
+export async function saveGoogleOAuth(
+  sql: SqlFn,
+  userId: string,
+  v: { refreshToken: string; email?: string | null; scopes?: string }
+): Promise<void> {
+  if (v.refreshToken) {
+    await sql(
+      `INSERT INTO agent_google_oauth (user_id, refresh_token, email, scopes)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id) DO UPDATE SET refresh_token = EXCLUDED.refresh_token,
+         email = EXCLUDED.email, scopes = EXCLUDED.scopes, updated_at = now()`,
+      [userId, v.refreshToken, v.email ?? null, v.scopes ?? ""]
+    );
+  } else {
+    await sql(
+      `UPDATE agent_google_oauth SET email = $2, scopes = $3, updated_at = now() WHERE user_id = $1`,
+      [userId, v.email ?? null, v.scopes ?? ""]
+    );
+  }
+}
+export async function deleteGoogleOAuth(sql: SqlFn, userId: string): Promise<void> {
+  await sql("DELETE FROM agent_google_oauth WHERE user_id = $1", [userId]);
 }
 
 // ── 런타임(출근·자율) ────────────────────────────────────────────────────────
@@ -845,6 +888,96 @@ async function runPublishTool(input: any, ctx: ToolContext): Promise<any> {
   return { published: data.published || [], kind: "publish", platforms, caption };
 }
 
+// ── 싱크(비서) 구글 도구 — 사용자별 refresh_token(Neon)으로 access token 갱신 후 API 호출 ──
+/** 현재 사용자의 구글 access token 발급. 미연결이면 명확한 에러. */
+async function syncGoogleAccess(ctx: ToolContext): Promise<string> {
+  const sql = getSql(ctx.env);
+  await ensureAgentSchema(sql);
+  const row = await getGoogleOAuth(sql, ctx.userId);
+  if (!row?.refresh_token) {
+    throw new Error("구글이 아직 연결되지 않았어요. ⚙️설정 → 에이전트 → 싱크 → '구글 연결'을 먼저 해주세요.");
+  }
+  return refreshAccessToken(ctx.env, row.refresh_token);
+}
+
+/** 싱크 Gmail 도구: 받은메일함 최근 N통 제목·발신자·미리보기. (읽기 전용) */
+async function runGmailReadTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const n = Math.min(Math.max(Number(input?.max) || 10, 1), 25);
+  const listRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${n}&labelIds=INBOX`,
+    { headers: { Authorization: `Bearer ${access}` } }
+  );
+  const listData: any = await listRes.json();
+  if (!listRes.ok) throw new Error(listData?.error?.message || `gmail 목록 실패 (${listRes.status})`);
+  const messages: any[] = listData.messages || [];
+  const emails: any[] = [];
+  for (const m of messages) {
+    const dRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=Date`,
+      { headers: { Authorization: `Bearer ${access}` } }
+    );
+    const d: any = await dRes.json().catch(() => ({}));
+    const hdrs: Record<string, string> = {};
+    for (const h of d?.payload?.headers || []) hdrs[h.name] = h.value;
+    emails.push({ subject: hdrs.Subject || "(제목 없음)", from: hdrs.From || "", date: hdrs.Date || "", snippet: d.snippet || "" });
+  }
+  return { kind: "email_list", count: emails.length, emails };
+}
+
+/** 싱크 캘린더 조회: 다가오는 일정 N개. (읽기 전용) */
+async function runCalendarListTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const n = Math.min(Math.max(Number(input?.max) || 10, 1), 25);
+  const timeMin = String(input?.timeMin || new Date().toISOString());
+  const params = new URLSearchParams({
+    maxResults: String(n), timeMin, singleEvents: "true", orderBy: "startTime",
+  });
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${access}` } }
+  );
+  const data: any = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || `캘린더 조회 실패 (${res.status})`);
+  const events = (data.items || []).map((e: any) => ({
+    summary: e.summary || "(제목 없음)",
+    start: e.start?.dateTime || e.start?.date || "",
+    end: e.end?.dateTime || e.end?.date || "",
+    location: e.location || "",
+    htmlLink: e.htmlLink || "",
+  }));
+  return { kind: "calendar_list", count: events.length, events };
+}
+
+/** 싱크 캘린더 일정 생성: summary + start(+end). end 없으면 1시간. */
+async function runCalendarCreateTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const summary = String(input?.summary || input?.title || input?.prompt || "").trim();
+  if (!summary) throw new Error("일정 제목(summary)이 필요해요.");
+  const start = String(input?.start || "").trim();
+  if (!start) throw new Error("시작 시각(start, ISO8601)이 필요해요. 예: 2026-06-20T15:00:00+09:00");
+  const isAllDay = /^\d{4}-\d{2}-\d{2}$/.test(start);
+  let end = String(input?.end || "").trim();
+  if (!end) {
+    end = isAllDay ? start : new Date(new Date(start).getTime() + 60 * 60 * 1000).toISOString();
+  }
+  const body: any = {
+    summary,
+    description: input?.description ? String(input.description) : undefined,
+    location: input?.location ? String(input.location) : undefined,
+    start: isAllDay ? { date: start } : { dateTime: start },
+    end: isAllDay ? { date: end } : { dateTime: end },
+  };
+  const res = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data: any = await res.json();
+  if (!res.ok) throw new Error(data?.error?.message || `일정 생성 실패 (${res.status})`);
+  return { kind: "calendar_event", summary, start, end, htmlLink: data.htmlLink || "", eventId: data.id || "" };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
@@ -854,6 +987,9 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   publish: { agentId: "reach", kind: "external", run: runPublishTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
+  gmail_read: { agentId: "sync", kind: "read", run: runGmailReadTool },
+  calendar_list: { agentId: "sync", kind: "read", run: runCalendarListTool },
+  calendar_create: { agentId: "sync", kind: "external", run: runCalendarCreateTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

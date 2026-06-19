@@ -164,6 +164,9 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     publish: `[[RUN: publish | {"platforms": ["instagram"], "caption": "게시글 내용", "mediaUrl": "이미지/영상URL"}]]  → SNS 발행 ⚠️ 항상 사람 승인 필요`,
     ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드)`,
     pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → PDF 문서 생성 (브라우저 프린트로 저장)`,
+    gmail_read: `[[RUN: gmail_read | {"max": 10}]]  → 받은 Gmail 최근 N통 제목·발신자·미리보기 (읽기 전용 · 구글 연결 필요)`,
+    calendar_list: `[[RUN: calendar_list | {"max": 10}]]  → 다가오는 구글 캘린더 일정 조회 (읽기 전용 · 구글 연결 필요)`,
+    calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
   };
   const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => t.agentId === agentId);
   const toolsRunBlock = myTools.length > 0

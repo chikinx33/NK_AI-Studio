@@ -192,6 +192,8 @@ export interface ToolIntegration {
   tool: string;
   fields: IntegrationField[];
   configured: boolean;
+  oauth?: "google"; // 사용자별 OAuth 연동(싱크 gmail·calendar) — env 공용키가 아님
+  connectedAs?: string; // 연결된 구글 계정(연동됨일 때만)
 }
 export async function getIntegrations(): Promise<ToolIntegration[]> {
   return (await fetch("/api/agent/integrations")).json();

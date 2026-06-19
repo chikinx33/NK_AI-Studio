@@ -1,7 +1,8 @@
 // prototype/functions/api/agent/integration-test.ts
 // POST /api/agent/integration-test { tool } — 도구의 NK 키 설정 여부로 연결 상태 확인.
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders } from "./_shared";
+import { send, corsHeaders, getSql, ensureAgentSchema, getGoogleOAuth } from "./_shared";
+import { refreshAccessToken } from "./_google";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
@@ -13,6 +14,45 @@ const TOOL_KEYS: Record<string, { key: string; alt?: string[] }[]> = {
 const has = (env: any, key: string, alt?: string[]) =>
   !!String(env?.[key] || "").trim() || (alt || []).some((k) => String(env?.[k] || "").trim());
 
+/** 싱크 구글 연동 테스트 — refresh_token 으로 access token 갱신 + 읽기 1건(부수효과 없음). */
+async function testGoogle(env: any, userId: string, tool: string): Promise<{ ok: boolean; message: string }> {
+  let row: { refresh_token: string; email: string | null } | null = null;
+  try {
+    const sql = getSql(env);
+    await ensureAgentSchema(sql);
+    row = await getGoogleOAuth(sql, userId);
+  } catch {
+    return { ok: false, message: "연결 상태를 확인하지 못했어요(DB)." };
+  }
+  if (!row?.refresh_token) return { ok: false, message: "아직 구글이 연결되지 않았어요. '구글 연결'을 먼저 해주세요." };
+  let access = "";
+  try {
+    access = await refreshAccessToken(env, row.refresh_token);
+  } catch (e: any) {
+    return { ok: false, message: `토큰 갱신 실패 — 다시 연결해주세요. (${String(e?.message || e)})` };
+  }
+  try {
+    if (tool === "gmail") {
+      const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/profile", {
+        headers: { Authorization: `Bearer ${access}` },
+      });
+      const d: any = await r.json();
+      if (!r.ok) throw new Error(d?.error?.message || `HTTP ${r.status}`);
+      return { ok: true, message: `✅ Gmail 연결 정상 — ${d.emailAddress || row.email || ""} (총 ${d.messagesTotal ?? "?"}통)` };
+    }
+    // calendar
+    const r = await fetch(
+      "https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=1",
+      { headers: { Authorization: `Bearer ${access}` } }
+    );
+    const d: any = await r.json();
+    if (!r.ok) throw new Error(d?.error?.message || `HTTP ${r.status}`);
+    return { ok: true, message: `✅ 캘린더 연결 정상 — '${d.summary || "primary"}' 읽기 확인` };
+  } catch (e: any) {
+    return { ok: false, message: `❌ 연결 실패: ${String(e?.message || e)}` };
+  }
+}
+
 export const onRequestOptions: PagesFunction = async ({ request }) => {
   return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("Origin")) });
 };
@@ -23,6 +63,12 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
   const body = await request.json().catch(() => ({} as any));
   const tool = String(body?.tool || "").trim();
+
+  // 싱크 구글 연동은 사용자별 OAuth 토큰으로 라이브 검증.
+  if (tool === "gmail" || tool === "calendar") {
+    return send(await testGoogle(env, auth.userId, tool), 200, origin);
+  }
+
   const keys = TOOL_KEYS[tool];
   if (!keys) return send({ ok: false, message: `알 수 없는 도구: ${tool}` }, 200, origin);
   const ok = keys.every((k) => has(env, k.key, k.alt));

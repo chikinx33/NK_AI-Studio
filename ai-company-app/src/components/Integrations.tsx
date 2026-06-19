@@ -24,8 +24,10 @@ export function ToolCard({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState("");
-  const isGoogleCal = it.tool === "google_calendar_write";
-  const isGmail = it.tool === "gmail";
+  // 싱크 구글 연동(gmail·calendar) — env 키가 아니라 사용자별 OAuth 팝업 흐름.
+  const isGoogleOAuth = it.tool === "gmail" || it.tool === "calendar";
+  const connectedAs = (it as { connectedAs?: string }).connectedAs;
+  const [connecting, setConnecting] = useState(false);
 
   async function save() {
     setSaving(true);
@@ -59,6 +61,45 @@ export function ToolCard({
       setTestMsg("❌ 테스트 호출 실패");
     }
     setTesting(false);
+  }
+
+  // 구글 연결: 서버에서 동의 URL 받아 팝업 → 콜백이 postMessage 로 결과 통보.
+  async function connectGoogle() {
+    setMsg("");
+    setConnecting(true);
+    try {
+      const r = await fetch("/api/agent/google/connect");
+      const d = await r.json();
+      if (!d?.oauthUrl) {
+        setMsg("⚠️ " + (d?.message || "연결 URL을 받지 못했어요."));
+        setConnecting(false);
+        return;
+      }
+      window.open(d.oauthUrl, "google_connect", "width=520,height=640");
+      const onMsg = (e: MessageEvent) => {
+        if (e?.data?.type === "sns_oauth_result" && e?.data?.platform === "google_connect") {
+          window.removeEventListener("message", onMsg);
+          const res = e.data.result || {};
+          setMsg(res.ok ? "✅ 연결됨" : "❌ " + (res.error || "연결 실패"));
+          setConnecting(false);
+          onSaved();
+        }
+      };
+      window.addEventListener("message", onMsg);
+    } catch {
+      setMsg("⚠️ 연결을 시작하지 못했어요.");
+      setConnecting(false);
+    }
+  }
+  async function disconnectGoogle() {
+    setMsg("");
+    try {
+      await fetch("/api/agent/google/connect", { method: "DELETE" });
+      setMsg("연결을 해제했어요.");
+    } catch {
+      setMsg("⚠️ 해제 실패");
+    }
+    onSaved();
   }
 
   return (
@@ -136,37 +177,59 @@ export function ToolCard({
           </label>
         ))}
       </div>
+      {isGoogleOAuth && (
+        <p className="mb-1 text-[11px] leading-snug text-gray-500">
+          한 번 '구글 연결'하면 Gmail·캘린더가 함께 연결돼요. 본인 구글 계정의 메일 읽기·일정 보기/추가에 사용됩니다.
+        </p>
+      )}
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        <button
-          onClick={save}
-          disabled={saving}
-          className="rounded-lg bg-emerald-700 px-4 py-1.5 text-sm font-medium transition hover:bg-emerald-600 disabled:opacity-40"
-        >
-          저장
-        </button>
-        <button
-          onClick={runTest}
-          disabled={testing || !it.configured}
-          title={it.configured ? "안전 모드로 1회 실행해 연결을 확인합니다" : "필수 키를 먼저 저장하세요"}
-          className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
-        >
-          <PlugIcon className="h-4 w-4" /> 연결 테스트
-        </button>
-        {isGoogleCal && (
-          <button
-            onClick={() => window.open("/api/oauth/google/start", "_blank", "width=520,height=640")}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60"
-          >
-            <LogInIcon className="h-4 w-4" /> 구글 로그인
-          </button>
-        )}
-        {isGmail && (
-          <button
-            onClick={() => window.open("/api/oauth/gmail/start", "_blank", "width=520,height=640")}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60"
-          >
-            <LogInIcon className="h-4 w-4" /> 구글 로그인
-          </button>
+        {isGoogleOAuth ? (
+          it.configured ? (
+            <>
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-300">
+                <CircleIcon className="h-2.5 w-2.5" filled /> 연결됨{connectedAs ? ` · ${connectedAs}` : ""}
+              </span>
+              <button
+                onClick={runTest}
+                disabled={testing}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
+              >
+                <PlugIcon className="h-4 w-4" /> 연결 테스트
+              </button>
+              <button
+                onClick={disconnectGoogle}
+                className="rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-400 transition hover:bg-edge"
+              >
+                연결 해제
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={connectGoogle}
+              disabled={connecting}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60 disabled:opacity-40"
+            >
+              <LogInIcon className="h-4 w-4" /> {connecting ? "연결 중…" : "구글 연결"}
+            </button>
+          )
+        ) : (
+          <>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="rounded-lg bg-emerald-700 px-4 py-1.5 text-sm font-medium transition hover:bg-emerald-600 disabled:opacity-40"
+            >
+              저장
+            </button>
+            <button
+              onClick={runTest}
+              disabled={testing || !it.configured}
+              title={it.configured ? "안전 모드로 1회 실행해 연결을 확인합니다" : "필수 키를 먼저 저장하세요"}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
+            >
+              <PlugIcon className="h-4 w-4" /> 연결 테스트
+            </button>
+          </>
         )}
         {msg && <StatusText msg={msg} className="text-xs text-gray-300" />}
       </div>

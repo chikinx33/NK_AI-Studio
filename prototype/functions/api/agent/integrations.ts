@@ -3,7 +3,7 @@
 // POST /api/agent/integrations — NK는 공용 env 키 사용(사용자 입력 불필요) → 안내만.
 // 라비오크 ToolIntegration 계약. 키는 NK env(시크릿)에서 존재 여부만 노출(값 미노출).
 import { authorizeRequest } from "../_shared/auth.js";
-import { send, corsHeaders, AGENT_TOOLS } from "./_shared";
+import { send, corsHeaders, AGENT_TOOLS, getSql, ensureAgentSchema, getGoogleOAuth } from "./_shared";
 import { getAgent } from "./_orchestrator";
 
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
@@ -29,7 +29,7 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const auth = await authorizeRequest(request, env);
   if (!auth.ok) return send({ error: auth.error }, auth.status, origin);
 
-  const items = Object.entries(TOOL_KEYS).map(([tool, keys]) => {
+  const items: any[] = Object.entries(TOOL_KEYS).map(([tool, keys]) => {
     const def = AGENT_TOOLS[tool];
     const meta = def ? getAgent(def.agentId) : undefined;
     const fields = keys.map((k) => ({
@@ -42,6 +42,23 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       tool, fields, configured: fields.every((f) => f.hasValue),
     };
   });
+
+  // 싱크(비서) 구글 연동 — env 공용키가 아니라 사용자별 OAuth(refresh_token, Neon 저장).
+  // Gmail·Calendar 는 한 번의 '구글 연결'로 두 스코프를 함께 받아 두 카드 모두 연결됨 처리.
+  let goog: { email: string | null; scopes: string } | null = null;
+  try {
+    const sql = getSql(env);
+    await ensureAgentSchema(sql);
+    const row = await getGoogleOAuth(sql, auth.userId);
+    if (row) goog = { email: row.email, scopes: row.scopes || "" };
+  } catch (_) { /* DB 미연결 등 → 미연결 카드로 표시 */ }
+  const sync = getAgent("sync");
+  const syncBase = { agentId: "sync", agentName: sync?.name || "싱크", emoji: sync?.emoji || "📱", fields: [] as any[], oauth: "google" as const };
+  const hasGmail = !!goog && /gmail/.test(goog.scopes);
+  const hasCal = !!goog && /calendar/.test(goog.scopes);
+  items.push({ ...syncBase, tool: "gmail", configured: hasGmail, connectedAs: hasGmail ? (goog?.email || "") : "" });
+  items.push({ ...syncBase, tool: "calendar", configured: hasCal, connectedAs: hasCal ? (goog?.email || "") : "" });
+
   return send(items, 200, origin);
 };
 
