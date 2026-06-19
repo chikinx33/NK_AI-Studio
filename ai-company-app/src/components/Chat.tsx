@@ -109,7 +109,7 @@ function ChatAvatar({ turn }: { turn: Turn }) {
   }
   return (
     <div className="w-16 h-16 shrink-0 flex items-center justify-center text-4xl">
-      {turn.emoji ?? "🤖"}
+      {turn.emoji || "🤖"}
     </div>
   );
 }

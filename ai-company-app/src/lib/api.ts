@@ -500,7 +500,18 @@ export async function cancelResult(id: string): Promise<{ ok: boolean; message?:
       body: JSON.stringify({ id }),
     })
   ).json();
-  return { ok: !!d.ok, message: d.message };
+  // 서버 DB 행은 agent_id(snake_case) — 클라이언트 AgentMessage는 agentId(camelCase)로 매핑
+  const raw = d.message;
+  const message: AgentMessage | undefined = raw
+    ? {
+        role: "agent",
+        agentId: raw.agent_id || raw.agentId,
+        name: raw.name,
+        emoji: AGENT_EMOJI[raw.agent_id || raw.agentId] || raw.emoji,
+        text: raw.text,
+      }
+    : undefined;
+  return { ok: !!d.ok, message };
 }
 
 export async function openResultFolder(_id: string) {
@@ -554,6 +565,11 @@ export async function approveItem(id: string) {
 export async function rejectItem(id: string) {
   return (await fetch(`/api/approvals/${id}/reject`, { method: "POST" })).json();
 }
+
+const AGENT_EMOJI: Record<string, string> = {
+  core: "🧭", edge: "💼", radar: "🔍", maki: "📈", plot: "🎬",
+  ink: "✍️", pixel: "🎨", beat: "🎵", engi: "💻", reach: "📡", sync: "📱",
+};
 
 export type SSEHandler = (event: string, data: any) => void;
 
@@ -642,7 +658,7 @@ export async function streamChat(
 
         if (event.type === "msg" && event.msg?.role === "agent") {
           const m = event.msg;
-          onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: "" });
+          onEvent("turn_start", { agentId: m.agent_id, name: m.name, emoji: AGENT_EMOJI[m.agent_id] || "" });
           onEvent("turn_end", { agentId: m.agent_id, text: m.text });
           agentEmitted++;
         } else if (event.type === "job_ready") {
