@@ -550,6 +550,29 @@ export function parseMentions(message: string): string[] {
   return [...new Set(found)];
 }
 
+/** 읽기 도구(gmail_read·calendar_list) 결과를 채팅용 한국어 요약 텍스트로. */
+export function formatReadResult(toolName: string, out: any): string {
+  if (toolName === "gmail_read") {
+    const emails: any[] = out?.emails || [];
+    if (!emails.length) return "📭 받은메일함에 표시할 메일이 없어요.";
+    const lines = emails.map((e, i) => {
+      const snip = e.snippet ? `\n   ${String(e.snippet).slice(0, 120)}` : "";
+      return `${i + 1}. **${e.subject || "(제목 없음)"}**\n   - 보낸이: ${e.from || "?"}${e.date ? ` · ${e.date}` : ""}${snip}`;
+    });
+    return `📥 받은메일 최근 ${emails.length}통이에요.\n\n${lines.join("\n\n")}`;
+  }
+  if (toolName === "calendar_list") {
+    const events: any[] = out?.events || [];
+    if (!events.length) return "📅 다가오는 일정이 없어요.";
+    const lines = events.map((ev, i) => {
+      const where = ev.location ? ` · 📍${ev.location}` : "";
+      return `${i + 1}. **${ev.summary || "(제목 없음)"}**\n   - ${ev.start || "?"}${where}`;
+    });
+    return `📅 다가오는 일정 ${events.length}개예요.\n\n${lines.join("\n")}`;
+  }
+  return "조회를 완료했어요.";
+}
+
 // 코어가 "종합/취합"을 예고했는지 — 통솔 마무리 턴 발동 신호.
 const SYNTH_CUE = /종합|취합|정리해서|합쳐서|모아서|모아|취합해|종합해|결론을/;
 
@@ -708,12 +731,37 @@ export async function runGroupChat(
   let coreDelegateCount = 0;
   let synthCue = false;
 
-  // 직원이 찍은 RUN 마커 → 본인 도구만 잡으로 실행(Phase 0 검수 게이트로 흐름).
+  // 직원이 찍은 RUN 마커 → 본인 도구만 실행.
+  //  - 읽기 도구(kind=read, 예: gmail_read·calendar_list): 검수 게이트 없이 결과를 채팅에 바로 출력.
+  //  - 생성/외부 도구(image·video·calendar_create 등): 잡+검수 패널 흐름 유지.
   const runTools = async (runs: { tool: string; reason: string }[], agentId: string) => {
     for (const r of runs) {
       const tool = AGENT_TOOLS[r.tool];
       if (!tool || tool.agentId !== agentId) continue; // 본인 도구만
       const parsedInput = parseToolInput(r.reason); // JSON or { prompt: reason }
+      const meta = getAgent(agentId)!;
+
+      // 읽기 전용 조회: 검수 없이 즉시 실행 → 결과를 채팅 메시지로 요약 출력.
+      if (tool.kind === "read") {
+        await emit({
+          userId, conversationId, role: "agent", agentId, name: meta.name,
+          text: `🔎 ${r.tool} 조회 중이에요…`,
+        });
+        try {
+          const output = await tool.run(parsedInput, toolCtx);
+          await emit({
+            userId, conversationId, role: "agent", agentId, name: meta.name,
+            text: formatReadResult(r.tool, output),
+          });
+        } catch (e: any) {
+          await emit({
+            userId, conversationId, role: "agent", agentId, name: meta.name,
+            text: `❌ 조회에 실패했어요: ${String(e?.message || e)}`,
+          });
+        }
+        continue;
+      }
+
       // PPT/PDF: 대화 컨텍스트 자동 주입 — 에이전트가 context를 생략한 경우 최근 대화로 보완
       if ((r.tool === "ppt" || r.tool === "pdf") && !parsedInput.context) {
         const msgs = await listMessages(sql, userId, conversationId);
@@ -723,7 +771,6 @@ export async function runGroupChat(
         if (ctxLines) parsedInput.context = ctxLines;
       }
       const job = await createJob(sql, { userId, type: r.tool, agentId, input: parsedInput });
-      const meta = getAgent(agentId)!;
       await emit({
         userId, conversationId, role: "agent", agentId, name: meta.name,
         text: `🛠️ ${r.tool} 작업을 시작했어요. 잠시 기다려주세요…`,
@@ -733,6 +780,7 @@ export async function runGroupChat(
         const doneText =
           r.tool === "ppt" ? "✅ PPT 완성! 오른쪽 **검수 패널**에서 .pptx 다운로드 버튼을 눌러주세요."
           : r.tool === "pdf" ? "✅ PDF 완성! 오른쪽 **검수 패널**에서 PDF 프린트 버튼을 눌러주세요."
+          : r.tool === "calendar_create" ? "✅ 일정을 만들었어요. 오른쪽 **검수 패널**에서 승인하면 캘린더에 반영돼요."
           : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.`;
         await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: doneText });
         try { deps.onJobReady?.(); } catch {}
