@@ -365,7 +365,16 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
 
   // 검토 대기 = 박스 항목, 처리된 것(사용 확정/재검토) = 최근 처리 텍스트 리스트 (승인 대기와 동일 구조)
   const pending = items.filter((it) => it.reviewStatus === "pending");
-  const recent = items.filter((it) => it.reviewStatus !== "pending").slice(0, 5);
+  // '최근 처리'는 채팅방 리셋(자정)과 동일하게 비운다 — 오늘 0시(로컬) 이후 처리된 것만 표시.
+  // 날짜가 넘어가면 채팅방이 새로 열리듯, 어제까지의 처리 내역은 자동으로 사라진다.
+  const startOfToday = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.getTime();
+  })();
+  const recent = items
+    .filter((it) => it.reviewStatus !== "pending" && it.createdAt >= startOfToday)
+    .slice(0, 5);
 
   // 보고 패널은 빈 상태여도 항상 표시(원본과 동일).
   return (
