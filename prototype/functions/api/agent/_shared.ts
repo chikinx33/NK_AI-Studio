@@ -929,13 +929,18 @@ async function runGmailReadTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "email_list", count: emails.length, emails };
 }
 
-/** 싱크 캘린더 조회: 다가오는 일정 N개. (읽기 전용) */
+/** 싱크 캘린더 조회: 다가오는 N일 내 일정. (읽기 전용)
+ *  범위(days)를 두지 않으면 매년 반복되는 생일 등이 미래 인스턴스로 목록을 도배하므로
+ *  기본 향후 30일로 제한한다. 사용자가 "이번 주/다음 달" 등을 말하면 days 로 조정. */
 async function runCalendarListTool(input: any, ctx: ToolContext): Promise<any> {
   const access = await syncGoogleAccess(ctx);
   const n = Math.min(Math.max(Number(input?.max) || 10, 1), 25);
-  const timeMin = String(input?.timeMin || new Date().toISOString());
+  const now = Date.now();
+  const days = Math.min(Math.max(Number(input?.days) || 30, 1), 365);
+  const timeMin = String(input?.timeMin || new Date(now).toISOString());
+  const timeMax = String(input?.timeMax || new Date(now + days * 86400000).toISOString());
   const params = new URLSearchParams({
-    maxResults: String(n), timeMin, singleEvents: "true", orderBy: "startTime",
+    maxResults: String(n), timeMin, timeMax, singleEvents: "true", orderBy: "startTime",
   });
   const res = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params.toString()}`,
@@ -950,7 +955,7 @@ async function runCalendarListTool(input: any, ctx: ToolContext): Promise<any> {
     location: e.location || "",
     htmlLink: e.htmlLink || "",
   }));
-  return { kind: "calendar_list", count: events.length, events };
+  return { kind: "calendar_list", count: events.length, events, days };
 }
 
 /** 싱크 캘린더 일정 생성: summary + start(+end). end 없으면 1시간. */

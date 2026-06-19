@@ -165,7 +165,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드)`,
     pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → PDF 문서 생성 (브라우저 프린트로 저장)`,
     gmail_read: `[[RUN: gmail_read | {"max": 10}]]  → 받은 Gmail 최근 N통 제목·발신자·미리보기 (읽기 전용 · 구글 연결 필요)`,
-    calendar_list: `[[RUN: calendar_list | {"max": 10}]]  → 다가오는 구글 캘린더 일정 조회 (읽기 전용 · 구글 연결 필요)`,
+    calendar_list: `[[RUN: calendar_list | {"max": 10, "days": 30}]]  → 향후 N일(기본 30) 구글 캘린더 일정 조회. "이번 주"면 days:7, "오늘"이면 days:1 로 조정 (읽기 전용 · 구글 연결 필요)`,
     calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
@@ -581,12 +581,13 @@ export function formatReadResult(toolName: string, out: any): string {
   }
   if (toolName === "calendar_list") {
     const events: any[] = out?.events || [];
-    if (!events.length) return "📅 다가오는 일정이 없어요.";
+    const days = out?.days || 30;
+    if (!events.length) return `📅 앞으로 ${days}일 안에 등록된 일정이 없어요.`;
     const lines = events.map((ev, i) => {
       const where = ev.location ? ` · 📍${ev.location}` : "";
       return `${i + 1}. **${ev.summary || "(제목 없음)"}**\n   - ${ev.start || "?"}${where}`;
     });
-    return `📅 다가오는 일정 ${events.length}개예요.\n\n${lines.join("\n")}`;
+    return `📅 앞으로 ${days}일 일정 ${events.length}개예요.\n\n${lines.join("\n")}`;
   }
   return "조회를 완료했어요.";
 }
