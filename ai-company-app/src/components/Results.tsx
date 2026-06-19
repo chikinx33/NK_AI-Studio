@@ -3,6 +3,7 @@ import {
   getResults,
   openResultFolder,
   reviewResult,
+  cancelResult,
   type ResultItem,
   type AgentMessage,
 } from "../lib/api";
@@ -79,6 +80,13 @@ function DownloadIcon({ className }: { className?: string }) {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" x2="12" y1="15" y2="3" />
+    </svg>
+  );
+}
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="M18 6 6 18" /><path d="m6 6 12 12" />
     </svg>
   );
 }
@@ -210,9 +218,11 @@ async function handleDocDownload(it: ResultItem) {
 function DocCard({
   it,
   onReview,
+  onCancel,
 }: {
   it: ResultItem;
   onReview: (action: "approve" | "revise") => void;
+  onCancel: () => void;
 }) {
   const [dlBusy, setDlBusy] = useState(false);
   const isPpt = it.kind === "ppt";
@@ -254,26 +264,37 @@ function DocCard({
           <div className="text-gray-500">{countLabel}</div>
         </div>
       </div>
-      <div className="mt-2 flex items-center gap-2">
+      <div className="mt-2 flex items-center gap-1.5">
+        {/* 다운로드: 아이콘 전용 정사각형 버튼 */}
         <button
           disabled={dlBusy}
           onClick={onDownload}
-          className="inline-flex items-center gap-1 rounded bg-indigo-700 px-2 py-1 transition hover:bg-indigo-600 disabled:opacity-60 text-white"
+          title={isPpt ? ".pptx 다운로드" : "PDF 프린트"}
+          className="h-7 w-7 flex items-center justify-center rounded bg-indigo-700 transition hover:bg-indigo-600 disabled:opacity-60 text-white shrink-0"
         >
-          <DownloadIcon className="h-3.5 w-3.5" />
-          {dlBusy ? "생성 중…" : isPpt ? ".pptx 다운로드" : "PDF 프린트"}
+          {dlBusy
+            ? <Spinner className="h-3.5 w-3.5" />
+            : <DownloadIcon className="h-3.5 w-3.5" />}
         </button>
         <button
           onClick={() => onReview("approve")}
-          className="inline-flex items-center gap-1 rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 text-white"
+          className="flex-1 inline-flex items-center justify-center rounded bg-emerald-700 px-2 py-1 transition hover:bg-emerald-600 text-white"
         >
           검토 승인
         </button>
         <button
           onClick={() => onReview("revise")}
-          className="inline-flex items-center gap-1 rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
+          className="flex-1 inline-flex items-center justify-center rounded bg-gray-700 px-2 py-1 transition hover:bg-gray-600"
         >
           재검토
+        </button>
+        {/* 취소: 지시 철회 → 에이전트 AI 멘트 + 코어 지식 정리 */}
+        <button
+          onClick={onCancel}
+          title="지시 취소"
+          className="h-7 w-7 flex items-center justify-center rounded bg-rose-900/60 border border-rose-700/50 transition hover:bg-rose-800/80 text-rose-300 shrink-0"
+        >
+          <XIcon className="h-3.5 w-3.5" />
         </button>
       </div>
     </div>
@@ -330,6 +351,18 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
     await applyReview(it, action, note);
   }
 
+  async function cancelInline(it: ResultItem) {
+    setBusy(it.id);
+    try {
+      const r = await cancelResult(it.id);
+      if (r?.ok && r.message) onAgentSay?.(r.message);
+      await refresh();
+    } finally {
+      setBusy(null);
+      setBusyAction(null);
+    }
+  }
+
   // 검토 대기 = 박스 항목, 처리된 것(사용 확정/재검토) = 최근 처리 텍스트 리스트 (승인 대기와 동일 구조)
   const pending = items.filter((it) => it.reviewStatus === "pending");
   const recent = items.filter((it) => it.reviewStatus !== "pending").slice(0, 5);
@@ -353,6 +386,7 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
                 key={it.id}
                 it={it}
                 onReview={(action) => reviewInline(it, action)}
+                onCancel={() => cancelInline(it)}
               />
             );
           }

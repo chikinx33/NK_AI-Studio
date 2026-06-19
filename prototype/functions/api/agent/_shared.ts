@@ -24,7 +24,7 @@ export function send(data: any, status = 200, origin: string | null = null) {
 }
 
 // ── 잡 상태/모델 ─────────────────────────────────────────────────────────────
-export type JobStatus = "queued" | "working" | "review_pending" | "approved" | "revise" | "error";
+export type JobStatus = "queued" | "working" | "review_pending" | "approved" | "revise" | "error" | "cancelled";
 export type ReviewStatus = "pending" | "approved" | "revise";
 
 export interface AgentJob {

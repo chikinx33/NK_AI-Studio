@@ -449,6 +449,7 @@ const NK_AGENT_NAMES: Record<string, string> = {
 export async function getResults(limit = 30): Promise<{ items: ResultItem[]; total: number }> {
   const d = await (await fetch(`/api/agent/jobs?limit=${limit}`)).json();
   const all = ((d && d.items) || []).filter((j: any) => {
+    if (j.status === "cancelled") return false;
     if (!j.output) return false;
     const o = j.output;
     return o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf";
@@ -489,6 +490,17 @@ export async function reviewResult(
     })
   ).json();
   return { ok: !!d.ok, reviewStatus: d.job?.review_status };
+}
+
+export async function cancelResult(id: string): Promise<{ ok: boolean; message?: AgentMessage }> {
+  const d = await (
+    await fetch("/api/agent/cancel-job", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
+  ).json();
+  return { ok: !!d.ok, message: d.message };
 }
 
 export async function openResultFolder(_id: string) {
