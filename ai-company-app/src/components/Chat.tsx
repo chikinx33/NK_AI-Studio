@@ -504,8 +504,15 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
           const activeNonCore = activeArr.find((id) => id !== "core");
           const lastAgentTurn = [...turns].reverse().find((t) => t.role === "agent" && t.agentId);
           const lastUserText = [...turns].reverse().find((t) => t.role === "user")?.text ?? "";
-          const mentionedAgent = agents?.find((a) => a.id !== "core" && lastUserText.includes(a.name));
-          const resolvedId = activeNonCore ?? mentionedAgent?.id ?? lastAgentTurn?.agentId ?? "core";
+          // 텍스트에서 가장 먼저 등장하는 이름이 수신자; 코어 직접 호명 시 항상 코어
+          const firstNamedAgent = agents?.reduce<{ id: string; idx: number } | null>((best, a) => {
+            const idx = lastUserText.indexOf(a.name);
+            if (idx === -1) return best;
+            return !best || idx < best.idx ? { id: a.id, idx } : best;
+          }, null);
+          const resolvedId = firstNamedAgent?.id === "core"
+            ? "core"
+            : (firstNamedAgent?.id ?? activeNonCore ?? lastAgentTurn?.agentId ?? "core");
           const resolved = agents?.find((a) => a.id === resolvedId);
           const tid = resolved?.id ?? resolvedId;
           const tname = resolved?.name ?? lastAgentTurn?.name ?? "코어";

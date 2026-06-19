@@ -168,8 +168,14 @@ export default function App() {
     const userTurn: Turn = { role: "user", text: text || (image ? "[이미지 첨부됨]" : ""), imagePreview: image?.preview };
     commit([...turnsRef.current, userTurn]);
     setBusy(true);
-    // 보내는 즉시 코어를 '활동 중'으로 — 사이드바 아바타가 깜박이며 반응을 보여준다.
-    const textMentioned = agents.find((a) => a.id !== "core" && text.includes(a.name))?.id;
+    // 보내는 즉시 수신자를 '활동 중'으로 — 텍스트에서 가장 먼저 등장하는 이름이 수신자
+    // (코어 직접 호명 시 코어로 고정; 단순 언급은 수신자로 취급 안 함)
+    const firstNamedAgent = agents.reduce<{ id: string; idx: number } | null>((best, a) => {
+      const idx = text.indexOf(a.name);
+      if (idx === -1) return best;
+      return !best || idx < best.idx ? { id: a.id, idx } : best;
+    }, null);
+    const textMentioned = firstNamedAgent && firstNamedAgent.id !== "core" ? firstNamedAgent.id : null;
     setWorkingIds(new Set<string>(focusAgentId ? [focusAgentId] : textMentioned ? [textMentioned] : ["core"]));
 
     const controller = new AbortController();
