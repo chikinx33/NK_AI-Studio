@@ -615,6 +615,14 @@ export async function approveItem(id: string) {
   return data;
 }
 
+// 승인 대기(실행 전) 잡을 일괄 정리(취소). 테스트로 쌓인 잔여 승인 비우기용.
+export async function clearApprovals(): Promise<{ ok: boolean; cleared: number }> {
+  const res = await fetch(`/api/agent/clear-approvals`, { method: "POST" });
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok || data?.error) throw new Error(data?.error || `정리 실패 (HTTP ${res.status})`);
+  return data;
+}
+
 // 거절 = 작업 취소. 담당 직원이 취소 멘트 + 관련 지식 정리. 실패 시 throw.
 export async function rejectItem(id: string) {
   const res = await fetch(`/api/agent/cancel-job`, {

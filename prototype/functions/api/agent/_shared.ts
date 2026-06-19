@@ -617,6 +617,16 @@ export async function listJobs(sql: SqlFn, userId: string, limit = 30): Promise<
   return rows as AgentJob[];
 }
 
+/** 승인 대기(실행 전 = output 없음) 잡을 일괄 취소. 테스트로 쌓인 잔여 승인 정리용.
+ *  산출물 있는 잡(보고/검수 대상)은 건드리지 않는다. */
+export async function clearPendingApprovals(sql: SqlFn, userId: string): Promise<number> {
+  const rows = await sql(
+    "UPDATE agent_jobs SET status = 'cancelled', updated_at = now() WHERE user_id = $1 AND status = 'review_pending' AND output IS NULL RETURNING id",
+    [userId]
+  );
+  return (rows as any[]).length;
+}
+
 /** 현재 review_pending 상태인 잡 목록 — 에이전트가 취소 대상으로 인식할 수 있는 목록 */
 export async function listPendingReviewJobs(sql: SqlFn, userId: string): Promise<AgentJob[]> {
   const rows = await sql(
