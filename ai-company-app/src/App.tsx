@@ -47,9 +47,6 @@ export default function App() {
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
   const [focusAgentId, setFocusAgentId] = useState<string | null>(null);
   const [agentMgrId, setAgentMgrId] = useState<string | null>("core"); // 직원 관리 기본 선택 = 코어
-  // 말풍선으로 전용 대화에 진입하기 직전 상태 (해제 시 복귀용) — 페이지 + VN 여부
-  const [prevView, setPrevView] = useState<"chat" | "dashboard" | "settings" | "knowledge" | "agents" | null>(null);
-  const [prevVn, setPrevVn] = useState(false);
   // 우측 사이드바 회사 지식 칩 → 지식 페이지로 이동하며 적용할 분류 필터(+nonce로 재클릭도 반영)
   const [knowFilter, setKnowFilter] = useState<"원칙" | "사실" | "결정" | "스킬" | null>(null);
   const [knowFilterNonce, setKnowFilterNonce] = useState(0);
@@ -88,20 +85,18 @@ export default function App() {
 
   // 사이드바 말풍선 버튼 → 해당 아바타 전용 대화. 어느 페이지에서든 즉시 대화창으로 전환.
   // 같은 말풍선을 다시 누르면(선택 해제) 진입 전 페이지로 복귀(없으면 홈).
+  // 전용 대화 종료 — 항상 일반 채팅 모드로 복귀(사용자 기대: '전용 대화 ✕' = 일반 채팅).
+  function clearFocus() {
+    setFocusAgentId(null);
+    setVnMode(false);
+    localStorage.setItem("vnMode", "0");
+    setCenterView("chat");
+  }
+
   function focusChat(agentId: string) {
     if (focusAgentId === agentId) {
-      // 같은 말풍선 재클릭 = 해제 → 진입 전 페이지·모드로 복귀(일반 채팅에서 왔으면 일반 채팅으로)
-      setFocusAgentId(null);
-      setVnMode(prevVn);
-      localStorage.setItem("vnMode", prevVn ? "1" : "0");
-      setCenterView(prevView ?? "chat");
-      setPrevView(null);
+      clearFocus(); // 같은 말풍선 재클릭 = 전용 대화 종료 → 일반 채팅
       return;
-    }
-    // 포커스 '첫' 진입일 때만 직전 상태 기억(직원 간 전환 시엔 원래 기억 유지)
-    if (focusAgentId === null) {
-      setPrevView(centerView);
-      setPrevVn(vnMode);
     }
     setFocusAgentId(agentId);
     setVnMode(true);
@@ -439,7 +434,7 @@ export default function App() {
             agents={agents}
             onToggleMode={toggleVn}
             focusAgent={agents.find((a) => a.id === focusAgentId) ?? null}
-            onClearFocus={() => setFocusAgentId(null)}
+            onClearFocus={clearFocus}
             convDate={activeConvId}
           />
         ) : (
