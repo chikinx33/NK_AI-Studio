@@ -47,6 +47,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const body = await request.json().catch(() => ({} as any));
     const message = String(body?.message || "").trim();
     const conversationId = String(body?.conversationId || "main").trim() || "main";
+    const focusAgent = String(body?.focusAgent || "").trim(); // 1:1 단독 대화 모드
     const imageBase64 = typeof body?.imageBase64 === "string" && body.imageBase64 ? body.imageBase64 : undefined;
     const imageMimeType = typeof body?.imageMimeType === "string" && body.imageMimeType ? body.imageMimeType : "image/jpeg";
     if (!message && !imageBase64) return send({ error: "message is required" }, 400, origin);
@@ -85,7 +86,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       try {
         await runGroupChat(env, {
           sql, userId: auth.userId, conversationId, toolCtx,
-          firstMessage: displayText, imageBase64, imageMimeType,
+          firstMessage: displayText, focusAgent: focusAgent || undefined, imageBase64, imageMimeType,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
           onJobReady: () => sse({ type: "job_ready" }),
         });

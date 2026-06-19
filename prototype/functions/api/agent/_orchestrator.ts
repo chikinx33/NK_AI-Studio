@@ -659,6 +659,7 @@ export interface OrchestratorDeps {
   conversationId: string;
   toolCtx: ToolContext; // 도구(RUN) 실행용 컨텍스트
   firstMessage?: string; // 방금 저장한 사용자 메시지(조회 타이밍 의존 제거)
+  focusAgent?: string;   // 1:1 단독 대화 모드 — 이 직원만 응답, 위임·통솔·다른 직원 개입 전면 차단
   imageBase64?: string;  // 첨부 이미지 base64 (첫 번째 에이전트에게만 전달)
   imageMimeType?: string;
   onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
@@ -723,10 +724,17 @@ export async function runGroupChat(
   }
   if (!message) return produced;
 
-  const mentions = parseMentions(message);
-  const explicitCore = mentions.includes("core");
-  const others = mentions.filter((id) => id !== "core");
-  const primary = others.length > 0 && !explicitCore ? others : ["core"];
+  // 1:1 단독 대화 모드: focusAgent 만 응답. 멘션·위임·통솔 전부 무시(다른 직원 개입 차단).
+  const soloAgent = deps.focusAgent && getAgent(deps.focusAgent) ? deps.focusAgent : "";
+  let primary: string[];
+  if (soloAgent) {
+    primary = [soloAgent];
+  } else {
+    const mentions = parseMentions(message);
+    const explicitCore = mentions.includes("core");
+    const others = mentions.filter((id) => id !== "core");
+    primary = others.length > 0 && !explicitCore ? others : ["core"];
+  }
 
   let coreDelegateCount = 0;
   let synthCue = false;
@@ -838,7 +846,7 @@ export async function runGroupChat(
 
   // 1) 1차 응답자
   for (const agentId of primary) {
-    const canDelegate = agentId === "core";
+    const canDelegate = !soloAgent && agentId === "core"; // 단독 모드면 위임 금지
     const meta = getAgent(agentId);
     if (!meta) continue;
     const instruction = canDelegate
@@ -884,7 +892,7 @@ export async function runGroupChat(
   //    단, 대규모 그룹 활동(5명 이상 위임)은 게임·끝말잇기 등 흐름 활동이므로 wrap 불필요.
   //    wrap·회고 Claude 호출을 아끼면 CF 백그라운드 시간을 남은 직원에게 더 줄 수 있다.
   const isLargeGroup = coreDelegateCount >= 5;
-  if (!isLargeGroup && primary.includes("core") && (coreDelegateCount >= 2 || (coreDelegateCount >= 1 && synthCue))) {
+  if (!soloAgent && !isLargeGroup && primary.includes("core") && (coreDelegateCount >= 2 || (coreDelegateCount >= 1 && synthCue))) {
     const t = buildTranscript(await listMessages(sql, userId, conversationId), addr);
     const wrapTrigger =
       `${addr} 요청: "${message}"\n\n방금 직원들이 각자 보고했어요. 팀장(코어)으로서 종합해 결론을 내고, ` +
