@@ -184,12 +184,8 @@ export default function App() {
         (event, data) => {
           switch (event) {
             case "turn_start":
-              // 발언을 시작한 직원을 활동 중으로 — 아바타 깜박임 유지
-              setWorkingIds((prev) => {
-                const next = new Set(prev);
-                if (data.agentId) next.add(data.agentId);
-                return next;
-              });
+              // 발언을 시작한 직원만 활동 중으로 교체 — 이전 직원(코어 등) 깜박임 즉시 해제
+              setWorkingIds(new Set<string>(data.agentId ? [data.agentId] : []));
               commit([
                 ...turnsRef.current,
                 {
