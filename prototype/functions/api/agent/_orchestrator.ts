@@ -189,7 +189,18 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.`
     : "";
 
+  // 현재 날짜·시각(KST/UTC+9) — 미주입 시 LLM이 "오늘"을 몰라 캘린더 일정을 엉뚱한 날짜로 만든다.
+  const pad2 = (n: number) => String(n).padStart(2, "0");
+  const kstNow = new Date(Date.now() + 9 * 3600000);
+  const kstY = kstNow.getUTCFullYear(), kstM = kstNow.getUTCMonth() + 1, kstD = kstNow.getUTCDate();
+  const kstDate = `${kstY}-${pad2(kstM)}-${pad2(kstD)}`;
+  const kstHM = `${pad2(kstNow.getUTCHours())}:${pad2(kstNow.getUTCMinutes())}`;
+  const kstDow = ["일", "월", "화", "수", "목", "금", "토"][kstNow.getUTCDay()];
+
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
+## 현재 시각 (한국 시간, KST/UTC+9)
+오늘은 ${kstDate}(${kstDow}요일), 지금 ${kstHM}. "오늘/내일/이번 주/오전 9시 30분" 같은 상대 날짜·시간은 모두 이 시각 기준으로 계산한다.
+캘린더 등 시각이 필요한 일정의 start/end는 반드시 이 날짜 기준 ISO8601에 '+09:00' 오프셋을 붙여 만든다. (예: 오늘 오전 9시 30분 → ${kstDate}T09:30:00+09:00)
 ## 나의 정체성
 나는 ${meta.emoji} ${meta.name} (id:${meta.id}), 역할: ${meta.role}.
 나는 '사용자'가 아니라 이 회사의 **직원**이다. 내 이름과 사용자를 혼동하지 않는다.
