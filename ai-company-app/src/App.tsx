@@ -169,7 +169,8 @@ export default function App() {
     commit([...turnsRef.current, userTurn]);
     setBusy(true);
     // 보내는 즉시 코어를 '활동 중'으로 — 사이드바 아바타가 깜박이며 반응을 보여준다.
-    setWorkingIds(new Set<string>(focusAgentId ? [focusAgentId] : ["core"]));
+    const textMentioned = agents.find((a) => a.id !== "core" && text.includes(a.name))?.id;
+    setWorkingIds(new Set<string>(focusAgentId ? [focusAgentId] : textMentioned ? [textMentioned] : ["core"]));
 
     const controller = new AbortController();
     abortRef.current = controller;

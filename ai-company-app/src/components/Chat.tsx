@@ -499,14 +499,13 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
           )
         )}
         {busy && !turns[turns.length - 1]?.streaming && (() => {
-          // 우선순위: ① activeIds에서 작업 중인 비코어 에이전트 → ② 마지막 에이전트 발언자 → ③ 유저 멘션 → ④ 코어
+          // 우선순위: ① activeIds 비코어 → ② 유저 멘션 에이전트 → ③ 마지막 발언 에이전트 → ④ 코어
           const activeArr = activeIds ? [...activeIds] : [];
           const activeNonCore = activeArr.find((id) => id !== "core");
-          const activeFallback = activeArr[0];
           const lastAgentTurn = [...turns].reverse().find((t) => t.role === "agent" && t.agentId);
           const lastUserText = [...turns].reverse().find((t) => t.role === "user")?.text ?? "";
           const mentionedAgent = agents?.find((a) => a.id !== "core" && lastUserText.includes(a.name));
-          const resolvedId = activeNonCore ?? activeFallback ?? lastAgentTurn?.agentId ?? mentionedAgent?.id ?? "core";
+          const resolvedId = activeNonCore ?? mentionedAgent?.id ?? lastAgentTurn?.agentId ?? "core";
           const resolved = agents?.find((a) => a.id === resolvedId);
           const tid = resolved?.id ?? resolvedId;
           const tname = resolved?.name ?? lastAgentTurn?.name ?? "코어";
