@@ -115,6 +115,7 @@ interface BuildSystemOpts {
   companySkills?: { name: string; category: string; description: string }[]; // 보유 스킬 목록(Level 0)
   companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[] }[]; // 현재 프로젝트 목록
   pendingJobs?: { id: string; type: string; agentId: string; agentName: string; desc: string }[]; // 검수 대기 잡(취소 가능)
+  clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 (예: 2026-06-20T11:30:00-05:00). "오늘" 판단·캘린더 시각의 기준.
 }
 
 /** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
@@ -189,18 +190,26 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.`
     : "";
 
-  // 현재 날짜·시각(KST/UTC+9) — 미주입 시 LLM이 "오늘"을 몰라 캘린더 일정을 엉뚱한 날짜로 만든다.
+  // 현재 날짜·시각 — 사용자(브라우저) 로컬 기준. 미주입 시 LLM이 "오늘"을 몰라 캘린더를 엉뚱한 날짜로 만든다.
+  // 사용자 시간대가 KST가 아닐 수 있으므로 절대 하드코딩하지 않고 clientNow(브라우저 로컬 ISB+오프셋)를 쓴다.
   const pad2 = (n: number) => String(n).padStart(2, "0");
-  const kstNow = new Date(Date.now() + 9 * 3600000);
-  const kstY = kstNow.getUTCFullYear(), kstM = kstNow.getUTCMonth() + 1, kstD = kstNow.getUTCDate();
-  const kstDate = `${kstY}-${pad2(kstM)}-${pad2(kstD)}`;
-  const kstHM = `${pad2(kstNow.getUTCHours())}:${pad2(kstNow.getUTCMinutes())}`;
-  const kstDow = ["일", "월", "화", "수", "목", "금", "토"][kstNow.getUTCDay()];
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"];
+  const nowInfo = (() => {
+    const m = opts.clientNow && /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2})(?::\d{2})?([+-]\d{2}:\d{2}|Z)?/.exec(opts.clientNow);
+    if (m) {
+      const dow = weekday[new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])).getUTCDay()];
+      const offset = !m[5] || m[5] === "Z" ? "+00:00" : m[5];
+      return { date: `${m[1]}-${m[2]}-${m[3]}`, time: m[4], dow, offset };
+    }
+    const n = new Date(); // 폴백: 서버 UTC (자율·백그라운드 등 clientNow 없을 때)
+    const date = `${n.getUTCFullYear()}-${pad2(n.getUTCMonth() + 1)}-${pad2(n.getUTCDate())}`;
+    return { date, time: `${pad2(n.getUTCHours())}:${pad2(n.getUTCMinutes())}`, dow: weekday[n.getUTCDay()], offset: "+00:00" };
+  })();
 
   const hardState = `# 🔒 확정 정보 (최고 신뢰 — 반드시 따름)
-## 현재 시각 (한국 시간, KST/UTC+9)
-오늘은 ${kstDate}(${kstDow}요일), 지금 ${kstHM}. "오늘/내일/이번 주/오전 9시 30분" 같은 상대 날짜·시간은 모두 이 시각 기준으로 계산한다.
-캘린더 등 시각이 필요한 일정의 start/end는 반드시 이 날짜 기준 ISO8601에 '+09:00' 오프셋을 붙여 만든다. (예: 오늘 오전 9시 30분 → ${kstDate}T09:30:00+09:00)
+## 현재 시각 (사용자 로컬 기준)
+오늘은 ${nowInfo.date}(${nowInfo.dow}요일), 지금 ${nowInfo.time}. "오늘/내일/이번 주/오전 9시 30분" 같은 상대 날짜·시간은 모두 이 시각 기준으로 계산한다.
+캘린더 등 시각이 필요한 일정의 start/end는 반드시 이 날짜와 사용자 시간대 오프셋 '${nowInfo.offset}'을 붙인 ISO8601로 만든다. (예: 오늘 오전 9시 30분 → ${nowInfo.date}T09:30:00${nowInfo.offset})
 ## 나의 정체성
 나는 ${meta.emoji} ${meta.name} (id:${meta.id}), 역할: ${meta.role}.
 나는 '사용자'가 아니라 이 회사의 **직원**이다. 내 이름과 사용자를 혼동하지 않는다.
@@ -769,6 +778,7 @@ export interface OrchestratorDeps {
   imageMimeType?: string;
   onMessage?: (msg: any) => Promise<void>; // SSE 콜백: 발언 저장 즉시 클라이언트에 전송
   onJobReady?: () => void; // SSE 콜백: 도구 잡 완료 시 Results 패널 즉시 갱신
+  clientNow?: string; // 사용자(브라우저) 로컬 현재시각 ISO+오프셋 — "오늘" 기준
 }
 
 /**
@@ -806,6 +816,7 @@ export async function runGroupChat(
     companyProjects: cachedProjects as any[],
     pendingJobs: pendingJobsCtx,
     resolvedAuth: cachedAuth || undefined,
+    clientNow: deps.clientNow,
   };
 
   // 생성된 에이전트 발언을 모은다 — 동기 호출 시 chat 응답에 직접 실어 보내 조회 의존을 없앤다.

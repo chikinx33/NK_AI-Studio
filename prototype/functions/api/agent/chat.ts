@@ -50,6 +50,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const focusAgent = String(body?.focusAgent || "").trim(); // 1:1 단독 대화 모드
     const imageBase64 = typeof body?.imageBase64 === "string" && body.imageBase64 ? body.imageBase64 : undefined;
     const imageMimeType = typeof body?.imageMimeType === "string" && body.imageMimeType ? body.imageMimeType : "image/jpeg";
+    const clientNow = typeof body?.clientNow === "string" && body.clientNow ? body.clientNow : undefined; // 브라우저 로컬 현재시각(시간대 포함)
     if (!message && !imageBase64) return send({ error: "message is required" }, 400, origin);
 
     const displayText = message + (imageBase64 ? (message ? "\n" : "") + "[이미지 첨부됨]" : "");
@@ -86,7 +87,7 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       try {
         await runGroupChat(env, {
           sql, userId: auth.userId, conversationId, toolCtx,
-          firstMessage: displayText, focusAgent: focusAgent || undefined, imageBase64, imageMimeType,
+          firstMessage: displayText, focusAgent: focusAgent || undefined, imageBase64, imageMimeType, clientNow,
           onMessage: (msg: any) => sse({ type: "msg", msg }),
           onJobReady: () => sse({ type: "job_ready" }),
         });

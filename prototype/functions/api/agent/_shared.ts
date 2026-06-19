@@ -1041,12 +1041,9 @@ async function runCalendarListTool(input: any, ctx: ToolContext): Promise<any> {
   const n = Math.min(Math.max(Number(input?.max) || 10, 1), 25);
   const now = Date.now();
   const days = Math.min(Math.max(Number(input?.days) || 30, 1), 365);
-  // timeMin을 '오늘 0시(KST)'로 둔다 — 그러지 않으면 오늘 이미 지난 일정(예: 오전 9:30 알람)이
-  // '과거'로 분류돼 "오늘 알림 있어?"에서 누락된다. (앱은 한국 기준 KST)
-  const KST = 9 * 3600000;
-  const kst = new Date(now + KST);
-  const startOfTodayKstUtcMs = Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth(), kst.getUTCDate()) - KST;
-  const timeMin = String(input?.timeMin || new Date(startOfTodayKstUtcMs).toISOString());
+  // timeMin을 '지금-24시간'으로 둔다 — 사용자 시간대를 서버가 모르므로, 어느 시간대든 '오늘' 이미 지난
+  // 일정(예: 오전 9:30 알람)이 누락되지 않게 24시간 여유를 둔다. (에이전트가 명시 timeMin 주면 그걸 우선)
+  const timeMin = String(input?.timeMin || new Date(now - 86400000).toISOString());
   const timeMax = String(input?.timeMax || new Date(now + days * 86400000).toISOString());
   const params = new URLSearchParams({
     maxResults: String(n), timeMin, timeMax, singleEvents: "true", orderBy: "startTime",

@@ -643,6 +643,17 @@ export interface HistoryTurn {
   text: string;
 }
 
+// 브라우저 로컬 현재시각을 시간대 오프셋 포함 ISO8601로. (예: 2026-06-20T11:30:00-05:00)
+// 서버(UTC)는 사용자 시간대를 모르므로 이 값을 보내 "오늘"·캘린더 시각을 정확히 맞춘다.
+function localNowISO(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const off = -d.getTimezoneOffset(); // 분, UTC 기준 동(+)/서(-)
+  const sign = off >= 0 ? "+" : "-";
+  const a = Math.abs(off);
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}${sign}${p(Math.floor(a / 60))}:${p(a % 60)}`;
+}
+
 /**
  * NK SSE 채팅. POST /api/agent/chat → text/event-stream 응답.
  * 에이전트가 발언을 완료하는 즉시 SSE 이벤트를 수신 → 실시간 순차 대화(진짜 티키타카).
@@ -674,6 +685,7 @@ export async function streamChat(
       focusAgent: opts.focusAgent,
       imageBase64: opts.imageBase64,
       imageMimeType: opts.imageMimeType,
+      clientNow: localNowISO(), // 브라우저 로컬 현재시각(시간대 오프셋 포함) → 에이전트가 "오늘"을 정확히 알게
     }),
     signal: opts.signal,
   });
