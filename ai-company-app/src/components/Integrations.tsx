@@ -25,6 +25,7 @@ export function ToolCard({
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState("");
   const isGoogleCal = it.tool === "google_calendar_write";
+  const isGmail = it.tool === "gmail";
 
   async function save() {
     setSaving(true);
@@ -154,6 +155,14 @@ export function ToolCard({
         {isGoogleCal && (
           <button
             onClick={() => window.open("/api/oauth/google/start", "_blank", "width=520,height=640")}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60"
+          >
+            <LogInIcon className="h-4 w-4" /> 구글 로그인
+          </button>
+        )}
+        {isGmail && (
+          <button
+            onClick={() => window.open("/api/oauth/gmail/start", "_blank", "width=520,height=640")}
             className="inline-flex items-center gap-1.5 rounded-lg border border-sky-700 bg-sky-900/30 px-3 py-1.5 text-sm text-sky-200 transition hover:bg-sky-900/60"
           >
             <LogInIcon className="h-4 w-4" /> 구글 로그인
