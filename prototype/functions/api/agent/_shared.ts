@@ -664,6 +664,9 @@ export interface ToolContext {
 export interface ToolDef {
   agentId: string;
   kind: ToolKind;
+  // true면 '승인 전 실행 금지' — 잡을 승인 대기로만 두고, 사람이 승인할 때 비로소 run을 실행한다.
+  // (외부에 영향 주는 되돌리기 어려운 행동: 캘린더 생성·SNS 발행 등)
+  gate?: boolean;
   run: (input: any, ctx: ToolContext) => Promise<any>;
 }
 
@@ -1094,14 +1097,14 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   video: { agentId: "pixel", kind: "external", run: runVideoTool },
   scenario: { agentId: "plot", kind: "external", run: runScenarioTool },
   music: { agentId: "beat", kind: "external", run: runMusicTool },
-  publish: { agentId: "reach", kind: "external", run: runPublishTool },
+  publish: { agentId: "reach", kind: "external", gate: true, run: runPublishTool },
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
   gmail_read: { agentId: "sync", kind: "read", run: runGmailReadTool },
   // 휴지통 이동은 복구 가능(30일)하므로 즉시 실행(read)으로 두되, 싱크가 대상 확인 후 실행하도록 프롬프트로 유도.
   gmail_trash: { agentId: "sync", kind: "read", run: runGmailTrashTool },
   calendar_list: { agentId: "sync", kind: "read", run: runCalendarListTool },
-  calendar_create: { agentId: "sync", kind: "external", run: runCalendarCreateTool },
+  calendar_create: { agentId: "sync", kind: "external", gate: true, run: runCalendarCreateTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */
@@ -1111,11 +1114,16 @@ export async function processJob(
   jobId: string,
   type: string,
   input: any
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; gated?: boolean }> {
   try {
-    await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
     const tool = AGENT_TOOLS[type];
     if (!tool) throw new Error(`unknown tool: ${type}`);
+    // 승인 게이트 도구: 승인 전에는 실행하지 않는다. 승인 대기로만 두고, 승인 시 review.ts에서 run 실행.
+    if (tool.gate) {
+      await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", reviewStatus: "pending" });
+      return { ok: true, gated: true };
+    }
+    await setJobStatus(sql, jobId, ctx.userId, { status: "working" });
     const output = await tool.run(input, ctx);
     await setJobStatus(sql, jobId, ctx.userId, { status: "review_pending", output, reviewStatus: "pending" });
     return { ok: true };

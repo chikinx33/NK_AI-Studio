@@ -879,9 +879,9 @@ export async function runGroupChat(
       const result = await processJob(toolCtx, sql, job.id, r.tool, parsedInput);
       if (result.ok) {
         const doneText =
-          r.tool === "ppt" ? "✅ PPT 완성! 오른쪽 **검수 패널**에서 .pptx 다운로드 버튼을 눌러주세요."
+          result.gated ? `🔐 이 작업은 승인이 필요해요. 오른쪽 **승인 패널**에서 승인하면 그때 실제로 실행할게요.`
+          : r.tool === "ppt" ? "✅ PPT 완성! 오른쪽 **검수 패널**에서 .pptx 다운로드 버튼을 눌러주세요."
           : r.tool === "pdf" ? "✅ PDF 완성! 오른쪽 **검수 패널**에서 PDF 프린트 버튼을 눌러주세요."
-          : r.tool === "calendar_create" ? "✅ 일정을 만들었어요. 오른쪽 **검수 패널**에서 승인하면 캘린더에 반영돼요."
           : `✅ ${r.tool} 작업 완료. 검수 패널에서 확인하세요.`;
         await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: doneText });
         try { deps.onJobReady?.(); } catch {}

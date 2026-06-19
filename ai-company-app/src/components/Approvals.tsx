@@ -239,7 +239,7 @@ export default function Approvals({
                 src={`/avatars/${a.agentId}.png`}
                 alt={a.agentName ?? a.agentId}
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                className="h-8 w-8 shrink-0 rounded-lg object-cover ring-2 ring-amber-500/60"
+                className="h-8 w-8 shrink-0 rounded-lg object-cover"
                 title={`${a.agentName ?? a.agentId}이(가) 승인 요청`}
               />
               <div className="min-w-0 flex-1">

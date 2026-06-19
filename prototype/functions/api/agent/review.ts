@@ -11,6 +11,7 @@ import {
   getJob,
   setJobStatus,
   AGENT_META,
+  AGENT_TOOLS,
 } from "./_shared";
 
 type PagesFunction = (ctx: {
@@ -45,11 +46,28 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     const job = await getJob(sql, id, auth.userId);
     if (!job) return send({ error: "not_found" }, 404, origin); // 타인 잡 숨김
 
-    const updated = await setJobStatus(sql, id, auth.userId, {
-      status: decision === "approved" ? "approved" : "revise",
-      reviewStatus: decision,
-      reviewNote: note,
-    });
+    // 승인 게이트 도구(gate)는 승인 전에는 실행되지 않은 상태(output 없음)다.
+    // → 승인된 지금 비로소 실제로 실행한다("승인 후 실제 업무 추진").
+    const tool = AGENT_TOOLS[job.type];
+    let updated;
+    if (decision === "approved" && tool?.gate && !job.output) {
+      try {
+        const authHeader = String(request.headers.get("Authorization") || "");
+        const output = await tool.run(job.input, { request, env, authHeader, userId: auth.userId });
+        updated = await setJobStatus(sql, id, auth.userId, {
+          status: "approved", output, reviewStatus: "approved", reviewNote: note,
+        });
+      } catch (e: any) {
+        await setJobStatus(sql, id, auth.userId, { status: "error", error: String(e?.message || e) });
+        return send({ error: `승인 실행 중 오류: ${e?.message || e}` }, 500, origin);
+      }
+    } else {
+      updated = await setJobStatus(sql, id, auth.userId, {
+        status: decision === "approved" ? "approved" : "revise",
+        reviewStatus: decision,
+        reviewNote: note,
+      });
+    }
 
     // 승인 시: 회사 지식에 "사용 확정"을 결정으로 적재(맛보기). 실패해도 검수는 성공 처리.
     if (decision === "approved") {
