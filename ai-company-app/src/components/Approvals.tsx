@@ -114,8 +114,9 @@ export default function Approvals({
     try {
       await (action === "approve" ? approveItem(id) : rejectItem(id));
       await refresh();
-    } catch {
-      // 실패 시에만 잠금 해제 → 다시 시도 가능
+    } catch (e) {
+      // 실패 원인을 사용자에게 그대로 보여준다(조용히 삼키지 않음 → "승인했는데 안 됨" 혼란 방지).
+      alert(`${action === "approve" ? "승인" : "거절"} 처리에 실패했어요:\n${(e as Error).message}`);
       setActing((m) => {
         const n = { ...m };
         delete n[id];

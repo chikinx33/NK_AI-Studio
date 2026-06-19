@@ -603,26 +603,28 @@ export async function getApprovals(): Promise<{ pending: any[]; history: any[] }
   }
 }
 
-// 승인 = 검수 게이트 통과(확정). 기존 검수 엔드포인트(/api/agent/review) 재사용.
+// 승인 = 검수 게이트 통과(확정) + 게이트 도구면 실제 실행. 실패 시 throw(원인을 화면에 드러냄).
 export async function approveItem(id: string) {
-  return (
-    await fetch(`/api/agent/review`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, decision: "approved" }),
-    })
-  ).json();
+  const res = await fetch(`/api/agent/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, decision: "approved" }),
+  });
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok || data?.error) throw new Error(data?.error || `승인 실패 (HTTP ${res.status})`);
+  return data;
 }
 
-// 거절 = 작업 취소. 담당 직원이 취소 멘트 + 관련 지식 정리.
+// 거절 = 작업 취소. 담당 직원이 취소 멘트 + 관련 지식 정리. 실패 시 throw.
 export async function rejectItem(id: string) {
-  return (
-    await fetch(`/api/agent/cancel-job`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    })
-  ).json();
+  const res = await fetch(`/api/agent/cancel-job`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id }),
+  });
+  const data = await res.json().catch(() => ({} as any));
+  if (!res.ok || data?.error) throw new Error(data?.error || `거절 실패 (HTTP ${res.status})`);
+  return data;
 }
 
 const AGENT_EMOJI: Record<string, string> = {
