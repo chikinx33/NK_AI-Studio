@@ -486,9 +486,13 @@ export async function listMessages(
   limit = 100
 ): Promise<AgentMessage[]> {
   const safe = Math.min(Math.max(Number(limit) || 100, 1), 300);
+  // 최근 N개를 가져와 시간순(ASC)으로 정렬. (예전엔 ASC LIMIT 으로 '가장 오래된 N개'만 가져와,
+  //  대화가 N개를 넘으면 방금 보낸 메시지가 잘려 옛 메시지를 처리하는 버그가 있었음.)
   const rows = await sql(
-    `SELECT * FROM agent_messages WHERE user_id = $1 AND conversation_id = $2
-     ORDER BY created_at ASC LIMIT $3`,
+    `SELECT * FROM (
+       SELECT * FROM agent_messages WHERE user_id = $1 AND conversation_id = $2
+       ORDER BY created_at DESC LIMIT $3
+     ) sub ORDER BY created_at ASC`,
     [userId, conversationId, safe]
   );
   return rows as AgentMessage[];
