@@ -503,13 +503,36 @@ export interface LiveEvents {
   working: string[];
 }
 export async function getEvents(since: number): Promise<LiveEvents> {
-  // NK: 라이브 이벤트(백그라운드 보고) 폴링은 후속 포팅. 지금은 빈 이벤트.
-  return { seq: since, messages: [], working: [] };
+  // agent_jobs에서 queued/working 상태 잡의 agent_id를 working 목록으로 반환
+  try {
+    const d = await (await fetch("/api/agent/jobs?limit=20")).json();
+    const jobs: any[] = d?.items ?? [];
+    const working = [
+      ...new Set(
+        jobs
+          .filter((j) => j.status === "queued" || j.status === "working")
+          .map((j) => j.agent_id)
+          .filter(Boolean)
+      ),
+    ];
+    return { seq: since, messages: [], working };
+  } catch {
+    return { seq: since, messages: [], working: [] };
+  }
 }
 
 export async function getApprovals(): Promise<{ pending: any[]; history: any[] }> {
-  // NK: 승인 큐는 검수(잡) 시스템으로 대체 예정. 지금은 빈 목록.
-  return { pending: [], history: [] };
+  // agent_jobs에서 review_pending 잡을 승인 대기 목록으로 반환
+  try {
+    const d = await (await fetch("/api/agent/jobs?limit=20")).json();
+    const jobs: any[] = d?.items ?? [];
+    const pending = jobs
+      .filter((j) => j.status === "review_pending" && j.review_status === "pending")
+      .map((j) => ({ id: j.id, agentId: j.agent_id }));
+    return { pending, history: [] };
+  } catch {
+    return { pending: [], history: [] };
+  }
 }
 
 export async function approveItem(id: string) {
