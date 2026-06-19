@@ -112,11 +112,20 @@ export default function Approvals({
     if (acting[id]) return; // 이미 처리 중이면 무시
     setActing((m) => ({ ...m, [id]: action }));
     try {
-      await (action === "approve" ? approveItem(id) : rejectItem(id));
+      const r: any = await (action === "approve" ? approveItem(id) : rejectItem(id));
       await refresh();
+      // 성공/실패를 항상 명시적으로 알린다(조용히 삼키지 않음 → "눌렀는데 아무 반응 없음" 혼란 방지).
+      const st = r?.job?.status ?? r?.status ?? "?";
+      if (action === "approve") {
+        alert(st === "approved" ? "✅ 승인 완료 — 실제로 실행했어요." : `✅ 승인 처리됨 — 잡 상태: ${st}`);
+      } else {
+        alert(`🗑️ 거절 처리됨 — 잡 상태: ${st}`);
+      }
     } catch (e) {
-      // 실패 원인을 사용자에게 그대로 보여준다(조용히 삼키지 않음 → "승인했는데 안 됨" 혼란 방지).
-      alert(`${action === "approve" ? "승인" : "거절"} 처리에 실패했어요:\n${(e as Error).message}`);
+      // 실패 원인을 사용자에게 그대로 보여준다.
+      alert(`❌ ${action === "approve" ? "승인" : "거절"} 처리에 실패했어요:\n${(e as Error).message}`);
+    } finally {
+      // 성공이든 실패든 항상 잠금 해제(영구 잠금으로 버튼이 먹통 되는 것 방지).
       setActing((m) => {
         const n = { ...m };
         delete n[id];
