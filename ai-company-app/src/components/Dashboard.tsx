@@ -152,8 +152,11 @@ function ConversationList({
       <div className="space-y-1">
         {convs.map((c) => {
           const active = c.id === activeConvId;
-          const date = (c.createdAt || "").slice(0, 10);
-          const titleIsDate = c.title === date;
+          // 아랫줄에 항상 표시할 '날짜': conversation_id가 날짜면 그대로, 아니면(main 등) 첫 메시지 날짜.
+          const isDateId = /^\d{4}-\d{2}-\d{2}$/.test(c.id);
+          const dateLabel = isDateId ? c.id : (c.createdAt || "").slice(0, 10);
+          // 윗줄 '제목': 커스텀 제목이 있으면 그것, 없으면 기본값=날짜. (서버는 커스텀 없으면 title=conversation_id 반환)
+          const displayTitle = c.title && c.title !== dateLabel ? c.title : dateLabel;
           return (
             <div
               key={c.id}
@@ -175,14 +178,14 @@ function ConversationList({
                 />
               ) : (
                 <button onClick={() => onOpenConversation?.(c.id)} className="min-w-0 flex-1 text-left">
-                  <div className={`truncate text-xs ${active ? "text-emerald-200" : "text-gray-200"}`}>{c.title}</div>
-                  {!titleIsDate && <div className="truncate text-[10px] text-gray-500">{date}</div>}
+                  <div className={`truncate text-xs ${active ? "text-emerald-200" : "text-gray-200"}`}>{displayTitle}</div>
+                  <div className="truncate text-[10px] text-gray-500">{dateLabel}</div>
                 </button>
               )}
               <button
                 onClick={() => {
                   setEditing(c.id);
-                  setEditText(c.title);
+                  setEditText(displayTitle);
                 }}
                 title="제목 변경"
                 className="shrink-0 text-gray-600 opacity-0 transition hover:text-gray-300 group-hover:opacity-100"

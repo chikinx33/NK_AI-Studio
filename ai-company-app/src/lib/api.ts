@@ -129,12 +129,13 @@ export async function createConversation(title?: string, projectId?: string): Pr
     })
   ).json();
 }
-export async function renameConversation(id: string, title: string): Promise<Conversation> {
+export async function renameConversation(id: string, title: string): Promise<{ ok: boolean; title?: string }> {
+  // 대화(날짜) 커스텀 제목 저장. 빈 title이면 서버가 기본 날짜 제목으로 복귀시킨다.
   return (
-    await fetch(`/api/conversations/${encodeURIComponent(id)}`, {
-      method: "PATCH",
+    await fetch(`/api/agent/conversation-title`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ conversationId: id, title }),
     })
   ).json();
 }

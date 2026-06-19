@@ -174,6 +174,16 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now()
     )
   `);
+  // 대화(날짜) 커스텀 제목: 사용자가 대화 목록에서 이름을 바꾸면 여기에 저장. 없으면 conversation_id(날짜)가 제목.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_conversation_meta (
+      user_id text NOT NULL,
+      conversation_id text NOT NULL,
+      title text NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, conversation_id)
+    )
+  `);
   agentSchemaReady = true;
 }
 
@@ -510,24 +520,51 @@ export async function listMessages(
   return rows as AgentMessage[];
 }
 
-/** 대화(날짜) 목록 — 캘린더 점·리스트용. conversation_id별 메시지 수·최신 시각. */
+/** 대화(날짜) 목록 — 캘린더 점·리스트용. conversation_id별 메시지 수·최신 시각. 커스텀 제목 있으면 반영. */
 export async function listConversations(
   sql: SqlFn,
   userId: string
 ): Promise<{ id: string; title: string; count: number; createdAt: string; updatedAt: string }[]> {
   const rows = await sql(
-    `SELECT conversation_id, COUNT(*)::int AS cnt, MIN(created_at) AS first, MAX(created_at) AS last
-     FROM agent_messages WHERE user_id = $1
-     GROUP BY conversation_id ORDER BY conversation_id DESC LIMIT 200`,
+    `SELECT m.conversation_id AS conversation_id, COUNT(*)::int AS cnt,
+            MIN(m.created_at) AS first, MAX(m.created_at) AS last, t.title AS custom_title
+     FROM agent_messages m
+     LEFT JOIN agent_conversation_meta t
+       ON t.user_id = m.user_id AND t.conversation_id = m.conversation_id
+     WHERE m.user_id = $1
+     GROUP BY m.conversation_id, t.title
+     ORDER BY m.conversation_id DESC LIMIT 200`,
     [userId]
   );
   return (rows as any[]).map((r) => ({
     id: r.conversation_id,
-    title: r.conversation_id,
+    // 커스텀 제목이 있으면 그것, 없으면 conversation_id(날짜)가 기본 제목.
+    title: (r.custom_title && String(r.custom_title).trim()) || r.conversation_id,
     count: Number(r.cnt) || 0,
     createdAt: r.first,
     updatedAt: r.last,
   }));
+}
+
+/** 대화(날짜) 커스텀 제목 저장. 빈 제목이면 커스텀 제목 삭제(=기본 날짜 제목으로 복귀). */
+export async function setConversationTitle(
+  sql: SqlFn,
+  userId: string,
+  conversationId: string,
+  title: string
+): Promise<boolean> {
+  const t = (title || "").trim();
+  if (!t) {
+    await sql("DELETE FROM agent_conversation_meta WHERE user_id = $1 AND conversation_id = $2", [userId, conversationId]);
+    return true;
+  }
+  await sql(
+    `INSERT INTO agent_conversation_meta (user_id, conversation_id, title, updated_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id, conversation_id) DO UPDATE SET title = EXCLUDED.title, updated_at = now()`,
+    [userId, conversationId, t]
+  );
+  return true;
 }
 
 /** 최근 N턴을 라비오크 buildTranscript 형식의 트랜스크립트로. */
