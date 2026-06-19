@@ -171,12 +171,13 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     calendar_list: `[[RUN: calendar_list | {"max": 10, "days": 30}]]  → 향후 N일(기본 30) 구글 캘린더 일정 조회. "이번 주"면 days:7, "오늘"이면 days:1 로 조정 (읽기 전용 · 구글 연결 필요)`,
     calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
     calendar_delete: `[[RUN: calendar_delete | {"summary": "삭제할 일정 제목", "date": "2026-06-21"}]]  → 구글 캘린더 일정 삭제. date(YYYY-MM-DD)는 선택(주면 그 날짜 위주로 찾음). ⚠️ 되돌릴 수 없으니 사람 승인 후 실행됨 (구글 연결 필요)`,
+    reminder_set: `[[RUN: reminder_set | {"at": "2026-06-20T00:40:00-05:00", "text": "40분 알람"}]]  → 그 시각에 앱에서 울리는 알람 설정(브라우저 알림+소리). at은 위 '현재 시각'의 날짜·오프셋 기준 ISO8601. "5분 뒤/40분에 알람" 같은 단순 알람은 캘린더 말고 이걸 쓴다(승인 불필요·즉시 설정). 구글 연결 불필요.`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
-    gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제",
+    gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
@@ -654,6 +655,12 @@ export function parseMentions(message: string): string[] {
 
 /** 읽기 도구(gmail_read·calendar_list) 결과를 채팅용 한국어 요약 텍스트로. */
 export function formatReadResult(toolName: string, out: any): string {
+  if (toolName === "reminder_set") {
+    const at = String(out?.at || "");
+    const m = /T(\d{2}:\d{2})/.exec(at);
+    const when = m ? m[1] : at;
+    return `⏰ 알람을 맞췄어요 — ${when}에 "${out?.text || "알람"}" 울려드릴게요. (앱이 열려 있어야 알림이 떠요)`;
+  }
   if (toolName === "gmail_read") {
     const emails: any[] = out?.emails || [];
     if (!emails.length) return "📭 받은메일함에 표시할 메일이 없어요.";

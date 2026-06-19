@@ -184,6 +184,18 @@ export async function ensureAgentSchema(sql: SqlFn): Promise<void> {
       PRIMARY KEY (user_id, conversation_id)
     )
   `);
+  // 알람(리마인더): 그 시각에 앱(브라우저)에서 울린다. fire_at 도달 시 프런트가 폴링해 알림.
+  await sql(`
+    CREATE TABLE IF NOT EXISTS agent_reminders (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      fire_at timestamptz NOT NULL,
+      text text NOT NULL DEFAULT '',
+      fired_at timestamptz,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )
+  `);
+  try { await sql("CREATE INDEX IF NOT EXISTS agent_reminders_due_idx ON agent_reminders (user_id, fired_at, fire_at)"); } catch (_) {}
   agentSchemaReady = true;
 }
 
@@ -577,6 +589,23 @@ export async function setConversationTitle(
     [userId, conversationId, t]
   );
   return true;
+}
+
+// ── 알람(리마인더) ────────────────────────────────────────────────────────────
+export async function createReminder(sql: SqlFn, userId: string, fireAtISO: string, text: string) {
+  const rows = await sql(
+    "INSERT INTO agent_reminders (user_id, fire_at, text) VALUES ($1, $2::timestamptz, $3) RETURNING id, fire_at, text",
+    [userId, fireAtISO, text]
+  );
+  return rows[0] as { id: string; fire_at: string; text: string };
+}
+/** 발화 시각 도달 + 아직 안 울린 알람을 '울림' 처리하고 반환(중복 방지). 프런트 폴링용. */
+export async function popDueReminders(sql: SqlFn, userId: string) {
+  const rows = await sql(
+    "UPDATE agent_reminders SET fired_at = now() WHERE user_id = $1 AND fired_at IS NULL AND fire_at <= now() RETURNING id, fire_at, text",
+    [userId]
+  );
+  return rows as { id: string; fire_at: string; text: string }[];
 }
 
 /** 최근 N턴을 라비오크 buildTranscript 형식의 트랜스크립트로. */
@@ -1147,6 +1176,19 @@ async function runCalendarDeleteTool(input: any, ctx: ToolContext): Promise<any>
   return { kind: "calendar_delete", count: deleted.length, deleted };
 }
 
+/** 알람 설정: 지정 시각에 앱(브라우저)에서 울릴 리마인더를 저장. 외부 영향 없음 → 즉시(승인 불필요). */
+async function runReminderSetTool(input: any, ctx: ToolContext): Promise<any> {
+  const sql = getSql(ctx.env);
+  await ensureAgentSchema(sql);
+  const at = String(input?.at || input?.start || input?.time || input?.when || "").trim();
+  if (!at) throw new Error("알람 시각(at, ISO8601)이 필요해요.");
+  const ms = Date.parse(at);
+  if (Number.isNaN(ms)) throw new Error("알람 시각 형식이 올바르지 않아요(ISO8601 필요).");
+  const text = (String(input?.text || input?.summary || input?.title || "알람").trim()) || "알람";
+  const r = await createReminder(sql, ctx.userId, new Date(ms).toISOString(), text);
+  return { kind: "reminder_set", at: r.fire_at, text: r.text, id: r.id };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
@@ -1162,6 +1204,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   calendar_list: { agentId: "sync", kind: "read", run: runCalendarListTool },
   calendar_create: { agentId: "sync", kind: "external", gate: true, run: runCalendarCreateTool },
   calendar_delete: { agentId: "sync", kind: "external", gate: true, run: runCalendarDeleteTool },
+  // 알람: 앱에서 그 시각에 울림. 외부 영향 없어 read처럼 즉시 실행(승인·검수 없음) + 결과를 채팅에 바로 표시.
+  reminder_set: { agentId: "sync", kind: "read", run: runReminderSetTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

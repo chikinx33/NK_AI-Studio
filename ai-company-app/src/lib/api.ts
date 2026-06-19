@@ -615,6 +615,17 @@ export async function approveItem(id: string) {
   return data;
 }
 
+// 발화 시각이 된 알람(리마인더)을 받아온다. 서버가 '울림' 처리하므로 한 번만 반환됨(중복 방지).
+export interface DueReminder { id: string; fire_at: string; text: string }
+export async function getDueReminders(): Promise<DueReminder[]> {
+  try {
+    const d = await (await fetch("/api/agent/reminders")).json();
+    return Array.isArray(d?.due) ? d.due : [];
+  } catch {
+    return [];
+  }
+}
+
 // 승인 대기(실행 전) 잡을 일괄 정리(취소). 테스트로 쌓인 잔여 승인 비우기용.
 export async function clearApprovals(): Promise<{ ok: boolean; cleared: number }> {
   const res = await fetch(`/api/agent/clear-approvals`, { method: "POST" });

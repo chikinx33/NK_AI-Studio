@@ -18,6 +18,7 @@ import {
   streamChat,
   getEvents,
   getApprovals,
+  getDueReminders,
   autonomousStep,
   type StatusInfo,
   type AgentInfo,
@@ -31,6 +32,40 @@ const MenuIcon = ({ className }: { className?: string }) => (
     <line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="18" y2="18" />
   </svg>
 );
+
+// 알람음 — 짧은 비프 3회 (오디오 파일 없이 Web Audio로 생성)
+function playAlarmBeep() {
+  try {
+    const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = new Ctx();
+    const beep = (start: number) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.value = 880;
+      o.connect(g);
+      g.connect(ctx.destination);
+      const t0 = ctx.currentTime + start;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.3, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.35);
+      o.start(t0);
+      o.stop(t0 + 0.36);
+    };
+    beep(0); beep(0.45); beep(0.9);
+    setTimeout(() => { try { ctx.close(); } catch { /* ignore */ } }, 2500);
+  } catch { /* 오디오 차단 등 무시 */ }
+}
+
+// 브라우저 알림 (권한 있을 때만)
+function notifyAlarm(text: string) {
+  try {
+    if ("Notification" in window && Notification.permission === "granted") {
+      new Notification("⏰ 알람", { body: text });
+    }
+  } catch { /* ignore */ }
+}
 
 export default function App() {
   const [status, setStatus] = useState<StatusInfo | null>(null);
@@ -351,6 +386,30 @@ export default function App() {
     poll();
     const t = setInterval(poll, 4000);
     return () => { stopped = true; clearInterval(t); };
+  }, []);
+
+  // 알람(리마인더) 폴링: 발화 시각이 된 알람을 받아 채팅·브라우저 알림·소리로 알린다.
+  // 앱이 열려 있는 동안 동작(브라우저 닫으면 울리지 않음 — 서버 푸시는 별도 작업).
+  useEffect(() => {
+    try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
+    let stopped = false;
+    const poll = async () => {
+      const due = await getDueReminders().catch(() => []);
+      if (stopped || !due.length) return;
+      for (const r of due) {
+        const text = r.text || "알람";
+        commit([
+          ...turnsRef.current,
+          { role: "agent", agentId: "sync", name: "싱크", emoji: "⏰", text: `⏰ 알람이에요! "${text}"` },
+        ]);
+        notifyAlarm(text);
+      }
+      playAlarmBeep();
+    };
+    poll();
+    const t = setInterval(poll, 15000);
+    return () => { stopped = true; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 자율 근무 진행: 출근(workMode=on) + 자율(autonomous) 상태일 때만, 60초마다 한 스텝씩
