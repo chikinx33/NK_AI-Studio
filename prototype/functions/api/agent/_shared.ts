@@ -929,6 +929,46 @@ async function runGmailReadTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "email_list", count: emails.length, emails };
 }
 
+/** 싱크 Gmail 휴지통 이동: 검색어(query)로 매칭된 메일을 휴지통으로. (영구삭제 아님 — 30일 복구 가능)
+ *  안전상 최대 개수를 제한하고, 실제로 옮긴 메일의 제목을 보고한다. 권한 부족(403)이면 재연결 안내. */
+async function runGmailTrashTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const query = String(input?.query || "").trim();
+  if (!query) {
+    throw new Error('어떤 메일을 휴지통으로 보낼지 검색어(query)가 필요해요. 예: "from:no-reply@example.com", "subject:광고", "category:promotions"');
+  }
+  const max = Math.min(Math.max(Number(input?.max) || 5, 1), 20);
+  const listRes = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=${encodeURIComponent(query)}&maxResults=${max}`,
+    { headers: { Authorization: `Bearer ${access}` } }
+  );
+  const listData: any = await listRes.json();
+  if (!listRes.ok) {
+    if (listRes.status === 403) {
+      throw new Error("메일을 옮길 권한이 없어요. ⚙️설정 → 에이전트 → 싱크 → 구글 '연결 해제' 후 다시 '구글 연결'로 권한을 갱신해주세요(읽기 전용 → 수정 가능).");
+    }
+    throw new Error(listData?.error?.message || `메일 검색 실패 (${listRes.status})`);
+  }
+  const messages: any[] = listData.messages || [];
+  if (!messages.length) return { kind: "gmail_trash", trashed: 0, query, items: [] };
+  const items: any[] = [];
+  for (const m of messages) {
+    const dRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From`,
+      { headers: { Authorization: `Bearer ${access}` } }
+    );
+    const d: any = await dRes.json().catch(() => ({}));
+    const hdrs: Record<string, string> = {};
+    for (const h of d?.payload?.headers || []) hdrs[h.name] = h.value;
+    const tRes = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.id}/trash`,
+      { method: "POST", headers: { Authorization: `Bearer ${access}` } }
+    );
+    if (tRes.ok) items.push({ subject: hdrs.Subject || "(제목 없음)", from: hdrs.From || "" });
+  }
+  return { kind: "gmail_trash", trashed: items.length, query, items };
+}
+
 /** 싱크 캘린더 조회: 다가오는 N일 내 일정. (읽기 전용)
  *  범위(days)를 두지 않으면 매년 반복되는 생일 등이 미래 인스턴스로 목록을 도배하므로
  *  기본 향후 30일로 제한한다. 사용자가 "이번 주/다음 달" 등을 말하면 days 로 조정. */
@@ -997,6 +1037,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
   gmail_read: { agentId: "sync", kind: "read", run: runGmailReadTool },
+  // 휴지통 이동은 복구 가능(30일)하므로 즉시 실행(read)으로 두되, 싱크가 대상 확인 후 실행하도록 프롬프트로 유도.
+  gmail_trash: { agentId: "sync", kind: "read", run: runGmailTrashTool },
   calendar_list: { agentId: "sync", kind: "read", run: runCalendarListTool },
   calendar_create: { agentId: "sync", kind: "external", run: runCalendarCreateTool },
 };

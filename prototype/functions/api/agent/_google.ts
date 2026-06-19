@@ -3,7 +3,8 @@
 // 한 번의 동의로 두 스코프를 받아 refresh_token 을 user_id 별로 Neon 에 저장한다.
 // 로그인용 OAuth(api/auth/google)와 별개의 연동 흐름(offline + 확장 스코프).
 
-export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+// gmail.modify = 읽기 + 휴지통 이동/라벨 변경(영구삭제는 불포함 — 안전).
+export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 export const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 export const GOOGLE_CONNECT_SCOPES = `openid email ${GMAIL_SCOPE} ${CALENDAR_SCOPE}`;
 
