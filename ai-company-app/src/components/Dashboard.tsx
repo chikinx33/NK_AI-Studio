@@ -239,10 +239,11 @@ export default function Dashboard({
 
   async function cycleStage(p: Project, idx: number) {
     const cur = p.stages[idx].status;
+    const next = NEXT[cur] ?? "doing"; // 비정상 status도 다음 단계로 안전하게 진행
     setProjects((prev) =>
-      prev?.map((x) => (x.id === p.id ? { ...x, stages: x.stages.map((s, i) => (i === idx ? { ...s, status: NEXT[cur] } : s)) } : x)) ?? prev
+      prev?.map((x) => (x.id === p.id ? { ...x, stages: x.stages.map((s, i) => (i === idx ? { ...s, status: next } : s)) } : x)) ?? prev
     );
-    await setProjectStage(p.id, idx, NEXT[cur]);
+    await setProjectStage(p.id, idx, next);
     load();
   }
 
@@ -319,7 +320,8 @@ export default function Dashboard({
                       </div>
                       <div className="space-y-1">
                         {p.stages.map((s, i) => {
-                          const st = STAGE[s.status];
+                          // 서버 jsonb에 todo/doing/done 외 값이 들어올 수 있어 fallback 필수(undefined.icon 크래시 방지)
+                          const st = STAGE[s.status] ?? STAGE.todo;
                           return (
                             <button
                               key={i}
