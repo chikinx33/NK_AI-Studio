@@ -559,12 +559,12 @@ function hasDeliverableOutput(j: any): boolean {
 }
 // 승인 카드에 보여줄 작업 요약 만들기 — 잡 종류(type)+입력(input)으로 사람이 읽을 한 줄.
 const APPROVAL_TOOL_LABEL: Record<string, string> = {
-  calendar_create: "구글 캘린더 일정 추가", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
+  calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
   image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", music: "BGM 생성",
   scenario: "시나리오 생성", ppt: "PPT 생성", pdf: "PDF 문서 생성",
 };
 // 외부에 영향을 주는(되돌리기 어려운) 도구 — 카드에 'external' 배지로 강조.
-const APPROVAL_EXTERNAL_TOOLS = new Set(["calendar_create", "gmail_trash", "publish"]);
+const APPROVAL_EXTERNAL_TOOLS = new Set(["calendar_create", "calendar_delete", "gmail_trash", "publish"]);
 function fmtWhen(s?: string): string {
   if (!s) return "";
   const m = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(s));

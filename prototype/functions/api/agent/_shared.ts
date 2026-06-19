@@ -1103,6 +1103,50 @@ async function runCalendarCreateTool(input: any, ctx: ToolContext): Promise<any>
   return { kind: "calendar_event", summary, start, end, htmlLink: data.htmlLink || "", eventId: data.id || "" };
 }
 
+/** 싱크 캘린더 일정 삭제: eventId로 직접, 또는 summary(+date)로 찾아 삭제. (외부 영향 → 승인 게이트) */
+async function runCalendarDeleteTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const base = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
+  const eventId = String(input?.eventId || "").trim();
+  if (eventId) {
+    const res = await fetch(`${base}/${encodeURIComponent(eventId)}`, { method: "DELETE", headers: { Authorization: `Bearer ${access}` } });
+    if (!res.ok && res.status !== 410 && res.status !== 404) {
+      const d: any = await res.json().catch(() => ({}));
+      throw new Error(d?.error?.message || `일정 삭제 실패 (${res.status})`);
+    }
+    return { kind: "calendar_delete", count: 1, deleted: [{ eventId }] };
+  }
+  const summary = String(input?.summary || input?.title || input?.query || "").trim();
+  if (!summary) throw new Error("삭제할 일정의 eventId 또는 제목(summary)이 필요해요.");
+  const dateStr = String(input?.date || input?.start || "").slice(0, 10);
+  let timeMin: string, timeMax: string;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    // 날짜 지정 시 시간대 차이를 고려해 ±하루 여유를 둔 3일 창에서 찾는다.
+    const d0 = Date.parse(`${dateStr}T00:00:00Z`);
+    timeMin = new Date(d0 - 86400000).toISOString();
+    timeMax = new Date(d0 + 2 * 86400000).toISOString();
+  } else {
+    const now = Date.now();
+    timeMin = new Date(now - 30 * 86400000).toISOString();
+    timeMax = new Date(now + 90 * 86400000).toISOString();
+  }
+  const params = new URLSearchParams({ q: summary, timeMin, timeMax, singleEvents: "true", orderBy: "startTime", maxResults: "50" });
+  const listRes = await fetch(`${base}?${params.toString()}`, { headers: { Authorization: `Bearer ${access}` } });
+  const listData: any = await listRes.json();
+  if (!listRes.ok) throw new Error(listData?.error?.message || `일정 조회 실패 (${listRes.status})`);
+  const norm = (s: any) => String(s || "").trim().toLowerCase();
+  const matches = (listData.items || []).filter((e: any) => norm(e.summary).includes(norm(summary)));
+  if (!matches.length) return { kind: "calendar_delete", count: 0, deleted: [], note: `"${summary}" 일정을 찾지 못했어요.` };
+  const deleted: any[] = [];
+  for (const e of matches.slice(0, 25)) {
+    const dr = await fetch(`${base}/${encodeURIComponent(e.id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${access}` } });
+    if (dr.ok || dr.status === 410 || dr.status === 404) {
+      deleted.push({ summary: e.summary || "", start: e.start?.dateTime || e.start?.date || "" });
+    }
+  }
+  return { kind: "calendar_delete", count: deleted.length, deleted };
+}
+
 export const AGENT_TOOLS: Record<string, ToolDef> = {
   image: { agentId: "pixel", kind: "external", run: runImagenTool },
   sound: { agentId: "beat", kind: "external", run: runSoundTool },
@@ -1117,6 +1161,7 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   gmail_trash: { agentId: "sync", kind: "read", run: runGmailTrashTool },
   calendar_list: { agentId: "sync", kind: "read", run: runCalendarListTool },
   calendar_create: { agentId: "sync", kind: "external", gate: true, run: runCalendarCreateTool },
+  calendar_delete: { agentId: "sync", kind: "external", gate: true, run: runCalendarDeleteTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

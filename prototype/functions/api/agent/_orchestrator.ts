@@ -170,12 +170,13 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     gmail_trash: `[[RUN: gmail_trash | {"query": "from:no-reply@x.com 또는 subject:광고 등 Gmail 검색어", "max": 5}]]  → 검색어에 맞는 메일을 휴지통으로(30일 복구 가능). ⚠️ 반드시 먼저 gmail_read 등으로 어떤 메일인지 사용자에게 보여주고 명확히 동의받은 뒤에만 실행. 광범위한 검색어로 한꺼번에 지우지 말 것.`,
     calendar_list: `[[RUN: calendar_list | {"max": 10, "days": 30}]]  → 향후 N일(기본 30) 구글 캘린더 일정 조회. "이번 주"면 days:7, "오늘"이면 days:1 로 조정 (읽기 전용 · 구글 연결 필요)`,
     calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
+    calendar_delete: `[[RUN: calendar_delete | {"summary": "삭제할 일정 제목", "date": "2026-06-21"}]]  → 구글 캘린더 일정 삭제. date(YYYY-MM-DD)는 선택(주면 그 날짜 위주로 찾음). ⚠️ 되돌릴 수 없으니 사람 승인 후 실행됨 (구글 연결 필요)`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
-    gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가",
+    gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
