@@ -53,7 +53,8 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     if (decision === "approved" && tool?.gate && !job.output) {
       try {
         const authHeader = String(request.headers.get("Authorization") || "");
-        const output = await tool.run(job.input, { request, env, authHeader, userId: auth.userId });
+        const toolInput = typeof job.input === "string" ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })() : (job.input || {});
+        const output = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId });
         updated = await setJobStatus(sql, id, auth.userId, {
           status: "approved", output, reviewStatus: "approved", reviewNote: note,
         });
