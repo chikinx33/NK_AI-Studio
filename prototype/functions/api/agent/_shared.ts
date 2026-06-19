@@ -303,6 +303,18 @@ export async function updateProjectStatus(sql: SqlFn, userId: string, projectNam
   await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
   return true;
 }
+/** 프로젝트 이름 변경 — data.name 갱신. (name은 매칭 키라 updateProjectField로는 못 바꾸므로 전용 함수) */
+export async function renameProject(sql: SqlFn, userId: string, oldName: string, newName: string): Promise<boolean> {
+  const o = (oldName || "").trim(), n = (newName || "").trim();
+  if (!o || !n || o === n) return false;
+  const rows = await sql("SELECT id, data FROM company_projects WHERE user_id = $1 AND data->>'name' = $2", [userId, o]);
+  if (!rows.length) return false;
+  const r = rows[0];
+  const data = typeof r.data === "string" ? JSON.parse(r.data) : (r.data || {});
+  data.name = n;
+  await sql("UPDATE company_projects SET data = $3::jsonb, updated_at = now() WHERE user_id = $1 AND id = $2", [userId, r.id, JSON.stringify(data)]);
+  return true;
+}
 export async function updateProjectField(sql: SqlFn, userId: string, projectName: string, field: string, value: string): Promise<boolean> {
   const ALLOWED = new Set(["goal", "summary", "nextAction"]);
   if (!ALLOWED.has(field)) return false;

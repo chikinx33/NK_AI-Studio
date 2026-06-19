@@ -23,6 +23,7 @@ import {
   upsertProject,
   listProjects,
   deleteProjectByName,
+  renameProject,
   updateProjectStageByName,
   updateProjectStatus,
   updateProjectField,
@@ -248,6 +249,7 @@ ${persona}${knowledgeBlock}
 프로젝트 관련 요청 시 답변 맨 끝 줄에 마커를 추가하세요(사용자껜 안 보입니다):
 - 생성: [[PROJECT: create | 프로젝트명 | 목표·기한 | 단계1, 단계2, 단계3]]
 - 삭제: [[PROJECT: delete | 프로젝트명]]
+- 이름 변경: [[PROJECT: rename | 기존이름 | 새이름]]  (프로젝트 제목 자체를 바꿀 때)
 - 단계 상태 변경: [[PROJECT: stage | 프로젝트명 | 단계명 | 상태]]  (상태: todo=예정, in_progress=진행 중, done=완료)
 - 단계 추가: [[PROJECT: add_stage | 프로젝트명 | 새단계명]]
 - 단계 삭제: [[PROJECT: remove_stage | 프로젝트명 | 단계명]]
@@ -255,6 +257,7 @@ ${persona}${knowledgeBlock}
 - 필드 수정: [[PROJECT: edit | 프로젝트명 | 필드 | 새값]]  (필드: goal=목표, summary=요약, nextAction=다음액션)
 예) [[PROJECT: stage | '우울의 숲' 소설 단독판매 | 기획 | in_progress]]
 예) [[PROJECT: status | '우울의 숲' 소설 단독판매 | done]]
+예) [[PROJECT: rename | '우울의 숲' 소설 PDF 판매 | '우울의 숲' 소설 PDF 판매전략]]
 예) [[PROJECT: edit | '우울의 숲' 소설 단독판매 | goal | 10월 완성, 11~12월 출시]]
 예) [[PROJECT: add_stage | '우울의 숲' 소설 단독판매 | 교정·퇴고]]
 이 마커를 쓰면 실제로 프로젝트 보드에 반영됩니다. "변경했어요"라고 답하려면 반드시 이 마커를 함께 쓰세요.
@@ -343,7 +346,7 @@ export async function callClaude(
 }
 
 export interface KnowOp { action: "add" | "del" | "edit"; type?: string; text: string; newText?: string; }
-export interface ProjectOp { action: "create" | "delete" | "update_stage" | "update_status" | "update_field" | "add_stage" | "remove_stage"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; field?: string; value?: string; }
+export interface ProjectOp { action: "create" | "delete" | "rename" | "update_stage" | "update_status" | "update_field" | "add_stage" | "remove_stage"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; field?: string; value?: string; }
 export interface SkillOp { action: "create" | "patch" | "delete" | "pin" | "unpin" | "archive" | "restore"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
 export interface CancelOp { jobId?: string; jobType?: string; hint?: string; }
 export interface SpeakResult {
@@ -423,6 +426,9 @@ function extractMarkers(raw: string): SpeakResult {
       projects.push({ action: "create", name, goal, stages });
     } else if (/^(delete|del|remove|삭제|제거)$/.test(action) && parts[1]) {
       projects.push({ action: "delete", name: parts[1], stages: [] });
+    } else if (/^(rename|이름변경|이름수정|이름)$/.test(action) && parts[1] && parts[2]) {
+      // [[PROJECT: rename | 기존이름 | 새이름]] — name=기존, value=새 이름.
+      projects.push({ action: "rename", name: parts[1], stages: [], value: parts.slice(2).join(" | ") });
     } else if (/^(stage|단계|update_stage)$/.test(action) && parts[1] && parts[2] && parts[3]) {
       const rawStatus = parts[3].trim();
       // canonical은 프런트 어휘(doing). 입력은 in_progress/진행 등도 허용하되 저장값은 doing으로 통일.
@@ -437,9 +443,15 @@ function extractMarkers(raw: string): SpeakResult {
         : "active";
       projects.push({ action: "update_status", name: parts[1], stages: [], value: status });
     } else if (/^(edit|update|수정|변경)$/.test(action) && parts[1] && parts[2] && parts[3] !== undefined) {
-      const fieldMap: Record<string, string> = { goal: "goal", 목표: "goal", summary: "summary", 요약: "summary", nextaction: "nextAction", 다음액션: "nextAction" };
-      const field = fieldMap[parts[2].toLowerCase().replace(/\s/g, "")] || parts[2];
-      projects.push({ action: "update_field", name: parts[1], stages: [], field, value: parts.slice(3).join(" | ") });
+      const fieldKey = parts[2].toLowerCase().replace(/\s/g, "");
+      if (fieldKey === "name" || fieldKey === "이름" || fieldKey === "제목" || fieldKey === "title") {
+        // edit 마커로 이름을 바꾸려 한 경우도 rename으로 라우팅(updateProjectField는 name을 거부하므로).
+        projects.push({ action: "rename", name: parts[1], stages: [], value: parts.slice(3).join(" | ") });
+      } else {
+        const fieldMap: Record<string, string> = { goal: "goal", 목표: "goal", summary: "summary", 요약: "summary", nextaction: "nextAction", 다음액션: "nextAction" };
+        const field = fieldMap[fieldKey] || parts[2];
+        projects.push({ action: "update_field", name: parts[1], stages: [], field, value: parts.slice(3).join(" | ") });
+      }
     } else if (/^(add_stage|단계추가)$/.test(action) && parts[1] && parts[2]) {
       projects.push({ action: "add_stage", name: parts[1], stages: [], stageTitle: parts[2] });
     } else if (/^(remove_stage|단계삭제)$/.test(action) && parts[1] && parts[2]) {
@@ -686,6 +698,11 @@ export async function applyProjects(sql: SqlFn, userId: string, projects: Projec
       if (p.action === "delete") {
         await deleteProjectByName(sql, userId, p.name);
         existingNames.delete(p.name);
+      } else if (p.action === "rename") {
+        if (p.value && p.value.trim()) {
+          const ok = await renameProject(sql, userId, p.name, p.value.trim());
+          if (ok) { existingNames.delete(p.name); existingNames.add(p.value.trim()); }
+        }
       } else if (p.action === "update_stage") {
         if (p.stageTitle && p.stageStatus !== undefined) await updateProjectStageByName(sql, userId, p.name, p.stageTitle, p.stageStatus);
       } else if (p.action === "update_status") {
