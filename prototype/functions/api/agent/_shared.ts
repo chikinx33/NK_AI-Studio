@@ -234,13 +234,25 @@ export interface BoardProject {
   id: string; name: string; summary?: string; status: string;
   goal?: string; stages: { title: string; status: string }[]; nextAction?: string; updatedAt: string;
 }
+// 단계 상태 어휘 통일 — 프런트(StageStatus: todo|doing|done)와 워커(in_progress 등)가 "진행 중"을
+// 다른 값으로 저장해 온 탓에 데이터가 섞여 있다. 어느 쪽이 썼든 읽을 때 canonical 값으로 정규화한다.
+// (프런트 STAGE 맵에 없는 값 → undefined.icon 렌더 크래시 방지 + 에이전트 진행현황 표시 정확화)
+export function normalizeStageStatus(s: any): "todo" | "doing" | "done" {
+  const v = String(s ?? "").trim().toLowerCase();
+  if (/^(done|완료|complete|completed|finished)$/.test(v)) return "done";
+  if (/^(doing|in[_\s-]?progress|progress|진행|진행중|진행 중|wip)$/.test(v)) return "doing";
+  return "todo";
+}
 export async function listProjects(sql: SqlFn, userId: string): Promise<BoardProject[]> {
   const rows = await sql("SELECT id, data, updated_at FROM company_projects WHERE user_id = $1 ORDER BY updated_at DESC", [userId]);
   return rows.map((r: any) => {
     const data = typeof r.data === "string" ? (() => { try { return JSON.parse(r.data); } catch { return {}; } })() : (r.data || {});
+    const stages = (Array.isArray(data.stages) ? data.stages : []).map((s: any) => ({
+      title: s?.title ?? "", status: normalizeStageStatus(s?.status),
+    }));
     return {
       id: r.id, name: data.name || r.id, summary: data.summary, status: data.status || "active",
-      goal: data.goal, stages: Array.isArray(data.stages) ? data.stages : [], nextAction: data.nextAction,
+      goal: data.goal, stages, nextAction: data.nextAction,
       updatedAt: r.updated_at,
     };
   });

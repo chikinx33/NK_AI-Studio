@@ -149,7 +149,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
         const done = p.stages.filter((s) => s.status === "done").length;
         const total = p.stages.length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-        const stageList = total > 0 ? ` | 단계: ${p.stages.map((s) => `${s.title}(${s.status === "done" ? "완료" : s.status === "in_progress" ? "진행" : "대기"})`).join(" → ")}` : "";
+        const stageList = total > 0 ? ` | 단계: ${p.stages.map((s) => `${s.title}(${s.status === "done" ? "완료" : s.status === "doing" ? "진행" : "대기"})`).join(" → ")}` : "";
         return `- **${p.name}** [${p.status === "active" ? "진행 중" : p.status === "done" ? "완료" : p.status}] ${total > 0 ? `${done}/${total}단계 (${pct}%)` : ""}${p.goal ? ` | 목표: ${p.goal}` : ""}${stageList}`;
       }).join("\n")
     : "- 등록된 프로젝트 없음. 사용자가 프로젝트를 시작하면 [[PROJECT: create ...]]로 만드세요.");
@@ -424,8 +424,9 @@ function extractMarkers(raw: string): SpeakResult {
       projects.push({ action: "delete", name: parts[1], stages: [] });
     } else if (/^(stage|단계|update_stage)$/.test(action) && parts[1] && parts[2] && parts[3]) {
       const rawStatus = parts[3].trim();
+      // canonical은 프런트 어휘(doing). 입력은 in_progress/진행 등도 허용하되 저장값은 doing으로 통일.
       const stageStatus = /^(done|완료)$/i.test(rawStatus) ? "done"
-        : /^(in_progress|진행|진행중|진행 중)$/i.test(rawStatus) ? "in_progress"
+        : /^(doing|in_progress|진행|진행중|진행 중)$/i.test(rawStatus) ? "doing"
         : "todo";
       projects.push({ action: "update_stage", name: parts[1], stages: [], stageTitle: parts[2], stageStatus });
     } else if (/^(status|상태)$/.test(action) && parts[1] && parts[2]) {
