@@ -552,7 +552,54 @@ export async function speak(
       } catch { /* 개인 지식 반영 실패는 대화 흐름에 영향 없음 */ }
     }
   }
-  return extractMarkers(raw);
+  const result = extractMarkers(raw);
+
+  // ── 한 번에 실행 보정 ─────────────────────────────────────────────────────────
+  // 문제: 모델이 "바꿀게요/반영할게요"처럼 변경을 말로만 하고 마커를 빠뜨리면 그 턴이 헛돈다
+  //       (사용자가 "바꿨어?"라고 다시 물어야 그제서야 마커를 출력 → 한 번에 안 됨).
+  // 해결: 변경을 분명히 말했는데(아래 정규식) DB 반영 마커가 하나도 없으면, 같은 턴에 마커만
+  //       한 번 더 강제로 받아 즉시 반영한다. (프롬프트 규칙만으론 불안정해 서버에서 보정)
+  if (opts.sql && opts.userId) {
+    const claimedChange = /(바꿨|바꿀게|바꾸겠|수정했|수정할게|수정하겠|변경했|변경할게|변경하겠|반영했|반영할게|반영하겠|등록했|등록할게|등록하겠|저장했|저장할게|저장하겠)/.test(result.text);
+    const hasDbMarker = result.knows.length > 0 || result.projects.length > 0 || result.skills.length > 0;
+    if (claimedChange && !hasDbMarker) {
+      const fixRaw = await callClaude(
+        env,
+        system,
+        [
+          { role: "user", content: userContent },
+          { role: "assistant", content: raw },
+          { role: "user", content: "방금 답에서 변경/반영을 말했지만 실제 반영 마커가 빠졌어요. 지금 이 턴에 그 변경을 실행하는 마커(KNOW/PROJECT/SKILL/SELF_KNOW)만 출력하세요. 인사·설명 없이 마커 줄만. 정말 변경할 게 없으면 빈 줄로 답하세요." },
+        ],
+        { sql: opts.sql, userId: opts.userId, model: opts.model || modelFor(agentId), maxTokens: 400, resolvedAuth: opts.resolvedAuth }
+      ).catch(() => "");
+      if (fixRaw) {
+        // SELF_KNOW(개인 지식)는 extractMarkers가 다루지 않으므로 보정분에서도 직접 처리.
+        SELF_KNOW_RE.lastIndex = 0;
+        let sm2: RegExpExecArray | null;
+        while ((sm2 = SELF_KNOW_RE.exec(fixRaw))) {
+          const parts = String(sm2[1]).split("|").map((s) => s.trim()).filter((s) => s.length > 0);
+          const act = (parts[0] || "").toLowerCase();
+          try {
+            if (/^(add|remember|등록|추가)$/.test(act)) {
+              const type = parts.length >= 3 ? normalizeKnowType(parts[1]) : "사실";
+              const text = parts.length >= 3 ? parts.slice(2).join(" | ") : parts.slice(1).join(" | ");
+              if (text) await addAgentKnowledgeRow(opts.sql, opts.userId, agentId, text, type);
+            } else if (/^(del|delete|remove|삭제|제거)$/.test(act)) {
+              const text = parts.slice(1).join(" | ");
+              if (text) await removeAgentKnowledgeRow(opts.sql, opts.userId, agentId, text);
+            }
+          } catch { /* 개인 지식 반영 실패는 대화 흐름에 영향 없음 */ }
+        }
+        // 회사 지식·프로젝트·스킬 마커만 보강(위임 CALL·도구 RUN은 보정 대상 아님 — 변경 누락만 메움).
+        const extra = extractMarkers(fixRaw);
+        result.knows.push(...extra.knows);
+        result.projects.push(...extra.projects);
+        result.skills.push(...extra.skills);
+      }
+    }
+  }
+  return result;
 }
 
 // ── 멘션 라우팅 (라비오크 parseMentions 포팅 — 오탐 방지) ──────────────────────
