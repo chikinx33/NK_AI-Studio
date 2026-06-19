@@ -42,7 +42,7 @@ export async function downloadPpt(title: string, slides: PptSlide[]) {
         align: "center", valign: "middle",
       });
       // 하단 액센트 라인
-      s.addShape(pptxgen.ShapeType.rect, {
+      s.addShape(pptx.ShapeType.rect, {
         x: 3.5, y: 5.5, w: 6.8, h: 0.08,
         fill: { color: BRAND_ACCENT },
         line: { color: BRAND_ACCENT },

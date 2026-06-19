@@ -223,7 +223,13 @@ function DocCard({
 
   async function onDownload() {
     setDlBusy(true);
-    try { await handleDocDownload(it); } finally { setDlBusy(false); }
+    try {
+      await handleDocDownload(it);
+    } catch (e: any) {
+      alert(`다운로드 오류: ${e?.message || String(e)}`);
+    } finally {
+      setDlBusy(false);
+    }
   }
 
   return (
