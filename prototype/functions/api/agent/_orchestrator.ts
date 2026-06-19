@@ -13,11 +13,13 @@ import {
   buildTranscript,
   createJob,
   processJob,
+  setJobStatus,
   getAgentPersona,
   listAgentKnowledge,
   addCompanyKnowledge,
   deleteCompanyKnowledge,
   listCompanyKnowledge,
+  listPendingReviewJobs,
   upsertProject,
   listProjects,
   deleteProjectByName,
@@ -111,6 +113,7 @@ interface BuildSystemOpts {
   companyKnowledge?: string[]; // 전사 공용 회사 지식·규칙(모든 직원에 주입)
   companySkills?: { name: string; category: string; description: string }[]; // 보유 스킬 목록(Level 0)
   companyProjects?: { name: string; status: string; goal?: string; stages: { title: string; status: string }[] }[]; // 현재 프로젝트 목록
+  pendingJobs?: { id: string; type: string; agentId: string; agentName: string; desc: string }[]; // 검수 대기 잡(취소 가능)
 }
 
 /** 라비오크 groupChatSystem 포팅(정체성·정직성·대화규칙·페르소나·개인지식). 위임 블록은 canDelegate 시. */
@@ -132,6 +135,14 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   const skillsBlock = skillsList.length
     ? `\n\n## 🛠️ 보유 스킬 (재사용 절차 — 비슷한 일에 적극 활용해 더 빠르고 정확하게)\n${skillsList.map((s) => `- ${s.category ? `[${s.category}] ` : ""}${s.name}: ${s.description}`).join("\n")}\n비슷한 작업이면 이 스킬의 절차를 따르세요. 절차가 부족하면 [[SKILL: patch ...]]로 개선하세요.`
     : "";
+  const pendingJobsList = opts.pendingJobs || [];
+  const pendingBlock = pendingJobsList.length
+    ? `\n\n## 🗂️ 검수 대기 중인 작업 (취소 가능)\n` +
+      pendingJobsList.map((j) => `- ID: \`${j.id}\` | 유형: ${j.type} | 담당: ${j.agentName} | 내용: ${j.desc}`).join("\n") +
+      `\n사용자가 "취소/철회/없애줘"를 요청하면 즉시: [[CANCEL: ${pendingJobsList[0].id}]]\n` +
+      `유형으로도 가능: [[CANCEL: ${pendingJobsList[0].type}]]`
+    : "";
+
   const projectsList = opts.companyProjects || [];
   const projectsBlock = `\n\n## 📁 현재 프로젝트 현황 (${projectsList.length}개)\n` + (projectsList.length
     ? projectsList.map((p) => {
@@ -182,7 +193,7 @@ ${addr ? `사용자의 호칭은 '${addr}'. 반드시 '${addr}'(으)로 부른�
 # 회사 공유 컨텍스트
 ${DEFAULT_COMPANY.identity}
 
-${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}${projectsBlock}
+${DEFAULT_COMPANY.goals}${companyKnowBlock}${skillsBlock}${projectsBlock}${pendingBlock}
 
 당신은 이 회사의 ${meta.emoji} ${meta.name} 입니다. 역할: ${meta.role}.
 지금 회사 **단톡방**에서 ${addr ?? "사용자"} 및 동료들과 실시간으로 대화 중입니다.
@@ -240,6 +251,12 @@ ${persona}${knowledgeBlock}
 - 삭제: [[SELF_KNOW: del | 기존에 등록된 정확한 내용]]
 예) 픽셀이 "이미지는 항상 16:9로"라는 지시를 받으면 → [[SELF_KNOW: add | 원칙 | 이미지 생성 시 기본 비율은 16:9]]
 이 마커로 저장된 내용은 나만 볼 수 있는 개인 지식으로, 다음 대화에서 자동으로 주입됩니다.
+
+## ❌ 작업 취소 (CANCEL 마커)
+사용자가 검수 대기 중인 작업을 "취소/철회/없애줘/지워줘"라고 요청하면, 위 "검수 대기 중인 작업" 목록에서 해당 항목을 찾아 답변 끝에 마커를 추가하세요(사용자껜 안 보임):
+- ID로 취소: [[CANCEL: {작업ID}]]  예) [[CANCEL: a1b2c3d4-e5f6-7890-abcd-ef1234567890]]
+- 유형으로 취소: [[CANCEL: ppt]] 또는 [[CANCEL: pdf]]
+이 마커를 쓰면 실제로 해당 작업이 취소됩니다. 마커 없이 "취소했어요"라고 말하지 마세요(거짓 보고 금지).
 
 ## ⛔ 미루지 말 것
 - 질문/지시에는 지금 바로 답하거나 즉시 행동으로 옮기세요. "나중에/잠시만/추후" 같은 미루는 답변 금지.${delegation}${toolsRunBlock}`;
@@ -305,6 +322,7 @@ export async function callClaude(
 export interface KnowOp { action: "add" | "del" | "edit"; type?: string; text: string; newText?: string; }
 export interface ProjectOp { action: "create" | "delete" | "update_stage" | "update_status" | "update_field" | "add_stage" | "remove_stage"; name: string; goal?: string; stages: string[]; stageTitle?: string; stageStatus?: string; field?: string; value?: string; }
 export interface SkillOp { action: "create" | "patch" | "delete" | "pin" | "unpin" | "archive" | "restore"; name: string; category?: string; description?: string; content?: string; oldStr?: string; newStr?: string; }
+export interface CancelOp { jobId?: string; jobType?: string; hint?: string; }
 export interface SpeakResult {
   text: string;
   calls: { agentId: string; instruction: string }[];
@@ -312,6 +330,7 @@ export interface SpeakResult {
   knows: KnowOp[];
   projects: ProjectOp[];
   skills: SkillOp[];
+  cancels: CancelOp[];
 }
 
 // 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
@@ -325,6 +344,8 @@ const PROJECT_RE = /\[{1,2}\s*PROJECT\s*:\s*([\s\S]+?)\]{1,2}/gi;
 const SKILL_RE = /\[{1,2}\s*SKILL\s*:\s*([\s\S]+?)\]{1,2}/gi;
 // 직원 개인 지식 마커: [[SELF_KNOW: add | 분류 | 내용]] / [[SELF_KNOW: del | 내용]]
 const SELF_KNOW_RE = /\[{1,2}\s*SELF_KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
+// 작업 취소 마커: [[CANCEL: 작업ID]] 또는 [[CANCEL: 작업유형(ppt/pdf/...)]]
+const CANCEL_RE = /\[{1,2}\s*CANCEL\s*:\s*([\s\S]+?)\]{1,2}/gi;
 
 // 분류 정규화 — 회사 지식 칩(원칙/사실/결정)과 일치시킨다.
 function normalizeKnowType(t: string): string {
@@ -334,13 +355,14 @@ function normalizeKnowType(t: string): string {
   return "사실";
 }
 
-/** 마커 추출 + 본문에서 숨김. (CALL 위임 · RUN 도구 · KNOW 회사지식 관리) */
+/** 마커 추출 + 본문에서 숨김. (CALL 위임 · RUN 도구 · KNOW 회사지식 관리 · CANCEL 작업취소) */
 function extractMarkers(raw: string): SpeakResult {
   const calls: { agentId: string; instruction: string }[] = [];
   const runs: { tool: string; reason: string }[] = [];
   const knows: KnowOp[] = [];
   const projects: ProjectOp[] = [];
   const skills: SkillOp[] = [];
+  const cancels: CancelOp[] = [];
   let m: RegExpExecArray | null;
   CALL_RE.lastIndex = 0;
   while ((m = CALL_RE.exec(raw))) {
@@ -422,8 +444,18 @@ function extractMarkers(raw: string): SpeakResult {
       skills.push({ action: "restore", name });
     }
   }
-  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").replace(SELF_KNOW_RE, "").trim();
-  return { text, calls, runs, knows, projects, skills };
+  CANCEL_RE.lastIndex = 0;
+  while ((m = CANCEL_RE.exec(raw))) {
+    const parts = String(m[1]).split("|").map((s) => s.trim());
+    const first = parts[0] || "";
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(first)) {
+      cancels.push({ jobId: first, hint: parts[1] });
+    } else if (first) {
+      cancels.push({ jobType: first.toLowerCase(), hint: parts[1] });
+    }
+  }
+  const text = raw.replace(CALL_RE, "").replace(RUN_RE, "").replace(KNOW_RE, "").replace(PROJECT_RE, "").replace(SKILL_RE, "").replace(SELF_KNOW_RE, "").replace(CANCEL_RE, "").trim();
+  return { text, calls, runs, knows, projects, skills, cancels };
 }
 
 /** 느슨한 agentId 문자열에서 정식 id 복원 (라비오크 resolveAgentId 포팅). */
@@ -619,18 +651,28 @@ export async function runGroupChat(
   const { sql, userId, conversationId, toolCtx } = deps;
   const addr = "사용자";
 
-  // DB 선취 캐시 — company knowledge·skills·projects·auth를 한 번만 읽고 전 직원이 공유.
+  // DB 선취 캐시 — company knowledge·skills·projects·auth·pendingJobs를 한 번만 읽고 전 직원이 공유.
   // 직원당 4회 DB 왕복(×10명 = 40회) → 4회로 단축 → CF 30초 안에 10명 전원 완주.
-  const [cachedCompanyKnowledge, cachedSkills, cachedProjects] = await Promise.all([
+  const [cachedCompanyKnowledge, cachedSkills, cachedProjects, cachedPendingJobsRaw] = await Promise.all([
     listCompanyKnowledge(sql, userId).catch(() => []).then((ck: any[]) => ck.map((k) => `[${k.type || "사실"}] ${k.text}`)),
     listSkills(sql, userId).catch(() => [] as any[]),
     listProjects(sql, userId).catch(() => [] as any[]),
+    listPendingReviewJobs(sql, userId).catch(() => [] as any[]),
   ]);
   const cachedAuth = await resolvedAuthHeaders(sql, userId, env).catch(() => null);
+  // 취소 가능한 대기 잡 컨텍스트 — 에이전트 시스템 프롬프트에 주입해 취소 마커를 쓸 수 있게 함
+  const pendingJobsCtx = cachedPendingJobsRaw.map((j: any) => ({
+    id: j.id as string,
+    type: j.type as string,
+    agentId: j.agent_id as string,
+    agentName: getAgent(j.agent_id)?.name || j.agent_id,
+    desc: String(j.input?.prompt || j.input?.topic || j.type).slice(0, 100),
+  }));
   const sharedOpts = {
     companyKnowledge: cachedCompanyKnowledge as string[],
     companySkills: cachedSkills as any[],
     companyProjects: cachedProjects as any[],
+    pendingJobs: pendingJobsCtx,
     resolvedAuth: cachedAuth || undefined,
   };
 
@@ -705,6 +747,27 @@ export async function runGroupChat(
   const _applySkills   = (skills: SkillOp[]  | undefined)              => applySkills  (sql, userId, skills       );
   const _applyProjects = (projects: ProjectOp[]| undefined)            => applyProjects(sql, userId, projects    );
 
+  // CANCEL 마커 적용 — 에이전트가 [[CANCEL: id|type]]를 쓰면 해당 잡을 DB에서 바로 취소
+  const _applyCancel = async (cancels: CancelOp[] | undefined) => {
+    if (!cancels || cancels.length === 0) return;
+    let anyDone = false;
+    for (const c of cancels) {
+      const job = c.jobId
+        ? pendingJobsCtx.find((j) => j.id === c.jobId)
+        : pendingJobsCtx.find((j) => j.type === c.jobType);
+      if (!job) continue;
+      try {
+        await setJobStatus(sql, job.id, userId, { status: "cancelled" });
+        // 로컬 목록에서 제거 — 같은 턴에 중복 취소 방지
+        const idx = pendingJobsCtx.findIndex((j) => j.id === job.id);
+        if (idx >= 0) pendingJobsCtx.splice(idx, 1);
+        anyDone = true;
+      } catch {}
+    }
+    // 취소 후 Results 패널 즉시 갱신 트리거
+    if (anyDone) { try { deps.onJobReady?.(); } catch {} }
+  };
+
   // 위임받은 직원이 실제로 일하고 단톡방에 보고.
   const runWorker = async (workerId: string, instruction: string, workerModel?: string, workerMaxTokens?: number) => {
     if (workerId === "core" || !getAgent(workerId)) return;
@@ -719,6 +782,7 @@ export async function runGroupChat(
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
+    await _applyCancel(res.cancels);
   };
 
   // 1) 1차 응답자
@@ -740,6 +804,7 @@ export async function runGroupChat(
     await _applyKnows(res.knows, meta.name);
     await _applyProjects(res.projects);
     await _applySkills(res.skills);
+    await _applyCancel(res.cancels);
     // 자율 근무 중 코어가 호출할 직원이 없으면(할 일 없음) 조용히 대기 — 단톡방 노이즈 방지
     if (opts.autoTrigger && canDelegate && res.calls.length === 0) return produced;
     await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res.text });
@@ -778,6 +843,7 @@ export async function runGroupChat(
     await _applyKnows(wrap.knows, "코어");
     await _applyProjects(wrap.projects);
     await _applySkills(wrap.skills);
+    await _applyCancel(wrap.cancels);
   }
 
   // 3) 자동 회고 (헤르메스 자기개선: 복잡 작업 뒤 새 교훈을 스스로 지식으로 축적 = persist durable knowledge).

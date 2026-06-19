@@ -509,6 +509,15 @@ export async function listJobs(sql: SqlFn, userId: string, limit = 30): Promise<
   return rows as AgentJob[];
 }
 
+/** 현재 review_pending 상태인 잡 목록 — 에이전트가 취소 대상으로 인식할 수 있는 목록 */
+export async function listPendingReviewJobs(sql: SqlFn, userId: string): Promise<AgentJob[]> {
+  const rows = await sql(
+    "SELECT * FROM agent_jobs WHERE user_id = $1 AND status = 'review_pending' ORDER BY created_at DESC LIMIT 20",
+    [userId]
+  );
+  return rows as AgentJob[];
+}
+
 export async function setJobStatus(
   sql: SqlFn,
   id: string,
