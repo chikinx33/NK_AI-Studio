@@ -116,7 +116,9 @@ export interface Conversation {
 }
 export async function getConversations(): Promise<Conversation[]> {
   // 날짜별 대화 목록(메시지가 쌓인 날) — 캘린더 점·리스트용.
-  return (await fetch("/api/agent/conversations")).json();
+  // 인증·서버 오류 시 배열이 아닌 {error} 가 올 수 있어 항상 배열로 정규화(렌더 .map 크래시 방지).
+  const d = await (await fetch("/api/agent/conversations")).json();
+  return Array.isArray(d) ? d : [];
 }
 export async function createConversation(title?: string, projectId?: string): Promise<Conversation> {
   return (
@@ -416,7 +418,9 @@ export interface Project {
   updatedAt: string;
 }
 export async function getProjects(): Promise<Project[]> {
-  return (await fetch("/api/agent/projects")).json();
+  // 인증·서버 오류 시 {error} 가 올 수 있어 항상 배열로 정규화(렌더 .map/.filter 크래시 방지).
+  const d = await (await fetch("/api/agent/projects")).json();
+  return Array.isArray(d) ? d : [];
 }
 export async function setProjectStage(projectId: string, index: number, status: StageStatus) {
   return (

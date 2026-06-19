@@ -6,6 +6,7 @@ import Results from "./components/Results";
 import Settings from "./components/Settings";
 import VisualNovel from "./components/VisualNovel";
 import Dashboard from "./components/Dashboard";
+import ErrorBoundary from "./components/ErrorBoundary";
 import KnowledgeWorkspace from "./components/KnowledgeWorkspace";
 import AgentManager from "./components/AgentManager";
 import RightMenu from "./components/RightMenu";
@@ -445,6 +446,9 @@ export default function App() {
         </div>
 
       <div className="flex-1 flex min-w-0 min-h-0">
+        {/* 중앙 뷰는 에러 바운더리로 감싸 한 화면 오류가 앱 전체를 백지로 만들지 않게 한다.
+            key={centerView} → 다른 메뉴로 이동하면 바운더리가 새로 마운트돼 자동 복구된다. */}
+        <ErrorBoundary key={centerView} onReset={() => setCenterView("chat")}>
         {centerView === "dashboard" ? (
           <Dashboard
             activeConvId={activeConvId}
@@ -496,6 +500,7 @@ export default function App() {
             activeIds={activeIds}
           />
         )}
+        </ErrorBoundary>
 
         <div className="w-72 shrink-0 border-l border-edge p-3 overflow-hidden hidden lg:flex lg:flex-col min-h-0">
           {/* 상단(메뉴·회사 지식·승인 대기)은 고정 */}
