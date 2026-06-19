@@ -168,6 +168,20 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     calendar_list: `[[RUN: calendar_list | {"max": 10}]]  → 다가오는 구글 캘린더 일정 조회 (읽기 전용 · 구글 연결 필요)`,
     calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
   };
+  // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
+  const TOOL_LABELS: Record<string, string> = {
+    image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
+    music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
+    gmail_read: "Gmail 메일 조회", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가",
+  };
+  const toolsByAgent: Record<string, string[]> = {};
+  for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
+    (toolsByAgent[td.agentId] ??= []).push(TOOL_LABELS[tname] || tname);
+  }
+  const teamToolMap = Object.entries(toolsByAgent)
+    .map(([aid, tools]) => `- ${getAgent(aid)?.name || aid}(${aid}): ${tools.join(", ")}`)
+    .join("\n");
+
   const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => t.agentId === agentId);
   const toolsRunBlock = myTools.length > 0
     ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.`
@@ -188,7 +202,11 @@ ${addr ? `사용자의 호칭은 '${addr}'. 반드시 '${addr}'(으)로 부른�
 1. 그 직원을 사람처럼 직접 불러내세요. 예: "플롯, 기획부터 잡아줘!"
 2. 답변 맨 끝 줄에 정확히: [[CALL: 직원id | 그 직원에게 줄 구체적 지시]] (사용자껜 안 보임)
 3. 여러 명이면 여러 줄. ⚠️ 자기 자신(core)은 호출 금지. 단순 대화·인사·질문이면 호출하지 마세요.
-직원 id: ${AGENT_IDS}`
+직원 id: ${AGENT_IDS}
+
+## 🛠️ 직원별 실행 도구 (이 작업이 오면 반드시 그 직원에게 [[CALL]] 위임)
+${teamToolMap}
+⚠️ 당신(코어)은 외부 도구 실행 권한이 없습니다. 특히 "달력/캘린더/일정/메일/Gmail 확인·조회·추가"는 전부 싱크(sync) 담당이에요. 사용자가 이런 걸 요청하면 "제가 직접 못 한다"거나 "시켜드릴까요?"라고 되묻지 말고, 곧바로 [[CALL: sync | 구체적 지시]]로 싱크를 호출해 처리하세요.`
     : "";
 
   return `${hardState}
