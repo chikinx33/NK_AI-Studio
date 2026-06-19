@@ -718,7 +718,7 @@ async function runMusicTool(input: any, ctx: ToolContext): Promise<any> {
   return { musicUrl: data.musicUrl || "", kind: "music", topic: topic || "배경음악", model: "elevenlabs" };
 }
 
-const PPT_SYSTEM = `당신은 프레젠테이션 전문가입니다. 요청을 받아 PowerPoint 슬라이드 구조를 순수 JSON으로 생성하세요.
+const PPT_SYSTEM = `당신은 프레젠테이션 전문가입니다. 요청과 대화 컨텍스트를 바탕으로 PowerPoint 슬라이드 구조를 순수 JSON으로 생성하세요.
 
 출력 형식 (마크다운 코드블록 없이 JSON만):
 {
@@ -729,15 +729,16 @@ const PPT_SYSTEM = `당신은 프레젠테이션 전문가입니다. 요청을 �
 }
 
 규칙:
-- 슬라이드 수: 8~12장 (표지 + 내용 + 마무리)
-- 첫 슬라이드: 표지 (title만, bullets=[])
-- 마지막 슬라이드: Q&A 또는 마무리
-- bullets: 슬라이드당 3~5개, 간결하게 (1줄 이내)
+- 슬라이드 수: 요청에 따름 (1장 요청이면 1장, 미지정이면 8~12장)
+- 1장 소개카드 요청: 표지 포맷 — bullets에 핵심 정보 5~7개(출간일·채널·가격·부제·핵심문구 등) 풍부하게 기입
+- 다장 프레젠테이션: 첫 슬라이드=표지(bullets=[]), 마지막=마무리/Q&A
+- bullets: 슬라이드당 3~7개, 간결하게 (1줄 이내)
+- 참고 컨텍스트가 있으면 반드시 활용해 실제 내용으로 채울 것
 - notes: 발표자가 구두로 할 말 (생략 가능)
 - 한국어 작성
 - JSON만 출력`;
 
-const PDF_SYSTEM = `당신은 문서 작성 전문가입니다. 요청을 받아 PDF 문서 구조를 순수 JSON으로 생성하세요.
+const PDF_SYSTEM = `당신은 문서 작성 전문가입니다. 요청과 대화 컨텍스트를 바탕으로 PDF 문서 구조를 순수 JSON으로 생성하세요.
 
 출력 형식 (마크다운 코드블록 없이 JSON만):
 {
@@ -750,7 +751,8 @@ const PDF_SYSTEM = `당신은 문서 작성 전문가입니다. 요청을 받아
 
 규칙:
 - 섹션 수: 4~8개
-- 각 섹션: heading + content (2~5문장 분량)
+- 각 섹션: heading + content (3~6문장 분량, 충실하게)
+- 참고 컨텍스트가 있으면 반드시 활용해 실제 내용으로 채울 것
 - 한국어 작성
 - JSON만 출력`;
 

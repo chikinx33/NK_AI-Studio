@@ -669,6 +669,14 @@ export async function runGroupChat(
       const tool = AGENT_TOOLS[r.tool];
       if (!tool || tool.agentId !== agentId) continue; // 본인 도구만
       const parsedInput = parseToolInput(r.reason); // JSON or { prompt: reason }
+      // PPT/PDF: 대화 컨텍스트 자동 주입 — 에이전트가 context를 생략한 경우 최근 대화로 보완
+      if ((r.tool === "ppt" || r.tool === "pdf") && !parsedInput.context) {
+        const msgs = await listMessages(sql, userId, conversationId);
+        const ctxLines = msgs.slice(-20)
+          .map((m) => `[${m.name ?? (m.role === "user" ? "사용자" : m.role)}]: ${m.text.slice(0, 600)}`)
+          .join("\n");
+        if (ctxLines) parsedInput.context = ctxLines;
+      }
       const job = await createJob(sql, { userId, type: r.tool, agentId, input: parsedInput });
       const meta = getAgent(agentId)!;
       await emit({
