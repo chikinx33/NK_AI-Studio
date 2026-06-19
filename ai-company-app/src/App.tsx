@@ -441,6 +441,7 @@ export default function App() {
             onToggleMode={toggleVn}
             agents={agents}
             convDate={activeConvId}
+            activeIds={activeIds}
           />
         )}
 

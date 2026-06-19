@@ -23,6 +23,7 @@ interface Props {
   onToggleMode?: () => void;
   agents?: { id: string; name: string }[]; // 코어 제안에서 담당자 위임 버튼 감지용
   convDate?: string; // 이 채팅(대화)의 생성 날짜 (YYYY-MM-DD) — 헤더 표기용
+  activeIds?: Set<string>; // 현재 활성(작업 중) 에이전트 ID 집합 — 입력 중 아바타 결정용
 }
 
 /** YYYY-MM-DD → YYYY.MM.DD (날짜 형식이 아니면 빈 문자열) */
@@ -253,7 +254,7 @@ function BrainIcon({ className }: { className?: string }) {
 
 // (에이전트 메시지 렌더는 Markdown 컴포넌트로 일원화 — react-markdown + remark-gfm)
 
-export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate }: Props) {
+export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, onSend, onToggleMode, agents, convDate, activeIds }: Props) {
   // 대화창은 날짜(conversationId)로 구분됨. 자정이 지나 오늘이 아닌 대화창은 종료(입력 막힘).
   const isExpired = (() => {
     if (!convDate) return false;
@@ -498,11 +499,17 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
           )
         )}
         {busy && !turns[turns.length - 1]?.streaming && (() => {
-          // 입력에서 멘션한 직원이 있으면 그 직원, 없으면 코어가 '입력 중'으로 보이게
+          // 우선순위: ① activeIds에서 작업 중인 비코어 에이전트 → ② 마지막 에이전트 발언자 → ③ 유저 멘션 → ④ 코어
+          const activeArr = activeIds ? [...activeIds] : [];
+          const activeNonCore = activeArr.find((id) => id !== "core");
+          const activeFallback = activeArr[0];
+          const lastAgentTurn = [...turns].reverse().find((t) => t.role === "agent" && t.agentId);
           const lastUserText = [...turns].reverse().find((t) => t.role === "user")?.text ?? "";
-          const ta = agents?.find((a) => a.id !== "core" && lastUserText.includes(a.name));
-          const tid = ta?.id ?? "core";
-          const tname = ta?.name ?? "코어";
+          const mentionedAgent = agents?.find((a) => a.id !== "core" && lastUserText.includes(a.name));
+          const resolvedId = activeNonCore ?? activeFallback ?? lastAgentTurn?.agentId ?? mentionedAgent?.id ?? "core";
+          const resolved = agents?.find((a) => a.id === resolvedId);
+          const tid = resolved?.id ?? resolvedId;
+          const tname = resolved?.name ?? lastAgentTurn?.name ?? "코어";
           return (
             <div className="flex items-start justify-start gap-2">
               <img
