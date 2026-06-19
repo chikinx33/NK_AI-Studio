@@ -546,13 +546,21 @@ export async function getEvents(since: number): Promise<LiveEvents> {
   }
 }
 
+// 산출물(이미지·영상·문서 등)이 달린 잡인지 — 이런 잡은 '보고'(Results)에서 검토하므로 '승인'에선 제외.
+function hasDeliverableOutput(j: any): boolean {
+  const o = j?.output;
+  if (!o) return false;
+  return !!(o.signedUrl || o.videoUrl || o.audioUrl || o.dataUrl || o.kind === "ppt" || o.kind === "pdf");
+}
 export async function getApprovals(): Promise<{ pending: any[]; history: any[] }> {
-  // agent_jobs에서 review_pending 잡을 승인 대기 목록으로 반환
+  // agent_jobs에서 review_pending 잡을 승인 대기 목록으로 반환.
+  // 역할 분리: 산출물이 있는 잡은 '보고'에서 검토 → 여기선 제외해 중복 표시를 막는다.
+  // 따라서 '승인'에는 산출물 없이 실행 허가만 필요한 잡(외부/로컬 명령 등)만 남는다.
   try {
     const d = await (await fetch("/api/agent/jobs?limit=20")).json();
     const jobs: any[] = d?.items ?? [];
     const pending = jobs
-      .filter((j) => j.status === "review_pending" && j.review_status === "pending")
+      .filter((j) => j.status === "review_pending" && j.review_status === "pending" && !hasDeliverableOutput(j))
       .map((j) => ({ id: j.id, agentId: j.agent_id }));
     return { pending, history: [] };
   } catch {
