@@ -50,13 +50,14 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
     // → 승인된 지금 비로소 실제로 실행한다("승인 후 실제 업무 추진").
     const tool = AGENT_TOOLS[job.type];
     let updated;
+    let executedOutput: any = job.output;
     if (decision === "approved" && tool?.gate && !job.output) {
       try {
         const authHeader = String(request.headers.get("Authorization") || "");
         const toolInput = typeof job.input === "string" ? (() => { try { return JSON.parse(job.input); } catch { return {}; } })() : (job.input || {});
-        const output = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId });
+        executedOutput = await tool.run(toolInput, { request, env, authHeader, userId: auth.userId });
         updated = await setJobStatus(sql, id, auth.userId, {
-          status: "approved", output, reviewStatus: "approved", reviewNote: note,
+          status: "approved", output: executedOutput, reviewStatus: "approved", reviewNote: note,
         });
       } catch (e: any) {
         await setJobStatus(sql, id, auth.userId, { status: "error", error: String(e?.message || e) });
@@ -78,11 +79,39 @@ export const onRequestPost: PagesFunction = async ({ request, env, waitUntil }) 
       waitUntil(recordDecision(request, authHeader, text).catch(() => {}));
     }
 
-    return send({ ok: true, job: updated }, 200, origin);
+    // 담당 직원(예: 싱크)이 채팅으로 결과를 답하도록 메시지를 함께 반환 (프런트가 alert 대신 채팅에 표시).
+    const meta = AGENT_META[job.agent_id] || { name: job.agent_id, role: "" };
+    const message = {
+      role: "agent",
+      agentId: job.agent_id,
+      name: meta.name,
+      text: decision === "approved"
+        ? approvalDoneText(job.type, executedOutput, job.input)
+        : "재검토로 돌릴게요. 어떤 점을 고칠지 알려주시면 다시 해볼게요.",
+    };
+
+    return send({ ok: true, job: updated, message }, 200, origin);
   } catch (e: any) {
     return send({ error: e?.message || "검수 처리 중 오류" }, 500, origin);
   }
 };
+
+/** 승인 완료 시 담당 직원이 채팅으로 할 말 — 작업 종류·결과 기반(자연스러운 한 줄). */
+function approvalDoneText(type: string, output: any, input: any): string {
+  const o = output || {};
+  const inp = (typeof input === "string" ? (() => { try { return JSON.parse(input); } catch { return {}; } })() : input) || {};
+  if (type === "calendar_create") {
+    const start = String(o.start || inp.start || "");
+    const t = /T(\d{2}:\d{2})/.exec(start)?.[1] || "";
+    const title = o.summary || inp.summary || "일정";
+    return `✅ 승인 확인! '${title}'${t ? ` ${t}에` : ""} 캘린더에 등록했어요.`;
+  }
+  if (type === "calendar_delete") {
+    return Number(o.count) > 0 ? `✅ 승인 확인! 일정 ${o.count}건을 삭제했어요.` : `✅ 승인 확인! 그런데 삭제할 일정을 찾지 못했어요.`;
+  }
+  if (type === "publish") return "✅ 승인 확인! 발행을 진행했어요.";
+  return "✅ 승인 확인! 요청하신 작업을 실행했어요.";
+}
 
 /** 회사 지식 적재(맛보기) — 기존 /api/knowledge 재사용. RAG 미설정이면 graceful 무시. */
 async function recordDecision(request: Request, authHeader: string, text: string): Promise<void> {

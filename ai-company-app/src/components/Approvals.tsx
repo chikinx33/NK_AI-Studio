@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project } from "../lib/api";
+import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -90,8 +90,10 @@ interface ApprovalItem {
 
 export default function Approvals({
   onPickCategory,
+  onAgentSay,
 }: {
   onPickCategory?: (key: "원칙" | "사실" | "결정" | "스킬" | null) => void;
+  onAgentSay?: (m: AgentMessage) => void;
 } = {}) {
   const [pending, setPending] = useState<ApprovalItem[]>([]);
   const [history, setHistory] = useState<ApprovalItem[]>([]);
@@ -114,16 +116,20 @@ export default function Approvals({
     try {
       const r: any = await (action === "approve" ? approveItem(id) : rejectItem(id));
       await refresh();
-      // 성공/실패를 항상 명시적으로 알린다(조용히 삼키지 않음 → "눌렀는데 아무 반응 없음" 혼란 방지).
-      const st = r?.job?.status ?? r?.status ?? "?";
-      if (action === "approve") {
-        alert(st === "approved" ? "✅ 승인 완료 — 실제로 실행했어요." : `✅ 승인 처리됨 — 잡 상태: ${st}`);
-      } else {
-        alert(`🗑️ 거절 처리됨 — 잡 상태: ${st}`);
+      // alert 팝업 대신 담당 직원(예: 싱크)이 채팅으로 결과를 답하게 한다.
+      const raw = r?.message;
+      if (raw && onAgentSay) {
+        onAgentSay({
+          role: "agent",
+          agentId: raw.agentId || raw.agent_id,
+          name: raw.name,
+          emoji: raw.emoji,
+          text: raw.text,
+        });
       }
     } catch (e) {
-      // 실패 원인을 사용자에게 그대로 보여준다.
-      alert(`❌ ${action === "approve" ? "승인" : "거절"} 처리에 실패했어요:\n${(e as Error).message}`);
+      // 실패도 채팅으로 알린다(조용히 삼키지 않음).
+      onAgentSay?.({ role: "agent", name: "시스템", emoji: "⚠️", text: `${action === "approve" ? "승인" : "거절"} 처리에 실패했어요: ${(e as Error).message}` });
     } finally {
       // 성공이든 실패든 항상 잠금 해제(영구 잠금으로 버튼이 먹통 되는 것 방지).
       setActing((m) => {

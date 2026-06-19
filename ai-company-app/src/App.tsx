@@ -572,7 +572,16 @@ export default function App() {
               onAgents={() => setCenterView("agents")}
               onSettings={() => setCenterView("settings")}
             />
-            <Approvals onPickCategory={openKnowledgeCategory} />
+            <Approvals
+              onPickCategory={openKnowledgeCategory}
+              onAgentSay={(m) => {
+                commit([
+                  ...turnsRef.current,
+                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text },
+                ]);
+                setCenterView("chat");
+              }}
+            />
           </div>
           {/* 결과 목록만 스크롤 */}
           <div className="flex-1 min-h-0 overflow-y-auto">
