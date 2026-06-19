@@ -23,6 +23,14 @@ import {
   type HistoryTurn,
 } from "./lib/api";
 
+// 모바일 좌측 드로어 토글용 햄버거 아이콘
+const MenuIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+    fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="4" x2="20" y1="6" y2="6" /><line x1="4" x2="20" y1="12" y2="12" /><line x1="4" x2="20" y1="18" y2="18" />
+  </svg>
+);
+
 export default function App() {
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -44,6 +52,8 @@ export default function App() {
     });
   }
   const [vnMode, setVnMode] = useState<boolean>(() => localStorage.getItem("vnMode") === "1");
+  const [navOpen, setNavOpen] = useState(false); // 모바일 좌측 사이드바(드로어) 열림 상태
+  const closeNav = () => setNavOpen(false);
   // 전용(포커스) 대화 대상 — 설정되면 해당 아바타하고만 1:1 게임형 대화
   const [focusAgentId, setFocusAgentId] = useState<string | null>(null);
   const [agentMgrId, setAgentMgrId] = useState<string | null>("core"); // 직원 관리 기본 선택 = 코어
@@ -384,21 +394,55 @@ export default function App() {
 
   return (
     <div className="flex h-full">
-      <Sidebar
-        status={status}
-        agents={agents}
-        activeAgentIds={activeIds}
-        approvalAgentIds={approvalIds}
-        hiddenAgents={hiddenAgents}
-        onPickAgent={mention}
-        onFocusChat={focusChat}
-        focusAgentId={focusAgentId}
-        draft={draft}
-        onWorkChanged={refreshStatus}
-        manageMode={centerView === "agents"}
-        selectedManageId={agentMgrId}
-        onManageSelect={setAgentMgrId}
-      />
+      {/* 모바일 드로어 오버레이 — 탭하면 닫힘 */}
+      {navOpen && (
+        <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={closeNav} aria-hidden="true" />
+      )}
+
+      {/* 좌측 사이드바: 모바일에선 드로어(fixed, 슬라이드), 데스크톱(lg)에선 정적 배치 */}
+      <div
+        className={`fixed inset-y-0 left-0 z-50 h-full transition-transform duration-200 ease-out lg:static lg:z-auto lg:translate-x-0 ${
+          navOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        }`}
+      >
+        <Sidebar
+          status={status}
+          agents={agents}
+          activeAgentIds={activeIds}
+          approvalAgentIds={approvalIds}
+          hiddenAgents={hiddenAgents}
+          onPickAgent={(id) => { mention(id); closeNav(); }}
+          onFocusChat={(id) => { focusChat(id); closeNav(); }}
+          focusAgentId={focusAgentId}
+          draft={draft}
+          onWorkChanged={refreshStatus}
+          manageMode={centerView === "agents"}
+          selectedManageId={agentMgrId}
+          onManageSelect={setAgentMgrId}
+        />
+      </div>
+
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
+        {/* 모바일 전용 상단바: 햄버거(사이드바) + 네비(데스크톱은 우측 패널에 있음) */}
+        <div className="lg:hidden shrink-0 flex items-center gap-2 border-b border-edge px-2 py-1.5">
+          <button
+            onClick={() => setNavOpen(true)}
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-gray-300 transition hover:bg-edge"
+            aria-label="직원 목록 열기"
+          >
+            <MenuIcon className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1 overflow-x-auto">
+            <RightMenu
+              centerView={centerView}
+              onHome={() => setCenterView("dashboard")}
+              onChat={() => setCenterView("chat")}
+              onKnowledge={() => setCenterView("knowledge")}
+              onAgents={() => setCenterView("agents")}
+              onSettings={() => setCenterView("settings")}
+            />
+          </div>
+        </div>
 
       <div className="flex-1 flex min-w-0 min-h-0">
         {centerView === "dashboard" ? (
@@ -484,6 +528,7 @@ export default function App() {
             {(window as any).NK?.config?.APP_VERSION ? `v${(window as any).NK.config.APP_VERSION}` : ""}
           </div>
         </div>
+      </div>
       </div>
 
     </div>
