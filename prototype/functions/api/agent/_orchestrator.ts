@@ -7,6 +7,7 @@ import {
   type SqlFn,
   type ToolContext,
   AGENT_TOOLS,
+  toolOwnedBy,
   parseToolInput,
   addMessage,
   listMessages,
@@ -174,22 +175,27 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     calendar_delete: `[[RUN: calendar_delete | {"summary": "삭제할 일정 제목", "date": "2026-06-21"}]]  → 구글 캘린더 일정 삭제. date(YYYY-MM-DD)는 선택(주면 그 날짜 위주로 찾음). ⚠️ 되돌릴 수 없으니 사람 승인 후 실행됨 (구글 연결 필요)`,
     reminder_set: `[[RUN: reminder_set | {"at": "2026-06-20T00:40:00-05:00", "text": "40분 알람"}]]  → 그 시각에 앱에서 울리는 알람 설정(브라우저 알림+소리). at은 위 '현재 시각'의 날짜·오프셋 기준 ISO8601. "5분 뒤/40분에 알람" 같은 단순 알람은 캘린더 말고 이걸 쓴다(승인 불필요·즉시 설정). 구글 연결 불필요.`,
     web_search: `[[RUN: web_search | {"query": "검색어"}]]  → 실시간 웹 검색(날씨·뉴스·최신 정보·일반 지식). 모델이 모르거나 최신/실시간 정보가 필요하면 반드시 이 도구로 검색한 뒤 결과를 근거로 답한다. (날씨는 "서울 오늘 날씨"처럼 지역+오늘 포함)`,
+    sheets_read: `[[RUN: sheets_read | {"url": "구글시트 URL 또는 ID", "range": "Sheet1!A1:F50(선택)"}]]  → Google Sheets에서 매출·지표 데이터를 읽어 분석 근거로. URL이 없으면 사용자에게 시트 링크를 물어본다. (싱크의 구글 연결 + 시트 권한 필요)`,
+    github: `[[RUN: github | {"repo": "owner/name", "path": "파일경로(선택)", "query": "레포검색어(repo 없을 때)"}]]  → GitHub 레포 정보·열린 이슈·파일 내용·레포 검색 조회. 공개 레포는 토큰 없이도 됨.`,
+    naver_datalab: `[[RUN: naver_datalab | {"keywords": ["키워드1","키워드2"], "timeUnit": "month(선택)"}]]  → 네이버 검색어 트렌드(상대 검색량 추이). 마케팅 키워드·관심도 비교에 사용. (NAVER 키 필요)`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
     gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)",
+    sheets_read: "Google Sheets 읽기(매출·지표)", github: "GitHub 레포·이슈 조회", naver_datalab: "네이버 데이터랩(검색 트렌드)",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
-    (toolsByAgent[td.agentId] ??= []).push(TOOL_LABELS[tname] || tname);
+    const label = TOOL_LABELS[tname] || tname;
+    for (const aid of [td.agentId, ...(td.agentIds || [])]) (toolsByAgent[aid] ??= []).push(label);
   }
   const teamToolMap = Object.entries(toolsByAgent)
     .map(([aid, tools]) => `- ${getAgent(aid)?.name || aid}(${aid}): ${tools.join(", ")}`)
     .join("\n");
 
-  const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => t.agentId === agentId);
+  const myTools = Object.entries(AGENT_TOOLS).filter(([, t]) => toolOwnedBy(t, agentId));
   const toolsRunBlock = myTools.length > 0
     ? `\n\n## 🎬 내 담당 도구 (실행 권한 있음)\n실제 결과물을 만들 때 답변 끝에 RUN 마커 추가 (사용자껜 안 보임):\n${myTools.map(([name]) => `- ${MY_TOOL_DESCRIPTIONS[name] || `[[RUN: ${name} | {"prompt": "설명"}]]`}`).join("\n")}\n⚠️ 사용자가 실제 결과물 생성을 요청했을 때만 사용. 마커 없이 "만들었어요"라고 말하는 건 거짓 보고입니다.`
     : "";
@@ -873,7 +879,7 @@ export async function runGroupChat(
   const runTools = async (runs: { tool: string; reason: string }[], agentId: string) => {
     for (const r of runs) {
       const tool = AGENT_TOOLS[r.tool];
-      if (!tool || tool.agentId !== agentId) continue; // 본인 도구만
+      if (!tool || !toolOwnedBy(tool, agentId)) continue; // 본인(또는 공유) 도구만
       const parsedInput = parseToolInput(r.reason); // JSON or { prompt: reason }
       const meta = getAgent(agentId)!;
 
@@ -889,9 +895,9 @@ export async function runGroupChat(
           if (tool.synthesize) {
             const t2 = buildTranscript(await listMessages(sql, userId, conversationId), addr);
             const synth =
-              `방금 사용자 질문에 답하려고 웹을 검색했어요. 아래 검색 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
-              `핵심부터 간결히, 필요하면 출처 링크 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n\n` +
-              `[검색 결과]\n${JSON.stringify(output).slice(0, 4500)}`;
+              `방금 '${r.tool}' 도구로 정보를 가져왔어요. 아래 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
+              `핵심부터 간결히, 필요하면 출처·근거 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n\n` +
+              `[도구 결과: ${r.tool}]\n${JSON.stringify(output).slice(0, 4500)}`;
             const res2 = await speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
             await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res2.text });
             await _applyKnows(res2.knows, meta.name);

@@ -716,6 +716,7 @@ export interface ToolContext {
 
 export interface ToolDef {
   agentId: string;
+  agentIds?: string[]; // 이 도구를 함께 쓸 수 있는 추가 직원들(공유 도구). 예: 웹검색을 여러 직원이 사용.
   kind: ToolKind;
   // true면 '승인 전 실행 금지' — 잡을 승인 대기로만 두고, 사람이 승인할 때 비로소 run을 실행한다.
   // (외부에 영향 주는 되돌리기 어려운 행동: 캘린더 생성·SNS 발행 등)
@@ -723,6 +724,11 @@ export interface ToolDef {
   // true면 도구 결과를 모델에 다시 먹여 답을 합성(툴콜→결과→재추론). 웹 검색 등 read 도구용.
   synthesize?: boolean;
   run: (input: any, ctx: ToolContext) => Promise<any>;
+}
+
+/** 이 직원이 해당 도구를 쓸 수 있는지 — 주 담당(agentId) 또는 공유 목록(agentIds)에 포함. */
+export function toolOwnedBy(def: ToolDef, agentId: string): boolean {
+  return def.agentId === agentId || (def.agentIds?.includes(agentId) ?? false);
 }
 
 // 라비오크 autonomy.ts 의 ALWAYS_GATE 이식 — 레벨 무관 항상 검수 게이트 강제 키워드.
@@ -1222,6 +1228,90 @@ async function runWebSearchTool(input: any, ctx: ToolContext): Promise<any> {
   };
 }
 
+/** 엣지(전략) Google Sheets 읽기: 매출·지표 시트를 읽어 분석 근거로. 싱크 구글 OAuth 토큰 재사용(시트 권한 필요). */
+async function runSheetsReadTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const raw = String(input?.spreadsheetId || input?.id || input?.url || "").trim();
+  const id = /\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/.exec(raw)?.[1] || (/^[a-zA-Z0-9_-]{20,}$/.test(raw) ? raw : "");
+  if (!id) throw new Error("스프레드시트 ID 또는 URL이 필요해요. (예: https://docs.google.com/spreadsheets/d/…)");
+  const range = String(input?.range || "A1:Z100").trim();
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${encodeURIComponent(range)}`,
+    { headers: { Authorization: `Bearer ${access}` } }
+  );
+  const data: any = await res.json();
+  if (!res.ok) {
+    if (res.status === 403) throw new Error("시트 읽기 권한이 없어요. ⚙️설정 → 에이전트 → 싱크 → 구글 '연결 해제' 후 다시 '구글 연결'로 시트 권한을 추가해주세요.");
+    throw new Error(data?.error?.message || `시트 읽기 실패 (${res.status})`);
+  }
+  return { kind: "sheets_read", range: data.range || range, values: (data.values || []).slice(0, 100) };
+}
+
+/** 엔지(개발) GitHub: 공개 레포는 토큰 없이도 조회(60회/시 한도). GITHUB_TOKEN 있으면 사설·한도↑. */
+async function runGithubTool(input: any, ctx: ToolContext): Promise<any> {
+  const token = String(ctx.env?.GITHUB_TOKEN || ctx.env?.GH_TOKEN || "").trim();
+  const headers: Record<string, string> = { "User-Agent": "NK-Studio", Accept: "application/vnd.github+json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const repo = String(input?.repo || "").trim();
+  if (!repo) {
+    const q = String(input?.query || input?.q || "").trim();
+    if (!q) throw new Error("repo(owner/name) 또는 검색어(query)가 필요해요.");
+    const r = await fetch(`https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&per_page=5`, { headers });
+    const d: any = await r.json();
+    if (!r.ok) throw new Error(d?.message || `GitHub 검색 실패 (${r.status})`);
+    return { kind: "github", mode: "search", items: (d.items || []).map((x: any) => ({ full_name: x.full_name, desc: x.description, stars: x.stargazers_count, url: x.html_url })) };
+  }
+  const path = String(input?.path || "").trim();
+  if (path) {
+    const r = await fetch(`https://api.github.com/repos/${repo}/contents/${path.split("/").map(encodeURIComponent).join("/")}`, { headers });
+    const d: any = await r.json();
+    if (!r.ok) throw new Error(d?.message || `파일 조회 실패 (${r.status})`);
+    let content = "";
+    try { content = d.content ? atob(String(d.content).replace(/\n/g, "")) : ""; } catch { content = ""; }
+    return { kind: "github", mode: "file", repo, path, content: content.slice(0, 4000) };
+  }
+  const [repoR, issuesR] = await Promise.all([
+    fetch(`https://api.github.com/repos/${repo}`, { headers }),
+    fetch(`https://api.github.com/repos/${repo}/issues?state=open&per_page=10`, { headers }),
+  ]);
+  const repoD: any = await repoR.json();
+  if (!repoR.ok) throw new Error(repoD?.message || `레포 조회 실패 (${repoR.status})`);
+  const issuesD: any = await issuesR.json();
+  return {
+    kind: "github", mode: "repo", repo,
+    info: { desc: repoD.description, stars: repoD.stargazers_count, lang: repoD.language, openIssues: repoD.open_issues_count, url: repoD.html_url },
+    issues: (Array.isArray(issuesD) ? issuesD : []).filter((i: any) => !i.pull_request).map((i: any) => ({ number: i.number, title: i.title, url: i.html_url })),
+  };
+}
+
+/** 마키(마케팅) 네이버 데이터랩: 검색어 트렌드. NAVER_CLIENT_ID·SECRET 필요. */
+async function runNaverDatalabTool(input: any, ctx: ToolContext): Promise<any> {
+  const id = String(ctx.env?.NAVER_CLIENT_ID || "").trim();
+  const secret = String(ctx.env?.NAVER_CLIENT_SECRET || "").trim();
+  if (!id || !secret) throw new Error("네이버 데이터랩 키가 없어요. Cloudflare 환경변수에 NAVER_CLIENT_ID·NAVER_CLIENT_SECRET을 추가해주세요. (developers.naver.com)");
+  const kws: string[] = Array.isArray(input?.keywords)
+    ? input.keywords.map((s: any) => String(s).trim()).filter(Boolean)
+    : String(input?.query || input?.keyword || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (!kws.length) throw new Error("키워드(keywords)가 필요해요.");
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const fmt = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+  const endDate = String(input?.endDate || fmt(now));
+  const startDate = String(input?.startDate || fmt(new Date(now.getTime() - 90 * 86400000)));
+  const body = {
+    startDate, endDate, timeUnit: String(input?.timeUnit || "month"),
+    keywordGroups: kws.slice(0, 5).map((k) => ({ groupName: k, keywords: [k] })),
+  };
+  const res = await fetch("https://openapi.naver.com/v1/datalab/search", {
+    method: "POST",
+    headers: { "X-Naver-Client-Id": id, "X-Naver-Client-Secret": secret, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data: any = await res.json();
+  if (!res.ok) throw new Error(data?.errorMessage || data?.message || `데이터랩 조회 실패 (${res.status})`);
+  return { kind: "naver_datalab", startDate, endDate, results: data.results || [] };
+}
+
 /** 알람 설정: 지정 시각에 앱(브라우저)에서 울릴 리마인더를 저장. 외부 영향 없음 → 즉시(승인 불필요). */
 async function runReminderSetTool(input: any, ctx: ToolContext): Promise<any> {
   const sql = getSql(ctx.env);
@@ -1252,8 +1342,14 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   calendar_delete: { agentId: "sync", kind: "external", gate: true, run: runCalendarDeleteTool },
   // 알람: 앱에서 그 시각에 울림. 외부 영향 없어 read처럼 즉시 실행(승인·검수 없음) + 결과를 채팅에 바로 표시.
   reminder_set: { agentId: "sync", kind: "read", run: runReminderSetTool },
-  // 웹 검색(레이더): 날씨·뉴스·최신 정보·일반 검색. 결과를 모델에 재투입해 답 합성(synthesize).
-  web_search: { agentId: "radar", kind: "read", synthesize: true, run: runWebSearchTool },
+  // 웹 검색: 날씨·뉴스·최신 정보·일반 검색. 레이더 주담당 + 엣지·마키·엔지 공유(조사 업무 공통).
+  web_search: { agentId: "radar", agentIds: ["edge", "maki", "engi"], kind: "read", synthesize: true, run: runWebSearchTool },
+  // 엣지(전략): Google Sheets 읽기 → 매출·지표 분석. 결과를 모델에 재투입해 분석 답 합성.
+  sheets_read: { agentId: "edge", kind: "read", synthesize: true, run: runSheetsReadTool },
+  // 엔지(개발): GitHub 레포·이슈·파일·검색 조회.
+  github: { agentId: "engi", kind: "read", synthesize: true, run: runGithubTool },
+  // 마키(마케팅): 네이버 데이터랩 검색어 트렌드.
+  naver_datalab: { agentId: "maki", kind: "read", synthesize: true, run: runNaverDatalabTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

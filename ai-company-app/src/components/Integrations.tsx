@@ -6,6 +6,15 @@ import { CircleIcon, LogInIcon, KeyRoundIcon, PlugIcon, StatusText, LabelText, s
 const inputCls =
   "mt-0.5 w-full rounded-lg border border-edge bg-panel px-3 py-2 text-sm text-gray-200 outline-none focus:border-emerald-600";
 
+// 도구 식별자 → 사람이 읽는 라벨 (설정 카드 제목)
+const TOOL_LABEL: Record<string, string> = {
+  image: "이미지 생성", sound: "효과음 생성", video: "영상 생성",
+  web_search: "웹 검색 (날씨·뉴스·최신정보)", naver_datalab: "네이버 데이터랩 (검색 트렌드)",
+  github: "GitHub (레포·이슈)", sheets: "Google Sheets (매출·지표)",
+  gmail: "Gmail", calendar: "Google 캘린더",
+};
+const toolLabel = (t: string) => TOOL_LABEL[t] || t;
+
 export function ToolCard({
   it,
   onSaved,
@@ -24,8 +33,8 @@ export function ToolCard({
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState("");
-  // 싱크 구글 연동(gmail·calendar) — env 키가 아니라 사용자별 OAuth 팝업 흐름.
-  const isGoogleOAuth = it.tool === "gmail" || it.tool === "calendar";
+  // 구글 OAuth 연동(싱크 gmail·calendar, 엣지 sheets) — env 키가 아니라 사용자별 OAuth 팝업 흐름.
+  const isGoogleOAuth = it.oauth === "google";
   const connectedAs = (it as { connectedAs?: string }).connectedAs;
   const [connecting, setConnecting] = useState(false);
 
@@ -105,7 +114,7 @@ export function ToolCard({
   return (
     <div className="rounded-xl border border-edge bg-ink p-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="font-mono text-sm font-semibold text-gray-200">{it.tool}</span>
+        <span className="text-sm font-semibold text-gray-200">{toolLabel(it.tool)}</span>
         <span className={`inline-flex items-center gap-1 text-[11px] ${it.configured ? "text-emerald-400" : "text-amber-400"}`}>
           <CircleIcon className="h-2.5 w-2.5" filled={it.configured} />
           {it.configured ? "연결됨" : "설정 필요"}

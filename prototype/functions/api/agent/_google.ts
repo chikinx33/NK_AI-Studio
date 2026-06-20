@@ -6,7 +6,9 @@
 // gmail.modify = 읽기 + 휴지통 이동/라벨 변경(영구삭제는 불포함 — 안전).
 export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 export const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
-export const GOOGLE_CONNECT_SCOPES = `openid email ${GMAIL_SCOPE} ${CALENDAR_SCOPE}`;
+// 엣지(전략)의 Sheets 읽기용 — 재연결 시 함께 동의받는다(읽기 전용).
+export const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
+export const GOOGLE_CONNECT_SCOPES = `openid email ${GMAIL_SCOPE} ${CALENDAR_SCOPE} ${SHEETS_SCOPE}`;
 
 /** 연동용 OAuth 클라이언트 자격증명. 로그인용 클라이언트를 재사용하되 전용 env 우선. */
 export function googleConnectCreds(env: any): { clientId: string; clientSecret: string } {

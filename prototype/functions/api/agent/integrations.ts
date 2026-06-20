@@ -9,10 +9,16 @@ import { getAgent } from "./_orchestrator";
 type PagesFunction = (ctx: { request: Request; env: any }) => Promise<Response>;
 
 // NK 도구 → NK 스튜디오 env 키 매핑(이미 스튜디오에 구현된 연동 재사용).
-const TOOL_KEYS: Record<string, { key: string; label: string; alt?: string[] }[]> = {
+const TOOL_KEYS: Record<string, { key: string; label: string; alt?: string[]; optional?: boolean }[]> = {
   image: [{ key: "GEMINI_API_KEY", label: "이미지 생성 키 (Gemini/Google/OpenAI)", alt: ["GOOGLE_API_KEY", "OPENAI_API_KEY"] }],
   sound: [{ key: "ELEVENLABS_API_KEY", label: "사운드 생성 키 (ElevenLabs)" }],
   video: [{ key: "ATLASCLOUD_API_KEY", label: "영상 생성 키 (AtlasCloud/xAI)", alt: ["XAI_API_KEY"] }],
+  web_search: [{ key: "TAVILY_API_KEY", label: "웹 검색 키 (Tavily)", alt: ["TAVILY_KEY"] }],
+  naver_datalab: [
+    { key: "NAVER_CLIENT_ID", label: "네이버 데이터랩 Client ID" },
+    { key: "NAVER_CLIENT_SECRET", label: "네이버 데이터랩 Secret" },
+  ],
+  github: [{ key: "GITHUB_TOKEN", label: "GitHub 토큰 (선택 — 공개 레포는 없어도 됨)", alt: ["GH_TOKEN"], optional: true }],
 };
 
 function hasKey(env: any, key: string, alt?: string[]): boolean {
@@ -33,13 +39,13 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const def = AGENT_TOOLS[tool];
     const meta = def ? getAgent(def.agentId) : undefined;
     const fields = keys.map((k) => ({
-      key: k.key, type: "password" as const, label: k.label, required: true,
+      key: k.key, type: "password" as const, label: k.label, required: !k.optional,
       secret: true, hasValue: hasKey(env, k.key, k.alt),
       hint: "NK 스튜디오 공용 키로 작동 — 별도 입력이 필요 없어요.",
     }));
     return {
       agentId: def?.agentId || "", agentName: meta?.name || "", emoji: meta?.emoji || "",
-      tool, fields, configured: fields.every((f) => f.hasValue),
+      tool, fields, configured: fields.filter((f) => f.required).every((f) => f.hasValue),
     };
   });
 
@@ -58,6 +64,14 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const hasCal = !!goog && /calendar/.test(goog.scopes);
   items.push({ ...syncBase, tool: "gmail", configured: hasGmail, connectedAs: hasGmail ? (goog?.email || "") : "" });
   items.push({ ...syncBase, tool: "calendar", configured: hasCal, connectedAs: hasCal ? (goog?.email || "") : "" });
+
+  // 엣지(전략) Google Sheets 읽기 — 같은 구글 연결의 시트 스코프로 동작.
+  const edge = getAgent("edge");
+  const hasSheets = !!goog && /spreadsheets/.test(goog.scopes);
+  items.push({
+    agentId: "edge", agentName: edge?.name || "엣지", emoji: edge?.emoji || "", fields: [], oauth: "google" as const,
+    tool: "sheets", configured: hasSheets, connectedAs: hasSheets ? (goog?.email || "") : "",
+  });
 
   return send(items, 200, origin);
 };
