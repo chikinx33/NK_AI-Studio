@@ -1078,7 +1078,9 @@
       var isRegionBlocked = /openai_region_blocked|"retriable"\s*:\s*true/.test(String((err && err.detail) || ''));
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var retryCount = Number(opts.retryCount) || 0;
-      var maxRetries = isRegionBlocked ? 5 : 2;
+      // 지역 차단은 백엔드가 Gemini 폴백으로 완료시키므로 보통 여기까지 안 온다(Gemini 미설정
+      // 시에만 도달). COLO 가 고정이면 재시도로도 못 벗어나니 과한 스핀을 막기 위해 2회로 제한.
+      var maxRetries = 2;
       if ((is500 || isRegionBlocked) && retryCount < maxRetries) {
         var label = isRegionBlocked ? '지역 차단 우회 재시도' : '재시도';
         console.warn('이미지 생성 실패, ' + label + ' ' + (retryCount + 1) + '/' + maxRetries + '...');
@@ -1275,7 +1277,8 @@
       var isRegionBlocked = /openai_region_blocked|"retriable"\s*:\s*true/.test(String((err && err.detail) || ''));
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var retryCount = Number(opts.retryCount) || 0;
-      var maxRetries = isRegionBlocked ? 5 : 2;
+      // 지역 차단은 백엔드 Gemini 폴백으로 완료되므로 보통 미도달. 과한 스핀 방지 위해 2회 제한.
+      var maxRetries = 2;
       if ((is500 || isRegionBlocked) && retryCount < maxRetries && opts.retryShotImage) {
         console.warn((isRegionBlocked ? '지역 차단 우회 재시도 ' : '재시도 ') + (retryCount + 1) + '/' + maxRetries + '...');
         await new Promise(function (r) { return setTimeout(r, isRegionBlocked ? 900 : (2000 * Math.pow(2, retryCount))); });

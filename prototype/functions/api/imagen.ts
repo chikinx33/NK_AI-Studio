@@ -210,18 +210,20 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const isAccountError =
           oStatus === 401 || oStatus === 403 || oStatus === 429 ||
           /billing|quota|credit|payment|권한|결제|크레딧|한도/i.test(oText);
-        // 지역 차단(HKG 등 COLO)은 같은 GPT 로 "새 요청" 재시도하면 다른 지역으로 나가 풀릴 수
-        // 있으므로 Gemini 로 우회하지 않고 그대로 프론트에 돌려보내 GPT 재시도를 유도한다.
+        // 지역 차단(HKG 등 COLO)은 Cloudflare 가 같은 사용자를 매번 같은 미지원 COLO 로 보내면
+        // 새 요청 재시도로도 못 벗어나 무한 스핀이 된다. 따라서 Gemini 가 설정돼 있으면 즉시
+        // 폴백해 생성이 항상 완료되게 한다(스핀 종료). GPT 품질을 유지하려면 OPENAI_BASE_URL 로
+        // 지원 지역 프록시/AI Gateway 를 설정해야 한다(폴백 사실은 응답·콘솔에 노출).
         const isRegionBlocked = oErr?.code === "openai_region_blocked" || oErr?.retriable === true;
         const geminiConfigured = !!apiKey;
-        if (isAccountError && !isRegionBlocked && geminiConfigured) {
+        if (isAccountError && geminiConfigured) {
           const fb = await runGeminiGeneration();
           if (fb.error) {
             return json(openaiResult.error, openaiResult.status || 500);
           }
           providerUsed = "gemini";
           providerFallbackFrom = "openai";
-          openaiFallbackError = openaiResult.error || null;
+          openaiFallbackError = Object.assign({ regionBlocked: isRegionBlocked }, openaiResult.error || {});
         } else {
           return json(openaiResult.error, openaiResult.status || 500);
         }

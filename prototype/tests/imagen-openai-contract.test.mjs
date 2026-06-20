@@ -51,8 +51,14 @@ test('empty-body 403 from a restricted colo is classified as region-blocked and 
   assert.match(source, /RESTRICTED_COLOS/);
   assert.match(source, /openai_region_blocked/);
   assert.match(source, /retriable = true/);
-  // 지역 차단은 Gemini 폴백 대신 GPT 재시도를 위해 그대로 전파되어야 한다.
-  assert.match(source, /isAccountError && !isRegionBlocked && geminiConfigured/);
+});
+
+test('region-blocked GPT falls back to gemini so generation always completes (no infinite spin)', () => {
+  const source = readImagenSource();
+  // 지역 차단도 Gemini 폴백 대상(무한 스핀 방지). 폴백 사실은 regionBlocked 플래그로 노출.
+  assert.match(source, /if \(isAccountError && geminiConfigured\)/);
+  assert.match(source, /regionBlocked: isRegionBlocked/);
+  assert.doesNotMatch(source, /isAccountError && !isRegionBlocked && geminiConfigured/);
 });
 
 test('openai edits request uses multipart form-data with image[] array', () => {
