@@ -44,6 +44,12 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
       const colo = cfRay.indexOf("-") >= 0 ? cfRay.slice(cfRay.lastIndexOf("-") + 1).toUpperCase() : "";
       const requestId = String(res.headers.get("x-request-id") || "");
       const emptyBody = !body || !body.trim();
+      const ms = Date.now() - t0;
+      // 판정: OpenAI API 까지 실제로 도달했는지는 x-request-id 유무로만 판단한다(본문 문자열로
+      // 추정하면 Cloudflare 차단 페이지의 "error" 단어에 오판함). 403 인데 x-request-id 가 없으면
+      // (그리고 보통 응답이 수 ms 로 매우 빠르면) OpenAI 도달 전 엣지(지역) 차단이다.
+      const reachedOpenAI = !!requestId;
+      const regionBlocked = res.status === 403 && !requestId;
       return {
         target,
         colo,
@@ -51,9 +57,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
         status: res.status,
         hasRequestId: !!requestId,
         emptyBody,
-        reachedOpenAI: !!requestId || (!emptyBody && /"?(error|object)"?/i.test(body)),
-        regionBlocked: res.status === 403 && emptyBody && !requestId,
-        ms: Date.now() - t0,
+        reachedOpenAI,
+        regionBlocked,
+        verdict: regionBlocked ? "EDGE_REGION_BLOCK" : (reachedOpenAI ? "REACHED_OPENAI" : "UNKNOWN"),
+        ms,
       };
     } catch (e: any) {
       return { target, error: String(e?.message || e), ms: Date.now() - t0 };
