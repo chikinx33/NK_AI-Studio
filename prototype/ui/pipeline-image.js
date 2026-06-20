@@ -1035,6 +1035,10 @@
         generationMode: 'text-to-image',
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
+      // [진단] OpenAI 요청이 어느 COLO(데이터센터)로 나갔는지 출력 — 지역 차단 가설 검증용.
+      if (json.openaiColo) {
+        console.log('%c[진단] OpenAI 송출 COLO: ' + json.openaiColo + ' / endpoint: ' + (json.openaiEndpoint || '?') + ' / provider: ' + (json.provider || '') + (json.providerFallbackFrom ? ' (GPT 실패→폴백)' : ' (GPT 성공)'), 'color:#0a0;font-weight:bold');
+      }
       // GPT 가 실패해 Gemini 로 폴백된 경우, 조용히 넘어가지 않고 경고를 남긴다.
       // (사용자는 GPT 품질을 선호 — 폴백 사실과 GPT 실패 사유를 바로 알 수 있게)
       if (json.providerFallbackFrom) {
@@ -1242,6 +1246,10 @@
         generationMode: 'text-to-image',
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
+      // [진단] OpenAI 요청이 어느 COLO(데이터센터)로 나갔는지 출력 — 지역 차단 가설 검증용.
+      if (json.openaiColo) {
+        console.log('%c[진단] OpenAI 송출 COLO: ' + json.openaiColo + ' / endpoint: ' + (json.openaiEndpoint || '?') + ' / provider: ' + (json.provider || '') + (json.providerFallbackFrom ? ' (GPT 실패→폴백)' : ' (GPT 성공)'), 'color:#0a0;font-weight:bold');
+      }
       // GPT 가 실패해 Gemini 로 폴백된 경우, 조용히 넘어가지 않고 경고를 남긴다.
       // (사용자는 GPT 품질을 선호 — 폴백 사실과 GPT 실패 사유를 바로 알 수 있게)
       if (json.providerFallbackFrom) {

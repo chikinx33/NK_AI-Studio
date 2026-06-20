@@ -131,6 +131,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 사용자가 GPT 품질을 원하므로, 조용히 Gemini 로 바뀐 사실과 그 사유(예: 조직 인증)를
     // 프론트 콘솔에서 바로 확인하고 GPT 쪽을 고칠 수 있게 한다.
     let openaiFallbackError: any = null;
+    // 진단: 실제로 OpenAI 요청이 어느 COLO 로 나갔는지(성공/실패 모두) 응답에 실어 검증한다.
+    let openaiColo = "";
+    let openaiEndpoint = "";
 
     // Gemini 이미지 생성. else 분기와 OpenAI 폴백에서 공용으로 호출한다.
     // 성공 시 imageOutput / modelUsed 를 채우고 {} 를, 실패 시 {error,status} 를 반환한다.
@@ -233,6 +236,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       } else {
         imageOutput = { data: openaiResult.b64 || "", mimeType: "image/png" };
         modelUsed = openaiModel;
+        openaiColo = openaiResult.colo || "";
+        openaiEndpoint = openaiResult.endpoint || "";
       }
     } else {
       const r = await runGeminiGeneration();
@@ -294,6 +299,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       providerRequested: provider === "openai" ? "openai-api" : "gemini-api",
       providerFallbackFrom: providerFallbackFrom ? `${providerFallbackFrom}-api` : "",
       openaiError: openaiFallbackError,
+      openaiColo: openaiColo || (openaiFallbackError && openaiFallbackError.colo) || "",
+      openaiEndpoint: openaiEndpoint || (openaiFallbackError && openaiFallbackError.endpoint) || "",
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
@@ -631,7 +638,7 @@ async function callOpenAIImage(opts: {
   referenceImages: NormalizedReferenceImage[];
   conversationHistory: ConversationHistoryTurn[];
   maskImage?: { base64: string; mimeType: string } | null;
-}): Promise<{ b64?: string; error?: any; status?: number }> {
+}): Promise<{ b64?: string; error?: any; status?: number; cfRay?: string; colo?: string; endpoint?: string }> {
   const size = mapAspectToOpenAISize(opts.aspectRatio);
   const quality = mapImageSizeToOpenAIQuality(opts.qualityHint);
   // 마스크가 있으면 native mask 가 첫 번째 이미지와 픽셀 크기로 정렬되어야 하므로
@@ -753,13 +760,19 @@ async function callOpenAIImage(opts: {
     };
   }
 
+  // 진단: 성공한 요청도 어느 COLO(데이터센터)로 나갔는지 기록한다. 실패(HKG)와 비교해
+  // "지역 차단" 가설을 실제로 검증하기 위함. (성공=ICN/NRT, 실패=HKG 면 지역 문제 확정)
+  const okCfRay = String(res.headers.get("cf-ray") || "").trim();
+  const okColo = okCfRay.indexOf("-") >= 0 ? okCfRay.slice(okCfRay.lastIndexOf("-") + 1).toUpperCase() : "";
+  const okEndpoint = isEdit ? "images/edits" : "images/generations";
+
   const json = safeJson(bodyText) || {};
   const data = Array.isArray((json as any).data) ? (json as any).data : [];
   const b64 = String(data[0]?.b64_json || "").trim();
   if (!b64) {
     return { error: { error: "No image bytes returned", raw: json }, status: 500 };
   }
-  return { b64 };
+  return { b64, cfRay: okCfRay, colo: okColo, endpoint: okEndpoint };
 }
 
 function buildOpenAIGenerationsRequest(
