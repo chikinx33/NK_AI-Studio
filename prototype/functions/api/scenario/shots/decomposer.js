@@ -57,6 +57,9 @@ export function buildShotPromptKo() {
        cut2 composition: "에어록 내부, 닫히는 해치 너머로 스타필드 흐릿하게"
        cut3 composition: "함교, 콘솔 LED 클로즈업"
      모든 컷이 같은 sub-location 일 필요 없음. 한 비트 안에서 sub-location 이 진행될 수 있다.
+   - 입력 씬의 visual 이 이미 샷 사이즈/앵글/프레이밍(예: 로우앵글 와이드, ECU, 오프센터 등)을 지정했다면,
+     그 씬의 대표(첫) 샷 composition·shotType 은 그것을 반드시 따른다. 기본값(MS/아이레벨/정면)으로 평탄화하지 마라.
+     씬 간 구도 다양성은 시나리오 단계에서 의도된 것이므로, 분해하면서 뭉개면 안 된다.
 8. action: 이 샷에서 일어나는 물리적 행동·움직임. 추상 표현 금지.
 9. shotType, cameraMove 는 아래 어휘 안에서만 선택. 다른 단어 절대 금지.
 
@@ -102,6 +105,9 @@ A scene is a beat (one unit of action/emotion). A shot is one camera setup.
        cut2 composition: "Airlock interior, closing hatch with starfield blurred behind"
        cut3 composition: "Bridge, close-up of console LEDs"
      Shots within one beat may walk through different sub-locations.
+   - If the input scene's visual already specifies a shot size / camera angle / framing (e.g. low-angle wide, ECU, off-center),
+     the scene's anchor (first) shot composition and shotType MUST honor it. Do NOT flatten to a default (MS / eye-level / centered).
+     The cross-scene shot variety was intended at the scenario stage and must survive decomposition.
 8. action: the physical motion happening in this specific shot. No abstract phrasing.
 9. shotType and cameraMove must be selected from the controlled vocabulary below — no other words allowed.
 

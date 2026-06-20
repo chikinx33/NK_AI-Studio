@@ -875,6 +875,12 @@ visual writing method:
 - Sentence 5 optional: lighting or time of day
 - Test: a cinematographer should be able to set the camera immediately after reading it.
 Keep the same base setting across scenes unless a location transition is explicitly shown.
+[Shot variety across scenes - REQUIRED. This is what separates real directing from flat AI footage.]
+You see ALL scenes at once, so you MUST design their shots as a varied sequence, not isolated lookalikes.
+- Consecutive scenes must NOT repeat the same layout. Each scene differs from the PREVIOUS one in at least TWO of: shot size (ECU / CU / MS / WS / EWS), camera angle (low / eye-level / high / overhead / dutch), framing (centered / rule-of-thirds / off-center), and the subject's on-screen size and position.
+- Choose the framing to serve THIS scene's beat, never by default: intimate/emotional beat -> tight (CU/ECU); establishing/spatial beat -> wide (WS/EWS); impact/dynamic beat -> low-angle wide or a canted angle; reaction beat -> over-the-shoulder or off-center. (e.g. "stands" -> WS that introduces the space; "closes eyes" -> ECU on the face; "jumps" -> low-angle WS that shows height and air.)
+- Keep the world/setting consistent, but the CAMERA must keep changing. Never use the same shot-size + angle + centered framing for 3 or more scenes in a row.
+- Sentence 1 (framing) and Sentence 4 (camera direction) must make this scene's shot visibly distinct from its neighbors. A viewer flipping through the stills must never feel "these are the same picture".
 The output must satisfy:
 ${required}
 Avoid these failure patterns:
@@ -885,6 +891,7 @@ Rewrite the scene if any check fails.
 □ Is sceneIntent written as a concrete audience reaction?
 □ Are forbidden phrases absent?
 □ Does it visually connect to the previous scene? (except scene 1)
+□ Is this scene's shot size / angle / framing visibly different from the previous scene, and chosen to serve this scene's beat? (no two neighbors look like the same picture)
 □ Does content density fit estSec?
 □ If this scene is removed, does the full flow break? If not, remove it.
 No markdown, no extra explanation.`;
@@ -4724,6 +4731,7 @@ D) narrationEnabled=false, dubbingEnabled=false:
   - Sentence 4: camera direction
   - Sentence 5 optional: lighting or time of day
   - Test: a cinematographer should be able to set the camera immediately after reading it.
+- [Shot variety across scenes - REQUIRED] You see all scenes at once, so design their shots as a varied sequence, not isolated lookalikes. Each scene must differ from the PREVIOUS one in at least TWO of: shot size (ECU/CU/MS/WS/EWS), camera angle (low/eye/high/overhead/dutch), framing (centered/rule-of-thirds/off-center), subject on-screen size and position. Pick framing to serve the beat (intimate -> tight CU/ECU; spatial -> wide WS/EWS; impact -> low-angle wide or canted). Keep the setting consistent but keep the camera changing; never reuse the same shot-size + angle + centered framing for 3+ scenes in a row. A viewer flipping through the stills must never feel "these are the same picture".
 - If narrationEnabled is true, narration must be a full spoken sentence (not empty).
 - If dubbingEnabled is true, dialogue must contain at least one line with speaker and line.
 - Keep narration/dialogue text ready for TTS usage.
