@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getApprovals, approveItem, rejectItem, clearApprovals, getKnowledge, getSkills, getProjects, type KnowledgeItem, type AgentSkill, type Project, type AgentMessage } from "../lib/api";
+import CollapsibleSection from "./CollapsibleSection";
 
 // 회사 지식 요약 칩 색 — 그래프/지식 화면과 동일 (규칙=보라 · 사실=초록 · 결정=주황). "전체" 칩 제거 — 제목에 숫자로 표시.
 const KNOW_CHIPS = [
@@ -220,10 +221,10 @@ export default function Approvals({
         const visible = projects.filter((p) => p.status === "active" && !sidebarHidden.has(p.id));
         if (visible.length === 0) return null;
         return (
-          <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
-            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold text-gray-400">
-              <KanbanIcon className="h-3.5 w-3.5" /> 프로젝트 ({visible.length})
-            </div>
+          <CollapsibleSection
+            storageKey="nk_collapse_projects"
+            header={<span className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400"><KanbanIcon className="h-3.5 w-3.5" /> 프로젝트 ({visible.length})</span>}
+          >
             <div className="space-y-1">
               {visible.map((p) => {
                 const done = p.stages.filter((s) => s.status === "done").length;
@@ -236,32 +237,32 @@ export default function Approvals({
                 );
               })}
             </div>
-          </div>
+          </CollapsibleSection>
         );
       })()}
 
-    <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
-      <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-amber-300">
-        <ListTodoIcon className="h-4 w-4" /> 승인 ({pending.length})
-        {pending.length > 0 && (
-          <button
-            onClick={async () => {
-              if (!confirm("대기 중인 승인을 모두 정리(취소)할까요?\n이미 실행·생성된 작업에는 영향이 없어요.")) return;
-              try {
-                const r = await clearApprovals();
-                await refresh();
-                alert(`🧹 승인 대기 ${r.cleared}건을 정리했어요.`);
-              } catch (e) {
-                alert(`정리 실패: ${(e as Error).message}`);
-              }
-            }}
-            title="대기 중인 승인 전부 취소"
-            className="ml-auto rounded px-1.5 py-0.5 text-[11px] font-normal text-gray-500 transition hover:bg-edge hover:text-gray-200"
-          >
-            전부 정리
-          </button>
-        )}
-      </div>
+    <CollapsibleSection
+      storageKey="nk_collapse_approvals"
+      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 승인 ({pending.length})</span>}
+      right={pending.length > 0 ? (
+        <button
+          onClick={async () => {
+            if (!confirm("대기 중인 승인을 모두 정리(취소)할까요?\n이미 실행·생성된 작업에는 영향이 없어요.")) return;
+            try {
+              const r = await clearApprovals();
+              await refresh();
+              alert(`🧹 승인 대기 ${r.cleared}건을 정리했어요.`);
+            } catch (e) {
+              alert(`정리 실패: ${(e as Error).message}`);
+            }
+          }}
+          title="대기 중인 승인 전부 취소"
+          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-normal text-gray-500 transition hover:bg-edge hover:text-gray-200"
+        >
+          전부 정리
+        </button>
+      ) : undefined}
+    >
       {pending.length === 0 && (
         <div className="text-xs text-gray-500 mb-2">대기 중인 승인이 없어요.</div>
       )}
@@ -354,7 +355,7 @@ export default function Approvals({
           </div>
         </div>
       )}
-    </div>
+    </CollapsibleSection>
     </>
   );
 }

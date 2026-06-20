@@ -1,4 +1,5 @@
 import type { DueReminder } from "../lib/api";
+import CollapsibleSection from "./CollapsibleSection";
 
 // 시계 아이콘 (승인/보고 헤더와 통일된 라인 아이콘)
 function ClockIcon({ className }: { className?: string }) {
@@ -40,10 +41,10 @@ export default function Reservations({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
-      <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-sky-300">
-        <ClockIcon className="h-4 w-4" /> 예약 ({reminders.length})
-      </div>
+    <CollapsibleSection
+      storageKey="nk_collapse_reservations"
+      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-sky-300"><ClockIcon className="h-4 w-4" /> 예약 ({reminders.length})</span>}
+    >
       {reminders.length === 0 ? (
         <div className="text-xs text-gray-500">예정된 알람이 없어요.</div>
       ) : (
@@ -63,6 +64,6 @@ export default function Reservations({
           ))}
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }

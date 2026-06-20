@@ -9,6 +9,7 @@ import {
 } from "../lib/api";
 import { JOB } from "../lib/jobs";
 import { downloadPpt, downloadPdfViaPrint } from "../lib/docgen";
+import CollapsibleSection from "./CollapsibleSection";
 
 // 보고 헤더 아이콘 — '승인' 섹션과 동일한 list-todo 아이콘 사용
 function ListTodoIcon({ className }: { className?: string }) {
@@ -378,10 +379,11 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
 
   // 보고 패널은 빈 상태여도 항상 표시(원본과 동일).
   return (
-    <div className="bg-panel border border-edge rounded-xl p-3 mb-3">
-      <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-amber-300">
-        <ListTodoIcon className="h-4 w-4" /> 보고 ({pending.length})
-      </div>
+    <>
+    <CollapsibleSection
+      storageKey="nk_collapse_results"
+      header={<span className="flex items-center gap-1.5 text-sm font-semibold text-amber-300"><ListTodoIcon className="h-4 w-4" /> 보고 ({pending.length})</span>}
+    >
       {pending.length === 0 && (
         <div className="text-xs text-gray-500 mb-2">검토할 보고가 없어요.</div>
       )}
@@ -470,7 +472,7 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
           </div>
         </div>
       )}
-
+    </CollapsibleSection>
       {open && (
         <ImagePopup
           item={open}
@@ -478,6 +480,6 @@ export default function Results({ onAgentSay, refreshKey }: { onAgentSay?: (m: A
           onReview={(action, note) => applyReview(open, action, note)}
         />
       )}
-    </div>
+    </>
   );
 }
