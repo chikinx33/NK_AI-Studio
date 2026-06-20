@@ -24,39 +24,77 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const url = new URL(request.url);
     const objectName = String(url.searchParams.get("objectName") || "").trim();
     if (!objectName) return send({ error: "missing_objectName" }, 400, origin);
-    const baseOutput = (env.AUDIO_OUTPUT_GCS_URI as string | undefined) || (env.VIDEO_OUTPUT_GCS_URI as string | undefined);
-    if (!baseOutput) return send({ error: "missing_output_base" }, 500, origin);
-    const parsed = parseGcsUri(baseOutput);
-    if (!parsed) return send({ error: "invalid_output_base" }, 500, origin);
-    const clientEmail = (env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL) as string | undefined;
-    const privateKeyRaw = (env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY) as string | undefined;
-    if (!clientEmail || !privateKeyRaw) return send({ error: "missing_signer" }, 500, origin);
+
+    // 오디오와 비디오/이미지는 서로 다른 버킷·서비스계정(서명자)일 수 있다. 객체 1개를
+    // "오디오 버킷+TTS 서명자"로만 조회하던 탓에, 비디오/이미지 자산(ai-video/.../image/...)이
+    // 잘못된 버킷에서 404/403 → 502 가 났다. 자산 종류에 맞는 (버킷+서명자) 쌍을 우선 시도하고,
+    // 실패하면 다른 쌍으로 폴백한다.
+    const audioPair = env.AUDIO_OUTPUT_GCS_URI ? {
+      uri: String(env.AUDIO_OUTPUT_GCS_URI),
+      email: String(env.TTS_GOOGLE_CLIENT_EMAIL || env.GOOGLE_CLIENT_EMAIL || ""),
+      key: String(env.TTS_GOOGLE_PRIVATE_KEY || env.GOOGLE_PRIVATE_KEY || ""),
+    } : null;
+    const videoPair = env.VIDEO_OUTPUT_GCS_URI ? {
+      uri: String(env.VIDEO_OUTPUT_GCS_URI),
+      email: String(env.GOOGLE_CLIENT_EMAIL || ""),
+      key: String(env.GOOGLE_PRIVATE_KEY || ""),
+    } : null;
+
+    const looksAudio = /(^|\/)(audio|voice|tts|sfx|music|ai-sound)(\/|-|$)/i.test(objectName);
+    const ordered = looksAudio ? [audioPair, videoPair] : [videoPair, audioPair];
+
+    // (버킷, 서명자) 중복 제거 후 시도 목록 구성.
+    const tries: Array<{ bucket: string; email: string; key: string }> = [];
+    const seen = new Set<string>();
+    for (const pair of ordered) {
+      if (!pair || !pair.uri || !pair.email || !pair.key) continue;
+      const parsed = parseGcsUri(pair.uri);
+      if (!parsed) continue;
+      const dedupKey = `${parsed.bucket}|${pair.email}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+      tries.push({ bucket: parsed.bucket, email: pair.email, key: pair.key });
+    }
+    if (!tries.length) return send({ error: "missing_output_base_or_signer" }, 500, origin);
+
     const userProjectRaw =
       (env.GCS_BILLING_PROJECT_ID as string | undefined) ||
       (env.GOOGLE_PROJECT_ID as string | undefined) ||
       "";
     const userProject = String(userProjectRaw || "").trim();
-    const signed = await signGcsUrl({
-      bucket: parsed.bucket,
-      object: objectName,
-      clientEmail: clientEmail as string,
-      privateKeyPem: privateKeyRaw as string,
-      expiresInSec: 3600,
-      userProject
-    });
-    const gcsResp = await fetch(signed, { method: "GET" });
-    if (!gcsResp.ok) {
-      const t = await gcsResp.text().catch(() => "");
-      return send({ error: "gcs_fetch_failed", status: gcsResp.status, detail: t }, 502, origin);
+
+    let lastStatus = 0;
+    let lastDetail = "";
+    for (const t of tries) {
+      let signed = "";
+      try {
+        signed = await signGcsUrl({
+          bucket: t.bucket,
+          object: objectName,
+          clientEmail: t.email,
+          privateKeyPem: t.key,
+          expiresInSec: 3600,
+          userProject
+        });
+      } catch (e: any) {
+        lastDetail = String(e?.message || e);
+        continue;
+      }
+      const gcsResp = await fetch(signed, { method: "GET" });
+      if (gcsResp.ok) {
+        const buf = await gcsResp.arrayBuffer();
+        const type = gcsResp.headers.get("Content-Type") || "application/octet-stream";
+        return new Response(buf, {
+          status: 200,
+          headers: { ...corsHeaders(origin), "Content-Type": type, "Cache-Control": "private, max-age=3600" }
+        });
+      }
+      lastStatus = gcsResp.status;
+      lastDetail = await gcsResp.text().catch(() => "");
     }
-    const buf = await gcsResp.arrayBuffer();
-    const type = gcsResp.headers.get("Content-Type") || "application/octet-stream";
-    const headers = {
-      ...corsHeaders(origin),
-      "Content-Type": type,
-      "Cache-Control": "private, max-age=3600"
-    };
-    return new Response(buf, { status: 200, headers });
+    // 모든 버킷에서 실패: 없음/권한은 실제 코드(404/403)로, 그 외는 502 로 전달.
+    const outStatus = (lastStatus === 404 || lastStatus === 403) ? lastStatus : 502;
+    return send({ error: "gcs_fetch_failed", status: lastStatus, detail: lastDetail }, outStatus, origin);
   } catch (e: any) {
     return send({ error: e?.message || "proxy_error" }, 500, origin);
   }
