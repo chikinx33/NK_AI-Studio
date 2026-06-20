@@ -1101,7 +1101,8 @@
       '<button type="button" class="btn-icon-sm active" id="pipeline-focus-mode" title="부분 펼침" aria-label="부분 펼침" data-i18n-title="scene_focus_mode" data-i18n-aria-label="scene_focus_mode"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 10 12 4 18 10" stroke-width="3.2"/><polyline points="6 14 12 20 18 14" stroke-width="2.2"/></svg></button>' +
       '</div>' +
       '<div class="pipeline-actions" style="display:flex; align-items:center; gap:8px;">' +
-      '<button class="btn-secondary" id="common-prompt-batch-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="모든 씬에 공통 적용되는 프롬프트(스타일·분위기·배경/세계관·대상)를 한 번에 일괄 편집">공통 프롬프트 일괄 편집</button>' +
+      '<button class="btn-secondary" id="bg-ref-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="이 에피소드의 공간(배경) 레퍼런스를 보고 편집하거나 배경 이미지를 생성">배경 레퍼런스</button>' +
+      '<button class="btn-secondary" id="common-prompt-batch-btn" ' + (state.isPlaceholder ? 'disabled' : '') + ' title="모든 씬에 공통 적용되는 프롬프트(스타일·분위기·배경/세계관·대상)를 한 번에 편집">공통 프롬프트</button>' +
       '<button class="btn-secondary" id="save-pipeline-btn" ' + (state.isPlaceholder ? 'disabled' : '') + '>저장하기</button>' +
       '<button class="btn-secondary" id="bulk-generate" disabled>이미지 일괄 생성</button>' +
       '<button class="btn-secondary" id="bulk-video" disabled>영상 일괄 생성</button>' +
@@ -1290,6 +1291,11 @@
         setPipelineLoading(false);
         alert('저장되었습니다.');
       };
+    }
+    // 배경 레퍼런스: 이 에피소드의 공간(장소) 목록을 보고 편집 + 배경 플레이트 생성.
+    var bgRefBtn = document.getElementById('bg-ref-btn');
+    if (bgRefBtn) {
+      bgRefBtn.onclick = function () { openBackgroundReferenceModal(); };
     }
     // 공통 프롬프트 일괄 편집: state.header(모든 씬 공유) 를 한 번에 수정 → 전체 씬 행 재렌더.
     // 개별 씬의 화면/행동/Duration 편집(씬별 "편집" 버튼)과 공존한다.
@@ -1939,6 +1945,172 @@ function openCommonPromptBatchModal(currentText, onApply) {
     catch (e) { alert('적용 실패: ' + (e && e.message ? e.message : e)); }
   };
   setTimeout(function () { if (ta) ta.focus(); }, 0);
+}
+
+// 배경 레퍼런스 모달 — 이 에피소드의 공간(장소) 목록을 보고 편집하고, 각 공간의 "배경 플레이트"
+// (캐릭터 없는 빈 배경)를 생성한다. draft.payload.episodeLocations 를 읽고 쓴다.
+function openBackgroundReferenceModal() {
+  var ctxRef = (window.NK && NK.uiPipeline && NK.uiPipeline.__ctx) || null;
+  if (!ctxRef || !ctxRef.getState || !ctxRef.setState) { alert('상태를 불러올 수 없습니다.'); return; }
+  var st0 = ctxRef.getState();
+  if (!st0) return;
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+  var slug = function (s) {
+    return String(s || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9가-힣\-]/g, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || ('loc-' + (st0.scenes ? st0.scenes.length : 0));
+  };
+  var thumbUrl = function (obj) { return (obj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(obj) : ''; };
+
+  // 작업용 복사본
+  var locs = (st0.payload && Array.isArray(st0.payload.episodeLocations))
+    ? st0.payload.episodeLocations.map(function (l) {
+        return { id: l.id || '', name: l.name || '', description: l.description || '', refObjectName: l.refObjectName || '', sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds.slice() : [], _busy: false };
+      })
+    : [];
+
+  var existing = document.getElementById('bg-ref-modal');
+  if (existing) existing.remove();
+  var overlay = document.createElement('div');
+  overlay.id = 'bg-ref-modal';
+  overlay.className = 'cpbm-overlay';
+  document.body.appendChild(overlay);
+  var close = function () { try { overlay.remove(); } catch (_) {} };
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+
+  function syncFromInputs() {
+    overlay.querySelectorAll('.bgref-item').forEach(function (el) {
+      var i = Number(el.getAttribute('data-idx'));
+      if (!locs[i]) return;
+      var nm = el.querySelector('.bgref-name'); if (nm) locs[i].name = nm.value;
+      var ds = el.querySelector('.bgref-desc'); if (ds) locs[i].description = ds.value;
+    });
+  }
+
+  function render() {
+    var inStyle = 'width:100%;padding:5px 7px;background:var(--input-bg,#1a1a2e);color:var(--text-primary,#eee);border:1px solid var(--border);border-radius:4px;';
+    var rows = locs.map(function (l, i) {
+      var turl = thumbUrl(l.refObjectName) || (l._dataUrl || '');
+      return (
+        '<div class="bgref-item" data-idx="' + i + '" style="display:flex;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;">' +
+          '<div style="width:120px;height:72px;flex:0 0 120px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.04);display:flex;align-items:center;justify-content:center;">' +
+            (turl ? '<img src="' + esc(turl) + '" alt="" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display=\'none\'"/>' : '<span class="muted" style="font-size:11px;">배경 없음</span>') +
+          '</div>' +
+          '<div style="flex:1;min-width:0;">' +
+            '<input class="bgref-name" type="text" value="' + esc(l.name) + '" placeholder="장소 이름 (예: 수영장)" style="' + inStyle + 'margin-bottom:6px;"/>' +
+            '<textarea class="bgref-desc" rows="3" placeholder="배경 플레이트 묘사 (캐릭터·동작 없이 공간만)" style="' + inStyle + 'resize:vertical;">' + esc(l.description) + '</textarea>' +
+            '<div style="display:flex;gap:6px;margin-top:6px;align-items:center;">' +
+              '<button type="button" class="btn-secondary compact bgref-gen"' + (l._busy ? ' disabled' : '') + '>' + (l._busy ? '생성 중...' : (l.refObjectName ? '배경 재생성' : '배경 생성')) + '</button>' +
+              '<button type="button" class="btn-ghost compact bgref-del">삭제</button>' +
+              '<span class="muted" style="font-size:11px;">씬 ' + (l.sceneIds ? l.sceneIds.length : 0) + '개</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    overlay.innerHTML =
+      '<div class="cpbm-box" style="max-width:680px;width:90vw;max-height:84vh;display:flex;flex-direction:column;">' +
+        '<h3 class="cpbm-title">배경 레퍼런스 (공간)</h3>' +
+        '<p class="cpbm-help">이 에피소드의 공간 목록이에요. 각 공간의 <strong>배경 플레이트</strong>(캐릭터 없는 빈 배경)를 생성해 두면, 컷 생성 시 그 컷의 장소 배경을 참조해 <strong>배경은 일관되게·구도는 자유롭게</strong> 만들 수 있어요. (브랜드 세계관 배경과 별개의 에피소드 전용입니다.)</p>' +
+        '<div style="overflow-y:auto;flex:1;min-height:80px;">' + (rows || '<p class="muted" style="text-align:center;padding:20px;">추출된 공간이 없어요. "씬에서 다시 추출"을 눌러보세요.</p>') + '</div>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;">' +
+          '<button type="button" class="btn-secondary compact" id="bgref-add">+ 장소 추가</button>' +
+          '<button type="button" class="btn-secondary compact" id="bgref-reextract">씬에서 다시 추출</button>' +
+        '</div>' +
+        '<div class="cpbm-actions">' +
+          '<button type="button" class="btn-ghost" id="bgref-cancel">닫기</button>' +
+          '<button type="button" class="btn-primary" id="bgref-save">저장</button>' +
+        '</div>' +
+      '</div>';
+    bind();
+  }
+
+  function bind() {
+    overlay.querySelectorAll('.bgref-item').forEach(function (el) {
+      var i = Number(el.getAttribute('data-idx'));
+      var del = el.querySelector('.bgref-del');
+      if (del) del.onclick = function () { syncFromInputs(); locs.splice(i, 1); render(); };
+      var gen = el.querySelector('.bgref-gen');
+      if (gen) gen.onclick = function () { syncFromInputs(); generatePlate(i); };
+    });
+    var addBtn = overlay.querySelector('#bgref-add');
+    if (addBtn) addBtn.onclick = function () { syncFromInputs(); locs.push({ id: '', name: '', description: '', refObjectName: '', sceneIds: [], _busy: false }); render(); };
+    var reBtn = overlay.querySelector('#bgref-reextract');
+    if (reBtn) reBtn.onclick = reextract;
+    var cancel = overlay.querySelector('#bgref-cancel'); if (cancel) cancel.onclick = close;
+    var saveBtn = overlay.querySelector('#bgref-save'); if (saveBtn) saveBtn.onclick = doSave;
+  }
+
+  async function generatePlate(i) {
+    var l = locs[i]; if (!l) return;
+    if (!String(l.description || '').trim() && !String(l.name || '').trim()) { alert('묘사 또는 이름을 입력하세요.'); return; }
+    l._busy = true; render();
+    try {
+      var st = ctxRef.getState();
+      var prompt = [st.header || '', l.description || l.name,
+        'Empty location background plate of this place. Wide establishing view of the environment ONLY — no characters, no people, no creatures, nothing held by anyone. Clean background for compositing.'
+      ].filter(Boolean).join('\n');
+      var json = await NK.api.imagen({
+        prompt: prompt,
+        aspectRatio: st.aspectRatio || '16:9',
+        projectId: st.draftId || '',
+        generationMode: 'text-to-image',
+        referenceImages: []
+      });
+      l.refObjectName = String(json.objectName || '').trim() || l.refObjectName;
+      if (!l.refObjectName && json.dataUrl) l._dataUrl = json.dataUrl;
+      l._busy = false; render();
+    } catch (e) {
+      l._busy = false; render();
+      alert('배경 생성 실패: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  async function reextract() {
+    var st = ctxRef.getState();
+    if (!NK.api || !NK.api.scenarioLocations) { alert('추출 API를 사용할 수 없습니다.'); return; }
+    var reBtn = overlay.querySelector('#bgref-reextract');
+    if (reBtn) { reBtn.disabled = true; reBtn.textContent = '추출 중...'; }
+    try {
+      syncFromInputs();
+      var r = await NK.api.scenarioLocations(st.scenes || [], (st.payload && st.payload.language) === 'en' ? 'en' : 'ko');
+      if (r && Array.isArray(r.locations)) {
+        var prevByName = {};
+        locs.forEach(function (p) { if (p.name) prevByName[String(p.name).trim().toLowerCase()] = p; });
+        locs = r.locations.map(function (nl) {
+          var prev = prevByName[String(nl.name || '').trim().toLowerCase()];
+          return { id: nl.id || '', name: nl.name || '', description: nl.description || '', refObjectName: (prev && prev.refObjectName) || nl.refObjectName || '', sceneIds: nl.sceneIds || [], _busy: false };
+        });
+        render();
+      }
+    } catch (e) {
+      alert('추출 실패: ' + (e && e.message ? e.message : e));
+      var rb = overlay.querySelector('#bgref-reextract'); if (rb) { rb.disabled = false; rb.textContent = '씬에서 다시 추출'; }
+    }
+  }
+
+  function doSave() {
+    syncFromInputs();
+    var cleaned = locs
+      .filter(function (l) { return String(l.name || '').trim() || String(l.description || '').trim(); })
+      .map(function (l) {
+        return { id: l.id || slug(l.name), name: String(l.name || '').trim(), description: String(l.description || '').trim(), refObjectName: l.refObjectName || '', sceneIds: Array.isArray(l.sceneIds) ? l.sceneIds : [] };
+      });
+    var st = ctxRef.getState();
+    st.payload = Object.assign({}, st.payload, { episodeLocations: cleaned });
+    ctxRef.setState(st);
+    if (ctxRef.persistPipeline) ctxRef.persistPipeline();
+    if (ctxRef.updateDraftFromPipeline) ctxRef.updateDraftFromPipeline();
+    try {
+      var pid = st.draftId || '';
+      if (pid && NK.api && NK.api.projectSave) {
+        NK.api.projectSave(pid, st.payload || {}, st.scenes || [], { header: st.header || '', aspectRatio: st.aspectRatio || '' }).catch(function () {});
+      }
+    } catch (_) {}
+    close();
+  }
+
+  render();
 }
 
 function buildSceneRowHtml(s, header) {

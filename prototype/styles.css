@@ -2181,12 +2181,27 @@ textarea::-webkit-scrollbar-corner {
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
-  scrollbar-width: none;
+  /* 얇은 주황 스크롤바 (프로덕션 #pipeline-scenes 와 동일 속성) — 스크롤 위치 가시화 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
 }
 
 .scenario-cards::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+  width: 8px;
+  height: 8px;
+}
+
+.scenario-cards::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scenario-cards::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 8px;
+}
+
+.scenario-cards::-webkit-scrollbar-thumb:hover {
+  background: #ff9326;
 }
 
 .scenario-cards.empty {
@@ -4878,11 +4893,16 @@ textarea::-webkit-scrollbar-corner {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent 65%);
 }
 
-.prompt-common[contenteditable="true"],
 .prompt-aspect[contenteditable="true"],
-.prompt-visual[contenteditable="true"],
-.prompt-duration[contenteditable="true"] {
+.prompt-visual[contenteditable="true"] {
   outline: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+/* common·시간(duration) 항목은 테두리 없이(요청). 편집 어포던스는 hover/focus 로만. */
+.prompt-common[contenteditable="true"],
+.prompt-duration[contenteditable="true"] {
+  outline: none;
   border-radius: 4px;
 }
 
