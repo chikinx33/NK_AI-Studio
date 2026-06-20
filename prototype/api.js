@@ -500,11 +500,14 @@
     return j(text);
   };
 
-  api.imageUpload = async function (projectId, file) {
+  api.imageUpload = async function (projectId, file, opts) {
     var fd = new FormData();
     fd.append('projectId', String(projectId || ''));
     fd.append('userId', resolveUserId());
     fd.append('file', file);
+    // kind:'logo' 면 로고 전용 폴더(logo/)에 저장돼 프로덕션 이미지 저장소와 분리된다.
+    var kind = (opts && opts.kind) ? String(opts.kind) : 'image';
+    fd.append('kind', kind);
     var res = await fetch(withBase('/api/image/upload'), {
       method: 'POST',
       headers: buildAuthHeaders(),

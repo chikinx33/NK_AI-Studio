@@ -35,7 +35,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const projectPrefix = buildAiVideoProjectPrefix(basePrefix, userId, projectId)
     const safeName = (file.name || "image.png").replace(/[^a-zA-Z0-9._-]+/g, "_")
     const stamp = Date.now()
-    const objectName = `${projectPrefix}/image/${stamp}-${safeName}`
+    // 로고(브랜드 썸네일)는 프로덕션 이미지와 섞이지 않게 별도 폴더(logo/)에 저장한다.
+    // 프로덕션 저장소 목록(/api/image/library)은 image/ 만 나열하므로 자동 분리된다.
+    const kind = String(fd.get("kind") || "image").trim().toLowerCase()
+    const folder = kind === "logo" ? "logo" : "image"
+    const objectName = `${projectPrefix}/${folder}/${stamp}-${safeName}`
     const token = await getGoogleAccessToken({ clientEmail, privateKeyPem: privateKeyRaw, scope: "https://www.googleapis.com/auth/cloud-platform" })
     const buf = await file.arrayBuffer()
     const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${encodeURIComponent(outParsed.bucket)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`

@@ -78,7 +78,7 @@
           anchorEl.classList.add('is-busy');
           if ('disabled' in anchorEl) anchorEl.disabled = true;
         }
-        const resp = await NK.api.imageUpload(id, file);
+        const resp = await NK.api.imageUpload(id, file, { kind: 'logo' });
         const objectName = String(resp && resp.objectName || '').trim();
         if (!objectName) throw new Error('objectName_missing');
         // 로고는 IP(브랜드) 엔티티의 단일 출처에 저장한다(SSOT). 더 이상 형제 프로젝트마다
