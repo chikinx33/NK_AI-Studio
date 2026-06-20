@@ -375,6 +375,85 @@
     modal.classList.remove('hidden');
   }
 
+  // 컷 기반 레퍼런스 선택 모달. 저장소(lib-modal)와 같은 그리드 UI 를 재사용하되,
+  // 항목은 "현재 프로젝트의 다른 컷 중 이미지가 있는 것"으로 채운다. 드롭다운으로 cut N 만
+  // 보면 어떤 그림인지 알기 어렵다는 요청에 따라 썸네일로 고르게 한다.
+  function openCutRefModal(scenes, currentSceneId, selectedId, onSelect) {
+    var modal = document.getElementById('lib-modal');
+    if (!modal) return;
+    var box = modal.querySelector('.lib-content');
+    if (!box) return;
+
+    var esc = function (s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
+    var candidates = (Array.isArray(scenes) ? scenes : []).filter(function (s) {
+      return s && String(s.id) !== String(currentSceneId) && s.imageDataUrl;
+    });
+    var chosenId = String(selectedId || '');
+
+    function render() {
+      var hasItems = candidates.length > 0;
+      var list = candidates.map(function (s) {
+        var url = toPlayableMediaUrl(s.imageDataUrl);
+        var lbl = esc(s.displayLabel || ('cut ' + s.id));
+        var active = String(s.id) === chosenId;
+        return (
+          '<div class="lib-item cut-ref-pick-item' + (active ? ' lib-selected selected' : '') + '" data-id="' + esc(s.id) + '" title="' + lbl + '">' +
+          '<img class="lib-thumb" src="' + esc(url) + '" alt="" />' +
+          '<span class="cut-ref-pick-thumb-label">' + lbl + '</span>' +
+          '</div>'
+        );
+      }).join('');
+
+      box.innerHTML = '' +
+        '<div class="lib-header">' +
+        '<span class="lib-title">컷 기반 레퍼런스 선택</span>' +
+        '<span class="muted">' + (hasItems ? '일관성 기준이 될 컷의 이미지를 고르세요' : '') + '</span>' +
+        '<div class="lib-header-spacer"></div>' +
+        '<div class="lib-toolbar">' +
+        '<button class="btn-primary" id="cutref-use-btn"' + (chosenId ? '' : ' disabled') + '>사용</button>' +
+        '<button class="btn-ghost" id="cutref-clear-btn">선택 해제</button>' +
+        '<button class="btn-secondary lib-close-btn" id="cutref-close">닫기</button>' +
+        '</div>' +
+        '</div>' +
+        (hasItems
+          ? '<div class="lib-grid">' + list + '</div>'
+          : '<div class="lib-empty"><p class="muted">레퍼런스로 쓸 이미지가 있는 다른 컷이 없습니다. 먼저 다른 컷의 이미지를 생성하세요.</p></div>');
+
+      box.querySelectorAll('.cut-ref-pick-item').forEach(function (el) {
+        el.onclick = function () {
+          chosenId = String(el.dataset.id || '');
+          render();
+        };
+        // 더블클릭은 선택 즉시 적용.
+        el.ondblclick = function () {
+          chosenId = String(el.dataset.id || '');
+          if (onSelect) onSelect(chosenId);
+          closeModals();
+        };
+      });
+      var useBtn = box.querySelector('#cutref-use-btn');
+      if (useBtn) useBtn.onclick = function () {
+        if (!chosenId) { alert('레퍼런스로 쓸 컷을 선택하세요.'); return; }
+        if (onSelect) onSelect(chosenId);
+        closeModals();
+      };
+      var clearBtn = box.querySelector('#cutref-clear-btn');
+      if (clearBtn) clearBtn.onclick = function () {
+        if (onSelect) onSelect('');
+        closeModals();
+      };
+      var closeBtn = box.querySelector('#cutref-close');
+      if (closeBtn) closeBtn.onclick = function () { closeModals(); };
+    }
+
+    render();
+    modal.classList.remove('hidden');
+  }
+
   function closeModals() {
     ['img-modal', 'video-modal', 'lib-modal'].forEach(id => {
       const m = document.getElementById(id);
@@ -1286,6 +1365,7 @@
         getProjectId: getProjectId,
         getProjectTitle: getProjectTitle,
         openLibraryModal: openLibraryModal,
+        openCutRefModal: openCutRefModal,
         downloadFile: downloadFile,
         openImageModal: openImageModal,
         openVideoModal: openVideoModal,

@@ -311,6 +311,18 @@
     return result;
   }
 
+  // 컷 기반 레퍼런스 선택 버튼에 표시할 라벨(이미 escape 된 텍스트 반환).
+  // 선택된 컷이 없거나 그 컷에 이미지가 없으면 기본 안내 문구를 보여준다.
+  function buildCutRefButtonLabel(allScenes, currentId, selectedId) {
+    if (!selectedId) return '컷 선택';
+    var found = null;
+    (allScenes || []).forEach(function (s) {
+      if (!found && s && String(s.id) === String(selectedId)) found = s;
+    });
+    if (!found || !found.imageDataUrl || String(found.id) === String(currentId)) return '컷 선택';
+    return escapeText(found.displayLabel || ('cut ' + found.id));
+  }
+
   function buildSceneRowHtml(scene, header, options) {
     var opts = options || {};
     var statePayload = opts.statePayload || {};
@@ -425,9 +437,9 @@
       '<input type="checkbox" class="cut-ref-check" data-action="toggle-cut-ref" data-id="' + scene.id + '"' + (scene.cutRefEnabled ? ' checked' : '') + '>' +
       ' 컷 기반 생성' +
       '</label>' +
-      '<select class="cut-ref-select" data-action="change-cut-ref" data-id="' + scene.id + '"' + (!scene.cutRefEnabled ? ' disabled' : '') + '>' +
-      buildCutRefOptions(allScenes, scene.id, scene.cutRefId) +
-      '</select>' +
+      '<button type="button" class="cut-ref-select cut-ref-pick-btn" data-action="pick-cut-ref" data-id="' + scene.id + '"' + (!scene.cutRefEnabled ? ' disabled' : '') + ' title="레퍼런스로 쓸 컷을 썸네일에서 선택">' +
+      '<span class="cut-ref-pick-text">' + buildCutRefButtonLabel(allScenes, scene.id, scene.cutRefId) + '</span><span class="cut-ref-pick-caret">▾</span>' +
+      '</button>' +
       '</div>' +
       '<div class="action-buttons grid video-actions">' +
       '<button class="btn-secondary compact span2" data-action="video" data-id="' + scene.id + '">' + (videoBusy ? '생성중(취소)' : '영상 생성') + '</button>' +
@@ -457,6 +469,7 @@
   sceneRow.buildVoiceScriptForVideo = buildVoiceScriptForVideo;
   sceneRow.buildSceneRowHtml = buildSceneRowHtml;
   sceneRow.buildCutRefOptions = buildCutRefOptions;
+  sceneRow.buildCutRefButtonLabel = buildCutRefButtonLabel;
   sceneRow.togglePipelineSceneCollapsed = togglePipelineSceneCollapsed;
   sceneRow.setPipelineSceneCollapsed = setPipelineSceneCollapsed;
   sceneRow.isPipelineSceneCollapsed = isPipelineSceneCollapsed;

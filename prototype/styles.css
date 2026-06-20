@@ -6076,6 +6076,50 @@ html.page-shell-image #sidebar-project-card {
   cursor: default;
 }
 
+/* 컷 기반 레퍼런스 선택: 드롭다운 대신 썸네일 모달을 여는 버튼 */
+button.cut-ref-pick-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  text-align: left;
+}
+
+.cut-ref-pick-btn .cut-ref-pick-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cut-ref-pick-btn .cut-ref-pick-caret {
+  flex-shrink: 0;
+  opacity: 0.7;
+  font-size: 10px;
+}
+
+/* 컷 선택 모달의 썸네일 위에 컷 라벨 오버레이 */
+.cut-ref-pick-item {
+  position: relative;
+  cursor: pointer;
+}
+
+.cut-ref-pick-thumb-label {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  pointer-events: none;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 
 /* Scene Media Constraints */
 .scene-media-stack {

@@ -375,6 +375,24 @@
           await opts.downloadFile(scene.imageDataUrl, 'scene-' + sceneId + '.png');
           return;
         }
+        if (action === 'pick-cut-ref') {
+          // 드롭다운(cut N) 대신 저장소처럼 썸네일로 레퍼런스 컷을 고른다.
+          if (!scene.cutRefEnabled) return;
+          var openCut = opts.openCutRefModal;
+          if (typeof openCut !== 'function') { alert('컷 선택 창을 열 수 없습니다.'); return; }
+          openCut(st.scenes, scene.id, scene.cutRefId, function (newId) {
+            // 모달 상호작용은 비동기라 최신 상태를 다시 읽어 반영한다.
+            var stp = ctx.getState();
+            if (!stp || !Array.isArray(stp.scenes)) return;
+            var pidx = stp.scenes.findIndex(function (s) { return String(s.id) === String(scene.id); });
+            if (pidx < 0) return;
+            stp.scenes[pidx] = Object.assign({}, stp.scenes[pidx], { cutRefId: String(newId || '') });
+            ctx.setState(stp);
+            if (opts.updateSceneRow) opts.updateSceneRow(pidx, stp.header || '', 'image');
+            if (ctx.persistPipeline) ctx.persistPipeline();
+          });
+          return;
+        }
         if (action === 'video') {
           if (!projectId) { alert('프로젝트가 선택되지 않았습니다.'); return; }
           if (opts.isSceneVideoProcessing && opts.isSceneVideoProcessing(scene)) {
@@ -573,31 +591,22 @@
         var enabled = !!chk.checked;
         stC.scenes[cidx] = Object.assign({}, stC.scenes[cidx], { cutRefEnabled: enabled });
         ctxC.setState(stC);
-        // 같은 행의 드롭다운을 그 자리에서 활성/비활성 + 옵션 새로고침(다른 컷 최신 이미지 반영)
+        // 같은 행의 컷 선택 버튼을 그 자리에서 활성/비활성 + 라벨 새로고침(선택된 컷 반영)
         var rowC = chk.closest('.scene-row');
-        var selC = rowC ? rowC.querySelector('.cut-ref-select[data-id="' + chkId + '"]') : null;
-        if (selC) {
-          selC.disabled = !enabled;
+        var btnC = rowC ? rowC.querySelector('.cut-ref-pick-btn[data-id="' + chkId + '"]') : null;
+        if (btnC) {
+          btnC.disabled = !enabled;
           var srMod = NK.uiPipelineSceneRow;
-          if (enabled && srMod && srMod.buildCutRefOptions) {
-            selC.innerHTML = srMod.buildCutRefOptions(stC.scenes, chkId, stC.scenes[cidx].cutRefId);
+          var txtC = btnC.querySelector('.cut-ref-pick-text');
+          if (enabled && txtC && srMod && srMod.buildCutRefButtonLabel) {
+            txtC.innerHTML = srMod.buildCutRefButtonLabel(stC.scenes, chkId, stC.scenes[cidx].cutRefId);
           }
         }
         if (ctxC.persistPipeline) ctxC.persistPipeline();
         return;
       }
-      var sel = e.target.closest('[data-action="change-cut-ref"]');
-      if (!sel) return;
-      var selSceneId = sel.dataset.id;
-      var ctx = opts.ctx;
-      if (!ctx || !ctx.getState) return;
-      var st = ctx.getState();
-      if (!st || !st.scenes || !selSceneId) return;
-      var idx = st.scenes.findIndex(function (s) { return String(s.id) === String(selSceneId); });
-      if (idx < 0) return;
-      st.scenes[idx] = Object.assign({}, st.scenes[idx], { cutRefId: sel.value });
-      ctx.setState(st);
-      if (ctx.persistPipeline) ctx.persistPipeline();
+      // 컷 선택은 이제 드롭다운이 아니라 썸네일 모달 버튼(pick-cut-ref, click 처리)이라
+      // 여기 change 핸들러에서 처리할 대상은 체크박스 토글뿐이다.
     });
 
     // ── 더빙 대본 인라인 편집 ──
