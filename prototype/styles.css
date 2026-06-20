@@ -662,12 +662,27 @@ body.page-shell-ai-sound .brand-mark {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-width: none;
+  /* 프로덕션 컷이 많아도 현재 스크롤 위치를 알 수 있게 얇은 주황 스크롤바를 표시한다. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
 }
 
 #pipeline-scenes::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+  width: 8px;
+  height: 8px;
+}
+
+#pipeline-scenes::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#pipeline-scenes::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 8px;
+}
+
+#pipeline-scenes::-webkit-scrollbar-thumb:hover {
+  background: #ff9326;
 }
 
 .lib-content {
