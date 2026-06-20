@@ -223,7 +223,7 @@ export default function Approvals({
         return (
           <CollapsibleSection
             storageKey="nk_collapse_projects"
-            header={<span className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400"><KanbanIcon className="h-3.5 w-3.5" /> 프로젝트 ({visible.length})</span>}
+            header={<span className="flex items-center gap-1.5 text-sm font-semibold text-emerald-300"><KanbanIcon className="h-4 w-4" /> 프로젝트 ({visible.length})</span>}
           >
             <div className="space-y-1">
               {visible.map((p) => {
