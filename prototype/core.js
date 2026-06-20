@@ -2,6 +2,23 @@
   var NK = window.NK || (window.NK = {});
   var core = NK.core || (NK.core = {});
 
+  // 브라우저 확장 프로그램(광고차단·번역·비밀번호 매니저 등)이 chrome.runtime 메시지 채널이
+  // 닫히며 던지는 무해한 에러를 콘솔에서 억제한다. 우리 앱 에러는 그대로 보이게 이 문구일 때만.
+  // (확장이 격리 영역에서 직접 콘솔에 찍는 경우는 페이지에서 못 막음 — 브라우저 한계)
+  try {
+    window.addEventListener('unhandledrejection', function (e) {
+      try {
+        var r = e && e.reason;
+        var msg = (r && (r.message || (typeof r === 'string' ? r : ''))) || '';
+        if (typeof msg === 'string' &&
+            (msg.indexOf('message channel closed') !== -1 ||
+             msg.indexOf('Receiving end does not exist') !== -1)) {
+          e.preventDefault();
+        }
+      } catch (_) { }
+    });
+  } catch (_) { }
+
   try {
     window.addEventListener('load', function () {
       try { document.documentElement.classList.remove('preload-veiled'); } catch (_) { }
