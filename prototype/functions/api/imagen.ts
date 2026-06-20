@@ -332,9 +332,14 @@ function buildGeminiParts(referenceImages: NormalizedReferenceImage[], prompt: s
     // 라벨이 이미지와 인접해야 Gemini 가 다중 주체를 구분한다. (text-to-image 다중 레퍼런스
     // 에서만 사용 — image-to-image 는 0번이 소스 이미지라 캐릭터 라벨링 대상이 아님)
     if (labelImages) {
-      const subject = String(item.subjectDescription || `registered character ${index + 1}`).trim() || `registered character ${index + 1}`;
-      const kindLabel = item.referenceKind === "environment" ? "background/prop" : "character";
-      parts.push({ text: `Reference image ${index + 1} (immediately below) is the registered ${kindLabel}: ${subject}. Use it as the exact appearance for THAT ${kindLabel} only; do not blend it into the other characters.` });
+      if (item.referenceKind === "continuity") {
+        // 연속성 레퍼런스: 카메라/구도 복제를 명시적으로 금지한다.
+        parts.push({ text: `Reference image ${index + 1} (immediately below) is a CONTINUITY reference from a previous cut in the same sequence. Reuse its character designs, colors, materials, world/setting art style, and lighting mood ONLY. Do NOT copy its camera angle, shot size, framing, perspective, or subject placement — the composition must follow the text prompt above.` });
+      } else {
+        const subject = String(item.subjectDescription || `registered character ${index + 1}`).trim() || `registered character ${index + 1}`;
+        const kindLabel = item.referenceKind === "environment" ? "background/prop" : "character";
+        parts.push({ text: `Reference image ${index + 1} (immediately below) is the registered ${kindLabel}: ${subject}. Use it as the exact appearance for THAT ${kindLabel} only; do not blend it into the other characters.` });
+      }
     }
     parts.push({
       inlineData: {
@@ -515,26 +520,41 @@ function buildGeminiImagePrompt(
   });
   const consistencyLines = Array.from(grouped.values()).map((item) => {
     const subject = String(item.subjectDescription || "registered character").trim() || "registered character";
+    if (item.referenceKind === "continuity") {
+      // 연속성 레퍼런스: "구도"가 아니라 룩(캐릭터/색/재질/월드/조명)만 잇는다.
+      return `One reference image is a CONTINUITY reference from ${subject}. Reuse the same character designs, colors, materials, world/setting art style, and lighting mood so this cut clearly belongs to the same sequence. This reference governs LOOK ONLY, not composition.`;
+    }
     if (item.referenceKind === "environment") {
       return `Use the provided registered reference image for ${subject} and keep the exact same layout, architecture, props, materials, colors, and lighting. Do not redesign this background or prop.`;
     }
     return `Use the provided registered reference image set for ${subject} and keep the exact same character design, face, silhouette, colors, costume, and proportions.`;
   });
   const groupedValues = Array.from(grouped.values());
-  const hasCharacterRef = groupedValues.some((item) => item.referenceKind !== "environment");
-  const characterRefCount = groupedValues.filter((item) => item.referenceKind !== "environment").length;
+  const hasContinuityRef = groupedValues.some((item) => item.referenceKind === "continuity");
+  const hasEnvRef = groupedValues.some((item) => item.referenceKind === "environment");
+  const hasCharacterRef = groupedValues.some((item) => item.referenceKind !== "environment" && item.referenceKind !== "continuity");
+  const characterRefCount = groupedValues.filter((item) => item.referenceKind !== "environment" && item.referenceKind !== "continuity").length;
   // 다중 캐릭터: 각 이미지에 인접 라벨(buildGeminiParts)이 붙으므로, 프롬프트에서도
   // "전원을 각자의 시트로, 병합·교체·중복·누락 없이" 렌더하도록 못박는다.
   // 이 지시가 없으면 모델이 첫 캐릭터만 강하게 반영하고 나머지를 흘리는 회귀가 있었다.
   const multiCharacterLine = characterRefCount > 1
     ? `This scene contains ${characterRefCount} different registered characters, each provided with its OWN labeled reference image. Render all ${characterRefCount} as separate, distinct individuals — match each character to its own reference image, and do not merge, swap, duplicate, or omit any character, and do not let one character's design bleed into another.`
     : "";
+  // 연속성 레퍼런스가 있으면, 카메라·구도·프레이밍은 "이 컷의 프롬프트"가 절대 우선임을 못박는다.
+  // (레퍼런스의 구도를 그대로 복제해 컷1과 똑같은 앵글이 나오던 문제 해결)
+  const continuityCompositionLine = hasContinuityRef
+    ? "CRITICAL: Treat the continuity reference as a style/identity guide only. Build THIS image's camera angle, shot size, framing, perspective, and subject placement strictly from the text prompt above — do NOT reproduce the reference's composition, camera, or layout. If the prompt asks for a different shot (for example a low angle just above the water surface), render that new shot even though the characters, palette, and setting stay consistent."
+    : "";
+  const designHeader = hasCharacterRef
+    ? "The uploaded reference images define the official registered character and background/prop designs."
+    : hasEnvRef
+      ? "The uploaded reference images define the official registered background/prop designs."
+      : "";
   return [
     base,
+    continuityCompositionLine,
     ...conversationLines,
-    hasCharacterRef
-      ? "The uploaded reference images define the official registered character and background/prop designs."
-      : "The uploaded reference images define the official registered background/prop designs.",
+    designHeader,
     multiCharacterLine,
   ].concat(consistencyLines).filter(Boolean).join("\n");
 }
@@ -870,7 +890,12 @@ async function normalizeReferenceImages(args: {
     const referenceId = Number(raw.referenceId || (i + 1)) || (i + 1);
     const subjectDescription = String(raw.subjectDescription || `registered character ${referenceId}`).trim() || `registered character ${referenceId}`;
     const subjectType = normalizeSubjectType(raw.subjectType);
-    const referenceKind = String(raw.referenceKind || "").trim().toLowerCase() === "environment" ? "environment" : "character";
+    // referenceKind: character(기본) | environment(배경·소품) | continuity(이전 컷 연속성 — 캐릭터/
+    // 색/재질/월드/조명만 유지, 카메라·구도는 새 프롬프트를 따름)
+    const rkRaw = String(raw.referenceKind || "").trim().toLowerCase();
+    const referenceKind = rkRaw === "environment" ? "environment"
+      : (rkRaw === "continuity" || rkRaw === "cut") ? "continuity"
+      : "character";
     out.push({
       referenceId,
       base64: parsed.base64,

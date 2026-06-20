@@ -26,6 +26,26 @@ test('image-to-image mode fails instead of silently falling back when all source
   assert.match(source, /source_image_reference_unavailable/);
 });
 
+test('cut-based continuity reference keeps look but lets the prompt drive camera/composition', () => {
+  const source = readImagenSource();
+  // continuity 종류 인식
+  assert.match(source, /rkRaw === "continuity" \|\| rkRaw === "cut"/);
+  // 구도가 아니라 룩만 잇는 일관성 문구
+  assert.match(source, /This reference governs LOOK ONLY, not composition\./);
+  // 카메라/구도는 이 컷 프롬프트가 우선임을 강제
+  assert.match(source, /do NOT reproduce the reference's composition, camera, or layout/);
+  // 캐릭터 수 집계에서 continuity 는 제외(별도 인물로 렌더하지 않음)
+  assert.match(source, /item\.referenceKind !== "environment" && item\.referenceKind !== "continuity"/);
+});
+
+test('frontend tags the cut reference as continuity (not a composition-locking environment ref)', () => {
+  const fullPath = path.join(process.cwd(), 'prototype/ui/pipeline-image.js');
+  const src = fs.readFileSync(fullPath, 'utf8');
+  assert.match(src, /referenceKind: 'continuity'/);
+  // 옛 "maintain the same ... environment" 구도 고정 문구가 사라졌는지
+  assert.doesNotMatch(src, /maintain the same character appearance, costume, environment/);
+});
+
 test('gemini request sends the edit instruction text part before inline reference images', () => {
   const source = readImagenSource();
   assert.match(source, /const parts: Array<Record<string, unknown>> = \[\{ text: prompt \}\];/);

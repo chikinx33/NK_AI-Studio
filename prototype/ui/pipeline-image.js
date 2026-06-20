@@ -995,8 +995,12 @@
         baseRefs.push({
           referenceId: baseRefs.length + 1,
           referenceType: 'REFERENCE_TYPE_STYLE',
+          // 연속성 전용 레퍼런스: 캐릭터/색/재질/월드/조명 일관성만 가져오고, 카메라·구도는
+          // 이 컷의 프롬프트를 따라야 한다. 'environment'를 "유지"로 지시하면 구도까지 복제되어
+          // 컷1과 똑같은 앵글이 나오는 문제가 있어 referenceKind 를 'continuity'로 명시한다.
+          referenceKind: 'continuity',
           imageDataUrl: refCutImg,
-          subjectDescription: 'Visual consistency reference: maintain the same character appearance, costume, environment, and lighting as shown.',
+          subjectDescription: 'the previous cut in this sequence',
           subjectType: 'SUBJECT_TYPE_DEFAULT'
         });
         referencePayload = referencePayload
