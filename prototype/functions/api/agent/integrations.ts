@@ -41,7 +41,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
     const fields = keys.map((k) => ({
       key: k.key, type: "password" as const, label: k.label, required: !k.optional,
       secret: true, hasValue: hasKey(env, k.key, k.alt),
-      hint: "NK 스튜디오 공용 키로 작동 — 별도 입력이 필요 없어요.",
+      // 키는 서버(Cloudflare) 환경변수로만 읽는다. 이 입력칸은 저장되지 않으므로 환경변수명을 안내.
+      hint: hasKey(env, k.key, k.alt)
+        ? `서버 환경변수 ${k.key} 설정됨 ✓`
+        : `여기 입력은 저장되지 않아요. Cloudflare Pages 환경변수에 ${k.key}${(k.alt && k.alt.length) ? `(또는 ${k.alt.join("/")})` : ""}를 추가한 뒤 재배포하세요.`,
     }));
     return {
       agentId: def?.agentId || "", agentName: meta?.name || "", emoji: meta?.emoji || "",
