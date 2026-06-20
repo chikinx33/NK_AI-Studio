@@ -560,12 +560,12 @@ function hasDeliverableOutput(j: any): boolean {
 }
 // 승인 카드에 보여줄 작업 요약 만들기 — 잡 종류(type)+입력(input)으로 사람이 읽을 한 줄.
 const APPROVAL_TOOL_LABEL: Record<string, string> = {
-  calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
+  gmail_send: "메일 발송", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", gmail_trash: "Gmail 메일 휴지통 이동", publish: "SNS 발행",
   image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", music: "BGM 생성",
   scenario: "시나리오 생성", ppt: "PPT 생성", pdf: "PDF 문서 생성",
 };
 // 외부에 영향을 주는(되돌리기 어려운) 도구 — 카드에 'external' 배지로 강조.
-const APPROVAL_EXTERNAL_TOOLS = new Set(["calendar_create", "calendar_delete", "gmail_trash", "publish"]);
+const APPROVAL_EXTERNAL_TOOLS = new Set(["gmail_send", "calendar_create", "calendar_delete", "gmail_trash", "publish"]);
 function fmtWhen(s?: string): string {
   if (!s) return "";
   const m = /(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(s));
@@ -574,9 +574,17 @@ function fmtWhen(s?: string): string {
 function summarizeApprovalJob(j: any) {
   const input = j.input || {};
   const label = APPROVAL_TOOL_LABEL[j.type] || j.type || "작업";
-  const detail = input.summary || input.title || input.prompt || input.topic || input.caption || input.query || "";
-  const when = fmtWhen(input.start);
-  const title = `${label}${detail ? `: ${String(detail).slice(0, 60)}` : ""}${when ? ` (${when})` : ""}`;
+  let title: string;
+  let reason: string | undefined = input.description ? String(input.description).slice(0, 120) : undefined;
+  if (j.type === "gmail_send") {
+    // 메일은 받는사람·제목을 카드에 명시(오발송 방지) + 본문 일부를 reason으로.
+    title = `${label}: ${input.subject || "(제목 없음)"} → ${input.to || "?"}`;
+    reason = input.body ? String(input.body).slice(0, 160) : undefined;
+  } else {
+    const detail = input.summary || input.title || input.prompt || input.topic || input.caption || input.query || "";
+    const when = fmtWhen(input.start);
+    title = `${label}${detail ? `: ${String(detail).slice(0, 60)}` : ""}${when ? ` (${when})` : ""}`;
+  }
   return {
     id: j.id,
     agentId: j.agent_id,
@@ -585,7 +593,7 @@ function summarizeApprovalJob(j: any) {
     tool: j.type,
     command: j.type,
     kind: APPROVAL_EXTERNAL_TOOLS.has(j.type) ? "external" : undefined,
-    reason: input.description ? String(input.description).slice(0, 120) : undefined,
+    reason,
   };
 }
 export async function getApprovals(): Promise<{ pending: any[]; history: any[] }> {

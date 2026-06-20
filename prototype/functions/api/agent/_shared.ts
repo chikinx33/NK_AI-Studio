@@ -1312,6 +1312,48 @@ async function runNaverDatalabTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "naver_datalab", startDate, endDate, results: data.results || [] };
 }
 
+/** 싱크(비서) Gmail 발송: to·subject·body로 메일 전송. (외부·되돌리기 어려움 → 승인 게이트) */
+function gmailB64(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+async function runGmailSendTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const to = String(input?.to || input?.recipient || input?.email || "").trim();
+  if (!to || !/@/.test(to)) throw new Error("받는 사람 이메일(to)이 필요해요.");
+  const subject = String(input?.subject || input?.title || "(제목 없음)").trim();
+  const body = String(input?.body || input?.text || input?.content || input?.message || "").trim();
+  if (!body) throw new Error("메일 본문(body)이 필요해요.");
+  const cc = String(input?.cc || "").trim();
+  const bcc = String(input?.bcc || "").trim();
+  const headers: (string | null)[] = [
+    `To: ${to}`,
+    cc ? `Cc: ${cc}` : null,
+    bcc ? `Bcc: ${bcc}` : null,
+    `Subject: =?UTF-8?B?${gmailB64(subject)}?=`,
+    "MIME-Version: 1.0",
+    'Content-Type: text/plain; charset="UTF-8"',
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    body,
+  ];
+  const mime = headers.filter((h) => h !== null).join("\r\n");
+  const raw = gmailB64(mime).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${access}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ raw }),
+  });
+  const data: any = await res.json();
+  if (!res.ok) {
+    if (res.status === 403) throw new Error("메일 발송 권한이 없어요. ⚙️설정 → 에이전트 → 싱크 → 구글 재연결로 권한을 갱신해주세요.");
+    throw new Error(data?.error?.message || `메일 발송 실패 (${res.status})`);
+  }
+  return { kind: "gmail_send", to, subject, id: data.id || "" };
+}
+
 /** 싱크(비서) Google Drive 보기: 파일 목록·검색, fileId 주면 내용(문서/시트/텍스트) 읽기. (읽기 전용) */
 async function runDriveTool(input: any, ctx: ToolContext): Promise<any> {
   const access = await syncGoogleAccess(ctx);
@@ -1381,6 +1423,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   ppt: { agentId: "plot", kind: "external", run: runPptTool },
   pdf: { agentId: "ink", kind: "external", run: runPdfTool },
   gmail_read: { agentId: "sync", kind: "read", run: runGmailReadTool },
+  // 메일 발송: 외부·되돌리기 어려움 → 승인 게이트(승인하면 그때 실제 발송).
+  gmail_send: { agentId: "sync", kind: "external", gate: true, run: runGmailSendTool },
   // 휴지통 이동은 복구 가능(30일)하므로 즉시 실행(read)으로 두되, 싱크가 대상 확인 후 실행하도록 프롬프트로 유도.
   gmail_trash: { agentId: "sync", kind: "read", run: runGmailTrashTool },
   calendar_list: { agentId: "sync", kind: "read", run: runCalendarListTool },

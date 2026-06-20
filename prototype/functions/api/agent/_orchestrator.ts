@@ -169,6 +169,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     ppt: `[[RUN: ppt | {"prompt": "발표 주제·목적·대상 구체적으로", "context": "추가 맥락(선택)"}]]  → PPT 슬라이드 생성 (브라우저에서 .pptx 다운로드)`,
     pdf: `[[RUN: pdf | {"prompt": "문서 주제·목적·내용 구체적으로", "context": "추가 맥락(선택)"}]]  → PDF 문서 생성 (브라우저 프린트로 저장)`,
     gmail_read: `[[RUN: gmail_read | {"max": 10}]]  → 받은 Gmail 최근 N통 제목·발신자·미리보기 (읽기 전용 · 구글 연결 필요)`,
+    gmail_send: `[[RUN: gmail_send | {"to": "받는사람@메일", "subject": "제목", "body": "본문 전체"}]]  → Gmail로 메일 발송. 본문은 사용자 요청에 맞춰 자연스럽고 완성된 형태로 직접 작성한다. ⚠️ 되돌릴 수 없어 사람 승인 후 발송됨(승인 패널). (구글 연결 필요)`,
     gmail_trash: `[[RUN: gmail_trash | {"query": "from:no-reply@x.com 또는 subject:광고 등 Gmail 검색어", "max": 5}]]  → 검색어에 맞는 메일을 휴지통으로(30일 복구 가능). ⚠️ 반드시 먼저 gmail_read 등으로 어떤 메일인지 사용자에게 보여주고 명확히 동의받은 뒤에만 실행. 광범위한 검색어로 한꺼번에 지우지 말 것.`,
     calendar_list: `[[RUN: calendar_list | {"max": 10, "days": 30}]]  → 향후 N일(기본 30) 구글 캘린더 일정 조회. "이번 주"면 days:7, "오늘"이면 days:1 로 조정 (읽기 전용 · 구글 연결 필요)`,
     calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
@@ -184,7 +185,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
   const TOOL_LABELS: Record<string, string> = {
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
-    gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)",
+    gmail_read: "Gmail 메일 조회", gmail_send: "Gmail 메일 발송", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)",
     sheets_read: "Google Sheets 읽기(매출·지표)", github: "GitHub 레포·이슈 조회", naver_datalab: "네이버 데이터랩(검색 트렌드)", drive: "Google Drive 파일 보기",
   };
   const toolsByAgent: Record<string, string[]> = {};
