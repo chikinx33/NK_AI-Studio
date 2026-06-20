@@ -1289,10 +1289,12 @@ async function runNaverDatalabTool(input: any, ctx: ToolContext): Promise<any> {
   const id = String(ctx.env?.NAVER_CLIENT_ID || "").trim();
   const secret = String(ctx.env?.NAVER_CLIENT_SECRET || "").trim();
   if (!id || !secret) throw new Error("네이버 데이터랩 키가 없어요. Cloudflare 환경변수에 NAVER_CLIENT_ID·NAVER_CLIENT_SECRET을 추가해주세요. (developers.naver.com)");
+  // 키워드 추출 — 배열/문자열 keywords, query, keyword, prompt(비-JSON 입력 폴백), topic 모두 허용.
   const kws: string[] = Array.isArray(input?.keywords)
     ? input.keywords.map((s: any) => String(s).trim()).filter(Boolean)
-    : String(input?.query || input?.keyword || "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (!kws.length) throw new Error("키워드(keywords)가 필요해요.");
+    : String(input?.keywords || input?.query || input?.keyword || input?.prompt || input?.topic || "")
+        .split(/[,/]| vs /i).map((s) => s.trim()).filter(Boolean);
+  if (!kws.length) throw new Error("검색 트렌드를 볼 키워드가 필요해요. 예: '강아지 사료'.");
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   const fmt = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
