@@ -17,6 +17,32 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
+  // 삭제된(404) 미디어 objectName 을 기억해 다시 요청하지 않게 한다. 저장소에서 지운 로고/
+  // 썸네일이 대시보드에 매 로드마다 불려가 404 를 콘솔에 남기던 문제를 self-heal.
+  var DEAD_MEDIA_KEY = 'nk_dead_media';
+  function getDeadMediaSet() {
+    try { var a = JSON.parse(localStorage.getItem(DEAD_MEDIA_KEY) || '[]'); return new Set(Array.isArray(a) ? a : []); }
+    catch (_) { return new Set(); }
+  }
+  function isDeadMedia(objectName) {
+    var o = String(objectName || '').trim();
+    return !!o && getDeadMediaSet().has(o);
+  }
+  function markDeadMedia(objectName) {
+    var o = String(objectName || '').trim();
+    if (!o) return;
+    try {
+      var s = getDeadMediaSet();
+      if (s.has(o)) return;
+      s.add(o);
+      var arr = Array.from(s);
+      if (arr.length > 500) arr = arr.slice(arr.length - 500); // 무한 증가 방지
+      localStorage.setItem(DEAD_MEDIA_KEY, JSON.stringify(arr));
+    } catch (_) {}
+  }
+  // 빈 썸네일(이미지 추가) placeholder SVG — 죽은 썸네일 교체/렌더에 공용.
+  var THUMB_EMPTY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg>';
+
   const truncateEpisodeTitle = (value) => {
     const s = String(value == null ? '' : value);
     const arr = Array.from(s);
@@ -823,15 +849,17 @@
       const isSelected = selectedProjectId && String(selectedProjectId) === String(d.id);
       const sid = d.seriesId != null ? String(d.seriesId) : '';
       // 해석 우선순위: IP 브랜드 로고(SSOT) → 프로젝트 자체 썸네일 → 형제 폴백(레거시).
-      const thumbObj = (sid ? (brandLogoBySeriesId.get(sid) || '') : '')
+      let thumbObj = (sid ? (brandLogoBySeriesId.get(sid) || '') : '')
         || String(d.payload?.thumbnailObjectName || '').trim()
         || (sid ? (seriesThumbBySeriesId.get(sid) || '') : '');
+      // 삭제돼 404 나는 걸로 이미 확인된 썸네일은 아예 요청하지 않는다(콘솔 404 방지).
+      if (isDeadMedia(thumbObj)) thumbObj = '';
       const thumbUrl = thumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
         ? NK.api.mediaProxyObjectUrl(thumbObj)
         : '';
       // 공유받은 카드도 일반 카드와 100% 동일한 마크업/스타일로 렌더한다.
       const thumbHtml = thumbUrl
-        ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" alt="" /></button>`
+        ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(thumbUrl)}" data-thumb-obj="${escapeHtml(thumbObj)}" alt="" /></button>`
         : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(d.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
 
       const editBtn = showTitleEdit ? `<button class="edit-btn" data-action="title-edit" data-id="${escapeHtml(d.id)}" aria-label="제목 수정">&#9998;</button>` : '';
@@ -871,6 +899,22 @@
     }).join('');
 
     container.innerHTML = filterBar + list;
+
+    // 죽은(404) 썸네일 self-heal: 로드 실패 시 그 objectName 을 기록하고 빈 썸네일로 교체한다.
+    // 다음 렌더부터는 isDeadMedia 필터에 걸려 아예 요청하지 않으므로 콘솔 404 가 사라진다.
+    try {
+      container.querySelectorAll('.draft-thumb.has-image img[data-thumb-obj]').forEach(function (img) {
+        img.onerror = function () {
+          markDeadMedia(img.getAttribute('data-thumb-obj'));
+          var btn = img.closest('.draft-thumb');
+          if (btn) {
+            btn.classList.remove('has-image');
+            btn.classList.add('empty');
+            btn.innerHTML = THUMB_EMPTY_SVG;
+          }
+        };
+      });
+    } catch (_) {}
 
     // 선택된 카드를 뷰포트 안으로 스크롤
     try {
@@ -1241,11 +1285,12 @@
         if (sibling) sidebarThumbObj = String(sibling.payload.thumbnailObjectName).trim();
       } catch (_) { }
     }
+    if (isDeadMedia(sidebarThumbObj)) sidebarThumbObj = '';
     const sidebarThumbUrl = sidebarThumbObj && NK.api && typeof NK.api.mediaProxyObjectUrl === 'function'
       ? NK.api.mediaProxyObjectUrl(sidebarThumbObj)
       : '';
     const sidebarThumbHtml = sidebarThumbUrl
-      ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(normalized.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(sidebarThumbUrl)}" alt="" /></button>`
+      ? `<button type="button" class="draft-thumb has-image" data-action="thumb-upload" data-id="${escapeHtml(normalized.id)}" aria-label="썸네일 변경" title="썸네일 변경"><img src="${escapeHtml(sidebarThumbUrl)}" data-thumb-obj="${escapeHtml(sidebarThumbObj)}" alt="" /></button>`
       : `<button type="button" class="draft-thumb empty" data-action="thumb-upload" data-id="${escapeHtml(normalized.id)}" aria-label="썸네일 추가" title="썸네일 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect><circle cx="9" cy="9" r="2"></circle><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path></svg></button>`;
 
     container.innerHTML = `
@@ -1260,6 +1305,17 @@
         <button class="btn-secondary" data-action="sidebar-edit-media" data-i18n="sidebar_postproduction_fixed">Post-Prod</button>
       </div>
     `;
+    // 죽은(404) 사이드바 썸네일 self-heal (renderDrafts 와 동일).
+    try {
+      var sImg = container.querySelector('.draft-thumb.has-image img[data-thumb-obj]');
+      if (sImg) {
+        sImg.onerror = function () {
+          markDeadMedia(sImg.getAttribute('data-thumb-obj'));
+          var btn = sImg.closest('.draft-thumb');
+          if (btn) { btn.classList.remove('has-image'); btn.classList.add('empty'); btn.innerHTML = THUMB_EMPTY_SVG; }
+        };
+      }
+    } catch (_) {}
     container.style.display = 'block';
     setSidebarProjectLayout(true);
   };
