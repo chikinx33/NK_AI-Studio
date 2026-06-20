@@ -72,7 +72,7 @@ export default function Knowledge({
   const [tidying, setTidying] = useState(false);
   const [tidyMsg, setTidyMsg] = useState<string | null>(null);
   // 그래프에서 노드 클릭 시 해당 항목으로 스크롤·하이라이트 (행 ref 맵)
-  const rowRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const rowRefs = useRef<Map<string, HTMLElement>>(new Map());
   const [highlight, setHighlight] = useState<string | null>(null);
 
   async function tidyDecisions() {
@@ -156,7 +156,7 @@ export default function Knowledge({
     if (!highlight) return;
     const el = rowRefs.current.get(highlight);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [highlight, items, sortDir]);
+  }, [highlight, items, skills, sortDir]);
   useEffect(() => {
     if (!highlight) return;
     const t = setTimeout(() => setHighlight(null), 2600);
@@ -173,8 +173,13 @@ export default function Knowledge({
   const renderSkillItem = (s: AgentSkill) => (
     <button
       key={`sk_${s.name}`}
+      ref={(el) => {
+        if (el) rowRefs.current.set(s.name, el);
+      }}
       onClick={() => setOpenSkill(s.name)}
-      className="flex w-full items-start gap-1.5 rounded-lg border border-edge bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60"
+      className={`flex w-full items-start gap-1.5 rounded-lg border bg-panel px-3 py-2 text-left text-sm transition hover:border-emerald-700/60 ${
+        highlight === s.name ? "border-emerald-500 ring-2 ring-emerald-500/50" : "border-edge"
+      }`}
     >
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1 font-medium text-gray-200">
