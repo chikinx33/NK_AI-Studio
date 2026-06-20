@@ -720,6 +720,8 @@ export interface ToolDef {
   // true면 '승인 전 실행 금지' — 잡을 승인 대기로만 두고, 사람이 승인할 때 비로소 run을 실행한다.
   // (외부에 영향 주는 되돌리기 어려운 행동: 캘린더 생성·SNS 발행 등)
   gate?: boolean;
+  // true면 도구 결과를 모델에 다시 먹여 답을 합성(툴콜→결과→재추론). 웹 검색 등 read 도구용.
+  synthesize?: boolean;
   run: (input: any, ctx: ToolContext) => Promise<any>;
 }
 
@@ -1190,6 +1192,36 @@ async function runCalendarDeleteTool(input: any, ctx: ToolContext): Promise<any>
   return { kind: "calendar_delete", count: deleted.length, deleted };
 }
 
+/** 웹 검색(레이더): Tavily API로 실시간 웹 검색. 날씨·뉴스·최신 정보·일반 검색에 사용.
+ *  결과는 synthesize 플래그로 모델에 다시 먹여 답을 합성한다. TAVILY_API_KEY 환경변수 필요. */
+async function runWebSearchTool(input: any, ctx: ToolContext): Promise<any> {
+  const key = ctx.env?.TAVILY_API_KEY || ctx.env?.TAVILY_KEY || "";
+  if (!key) {
+    throw new Error("웹 검색 API 키가 없어요. Cloudflare Pages 환경변수에 TAVILY_API_KEY를 추가해주세요. (tavily.com에서 무료 발급)");
+  }
+  const query = String(input?.query || input?.q || input?.prompt || input?.topic || "").trim();
+  if (!query) throw new Error("검색어(query)가 필요해요.");
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: key,
+      query,
+      search_depth: "basic",
+      include_answer: true,
+      max_results: Math.min(Math.max(Number(input?.max) || 5, 1), 10),
+    }),
+  });
+  const data: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || data?.detail || `검색 실패 (${res.status})`);
+  return {
+    kind: "web_search",
+    query,
+    answer: data.answer || "",
+    results: (data.results || []).map((r: any) => ({ title: r.title, url: r.url, content: r.content })),
+  };
+}
+
 /** 알람 설정: 지정 시각에 앱(브라우저)에서 울릴 리마인더를 저장. 외부 영향 없음 → 즉시(승인 불필요). */
 async function runReminderSetTool(input: any, ctx: ToolContext): Promise<any> {
   const sql = getSql(ctx.env);
@@ -1220,6 +1252,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   calendar_delete: { agentId: "sync", kind: "external", gate: true, run: runCalendarDeleteTool },
   // 알람: 앱에서 그 시각에 울림. 외부 영향 없어 read처럼 즉시 실행(승인·검수 없음) + 결과를 채팅에 바로 표시.
   reminder_set: { agentId: "sync", kind: "read", run: runReminderSetTool },
+  // 웹 검색(레이더): 날씨·뉴스·최신 정보·일반 검색. 결과를 모델에 재투입해 답 합성(synthesize).
+  web_search: { agentId: "radar", kind: "read", synthesize: true, run: runWebSearchTool },
 };
 
 /** 도구 실행 파이프라인: working → tool.run → review_pending | error. (job.ts·오케스트레이터 공용) */

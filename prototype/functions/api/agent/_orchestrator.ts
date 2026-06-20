@@ -91,7 +91,7 @@ export const AGENT_PERSONAS: Record<string, string> = {
     "나는 총괄 오케스트레이터 코어다. 직원들을 지휘하는 지휘자.",
     "침착하고 결단력 있다. 말은 짧고 명확하게. 일을 벌이지 않고 끝까지 책임진다.",
     "내 일(순서): ①의도 파악 ②작업 분해 ③라우팅(누구에게/무엇을/왜) ④종합 ⑤최종 판단 + 다음 액션 1줄.",
-    "라우팅 기준: 전략·수익=엣지 / 리서치=레이더 / 마케팅=마키 / 기획=플롯 / 글=잉크 / 디자인=픽셀 / 사운드=비트 / 개발=엔지 / 발행=리치 / 일정·진행=싱크.",
+    "라우팅 기준: 전략·수익=엣지 / 리서치·웹검색·날씨·뉴스·최신정보=레이더 / 마케팅=마키 / 기획=플롯 / 글=잉크 / 디자인=픽셀 / 사운드=비트 / 개발=엔지 / 발행=리치 / 일정·알람·진행=싱크.",
     "원칙: 직접 실무를 하지 않는다. 분배하고, 합치고, 결정한다. 삭제·배포·발송은 항상 승인 게이트.",
   ].join("\n"),
 };
@@ -173,12 +173,13 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     calendar_create: `[[RUN: calendar_create | {"summary": "일정 제목", "start": "2026-06-20T15:00:00+09:00", "end": "(선택)", "description": "(선택)", "location": "(선택)"}]]  → 구글 캘린더 일정 추가 (구글 연결 필요)`,
     calendar_delete: `[[RUN: calendar_delete | {"summary": "삭제할 일정 제목", "date": "2026-06-21"}]]  → 구글 캘린더 일정 삭제. date(YYYY-MM-DD)는 선택(주면 그 날짜 위주로 찾음). ⚠️ 되돌릴 수 없으니 사람 승인 후 실행됨 (구글 연결 필요)`,
     reminder_set: `[[RUN: reminder_set | {"at": "2026-06-20T00:40:00-05:00", "text": "40분 알람"}]]  → 그 시각에 앱에서 울리는 알람 설정(브라우저 알림+소리). at은 위 '현재 시각'의 날짜·오프셋 기준 ISO8601. "5분 뒤/40분에 알람" 같은 단순 알람은 캘린더 말고 이걸 쓴다(승인 불필요·즉시 설정). 구글 연결 불필요.`,
+    web_search: `[[RUN: web_search | {"query": "검색어"}]]  → 실시간 웹 검색(날씨·뉴스·최신 정보·일반 지식). 모델이 모르거나 최신/실시간 정보가 필요하면 반드시 이 도구로 검색한 뒤 결과를 근거로 답한다. (날씨는 "서울 오늘 날씨"처럼 지역+오늘 포함)`,
   };
   // 코어 위임 라우팅용: 직원별 실행 도구 맵 — '이 작업은 누구 담당'인지 코어가 알게 해 자동 위임.
   const TOOL_LABELS: Record<string, string> = {
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
-    gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정",
+    gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {
@@ -876,7 +877,8 @@ export async function runGroupChat(
       const parsedInput = parseToolInput(r.reason); // JSON or { prompt: reason }
       const meta = getAgent(agentId)!;
 
-      // 읽기 전용 조회: 검수 없이 즉시 실행 → 결과를 채팅 메시지로 요약 출력.
+      // 읽기 전용 조회: 검수 없이 즉시 실행. synthesize 도구(웹 검색 등)는 결과를 모델에 다시 먹여
+      // 자연스러운 답을 만들고(툴콜→결과→재추론), 그 외엔 결과를 채팅에 요약 출력.
       if (tool.kind === "read") {
         await emit({
           userId, conversationId, role: "agent", agentId, name: meta.name,
@@ -884,10 +886,23 @@ export async function runGroupChat(
         });
         try {
           const output = await tool.run(parsedInput, toolCtx);
-          await emit({
-            userId, conversationId, role: "agent", agentId, name: meta.name,
-            text: formatReadResult(r.tool, output),
-          });
+          if (tool.synthesize) {
+            const t2 = buildTranscript(await listMessages(sql, userId, conversationId), addr);
+            const synth =
+              `방금 사용자 질문에 답하려고 웹을 검색했어요. 아래 검색 결과만 근거로 한국어로 자연스럽게 답하세요. ` +
+              `핵심부터 간결히, 필요하면 출처 링크 1~2개. 결과에 없는 내용은 지어내지 말고 모른다고 하세요.\n\n` +
+              `[검색 결과]\n${JSON.stringify(output).slice(0, 4500)}`;
+            const res2 = await speak(env, agentId, synth, t2, { address: addr, canDelegate: false, sql, userId, ...sharedOpts });
+            await emit({ userId, conversationId, role: "agent", agentId, name: meta.name, text: res2.text });
+            await _applyKnows(res2.knows, meta.name);
+            await _applyProjects(res2.projects);
+            await _applySkills(res2.skills);
+          } else {
+            await emit({
+              userId, conversationId, role: "agent", agentId, name: meta.name,
+              text: formatReadResult(r.tool, output),
+            });
+          }
         } catch (e: any) {
           await emit({
             userId, conversationId, role: "agent", agentId, name: meta.name,
