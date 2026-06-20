@@ -1031,6 +1031,12 @@
         generationMode: 'text-to-image',
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
+      // GPT 가 실패해 Gemini 로 폴백된 경우, 조용히 넘어가지 않고 경고를 남긴다.
+      // (사용자는 GPT 품질을 선호 — 폴백 사실과 GPT 실패 사유를 바로 알 수 있게)
+      if (json.providerFallbackFrom) {
+        var oErr = json.openaiError || {};
+        console.warn('GPT 이미지 생성 실패 → ' + (json.provider || 'gemini') + '로 대체 생성됨. GPT 실패 사유:', oErr.hint || oErr.message || oErr, oErr.endpoint ? ('(endpoint: ' + oErr.endpoint + ', status: ' + oErr.status + (oErr.requestId ? ', request-id: ' + oErr.requestId : '') + ')') : '');
+      }
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
       var signedUrl = String(json.signedUrl || '').trim();
       // 영속 GCS 앵커. 종횡비 보정으로 imageRef 가 잘린 data: URL 이 되면 저장 시 stripping 되어
@@ -1224,6 +1230,12 @@
         generationMode: 'text-to-image',
         referenceImages: referencePayload && referencePayload.referenceImages ? referencePayload.referenceImages : []
       }, { signal: ctrl ? ctrl.signal : undefined });
+      // GPT 가 실패해 Gemini 로 폴백된 경우, 조용히 넘어가지 않고 경고를 남긴다.
+      // (사용자는 GPT 품질을 선호 — 폴백 사실과 GPT 실패 사유를 바로 알 수 있게)
+      if (json.providerFallbackFrom) {
+        var oErr = json.openaiError || {};
+        console.warn('GPT 이미지 생성 실패 → ' + (json.provider || 'gemini') + '로 대체 생성됨. GPT 실패 사유:', oErr.hint || oErr.message || oErr, oErr.endpoint ? ('(endpoint: ' + oErr.endpoint + ', status: ' + oErr.status + (oErr.requestId ? ', request-id: ' + oErr.requestId : '') + ')') : '');
+      }
       var dataUrl = json.dataUrl || json.bytesBase64Encoded || '';
       var signedUrl = String(json.signedUrl || '').trim();
       // 영속 GCS 앵커 — scene 생성부와 동일 이유로 imagePath 에 보존(잘린 data: URL 영속 보호).

@@ -121,6 +121,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     let modelUsed = "";
     let providerUsed: "gemini" | "openai" = provider;
     let providerFallbackFrom = "";
+    // 폴백이 일어났을 때 "원래 GPT 가 왜 실패했는지"를 성공 응답에도 실어 보낸다.
+    // 사용자가 GPT 품질을 원하므로, 조용히 Gemini 로 바뀐 사실과 그 사유(예: 조직 인증)를
+    // 프론트 콘솔에서 바로 확인하고 GPT 쪽을 고칠 수 있게 한다.
+    let openaiFallbackError: any = null;
 
     // Gemini 이미지 생성. else 분기와 OpenAI 폴백에서 공용으로 호출한다.
     // 성공 시 imageOutput / modelUsed 를 채우고 {} 를, 실패 시 {error,status} 를 반환한다.
@@ -209,6 +213,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
           }
           providerUsed = "gemini";
           providerFallbackFrom = "openai";
+          openaiFallbackError = openaiResult.error || null;
         } else {
           return json(openaiResult.error, openaiResult.status || 500);
         }
@@ -275,6 +280,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       provider: providerUsed === "openai" ? "openai-api" : "gemini-api",
       providerRequested: provider === "openai" ? "openai-api" : "gemini-api",
       providerFallbackFrom: providerFallbackFrom ? `${providerFallbackFrom}-api` : "",
+      openaiError: openaiFallbackError,
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
@@ -634,16 +640,32 @@ async function callOpenAIImage(opts: {
     const detail = safeJson(bodyText);
     const message = String((detail as any)?.error?.message || (detail as any)?.message || "").trim();
     const code = String((detail as any)?.error?.code || (detail as any)?.error?.type || "").trim();
+    // 빈 본문(detail:"" message:"")으로 오는 403 의 진짜 원인을 추적하기 위한 진단 정보.
+    // OpenAI 응답은 storage 처럼 Cloudflare 뒤에 있어, request-id / cf-ray 가 있으면
+    // OpenAI 측 로그에서 해당 요청을 특정할 수 있다. endpoint 로 generations vs edits 를
+    // 구분해 "텍스트 생성은 되는데 이미지 입력(edits)만 막히는" 양상을 명확히 드러낸다.
+    const endpoint = isEdit ? "images/edits" : "images/generations";
+    const statusText = String((res as any).statusText || "").trim();
+    const requestId = String(res.headers.get("x-request-id") || "").trim();
+    const cfRay = String(res.headers.get("cf-ray") || "").trim();
+    const wwwAuthenticate = String(res.headers.get("www-authenticate") || "").trim();
+    const emptyBody = !bodyText || !bodyText.trim();
     const isBilling = /billing|hard limit|insufficient[_ ]?quota|exceeded your current quota|credit balance|payment/i.test(message + " " + code);
+    const isVerification = /verif|must be verified|organization|not have access|access to the model/i.test(message + " " + code);
     let hint = "";
     if (isBilling) hint = "OpenAI 계정의 크레딧 잔액이 부족하거나 결제 한도에 도달했어요. platform.openai.com → Billing에서 크레딧을 충전하거나 한도를 올리세요.";
     else if (res.status === 401) hint = "OPENAI_API_KEY가 유효하지 않거나 권한이 없습니다.";
-    else if (res.status === 403) hint = "OpenAI 계정 권한 또는 결제 상태를 확인하세요.";
+    else if (res.status === 403) {
+      // edits(이미지 입력) 만 403 이면 대부분 조직 인증 또는 모델의 이미지 입력 권한 문제다.
+      hint = (isEdit || isVerification)
+        ? `OpenAI가 이미지 입력(${endpoint}) 호출을 거부했어요(403${requestId ? ", request-id " + requestId : ""}). gpt-image 의 이미지 입력 기능은 조직 인증이 필요할 수 있어요. platform.openai.com → Settings → Organization → General 에서 'Verify Organization'을 완료했는지 확인하세요. 텍스트 생성(컷1)은 되는데 컷 기반/레퍼런스 생성(컷2)만 막히면 대부분 이 경우예요.`
+        : "OpenAI 계정 권한 또는 결제 상태를 확인하세요.";
+    }
     else if (res.status === 429) hint = "OpenAI 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.";
     else if (res.status === 400) hint = "요청 파라미터가 잘못되었을 수 있습니다. 프롬프트/사이즈/레퍼런스 이미지를 확인하세요.";
     else if (res.status >= 500) hint = "OpenAI 서버 일시 오류입니다. 잠시 후 다시 시도하세요.";
     return {
-      error: { error: "OpenAI API error", status: res.status, detail, message, hint },
+      error: { error: "OpenAI API error", status: res.status, statusText, endpoint, requestId, cfRay, wwwAuthenticate, emptyBody, detail, message, code, hint },
       status: 500,
     };
   }
