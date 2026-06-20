@@ -11,7 +11,7 @@ const TOOL_LABEL: Record<string, string> = {
   image: "이미지 생성", sound: "효과음 생성", video: "영상 생성",
   web_search: "웹 검색 (날씨·뉴스·최신정보)", naver_datalab: "네이버 데이터랩 (검색 트렌드)",
   github: "GitHub (레포·이슈)", sheets: "Google Sheets (매출·지표)",
-  gmail: "Gmail", calendar: "Google 캘린더",
+  gmail: "Gmail", calendar: "Google 캘린더", drive: "Google Drive (내 파일)",
 };
 const toolLabel = (t: string) => TOOL_LABEL[t] || t;
 

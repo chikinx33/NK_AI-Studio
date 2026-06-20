@@ -8,7 +8,9 @@ export const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 export const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar";
 // 엣지(전략)의 Sheets 읽기용 — 재연결 시 함께 동의받는다(읽기 전용).
 export const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets.readonly";
-export const GOOGLE_CONNECT_SCOPES = `openid email ${GMAIL_SCOPE} ${CALENDAR_SCOPE} ${SHEETS_SCOPE}`;
+// 싱크(비서)의 드라이브 보기용 — 파일 목록·검색·내용 읽기(읽기 전용).
+export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.readonly";
+export const GOOGLE_CONNECT_SCOPES = `openid email ${GMAIL_SCOPE} ${CALENDAR_SCOPE} ${SHEETS_SCOPE} ${DRIVE_SCOPE}`;
 
 /** 연동용 OAuth 클라이언트 자격증명. 로그인용 클라이언트를 재사용하되 전용 env 우선. */
 export function googleConnectCreds(env: any): { clientId: string; clientSecret: string } {

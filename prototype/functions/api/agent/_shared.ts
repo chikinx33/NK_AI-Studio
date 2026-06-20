@@ -1312,6 +1312,52 @@ async function runNaverDatalabTool(input: any, ctx: ToolContext): Promise<any> {
   return { kind: "naver_datalab", startDate, endDate, results: data.results || [] };
 }
 
+/** 싱크(비서) Google Drive 보기: 파일 목록·검색, fileId 주면 내용(문서/시트/텍스트) 읽기. (읽기 전용) */
+async function runDriveTool(input: any, ctx: ToolContext): Promise<any> {
+  const access = await syncGoogleAccess(ctx);
+  const auth = { Authorization: `Bearer ${access}` };
+  const fileId = String(input?.fileId || input?.id || "").trim();
+  if (fileId) {
+    const metaR = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?fields=id,name,mimeType,modifiedTime,webViewLink`,
+      { headers: auth }
+    );
+    const meta: any = await metaR.json();
+    if (!metaR.ok) throw new Error(meta?.error?.message || `파일 조회 실패 (${metaR.status})`);
+    const mime = String(meta.mimeType || "");
+    let content = "";
+    try {
+      if (mime === "application/vnd.google-apps.document") {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`, { headers: auth });
+        if (r.ok) content = (await r.text()).slice(0, 4000);
+      } else if (mime === "application/vnd.google-apps.spreadsheet") {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`, { headers: auth });
+        if (r.ok) content = (await r.text()).slice(0, 4000);
+      } else if (mime.startsWith("text/") || mime === "application/json") {
+        const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, { headers: auth });
+        if (r.ok) content = (await r.text()).slice(0, 4000);
+      }
+    } catch { /* 내용 추출 실패는 무시(메타만 반환) */ }
+    return { kind: "drive", mode: "file", file: { id: meta.id, name: meta.name, mimeType: mime, modifiedTime: meta.modifiedTime, link: meta.webViewLink }, content };
+  }
+  const query = String(input?.query || input?.q || "").trim();
+  const max = Math.min(Math.max(Number(input?.max) || 10, 1), 30);
+  const q = query ? `name contains '${query.replace(/'/g, "\\'")}' and trashed = false` : "trashed = false";
+  const params = new URLSearchParams({
+    pageSize: String(max),
+    fields: "files(id,name,mimeType,modifiedTime,webViewLink)",
+    orderBy: "modifiedTime desc",
+    q,
+  });
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?${params.toString()}`, { headers: auth });
+  const d: any = await r.json();
+  if (!r.ok) {
+    if (r.status === 403) throw new Error("드라이브 읽기 권한이 없어요. ⚙️설정 → 에이전트 → 싱크 → 구글 '연결 해제' 후 다시 '구글 연결'로 드라이브 권한을 추가해주세요.");
+    throw new Error(d?.error?.message || `드라이브 조회 실패 (${r.status})`);
+  }
+  return { kind: "drive", mode: "list", query, files: (d.files || []).map((f: any) => ({ id: f.id, name: f.name, mimeType: f.mimeType, modifiedTime: f.modifiedTime, link: f.webViewLink })) };
+}
+
 /** 알람 설정: 지정 시각에 앱(브라우저)에서 울릴 리마인더를 저장. 외부 영향 없음 → 즉시(승인 불필요). */
 async function runReminderSetTool(input: any, ctx: ToolContext): Promise<any> {
   const sql = getSql(ctx.env);
@@ -1346,6 +1392,8 @@ export const AGENT_TOOLS: Record<string, ToolDef> = {
   web_search: { agentId: "radar", agentIds: ["edge", "maki", "engi"], kind: "read", synthesize: true, run: runWebSearchTool },
   // 엣지(전략): Google Sheets 읽기 → 매출·지표 분석. 결과를 모델에 재투입해 분석 답 합성.
   sheets_read: { agentId: "edge", kind: "read", synthesize: true, run: runSheetsReadTool },
+  // 싱크(비서): Google Drive 보기 → 파일 목록·검색·내용 읽기.
+  drive: { agentId: "sync", kind: "read", synthesize: true, run: runDriveTool },
   // 엔지(개발): GitHub 레포·이슈·파일·검색 조회.
   github: { agentId: "engi", kind: "read", synthesize: true, run: runGithubTool },
   // 마키(마케팅): 네이버 데이터랩 검색어 트렌드.

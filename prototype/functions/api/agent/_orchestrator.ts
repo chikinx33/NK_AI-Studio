@@ -176,6 +176,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     reminder_set: `[[RUN: reminder_set | {"at": "2026-06-20T00:40:00-05:00", "text": "40분 알람"}]]  → 그 시각에 앱에서 울리는 알람 설정(브라우저 알림+소리). at은 위 '현재 시각'의 날짜·오프셋 기준 ISO8601. "5분 뒤/40분에 알람" 같은 단순 알람은 캘린더 말고 이걸 쓴다(승인 불필요·즉시 설정). 구글 연결 불필요.`,
     web_search: `[[RUN: web_search | {"query": "검색어"}]]  → 실시간 웹 검색(날씨·뉴스·최신 정보·일반 지식). 모델이 모르거나 최신/실시간 정보가 필요하면 반드시 이 도구로 검색한 뒤 결과를 근거로 답한다. (날씨는 "서울 오늘 날씨"처럼 지역+오늘 포함)`,
     sheets_read: `[[RUN: sheets_read | {"url": "구글시트 URL 또는 ID", "range": "Sheet1!A1:F50(선택)"}]]  → Google Sheets에서 매출·지표 데이터를 읽어 분석 근거로. URL이 없으면 사용자에게 시트 링크를 물어본다. (싱크의 구글 연결 + 시트 권한 필요)`,
+    drive: `[[RUN: drive | {"query": "파일명 검색어(선택)", "fileId": "특정 파일 내용 읽기(선택)"}]]  → Google Drive 파일 목록·검색(query) 또는 특정 파일 내용 읽기(fileId). "내 드라이브/파일 찾아줘"에 사용. (구글 연결 + 드라이브 권한 필요)`,
     github: `[[RUN: github | {"repo": "owner/name", "path": "파일경로(선택)", "query": "레포검색어(repo 없을 때)"}]]  → GitHub 레포 정보·열린 이슈·파일 내용·레포 검색 조회. 공개 레포는 토큰 없이도 됨.`,
     naver_datalab: `[[RUN: naver_datalab | {"keywords": ["키워드1","키워드2"], "timeUnit": "month(선택)"}]]  → 네이버 검색어 트렌드(상대 검색량 추이). 마케팅 키워드·관심도 비교에 사용. (NAVER 키 필요)`,
   };
@@ -184,7 +185,7 @@ export function buildAgentSystem(agentId: string, opts: BuildSystemOpts = {}): s
     image: "이미지 생성", video: "영상 생성", sound: "효과음 생성", scenario: "시나리오 생성",
     music: "BGM 생성", publish: "SNS 발행", ppt: "PPT 생성", pdf: "PDF 문서 생성",
     gmail_read: "Gmail 메일 조회", gmail_trash: "Gmail 메일 휴지통 이동", calendar_list: "구글 캘린더 일정 조회", calendar_create: "구글 캘린더 일정 추가", calendar_delete: "구글 캘린더 일정 삭제", reminder_set: "알람(리마인더) 설정", web_search: "웹 검색(날씨·뉴스·최신정보)",
-    sheets_read: "Google Sheets 읽기(매출·지표)", github: "GitHub 레포·이슈 조회", naver_datalab: "네이버 데이터랩(검색 트렌드)",
+    sheets_read: "Google Sheets 읽기(매출·지표)", github: "GitHub 레포·이슈 조회", naver_datalab: "네이버 데이터랩(검색 트렌드)", drive: "Google Drive 파일 보기",
   };
   const toolsByAgent: Record<string, string[]> = {};
   for (const [tname, td] of Object.entries(AGENT_TOOLS)) {

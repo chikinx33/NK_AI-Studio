@@ -62,8 +62,10 @@ export const onRequestGet: PagesFunction = async ({ request, env }) => {
   const syncBase = { agentId: "sync", agentName: sync?.name || "싱크", emoji: sync?.emoji || "📱", fields: [] as any[], oauth: "google" as const };
   const hasGmail = !!goog && /gmail/.test(goog.scopes);
   const hasCal = !!goog && /calendar/.test(goog.scopes);
+  const hasDrive = !!goog && /drive/.test(goog.scopes);
   items.push({ ...syncBase, tool: "gmail", configured: hasGmail, connectedAs: hasGmail ? (goog?.email || "") : "" });
   items.push({ ...syncBase, tool: "calendar", configured: hasCal, connectedAs: hasCal ? (goog?.email || "") : "" });
+  items.push({ ...syncBase, tool: "drive", configured: hasDrive, connectedAs: hasDrive ? (goog?.email || "") : "" });
 
   // 엣지(전략) Google Sheets 읽기 — 같은 구글 연결의 시트 스코프로 동작.
   const edge = getAgent("edge");
