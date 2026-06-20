@@ -397,7 +397,8 @@ export interface SpeakResult {
 
 // 대괄호 1~2개 모두 허용 (작은/큰 모델이 형식을 흘리는 경우 대비). 라비오크 포팅.
 const CALL_RE = /\[{1,2}\s*CALL\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
-const RUN_RE = /\[{1,2}\s*RUN\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]{1,2}/gi;
+// 종료를 ']]'(두 개)로 요구 — payload의 JSON 배열(["x"]) 안 단일 ']'에서 끊기지 않게(배열 도구 깨짐 방지).
+const RUN_RE = /\[{1,2}\s*RUN\s*:\s*([^\|\]]+?)\s*\|\s*([\s\S]+?)\]\]/gi;
 // 회사 지식 관리 마커: [[KNOW: add | 분류 | 내용]] / [[KNOW: del | 내용]]
 const KNOW_RE = /\[{1,2}\s*KNOW\s*:\s*([\s\S]+?)\]{1,2}/gi;
 // 프로젝트 생성 마커: [[PROJECT: create | 이름 | 목표 | 단계1, 단계2, ...]]
