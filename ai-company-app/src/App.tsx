@@ -276,12 +276,9 @@ export default function App() {
                 }
               }
               commit(next);
-              // 발언 완료 → 해당 직원 working 해제 (아바타 스피너 즉시 제거)
-              setWorkingIds((prev) => {
-                const nextSet = new Set(prev);
-                nextSet.delete(data.agentId);
-                return nextSet;
-              });
+              // 발언이 끝나도 working을 지우지 않는다 — 다음 발언자의 turn_start가 교체하거나
+              // 스트림 종료(아래 finally)에서 일괄 정리. 이래야 '현재 응답자' 하이라이트가 사이드바·
+              // 타이핑 버블에서 유지돼 실제 답하는 아바타가 그대로 표시된다.
               break;
             }
             case "job_ready":

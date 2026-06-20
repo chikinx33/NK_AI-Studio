@@ -520,20 +520,18 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
           )
         )}
         {busy && !turns[turns.length - 1]?.streaming && (() => {
-          // 우선순위: ① activeIds 비코어 → ② 유저 멘션 에이전트 → ③ 마지막 발언 에이전트 → ④ 코어
+          // 사이드바 하이라이트(activeIds)와 반드시 일치시킨다 — 같은 출처를 우선으로 본다.
+          // 우선순위: ① activeIds 비코어 → ② activeIds 첫 항목(코어 등) → ③ 유저 멘션 → ④ 마지막 발언자 → ⑤ 코어
           const activeArr = activeIds ? [...activeIds] : [];
           const activeNonCore = activeArr.find((id) => id !== "core");
           const lastAgentTurn = [...turns].reverse().find((t) => t.role === "agent" && t.agentId);
           const lastUserText = [...turns].reverse().find((t) => t.role === "user")?.text ?? "";
-          // 텍스트에서 가장 먼저 등장하는 이름이 수신자; 코어 직접 호명 시 항상 코어
           const firstNamedAgent = agents?.reduce<{ id: string; idx: number } | null>((best, a) => {
             const idx = lastUserText.indexOf(a.name);
             if (idx === -1) return best;
             return !best || idx < best.idx ? { id: a.id, idx } : best;
           }, null);
-          const resolvedId = firstNamedAgent?.id === "core"
-            ? "core"
-            : (firstNamedAgent?.id ?? activeNonCore ?? lastAgentTurn?.agentId ?? "core");
+          const resolvedId = activeNonCore ?? activeArr[0] ?? firstNamedAgent?.id ?? lastAgentTurn?.agentId ?? "core";
           const resolved = agents?.find((a) => a.id === resolvedId);
           const tid = resolved?.id ?? resolvedId;
           const tname = resolved?.name ?? lastAgentTurn?.name ?? "코어";
