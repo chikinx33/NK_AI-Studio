@@ -366,7 +366,20 @@
       };
       if (maskDataUrl) body.maskDataUrl = maskDataUrl;
 
-      var json = await NK.api.imagen(body);
+      // OpenAI 지역 차단(HKG 등 COLO)은 새 요청마다 다른 지역으로 나갈 수 있어 재시도가 유효하다.
+      // 매 요청은 새 Worker 호출이므로 짧은 간격으로 여러 번 재시도해 허용 지역 송출을 노린다.
+      var json = null;
+      for (var attempt = 0; attempt < 6; attempt++) {
+        try {
+          json = await NK.api.imagen(body);
+          break;
+        } catch (e2) {
+          var regionBlocked = /openai_region_blocked|"retriable"\s*:\s*true/.test(String((e2 && e2.detail) || ''));
+          if (!regionBlocked || attempt >= 5) throw e2;
+          setStatus(L('지역 차단 우회 재시도 ', 'Retrying around region block ') + (attempt + 1) + '/5...');
+          await new Promise(function (r) { return setTimeout(r, 900); });
+        }
+      }
       var dataUrl = json.dataUrl || (json.bytesBase64Encoded ? ('data:image/png;base64,' + json.bytesBase64Encoded) : '');
       var signedUrl = String(json.signedUrl || '').trim();
       var imageRef = signedUrl || dataUrl;

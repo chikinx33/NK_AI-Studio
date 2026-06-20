@@ -1069,14 +1069,20 @@
       var msg = (err && err.message) || '';
       var detail = (err && err.detail) ? (' detail: ' + err.detail) : '';
       console.error('Scene ' + scene.id + ' 이미지 생성 실패:', msg, detail);
+      // OpenAI 지역 차단(HKG 등 COLO): 매 요청은 새 Worker 호출이라 재시도하면 다른 지역으로
+      // 나가 성공할 수 있다. 일반 500 보다 더 여러 번, 짧은 간격으로 재시도한다.
+      var isRegionBlocked = /openai_region_blocked|"retriable"\s*:\s*true/.test(String((err && err.detail) || ''));
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var retryCount = Number(opts.retryCount) || 0;
-      if (is500 && retryCount < 2) {
-        console.warn('이미지 생성 실패(500), 재시도 ' + (retryCount + 1) + '/2...');
-        st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: '재시도 중... (' + (retryCount + 1) + '/2)' });
+      var maxRetries = isRegionBlocked ? 5 : 2;
+      if ((is500 || isRegionBlocked) && retryCount < maxRetries) {
+        var label = isRegionBlocked ? '지역 차단 우회 재시도' : '재시도';
+        console.warn('이미지 생성 실패, ' + label + ' ' + (retryCount + 1) + '/' + maxRetries + '...');
+        st.scenes[opts.idx] = Object.assign({}, scene, { imgLoading: true, imgError: label + ' 중... (' + (retryCount + 1) + '/' + maxRetries + ')' });
         ctx.setState(st);
         opts.updateSceneRow(opts.idx, st.header || '', 'image');
-        await new Promise(function (resolve) { return setTimeout(resolve, 2000 * Math.pow(2, retryCount)); });
+        var delayMs = isRegionBlocked ? 900 : (2000 * Math.pow(2, retryCount));
+        await new Promise(function (resolve) { return setTimeout(resolve, delayMs); });
         return opts.retryImage(opts.idx, retryCount + 1);
       }
       var errorMessage = (err && err.message) || '이미지 생성 실패';
@@ -1261,11 +1267,14 @@
       var msg = (err && err.message) || '';
       var detail = (err && err.detail) ? (' detail: ' + err.detail) : '';
       console.error('Shot ' + shot.id + ' 이미지 생성 실패:', msg, detail);
+      // OpenAI 지역 차단은 새 요청(=새 Worker 호출)으로 재시도하면 다른 COLO 로 나가 풀릴 수 있다.
+      var isRegionBlocked = /openai_region_blocked|"retriable"\s*:\s*true/.test(String((err && err.detail) || ''));
       var is500 = /\b500\b/.test(msg) || /server/i.test(msg);
       var retryCount = Number(opts.retryCount) || 0;
-      if (is500 && retryCount < 2 && opts.retryShotImage) {
-        console.warn('재시도 ' + (retryCount + 1) + '/2...');
-        await new Promise(function (r) { return setTimeout(r, 2000 * Math.pow(2, retryCount)); });
+      var maxRetries = isRegionBlocked ? 5 : 2;
+      if ((is500 || isRegionBlocked) && retryCount < maxRetries && opts.retryShotImage) {
+        console.warn((isRegionBlocked ? '지역 차단 우회 재시도 ' : '재시도 ') + (retryCount + 1) + '/' + maxRetries + '...');
+        await new Promise(function (r) { return setTimeout(r, isRegionBlocked ? 900 : (2000 * Math.pow(2, retryCount))); });
         return opts.retryShotImage(opts.sceneIdx, shotIdx, retryCount + 1);
       }
       var st3 = ctx.getState();

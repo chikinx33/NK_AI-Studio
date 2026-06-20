@@ -33,9 +33,26 @@ test('GCS upload is skipped when no google access token is available', () => {
 
 test('openai branch dispatches text-to-image to /v1/images/generations and image-to-image to /v1/images/edits', () => {
   const source = readImagenSource();
-  assert.match(source, /https:\/\/api\.openai\.com\/v1\/images\/generations/);
-  assert.match(source, /https:\/\/api\.openai\.com\/v1\/images\/edits/);
+  // URL 은 OPENAI_BASE_URL 오버라이드를 지원하도록 apiBase 템플릿으로 구성된다.
+  assert.match(source, /\$\{apiBase\}\/v1\/images\/generations/);
+  assert.match(source, /\$\{apiBase\}\/v1\/images\/edits/);
   assert.match(source, /const isEdit = allRefs\.length > 0;/);
+  assert.match(source, /https:\/\/api\.openai\.com/); // 기본 베이스 URL
+});
+
+test('openai requests honor OPENAI_BASE_URL override to bypass region-blocked colos', () => {
+  const source = readImagenSource();
+  assert.match(source, /env\.OPENAI_BASE_URL/);
+  assert.match(source, /const apiBase = String\(opts\.baseUrl/);
+});
+
+test('empty-body 403 from a restricted colo is classified as region-blocked and retriable', () => {
+  const source = readImagenSource();
+  assert.match(source, /RESTRICTED_COLOS/);
+  assert.match(source, /openai_region_blocked/);
+  assert.match(source, /retriable = true/);
+  // 지역 차단은 Gemini 폴백 대신 GPT 재시도를 위해 그대로 전파되어야 한다.
+  assert.match(source, /isAccountError && !isRegionBlocked && geminiConfigured/);
 });
 
 test('openai edits request uses multipart form-data with image[] array', () => {

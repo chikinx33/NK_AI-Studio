@@ -48,6 +48,10 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     const geminiModel = String(env.GEMINI_IMAGE_MODEL || "").trim() || "gemini-3.1-flash-image-preview";
     const openaiApiKey = String(env.OPENAI_API_KEY || "").trim();
     const openaiModel = String(env.OPENAI_IMAGE_MODEL || "").trim() || "gpt-image-2";
+    // OpenAI 베이스 URL 오버라이드. OpenAI 는 홍콩(HKG) 등 미지원 지역의 Cloudflare Worker
+    // 송출을 403 으로 차단한다. 지원 지역의 프록시나 Cloudflare AI Gateway 엔드포인트를
+    // OPENAI_BASE_URL 로 지정하면 그쪽으로 우회해 지역 차단을 영구적으로 회피할 수 있다.
+    const openaiBaseUrl = String(env.OPENAI_BASE_URL || "https://api.openai.com").trim().replace(/\/+$/, "");
     const incomingSize = String(body?.imageSize || body?.quality || body?.resolution || "").trim().toUpperCase();
     const sizeAllowed = new Set(["512", "1K", "2K"]);
     const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "1K";
@@ -186,6 +190,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     if (provider === "openai") {
       const openaiResult = await callOpenAIImage({
         apiKey: openaiApiKey,
+        baseUrl: openaiBaseUrl,
         model: openaiModel,
         prompt: finalPrompt,
         aspectRatio: aspectFinal,
@@ -205,8 +210,11 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
         const isAccountError =
           oStatus === 401 || oStatus === 403 || oStatus === 429 ||
           /billing|quota|credit|payment|권한|결제|크레딧|한도/i.test(oText);
+        // 지역 차단(HKG 등 COLO)은 같은 GPT 로 "새 요청" 재시도하면 다른 지역으로 나가 풀릴 수
+        // 있으므로 Gemini 로 우회하지 않고 그대로 프론트에 돌려보내 GPT 재시도를 유도한다.
+        const isRegionBlocked = oErr?.code === "openai_region_blocked" || oErr?.retriable === true;
         const geminiConfigured = !!apiKey;
-        if (isAccountError && geminiConfigured) {
+        if (isAccountError && !isRegionBlocked && geminiConfigured) {
           const fb = await runGeminiGeneration();
           if (fb.error) {
             return json(openaiResult.error, openaiResult.status || 500);
@@ -589,6 +597,7 @@ function mapImageSizeToOpenAIQuality(imageSize: string): "low" | "medium" | "hig
 
 async function callOpenAIImage(opts: {
   apiKey: string;
+  baseUrl?: string;
   model: string;
   prompt: string;
   aspectRatio: string;
@@ -608,10 +617,11 @@ async function callOpenAIImage(opts: {
       ...opts.referenceImages.map((r) => ({ base64: r.base64, mimeType: r.mimeType })),
     ];
 
+  const apiBase = String(opts.baseUrl || "https://api.openai.com").replace(/\/+$/, "");
   const isEdit = allRefs.length > 0;
   const url = isEdit
-    ? "https://api.openai.com/v1/images/edits"
-    : "https://api.openai.com/v1/images/generations";
+    ? `${apiBase}/v1/images/edits`
+    : `${apiBase}/v1/images/generations`;
 
   let res: Response | null = null;
   let bodyText = "";
@@ -669,20 +679,35 @@ async function callOpenAIImage(opts: {
     const cfRay = String(res.headers.get("cf-ray") || "").trim();
     const wwwAuthenticate = String(res.headers.get("www-authenticate") || "").trim();
     const emptyBody = !bodyText || !bodyText.trim();
+    // cf-ray 의 끝(예: "a0ea...-HKG")은 요청을 처리한 Cloudflare COLO(데이터센터) 코드다.
+    // OpenAI 는 홍콩(HKG)·마카오(MFM)·중국 본토 등 미지원 지역에서 나간 요청을 403 으로 막는다.
+    const colo = cfRay.indexOf("-") >= 0 ? cfRay.slice(cfRay.lastIndexOf("-") + 1).toUpperCase() : "";
+    const RESTRICTED_COLOS = ["HKG", "MFM", "PEK", "SHA", "PVG", "CAN", "SZX", "TSN", "CTU"];
     const isBilling = /billing|hard limit|insufficient[_ ]?quota|exceeded your current quota|credit balance|payment/i.test(message + " " + code);
     const isVerification = /verif|must be verified|organization|not have access|access to the model/i.test(message + " " + code);
+    const isUnsupportedRegionMsg = /not supported|unsupported_country|country,?\s*region|territory/i.test(message + " " + code);
+    // 지역 차단 판정: 명시적 메시지가 있거나, 빈 본문 403 인데 송출 COLO 가 미지원 지역인 경우.
+    const isRegionBlocked = res.status === 403 && (isUnsupportedRegionMsg ||
+      (emptyBody && !requestId && RESTRICTED_COLOS.indexOf(colo) >= 0));
     let hint = "";
-    if (isBilling) hint = "OpenAI 계정의 크레딧 잔액이 부족하거나 결제 한도에 도달했어요. platform.openai.com → Billing에서 크레딧을 충전하거나 한도를 올리세요.";
+    let errCode = code;
+    let retriable = false;
+    if (isRegionBlocked) {
+      // 핵심 원인. 코드로 COLO 를 바꿀 수 없으므로 프론트가 "새 요청"으로 자동 재시도하게
+      // retriable 신호를 준다(매 요청은 새 Worker 호출 → 다른 COLO 로 나갈 수 있음).
+      errCode = "openai_region_blocked";
+      retriable = true;
+      hint = `OpenAI가 이 요청의 송출 지역(${colo || "미지원 지역"})을 차단했어요. Cloudflare Worker가 홍콩(HKG) 등 OpenAI 미지원 데이터센터를 거치면 빈 본문 403이 납니다(조직 인증·멀티파트 문제 아님). 자동 재시도로 다른 지역에서 나가면 성공할 수 있어요. 계속되면 OPENAI_BASE_URL에 지원 지역 프록시/AI Gateway를 설정하세요.`;
+    } else if (isBilling) hint = "OpenAI 계정의 크레딧 잔액이 부족하거나 결제 한도에 도달했어요. platform.openai.com → Billing에서 크레딧을 충전하거나 한도를 올리세요.";
     else if (res.status === 401) hint = "OPENAI_API_KEY가 유효하지 않거나 권한이 없습니다.";
     else if (res.status === 403) {
-      // 빈 본문 + x-request-id 없음 = OpenAI API 도달 전 앞단 Cloudflare 엣지에서 차단된 것.
-      // (조직 인증 문제라면 x-request-id 와 JSON 본문이 온다.) 이 경우는 멀티파트 업로드의
-      // 청크 전송/UA 가 봇 관리에 걸린 네트워크 사유라 코드 측 직렬화/UA 보정으로 풀린다.
-      const edgeBlocked = emptyBody && !requestId && !!cfRay;
       if (isVerification) {
         hint = `OpenAI가 조직 인증을 요구해요. platform.openai.com → Settings → Organization → General 에서 'Verify Organization'을 완료하세요.`;
-      } else if (edgeBlocked) {
-        hint = `OpenAI 앞단 Cloudflare 엣지가 이미지 업로드(${endpoint}) 요청을 차단했어요(빈 본문 403, cf-ray ${cfRay}). 조직 인증 문제가 아니라 멀티파트 업로드 전송 방식 문제일 가능성이 높아요. 잠시 후 다시 시도하거나, 같은 증상이 계속되면 알려주세요.`;
+      } else if (emptyBody && !requestId && !!cfRay) {
+        // COLO 가 제한 목록에 없더라도, 빈 본문 403 은 대부분 지역/엣지 차단이라 재시도가 유효하다.
+        errCode = "openai_region_blocked";
+        retriable = true;
+        hint = `OpenAI 앞단 Cloudflare 엣지가 요청을 차단했어요(빈 본문 403, cf-ray ${cfRay}${colo ? ", COLO " + colo : ""}). 송출 지역 차단일 가능성이 높아요(조직 인증 문제 아님). 자동 재시도하거나, 계속되면 OPENAI_BASE_URL 프록시를 설정하세요.`;
       } else if (isEdit) {
         hint = `OpenAI가 이미지 입력(${endpoint}) 호출을 거부했어요(403${requestId ? ", request-id " + requestId : ""}). gpt-image 의 이미지 입력 기능에 대한 조직 인증/권한을 확인하세요.`;
       } else {
@@ -693,7 +718,7 @@ async function callOpenAIImage(opts: {
     else if (res.status === 400) hint = "요청 파라미터가 잘못되었을 수 있습니다. 프롬프트/사이즈/레퍼런스 이미지를 확인하세요.";
     else if (res.status >= 500) hint = "OpenAI 서버 일시 오류입니다. 잠시 후 다시 시도하세요.";
     return {
-      error: { error: "OpenAI API error", status: res.status, statusText, endpoint, requestId, cfRay, wwwAuthenticate, emptyBody, detail, message, code, hint },
+      error: { error: "OpenAI API error", status: res.status, statusText, endpoint, requestId, cfRay, colo, wwwAuthenticate, emptyBody, detail, message, code: errCode, retriable, hint },
       status: 500,
     };
   }
