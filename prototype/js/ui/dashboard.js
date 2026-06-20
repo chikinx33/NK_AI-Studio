@@ -81,19 +81,14 @@
         const resp = await NK.api.imageUpload(id, file, { kind: 'logo' });
         const objectName = String(resp && resp.objectName || '').trim();
         if (!objectName) throw new Error('objectName_missing');
-        // 로고는 IP(브랜드) 엔티티의 단일 출처에 저장한다(SSOT). 더 이상 형제 프로젝트마다
-        // thumbnailObjectName으로 복제하지 않으므로, 시리즈에 나중에 추가된 프로젝트도 자동 반영된다.
-        let savedToBrand = false;
+        // 로고는 IP(브랜드) 엔티티의 단일 출처에 저장한다(SSOT) — 소유자 화면은 이걸 최우선으로 쓴다.
         if (NK.service.brand && typeof NK.service.brand.setLogoForProject === 'function') {
-          try {
-            await NK.service.brand.setLogoForProject(id, objectName);
-            savedToBrand = true;
-          } catch (_) { savedToBrand = false; }
+          try { await NK.service.brand.setLogoForProject(id, objectName); } catch (_) { }
         }
-        // 브랜드 저장 경로가 없거나 실패하면 레거시 방식(현재 프로젝트 썸네일)으로라도 보존.
-        if (!savedToBrand) {
-          await NK.service.project.updatePayload(id, { thumbnailObjectName: objectName });
-        }
+        // 공유받은 사용자는 브랜드 SSOT 엔티티가 없으므로, 프로젝트 payload 에도 로고 objectName 을
+        // 함께 저장한다. 공유 카드는 소유자 프로젝트를 실시간 fetch 하므로, payload 에 있으면 폴백으로
+        // 로고가 보인다(미디어 프록시는 소유자 objectName 을 그대로 서명·서빙).
+        try { await NK.service.project.updatePayload(id, { thumbnailObjectName: objectName }); } catch (_) { }
         if (NK.ui && NK.ui.dashboard && typeof NK.ui.dashboard.renderDrafts === 'function') {
           NK.ui.dashboard.renderDrafts();
         }
@@ -462,6 +457,7 @@
   var _sharedDrafts = [];                 // 공유받은 에피소드의 의사(pseudo) 드래프트
   var _sharedMeta = new Map();            // seriesId -> { role, ownerId }
   var _sharedFetchedKey = '';
+  var _logoPayloadBackfilled = new Set(); // 브랜드 로고를 payload 로 백필한 프로젝트(세션당 1회)
 
   // 공유 상태 아이콘 (lucide share-2) — 뷰어/에디터 구분 없이 '공유받음' 표시만.
   var ICON_SHARE = '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>';
@@ -770,6 +766,23 @@
       if (!seriesThumbBySeriesId.has(sid)) {
         const obj = String(d.payload?.thumbnailObjectName || '').trim();
         if (obj) seriesThumbBySeriesId.set(sid, obj);
+      }
+    }
+
+    // 기존 프로젝트 백필: 소유자 화면에서, 브랜드 SSOT 에만 있고 payload 엔 없는 로고를 payload 로
+    // 1회 복제해 둔다. 공유받은 사용자는 소유자 프로젝트를 fetch 하므로, payload 에 로고가 있어야
+    // 카드에 로고가 보인다(브랜드 엔티티는 공유되지 않음). 소유 프로젝트만, 세션당 1회만 쓴다.
+    if (NK.service && NK.service.project && typeof NK.service.project.updatePayload === 'function') {
+      for (const d of drafts) {
+        if (!d || d.__shared) continue; // 공유받은 카드는 남의 프로젝트라 쓰지 않음
+        const sid = d.seriesId != null ? String(d.seriesId) : '';
+        const logo = sid ? String(brandLogoBySeriesId.get(sid) || '').trim() : '';
+        if (!logo) continue;
+        if (String(d.payload?.thumbnailObjectName || '').trim() === logo) continue;
+        const key = String(d.id);
+        if (_logoPayloadBackfilled.has(key)) continue;
+        _logoPayloadBackfilled.add(key);
+        try { NK.service.project.updatePayload(d.id, { thumbnailObjectName: logo }).catch(function () { }); } catch (_) { }
       }
     }
 
