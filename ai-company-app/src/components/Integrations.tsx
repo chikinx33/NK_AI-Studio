@@ -120,70 +120,22 @@ export function ToolCard({
           {it.configured ? "연결됨" : "설정 필요"}
         </span>
       </div>
-      <div className="space-y-2">
+      {/* env 키 도구: 키는 서버 환경변수로만 읽으므로 입력칸 대신 '설정 여부'만 읽기전용으로 표시. */}
+      <div className="space-y-1.5">
         {it.fields.map((fl) => (
-          <label key={fl.key} className="block">
-            <span className="inline-flex items-center text-xs text-gray-400">
-              <LabelText label={fl.label} iconClassName="h-3 w-3 shrink-0" />
-              {fl.required && <span className="text-red-400"> *</span>}
+          <div key={fl.key} className="flex items-start gap-1.5 text-xs">
+            <CircleIcon
+              className={`mt-1 h-2.5 w-2.5 shrink-0 ${fl.hasValue ? "text-emerald-400" : "text-amber-400"}`}
+              filled={fl.hasValue}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="inline-flex items-center text-gray-300">
+                <LabelText label={fl.label} iconClassName="h-3 w-3 shrink-0" />
+                {!fl.required && <span className="ml-1 text-[10px] text-gray-500">(선택)</span>}
+              </span>
+              {fl.hint && <span className="mt-0.5 block text-[11px] leading-snug text-gray-600">{fl.hint}</span>}
             </span>
-            {fl.widget === "toggle" ? (
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {(fl.options ?? []).map((o) => {
-                  const opt =
-                    typeof o === "object" && o !== null
-                      ? { value: String(o.value), label: o.label }
-                      : { value: String(o), label: String(o) };
-                  const active = form[fl.key] === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => toggleField(fl.key, opt.value)}
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
-                        active
-                          ? "border-emerald-500 bg-emerald-900/40 text-emerald-200"
-                          : "border-edge text-gray-400 hover:bg-edge"
-                      }`}
-                    >
-                      <CircleIcon
-                        className={`h-2.5 w-2.5 ${active ? "text-emerald-400" : "text-gray-500"}`}
-                        filled={active}
-                      />
-                      <LabelText label={opt.label} iconClassName="h-3 w-3 shrink-0" />
-                    </button>
-                  );
-                })}
-              </div>
-            ) : fl.type === "select" ? (
-              <select
-                value={form[fl.key]}
-                onChange={(e) => setForm({ ...form, [fl.key]: e.target.value })}
-                className={inputCls}
-              >
-                {(fl.options ?? []).map((o) => {
-                  const opt =
-                    typeof o === "object" && o !== null
-                      ? { value: String(o.value), label: o.label }
-                      : { value: String(o), label: String(o) };
-                  return (
-                    <option key={opt.value} value={opt.value}>
-                      {stripEmoji(opt.label)}
-                    </option>
-                  );
-                })}
-              </select>
-            ) : (
-              <input
-                type={fl.type === "password" ? "password" : fl.type === "number" ? "number" : "text"}
-                value={form[fl.key]}
-                onChange={(e) => setForm({ ...form, [fl.key]: e.target.value })}
-                placeholder={fl.secret && fl.hasValue ? "●●●●●●  (설정됨 — 바꿀 때만 입력)" : ""}
-                className={inputCls}
-              />
-            )}
-            {fl.hint && <span className="mt-0.5 block text-[11px] leading-snug text-gray-600">{fl.hint}</span>}
-          </label>
+          </div>
         ))}
       </div>
       {isGoogleOAuth && (
@@ -222,23 +174,14 @@ export function ToolCard({
             </button>
           )
         ) : (
-          <>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="rounded-lg bg-emerald-700 px-4 py-1.5 text-sm font-medium transition hover:bg-emerald-600 disabled:opacity-40"
-            >
-              저장
-            </button>
-            <button
-              onClick={runTest}
-              disabled={testing || !it.configured}
-              title={it.configured ? "안전 모드로 1회 실행해 연결을 확인합니다" : "필수 키를 먼저 저장하세요"}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
-            >
-              <PlugIcon className="h-4 w-4" /> 연결 테스트
-            </button>
-          </>
+          <button
+            onClick={runTest}
+            disabled={testing || !it.configured}
+            title={it.configured ? "안전 모드로 1회 실행해 연결을 확인합니다" : "환경변수를 설정하고 재배포하면 활성화돼요"}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-edge px-3 py-1.5 text-sm text-gray-200 transition hover:bg-edge disabled:opacity-40"
+          >
+            <PlugIcon className="h-4 w-4" /> 연결 테스트
+          </button>
         )}
         {msg && <StatusText msg={msg} className="text-xs text-gray-300" />}
       </div>
