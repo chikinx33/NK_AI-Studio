@@ -52,6 +52,39 @@
     if (!rootEl || rootEl.dataset.bound) return;
     rootEl.dataset.bound = '1';
 
+    // 씬 이미지가 로드 실패(예: 저장소에서 삭제됨)하면 깨진 아이콘이 그대로 남는다.
+    // 진짜 404(삭제)인지 확인한 뒤, 맞으면 그 씬의 죽은 이미지 참조와 이를 컷 레퍼런스로
+    // 가리키던 다른 씬의 cutRefId 를 비워 빈 슬롯으로 정리한다(자가치유). 'error' 는 버블링이
+    // 안 되므로 캡처 단계(true)로 받는다. 일시 오류(404 아님)면 상태는 건드리지 않는다.
+    rootEl.addEventListener('error', function (e) {
+      var img = e.target;
+      if (!img || img.tagName !== 'IMG' || !img.classList || !img.classList.contains('scene-img')) return;
+      var row = img.closest('.scene-row');
+      var sceneId = row ? row.getAttribute('data-id') : '';
+      var url = img.getAttribute('src') || '';
+      if (!sceneId || !url) return;
+      // 같은 깨진 이미지에 대해 중복 처리 방지
+      if (img.dataset.deadChecked === '1') return;
+      img.dataset.deadChecked = '1';
+      fetch(url, { method: 'GET' }).then(function (r) {
+        if (!r || r.status !== 404) return; // 삭제(404)일 때만 자가치유
+        var ctx = opts.ctx;
+        if (!ctx || !ctx.getState || !ctx.setState) return;
+        var st = ctx.getState();
+        if (!st || !Array.isArray(st.scenes)) return;
+        var idx = st.scenes.findIndex(function (s) { return String(s.id) === String(sceneId); });
+        if (idx < 0) return;
+        st.scenes[idx] = Object.assign({}, st.scenes[idx], { imageDataUrl: '', imagePath: '', generatedImageUrl: '', imageUrl: '' });
+        st.scenes = st.scenes.map(function (s) {
+          if (s && String(s.cutRefId == null ? '' : s.cutRefId) === String(sceneId)) return Object.assign({}, s, { cutRefId: '' });
+          return s;
+        });
+        ctx.setState(st);
+        if (opts.updateSceneRow) opts.updateSceneRow(idx, st.header || '', 'cut-ref'); // 행 전체 재렌더(빈 이미지 + 버튼 동기화)
+        if (ctx.persistPipeline) ctx.persistPipeline();
+      }).catch(function () {});
+    }, true);
+
     // 씬 행 외부 클릭 시 선택 해제
     document.addEventListener('click', function (e) {
       if (!e.target.closest('.scene-row')) {
