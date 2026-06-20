@@ -567,6 +567,10 @@ function normalizeProvider(value: unknown): "gemini" | "openai" {
   return "gemini";
 }
 
+// OpenAI 호출용 User-Agent. Cloudflare Worker 기본 UA 가 OpenAI 엣지(Cloudflare) 봇 관리에
+// 걸려 멀티파트 업로드가 빈 본문 403 으로 차단되는 것을 피하기 위해 정식 클라이언트 형태로 명시.
+const OPENAI_USER_AGENT = "OpenAI/NodeJS/4.28.0 NK-Studio";
+
 function mapAspectToOpenAISize(aspectRatio: string): string {
   switch (aspectRatio) {
     case "9:16": return "1024x1536";
@@ -614,9 +618,24 @@ async function callOpenAIImage(opts: {
   let useMask = opts.maskImage || null;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const init: RequestInit = isEdit
-        ? buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey, useMask)
-        : buildOpenAIGenerationsRequest(opts.model, opts.prompt, size, quality, opts.apiKey);
+      let init: RequestInit;
+      if (isEdit) {
+        const editsInit = buildOpenAIEditsRequest(opts.model, opts.prompt, size, quality, allRefs, opts.apiKey, useMask);
+        // FormData 를 그대로 fetch 에 넘기면 Cloudflare Worker 가 청크 전송(chunked, Content-Length
+        // 없음)으로 업로드한다. OpenAI 앞단 Cloudflare 엣지가 이런 업로드를 빈 본문 403 으로
+        // 차단하는 경우가 있어(x-request-id 없음 = API 도달 전 엣지 차단), 멀티파트 바디를
+        // 고정 길이 ArrayBuffer 로 직렬화해 Content-Length 가 붙은 일반 업로드로 보낸다.
+        const tmpReq = new Request(url, { method: "POST", body: editsInit.body as BodyInit });
+        const multipartCT = tmpReq.headers.get("content-type") || "multipart/form-data";
+        const multipartBuf = await tmpReq.arrayBuffer();
+        init = {
+          method: "POST",
+          headers: Object.assign({}, editsInit.headers as Record<string, string>, { "Content-Type": multipartCT }),
+          body: multipartBuf,
+        };
+      } else {
+        init = buildOpenAIGenerationsRequest(opts.model, opts.prompt, size, quality, opts.apiKey);
+      }
       res = await fetch(url, init);
       bodyText = await res.text();
       // 마스크가 붙은 편집이 400(파라미터 거부)이면, 마스크 없이 1회 재시도해
@@ -656,10 +675,19 @@ async function callOpenAIImage(opts: {
     if (isBilling) hint = "OpenAI 계정의 크레딧 잔액이 부족하거나 결제 한도에 도달했어요. platform.openai.com → Billing에서 크레딧을 충전하거나 한도를 올리세요.";
     else if (res.status === 401) hint = "OPENAI_API_KEY가 유효하지 않거나 권한이 없습니다.";
     else if (res.status === 403) {
-      // edits(이미지 입력) 만 403 이면 대부분 조직 인증 또는 모델의 이미지 입력 권한 문제다.
-      hint = (isEdit || isVerification)
-        ? `OpenAI가 이미지 입력(${endpoint}) 호출을 거부했어요(403${requestId ? ", request-id " + requestId : ""}). gpt-image 의 이미지 입력 기능은 조직 인증이 필요할 수 있어요. platform.openai.com → Settings → Organization → General 에서 'Verify Organization'을 완료했는지 확인하세요. 텍스트 생성(컷1)은 되는데 컷 기반/레퍼런스 생성(컷2)만 막히면 대부분 이 경우예요.`
-        : "OpenAI 계정 권한 또는 결제 상태를 확인하세요.";
+      // 빈 본문 + x-request-id 없음 = OpenAI API 도달 전 앞단 Cloudflare 엣지에서 차단된 것.
+      // (조직 인증 문제라면 x-request-id 와 JSON 본문이 온다.) 이 경우는 멀티파트 업로드의
+      // 청크 전송/UA 가 봇 관리에 걸린 네트워크 사유라 코드 측 직렬화/UA 보정으로 풀린다.
+      const edgeBlocked = emptyBody && !requestId && !!cfRay;
+      if (isVerification) {
+        hint = `OpenAI가 조직 인증을 요구해요. platform.openai.com → Settings → Organization → General 에서 'Verify Organization'을 완료하세요.`;
+      } else if (edgeBlocked) {
+        hint = `OpenAI 앞단 Cloudflare 엣지가 이미지 업로드(${endpoint}) 요청을 차단했어요(빈 본문 403, cf-ray ${cfRay}). 조직 인증 문제가 아니라 멀티파트 업로드 전송 방식 문제일 가능성이 높아요. 잠시 후 다시 시도하거나, 같은 증상이 계속되면 알려주세요.`;
+      } else if (isEdit) {
+        hint = `OpenAI가 이미지 입력(${endpoint}) 호출을 거부했어요(403${requestId ? ", request-id " + requestId : ""}). gpt-image 의 이미지 입력 기능에 대한 조직 인증/권한을 확인하세요.`;
+      } else {
+        hint = "OpenAI 계정 권한 또는 결제 상태를 확인하세요.";
+      }
     }
     else if (res.status === 429) hint = "OpenAI 요청 한도를 초과했습니다. 잠시 후 다시 시도하세요.";
     else if (res.status === 400) hint = "요청 파라미터가 잘못되었을 수 있습니다. 프롬프트/사이즈/레퍼런스 이미지를 확인하세요.";
@@ -691,6 +719,10 @@ function buildOpenAIGenerationsRequest(
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      // Cloudflare Worker 의 기본 아웃바운드 UA 는 OpenAI 엣지 봇 관리 규칙에 걸릴 수 있어
+      // 정식 클라이언트처럼 보이는 UA/Accept 를 명시한다.
+      "User-Agent": OPENAI_USER_AGENT,
+      "Accept": "application/json",
     },
     body: JSON.stringify({
       model,
@@ -735,6 +767,9 @@ function buildOpenAIEditsRequest(
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
+      // Content-Type 은 호출부에서 멀티파트 바디 직렬화 후 boundary 와 함께 설정한다.
+      "User-Agent": OPENAI_USER_AGENT,
+      "Accept": "application/json",
     },
     body: fd as unknown as BodyInit,
   };
