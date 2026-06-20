@@ -6099,6 +6099,14 @@ button.cut-ref-pick-btn {
   cursor: pointer;
 }
 
+/* 삭제된(로드 실패) 컷: 선택 불가 표시 */
+.cut-ref-pick-item.cut-ref-pick-broken {
+  opacity: 0.35;
+  filter: grayscale(1);
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
 .cut-ref-pick-thumb-label {
   position: absolute;
   left: 4px;

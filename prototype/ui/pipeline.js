@@ -394,6 +394,37 @@
     });
     var chosenId = String(selectedId || '');
 
+    // 저장소에서 삭제된 이미지의 죽은 참조(예: 502 나는 /api/media/proxy URL)가 컷에 남아 있으면
+    // 컷 선택 모달에 뜨고, 그걸 레퍼런스로 생성하면 OpenAI edits(지역 차단 취약) 경로로 빠져
+    // 무한로딩처럼 보인다. 썸네일 로드 실패를 감지하면 해당 컷의 죽은 이미지 필드와, 그 컷을
+    // 가리키던 다른 컷의 cutRefId 를 상태에서 비워(self-heal) 다시는 선택/사용되지 않게 한다.
+    function clearDeadCut(deadId) {
+      try {
+        if (!ctx || !ctx.getState || !ctx.setState) return;
+        var stx = ctx.getState();
+        if (!stx || !Array.isArray(stx.scenes)) return;
+        var changed = false;
+        stx.scenes = stx.scenes.map(function (s) {
+          if (!s || typeof s !== 'object') return s;
+          var ns = s;
+          if (String(s.id) === String(deadId)) {
+            ns = Object.assign({}, ns, { imageDataUrl: '', imagePath: '', generatedImageUrl: '', imageUrl: '' });
+            changed = true;
+          }
+          if (String(ns.cutRefId == null ? '' : ns.cutRefId) === String(deadId)) {
+            ns = Object.assign({}, ns, { cutRefId: '' });
+            changed = true;
+          }
+          return ns;
+        });
+        if (!changed) return;
+        ctx.setState(stx);
+        if (NK.uiPipeline && NK.uiPipeline.render) NK.uiPipeline.render();
+        if (ctx.persistPipeline) ctx.persistPipeline();
+        if (ctx.updateDraftFromPipeline) ctx.updateDraftFromPipeline();
+      } catch (_) {}
+    }
+
     function render() {
       var hasItems = candidates.length > 0;
       var list = candidates.map(function (s) {
@@ -424,6 +455,27 @@
           : '<div class="lib-empty"><p class="muted">레퍼런스로 쓸 이미지가 있는 다른 컷이 없습니다. 먼저 다른 컷의 이미지를 생성하세요.</p></div>');
 
       box.querySelectorAll('.cut-ref-pick-item').forEach(function (el) {
+        var itemSceneId = String(el.dataset.id || '');
+        var thumb = el.querySelector('img.lib-thumb');
+        if (thumb) {
+          thumb.onerror = function () {
+            // 삭제된(로드 실패) 이미지: 선택 불가 처리 + 죽은 참조 self-heal.
+            el.classList.add('cut-ref-pick-broken');
+            el.onclick = null;
+            el.ondblclick = null;
+            var lbl2 = el.querySelector('.cut-ref-pick-thumb-label');
+            if (lbl2) lbl2.textContent = '삭제됨';
+            el.title = '삭제된 이미지 — 선택할 수 없어요';
+            if (chosenId === itemSceneId) {
+              chosenId = '';
+              var ub = box.querySelector('#cutref-use-btn');
+              if (ub) ub.disabled = true;
+            }
+            // 이후 재렌더에서 다시 나타나지 않도록 후보에서 제거.
+            candidates = candidates.filter(function (s) { return String(s.id) !== itemSceneId; });
+            clearDeadCut(itemSceneId);
+          };
+        }
         el.onclick = function () {
           chosenId = String(el.dataset.id || '');
           render();
