@@ -6083,15 +6083,8 @@ button.cut-ref-pick-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
   font-size: 12px;
   white-space: nowrap;
-}
-
-.cut-ref-pick-btn .cut-ref-pick-ico {
-  flex-shrink: 0;
-  font-size: 12px;
-  line-height: 1;
 }
 
 .cut-ref-pick-btn .cut-ref-pick-text {

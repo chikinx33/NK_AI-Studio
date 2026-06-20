@@ -438,7 +438,7 @@
       ' 컷 기반 생성' +
       '</label>' +
       '<button type="button" class="btn-secondary compact cut-ref-pick-btn" data-action="pick-cut-ref" data-id="' + scene.id + '"' + (!scene.cutRefEnabled ? ' disabled' : '') + ' title="레퍼런스로 쓸 컷을 썸네일에서 선택">' +
-      '<span class="cut-ref-pick-ico">🖼</span><span class="cut-ref-pick-text">' + buildCutRefButtonLabel(allScenes, scene.id, scene.cutRefId) + '</span>' +
+      '<span class="cut-ref-pick-text">' + buildCutRefButtonLabel(allScenes, scene.id, scene.cutRefId) + '</span>' +
       '</button>' +
       '</div>' +
       '<div class="action-buttons grid video-actions">' +

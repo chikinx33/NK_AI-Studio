@@ -388,7 +388,9 @@
             if (pidx < 0) return;
             stp.scenes[pidx] = Object.assign({}, stp.scenes[pidx], { cutRefId: String(newId || '') });
             ctx.setState(stp);
-            if (opts.updateSceneRow) opts.updateSceneRow(pidx, stp.header || '', 'image');
+            // 'image' 부분 갱신은 이미지 슬롯만 바꿔 버튼 라벨이 안 바뀐다. 특수 분기에 없는
+            // part 를 넘겨 행 전체를 다시 그려(폴백) 선택한 컷 이름이 버튼에 표시되게 한다.
+            if (opts.updateSceneRow) opts.updateSceneRow(pidx, stp.header || '', 'cut-ref');
             if (ctx.persistPipeline) ctx.persistPipeline();
           });
           return;
