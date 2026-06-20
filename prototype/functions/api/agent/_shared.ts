@@ -599,13 +599,27 @@ export async function createReminder(sql: SqlFn, userId: string, fireAtISO: stri
   );
   return rows[0] as { id: string; fire_at: string; text: string };
 }
-/** 발화 시각 도달 + 아직 안 울린 알람을 '울림' 처리하고 반환(중복 방지). 프런트 폴링용. */
+/** 발화 시각이 지난(=경과/실행 대상) 알람을 삭제하며 반환. 프런트가 받아 울리고, 동시에 목록에서 사라진다.
+ *  (삭제 조건 ①시간 경과 ③알람 실행 — 둘 다 fire_at<=now 이므로 여기서 함께 처리) */
 export async function popDueReminders(sql: SqlFn, userId: string) {
   const rows = await sql(
-    "UPDATE agent_reminders SET fired_at = now() WHERE user_id = $1 AND fired_at IS NULL AND fire_at <= now() RETURNING id, fire_at, text",
+    "DELETE FROM agent_reminders WHERE user_id = $1 AND fire_at <= now() RETURNING id, fire_at, text",
     [userId]
   );
   return rows as { id: string; fire_at: string; text: string }[];
+}
+/** 예정된(아직 안 지난) 알람 목록 — 예약 패널용. */
+export async function listUpcomingReminders(sql: SqlFn, userId: string) {
+  const rows = await sql(
+    "SELECT id, fire_at, text FROM agent_reminders WHERE user_id = $1 AND fire_at > now() ORDER BY fire_at ASC LIMIT 50",
+    [userId]
+  );
+  return rows as { id: string; fire_at: string; text: string }[];
+}
+/** 사용자가 예약을 직접 삭제(삭제 조건 ②). */
+export async function deleteReminderById(sql: SqlFn, userId: string, id: string): Promise<boolean> {
+  const rows = await sql("DELETE FROM agent_reminders WHERE user_id = $1 AND id = $2 RETURNING id", [userId, id]);
+  return (rows as any[]).length > 0;
 }
 
 /** 최근 N턴을 라비오크 buildTranscript 형식의 트랜스크립트로. */

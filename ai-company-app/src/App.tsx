@@ -6,6 +6,7 @@ import Results from "./components/Results";
 import Settings from "./components/Settings";
 import VisualNovel from "./components/VisualNovel";
 import Dashboard from "./components/Dashboard";
+import Reservations from "./components/Reservations";
 import ErrorBoundary from "./components/ErrorBoundary";
 import KnowledgeWorkspace from "./components/KnowledgeWorkspace";
 import AgentManager from "./components/AgentManager";
@@ -18,7 +19,9 @@ import {
   streamChat,
   getEvents,
   getApprovals,
-  getDueReminders,
+  getReminders,
+  deleteReminder,
+  type DueReminder,
   autonomousStep,
   type StatusInfo,
   type AgentInfo,
@@ -97,6 +100,7 @@ export default function App() {
   const [knowFilter, setKnowFilter] = useState<"원칙" | "사실" | "결정" | "스킬" | null>(null);
   const [knowFilterNonce, setKnowFilterNonce] = useState(0);
   const [resultsRefreshKey, setResultsRefreshKey] = useState(0);
+  const [reminders, setReminders] = useState<DueReminder[]>([]); // 예정된 알람(예약 패널)
   function openKnowledgeCategory(key: "원칙" | "사실" | "결정" | "스킬" | null) {
     setKnowFilter(key);
     setKnowFilterNonce((n) => n + 1);
@@ -394,9 +398,16 @@ export default function App() {
     try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
     let stopped = false;
     const poll = async () => {
-      const due = await getDueReminders().catch(() => []);
-      if (stopped || !due.length) return;
-      for (const r of due) {
+      const { due, upcoming } = await getReminders().catch(() => ({ due: [], upcoming: [] }));
+      if (stopped) return;
+      setReminders(upcoming); // 예약 패널 갱신
+      // 최근(3분 이내) 도래분만 울린다. 앱이 닫혀 한참 지난 건은 서버에서 이미 삭제됐고 늦게 울리지 않음.
+      const fresh = due.filter((r) => {
+        const ms = Date.parse(r.fire_at);
+        return Number.isFinite(ms) && Date.now() - ms <= 180000;
+      });
+      if (!fresh.length) return;
+      for (const r of fresh) {
         const text = r.text || "알람";
         commit([
           ...turnsRef.current,
@@ -411,6 +422,12 @@ export default function App() {
     return () => { stopped = true; clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 예약 직접 삭제(사용자 삭제 지시) — 즉시 목록에서 제거 후 서버 반영.
+  async function removeReminder(id: string) {
+    setReminders((prev) => prev.filter((r) => r.id !== id));
+    await deleteReminder(id).catch(() => {});
+  }
 
   // 자율 근무 진행: 출근(workMode=on) + 자율(autonomous) 상태일 때만, 60초마다 한 스텝씩
   // 코어가 프로젝트를 실제로 진행시킨다(브라우저가 열려 있는 동안). 보고는 events 폴링으로 화면에 반영.
@@ -595,6 +612,7 @@ export default function App() {
                 setCenterView("chat");
               }}
             />
+            <Reservations reminders={reminders} onDelete={removeReminder} />
             {!status && <div className="text-xs text-gray-500">서버 연결 대기 중…</div>}
           </div>
           <div className="shrink-0 pt-2 text-center text-[11px] text-gray-600">

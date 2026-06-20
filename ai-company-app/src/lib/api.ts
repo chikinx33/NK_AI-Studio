@@ -615,14 +615,26 @@ export async function approveItem(id: string) {
   return data;
 }
 
-// 발화 시각이 된 알람(리마인더)을 받아온다. 서버가 '울림' 처리하므로 한 번만 반환됨(중복 방지).
+// 알람(리마인더) 한 건.
 export interface DueReminder { id: string; fire_at: string; text: string }
-export async function getDueReminders(): Promise<DueReminder[]> {
+// 알람 폴링: due(경과/실행 → 서버가 삭제하며 반환, 울림용) + upcoming(예정 목록, 예약 패널용).
+export async function getReminders(): Promise<{ due: DueReminder[]; upcoming: DueReminder[] }> {
   try {
     const d = await (await fetch("/api/agent/reminders")).json();
-    return Array.isArray(d?.due) ? d.due : [];
+    return { due: Array.isArray(d?.due) ? d.due : [], upcoming: Array.isArray(d?.upcoming) ? d.upcoming : [] };
   } catch {
-    return [];
+    return { due: [], upcoming: [] };
+  }
+}
+// 예약 직접 삭제(사용자 삭제 지시).
+export async function deleteReminder(id: string): Promise<{ ok: boolean }> {
+  try {
+    const d = await (await fetch("/api/agent/reminder-delete", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }),
+    })).json();
+    return { ok: !!d?.ok };
+  } catch {
+    return { ok: false };
   }
 }
 
