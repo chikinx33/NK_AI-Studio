@@ -177,7 +177,7 @@ export default function App() {
     getConversationMessages(activeConvId)
       .then((h) =>
         commit(
-          h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text }))
+          h.map((t) => ({ role: t.role, agentId: t.agentId, name: t.name, emoji: t.emoji, text: t.text, ts: t.ts }))
         )
       )
       .catch(() => {});
@@ -210,7 +210,7 @@ export default function App() {
   }
 
   async function send(text: string, image?: { base64: string; mimeType: string; name: string; preview: string }) {
-    const userTurn: Turn = { role: "user", text: text || (image ? "[이미지 첨부됨]" : ""), imagePreview: image?.preview };
+    const userTurn: Turn = { role: "user", text: text || (image ? "[이미지 첨부됨]" : ""), imagePreview: image?.preview, ts: Date.now() };
     commit([...turnsRef.current, userTurn]);
     setBusy(true);
     // 보내는 즉시 수신자를 '활동 중'으로 — 텍스트에서 가장 먼저 등장하는 이름이 수신자
@@ -248,6 +248,7 @@ export default function App() {
                   emoji: data.emoji,
                   text: "",
                   streaming: true,
+                  ts: Date.now(),
                 },
               ]);
               break;
@@ -348,6 +349,7 @@ export default function App() {
               name: m.turn.name,
               emoji: m.turn.emoji,
               text: m.turn.text,
+              ts: Date.now(),
             }));
             commit([...turnsRef.current, ...add]);
           }
@@ -411,7 +413,7 @@ export default function App() {
         const text = r.text || "알람";
         commit([
           ...turnsRef.current,
-          { role: "agent", agentId: "sync", name: "싱크", emoji: "⏰", text: `⏰ 알람이에요! "${text}"` },
+          { role: "agent", agentId: "sync", name: "싱크", emoji: "⏰", text: `⏰ 알람이에요! "${text}"`, ts: Date.now() },
         ]);
         notifyAlarm(text);
       }
@@ -594,7 +596,7 @@ export default function App() {
               onAgentSay={(m) => {
                 commit([
                   ...turnsRef.current,
-                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text },
+                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, ts: Date.now() },
                 ]);
                 setCenterView("chat");
               }}
@@ -607,7 +609,7 @@ export default function App() {
               onAgentSay={(m) => {
                 commit([
                   ...turnsRef.current,
-                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text },
+                  { role: "agent", agentId: m.agentId, name: m.name, emoji: m.emoji, text: m.text, ts: Date.now() },
                 ]);
                 setCenterView("chat");
               }}

@@ -143,6 +143,7 @@ export async function getConversationMessages(id: string): Promise<HistoryTurn[]
   const d = await (await fetch(`/api/agent/messages?conversationId=${encodeURIComponent(id)}`)).json();
   return ((d && d.items) || []).map((m: any) => ({
     role: m.role, agentId: m.agent_id || undefined, name: m.name || undefined, text: m.text,
+    ts: m.created_at ? (Date.parse(m.created_at) || undefined) : undefined,
   }));
 }
 export async function ensureDateConversation(date: string): Promise<Conversation> {
@@ -672,6 +673,7 @@ export interface HistoryTurn {
   name?: string;
   emoji?: string;
   text: string;
+  ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
 }
 
 // 브라우저 로컬 현재시각을 시간대 오프셋 포함 ISO8601로. (예: 2026-06-20T11:30:00-05:00)

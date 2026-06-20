@@ -10,6 +10,17 @@ export interface Turn {
   text: string;
   streaming?: boolean;
   imagePreview?: string; // 첨부 이미지 data URL (사용자 메시지 버블에 표시)
+  ts?: number; // 메시지 시각(ms) — 채팅 시각 표시용
+}
+
+/** 시각(ms) → "오후 3:05" 형식 (시:분만, 날짜 없음) */
+export function formatChatTime(ts?: number): string {
+  if (!ts) return "";
+  try {
+    return new Date(ts).toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
 }
 
 interface Props {
@@ -399,7 +410,7 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
 
         {turns.map((t, i) =>
           t.role === "user" ? (
-            <div key={i} className="group flex items-center justify-end gap-1.5">
+            <div key={i} className="group flex items-end justify-end gap-1.5">
               <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100">
                 <button
                   onClick={() => copyText(i, t.text)}
@@ -417,18 +428,24 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                   <RepeatIcon className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <div className="max-w-[78%] rounded-2xl rounded-br-sm px-4 py-2 bg-emerald-700 text-white text-sm whitespace-pre-wrap">
-                {t.imagePreview && (
-                  <img src={t.imagePreview} alt="첨부 이미지" className="mb-2 max-h-48 w-auto rounded-lg object-contain" />
-                )}
-                {t.text && t.text !== "[이미지 첨부됨]" ? t.text : !t.imagePreview ? t.text : null}
+              <div className="flex max-w-[78%] flex-col items-end">
+                {t.ts && <div className="mb-0.5 mr-1 text-[10px] text-gray-600">{formatChatTime(t.ts)}</div>}
+                <div className="rounded-2xl rounded-br-sm px-4 py-2 bg-emerald-700 text-white text-sm whitespace-pre-wrap">
+                  {t.imagePreview && (
+                    <img src={t.imagePreview} alt="첨부 이미지" className="mb-2 max-h-48 w-auto rounded-lg object-contain" />
+                  )}
+                  {t.text && t.text !== "[이미지 첨부됨]" ? t.text : !t.imagePreview ? t.text : null}
+                </div>
               </div>
             </div>
           ) : (
             <div key={i} className="flex items-start justify-start gap-2">
               <ChatAvatar turn={t} />
               <div className="max-w-[78%]">
-                <div className="text-xs text-gray-400 mb-0.5">{t.name}</div>
+                <div className="mb-0.5 flex items-baseline gap-1.5">
+                  <span className="text-xs text-gray-400">{t.name}</span>
+                  {t.ts && <span className="text-[10px] text-gray-600">{formatChatTime(t.ts)}</span>}
+                </div>
                 <div className="group relative rounded-2xl rounded-tl-sm px-4 py-2 pb-6 bg-panel border border-edge text-sm whitespace-pre-wrap">
                   {t.agentId === "_tool" && t.text.startsWith("🔐") ? (
                     <span className="inline-flex items-baseline gap-1.5">
