@@ -631,12 +631,15 @@
     var promptBlocks = [];
     if (common) promptBlocks.push(common);
     if (sceneLocation) promptBlocks.push('Location: ' + sceneLocation);
-    // composition / action 이 있으면 그것이 canonical visual. 없으면 visual(shot) 사용.
-    if (composition || action) {
-      if (composition) promptBlocks.push('Composition: ' + composition);
-      if (action) promptBlocks.push('Action: ' + action);
+    // 화면(composition)은 "정지 상태"(스틸 컷)라서 이미지 생성에만 쓴다. 행동(action)은 그
+    // 이미지를 바탕으로 한 "영상 생성"용이므로 이미지 프롬프트엔 넣지 않는다. (넣으면 모델이
+    // 동작 '중' 장면 — 예: 공중에 솟구친 순간 — 을 그려, 영상의 시작 프레임이 안 나온다.)
+    if (composition) {
+      promptBlocks.push('Composition: ' + composition);
     } else if (primaryVisual) {
       promptBlocks.push(primaryVisual);
+    } else if (action) {
+      promptBlocks.push('Composition: ' + action); // 화면·비주얼이 모두 없을 때만 최후 보루
     }
     if (cameraHint) promptBlocks.push(cameraHint);
     promptBlocks.push('텍스트/워터마크를 넣지 말고, 지정된 스타일만 사용.');
@@ -669,8 +672,9 @@
       var trimmed = sceneVisual.length > 220 ? sceneVisual.slice(0, 219) + '…' : sceneVisual;
       blocks.push('Scene context (broader beat): ' + trimmed);
     }
+    // 행동(action)은 영상 생성용 — 이미지(스틸 컷)엔 화면(composition)만 쓴다.
     if (composition) blocks.push('Composition: ' + composition);
-    if (action) blocks.push('Action: ' + action);
+    else if (action) blocks.push('Composition: ' + action); // 화면이 없을 때만 최후 보루
     if (cameraHint) blocks.push(cameraHint);
     blocks.push('Render this single shot only — do NOT depict the entire scene at once. Keep framing/composition strictly to the camera spec above.');
     blocks.push('텍스트/워터마크를 넣지 말고, 지정된 스타일만 사용.');
