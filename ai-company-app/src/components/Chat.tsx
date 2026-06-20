@@ -454,7 +454,10 @@ export default function Chat({ turns, busy, streaming, onStop, draft, setDraft, 
                     </span>
                   ) : t.text ? (
                     (() => {
-                      const isLong = !t.streaming && t.text.length > LONG_CHARS;
+                      // 코드 블록(```)이 있는 메시지는 자르지 않는다 — 중간에 잘리면 코드가 깨지고
+                      // 다운로드도 잘린 코드만 받게 된다. (코드는 블록 안에서 스크롤됨)
+                      const hasCode = t.text.includes("```");
+                      const isLong = !t.streaming && !hasCode && t.text.length > LONG_CHARS;
                       const isOpen = expandedMsgs.has(i);
                       const shown = isLong && !isOpen ? t.text.slice(0, LONG_CHARS) : t.text;
                       return (
