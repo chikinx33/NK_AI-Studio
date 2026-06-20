@@ -186,6 +186,25 @@
 
   // Pass 2: scene 배열을 받아 각 scene 을 1~5 shot 으로 분해.
   // 실패 시 throw — 호출 측에서 원본 scenes 그대로 사용 가능 (shots 없는 단계).
+  // 에피소드 공간(로케이션) 추출 — LLM 이 씬들을 보고 구분되는 공간으로 묶는다.
+  api.scenarioLocations = async function (scenes, language) {
+    var arr = Array.isArray(scenes) ? scenes : [];
+    if (!arr.length) return { locations: [] };
+    var res = await fetchWithTimeout(withBase('/api/scenario/locations'), {
+      method: 'POST',
+      headers: buildAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ scenes: arr, language: language === 'en' ? 'en' : 'ko' })
+    }, 45000);
+    var text = await readTextWithTimeout(res, 45000);
+    if (!res.ok) {
+      var err = new Error(e(text) || 'scenario_locations_failed');
+      err.status = res.status;
+      err.detail = text;
+      throw err;
+    }
+    return j(text);
+  };
+
   api.scenarioShots = async function (payload) {
     var scenes = (payload && payload.scenes) || [];
     if (!Array.isArray(scenes) || !scenes.length) {

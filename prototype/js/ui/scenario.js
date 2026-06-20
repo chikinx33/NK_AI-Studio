@@ -2533,15 +2533,23 @@
           draft.payload = payload;
           draft.scenes = normalized;
           draft.header = headerText || draft.header || '';
-          // [공간 레퍼런스 1단계] 이 에피소드의 장소 목록을 씬에서 1차 추출해 draft.payload 에 저장한다.
+          // [공간 레퍼런스] 이 에피소드의 "실제로 구분되는 공간" 목록을 추출해 draft.payload 에 저장한다.
           // (브랜드 환경자산과 별개의 에피소드 전용 데이터. 생성 결과는 메모리 유지 — '저장' 시 영속화.)
+          // 1순위: LLM(같은 공간을 하나로 묶고 배경 플레이트 묘사 생성), 실패 시 규칙 기반 폴백.
           try {
-            if (NK.service && NK.service.episodeLocations && NK.service.episodeLocations.derive) {
-              const epLocs = NK.service.episodeLocations.derive(draft.scenes, {
-                existing: draft.payload && draft.payload.episodeLocations
-              });
+            let epLocs = null;
+            if (NK.api && NK.api.scenarioLocations) {
+              try {
+                const r = await NK.api.scenarioLocations(draft.scenes, payload?.language === 'en' ? 'en' : 'ko');
+                if (r && Array.isArray(r.locations) && r.locations.length) epLocs = r.locations;
+              } catch (llmErr) { console.warn('[episode-locations] LLM 추출 실패 → 규칙 기반 폴백', llmErr); }
+            }
+            if (!epLocs && NK.service && NK.service.episodeLocations && NK.service.episodeLocations.derive) {
+              epLocs = NK.service.episodeLocations.derive(draft.scenes, { existing: draft.payload && draft.payload.episodeLocations });
+            }
+            if (epLocs) {
               draft.payload = Object.assign({}, draft.payload, { episodeLocations: epLocs });
-              console.log('[episode-locations] 1차 추출:', epLocs);
+              console.log('[episode-locations] 추출(' + epLocs.length + '개):', epLocs);
             }
           } catch (epErr) { console.warn('[episode-locations] 추출 실패', epErr); }
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
