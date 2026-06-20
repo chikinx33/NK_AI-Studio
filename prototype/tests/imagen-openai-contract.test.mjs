@@ -66,7 +66,16 @@ test('openai response is parsed from data[0].b64_json and surfaces hint on commo
 test('response surfaces dynamic model and provider tag based on selected branch', () => {
   const source = readImagenSource();
   assert.match(source, /model: modelUsed,/);
-  assert.match(source, /provider: provider === "openai" \? "openai-api" : "gemini-api"/);
+  assert.match(source, /provider: providerUsed === "openai" \? "openai-api" : "gemini-api"/);
+});
+
+test('openai account-level errors fall back to gemini so cut-based reference consistency keeps working', () => {
+  const source = readImagenSource();
+  // OpenAI 계정/권한/결제 오류일 때 Gemini 로 자동 폴백하는 경로가 있어야 한다.
+  assert.match(source, /const runGeminiGeneration = async/);
+  assert.match(source, /oStatus === 401 \|\| oStatus === 403 \|\| oStatus === 429/);
+  assert.match(source, /providerUsed = "gemini"/);
+  assert.match(source, /providerFallbackFrom = "openai"/);
 });
 
 test('openai default model is gpt-image-2 and is overridable via OPENAI_IMAGE_MODEL', () => {

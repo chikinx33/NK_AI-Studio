@@ -119,24 +119,15 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
 
     let imageOutput: { data: string; mimeType: string } | null = null;
     let modelUsed = "";
+    let providerUsed: "gemini" | "openai" = provider;
+    let providerFallbackFrom = "";
 
-    if (provider === "openai") {
-      const openaiResult = await callOpenAIImage({
-        apiKey: openaiApiKey,
-        model: openaiModel,
-        prompt: finalPrompt,
-        aspectRatio: aspectFinal,
-        qualityHint: geminiImageSize,
-        referenceImages,
-        conversationHistory,
-        maskImage,
-      });
-      if (openaiResult.error) {
-        return json(openaiResult.error, openaiResult.status || 500);
+    // Gemini 이미지 생성. else 분기와 OpenAI 폴백에서 공용으로 호출한다.
+    // 성공 시 imageOutput / modelUsed 를 채우고 {} 를, 실패 시 {error,status} 를 반환한다.
+    const runGeminiGeneration = async (): Promise<{ error?: any; status?: number }> => {
+      if (!apiKey) {
+        return { error: { error: "Missing GEMINI_API_KEY / GOOGLE_API_KEY" }, status: 500 };
       }
-      imageOutput = { data: openaiResult.b64 || "", mimeType: "image/png" };
-      modelUsed = openaiModel;
-    } else {
       const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(geminiModel)}:generateContent`;
       const requestPayload = {
         contents: buildGeminiContents(
@@ -170,19 +161,65 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       }
 
       if (!geminiRes) {
-        return json({ error: "Gemini API error", status: 500, detail: "network_error", hint: "네트워크 오류로 Gemini 호출에 실패했습니다. 잠시 후 다시 시도하세요." }, 500);
+        return { error: { error: "Gemini API error", status: 500, detail: "network_error", hint: "네트워크 오류로 Gemini 호출에 실패했습니다. 잠시 후 다시 시도하세요." }, status: 500 };
       }
       if (!geminiRes.ok) {
         const detail = safeJson(geminiText);
         const mapped = explainGeminiError(geminiRes.status, detail, { model: geminiModel });
-        return json(Object.assign({ error: "Gemini API error", status: geminiRes.status, detail }, mapped), 500);
+        return { error: Object.assign({ error: "Gemini API error", status: geminiRes.status, detail }, mapped), status: 500 };
       }
 
       const geminiJson = safeJson(geminiText) || {};
-      imageOutput = extractGeminiImage(geminiJson);
+      const out = extractGeminiImage(geminiJson);
+      if (!out?.data) {
+        return { error: { error: "No image bytes returned", raw: geminiJson }, status: 500 };
+      }
+      imageOutput = out;
       modelUsed = geminiModel;
-      if (!imageOutput?.data) {
-        return json({ error: "No image bytes returned", raw: geminiJson }, 500);
+      return {};
+    };
+
+    if (provider === "openai") {
+      const openaiResult = await callOpenAIImage({
+        apiKey: openaiApiKey,
+        model: openaiModel,
+        prompt: finalPrompt,
+        aspectRatio: aspectFinal,
+        qualityHint: geminiImageSize,
+        referenceImages,
+        conversationHistory,
+        maskImage,
+      });
+      if (openaiResult.error) {
+        // OpenAI 계정/권한/결제 오류(401·403·429·billing)는 코드로 못 고치는 외부 사유다.
+        // 컷 기반 생성은 이전 컷 이미지를 레퍼런스로 넘겨 배경·오브젝트 일관성을 유지하는 게
+        // 핵심이므로, Gemini(nano-banana, 인라인 레퍼런스 이미지 지원)가 설정돼 있으면
+        // 자동 폴백해 생성이 끊기지 않게 한다. 폴백도 실패하면 원래 OpenAI 오류를 그대로 노출.
+        const oErr = openaiResult.error || {};
+        const oStatus = Number(oErr?.status) || Number(openaiResult.status) || 0;
+        const oText = `${oErr?.message || ""} ${oErr?.hint || ""}`;
+        const isAccountError =
+          oStatus === 401 || oStatus === 403 || oStatus === 429 ||
+          /billing|quota|credit|payment|권한|결제|크레딧|한도/i.test(oText);
+        const geminiConfigured = !!apiKey;
+        if (isAccountError && geminiConfigured) {
+          const fb = await runGeminiGeneration();
+          if (fb.error) {
+            return json(openaiResult.error, openaiResult.status || 500);
+          }
+          providerUsed = "gemini";
+          providerFallbackFrom = "openai";
+        } else {
+          return json(openaiResult.error, openaiResult.status || 500);
+        }
+      } else {
+        imageOutput = { data: openaiResult.b64 || "", mimeType: "image/png" };
+        modelUsed = openaiModel;
+      }
+    } else {
+      const r = await runGeminiGeneration();
+      if (r.error) {
+        return json(r.error, r.status || 500);
       }
     }
 
@@ -235,7 +272,9 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       objectName,
       model: modelUsed,
       imageSizeApplied: geminiImageSize,
-      provider: provider === "openai" ? "openai-api" : "gemini-api",
+      provider: providerUsed === "openai" ? "openai-api" : "gemini-api",
+      providerRequested: provider === "openai" ? "openai-api" : "gemini-api",
+      providerFallbackFrom: providerFallbackFrom ? `${providerFallbackFrom}-api` : "",
       promptEcho: finalPrompt,
       aspectApplied: aspectFinal,
       referenceImageCount: referenceImages.length,
