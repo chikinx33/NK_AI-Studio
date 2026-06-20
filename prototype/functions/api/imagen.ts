@@ -52,6 +52,8 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
     // 송출을 403 으로 차단한다. 지원 지역의 프록시나 Cloudflare AI Gateway 엔드포인트를
     // OPENAI_BASE_URL 로 지정하면 그쪽으로 우회해 지역 차단을 영구적으로 회피할 수 있다.
     const openaiBaseUrl = String(env.OPENAI_BASE_URL || "https://api.openai.com").trim().replace(/\/+$/, "");
+    // 프록시(OPENAI_BASE_URL) 오남용 방지용 공유 시크릿. 프록시로 호출할 때만 헤더로 보낸다.
+    const openaiProxySecret = String(env.OPENAI_PROXY_SECRET || "").trim();
     const incomingSize = String(body?.imageSize || body?.quality || body?.resolution || "").trim().toUpperCase();
     const sizeAllowed = new Set(["512", "1K", "2K"]);
     const sizeDefault = String(env.GEMINI_IMAGE_SIZE || "").trim().toUpperCase() || "1K";
@@ -191,6 +193,7 @@ export const onRequestPost: PagesFunction = async ({ request, env }) => {
       const openaiResult = await callOpenAIImage({
         apiKey: openaiApiKey,
         baseUrl: openaiBaseUrl,
+        proxySecret: openaiProxySecret,
         model: openaiModel,
         prompt: finalPrompt,
         aspectRatio: aspectFinal,
@@ -620,6 +623,7 @@ function mapImageSizeToOpenAIQuality(imageSize: string): "low" | "medium" | "hig
 async function callOpenAIImage(opts: {
   apiKey: string;
   baseUrl?: string;
+  proxySecret?: string;
   model: string;
   prompt: string;
   aspectRatio: string;
@@ -667,6 +671,10 @@ async function callOpenAIImage(opts: {
         };
       } else {
         init = buildOpenAIGenerationsRequest(opts.model, opts.prompt, size, quality, opts.apiKey);
+      }
+      // 프록시(OPENAI_BASE_URL) 로 보낼 때만 공유 시크릿 헤더를 붙인다(직접 OpenAI 호출엔 불필요).
+      if (opts.proxySecret && apiBase !== "https://api.openai.com") {
+        init.headers = Object.assign({}, init.headers as Record<string, string>, { "x-nk-proxy-secret": opts.proxySecret });
       }
       res = await fetch(url, init);
       bodyText = await res.text();

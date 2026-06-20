@@ -46,6 +46,13 @@ test('openai requests honor OPENAI_BASE_URL override to bypass region-blocked co
   assert.match(source, /const apiBase = String\(opts\.baseUrl/);
 });
 
+test('proxy shared secret header is sent only when using a non-default base url', () => {
+  const source = readImagenSource();
+  assert.match(source, /env\.OPENAI_PROXY_SECRET/);
+  assert.match(source, /opts\.proxySecret && apiBase !== "https:\/\/api\.openai\.com"/);
+  assert.match(source, /"x-nk-proxy-secret": opts\.proxySecret/);
+});
+
 test('empty-body 403 from a restricted colo is classified as region-blocked and retriable', () => {
   const source = readImagenSource();
   assert.match(source, /RESTRICTED_COLOS/);
