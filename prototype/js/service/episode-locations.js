@@ -1,0 +1,112 @@
+/**
+ * episode-locations.js — 에피소드(편) 전용 공간 레퍼런스.
+ *
+ * 브랜드(IP) 환경자산(environmentAssets, 세계관·프로젝트 관통)과는 별개의,
+ * "이 에피소드 한 편에만 쓰이는 공간(장소) 목록"이다. draft.payload.episodeLocations 에 저장된다.
+ *
+ * 목적: 컷 기반 생성이 "이전 컷 이미지 통짜"를 베껴 모든 컷 구도가 똑같아지는 문제를,
+ * 컷마다 "그 장소의 깨끗한 배경 플레이트"만 레퍼런스로 붙여 해결하기 위함.
+ * 배경(월드)은 일관되지만 구도는 베끼지 않는다.
+ *
+ * 1단계(현재): 생성된 씬에서 장소를 보수적으로 1차 추출(데이터 구조 확정). B안: 이후 패널에서 편집.
+ * 이후 단계: LLM 그룹핑/묘사 보강 → 배경 플레이트 생성 → 컷 자동 연결.
+ *
+ * 데이터 구조 (draft.payload.episodeLocations):
+ *   [{ id, name, description, refObjectName, sceneIds:[] }]
+ *     - id            : 안정적 식별자
+ *     - name          : 장소 이름(예: "수영장", "수영장 입구", "길거리")
+ *     - description   : 배경 플레이트 생성용 묘사 프롬프트(캐릭터 없는 공간 묘사). 사용자 편집 가능.
+ *     - refObjectName : 생성된 배경 플레이트 이미지의 objectName(이후 단계에서 채움)
+ *     - sceneIds      : 이 장소를 쓰는 씬 id 목록
+ */
+; (function () {
+  var NK = window.NK || (window.NK = {});
+  var service = NK.service || (NK.service = {});
+  var mod = service.episodeLocations || (service.episodeLocations = {});
+
+  function slugify(s) {
+    var base = String(s || '').toLowerCase().trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^a-z0-9가-힣\-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48);
+    return base || 'loc';
+  }
+
+  function normKey(s) {
+    return String(s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  // 씬의 장소 문자열. sceneLocation 우선, 없으면 visual 첫 문장에서 짧게 추정.
+  function locStringOf(scene) {
+    var loc = String((scene && (scene.sceneLocation || scene.location)) || '').trim();
+    if (loc) return loc;
+    var v = String((scene && (scene.visual || scene.shot)) || '').trim();
+    if (!v) return '';
+    return v.split(/[.\n]/)[0].slice(0, 60).trim();
+  }
+
+  /**
+   * 생성된 씬들에서 에피소드 공간(장소) 목록을 1차 추출한다.
+   * 보수적 그룹핑: 정규화된 장소 문구가 동일한 것만 병합(잘못된 병합 방지). 과분할은 패널에서 사용자가 병합.
+   * 기존 목록(opts.existing)의 사용자 편집(description·refObjectName·id)은 이름이 같으면 보존한다.
+   *
+   * @param {Array} scenes
+   * @param {{existing?: Array}} [opts]
+   * @returns {Array<{id:string,name:string,description:string,refObjectName:string,sceneIds:string[]}>}
+   */
+  mod.derive = function (scenes, opts) {
+    opts = opts || {};
+    var existing = Array.isArray(opts.existing) ? opts.existing : [];
+    var existingByKey = {};
+    existing.forEach(function (e) { if (e && e.name) existingByKey[normKey(e.name)] = e; });
+
+    var order = [];
+    var byKey = {};
+    (Array.isArray(scenes) ? scenes : []).forEach(function (sc) {
+      if (!sc) return;
+      var loc = locStringOf(sc);
+      if (!loc) return;
+      var key = normKey(loc);
+      if (!byKey[key]) {
+        byKey[key] = { name: loc, rep: loc, sceneIds: [] };
+        order.push(key);
+      }
+      var sid = sc.id != null ? String(sc.id) : '';
+      if (sid && byKey[key].sceneIds.indexOf(sid) < 0) byKey[key].sceneIds.push(sid);
+      // 더 묘사적인(긴) 문구를 대표/시드 묘사로
+      if (loc.length > byKey[key].rep.length) byKey[key].rep = loc;
+    });
+
+    return order.map(function (key) {
+      var g = byKey[key];
+      var prev = existingByKey[key];
+      return {
+        id: (prev && prev.id) || slugify(g.name),
+        name: g.name,
+        description: (prev && prev.description) || g.rep,
+        refObjectName: (prev && prev.refObjectName) || '',
+        sceneIds: g.sceneIds,
+      };
+    });
+  };
+
+  // 씬 1개가 어느 episodeLocation 에 속하는지 찾는다(컷 자동 연결 단계에서 사용).
+  mod.locationForScene = function (locations, scene) {
+    if (!Array.isArray(locations) || !scene) return null;
+    var sid = scene.id != null ? String(scene.id) : '';
+    if (sid) {
+      for (var i = 0; i < locations.length; i++) {
+        var l = locations[i];
+        if (l && Array.isArray(l.sceneIds) && l.sceneIds.indexOf(sid) >= 0) return l;
+      }
+    }
+    // 폴백: 장소 문자열 일치
+    var key = normKey(locStringOf(scene));
+    for (var j = 0; j < locations.length; j++) {
+      if (locations[j] && normKey(locations[j].name) === key) return locations[j];
+    }
+    return null;
+  };
+})();

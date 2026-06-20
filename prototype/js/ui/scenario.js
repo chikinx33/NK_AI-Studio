@@ -2533,6 +2533,17 @@
           draft.payload = payload;
           draft.scenes = normalized;
           draft.header = headerText || draft.header || '';
+          // [공간 레퍼런스 1단계] 이 에피소드의 장소 목록을 씬에서 1차 추출해 draft.payload 에 저장한다.
+          // (브랜드 환경자산과 별개의 에피소드 전용 데이터. 생성 결과는 메모리 유지 — '저장' 시 영속화.)
+          try {
+            if (NK.service && NK.service.episodeLocations && NK.service.episodeLocations.derive) {
+              const epLocs = NK.service.episodeLocations.derive(draft.scenes, {
+                existing: draft.payload && draft.payload.episodeLocations
+              });
+              draft.payload = Object.assign({}, draft.payload, { episodeLocations: epLocs });
+              console.log('[episode-locations] 1차 추출:', epLocs);
+            }
+          } catch (epErr) { console.warn('[episode-locations] 추출 실패', epErr); }
           currentPayload = Object.assign({}, draft.payload, { header: draft.header });
           // 생성 결과는 메모리(draft)에만 유지한다. 사용자가 '저장' 버튼을 눌러야
           // 로컬(localStorage/IndexedDB)·서버에 영속화된다. 자동 저장을 하면 새로고침·창
@@ -2599,7 +2610,11 @@
         NK.core.setLoading(true, '저장중...');
         try {
           draft = draft || { id: Date.now(), title: '새 프로젝트' };
+          // collectPayload()는 폼에서 새 payload 를 만들므로, 생성 단계에서 만든 에피소드 공간
+          // 레퍼런스(episodeLocations)가 떨어진다. 저장 시 보존한다.
+          const _prevEpLocs = draft.payload && draft.payload.episodeLocations;
           draft.payload = collectPayload();
+          if (_prevEpLocs) draft.payload.episodeLocations = _prevEpLocs;
           draft.title = draft.payload.topic || draft.title || '새 프로젝트';
           draft.scenes = mergeSceneSnapshots(draft.scenes || [], collectScenesFromCards());
           if (NK.service?.project?.upsertLocalDraft) {
