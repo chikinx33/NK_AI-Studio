@@ -1999,6 +1999,18 @@ function openBackgroundReferenceModal() {
     return String(s || '').toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9가-힣\-]/g, '').replace(/-+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || ('loc-' + (st0.scenes ? st0.scenes.length : 0));
   };
   var thumbUrl = function (obj) { return (obj && NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(obj) : ''; };
+  // 공통 프롬프트(스타일·분위기·세계관). 컷 생성과 동일하게 배경 플레이트에도 주입해 화풍을 맞춘다.
+  // st.header 가 비어 있으면 payload 로 재구성(buildVisualHeader)해 폴백한다.
+  function commonPromptOf(st) {
+    var h = String((st && st.header) || '').trim();
+    if (h) return h;
+    try {
+      if (NK.service && NK.service.project && NK.service.project.buildVisualHeader) {
+        return String(NK.service.project.buildVisualHeader(st && st.payload) || '').trim();
+      }
+    } catch (_) {}
+    return '';
+  }
 
   // 작업용 복사본
   var locs = (st0.payload && Array.isArray(st0.payload.episodeLocations))
@@ -2153,8 +2165,11 @@ function openBackgroundReferenceModal() {
     l._busy = true; render();
     try {
       var st = ctxRef.getState();
-      var prompt = [st.header || '', l.description || l.name,
-        'Empty location background plate of this place. Wide establishing view of the environment ONLY — no characters, no people, no creatures, nothing held by anyone. Clean background for compositing.'
+      var prompt = [
+        commonPromptOf(st),
+        l.description || l.name,
+        'Empty location background plate of this place. Wide establishing view of the environment ONLY — no characters, no people, no creatures, nothing held by anyone. Clean background for compositing.',
+        'IMPORTANT: render strictly in the SAME art style/medium described in the style/mood/background lines above (e.g. 3D animation, simple stylized shapes). Do NOT render photorealistically — it must match this episode\'s look.'
       ].filter(Boolean).join('\n');
       var json = await NK.api.imagen({
         prompt: prompt,
@@ -2182,8 +2197,11 @@ function openBackgroundReferenceModal() {
     try {
       var st = ctxRef.getState();
       var primaryUrl = (NK.api && NK.api.mediaProxyObjectUrl) ? NK.api.mediaProxyObjectUrl(l.refObjectName) : '';
-      var prompt = [st.header || '', l.description || l.name,
-        'This is the SAME location as the reference image (' + (l.name || 'this place') + '). Show the "' + v.label + '" view/angle of this same place — keep the exact same architecture, materials, colors and lighting as the reference. Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.'
+      var prompt = [
+        commonPromptOf(st),
+        l.description || l.name,
+        'This is the SAME location as the reference image (' + (l.name || 'this place') + '). Show the "' + v.label + '" view/angle of this same place — keep the exact same architecture, materials, colors and lighting as the reference. Empty environment ONLY: no characters, no people, no creatures. Clean background plate for compositing.',
+        'IMPORTANT: render strictly in the SAME art style/medium described in the style/mood/background lines above (3D animation, stylized shapes). Do NOT render photorealistically — match this episode\'s look and the reference image.'
       ].filter(Boolean).join('\n');
       var json = await NK.api.imagen({
         prompt: prompt,
