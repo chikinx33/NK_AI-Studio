@@ -433,10 +433,10 @@
       // 프롬프트도 더빙처럼 인라인 편집: 별도 편집/저장/취소 버튼 없이 클릭→타이핑→Enter 적용.
       '<div class="scene-cell prompt">' +
       '<p class="eyebrow">Common</p>' +
-      // COMMON 은 모든 컷이 공유하는 공통 프롬프트(state.header)다. 컷마다 인라인으로 고치면
-      // 전체가 함께 바뀌어 혼란스러우므로 여기서는 "읽기 전용 표시"만 하고, 편집은 상단 메뉴의
-      // "공통 프롬프트" 버튼에서만 한다(거기서 고치면 모든 컷에 공통 적용). 컷별 편집은 화면/행동/Duration.
-      '<p class="prompt-common" data-id="' + scene.id + '" title="공통 프롬프트는 상단 \'공통 프롬프트\' 버튼에서 편집해요 (모든 컷 공통 적용)">' + header + '</p>' +
+      // COMMON 은 "이 컷의 공통 프롬프트"(scene.common)다. 컷마다 개별 편집해 다르게 쓸 수 있고,
+      // 미설정이면 프로젝트 공통(header)을 표시한다. 상단 "공통 프롬프트" 버튼은 전체 컷에 일괄
+      // 적용(덮어쓰기)하며, 그 후 다시 각 컷을 개별 수정할 수 있다. 이미지 생성은 이 값을 읽는다.
+      '<p class="prompt-common is-editable" data-id="' + scene.id + '" data-prompt-edit="1" contenteditable="true" spellcheck="false" title="이 컷의 공통 프롬프트 (컷별 편집) · 상단 \'공통 프롬프트\'로 전체 일괄 적용">' + escapeText(scene.common != null ? scene.common : header) + '</p>' +
       // composition/action 이 있으면 화면/행동을 별도 라인으로 (Visual 라인은 숨김 — 중복 방지).
       // 둘 다 없으면 기존 Visual 사용.
       ((scene.composition || scene.action)

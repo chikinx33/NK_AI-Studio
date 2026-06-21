@@ -853,7 +853,9 @@
     var scene = st.scenes[opts.idx];
     if (!scene || scene.imgLoading) return;
 
-    var finalPrompt = buildImagePrompt(scene, st.header || '', opts.cleanHeader || function (text) { return String(text || ''); });
+    // COMMON 은 컷별(scene.common). 미설정이면 프로젝트 공통(st.header)으로 폴백.
+    var sceneCommon = (scene.common != null ? scene.common : (st.header || ''));
+    var finalPrompt = buildImagePrompt(scene, sceneCommon, opts.cleanHeader || function (text) { return String(text || ''); });
     var rawP = finalPrompt;
     var referencePayload = null;
     var imageCharacterNegativePrompt = '';
@@ -1184,7 +1186,8 @@
     scene = st.scenes[opts.sceneIdx];
     shot = scene.shots[shotIdx];
 
-    var basePrompt = buildShotImagePrompt(scene, shot, st.header || '', opts.cleanHeader || function (t) { return String(t || ''); });
+    var shotCommon = (scene.common != null ? scene.common : (st.header || ''));
+    var basePrompt = buildShotImagePrompt(scene, shot, shotCommon, opts.cleanHeader || function (t) { return String(t || ''); });
     var finalPrompt = basePrompt;
     var rawP = basePrompt;
     var referencePayload = null;

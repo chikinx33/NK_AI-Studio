@@ -1347,8 +1347,11 @@
           var st2 = ctx.getState();
           if (!st2) return;
           var cleaned = String(newText || '').trim();
-          // 종횡비 메타는 보존(표시는 cleanHeader 로 strip 되지만 데이터엔 유지).
+          // 종횡비 메타는 보존(표시는 cleanHeader 로 strip 되지만 데이터엔 유지). header 는 기본값/폴백용.
           st2.header = withAspectInHeader ? withAspectInHeader(cleaned, st2.aspectRatio) : cleaned;
+          // 일괄 적용: 모든 컷의 공통 프롬프트(scene.common)를 이 값으로 덮어쓴다.
+          // 이후 사용자는 각 컷의 COMMON 을 다시 개별 수정할 수 있다(컷별 데이터).
+          st2.scenes = (st2.scenes || []).map(function (s) { return Object.assign({}, s, { common: cleaned }); });
           ctx.setState(st2);
           if (ctx.persistPipeline) ctx.persistPipeline();
           if (updateDraftFromPipeline) updateDraftFromPipeline();

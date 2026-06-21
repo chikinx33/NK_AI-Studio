@@ -41,6 +41,8 @@
       visual: nextShot,
       estSec: est
     };
+    // COMMON 은 컷별 데이터(scene.common). 편집 칸이 있으면 그 값을 그대로 저장한다.
+    if (commonEl) result.common = commonText;
     if (newComposition !== null) result.composition = newComposition;
     if (newAction !== null) result.action = newAction;
     return result;
@@ -703,31 +705,18 @@
           if (Number(draft.estSec) > modelMax) draft.estSec = modelMax;
         }
       } catch (_) { }
-      // COMMON 은 전 씬 공통(st.header). 변경됐으면 header 를 갱신하고 다른 행 표시도 동기화한다.
-      // (이미지/영상 생성은 st.header 를 공통 프롬프트로 사용하므로 반드시 여기에 반영해야 함)
-      var commonEl = rootEl.querySelector('.prompt-common[data-id="' + sceneId + '"]');
-      var commonText = commonEl
-        ? String(commonEl.innerText || commonEl.textContent || '').replace(/\r/g, '').replace(/\n{3,}/g, '\n\n').trim()
-        : null;
-      var headerChanged = commonText !== null && commonText !== String(st.header || '').trim();
+      // COMMON 은 이 컷만의 공통 프롬프트(scene.common). 다른 컷으로 전파하지 않는다.
+      // (전체 일괄 적용은 상단 "공통 프롬프트" 버튼이 담당. 이미지/영상 생성은 scene.common 을 읽음)
+      var curCommon = String(scene.common != null ? scene.common : (st.header || '')).trim();
+      var commonChanged = draft.common != null && String(draft.common).trim() !== curCommon;
       // 씬 단위(화면/행동/Visual/Duration) 변경 여부
       var perSceneSame = Number(scene.estSec || 0) === Number(draft.estSec || 0) &&
         String(scene.shot || '') === String(draft.shot || '') &&
         (draft.composition == null || String(scene.composition || '') === String(draft.composition)) &&
         (draft.action == null || String(scene.action || '') === String(draft.action));
-      if (!headerChanged && perSceneSame) return;
-      if (!perSceneSame) st.scenes[idx] = Object.assign({}, scene, draft, { editingPrompt: false });
-      if (headerChanged) st.header = commonText;
+      if (!commonChanged && perSceneSame) return;
+      st.scenes[idx] = Object.assign({}, scene, draft, { editingPrompt: false });
       ctx.setState(st);
-      if (headerChanged) {
-        // 전체 재렌더 없이 모든 행의 COMMON 표시만 동기화(편집 중 포커스/레이아웃 방해 최소화).
-        var commons = rootEl.querySelectorAll('.prompt-common[data-id]');
-        for (var ci = 0; ci < commons.length; ci++) {
-          if (commons[ci] !== commonEl && String(commons[ci].textContent || '') !== commonText) {
-            commons[ci].textContent = commonText;
-          }
-        }
-      }
       // Duration 표시를 "Ns." 형식으로 재포맷(편집 후 일관성).
       var durEl = rootEl.querySelector('.prompt-duration[data-id="' + sceneId + '"]');
       if (durEl) durEl.textContent = (Math.max(Number(draft.estSec) || 0, 1)) + 's.';
